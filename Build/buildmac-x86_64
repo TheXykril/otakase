@@ -1,0 +1,2 @@
+VERSION=$(cat VERSION.txt)
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o curd-macos-x86_64 -ldflags="-X main.version=${VERSION}" -trimpath cmd/curd/main.go

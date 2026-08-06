@@ -1,0 +1,4 @@
+#!/bin/bash
+
+./Build/buildlinux-arm64
+./Build/buildlinux-x86_64

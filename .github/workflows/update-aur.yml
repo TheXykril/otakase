@@ -1,0 +1,231 @@
+name: Update AUR Package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-aur:
+    runs-on: ubuntu-24.04
+    if: github.repository == 'Wraient/curd'
+    
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl git jq openssh-client
+
+      - name: Download release asset and compute SHA256
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG_NAME="${{ github.event.release.tag_name }}"
+            RELEASE_API_URL="https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG_NAME}"
+          else
+            RELEASE_API_URL="https://api.github.com/repos/${{ github.repository }}/releases/latest"
+          fi
+
+          RELEASE_JSON="$(mktemp)"
+          curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "$RELEASE_API_URL" \
+            -o "$RELEASE_JSON"
+
+          TAG_NAME="$(jq -r '.tag_name // empty' "$RELEASE_JSON")"
+          ASSET_URL="$(jq -r '.assets[] | select(.name=="curd-linux-x86_64") | .browser_download_url' "$RELEASE_JSON" | head -n1)"
+
+          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "null" ]; then
+            echo "Could not resolve release tag from $RELEASE_API_URL"
+            rm -f "$RELEASE_JSON"
+            exit 1
+          fi
+
+          if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
+            echo "Release ${TAG_NAME} does not contain asset: curd-linux-x86_64"
+            rm -f "$RELEASE_JSON"
+            exit 1
+          fi
+
+          VERSION="${TAG_NAME#v}"
+          TMP_ASSET="$(mktemp)"
+          curl -fL --retry 3 --retry-all-errors --connect-timeout 20 "$ASSET_URL" -o "$TMP_ASSET"
+          SHA256="$(sha256sum "$TMP_ASSET" | awk '{print $1}')"
+
+          rm -f "$RELEASE_JSON"
+          rm -f "$TMP_ASSET"
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH for AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${AUR_SSH_PRIVATE_KEY:-}" ]; then
+            echo "Missing required secret: AUR_SSH_PRIVATE_KEY"
+            exit 1
+          fi
+
+          install -m 700 -d ~/.ssh
+          umask 077
+          KEY_FILE=~/.ssh/curd_aur_deploy
+          RAW_KEY="$(printf '%s' "$AUR_SSH_PRIVATE_KEY" | tr -d '\r')"
+
+          if printf '%s' "$RAW_KEY" | grep -q 'BEGIN [A-Z0-9 ]*PRIVATE KEY'; then
+            if printf '%s' "$RAW_KEY" | grep -q '\\n'; then
+              printf '%b' "$RAW_KEY" > "$KEY_FILE"
+            else
+              printf '%s\n' "$RAW_KEY" > "$KEY_FILE"
+            fi
+          else
+            if ! printf '%s' "$RAW_KEY" | base64 -d > "$KEY_FILE" 2>/dev/null; then
+              echo "AUR_SSH_PRIVATE_KEY must be a private key (raw, escaped with \\n, or base64-encoded)"
+              exit 1
+            fi
+          fi
+
+          tr -d '\r' < "$KEY_FILE" > "${KEY_FILE}.tmp"
+          mv "${KEY_FILE}.tmp" "$KEY_FILE"
+
+          if [ ! -s "$KEY_FILE" ]; then
+            echo "SSH key file is empty after writing secret"
+            exit 1
+          fi
+
+          KEY_HEADER="$(head -n1 "$KEY_FILE" || true)"
+          case "$KEY_HEADER" in
+            "-----BEGIN OPENSSH PRIVATE KEY-----"|"-----BEGIN RSA PRIVATE KEY-----"|"-----BEGIN EC PRIVATE KEY-----"|"-----BEGIN DSA PRIVATE KEY-----"|"-----BEGIN PRIVATE KEY-----")
+              ;;
+            *)
+              echo "AUR_SSH_PRIVATE_KEY has an invalid private key header: $KEY_HEADER"
+              exit 1
+              ;;
+          esac
+
+          if ! ssh-keygen -y -f "$KEY_FILE" > ~/.ssh/curd_aur_deploy.pub 2>/dev/null; then
+            echo "AUR_SSH_PRIVATE_KEY is not a valid, unencrypted SSH private key"
+            exit 1
+          fi
+
+          chmod 600 "$KEY_FILE"
+          chmod 644 ~/.ssh/curd_aur_deploy.pub
+          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          echo "Validated deploy key format. Add the matching public key to the AUR account SSH keys."
+
+      - name: Clone AUR repository
+        env:
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/curd_aur_deploy -o IdentitiesOnly=yes
+        run: |
+          set -euo pipefail
+          git clone --depth 1 ssh://aur@aur.archlinux.org/curd.git aur-curd
+
+      - name: Update AUR package files
+        working-directory: aur-curd
+        run: |
+          set -euo pipefail
+
+          {
+            printf '%s\n' '# Maintainer: Wraient <rushikeshwastaken@gmail.com>'
+            printf '%s\n' "pkgname='curd'"
+            printf '%s\n' "pkgver=${{ steps.release.outputs.version }}"
+            printf '%s\n' 'pkgrel=1'
+            printf '%s\n' 'pkgdesc="Watch anime in CLI with AniList Tracking, Discord RPC, Intro/Outro/Filler/Recap Skipping, etc."'
+            printf '%s\n' "arch=('x86_64')"
+            printf '%s\n' 'url="https://github.com/Wraient/curd"'
+            printf '%s\n' "license=('GPL')"
+            printf '%s\n' "depends=('mpv' 'rofi' 'ueberzugpp')"
+            printf '%s\n' "provides=('curd')"
+            printf '%s\n' "conflicts=('curd')"
+            printf '%s\n' 'source=("https://github.com/Wraient/curd/releases/download/v${pkgver}/curd-linux-x86_64")'
+            printf '%s\n' "sha256sums=('${{ steps.release.outputs.sha256 }}')"
+            printf '\n'
+            printf '%s\n' 'package() {'
+            printf '%s\n' '  install -Dm755 "$srcdir/curd-linux-x86_64" "$pkgdir/usr/bin/curd"'
+            printf '%s\n' '}'
+          } > PKGBUILD
+
+          # Fail fast if checksum/source/install-target drift.
+          grep -q '^source=(' PKGBUILD
+          grep -q '^sha256sums=(' PKGBUILD
+          grep -q 'curd-linux-x86_64' PKGBUILD
+          grep -q 'install -Dm755 "\$srcdir/curd-linux-x86_64" "\$pkgdir/usr/bin/curd"' PKGBUILD
+          bash -n PKGBUILD
+
+          set +u
+          # shellcheck disable=SC1091
+          source PKGBUILD
+          set -u
+
+          pkgbase_value="${pkgbase:-}"
+          if [ -z "${pkgbase_value}" ]; then
+            pkgbase_value="${pkgname[0]:-${pkgname:-}}"
+          fi
+
+          {
+            printf 'pkgbase = %s\n' "$pkgbase_value"
+            [ -n "${pkgdesc:-}" ] && printf '\tpkgdesc = %s\n' "$pkgdesc"
+            [ -n "${pkgver:-}" ] && printf '\tpkgver = %s\n' "$pkgver"
+            [ -n "${pkgrel:-}" ] && printf '\tpkgrel = %s\n' "$pkgrel"
+            [ -n "${epoch:-}" ] && printf '\tepoch = %s\n' "$epoch"
+            [ -n "${url:-}" ] && printf '\turl = %s\n' "$url"
+            for item in "${arch[@]-}"; do [ -n "$item" ] && printf '\tarch = %s\n' "$item"; done
+            for item in "${license[@]-}"; do [ -n "$item" ] && printf '\tlicense = %s\n' "$item"; done
+            for item in "${makedepends[@]-}"; do [ -n "$item" ] && printf '\tmakedepends = %s\n' "$item"; done
+            for item in "${depends[@]-}"; do [ -n "$item" ] && printf '\tdepends = %s\n' "$item"; done
+            for item in "${checkdepends[@]-}"; do [ -n "$item" ] && printf '\tcheckdepends = %s\n' "$item"; done
+            for item in "${optdepends[@]-}"; do [ -n "$item" ] && printf '\toptdepends = %s\n' "$item"; done
+            for item in "${provides[@]-}"; do [ -n "$item" ] && printf '\tprovides = %s\n' "$item"; done
+            for item in "${conflicts[@]-}"; do [ -n "$item" ] && printf '\tconflicts = %s\n' "$item"; done
+            for item in "${replaces[@]-}"; do [ -n "$item" ] && printf '\treplaces = %s\n' "$item"; done
+            for item in "${source[@]-}"; do [ -n "$item" ] && printf '\tsource = %s\n' "$item"; done
+            for item in "${md5sums[@]-}"; do [ -n "$item" ] && printf '\tmd5sums = %s\n' "$item"; done
+            for item in "${sha1sums[@]-}"; do [ -n "$item" ] && printf '\tsha1sums = %s\n' "$item"; done
+            for item in "${sha224sums[@]-}"; do [ -n "$item" ] && printf '\tsha224sums = %s\n' "$item"; done
+            for item in "${sha256sums[@]-}"; do [ -n "$item" ] && printf '\tsha256sums = %s\n' "$item"; done
+            for item in "${sha384sums[@]-}"; do [ -n "$item" ] && printf '\tsha384sums = %s\n' "$item"; done
+            for item in "${sha512sums[@]-}"; do [ -n "$item" ] && printf '\tsha512sums = %s\n' "$item"; done
+            for item in "${b2sums[@]-}"; do [ -n "$item" ] && printf '\tb2sums = %s\n' "$item"; done
+            printf '\n'
+            for pkg in "${pkgname[@]-}"; do [ -n "$pkg" ] && printf 'pkgname = %s\n' "$pkg"; done
+          } > .SRCINFO
+
+          grep -Fq "pkgver = ${{ steps.release.outputs.version }}" .SRCINFO
+          grep -Fq "sha256sums = ${{ steps.release.outputs.sha256 }}" .SRCINFO
+
+      - name: Commit and push to AUR
+        working-directory: aur-curd
+        env:
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/curd_aur_deploy -o IdentitiesOnly=yes
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to version ${{ steps.release.outputs.version }}"
+          git push origin HEAD:master
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/curd_aur_deploy
+          rm -f ~/.ssh/curd_aur_deploy.pub
