@@ -48,6 +48,7 @@ type CurdConfig struct {
 	StoragePath                string   `config:"StoragePath"`
 	AnimeNameLanguage          string   `config:"AnimeNameLanguage"`
 	Theme                      string   `config:"Theme"`
+	DownloadDir                string   `config:"DownloadDir"`
 	MenuOrder                  string   `config:"MenuOrder"`
 	PercentageToMarkComplete   int      `config:"PercentageToMarkComplete"`
 	NextEpisodePrompt          bool     `config:"NextEpisodePrompt"`
@@ -141,6 +142,7 @@ func defaultConfigMap() map[string]string {
 		"MyAnimeListImportDismissed": "false",
 		"ShowNewEpisodes":            "true",
 		"Theme":                      "auto",
+		"DownloadDir":                "$HOME/Downloads/curd",
 	}
 }
 

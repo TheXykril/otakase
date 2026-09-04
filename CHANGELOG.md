@@ -4,6 +4,18 @@
 
 ### Added
 
+- **Episode downloading** (`curd -download`), the most-requested missing feature
+  upstream (Wraient/curd#104, #55). It reuses the whole existing selection flow
+  and saves instead of playing: `-episodes 1-12` for a range, `-download-dir` or
+  the `DownloadDir` config for the destination. Streams are remuxed to MP4 rather
+  than re-encoded, so a download costs bandwidth and almost no CPU with no quality
+  loss, and soft subtitles are muxed in where the provider supplies them. An
+  episode already on disk is skipped without a provider round trip, and a failed
+  download is deleted rather than left looking complete.
+
+  Providers routinely disguise HLS segments as images (`…/seg-1-f1-v1-a1.jpg`),
+  which ffmpeg's demuxer rejects by default; the extension check is relaxed so
+  those streams download correctly.
 - **Desktop theming.** On [Omarchy](https://omarchy.org/) the active theme's
   `colors.toml` is read from `~/.local/state/omarchy/current/theme/` and drives
   both the terminal menus and the rofi menus, so Curd matches the rest of the

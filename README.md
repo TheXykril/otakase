@@ -24,6 +24,9 @@ Works on Linux, MacOS and Windows.
 > | Failures were reported as one concatenated wall of provider errors | Grouped by cause: "hosts are down" reads differently from "nobody carries it" |
 >
 > **Also new:**
+> - `curd -download` saves episodes instead of streaming them — the most-requested
+>   missing feature upstream ([#104](https://github.com/Wraient/curd/issues/104),
+>   [#55](https://github.com/Wraient/curd/issues/55)).
 > - `curd -provider-status` probes every provider and reports which ones work.
 > - The menus follow your desktop colours on [Omarchy](https://omarchy.org/), and
 >   the rofi themes were redesigned and are now generated locally rather than
@@ -54,7 +57,7 @@ https://github.com/user-attachments/assets/cbf799bc-9fdd-4402-ab61-b4e31f1e264d
 ## Features
 - Multiple content providers (AniPub, AniNeko, and optionally AniDB, AllAnime, Animepahe) searched concurrently with ordered fallback and up to 1080p support
 - Built-in headless browser to bypass Cloudflare/DDoS-Guard protections
-- Stream anime online
+- Stream anime online, or download episodes with `-download`
 - Track anime locally, on AniList, or on MyAnimeList
 - Browser-based AniList and MyAnimeList login flows
 - Skip anime Intro and Outro
@@ -380,6 +383,9 @@ curd [options]
 | `-subs-lang`              | Set the language for subtitles                                         | `"english"`   |
 | `-u`                      | Update the script                                                      | -             |
 | `-v`                      | Show curd version                                                      | -             |
+| `-download`               | Download episodes instead of playing them (needs `ffmpeg`)             | -             |
+| `-episodes`               | Episodes to download, e.g. `5` or `1-12`                               | selected ep   |
+| `-download-dir`           | Where to save downloads                                                | `$HOME/Downloads/curd` |
 | `-provider-status`        | Probe every provider and report which ones work                        | -             |
 | `-provider-status-query`  | Search term used by `-provider-status`                                 | `one piece`   |
 
@@ -399,6 +405,31 @@ curd [options]
   ```bash
   curd -rofi -image-preview
   ```
+
+## Downloading
+
+Curd can save episodes instead of streaming them. This needs `ffmpeg`.
+
+```bash
+# Download the episode you are up to
+curd -download
+
+# Download a range
+curd -download -episodes 1-12
+
+# Download somewhere specific
+curd -download -episodes 5 -download-dir ~/Videos/anime
+```
+
+You pick the anime the same way as for playback — the whole selection flow is
+shared — and then Curd saves rather than plays. Files land in
+`$HOME/Downloads/curd` by default (set `DownloadDir` in the config), named
+`<Title> - Episode NN (sub|dub).mp4`.
+
+Streams are **remuxed, not re-encoded**, so a download costs bandwidth and almost
+no CPU, and there is no quality loss. Soft subtitles are muxed into the MP4 where
+the provider supplies them. An episode already on disk is skipped, and a download
+that fails partway is deleted rather than left to look complete.
 
 ## Theming
 

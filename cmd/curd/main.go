@@ -95,6 +95,9 @@ func main() {
 	softSubFlag := flag.Bool("softsub", false, "Prefer soft subtitles when available (anineko)")
 	hardSubFlag := flag.Bool("hardsub", false, "Prefer hard subtitles when available (anineko)")
 	versionFlag := flag.Bool("v", false, "Print version information")
+	downloadFlag := flag.Bool("download", false, "Download episodes instead of playing them (requires ffmpeg)")
+	downloadRange := flag.String("episodes", "", "Episodes to download, e.g. 5 or 1-12 (default: the selected episode)")
+	flag.StringVar(&userCurdConfig.DownloadDir, "download-dir", userCurdConfig.DownloadDir, "Directory to save downloaded episodes into")
 	providerStatus := flag.Bool("provider-status", false, "Probe every provider and report which ones work")
 	providerStatusQuery := flag.String("provider-status-query", "one piece", "Search query used by -provider-status")
 
@@ -353,6 +356,34 @@ func main() {
 				internal.CurdOut("Reached end of series")
 				internal.ExitCurd(nil)
 			}
+		}
+
+		// Downloading reuses everything above -- tracker selection, provider
+		// mapping, episode resolution -- and simply saves the stream instead of
+		// handing it to MPV.
+		if *downloadFlag {
+			from, to, rangeErr := internal.ParseEpisodeRange(*downloadRange, anime.Ep.Number)
+			if rangeErr != nil {
+				internal.CurdOut(rangeErr.Error())
+				internal.ExitCurd(rangeErr)
+			}
+
+			dir := internal.ResolveDownloadDir(&userCurdConfig)
+			internal.CurdOut(fmt.Sprintf("Downloading episodes %d-%d to %s", from, to, dir))
+
+			results := internal.DownloadEpisodes(userCurdConfig, &anime, from, to, dir)
+			failed := 0
+			for _, result := range results {
+				if result.Err != nil {
+					failed++
+				}
+			}
+			internal.CurdOut(fmt.Sprintf("Downloaded %d of %d episode(s).", len(results)-failed, len(results)))
+			if failed > 0 {
+				internal.ExitCurd(fmt.Errorf("%d episode(s) failed to download", failed))
+			}
+			internal.ExitCurd(nil)
+			return
 		}
 
 		// Now start playback for the non-filler episode
