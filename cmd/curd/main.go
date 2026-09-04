@@ -146,8 +146,11 @@ func main() {
 		userCurdConfig.RofiSelection = false
 	}
 	// `curd -u` is a CLI operation: always use the terminal for sudo when stdin is a TTY,
-	// even if RofiSelection is enabled in the config file.
-	if *updateScript {
+	// even if RofiSelection is enabled in the config file. `curd -e` is the same:
+	// it runs an editor in this terminal, so its messages belong here too --
+	// otherwise a failure is delivered as a desktop notification and the terminal
+	// the user is looking at stays silent.
+	if *updateScript || *editConfig {
 		userCurdConfig.RofiSelection = false
 	}
 	internal.SetGlobalConfig(&userCurdConfig)

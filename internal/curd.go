@@ -21,45 +21,6 @@ import (
 
 var alternateScreenActive bool
 
-func EditConfig(configFilePath string) {
-	// Get the user's preferred editor from the EDITOR environment variable
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		// If EDITOR is not set, use system-specific defaults
-		if runtime.GOOS == "windows" {
-			// Try Notepad++ first
-			if _, err := exec.LookPath("notepad++"); err == nil {
-				editor = "notepad++"
-			} else {
-				editor = "notepad.exe"
-			}
-		} else {
-			if _, err := exec.LookPath("vim"); err == nil {
-				editor = "vim"
-			} else {
-				editor = "nano"
-			}
-		}
-	}
-
-	// Construct the command to open the config file
-	cmd := exec.Command(editor, configFilePath)
-
-	// Set the command to run in the current terminal
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	// Run the editor command
-	err := cmd.Run()
-	if err != nil {
-		CurdOut(fmt.Sprintf("Error opening config file: %v", err))
-		return
-	}
-
-	CurdOut("Config file edited successfully.")
-}
-
 // ClearLogFile removes all contents from the specified log file
 func ClearLogFile(logFile string) error {
 	// Drop any cached append handle first: it still points at the pre-truncation

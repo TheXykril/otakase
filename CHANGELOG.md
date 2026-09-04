@@ -45,6 +45,18 @@
 
 ### Fixed
 
+- **`curd -e` failed for anyone whose `$EDITOR` carries arguments.** The whole
+  environment variable was passed to `exec.Command` as the executable name, so
+  `EDITOR="omarchy-launch-editor --inline"` (Omarchy's default) produced
+  `executable file not found in $PATH`. The same broke `code --wait`, `subl -w`
+  and any other editor invoked with a flag. The value is now split the way a
+  shell would, honouring quotes so a path containing spaces survives, and
+  `$VISUAL` takes precedence over `$EDITOR` per convention.
+
+  The failure was also invisible: `CurdOut` sends to a desktop notification when
+  `RofiSelection` is on, so the terminal the user was looking at stayed silent.
+  `-e` now reports to the terminal it runs in, as `-u` already did, and an editor
+  that is not on `PATH` gets a message saying so instead of a raw exec error.
 - **Playback polling loops now stop when MPV exits** (upstream Wraient/curd#58,
   "Pipe Status Spam"). Three loops polled the IPC socket and treated a dead
   connection as a transient error: the Discord presence loop retried every 5s
