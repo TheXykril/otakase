@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+#
+# NOTE: this fork does not publish to the AUR. The `curd` AUR package belongs to
+# upstream (maintainer: Wraient) and must not be pushed to from here. Point
+# AUR_REPO at a package you own before using this script; see the comment at the
+# top of .github/workflows/update-aur.yml.
 
 set -euo pipefail
 

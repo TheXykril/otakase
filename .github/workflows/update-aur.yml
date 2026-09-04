@@ -1,3 +1,18 @@
+# DISABLED. This workflow publishes to the AUR, and it is inherited from
+# upstream, where it pushes to the `curd` package maintained by Wraient.
+#
+# This fork does not own that package and must not push to it. The guard below is
+# deliberately set to a repository that does not exist, so the job can never run.
+#
+# To enable AUR publishing for this fork you would need to:
+#   1. Register your own package on the AUR under a different name
+#      (`curd` is taken; `curd-polland-*` shows the convention for forks).
+#   2. Rewrite the clone URL and pkgname below to point at that package.
+#   3. Add an AUR SSH key to the repository as the AUR_SSH_PRIVATE_KEY secret.
+#   4. Change the guard to this repository.
+#
+# Until all four are done, leave this disabled: a release must not try to publish
+# to someone else's package.
 name: Update AUR Package
 
 on:
@@ -11,7 +26,7 @@ permissions:
 jobs:
   update-aur:
     runs-on: ubuntu-24.04
-    if: github.repository == 'TheXykril/curd'
+    if: github.repository == 'DISABLED/aur-publishing-not-configured'
     
     steps:
       - name: Install dependencies
