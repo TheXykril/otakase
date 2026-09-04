@@ -93,26 +93,39 @@ func ffmpegPath() (string, error) {
 func buildFFmpegArgs(streamURL, referrer, subtitleURL, output string) []string {
 	args := []string{"-hide_banner", "-loglevel", "error", "-stats_period", "1"}
 
+	referrer = strings.TrimSpace(referrer)
+	subtitleURL = strings.TrimSpace(subtitleURL)
+
+	// -headers is a per-input option: it applies only to the next -i. Setting it
+	// once covers the video but leaves the subtitle request unauthenticated, which
+	// the CDNs answer with 403.
+	referrerHeader := func() {
+		if referrer != "" {
+			// Many hosts reject a request without the referrer their player sends.
+			args = append(args, "-headers", "Referer: "+referrer+"\r\n")
+		}
+	}
+
 	// Providers routinely disguise HLS segments as images (…/seg-1-f1-v1-a1.jpg)
 	// to slip past filters. ffmpeg's HLS demuxer rejects any segment extension it
 	// does not recognise, so without this a perfectly good stream fails with
-	// "not in allowed_segment_extensions".
+	// "not in allowed_segment_extensions". These are HLS demuxer options and must
+	// NOT be repeated before a WebVTT input, which rejects them outright.
 	args = append(args, "-allowed_extensions", "ALL", "-extension_picky", "0")
-
-	if strings.TrimSpace(referrer) != "" {
-		// Many hosts reject a request without the referrer their player sends.
-		args = append(args, "-headers", "Referer: "+referrer+"\r\n")
-	}
+	referrerHeader()
 	args = append(args, "-i", streamURL)
 
-	if strings.TrimSpace(subtitleURL) != "" {
+	if subtitleURL != "" {
+		referrerHeader()
 		args = append(args, "-i", subtitleURL)
 	}
 
 	args = append(args, "-c", "copy", "-bsf:a", "aac_adtstoasc")
-	if strings.TrimSpace(subtitleURL) != "" {
-		// mov_text is the subtitle codec MP4 supports.
-		args = append(args, "-c:s", "mov_text", "-map", "0", "-map", "1")
+	if subtitleURL != "" {
+		// Map one video, one audio and the subtitle explicitly. A bare
+		// "-map 0" pulls in every variant of an HLS master playlist, which
+		// produced a broken file and crashed ffmpeg outright.
+		args = append(args, "-c:s", "mov_text", "-map", "0:v:0", "-map", "0:a:0", "-map", "1:0")
 	}
 
 	args = append(args, "-progress", "pipe:1", "-nostdin", "-y", output)
@@ -187,16 +200,21 @@ func DownloadEpisode(config CurdConfig, anime *Anime, episode int, dir string) (
 		return expected, nil
 	}
 
-	_, providerID := providerIDForAnime(anime)
-	links, mode, err := GetEpisodeURLForPlayback(config, providerID, episode)
+	// ResolveEpisodeURLForPlayback rather than GetEpisodeURLForPlayback: it walks
+	// the whole provider stack with sub/dub fallback and, crucially, returns the
+	// per-stream hints. anime.Ep.SubtitleURL is only populated during playback, so
+	// reading it here would silently skip subtitles on every download.
+	result, err := ResolveEpisodeURLForPlayback(config, anime, episode)
 	if err != nil {
 		return "", err
 	}
-	if len(links) == 0 {
+	if len(result.Links) == 0 {
 		return "", fmt.Errorf("no links found for episode %d", episode)
 	}
 
-	streamURL := PrioritizeLink(links)
+	mode := result.Mode
+	streamURL := PrioritizeLink(result.Links)
+	hint := result.LinkHints[streamURL]
 	output := DownloadPath(dir, title, episode, mode)
 
 	// The resolved mode can differ from the configured one when curd falls back
@@ -208,17 +226,20 @@ func DownloadEpisode(config CurdConfig, anime *Anime, episode int, dir string) (
 		}
 	}
 
-	referrer := anime.Ep.StreamReferrer
+	referrer := hint.Referrer
 	if referrer == "" {
-		referrer = providers.Referrer(providerNameForAnime(anime))
+		providerName := result.ProviderName
+		if providerName == "" {
+			providerName = providerNameForAnime(anime)
+		}
+		referrer = providers.Referrer(providerName)
 	}
 
 	CurdOut(fmt.Sprintf("Downloading episode %d (%s)...", episode, mode))
 	Log(fmt.Sprintf("Downloading episode %d from %s to %s", episode, streamURL, output))
 
-	args := buildFFmpegArgs(streamURL, referrer, anime.Ep.SubtitleURL, output)
 	lastReport := time.Now()
-	progressErr := runFFmpeg(binary, args, func(elapsed time.Duration) {
+	onProgress := func(elapsed time.Duration) {
 		// ffmpeg emits progress every second; throttle the user-facing line so a
 		// long download does not flood the terminal.
 		if time.Since(lastReport) < 5*time.Second {
@@ -226,7 +247,17 @@ func DownloadEpisode(config CurdConfig, anime *Anime, episode int, dir string) (
 		}
 		lastReport = time.Now()
 		CurdOut(fmt.Sprintf("  episode %d: %s downloaded", episode, elapsed.Round(time.Second)))
-	})
+	}
+
+	progressErr := runFFmpeg(binary, buildFFmpegArgs(streamURL, referrer, hint.Subtitle, output), onProgress)
+	if progressErr != nil && hint.Subtitle != "" {
+		// A subtitle track is a nicety; losing the episode over one is not. Retry
+		// without it rather than failing the download outright.
+		Log(fmt.Sprintf("Episode %d failed with subtitles (%v); retrying without them", episode, progressErr))
+		CurdOut(fmt.Sprintf("  episode %d: subtitles unavailable, downloading video only", episode))
+		lastReport = time.Now()
+		progressErr = runFFmpeg(binary, buildFFmpegArgs(streamURL, referrer, "", output), onProgress)
+	}
 
 	if progressErr != nil {
 		// A partial file is worse than none: it would be mistaken for a completed
@@ -244,6 +275,12 @@ func DownloadEpisode(config CurdConfig, anime *Anime, episode int, dir string) (
 func DownloadEpisodes(config CurdConfig, anime *Anime, from, to int, dir string) []DownloadResult {
 	if to < from {
 		from, to = to, from
+	}
+
+	// StartCurd refreshes a stale provider id before playing; downloads must do
+	// the same or they can resolve against an expired session id.
+	if err := resolveRuntimeProviderID(&config, anime); err != nil {
+		Log(fmt.Sprintf("Could not refresh provider id before download: %v", err))
 	}
 
 	results := make([]DownloadResult, 0, to-from+1)

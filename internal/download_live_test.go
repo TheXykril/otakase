@@ -71,6 +71,14 @@ func TestDownloadEpisodeLive(t *testing.T) {
 	if !strings.Contains(streams, "audio") {
 		t.Fatalf("no audio stream in the download:\n%s", streams)
 	}
+	// Subtitles are only present when the provider supplied a soft track, so this
+	// is reported rather than required -- but it proves the hint plumbing works
+	// when there is something to mux.
+	if strings.Contains(streams, "subtitle") {
+		t.Logf("subtitle track was muxed in")
+	} else {
+		t.Logf("provider supplied no soft subtitle track for this episode")
+	}
 
 	t.Logf("downloaded %s (%.1f MB), streams: %s",
 		filepath.Base(path), float64(info.Size())/(1024*1024), strings.ReplaceAll(strings.TrimSpace(streams), "\n", ", "))

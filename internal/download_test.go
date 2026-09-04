@@ -157,13 +157,40 @@ func TestBuildFFmpegArgsPassesReferrer(t *testing.T) {
 }
 
 func TestBuildFFmpegArgsMuxesSubtitles(t *testing.T) {
-	args := buildFFmpegArgs("https://cdn.test/x.m3u8", "", "https://cdn.test/subs.vtt", "/tmp/o.mp4")
+	args := buildFFmpegArgs("https://cdn.test/x.m3u8", "https://megaplay.buzz/", "https://cdn.test/subs.vtt", "/tmp/o.mp4")
 	joined := strings.Join(args, " ")
+
 	if !strings.Contains(joined, "subs.vtt") {
 		t.Fatalf("expected the subtitle input, got: %s", joined)
 	}
 	if !strings.Contains(joined, "mov_text") {
 		t.Fatalf("MP4 subtitles need mov_text, got: %s", joined)
+	}
+
+	// A bare "-map 0" pulls in every variant of an HLS master playlist, which
+	// produced a broken file and crashed ffmpeg.
+	if strings.Contains(joined, "-map 0 ") {
+		t.Fatalf("expected explicit stream mapping, not -map 0: %s", joined)
+	}
+	for _, want := range []string{"-map 0:v:0", "-map 0:a:0", "-map 1:0"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected %q, got: %s", want, joined)
+		}
+	}
+
+	// -headers is per-input: the subtitle fetch is a separate request and gets a
+	// 403 without its own referrer.
+	if strings.Count(joined, "-headers") != 2 {
+		t.Fatalf("expected a referrer header before each input, got: %s", joined)
+	}
+
+	// ...but the HLS demuxer options must not be repeated before the WebVTT
+	// input; ffmpeg fails with "Option extension_picky not found".
+	if strings.Count(joined, "-extension_picky") != 1 {
+		t.Fatalf("HLS options must apply only to the stream input, got: %s", joined)
+	}
+	if strings.Count(joined, "-allowed_extensions") != 1 {
+		t.Fatalf("HLS options must apply only to the stream input, got: %s", joined)
 	}
 }
 
