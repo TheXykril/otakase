@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/wraient/curd/internal/theme"
 	"golang.org/x/term"
 )
 
@@ -282,11 +284,11 @@ func escapePango(s string) string {
 }
 
 var (
-	mdBoldRe  = regexp.MustCompile(`\*\*(.+?)\*\*`)
-	mdCodeRe  = regexp.MustCompile("`([^`]+)`")
-	mdLinkRe  = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
-	mdURLRe   = regexp.MustCompile(`https?://[^\s<>\]]+`)
-	ansiStrip = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	mdBoldRe   = regexp.MustCompile(`\*\*(.+?)\*\*`)
+	mdCodeRe   = regexp.MustCompile("`([^`]+)`")
+	mdLinkRe   = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
+	mdURLRe    = regexp.MustCompile(`https?://[^\s<>\]]+`)
+	ansiStrip  = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	pangoStrip = regexp.MustCompile(`<[^>]*>`)
 )
 
@@ -349,12 +351,13 @@ func inlineMarkdownToPango(s string) string {
 
 // markdownToTerminal colors release notes for CLI (lipgloss), easy on the eyes.
 func markdownToTerminal(md string) string {
-	heading := lipgloss.NewStyle().Foreground(lipgloss.Color("#7CB9E8")).Bold(true)
-	subhead := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD166")).Bold(true)
-	bullet := lipgloss.NewStyle().Foreground(lipgloss.Color("#98FB98"))
-	body := lipgloss.NewStyle().Foreground(lipgloss.Color("#E6E6FA"))
-	muted := lipgloss.NewStyle().Foreground(lipgloss.Color("#9A9A9A"))
-	link := lipgloss.NewStyle().Foreground(lipgloss.Color("#6EC6FF")).Underline(true)
+	palette := theme.Active()
+	heading := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Accent)).Bold(true)
+	subhead := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Yellow)).Bold(true)
+	bullet := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Green))
+	body := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Foreground))
+	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Muted))
+	link := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Cyan)).Underline(true)
 
 	lines := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
 	out := make([]string, 0, len(lines))
@@ -429,11 +432,12 @@ func buildUpdatePromptMessageMode(currentVersion string, state updatePendingStat
 	}
 
 	// CLI / terminal
-	title := lipgloss.NewStyle().Foreground(lipgloss.Color("#7CFC98")).Bold(true)
-	label := lipgloss.NewStyle().Foreground(lipgloss.Color("#E6E6FA"))
-	oldV := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF8A80")).Bold(true)
-	newV := lipgloss.NewStyle().Foreground(lipgloss.Color("#7CFC98")).Bold(true)
-	link := lipgloss.NewStyle().Foreground(lipgloss.Color("#6EC6FF")).Underline(true)
+	palette := theme.Active()
+	title := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Green)).Bold(true)
+	label := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Foreground))
+	oldV := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Red)).Bold(true)
+	newV := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Green)).Bold(true)
+	link := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Cyan)).Underline(true)
 
 	var b strings.Builder
 	name := state.ReleaseName
@@ -550,7 +554,7 @@ func HandlePendingUpdatePrompt(config *CurdConfig, currentVersion string) bool {
 		// Pango-colored notes in -mesg; one Rofi UI, no notify spam.
 		selected, err = RofiSelectWithMessage(options, false, prompt, message)
 	} else {
-		header := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD166")).Bold(true)
+		header := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Active().Yellow)).Bold(true)
 		fmt.Println(header.Render(prompt))
 		fmt.Println(message)
 		fmt.Println()

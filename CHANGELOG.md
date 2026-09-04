@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Desktop theming.** On [Omarchy](https://omarchy.org/) the active theme's
+  `colors.toml` is read from `~/.local/state/omarchy/current/theme/` and drives
+  both the terminal menus and the rofi menus, so Curd matches the rest of the
+  desktop. Configurable with `Theme=auto|omarchy|builtin`. Colours are chosen by
+  measured contrast rather than assumed: the highlighted row falls back to the
+  accent when a theme's selection colour is too close to its background to see,
+  and text on a filled accent is picked light or dark to stay readable.
+- **Redesigned rofi menus**, now generated from the palette and embedded in the
+  binary rather than downloaded from GitHub on first run. The menus work offline,
+  a theme change is picked up automatically, and a hand-edited `.rasi` is copied
+  to `<name>.rasi.user-backup` before being replaced.
+
+### Fixed
+
+- **A stacked search no longer waits on the slowest provider.** It waited on all
+  of them, so animepahe's ~17s browser challenge set the pace even when anipub
+  had answered in 0.2s. A straggler now gets a 2.5s grace window once another
+  provider has produced results, with a 20s overall deadline while nothing has
+  succeeded. Healthy providers are unaffected.
+- **Failures are grouped by cause.** Every provider error used to be
+  concatenated onto one line, burying whether the hosts were down or simply did
+  not carry the show. Clean misses now collapse onto a single line and the
+  message says which situation it is.
+- **Providers that just failed are no longer re-probed every search.** Two
+  consecutive unreachable failures put a provider on a 5 minute cooldown. A
+  provider answering "no results" is working correctly and is never cooled down.
+
+### Performance
+
+- `Log()` kept the log file open instead of reopening it for every line, which
+  cost an open/write/close syscall triple per entry. Writes stay unbuffered.
+
 ## 2.1.0 — provider resolution fixes
 
 Fork of [Wraient/curd](https://github.com/Wraient/curd) at v2.0.7. Drop-in

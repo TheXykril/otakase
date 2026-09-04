@@ -16,6 +16,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/wraient/curd/internal/theme"
 )
 
 // Model represents the application state for the selection prompt
@@ -47,43 +49,66 @@ type PreviewSelectionRefreshConfig struct {
 	BuildOptions func(AnimeList) map[string]RofiSelectPreview
 }
 
+// Menu styles are derived from the active palette rather than fixed, so Curd
+// matches the desktop theme on Omarchy. ApplyTheme rebuilds them; the values here
+// are the builtin palette so the package is usable before it is called.
 var (
-	// Style definitions
+	titleStyle          lipgloss.Style
+	filterLabelStyle    lipgloss.Style
+	filterTextStyle     lipgloss.Style
+	selectedItemStyle   lipgloss.Style
+	regularItemStyle    lipgloss.Style
+	noMatchesStyle      lipgloss.Style
+	quitHintStyle       lipgloss.Style
+	newEpisodeItemStyle lipgloss.Style
+
+	rofiNewEpisodeColor string
+)
+
+func init() {
+	ApplyTheme(theme.Builtin())
+}
+
+// ApplyTheme rebuilds the menu styles from a palette.
+func ApplyTheme(palette theme.Palette) {
+	color := func(value string) lipgloss.Color { return lipgloss.Color(value) }
+
 	titleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#7CB9E8")). // Light blue
-			Bold(true)
+		Foreground(color(palette.Accent)).
+		Bold(true)
 
 	filterLabelStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FF69B4")). // Hot pink
-				Bold(true)
+		Foreground(color(palette.Magenta)).
+		Bold(true)
 
 	filterTextStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#98FB98")) // Pale green
+		Foreground(color(palette.Green))
 
+	selectionBackground := palette.SelectionBackground()
 	selectedItemStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFFFFF")). // White text
-				Background(lipgloss.Color("#4A90E2")). // Softer blue background
-				Bold(true).
-				Padding(0, 1).
-				Border(lipgloss.NormalBorder(), false, false, false, true). // Left border only
-				BorderForeground(lipgloss.Color("#FFFFFF"))                 // White border
+		Foreground(color(palette.SelectionForeground())).
+		Background(color(selectionBackground)).
+		Bold(true).
+		Padding(0, 1).
+		Border(lipgloss.NormalBorder(), false, false, false, true). // Left border only
+		BorderForeground(color(palette.Accent))
 
 	regularItemStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#E6E6FA")). // Light lavender
-				Padding(0, 1)
+		Foreground(color(palette.Foreground)).
+		Padding(0, 1)
 
 	noMatchesStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF6B6B")). // Coral red
-			Italic(true)
+		Foreground(color(palette.Red)).
+		Italic(true)
 
 	quitHintStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFD700")) // Gold
+		Foreground(color(palette.Muted))
 
 	newEpisodeItemStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#4CAF50")) // Green
+		Foreground(color(palette.Green))
 
-	rofiNewEpisodeColor = "#4CAF50"
-)
+	rofiNewEpisodeColor = palette.Green
+}
 
 // Init initializes the model
 func (m Model) Init() tea.Cmd {

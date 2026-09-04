@@ -47,6 +47,7 @@ type CurdConfig struct {
 	SubStyle                   string   `config:"SubStyle"`
 	StoragePath                string   `config:"StoragePath"`
 	AnimeNameLanguage          string   `config:"AnimeNameLanguage"`
+	Theme                      string   `config:"Theme"`
 	MenuOrder                  string   `config:"MenuOrder"`
 	PercentageToMarkComplete   int      `config:"PercentageToMarkComplete"`
 	NextEpisodePrompt          bool     `config:"NextEpisodePrompt"`
@@ -139,6 +140,7 @@ func defaultConfigMap() map[string]string {
 		"MyAnimeListImported":        "false",
 		"MyAnimeListImportDismissed": "false",
 		"ShowNewEpisodes":            "true",
+		"Theme":                      "auto",
 	}
 }
 

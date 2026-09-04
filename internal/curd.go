@@ -1489,57 +1489,6 @@ func reselectProviderAnime(userCurdConfig *CurdConfig, anime *Anime, reason erro
 	return true
 }
 
-func CheckAndDownloadFiles(storagePath string, filesToCheck []string) error {
-	// Create storage directory if it doesn't exist
-	storagePath = os.ExpandEnv(storagePath)
-	if err := os.MkdirAll(storagePath, 0755); err != nil {
-		return fmt.Errorf("failed to create storage directory: %v", err)
-	}
-
-	// Base URL for downloading config files
-	baseURL := "https://raw.githubusercontent.com/TheXykril/curd/refs/heads/main/rofi/"
-
-	// Check each file
-	for _, fileName := range filesToCheck {
-		filePath := filepath.Join(os.ExpandEnv(storagePath), fileName)
-
-		// Skip if file already exists
-		if _, err := os.Stat(filePath); err == nil {
-			continue
-		}
-
-		// Download file if it doesn't exist
-		resp, err := sharedHTTPClient.Get(baseURL + fileName)
-		if err != nil {
-			return fmt.Errorf("failed to download %s: %v", fileName, err)
-		}
-		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
-			return fmt.Errorf("failed to download %s: received status code %d", fileName, resp.StatusCode)
-		}
-
-		// Create the file
-		out, err := os.Create(filePath)
-		if err != nil {
-			resp.Body.Close()
-			return fmt.Errorf("failed to create file %s: %v", fileName, err)
-		}
-
-		// Write the content
-		if _, err := io.Copy(out, resp.Body); err != nil {
-			resp.Body.Close()
-			out.Close()
-			return fmt.Errorf("failed to write file %s: %v", fileName, err)
-		}
-		resp.Body.Close()
-		if err := out.Close(); err != nil {
-			return fmt.Errorf("failed to close file %s: %v", fileName, err)
-		}
-	}
-
-	return nil
-}
-
 func getEntriesByCategory(list AnimeList, category string) []Entry {
 	switch category {
 	case "ALL":

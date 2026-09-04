@@ -178,17 +178,17 @@ func main() {
 		return
 	}
 
-	if userCurdConfig.RofiSelection {
-		filesToCheck := []string{
-			"selectanimepreview.rasi",
-			"selectanime.rasi",
-			"userinput.rasi",
-		}
+	// Resolve the colour palette before anything draws. On Omarchy this follows
+	// the desktop theme; elsewhere it is curd's own palette.
+	internal.ApplyThemeFromConfig(&userCurdConfig)
 
-		err := internal.CheckAndDownloadFiles(os.ExpandEnv(userCurdConfig.StoragePath), filesToCheck)
-		if err != nil {
-			internal.Log(fmt.Sprintf("Error checking and downloading files: %v\n", err))
-			internal.CurdOut(fmt.Sprintf("Error checking and downloading files: %v\n", err))
+	if userCurdConfig.RofiSelection {
+		// Themes are rendered from the palette on every run, so a desktop theme
+		// change is picked up without the user clearing anything. This also means
+		// the menus no longer need the network before they can be shown.
+		if err := internal.WriteRofiThemes(os.ExpandEnv(userCurdConfig.StoragePath)); err != nil {
+			internal.Log(fmt.Sprintf("Error writing rofi themes: %v", err))
+			internal.CurdOut(fmt.Sprintf("Error writing rofi themes: %v", err))
 			internal.ExitCurd(err)
 		}
 	}

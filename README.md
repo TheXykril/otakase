@@ -19,8 +19,15 @@ Works on Linux, MacOS and Windows.
 > | anipub's newer `/play/{id}/{ep}/{mode}` episode links failed with `unsupported video link` | Both anipub link shapes are now resolved |
 > | AllAnime returns `AA_CRYPTO_MISSING` for episode sources, so it listed shows that could never play | Detected and reported explicitly; AllAnime is disabled by default |
 > | A failed MPV launch left an empty IPC socket path being polled in a hot loop, writing millions of log lines | Missing sockets now fail immediately and are treated as a closed session |
+> | One slow provider set the pace for the whole search — animepahe costs ~17s | Stragglers are abandoned once a faster provider has answered |
+> | A failed provider was re-probed on every search, paying its timeout each time | Repeated failures put a provider on a short cooldown |
+> | Failures were reported as one concatenated wall of provider errors | Grouped by cause: "hosts are down" reads differently from "nobody carries it" |
 >
-> New: `curd -provider-status` probes every provider and reports which ones work.
+> **Also new:**
+> - `curd -provider-status` probes every provider and reports which ones work.
+> - The menus follow your desktop colours on [Omarchy](https://omarchy.org/), and
+>   the rofi themes were redesigned and are now generated locally rather than
+>   downloaded — see [Theming](#theming).
 >
 > Providers verified working end-to-end at the time of writing: **anipub** and **anineko**.
 
@@ -53,7 +60,7 @@ https://github.com/user-attachments/assets/cbf799bc-9fdd-4402-ab61-b4e31f1e264d
 - Skip anime Intro and Outro
 - Skip Filler and Recap episodes
 - Discord RPC about the anime
-- Rofi support
+- Rofi support, with menus themed from your desktop colours on Omarchy
 - Image preview in rofi
 - Local anime history to continue from where you left off last time
 - Save mpv speed for next episode
@@ -61,31 +68,58 @@ https://github.com/user-attachments/assets/cbf799bc-9fdd-4402-ab61-b4e31f1e264d
 
 
 ## Installing and Setup
-> **Note**: `Curd` requires `mpv`, `rofi`, and `ueberzugpp` for Rofi support and image preview. These are included in the installation instructions below for each distribution.
+
+> **Note**: `Curd` requires `mpv`. `rofi` and `ueberzugpp` are optional, for the
+> graphical menus and image previews.
+
+> **Installing this fork?** It is a drop-in replacement for the official `curd`
+> package: same binary name, same `~/.config/curd/curd.conf`, same AniList and
+> MyAnimeList tokens. Installing it **replaces** the official package, and your
+> existing config, watch history and logins carry over untouched.
+>
+> This fork is **not on the AUR**, so `yay -S curd` installs the *original*
+> (unfixed) package. Use one of the methods below instead.
 
 ### Linux
-<details>
-<summary>Arch Linux / Manjaro (AUR-based systems)</summary>
 
-Using Yay:
+<details open>
+<summary><b>Arch Linux / Manjaro</b></summary>
 
-```bash
-yay -Sy curd
-```
-
-or using Paru:
+**Build from source with the bundled PKGBUILD** (recommended — pacman then
+tracks it like any other package):
 
 ```bash
-paru -Sy curd
-```
-
-Or, to manually clone and install:
-
-```bash
-git clone https://aur.archlinux.org/curd.git
+sudo pacman -S --needed go git mpv
+git clone https://github.com/TheXykril/curd.git
 cd curd
 makepkg -si
+```
+
+`makepkg` runs the test suite as part of the build, so a broken build fails
+before it is installed.
+
+**Or install the prebuilt binary** (no Go toolchain needed):
+
+```bash
+sudo pacman -S --needed mpv
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-linux-x86_64
+chmod +x curd
+sudo install -Dm755 curd /usr/bin/curd
+```
+
+Note this bypasses pacman, so it will be overwritten if you later install the
+official `curd` package.
+
+**Optional extras** for the rofi menus and image previews:
+
+```bash
 sudo pacman -S rofi ueberzugpp
+```
+
+**Switching back to upstream** at any point:
+
+```bash
+sudo pacman -R curd && yay -S curd
 ```
 </details>
 
@@ -307,9 +341,13 @@ curd [options]
 
 > **Note**:
 > - To use rofi you need rofi and ueberzug installed.
-> - Rofi .rasi files are at default `~/.local/share/curd/`
-> - You can edit them as you like.
-> - If there are no rasi files with specific names, they would be downloaded from this repo.
+> - Rofi `.rasi` themes live in `~/.local/share/curd/`.
+> - They are **generated from your colour theme on every run** (see
+>   [Theming](#theming)), so they follow your desktop and work offline. A theme
+>   you have hand-edited is copied to `<name>.rasi.user-backup` before being
+>   replaced, so your work is never lost.
+> - To keep your own themes permanently, set `Theme=builtin` — or edit the
+>   backup and copy it back over the generated file.
 
 
 ### Options
@@ -342,6 +380,8 @@ curd [options]
 | `-subs-lang`              | Set the language for subtitles                                         | `"english"`   |
 | `-u`                      | Update the script                                                      | -             |
 | `-v`                      | Show curd version                                                      | -             |
+| `-provider-status`        | Probe every provider and report which ones work                        | -             |
+| `-provider-status-query`  | Search term used by `-provider-status`                                 | `one piece`   |
 
 ### Examples
 
@@ -359,6 +399,31 @@ curd [options]
   ```bash
   curd -rofi -image-preview
   ```
+
+## Theming
+
+Curd colours its menus from your desktop theme where it can.
+
+On [Omarchy](https://omarchy.org/), the active theme's `colors.toml` is read
+from `~/.local/state/omarchy/current/theme/`, and both the terminal menus and
+the rofi menus follow it. Switch themes with `omarchy theme set <name>` and Curd
+picks it up on its next run — nothing to configure.
+
+Anywhere else, Curd uses its own palette.
+
+Set `Theme` in `~/.config/curd/curd.conf`:
+
+| Value     | Behaviour                                                        |
+|-----------|------------------------------------------------------------------|
+| `auto`    | Follow the desktop theme when one is detected (default)           |
+| `omarchy` | Always use the Omarchy theme; fall back to builtin if unreadable  |
+| `builtin` | Always use Curd's own palette, and stop rewriting the rofi themes |
+
+Colours are chosen for contrast rather than assumed: the highlighted row falls
+back to the theme's accent when its selection colour sits too close to the
+background to be seen, and text drawn on a filled accent is picked light or dark
+by measured contrast. That keeps the menus readable on both light and dark
+themes.
 
 ## Configuration
 
@@ -432,6 +497,36 @@ If the browser reaches the localhost callback page but curd does not continue au
 ## Todo (fix)
 - Use Powershell for windows token input instead of notepad or cmd
 - Add a better way to do commands in windows (Convinience for users)
+
+## Troubleshooting
+
+**"No provider had ..." / nothing plays.** Streaming hosts break often. Check
+which ones are actually working:
+
+```bash
+curd -provider-status
+```
+
+Each provider is reported as working, disabled (with the reason), or unreachable.
+If everything is unreachable, it is your connection or the hosts are down; if
+everything answered but nothing matched, the show is genuinely not carried under
+that name — try searching for it manually from the menu.
+
+**A provider says it is disabled.** Some are off by default because they cannot
+currently play anything (`allanime`), because their host is gone (`senshi`),
+because they need a browser challenge (`animepahe`), or because they are
+unverified (`anidb`). To enable one anyway, list it in `Provider`:
+
+```
+Provider=["anipub","anineko","animepahe"]
+```
+
+**Curd is slow to search.** A provider that fails repeatedly is skipped for five
+minutes, and slow providers are abandoned once a faster one has answered, so
+this usually resolves itself. `curd -provider-status` shows the per-provider
+timings.
+
+**Logs.** `~/.local/share/curd/debug.log`, truncated on each run.
 
 ## Dependencies
 - mpv - Video player (required fallback)
