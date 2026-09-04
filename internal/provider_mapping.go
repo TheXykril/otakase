@@ -27,6 +27,17 @@ type providerMappingSearchState struct {
 	allProviders  []string
 	sequential    bool
 	providerIndex int
+	// queryVariants holds alternate titles to try when the primary query finds
+	// nothing, so a romaji-only AniList title still resolves on English-indexed
+	// providers. It is cleared once the user types a query of their own.
+	queryVariants []string
+}
+
+// setManualQuery records a user-supplied search term and drops the automatic title
+// variants, so an explicit search is never silently replaced by a title guess.
+func (s *providerMappingSearchState) setManualQuery(query string) {
+	s.query = query
+	s.queryVariants = nil
 }
 
 func (s *providerMappingSearchState) activeProviders() []string {
@@ -92,10 +103,41 @@ func searchAnimeForMapping(config *CurdConfig, state *providerMappingSearchState
 	if len(providers) == 0 {
 		return nil, nil
 	}
-	if !state.sequential && len(providers) == len(state.allProviders) {
-		return SearchAnime(state.query, mode)
+
+	runSearch := func(query string) ([]SelectionOption, error) {
+		if !state.sequential && len(providers) == len(state.allProviders) {
+			return SearchAnime(query, mode)
+		}
+		return searchAnimeWithProviders(providers, query, mode)
 	}
-	return searchAnimeWithProviders(providers, state.query, mode)
+
+	queries := state.queryVariants
+	if len(queries) == 0 {
+		queries = []string{state.query}
+	}
+
+	var firstErr error
+	for _, query := range queries {
+		results, err := runSearch(query)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			Log(fmt.Sprintf("Search variant %q failed: %v", query, err))
+			continue
+		}
+		if len(results) > 0 {
+			if query != state.query {
+				Log(fmt.Sprintf("Search variant %q matched after %q found nothing", query, state.query))
+				// Adopt the query that worked so recovery prompts and any later
+				// retry stay on the term that actually resolves this show.
+				state.query = query
+			}
+			return results, nil
+		}
+	}
+
+	return nil, firstErr
 }
 
 func confirmProviderMatch(option SelectionOption, reason string) bool {
@@ -493,8 +535,12 @@ func ResolveAnimeProviderMapping(config *CurdConfig, anime *Anime, query string,
 
 func resolveAnimeProviderMapping(config *CurdConfig, anime *Anime, query string, anilistEntry *Entry, manualOnly bool) (ProviderMappingOutcome, error) {
 	state := &providerMappingSearchState{
-		query:        query,
-		allProviders: configuredProviderNames(config),
+		query:         query,
+		allProviders:  configuredProviderNames(config),
+		queryVariants: buildSearchQueryVariants(config, anime.Title, query),
+	}
+	if len(state.queryVariants) > 1 {
+		Log(fmt.Sprintf("Search title variants for %q: %v", query, state.queryVariants))
 	}
 
 	for {
@@ -749,7 +795,7 @@ func handleProviderMappingAction(config *CurdConfig, state *providerMappingSearc
 		if err != nil {
 			return ProviderMappingQuit, false, err
 		}
-		state.query = newQuery
+		state.setManualQuery(newQuery)
 		state.resetToAllProviders()
 		return ProviderMappingOK, true, nil
 	case "next_provider":
