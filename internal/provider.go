@@ -1,13 +1,61 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/wraient/curd/internal/providers"
 	"github.com/wraient/curd/internal/providers/animepahe"
 )
+
+const (
+	// providerSearchAttempts bounds retries for a single provider search.
+	providerSearchAttempts = 2
+	// providerSearchRetryDelay is the base backoff between search attempts.
+	providerSearchRetryDelay = 500 * time.Millisecond
+)
+
+// isRetryableProviderError reports whether a provider failure looks transient
+// (timeout, reset connection, truncated response) rather than a definitive
+// "this host has no such show" answer, which must not be retried.
+func isRetryableProviderError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+
+	message := strings.ToLower(err.Error())
+	for _, transient := range []string{
+		"timeout",
+		"deadline exceeded",
+		"connection reset",
+		"connection refused",
+		"unexpected eof",
+		"eof",
+		"temporary failure",
+		"no such host",
+		"broken pipe",
+		"server misbehaving",
+	} {
+		if strings.Contains(message, transient) {
+			return true
+		}
+	}
+	return false
+}
 
 // Provider interface defines methods for an anime provider.
 type Provider interface {
@@ -353,31 +401,71 @@ func SearchAnime(query, mode string) ([]SelectionOption, error) {
 	return results, nil
 }
 
-func searchAnimeWithProviders(providerNames []string, query, mode string) ([]SelectionOption, error) {
-	if len(providerNames) == 1 {
-		provider, err := ProviderByName(providerNames[0])
-		if err != nil {
-			return nil, err
-		}
-		return provider.SearchAnime(query, mode)
+// searchProviderWithRetry runs one provider search, retrying transient network
+// failures. A single slow response used to sink the whole search: providers were
+// tried one after another against a shared 15s client timeout, so one stalled host
+// consumed the budget and the run reported "all provider searches failed".
+func searchProviderWithRetry(providerName, query, mode string) ([]SelectionOption, error) {
+	provider, err := ProviderByName(providerName)
+	if err != nil {
+		return nil, err
 	}
+
+	var lastErr error
+	for attempt := 1; attempt <= providerSearchAttempts; attempt++ {
+		options, err := provider.SearchAnime(query, mode)
+		if err == nil {
+			return options, nil
+		}
+		lastErr = err
+		if !isRetryableProviderError(err) || attempt == providerSearchAttempts {
+			break
+		}
+		Log(fmt.Sprintf("Provider %s search attempt %d/%d for %q failed transiently: %v", providerName, attempt, providerSearchAttempts, query, err))
+		time.Sleep(time.Duration(attempt) * providerSearchRetryDelay)
+	}
+	return nil, lastErr
+}
+
+// searchAnimeWithProviders queries every configured provider concurrently and
+// merges the results in stack order, so a dead or slow host costs one timeout in
+// parallel rather than delaying every provider behind it.
+func searchAnimeWithProviders(providerNames []string, query, mode string) ([]SelectionOption, error) {
+	if len(providerNames) == 0 {
+		return nil, fmt.Errorf("no providers configured")
+	}
+	if len(providerNames) == 1 {
+		return searchProviderWithRetry(providerNames[0], query, mode)
+	}
+
+	type providerSearch struct {
+		options []SelectionOption
+		err     error
+	}
+
+	outcomes := make([]providerSearch, len(providerNames))
+	var wg sync.WaitGroup
+	for i, providerName := range providerNames {
+		wg.Add(1)
+		go func(index int, name string) {
+			defer wg.Done()
+			options, err := searchProviderWithRetry(name, query, mode)
+			outcomes[index] = providerSearch{options: options, err: err}
+		}(i, providerName)
+	}
+	wg.Wait()
 
 	results := make([]SelectionOption, 0)
 	seen := make(map[string]struct{})
 	var searchErrors []string
-	for _, providerName := range providerNames {
-		provider, err := ProviderByName(providerName)
-		if err != nil {
-			searchErrors = append(searchErrors, err.Error())
+	for i, providerName := range providerNames {
+		outcome := outcomes[i]
+		if outcome.err != nil {
+			Log(fmt.Sprintf("Provider %s search failed for %q: %v", providerName, query, outcome.err))
+			searchErrors = append(searchErrors, fmt.Sprintf("%s: %v", providerName, outcome.err))
 			continue
 		}
-		options, err := provider.SearchAnime(query, mode)
-		if err != nil {
-			Log(fmt.Sprintf("Provider %s search failed for %q: %v", providerName, query, err))
-			searchErrors = append(searchErrors, fmt.Sprintf("%s: %v", providerName, err))
-			continue
-		}
-		for _, option := range options {
+		for _, option := range outcome.options {
 			option = qualifySelectionOption(providerName, option, true)
 			if _, exists := seen[option.Key]; exists {
 				continue

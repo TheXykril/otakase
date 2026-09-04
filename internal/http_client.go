@@ -36,11 +36,19 @@ func init() {
 	jar, _ := cookiejar.New(nil)
 	sharedHTTPClient = &http.Client{
 		Transport: &http.Transport{
-			MaxIdleConns:        10,
-			MaxIdleConnsPerHost: 5,
-			IdleConnTimeout:     30 * time.Second,
+			// Providers are now searched concurrently, so the pool has to hold a
+			// live connection per host instead of serialising them.
+			MaxIdleConns:          50,
+			MaxIdleConnsPerHost:   10,
+			IdleConnTimeout:       60 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 20 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			ForceAttemptHTTP2:     true,
 		},
-		Timeout: 15 * time.Second,
+		// Anime hosts are frequently slow on a cold connection; 15s was tight
+		// enough that a single stall aborted an otherwise healthy search.
+		Timeout: 25 * time.Second,
 		Jar:     jar,
 	}
 }
