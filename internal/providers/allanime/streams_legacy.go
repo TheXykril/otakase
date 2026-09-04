@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -158,6 +159,12 @@ const (
 	allanimePersistedQueryReferer = "https://youtu-chan.com"
 	allanimeGraphQLReferer        = "https://allanime.to"
 )
+
+// errAllanimeCryptoRequired reports that AllAnime's episode endpoint demands a
+// request signature Curd cannot produce. Their own frontend is unreachable
+// (allanime.day answers every request with a 301 back to itself), so there is no
+// live page to derive the scheme from.
+var errAllanimeCryptoRequired = errors.New("AllAnime now requires a signed request for episode sources (AA_CRYPTO_MISSING); the provider is currently unusable")
 
 func isDirectPlayableAllanimeSource(source allanimeSource) bool {
 	sourceURL := strings.TrimSpace(source.SourceUrl)
@@ -494,6 +501,14 @@ func fetchEpisodeSourcesForMode(id, mode string, epNo int) ([]allanimeSource, er
 			curdhost.Log(fmt.Sprint("Error parsing fallback JSON: ", err))
 			return nil, err
 		}
+	}
+
+	// AllAnime moved episode sources behind a client-side signature. Unsigned
+	// requests now come back 200 with an AA_CRYPTO_MISSING GraphQL error and a null
+	// episode, which previously surfaced as the far less useful
+	// "no encoded Allanime provider sources found".
+	if bytes.Contains(body, []byte("AA_CRYPTO_MISSING")) {
+		return nil, errAllanimeCryptoRequired
 	}
 
 	if response.Data.Tobeparsed != "" {

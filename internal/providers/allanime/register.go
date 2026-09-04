@@ -8,7 +8,11 @@ func init() {
 		Aliases:         []string{"all-anime", "all anime"},
 		Referrer:        "https://allanime.day/",
 		DefaultDisabled: true,
-		DisableReason:   "disabled by default; set Provider to include allanime to enable",
+		// Catalogue search still answers, but the episode endpoint now rejects
+		// unsigned requests with AA_CRYPTO_MISSING, so every selection made from an
+		// AllAnime result fails at playback. Listing it would only offer shows that
+		// cannot be played.
+		DisableReason: "AllAnime requires a signed request for episode sources (AA_CRYPTO_MISSING); search works but playback does not",
 	}, func() providers.Provider {
 		return &Provider{}
 	})

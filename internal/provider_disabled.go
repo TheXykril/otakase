@@ -100,7 +100,10 @@ func filterEnabledProviders(names []string) []string {
 	return enabled
 }
 
-var preferredProviderOrder = []string{"senshi", "anipub", "anineko", "allanime", "animepahe"}
+// preferredProviderOrder ranks providers by how reliably they currently resolve
+// streams. anipub and anineko are the two that verifiably work end to end; the
+// rest are kept registered so an explicit config can still select them.
+var preferredProviderOrder = []string{"anipub", "anineko", "anidb", "senshi", "allanime", "animepahe"}
 
 func defaultEnabledProviderStack() []string {
 	registered := providers.RegisteredNames()
@@ -154,7 +157,17 @@ func firstEnabledProviderName() string {
 	if len(enabled) > 0 {
 		return enabled[0]
 	}
-	return "senshi"
+	// Every preferred provider is disabled, so fall back to the first registered
+	// one rather than a hardcoded name that may no longer resolve.
+	for _, name := range preferredProviderOrder {
+		if _, ok := providers.MetaFor(name); ok {
+			return name
+		}
+	}
+	if registered := providers.RegisteredNames(); len(registered) > 0 {
+		return registered[0]
+	}
+	return ""
 }
 
 func ensureEnabledProviderNames(names []string) []string {
