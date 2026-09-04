@@ -31,19 +31,30 @@ var Names = []string{
 }
 
 // templateData is the value the .rasi templates are rendered against.
+//
+// The type scale is set by role rather than decoration: one family, sized so the
+// thing you are typing into is larger than the things you are choosing between.
 type templateData struct {
 	Font        string
+	EntryFont   string
+	PromptFont  string
 	HeadingFont string
+	TitleFont   string
 
-	Background string
-	Scrim      string
-	Surface    string
-	Border     string
-	Foreground string
-	Muted      string
-	Accent     string
+	Background       string
+	Scrim            string
+	Surface          string
+	Border           string
+	Foreground       string
+	BrightForeground string
+	Muted            string
+	Accent           string
 	// OnAccent is text drawn on top of the accent colour.
-	OnAccent            string
+	OnAccent string
+	// SelectionBand is the filled band behind the cursor row. It is mixed from
+	// the accent rather than taken from the theme's selection colour, which on
+	// some themes sits so close to the background that the cursor disappears.
+	SelectionBand       string
 	SelectionBackground string
 	SelectionForeground string
 	Red                 string
@@ -53,22 +64,27 @@ type templateData struct {
 func newTemplateData(palette theme.Palette) templateData {
 	accent := palette.Accent
 	return templateData{
-		Font:        "Sans 12",
-		HeadingFont: "Sans Bold 16",
+		Font:        "Sans 11",
+		EntryFont:   "Sans 13",
+		PromptFont:  "Sans Bold 13",
+		HeadingFont: "Sans Bold 14",
+		TitleFont:   "Sans 15",
 
 		Background: palette.Background,
 		// rofi accepts #rrggbbaa. The poster grid is fullscreen, so it dims the
 		// desktop rather than blacking it out -- but it has to be opaque enough
 		// that whatever is behind it does not compete with the covers.
-		Scrim:      strings.TrimSpace(palette.Background) + "f7",
-		Surface:    palette.Surface(),
-		Border:     palette.Border(),
-		Foreground: palette.Foreground,
-		Muted:      palette.Muted,
-		Accent:     accent,
+		Scrim:            strings.TrimSpace(palette.Background) + "f7",
+		Surface:          palette.Surface(),
+		Border:           palette.Border(),
+		Foreground:       palette.Foreground,
+		BrightForeground: palette.BrightForeground,
+		Muted:            palette.Muted,
+		Accent:           accent,
 		// The prompt pill is filled with the accent, so its text has to be chosen
 		// by contrast or it disappears on light accents.
 		OnAccent:            theme.ReadableOn(accent, palette.Background, palette.BrightForeground, palette.Foreground),
+		SelectionBand:       palette.SelectionBand(),
 		SelectionBackground: palette.SelectionBackground(),
 		SelectionForeground: palette.SelectionForeground(),
 		Red:                 palette.Red,

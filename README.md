@@ -30,7 +30,8 @@ Works on Linux, MacOS and Windows.
 > - `curd -provider-status` probes every provider and reports which ones work.
 > - The menus follow your desktop colours on [Omarchy](https://omarchy.org/), and
 >   the rofi themes were redesigned and are now generated locally rather than
->   downloaded — see [Theming](#theming).
+>   downloaded — see [Theming](#theming). Rows set the title at full strength and
+>   dim the episode count and provider, so a long list stays scannable.
 >
 > Providers verified working end-to-end at the time of writing: **anipub** and **anineko**.
 

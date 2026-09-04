@@ -63,6 +63,7 @@ var (
 	newEpisodeItemStyle lipgloss.Style
 
 	rofiNewEpisodeColor string
+	rofiMetaColor       string
 )
 
 func init() {
@@ -108,6 +109,7 @@ func ApplyTheme(palette theme.Palette) {
 		Foreground(color(palette.Green))
 
 	rofiNewEpisodeColor = palette.Green
+	rofiMetaColor = palette.Muted
 }
 
 // Init initializes the model
@@ -580,7 +582,7 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 			}
 			label := opt.Label
 			if opt.HasNewEpisodes {
-				label = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s ", rofiNewEpisodeColor, opt.Label)
+				label = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s ", rofiNewEpisodeColor, rofiRowMarkup(opt.Label))
 			}
 			rofiInput.WriteString(fmt.Sprintf("%s\x00icon\x1f%s\n", label, cachePath))
 		}
@@ -664,7 +666,7 @@ func preDownloadImages(options map[string]RofiSelectPreview, count int) {
 
 func parsePreviewSelection(rawSelection string, selectionOptions []SelectionOption) (SelectionOption, error) {
 	selected := strings.TrimSpace(rawSelection)
-	selected = strings.TrimSpace(pangoStrip.ReplaceAllString(selected, ""))
+	selected = unescapePango(strings.TrimSpace(pangoStrip.ReplaceAllString(selected, "")))
 	selected = strings.TrimPrefix(selected, "[NEW] ")
 	selected = strings.TrimSpace(selected)
 
@@ -947,11 +949,11 @@ func dynamicSelectInternal(options []SelectionOption, refreshConfig *SelectionRe
 func buildRofiOptionsString(options []SelectionOption, isHomeMenu bool) string {
 	optionsList := make([]string, 0, len(options)+2)
 	for _, opt := range options {
+		row := rofiRowMarkup(opt.Label)
 		if opt.HasNewEpisodes {
-			optionsList = append(optionsList, fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s", rofiNewEpisodeColor, opt.Label))
-		} else {
-			optionsList = append(optionsList, opt.Label)
+			row = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s", rofiNewEpisodeColor, row)
 		}
+		optionsList = append(optionsList, row)
 	}
 
 	if !isHomeMenu {
@@ -975,9 +977,9 @@ func parseRofiSelection(err error, rawSelection string, options []SelectionOptio
 
 	selected := strings.TrimSpace(rawSelection)
 	// strip accidental pango noise if a theme echoes it.
-	selected = strings.TrimSpace(pangoStrip.ReplaceAllString(
+	selected = unescapePango(strings.TrimSpace(pangoStrip.ReplaceAllString(
 		ansiStrip.ReplaceAllString(selected, ""), "",
-	))
+	)))
 	selected = strings.TrimPrefix(selected, "[NEW] ")
 	selected = strings.TrimSpace(selected)
 	switch {

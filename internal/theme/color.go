@@ -148,6 +148,17 @@ func (p Palette) SelectionForeground() string {
 	return ReadableOn(background, p.BrightForeground, p.Foreground, p.Background, p.DarkBackground)
 }
 
+// SelectionBand is the filled band drawn behind the cursor row. It is mixed from
+// the accent into the base rather than taken from the theme's selection colour,
+// which on some themes sits so close to the background that the cursor row
+// vanishes. Mixing keeps it tied to the theme while guaranteeing it is visible.
+func (p Palette) SelectionBand() string {
+	if p.Dark {
+		return Mix(p.Background, p.Accent, 0.28)
+	}
+	return Mix(p.Background, p.Accent, 0.20)
+}
+
 // Surface returns a background one step raised from the base, for input bars and
 // other panels a theme does not colour explicitly.
 func (p Palette) Surface() string {

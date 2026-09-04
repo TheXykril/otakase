@@ -28,6 +28,16 @@
   a theme change is picked up automatically, and a hand-edited `.rasi` is copied
   to `<name>.rasi.user-backup` before being replaced.
 
+  The design is a flat plane anchored by a single accent rail, rather than a
+  floating rounded card: radius is applied only at the outermost level so it
+  reads as hierarchy, rows run full width with a filled selection band, and one
+  hairline separates what you type from what you are choosing between.
+
+  Rows also carry typographic hierarchy now. `One Piece · 1171 eps [anipub]` was
+  rendered at one weight, so a list was an undifferentiated wall of text; the
+  title is now full strength and the episode count and provider are dimmed, so
+  the eye scans titles down the left edge.
+
 ### Fixed
 
 - **Playback polling loops now stop when MPV exits** (upstream Wraient/curd#58,
@@ -50,6 +60,11 @@
 - **Providers that just failed are no longer re-probed every search.** Two
   consecutive unreachable failures put a provider on a 5 minute cooldown. A
   provider answering "no results" is working correctly and is never cooled down.
+
+- **Anime titles containing `&`, `<` or `>` no longer break their rofi row.**
+  Curd passes `-markup-rows`, so labels are parsed as pango markup, but they were
+  emitted unescaped. Titles are escaped now, and selections are unescaped on the
+  way back so they still match the option they came from.
 
 ### Performance
 
