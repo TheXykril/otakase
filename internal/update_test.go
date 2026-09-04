@@ -58,7 +58,7 @@ func TestPendingUpdateShouldPromptRespectsSkipAndRemind(t *testing.T) {
 func TestCheckForUpdateInBackgroundWritesPendingState(t *testing.T) {
 	storage := t.TempDir()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/repos/Wraient/curd/releases/latest" {
+		if r.URL.Path != "/repos/TheXykril/curd/releases/latest" {
 			http.NotFound(w, r)
 			return
 		}
@@ -66,7 +66,7 @@ func TestCheckForUpdateInBackgroundWritesPendingState(t *testing.T) {
 			"tag_name": "v9.9.9",
 			"name":     "Curd v9.9.9",
 			"body":     "## Changes\n- test",
-			"html_url": "https://github.com/Wraient/curd/releases/tag/v9.9.9",
+			"html_url": "https://github.com/TheXykril/curd/releases/tag/v9.9.9",
 			"assets":   []map[string]string{},
 		})
 	}))
@@ -81,7 +81,7 @@ func TestCheckForUpdateInBackgroundWritesPendingState(t *testing.T) {
 		LatestTag:     "v9.9.9",
 		ReleaseName:   "Curd v9.9.9",
 		ReleaseNotes:  "## Changes\n- test",
-		HTMLURL:       "https://github.com/Wraient/curd/releases/tag/v9.9.9",
+		HTMLURL:       "https://github.com/TheXykril/curd/releases/tag/v9.9.9",
 		CheckedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
 	if err := saveUpdatePendingState(storage, state); err != nil {

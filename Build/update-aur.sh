@@ -3,7 +3,7 @@
 set -euo pipefail
 
 AUR_REPO="${AUR_REPO:-$HOME/Projects/aur/curd}"
-UPSTREAM_REPO="${UPSTREAM_REPO:-Wraient/curd}"
+UPSTREAM_REPO="${UPSTREAM_REPO:-TheXykril/curd}"
 ASSET_NAME="${ASSET_NAME:-curd-linux-x86_64}"
 REMOTE="${REMOTE:-origin}"
 DRY_RUN="false"
@@ -14,7 +14,7 @@ Usage: Build/update-aur.sh [--dry-run]
 
 Environment overrides:
   AUR_REPO       AUR git clone path (default: ~/Projects/aur/curd)
-  UPSTREAM_REPO  GitHub repo in owner/name format (default: Wraient/curd)
+  UPSTREAM_REPO  GitHub repo in owner/name format (default: TheXykril/curd)
   ASSET_NAME     Release asset to checksum (default: curd-linux-x86_64)
   REMOTE         Git remote to push (default: origin)
 EOF

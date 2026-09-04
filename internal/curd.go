@@ -1504,7 +1504,7 @@ func CheckAndDownloadFiles(storagePath string, filesToCheck []string) error {
 	}
 
 	// Base URL for downloading config files
-	baseURL := "https://raw.githubusercontent.com/Wraient/curd/refs/heads/main/rofi/"
+	baseURL := "https://raw.githubusercontent.com/TheXykril/curd/refs/heads/main/rofi/"
 
 	// Check each file
 	for _, fileName := range filesToCheck {

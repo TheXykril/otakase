@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	defaultUpdateRepo          = "Wraient/curd"
+	defaultUpdateRepo          = "TheXykril/curd"
 	updatePendingFileName      = "update_pending.json"
 	backgroundUpdateIdleDelay  = 4 * time.Second
 	defaultRemindLaterDuration = 24 * time.Hour

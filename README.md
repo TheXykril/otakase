@@ -3,6 +3,27 @@
 A cli application to stream anime with [Anilist](https://anilist.co/) integration and Discord RPC written in golang.
 Works on Linux, MacOS and Windows.
 
+> ### About this fork
+>
+> This is a fork of [Wraient/curd](https://github.com/Wraient/curd) that fixes provider
+> resolution, which had stopped finding anime at all. It is a drop-in replacement:
+> same `curd` binary, same `~/.config/curd/curd.conf`, same AniList/MAL tokens.
+>
+> **What was broken and what changed** — see [CHANGELOG.md](CHANGELOG.md) for detail:
+>
+> | Problem | Fix |
+> |---|---|
+> | Providers were searched with the AniList **romaji** title only, so shows indexed under their English title returned "no results" | Search now falls through a list of title variants (English, romaji, native, then simplified forms) |
+> | `senshi.live` lapsed and is now a **parked domain for sale**, yet was first in the default provider stack and the hardcoded fallback | Retired; the stack now leads with the providers that actually resolve streams |
+> | A single slow provider could sink an entire search, because providers were tried one at a time against a shared client timeout | Providers are searched **concurrently**, with retries for transient network failures |
+> | anipub's newer `/play/{id}/{ep}/{mode}` episode links failed with `unsupported video link` | Both anipub link shapes are now resolved |
+> | AllAnime returns `AA_CRYPTO_MISSING` for episode sources, so it listed shows that could never play | Detected and reported explicitly; AllAnime is disabled by default |
+> | A failed MPV launch left an empty IPC socket path being polled in a hot loop, writing millions of log lines | Missing sockets now fail immediately and are treated as a closed session |
+>
+> New: `curd -provider-status` probes every provider and reports which ones work.
+>
+> Providers verified working end-to-end at the time of writing: **anipub** and **anineko**.
+
 ## Join the discord server
 
 https://discord.gg/rrpBfu2gHq
@@ -24,7 +45,7 @@ https://github.com/user-attachments/assets/cbf799bc-9fdd-4402-ab61-b4e31f1e264d
 
 
 ## Features
-- Multiple Content Providers (Senshi, AniNeko, AllAnime, and Animepahe) with ordered fallback and up to 1080p support
+- Multiple content providers (AniPub, AniNeko, and optionally AniDB, AllAnime, Animepahe) searched concurrently with ordered fallback and up to 1080p support
 - Built-in headless browser to bypass Cloudflare/DDoS-Guard protections
 - Stream anime online
 - Track anime locally, on AniList, or on MyAnimeList
@@ -76,10 +97,10 @@ sudo apt update
 sudo apt install mpv curl rofi ueberzugpp
 
 # For x86_64 systems:
-curl -Lo curd https://github.com/Wraient/curd/releases/latest/download/curd-linux-x86_64
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-linux-x86_64
 
 # For ARM64 systems:
-curl -Lo curd https://github.com/Wraient/curd/releases/latest/download/curd-linux-arm64
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-linux-arm64
 
 chmod +x curd
 sudo mv curd /usr/bin/
@@ -95,10 +116,10 @@ sudo dnf update
 sudo dnf install mpv curl rofi ueberzugpp
 
 # For x86_64 systems:
-curl -Lo curd https://github.com/Wraient/curd/releases/latest/download/curd-linux-x86_64
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-linux-x86_64
 
 # For ARM64 systems:
-curl -Lo curd https://github.com/Wraient/curd/releases/latest/download/curd-linux-arm64
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-linux-arm64
 
 chmod +x curd
 sudo mv curd /usr/bin/
@@ -114,10 +135,10 @@ sudo zypper refresh
 sudo zypper install mpv curl rofi ueberzugpp
 
 # For x86_64 systems:
-curl -Lo curd https://github.com/Wraient/curd/releases/latest/download/curd-linux-x86_64
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-linux-x86_64
 
 # For ARM64 systems:
-curl -Lo curd https://github.com/Wraient/curd/releases/latest/download/curd-linux-arm64
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-linux-arm64
 
 chmod +x curd
 sudo mv curd /usr/bin/
@@ -134,7 +155,7 @@ curd
     inputs = {
         nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
         curd = {
-            url = "github:Wraient/curd";
+            url = "github:TheXykril/curd";
             inputs.nixpkgs.follows = "nixpkgs";
         };
     }
@@ -157,10 +178,10 @@ curd
 Choose the appropriate binary for your system:
 ```bash
 # For Linux x86_64:
-curl -Lo curd https://github.com/Wraient/curd/releases/latest/download/curd-linux-x86_64
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-linux-x86_64
 
 # For Linux ARM64:
-curl -Lo curd https://github.com/Wraient/curd/releases/latest/download/curd-linux-arm64
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-linux-arm64
 
 chmod +x curd
 sudo mv curd /usr/bin/
@@ -196,17 +217,17 @@ Download the appropriate binary for your system:
 
 - For Apple Silicon (M1/M2) Macs:
 ```bash
-curl -Lo curd https://github.com/Wraient/curd/releases/latest/download/curd-macos-arm64
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-macos-arm64
 ```
 
 - For Intel Macs:
 ```bash
-curl -Lo curd https://github.com/Wraient/curd/releases/latest/download/curd-macos-x86_64
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-macos-x86_64
 ```
 
 - For Universal Binary (works on both architectures):
 ```bash
-curl -Lo curd https://github.com/Wraient/curd/releases/latest/download/curd-macos-universal
+curl -Lo curd https://github.com/TheXykril/curd/releases/latest/download/curd-macos-universal
 ```
 
 Then complete the installation:
@@ -234,10 +255,10 @@ sudo rm /usr/local/bin/curd
 <summary>Windows Installation</summary>
 
 Option 1: Using the installer
-- Download and run the [Windows Installer](https://github.com/Wraient/curd/releases/latest/download/curd-windows-installer.exe)
+- Download and run the [Windows Installer](https://github.com/TheXykril/curd/releases/latest/download/curd-windows-installer.exe)
 
 Option 2: Standalone executable
-- Download [curd-windows-x86_64.exe](https://github.com/Wraient/curd/releases/latest/download/curd-windows-x86_64.exe)
+- Download [curd-windows-x86_64.exe](https://github.com/TheXykril/curd/releases/latest/download/curd-windows-x86_64.exe)
 </details>
 
 ## Data Storage
