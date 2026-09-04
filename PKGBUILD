@@ -1,7 +1,7 @@
 # Maintainer: TheXykril <pijus.skirmantas@gmail.com>
 # Fork of Wraient/curd with provider resolution fixes.
 pkgname='curd'
-pkgver=2.1.0
+pkgver=2.2.0
 pkgrel=1
 pkgdesc="Watch anime in CLI with AniList tracking, Discord RPC, and intro/outro/filler/recap skipping (fork with provider fixes)"
 arch=('x86_64' 'aarch64')
