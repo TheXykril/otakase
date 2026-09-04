@@ -34,8 +34,8 @@ window {
 mainbox {
     children:         [ inputbar, listview ];
     background-color: transparent;
-    padding:          40px 56px 32px 56px;
-    spacing:          28px;
+    padding:          40px 48px 32px 48px;
+    spacing:          32px;
 }
 
 /* Left-aligned with the grid below it rather than floated in the centre: the
@@ -45,8 +45,8 @@ inputbar {
     background-color: transparent;
     border:           0px 0px 1px 0px;
     border-color:     @edge;
-    padding:          0px 4px 14px 4px;
-    spacing:          14px;
+    padding:          0px 4px 16px 4px;
+    spacing:          12px;
 }
 
 prompt {
@@ -68,21 +68,23 @@ entry {
 
 listview {
     layout:           vertical;
-    columns:          5;
-    /* No `orientation: horizontal`: that fills the grid column-major, so the
-       list reads top-to-bottom down the far left instead of left-to-right. */
+    /* rofi clamps this grid to four columns whatever is asked for, so four is
+       what is declared: a number the theme cannot deliver is just a lie in the
+       source. It also fills column-major, which is rofi's own behaviour and not
+       something a theme can change. */
+    columns:          4;
+    lines:            3;
     dynamic:          false;
-    fixed-columns:    true;
     scrollbar:        false;
     padding:          4px;
-    spacing:          22px;
+    spacing:          24px;
     background-color: transparent;
 }
 
 element {
     children:         [ element-box ];
     orientation:      vertical;
-    padding:          10px;
+    padding:          12px;
     border:           0px;
     border-radius:    6px;
     background-color: transparent;
@@ -100,13 +102,13 @@ element-box {
     children:         [ element-icon, element-text ];
     orientation:      vertical;
     expand:           false;
-    spacing:          10px;
+    spacing:          8px;
     background-color: transparent;
     cursor:           pointer;
 }
 
 element-icon {
-    size:             180px;
+    size:             200px;
     padding:          0px;
     margin:           0px;
     border-radius:    3px;

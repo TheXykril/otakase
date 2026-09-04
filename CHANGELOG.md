@@ -33,6 +33,11 @@
   reads as hierarchy, rows run full width with a filled selection band, and one
   hairline separates what you type from what you are choosing between.
 
+  Sizing follows a modular type scale (11 / 13 / 16, roughly 1.2x) and a 4/8
+  spacing rhythm, replacing ad-hoc values. The list menus are wider so a long
+  anime title is not clipped, and the poster grid declares the four columns rofi
+  actually renders rather than a number it silently ignores.
+
   Rows also carry typographic hierarchy now. `One Piece · 1171 eps [anipub]` was
   rendered at one weight, so a list was an undifferentiated wall of text; the
   title is now full strength and the episode count and provider are dimmed, so

@@ -64,11 +64,14 @@ type templateData struct {
 func newTemplateData(palette theme.Palette) templateData {
 	accent := palette.Accent
 	return templateData{
+		// A modular scale, 11 -> 13 -> 16 at roughly 1.2x, rather than the ad-hoc
+		// 11/13/13/14/15 it replaces. Three steps is all this UI needs, and a
+		// consistent ratio is what makes hierarchy read as deliberate.
 		Font:        "Sans 11",
 		EntryFont:   "Sans 13",
 		PromptFont:  "Sans Bold 13",
-		HeadingFont: "Sans Bold 14",
-		TitleFont:   "Sans 15",
+		HeadingFont: "Sans Bold 16",
+		TitleFont:   "Sans 16",
 
 		Background: palette.Background,
 		// rofi accepts #rrggbbaa. The poster grid is fullscreen, so it dims the

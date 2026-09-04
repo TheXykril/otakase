@@ -26,7 +26,7 @@ configuration {
 
 window {
     fullscreen:       false;
-    width:            720px;
+    width:            800px;
     background-color: @base;
     /* The rail, and nothing else: rofi allows one border colour per element, and
        an outline on all four sides is what made this read as a floating card. */
@@ -50,7 +50,7 @@ inputbar {
     background-color: transparent;
     border:           0px 0px 1px 0px;
     border-color:     @edge;
-    padding:          15px 18px;
+    padding:          16px 20px;
     spacing:          12px;
 }
 
@@ -80,14 +80,14 @@ listview {
     fixed-height:     false;
     scrollbar:        false;
     spacing:          0px;
-    padding:          6px 0px;
+    padding:          8px 0px;
     background-color: transparent;
 }
 
 /* Rows run full width to the rail. No inset pill, no per-row radius: the radius
    belongs to the window alone, so it reads as hierarchy rather than decoration. */
 element {
-    padding:          9px 18px;
+    padding:          12px 20px;
     border-radius:    0px;
     background-color: transparent;
     text-color:       @title;
