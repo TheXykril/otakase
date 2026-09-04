@@ -84,20 +84,22 @@ entry {
 
 listview {
     layout:           vertical;
-    orientation:      horizontal;
-    columns:          6;
-    dynamic:          true;
+    columns:          5;
+    /* No `orientation: horizontal` here: that fills the grid column-major, so the
+       list reads top-to-bottom down the far left instead of left-to-right. */
+    dynamic:          false;
+    fixed-columns:    true;
     scrollbar:        false;
     padding:          8px;
-    spacing:          18px;
+    spacing:          20px;
     background-color: transparent;
 }
 
 element {
     children:         [ element-box ];
     orientation:      vertical;
-    padding:          8px;
-    border:           1px;
+    padding:          10px;
+    border:           2px;
     border-color:     transparent;
     border-radius:    14px;
     background-color: transparent;

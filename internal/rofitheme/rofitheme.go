@@ -57,9 +57,10 @@ func newTemplateData(palette theme.Palette) templateData {
 		HeadingFont: "Sans Bold 16",
 
 		Background: palette.Background,
-		// rofi accepts #rrggbbaa; the poster grid is fullscreen, so it shows the
-		// desktop through a scrim rather than blacking the screen out.
-		Scrim:      strings.TrimSpace(palette.Background) + "d9",
+		// rofi accepts #rrggbbaa. The poster grid is fullscreen, so it dims the
+		// desktop rather than blacking it out -- but it has to be opaque enough
+		// that whatever is behind it does not compete with the covers.
+		Scrim:      strings.TrimSpace(palette.Background) + "f7",
 		Surface:    palette.Surface(),
 		Border:     palette.Border(),
 		Foreground: palette.Foreground,

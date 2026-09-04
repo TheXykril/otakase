@@ -86,7 +86,11 @@ entry {
 
 listview {
     layout:           vertical;
+    /* `lines` is the maximum; `dynamic` shrinks the window to the number of
+       results, so a short list does not leave a block of empty space below it. */
     lines:            8;
+    dynamic:          true;
+    fixed-height:     false;
     scrollbar:        false;
     spacing:          2px;
     background-color: transparent;
