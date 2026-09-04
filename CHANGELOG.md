@@ -30,6 +30,14 @@
 
 ### Fixed
 
+- **Playback polling loops now stop when MPV exits** (upstream Wraient/curd#58,
+  "Pipe Status Spam"). Three loops polled the IPC socket and treated a dead
+  connection as a transient error: the Discord presence loop retried every 5s
+  forever, the CLI next-episode branch every 1s, and the playback-status check
+  logged and re-polled because "MPV has exited" was handled as an inconclusive
+  error rather than as "nothing is playing". Each now recognises a gone
+  connection and stops. This is the other half of the empty-socket fix in 2.1.0,
+  and the cause of the multi-megabyte logs and the Windows terminal flood.
 - **A stacked search no longer waits on the slowest provider.** It waited on all
   of them, so animepahe's ~17s browser challenge set the pace even when anipub
   had answered in 0.2s. A straggler now gets a 2.5s grace window once another

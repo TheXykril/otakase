@@ -590,6 +590,13 @@ func StartVideoWithProviderFallback(userCurdConfig *CurdConfig, anime *Anime, ti
 	}
 }
 
+// MPVConnectionGone reports that the MPV session is over: the socket is missing,
+// closed, or refusing connections. Polling loops must stop when it returns true,
+// or they spin forever logging the same error.
+func MPVConnectionGone(err error) bool {
+	return isMPVConnectionGoneError(err)
+}
+
 func isMPVConnectionGoneError(err error) bool {
 	if err == nil {
 		return false

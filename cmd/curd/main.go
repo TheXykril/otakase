@@ -499,6 +499,13 @@ func main() {
 						// Get current state from MPV
 						isPaused, err := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "pause"})
 						if err != nil {
+							// Without this the loop retried a dead socket every 5s
+							// forever, logging the same error each time (see
+							// Wraient/curd#58).
+							if internal.MPVConnectionGone(err) {
+								internal.Log("MPV is gone, stopping Discord presence updates")
+								return
+							}
 							internal.Log("Error getting pause status: " + err.Error())
 							time.Sleep(5 * time.Second)
 							continue
@@ -686,6 +693,12 @@ func main() {
 
 						// For CLI mode with next episode prompt, let the continuous prompt handle everything
 						if userCurdConfig.NextEpisodePrompt && !userCurdConfig.RofiSelection {
+							// ...but only while MPV is still there. Once it has exited,
+							// continuing just re-polls a dead socket every second.
+							if internal.MPVConnectionGone(err) && !internal.IsMPVRunning(anime.Ep.Player.SocketPath) {
+								internal.Log("MPV is gone, stopping playback time updates")
+								return
+							}
 							continue
 						}
 
@@ -821,6 +834,13 @@ func main() {
 
 					// Check if anything is playing; if not and episode was started, classify the loss.
 					hasPlayback, err := internal.HasActivePlayback(anime.Ep.Player.SocketPath)
+					// A gone connection is not an inconclusive error: MPV has exited,
+					// which is definitively "nothing is playing". Treating it as an
+					// error left the loop re-polling a dead socket and logging the
+					// same failure every iteration (see Wraient/curd#58).
+					if err != nil && internal.MPVConnectionGone(err) {
+						hasPlayback, err = false, nil
+					}
 					if err != nil {
 						internal.Log("Error checking playback status: " + err.Error())
 					} else if !hasPlayback && anime.Ep.Started {
@@ -828,6 +848,9 @@ func main() {
 						time.Sleep(2 * time.Second)
 
 						hasPlayback, err = internal.HasActivePlayback(anime.Ep.Player.SocketPath)
+						if err != nil && internal.MPVConnectionGone(err) {
+							hasPlayback, err = false, nil
+						}
 						if err != nil {
 							internal.Log("Error checking playback status: " + err.Error())
 						} else if !hasPlayback {
