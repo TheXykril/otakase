@@ -104,6 +104,27 @@ type MPVPlaylistController struct {
 	currentPlaying int // episode number currently intended
 	currentMode    string
 	episodeNums    []int // provider episode list (sorted), preferred mode
+
+	// prefetch tracks background next-episode lookups so they can be awaited
+	// instead of leaking network work past the controller's lifetime.
+	prefetch sync.WaitGroup
+}
+
+// startPrefetch runs a background next-episode lookup that callers can wait on.
+func (c *MPVPlaylistController) startPrefetch(toEp int) {
+	c.prefetch.Add(1)
+	go func() {
+		defer c.prefetch.Done()
+		c.prefetchAfterPlaylistSwitch(toEp)
+	}()
+}
+
+// WaitForPrefetch blocks until every in-flight prefetch has finished.
+func (c *MPVPlaylistController) WaitForPrefetch() {
+	if c == nil {
+		return
+	}
+	c.prefetch.Wait()
 }
 
 // StartMPVPlaylistController waits until playback is stable, then builds the
@@ -1077,7 +1098,7 @@ func (c *MPVPlaylistController) finalizePlaylistEpisodeChange(fromEp, toEp int, 
 	}
 
 	// Prefetch next episode links in preferred mode (no audio prompts).
-	go c.prefetchAfterPlaylistSwitch(toEp)
+	c.startPrefetch(toEp)
 
 	// Discord will pick up the new title/position on the next presence tick once
 	// duration is known; force a soft title refresh for the window.
@@ -1116,6 +1137,11 @@ func (c *MPVPlaylistController) prefetchAfterPlaylistSwitch(currentEp int) {
 	if c == nil || c.config == nil || c.anime == nil {
 		return
 	}
+	// Without an IPC socket there is no MPV session to hand the prefetched links
+	// to, so resolving them would be pure wasted network work.
+	if strings.TrimSpace(c.socket) == "" || c.socket == "android-intent" {
+		return
+	}
 	nextEp := currentEp + 1
 	if c.anime.TotalEpisodes > 0 && nextEp > c.anime.TotalEpisodes {
 		return
@@ -1128,6 +1154,7 @@ func (c *MPVPlaylistController) prefetchAfterPlaylistSwitch(currentEp int) {
 		Log(fmt.Sprintf("MPV playlist: prefetch ep %d: %v", nextEp, err))
 		return
 	}
+	c.mu.Lock()
 	c.anime.Ep.NextEpisode = NextEpisode{
 		Number:       nextEp,
 		Links:        result.Links,
@@ -1135,6 +1162,7 @@ func (c *MPVPlaylistController) prefetchAfterPlaylistSwitch(currentEp int) {
 		ProviderId:   result.ProviderID,
 		Mode:         result.Mode,
 	}
+	c.mu.Unlock()
 	Log(fmt.Sprintf("MPV playlist: prefetched episode %d", nextEp))
 }
 

@@ -382,6 +382,7 @@ func TestFinalizePlaylistEpisodeChangeUpdatesLocalHistory(t *testing.T) {
 	}
 
 	c.finalizePlaylistEpisodeChange(40, 39, "sub", playlistLeaveNone)
+	c.WaitForPrefetch()
 
 	if anime.Ep.Number != 39 {
 		t.Fatalf("episode number=%d want 39", anime.Ep.Number)
@@ -426,6 +427,9 @@ func TestFinalizePlaylistMarksFillerFromList(t *testing.T) {
 		anime:  anime,
 	}
 	c.finalizePlaylistEpisodeChange(1, 5, "sub", playlistLeaveNone)
+	// finalizePlaylistEpisodeChange kicks off a background prefetch that performs
+	// real network work; wait for it so it cannot outlive this test.
+	c.WaitForPrefetch()
 	if !anime.Ep.IsFiller {
 		t.Fatal("expected filler flag for ep 5")
 	}

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -593,6 +594,11 @@ func isMPVConnectionGoneError(err error) bool {
 	if err == nil {
 		return false
 	}
+	// No socket at all means MPV never came up, which callers must treat the same
+	// way as a socket that has since closed — otherwise they poll forever.
+	if errors.Is(err, ErrMPVNoSocket) {
+		return true
+	}
 	errMsg := strings.ToLower(err.Error())
 	goneErrors := []string{
 		"connect: connection refused",
@@ -601,6 +607,7 @@ func isMPVConnectionGoneError(err error) bool {
 		"pipe has been ended",
 		"pipe is being closed",
 		"no process is on the other end of the pipe",
+		"missing address",
 	}
 	for _, goneError := range goneErrors {
 		if strings.Contains(errMsg, goneError) {
@@ -662,7 +669,19 @@ func joinArgs(args []string) string {
 	return result
 }
 
+// ErrMPVNoSocket reports that no MPV IPC socket is available. Callers treat it
+// like a closed connection: MPV is not reachable, so polling must stop.
+var ErrMPVNoSocket = errors.New("no MPV IPC socket")
+
 func MPVSendCommand(ipcSocketPath string, command []interface{}) (interface{}, error) {
+	// An empty socket path can never connect, and retrying it three times per call
+	// turned a failed launch into a hot loop that logged "dial unix: missing
+	// address" thousands of times a second. Fail immediately and let the caller
+	// notice MPV is gone.
+	if strings.TrimSpace(ipcSocketPath) == "" {
+		return nil, ErrMPVNoSocket
+	}
+
 	// Use a retry mechanism for transient errors
 	var lastErr error
 	maxRetries := 3
