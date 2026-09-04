@@ -62,6 +62,12 @@ func EditConfig(configFilePath string) {
 
 // ClearLogFile removes all contents from the specified log file
 func ClearLogFile(logFile string) error {
+	// Drop any cached append handle first: it still points at the pre-truncation
+	// file description, and writing through it would restore the old length.
+	if err := CloseLogFile(); err != nil {
+		return fmt.Errorf("failed to close log file: %w", err)
+	}
+
 	if err := os.MkdirAll(filepath.Dir(logFile), 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
@@ -78,14 +84,6 @@ func ClearLogFile(logFile string) error {
 
 // LogData logs the input data into a specified log file with the format [LOG] time lineNumber: logData
 func Log(data interface{}) error {
-	logFile := GetGlobalLogFile()
-	// Open or create the log file
-	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
 	// Attempt to marshal the data into JSON
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -101,12 +99,7 @@ func Log(data interface{}) error {
 	// Log the current time and the JSON representation along with caller info
 	currentTime := time.Now().Format("2006/01/02 15:04:05")
 	logMessage := fmt.Sprintf("[LOG] %s %s:%d: %s\n", currentTime, filename, lineNumber, jsonData)
-	_, err = fmt.Fprint(file, logMessage) // Write to the file
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return writeLogLine(logMessage)
 }
 
 // ClearScreen clears the terminal screen and saves the state

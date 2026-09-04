@@ -28,6 +28,9 @@ func InstallTerminalInterruptHandler() {
 func exitWithRestore(code int) {
 	interruptExitOnce.Do(func() {
 		RestoreScreen()
+		// The log handle is held open for the process lifetime; release it so the
+		// final lines are flushed to disk before the process goes away.
+		_ = CloseLogFile()
 		os.Exit(code)
 	})
 }
