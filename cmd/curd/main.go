@@ -95,6 +95,8 @@ func main() {
 	softSubFlag := flag.Bool("softsub", false, "Prefer soft subtitles when available (anineko)")
 	hardSubFlag := flag.Bool("hardsub", false, "Prefer hard subtitles when available (anineko)")
 	versionFlag := flag.Bool("v", false, "Print version information")
+	providerStatus := flag.Bool("provider-status", false, "Probe every provider and report which ones work")
+	providerStatusQuery := flag.String("provider-status-query", "one piece", "Search query used by -provider-status")
 
 	// Custom help/usage function
 	flag.Usage = func() {
@@ -117,6 +119,18 @@ func main() {
 	if *versionFlag {
 		fmt.Printf("Curd version: %s\n", resolvedVersion())
 		os.Exit(0)
+	}
+
+	// Diagnostics run before any UI setup so the output stays plain and pipeable.
+	if *providerStatus {
+		report := internal.CheckProviders(&userCurdConfig, *providerStatusQuery)
+		fmt.Print(internal.FormatProviderStatus(report, *providerStatusQuery))
+		for _, health := range report {
+			if health.OK() {
+				os.Exit(0)
+			}
+		}
+		os.Exit(1)
 	}
 
 	anime.Ep.ContinueLast = *continueLast
