@@ -238,3 +238,73 @@ func TestSearchAnimeWithProvidersIsRaceFree(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// Animepahe spends ~17s on its browser challenge. Before the grace window, a
+// stacked search waited on it even when another provider had answered in 0.2s.
+func TestSearchAnimeWithProvidersDoesNotWaitOnStragglers(t *testing.T) {
+	withAllProvidersEnabledForTest(t)
+
+	fast := &stubSearchProvider{name: "anipub", results: []providers.SelectionOption{{Key: "p1", Label: "Fast"}}}
+	// Far longer than providerSearchGrace, standing in for animepahe.
+	straggler := &stubSearchProvider{name: "animepahe", delay: 15 * time.Second, results: []providers.SelectionOption{{Key: "x", Label: "Slow"}}}
+	stubProvider(t, "anipub", fast)
+	stubProvider(t, "animepahe", straggler)
+
+	start := time.Now()
+	results, err := searchAnimeWithProviders([]string{"anipub", "animepahe"}, "demo", "sub")
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("search failed: %v", err)
+	}
+	if len(results) != 1 || results[0].Label != "Fast [anipub]" {
+		t.Fatalf("expected the fast provider's result, got %v", results)
+	}
+	if elapsed > providerSearchGrace+2*time.Second {
+		t.Fatalf("expected the straggler to be abandoned after the grace window, took %s", elapsed)
+	}
+}
+
+// The grace window must not slow down the common case where every provider is
+// healthy and fast -- that should still return as soon as all have answered.
+func TestSearchAnimeWithProvidersReturnsImmediatelyWhenAllFast(t *testing.T) {
+	withAllProvidersEnabledForTest(t)
+
+	stubProvider(t, "anipub", &stubSearchProvider{name: "anipub", results: []providers.SelectionOption{{Key: "a", Label: "A"}}})
+	stubProvider(t, "anineko", &stubSearchProvider{name: "anineko", results: []providers.SelectionOption{{Key: "b", Label: "B"}}})
+
+	start := time.Now()
+	results, err := searchAnimeWithProviders([]string{"anipub", "anineko"}, "demo", "sub")
+	elapsed := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("search failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected both results, got %v", results)
+	}
+	if elapsed > providerSearchGrace {
+		t.Fatalf("healthy providers should not pay the grace window, took %s", elapsed)
+	}
+}
+
+// With nothing succeeding there is no grace window, so a hung provider is bounded
+// by the overall deadline instead.
+func TestSearchAnimeWithProvidersReportsPendingProvidersAsUnreachable(t *testing.T) {
+	withAllProvidersEnabledForTest(t)
+
+	fast := &stubSearchProvider{name: "anipub", results: []providers.SelectionOption{{Key: "p1", Label: "Fast"}}}
+	straggler := &stubSearchProvider{name: "animepahe", delay: 15 * time.Second, errs: []error{errors.New("boom")}}
+	stubProvider(t, "anipub", fast)
+	stubProvider(t, "animepahe", straggler)
+
+	// The fast provider succeeds, so the straggler is abandoned and simply absent
+	// from the results rather than reported as an error.
+	results, err := searchAnimeWithProviders([]string{"anipub", "animepahe"}, "demo", "sub")
+	if err != nil {
+		t.Fatalf("search failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected only the fast provider's result, got %v", results)
+	}
+}

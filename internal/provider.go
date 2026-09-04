@@ -7,7 +7,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/wraient/curd/internal/providers"
@@ -19,6 +18,12 @@ const (
 	providerSearchAttempts = 2
 	// providerSearchRetryDelay is the base backoff between search attempts.
 	providerSearchRetryDelay = 500 * time.Millisecond
+	// providerSearchGrace is how long a straggler gets once another provider has
+	// already produced results. Animepahe spends ~17s on its browser challenge;
+	// without this the whole search waits on it even when anipub answered in 0.2s.
+	providerSearchGrace = 2500 * time.Millisecond
+	// providerSearchDeadline caps a stacked search when nothing has succeeded yet.
+	providerSearchDeadline = 20 * time.Second
 )
 
 // isRetryableProviderError reports whether a provider failure looks transient
@@ -411,10 +416,17 @@ func searchProviderWithRetry(providerName, query, mode string) ([]SelectionOptio
 		return nil, err
 	}
 
+	// A provider that has just failed repeatedly is skipped rather than waited on
+	// again, so a host that is down stops costing a timeout per search.
+	if until, cooling := providerCoolingUntil(providerName); cooling {
+		return nil, &errProviderCooling{provider: providerName, until: until}
+	}
+
 	var lastErr error
 	for attempt := 1; attempt <= providerSearchAttempts; attempt++ {
 		options, err := provider.SearchAnime(query, mode)
 		if err == nil {
+			noteProviderSuccess(providerName)
 			return options, nil
 		}
 		lastErr = err
@@ -424,6 +436,7 @@ func searchProviderWithRetry(providerName, query, mode string) ([]SelectionOptio
 		Log(fmt.Sprintf("Provider %s search attempt %d/%d for %q failed transiently: %v", providerName, attempt, providerSearchAttempts, query, err))
 		time.Sleep(time.Duration(attempt) * providerSearchRetryDelay)
 	}
+	noteProviderFailure(providerName, lastErr)
 	return nil, lastErr
 }
 
@@ -439,30 +452,57 @@ func searchAnimeWithProviders(providerNames []string, query, mode string) ([]Sel
 	}
 
 	type providerSearch struct {
+		index   int
 		options []SelectionOption
 		err     error
+		done    bool
+	}
+
+	completed := make(chan providerSearch, len(providerNames))
+	for i, providerName := range providerNames {
+		go func(index int, name string) {
+			options, err := searchProviderWithRetry(name, query, mode)
+			completed <- providerSearch{index: index, options: options, err: err, done: true}
+		}(i, providerName)
 	}
 
 	outcomes := make([]providerSearch, len(providerNames))
-	var wg sync.WaitGroup
-	for i, providerName := range providerNames {
-		wg.Add(1)
-		go func(index int, name string) {
-			defer wg.Done()
-			options, err := searchProviderWithRetry(name, query, mode)
-			outcomes[index] = providerSearch{options: options, err: err}
-		}(i, providerName)
+	// A straggler only gets providerSearchGrace once some other provider has
+	// produced results; until then the search waits out providerSearchDeadline.
+	var grace <-chan time.Time
+	deadline := time.After(providerSearchDeadline)
+	remaining := len(providerNames)
+
+collect:
+	for remaining > 0 {
+		select {
+		case outcome := <-completed:
+			outcomes[outcome.index] = outcome
+			remaining--
+			if grace == nil && outcome.err == nil && len(outcome.options) > 0 {
+				grace = time.After(providerSearchGrace)
+			}
+		case <-grace:
+			Log(fmt.Sprintf("Provider search for %q returning early; %d provider(s) still pending", query, remaining))
+			break collect
+		case <-deadline:
+			Log(fmt.Sprintf("Provider search for %q hit the %s deadline with %d provider(s) pending", query, providerSearchDeadline, remaining))
+			break collect
+		}
 	}
-	wg.Wait()
 
 	results := make([]SelectionOption, 0)
 	seen := make(map[string]struct{})
-	var searchErrors []string
+	failures := make([]providerFailure, 0, len(providerNames))
 	for i, providerName := range providerNames {
 		outcome := outcomes[i]
+		if !outcome.done {
+			failures = append(failures, providerFailure{provider: providerName, timedOut: true})
+			continue
+		}
 		if outcome.err != nil {
 			Log(fmt.Sprintf("Provider %s search failed for %q: %v", providerName, query, outcome.err))
-			searchErrors = append(searchErrors, fmt.Sprintf("%s: %v", providerName, outcome.err))
+			failures = append(failures, providerFailure{provider: providerName, err: outcome.err})
 			continue
 		}
 		for _, option := range outcome.options {
@@ -475,8 +515,8 @@ func searchAnimeWithProviders(providerNames []string, query, mode string) ([]Sel
 		}
 	}
 
-	if len(results) == 0 && len(searchErrors) > 0 {
-		return nil, fmt.Errorf("all provider searches failed: %s", strings.Join(searchErrors, "; "))
+	if len(results) == 0 && len(failures) > 0 {
+		return nil, newProviderSearchError(query, failures)
 	}
 	return results, nil
 }
