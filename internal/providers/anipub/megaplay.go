@@ -11,9 +11,20 @@ import (
 )
 
 var (
+	// anipub serves two episode link shapes. The legacy one embeds a megaplay
+	// stream id directly; newer entries point at an anipub /play/ page keyed by MAL
+	// id and episode number, which fronts a different megaplay route.
 	videoPathRE = regexp.MustCompile(`/video/(\d+)/(sub|dub)`)
+	playPathRE  = regexp.MustCompile(`/play/(\d+)/(\d+)/(sub|dub)`)
 	dataIDRE    = regexp.MustCompile(`data-id="(\d+)"`)
 )
+
+// megaplayRoute is the megaplay stream page backing one anipub episode link.
+type megaplayRoute struct {
+	// path is the megaplay stream page path, minus the trailing sub/dub segment.
+	path string
+	mode string
+}
 
 func resolveMegaplayStream(videoLink, mode string) (string, string, error) {
 	videoLink = strings.TrimSpace(videoLink)
@@ -21,18 +32,17 @@ func resolveMegaplayStream(videoLink, mode string) (string, string, error) {
 		return "", "", fmt.Errorf("empty video link")
 	}
 
-	embedID, linkMode, err := parseVideoLink(videoLink)
+	route, err := parseVideoLink(videoLink)
 	if err != nil {
 		return "", "", err
 	}
 	mode = providers.NormalizeTranslationType(mode)
+	linkMode := "sub"
 	if mode == "dub" {
 		linkMode = "dub"
-	} else {
-		linkMode = "sub"
 	}
 
-	streamPage := fmt.Sprintf("%s/stream/s-2/%s/%s", megaplayBaseURL, embedID, linkMode)
+	streamPage := fmt.Sprintf("%s/%s/%s", megaplayBaseURL, route.path, linkMode)
 	html, err := fetchString(streamPage, baseURL+"/")
 	if err != nil {
 		return "", "", err
@@ -57,21 +67,35 @@ func resolveMegaplayStream(videoLink, mode string) (string, string, error) {
 	return streamURL, subtitle, nil
 }
 
-func parseVideoLink(videoLink string) (embedID, mode string, err error) {
+// parseVideoLink maps an anipub episode link onto its megaplay stream route.
+func parseVideoLink(videoLink string) (megaplayRoute, error) {
 	parsed, err := url.Parse(videoLink)
 	if err != nil {
-		return "", "", fmt.Errorf("parse video link: %w", err)
+		return megaplayRoute{}, fmt.Errorf("parse video link: %w", err)
 	}
-	matches := videoPathRE.FindStringSubmatch(parsed.Path)
-	if len(matches) < 3 {
-		return "", "", fmt.Errorf("unsupported video link %q", videoLink)
+
+	// Legacy: /video/{embedId}/{mode} -> /stream/s-2/{embedId}/{mode}
+	if matches := videoPathRE.FindStringSubmatch(parsed.Path); len(matches) >= 3 {
+		embedID := matches[1]
+		if _, err := strconv.Atoi(embedID); err != nil {
+			return megaplayRoute{}, fmt.Errorf("invalid embed id %q", embedID)
+		}
+		return megaplayRoute{path: "stream/s-2/" + embedID, mode: matches[2]}, nil
 	}
-	embedID = matches[1]
-	mode = matches[2]
-	if _, err := strconv.Atoi(embedID); err != nil {
-		return "", "", fmt.Errorf("invalid embed id %q", embedID)
+
+	// Newer: /play/{malId}/{episode}/{mode} -> /stream/mal/{malId}/{episode}/{mode}
+	if matches := playPathRE.FindStringSubmatch(parsed.Path); len(matches) >= 4 {
+		malID, episode := matches[1], matches[2]
+		if _, err := strconv.Atoi(malID); err != nil {
+			return megaplayRoute{}, fmt.Errorf("invalid mal id %q", malID)
+		}
+		if _, err := strconv.Atoi(episode); err != nil {
+			return megaplayRoute{}, fmt.Errorf("invalid episode number %q", episode)
+		}
+		return megaplayRoute{path: "stream/mal/" + malID + "/" + episode, mode: matches[3]}, nil
 	}
-	return embedID, mode, nil
+
+	return megaplayRoute{}, fmt.Errorf("unsupported video link %q", videoLink)
 }
 
 func pickSubtitleTrack(payload megaplaySourcesResponse, mode string) string {
