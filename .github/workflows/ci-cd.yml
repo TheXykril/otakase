@@ -17,6 +17,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # A release commit is the only one that needs the macOS and Windows
+      # targets; the same marker the release job below keys off.
+      RELEASE_BUILD: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:') }}
 
     steps:
       - name: Checkout code
@@ -53,15 +57,26 @@ jobs:
           GITHUB_EVENT_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
           COMPRESS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:') }}
 
+      # Everything below this point builds platforms only a release needs.
+      #
+      # GitHub bills macOS runners at 10x the Linux rate and Windows at 2x, and
+      # every push was building all five targets plus a macOS universal binary.
+      # A day of ordinary iteration exhausted the account's Actions allowance and
+      # disabled workflows entirely. An ordinary push now proves the code with
+      # vet, the test suite and a Linux build; the full matrix runs when a
+      # release is actually being cut.
       - name: Build macOS x86_64 binary
+        if: env.RELEASE_BUILD == 'true'
         run: |
           ./Build/buildmac-x86_64
 
       - name: Build macOS ARM64 binary
+        if: env.RELEASE_BUILD == 'true'
         run: |
           ./Build/buildmac-arm64
 
       - name: Install LLVM
+        if: env.RELEASE_BUILD == 'true'
         run: |
           sudo apt-get update && sudo apt-get install -y llvm
           # Find the llvm-lipo command
@@ -70,6 +85,7 @@ jobs:
           echo "LIPO_CMD=$LIPO_CMD" >> $GITHUB_ENV
 
       - name: Create Universal macOS binary
+        if: env.RELEASE_BUILD == 'true'
         run: |
           ${{ env.LIPO_CMD }} -create "curd-macos-x86_64" "curd-macos-arm64" -output "curd-macos-universal"
           mkdir -p release/macos
@@ -78,6 +94,7 @@ jobs:
           mv curd-macos-universal release/macos
 
       - name: Build Windows binary (cross-compile)
+        if: env.RELEASE_BUILD == 'true'
         run: |
           ./Build/buildwindows
           mkdir -p release/windows
@@ -92,15 +109,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: curd-binaries
+          # release/macos and release/windows only exist on a release build; the
+          # glob tolerates their absence, and the release job needs them all.
           path: |
             release/linux/curd-linux-x86_64
             release/linux/curd-linux-arm64
-            release/macos/curd-macos-x86_64
-            release/macos/curd-macos-arm64
-            release/macos/curd-macos-universal
+            release/macos/curd-macos-*
             release/windows/curd-windows-x86_64.exe
           retention-days: 1
-          if-no-files-found: error
+          if-no-files-found: warn
 
   release:
     runs-on: windows-latest
