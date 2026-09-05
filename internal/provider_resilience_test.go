@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wraient/curd/internal/curdhost"
 	"github.com/wraient/curd/internal/providers"
 )
 
@@ -306,5 +307,33 @@ func TestSearchAnimeWithProvidersReportsPendingProvidersAsUnreachable(t *testing
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected only the fast provider's result, got %v", results)
+	}
+}
+
+// A provider throttling us is temporary. Treating it as definitive means no
+// retry, no cooldown, and a user told their anime does not exist when curd was
+// simply being rate limited.
+func TestRateLimitsAreRetryable(t *testing.T) {
+	for _, err := range []error{
+		fmt.Errorf("anipub: %w", curdhost.ErrRateLimited),
+		errors.New(`{"error":"Too many requests, try again in a minute"}`),
+		errors.New("anipub request failed with status 429: rate limit exceeded"),
+	} {
+		if !isRetryableProviderError(err) {
+			t.Fatalf("expected %v to be retryable", err)
+		}
+	}
+}
+
+// ...and it must be reported as the host being unavailable, not as a clean miss.
+func TestRateLimitReadsAsUnreachableNotAMiss(t *testing.T) {
+	failure := providerFailure{provider: "anipub", err: fmt.Errorf("anipub: %w", curdhost.ErrRateLimited)}
+	if got := failure.kind(); got != failureUnreachable {
+		t.Fatalf("kind = %v, want failureUnreachable", got)
+	}
+
+	message := newProviderSearchError("Some Show", []providerFailure{failure}).Error()
+	if strings.Contains(message, "none carries it") {
+		t.Fatalf("a rate limit must not be reported as the show not existing: %s", message)
 	}
 }

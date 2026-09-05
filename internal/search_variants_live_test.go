@@ -1,8 +1,11 @@
 package internal
 
 import (
+	"errors"
 	"os"
 	"testing"
+
+	"github.com/wraient/curd/internal/curdhost"
 )
 
 // TestProviderSearchResolvesRomajiOnlyTitlesLive exercises the real fix against
@@ -85,8 +88,14 @@ func TestAnipubNeedsEnglishTitleVariantLive(t *testing.T) {
 	t.Cleanup(func() { SetGlobalConfig(previous) })
 
 	// Without variants the romaji query misses outright — the original bug.
-	if _, err := searchAnimeWithProviders([]string{"anipub"}, romaji, "sub"); err == nil {
+	_, romajiErr := searchAnimeWithProviders([]string{"anipub"}, romaji, "sub")
+	if romajiErr == nil {
 		t.Skip("anipub now indexes the romaji title; this regression no longer reproduces")
+	}
+	// Being throttled proves nothing either way, and failing on it would make a
+	// scheduled run cry wolf about a provider that is perfectly healthy.
+	if errors.Is(romajiErr, curdhost.ErrRateLimited) {
+		t.Skip("anipub is rate limiting; cannot exercise the variant fallback right now")
 	}
 
 	state := &providerMappingSearchState{
@@ -96,6 +105,9 @@ func TestAnipubNeedsEnglishTitleVariantLive(t *testing.T) {
 	}
 
 	results, err := searchAnimeForMapping(config, state, "sub")
+	if errors.Is(err, curdhost.ErrRateLimited) {
+		t.Skip("anipub is rate limiting; cannot exercise the variant fallback right now")
+	}
 	if err != nil {
 		t.Fatalf("expected a variant to rescue the search, got %v", err)
 	}

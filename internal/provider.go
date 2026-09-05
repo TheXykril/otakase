@@ -54,6 +54,13 @@ func isRetryableProviderError(err error) bool {
 		"no such host",
 		"broken pipe",
 		"server misbehaving",
+		// Throttling is temporary by definition. Without these a rate-limited
+		// provider is treated as a definitive answer: not retried, not cooled
+		// down, and reported to the user as though the show does not exist.
+		"too many requests",
+		"rate limited",
+		"rate limit",
+		"status 429",
 	} {
 		if strings.Contains(message, transient) {
 			return true

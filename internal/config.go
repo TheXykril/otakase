@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -249,6 +250,10 @@ func LoadConfig(configPath string) (CurdConfig, error) {
 	if err != nil {
 		return CurdConfig{}, fmt.Errorf("error loading config file: %v", err)
 	}
+
+	// Settings curd does not recognise are kept on disk but never applied, so a
+	// typo such as SkipOP=true would otherwise fail in complete silence.
+	WarnAboutUnknownConfigKeys(configMap)
 
 	// Check AddMissingOptions setting first
 	addMissing := true
@@ -659,28 +664,28 @@ func LoadConfigFromFile(path string) (map[string]string, error) {
 	return configMap, nil
 }
 
-// SaveConfigToFile saves updated config map to file in key=value format
+// SaveConfigToFile saves updated config map to file in key=value format.
+//
+// The write is atomic. This file holds tracker credentials and is rewritten on
+// most runs, and truncating it in place meant a crash or two concurrent runs
+// could leave it mangled -- a real config in the wild ended up with
+// "nimeListClientID", which is "MyAnimeListClientID" missing its first three
+// characters.
 func SaveConfigToFile(path string, configMap map[string]string) error {
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
 	keys := make([]string, 0, len(configMap))
 	for key := range configMap {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 
-	writer := bufio.NewWriter(file)
+	var buf bytes.Buffer
 	for _, key := range keys {
-		line := fmt.Sprintf("%s=%s\n", key, configMap[key])
-		if _, err := writer.WriteString(line); err != nil {
+		if _, err := fmt.Fprintf(&buf, "%s=%s\n", key, configMap[key]); err != nil {
 			return err
 		}
 	}
-	return writer.Flush()
+
+	return writeFileAtomic(path, buf.Bytes(), 0o644)
 }
 
 // PopulateConfig populates the CurdConfig struct from a map

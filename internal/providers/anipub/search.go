@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/wraient/curd/internal/curdhost"
 	"github.com/wraient/curd/internal/providers"
 )
 
@@ -61,6 +62,14 @@ func decodeSearchResults(raw []byte) ([]searchResult, error) {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("empty search response")
+	}
+
+	// anipub answers HTTP 200 with {"error":"Too many requests, ..."} when it is
+	// throttling. Falling through to the parse path below reported that as
+	// "parse anipub search response", which reads like a bug in curd and, worse,
+	// is not retried because it does not look transient.
+	if curdhost.IsRateLimitedBody(raw) {
+		return nil, fmt.Errorf("anipub: %w", curdhost.ErrRateLimited)
 	}
 
 	var notFound struct {

@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **A rate-limited provider was reported as though the show did not exist.**
+  anipub answers HTTP 200 with `{"error":"Too many requests, ..."}` when it
+  throttles, which fell through to a generic parse failure. Nothing recognised
+  it as temporary, so it was not retried, did not trip the provider cooldown,
+  and told the user their anime was not carried. Throttling is now detected,
+  reported as the host being unavailable, and retried.
+- **The config file is written atomically.** It holds tracker credentials and is
+  rewritten on most runs, but was truncated in place with no lock, so a crash or
+  two concurrent runs could mangle it. A real config in the wild ended up
+  containing `nimeListClientID` — `MyAnimeListClientID` with its first three
+  characters gone. Writes now go to a temporary file and are renamed into place.
+- **Unrecognised config options are reported instead of silently ignored.** A
+  typo such as `SkipOP=true` did nothing at all, with no indication why. Unknown
+  keys are now named on startup with the closest valid option suggested, and are
+  never deleted, since they may belong to another curd the user runs.
+
+### Added
+
+- **A scheduled provider canary** (`.github/workflows/provider-canary.yml`). The
+  repo already had live tests covering real providers, but they are gated behind
+  environment variables and CI ran `go test -short`, which skips every one — so
+  provider rot was only ever discovered by users. The canary runs them weekly,
+  probes every provider, and opens or updates an issue when one breaks. It
+  retries once after a pause, because a canary that cries wolf over a brief
+  throttle gets ignored.
+
 ## 2.2.0 — 2026-09-04
 
 ### Added

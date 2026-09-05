@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/wraient/curd/internal/curdhost"
 )
 
 // A failed stacked search used to report every provider error concatenated into
@@ -58,6 +60,8 @@ func (f providerFailure) kind() failureKind {
 		return failureDisabled
 	case strings.Contains(message, "no results for"), strings.Contains(message, "not found"):
 		return failureNoResults
+	case errors.Is(f.err, curdhost.ErrRateLimited), strings.Contains(message, "too many requests"):
+		return failureUnreachable
 	case isRetryableProviderError(f.err), strings.Contains(message, "cloudflare"), strings.Contains(message, "maintenance"):
 		return failureUnreachable
 	default:

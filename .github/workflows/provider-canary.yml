@@ -1,0 +1,119 @@
+# Streaming hosts rot silently. senshi.live's domain lapsed, AllAnime started
+# demanding signed requests, and anipub changed its episode link shape -- each
+# went unnoticed until a user could not watch anything.
+#
+# The repo already had live tests covering exactly this, but they are gated
+# behind environment variables and the build workflow runs `go test -short`,
+# which skips every one. This runs them on a schedule instead, so a dead provider
+# is reported here rather than discovered by whoever tries to watch something.
+name: Provider canary
+
+on:
+  schedule:
+    # Weekly, Monday 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    # A fork with no maintainer should not accumulate failing scheduled runs.
+    if: github.repository == 'TheXykril/curd'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Probe every provider
+        id: status
+        continue-on-error: true
+        run: |
+          go build -o curd ./cmd/curd
+          # Always readable in the log, whatever the outcome.
+          ./curd -provider-status | tee provider-status.txt
+
+      - name: Resolve real shows through the provider stack
+        id: live
+        continue-on-error: true
+        shell: bash
+        env:
+          CURD_LIVE_SEARCH_TEST: "1"
+        run: |
+          # The download test is deliberately excluded: it pulls ~165 MB.
+          run_tests() {
+            go test -count=1 -timeout 10m \
+              -run 'TestProviderSearchResolvesRomajiOnlyTitlesLive|TestAnipubNeedsEnglishTitleVariantLive' \
+              ./internal/ 2>&1 | tee live-tests.txt
+            return "${PIPESTATUS[0]}"
+          }
+
+          # One retry after a pause. Providers throttle, and a canary that cries
+          # wolf every time a host is briefly busy gets ignored -- which defeats
+          # the point of having it.
+          if ! run_tests; then
+            echo "First attempt failed; waiting 90s in case a provider was throttling."
+            sleep 90
+            run_tests
+          fi
+
+      - name: Report a broken provider
+        if: steps.live.outcome == 'failure' || steps.status.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Passed as environment variables rather than interpolated into the
+          # script. These are trusted values on a schedule-only trigger, but
+          # expanding ${{ }} inside a shell body is the habit that leads to
+          # workflow injection when the input is not trusted.
+          SERVER_URL: ${{ github.server_url }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          title="Provider canary failed"
+          body_file=$(mktemp)
+          {
+            echo "The scheduled provider check failed, which usually means a"
+            echo "streaming host changed or went away."
+            echo
+            echo "Run: ${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}"
+            echo
+            echo "### Provider status"
+            echo '```'
+            cat provider-status.txt 2>/dev/null || echo "(the probe did not produce output)"
+            echo '```'
+            echo
+            echo "### Live search tests"
+            echo '```'
+            tail -40 live-tests.txt 2>/dev/null || echo "(the tests did not produce output)"
+            echo '```'
+          } > "$body_file"
+
+          # Update the existing report rather than opening a new issue every week.
+          existing=$(gh issue list --state open --label provider-canary \
+            --json number --jq '.[0].number // empty')
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file "$body_file"
+            echo "Commented on existing issue #$existing"
+          else
+            gh label create provider-canary \
+              --description "Automated provider health check" \
+              --color B60205 2>/dev/null || true
+            gh issue create --title "$title" --label provider-canary --body-file "$body_file"
+          fi
+
+      - name: Fail the run when a provider is broken
+        if: steps.live.outcome == 'failure' || steps.status.outcome == 'failure'
+        run: |
+          echo "A provider check failed; see the issue and the logs above."
+          exit 1
