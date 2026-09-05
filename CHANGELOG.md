@@ -30,6 +30,11 @@
   retries once after a pause, because a canary that cries wolf over a brief
   throttle gets ignored.
 
+  It also reports when upstream (`Wraient/curd`) has commits this fork does not,
+  so upstream fixes surface on their own rather than depending on someone
+  remembering to look. That is filed separately from provider health and never
+  fails the run: commits existing upstream is information, not a fault.
+
 ## 2.2.0 — 2026-09-04
 
 ### Added

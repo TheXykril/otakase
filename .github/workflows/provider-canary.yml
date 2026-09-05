@@ -27,6 +27,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Full history: a shallow clone cannot compute HEAD..upstream/main.
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -63,6 +66,93 @@ jobs:
             echo "First attempt failed; waiting 90s in case a provider was throttling."
             sleep 90
             run_tests
+          fi
+
+      # Upstream will eventually ship fixes, and nothing otherwise says when.
+      # This is reported separately from provider health and never fails the run:
+      # commits existing upstream is information, not a fault.
+      - name: Check for upstream commits
+        id: drift
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          git remote add upstream https://github.com/Wraient/curd.git 2>/dev/null || true
+          if ! git fetch --quiet upstream main; then
+            echo "Could not reach upstream; skipping the drift check."
+            echo "count=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Commit messages come from upstream, so they are never interpolated
+          # into a shell command -- only written to files and passed by path.
+          git log --no-merges --pretty=format:'- %h %s (%an, %ad)' --date=short \
+            HEAD..upstream/main > upstream-commits.txt || true
+
+          count=$(git rev-list --count HEAD..upstream/main 2>/dev/null || echo 0)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Upstream (Wraient/curd)"
+            if [ "$count" -eq 0 ]; then
+              echo
+              echo "Up to date - no commits this fork is missing."
+            else
+              echo
+              echo "$count commit(s) not in this fork:"
+              echo
+              cat upstream-commits.txt
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "upstream commits not in this fork: $count"
+
+      - name: Report upstream commits worth reviewing
+        if: steps.drift.outputs.count != '0' && steps.drift.outputs.count != 'unknown'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER_URL: ${{ github.server_url }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          COUNT: ${{ steps.drift.outputs.count }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          body_file=$(mktemp)
+          {
+            echo "Upstream has ${COUNT} commit(s) this fork does not have."
+            echo
+            echo "Review them and merge anything worth taking:"
+            echo
+            echo '```'
+            echo "git fetch upstream && git log --oneline HEAD..upstream/main"
+            echo '```'
+            echo
+            echo "### Commits"
+            echo
+            # Written from a file: upstream commit messages are untrusted text
+            # and must not be evaluated by the shell.
+            cat upstream-commits.txt
+            echo
+            echo "Run: ${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}"
+          } > "$body_file"
+
+          existing=$(gh issue list --state open --label upstream-drift \
+            --json number --jq '.[0].number // empty')
+
+          if [ -n "$existing" ]; then
+            # Replace the body rather than pile up comments: the list of missing
+            # commits is a current state, not a history.
+            gh issue edit "$existing" --body-file "$body_file"
+            echo "Updated existing issue #$existing"
+          else
+            gh label create upstream-drift \
+              --description "Upstream has commits this fork does not" \
+              --color 0E8A16 2>/dev/null || true
+            gh issue create --title "Upstream has new commits" \
+              --label upstream-drift --body-file "$body_file"
           fi
 
       - name: Report a broken provider
