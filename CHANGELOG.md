@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Dual tracking (`TrackingRemote=anilist+myanimelist`) failed to launch.**
+  Three defects compounded:
+
+  The AniList write loop slept 350ms between updates; the MyAnimeList loop had
+  no delay at all. A first dual sync is large — 180 entries on a real library —
+  and firing those back to back gets the account rate limited. Both loops are
+  now paced.
+
+  MyAnimeList answers a rate-limited write with a redirect to `/error.json`,
+  which never responds. Go followed it and re-issued the `PUT`, so throttling
+  became a minute-long hang rather than an error. API requests no longer follow
+  redirects: a REST API returning one is reporting a failure, not a new address.
+
+  A single failed entry aborted the entire sync, and with it the launch. One
+  anime that cannot be written is now logged and skipped, and the count of
+  skipped updates is reported.
+
+  The error was also undiagnosable: it carried no status code and, for a
+  redirect, an empty body. It now names the status and the redirect target.
+
 ### Added
 
 - **The list leads with what you were last watching.** The text menu applied no

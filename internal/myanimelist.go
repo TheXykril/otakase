@@ -534,13 +534,23 @@ func myAnimeListRequest(config *CurdConfig, method, requestURL string, form url.
 		return req, nil
 	}
 
+	// A REST API answering a redirect is telling us the request failed, not
+	// where to send it again. MyAnimeList redirects a rate-limited write to
+	// /error.json, which never responds; following that turned a throttling
+	// response into a minute-long hang and a failed launch. Surface the redirect
+	// as the error it is.
+	client := *sharedHTTPClient
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
 	for attempt := 0; attempt < 2; attempt++ {
 		req, err := buildRequest(token)
 		if err != nil {
 			return err
 		}
 
-		resp, err := sharedHTTPClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			return err
 		}
@@ -574,7 +584,20 @@ func myAnimeListRequest(config *CurdConfig, method, requestURL string, form url.
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return fmt.Errorf("MyAnimeList API %s %s failed: %s", method, requestURL, strings.TrimSpace(string(body)))
+			detail := strings.TrimSpace(string(body))
+			if location := resp.Header.Get("Location"); location != "" {
+				// A redirect body is usually empty, and the destination is the
+				// only useful part: MyAnimeList sends rate-limited writes to
+				// /error.json.
+				detail = "redirected to " + location
+			}
+			if detail == "" {
+				detail = resp.Status
+			}
+			// The status code was missing entirely, so a throttled write
+			// reported only an empty body and gave nothing to diagnose.
+			return fmt.Errorf("MyAnimeList API %s %s failed with status %d: %s",
+				method, requestURL, resp.StatusCode, detail)
 		}
 
 		if out != nil {

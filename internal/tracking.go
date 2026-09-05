@@ -17,6 +17,10 @@ const (
 	TrackingRemoteAniList     = "anilist"
 	TrackingRemoteMyAnimeList = "myanimelist"
 	TrackingRemoteBoth        = "anilist+myanimelist"
+
+	// remoteTrackerWriteDelay paces writes to either tracker. Both are rate
+	// limited, and a first dual sync can run to hundreds of entries.
+	remoteTrackerWriteDelay = 350 * time.Millisecond
 )
 
 func UsesLocalTracking(config *CurdConfig) bool {
@@ -661,19 +665,40 @@ func syncDualRemoteTrackers(config *CurdConfig, aniListToken string, aniListUser
 		return AnimeList{}, fmt.Errorf("missing tracker users")
 	}
 
+	failures := 0
 	plan := buildDualRemoteSyncPlan(aniListUser.AnimeList, myAnimeListUser.AnimeList)
 	for index, entry := range plan.AniListUpdates {
 		if index > 0 {
-			time.Sleep(350 * time.Millisecond)
+			time.Sleep(remoteTrackerWriteDelay)
 		}
 		if err := saveAniListTrackedEntry(aniListToken, entry); err != nil {
-			return AnimeList{}, err
+			Log(fmt.Sprintf("Dual sync: AniList update for %q failed: %v", mediaDisplayTitle(entry.Media, config), err))
+			failures++
+			continue
 		}
 	}
-	for _, entry := range plan.MyAnimeListUpdates {
-		if err := saveMyAnimeListTrackedEntry(config, entry); err != nil {
-			return AnimeList{}, err
+	// The MyAnimeList loop had no delay at all while the AniList one above slept
+	// between writes. A first dual sync can be well over a hundred entries -- 180
+	// on a real library -- and firing those back to back gets the account rate
+	// limited, at which point MyAnimeList answers with a redirect to
+	// /error.json that never completes, so startup hung and the launch failed.
+	for index, entry := range plan.MyAnimeListUpdates {
+		if index > 0 {
+			time.Sleep(remoteTrackerWriteDelay)
 		}
+		if err := saveMyAnimeListTrackedEntry(config, entry); err != nil {
+			// One entry that cannot be written must not cost the user their
+			// launch: an anime missing from MyAnimeList, or a single rejected
+			// write, previously aborted the whole sync.
+			Log(fmt.Sprintf("Dual sync: MyAnimeList update for %q failed: %v", mediaDisplayTitle(entry.Media, config), err))
+			failures++
+			continue
+		}
+	}
+
+	if failures > 0 {
+		CurdOut(fmt.Sprintf("Dual tracking: %d of %d updates could not be synced; see the log.",
+			failures, len(plan.AniListUpdates)+len(plan.MyAnimeListUpdates)))
 	}
 
 	aniListUser.AnimeList = plan.Merged
