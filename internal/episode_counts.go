@@ -86,11 +86,21 @@ func WithEpisodeCounts(title string, entry Entry) string {
 // WithEpisodeCountsAndNote appends the counts and, when there is one, a single
 // status note: a resume point, or how long until the next episode airs.
 func WithEpisodeCountsAndNote(title string, entry Entry, resume string) string {
+	return withEpisodeCounts(title, entry, resume, true)
+}
+
+// WithEpisodeCountsForGrid is the poster-grid form: it omits the airing
+// countdown, which costs more of the clipped label than it is worth there.
+func WithEpisodeCountsForGrid(title string, entry Entry, resume string) string {
+	return withEpisodeCounts(title, entry, resume, false)
+}
+
+func withEpisodeCounts(title string, entry Entry, resume string, withCountdown bool) string {
 	parts := make([]string, 0, 2)
 	if summary := episodeProgressFor(entry).Summary(); summary != "" {
 		parts = append(parts, summary)
 	}
-	if note := entryStatusNote(entry, resume); note != "" {
+	if note := entryStatusNote(entry, resume, withCountdown); note != "" {
 		parts = append(parts, note)
 	}
 	if len(parts) == 0 {

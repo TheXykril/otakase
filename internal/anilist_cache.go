@@ -304,7 +304,7 @@ func buildCategoryPreviewOptions(list AnimeList, category string) map[string]Rof
 		}
 
 		options[strconv.Itoa(entry.Media.ID)] = RofiSelectPreview{
-			Title:          WithEpisodeCountsAndNote(title, entry, resume[entry.Media.ID]),
+			Title:          WithEpisodeCountsForGrid(title, entry, resume[entry.Media.ID]),
 			CoverImage:     entry.CoverImage,
 			HasNewEpisodes: hasNew,
 			Rank:           rank,

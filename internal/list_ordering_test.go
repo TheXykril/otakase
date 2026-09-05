@@ -107,16 +107,47 @@ func TestEntryStatusNotePrefersResume(t *testing.T) {
 	entry := Entry{}
 	entry.Media.NextAiringEpisode = &NextAiringEpisodeInfo{Episode: 10, TimeUntilAiring: 6 * 86400}
 
-	if got := entryStatusNote(entry, "resume 11:40"); got != "resume 11:40" {
+	if got := entryStatusNote(entry, "resume 11:40", true); got != "resume 11:40" {
 		t.Fatalf("got %q, want the resume point", got)
 	}
-	if got := entryStatusNote(entry, ""); got != "next in 6d" {
+	if got := entryStatusNote(entry, "", true); got != "next in 6d" {
 		t.Fatalf("got %q, want the countdown", got)
 	}
 
 	// Nothing to say about a finished show with no resume point.
-	if got := entryStatusNote(Entry{}, ""); got != "" {
+	if got := entryStatusNote(Entry{}, "", true); got != "" {
 		t.Fatalf("got %q, want no note", got)
+	}
+}
+
+// The poster grid clips its label at the column width, so the countdown is
+// dropped there to buy the title back the room. A resume point still shows: it
+// is shorter and it is something to act on now.
+func TestEntryStatusNoteOmitsCountdownForTheGrid(t *testing.T) {
+	entry := Entry{}
+	entry.Media.NextAiringEpisode = &NextAiringEpisodeInfo{Episode: 10, TimeUntilAiring: 6 * 86400}
+
+	if got := entryStatusNote(entry, "", false); got != "" {
+		t.Fatalf("got %q, want no countdown in the grid", got)
+	}
+	if got := entryStatusNote(entry, "resume 11:40", false); got != "resume 11:40" {
+		t.Fatalf("got %q, want the resume point kept", got)
+	}
+}
+
+// The two menus differ only in the countdown.
+func TestGridLabelDropsTheCountdownButKeepsTheCounts(t *testing.T) {
+	entry := entryWith(9, 12, 10, "RELEASING")
+	entry.Media.NextAiringEpisode.TimeUntilAiring = 22 * 3600
+
+	list := WithEpisodeCountsAndNote("Rich Girl Caretaker", entry, "")
+	grid := WithEpisodeCountsForGrid("Rich Girl Caretaker", entry, "")
+
+	if list != "Rich Girl Caretaker · 9/12 (9 aired) · next in 22h" {
+		t.Fatalf("list = %q", list)
+	}
+	if grid != "Rich Girl Caretaker · 9/12 (9 aired)" {
+		t.Fatalf("grid = %q", grid)
 	}
 }
 

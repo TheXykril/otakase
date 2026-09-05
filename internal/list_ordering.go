@@ -91,11 +91,19 @@ func formatResumePosition(playbackSeconds, durationMinutes int) string {
 // entryStatusNote returns the one extra note worth appending to a list row.
 //
 // Resume wins over the airing countdown: a part-watched episode is something to
-// act on now, whereas a countdown is something to come back for. Showing both
-// would crowd the row, and the poster grid budgets its label tightly.
-func entryStatusNote(entry Entry, resume string) string {
+// act on now, whereas a countdown is something to come back for, and showing
+// both would crowd the row.
+//
+// withCountdown is false for the poster grid. A cover's label is clipped at the
+// column width, and "next in 22h" costs about fourteen characters of a
+// thirty-seven character line -- it buys back more than a third of the title.
+// The text menu has the width to spare, so it keeps the countdown.
+func entryStatusNote(entry Entry, resume string, withCountdown bool) string {
 	if resume != "" {
 		return resume
+	}
+	if !withCountdown {
+		return ""
 	}
 	if next := entry.Media.NextAiringEpisode; next != nil {
 		return formatTimeUntilAiring(next.TimeUntilAiring)

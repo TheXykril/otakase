@@ -18,6 +18,12 @@
   Rich Girl Caretaker … · 9/12 (9 aired) · next in 22h
   That Time I Got Rein… · 0/24 (21 aired) · next in 6d
   ```
+
+  The countdown appears in the text menu only. A poster label is clipped at the
+  column width, and "next in 22h" costs about fourteen of its thirty-seven
+  characters — more than a third of the title — which is a poor trade when the
+  cover already identifies the show. Resume points still show in both: they are
+  shorter, and they are something to act on now.
 - **Resume points.** Where the local history shows you stopped part-way through
   an episode, the row says so: `· resume 11:40`. Shown only when you are
   meaningfully in — past a minute and not yet 95% through — so it stays signal
