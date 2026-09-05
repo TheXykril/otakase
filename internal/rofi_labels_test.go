@@ -3,6 +3,7 @@ package internal
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestSplitRofiLabel(t *testing.T) {
@@ -108,5 +109,106 @@ func TestRofiRowMarkupRoundTripsToOriginalLabel(t *testing.T) {
 		if recovered != label {
 			t.Fatalf("round trip failed:\n  label     %q\n  rendered  %q\n  recovered %q", label, rendered, recovered)
 		}
+	}
+}
+
+// The grid clips at the column width, and a long title used to consume the whole
+// line so the episode counts -- the one thing a cover cannot tell you -- were
+// what disappeared. The title must absorb the truncation instead.
+func TestGridRowMarkupKeepsCountsVisible(t *testing.T) {
+	rofiMetaColor = "#4b4e55"
+	const capacity = 37
+
+	cases := []string{
+		"That Time I Got Reincarnated as a Slime Season 4 · 0/24 (21 aired)",
+		"Rich Girl Caretaker: I'm Secretly the Caregiver of the Most Popular Girl · 9/12 (9 aired)",
+		"From Old Country Bumpkin to Master Swordsman · 4/12",
+		"Uzaki-chan Wants to Hang Out! · 3/12",
+	}
+
+	for _, label := range cases {
+		row := GridRowMarkup(label, capacity)
+		plain := unescapePango(pangoStrip.ReplaceAllString(row, ""))
+
+		if got := len([]rune(plain)); got > capacity {
+			t.Fatalf("row exceeds the budget (%d > %d): %q", got, capacity, plain)
+		}
+
+		_, meta := splitRofiLabel(label)
+		// The counts must survive intact -- never truncated, never dropped.
+		if !strings.HasSuffix(plain, meta) {
+			t.Fatalf("counts did not survive:\n  in  %q\n  out %q", label, plain)
+		}
+	}
+}
+
+func TestGridRowMarkupDimsOnlyTheCounts(t *testing.T) {
+	rofiMetaColor = "#4b4e55"
+
+	row := GridRowMarkup("Uzaki-chan Wants to Hang Out! · 3/12", 37)
+	if strings.Count(row, "<span") != 1 {
+		t.Fatalf("expected one dimmed span, got %q", row)
+	}
+	if !strings.HasPrefix(row, "Uzaki-chan Wants to Hang Out!<span") {
+		t.Fatalf("expected the title outside the span, got %q", row)
+	}
+}
+
+// A title short enough to fit is left exactly as it is.
+func TestGridRowMarkupLeavesShortTitlesIntact(t *testing.T) {
+	rofiMetaColor = "#4b4e55"
+
+	row := GridRowMarkup("Monster · 4/24", 37)
+	plain := unescapePango(pangoStrip.ReplaceAllString(row, ""))
+	if plain != "Monster · 4/24" {
+		t.Fatalf("got %q", plain)
+	}
+}
+
+// Counts so long that the title would vanish: keep a recognisable stub rather
+// than rendering a single ellipsis.
+func TestGridRowMarkupKeepsAMinimumTitle(t *testing.T) {
+	rofiMetaColor = "#4b4e55"
+
+	row := GridRowMarkup("Some Extremely Long Anime Title Here · 1100/1177 aired", 20)
+	plain := unescapePango(pangoStrip.ReplaceAllString(row, ""))
+	title, _ := splitRofiLabel(plain)
+	if len([]rune(title)) < gridLabelMinTitle {
+		t.Fatalf("title collapsed to %q", title)
+	}
+}
+
+func TestTruncateRunes(t *testing.T) {
+	cases := []struct {
+		in    string
+		limit int
+		want  string
+	}{
+		{"short", 10, "short"},
+		{"exactly-ten", 11, "exactly-ten"},
+		{"truncate me please", 10, "truncate…"},
+		{"trailing space  x", 15, "trailing space…"},
+		{"日本語のタイトルです", 5, "日本語の…"},
+		{"anything", 1, "…"},
+		{"anything", 0, ""},
+	}
+	for _, tc := range cases {
+		if got := truncateRunes(tc.in, tc.limit); got != tc.want {
+			t.Fatalf("truncateRunes(%q, %d) = %q, want %q", tc.in, tc.limit, got, tc.want)
+		}
+	}
+}
+
+// A multi-byte title must not be cut mid-character.
+func TestGridRowMarkupHandlesMultibyteTitles(t *testing.T) {
+	rofiMetaColor = "#4b4e55"
+
+	row := GridRowMarkup("転生したらスライムだった件 第4期 とても長いタイトル · 0/24", 24)
+	plain := unescapePango(pangoStrip.ReplaceAllString(row, ""))
+	if !strings.HasSuffix(plain, "0/24") {
+		t.Fatalf("counts lost: %q", plain)
+	}
+	if !utf8.ValidString(plain) {
+		t.Fatalf("produced invalid utf-8: %q", plain)
 	}
 }

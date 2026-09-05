@@ -22,6 +22,12 @@ import (
 //go:embed templates/*.rasi
 var templates embed.FS
 
+// GridLabelCapacity is how many monospace characters fit under one cover in the
+// poster grid. Measured against the three-column layout in
+// selectanimepreview.rasi by rendering a character ruler, not derived from the
+// geometry: a first estimate from column arithmetic was off by a third.
+const GridLabelCapacity = 37
+
 // Names are the theme files Curd invokes rofi with.
 var Names = []string{
 	"selectanime.rasi",
@@ -49,6 +55,13 @@ type templateData struct {
 	BrightForeground string
 	Muted            string
 	Accent           string
+	// CardBorder, HairRule, SelectFill and SelectEdge are the foreground tinted
+	// at the alphas Omarchy's shell.toml uses for menu chrome: a card outline, an
+	// interior rule, a selected row's fill, and that row's own outline.
+	CardBorder string
+	HairRule   string
+	SelectFill string
+	SelectEdge string
 	// OnAccent is text drawn on top of the accent colour.
 	OnAccent string
 	// SelectionBand is the filled band behind the cursor row. It is mixed from
@@ -61,23 +74,41 @@ type templateData struct {
 	Green               string
 }
 
+// alpha renders a palette colour at the given opacity as #rrggbbaa.
+func alpha(color string, opacity float64) string {
+	color = strings.TrimSpace(color)
+	if opacity < 0 {
+		opacity = 0
+	}
+	if opacity > 1 {
+		opacity = 1
+	}
+	return fmt.Sprintf("%s%02x", color, int(opacity*255+0.5))
+}
+
 func newTemplateData(palette theme.Palette) templateData {
 	accent := palette.Accent
+	mono := theme.MonospaceFont()
 	return templateData{
 		// A modular scale, 11 -> 13 -> 16 at roughly 1.2x, rather than the ad-hoc
 		// 11/13/13/14/15 it replaces. Three steps is all this UI needs, and a
 		// consistent ratio is what makes hierarchy read as deliberate.
-		Font:        "Sans 11",
-		EntryFont:   "Sans 13",
-		PromptFont:  "Sans Bold 13",
-		HeadingFont: "Sans Bold 16",
-		TitleFont:   "Sans 16",
+		// Monospace throughout: the grid budgets a title against a fixed column
+		// width, which only holds when every glyph is the same width. Omarchy's
+		// own menus are monospace too, so this matches the desktop.
+		Font:        mono + " 10",
+		EntryFont:   mono + " 13",
+		PromptFont:  mono + " Bold 13",
+		HeadingFont: mono + " Bold 13",
+		TitleFont:   mono + " 13",
 
 		Background: palette.Background,
 		// rofi accepts #rrggbbaa. The poster grid is fullscreen, so it dims the
 		// desktop rather than blacking it out -- but it has to be opaque enough
 		// that whatever is behind it does not compete with the covers.
-		Scrim:            strings.TrimSpace(palette.Background) + "f7",
+		// Omarchy dims the desktop to 0.5 behind its menus rather than blacking it
+		// out; that works here because the grid now sits on an opaque card.
+		Scrim:            alpha(palette.Background, 0.50),
 		Surface:          palette.Surface(),
 		Border:           palette.Border(),
 		Foreground:       palette.Foreground,
@@ -86,7 +117,13 @@ func newTemplateData(palette theme.Palette) templateData {
 		Accent:           accent,
 		// The prompt pill is filled with the accent, so its text has to be chosen
 		// by contrast or it disappears on light accents.
-		OnAccent:            theme.ReadableOn(accent, palette.Background, palette.BrightForeground, palette.Foreground),
+		OnAccent: theme.ReadableOn(accent, palette.Background, palette.BrightForeground, palette.Foreground),
+		// Alphas from Omarchy's shell.toml: menu border, interior rules, and a
+		// selected row at 8% fill with a 25% outline.
+		CardBorder:          alpha(palette.Foreground, 0.40),
+		HairRule:            alpha(palette.Foreground, 0.15),
+		SelectFill:          alpha(palette.Foreground, 0.08),
+		SelectEdge:          alpha(palette.Foreground, 0.25),
 		SelectionBand:       palette.SelectionBand(),
 		SelectionBackground: palette.SelectionBackground(),
 		SelectionForeground: palette.SelectionForeground(),

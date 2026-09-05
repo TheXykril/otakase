@@ -17,6 +17,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/wraient/curd/internal/rofitheme"
 	"github.com/wraient/curd/internal/theme"
 )
 
@@ -580,9 +581,12 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 				Log(fmt.Sprintf("Error caching image: %v", err))
 				continue
 			}
-			label := opt.Label
+			// Every row goes through the markup builder, not just the ones with new
+			// episodes: it is what escapes pango and dims the counts, and skipping
+			// it left ordinary rows unescaped.
+			label := GridRowMarkup(opt.Label, rofitheme.GridLabelCapacity)
 			if opt.HasNewEpisodes {
-				label = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s ", rofiNewEpisodeColor, rofiRowMarkup(opt.Label))
+				label = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s", rofiNewEpisodeColor, label)
 			}
 			rofiInput.WriteString(fmt.Sprintf("%s\x00icon\x1f%s\n", label, cachePath))
 		}

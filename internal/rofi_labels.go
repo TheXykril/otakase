@@ -90,3 +90,61 @@ func rofiRowMarkup(label string) string {
 	return fmt.Sprintf("%s <span foreground=\"%s\">%s</span>",
 		escapePango(title), rofiMetaColor, escapePango(meta))
 }
+
+// gridLabelGap separates a truncated title from its counts. splitRofiLabel
+// already returns the "·" as part of the metadata, so only a space is needed
+// here -- adding another separator produced "Title · · 4/24".
+const gridLabelGap = " "
+
+// GridRowMarkup renders one poster-grid label, budgeting the title so the
+// episode counts always survive.
+//
+// The grid clips a label at the column width, and a long anime title used the
+// whole line, so the counts -- the one thing a cover cannot tell you -- were the
+// part that disappeared. The title absorbs the truncation instead, and the
+// counts stay pinned at the end.
+//
+// The budget is in characters, which is only meaningful because the menus are
+// set in a monospace face; see theme.MonospaceFont.
+func GridRowMarkup(label string, capacity int) string {
+	title, meta := splitRofiLabel(label)
+	if title == "" {
+		return escapePango(strings.TrimSpace(label))
+	}
+	if meta == "" {
+		return escapePango(truncateRunes(title, capacity))
+	}
+
+	budget := capacity - len([]rune(meta)) - len([]rune(gridLabelGap))
+	if budget < gridLabelMinTitle {
+		// The counts are so long that truncating the title further would leave
+		// nothing recognisable; let the row clip rather than render a stub.
+		budget = gridLabelMinTitle
+	}
+
+	return fmt.Sprintf("%s<span foreground=\"%s\">%s%s</span>",
+		escapePango(truncateRunes(title, budget)),
+		rofiMetaColor,
+		escapePango(gridLabelGap),
+		escapePango(meta))
+}
+
+// gridLabelMinTitle is the fewest title characters worth showing.
+const gridLabelMinTitle = 8
+
+// truncateRunes shortens text to at most limit characters, ending with an
+// ellipsis. It counts runes, not bytes, so a multi-byte title is not cut mid
+// character.
+func truncateRunes(text string, limit int) string {
+	runes := []rune(text)
+	if limit <= 0 {
+		return ""
+	}
+	if len(runes) <= limit {
+		return text
+	}
+	if limit == 1 {
+		return "…"
+	}
+	return strings.TrimRight(string(runes[:limit-1]), " ") + "…"
+}

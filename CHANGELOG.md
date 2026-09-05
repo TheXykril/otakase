@@ -1,6 +1,46 @@
 # Changelog
 
-## Unreleased
+## 2.3.0 — 2026-09-05
+
+### Added
+
+- **The menus follow Omarchy's own design language.** Curd's rofi themes are now
+  built from the tokens in the active theme's `shell.toml` — the same contract
+  Omarchy's bar, dropdowns and menus use — so curd looks like part of the desktop
+  rather than a separate application:
+
+  - an opaque card on a light (0.5) scrim, hairline border on every side, small
+    radius, matching `[menu]`;
+  - a selected row marked by an 8% foreground fill with its own 25% outline and
+    accent-coloured text, rather than a heavy accent band;
+  - no prompt chip: a bare field with placeholder text and a hairline beneath;
+  - the system monospace family, via `fc-match`, which follows `omarchy font set`
+    and still works with no Omarchy installed.
+
+  The poster grid is now a card too, not a fullscreen surface. Omarchy's scrim is
+  deliberately light because its menus are opaque cards on top of it; rendering
+  covers straight onto that scrim let the wallpaper compete with the artwork.
+
+- **Poster labels keep their episode counts.** The grid clips a label at the
+  column width, and a long anime title consumed the whole line, so the counts —
+  the one thing a cover cannot tell you — were what disappeared. The title now
+  absorbs the truncation and the counts stay pinned at the end:
+
+  ```
+  That Time I Got Re…            · 0/24 (21 aired)
+  From Old Country Bumpkin to M… · 4/12
+  Uzaki-chan Wants to Hang Out!  · 3/12
+  ```
+
+  The budget is measured against the layout by rendering a character ruler, not
+  derived from column arithmetic — a first estimate that way was off by a third.
+  A test pins the layout to the measured value so the two cannot drift apart.
+
+### Fixed
+
+- **Poster grid rows were not pango-escaped.** Only rows flagged as having new
+  episodes went through the markup builder, so an ordinary title containing `&`
+  broke its own row, and the episode counts were never dimmed.
 
 ### Added
 

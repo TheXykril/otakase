@@ -233,3 +233,44 @@ func TestWriteAllDoesNotBackUpItsOwnOutput(t *testing.T) {
 		}
 	}
 }
+
+// GridLabelCapacity is measured against the poster grid's column count and card
+// width. If either changes, the budget is stale and titles will clip the counts
+// again, so this fails loudly rather than silently drifting.
+func TestGridLayoutMatchesTheMeasuredCapacity(t *testing.T) {
+	rendered, err := Render("selectanimepreview.rasi", theme.Builtin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"columns:          3;", "width:            1100px;", "size:             240px;"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("GridLabelCapacity (%d) was measured against a layout with %q; "+
+				"re-measure it before changing the grid", GridLabelCapacity, want)
+		}
+	}
+}
+
+// The menus should be monospace: the grid budgets a title in characters, which
+// only maps to width in a fixed-pitch face.
+func TestMenusUseAMonospaceFont(t *testing.T) {
+	data := newTemplateData(theme.Builtin())
+	if !strings.Contains(data.Font, theme.MonospaceFont()) {
+		t.Fatalf("Font = %q, expected the system monospace family", data.Font)
+	}
+}
+
+func TestQuattroTokensAreRendered(t *testing.T) {
+	rendered, err := Render("selectanime.rasi", theme.Builtin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Foreground-tinted chrome at Omarchy's alphas, not accent-coloured bands.
+	for _, want := range []string{"sel-fill:", "sel-edge:", "edge:", "rule:"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected %q in the rendered theme", want)
+		}
+	}
+	if strings.Contains(rendered, "{{") {
+		t.Fatal("unrendered template markers remain")
+	}
+}
