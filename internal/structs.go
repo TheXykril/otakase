@@ -168,6 +168,10 @@ type RofiSelectPreview struct {
 	Title          string `json:"title"`
 	CoverImage     string `json:"coverImage"`
 	HasNewEpisodes bool   `json:"-"`
+	// Rank is the display position this entry should hold. The grid is built
+	// from a map, which has no order, so the ordering has to travel with the
+	// value rather than being recovered by sorting titles at render time.
+	Rank int `json:"-"`
 }
 
 type SelectionOptionImage struct {

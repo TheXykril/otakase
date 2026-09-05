@@ -265,8 +265,9 @@ func RefreshAniListUserAnimeList(userCurdConfig *CurdConfig, user *User) error {
 func buildCategorySelectionOptions(list AnimeList, category string) []SelectionOption {
 	userCurdConfig := GetGlobalConfig()
 	options := make([]SelectionOption, 0)
+	resume := resumePointsByAnilistID(userCurdConfig)
 
-	for _, entry := range getEntriesByCategory(list, category) {
+	for _, entry := range sortEntriesByRecency(getEntriesByCategory(list, category), userCurdConfig) {
 		title := mediaDisplayTitle(entry.Media, userCurdConfig)
 
 		hasNew := false
@@ -277,7 +278,7 @@ func buildCategorySelectionOptions(list AnimeList, category string) []SelectionO
 
 		options = append(options, SelectionOption{
 			Key:            strconv.Itoa(entry.Media.ID),
-			Label:          WithEpisodeCounts(title, entry),
+			Label:          WithEpisodeCountsAndNote(title, entry, resume[entry.Media.ID]),
 			Title:          title,
 			HasNewEpisodes: hasNew,
 		})
@@ -289,8 +290,11 @@ func buildCategorySelectionOptions(list AnimeList, category string) []SelectionO
 func buildCategoryPreviewOptions(list AnimeList, category string) map[string]RofiSelectPreview {
 	userCurdConfig := GetGlobalConfig()
 	options := make(map[string]RofiSelectPreview)
+	resume := resumePointsByAnilistID(userCurdConfig)
 
-	for _, entry := range getEntriesByCategory(list, category) {
+	// The grid is keyed by a map, which has no order of its own, so each entry
+	// carries the rank it should be displayed at.
+	for rank, entry := range sortEntriesByRecency(getEntriesByCategory(list, category), userCurdConfig) {
 		title := mediaDisplayTitle(entry.Media, userCurdConfig)
 
 		hasNew := false
@@ -300,9 +304,10 @@ func buildCategoryPreviewOptions(list AnimeList, category string) map[string]Rof
 		}
 
 		options[strconv.Itoa(entry.Media.ID)] = RofiSelectPreview{
-			Title:          WithEpisodeCounts(title, entry),
+			Title:          WithEpisodeCountsAndNote(title, entry, resume[entry.Media.ID]),
 			CoverImage:     entry.CoverImage,
 			HasNewEpisodes: hasNew,
+			Rank:           rank,
 		}
 	}
 

@@ -544,18 +544,37 @@ func sortHomeMenuOptions(options []SelectionOption) []SelectionOption {
 }
 
 func previewOptionsToSortedSelection(options map[string]RofiSelectPreview) []SelectionOption {
-	selectionOptions := make([]SelectionOption, 0, len(options))
+	type ranked struct {
+		option SelectionOption
+		rank   int
+	}
+
+	entries := make([]ranked, 0, len(options))
 	for id, opt := range options {
-		selectionOptions = append(selectionOptions, SelectionOption{
-			Label:          opt.Title,
-			Key:            id,
-			HasNewEpisodes: opt.HasNewEpisodes,
+		entries = append(entries, ranked{
+			option: SelectionOption{
+				Label:          opt.Title,
+				Key:            id,
+				HasNewEpisodes: opt.HasNewEpisodes,
+			},
+			rank: opt.Rank,
 		})
 	}
 
-	sort.Slice(selectionOptions, func(i, j int) bool {
-		return selectionOptions[i].Label < selectionOptions[j].Label
+	// Honour the order the list was built in -- most recently watched first --
+	// rather than re-sorting alphabetically, which buried whatever you were part
+	// way through and disagreed with the text menu.
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].rank != entries[j].rank {
+			return entries[i].rank < entries[j].rank
+		}
+		return entries[i].option.Label < entries[j].option.Label
 	})
+
+	selectionOptions := make([]SelectionOption, 0, len(entries))
+	for _, entry := range entries {
+		selectionOptions = append(selectionOptions, entry.option)
+	}
 
 	return selectionOptions
 }

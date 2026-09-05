@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **The list leads with what you were last watching.** The text menu applied no
+  sort at all and took whatever AniList returned, while the poster grid sorted
+  alphabetically — so neither surfaced the show you were part-way through, and
+  the two menus disagreed with each other. Both now order by when the entry last
+  changed, most recent first.
+- **How long until the next episode.** AniList sends `timeUntilAiring` with every
+  list fetch and curd stored it without ever reading it; only the episode number
+  was used, for the "new episode" flag. Releasing shows now say when the next one
+  lands, at no extra cost:
+
+  ```
+  Rich Girl Caretaker … · 9/12 (9 aired) · next in 22h
+  That Time I Got Rein… · 0/24 (21 aired) · next in 6d
+  ```
+- **Resume points.** Where the local history shows you stopped part-way through
+  an episode, the row says so: `· resume 11:40`. Shown only when you are
+  meaningfully in — past a minute and not yet 95% through — so it stays signal
+  rather than appearing on every row. A resume point takes precedence over the
+  airing countdown: one is something to act on now, the other is something to
+  come back for, and showing both would crowd the row.
+
 ## 2.3.0 — 2026-09-05
 
 ### Added

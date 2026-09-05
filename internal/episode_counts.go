@@ -80,11 +80,23 @@ func (p EpisodeProgress) Summary() string {
 
 // WithEpisodeCounts appends the counts to a list row's title.
 func WithEpisodeCounts(title string, entry Entry) string {
-	summary := episodeProgressFor(entry).Summary()
-	if summary == "" {
+	return WithEpisodeCountsAndNote(title, entry, "")
+}
+
+// WithEpisodeCountsAndNote appends the counts and, when there is one, a single
+// status note: a resume point, or how long until the next episode airs.
+func WithEpisodeCountsAndNote(title string, entry Entry, resume string) string {
+	parts := make([]string, 0, 2)
+	if summary := episodeProgressFor(entry).Summary(); summary != "" {
+		parts = append(parts, summary)
+	}
+	if note := entryStatusNote(entry, resume); note != "" {
+		parts = append(parts, note)
+	}
+	if len(parts) == 0 {
 		return title
 	}
 	// " · " is the separator the rofi rows already treat as the start of
-	// metadata, so the whole count block dims with it.
-	return fmt.Sprintf("%s · %s", title, summary)
+	// metadata, so the whole block dims with it.
+	return fmt.Sprintf("%s · %s", title, strings.Join(parts, " · "))
 }
