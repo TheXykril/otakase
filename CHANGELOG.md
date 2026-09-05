@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Added
+
+- **Episode counts in the anime list.** Rows showed only a title, so knowing how
+  far through a show you were, or whether anything new had aired, meant opening
+  it. Every number was already on the AniList entry.
+
+  The denominator is always the season total, so a fraction means the same thing
+  on every row, and the aired count appears only while a show is still releasing
+  and differs from the total:
+
+  ```
+  That Time I Got Reincarnated as a Slime Season 4 · 0/24 (21 aired)
+  Rich Girl Caretaker: I'm Secretly the Caregiver … · 9/12 (9 aired)
+  Uzaki-chan Wants to Hang Out!                     · 3/12
+  ```
+
+  Shows AniList has no episode count for fall back to `6 watched`, or
+  `1100/1177 aired` when the aired figure is known. Counts render dimmed after
+  the title, so they never compete with it.
+
 ### Fixed
 
 - **A rate-limited provider was reported as though the show did not exist.**

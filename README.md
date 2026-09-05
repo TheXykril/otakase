@@ -27,6 +27,9 @@ Works on Linux, MacOS and Windows.
 > - `curd -download` saves episodes instead of streaming them — the most-requested
 >   missing feature upstream ([#104](https://github.com/Wraient/curd/issues/104),
 >   [#55](https://github.com/Wraient/curd/issues/55)).
+> - The anime list shows episode counts: `Show · 9/12 (9 aired)` — how many you
+>   have watched, the season total, and how many have actually aired while a show
+>   is still releasing.
 > - `curd -provider-status` probes every provider and reports which ones work.
 > - The menus follow your desktop colours on [Omarchy](https://omarchy.org/), and
 >   the rofi themes were redesigned and are now generated locally rather than

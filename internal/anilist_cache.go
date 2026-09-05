@@ -277,7 +277,8 @@ func buildCategorySelectionOptions(list AnimeList, category string) []SelectionO
 
 		options = append(options, SelectionOption{
 			Key:            strconv.Itoa(entry.Media.ID),
-			Label:          title,
+			Label:          WithEpisodeCounts(title, entry),
+			Title:          title,
 			HasNewEpisodes: hasNew,
 		})
 	}
@@ -299,7 +300,7 @@ func buildCategoryPreviewOptions(list AnimeList, category string) map[string]Rof
 		}
 
 		options[strconv.Itoa(entry.Media.ID)] = RofiSelectPreview{
-			Title:          title,
+			Title:          WithEpisodeCounts(title, entry),
 			CoverImage:     entry.CoverImage,
 			HasNewEpisodes: hasNew,
 		}
