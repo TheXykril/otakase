@@ -876,6 +876,21 @@ func episodeModeResultWithProviders(config CurdConfig, anime *Anime, epNo int, m
 		}
 
 		links, linkHints, err := getProviderEpisodeURLForModeWithHints(provider, config, providerID, epNo, mode)
+
+		// A stored id can belong to a different host: curd used to write the id
+		// of whichever provider served an episode next to the name of the first
+		// *configured* one, so anineko slugs ended up filed under "anipub" and
+		// were handed back to anipub on every later run. Re-derive the mapping
+		// once by searching before believing the provider does not carry it.
+		if (err != nil || len(links) == 0) && storedProviderIDMatches(anime, providerName, providerID) {
+			if fresh, searchErr := searchProviderIDForAnime(provider, &config, anime, mode); searchErr == nil && fresh != providerID {
+				Log(fmt.Sprintf("Stored %s id %q did not work; re-derived %q", providerName, providerID, fresh))
+				if freshLinks, freshHints, freshErr := getProviderEpisodeURLForModeWithHints(provider, config, fresh, epNo, mode); freshErr == nil && len(freshLinks) > 0 {
+					providerID, links, linkHints, err = fresh, freshLinks, freshHints, nil
+				}
+			}
+		}
+
 		if err != nil || len(links) == 0 {
 			if err != nil {
 				errors = append(errors, fmt.Sprintf("%s episode: %v", providerName, err))
@@ -1191,6 +1206,16 @@ func findProviderIDForAnime(provider Provider, config *CurdConfig, anime *Anime,
 		return "", fmt.Errorf("cannot search %s without an anime title", provider.Name())
 	}
 
+	return searchProviderIDForAnime(provider, config, anime, mode)
+}
+
+// searchProviderIDForAnime maps an anime by searching, ignoring any stored id.
+func searchProviderIDForAnime(provider Provider, config *CurdConfig, anime *Anime, mode string) (string, error) {
+	query := animeSearchTitle(anime)
+	if query == "" {
+		return "", fmt.Errorf("cannot search %s without an anime title", provider.Name())
+	}
+
 	var title AnimeTitle
 	if anime != nil {
 		title = anime.Title
@@ -1223,6 +1248,17 @@ func findProviderIDForAnime(provider Provider, config *CurdConfig, anime *Anime,
 		return "", fmt.Errorf("no %s search results for %q: %w", provider.Name(), query, lastErr)
 	}
 	return "", fmt.Errorf("no %s search results for %q", provider.Name(), query)
+}
+
+// storedProviderIDMatches reports whether providerID is the id already recorded
+// for this anime under providerName, i.e. it came from the saved mapping rather
+// than from a search performed just now.
+func storedProviderIDMatches(anime *Anime, providerName, providerID string) bool {
+	if anime == nil || providerID == "" {
+		return false
+	}
+	storedName, storedID := providerIDForAnime(anime)
+	return storedName == providerName && storedID == providerID
 }
 
 func audioFallbackPrompt(preferredMode, fallbackMode string) string {

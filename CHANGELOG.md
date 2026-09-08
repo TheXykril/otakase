@@ -4,6 +4,25 @@
 
 ### Fixed
 
+- **Watch history filed provider ids under the wrong provider.** Six history
+  writes paired `anime.ProviderId` -- the id of whichever host actually served
+  the episode -- with `GetProvider().Name()`, which is the *first configured*
+  provider, not that one. Playing something anipub could not serve but anineko
+  could stored anineko's slug under the name "anipub", and every later run then
+  handed that slug straight back to anipub:
+
+  ```
+  anipub episode: invalid anipub show id "rich-girl-caretaker-im-secretly-..."
+  ```
+
+  which removed anipub from consideration for that show permanently. The name
+  written now always belongs to the id beside it.
+
+  Those corrupted pairings already exist in users' history files, so a stored id
+  that fails is no longer believed: it is re-derived by searching once, and the
+  working id replaces it. A stored id that works is still used directly, with no
+  extra search.
+
 - **A show could be reported as uncarried on the one provider that had it.**
   Mapping an anime onto a provider during playback searched the full AniList
   title once and gave up. Hosts shorten long titles: anineko carries *Rich Girl

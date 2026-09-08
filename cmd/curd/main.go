@@ -352,7 +352,7 @@ func main() {
 
 			anime.Ep.LastWasSkipped = true
 			anime.Ep.Started = false
-			internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, 0, 0, internal.GetAnimeName(anime), internal.GetProvider().Name())
+			internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, 0, 0, internal.GetAnimeName(anime), internal.CurrentAnimeProviderName(&anime))
 
 			// Check if we've reached the end of the series
 			if anime.TotalEpisodes > 0 && anime.Ep.Number > anime.TotalEpisodes {
@@ -424,7 +424,7 @@ func main() {
 
 			// Update progress for the finished episode
 			// Local update
-			internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, 0, 0, internal.GetAnimeName(anime), internal.GetProvider().Name())
+			internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, 0, 0, internal.GetAnimeName(anime), internal.CurrentAnimeProviderName(&anime))
 
 			// Check if we should continue to next episode
 			// On Android we always prompt because we don't know exactly when video ended
@@ -771,7 +771,7 @@ func main() {
 											internal.HandleLastEpisodeCompletion(&userCurdConfig, &anime, user.Token)
 										}
 										// Update local database with completed episode
-										err := internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, anime.Ep.Player.PlaybackTime, internal.ConvertSecondsToMinutes(anime.Ep.Duration), internal.GetAnimeName(anime), internal.GetProvider().Name())
+										err := internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, anime.Ep.Player.PlaybackTime, internal.ConvertSecondsToMinutes(anime.Ep.Duration), internal.GetAnimeName(anime), internal.CurrentAnimeProviderName(&anime))
 										if err != nil {
 											internal.Log("Error updating local database on quit: " + err.Error())
 										}
@@ -849,7 +849,7 @@ func main() {
 
 						anime.Ep.Player.PlaybackTime = int(animePosition + 0.5) // Round to nearest integer
 						// Update Local Database
-						if updateErr := internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, anime.Ep.Player.PlaybackTime, internal.ConvertSecondsToMinutes(anime.Ep.Duration), internal.GetAnimeName(anime), internal.GetProvider().Name()); updateErr != nil {
+						if updateErr := internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, anime.Ep.Player.PlaybackTime, internal.ConvertSecondsToMinutes(anime.Ep.Duration), internal.GetAnimeName(anime), internal.CurrentAnimeProviderName(&anime)); updateErr != nil {
 							internal.Log("Error updating local database: " + updateErr.Error())
 						}
 					}
@@ -913,7 +913,7 @@ func main() {
 									} else {
 										// Episode was already marked as completed above
 										// Update local database with completed episode
-										err := internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, anime.Ep.Player.PlaybackTime, internal.ConvertSecondsToMinutes(anime.Ep.Duration), internal.GetAnimeName(anime), internal.GetProvider().Name())
+										err := internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, anime.Ep.Player.PlaybackTime, internal.ConvertSecondsToMinutes(anime.Ep.Duration), internal.GetAnimeName(anime), internal.CurrentAnimeProviderName(&anime))
 										if err != nil {
 											internal.Log("Error updating local database on quit: " + err.Error())
 										}
@@ -932,7 +932,7 @@ func main() {
 								} else {
 									// For CLI mode, update progress immediately since episode is 85%+ complete
 									// Update local database with completed episode
-									err := internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, anime.Ep.Player.PlaybackTime, internal.ConvertSecondsToMinutes(anime.Ep.Duration), internal.GetAnimeName(anime), internal.GetProvider().Name())
+									err := internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, anime.Ep.Player.PlaybackTime, internal.ConvertSecondsToMinutes(anime.Ep.Duration), internal.GetAnimeName(anime), internal.CurrentAnimeProviderName(&anime))
 									if err != nil {
 										internal.Log("Error updating local database on completion: " + err.Error())
 									}
