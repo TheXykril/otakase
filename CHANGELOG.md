@@ -4,6 +4,25 @@
 
 ### Fixed
 
+- **Choosing an anime from the poster grid failed with "error selecting
+  anime".** The grid clips a label to the column width, so a long title came
+  back from rofi shortened:
+
+  ```
+  written:  That Time I Got Reincarnated as a Slime Season 4 · 0/24 (21 aired)
+  returned: That Time I Got Reincarn… · 0/24 (21 aired)
+  ```
+
+  The returned text was then matched against the full label to find the chosen
+  show, which could not succeed — so the menu died on exactly the entries with
+  the longest names. Rows are now addressed by index (`rofi -format i`) instead
+  of by their text, which cannot drift from what was displayed.
+
+  The row table is built as the menu is written rather than reused from the
+  option list, because a row whose cover fails to download is skipped; indexing
+  into the unfiltered list would have resolved every row after such a gap to its
+  neighbour. Dismissing the picker now means "back" rather than an error.
+
 - **Dual tracking (`TrackingRemote=anilist+myanimelist`) failed to launch.**
   Three defects compounded:
 

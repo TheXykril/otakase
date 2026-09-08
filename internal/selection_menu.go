@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -594,31 +595,32 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 		var rofiInput strings.Builder
 		selectionOptions := previewOptionsToSortedSelection(currentOptions)
 
-		for _, opt := range selectionOptions {
+		rows := writePreviewRows(&rofiInput, selectionOptions, func(opt SelectionOption) (string, bool) {
 			cachePath, err := downloadToCache(currentOptions[opt.Key].CoverImage)
 			if err != nil {
 				Log(fmt.Sprintf("Error caching image: %v", err))
-				continue
+				return "", false
 			}
-			// Every row goes through the markup builder, not just the ones with new
-			// episodes: it is what escapes pango and dims the counts, and skipping
-			// it left ordinary rows unescaped.
-			label := GridRowMarkup(opt.Label, rofitheme.GridLabelCapacity)
-			if opt.HasNewEpisodes {
-				label = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s", rofiNewEpisodeColor, label)
-			}
-			rofiInput.WriteString(fmt.Sprintf("%s\x00icon\x1f%s\n", label, cachePath))
-		}
+			return cachePath, true
+		})
 
 		if addnewoption {
 			rofiInput.WriteString("Add new anime\n")
+			rows = append(rows, SelectionOption{Key: "add_new", Label: "Add new anime"})
 		}
 		rofiInput.WriteString("Back\n")
 		rofiInput.WriteString("Quit\n")
+		rows = append(rows,
+			SelectionOption{Key: "-2", Label: "Back"},
+			SelectionOption{Key: "-1", Label: "Quit"},
+		)
 
 		configPath := filepath.Join(GetStoragePath(), "selectanimepreview.rasi")
 		// NOTE: Need `-markup-rows` to enable pango
-		cmd := exec.Command("rofi", "-dmenu", "-theme", configPath, "-show-icons", "-markup-rows", "-p", "Select Anime", "-i", "-no-custom")
+		// -format i returns the index of the chosen row. The label cannot be used:
+		// the grid clips it to the column width, so what comes back for a long
+		// title is not the string the option carries.
+		cmd := exec.Command("rofi", "-dmenu", "-theme", configPath, "-show-icons", "-markup-rows", "-p", "Select Anime", "-i", "-no-custom", "-format", "i")
 		cmd.Stdin = strings.NewReader(rofiInput.String())
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
@@ -630,7 +632,7 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 				Log(fmt.Sprintf("Rofi stdout: %s", stdout.String()))
 				return SelectionOption{Key: "-2", Label: "Back"}, nil
 			}
-			return parsePreviewSelection(stdout.String(), selectionOptions)
+			return parsePreviewSelectionIndex(stdout.String(), rows)
 		}
 
 		if err := cmd.Start(); err != nil {
@@ -652,7 +654,7 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 					Log(fmt.Sprintf("Rofi stdout: %s", stdout.String()))
 					return SelectionOption{Key: "-2", Label: "Back"}, nil
 				}
-				return parsePreviewSelection(stdout.String(), selectionOptions)
+				return parsePreviewSelectionIndex(stdout.String(), rows)
 			case updatedList, ok := <-refreshConfig.Updates:
 				if !ok {
 					refreshConfig = nil
@@ -687,31 +689,51 @@ func preDownloadImages(options map[string]RofiSelectPreview, count int) {
 	}
 }
 
-func parsePreviewSelection(rawSelection string, selectionOptions []SelectionOption) (SelectionOption, error) {
-	selected := strings.TrimSpace(rawSelection)
-	selected = unescapePango(strings.TrimSpace(pangoStrip.ReplaceAllString(selected, "")))
-	selected = strings.TrimPrefix(selected, "[NEW] ")
-	selected = strings.TrimSpace(selected)
-
-	switch selected {
-	case "":
-		return SelectionOption{Key: "-2", Label: "Back"}, nil
-	case "Add new anime":
-		return SelectionOption{Label: "Add new anime", Key: "add_new"}, nil
-
-	case "Back":
-		return SelectionOption{Label: "Back", Key: "-2"}, nil
-	case "Quit":
-		return SelectionOption{Label: "Quit", Key: "-1"}, nil
-	}
-
-	for _, opt := range selectionOptions {
-		if opt.Label == selected {
-			return opt, nil
+// writePreviewRows renders the poster rows into the rofi input and returns the
+// table those rows index into.
+//
+// The table has to be built here rather than reused from the option list: a row
+// whose cover fails to download is skipped, and indexing into the unfiltered
+// list would then resolve every row after the gap to its neighbour.
+//
+// cache returns the cached cover path for an option, and false to skip it.
+func writePreviewRows(w *strings.Builder, options []SelectionOption, cache func(SelectionOption) (string, bool)) []SelectionOption {
+	rows := make([]SelectionOption, 0, len(options))
+	for _, opt := range options {
+		cachePath, ok := cache(opt)
+		if !ok {
+			continue
 		}
+		// Every row goes through the markup builder, not just the ones with new
+		// episodes: it is what escapes pango and dims the counts, and skipping
+		// it left ordinary rows unescaped.
+		label := GridRowMarkup(opt.Label, rofitheme.GridLabelCapacity)
+		if opt.HasNewEpisodes {
+			label = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s", rofiNewEpisodeColor, label)
+		}
+		w.WriteString(fmt.Sprintf("%s\x00icon\x1f%s\n", label, cachePath))
+		rows = append(rows, opt)
 	}
+	return rows
+}
 
-	return SelectionOption{}, fmt.Errorf("selection not found in options")
+// parsePreviewSelectionIndex resolves rofi's chosen row index against the table
+// written alongside the menu.
+//
+// Anything that is not a usable index -- no output because the menu was
+// dismissed, or a row outside the table -- means "go back" rather than an error:
+// closing the picker is a normal thing to do, and it must not end the session.
+func parsePreviewSelectionIndex(rawSelection string, rows []SelectionOption) (SelectionOption, error) {
+	back := SelectionOption{Key: "-2", Label: "Back"}
+
+	index, err := strconv.Atoi(strings.TrimSpace(rawSelection))
+	if err != nil {
+		return back, nil
+	}
+	if index < 0 || index >= len(rows) {
+		return back, nil
+	}
+	return rows[index], nil
 }
 
 func downloadToCache(imageURL string) (string, error) {
