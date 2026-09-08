@@ -394,6 +394,16 @@ func main() {
 		internal.Log(fmt.Sprint("Playback starting time: ", anime.Ep.Player.PlaybackTime))
 		internal.Log(anime.Ep.Player.SocketPath)
 
+		// StartCurd reports "could not start playback" by returning an empty
+		// socket path, having already said why. Continuing past it started the
+		// playback watchers for a session that does not exist, and they then
+		// polled a socket that would never answer -- once a second, forever.
+		if anime.Ep.Player.SocketPath == "" {
+			internal.Log("Playback did not start; no MPV socket")
+			internal.ExitCurd(nil)
+			return
+		}
+
 		// After playback is running, lazily build MPV episode playlist / audio
 		// options while idle (no startup cost, no mid-buffer stutter).
 		if anime.Ep.Player.SocketPath != "" && anime.Ep.Player.SocketPath != "android-intent" {
@@ -693,6 +703,15 @@ func main() {
 					timePos, err := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "time-pos"})
 					if err != nil {
 						internal.Log("Error getting playback time: " + err.Error())
+
+						// Nothing will ever answer a socket for an episode that never
+						// began. The bail-out below is reached only in CLI mode, so a
+						// rofi user whose playback failed to start polled forever.
+						if !anime.Ep.Started && internal.MPVConnectionGone(err) &&
+							!internal.IsMPVRunning(anime.Ep.Player.SocketPath) {
+							internal.Log("MPV never started, stopping playback time updates")
+							return
+						}
 
 						// For CLI mode with next episode prompt, let the continuous prompt handle everything
 						if userCurdConfig.NextEpisodePrompt && !userCurdConfig.RofiSelection {

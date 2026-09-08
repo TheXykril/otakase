@@ -869,7 +869,7 @@ func episodeModeResultWithProviders(config CurdConfig, anime *Anime, epNo int, m
 			continue
 		}
 
-		providerID, err := findProviderIDForAnime(provider, anime, mode)
+		providerID, err := findProviderIDForAnime(provider, &config, anime, mode)
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("%s lookup: %v", providerName, err))
 			continue
@@ -1169,7 +1169,18 @@ func confidentProviderSearchMatch(options []SelectionOption, anime *Anime, query
 	return SelectionOption{}, false
 }
 
-func findProviderIDForAnime(provider Provider, anime *Anime, mode string) (string, error) {
+// findProviderIDForAnime maps an anime onto one provider's own show id.
+//
+// It works through the same title variants as the initial search rather than
+// trying the AniList title alone. Hosts shorten long titles: anineko carries
+// "Rich Girl Caretaker: I'm Secretly the Caregiver of the Most Popular Girl in
+// This Rich Kid School" as plain "Rich Girl Caretaker", so searching only the
+// full title reported the show as uncarried on the one host that had the
+// episode being asked for.
+//
+// Variants are ordered exact-first, so a host that answers the real title is
+// never sent the broader simplified forms.
+func findProviderIDForAnime(provider Provider, config *CurdConfig, anime *Anime, mode string) (string, error) {
 	currentProviderName, currentProviderID := providerIDForAnime(anime)
 	if currentProviderName == provider.Name() && currentProviderID != "" {
 		return currentProviderID, nil
@@ -1180,17 +1191,38 @@ func findProviderIDForAnime(provider Provider, anime *Anime, mode string) (strin
 		return "", fmt.Errorf("cannot search %s without an anime title", provider.Name())
 	}
 
-	options, err := provider.SearchAnime(query, mode)
-	if err != nil {
-		return "", err
-	}
-	option, ok := selectBestProviderSearchResult(options, anime, query)
-	if !ok {
-		return "", fmt.Errorf("no %s search results for %q", provider.Name(), query)
+	var title AnimeTitle
+	if anime != nil {
+		title = anime.Title
 	}
 
-	Log(fmt.Sprintf("Mapped %q to provider %s id %s for %s fallback", query, provider.Name(), option.Key, mode))
-	return option.Key, nil
+	var lastErr error
+	for _, variant := range buildSearchQueryVariants(config, title, query) {
+		options, err := provider.SearchAnime(variant, mode)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		option, ok := selectBestProviderSearchResult(options, anime, variant)
+		if !ok {
+			continue
+		}
+
+		if variant != query {
+			Log(fmt.Sprintf("Mapped %q to provider %s id %s for %s fallback via title variant %q",
+				query, provider.Name(), option.Key, mode, variant))
+		} else {
+			Log(fmt.Sprintf("Mapped %q to provider %s id %s for %s fallback", query, provider.Name(), option.Key, mode))
+		}
+		return option.Key, nil
+	}
+
+	// Report the title the user recognises, not whichever variant happened to be
+	// tried last.
+	if lastErr != nil {
+		return "", fmt.Errorf("no %s search results for %q: %w", provider.Name(), query, lastErr)
+	}
+	return "", fmt.Errorf("no %s search results for %q", provider.Name(), query)
 }
 
 func audioFallbackPrompt(preferredMode, fallbackMode string) string {

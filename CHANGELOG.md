@@ -4,6 +4,32 @@
 
 ### Fixed
 
+- **A show could be reported as uncarried on the one provider that had it.**
+  Mapping an anime onto a provider during playback searched the full AniList
+  title once and gave up. Hosts shorten long titles: anineko carries *Rich Girl
+  Caretaker: I'm Secretly the Caregiver of the Most Popular Girl in This Rich
+  Kid School* as plain *Rich Girl Caretaker*, and answers nothing for the full
+  name. So episode 10 was declared missing while anineko had it, and the only
+  host consulted was anipub, whose catalogue for that show stops at episode 5.
+
+  The same ordered title variants the initial search already used are now tried
+  here too — exact titles first, simplified forms last, so a provider that
+  answers the real title is never sent the broader guesses.
+
+- **A failed episode lookup left curd spinning instead of stopping.** When no
+  stream could be resolved, `StartCurd` returned an empty socket path — having
+  already reported why — but the caller ran on and started the playback
+  watchers for a session that did not exist. Those then polled a socket nothing
+  would ever answer, once a second, indefinitely:
+
+  ```
+  Error getting playback time: no MPV IPC socket   (x60, and counting)
+  ```
+
+  The empty socket path is now treated as the failure it is. The polling loop
+  also gained its own guard: its "MPV is gone" bail-out sat behind a
+  CLI-only condition, so with `RofiSelection=true` it was never reached.
+
 - **Choosing an anime from the poster grid failed with "error selecting
   anime".** The grid clips a label to the column width, so a long title came
   back from rofi shortened:
