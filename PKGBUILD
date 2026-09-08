@@ -11,6 +11,7 @@ depends=('mpv')
 optdepends=(
   'rofi: graphical selection menus'
   'ueberzugpp: image previews in the terminal'
+  'ffmpeg: saving episodes with -download'
 )
 makedepends=('go' 'git')
 conflicts=('curd-bin' 'curd-git')
