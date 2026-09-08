@@ -53,6 +53,7 @@ type CurdConfig struct {
 	MenuOrder                  string   `config:"MenuOrder"`
 	PercentageToMarkComplete   int      `config:"PercentageToMarkComplete"`
 	NextEpisodePrompt          bool     `config:"NextEpisodePrompt"`
+	AutoAudioFallback          bool     `config:"AutoAudioFallback"`
 	SkipOp                     bool     `config:"SkipOp"`
 	SkipEd                     bool     `config:"SkipEd"`
 	SkipFiller                 bool     `config:"SkipFiller"`
@@ -116,6 +117,9 @@ func defaultConfigMap() map[string]string {
 		"SubStyle":                   "ask",
 		"PercentageToMarkComplete":   "85",
 		"NextEpisodePrompt":          "false",
+		// A show that exists only in the other language should play, not stop to
+		// ask a question with one useful answer. Curd still says which it used.
+		"AutoAudioFallback":          "true",
 		"SkipOp":                     "true",
 		"SkipEd":                     "true",
 		"SkipFiller":                 "true",

@@ -963,6 +963,7 @@ func resolveEpisodeLinksWithRecovery(config *CurdConfig, anime *Anime, anilistEn
 	var lastErr error
 	includeAudio := true
 	attemptedAnimepaheReselect := false
+	attemptedAutoAudio := false
 
 	for {
 		result, err := ResolveEpisodeURLForPlayback(*config, anime, anime.Ep.Number)
@@ -992,6 +993,20 @@ func resolveEpisodeLinksWithRecovery(config *CurdConfig, anime *Anime, anilistEn
 				}
 				Log(fmt.Sprintf("ResolveEpisodeURL still failed after provider reselect: %v", lastErr))
 			}
+		}
+
+		// A show carried only in the other language is the common case here, and
+		// the recovery menu's answer for it is always the same. Take it directly.
+		if config.AutoAudioFallback && includeAudio && !attemptedAutoAudio {
+			attemptedAutoAudio = true
+			altResult, altErr := ResolveEpisodeURLAlternateModeAuto(*config, anime, anime.Ep.Number, nil)
+			if altErr == nil && len(altResult.Links) > 0 {
+				Log(fmt.Sprintf("Automatically fell back to %s for ep %d", altResult.Mode, anime.Ep.Number))
+				return altResult, true
+			}
+			Log(fmt.Sprintf("Automatic audio fallback did not help for ep %d: %v", anime.Ep.Number, altErr))
+			// Nothing in either language: the menu must not re-offer audio.
+			includeAudio = false
 		}
 
 		switch promptEpisodeLinkFailureRecovery(config, anime, lastErr, includeAudio) {

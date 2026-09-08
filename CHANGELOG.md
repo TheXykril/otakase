@@ -1,5 +1,23 @@
 # Changelog
 
+### Added
+
+- **`AutoAudioFallback` (default on): a show carried in only one language just
+  plays.** Reaching the other audio took two menus — a recovery menu, then a
+  confirmation — for a question with a single useful answer. Curd now switches
+  on its own and says so:
+
+  ```
+  No dub for episode 7 — playing sub.
+  ```
+
+  The switch is announced, never silent, and the preferred language is still
+  tried first every time. Set `AutoAudioFallback=false` to be asked as before.
+
+  The setting is honoured in one place, so every route into the other audio —
+  the preferred-first resolve, the recovery menu, the playlist controller —
+  behaves the same way.
+
 ## Unreleased
 
 ### Fixed

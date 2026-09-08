@@ -954,6 +954,22 @@ func resolveEpisodeURLExcludingProvidersMode(config CurdConfig, anime *Anime, ep
 // ResolveEpisodeURLAlternateModeWithPrompt probes the non-preferred sub/dub mode and asks
 // before switching. Preferred mode is never switched silently.
 func ResolveEpisodeURLAlternateModeWithPrompt(config CurdConfig, anime *Anime, epNo int, exclude []string) (ProviderEpisodeResult, error) {
+	// AutoAudioFallback is decided here rather than at each call site, so every
+	// route into the alternate audio -- the preferred-first resolve, the recovery
+	// menu, the playlist controller -- obeys the setting the same way.
+	return resolveEpisodeURLAlternateMode(config, anime, epNo, exclude, !config.AutoAudioFallback)
+}
+
+// ResolveEpisodeURLAlternateModeAuto switches to the other audio without asking.
+//
+// Some shows exist in one language only, and for those the prompt has a single
+// useful answer -- it just stands between the user and the episode. What was
+// played is still reported, so an automatic switch is never a silent one.
+func ResolveEpisodeURLAlternateModeAuto(config CurdConfig, anime *Anime, epNo int, exclude []string) (ProviderEpisodeResult, error) {
+	return resolveEpisodeURLAlternateMode(config, anime, epNo, exclude, false)
+}
+
+func resolveEpisodeURLAlternateMode(config CurdConfig, anime *Anime, epNo int, exclude []string, ask bool) (ProviderEpisodeResult, error) {
 	preferredMode := normalizeTranslationType(config.SubOrDub)
 	fallbackMode := alternateTranslationType(preferredMode)
 
@@ -976,16 +992,20 @@ func ResolveEpisodeURLAlternateModeWithPrompt(config CurdConfig, anime *Anime, e
 		return ProviderEpisodeResult{}, fmt.Errorf("no %s streams available", fallbackMode)
 	}
 
-	CurdOut(audioFallbackPrompt(preferredMode, fallbackMode))
-	selected, selectErr := promptSelect([]SelectionOption{
-		{Key: "play", Label: "Play " + fallbackMode},
-		{Key: "cancel", Label: "Cancel"},
-	})
-	if selectErr != nil {
-		return ProviderEpisodeResult{}, selectErr
-	}
-	if selected.Key != "play" {
-		return ProviderEpisodeResult{}, fmt.Errorf("%s unavailable and %s fallback declined", preferredMode, fallbackMode)
+	if ask {
+		CurdOut(audioFallbackPrompt(preferredMode, fallbackMode))
+		selected, selectErr := promptSelect([]SelectionOption{
+			{Key: "play", Label: "Play " + fallbackMode},
+			{Key: "cancel", Label: "Cancel"},
+		})
+		if selectErr != nil {
+			return ProviderEpisodeResult{}, selectErr
+		}
+		if selected.Key != "play" {
+			return ProviderEpisodeResult{}, fmt.Errorf("%s unavailable and %s fallback declined", preferredMode, fallbackMode)
+		}
+	} else {
+		CurdOut(fmt.Sprintf("No %s for episode %d — playing %s.", preferredMode, epNo, fallbackMode))
 	}
 
 	if anime != nil {
