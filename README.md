@@ -22,21 +22,59 @@ Works on Linux, MacOS and Windows.
 > | One slow provider set the pace for the whole search — animepahe costs ~17s | Stragglers are abandoned once a faster provider has answered |
 > | A failed provider was re-probed on every search, paying its timeout each time | Repeated failures put a provider on a short cooldown |
 > | Failures were reported as one concatenated wall of provider errors | Grouped by cause: "hosts are down" reads differently from "nobody carries it" |
+> | Choosing from the poster grid failed with "error selecting anime" — the grid clips long labels, and the clipped text was matched against the full one | Rows are addressed by index, which cannot drift from what was displayed |
+> | Watch history filed a provider's show id under the *first configured* provider's name, so one host's id was handed to another forever after | The name written now belongs to the id beside it, and a stored id that fails is re-derived instead of believed |
+> | Dual tracking (`anilist+myanimelist`) failed to launch: unthrottled writes hit a rate limit, and MyAnimeList's redirect to a dead endpoint was followed | Both loops are paced, API requests no longer follow redirects, and one unwritable entry is skipped rather than aborting the sync |
+> | A stream whose CDN wanted an `Origin` header played nothing — the manifest opened, then every segment returned 403 | Providers can require arbitrary HTTP headers, which are passed through to MPV |
 >
 > **Also new:**
+>
+> *Providers*
+> - **[KickassAnime](https://kaa.lt) (`kickassanime`)** leads the stack — whole
+>   seasons rather than only what is recent, plain HLS, English subtitles, and
+>   the one host here that indexes dubs separately.
+> - **[Nyaa](https://nyaa.si) (`nyaa`)** streams from torrents without waiting for
+>   a download, for the episodes that aired this week. Streaming hosts lag there;
+>   fansub releases are indexed within hours. Nothing is kept — the cache is
+>   temporary and removed on exit.
+> - `curd -provider-status` probes every provider and reports which ones work.
+>
+> *Playback*
+> - **A show carried in only one language just plays.** Reaching the other audio
+>   took two menus for a question with one useful answer; curd now switches and
+>   says so (`No dub for episode 7 — playing sub`). See `AutoAudioFallback`.
 > - `curd -download` saves episodes instead of streaming them — the most-requested
 >   missing feature upstream ([#104](https://github.com/Wraient/curd/issues/104),
 >   [#55](https://github.com/Wraient/curd/issues/55)).
-> - The anime list shows episode counts: `Show · 9/12 (9 aired)` — how many you
->   have watched, the season total, and how many have actually aired while a show
->   is still releasing.
-> - `curd -provider-status` probes every provider and reports which ones work.
+>
+> *The list*
+> - Episode counts: `Show · 9/12 (9 aired)` — watched, season total, and how many
+>   have actually aired while a show is still releasing.
+> - The list leads with what you were **last watching**, in both menus, instead of
+>   whatever order the tracker returned.
+> - **Resume points** (`· resume 11:40`) where you stopped part-way, and **airing
+>   countdowns** (`· next in 22h`) for releasing shows.
+>
+> *Interface*
+> - **Curd says when it is starting**, if starting takes more than about a second
+>   — launched from a keybind there was previously no sign of life until the first
+>   menu appeared.
 > - The menus follow your desktop colours on [Omarchy](https://omarchy.org/), and
 >   the rofi themes were redesigned and are now generated locally rather than
 >   downloaded — see [Theming](#theming). Rows set the title at full strength and
 >   dim the episode count and provider, so a long list stays scannable.
 >
-> Providers verified working end-to-end at the time of writing: **anipub** and **anineko**.
+> **Provider status** at the time of writing — hosts break constantly, so run
+> `curd -provider-status` rather than trusting this table:
+>
+> | Provider | State |
+> |---|---|
+> | `kickassanime` | Working — full seasons, sub and dub |
+> | `anipub`, `anineko` | Working |
+> | `nyaa` | Working — recent episodes, torrent-backed |
+> | `allanime` | Disabled — episode sources now demand a signed request or a CAPTCHA |
+> | `animepahe` | Disabled — Cloudflare Turnstile, which no automated browser clears |
+> | `senshi` | Retired — the domain lapsed and is parked for sale |
 
 ## Join the discord server
 
@@ -59,8 +97,9 @@ https://github.com/user-attachments/assets/cbf799bc-9fdd-4402-ab61-b4e31f1e264d
 
 
 ## Features
-- Multiple content providers (AniPub, AniNeko, and optionally AniDB, AllAnime, Animepahe) searched concurrently with ordered fallback and up to 1080p support
-- Built-in headless browser to bypass Cloudflare/DDoS-Guard protections
+- Multiple content providers (KickassAnime, AniPub, AniNeko, Nyaa, and optionally AniDB) searched concurrently with ordered fallback and up to 1080p support
+- Torrent-backed playback for episodes that aired this week, streamed rather than downloaded, with nothing kept afterwards
+- Falls back to the other audio automatically when a show exists in only one language, instead of asking
 - Stream anime online, or download episodes with `-download`
 - Track anime locally, on AniList, or on MyAnimeList
 - Browser-based AniList and MyAnimeList login flows
@@ -520,7 +559,8 @@ If the browser reaches the localhost callback page but curd does not continue au
 | `SaveMpvSpeed`            | Boolean    | `true`, `false`                           | Retains the playback speed set in MPV for next episode.                                           |
 | `SkipFiller`              | Boolean    | `true`, `false`                           | Skips filler episodes when supported.                                                             |
 | `MenuOrder`               | String     | Comma-separated list                      | Controls which menu items appear and their order. Available options: `CURRENT`, `ALL`, `UNTRACKED`, `UPDATE`, `REMAP_PROVIDER`, `CONTINUE_LAST`, `PLANNING`, `COMPLETED`, `PAUSED`, `DROPPED`, `REWATCHING`, `TRACKER`, `PROVIDER`. Only listed items will be shown. Default: `CURRENT,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER` |
-| `Provider`                | List       | `stacked`, `["anipub"]`, `["anineko"]`, `["allanime"]`, `["animepahe"]` | Sets the content-provider fallback list. `stacked` (default) uses the preferred order: senshi → anipub → anineko → allanime → animepahe. A single-provider list uses only that site. AllAnime and Animepahe are disabled by default unless included in `Provider`. Default: `stacked` |
+| `Provider`                | List       | `stacked`, `["kickassanime"]`, `["anipub"]`, `["anineko"]`, `["nyaa"]`, `["allanime"]`, `["animepahe"]` | Sets the content-provider fallback list. `stacked` (default) uses the preferred order: kickassanime → anipub → anineko → nyaa. `nyaa` sits last of the working four because finding peers costs a few seconds, but it carries episodes the streaming hosts have not indexed yet. A single-provider list uses only that site. AllAnime and Animepahe are registered but disabled — both now refuse automated clients — and are only used if named explicitly. Default: `stacked` |
+| `AutoAudioFallback`       | Boolean    | `true`, `false`                           | When `true` (default), a show carried in only one language plays in the other rather than stopping to ask — the preferred language is still tried first every episode, and the switch is announced (`No dub for episode 7 — playing sub`). Set `false` to be prompted instead. |
 | `ManualProviderSearch`    | Boolean    | `true`, `false`                           | Skip automatic provider matching and always show provider search results for manual selection. Displays a hint with the tracker title, format (TV/Movie/etc.), episode count, and sub/dub mode. Default: `false` |
 | `TrackingLocal`           | Boolean    | `true`                                    | Legacy compatibility flag. Local playback history is always enabled.                              |
 | `TrackingRemote`          | Enum       | `none`, `anilist`, `myanimelist`, `anilist+myanimelist` | Selects which remote tracker curd syncs with.                                           |
@@ -548,18 +588,37 @@ everything answered but nothing matched, the show is genuinely not carried under
 that name — try searching for it manually from the menu.
 
 **A provider says it is disabled.** Some are off by default because they cannot
-currently play anything (`allanime`), because their host is gone (`senshi`),
-because they need a browser challenge (`animepahe`), or because they are
-unverified (`anidb`). To enable one anyway, list it in `Provider`:
+currently play anything: `allanime`'s episode endpoint demands a signed request
+or a CAPTCHA, `animepahe` sits behind Cloudflare Turnstile that no automated
+browser clears, and `senshi`'s domain has lapsed. `anidb` is off as unverified.
+To enable one anyway, list it in `Provider`:
 
 ```
-Provider=["anipub","anineko","animepahe"]
+Provider=["kickassanime","anipub","anineko","animepahe"]
 ```
 
 **Curd is slow to search.** A provider that fails repeatedly is skipped for five
 minutes, and slow providers are abandoned once a faster one has answered, so
 this usually resolves itself. `curd -provider-status` shows the per-provider
 timings.
+
+**A recent episode is missing.** Streaming hosts often carry a show's back
+catalogue but lag on the episode that aired this week. That is what `nyaa` is
+for — it is in the default stack, and releases are indexed within hours of
+broadcast. To use it alone while testing, pick it from the **PROVIDER** menu or
+set `Provider=nyaa`.
+
+**Torrent playback: what to expect.** The first frame takes a few seconds while
+peers are found, then it plays and seeks normally. Curd seeds while you watch,
+which is ordinary swarm behaviour and is what keeps peers willing to serve you —
+it does mean outbound traffic. Nothing is kept: the cache is a temporary
+directory removed when curd exits. Nyaa's feed returns roughly the most recent
+matches, so the early episodes of a long-running show may not appear there.
+
+**It plays nothing, or dies after a second.** If the log shows repeated `403`
+against a CDN, the stream needs an HTTP header the player is not sending. That
+is a provider bug rather than a broken host — please open an issue with the
+provider name and the failing URL.
 
 **Logs.** `~/.local/share/curd/debug.log`, truncated on each run.
 
@@ -568,16 +627,18 @@ timings.
 - iina - Optional mpv-based player on macOS
 - rofi - Selection menu
 - ueberzug - Display images in rofi
-- chromium - Required for Animepahe (auto-downloaded by default, but Termux users must install manually via `pkg install chromium`)
+- ffmpeg - Required for `-download`, which remuxes the stream
+- chromium - Only for Animepahe, which is disabled by default (auto-downloaded; Termux users must install manually via `pkg install chromium`)
 
 ## API Used
 - [Anilist API](https://anilist.gitbook.io/anilist-apiv2-docs) - Update user data and download user data
 - [MyAnimeList API](https://myanimelist.net/apiconfig/references/api/v2) - MyAnimeList OAuth and tracking sync
 - [AniSkip API](https://api.aniskip.com/api-docs) - Get anime intro and outro timings
-- [AllAnime Content](https://allanime.to/) - Fetch anime url
-- [Senshi Project](https://senshi.live/) - Default provider with direct HLS streams and MAL-based catalog matching
+- [KickassAnime](https://kaa.lt/) - Default provider: JSON catalog, HLS streams and external subtitle tracks, sub and dub
 - [AniPub](https://anipub.xyz/) - Fast JSON catalog APIs with MegaPlay HLS streams
 - [AniNeko Content](https://anineko.to/) - Alternative provider with soft/hard sub stream selection
+- [Nyaa](https://nyaa.si/) - Torrent index, streamed as playback rather than downloaded
+- [AllAnime Content](https://allanime.to/) - Registered but disabled; episode sources now require a signed request or a CAPTCHA
 - [Animepahe Content](https://animepahe.pw/) - Alternative provider for 1080p streams
 - [Jikan](https://jikan.moe/) - Get filler episode number
 
