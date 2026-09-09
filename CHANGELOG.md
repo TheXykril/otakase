@@ -114,10 +114,18 @@
   been watched in full.
 
   Playback now records which audio it actually resolved, and the playlist follows
-  that. Movement after the completion threshold is treated as end-of-file rather
-  than a selection. And every failing path of a switch restores what it cleared —
-  position, duration, links, headers and completion — so a switch that cannot
-  happen leaves the episode exactly as it found it.
+  that. Every failing path of a switch restores what it cleared — position,
+  duration, links, headers and completion — so a switch that cannot happen leaves
+  the episode exactly as it found it.
+
+  Running off the end is now ended rather than merely declined. The episode's
+  stream is one row in a playlist of placeholders, so when it finishes MPV moves
+  to the next row: a black clip that runs for a day. Declining to follow it left
+  MPV sitting on that blackness with "Loading episode 1…" on screen, and since
+  playback never ended the episode was still never marked watched. Curd now
+  closes MPV instead, which is what happens without a playlist — and the episode
+  gets recorded. A row the user genuinely picked is told apart by MPV having
+  media loaded; running off the end leaves it idle with no path.
 
 - **Watch history filed provider ids under the wrong provider.** Six history
   writes paired `anime.ProviderId` -- the id of whichever host actually served

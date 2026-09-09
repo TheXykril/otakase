@@ -134,3 +134,47 @@ func TestPlaylistFollowsTheAudioActuallyPlaying(t *testing.T) {
 		t.Errorf("expected dub, got %q", got)
 	}
 }
+
+// Refusing to chase MPV off the end of the episode is only half the job. The
+// real stream is one row in a playlist of placeholders, so when it finishes MPV
+// moves to the next row -- a black clip that runs for a day. Declining to switch
+// left MPV sitting on that blackness with "Loading episode 1…" on screen, and
+// because playback never ended the episode was never marked watched.
+//
+// The distinguishing signal is the path: empty means MPV is idle between files,
+// which is what running off the end looks like. A row the user actually picked
+// has media loaded and reports a path.
+func TestFinishedEpisodeEndsTheSessionOnlyWhenMPVRanOffTheEnd(t *testing.T) {
+	finished := func() *MPVPlaylistController {
+		anime := &Anime{TotalEpisodes: 12}
+		anime.Ep.Number = 10
+		anime.Ep.Player.PlaybackTime = 1400
+		anime.Ep.Duration = 1440 // ~97%
+		return &MPVPlaylistController{
+			config:         &CurdConfig{PercentageToMarkComplete: 85},
+			anime:          anime,
+			socket:         "", // no MPV: property reads answer empty, as when idle
+			currentPlaying: 10,
+		}
+	}
+
+	// Finished, and MPV reports no path: this is end-of-file, so end the session
+	// and let the main loop record the episode.
+	if !finished().endSessionIfEpisodeOver(1) {
+		t.Error("expected a finished episode with no media loaded to end the session")
+	}
+
+	// Partway through, the same movement is a genuine selection.
+	partway := finished()
+	partway.anime.Ep.Player.PlaybackTime = 300 // ~20%
+	if partway.endSessionIfEpisodeOver(1) {
+		t.Error("an unfinished episode must never have its session ended")
+	}
+
+	// Duration unknown: nothing can be concluded, so do not end anything.
+	unknown := finished()
+	unknown.anime.Ep.Duration = 0
+	if unknown.endSessionIfEpisodeOver(1) {
+		t.Error("an unknown duration must not end the session")
+	}
+}

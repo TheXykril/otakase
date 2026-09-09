@@ -702,6 +702,12 @@ func (c *MPVPlaylistController) watchPlaylistSelection() {
 			Log(fmt.Sprintf("MPV playlist: DETECT placeholder row pos=%d → ep %d (%s) (was ep=%d)",
 				targetPos, slot.Episode, slot.Mode, curEp))
 
+			// Check before announcing anything: saying "Loading episode 1…" and
+			// then declining is how this looked stuck.
+			if c.endSessionIfEpisodeOver(slot.Episode) {
+				return
+			}
+
 			beginMPVPlaylistSwitch()
 			_, _ = MPVSendCommand(c.socket, []interface{}{"set_property", "pause", true})
 			_, _ = MPVSendCommand(c.socket, []interface{}{"show-text", fmt.Sprintf("Loading episode %d…", slot.Episode), 5000})
@@ -754,6 +760,10 @@ func (c *MPVPlaylistController) watchPlaylistSelection() {
 				continue
 			}
 
+			if c.endSessionIfEpisodeOver(slot.Episode) {
+				return
+			}
+
 			beginMPVPlaylistSwitch()
 			_, _ = MPVSendCommand(c.socket, []interface{}{"set_property", "pause", true})
 			_, _ = MPVSendCommand(c.socket, []interface{}{"show-text", fmt.Sprintf("Loading episode %d…", slot.Episode), 5000})
@@ -771,6 +781,40 @@ func (c *MPVPlaylistController) watchPlaylistSelection() {
 
 func isPlaceholderPath(path string) bool {
 	return strings.HasPrefix(path, "av://lavfi:") || strings.Contains(path, "lavfi:color=")
+}
+
+// endSessionIfEpisodeOver handles MPV running off the end of the episode.
+//
+// The episode's real stream is one entry in a playlist whose other rows are
+// placeholders, so when it finishes MPV does not stop -- it moves on, and the
+// next row is a black lavfi clip that runs for a day. Curd used to chase that as
+// though the user had chosen episode 1; refusing to chase it is not enough
+// either, because MPV then sits on blackness forever and the episode never ends,
+// so it is never marked watched.
+//
+// Ending playback here puts things back the way they are without a playlist:
+// MPV closes, the main loop sees playback stop with the episode watched, and
+// records it.
+//
+// The distinguishing signal is an empty path. MPV reports one while idle between
+// files, which is what running off the end looks like; a row the user actually
+// picked has been loaded and reports its own path. Without that check, choosing
+// an episode to rewatch right after finishing one would quit instead.
+func (c *MPVPlaylistController) endSessionIfEpisodeOver(targetEp int) bool {
+	if !c.episodeFinished() {
+		return false
+	}
+	if path := mpvStringProperty(c.socket, "path"); strings.TrimSpace(path) != "" {
+		// A real selection: MPV has media loaded, so this is not end-of-file.
+		return false
+	}
+
+	Log(fmt.Sprintf("MPV playlist: episode %d finished and MPV ran off the end (target was ep %d); ending playback",
+		c.currentPlaying, targetEp))
+	if _, err := MPVSendCommand(c.socket, []interface{}{"quit"}); err != nil {
+		Log(fmt.Sprintf("MPV playlist: could not end playback: %v", err))
+	}
+	return true
 }
 
 // episodeFinished reports whether the episode playing has already been watched
