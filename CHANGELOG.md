@@ -4,6 +4,25 @@
 
 ### Added
 
+- **KickassAnime (`kickassanime`, kaa.lt) — now the first provider tried.** It
+  is the most conventional source Curd talks to and the best behaved: a plain
+  JSON API with no anti-bot gate, no persisted-query handshake, and stream URLs
+  that sit in the player page rather than behind an obfuscated endpoint. Two
+  requests get an HLS manifest and an English subtitle track.
+
+  It also carries whole seasons rather than only what is recent, and indexes
+  dubs separately — so a dub request either gets a dub or a straight answer that
+  the show has none, which is what `AutoAudioFallback` needs to act on:
+
+  ```
+  no dub release for this show (available: ja-JP)
+  ```
+
+  The player is an Astro island whose props carry the manifest and every
+  subtitle track already. Two URL shapes it emits need repairing before use: the
+  manifest is protocol-relative, and subtitle links carry an empty authority
+  (`https:///host/...`), which no HTTP client resolves.
+
 - **A torrent-backed provider, `nyaa`.** Every other provider Curd ships scrapes
   a streaming host, and those share a failure mode: they carry a show's back
   catalogue but lag or omit the episodes that aired this week — exactly the ones
