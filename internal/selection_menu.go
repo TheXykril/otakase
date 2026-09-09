@@ -615,6 +615,9 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 			SelectionOption{Key: "-1", Label: "Quit"},
 		)
 
+		// A menu on screen is proof Curd started; anything still showing is stale.
+		EndStartupProgress()
+
 		configPath := filepath.Join(GetStoragePath(), "selectanimepreview.rasi")
 		// NOTE: Need `-markup-rows` to enable pango
 		// -format i returns the index of the chosen row. The label cannot be used:
@@ -824,6 +827,9 @@ func rofiSelectInternal(options []SelectionOption, isHomeMenu bool, refreshConfi
 	}
 
 	for {
+		// A menu on screen is proof Curd started; anything still showing is stale.
+		EndStartupProgress()
+
 		optionsString := buildRofiOptionsString(currentOptions, isHomeMenu)
 		configPath := filepath.Join(GetStoragePath(), "selectanime.rasi")
 		args := []string{"-dmenu", "-theme", configPath, "-i", "-markup", "-markup-rows", "-p", prompt}

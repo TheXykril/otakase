@@ -95,6 +95,10 @@ func RestoreScreen() {
 func ExitCurd(err error) {
 	RestoreScreen()
 
+	// Quitting during a slow launch must not leave a "starting..." notification
+	// on screen describing something that is no longer happening.
+	EndStartupProgress()
+
 	// Torrent-backed playback keeps a client and a temporary cache directory
 	// alive for the session. Leaving either behind would mean a stray port and a
 	// download the user never asked to keep.

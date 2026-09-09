@@ -235,8 +235,13 @@ func main() {
 	// Idle background check — does not block startup; stores result for next launch.
 	internal.StartBackgroundUpdateCheck(&userCurdConfig, resolvedVersion())
 
+	// From here on the launch can block on the network, with no terminal to show
+	// it when Curd was started from a keybind.
+	internal.BeginStartupProgress(&userCurdConfig, "Curd is starting")
+
 	// Get the token from the token file for the configured remote tracker.
 	if internal.UsesRemoteTracking(&userCurdConfig) {
+		internal.StartupStage("Signing in to your tracker")
 		if err := internal.EnsureConfiguredTrackersReady(&userCurdConfig, &user); err != nil {
 			internal.Log("Error preparing trackers: " + err.Error())
 			internal.ExitCurd(err)
@@ -252,6 +257,7 @@ func main() {
 		// internal.ExitCurd(fmt.Errorf("Added new anime!"))
 	}
 
+	internal.StartupStage("Loading your anime list")
 	internal.SetupCurd(&userCurdConfig, &anime, &user, &databaseAnimes)
 
 	temp_anime, err := internal.FindAnimeByAnilistID(user.AnimeList, strconv.Itoa(anime.AnilistId))

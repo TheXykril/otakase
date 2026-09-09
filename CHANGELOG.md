@@ -4,6 +4,27 @@
 
 ### Added
 
+- **Curd says when it is starting, if starting takes a while.** Launched from a
+  keybind rather than a terminal, it gave no sign of life until its first menu
+  appeared — and refreshing a tracker token and pulling a large list can take
+  several seconds. The honest reading of a silent desktop is "did that even
+  start?", so people press the key again and end up with two copies racing.
+
+  A notification now fills that gap, with the seconds ticking so a slow launch
+  reads as working rather than hung:
+
+  ```
+  Signing in to your tracker (3s)
+  Loading your anime list (6s)
+  ```
+
+  It only appears when there is a gap worth filling: a launch that reaches the
+  menu within about a second stays silent, since a message nobody has time to
+  read is worse than none. The menu opening ends it, because a visible menu is
+  its own proof, and quitting mid-launch ends it too rather than leaving a
+  notification describing work that stopped. In a terminal nothing is shown, as
+  the output is already visible there.
+
 - **Providers can require HTTP headers beyond a referrer.** MPV's `--referrer`
   cannot set `Origin`, and one CDN needs exactly that, so a stream hint may now
   carry arbitrary headers. They are appended to whatever `MpvArgs` already
