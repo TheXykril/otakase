@@ -38,6 +38,17 @@ func sortEntriesByRecency(entries []Entry, config *CurdConfig) []Entry {
 // ever reading it: only the episode number was used, for the "new episode" flag.
 // It costs nothing extra to say when the next one lands.
 func formatTimeUntilAiring(seconds int) string {
+	delay := formatAiringDelay(seconds)
+	if delay == "" {
+		return ""
+	}
+	return "next in " + delay
+}
+
+// formatAiringDelay renders just the wait -- "4d", "22h", "35m" -- so callers
+// can phrase it themselves. A row says "next in 4d"; a prompt explaining why an
+// episode cannot be played says "airs in 4d".
+func formatAiringDelay(seconds int) string {
 	if seconds <= 0 {
 		return ""
 	}
@@ -47,13 +58,13 @@ func formatTimeUntilAiring(seconds int) string {
 	case d < time.Hour:
 		minutes := int(d.Minutes())
 		if minutes < 1 {
-			return "next in <1m"
+			return "<1m"
 		}
-		return fmt.Sprintf("next in %dm", minutes)
+		return fmt.Sprintf("%dm", minutes)
 	case d < 24*time.Hour:
-		return fmt.Sprintf("next in %dh", int(d.Hours()))
+		return fmt.Sprintf("%dh", int(d.Hours()))
 	default:
-		return fmt.Sprintf("next in %dd", int(d.Hours()/24))
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
 }
 

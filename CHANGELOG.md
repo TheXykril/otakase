@@ -4,6 +4,28 @@
 
 ### Added
 
+- **Being caught up now says so, instead of failing.** After the last aired
+  episode, the prompt offered the next one — which does not exist yet, so
+  choosing it searched every provider and returned a failure that read as though
+  something were broken:
+
+  ```
+  before:  Yes, start episode 11   →   failed to get episode links
+  after:   Caught up
+           Episode 11 airs in 4d
+  ```
+
+  The airing schedule is the same tracker data that already drives the list
+  countdowns, so this costs no extra request — it is read from memory at the end
+  of an episode, where a prompt that paused on a lookup would be worse than one
+  that occasionally cannot say.
+
+  When the schedule is unknown the episode is still offered: refusing one the
+  user could have watched is the worse mistake, and a failed lookup is exactly
+  what happened before anyway. A countdown is shown only for the immediately next
+  episode, since a later one airs later still and reusing the wait would
+  understate it.
+
 - **Curd says when it is starting, if starting takes a while.** Launched from a
   keybind rather than a terminal, it gave no sign of life until its first menu
   appeared — and refreshing a tracker token and pulling a large list can take

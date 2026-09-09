@@ -1501,6 +1501,16 @@ func NextEpisodePromptCLI(userCurdConfig *CurdConfig) bool {
 	// Show the next episode number that will be started
 	nextEpisodeNum := anime.Ep.Number + 1
 	isLastKnownEpisode := anime.TotalEpisodes > 0 && anime.Ep.Number >= anime.TotalEpisodes
+
+	// Same reasoning as the rofi prompt: do not offer an episode that has not
+	// been broadcast, since choosing it can only fail.
+	if !isLastKnownEpisode {
+		if availability := nextEpisodeAiring(anime, nextEpisodeNum); !availability.Aired {
+			CurdOut(unairedEpisodeNotice(nextEpisodeNum, availability) + ". You are caught up.")
+			return false
+		}
+	}
+
 	if isLastKnownEpisode {
 		CurdOut("Finish this series?")
 	} else {
@@ -1633,6 +1643,26 @@ func NextEpisodePromptRofi(userCurdConfig *CurdConfig) bool {
 	// Show the next episode number that will be started
 	nextEpisodeNum := anime.Ep.Number + 1
 	isLastKnownEpisode := anime.TotalEpisodes > 0 && anime.Ep.Number >= anime.TotalEpisodes
+
+	// Say so rather than offering an episode that cannot be played: picking it
+	// would search every provider and fail, which reads as a broken tool rather
+	// than an episode that has not been broadcast.
+	if !isLastKnownEpisode {
+		if availability := nextEpisodeAiring(anime, nextEpisodeNum); !availability.Aired {
+			notice := unairedEpisodeNotice(nextEpisodeNum, availability)
+			Log(fmt.Sprintf("Next episode prompt: %s", notice))
+			_, err := RofiSelectWithMessage(
+				[]SelectionOption{{Key: "-1", Label: "Done"}},
+				false,
+				"Caught up",
+				notice,
+			)
+			if err != nil {
+				Log(fmt.Sprintf("Error showing unaired episode notice: %v", err))
+			}
+			return false
+		}
+	}
 
 	// Create options for the selection
 	label := fmt.Sprintf("Yes, start episode %d", nextEpisodeNum)
