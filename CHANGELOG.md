@@ -113,6 +113,13 @@
 
 ### Fixed
 
+- **Menus never showed the sentence explaining them.** The redesigned rofi theme
+  left `message` out of its `mainbox` children, and rofi draws `-mesg` only if
+  the theme asks for it. Nothing looked broken — the menu appeared, the choices
+  worked — but the line giving them meaning was silently dropped, so "why
+  playback failed" and "when the next episode airs" arrived as a bare **Done**
+  with nothing above it.
+
 - **Finishing an episode could lose it.** On a show with no dub, watched with
   `SubOrDub=dub`, the episode played correctly as sub — and then, as MPV reached
   the end, curd tried to load episode 1 and the tracker was never updated.

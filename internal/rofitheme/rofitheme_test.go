@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -272,5 +273,31 @@ func TestQuattroTokensAreRendered(t *testing.T) {
 	}
 	if strings.Contains(rendered, "{{") {
 		t.Fatal("unrendered template markers remain")
+	}
+}
+
+// Rofi draws -mesg only if the theme lists `message` among mainbox children.
+// Leaving it out fails silently and invisibly: the menu still appears, still
+// works, and simply loses the sentence explaining why it is on screen -- why
+// playback failed, or when the next episode airs -- so the user sees a bare
+// list of choices with no context.
+func TestSelectAnimeThemeRendersMessages(t *testing.T) {
+	rendered, err := Render("selectanime.rasi", theme.Builtin())
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	children := regexp.MustCompile(`mainbox\s*\{[^}]*children:\s*\[([^\]]*)\]`).FindStringSubmatch(rendered)
+	if children == nil {
+		t.Fatal("could not find mainbox children in the rendered theme")
+	}
+	if !strings.Contains(children[1], "message") {
+		t.Fatalf("mainbox children %q must include message, or -mesg is never drawn", children[1])
+	}
+
+	// A message must also be styled, or it inherits defaults that clash with the
+	// rest of the menu.
+	if !strings.Contains(rendered, "message textbox") {
+		t.Error("expected the message textbox to be styled")
 	}
 }

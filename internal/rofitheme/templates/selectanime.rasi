@@ -36,11 +36,33 @@ window {
     padding:          0px;
 }
 
+/* `message` has to be listed here or rofi never draws -mesg, and the menus that
+   rely on it -- why playback failed, when the next episode airs -- lose the
+   sentence that explains why they are on screen, leaving a bare list of choices
+   with no context. Rofi omits the widget entirely when no message is passed, so
+   the ordinary menus are unaffected. */
 mainbox {
-    children:         [ inputbar, listview ];
+    children:         [ inputbar, message, listview ];
     background-color: transparent;
     padding:          14px;
     spacing:          8px;
+}
+
+/* A message is explanation, not a choice: it reads at the same size as a row but
+   in the dimmed colour, so it never competes with what is selectable. */
+message {
+    background-color: transparent;
+    padding:          6px 12px 8px 12px;
+    border:           0px 0px 1px 0px;
+    border-color:     @rule;
+}
+
+message textbox {
+    background-color: transparent;
+    text-color:       @muted;
+    font:             "{{ .Font }}";
+    vertical-align:   0.5;
+    markup:           true;
 }
 
 /* No prompt pill: Omarchy's menus are a bare field with placeholder text and a
