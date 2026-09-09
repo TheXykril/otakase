@@ -1288,6 +1288,7 @@ func StartCurd(userCurdConfig *CurdConfig, anime *Anime) string {
 		}
 		Log(fmt.Sprintf("Successfully retrieved %s/%s episode link. Links count: %d", episodeResult.ProviderName, episodeResult.Mode, len(episodeResult.Links)))
 		anime.Ep.Links = episodeResult.Links
+		anime.Ep.Mode = episodeResult.Mode
 		applyStreamPlaybackHints(anime, anime.Ep.Links, episodeResult.LinkHints)
 	}
 

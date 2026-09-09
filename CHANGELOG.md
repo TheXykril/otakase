@@ -91,6 +91,34 @@
 
 ### Fixed
 
+- **Finishing an episode could lose it.** On a show with no dub, watched with
+  `SubOrDub=dub`, the episode played correctly as sub — and then, as MPV reached
+  the end, curd tried to load episode 1 and the tracker was never updated.
+
+  Three faults compounded. The MPV playlist controller built its playlist for the
+  *configured* audio rather than the audio actually playing, so on a sub-only
+  show every entry asked providers for a dub that does not exist. When playback
+  ended, MPV landed on the first placeholder row and the controller read that as
+  the user choosing episode 1, rather than as end-of-file. And the switch it then
+  attempted had already zeroed the playback state it needed in order to put
+  things back, so after it failed the finished episode looked unwatched:
+
+  ```
+  MPV playlist: resolving stream for episode 1 (dub) [was 10]
+  MPV playlist: failed to play ep 1: no dub episode links found ...
+  Episode is not completed, exiting
+  ```
+
+  The completion check divides by a duration that was now zero, decided the
+  episode had been abandoned, and left AniList showing 9/12 after episode 10 had
+  been watched in full.
+
+  Playback now records which audio it actually resolved, and the playlist follows
+  that. Movement after the completion threshold is treated as end-of-file rather
+  than a selection. And every failing path of a switch restores what it cleared —
+  position, duration, links, headers and completion — so a switch that cannot
+  happen leaves the episode exactly as it found it.
+
 - **Watch history filed provider ids under the wrong provider.** Six history
   writes paired `anime.ProviderId` -- the id of whichever host actually served
   the episode -- with `GetProvider().Name()`, which is the *first configured*

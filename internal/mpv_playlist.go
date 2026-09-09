@@ -127,6 +127,26 @@ func (c *MPVPlaylistController) WaitForPrefetch() {
 	c.prefetch.Wait()
 }
 
+// playlistAudioMode picks the audio a playlist should be built for.
+//
+// It follows what is actually playing rather than the configured preference: on
+// a show carried in one language only, AutoAudioFallback plays the other one,
+// and a playlist built for the preference asks every provider for audio the show
+// does not have, so every entry fails to load.
+//
+// The recorded mode has to be tested before normalising, not after --
+// normalizeTranslationType turns an empty string into "sub", which would quietly
+// override a dub preference whenever nothing had been recorded yet.
+func playlistAudioMode(anime *Anime, config *CurdConfig) string {
+	if anime != nil && strings.TrimSpace(anime.Ep.Mode) != "" {
+		return normalizeTranslationType(anime.Ep.Mode)
+	}
+	if config != nil {
+		return normalizeTranslationType(config.SubOrDub)
+	}
+	return "sub"
+}
+
 // StartMPVPlaylistController waits until playback is stable, then builds the
 // episode playlist and watches for user selections. Safe to call in a goroutine.
 // Does nothing for android-intent / empty sockets or when disabled in config.
@@ -138,15 +158,17 @@ func StartMPVPlaylistController(config *CurdConfig, anime *Anime, socket string,
 		return
 	}
 
+	playingMode := playlistAudioMode(anime, config)
+
 	c := &MPVPlaylistController{
 		config:         config,
 		anime:          anime,
 		socket:         socket,
 		done:           done,
 		lastPos:        -1,
-		preferredMode:  normalizeTranslationType(config.SubOrDub),
+		preferredMode:  playingMode,
 		currentPlaying: anime.Ep.Number,
-		currentMode:    normalizeTranslationType(config.SubOrDub),
+		currentMode:    playingMode,
 	}
 	if c.preferredMode == "" {
 		c.preferredMode = "sub"
@@ -708,7 +730,7 @@ func (c *MPVPlaylistController) watchPlaylistSelection() {
 				_, _ = MPVSendCommand(c.socket, []interface{}{"set_property", "pause", true})
 				c.lastPos = targetPos
 				c.handlePlaylistJump(targetPos)
-					continue
+				continue
 			}
 
 			c.mu.Lock()
@@ -727,7 +749,7 @@ func (c *MPVPlaylistController) watchPlaylistSelection() {
 					beginMPVPlaylistSwitch()
 					_, _ = MPVSendCommand(c.socket, []interface{}{"set_property", "pause", true})
 					c.handlePlaylistJumpSlot(slot, curEp)
-						}
+				}
 				time.Sleep(poll)
 				continue
 			}
@@ -751,8 +773,34 @@ func isPlaceholderPath(path string) bool {
 	return strings.HasPrefix(path, "av://lavfi:") || strings.Contains(path, "lavfi:color=")
 }
 
+// episodeFinished reports whether the episode playing has already been watched
+// far enough to count as complete. Past that point the controller's job is done:
+// the main loop owns what happens next, including marking progress.
+func (c *MPVPlaylistController) episodeFinished() bool {
+	if c.anime == nil || c.anime.Ep.Duration <= 0 {
+		return false
+	}
+	threshold := 85
+	if c.config != nil && c.config.PercentageToMarkComplete > 0 {
+		threshold = c.config.PercentageToMarkComplete
+	}
+	return int(PercentageWatched(c.anime.Ep.Player.PlaybackTime, c.anime.Ep.Duration)) >= threshold
+}
+
 // handlePlaylistJumpSlot switches to a known target slot (from path or pos detection).
 func (c *MPVPlaylistController) handlePlaylistJumpSlot(slot playlistSlot, curEp int) {
+	// An episode that has been watched to the completion threshold is over, and
+	// what moves the playlist position then is MPV reaching end-of-file, not the
+	// user choosing anything. Acting on it hijacks the end of the episode: MPV
+	// lands on the first placeholder, that reads as "play episode 1", and the
+	// switch replaces a finished episode with a failed one -- so the episode is
+	// never marked watched and the tracker is never updated.
+	if c.episodeFinished() {
+		Log(fmt.Sprintf("MPV playlist: ignoring move to ep %d; episode %d already finished",
+			slot.Episode, curEp))
+		return
+	}
+
 	curMode := c.currentMode
 	if curMode == "" {
 		curMode = c.preferredMode
@@ -1210,6 +1258,48 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 	prevEp := anime.Ep.Number
 	targetEp := slot.Episode
 
+	// Everything the switch is about to clear, kept so a failed switch can put it
+	// back. Without this, a switch that could not resolve left the episode
+	// looking unwatched: the completion check divides by a duration that is now
+	// zero, decides the episode was abandoned, and the tracker is never updated
+	// even though the user watched the whole thing.
+	restore := struct {
+		resume       bool
+		playbackTime int
+		duration     int
+		completed    bool
+		links        []string
+		referrer     string
+		subtitle     string
+		headers      map[string]string
+		skipTimes    SkipTimes
+		nextEpisode  NextEpisode
+	}{
+		resume:       anime.Ep.Resume,
+		playbackTime: anime.Ep.Player.PlaybackTime,
+		duration:     anime.Ep.Duration,
+		completed:    anime.Ep.IsCompleted,
+		links:        anime.Ep.Links,
+		referrer:     anime.Ep.StreamReferrer,
+		subtitle:     anime.Ep.SubtitleURL,
+		headers:      anime.Ep.StreamHeaders,
+		skipTimes:    anime.Ep.SkipTimes,
+		nextEpisode:  anime.Ep.NextEpisode,
+	}
+	restoreEpisodeState := func() {
+		anime.Ep.Number = prevEp
+		anime.Ep.Resume = restore.resume
+		anime.Ep.Player.PlaybackTime = restore.playbackTime
+		anime.Ep.Duration = restore.duration
+		anime.Ep.IsCompleted = restore.completed
+		anime.Ep.Links = restore.links
+		anime.Ep.StreamReferrer = restore.referrer
+		anime.Ep.SubtitleURL = restore.subtitle
+		anime.Ep.StreamHeaders = restore.headers
+		anime.Ep.SkipTimes = restore.skipTimes
+		anime.Ep.NextEpisode = restore.nextEpisode
+	}
+
 	// Clear ALL previous-episode playback state before resolve/load so the main
 	// loop cannot seek/resume the old episode into the new stream.
 	anime.Ep.Resume = false
@@ -1231,7 +1321,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 	// Preferred mode only — no nested DynamicSelect prompts from this goroutine.
 	result, err := ResolveEpisodeURL(cfg, anime, targetEp)
 	if err != nil || len(result.Links) == 0 {
-		anime.Ep.Number = prevEp
+		restoreEpisodeState()
 		if err == nil {
 			err = fmt.Errorf("no streams for episode %d", targetEp)
 		}
@@ -1242,7 +1332,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 	applyStreamPlaybackHints(anime, result.Links, result.LinkHints)
 	link := PrioritizeLink(result.Links)
 	if link == "" {
-		anime.Ep.Number = prevEp
+		restoreEpisodeState()
 		return fmt.Errorf("empty stream link for episode %d", targetEp)
 	}
 
@@ -1260,14 +1350,14 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 
 	anime.Ep.Player.SocketPath = c.socket
 	if err := loadEpisodeInRunningMPV(c.socket, link, title, anime); err != nil {
-		anime.Ep.Number = prevEp
+		restoreEpisodeState()
 		return err
 	}
 
 	// Wait until path actually changes away from the old media (not just time-pos).
 	// WaitForMPVPlaybackStart alone is wrong — old episode still has time-pos.
 	if !waitForMPVMediaChange(c.socket, oldPath, link, 30*time.Second) {
-		anime.Ep.Number = prevEp
+		restoreEpisodeState()
 		return fmt.Errorf("episode %d did not become the active media (still on previous file?)", targetEp)
 	}
 	_, _ = MPVSendCommand(c.socket, []interface{}{"set_property", "time-pos", 0})
@@ -1552,4 +1642,3 @@ func (c *MPVPlaylistController) rebuildPlaylistAroundCurrent() error {
 	Log(fmt.Sprintf("MPV playlist rebuilt around ep %d (%d entries)", currentEp, len(slots)))
 	return nil
 }
-

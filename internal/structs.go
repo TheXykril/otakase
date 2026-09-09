@@ -54,11 +54,16 @@ type Episode struct {
 	StreamReferrer string            `json:"-"`
 	SubtitleURL    string            `json:"-"`
 	StreamHeaders  map[string]string `json:"-"`
-	NextEpisode    NextEpisode       `json:"next_episode"`
-	IsFiller       bool              `json:"filler"`
-	IsRecap        bool              `json:"recap"`
-	Aired          string            `json:"aired"`
-	Synopsis       string            `json:"synopsis"`
+	// Mode is the audio actually playing, which is not always the audio that was
+	// asked for: AutoAudioFallback plays sub when a show has no dub. Anything
+	// resolving a further episode has to follow what is playing rather than the
+	// preference, or it asks for audio this show does not have and fails.
+	Mode           string      `json:"-"`
+	NextEpisode    NextEpisode `json:"next_episode"`
+	IsFiller       bool        `json:"filler"`
+	IsRecap        bool        `json:"recap"`
+	Aired          string      `json:"aired"`
+	Synopsis       string      `json:"synopsis"`
 	ContinueLast   bool
 	LastWasSkipped bool // used in filler check
 	IsCompleted    bool
