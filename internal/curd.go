@@ -17,6 +17,8 @@ import (
 
 	"github.com/gen2brain/beeep"
 	"github.com/pkg/browser"
+
+	"github.com/wraient/curd/internal/torrentstream"
 )
 
 var alternateScreenActive bool
@@ -92,6 +94,11 @@ func RestoreScreen() {
 
 func ExitCurd(err error) {
 	RestoreScreen()
+
+	// Torrent-backed playback keeps a client and a temporary cache directory
+	// alive for the session. Leaving either behind would mean a stray port and a
+	// download the user never asked to keep.
+	torrentstream.Shutdown()
 
 	anime := GetGlobalAnime()
 	socketPath := ""
@@ -463,7 +470,7 @@ func AddNewAnime(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseA
 	query, err = promptText(userCurdConfig, "Enter the anime name", false)
 	if err != nil {
 		Log("Error getting user input: " + err.Error())
-		ExitCurd(fmt.Errorf("Error getting user input: " + err.Error()))
+		ExitCurd(fmt.Errorf("Error getting user input: %w", err))
 	}
 	if userCurdConfig.RofiSelection && userCurdConfig.ImagePreview {
 		animeMapPreview, err = SearchAnimeAnilistPreview(query, user.Token)
@@ -1155,7 +1162,7 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 				userInput, err := GetUserInputFromRofi("Would like to start the anime from beginning? (y/n)")
 				if err != nil {
 					Log("Error getting user input: " + err.Error())
-					ExitCurd(fmt.Errorf("Error getting user input: " + err.Error()))
+					ExitCurd(fmt.Errorf("Error getting user input: %w", err))
 				}
 				answer = userInput
 			} else {

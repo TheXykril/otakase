@@ -430,7 +430,7 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 		query, err = promptText(userCurdConfig, "Enter the anime name", false)
 		if err != nil {
 			Log("Error getting user input: " + err.Error())
-			ExitCurd(fmt.Errorf("Error getting user input: " + err.Error()))
+			ExitCurd(fmt.Errorf("Error getting user input: %w", err))
 		}
 
 		providerID, providerName, back, searchErr := ResolveUntrackedProviderSearch(userCurdConfig, query)

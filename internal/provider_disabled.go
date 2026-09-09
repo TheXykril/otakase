@@ -103,7 +103,11 @@ func filterEnabledProviders(names []string) []string {
 // preferredProviderOrder ranks providers by how reliably they currently resolve
 // streams. anipub and anineko are the two that verifiably work end to end; the
 // rest are kept registered so an explicit config can still select them.
-var preferredProviderOrder = []string{"anipub", "anineko", "anidb", "senshi", "allanime", "animepahe"}
+// nyaa sits behind the streaming hosts because it costs more to start -- peers
+// have to be found before the first frame -- but ahead of the broken ones,
+// because it is the only source that reliably carries an episode in the week it
+// airs, which is exactly what a continue-watching list asks for.
+var preferredProviderOrder = []string{"anipub", "anineko", "nyaa", "anidb", "senshi", "allanime", "animepahe"}
 
 func defaultEnabledProviderStack() []string {
 	registered := providers.RegisteredNames()

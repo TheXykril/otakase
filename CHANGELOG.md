@@ -1,6 +1,32 @@
 # Changelog
 
+## Unreleased
+
 ### Added
+
+- **A torrent-backed provider, `nyaa`.** Every other provider Curd ships scrapes
+  a streaming host, and those share a failure mode: they carry a show's back
+  catalogue but lag or omit the episodes that aired this week — exactly the ones
+  a continue-watching list asks for. On one currently-airing show, anipub
+  stopped at episode 5 and anineko's streams stopped resolving after 6, so
+  episodes 7-10 were unreachable while the index carried all of them.
+
+  Releases are indexed within hours of broadcast, the RSS feed is a documented
+  interface rather than markup that changes shape, and there is no anti-bot gate
+  in front of it. Playback does not wait for a download: pieces are fetched in
+  the order the player asks for them and served over a local HTTP endpoint that
+  honours range requests, so MPV starts within seconds and can still seek.
+  Nothing is kept — the cache is temporary and removed on exit.
+
+  Releases are ranked by resolution and then by swarm health, since a "trusted"
+  release with two peers starts slower than an untrusted one with four hundred.
+  Batch torrents are skipped: they cannot answer "play episode 10" without
+  fetching a whole season. A dub request with no dubbed release fails cleanly
+  rather than quietly returning subtitles, which lets `AutoAudioFallback` do its
+  job.
+
+  It sits third in the default stack — behind the streaming hosts, because
+  finding peers costs a few seconds, and ahead of the ones that no longer work.
 
 - **`AutoAudioFallback` (default on): a show carried in only one language just
   plays.** Reaching the other audio took two menus — a recovery menu, then a
@@ -17,8 +43,6 @@
   The setting is honoured in one place, so every route into the other audio —
   the preferred-first resolve, the recovery menu, the playlist controller —
   behaves the same way.
-
-## Unreleased
 
 ### Fixed
 

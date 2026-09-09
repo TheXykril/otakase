@@ -160,11 +160,29 @@ const (
 	allanimeGraphQLReferer        = "https://allanime.to"
 )
 
-// errAllanimeCryptoRequired reports that AllAnime's episode endpoint demands a
-// request signature Curd cannot produce. Their own frontend is unreachable
-// (allanime.day answers every request with a 301 back to itself), so there is no
-// live page to derive the scheme from.
-var errAllanimeCryptoRequired = errors.New("AllAnime now requires a signed request for episode sources (AA_CRYPTO_MISSING); the provider is currently unusable")
+// errAllanimeGated reports that AllAnime's episode endpoint refuses unsigned,
+// unattended requests. The demand is not fixed: the same query answered
+// AA_CRYPTO_MISSING (a missing request signature) and later NEED_CAPTCHA on the
+// same day, so the check below matches either rather than one exact string.
+// Both mean the same thing for Curd -- episode sources are not obtainable.
+var errAllanimeGated = errors.New("AllAnime requires a signed request or a CAPTCHA for episode sources; the provider is currently unusable")
+
+// allanimeGateMarkers are the GraphQL errors AllAnime answers an unsigned
+// episode query with.
+var allanimeGateMarkers = [][]byte{
+	[]byte("AA_CRYPTO_MISSING"),
+	[]byte("NEED_CAPTCHA"),
+}
+
+// isAllanimeGateResponse reports whether the API refused rather than answered.
+func isAllanimeGateResponse(body []byte) bool {
+	for _, marker := range allanimeGateMarkers {
+		if bytes.Contains(body, marker) {
+			return true
+		}
+	}
+	return false
+}
 
 func isDirectPlayableAllanimeSource(source allanimeSource) bool {
 	sourceURL := strings.TrimSpace(source.SourceUrl)
@@ -489,10 +507,17 @@ func fetchEpisodeSourcesForMode(id, mode string, epNo int) ([]allanimeSource, er
 		}
 		defer resp.Body.Close()
 
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read response body: %w", err)
+		// Assign to the outer body rather than shadowing it. The AA_CRYPTO_MISSING
+		// check further down reads body, and the error only ever appears in this
+		// fallback response -- the persisted query fails earlier and differently
+		// (PersistedQueryNotFound). Shadowing here left that check reading the
+		// wrong response, so it never fired and the real cause was reported as
+		// "no encoded Allanime provider sources found".
+		fallbackBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", readErr)
 		}
+		body = fallbackBody
 		if !curdhost.HTTPStatusOK(resp.StatusCode) {
 			return nil, curdhost.HTTPStatusError("allanime episode fallback query", resp.StatusCode, body)
 		}
@@ -503,12 +528,11 @@ func fetchEpisodeSourcesForMode(id, mode string, epNo int) ([]allanimeSource, er
 		}
 	}
 
-	// AllAnime moved episode sources behind a client-side signature. Unsigned
-	// requests now come back 200 with an AA_CRYPTO_MISSING GraphQL error and a null
-	// episode, which previously surfaced as the far less useful
-	// "no encoded Allanime provider sources found".
-	if bytes.Contains(body, []byte("AA_CRYPTO_MISSING")) {
-		return nil, errAllanimeCryptoRequired
+	// AllAnime moved episode sources behind a gate. Refused requests come back
+	// 200 with a GraphQL error and a null episode, which without this surfaced as
+	// the far less useful "no encoded Allanime provider sources found".
+	if isAllanimeGateResponse(body) {
+		return nil, errAllanimeGated
 	}
 
 	if response.Data.Tobeparsed != "" {
