@@ -156,13 +156,21 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 			continue
 		}
 
-		// The manifest is served from a CDN that checks the referrer, and the
-		// subtitles are a separate file MPV has to be told about, so both travel
-		// with the URL as playback hints.
+		// Two different hosts with two different rules, and getting this wrong
+		// yields a manifest that opens and then plays nothing:
+		//
+		//   the manifest wants Referer: kaa.lt
+		//   the video segments live elsewhere and 403 unless Origin names the
+		//   player's domain -- a Referer, even the right one, is not accepted
+		//
+		// So the referrer stays kaa.lt for the manifest and Origin is sent
+		// alongside for the segments. The subtitles are a separate file MPV has
+		// to be told about.
 		hints := map[string]providers.StreamPlaybackHint{
 			sources.Manifest: {
 				Referrer: referer,
 				Subtitle: englishSubtitle(sources.Subtitles),
+				Headers:  map[string]string{"Origin": playerOrigin(server.Src)},
 			},
 		}
 		return []string{sources.Manifest}, hints, nil

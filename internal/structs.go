@@ -43,21 +43,22 @@ type SkipTimes struct {
 }
 
 type Episode struct {
-	Title          AnimeTitle   `json:"title"`
-	Number         int          `json:"number"`
-	SkipTimes      SkipTimes    `json:"skip_times"`
-	Player         playingVideo `json:"player"`
-	Resume         bool         `json:"resume"`
-	Started        bool         `json:"started"`
-	Duration       int          `json:"duration"`
-	Links          []string     `json:"links"`
-	StreamReferrer string       `json:"-"`
-	SubtitleURL    string       `json:"-"`
-	NextEpisode    NextEpisode  `json:"next_episode"`
-	IsFiller       bool         `json:"filler"`
-	IsRecap        bool         `json:"recap"`
-	Aired          string       `json:"aired"`
-	Synopsis       string       `json:"synopsis"`
+	Title          AnimeTitle        `json:"title"`
+	Number         int               `json:"number"`
+	SkipTimes      SkipTimes         `json:"skip_times"`
+	Player         playingVideo      `json:"player"`
+	Resume         bool              `json:"resume"`
+	Started        bool              `json:"started"`
+	Duration       int               `json:"duration"`
+	Links          []string          `json:"links"`
+	StreamReferrer string            `json:"-"`
+	SubtitleURL    string            `json:"-"`
+	StreamHeaders  map[string]string `json:"-"`
+	NextEpisode    NextEpisode       `json:"next_episode"`
+	IsFiller       bool              `json:"filler"`
+	IsRecap        bool              `json:"recap"`
+	Aired          string            `json:"aired"`
+	Synopsis       string            `json:"synopsis"`
 	ContinueLast   bool
 	LastWasSkipped bool // used in filler check
 	IsCompleted    bool
@@ -80,6 +81,9 @@ type NextAiringEpisodeInfo struct {
 type StreamPlaybackHint struct {
 	Referrer string
 	Subtitle string
+	// Headers are extra HTTP headers the stream's CDN requires; see the
+	// providers package for why a referrer alone is sometimes not enough.
+	Headers map[string]string
 }
 
 type playingVideo struct {

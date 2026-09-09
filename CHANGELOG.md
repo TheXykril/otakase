@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Providers can require HTTP headers beyond a referrer.** MPV's `--referrer`
+  cannot set `Origin`, and one CDN needs exactly that, so a stream hint may now
+  carry arbitrary headers. They are appended to whatever `MpvArgs` already
+  configures rather than replacing it.
+
 - **KickassAnime (`kickassanime`, kaa.lt) — now the first provider tried.** It
   is the most conventional source Curd talks to and the best behaved: a plain
   JSON API with no anti-bot gate, no persisted-query handshake, and stream URLs

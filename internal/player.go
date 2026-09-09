@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,6 +30,32 @@ const mpvPlaybackPollInterval = 500 * time.Millisecond
 
 // This is not generic but we have MpvArgs in CurdConfig to add custom ones
 const defaultStreamReferrer = "https://allanime.day/"
+
+// streamHeaderArgs renders a provider's extra HTTP headers as MPV arguments.
+//
+// --http-header-fields-append is used rather than --http-header-fields so these
+// add to whatever the user configured in MpvArgs instead of replacing it. Header
+// names are sorted so a given episode always launches MPV the same way, which
+// matters when comparing two runs in a log.
+func streamHeaderArgs(headers map[string]string) []string {
+	if len(headers) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(headers))
+	for name := range headers {
+		if strings.TrimSpace(name) != "" && strings.TrimSpace(headers[name]) != "" {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+
+	args := make([]string, 0, len(names))
+	for _, name := range names {
+		args = append(args, fmt.Sprintf("--http-header-fields-append=%s: %s",
+			strings.TrimSpace(name), strings.TrimSpace(headers[name])))
+	}
+	return args
+}
 
 func streamReferrerForLink(link, provider string) string {
 	if strings.Contains(strings.ToLower(link), "tools.fast4speed.rsvp") {
@@ -304,6 +331,11 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 	if referrer != "" && shouldSetDefaultReferrer {
 		args = append(args, fmt.Sprintf("--referrer=%s", referrer))
 	}
+	// Some CDNs want more than a referrer. One rejects its own video segments
+	// with 403 unless Origin names the player's domain, and --referrer cannot
+	// set Origin, so a provider that knows this passes the headers along.
+	args = append(args, streamHeaderArgs(anime.Ep.StreamHeaders)...)
+
 	subtitleURL := strings.TrimSpace(anime.Ep.SubtitleURL)
 	if subtitleURL != "" && !callerHasSubtitleArg {
 		args = append(args, fmt.Sprintf("--sub-file=%s", subtitleURL))
@@ -811,7 +843,6 @@ func asInt64(v interface{}) (int64, bool) {
 		return 0, false
 	}
 }
-
 
 func mpvResponseData(response map[string]interface{}) (interface{}, error) {
 	if errorValue, exists := response["error"]; exists {

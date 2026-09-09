@@ -20,6 +20,11 @@ type PlaybackConfig struct {
 type StreamPlaybackHint struct {
 	Referrer string
 	Subtitle string
+	// Headers are extra HTTP headers the stream's CDN requires. A referrer alone
+	// is not always enough: one host rejects its own video segments with 403
+	// unless Origin names the player's domain, and MPV's --referrer cannot set
+	// Origin. Anything here is passed through to the player as-is.
+	Headers map[string]string
 }
 
 // Provider resolves catalog search, episode lists, and stream URLs.

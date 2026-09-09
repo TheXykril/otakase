@@ -75,3 +75,20 @@ func TestEnglishSubtitleSelection(t *testing.T) {
 		t.Errorf("expected no track, got %q", got)
 	}
 }
+
+// The CDN serving the video segments wants Origin set to the player's own host,
+// not the site's. Deriving it from the embed URL means a change of player host
+// does not silently produce streams that resolve but never play.
+func TestPlayerOrigin(t *testing.T) {
+	cases := map[string]string{
+		"https://krussdomi.com/cat-player/player?id=abc&type=hls": "https://krussdomi.com",
+		"http://other.host/embed":                                 "http://other.host",
+		"not a url":                                               "",
+		"":                                                        "",
+	}
+	for in, want := range cases {
+		if got := playerOrigin(in); got != want {
+			t.Errorf("playerOrigin(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

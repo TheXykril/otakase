@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -110,6 +111,18 @@ func normalizeURL(raw string) string {
 	default:
 		return raw
 	}
+}
+
+// playerOrigin returns the scheme and host of a server's embed URL, which is
+// what its CDN expects to see in Origin. Derived from the URL the API gave us
+// rather than hardcoded, so a change of player host does not silently start
+// producing streams that resolve but will not play.
+func playerOrigin(src string) string {
+	parsed, err := url.Parse(strings.TrimSpace(src))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return parsed.Scheme + "://" + parsed.Host
 }
 
 // englishSubtitle picks the track to hand MPV. Curd plays subtitled releases

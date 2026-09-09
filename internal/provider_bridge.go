@@ -102,6 +102,7 @@ func fromStreamHints(hints map[string]providers.StreamPlaybackHint) map[string]S
 		result[key] = StreamPlaybackHint{
 			Referrer: hint.Referrer,
 			Subtitle: hint.Subtitle,
+			Headers:  hint.Headers,
 		}
 	}
 	return result
@@ -174,8 +175,10 @@ func applyStreamPlaybackHints(anime *Anime, links []string, hints map[string]Str
 	if hint, ok := hints[selected]; ok {
 		anime.Ep.StreamReferrer = hint.Referrer
 		anime.Ep.SubtitleURL = hint.Subtitle
+		anime.Ep.StreamHeaders = hint.Headers
 		return
 	}
 	anime.Ep.StreamReferrer = ""
 	anime.Ep.SubtitleURL = ""
+	anime.Ep.StreamHeaders = nil
 }
