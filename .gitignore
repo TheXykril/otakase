@@ -1,0 +1,13 @@
+# Session state from AI coding tools. Never part of the source, and easy to
+# sweep in with `git add -A` -- which is how .opencode/ first landed here.
+.opencode/
+.claude/
+
+# Build output. `go build` drops the binary at the repo root, and makepkg
+# expands its work into src/ and pkg/ beside the PKGBUILD.
+/curd
+/curd-*
+src/
+pkg/
+*.pkg.tar.zst
+*.tar.gz
