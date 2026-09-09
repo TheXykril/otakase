@@ -32,13 +32,32 @@ func matchesMode(release Release, mode string) bool {
 	return true
 }
 
-// usableReleases drops batches, releases for the other audio, and anything with
-// no peers -- a release nobody is seeding cannot be played, so offering it would
-// only produce a menu entry that stalls.
-func usableReleases(releases []Release, mode string) []Release {
+// playableReleases drops batches and anything with no peers. A release nobody
+// is seeding cannot be played, so offering it would only produce a menu entry
+// that stalls, and a batch cannot answer "play episode 10" without fetching a
+// whole season.
+func playableReleases(releases []Release) []Release {
 	usable := make([]Release, 0, len(releases))
 	for _, release := range releases {
-		if release.Episode <= 0 || release.Seeders <= 0 || !matchesMode(release, mode) {
+		if release.Episode <= 0 || release.Seeders <= 0 {
+			continue
+		}
+		usable = append(usable, release)
+	}
+	return usable
+}
+
+// usableReleases additionally keeps only releases carrying the requested audio.
+//
+// This belongs to picking an episode, never to finding a show. Filtering by
+// audio during search made a sub-only show vanish from a dub-configured setup
+// entirely -- every title variant came back "no results", so Curd could not map
+// the show at all and the audio fallback, which only runs once a provider is
+// mapped, never got its chance.
+func usableReleases(releases []Release, mode string) []Release {
+	usable := make([]Release, 0, len(releases))
+	for _, release := range playableReleases(releases) {
+		if !matchesMode(release, mode) {
 			continue
 		}
 		usable = append(usable, release)
@@ -58,8 +77,10 @@ func (p *Provider) SearchAnime(query, mode string) ([]providers.SelectionOption,
 		episodes map[int]struct{}
 		seeders  int
 	}
+	// Deliberately mode-agnostic: a show exists whether or not it has the audio
+	// currently configured, and saying otherwise hides it completely.
 	grouped := map[string]*series{}
-	for _, release := range usableReleases(releases, mode) {
+	for _, release := range playableReleases(releases) {
 		key := seriesKey(release.Title)
 		if key == "" {
 			continue
@@ -112,6 +133,12 @@ func (p *Provider) EpisodesList(showID, mode string) ([]string, error) {
 		seen[release.Episode] = struct{}{}
 	}
 	if len(seen) == 0 {
+		// Distinguish "this show is not indexed" from "it is, but not dubbed".
+		// Only the second can be answered by falling back to the other audio, and
+		// Curd can only make that choice if the error says which it is.
+		if providers.NormalizeTranslationType(mode) == "dub" && len(playableReleases(releases)) > 0 {
+			return nil, fmt.Errorf("no dub releases indexed for %q", showID)
+		}
 		return nil, fmt.Errorf("no episodes found for %q", showID)
 	}
 
