@@ -474,6 +474,18 @@ func mergeEntryMetadata(preferred, fallback Entry) Entry {
 	if preferred.Media.Status == "" {
 		preferred.Media.Status = fallback.Media.Status
 	}
+	// Only AniList reports a broadcast schedule, so a merge that takes the
+	// MyAnimeList entry -- which is what happens right after Curd pushes progress
+	// there, making it the more recently updated of the two -- silently loses it.
+	// Everything downstream then behaves as though the show's schedule were
+	// unknown: no airing countdown in the list, and no way to tell "you are
+	// caught up" apart from "this episode could not be found".
+	if preferred.Media.NextAiringEpisode == nil {
+		preferred.Media.NextAiringEpisode = fallback.Media.NextAiringEpisode
+	}
+	if preferred.Media.Format == "" {
+		preferred.Media.Format = fallback.Media.Format
+	}
 	if preferred.CoverImage == "" {
 		preferred.CoverImage = fallback.CoverImage
 	}

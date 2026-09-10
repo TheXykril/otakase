@@ -122,6 +122,22 @@
 
 ### Fixed
 
+- **Dual tracking silently lost every show's broadcast schedule.** Only AniList
+  reports when the next episode airs; MyAnimeList has no equivalent. Merging the
+  two lists backfilled titles, episode counts, status and duration from whichever
+  side had them — but not the schedule. So the moment curd pushed progress to
+  MyAnimeList, making that entry the fresher of the two, it won the merge and
+  the airing dates were dropped.
+
+  Everything downstream then behaved as though the dates were simply unknown:
+  no `next in 22h` countdown in the list, and no way to tell "you are caught up"
+  apart from "that episode could not be found" — so a `anilist+myanimelist` user
+  still got a failed provider search at the end of a season, where a single
+  tracker user was told when the next episode airs.
+
+  The schedule is now carried across the merge like every other field only one
+  side knows, as is `format`, which had the same gap.
+
 - **Menus never showed the sentence explaining them.** The redesigned rofi theme
   left `message` out of its `mainbox` children, and rofi draws `-mesg` only if
   the theme asks for it. Nothing looked broken — the menu appeared, the choices
