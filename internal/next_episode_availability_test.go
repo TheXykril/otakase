@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -124,5 +125,55 @@ func TestAiringDelayFormatting(t *testing.T) {
 	}
 	if got := formatTimeUntilAiring(0); got != "" {
 		t.Errorf("expected no countdown, got %q", got)
+	}
+}
+
+// The same situation reached two ways -- finishing an episode, or picking the
+// show again from the list a day later -- has to answer the same. The second
+// route used to search every provider and fail on an episode that does not exist
+// yet, which reads as a broken tool rather than as being caught up.
+func TestUnairedEpisodeOffersToTryAnyway(t *testing.T) {
+	withTrackedAnime(t, airingEntry(201514, 11, int(4*24*time.Hour/time.Second)))
+	availability := nextEpisodeAiring(&Anime{AnilistId: 201514, TotalEpisodes: 12}, 11)
+
+	var shown []SelectionOption
+	withPromptSelect(t, func(options []SelectionOption) (SelectionOption, error) {
+		shown = options
+		return SelectionOption{Key: "wait"}, nil
+	})
+
+	if confirmUnairedEpisode(&CurdConfig{}, 11, availability) {
+		t.Error("choosing Done must not start a search")
+	}
+
+	// The escape hatch matters: the schedule comes from a cached list, so an
+	// episode that aired an hour ago can still read as upcoming, and a flat
+	// refusal would have curd overruling the user on something it half knows.
+	var keys []string
+	for _, option := range shown {
+		keys = append(keys, option.Key)
+	}
+	if !strings.Contains(strings.Join(keys, ","), "try") {
+		t.Fatalf("expected a way to look anyway, got options %v", keys)
+	}
+
+	withPromptSelect(t, func(options []SelectionOption) (SelectionOption, error) {
+		return SelectionOption{Key: "try"}, nil
+	})
+	if !confirmUnairedEpisode(&CurdConfig{}, 11, availability) {
+		t.Error("choosing to look anyway must proceed")
+	}
+}
+
+// A menu that cannot be shown must not be read as permission to continue.
+func TestUnairedEpisodePromptFailureDoesNotProceed(t *testing.T) {
+	withTrackedAnime(t, airingEntry(201514, 11, 3600))
+	availability := nextEpisodeAiring(&Anime{AnilistId: 201514, TotalEpisodes: 12}, 11)
+
+	withPromptSelect(t, func(options []SelectionOption) (SelectionOption, error) {
+		return SelectionOption{}, errors.New("no display")
+	})
+	if confirmUnairedEpisode(&CurdConfig{}, 11, availability) {
+		t.Error("a failed prompt must not be treated as consent to search")
 	}
 }

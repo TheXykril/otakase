@@ -1271,6 +1271,18 @@ func StartCurd(userCurdConfig *CurdConfig, anime *Anime) string {
 		exitWithRestore(1)
 	}
 
+	// Reaching here for an episode that has not been broadcast means the user is
+	// caught up. Searching every provider for it produces a failure that reads as
+	// a broken tool, so say what is actually the case first. This is the same
+	// answer the end-of-episode prompt gives; picking the show again from the
+	// list a day later arrives by a different route and deserves the same one.
+	if availability := nextEpisodeAiring(anime, anime.Ep.Number); !availability.Aired {
+		if !confirmUnairedEpisode(userCurdConfig, anime.Ep.Number, availability) {
+			RestoreScreen()
+			return ""
+		}
+	}
+
 	if (anime.Ep.NextEpisode.Number == anime.Ep.Number) && (len(anime.Ep.NextEpisode.Links) > 0) {
 		anime.Ep.Links = anime.Ep.NextEpisode.Links
 		anime.Ep.StreamReferrer = ""
@@ -1506,8 +1518,7 @@ func NextEpisodePromptCLI(userCurdConfig *CurdConfig) bool {
 	// been broadcast, since choosing it can only fail.
 	if !isLastKnownEpisode {
 		if availability := nextEpisodeAiring(anime, nextEpisodeNum); !availability.Aired {
-			CurdOut(unairedEpisodeNotice(nextEpisodeNum, availability) + ". You are caught up.")
-			return false
+			return confirmUnairedEpisode(userCurdConfig, nextEpisodeNum, availability)
 		}
 	}
 
@@ -1649,18 +1660,7 @@ func NextEpisodePromptRofi(userCurdConfig *CurdConfig) bool {
 	// than an episode that has not been broadcast.
 	if !isLastKnownEpisode {
 		if availability := nextEpisodeAiring(anime, nextEpisodeNum); !availability.Aired {
-			notice := unairedEpisodeNotice(nextEpisodeNum, availability)
-			Log(fmt.Sprintf("Next episode prompt: %s", notice))
-			_, err := RofiSelectWithMessage(
-				[]SelectionOption{{Key: "-1", Label: "Done"}},
-				false,
-				"Caught up",
-				notice,
-			)
-			if err != nil {
-				Log(fmt.Sprintf("Error showing unaired episode notice: %v", err))
-			}
-			return false
+			return confirmUnairedEpisode(userCurdConfig, nextEpisodeNum, availability)
 		}
 	}
 

@@ -71,3 +71,39 @@ func unairedEpisodeNotice(number int, availability nextEpisodeAvailability) stri
 	}
 	return fmt.Sprintf("Episode %d has not aired yet", number)
 }
+
+// confirmUnairedEpisode reports an episode the tracker says is still to come and
+// asks whether to look for it regardless. It answers true to go ahead.
+//
+// There is an escape hatch rather than a flat refusal because the schedule is
+// read from a cached list: an episode that aired an hour ago can still be listed
+// as upcoming, and refusing outright would mean curd knowing better than the
+// user about something it only half knows. Choosing to try lands exactly where
+// this used to land on its own -- a provider search that may fail -- which is no
+// worse than the behaviour it replaces.
+func confirmUnairedEpisode(config *CurdConfig, number int, availability nextEpisodeAvailability) bool {
+	notice := unairedEpisodeNotice(number, availability)
+	Log(fmt.Sprintf("Episode availability: %s", notice))
+
+	options := []SelectionOption{
+		{Key: "wait", Label: "Done"},
+		{Key: "try", Label: fmt.Sprintf("Look for episode %d anyway", number)},
+	}
+
+	if config != nil && config.RofiSelection {
+		selected, err := RofiSelectWithMessage(options, false, "Caught up", notice)
+		if err != nil {
+			Log(fmt.Sprintf("Error showing the unaired episode notice: %v", err))
+			return false
+		}
+		return selected.Key == "try"
+	}
+
+	CurdOut(notice + ". You are caught up.")
+	selected, err := promptSelectOrdered(options)
+	if err != nil {
+		Log(fmt.Sprintf("Error showing the unaired episode notice: %v", err))
+		return false
+	}
+	return selected.Key == "try"
+}

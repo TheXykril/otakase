@@ -20,10 +20,19 @@
   of an episode, where a prompt that paused on a lookup would be worse than one
   that occasionally cannot say.
 
-  When the schedule is unknown the episode is still offered: refusing one the
+  Both routes into that situation answer the same way — finishing an episode, or
+  coming back a day later and picking the show from the list, which used to
+  search every provider before failing.
+
+  There is still a way through: the schedule comes from a cached list, so an
+  episode that aired an hour ago can read as upcoming, and a flat refusal would
+  have curd overruling the user on something it only half knows. Choosing to look
+  anyway lands exactly where this used to land by itself.
+
+  When the schedule is unknown the episode is offered as before: refusing one the
   user could have watched is the worse mistake, and a failed lookup is exactly
-  what happened before anyway. A countdown is shown only for the immediately next
-  episode, since a later one airs later still and reusing the wait would
+  what happened previously anyway. A countdown is shown only for the immediately
+  next episode, since a later one airs later still and reusing the wait would
   understate it.
 
 - **Curd says when it is starting, if starting takes a while.** Launched from a
