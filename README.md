@@ -26,6 +26,9 @@ Works on Linux, MacOS and Windows.
 > | Watch history filed a provider's show id under the *first configured* provider's name, so one host's id was handed to another forever after | The name written now belongs to the id beside it, and a stored id that fails is re-derived instead of believed |
 > | Dual tracking (`anilist+myanimelist`) failed to launch: unthrottled writes hit a rate limit, and MyAnimeList's redirect to a dead endpoint was followed | Both loops are paced, API requests no longer follow redirects, and one unwritable entry is skipped rather than aborting the sync |
 > | A stream whose CDN wanted an `Origin` header played nothing — the manifest opened, then every segment returned 403 | Providers can require arbitrary HTTP headers, which are passed through to MPV |
+> | Finishing an episode could lose it: MPV ran past the end onto a playlist placeholder, curd chased that as a request for episode 1, and the failed switch had already cleared the progress it needed to record | Running off the end ends playback instead, the playlist follows the audio actually playing, and a switch that fails restores everything it cleared |
+> | Dual tracking (`anilist+myanimelist`) silently lost every show's broadcast schedule — only AniList reports one, and the merge dropped it whenever the MyAnimeList entry was fresher | Carried across the merge like every other field only one side knows, so countdowns and "caught up" work on both trackers |
+> | Menus never displayed the sentence explaining them — the theme omitted rofi's `message` widget, so `-mesg` was silently discarded | Drawn, dimmed, above a hairline |
 >
 > **Also new:**
 >
@@ -43,6 +46,9 @@ Works on Linux, MacOS and Windows.
 > - **A show carried in only one language just plays.** Reaching the other audio
 >   took two menus for a question with one useful answer; curd now switches and
 >   says so (`No dub for episode 7 — playing sub`). See `AutoAudioFallback`.
+> - **Being caught up says so**, instead of offering an episode that has not
+>   aired and then failing to find it — `Episode 11 airs in 2d`, with the option
+>   to look anyway in case the cached schedule is behind.
 > - `curd -download` saves episodes instead of streaming them — the most-requested
 >   missing feature upstream ([#104](https://github.com/Wraient/curd/issues/104),
 >   [#55](https://github.com/Wraient/curd/issues/55)).
