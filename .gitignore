@@ -1,4 +1,0 @@
-# Session state from AI coding tools. Never part of the source, and easy to
-# sweep in with `git add -A` -- which is how .opencode/ first landed here.
-.opencode/
-.claude/
