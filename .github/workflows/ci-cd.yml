@@ -59,12 +59,15 @@ jobs:
 
       # Everything below this point builds platforms only a release needs.
       #
-      # GitHub bills macOS runners at 10x the Linux rate and Windows at 2x, and
-      # every push was building all five targets plus a macOS universal binary.
-      # A day of ordinary iteration exhausted the account's Actions allowance and
-      # disabled workflows entirely. An ordinary push now proves the code with
-      # vet, the test suite and a Linux build; the full matrix runs when a
-      # release is actually being cut.
+      # curd is a Linux desktop tool, so a Linux build is what actually gates a
+      # change. Cross-compiling the macOS and Windows targets on every push cost
+      # several minutes each time and proved nothing nobody was waiting on, so
+      # they are keyed off the same "release:" marker the release job uses. An
+      # ordinary push proves the code with vet, the test suite and a Linux build;
+      # the full set of assets is produced when a release is actually being cut.
+      #
+      # These are Go cross-compiles running on this ubuntu-latest job. They do
+      # not start a macOS runner, and never did.
       - name: Build macOS x86_64 binary
         if: env.RELEASE_BUILD == 'true'
         run: |
