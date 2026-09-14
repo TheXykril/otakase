@@ -153,7 +153,7 @@ jobs:
           set -euo pipefail
 
           {
-            printf '%s\n' '# Maintainer: TheXykril <pijus.skirmantas@gmail.com>'
+            printf '%s\n' '# Maintainer: TheXykril <48257623+TheXykril@users.noreply.github.com>'
             printf '%s\n' "pkgname='curd'"
             printf '%s\n' "pkgver=${{ steps.release.outputs.version }}"
             printf '%s\n' 'pkgrel=1'

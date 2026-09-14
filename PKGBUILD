@@ -1,4 +1,4 @@
-# Maintainer: TheXykril <pijus.skirmantas@gmail.com>
+# Maintainer: TheXykril <48257623+TheXykril@users.noreply.github.com>
 # Fork of Wraient/curd with provider resolution fixes.
 pkgname='curd'
 pkgver=2.4.0
