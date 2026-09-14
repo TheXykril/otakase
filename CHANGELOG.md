@@ -4,6 +4,31 @@
 
 ### Added
 
+- **Launching no longer waits for both trackers to be reconciled.** With
+  `TrackingRemote=anilist+myanimelist`, every launch pushed the differences
+  between the two services before the first menu could appear — one paced write
+  per entry. That difference is not small and does not shrink on its own: 78
+  entries present on AniList but not on MyAnimeList were re-sent every time,
+  around half a minute of waiting to push a planning list nobody was about to
+  watch.
+
+  Measured rather than guessed, after the obvious suspects turned out innocent:
+
+  ```
+  Reading your AniList list          5ms
+  Reading your MyAnimeList list      5ms
+  Reconciling both trackers      53.11s      <- all of it
+  ```
+
+  The merge itself is local and instant, and nothing on screen depends on the
+  writes having finished — the merged list is already what curd shows. So the
+  writes now run behind the menu instead of in front of it. Ordering stays safe:
+  these are catch-up writes for entries that differed at launch, and anything
+  done during the session is written later by definition.
+
+  Startup also reports where its time went, so a slow launch names the step that
+  spent it instead of being a minute of silence.
+
 - **Being caught up now says so, instead of failing.** After the last aired
   episode, the prompt offered the next one — which does not exist yet, so
   choosing it searched every provider and returned a failure that read as though

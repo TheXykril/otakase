@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# Runs what the CI/CD pipeline gates a push on, locally.
+#
+# Actions is disabled account-wide (not for anything this repository did -- see
+# the note on the release-target gating in .github/workflows/ci-cd.yml), so no
+# push has been verified by CI since 2026-09-05. This is the same gate, run by
+# hand: vet, the test suite under -race, and both Linux builds.
+#
+# Keep in step with the `build` job in .github/workflows/ci-cd.yml.
+#
+#   ./Build/ci-local          vet, test, build
+#   ./Build/ci-local --quick  vet and test only
+
+set -uo pipefail
+
+cd "$(dirname "$0")/.." || exit 1
+
+QUICK=0
+[[ "${1:-}" == "--quick" || "${1:-}" == "-q" ]] && QUICK=1
+
+if ! command -v go >/dev/null 2>&1; then
+    printf '\033[31mgo is not installed.\033[0m  sudo pacman -S --needed go\n' >&2
+    exit 127
+fi
+
+FAILED=()
+
+step() {
+    local name="$1"; shift
+    printf '\033[1;34m==>\033[0m %s\n' "$name"
+    local start elapsed
+    start=$(date +%s)
+    if "$@"; then
+        elapsed=$(( $(date +%s) - start ))
+        printf '\033[32m    ok\033[0m (%ss)\n\n' "$elapsed"
+        return 0
+    fi
+    elapsed=$(( $(date +%s) - start ))
+    printf '\033[31m    FAILED\033[0m (%ss)\n\n' "$elapsed"
+    FAILED+=("$name")
+    return 1
+}
+
+# CI runs `go mod tidy` before anything else. It rewrites go.mod and go.sum in
+# place, so say when it changed something rather than letting it pass silently.
+before=$(sha1sum go.mod go.sum 2>/dev/null)
+step "go mod tidy" go mod tidy
+if [[ "$(sha1sum go.mod go.sum 2>/dev/null)" != "$before" ]]; then
+    printf '\033[33m    note: go mod tidy modified go.mod/go.sum -- commit that.\033[0m\n\n'
+fi
+
+step "go vet ./..." go vet ./...
+
+# -short skips the live provider tests, which depend on third-party hosts being
+# up and so cannot gate a build. Same flag CI uses.
+step "go test -short -race ./..." go test -short -race ./...
+
+if (( QUICK == 0 )); then
+    if step "Build/buildlinux" ./Build/buildlinux; then
+        mkdir -p release/linux
+        mv -f curd-linux-x86_64 curd-linux-arm64 release/linux/ 2>/dev/null
+        printf '    binaries -> release/linux/\n\n'
+    fi
+fi
+
+if (( ${#FAILED[@]} == 0 )); then
+    printf '\033[1;32mAll checks passed.\033[0m This is what CI would have gated on.\n'
+    exit 0
+fi
+
+printf '\033[1;31mFailed:\033[0m %s\n' "${FAILED[*]}"
+exit 1

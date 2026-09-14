@@ -677,45 +677,18 @@ func syncDualRemoteTrackers(config *CurdConfig, aniListToken string, aniListUser
 		return AnimeList{}, fmt.Errorf("missing tracker users")
 	}
 
-	failures := 0
+	// The merge is local and instant; the writes it implies are neither, and
+	// nothing on screen waits for them -- the merged list below is already what
+	// Curd shows. So they are handed to the background and the launch continues.
 	plan := buildDualRemoteSyncPlan(aniListUser.AnimeList, myAnimeListUser.AnimeList)
-	// Each write is paced, so the plan size is the launch cost: a hundred
-	// entries is most of a minute before the first menu appears.
-	Log(fmt.Sprintf("Dual sync: %d AniList and %d MyAnimeList updates to write",
+	Log(fmt.Sprintf("Dual sync: %d AniList and %d MyAnimeList update(s) queued",
 		len(plan.AniListUpdates), len(plan.MyAnimeListUpdates)))
-	for index, entry := range plan.AniListUpdates {
-		if index > 0 {
-			time.Sleep(remoteTrackerWriteDelay)
-		}
-		if err := saveAniListTrackedEntry(aniListToken, entry); err != nil {
-			Log(fmt.Sprintf("Dual sync: AniList update for %q failed: %v", mediaDisplayTitle(entry.Media, config), err))
-			failures++
-			continue
-		}
-	}
-	// The MyAnimeList loop had no delay at all while the AniList one above slept
-	// between writes. A first dual sync can be well over a hundred entries -- 180
-	// on a real library -- and firing those back to back gets the account rate
-	// limited, at which point MyAnimeList answers with a redirect to
-	// /error.json that never completes, so startup hung and the launch failed.
-	for index, entry := range plan.MyAnimeListUpdates {
-		if index > 0 {
-			time.Sleep(remoteTrackerWriteDelay)
-		}
-		if err := saveMyAnimeListTrackedEntry(config, entry); err != nil {
-			// One entry that cannot be written must not cost the user their
-			// launch: an anime missing from MyAnimeList, or a single rejected
-			// write, previously aborted the whole sync.
-			Log(fmt.Sprintf("Dual sync: MyAnimeList update for %q failed: %v", mediaDisplayTitle(entry.Media, config), err))
-			failures++
-			continue
-		}
-	}
 
-	if failures > 0 {
-		CurdOut(fmt.Sprintf("Dual tracking: %d of %d updates could not be synced; see the log.",
-			failures, len(plan.AniListUpdates)+len(plan.MyAnimeListUpdates)))
-	}
+	startDualSyncWrites(config, dualSyncWrites{
+		aniListToken: aniListToken,
+		aniList:      plan.AniListUpdates,
+		myAnimeList:  plan.MyAnimeListUpdates,
+	})
 
 	aniListUser.AnimeList = plan.Merged
 	myAnimeListUser.AnimeList = plan.Merged
@@ -727,7 +700,6 @@ func syncDualRemoteTrackers(config *CurdConfig, aniListToken string, aniListUser
 	}
 	return plan.Merged, nil
 }
-
 func InitializeCombinedRemoteAnimeList(config *CurdConfig, user *User) error {
 	aniListToken, err := GetTokenFromFile(filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json"))
 	if err != nil {
