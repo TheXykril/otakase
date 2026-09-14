@@ -729,23 +729,30 @@ func InitializeCombinedRemoteAnimeList(config *CurdConfig, user *User) error {
 	if err != nil {
 		return err
 	}
+	StartupStage("Signing in to MyAnimeList")
 	myAnimeListToken, err := GetMyAnimeListAccessToken(config)
 	if err != nil {
 		return err
 	}
 
+	StartupStage("Reading your AniList list")
 	aniListUser := &User{Token: aniListToken}
 	if err := InitializeAniListUserAnimeList(config, aniListUser); err != nil {
 		return err
 	}
+
+	StartupStage("Reading your MyAnimeList list")
 	myAnimeListUser := &User{Token: myAnimeListToken}
 	if err := InitializeMyAnimeListUserAnimeList(config, myAnimeListUser); err != nil {
 		return err
 	}
+
+	StartupStage("Checking MyAnimeList import")
 	if err := maybeImportAniListToMyAnimeList(config, myAnimeListUser); err != nil {
 		return err
 	}
 
+	StartupStage("Reconciling both trackers")
 	merged, err := syncDualRemoteTrackers(config, aniListToken, aniListUser, myAnimeListUser)
 	if err != nil {
 		return err

@@ -46,6 +46,11 @@ var (
 // BeginStartupProgress starts reporting a slow launch. It is a no-op when Curd
 // is running in a terminal, where its output is already visible.
 func BeginStartupProgress(config *CurdConfig, stage string) {
+	// The clock runs regardless of how Curd was launched: a slow start is worth
+	// recording in a terminal too, where it is merely visible rather than
+	// mysterious.
+	beginStartupClock(stage)
+
 	if config == nil || !config.RofiSelection {
 		return
 	}
@@ -67,6 +72,8 @@ func BeginStartupProgress(config *CurdConfig, stage string) {
 
 // StartupStage updates what the launch is currently waiting on.
 func StartupStage(stage string) {
+	recordStartupStageTiming(stage)
+
 	startupMu.Lock()
 	progress := activeStartup
 	startupMu.Unlock()
@@ -78,10 +85,61 @@ func StartupStage(stage string) {
 	progress.mu.Unlock()
 }
 
+// A slow launch is hard to argue about from the outside: the only evidence is
+// that nothing happens for a while. Timing each stage into the log turns "curd
+// takes a minute" into a line naming which step spent it, and costs one
+// timestamp per stage.
+var (
+	startupClockMu    sync.Mutex
+	startupClockBegan time.Time
+	startupClockLast  time.Time
+	startupClockStage string
+)
+
+func beginStartupClock(stage string) {
+	now := time.Now()
+	startupClockMu.Lock()
+	defer startupClockMu.Unlock()
+	startupClockBegan, startupClockLast, startupClockStage = now, now, stage
+}
+
+func recordStartupStageTiming(stage string) {
+	now := time.Now()
+	startupClockMu.Lock()
+	previous, last, began := startupClockStage, startupClockLast, startupClockBegan
+	startupClockLast, startupClockStage = now, stage
+	startupClockMu.Unlock()
+
+	if began.IsZero() || previous == "" {
+		return
+	}
+	Log(fmt.Sprintf("Startup timing: %q took %s (%s since launch)",
+		previous, now.Sub(last).Round(time.Millisecond), now.Sub(began).Round(time.Millisecond)))
+}
+
+// reportStartupTotal closes the timing record when the first menu appears.
+func reportStartupTotal() {
+	now := time.Now()
+	startupClockMu.Lock()
+	previous, last, began := startupClockStage, startupClockLast, startupClockBegan
+	startupClockBegan, startupClockStage = time.Time{}, ""
+	startupClockMu.Unlock()
+
+	if began.IsZero() {
+		return
+	}
+	if previous != "" {
+		Log(fmt.Sprintf("Startup timing: %q took %s", previous, now.Sub(last).Round(time.Millisecond)))
+	}
+	Log(fmt.Sprintf("Startup timing: ready after %s", now.Sub(began).Round(time.Millisecond)))
+}
+
 // EndStartupProgress stops reporting. It is safe to call more than once, and is
 // called from the menus themselves: a visible menu is its own proof that Curd
 // started, and any message still on screen at that point is stale.
 func EndStartupProgress() {
+	reportStartupTotal()
+
 	startupMu.Lock()
 	progress := activeStartup
 	activeStartup = nil
