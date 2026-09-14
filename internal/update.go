@@ -22,7 +22,9 @@ import (
 )
 
 const (
-	defaultUpdateRepo          = "TheXykril/curd"
+	// DefaultUpdateRepo is the fork every update path pulls from: the
+	// background check, the next-launch prompt, and `curd -u` alike.
+	DefaultUpdateRepo          = "TheXykril/curd"
 	updatePendingFileName      = "update_pending.json"
 	backgroundUpdateIdleDelay  = 4 * time.Second
 	defaultRemindLaterDuration = 24 * time.Hour
@@ -141,7 +143,7 @@ func truncateReleaseNotes(notes string) string {
 
 func fetchLatestGitHubRelease(repo string) (githubReleaseAPI, error) {
 	if strings.TrimSpace(repo) == "" {
-		repo = defaultUpdateRepo
+		repo = DefaultUpdateRepo
 	}
 	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -211,7 +213,7 @@ func checkForUpdateInBackground(config *CurdConfig, currentVersion string) error
 		}
 	}
 
-	release, err := fetchLatestGitHubRelease(defaultUpdateRepo)
+	release, err := fetchLatestGitHubRelease(DefaultUpdateRepo)
 	if err != nil {
 		return err
 	}
@@ -478,7 +480,7 @@ func refreshUpdateStateFromGitHub(state *updatePendingState) {
 	if state == nil {
 		return
 	}
-	release, err := fetchLatestGitHubRelease(defaultUpdateRepo)
+	release, err := fetchLatestGitHubRelease(DefaultUpdateRepo)
 	if err != nil {
 		Log(fmt.Sprintf("Could not refresh release notes from GitHub: %v", err))
 		return
@@ -577,7 +579,7 @@ func HandlePendingUpdatePrompt(config *CurdConfig, currentVersion string) bool {
 	switch selected.Key {
 	case "update":
 		updateUserMessage(config, "Downloading and installing update…")
-		if err := UpdateCurd(defaultUpdateRepo, "curd"); err != nil {
+		if err := UpdateCurd(DefaultUpdateRepo, "curd"); err != nil {
 			updateUserMessage(config, fmt.Sprintf("Update failed: %v", err))
 			Log(fmt.Sprintf("Update failed: %v", err))
 			return false

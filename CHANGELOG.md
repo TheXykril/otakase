@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`curd -u` updated from the upstream repository instead of this fork.**
+  Every other update path — the background check, the next-launch prompt — already
+  read `TheXykril/curd`, but the flag passed `wraient/curd` explicitly, so asking
+  curd to update itself replaced a forked build with an upstream one that has
+  none of its providers or fixes. The repository now lives in a single exported
+  constant that all three paths share, and a test fails if any of them names a
+  repository of its own again.
+
+- **Generated release notes listed the whole project history under stale names.**
+  The notes step called `git tag --sort=… "v*"`, which tries to *create* a tag
+  rather than list one; it failed, no previous tag was found, and the commit
+  range fell back to the root commit — 563 commits, every upstream contributor's
+  work reprinted on each release. Separately, the author lookup authenticated
+  with a secret this repository does not define, so every request was rejected
+  and the notes fell back to the commit's git author name, reviving an account
+  name that was renamed long ago. Both are fixed, and a failed lookup now warns
+  instead of quietly publishing the wrong name.
+
 ## 2.4.0 — 2026-09-14
 
 ### Added

@@ -407,7 +407,7 @@ func UpdateCurd(repo, fileName string) error {
 	_ = fileName // retained for call-site compatibility
 
 	if strings.TrimSpace(repo) == "" {
-		repo = defaultUpdateRepo
+		repo = DefaultUpdateRepo
 	}
 	// GitHub release URL for curd
 	url := fmt.Sprintf("https://github.com/%s/releases/latest/download/%s", repo, binaryName)

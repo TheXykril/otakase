@@ -156,7 +156,7 @@ func main() {
 	internal.SetGlobalConfig(&userCurdConfig)
 
 	if *updateScript {
-		repo := "wraient/curd"
+		repo := internal.DefaultUpdateRepo
 		fileName := "curd"
 
 		if err := internal.UpdateCurd(repo, fileName); err != nil {
