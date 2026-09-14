@@ -679,6 +679,10 @@ func syncDualRemoteTrackers(config *CurdConfig, aniListToken string, aniListUser
 
 	failures := 0
 	plan := buildDualRemoteSyncPlan(aniListUser.AnimeList, myAnimeListUser.AnimeList)
+	// Each write is paced, so the plan size is the launch cost: a hundred
+	// entries is most of a minute before the first menu appears.
+	Log(fmt.Sprintf("Dual sync: %d AniList and %d MyAnimeList updates to write",
+		len(plan.AniListUpdates), len(plan.MyAnimeListUpdates)))
 	for index, entry := range plan.AniListUpdates {
 		if index > 0 {
 			time.Sleep(remoteTrackerWriteDelay)
@@ -758,6 +762,7 @@ func InitializeCombinedRemoteAnimeList(config *CurdConfig, user *User) error {
 		return err
 	}
 
+	StartupStage("Building the menu")
 	user.Token = aniListToken
 	user.AnimeList = merged
 	user.ListSync = NewAnimeListSync(user.AnimeList)
