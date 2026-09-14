@@ -213,7 +213,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
 
           $repo = "${{ github.repository }}"
-          $token = "${{ secrets.ACTIONS_PAT }}"
+          $token = "${{ secrets.GITHUB_TOKEN }}"
           $headers = @{
             Authorization = "Bearer $token"
             Accept = "application/vnd.github+json"
@@ -221,7 +221,7 @@ jobs:
           }
 
           $currentTag = "v$env:CURD_VERSION"
-          $tags = @(git tag --sort=-version:refname "v*")
+          $tags = @(git tag -l "v*" --sort=-version:refname)
           $previousTag = $null
           foreach ($tag in $tags) {
             if ($tag -ne $currentTag) {
@@ -291,6 +291,10 @@ jobs:
                 $login = $commitData.author.login
               }
             } catch {
+              # Falling back here prints the historical git author name, which
+              # for renamed accounts is the old one -- so say it out loud
+              # rather than quietly publishing a stale name.
+              Write-Warning "Could not resolve the GitHub account for $sha; using the commit's author name."
               $login = $null
             }
 
@@ -383,4 +387,4 @@ jobs:
             releases/curd-${{ env.CURD_VERSION }}/windows/curd-windows-x86_64.exe
             Build/Output/curd-windows-installer.exe
         env:
-          GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
