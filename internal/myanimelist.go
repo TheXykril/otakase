@@ -225,20 +225,17 @@ func myAnimeListClientCredentials(config *CurdConfig) (string, string) {
 		return "", ""
 	}
 
+	// CURD_MAL_* is what these were called before the rename. Anyone who set
+	// them in a shell profile would otherwise be silently logged out of
+	// MyAnimeList by an update, so the old names still work.
 	clientID := strings.TrimSpace(config.MyAnimeListClientID)
 	if clientID == "" {
-		clientID = strings.TrimSpace(os.Getenv("CURD_MAL_CLIENT_ID"))
-	}
-	if clientID == "" {
-		clientID = strings.TrimSpace(os.Getenv("MYANIMELIST_CLIENT_ID"))
+		clientID = firstEnv("OTAKASE_MAL_CLIENT_ID", "CURD_MAL_CLIENT_ID", "MYANIMELIST_CLIENT_ID")
 	}
 
 	clientSecret := strings.TrimSpace(config.MyAnimeListClientSecret)
 	if clientSecret == "" {
-		clientSecret = strings.TrimSpace(os.Getenv("CURD_MAL_CLIENT_SECRET"))
-	}
-	if clientSecret == "" {
-		clientSecret = strings.TrimSpace(os.Getenv("MYANIMELIST_CLIENT_SECRET"))
+		clientSecret = firstEnv("OTAKASE_MAL_CLIENT_SECRET", "CURD_MAL_CLIENT_SECRET", "MYANIMELIST_CLIENT_SECRET")
 	}
 
 	return clientID, clientSecret
@@ -1306,4 +1303,14 @@ func maybeMarshalMALResponse(v interface{}) string {
 		return ""
 	}
 	return string(bytes.TrimSpace(body))
+}
+
+// firstEnv returns the first of names that is set to a non-empty value.
+func firstEnv(names ...string) string {
+	for _, name := range names {
+		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+			return value
+		}
+	}
+	return ""
 }

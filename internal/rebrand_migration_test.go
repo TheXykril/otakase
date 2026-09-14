@@ -118,3 +118,20 @@ func mustWrite(t *testing.T, path, body string) {
 		t.Fatal(err)
 	}
 }
+
+// The MyAnimeList credentials can come from the environment, and the variables
+// were named after the old program. Someone who set them in a shell profile
+// must not be silently signed out by an update, so the old names still work --
+// with the new ones winning when both are set.
+func TestLegacyMalEnvVarsStillWork(t *testing.T) {
+	t.Setenv("OTAKASE_MAL_CLIENT_ID", "")
+	t.Setenv("CURD_MAL_CLIENT_ID", "from-the-old-name")
+	if got := firstEnv("OTAKASE_MAL_CLIENT_ID", "CURD_MAL_CLIENT_ID"); got != "from-the-old-name" {
+		t.Errorf("a pre-rename environment stopped working: %q", got)
+	}
+
+	t.Setenv("OTAKASE_MAL_CLIENT_ID", "from-the-new-name")
+	if got := firstEnv("OTAKASE_MAL_CLIENT_ID", "CURD_MAL_CLIENT_ID"); got != "from-the-new-name" {
+		t.Errorf("the current name should win when both are set, got %q", got)
+	}
+}
