@@ -738,8 +738,63 @@ func InitializeCombinedRemoteAnimeList(config *CurdConfig, user *User) error {
 	user.Token = aniListToken
 	user.AnimeList = merged
 	user.ListSync = NewAnimeListSync(user.AnimeList)
-	user.ListSync.MarkRefreshDone()
+
+	// The merge above is built from two caches, because both trackers answer
+	// from cache and refresh behind us. Left there, the session would run
+	// entirely on stale data: an episode that aired an hour ago still reads as
+	// unreleased, and the list shows yesterday's progress. Worse, the refreshes
+	// do arrive -- into the two sub-lists, which nothing reads once the merged
+	// list replaces them.
+	//
+	// So merge again when they land, and only then call the launch refreshed.
+	// Playback waits on that (briefly, and with its own timeout), which is what
+	// a single-tracker setup has always done.
+	go refreshCombinedRemoteAnimeList(config, user, aniListUser, myAnimeListUser)
 	return nil
+}
+
+// combinedRefreshDeadline bounds the wait for both trackers. A refresh that
+// never answers must not leave the list permanently marked "refreshing", since
+// callers block on that.
+const combinedRefreshDeadline = 20 * time.Second
+
+// combinedRefreshDeadlineForTest lets a test exercise the give-up path without
+// spending the real deadline waiting for it.
+var combinedRefreshDeadlineForTest = combinedRefreshDeadline
+
+func refreshCombinedRemoteAnimeList(config *CurdConfig, user, aniListUser, myAnimeListUser *User) {
+	defer user.ListSync.MarkRefreshDone()
+
+	deadline := time.After(combinedRefreshDeadlineForTest)
+	for _, source := range []*User{aniListUser, myAnimeListUser} {
+		if source == nil || source.ListSync == nil {
+			continue
+		}
+		select {
+		case <-source.ListSync.RefreshDone():
+		case <-deadline:
+			Log("Combined refresh: a tracker did not answer in time; keeping the cached merge")
+			return
+		}
+	}
+
+	fresh := buildDualRemoteSyncPlan(aniListUser.ListSync.Current(), myAnimeListUser.ListSync.Current())
+	if animeListEqual(user.ListSync.Current(), fresh.Merged) {
+		return
+	}
+
+	// Published through ListSync only. Assigning user.AnimeList here would race
+	// with the launch reading it, and readers take it from ListSync.Current()
+	// anyway; notify so menus already on screen redraw.
+	user.ListSync.Replace(fresh.Merged, true)
+	Log("Combined refresh: merged list updated from both trackers")
+
+	if err := saveAniListAnimeListCache(config.StoragePath, aniListUser.Id, fresh.Merged); err != nil {
+		Log(fmt.Sprintf("Combined refresh: failed to save AniList cache: %v", err))
+	}
+	if err := saveMyAnimeListCache(config.StoragePath, myAnimeListUser.Id, fresh.Merged); err != nil {
+		Log(fmt.Sprintf("Combined refresh: failed to save MyAnimeList cache: %v", err))
+	}
 }
 
 func RefreshCombinedRemoteAnimeList(config *CurdConfig, user *User) error {

@@ -147,6 +147,19 @@
 
 ### Fixed
 
+- **Dual tracking ran the whole session on cached data.** Both trackers answer
+  from cache and refresh behind the launch, so the merged list dual tracking
+  shows was built from two caches. The refreshes did arrive — into the two
+  sub-lists, which nothing reads once the merged list replaces them. So an
+  episode that aired an hour ago still read as unreleased, and progress made on
+  another device did not appear until the next launch at the earliest.
+
+  The merge now happens again when both refreshes land, and the result is
+  published to any menu already on screen. The launch still shows the cached
+  merge immediately, so nothing got slower; a tracker that never answers is
+  given up on rather than leaving the list marked as still refreshing, which
+  playback waits on.
+
 - **Dual tracking silently lost every show's broadcast schedule.** Only AniList
   reports when the next episode airs; MyAnimeList has no equivalent. Merging the
   two lists backfilled titles, episode counts, status and duration from whichever
