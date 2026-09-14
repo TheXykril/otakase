@@ -22,7 +22,7 @@ import (
 // cannot be checked at runtime -- a wrong name is still a valid string -- so it
 // is pinned here at the call sites instead.
 func TestHistoryWritesPairTheIDWithItsOwnProvider(t *testing.T) {
-	source, err := os.ReadFile("../cmd/curd/main.go")
+	source, err := os.ReadFile("../cmd/otakase/main.go")
 	if err != nil {
 		t.Fatalf("read main.go: %v", err)
 	}

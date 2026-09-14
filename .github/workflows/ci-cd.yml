@@ -49,8 +49,8 @@ jobs:
         run: |
           ./Build/buildlinux
           mkdir -p release/linux
-          mv curd-linux-x86_64 release/linux/
-          mv curd-linux-arm64 release/linux/
+          mv otakase-linux-x86_64 release/linux/
+          mv otakase-linux-arm64 release/linux/
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_REF: ${{ github.ref }}
@@ -59,7 +59,7 @@ jobs:
 
       # Everything below this point builds platforms only a release needs.
       #
-      # curd is a Linux desktop tool, so a Linux build is what actually gates a
+      # otakase is a Linux desktop tool, so a Linux build is what actually gates a
       # change. Cross-compiling the macOS and Windows targets on every push cost
       # several minutes each time and proved nothing nobody was waiting on, so
       # they are keyed off the same "release:" marker the release job uses. An
@@ -90,18 +90,18 @@ jobs:
       - name: Create Universal macOS binary
         if: env.RELEASE_BUILD == 'true'
         run: |
-          ${{ env.LIPO_CMD }} -create "curd-macos-x86_64" "curd-macos-arm64" -output "curd-macos-universal"
+          ${{ env.LIPO_CMD }} -create "otakase-macos-x86_64" "otakase-macos-arm64" -output "otakase-macos-universal"
           mkdir -p release/macos
-          mv curd-macos-x86_64 release/macos
-          mv curd-macos-arm64 release/macos
-          mv curd-macos-universal release/macos
+          mv otakase-macos-x86_64 release/macos
+          mv otakase-macos-arm64 release/macos
+          mv otakase-macos-universal release/macos
 
       - name: Build Windows binary (cross-compile)
         if: env.RELEASE_BUILD == 'true'
         run: |
           ./Build/buildwindows
           mkdir -p release/windows
-          mv curd-windows-x86_64.exe release/windows/curd-windows-x86_64.exe
+          mv otakase-windows-x86_64.exe release/windows/otakase-windows-x86_64.exe
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_REF: ${{ github.ref }}
@@ -111,14 +111,14 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: curd-binaries
+          name: otakase-binaries
           # release/macos and release/windows only exist on a release build; the
           # glob tolerates their absence, and the release job needs them all.
           path: |
-            release/linux/curd-linux-x86_64
-            release/linux/curd-linux-arm64
-            release/macos/curd-macos-*
-            release/windows/curd-windows-x86_64.exe
+            release/linux/otakase-linux-x86_64
+            release/linux/otakase-linux-arm64
+            release/macos/otakase-macos-*
+            release/windows/otakase-windows-x86_64.exe
           retention-days: 1
           if-no-files-found: warn
 
@@ -167,14 +167,14 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: curd-binaries
+          name: otakase-binaries
           path: Build
 
       - name: Organize Release Files
         run: |
           $version = Get-Content VERSION.txt
-          echo "CURD_VERSION=$version" >> $env:GITHUB_ENV
-          $release_dir = "releases/curd-$version"
+          echo "OTAKASE_VERSION=$version" >> $env:GITHUB_ENV
+          $release_dir = "releases/otakase-$version"
 
           # Create directory structure
           New-Item -ItemType Directory -Force -Path "$release_dir/windows"
@@ -186,26 +186,26 @@ jobs:
           Get-ChildItem -Path "Build" -Recurse
 
           # Move files to their respective directories
-          Move-Item "Build/windows/curd-windows-x86_64.exe" "$release_dir/windows/"
-          Move-Item "Build/macos/curd-macos-universal" "$release_dir/macos/"
-          Move-Item "Build/macos/curd-macos-x86_64" "$release_dir/macos/"
-          Move-Item "Build/macos/curd-macos-arm64" "$release_dir/macos/"
-          Move-Item "Build/linux/curd-linux-x86_64" "$release_dir/linux/"
-          Move-Item "Build/linux/curd-linux-arm64" "$release_dir/linux/"
+          Move-Item "Build/windows/otakase-windows-x86_64.exe" "$release_dir/windows/"
+          Move-Item "Build/macos/otakase-macos-universal" "$release_dir/macos/"
+          Move-Item "Build/macos/otakase-macos-x86_64" "$release_dir/macos/"
+          Move-Item "Build/macos/otakase-macos-arm64" "$release_dir/macos/"
+          Move-Item "Build/linux/otakase-linux-x86_64" "$release_dir/linux/"
+          Move-Item "Build/linux/otakase-linux-arm64" "$release_dir/linux/"
           Copy-Item "Build/mpv/mpv.exe" "$release_dir/windows/"
         shell: pwsh
 
       - name: Update Inno Setup Script with New Version
         run: |
-          $iss_path = "Build/curd-windows-build.iss"
+          $iss_path = "Build/otakase-windows-build.iss"
           $content = Get-Content $iss_path
-          $content = $content -replace '^AppVersion=.*', "AppVersion=$env:CURD_VERSION"
+          $content = $content -replace '^AppVersion=.*', "AppVersion=$env:OTAKASE_VERSION"
           Set-Content $iss_path $content
         shell: pwsh
 
       - name: Create Windows Installer
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "Build\curd-windows-build.iss"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "Build\otakase-windows-build.iss"
         shell: pwsh
 
       - name: Build direct commit release notes
@@ -220,7 +220,7 @@ jobs:
             "X-GitHub-Api-Version" = "2022-11-28"
           }
 
-          $currentTag = "v$env:CURD_VERSION"
+          $currentTag = "v$env:OTAKASE_VERSION"
           $tags = @(git tag -l "v*" --sort=-version:refname)
           $previousTag = $null
           foreach ($tag in $tags) {
@@ -362,7 +362,7 @@ jobs:
           if ($previousTag) {
             $body += ""
             $body += "---"
-            $body += "_Diff range: [$previousTag..v$env:CURD_VERSION](https://github.com/$repo/compare/$previousTag...v$env:CURD_VERSION)_"
+            $body += "_Diff range: [$previousTag..v$env:OTAKASE_VERSION](https://github.com/$repo/compare/$previousTag...v$env:OTAKASE_VERSION)_"
           }
 
           $body | Set-Content -Path $notesPath -Encoding utf8
@@ -372,19 +372,19 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ env.CURD_VERSION }}"
-          name: "Curd v${{ env.CURD_VERSION }}"
+          tag_name: "v${{ env.OTAKASE_VERSION }}"
+          name: "Otakase v${{ env.OTAKASE_VERSION }}"
           draft: false
           prerelease: false
           generate_release_notes: true
           body_path: Build/release-notes-extra.md
           files: |
-            releases/curd-${{ env.CURD_VERSION }}/linux/curd-linux-x86_64
-            releases/curd-${{ env.CURD_VERSION }}/linux/curd-linux-arm64
-            releases/curd-${{ env.CURD_VERSION }}/macos/curd-macos-x86_64
-            releases/curd-${{ env.CURD_VERSION }}/macos/curd-macos-arm64
-            releases/curd-${{ env.CURD_VERSION }}/macos/curd-macos-universal
-            releases/curd-${{ env.CURD_VERSION }}/windows/curd-windows-x86_64.exe
-            Build/Output/curd-windows-installer.exe
+            releases/otakase-${{ env.OTAKASE_VERSION }}/linux/otakase-linux-x86_64
+            releases/otakase-${{ env.OTAKASE_VERSION }}/linux/otakase-linux-arm64
+            releases/otakase-${{ env.OTAKASE_VERSION }}/macos/otakase-macos-x86_64
+            releases/otakase-${{ env.OTAKASE_VERSION }}/macos/otakase-macos-arm64
+            releases/otakase-${{ env.OTAKASE_VERSION }}/macos/otakase-macos-universal
+            releases/otakase-${{ env.OTAKASE_VERSION }}/windows/otakase-windows-x86_64.exe
+            Build/Output/otakase-windows-installer.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

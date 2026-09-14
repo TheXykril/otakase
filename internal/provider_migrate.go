@@ -208,7 +208,7 @@ func MigrateOnVersionUpgrade(configPath string, config *CurdConfig, appVersion s
 
 	storagePath := os.ExpandEnv(config.StoragePath)
 	if storagePath == "" {
-		storagePath = filepath.Join(os.ExpandEnv("$HOME"), ".local", "share", "curd")
+		storagePath = filepath.Join(os.ExpandEnv("$HOME"), ".local", "share", AppName)
 	}
 
 	storedVersion := readStoredCurdVersion(storagePath)

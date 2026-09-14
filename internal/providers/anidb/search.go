@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // anidb.app renders browse results server-side as anchors of the form

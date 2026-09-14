@@ -1,6 +1,6 @@
 package anipub
 
-import "github.com/wraient/curd/internal/providers"
+import "github.com/thexykril/otakase/internal/providers"
 
 // Provider implements anipub.xyz catalog search and MegaPlay stream resolution.
 type Provider struct{}

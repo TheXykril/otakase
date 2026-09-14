@@ -3,9 +3,9 @@ package anipub
 import (
 	"fmt"
 
-	"github.com/wraient/curd/internal/curdhost"
-	"github.com/wraient/curd/internal/providers"
-	"github.com/wraient/curd/internal/providers/substyle"
+	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providers"
+	"github.com/thexykril/otakase/internal/providers/substyle"
 )
 
 func getEpisodeStreamsForMode(showID string, config providers.PlaybackConfig, epNo int) ([]string, map[string]providers.StreamPlaybackHint, error) {

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 func searchAnime(query, mode string) ([]providers.SelectionOption, error) {

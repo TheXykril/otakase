@@ -18,7 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // Monotonic request id for mpv JSON IPC so we can ignore interleaved events.

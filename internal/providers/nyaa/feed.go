@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wraient/curd/internal/curdhost"
+	"github.com/thexykril/otakase/internal/curdhost"
 )
 
 // feedURL is Nyaa's RSS endpoint. Category 1_2 is "Anime - English-translated",

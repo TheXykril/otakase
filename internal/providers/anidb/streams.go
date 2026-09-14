@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // language holds one entry of /api/frontend/episode/<id>/languages. Sub tracks are

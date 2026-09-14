@@ -100,7 +100,7 @@ func GetStoragePath() string {
 	if globalConfig != nil && globalConfig.StoragePath != "" {
 		return os.ExpandEnv(globalConfig.StoragePath)
 	}
-	return filepath.Join(os.ExpandEnv("$HOME"), ".local", "share", "curd")
+	return filepath.Join(os.ExpandEnv("$HOME"), ".local", "share", AppName)
 }
 
 // Default configuration values as a map
@@ -109,7 +109,7 @@ func defaultConfigMap() map[string]string {
 		"Player":                     "mpv",
 		"MpvArgs":                    "[]",
 		"MpvPlaybackStartTimeout":    "20",
-		"StoragePath":                "$HOME/.local/share/curd",
+		"StoragePath":                StoragePathDefault,
 		"AnimeNameLanguage":          "english",
 		"SubsLanguage":               "english",
 		"MenuOrder":                  "CURRENT,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER",
@@ -147,7 +147,7 @@ func defaultConfigMap() map[string]string {
 		"MyAnimeListImportDismissed": "false",
 		"ShowNewEpisodes":            "true",
 		"Theme":                      "auto",
-		"DownloadDir":                "$HOME/Downloads/curd",
+		"DownloadDir":                "$HOME/Downloads/" + AppName,
 	}
 }
 

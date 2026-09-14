@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wraient/curd/internal/curdhost"
+	"github.com/thexykril/otakase/internal/curdhost"
 )
 
 const maxSenshiSubtitleSize = 8 << 20

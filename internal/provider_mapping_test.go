@@ -3,7 +3,7 @@ package internal
 import (
 	"testing"
 
-	_ "github.com/wraient/curd/internal/loadproviders"
+	_ "github.com/thexykril/otakase/internal/loadproviders"
 )
 
 func TestProviderMappingSearchStateNextProvider(t *testing.T) {

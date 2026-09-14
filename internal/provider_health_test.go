@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 func withProviderHealthClock(t *testing.T) *time.Time {

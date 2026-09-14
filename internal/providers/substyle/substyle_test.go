@@ -3,8 +3,8 @@ package substyle_test
 import (
 	"testing"
 
-	"github.com/wraient/curd/internal/curdhost"
-	"github.com/wraient/curd/internal/providers/substyle"
+	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providers/substyle"
 )
 
 func TestChooseHardPromptsForSoftFallback(t *testing.T) {

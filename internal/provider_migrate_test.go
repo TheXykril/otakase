@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	_ "github.com/wraient/curd/internal/loadproviders"
+	_ "github.com/thexykril/otakase/internal/loadproviders"
 )
 
 func TestProviderSelectionOptionsUsesDefaultAndSingleProviders(t *testing.T) {

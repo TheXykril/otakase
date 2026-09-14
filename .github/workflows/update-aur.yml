@@ -1,18 +1,16 @@
-# DISABLED. This workflow publishes to the AUR, and it is inherited from
-# upstream, where it pushes to the `curd` package maintained by Wraient.
+# DISABLED. This workflow publishes to the AUR. It is inherited from upstream,
+# where it pushed to the `curd` package maintained by Wraient -- a package this
+# project does not own and must never push to. The guard below names a repository
+# that does not exist, so the job cannot run.
 #
-# This fork does not own that package and must not push to it. The guard below is
-# deliberately set to a repository that does not exist, so the job can never run.
+# The names below have been updated for the rename, and `otakase` was free on the
+# AUR when it was chosen, so step 1 may already be done. Still to do:
+#   1. Register `otakase` on the AUR under this account.
+#   2. Add that account's AUR SSH key as the AUR_SSH_PRIVATE_KEY secret.
+#   3. Change the guard to this repository.
 #
-# To enable AUR publishing for this fork you would need to:
-#   1. Register your own package on the AUR under a different name
-#      (`curd` is taken; `curd-polland-*` shows the convention for forks).
-#   2. Rewrite the clone URL and pkgname below to point at that package.
-#   3. Add an AUR SSH key to the repository as the AUR_SSH_PRIVATE_KEY secret.
-#   4. Change the guard to this repository.
-#
-# Until all four are done, leave this disabled: a release must not try to publish
-# to someone else's package.
+# Leave it disabled until all three are done. Publishing to a package you do not
+# own is the failure this guard exists to prevent.
 name: Update AUR Package
 
 on:
@@ -56,7 +54,7 @@ jobs:
             -o "$RELEASE_JSON"
 
           TAG_NAME="$(jq -r '.tag_name // empty' "$RELEASE_JSON")"
-          ASSET_URL="$(jq -r '.assets[] | select(.name=="curd-linux-x86_64") | .browser_download_url' "$RELEASE_JSON" | head -n1)"
+          ASSET_URL="$(jq -r '.assets[] | select(.name=="otakase-linux-x86_64") | .browser_download_url' "$RELEASE_JSON" | head -n1)"
 
           if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "null" ]; then
             echo "Could not resolve release tag from $RELEASE_API_URL"
@@ -65,7 +63,7 @@ jobs:
           fi
 
           if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
-            echo "Release ${TAG_NAME} does not contain asset: curd-linux-x86_64"
+            echo "Release ${TAG_NAME} does not contain asset: otakase-linux-x86_64"
             rm -f "$RELEASE_JSON"
             exit 1
           fi
@@ -95,7 +93,7 @@ jobs:
 
           install -m 700 -d ~/.ssh
           umask 077
-          KEY_FILE=~/.ssh/curd_aur_deploy
+          KEY_FILE=~/.ssh/otakase_aur_deploy
           RAW_KEY="$(printf '%s' "$AUR_SSH_PRIVATE_KEY" | tr -d '\r')"
 
           if printf '%s' "$RAW_KEY" | grep -q 'BEGIN [A-Z0-9 ]*PRIVATE KEY'; then
@@ -129,54 +127,54 @@ jobs:
               ;;
           esac
 
-          if ! ssh-keygen -y -f "$KEY_FILE" > ~/.ssh/curd_aur_deploy.pub 2>/dev/null; then
+          if ! ssh-keygen -y -f "$KEY_FILE" > ~/.ssh/otakase_aur_deploy.pub 2>/dev/null; then
             echo "AUR_SSH_PRIVATE_KEY is not a valid, unencrypted SSH private key"
             exit 1
           fi
 
           chmod 600 "$KEY_FILE"
-          chmod 644 ~/.ssh/curd_aur_deploy.pub
+          chmod 644 ~/.ssh/otakase_aur_deploy.pub
           ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
           echo "Validated deploy key format. Add the matching public key to the AUR account SSH keys."
 
       - name: Clone AUR repository
         env:
-          GIT_SSH_COMMAND: ssh -i ~/.ssh/curd_aur_deploy -o IdentitiesOnly=yes
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/otakase_aur_deploy -o IdentitiesOnly=yes
         run: |
           set -euo pipefail
-          git clone --depth 1 ssh://aur@aur.archlinux.org/curd.git aur-curd
+          git clone --depth 1 ssh://aur@aur.archlinux.org/otakase.git aur-otakase
 
       - name: Update AUR package files
-        working-directory: aur-curd
+        working-directory: aur-otakase
         run: |
           set -euo pipefail
 
           {
             printf '%s\n' '# Maintainer: TheXykril <48257623+TheXykril@users.noreply.github.com>'
-            printf '%s\n' "pkgname='curd'"
+            printf '%s\n' "pkgname='otakase'"
             printf '%s\n' "pkgver=${{ steps.release.outputs.version }}"
             printf '%s\n' 'pkgrel=1'
             printf '%s\n' 'pkgdesc="Watch anime in CLI with AniList Tracking, Discord RPC, Intro/Outro/Filler/Recap Skipping, etc."'
             printf '%s\n' "arch=('x86_64')"
-            printf '%s\n' 'url="https://github.com/TheXykril/curd"'
+            printf '%s\n' 'url="https://github.com/TheXykril/otakase"'
             printf '%s\n' "license=('GPL')"
             printf '%s\n' "depends=('mpv' 'rofi' 'ueberzugpp')"
-            printf '%s\n' "provides=('curd')"
+            printf '%s\n' "provides=('otakase')"
             printf '%s\n' "conflicts=('curd')"
-            printf '%s\n' 'source=("https://github.com/TheXykril/curd/releases/download/v${pkgver}/curd-linux-x86_64")'
+            printf '%s\n' 'source=("https://github.com/TheXykril/otakase/releases/download/v${pkgver}/otakase-linux-x86_64")'
             printf '%s\n' "sha256sums=('${{ steps.release.outputs.sha256 }}')"
             printf '\n'
             printf '%s\n' 'package() {'
-            printf '%s\n' '  install -Dm755 "$srcdir/curd-linux-x86_64" "$pkgdir/usr/bin/curd"'
+            printf '%s\n' '  install -Dm755 "$srcdir/otakase-linux-x86_64" "$pkgdir/usr/bin/otakase"'
             printf '%s\n' '}'
           } > PKGBUILD
 
           # Fail fast if checksum/source/install-target drift.
           grep -q '^source=(' PKGBUILD
           grep -q '^sha256sums=(' PKGBUILD
-          grep -q 'curd-linux-x86_64' PKGBUILD
-          grep -q 'install -Dm755 "\$srcdir/curd-linux-x86_64" "\$pkgdir/usr/bin/curd"' PKGBUILD
+          grep -q 'otakase-linux-x86_64' PKGBUILD
+          grep -q 'install -Dm755 "\$srcdir/otakase-linux-x86_64" "\$pkgdir/usr/bin/curd"' PKGBUILD
           bash -n PKGBUILD
 
           set +u
@@ -221,9 +219,9 @@ jobs:
           grep -Fq "sha256sums = ${{ steps.release.outputs.sha256 }}" .SRCINFO
 
       - name: Commit and push to AUR
-        working-directory: aur-curd
+        working-directory: aur-otakase
         env:
-          GIT_SSH_COMMAND: ssh -i ~/.ssh/curd_aur_deploy -o IdentitiesOnly=yes
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/otakase_aur_deploy -o IdentitiesOnly=yes
         run: |
           set -euo pipefail
 
@@ -242,5 +240,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          rm -f ~/.ssh/curd_aur_deploy
-          rm -f ~/.ssh/curd_aur_deploy.pub
+          rm -f ~/.ssh/otakase_aur_deploy
+          rm -f ~/.ssh/otakase_aur_deploy.pub

@@ -17,14 +17,14 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/wraient/curd/internal/theme"
+	"github.com/thexykril/otakase/internal/theme"
 	"golang.org/x/term"
 )
 
 const (
 	// DefaultUpdateRepo is the fork every update path pulls from: the
 	// background check, the next-launch prompt, and `curd -u` alike.
-	DefaultUpdateRepo          = "TheXykril/curd"
+	DefaultUpdateRepo          = "TheXykril/otakase"
 	updatePendingFileName      = "update_pending.json"
 	backgroundUpdateIdleDelay  = 4 * time.Second
 	defaultRemindLaterDuration = 24 * time.Hour
@@ -96,24 +96,24 @@ func curdReleaseBinaryName() (string, error) {
 	switch runtime.GOOS {
 	case "windows":
 		if runtime.GOARCH == "arm64" {
-			return "curd-windows-arm64.exe", nil
+			return "otakase-windows-arm64.exe", nil
 		}
-		return "curd-windows-x86_64.exe", nil
+		return "otakase-windows-x86_64.exe", nil
 	case "darwin":
 		switch runtime.GOARCH {
 		case "amd64":
-			return "curd-macos-x86_64", nil
+			return "otakase-macos-x86_64", nil
 		case "arm64":
-			return "curd-macos-arm64", nil
+			return "otakase-macos-arm64", nil
 		default:
-			return "curd-macos-universal", nil
+			return "otakase-macos-universal", nil
 		}
 	case "linux":
 		switch runtime.GOARCH {
 		case "amd64":
-			return "curd-linux-x86_64", nil
+			return "otakase-linux-x86_64", nil
 		case "arm64":
-			return "curd-linux-arm64", nil
+			return "otakase-linux-arm64", nil
 		default:
 			return "", fmt.Errorf("unsupported Linux architecture: %s", runtime.GOARCH)
 		}
@@ -151,7 +151,7 @@ func fetchLatestGitHubRelease(repo string) (githubReleaseAPI, error) {
 		return githubReleaseAPI{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "curd-update-check")
+	req.Header.Set("User-Agent", AppName+"-update-check")
 
 	client := sharedHTTPClient
 	if client == nil {
@@ -223,7 +223,7 @@ func checkForUpdateInBackground(config *CurdConfig, currentVersion string) error
 	state.LatestVersion = latest
 	state.ReleaseName = strings.TrimSpace(release.Name)
 	if state.ReleaseName == "" {
-		state.ReleaseName = "Curd " + latest
+		state.ReleaseName = DisplayName + " " + latest
 	}
 	state.ReleaseNotes = truncateReleaseNotes(release.Body)
 	state.HTMLURL = release.HTMLURL
@@ -412,7 +412,7 @@ func buildUpdatePromptMessageMode(currentVersion string, state updatePendingStat
 		var b strings.Builder
 		title := state.ReleaseName
 		if title == "" {
-			title = "Curd " + to
+			title = DisplayName + " " + to
 		}
 		b.WriteString(`<span foreground="#7CFC98" size="large"><b>🚀 ` + escapePango(title) + `</b></span>` + "\n")
 		b.WriteString(`<span foreground="#E6E6FA">Current </span>`)
@@ -444,7 +444,7 @@ func buildUpdatePromptMessageMode(currentVersion string, state updatePendingStat
 	var b strings.Builder
 	name := state.ReleaseName
 	if name == "" {
-		name = "Curd " + to
+		name = DisplayName + " " + to
 	}
 	b.WriteString(title.Render("🚀 "+name) + "\n")
 	b.WriteString(label.Render("Current ") + oldV.Render(from) + label.Render("  →  Latest ") + newV.Render(to) + "\n")
@@ -494,7 +494,7 @@ func refreshUpdateStateFromGitHub(state *updatePendingState) {
 	state.LatestVersion = latest
 	state.ReleaseName = strings.TrimSpace(release.Name)
 	if state.ReleaseName == "" {
-		state.ReleaseName = "Curd " + latest
+		state.ReleaseName = DisplayName + " " + latest
 	}
 	// Full markdown body from the GitHub release page (API `body` field).
 	// Do not seed/test stubs here — always prefer live API content when online.
@@ -517,8 +517,8 @@ func updateUserMessage(config *CurdConfig, msg string) {
 	Log(msg)
 	if config != nil && config.RofiSelection {
 		// One short desktop notification, not a barrage of CurdOut lines.
-		_ = exec.Command("notify-send", "-a", "Curd",
-			"-h", "string:x-canonical-private-synchronous:curd-update",
+		_ = exec.Command("notify-send", "-a", DisplayName,
+			"-h", "string:x-canonical-private-synchronous:"+AppName+"-update",
 			"Curd", msg).Run()
 		return
 	}
@@ -579,7 +579,7 @@ func HandlePendingUpdatePrompt(config *CurdConfig, currentVersion string) bool {
 	switch selected.Key {
 	case "update":
 		updateUserMessage(config, "Downloading and installing update…")
-		if err := UpdateCurd(DefaultUpdateRepo, "curd"); err != nil {
+		if err := UpdateCurd(DefaultUpdateRepo, AppName); err != nil {
 			updateUserMessage(config, fmt.Sprintf("Update failed: %v", err))
 			Log(fmt.Sprintf("Update failed: %v", err))
 			return false

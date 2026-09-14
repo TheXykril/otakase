@@ -3,8 +3,8 @@ package internal
 import (
 	"fmt"
 
-	"github.com/wraient/curd/internal/rofitheme"
-	"github.com/wraient/curd/internal/theme"
+	"github.com/thexykril/otakase/internal/rofitheme"
+	"github.com/thexykril/otakase/internal/theme"
 )
 
 // ApplyThemeFromConfig resolves the colour palette named by the config and

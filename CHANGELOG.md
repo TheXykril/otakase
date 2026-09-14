@@ -1,6 +1,36 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 — unreleased
+
+Curd is now **Otakase**, and the version resets to 1.0.0. Everything below this
+section is the curd-era history, kept because it is the record of what changed
+and why.
+
+### Changed
+
+- **Renamed.** The binary, the Arch package, the config directory and the
+  release assets are all `otakase`. The Go module is
+  `github.com/thexykril/otakase`.
+
+- **Version reset to 1.0.0.** The old numbering belonged to a different
+  project's line. Note that this reads as a downgrade to anything comparing
+  versions, so an existing curd install will not be offered this as an update —
+  moving over is a deliberate install, not an automatic one.
+
+- **An existing curd install is carried over on first launch.** The config,
+  the AniList/MyAnimeList tokens and the local watch history are copied from
+  `~/.config/curd` and `~/.local/share/curd` into the otakase locations, and a
+  `StoragePath` still set to curd's default is repointed. A path you chose
+  yourself is left alone. The originals are **copied, not moved**, so a curd
+  binary that is still installed keeps working; they can be deleted once
+  otakase looks right.
+
+  Without this, the first launch after the rename would look like a factory
+  reset — signed out of both trackers, no history — with the data still on disk
+  under the old name.
+
+- **The Arch package `replaces`/`conflicts` with `curd`**, and installs a `curd`
+  symlink beside `otakase` for muscle memory and any script that calls it.
 
 ### Fixed
 

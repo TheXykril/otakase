@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 type stackStubProvider struct {

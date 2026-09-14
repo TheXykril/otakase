@@ -3,10 +3,10 @@ package internal
 import (
 	"net/http"
 
-	_ "github.com/wraient/curd/internal/loadproviders"
+	_ "github.com/thexykril/otakase/internal/loadproviders"
 
-	"github.com/wraient/curd/internal/curdhost"
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 func init() {

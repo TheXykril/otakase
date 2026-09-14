@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wraient/curd/internal/theme"
+	"github.com/thexykril/otakase/internal/theme"
 )
 
 func TestRenderSubstitutesPaletteColors(t *testing.T) {

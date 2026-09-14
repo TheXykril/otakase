@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // narrowTitleProvider answers only for the exact queries it is given, the way a

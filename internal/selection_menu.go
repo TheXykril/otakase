@@ -18,8 +18,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/wraient/curd/internal/rofitheme"
-	"github.com/wraient/curd/internal/theme"
+	"github.com/thexykril/otakase/internal/rofitheme"
+	"github.com/thexykril/otakase/internal/theme"
 )
 
 // Model represents the application state for the selection prompt

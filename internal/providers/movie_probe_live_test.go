@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wraient/curd/internal/curdhost"
-	_ "github.com/wraient/curd/internal/loadproviders"
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/curdhost"
+	_ "github.com/thexykril/otakase/internal/loadproviders"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // Run with:

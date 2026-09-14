@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wraient/curd/internal/providers/animepahe"
+	"github.com/thexykril/otakase/internal/providers/animepahe"
 )
 
 // Function to add an anime entry

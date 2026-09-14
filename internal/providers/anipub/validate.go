@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wraient/curd/internal/curdhost"
+	"github.com/thexykril/otakase/internal/curdhost"
 )
 
 // decoySegmentMarkers identify ad/decoy segments that the megap.kotocdn.site

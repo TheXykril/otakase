@@ -1,7 +1,7 @@
 package anidb
 
 import (
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // Provider implements anidb.app catalog search and stream resolution.

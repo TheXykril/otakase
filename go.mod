@@ -1,4 +1,4 @@
-module github.com/wraient/curd
+module github.com/thexykril/otakase
 
 go 1.24.0
 

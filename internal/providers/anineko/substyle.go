@@ -3,7 +3,7 @@ package anineko
 import (
 	"strings"
 
-	"github.com/wraient/curd/internal/providers/substyle"
+	"github.com/thexykril/otakase/internal/providers/substyle"
 )
 
 func chooseSubStyle(groups map[string][]string, preference string) (string, error) {

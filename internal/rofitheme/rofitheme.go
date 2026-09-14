@@ -16,7 +16,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/wraient/curd/internal/theme"
+	"github.com/thexykril/otakase/internal/theme"
 )
 
 //go:embed templates/*.rasi

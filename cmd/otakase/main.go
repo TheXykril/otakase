@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wraient/curd/internal"
+	"github.com/thexykril/otakase/internal"
 )
 
 var version string // Will be set by ldflags during build
@@ -40,9 +40,19 @@ func main() {
 		}
 	}
 
-	configFilePath := filepath.Join(configDir, "curd", "curd.conf")
+	// An install from before the rename keeps its config, tokens and history
+	// under the old name; carry them over before anything looks for them.
+	if notes, migrateErr := internal.MigrateLegacyAppDirs(configDir, os.Getenv("HOME")); migrateErr != nil {
+		fmt.Fprintf(os.Stderr, "Could not carry over the previous install: %v\n", migrateErr)
+	} else {
+		for _, note := range notes {
+			fmt.Println(note)
+		}
+	}
 
-	// load curd userCurdConfig
+	configFilePath := filepath.Join(configDir, internal.AppName, internal.ConfigFileName())
+
+	// load userCurdConfig
 	userCurdConfig, err := internal.LoadConfig(configFilePath)
 	if err != nil {
 		fmt.Println("Error loading config:", err)
@@ -53,7 +63,7 @@ func main() {
 		fmt.Println("Error applying storage migration:", migrateErr)
 		return
 	} else if updated {
-		fmt.Println("Updated config for this curd version (new options and/or migrations).")
+		fmt.Println("Updated config for this " + internal.DisplayName + " version (new options and/or migrations).")
 	}
 	internal.SetGlobalConfig(&userCurdConfig)
 
@@ -104,7 +114,7 @@ func main() {
 	// Custom help/usage function
 	flag.Usage = func() {
 		internal.RestoreScreen()
-		fmt.Fprintf(os.Stderr, "Curd is a CLI tool to manage anime playback with advanced features like skipping intro, outro, filler, recap, tracking progress, and integrating with Discord.\n")
+		fmt.Fprintf(os.Stderr, "%s is a CLI tool to manage anime playback with advanced features like skipping intro, outro, filler, recap, tracking progress, and integrating with Discord.\n", internal.DisplayName)
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults() // This prints the default flag information
 	}
@@ -157,7 +167,7 @@ func main() {
 
 	if *updateScript {
 		repo := internal.DefaultUpdateRepo
-		fileName := "curd"
+		fileName := internal.AppName
 
 		if err := internal.UpdateCurd(repo, fileName); err != nil {
 			fmt.Fprintf(os.Stderr, "Error updating executable: %v\n", err)

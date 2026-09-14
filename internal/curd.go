@@ -18,7 +18,7 @@ import (
 	"github.com/gen2brain/beeep"
 	"github.com/pkg/browser"
 
-	"github.com/wraient/curd/internal/torrentstream"
+	"github.com/thexykril/otakase/internal/torrentstream"
 )
 
 var alternateScreenActive bool

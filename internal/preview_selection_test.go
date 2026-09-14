@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wraient/curd/internal/rofitheme"
+	"github.com/thexykril/otakase/internal/rofitheme"
 )
 
 // The poster grid clips a label to the column width, so what rofi hands back on

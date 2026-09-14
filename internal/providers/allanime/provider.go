@@ -1,7 +1,7 @@
 package allanime
 
 import (
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // Provider implements AllAnime catalog search and stream resolution.

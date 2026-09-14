@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wraient/curd/internal/curdhost"
+	"github.com/thexykril/otakase/internal/curdhost"
 )
 
 var (

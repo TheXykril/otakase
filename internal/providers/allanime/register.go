@@ -1,6 +1,6 @@
 package allanime
 
-import "github.com/wraient/curd/internal/providers"
+import "github.com/thexykril/otakase/internal/providers"
 
 func init() {
 	providers.Register(providers.Meta{

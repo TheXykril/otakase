@@ -19,8 +19,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wraient/curd/internal/curdhost"
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 type allanimeSource struct {

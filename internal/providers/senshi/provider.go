@@ -1,6 +1,6 @@
 package senshi
 
-import "github.com/wraient/curd/internal/providers"
+import "github.com/thexykril/otakase/internal/providers"
 
 // Provider implements senshi.live catalog search and direct HLS stream resolution.
 type Provider struct{}

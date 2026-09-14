@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wraient/curd/internal/providers/animepahe"
+	"github.com/thexykril/otakase/internal/providers/animepahe"
 )
 
 func TestFormatAnimeSearchLabel(t *testing.T) {

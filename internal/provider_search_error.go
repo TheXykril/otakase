@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wraient/curd/internal/curdhost"
+	"github.com/thexykril/otakase/internal/curdhost"
 )
 
 // A failed stacked search used to report every provider error concatenated into

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wraient/curd/internal/curdhost"
+	"github.com/thexykril/otakase/internal/curdhost"
 )
 
 // Run AniPub edge cases in isolation with generous pacing to avoid rate limits:

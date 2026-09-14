@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wraient/curd/internal/curdhost"
-	_ "github.com/wraient/curd/internal/loadproviders"
-	"github.com/wraient/curd/internal/providers"
-	"github.com/wraient/curd/internal/providers/anineko"
-	"github.com/wraient/curd/internal/providers/anipub"
-	"github.com/wraient/curd/internal/providers/senshi"
+	"github.com/thexykril/otakase/internal/curdhost"
+	_ "github.com/thexykril/otakase/internal/loadproviders"
+	"github.com/thexykril/otakase/internal/providers"
+	"github.com/thexykril/otakase/internal/providers/anineko"
+	"github.com/thexykril/otakase/internal/providers/anipub"
+	"github.com/thexykril/otakase/internal/providers/senshi"
 )
 
 // Run with:

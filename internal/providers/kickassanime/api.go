@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/wraient/curd/internal/curdhost"
+	"github.com/thexykril/otakase/internal/curdhost"
 )
 
 const (

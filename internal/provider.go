@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wraient/curd/internal/providers"
-	"github.com/wraient/curd/internal/providers/animepahe"
+	"github.com/thexykril/otakase/internal/providers"
+	"github.com/thexykril/otakase/internal/providers/animepahe"
 )
 
 const (

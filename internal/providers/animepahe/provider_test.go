@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wraient/curd/internal/curdhost"
+	"github.com/thexykril/otakase/internal/curdhost"
 )
 
 const animepaheChallengeHTML = `<!doctype html><html><head><title>DDoS-Guard</title></head><body>Checking your browser</body></html>`

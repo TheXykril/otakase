@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wraient/curd/internal/providers/animepahe"
-	"github.com/wraient/curd/internal/providers/anipub"
-	"github.com/wraient/curd/internal/providers/senshi"
+	"github.com/thexykril/otakase/internal/providers/animepahe"
+	"github.com/thexykril/otakase/internal/providers/anipub"
+	"github.com/thexykril/otakase/internal/providers/senshi"
 )
 
 var selectionEpisodeCountRE = regexp.MustCompile(`\((\d+)\s+episodes?\)`)

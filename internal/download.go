@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // Downloading episodes is the most-requested missing feature upstream
@@ -70,9 +70,9 @@ func ResolveDownloadDir(config *CurdConfig) string {
 	}
 	if dir == "" {
 		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, "Downloads", "curd")
+			return filepath.Join(home, "Downloads", AppName)
 		}
-		return "curd-downloads"
+		return AppName + "-downloads"
 	}
 	return os.ExpandEnv(dir)
 }

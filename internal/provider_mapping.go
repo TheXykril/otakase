@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wraient/curd/internal/providers/animepahe"
-	"github.com/wraient/curd/internal/providers/anipub"
+	"github.com/thexykril/otakase/internal/providers/animepahe"
+	"github.com/thexykril/otakase/internal/providers/anipub"
 )
 
 type ProviderMappingOutcome int

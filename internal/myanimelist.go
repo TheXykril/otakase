@@ -362,7 +362,7 @@ func authenticateMyAnimeListWithBrowser(config *CurdConfig, tokenPath string) (s
 	if err := browser.OpenURL(authURL); err != nil {
 		fmt.Printf("Failed to open browser automatically: %v\n", err)
 	}
-	fmt.Println("If curd does not continue after the browser reaches localhost, rerun the command and paste the full callback URL when prompted.")
+	fmt.Println("If otakase does not continue after the browser reaches localhost, rerun the command and paste the full callback URL when prompted.")
 
 	var code string
 	select {

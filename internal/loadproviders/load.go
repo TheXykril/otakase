@@ -2,12 +2,12 @@
 package loadproviders
 
 import (
-	_ "github.com/wraient/curd/internal/providers/allanime"
-	_ "github.com/wraient/curd/internal/providers/anidb"
-	_ "github.com/wraient/curd/internal/providers/animepahe"
-	_ "github.com/wraient/curd/internal/providers/anineko"
-	_ "github.com/wraient/curd/internal/providers/anipub"
-	_ "github.com/wraient/curd/internal/providers/kickassanime"
-	_ "github.com/wraient/curd/internal/providers/nyaa"
-	_ "github.com/wraient/curd/internal/providers/senshi"
+	_ "github.com/thexykril/otakase/internal/providers/allanime"
+	_ "github.com/thexykril/otakase/internal/providers/anidb"
+	_ "github.com/thexykril/otakase/internal/providers/animepahe"
+	_ "github.com/thexykril/otakase/internal/providers/anineko"
+	_ "github.com/thexykril/otakase/internal/providers/anipub"
+	_ "github.com/thexykril/otakase/internal/providers/kickassanime"
+	_ "github.com/thexykril/otakase/internal/providers/nyaa"
+	_ "github.com/thexykril/otakase/internal/providers/senshi"
 )

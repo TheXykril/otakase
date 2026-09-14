@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/wraient/curd/internal/curdhost"
+	"github.com/thexykril/otakase/internal/curdhost"
 )
 
 // TestProviderSearchResolvesRomajiOnlyTitlesLive exercises the real fix against

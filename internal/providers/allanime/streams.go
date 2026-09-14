@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wraient/curd/internal/curdhost"
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 const allanimeUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0"

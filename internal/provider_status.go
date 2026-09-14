@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wraient/curd/internal/providers"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // Streaming hosts rot constantly: domains lapse, APIs start demanding signatures,
