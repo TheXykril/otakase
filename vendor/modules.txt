@@ -1,3 +1,6 @@
+# github.com/BourgeoisBear/rasterm v1.1.2
+## explicit; go 1.16
+github.com/BourgeoisBear/rasterm
 # github.com/Microsoft/go-winio v0.6.2
 ## explicit; go 1.21
 github.com/Microsoft/go-winio
@@ -124,6 +127,9 @@ github.com/anacrolix/upnp
 # github.com/anacrolix/utp v0.1.0
 ## explicit
 github.com/anacrolix/utp
+# github.com/atotto/clipboard v0.1.4
+## explicit
+github.com/atotto/clipboard
 # github.com/aymanbagabas/go-osc52/v2 v2.0.1
 ## explicit; go 1.16
 github.com/aymanbagabas/go-osc52/v2
@@ -142,6 +148,17 @@ github.com/bradfitz/iter
 # github.com/cespare/xxhash v1.1.0
 ## explicit
 github.com/cespare/xxhash
+# github.com/charmbracelet/bubbles v0.21.0
+## explicit; go 1.23.0
+github.com/charmbracelet/bubbles/cursor
+github.com/charmbracelet/bubbles/help
+github.com/charmbracelet/bubbles/key
+github.com/charmbracelet/bubbles/list
+github.com/charmbracelet/bubbles/paginator
+github.com/charmbracelet/bubbles/runeutil
+github.com/charmbracelet/bubbles/spinner
+github.com/charmbracelet/bubbles/textinput
+github.com/charmbracelet/bubbles/viewport
 # github.com/charmbracelet/bubbletea v1.3.10
 ## explicit; go 1.24.0
 github.com/charmbracelet/bubbletea
@@ -400,6 +417,9 @@ github.com/rivo/uniseg
 # github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417
 ## explicit; go 1.12
 github.com/rs/dnscache
+# github.com/sahilm/fuzzy v0.1.1
+## explicit
+github.com/sahilm/fuzzy
 # github.com/spaolacci/murmur3 v1.1.0
 ## explicit
 github.com/spaolacci/murmur3
