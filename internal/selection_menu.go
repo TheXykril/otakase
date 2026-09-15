@@ -830,19 +830,29 @@ func parsePreviewSelectionIndex(rawSelection string, rows []SelectionOption) (Se
 	return rows[index], nil
 }
 
+// coverCachePath is where a cover lives once fetched. It is separated from the
+// fetching so a caller can ask whether a poster is already on disk without
+// reaching for the network -- which the drawing path must never do.
+func coverCachePath(imageURL string) (string, error) {
+	if strings.TrimSpace(imageURL) == "" {
+		return "", fmt.Errorf("image URL is empty")
+	}
+	cacheDir := os.ExpandEnv("${HOME}/.cache/" + AppName + "/images")
+	return filepath.Join(cacheDir, fmt.Sprintf("%x.jpg", md5.Sum([]byte(imageURL)))), nil
+}
+
 func downloadToCache(imageURL string) (string, error) {
 	if strings.TrimSpace(imageURL) == "" {
 		return "", fmt.Errorf("image URL is empty")
 	}
 
-	cacheDir := os.ExpandEnv("${HOME}/.cache/curd/images")
-	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+	cachePath, err := coverCachePath(imageURL)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
 		return "", fmt.Errorf("failed to create cache directory: %w", err)
 	}
-
-	// Create a hash of the URL to use as filename
-	filename := fmt.Sprintf("%x.jpg", md5.Sum([]byte(imageURL)))
-	cachePath := filepath.Join(cacheDir, filename)
 
 	// Check if file already exists in cache
 	if info, err := os.Stat(cachePath); err == nil {

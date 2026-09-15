@@ -200,3 +200,65 @@ func truncate(text string, width int) string {
 	}
 	return string(runes[:width-1]) + "…"
 }
+
+// Tab labels are deliberately shorter than the menu entries they replace.
+// A tab bar is horizontal and every column spent on "Currently Watching"
+// is one the next category does not get.
+var menuCategoryLabels = map[string]string{
+	"CURRENT":    "Watching",
+	"PLANNING":   "Planning",
+	"COMPLETED":  "Completed",
+	"PAUSED":     "On Hold",
+	"DROPPED":    "Dropped",
+	"REWATCHING": "Rewatching",
+	// AniList calls rewatching REPEATING, and both spellings reach this code.
+	"REPEATING": "Rewatching",
+	"ALL":       "All",
+	"UNTRACKED": "Untracked",
+}
+
+// menuActions are the entries that do something rather than show a list. The
+// hint is the key that triggers them from the footer.
+var menuActions = map[string]FooterAction{
+	"CONTINUE_LAST":  {Key: "CONTINUE_LAST", Label: "continue", Hint: "c"},
+	"UPDATE":         {Key: "UPDATE", Label: "update", Hint: "u"},
+	"REMAP_PROVIDER": {Key: "REMAP_PROVIDER", Label: "remap", Hint: "r"},
+	"TRACKER":        {Key: "TRACKER", Label: "tracker", Hint: "t"},
+	"PROVIDER":       {Key: "PROVIDER", Label: "provider", Hint: "p"},
+}
+
+// SplitMenuOrder divides a MenuOrder setting into the categories that become
+// tabs and the actions that become footer entries, keeping the order the user
+// wrote in each case.
+//
+// MenuOrder mixes two kinds of thing that used to sit in one list: lists you
+// look at, and things you do. Rather than introduce a second setting and a
+// migration to fill it, the one setting keeps its name and is read as both.
+// A key belonging to neither group is ignored rather than guessed at.
+func SplitMenuOrder(menuOrder string) ([]Tab, []FooterAction) {
+	tabs := []Tab{}
+	actions := []FooterAction{}
+	seenTab := map[string]bool{}
+	seenAction := map[string]bool{}
+
+	for _, raw := range strings.Split(menuOrder, ",") {
+		key := strings.ToUpper(strings.TrimSpace(raw))
+		if key == "" {
+			continue
+		}
+		if label, ok := menuCategoryLabels[key]; ok {
+			if !seenTab[label] {
+				seenTab[label] = true
+				tabs = append(tabs, Tab{Key: key, Label: label})
+			}
+			continue
+		}
+		if action, ok := menuActions[key]; ok {
+			if !seenAction[key] {
+				seenAction[key] = true
+				actions = append(actions, action)
+			}
+		}
+	}
+	return tabs, actions
+}

@@ -175,3 +175,72 @@ func TestTruncateCountsCharactersNotBytes(t *testing.T) {
 		t.Errorf("zero width should give nothing, got %q", got)
 	}
 }
+
+// MenuOrder is read as both settings at once, so a config written before tabs
+// existed produces a sensible tab bar and footer without being touched.
+func TestSplitMenuOrderReadsTheDefaultConfig(t *testing.T) {
+	tabs, actions := SplitMenuOrder("CURRENT,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER")
+
+	wantTabs := []string{"CURRENT", "ALL", "UNTRACKED"}
+	if len(tabs) != len(wantTabs) {
+		t.Fatalf("expected %d tabs, got %d: %+v", len(wantTabs), len(tabs), tabs)
+	}
+	for i, key := range wantTabs {
+		if tabs[i].Key != key {
+			t.Errorf("tab %d: expected %s, got %s", i, key, tabs[i].Key)
+		}
+	}
+
+	wantActions := []string{"UPDATE", "REMAP_PROVIDER", "CONTINUE_LAST", "TRACKER", "PROVIDER"}
+	if len(actions) != len(wantActions) {
+		t.Fatalf("expected %d actions, got %d: %+v", len(wantActions), len(actions), actions)
+	}
+	for i, key := range wantActions {
+		if actions[i].Key != key {
+			t.Errorf("action %d: expected %s, got %s", i, key, actions[i].Key)
+		}
+	}
+}
+
+// The order written in the config is the order shown, for both groups.
+func TestSplitMenuOrderKeepsTheUsersOrder(t *testing.T) {
+	tabs, actions := SplitMenuOrder("COMPLETED,PROVIDER,PLANNING,CONTINUE_LAST,CURRENT")
+	if got := []string{tabs[0].Key, tabs[1].Key, tabs[2].Key}; got[0] != "COMPLETED" || got[1] != "PLANNING" || got[2] != "CURRENT" {
+		t.Errorf("tab order was not preserved: %v", got)
+	}
+	if actions[0].Key != "PROVIDER" || actions[1].Key != "CONTINUE_LAST" {
+		t.Errorf("action order was not preserved: %+v", actions)
+	}
+}
+
+// AniList calls rewatching REPEATING; the documented config key is REWATCHING.
+// Both reach this code, and both have to mean the same tab.
+func TestSplitMenuOrderAcceptsBothRewatchingSpellings(t *testing.T) {
+	for _, key := range []string{"REWATCHING", "REPEATING"} {
+		tabs, _ := SplitMenuOrder(key)
+		if len(tabs) != 1 || tabs[0].Label != "Rewatching" {
+			t.Errorf("%s did not produce a Rewatching tab: %+v", key, tabs)
+		}
+	}
+	// Writing both must not produce the same tab twice.
+	tabs, _ := SplitMenuOrder("REWATCHING,REPEATING")
+	if len(tabs) != 1 {
+		t.Errorf("both spellings should collapse to one tab, got %d", len(tabs))
+	}
+}
+
+// Whitespace, case and unknown keys are all things a hand-edited config has.
+func TestSplitMenuOrderToleratesUntidyConfigs(t *testing.T) {
+	tabs, actions := SplitMenuOrder("  current , NONSENSE ,, continue_last ")
+	if len(tabs) != 1 || tabs[0].Key != "CURRENT" {
+		t.Errorf("lowercase and padding should still resolve: %+v", tabs)
+	}
+	if len(actions) != 1 || actions[0].Key != "CONTINUE_LAST" {
+		t.Errorf("expected the one valid action: %+v", actions)
+	}
+
+	emptyTabs, emptyActions := SplitMenuOrder("")
+	if len(emptyTabs) != 0 || len(emptyActions) != 0 {
+		t.Error("an empty MenuOrder should produce nothing, not defaults")
+	}
+}
