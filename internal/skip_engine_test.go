@@ -152,3 +152,56 @@ func TestAniSkipIsQuietWithoutAMalID(t *testing.T) {
 		t.Error("it claimed to know something without an id to ask about")
 	}
 }
+
+// Anime-Skip records single points in time with a type, not ranges: "Intro" at
+// 93s means the opening starts there, and the next marker of any kind is where
+// it ends. This is the real shape returned for Frieren.
+func TestAnimeSkipMarkersBecomeSpans(t *testing.T) {
+	type stamp = struct {
+		At   float64 `json:"at"`
+		Type struct {
+			Name string `json:"name"`
+		} `json:"type"`
+	}
+	mark := func(at float64, name string) stamp {
+		s := stamp{At: at}
+		s.Type.Name = name
+		return s
+	}
+
+	// Episode 6: the opening does not start at zero, and credits are followed
+	// by a preview, so both spans end at the next marker rather than the end.
+	got := timestampsToSkips([]stamp{
+		mark(0, "Canon"), mark(93, "Intro"), mark(183, "Canon"),
+		mark(1340, "Credits"), mark(1430, "Preview"),
+	})
+	if got.Op != span(93, 183) {
+		t.Errorf("opening should run to the next marker, got %+v", got.Op)
+	}
+	if got.Ed != span(1340, 1430) {
+		t.Errorf("ending should run to the next marker, got %+v", got.Ed)
+	}
+
+	// Episode 8: the opening starts at zero.
+	got = timestampsToSkips([]stamp{
+		mark(0, "Intro"), mark(90, "Canon"), mark(1340, "Credits"), mark(1430, "Preview"),
+	})
+	if got.Op != span(0, 90) {
+		t.Errorf("an opening at zero was not read: %+v", got.Op)
+	}
+
+	// Markers are not guaranteed to arrive in order.
+	got = timestampsToSkips([]stamp{
+		mark(1430, "Preview"), mark(0, "Intro"), mark(1340, "Credits"), mark(90, "Canon"),
+	})
+	if got.Op != span(0, 90) || got.Ed != span(1340, 1430) {
+		t.Errorf("out-of-order markers were misread: %+v", got)
+	}
+
+	// A trailing marker has nothing to pair with and must not become a span
+	// running to zero.
+	got = timestampsToSkips([]stamp{mark(1340, "Credits")})
+	if usableSpan(got.Ed) {
+		t.Errorf("a marker with nothing after it became a span: %+v", got.Ed)
+	}
+}

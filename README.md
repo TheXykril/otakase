@@ -244,6 +244,57 @@ OTAKASE_MAL_CLIENT_SECRET=your_client_secret
 If the browser reaches the localhost callback page but Otakase does not
 continue, run the command again and paste the full callback URL when prompted.
 
+## Skip timings
+
+Openings and endings are skipped using whatever source knows them. The opening
+is taken from the first source that has one and the ending from the first that
+has one — they need not be the same source, because AniSkip often knows an
+opening and not an ending, while a provider that ships timings with the stream
+usually knows both.
+
+Two of the three work with no setup: the provider in use, then
+[AniSkip](https://api.aniskip.com/api-docs). The third, Anime-Skip, is optional.
+
+### Adding Anime-Skip
+
+The [Anime-Skip](https://anime-skip.com) API requires an `X-Client-ID` header
+identifying the *application* — not you, and not a password. Every request
+without one is rejected:
+
+```json
+{"errors":[{"message":"The X-Client-ID header must be passed"}]}
+```
+
+Anime-Skip publishes a client id for its own GraphQL playground at
+<https://api.anime-skip.com>. You can read it out of that page:
+
+```bash
+curl -s https://api.anime-skip.com/ | grep -o 'Client-ID": "[A-Za-z0-9]*'
+```
+
+Put whatever id you use in the config:
+
+```
+AnimeSkipClientID=your_client_id_here
+```
+
+Check it works — this should name a show rather than return an error:
+
+```bash
+curl -s -X POST https://api.anime-skip.com/graphql \
+  -H 'Content-Type: application/json' -H 'X-Client-ID: your_client_id_here' \
+  -d '{"query":"query($id:String!){findShowsByExternalId(service:ANILIST,serviceId:$id){name}}","variables":{"id":"154587"}}'
+```
+
+No client id is bundled. The playground's is shared by everyone who uses it and
+may be rate-limited or rotated without notice, and the other ids in circulation
+belong to other projects — borrowing one makes this program's traffic look like
+theirs. If you want a stable id of your own, ask the Anime-Skip maintainers
+through the links on their site.
+
+Leaving `AnimeSkipClientID` empty is fine. The source reports that it knows
+nothing and the other two carry on.
+
 ## Theming
 
 The rofi menus are rendered from a colour palette at every launch. On
