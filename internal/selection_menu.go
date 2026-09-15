@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -788,22 +787,6 @@ func downloadToCache(imageURL string) (string, error) {
 	}
 
 	return cachePath, nil
-}
-
-func showCachedImagePreview(imageURL string) error {
-	cachePath, err := downloadToCache(imageURL)
-	if err != nil {
-		return err
-	}
-
-	// Display the image with ueberzugpp
-	cmd := exec.Command("ueberzugpp", "layer", "--silent", "add", "preview", "--path", cachePath)
-	err = cmd.Start()
-	if err != nil {
-		return fmt.Errorf("failed to start image preview: %w", err)
-	}
-	time.Sleep(2 * time.Second) // Allow image to load for a moment
-	return nil
 }
 
 func RofiSelect(options []SelectionOption, isHomeMenu bool) (SelectionOption, error) {

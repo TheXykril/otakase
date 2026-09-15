@@ -36,8 +36,7 @@ theme.
 ## Install
 
 > Otakase needs **mpv**. Everything else is optional: `rofi` for the graphical
-> menus (it draws its own poster thumbnails, so `ueberzugpp` is only for
-> previews in the *terminal*), `libnotify` so a launch with no terminal — from
+> menus (it draws its own poster thumbnails), `libnotify` so a launch with no terminal — from
 > the keybinding, say — can still report progress and errors, `xdg-utils` to
 > open the browser for AniList/MyAnimeList sign-in, and `ffmpeg` for
 > `-download`.
@@ -68,14 +67,14 @@ sudo ln -sf otakase /usr/bin/otk
 Optional extras:
 
 ```bash
-sudo pacman -S rofi ueberzugpp ffmpeg
+sudo pacman -S rofi libnotify xdg-utils ffmpeg
 ```
 
 ### Debian / Ubuntu and other Linux
 
 ```bash
 sudo apt update
-sudo apt install mpv curl rofi ueberzugpp
+sudo apt install mpv curl rofi libnotify-bin xdg-utils
 
 # x86_64
 curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-x86_64

@@ -14,7 +14,6 @@ optdepends=(
   # from a keybinding that fails is silent without this.
   'libnotify: progress and errors when launched without a terminal'
   'xdg-utils: opening the browser for AniList/MyAnimeList sign-in'
-  'ueberzugpp: image previews in the terminal (rofi draws its own)'
   'ffmpeg: saving episodes with -download'
 )
 makedepends=('go' 'git')
