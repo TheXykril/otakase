@@ -111,6 +111,7 @@ func main() {
 	providerStatus := flag.Bool("provider-status", false, "Probe every provider and report which ones work")
 	installKeybind := flag.Bool("install-keybind", false, "Add a Super+Shift+A Hyprland binding that opens the rofi menu")
 	removeKeybind := flag.Bool("remove-keybind", false, "Remove the Hyprland binding added by -install-keybind")
+	refreshKeybind := flag.Bool("refresh-keybind", false, "Update an existing Hyprland binding, adding nothing if absent")
 	forceKeybind := flag.Bool("force-keybind", false, "Let -install-keybind replace a binding something else owns")
 	providerStatusQuery := flag.String("provider-status-query", "one piece", "Search query used by -provider-status")
 
@@ -140,16 +141,19 @@ func main() {
 	// Diagnostics run before any UI setup so the output stays plain and pipeable.
 	// Editing the user's Hyprland config is a command they run deliberately,
 	// never something an install does behind their back.
-	if *installKeybind || *removeKeybind {
+	if *installKeybind || *removeKeybind || *refreshKeybind {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Could not find your home directory: %v\n", err)
 			os.Exit(1)
 		}
 		var notes []string
-		if *removeKeybind {
+		switch {
+		case *removeKeybind:
 			notes, err = internal.RemoveHyprlandKeybind(home)
-		} else {
+		case *refreshKeybind:
+			notes, err = internal.RefreshHyprlandKeybind(home)
+		default:
 			notes, err = internal.InstallHyprlandKeybind(home, *forceKeybind)
 		}
 		for _, note := range notes {

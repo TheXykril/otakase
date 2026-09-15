@@ -52,9 +52,17 @@ and why.
   and when forced it comments the old line out rather than leaving two bindings
   on one combination. `-remove-keybind` reverses it.
 
-  Installing the package deliberately does not do this. A package is installed
-  as root with no user context and cannot write to a user's config; one that
-  tried would be overstepping. The package prints the command instead.
+  Installing with `sudo` sets it up for you. The obstacle was never permission
+  but identity: an install script runs as root, so `$HOME` is `/root`, and a
+  keybinding written there helps nobody. The script resolves the invoking user
+  through `SUDO_USER` and runs the command as them, so the file lands in the
+  right config owned by the right account, and skips itself when there is no
+  such user — a chroot, an image build, pacman as root. `OTAKASE_NO_KEYBIND=1`
+  opts out.
+
+  Uninstalling removes the binding first, while the binary it points at still
+  exists, so `pacman -R` does not leave a key bound to something that is gone.
+  An upgrade refreshes a binding already present and adds nothing otherwise.
 
 - **`otk`, a short alias.** Same program, same flags — `otakase` is a mouthful
   for something typed several times a day. Installed as a symlink beside

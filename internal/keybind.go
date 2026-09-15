@@ -73,6 +73,17 @@ func (c hyprlandConfig) keybindBlock() string {
 // It is idempotent -- a block it wrote before is replaced rather than appended
 // to -- and it refuses to touch a binding somebody else owns unless forced.
 func InstallHyprlandKeybind(home string, force bool) ([]string, error) {
+	return installKeybind(home, force, false)
+}
+
+// RefreshHyprlandKeybind updates a binding this program already owns and does
+// nothing otherwise. A package upgrade uses this: re-adding a keybinding the
+// user deliberately removed would be the package arguing with them.
+func RefreshHyprlandKeybind(home string) ([]string, error) {
+	return installKeybind(home, false, true)
+}
+
+func installKeybind(home string, force, refreshOnly bool) ([]string, error) {
 	cfg, err := findHyprlandConfig(home)
 	if err != nil {
 		return nil, err
@@ -93,6 +104,10 @@ func InstallHyprlandKeybind(home string, force bool) ([]string, error) {
 			return notes, err
 		}
 		return append(notes, fmt.Sprintf("updated the existing %s binding in %s", keybindCombo, cfg.path)), nil
+	}
+
+	if refreshOnly {
+		return []string{"no existing " + AppName + " binding to refresh"}, nil
 	}
 
 	// Somebody else's binding on the same keys is theirs to keep.

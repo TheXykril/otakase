@@ -167,6 +167,7 @@ Arguments always take precedence over the config file.
 | `-install-keybind` | Bind Super+Shift+A to the rofi menu in your Hyprland config | |
 | `-remove-keybind` | Undo `-install-keybind` | |
 | `-force-keybind` | Let `-install-keybind` take a key something else uses | |
+| `-refresh-keybind` | Update an existing binding, adding nothing if absent | |
 | `-provider-status` | Probe each configured source and report which respond | |
 | `-provider-status-query` | Search term `-provider-status` probes with | `one piece` |
 | `-change-token` | Change your authentication token | |
@@ -210,9 +211,16 @@ already owns that key it tells you what and changes nothing; `-force-keybind`
 takes it anyway and comments out the old line rather than deleting it.
 `-remove-keybind` undoes the whole thing.
 
-Installing the package does **not** do this for you. A package is installed as
-root with no user context, so it cannot write to your config — and one that
-tried would be reaching somewhere it does not belong.
+**Installing the package does this for you** when you install it with `sudo`,
+which is the normal way. The install script finds the invoking user through
+`SUDO_USER` and runs the command as them, so the file is written to your config
+and owned by you rather than root. Uninstalling takes the binding back out
+before the binary disappears.
+
+It skips itself, printing the command instead, when there is no user to act for
+— a chroot, an image build, or pacman run as root directly. Set
+`OTAKASE_NO_KEYBIND=1` to skip it deliberately. An upgrade only refreshes a
+binding that is already there; it will not re-add one you removed.
 
 ## Tracking
 

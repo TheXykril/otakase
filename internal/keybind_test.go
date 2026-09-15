@@ -176,3 +176,42 @@ func TestKeybindForceRetiresTheOldBinding(t *testing.T) {
 		t.Errorf("the old binding should be commented out, not deleted:\n%s", body)
 	}
 }
+
+// A package upgrade refreshes a binding it already owns. It must not re-add one
+// the user deliberately removed -- an upgrade that argues with you is worse than
+// an upgrade that does nothing.
+func TestKeybindRefreshOnlyTouchesItsOwnBlock(t *testing.T) {
+	home := hyprHome(t, "bindings.lua", "-- nothing of mine here\n")
+
+	notes, err := RefreshHyprlandKeybind(home)
+	if err != nil {
+		t.Fatalf("refresh failed: %v", err)
+	}
+	body := readBindings(t, home, "bindings.lua")
+	if strings.Contains(body, "SUPER + SHIFT + A") {
+		t.Errorf("refresh added a binding that was not there:\n%s", body)
+	}
+	if !strings.Contains(strings.Join(notes, " "), "no existing") {
+		t.Errorf("refresh should say it found nothing, got %v", notes)
+	}
+
+	// With a block present, a refresh rewrites it in place.
+	if _, err := InstallHyprlandKeybind(home, false); err != nil {
+		t.Fatal(err)
+	}
+	stale := strings.Replace(readBindings(t, home, "bindings.lua"),
+		"otakase -rofi -image-preview", "otakase -old-flags", 1)
+	if err := os.WriteFile(filepath.Join(home, ".config", "hypr", "bindings.lua"), []byte(stale), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RefreshHyprlandKeybind(home); err != nil {
+		t.Fatalf("refresh failed: %v", err)
+	}
+	body = readBindings(t, home, "bindings.lua")
+	if strings.Contains(body, "-old-flags") {
+		t.Errorf("refresh did not update the existing block:\n%s", body)
+	}
+	if got := strings.Count(body, "o.bind(\"SUPER + SHIFT + A\""); got != 1 {
+		t.Errorf("refresh should leave exactly one binding, found %d", got)
+	}
+}
