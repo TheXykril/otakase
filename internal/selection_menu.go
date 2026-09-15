@@ -352,11 +352,6 @@ func (m *Model) replaceOptions(options []SelectionOption) {
 func (m Model) View() string {
 	var b strings.Builder
 
-	if bar := renderTabBar(m.layout, m.terminalWidth); bar != "" {
-		b.WriteString(bar)
-		b.WriteString("\n")
-	}
-
 	// Display the search prompt and filter with colors
 	if VimKeysEnabled(nil) {
 		if m.filterActive {
@@ -391,16 +386,16 @@ func (m Model) View() string {
 
 		// Render the options within the visible range
 		for i := start; i < end; i++ {
+			// The marker goes inside the row rather than before it. Rendered
+			// outside, it landed to the left of the selection's border, so a
+			// highlighted new episode read as "[NEW]| Title" with the bar
+			// stranded in the middle.
 			label := m.filteredKeys[i].Label
-
+			if m.filteredKeys[i].HasNewEpisodes {
+				label = newEpisodeItemStyle.Render("[NEW]") + " " + label
+			}
 			if i == m.selected {
-				if m.filteredKeys[i].HasNewEpisodes {
-					b.WriteString(newEpisodeItemStyle.Render(" [NEW]") + selectedItemStyle.Render(label) + "\n")
-				} else {
-					b.WriteString(selectedItemStyle.Render(label) + "\n")
-				}
-			} else if m.filteredKeys[i].HasNewEpisodes {
-				b.WriteString(newEpisodeItemStyle.Render(" [NEW]") + regularItemStyle.Render(label) + "\n")
+				b.WriteString(selectedItemStyle.Render(label) + "\n")
 			} else {
 				b.WriteString(regularItemStyle.Render(label) + "\n")
 			}
@@ -409,17 +404,30 @@ func (m Model) View() string {
 
 	body := b.String()
 
+	// The tab bar is drawn after the list so its rule can span exactly the
+	// width the list actually uses. Stretching it to the terminal instead makes
+	// the body as wide as the screen, which then pushes the detail pane off to
+	// the far edge with an empty field between them.
+	if bar := renderTabBar(m.layout, lipgloss.Width(body)); bar != "" {
+		body = bar + "\n" + body
+	}
+
 	if m.layout.pane && m.terminalWidth > 0 {
-		// A third of the width, within reason: too narrow and the poster is a
-		// smudge, too wide and the titles start wrapping.
 		paneWidth := m.terminalWidth / 3
 		if paneWidth > 40 {
 			paneWidth = 40
 		}
 		if paneWidth >= 20 {
-			pane := renderSidePane(m.paneTitle(), m.paneposter(), m.paneMeta(), paneWidth, 0)
+			// Sit the pane beside the text rather than at the far edge of the
+			// terminal. Padding the list to every available column leaves the
+			// two halves separated by an empty field on a wide screen, which
+			// reads as two unrelated things rather than one menu.
+			listWidth := lipgloss.Width(body) + 2
+			if maxList := m.terminalWidth - paneWidth - 2; listWidth > maxList {
+				listWidth = maxList
+			}
+			pane := renderSidePane(m.paneTitle(), m.paneMeta(), paneWidth, lipgloss.Height(body))
 			if pane != "" {
-				listWidth := m.terminalWidth - paneWidth - 2
 				left := lipgloss.NewStyle().Width(listWidth).Render(body)
 				body = lipgloss.JoinHorizontal(lipgloss.Top, left, pane)
 			}
@@ -452,14 +460,6 @@ func (m Model) paneTitle() string {
 		return option.Title
 	}
 	return option.Label
-}
-
-func (m Model) paneposter() string {
-	option, ok := m.highlighted()
-	if !ok || m.posterOf == nil {
-		return ""
-	}
-	return m.posterOf(option)
 }
 
 func (m Model) paneMeta() []string {

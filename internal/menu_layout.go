@@ -130,7 +130,8 @@ func renderTabBar(layout menuLayout, width int) string {
 		parts = append(parts, tabInactiveStyle.Render(tab.Label))
 	}
 	bar := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
-	if width > 0 {
+	// Never narrower than the tabs themselves, or the rule cuts through them.
+	if width > lipgloss.Width(bar) {
 		return tabBarStyle.Width(width).Render(bar)
 	}
 	return tabBarStyle.Render(bar)
@@ -158,28 +159,34 @@ func renderFooter(layout menuLayout) string {
 // The poster is passed in already rendered rather than fetched here, because
 // drawing is a pure function of state and fetching is not: a view that reached
 // for the network would stall the interface every time the selection moved.
-func renderSidePane(title, poster string, meta []string, width, height int) string {
+func renderSidePane(title string, meta []string, width, height int) string {
 	if width <= 0 {
 		return ""
 	}
-	var b strings.Builder
-	if poster != "" {
-		b.WriteString(poster)
-		b.WriteString("\n\n")
+	// Wrap rather than truncate. The pane exists precisely because the row is
+	// clipped, so clipping again here would make it useless.
+	inner := width - 4
+	if inner < 8 {
+		return ""
 	}
+	wrap := lipgloss.NewStyle().Width(inner)
+
+	var b strings.Builder
 	if title != "" {
-		b.WriteString(paneTitleStyle.Render(truncate(title, width-4)))
+		b.WriteString(wrap.Inherit(paneTitleStyle).Render(title))
 		b.WriteString("\n")
 	}
 	for _, line := range meta {
 		if line == "" {
 			continue
 		}
-		b.WriteString(paneMetaStyle.Render(truncate(line, width-4)))
 		b.WriteString("\n")
+		b.WriteString(wrap.Inherit(paneMetaStyle).Render(line))
 	}
 	style := paneBorderStyle.Width(width)
 	if height > 0 {
+		// Match the list, so the divider runs the height of the menu instead of
+		// stopping after a line or two and looking like a mistake.
 		style = style.Height(height)
 	}
 	return style.Render(b.String())
@@ -291,12 +298,28 @@ func paneDetails(option SelectionOption) []string {
 	if option.HasNewEpisodes {
 		details = append(details, "new episode")
 	}
-	// The row is clipped to the list width, so the pane is where a long label
-	// can actually be read.
-	if option.Label != "" && option.Label != option.Title {
-		details = append(details, option.Label)
+	// The label is the title plus its counts and airing note. Showing it whole
+	// beneath the title repeats the title, and at pane width the repetition is
+	// all that fits -- so only the part the title does not already say is kept.
+	if extra := labelBeyondTitle(option); extra != "" {
+		details = append(details, extra)
 	}
 	return details
+}
+
+// labelBeyondTitle strips the leading title from a label, returning what the
+// title does not already convey.
+func labelBeyondTitle(option SelectionOption) string {
+	label := strings.TrimSpace(option.Label)
+	title := strings.TrimSpace(option.Title)
+	if label == "" || label == title {
+		return ""
+	}
+	if title != "" && strings.HasPrefix(label, title) {
+		rest := strings.TrimSpace(strings.TrimPrefix(label, title))
+		return strings.TrimSpace(strings.TrimPrefix(rest, "·"))
+	}
+	return label
 }
 
 // attachCategoryTabs gives a menu its tab bar, when the caller supplied the
