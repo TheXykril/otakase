@@ -42,6 +42,16 @@
 
 ### Changed
 
+- **Individual colours can be replaced with your own.** `ThemeOverrides` takes
+  `name:#hex` pairs and layers them onto whichever palette is in use, so
+  following the desktop theme and disliking one colour in it are no longer
+  exclusive. A mistyped colour costs that colour alone: it is reported and
+  skipped while the rest apply.
+
+- **← and → move between categories**, alongside Tab, and each tab shows how
+  many entries it holds. The bar worked from the moment it was added, but
+  nothing on screen said so, which made it read as a heading.
+
 - **The Bubble Tea stack moved up** (bubbletea 1.3.10, lipgloss 1.1.0), and the
   menu gained the parts that surround the list: category tabs from the
   tracker's own list statuses, an actions footer, and a detail pane. All of it
