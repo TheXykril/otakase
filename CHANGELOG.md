@@ -32,6 +32,13 @@ and why.
 - **The Arch package `replaces`/`conflicts` with `curd`**, and installs a `curd`
   symlink beside `otakase` for muscle memory and any script that calls it.
 
+- **The provider canary no longer reports upstream commits.** Watching a parent
+  repository for commits to pick up made sense for a fork; this is a
+  continuation, so those weekly reports were noise. The canary keeps doing the
+  job it was written for: probing every source on a schedule and opening an
+  issue when one stops working, so rot is found on a Monday rather than by
+  whoever next tries to watch something.
+
 ### Added
 
 - **`otk`, a short alias.** Same program, same flags — `otakase` is a mouthful
