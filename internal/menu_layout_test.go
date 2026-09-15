@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/thexykril/otakase/internal/theme"
 )
 
@@ -539,50 +538,5 @@ func TestEveryTabKeyIsARealCategory(t *testing.T) {
 	}
 	if !found {
 		t.Error("UNTRACKED disappeared instead of becoming an action")
-	}
-}
-
-// The whole failure of the first attempt was the layout's idea of the height
-// not matching what the terminal painted. lipgloss sees the image sequence as
-// one invisible line; the terminal paints it over many. The pane must reserve
-// the difference or the title lands on top of the picture.
-func TestPaneReservesTheRowsThePosterPaints(t *testing.T) {
-	const posterRows = 12
-	fakePoster := "\x1b_Ga=T,f=100;AAAA\x1b\\"
-
-	withPoster := renderSidePane("Frieren", fakePoster, posterRows, []string{"12/28"}, 30, 0)
-	withoutPoster := renderSidePane("Frieren", "", 0, []string{"12/28"}, 30, 0)
-
-	gained := lipgloss.Height(withPoster) - lipgloss.Height(withoutPoster)
-	if gained != posterRows {
-		t.Errorf("the pane reserved %d rows for a poster occupying %d", gained, posterRows)
-	}
-
-	// And the sequence has to actually be in there, before the title.
-	if !strings.Contains(withPoster, fakePoster) {
-		t.Error("the poster sequence is missing from the pane")
-	}
-	if strings.Index(withPoster, fakePoster) > strings.Index(withPoster, "Frieren") {
-		t.Error("the title is written before the poster, so it lands on the picture")
-	}
-}
-
-// A poster must be preceded by the delete, on the same line, or Bubble Tea can
-// erase it in a frame that then skips redrawing it.
-func TestPosterCarriesItsOwnDelete(t *testing.T) {
-	if !strings.HasPrefix(DeleteAllImages, "\x1b_G") || !strings.Contains(DeleteAllImages, "a=d") {
-		t.Errorf("the delete sequence does not look like one: %q", DeleteAllImages)
-	}
-}
-
-// A terminal that cannot be told to size an image in cells gets no poster.
-// Drawing at natural size is the failure this path exists to avoid.
-func TestPostersOnlyWhereCellSizingExists(t *testing.T) {
-	for _, protocol := range []TerminalImageProtocol{TerminalImageNone, TerminalImageIterm, TerminalImageSixel} {
-		source := NewPosterSource(protocol, 20, 15)
-		got := source.Poster(SelectionOption{Thumbnail: "https://example.invalid/a.jpg"})
-		if got != "" {
-			t.Errorf("%s produced a poster despite having no cell sizing", protocol)
-		}
 	}
 }

@@ -38,11 +38,9 @@ type Model struct {
 	// layout is the chrome around the list: tabs, an actions footer, a detail
 	// pane. Its zero value draws none of them, which is how every caller that
 	// has not opted in keeps the interface it had.
-	layout     menuLayout
-	loadTab    func(key string) []SelectionOption
-	posterOf   func(option SelectionOption) string
-	posterRows int
-	metaOf     func(option SelectionOption) []string
+	layout  menuLayout
+	loadTab func(key string) []SelectionOption
+	metaOf  func(option SelectionOption) []string
 }
 
 type optionsRefreshedMsg struct {
@@ -442,7 +440,7 @@ func (m Model) View() string {
 			if maxList := m.terminalWidth - paneWidth - 2; listWidth > maxList {
 				listWidth = maxList
 			}
-			pane := renderSidePane(m.paneTitle(), m.panePoster(), m.posterRows, m.paneMeta(), paneWidth, lipgloss.Height(body))
+			pane := renderSidePane(m.paneTitle(), m.paneMeta(), paneWidth, lipgloss.Height(body))
 			if pane != "" {
 				left := lipgloss.NewStyle().Width(listWidth).Render(body)
 				body = lipgloss.JoinHorizontal(lipgloss.Top, left, pane)
@@ -476,14 +474,6 @@ func (m Model) paneTitle() string {
 		return option.Title
 	}
 	return option.Label
-}
-
-func (m Model) panePoster() string {
-	option, ok := m.highlighted()
-	if !ok || m.posterOf == nil {
-		return ""
-	}
-	return m.posterOf(option)
 }
 
 func (m Model) paneMeta() []string {

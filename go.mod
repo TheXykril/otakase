@@ -3,7 +3,6 @@ module github.com/thexykril/otakase
 go 1.26.0
 
 require (
-	github.com/BourgeoisBear/rasterm v1.1.2
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/anacrolix/torrent v1.61.0
 	github.com/charmbracelet/bubbletea v1.3.10
@@ -12,7 +11,6 @@ require (
 	github.com/go-rod/rod v0.116.2
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/tr1xem/go-discordrpc v1.0.0
-	golang.org/x/image v0.46.0
 	golang.org/x/term v0.37.0
 )
 
