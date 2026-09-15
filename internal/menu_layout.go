@@ -70,6 +70,13 @@ var (
 	paneBorderStyle  lipgloss.Style
 	paneTitleStyle   lipgloss.Style
 	paneMetaStyle    lipgloss.Style
+
+	crumbAppStyle  lipgloss.Style
+	crumbSepStyle  lipgloss.Style
+	crumbViewStyle lipgloss.Style
+	ruleStyle      lipgloss.Style
+	keyBadgeStyle  lipgloss.Style
+	noticeStyle    lipgloss.Style
 )
 
 // applyLayoutTheme rebuilds the surrounding chrome from the palette. Every
@@ -88,13 +95,9 @@ func applyLayoutTheme(palette theme.Palette) {
 		Foreground(color(palette.Muted)).
 		Padding(0, 2)
 
-	tabBarStyle = lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottom(true).
-		BorderTop(false).
-		BorderLeft(false).
-		BorderRight(false).
-		BorderForeground(color(palette.Muted))
+	// No border of its own: the frame draws one rule, under the header, and a
+	// second one here would sit at a different width and read as a mistake.
+	tabBarStyle = lipgloss.NewStyle()
 
 	footerKeyStyle = lipgloss.NewStyle().
 		Foreground(color(palette.Accent)).
@@ -118,6 +121,82 @@ func applyLayoutTheme(palette theme.Palette) {
 
 	paneMetaStyle = lipgloss.NewStyle().
 		Foreground(color(palette.Muted))
+
+	// A breadcrumb says where you are without spending a line on a title bar.
+	crumbAppStyle = lipgloss.NewStyle().
+		Foreground(color(palette.Accent)).
+		Bold(true)
+	crumbSepStyle = lipgloss.NewStyle().Foreground(color(palette.Muted))
+	crumbViewStyle = lipgloss.NewStyle().Foreground(color(palette.Muted))
+
+	ruleStyle = lipgloss.NewStyle().Foreground(color(palette.Muted))
+
+	// A key drawn as a badge reads as something to press. The same words in
+	// running text read as a sentence about the program.
+	keyBadgeStyle = lipgloss.NewStyle().
+		Foreground(color(palette.Background)).
+		Background(color(palette.Muted)).
+		Bold(true).
+		Padding(0, 1)
+
+	noticeStyle = lipgloss.NewStyle().
+		Foreground(color(palette.Yellow)).
+		Align(lipgloss.Center)
+}
+
+// Below this the menu cannot be drawn usefully: the list has no room and the
+// chrome would take every row. Saying so beats rendering something unreadable
+// and leaving the user to guess whether it is broken.
+const (
+	minMenuWidth  = 36
+	minMenuHeight = 10
+)
+
+// renderBreadcrumb draws "Otakase › Watching".
+func renderBreadcrumb(section string) string {
+	crumb := crumbAppStyle.Render(DisplayName)
+	if section != "" {
+		crumb += crumbSepStyle.Render(" › ") + crumbViewStyle.Render(section)
+	}
+	return crumb
+}
+
+// renderRule draws the line under the header, the width of the content.
+func renderRule(width int) string {
+	if width <= 0 {
+		return ""
+	}
+	return ruleStyle.Render(strings.Repeat("─", width))
+}
+
+// renderKeyHints draws the bar of key badges along the bottom.
+func renderKeyHints(hints []keyHint, width int) string {
+	if len(hints) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(hints))
+	for _, hint := range hints {
+		parts = append(parts, keyBadgeStyle.Render(hint.Key)+" "+footerTextStyle.Render(hint.Label))
+	}
+	bar := strings.Join(parts, "  ")
+	if width > lipgloss.Width(bar) {
+		return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(bar)
+	}
+	return bar
+}
+
+// keyHint is one key and what it does.
+type keyHint struct {
+	Key   string
+	Label string
+}
+
+// renderTooSmallNotice replaces the menu when the terminal cannot hold it.
+func renderTooSmallNotice(width, height int) string {
+	message := fmt.Sprintf("%s needs at least %d \u00d7 %d cells\n"+
+		"This terminal is %d \u00d7 %d\nResize to continue.",
+		DisplayName, minMenuWidth, minMenuHeight, width, height)
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, noticeStyle.Render(message))
 }
 
 // renderTabBar draws the categories. It returns an empty string when there are

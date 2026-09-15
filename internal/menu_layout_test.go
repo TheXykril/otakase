@@ -584,3 +584,112 @@ func TestThemeOverrideReachesTheRenderedMenu(t *testing.T) {
 	}
 	_ = sized
 }
+
+// The breadcrumb says where you are without spending a line on a title bar.
+func TestBreadcrumbNamesTheCategory(t *testing.T) {
+	m := &Model{allOptions: []SelectionOption{{Key: "1", Label: "Frieren"}}}
+	attachCategoryTabs(m, &SelectionRefreshConfig{
+		Categories:     []Tab{{Key: "CURRENT", Label: "Watching"}, {Key: "ALL", Label: "All"}},
+		ActiveCategory: "ALL",
+		LoadCategory:   func(string) []SelectionOption { return nil },
+	})
+	if got := m.sectionLabel(); got != "All" {
+		t.Errorf("the breadcrumb should name the open category, got %q", got)
+	}
+
+	// A menu without categories has nothing to add after the program's name.
+	plain := &Model{}
+	if got := plain.sectionLabel(); got != "" {
+		t.Errorf("a menu with no categories should have no section, got %q", got)
+	}
+	if crumb := renderBreadcrumb(""); !strings.Contains(crumb, DisplayName) || strings.Contains(crumb, "›") {
+		t.Errorf("an empty section should leave off the separator: %q", crumb)
+	}
+}
+
+// Offering a key that does nothing is worse than offering none: it invites a
+// press that goes nowhere.
+func TestKeyHintsOnlyOfferKeysThatWork(t *testing.T) {
+	previous := GetGlobalConfig()
+	t.Cleanup(func() { SetGlobalConfig(previous) })
+	SetGlobalConfig(&CurdConfig{VimKeys: false})
+
+	plain := Model{isHomeMenu: true}
+	keys := func(m Model) string {
+		parts := []string{}
+		for _, hint := range m.keyHints() {
+			parts = append(parts, hint.Key)
+		}
+		return strings.Join(parts, " ")
+	}
+
+	// No categories, so no category key.
+	if got := keys(plain); strings.Contains(got, "←/→") {
+		t.Errorf("a menu with no categories offered a category key: %q", got)
+	}
+	// The home menu quits; anything else goes back.
+	if got := keys(plain); !strings.Contains(got, "ctrl+c") {
+		t.Errorf("the home menu should offer quit: %q", got)
+	}
+	if got := keys(Model{}); !strings.Contains(got, "esc") {
+		t.Errorf("a submenu should offer back: %q", got)
+	}
+
+	tabbed := Model{layout: menuLayout{tabs: []Tab{{Key: "A"}, {Key: "B"}}}}
+	if got := keys(tabbed); !strings.Contains(got, "←/→") {
+		t.Errorf("a menu with categories should offer the category key: %q", got)
+	}
+
+	// Under vim keys the arrows move the cursor, so the category key differs
+	// and the movement hint has to match what actually moves.
+	SetGlobalConfig(&CurdConfig{VimKeys: true})
+	if got := keys(tabbed); !strings.Contains(got, "tab") || strings.Contains(got, "←/→") {
+		t.Errorf("under vim keys the category key should be tab: %q", got)
+	}
+	if got := keys(tabbed); !strings.Contains(got, "j/k") {
+		t.Errorf("under vim keys the movement hint should be j/k: %q", got)
+	}
+}
+
+// A terminal too small for the menu should say so rather than draw something
+// unreadable and leave the user guessing whether it is broken.
+func TestTooSmallTerminalIsToldSo(t *testing.T) {
+	m := &Model{
+		allOptions:     []SelectionOption{{Key: "1", Label: "Frieren"}},
+		terminalWidth:  20,
+		terminalHeight: 6,
+	}
+	m.filterOptions()
+	view := m.View()
+
+	if strings.Contains(view, "Frieren") {
+		t.Error("the list was drawn into a terminal too small for it")
+	}
+	for _, want := range []string{DisplayName, "Resize"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the notice does not mention %q: %q", want, view)
+		}
+	}
+
+	// A terminal that has not reported its size yet must not trigger it.
+	unknown := &Model{allOptions: []SelectionOption{{Key: "1", Label: "Frieren"}}}
+	unknown.filterOptions()
+	if strings.Contains(unknown.View(), "Resize") {
+		t.Error("a menu with no size yet was told to resize")
+	}
+}
+
+// The filter line costs a row, so it appears only when there is something in it.
+func TestFilterLineOnlyAppearsWhenUsed(t *testing.T) {
+	m := &Model{allOptions: []SelectionOption{{Key: "1", Label: "Frieren"}}, terminalWidth: 80, terminalHeight: 20}
+	m.filterOptions()
+	if strings.Contains(m.View(), "/ ") && !strings.Contains(m.View(), "Frieren") {
+		t.Error("an empty filter drew a line saying nothing")
+	}
+
+	m.filter = "fri"
+	m.filterOptions()
+	if !strings.Contains(m.View(), "fri") {
+		t.Errorf("a filter in use was not shown:\n%s", m.View())
+	}
+}

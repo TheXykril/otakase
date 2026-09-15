@@ -360,32 +360,23 @@ func (m *Model) replaceOptions(options []SelectionOption) {
 
 // View renders the UI and only shows as many options as fit in the terminal
 func (m Model) View() string {
+	if m.terminalWidth > 0 && m.terminalHeight > 0 &&
+		(m.terminalWidth < minMenuWidth || m.terminalHeight < minMenuHeight) {
+		return renderTooSmallNotice(m.terminalWidth, m.terminalHeight)
+	}
+
 	var b strings.Builder
 
-	// Display the search prompt and filter with colors
-	if VimKeysEnabled(nil) {
+	// A filter line, shown only once there is something in it or the user has
+	// asked to search. An empty "Filter:" on every screen is a row spent
+	// saying nothing.
+	if m.filter != "" || m.filterActive {
+		caret := ""
 		if m.filterActive {
-			b.WriteString(titleStyle.Render("Search") + " (type query · arrows move · Enter: select · Esc: normal):\n")
-			b.WriteString(filterLabelStyle.Render("/") +
-				filterTextStyle.Render(m.filter+"▌") + "\n\n")
-		} else {
-			b.WriteString(titleStyle.Render("Select") + " (hjkl/arrows · / search · Enter · Esc):\n")
-			if m.filter != "" {
-				b.WriteString(filterLabelStyle.Render("Filter: ") +
-					filterTextStyle.Render(m.filter) + "\n\n")
-			} else {
-				b.WriteString(quitHintStyle.Render("Press / to search") + "\n\n")
-			}
+			caret = "▌"
 		}
-	} else {
-		hint := " (Press " + quitHintStyle.Render("Ctrl+C") + " to quit):\n"
-		if m.layout.hasTabs() {
-			hint = " (" + quitHintStyle.Render("←/→") + " category · " +
-				quitHintStyle.Render("Ctrl+C") + " quit):\n"
-		}
-		b.WriteString(titleStyle.Render("Search") + hint)
-		b.WriteString(filterLabelStyle.Render("Filter: ") +
-			filterTextStyle.Render(m.filter) + "\n\n")
+		b.WriteString(filterLabelStyle.Render("/ ") +
+			filterTextStyle.Render(m.filter+caret) + "\n\n")
 	}
 
 	if len(m.filteredKeys) == 0 {
@@ -418,12 +409,13 @@ func (m Model) View() string {
 
 	body := b.String()
 
-	// The tab bar is drawn after the list so its rule can span exactly the
-	// width the list actually uses. Stretching it to the terminal instead makes
-	// the body as wide as the screen, which then pushes the detail pane off to
-	// the far edge with an empty field between them.
-	if bar := renderTabBar(m.layout, lipgloss.Width(body)); bar != "" {
-		body = bar + "\n" + body
+	// The tab bar is drawn after the list so it can span exactly the width the
+	// list actually uses. Stretching it to the terminal instead makes the body
+	// as wide as the screen, which pushes the detail pane off to the far edge
+	// with an empty field between them.
+	contentWidth := lipgloss.Width(body)
+	if bar := renderTabBar(m.layout, contentWidth); bar != "" {
+		body = bar + "\n\n" + body
 	}
 
 	if m.layout.pane && m.terminalWidth > 0 {
@@ -448,11 +440,57 @@ func (m Model) View() string {
 		}
 	}
 
-	if footer := renderFooter(m.layout); footer != "" {
-		body += "\n" + footer
+	// Header, rule, body, footer -- the frame the whole menu sits in.
+	frameWidth := lipgloss.Width(body)
+	header := renderBreadcrumb(m.sectionLabel())
+	frame := header + "\n" + renderRule(frameWidth) + "\n" + body
+	if hints := renderKeyHints(m.keyHints(), frameWidth); hints != "" {
+		frame += "\n" + hints
 	}
+	return frame
+}
 
-	return body
+// sectionLabel is what the breadcrumb says after the program's name: the
+// category being looked at, or nothing when the menu has no categories.
+func (m Model) sectionLabel() string {
+	if !m.layout.hasTabs() {
+		return ""
+	}
+	for _, tab := range m.layout.tabs {
+		if tab.Key == m.layout.activeTabKey() {
+			return tab.Label
+		}
+	}
+	return ""
+}
+
+// keyHints are the keys worth showing, in the order they are most used.
+// Only keys that do something here are listed: offering one that does nothing
+// is worse than offering none, because it invites a press that goes nowhere.
+func (m Model) keyHints() []keyHint {
+	hints := []keyHint{{Key: "↵", Label: "select"}}
+	if m.layout.hasTabs() {
+		key := "←/→"
+		if VimKeysEnabled(nil) {
+			key = "tab"
+		}
+		hints = append(hints, keyHint{Key: key, Label: "category"})
+	}
+	if VimKeysEnabled(nil) {
+		hints = append(hints, keyHint{Key: "j/k", Label: "move"}, keyHint{Key: "/", Label: "search"})
+	} else {
+		hints = append(hints, keyHint{Key: "↑/↓", Label: "move"}, keyHint{Key: "type", Label: "filter"})
+	}
+	for _, action := range m.layout.footer {
+		if action.Hint == "" {
+			continue
+		}
+		hints = append(hints, keyHint{Key: action.Hint, Label: action.Label})
+	}
+	if m.isHomeMenu {
+		return append(hints, keyHint{Key: "ctrl+c", Label: "quit"})
+	}
+	return append(hints, keyHint{Key: "esc", Label: "back"})
 }
 
 // paneTitle, paneposter and paneMeta describe the highlighted entry. Each

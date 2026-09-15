@@ -48,6 +48,19 @@
   exclusive. A mistyped colour costs that colour alone: it is reported and
   skipped while the rest apply.
 
+- **The menu is framed like a proper application.** A breadcrumb naming the
+  program and the open category, a rule beneath it, the list, and a centred row
+  of key badges along the bottom — the shape borrowed from
+  [kari](https://github.com/Dhairya3391/kari), with every colour still coming
+  from your palette rather than hardcoded.
+
+  The keys shown are the keys that work: a menu without categories does not
+  offer a category key, the home menu offers quit where a submenu offers back,
+  and under vim keys the hints say `j/k` and `tab` rather than arrows. The
+  filter line appears only once something is typed, instead of spending a row
+  on an empty `Filter:` on every screen. A terminal smaller than 36 × 10 is
+  told to resize rather than shown something unreadable.
+
 - **← and → move between categories**, alongside Tab, and each tab shows how
   many entries it holds. The bar worked from the moment it was added, but
   nothing on screen said so, which made it read as a heading.
