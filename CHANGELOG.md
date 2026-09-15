@@ -32,6 +32,16 @@ and why.
 - **The Arch package `replaces`/`conflicts` with `curd`**, and installs a `curd`
   symlink beside `otakase` for muscle memory and any script that calls it.
 
+### Added
+
+- **`otk`, a short alias.** Same program, same flags — `otakase` is a mouthful
+  for something typed several times a day. Installed as a symlink beside
+  `otakase` on Linux and macOS, and as a forwarding shim on Windows, where a
+  symlink is not worth the trouble. `curd` still works too.
+
+  The updater resolves symlinks before replacing the binary, so `otk -u`
+  updates the real executable rather than overwriting the link with it.
+
 ### Fixed
 
 - **`curd -u` updated from the upstream repository instead of this fork.**

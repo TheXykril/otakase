@@ -141,7 +141,7 @@ func CurdOut(data interface{}) {
 		switch runtime.GOOS {
 		case "windows":
 			err := beeep.Notify(
-				"Curd",
+				DisplayName,
 				fmt.Sprintf("%v", data),
 				"",
 			)
@@ -159,9 +159,9 @@ func CurdOut(data interface{}) {
 					// Remove quotes from the message
 					message := strings.Trim(parts[2], "\"")
 					cmd := exec.Command("notify-send",
-						"-a", "Curd",
+						"-a", DisplayName,
 						"-h", "string:x-canonical-private-synchronous:curd-notification",
-						"Curd",
+						DisplayName,
 						"-i", parts[1],
 						message)
 					err := cmd.Run()
@@ -172,9 +172,9 @@ func CurdOut(data interface{}) {
 				}
 			} else {
 				cmd := exec.Command("notify-send",
-					"-a", "Curd",
+					"-a", DisplayName,
 					"-h", "string:x-canonical-private-synchronous:curd-notification",
-					"Curd",
+					DisplayName,
 					dataStr)
 				err := cmd.Run()
 				if err != nil {
@@ -974,7 +974,7 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 				trackerLabel := RemoteTrackingDisplayName(userCurdConfig)
 				Log(fmt.Sprintf("Local history episode (%d) is ahead of %s episode (%d), prompting user", animePointer.Ep.Number, trackerLabel, anilistEpisode))
 				options := []SelectionOption{
-					{Key: "update_upstream", Label: fmt.Sprintf("Use Curd episode %d", animePointer.Ep.Number)},
+					{Key: "update_upstream", Label: fmt.Sprintf("Use %s episode %d", DisplayName, animePointer.Ep.Number)},
 					{Key: "use_anilist", Label: fmt.Sprintf("Use %s episode %d", trackerLabel, anilistEpisode)},
 				}
 				CurdOut(fmt.Sprintf("Curd has episode %d. %s has episode %d. Pick one.", animePointer.Ep.Number, trackerLabel, anilistEpisode))

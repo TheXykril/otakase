@@ -58,6 +58,7 @@ sudo pacman -S --needed mpv
 curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-x86_64
 chmod +x otakase
 sudo install -Dm755 otakase /usr/bin/otakase
+sudo ln -sf otakase /usr/bin/otk
 ```
 
 Optional extras:
@@ -79,6 +80,7 @@ curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/o
 
 chmod +x otakase
 sudo install -Dm755 otakase /usr/bin/otakase
+sudo ln -sf otakase /usr/bin/otk
 ```
 
 ### macOS
@@ -95,9 +97,10 @@ curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/o
 
 chmod +x otakase
 sudo mv otakase /usr/local/bin/
+sudo ln -sf otakase /usr/local/bin/otk
 ```
 
-Uninstall with `sudo rm /usr/local/bin/otakase`.
+Uninstall with `sudo rm /usr/local/bin/otakase /usr/local/bin/otk`.
 
 ### Windows
 
@@ -122,8 +125,10 @@ profile, those names still work. `OTAKASE_MAL_*` takes precedence.
 
 ## Usage
 
-Run `otakase` with no arguments to pick from your list. Arguments always take
-precedence over the config file.
+Run `otakase` with no arguments to pick from your list. **`otk` is a shorter
+alias for the same program** — every command below works with either, and
+`curd` still works too for anyone arriving from the old name. Arguments always
+take precedence over the config file.
 
 | Flag | Description | Default |
 |---|---|---|
@@ -161,6 +166,7 @@ precedence over the config file.
 | `-v` | Show the version | |
 
 ```bash
+otk                                 # the short form, identical in every way
 otakase -c                          # continue where you left off
 otakase -rofi -image-preview        # graphical menu with posters
 otakase -dub -next-episode-prompt   # dub, asking before each next episode

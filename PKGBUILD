@@ -18,6 +18,8 @@ makedepends=('go' 'git')
 # otherwise end up with two copies of the same tool fighting over /usr/bin.
 conflicts=('curd' 'curd-bin' 'curd-git')
 replaces=('curd')
+# Declared so a future package cannot quietly take the same paths.
+provides=('otakase' 'otk' 'curd')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/TheXykril/otakase/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=('SKIP')
 
@@ -37,6 +39,8 @@ check() {
 package() {
   cd "$srcdir/otakase-$pkgver"
   install -Dm755 otakase "$pkgdir/usr/bin/otakase"
+  # otk is the short form, for something typed several times a day.
+  ln -s otakase "$pkgdir/usr/bin/otk"
   # Muscle memory, and any script that still calls curd.
   ln -s otakase "$pkgdir/usr/bin/curd"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"

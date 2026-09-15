@@ -16,6 +16,9 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 [Files]
 ; Copy the Otakase executable to the install directory
 Source: "..\releases\otakase-{#SetupSetting("AppVersion")}\windows\otakase-windows-x86_64.exe"; DestDir: "{app}"; DestName: "otakase.exe"; Flags: ignoreversion
+; otk is the short form; Windows has no symlink worth using here, so this
+; one-line shim forwards to the real executable beside it.
+Source: "otk.cmd"; DestDir: "{app}"; Flags: ignoreversion
 Source: "mpv\mpv.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
 
 [Icons]

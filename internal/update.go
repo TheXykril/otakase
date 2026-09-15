@@ -519,7 +519,7 @@ func updateUserMessage(config *CurdConfig, msg string) {
 		// One short desktop notification, not a barrage of CurdOut lines.
 		_ = exec.Command("notify-send", "-a", DisplayName,
 			"-h", "string:x-canonical-private-synchronous:"+AppName+"-update",
-			"Curd", msg).Run()
+			DisplayName, msg).Run()
 		return
 	}
 	fmt.Println(msg)
@@ -703,7 +703,7 @@ func preferGUIPasswordPrompt() bool {
 // promptSudoPasswordGUI tries GTK/desktop password dialogs (zenity → yad → kdialog).
 func promptSudoPasswordGUI(prompt string) (string, error) {
 	if prompt == "" {
-		prompt = "Enter your password to install the Curd update:"
+		prompt = "Enter your password to install the " + DisplayName + " update:"
 	}
 
 	type dialog struct {
@@ -712,11 +712,11 @@ func promptSudoPasswordGUI(prompt string) (string, error) {
 	}
 	dialogs := []dialog{
 		// GTK (GNOME / many desktops)
-		{"zenity", []string{"--password", "--title=Curd Update", "--text=" + prompt}},
+		{"zenity", []string{"--password", "--title=" + DisplayName + " Update", "--text=" + prompt}},
 		// GTK-based yad
-		{"yad", []string{"--entry", "--hide-text", "--title=Curd Update", "--text=" + prompt, "--button=OK:0", "--button=Cancel:1"}},
+		{"yad", []string{"--entry", "--hide-text", "--title=" + DisplayName + " Update", "--text=" + prompt, "--button=OK:0", "--button=Cancel:1"}},
 		// KDE
-		{"kdialog", []string{"--title", "Curd Update", "--password", prompt}},
+		{"kdialog", []string{"--title", DisplayName + " Update", "--password", prompt}},
 	}
 
 	for _, d := range dialogs {

@@ -130,7 +130,7 @@ func main() {
 
 	// Check version before screen clearing
 	if *versionFlag {
-		fmt.Printf("Curd version: %s\n", resolvedVersion())
+		fmt.Printf("%s version: %s\n", internal.DisplayName, resolvedVersion())
 		os.Exit(0)
 	}
 
