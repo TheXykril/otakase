@@ -140,7 +140,9 @@ planning, completed and the rest — without going back to the menu. Each tab
 shows how many entries it holds. Tab and Shift+Tab do the same, and are the
 way to do it when vim keys are on, where the arrows move the cursor instead.
 Which categories appear, and in what order, is `MenuOrder`. The highlighted show's
-full title and notes appear beside the list, where the row itself is clipped.
+poster, full title and notes appear beside the list, where the row itself is
+clipped. Posters need a terminal that draws images into a fixed block of cells —
+Kitty and Ghostty do; elsewhere the pane is text.
 
 | Flag | Description | Default |
 |---|---|---|

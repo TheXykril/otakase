@@ -168,7 +168,7 @@ func renderFooter(layout menuLayout) string {
 // The poster is passed in already rendered rather than fetched here, because
 // drawing is a pure function of state and fetching is not: a view that reached
 // for the network would stall the interface every time the selection moved.
-func renderSidePane(title string, meta []string, width, height int) string {
+func renderSidePane(title, poster string, posterRows int, meta []string, width, height int) string {
 	if width <= 0 {
 		return ""
 	}
@@ -181,6 +181,14 @@ func renderSidePane(title string, meta []string, width, height int) string {
 	wrap := lipgloss.NewStyle().Width(inner)
 
 	var b strings.Builder
+	if poster != "" && posterRows > 0 {
+		// The sequence is invisible to lipgloss -- zero width, one line -- while
+		// the terminal paints it across posterRows. The blank lines make the
+		// layout's idea of the height match what is actually on screen; without
+		// them the title is written over the picture.
+		b.WriteString(poster)
+		b.WriteString(strings.Repeat("\n", posterRows))
+	}
 	if title != "" {
 		b.WriteString(wrap.Inherit(paneTitleStyle).Render(title))
 		b.WriteString("\n")
@@ -313,8 +321,39 @@ func attachDetailPane(model *Model) {
 	}
 	model.layout.pane = true
 	model.metaOf = paneDetails
-	Log(fmt.Sprintf("Detail pane: on, %d entries", len(model.allOptions)))
+
+	// A poster is only offered where the terminal can be told to draw it into a
+	// fixed block of cells, and where there is a cover to draw.
+	covers := 0
+	for _, option := range model.allOptions {
+		if option.Thumbnail != "" {
+			covers++
+		}
+	}
+	config := GetGlobalConfig()
+	wantImages := config == nil || config.ImagePreview
+	protocol := DetectTerminalImageProtocol()
+
+	if covers > 0 && wantImages && protocol == TerminalImageKitty {
+		// Cells are about twice as tall as they are wide, and a cover is about
+		// half again as tall as it is wide, so the row count is roughly
+		// three quarters of the column count.
+		cols := paneInnerWidth
+		rows := cols * 3 / 4
+		source := NewPosterSource(protocol, cols, rows)
+		model.posterOf = source.Poster
+		model.posterRows = rows
+		Log(fmt.Sprintf("Detail pane: on, %d entries, posters %dx%d cells via %s", len(model.allOptions), cols, rows, protocol))
+		return
+	}
+	Log(fmt.Sprintf("Detail pane: on, %d entries, no posters (covers=%d images=%v protocol=%s)",
+		len(model.allOptions), covers, wantImages, protocol))
 }
+
+// paneInnerWidth is the width a poster is drawn into, in columns. It is fixed
+// rather than derived from the terminal so the cached rendering stays valid as
+// the window is resized.
+const paneInnerWidth = 22
 
 // paneDetails is what is known about an entry beyond its title. The label
 // already carries the counts and the airing note, so the pane repeats neither;
