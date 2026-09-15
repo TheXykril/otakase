@@ -304,10 +304,37 @@ nothing and the other two carry on.
 
 ## Theming
 
-The rofi menus are rendered from a colour palette at every launch. On
-[Omarchy](https://omarchy.org) that palette follows the current desktop theme,
-so changing your theme changes the menus with no extra step. Elsewhere Otakase
-uses its own palette.
+The menus — both rofi and terminal — are rendered from a colour palette at every
+launch. On [Omarchy](https://omarchy.org) that palette follows the current
+desktop theme, so changing your theme changes the menus with no extra step.
+Elsewhere Otakase uses its own palette. `Theme` picks between them: `auto` (the
+default), `omarchy`, or `builtin`.
+
+### Changing individual colours
+
+`ThemeOverrides` replaces named colours with your own, on top of whichever
+palette is in use. Following your desktop theme and disliking one colour in it
+are not exclusive:
+
+```
+ThemeOverrides=accent:#ff6188, green:#a9dc76
+```
+
+Comma-separated `name:#hex` pairs. `#rgb` and `#rrggbb` both work, names are
+case-insensitive, and anything you do not name keeps the value it had. The
+names are:
+
+```
+accent      selection   muted
+background  background-dark  background-light
+foreground  foreground-dark  foreground-bright
+red  green  yellow  blue  magenta  cyan
+```
+
+A mistyped colour costs that colour and nothing else — it is reported in
+`debug.log` and skipped, and the rest still apply. When any override is in use
+the log names the theme as customised, so a colour you do not recognise is
+traceable.
 
 ## Configuration
 
@@ -331,6 +358,8 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `NextEpisodePrompt` | Boolean | `true`, `false` | Ask before playing the next episode. |
 | `ScoreOnCompletion` | Boolean | `true`, `false` | Prompt to rate a show when you finish it. |
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
+| `Theme` | Enum | `auto`, `omarchy`, `builtin` | Which colour palette to use. `auto` follows the desktop on Omarchy. |
+| `ThemeOverrides` | String | `name:#hex` pairs | Replaces named colours on top of the palette in use. See [Theming](#theming). |
 | `AnimeSkipClientID` | String | an Anime-Skip client id | Adds Anime-Skip as a source of skip timings. Empty by default — the API requires a client id that identifies the application, and none is bundled. Timings still come from the source in use and from AniSkip without it. |
 | `SkipFiller` / `SkipRecap` | Boolean | `true`, `false` | Skip filler episodes and recap sections. |
 | `DiscordPresence` | Boolean | `true`, `false` | Discord Rich Presence. |

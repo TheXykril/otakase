@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/thexykril/otakase/internal/theme"
 )
 
@@ -539,4 +540,47 @@ func TestEveryTabKeyIsARealCategory(t *testing.T) {
 	if !found {
 		t.Error("UNTRACKED disappeared instead of becoming an action")
 	}
+}
+
+// An override is only worth having if it reaches the screen. This goes through
+// the same call startup makes, then renders, rather than checking the palette
+// in isolation.
+func TestThemeOverrideReachesTheRenderedMenu(t *testing.T) {
+	previous := GetGlobalConfig()
+	t.Cleanup(func() {
+		SetGlobalConfig(previous)
+		ApplyThemeFromConfig(previous)
+	})
+
+	config := &CurdConfig{Theme: "builtin", ThemeOverrides: "accent:#ff6188"}
+	SetGlobalConfig(config)
+	palette := ApplyThemeFromConfig(config)
+
+	if palette.Accent != "#ff6188" {
+		t.Fatalf("the override did not reach the palette: %q", palette.Accent)
+	}
+	// Whatever writes the rofi themes reads the active palette, so it has to
+	// see the same colours the terminal menus use.
+	if active := theme.Active(); active.Accent != "#ff6188" {
+		t.Errorf("the active palette still has %q, so rofi would disagree with the menu", active.Accent)
+	}
+
+	m := &Model{allOptions: []SelectionOption{{Key: "1", Label: "Frieren"}}}
+	attachCategoryTabs(m, &SelectionRefreshConfig{
+		Categories:     []Tab{{Key: "CURRENT", Label: "Watching"}, {Key: "ALL", Label: "All"}},
+		ActiveCategory: "CURRENT",
+		LoadCategory:   func(string) []SelectionOption { return nil },
+	})
+	m.filterOptions()
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+
+	// lipgloss only emits colour when the terminal is thought to support it, so
+	// the check is on the styles the view is built from rather than its bytes.
+	if got := titleStyle.GetForeground(); got != lipgloss.Color("#ff6188") {
+		t.Errorf("the title style did not pick up the override, got %v", got)
+	}
+	if got := tabActiveStyle.GetBackground(); got == lipgloss.Color("") {
+		t.Error("the tab style lost its colour entirely")
+	}
+	_ = sized
 }

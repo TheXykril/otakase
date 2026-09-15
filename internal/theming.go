@@ -20,6 +20,20 @@ func ApplyThemeFromConfig(config *CurdConfig) theme.Palette {
 	if err != nil {
 		Log(fmt.Sprintf("Falling back to the builtin palette: %v", err))
 	}
+
+	// Hand-picked colours sit on top of whatever was resolved, so following the
+	// desktop theme and replacing one colour in it are not exclusive.
+	if config != nil {
+		var problems []error
+		palette, problems = theme.ApplyOverrides(palette, config.ThemeOverrides)
+		for _, problem := range problems {
+			Log(fmt.Sprintf("ThemeOverrides: %v", problem))
+		}
+		// Whatever reads the active palette later -- the rofi themes are
+		// written from it -- must see the same colours the menus use.
+		theme.SetActive(palette)
+	}
+
 	ApplyTheme(palette)
 	Log(fmt.Sprintf("Using %s colour theme %q", palette.Source, palette.Name))
 	return palette
