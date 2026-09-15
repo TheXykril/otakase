@@ -1,8 +1,10 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -116,6 +118,12 @@ func InstallHyprlandKeybind(home string, force bool) ([]string, error) {
 	if err := writeConfig(cfg.path, updated, &notes); err != nil {
 		return notes, err
 	}
+	// A combination held by a default binding is not visible in the user's own
+	// file, so the file alone cannot say what is being taken over. Ask the
+	// running compositor instead, and name it.
+	if previous := liveBindingDescription(); previous != "" {
+		notes = append(notes, fmt.Sprintf("note: %s was bound to %q; the unbind above takes it over", keybindCombo, previous))
+	}
 	return append(notes,
 		fmt.Sprintf("added %s -> %s in %s", keybindCombo, keybindCommand, cfg.path),
 		"run `hyprctl reload` if Hyprland has not picked it up already",
@@ -211,4 +219,36 @@ func commentOutBinding(body, target string, cfg hyprlandConfig) string {
 		break
 	}
 	return strings.Join(lines, "\n")
+}
+
+// superShiftModmask is Hyprland's bitmask for SUPER (64) + SHIFT (1).
+const superShiftModmask = 65
+
+// liveBindingDescription asks the running compositor what currently holds the
+// combination. Omarchy binds it by default -- to a webapp, at the time of
+// writing -- and a default lives outside the user's config where scanning the
+// file cannot see it. Any failure here is silence, never an error: this is a
+// courtesy message, and a machine without Hyprland running still deserves to
+// have its config edited.
+func liveBindingDescription() string {
+	out, err := exec.Command("hyprctl", "binds", "-j").Output()
+	if err != nil {
+		return ""
+	}
+	var binds []struct {
+		Modmask     int    `json:"modmask"`
+		Key         string `json:"key"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(out, &binds); err != nil {
+		return ""
+	}
+	for _, bind := range binds {
+		if bind.Modmask == superShiftModmask && strings.EqualFold(bind.Key, "A") {
+			if description := strings.TrimSpace(bind.Description); description != "" && description != DisplayName {
+				return description
+			}
+		}
+	}
+	return ""
 }
