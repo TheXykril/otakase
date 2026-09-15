@@ -1461,17 +1461,11 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 	// Stream is live — safe for the main loop again.
 	endMPVPlaylistSwitch()
 
-	// Refresh skip times in background (non-blocking for playback).
+	// Refresh skip times in background (non-blocking for playback). Every
+	// source is consulted, not only AniSkip: a show tracked on AniList alone
+	// has no MyAnimeList id, and used to get no skipping at all as a result.
 	go func(ep int) {
-		if c.anime.MalId > 0 {
-			if err := GetAndParseAniSkipData(c.anime.MalId, ep, 0, c.anime); err != nil {
-				Log(fmt.Sprintf("AniSkip for ep %d: %v", ep, err))
-			}
-			if c.anime.Ep.SkipTimes.Op.Start != c.anime.Ep.SkipTimes.Op.End ||
-				c.anime.Ep.SkipTimes.Ed.Start != c.anime.Ep.SkipTimes.Ed.End {
-				_ = SendSkipTimesToMPV(c.anime)
-			}
-		}
+		ApplySkipTimes(c.anime, ep, GetGlobalConfig(), GetProvider())
 	}(targetEp)
 
 	// Re-probe alternate for the new episode only after placeholders are rebuilt.

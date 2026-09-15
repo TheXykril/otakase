@@ -45,6 +45,13 @@ type HintResolver interface {
 	GetEpisodeURLForModeWithHints(config PlaybackConfig, id string, epNo int, mode string) ([]string, map[string]StreamPlaybackHint, error)
 }
 
+// SkipRanger reports the intro and outro of an episode as [start, end] second
+// pairs. A provider that already knows them -- because its stream response
+// carries them -- can answer without a second service being asked at all.
+type SkipRanger interface {
+	SkipRange(id, mode string, epNo int) (intro, outro []int, err error)
+}
+
 // IDResolver refreshes or validates a provider-specific show ID.
 type IDResolver interface {
 	ResolveProviderID(providerID, query string) (string, error)

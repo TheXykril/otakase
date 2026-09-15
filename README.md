@@ -273,6 +273,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `NextEpisodePrompt` | Boolean | `true`, `false` | Ask before playing the next episode. |
 | `ScoreOnCompletion` | Boolean | `true`, `false` | Prompt to rate a show when you finish it. |
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
+| `AnimeSkipClientID` | String | an Anime-Skip client id | Adds Anime-Skip as a source of skip timings. Empty by default — the API requires a client id that identifies the application, and none is bundled. Timings still come from the source in use and from AniSkip without it. |
 | `SkipFiller` / `SkipRecap` | Boolean | `true`, `false` | Skip filler episodes and recap sections. |
 | `DiscordPresence` | Boolean | `true`, `false` | Discord Rich Presence. |
 | `RofiSelection` | Boolean | `true`, `false` | Use rofi for selection menus. |

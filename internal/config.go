@@ -68,6 +68,7 @@ type CurdConfig struct {
 	DiscordPresence            bool     `config:"DiscordPresence"`
 	DiscordClientId            string   `config:"DiscordClientId"`
 	VimKeys                    bool     `config:"VimKeys"`
+	AnimeSkipClientID          string   `config:"AnimeSkipClientID"`
 	CheckUpdates               bool     `config:"CheckUpdates"`
 	MpvEpisodePlaylist         bool     `config:"MpvEpisodePlaylist"`
 	Provider                   string   `config:"Provider"`
@@ -106,17 +107,17 @@ func GetStoragePath() string {
 // Default configuration values as a map
 func defaultConfigMap() map[string]string {
 	return map[string]string{
-		"Player":                     "mpv",
-		"MpvArgs":                    "[]",
-		"MpvPlaybackStartTimeout":    "20",
-		"StoragePath":                StoragePathDefault,
-		"AnimeNameLanguage":          "english",
-		"SubsLanguage":               "english",
-		"MenuOrder":                  "CURRENT,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER",
-		"SubOrDub":                   "sub",
-		"SubStyle":                   "ask",
-		"PercentageToMarkComplete":   "85",
-		"NextEpisodePrompt":          "false",
+		"Player":                   "mpv",
+		"MpvArgs":                  "[]",
+		"MpvPlaybackStartTimeout":  "20",
+		"StoragePath":              StoragePathDefault,
+		"AnimeNameLanguage":        "english",
+		"SubsLanguage":             "english",
+		"MenuOrder":                "CURRENT,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER",
+		"SubOrDub":                 "sub",
+		"SubStyle":                 "ask",
+		"PercentageToMarkComplete": "85",
+		"NextEpisodePrompt":        "false",
 		// A show that exists only in the other language should play, not stop to
 		// ask a question with one useful answer. Curd still says which it used.
 		"AutoAudioFallback":          "true",
@@ -133,6 +134,7 @@ func defaultConfigMap() map[string]string {
 		"DiscordPresence":            "true",
 		"DiscordClientId":            "1287457464148820089",
 		"VimKeys":                    "false",
+		"AnimeSkipClientID":          "",
 		"CheckUpdates":               "true",
 		"MpvEpisodePlaylist":         "true",
 		"Provider":                   "stacked",

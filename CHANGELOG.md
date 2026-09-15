@@ -21,6 +21,25 @@
   with the stated headers — resolving a URL is not the same as it playing, and
   this project has been caught by that difference before.
 
+- **Skip timings now come from every source that knows them.** The opening is
+  taken from the first source that has one and the ending from the first that
+  has one, and they need not be the same source: AniSkip frequently knows an
+  opening and not an ending, and a provider that ships timings with the stream
+  often knows both, so a half-answer is completed rather than discarded. Asking
+  stops as soon as both halves are known.
+
+  The chain is the active provider first, because a provider that ships timings
+  with the stream has already paid for that request; then AniSkip, which is
+  keyless; then Anime-Skip, which needs two requests and a client id.
+
+  This also fixes a quiet gap: skipping was keyed on a MyAnimeList id, so a show
+  tracked on AniList alone never skipped anything at all.
+
+  Anime-Skip requires an `X-Client-ID` identifying the application. None is
+  bundled — the ones in circulation belong to other projects, and borrowing one
+  makes this program's traffic look like theirs. Set `AnimeSkipClientID` to use
+  it; the other sources work without it.
+
 ### Changed
 
 - **The Bubble Tea stack moved up** (bubbletea 1.3.10, lipgloss 1.1.0), and the
