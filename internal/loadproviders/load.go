@@ -4,6 +4,7 @@ package loadproviders
 import (
 	_ "github.com/thexykril/otakase/internal/providers/allanime"
 	_ "github.com/thexykril/otakase/internal/providers/anidb"
+	_ "github.com/thexykril/otakase/internal/providers/anikoto"
 	_ "github.com/thexykril/otakase/internal/providers/animepahe"
 	_ "github.com/thexykril/otakase/internal/providers/anineko"
 	_ "github.com/thexykril/otakase/internal/providers/anipub"

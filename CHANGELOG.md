@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **anikoto, and it leads the provider stack.** Its identifiers are AniList
+  media ids — the same ids the tracker already stores for every entry. Every
+  other provider has to work out which of its shows is the one on your list,
+  and getting that wrong is the failure this project has spent most of its
+  history repairing. Searching "rich girl caretaker", the title that broke the
+  older providers, returns one exact result whose id is the one already in the
+  watch history.
+
+  It answers with a plain HLS manifest, a subtitle track, the HTTP headers its
+  CDN requires, and per-episode intro and outro ranges, in two requests. Sub
+  and dub are indexed separately, so a dub request gets a dub or a straight
+  answer that there is none.
+
+  Verified against the real host end to end, including fetching the manifest
+  with the stated headers — resolving a URL is not the same as it playing, and
+  this project has been caught by that difference before.
+
+### Changed
+
+- **The Bubble Tea stack moved up** (bubbletea 1.3.10, lipgloss 1.1.0), and the
+  menu gained the parts that surround the list: category tabs from the
+  tracker's own list statuses, an actions footer, and a detail pane. All of it
+  is opt-in, so menus that have not asked for it render exactly as before.
+  `MenuOrder` keeps its name and is read as both settings.
+
+- **Posters can be drawn in the terminal**, through the Kitty, iTerm2 and Sixel
+  protocols. Detection refuses inside tmux and screen, where an image lands in
+  the wrong pane or wedges the terminal.
+
+### Removed
+
+- **ueberzugpp is no longer a dependency.** The function that used it had no
+  callers, and every image preview in the program is drawn by rofi itself
+  through its own icon protocol. It had never done anything here.
+
 ## 1.0.0 — 2026-09-15
 
 Curd is now **Otakase**, and the version resets to 1.0.0. Everything below this

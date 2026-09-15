@@ -33,16 +33,21 @@ func TestProviderEnabledDisablesAllanimeAndAnimepaheByDefault(t *testing.T) {
 }
 
 func TestConfiguredProviderNamesFiltersDisabledProviders(t *testing.T) {
+	// Configs that name only disabled providers fall back to the head of the
+	// stack. Which provider that is changes as the stack is reordered, and
+	// that reordering should not fail a test about fallback.
+	stackHead := defaultEnabledProviderStack()[0]
+
 	cases := []struct {
 		name string
 		cfg  *CurdConfig
 		want []string
 	}{
-		{name: "empty", cfg: &CurdConfig{}, want: []string{"kickassanime", "anipub", "anineko", "nyaa"}},
-		{name: "json list", cfg: &CurdConfig{Provider: `["allanime","animepahe"]`}, want: []string{"kickassanime"}},
-		{name: "animepahe only", cfg: &CurdConfig{Provider: `["animepahe"]`}, want: []string{"kickassanime"}},
-		{name: "allanime only", cfg: &CurdConfig{Provider: `["allanime"]`}, want: []string{"kickassanime"}},
-		{name: "legacy alias", cfg: &CurdConfig{Provider: "stacked"}, want: []string{"kickassanime", "anipub", "anineko", "nyaa"}},
+		{name: "empty", cfg: &CurdConfig{}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa"}},
+		{name: "json list", cfg: &CurdConfig{Provider: `["allanime","animepahe"]`}, want: []string{stackHead}},
+		{name: "animepahe only", cfg: &CurdConfig{Provider: `["animepahe"]`}, want: []string{stackHead}},
+		{name: "allanime only", cfg: &CurdConfig{Provider: `["allanime"]`}, want: []string{stackHead}},
+		{name: "legacy alias", cfg: &CurdConfig{Provider: "stacked"}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa"}},
 	}
 
 	for _, tc := range cases {

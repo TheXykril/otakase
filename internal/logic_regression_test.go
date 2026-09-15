@@ -343,8 +343,12 @@ func TestGetProviderNormalizesConfiguredProviderName(t *testing.T) {
 	CurrentProvider = nil
 	SetGlobalConfig(&CurdConfig{Provider: " AllAnime "})
 
-	if got := GetProvider().Name(); got != "kickassanime" {
-		t.Fatalf("expected kickassanime provider when allanime is disabled, got %q", got)
+	// The point is that a disabled provider falls back to the head of the
+	// stack, whichever that currently is -- naming it here only makes this
+	// test fail every time the stack is reordered for good reasons.
+	want := defaultEnabledProviderStack()[0]
+	if got := GetProvider().Name(); got != want {
+		t.Fatalf("expected the stack head %q when allanime is disabled, got %q", want, got)
 	}
 }
 
@@ -359,8 +363,9 @@ func TestGetProviderFallsBackWhenConfiguredProviderDisabled(t *testing.T) {
 	CurrentProvider = nil
 	SetGlobalConfig(&CurdConfig{Provider: " AnimePahe "})
 
-	if got := GetProvider().Name(); got != "kickassanime" {
-		t.Fatalf("expected kickassanime fallback for disabled provider, got %q", got)
+	want := defaultEnabledProviderStack()[0]
+	if got := GetProvider().Name(); got != want {
+		t.Fatalf("expected the stack head %q as fallback for a disabled provider, got %q", want, got)
 	}
 }
 

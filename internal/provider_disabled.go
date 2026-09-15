@@ -103,16 +103,22 @@ func filterEnabledProviders(names []string) []string {
 // preferredProviderOrder ranks providers by how reliably they currently resolve
 // streams. anipub and anineko are the two that verifiably work end to end; the
 // rest are kept registered so an explicit config can still select them.
-// kickassanime leads: it answers with a plain HLS manifest and a subtitle track
-// in two requests, carries whole seasons rather than only what is recent, and is
-// the one host here that indexes dubs separately, so a dub request either gets a
-// dub or a straight answer that there is none.
+// anikoto leads because its identifiers are AniList media ids, which is what the
+// tracker already knows every entry by. Every other provider has to work out
+// which of its shows is the one on the user's list, and getting that wrong is
+// the failure this project has spent most of its history repairing. anikoto
+// also answers with a plain HLS manifest, a subtitle track, the HTTP headers its
+// CDN requires, and per-episode intro and outro ranges, in two requests.
+//
+// kickassanime follows: it answers as cheaply, carries whole seasons rather than
+// only what is recent, and like anikoto indexes dubs separately, so a dub
+// request either gets a dub or a straight answer that there is none.
 //
 // nyaa sits behind the streaming hosts because it costs more to start -- peers
 // have to be found before the first frame -- but ahead of the broken ones,
 // because it reliably carries an episode in the week it airs even when every
 // streaming host is still missing it.
-var preferredProviderOrder = []string{"kickassanime", "anipub", "anineko", "nyaa", "anidb", "senshi", "allanime", "animepahe"}
+var preferredProviderOrder = []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb", "senshi", "allanime", "animepahe"}
 
 func defaultEnabledProviderStack() []string {
 	registered := providers.RegisteredNames()
