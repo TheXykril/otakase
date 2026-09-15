@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 — unreleased
+## 1.0.0 — 2026-09-15
 
 Curd is now **Otakase**, and the version resets to 1.0.0. Everything below this
 section is the curd-era history, kept because it is the record of what changed
