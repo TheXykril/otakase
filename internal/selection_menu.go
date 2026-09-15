@@ -34,6 +34,14 @@ type Model struct {
 	addNewOption   bool
 	isHomeMenu     bool // If true, ESC quits; if false, ESC goes back
 	preserveOrder  bool // skip alphabetical sort (action menus with a fixed priority)
+
+	// layout is the chrome around the list: tabs, an actions footer, a detail
+	// pane. Its zero value draws none of them, which is how every caller that
+	// has not opted in keeps the interface it had.
+	layout   menuLayout
+	loadTab  func(key string) []SelectionOption
+	posterOf func(option SelectionOption) string
+	metaOf   func(option SelectionOption) []string
 }
 
 type optionsRefreshedMsg struct {
@@ -111,6 +119,8 @@ func ApplyTheme(palette theme.Palette) {
 
 	rofiNewEpisodeColor = palette.Green
 	rofiMetaColor = palette.Muted
+
+	applyLayoutTheme(palette)
 }
 
 // Init initializes the model
@@ -180,6 +190,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.filteredKeys = []SelectionOption{{Key: "-1", Label: "Quit"}}
 			m.selected = 0
 			return m, tea.Quit
+		}
+
+		// Tab moves between categories, but only where categories exist. Every
+		// menu without them keeps Tab as "next item", which is what it has
+		// always done here and what people's hands expect.
+		if m.layout.hasTabs() && (key == "tab" || key == "shift+tab") {
+			delta := 1
+			if key == "shift+tab" {
+				delta = -1
+			}
+			m.layout = m.layout.cycleTab(delta)
+			if m.loadTab != nil {
+				m.replaceOptions(m.loadTab(m.layout.activeTabKey()))
+			}
+			m.selected = 0
+			m.scrollOffset = 0
+			return m, nil
 		}
 
 		// --- Vim-enabled selection: normal mode vs search mode ---
@@ -317,6 +344,11 @@ func (m *Model) replaceOptions(options []SelectionOption) {
 func (m Model) View() string {
 	var b strings.Builder
 
+	if bar := renderTabBar(m.layout, m.terminalWidth); bar != "" {
+		b.WriteString(bar)
+		b.WriteString("\n")
+	}
+
 	// Display the search prompt and filter with colors
 	if VimKeysEnabled(nil) {
 		if m.filterActive {
@@ -367,7 +399,67 @@ func (m Model) View() string {
 		}
 	}
 
-	return b.String()
+	body := b.String()
+
+	if m.layout.pane && m.terminalWidth > 0 {
+		// A third of the width, within reason: too narrow and the poster is a
+		// smudge, too wide and the titles start wrapping.
+		paneWidth := m.terminalWidth / 3
+		if paneWidth > 40 {
+			paneWidth = 40
+		}
+		if paneWidth >= 20 {
+			pane := renderSidePane(m.paneTitle(), m.paneposter(), m.paneMeta(), paneWidth, 0)
+			if pane != "" {
+				listWidth := m.terminalWidth - paneWidth - 2
+				left := lipgloss.NewStyle().Width(listWidth).Render(body)
+				body = lipgloss.JoinHorizontal(lipgloss.Top, left, pane)
+			}
+		}
+	}
+
+	if footer := renderFooter(m.layout); footer != "" {
+		body += "\n" + footer
+	}
+
+	return body
+}
+
+// paneTitle, paneposter and paneMeta describe the highlighted entry. Each
+// returns empty when nothing is highlighted or no supplier was given, so the
+// pane simply renders with less in it rather than the view having to branch.
+func (m Model) highlighted() (SelectionOption, bool) {
+	if m.selected < 0 || m.selected >= len(m.filteredKeys) {
+		return SelectionOption{}, false
+	}
+	return m.filteredKeys[m.selected], true
+}
+
+func (m Model) paneTitle() string {
+	option, ok := m.highlighted()
+	if !ok {
+		return ""
+	}
+	if option.Title != "" {
+		return option.Title
+	}
+	return option.Label
+}
+
+func (m Model) paneposter() string {
+	option, ok := m.highlighted()
+	if !ok || m.posterOf == nil {
+		return ""
+	}
+	return m.posterOf(option)
+}
+
+func (m Model) paneMeta() []string {
+	option, ok := m.highlighted()
+	if !ok || m.metaOf == nil {
+		return nil
+	}
+	return m.metaOf(option)
 }
 
 // visibleItemsCount calculates how many options fit in the terminal
