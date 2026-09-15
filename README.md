@@ -328,11 +328,6 @@ contributors. [ani-cli](https://github.com/pystardust/ani-cli) and
 [jerry](https://github.com/justchokingaround/jerry) came first, and this owes
 both.
 
-## Packaging
-
-Building a package, releasing a version, or publishing to the AUR is documented
-in [PACKAGING.md](PACKAGING.md).
-
 ## Licence
 
 GPL-3.0. See [LICENSE](LICENSE).
