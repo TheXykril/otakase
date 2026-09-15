@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -285,12 +287,17 @@ func attachDetailPane(model *Model) {
 		}
 	}
 	if withCovers == 0 {
+		Log("Detail pane: off, no entry carries a cover image")
 		return
 	}
 	protocol := DetectTerminalImageProtocol()
 	if protocol == TerminalImageNone {
+		Log(fmt.Sprintf("Detail pane: %d entries have covers, but this terminal draws no images (TERM=%q, multiplexer=%v)",
+			withCovers, os.Getenv("TERM"), insideMultiplexer()))
 		return
 	}
+	Log(fmt.Sprintf("Detail pane: on, %s protocol, %d of %d entries have covers",
+		protocol, withCovers, len(model.allOptions)))
 
 	// Sized for a poster in a pane a third of a normal terminal wide. The
 	// protocols speak pixels, not cells, so this is deliberately generous --
@@ -309,6 +316,9 @@ func attachDetailPane(model *Model) {
 // first, or opening "Completed" would draw "Watching" as selected.
 func attachCategoryTabs(model *Model, refresh *SelectionRefreshConfig) {
 	if model == nil || refresh == nil || refresh.LoadCategory == nil || len(refresh.Categories) < 2 {
+		if refresh != nil && len(refresh.Categories) < 2 {
+			Log(fmt.Sprintf("Category tabs: off, %d category in MenuOrder", len(refresh.Categories)))
+		}
 		return
 	}
 	model.layout.tabs = refresh.Categories
@@ -320,4 +330,5 @@ func attachCategoryTabs(model *Model, refresh *SelectionRefreshConfig) {
 		}
 	}
 	model.loadTab = refresh.LoadCategory
+	Log(fmt.Sprintf("Category tabs: on, %d tabs, %q active", len(refresh.Categories), model.layout.activeTabKey()))
 }

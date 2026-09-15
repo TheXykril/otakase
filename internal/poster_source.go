@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"os"
 	"sync"
 )
@@ -18,9 +19,10 @@ type PosterSource struct {
 	width    int
 	height   int
 
-	mu       sync.Mutex
-	rendered map[string]string
-	fetching map[string]bool
+	mu          sync.Mutex
+	rendered    map[string]string
+	fetching    map[string]bool
+	loggedFirst bool
 }
 
 // NewPosterSource makes a source sized to a pane. Width and height are in
@@ -58,9 +60,14 @@ func (s *PosterSource) Poster(option SelectionOption) string {
 	if info, err := os.Stat(path); err == nil && info.Size() > 0 {
 		out, err := RenderTerminalImage(path, s.protocol, s.width, s.height)
 		if err != nil {
+			Log(fmt.Sprintf("Poster: %s failed to render: %v", path, err))
 			// Remember the failure as an empty render so a corrupt file is not
 			// decoded again on every keypress.
 			out = ""
+		} else if !s.loggedFirst {
+			s.loggedFirst = true
+			Log(fmt.Sprintf("Poster: drew the first cover, %d bytes of %s escape sequence from a %d byte file",
+				len(out), s.protocol, info.Size()))
 		}
 		s.mu.Lock()
 		s.rendered[path] = out
@@ -73,7 +80,9 @@ func (s *PosterSource) Poster(option SelectionOption) string {
 		s.fetching[path] = true
 		s.mu.Unlock()
 		go func() {
-			_, _ = downloadToCache(option.Thumbnail)
+			if _, err := downloadToCache(option.Thumbnail); err != nil {
+				Log(fmt.Sprintf("Poster: could not fetch %s: %v", option.Thumbnail, err))
+			}
 			s.mu.Lock()
 			delete(s.fetching, path)
 			s.mu.Unlock()
