@@ -71,6 +71,16 @@ func DetectTerminalImageProtocol() TerminalImageProtocol {
 // a frame erase the poster and then skip putting it back.
 const DeleteAllImages = "\x1b_Ga=d\x1b\\"
 
+// KittyDisplayByID is the sequence that shows an already-transmitted image.
+//
+// It is a few dozen bytes, against the hundreds of kilobytes of the transmit.
+// That difference is the whole reason for keeping ids: the picture is redrawn
+// every time the cursor moves, and sending the image itself each time floods
+// the terminal.
+func KittyDisplayByID(id uint32, cols, rows int) string {
+	return fmt.Sprintf("\x1b_Ga=p,i=%d,c=%d,r=%d,q=2\x1b\\", id, cols, rows)
+}
+
 // RenderTerminalImageCells draws an image into an exact block of terminal
 // cells.
 //
@@ -107,6 +117,37 @@ func RenderTerminalImageCells(path string, cols, rows int) (string, error) {
 	if err := rasterm.KittyWriteImage(&out, scaled, rasterm.KittyImgOpts{
 		DstCols: uint32(cols),
 		DstRows: uint32(rows),
+	}); err != nil {
+		return "", fmt.Errorf("encoding for kitty: %w", err)
+	}
+	return out.String(), nil
+}
+
+// RenderTerminalImageWithID transmits an image under an id and displays it.
+// Later frames can show it again with KittyDisplayByID without resending it.
+func RenderTerminalImageWithID(path string, id uint32, cols, rows int) (string, error) {
+	if cols <= 0 || rows <= 0 {
+		return "", fmt.Errorf("image must have a positive size in cells, got %dx%d", cols, rows)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	source, _, err := image.Decode(file)
+	if err != nil {
+		return "", fmt.Errorf("decoding %s: %w", path, err)
+	}
+	// A terminal cell is roughly 9 by 18 pixels. Sending more than the block
+	// can show is bytes spent on detail the terminal immediately scales away.
+	scaled := scaleToFit(source, cols*9, rows*18)
+
+	var out bytes.Buffer
+	if err := rasterm.KittyWriteImage(&out, scaled, rasterm.KittyImgOpts{
+		DstCols: uint32(cols),
+		DstRows: uint32(rows),
+		ImageId: id,
 	}); err != nil {
 		return "", fmt.Errorf("encoding for kitty: %w", err)
 	}

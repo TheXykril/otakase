@@ -22,6 +22,8 @@ type PosterSource struct {
 	mu          sync.Mutex
 	rendered    map[string]string
 	fetching    map[string]bool
+	ids         map[string]uint32
+	nextID      uint32
 	loggedFirst bool
 }
 
@@ -37,6 +39,7 @@ func NewPosterSource(protocol TerminalImageProtocol, cols, rows int) *PosterSour
 		rows:     rows,
 		rendered: map[string]string{},
 		fetching: map[string]bool{},
+		ids:      map[string]uint32{},
 	}
 }
 
@@ -64,26 +67,34 @@ func (s *PosterSource) Poster(option SelectionOption) string {
 	s.mu.Unlock()
 
 	if info, err := os.Stat(path); err == nil && info.Size() > 0 {
-		out, err := RenderTerminalImageCells(path, s.cols, s.rows)
+		// Transmit once under an id, then remember only the short sequence that
+		// shows it again. The transmit is hundreds of kilobytes; the display is
+		// a few dozen bytes, and it is the one sent on every redraw.
+		s.mu.Lock()
+		s.nextID++
+		id := s.nextID
+		s.ids[path] = id
+		s.mu.Unlock()
+
+		transmit, err := RenderTerminalImageWithID(path, id, s.cols, s.rows)
 		if err != nil {
 			Log(fmt.Sprintf("Poster: %s failed to render: %v", path, err))
-			// Remember the failure as an empty render so a corrupt file is not
-			// decoded again on every keypress.
-			out = ""
-		} else if !s.loggedFirst {
-			s.loggedFirst = true
-			Log(fmt.Sprintf("Poster: drew the first cover, %d bytes of %s escape sequence from a %d byte file",
-				len(out), s.protocol, info.Size()))
+			s.mu.Lock()
+			s.rendered[path] = ""
+			s.mu.Unlock()
+			return ""
 		}
-		if out != "" {
-			// Delete first, on the same line, so a frame can never erase the
-			// poster and then skip redrawing it.
-			out = DeleteAllImages + out
+		display := DeleteAllImages + KittyDisplayByID(id, s.cols, s.rows)
+		if !s.loggedFirst {
+			s.loggedFirst = true
+			Log(fmt.Sprintf("Poster: transmitted %d bytes once from a %d byte file; each redraw costs %d bytes",
+				len(transmit), info.Size(), len(display)))
 		}
 		s.mu.Lock()
-		s.rendered[path] = out
+		s.rendered[path] = display
 		s.mu.Unlock()
-		return out
+		// This frame carries the transmit, which also displays it.
+		return DeleteAllImages + transmit
 	}
 
 	if !alreadyFetching {
