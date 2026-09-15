@@ -1,5 +1,5 @@
 VERSION=$(cat VERSION.txt)
-CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o curd-windows-arm64.exe -ldflags="-X main.version=${VERSION}" cmd/curd/main.go
+CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o otakase-windows-arm64.exe -ldflags="-X main.version=${VERSION}" ./cmd/otakase
 if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_HEAD_COMMIT_MESSAGE" == *"release:"* ]] || [[ "$COMPRESS" == "true" ]]; then
-    upx --best --ultra-brute curd-windows-arm64.exe
+    upx --best --ultra-brute otakase-windows-arm64.exe
 fi

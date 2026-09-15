@@ -174,7 +174,7 @@ jobs:
           grep -q '^source=(' PKGBUILD
           grep -q '^sha256sums=(' PKGBUILD
           grep -q 'otakase-linux-x86_64' PKGBUILD
-          grep -q 'install -Dm755 "\$srcdir/otakase-linux-x86_64" "\$pkgdir/usr/bin/curd"' PKGBUILD
+          grep -q 'install -Dm755 "\$srcdir/otakase-linux-x86_64" "\$pkgdir/usr/bin/otakase"' PKGBUILD
           bash -n PKGBUILD
 
           set +u

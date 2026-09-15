@@ -2,11 +2,11 @@
 
 # Ask for version number
 read -p "Enter the version number: " version
-release_folder="releases/curd-$version"
+release_folder="releases/otakase-$version"
 windows_folder="$release_folder/windows"
 linux_folder="$release_folder/linux"
 macos_folder="$release_folder/macos"
-installer_script="Build/curd-windows-build.iss"
+installer_script="Build/otakase-windows-build.iss"
 
 # Ensure required directories exist
 mkdir -p "$windows_folder" "$linux_folder" "$macos_folder"
@@ -16,15 +16,15 @@ echo "Building Linux binary..."
 bash Build/buildlinux
 
 # Move the Linux binary to the release folder
-if [ -f "curd-linux-x86_64" ]; then
-    mv curd-linux-x86_64 "$linux_folder"
+if [ -f "otakase-linux-x86_64" ]; then
+    mv otakase-linux-x86_64 "$linux_folder"
 else
     echo "Linux build failed. Please check Build/buildlinux."
     exit 1
 fi
 
-if [ -f "curd-linux-arm64" ]; then
-    mv curd-linux-arm64 "$linux_folder"
+if [ -f "otakase-linux-arm64" ]; then
+    mv otakase-linux-arm64 "$linux_folder"
 else
     echo "Linux build failed. Please check Build/buildlinux-arm64."
     exit 1
@@ -33,15 +33,15 @@ fi
 # Build macOS binaries
 echo "Building macOS binaries..."
 bash Build/buildmac
-if [ -f "curd-macos-x86_64" ]; then
-    mv curd-macos-x86_64 "$macos_folder"
+if [ -f "otakase-macos-x86_64" ]; then
+    mv otakase-macos-x86_64 "$macos_folder"
 else
     echo "macOS x86-64 build failed. Please check Build/buildmac-x86_64."
     exit 1
 fi
 
-if [ -f "curd-macos-arm64" ]; then
-    mv curd-macos-arm64 "$macos_folder"
+if [ -f "otakase-macos-arm64" ]; then
+    mv otakase-macos-arm64 "$macos_folder"
 else
     echo "macOS arm64 build failed. Please check Build/buildmac-arm64."
     exit 1
@@ -49,10 +49,10 @@ fi
 
 # Create Universal binary for macOS
 echo "Creating macOS Universal binary..."
-llvm-lipo -create "$macos_folder/curd-macos-x86_64" "$macos_folder/curd-macos-arm64" -output "$macos_folder/curd-macos-universal"
-# rm "$macos_folder/curd-macos-x86_64" "$macos_folder/curd-macos-arm64"
+llvm-lipo -create "$macos_folder/otakase-macos-x86_64" "$macos_folder/otakase-macos-arm64" -output "$macos_folder/otakase-macos-universal"
+# rm "$macos_folder/otakase-macos-x86_64" "$macos_folder/otakase-macos-arm64"
 
-if [ ! -f "$macos_folder/curd-macos-universal" ]; then    
+if [ ! -f "$macos_folder/otakase-macos-universal" ]; then    
     echo "macOS arm64 build failed. Please check Build/buildmac."
     exit 1
 fi
@@ -70,16 +70,16 @@ mkdir -p "Build/mpv"
 gunzip -c Build/mpv.exe.gz > "Build/mpv/mpv.exe"
 
 # Move the Windows binary to the release folder
-if [ -f "curd-windows-x86_64.exe" ]; then
-    mv curd-windows-x86_64.exe "$windows_folder"
+if [ -f "otakase-windows-x86_64.exe" ]; then
+    mv otakase-windows-x86_64.exe "$windows_folder"
 else
     echo "Windows build failed. Please check Build/buildwindows-x86_64."
     exit 1
 fi
 
 # NOTE: Broken due to npipe and rich-go
-# if [ -f "curd-windows-arm64.exe" ]; then
-#     mv curd-windows-arm64.exe "$windows_folder"
+# if [ -f "otakase-windows-arm64.exe" ]; then
+#     mv otakase-windows-arm64.exe "$windows_folder"
 # else
 #     echo "Windows build failed. Please check Build/buildwindows-arm64."
 #     exit 1
@@ -90,7 +90,7 @@ echo "Creating Windows installer..."
 wine "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "$installer_script"
 
 # Move installer to the release folder
-installer_output="Build/Output/curd-windows-installer.exe"
+installer_output="Build/Output/otakase-windows-installer.exe"
 if [ -f "$installer_output" ]; then
     mv "$installer_output" "$windows_folder"
 else

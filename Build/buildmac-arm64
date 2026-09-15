@@ -1,2 +1,2 @@
 VERSION=$(cat VERSION.txt)
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o curd-macos-arm64 -ldflags="-X main.version=${VERSION}" cmd/curd/main.go
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o otakase-macos-arm64 -ldflags="-X main.version=${VERSION}" ./cmd/otakase

@@ -59,7 +59,7 @@ step "go test -short -race ./..." go test -short -race ./...
 if (( QUICK == 0 )); then
     if step "Build/buildlinux" ./Build/buildlinux; then
         mkdir -p release/linux
-        mv -f curd-linux-x86_64 curd-linux-arm64 release/linux/ 2>/dev/null
+        mv -f otakase-linux-x86_64 otakase-linux-arm64 release/linux/ 2>/dev/null
         printf '    binaries -> release/linux/\n\n'
     fi
 fi

@@ -22,7 +22,7 @@ jobs:
   canary:
     runs-on: ubuntu-latest
     # A fork with no maintainer should not accumulate failing scheduled runs.
-    if: github.repository == 'TheXykril/curd'
+    if: github.repository == 'TheXykril/otakase'
 
     steps:
       - name: Checkout code
@@ -40,9 +40,9 @@ jobs:
         id: status
         continue-on-error: true
         run: |
-          go build -o curd ./cmd/curd
+          go build -o otakase ./cmd/otakase
           # Always readable in the log, whatever the outcome.
-          ./curd -provider-status | tee provider-status.txt
+          ./otakase -provider-status | tee provider-status.txt
 
       - name: Resolve real shows through the provider stack
         id: live
