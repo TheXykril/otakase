@@ -748,6 +748,11 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 						// the tab so a background refresh rebuilds what is on
 						// screen rather than the category first opened.
 						categoryTabs, _ := SplitMenuOrder(userCurdConfig.MenuOrder)
+						// Counting is a filter over a list already in memory, so
+						// every tab can say how much is behind it.
+						for i := range categoryTabs {
+							categoryTabs[i].Count = len(getEntriesByCategory(user.AnimeList, categoryTabs[i].Key))
+						}
 						activeCategory := categorySelection.Key
 						withAddNew := func(options []SelectionOption) []SelectionOption {
 							return append(options, SelectionOption{

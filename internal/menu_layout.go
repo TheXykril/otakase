@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -14,6 +15,10 @@ import (
 type Tab struct {
 	Key   string
 	Label string
+	// Count is how many entries the category holds. Shown beside the label,
+	// because a bare word reads as decoration while a number reads as a view
+	// of something that exists.
+	Count int
 }
 
 // FooterAction is one entry in the bar along the bottom: the things you do to
@@ -123,11 +128,15 @@ func renderTabBar(layout menuLayout, width int) string {
 	}
 	parts := make([]string, 0, len(layout.tabs))
 	for i, tab := range layout.tabs {
+		label := tab.Label
+		if tab.Count > 0 {
+			label += "  " + strconv.Itoa(tab.Count)
+		}
 		if i == layout.activeTab {
-			parts = append(parts, tabActiveStyle.Render(tab.Label))
+			parts = append(parts, tabActiveStyle.Render(label))
 			continue
 		}
-		parts = append(parts, tabInactiveStyle.Render(tab.Label))
+		parts = append(parts, tabInactiveStyle.Render(label))
 	}
 	bar := lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 	// Never narrower than the tabs themselves, or the rule cuts through them.

@@ -356,3 +356,78 @@ func TestTabsNeedMoreThanOneCategoryAndALoader(t *testing.T) {
 
 	attachCategoryTabs(&Model{}, nil) // must not panic
 }
+
+// Left and right are the obvious way to move along a row of tabs, and are
+// unbound in the default key scheme.
+func TestArrowsSwitchCategories(t *testing.T) {
+	previous := GetGlobalConfig()
+	t.Cleanup(func() { SetGlobalConfig(previous) })
+	SetGlobalConfig(&CurdConfig{VimKeys: false})
+
+	lists := map[string][]SelectionOption{
+		"CURRENT":  {{Key: "1", Label: "Frieren"}},
+		"PLANNING": {{Key: "2", Label: "Monster"}},
+	}
+	build := func() *Model {
+		m := &Model{allOptions: lists["CURRENT"]}
+		attachCategoryTabs(m, &SelectionRefreshConfig{
+			Categories:     []Tab{{Key: "CURRENT", Label: "Watching"}, {Key: "PLANNING", Label: "Planning"}},
+			ActiveCategory: "CURRENT",
+			LoadCategory:   func(k string) []SelectionOption { return lists[k] },
+		})
+		m.filterOptions()
+		return m
+	}
+
+	right, _ := build().Update(tea.KeyMsg{Type: tea.KeyRight})
+	if got := right.(*Model).layout.activeTabKey(); got != "PLANNING" {
+		t.Errorf("right should move to the next category, got %q", got)
+	}
+	left, _ := build().Update(tea.KeyMsg{Type: tea.KeyLeft})
+	if got := left.(*Model).layout.activeTabKey(); got != "PLANNING" {
+		t.Errorf("left should wrap back to the last category, got %q", got)
+	}
+}
+
+// Under vim keys the arrows already mean up and down, and must keep meaning it.
+func TestArrowsStillMoveTheCursorUnderVimKeys(t *testing.T) {
+	previous := GetGlobalConfig()
+	t.Cleanup(func() { SetGlobalConfig(previous) })
+	SetGlobalConfig(&CurdConfig{VimKeys: true})
+
+	m := &Model{allOptions: []SelectionOption{{Key: "1", Label: "a"}, {Key: "2", Label: "b"}}}
+	attachCategoryTabs(m, &SelectionRefreshConfig{
+		Categories:     []Tab{{Key: "CURRENT", Label: "Watching"}, {Key: "PLANNING", Label: "Planning"}},
+		ActiveCategory: "CURRENT",
+		LoadCategory:   func(string) []SelectionOption { return nil },
+	})
+	m.filterOptions()
+
+	moved, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	next := moved.(*Model)
+	if next.layout.activeTabKey() != "CURRENT" {
+		t.Error("right changed category under vim keys, where it means move down")
+	}
+	if next.selected == 0 {
+		t.Error("right did not move the cursor under vim keys")
+	}
+}
+
+// A count turns a word into a view of something, and is what makes the bar read
+// as live rather than decorative.
+func TestTabBarShowsCounts(t *testing.T) {
+	bar := renderTabBar(menuLayout{tabs: []Tab{
+		{Key: "CURRENT", Label: "Watching", Count: 7},
+		{Key: "ALL", Label: "All", Count: 643},
+	}}, 0)
+	for _, want := range []string{"Watching", "7", "All", "643"} {
+		if !strings.Contains(bar, want) {
+			t.Errorf("the bar is missing %q: %q", want, bar)
+		}
+	}
+	// A category with nothing in it should not read as "Planning 0".
+	empty := renderTabBar(menuLayout{tabs: []Tab{{Key: "PLANNING", Label: "Planning", Count: 0}, {Key: "ALL", Label: "All", Count: 3}}}, 0)
+	if strings.Contains(empty, "Planning  0") {
+		t.Errorf("an empty category printed a zero: %q", empty)
+	}
+}

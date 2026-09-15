@@ -135,8 +135,10 @@ Run `otakase` with no arguments to pick from your list. **`otk` is a shorter
 alias for the same program** — every command below works with either.
 Arguments always take precedence over the config file.
 
-In the terminal list, **Tab and Shift+Tab move between your categories** —
-watching, planning, completed and the rest — without going back to the menu.
+In the terminal list, **← and → move between your categories** — watching,
+planning, completed and the rest — without going back to the menu. Each tab
+shows how many entries it holds. Tab and Shift+Tab do the same, and are the
+way to do it when vim keys are on, where the arrows move the cursor instead.
 Which categories appear, and in what order, is `MenuOrder`. The highlighted show's
 full title and notes appear beside the list, where the row itself is clipped.
 

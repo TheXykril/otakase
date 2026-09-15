@@ -200,17 +200,28 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		// Tab moves between categories, but only where categories exist. Every
-		// menu without them keeps Tab as "next item", which is what it has
-		// always done here and what people's hands expect.
-		if m.layout.hasTabs() && (key == "tab" || key == "shift+tab") {
+		// Tab and the arrows move between categories, but only where categories
+		// exist. Every menu without them keeps Tab as "next item", which is what
+		// it has always done here and what people's hands expect.
+		//
+		// Left and right are unbound in the default key scheme and are the
+		// obvious way to move along a row of tabs, so they are accepted too.
+		// Under vim keys they already mean up and down, and are left alone.
+		switchKey := key == "tab" || key == "shift+tab"
+		if !VimKeysEnabled(nil) && (key == "left" || key == "right") {
+			switchKey = true
+		}
+		if m.layout.hasTabs() && switchKey {
 			delta := 1
-			if key == "shift+tab" {
+			if key == "shift+tab" || key == "left" {
 				delta = -1
 			}
 			m.layout = m.layout.cycleTab(delta)
 			if m.loadTab != nil {
-				m.replaceOptions(m.loadTab(m.layout.activeTabKey()))
+				loaded := m.loadTab(m.layout.activeTabKey())
+				m.replaceOptions(loaded)
+				Log(fmt.Sprintf("Category tabs: switched to %q, %d entries",
+					m.layout.activeTabKey(), len(loaded)))
 			}
 			m.selected = 0
 			m.scrollOffset = 0
@@ -368,8 +379,12 @@ func (m Model) View() string {
 			}
 		}
 	} else {
-		b.WriteString(titleStyle.Render("Search") + " (Press " +
-			quitHintStyle.Render("Ctrl+C") + " to quit):\n")
+		hint := " (Press " + quitHintStyle.Render("Ctrl+C") + " to quit):\n"
+		if m.layout.hasTabs() {
+			hint = " (" + quitHintStyle.Render("←/→") + " category · " +
+				quitHintStyle.Render("Ctrl+C") + " quit):\n"
+		}
+		b.WriteString(titleStyle.Render("Search") + hint)
 		b.WriteString(filterLabelStyle.Render("Filter: ") +
 			filterTextStyle.Render(m.filter) + "\n\n")
 	}
