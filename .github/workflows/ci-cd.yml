@@ -273,7 +273,10 @@ jobs:
             $pullsUri = "https://api.github.com/repos/$repo/commits/$sha/pulls"
             $pulls = @()
             try {
-              $pulls = @(Invoke-RestMethod -Uri $pullsUri -Headers $headers -Method Get)
+              # An empty JSON array comes back as $null, and @($null) is an array
+              # of one -- so without filtering, "no pull requests" reads as "one
+              # pull request" and every commit is skipped.
+              $pulls = @(Invoke-RestMethod -Uri $pullsUri -Headers $headers -Method Get | Where-Object { $_ })
             } catch {
               $pulls = @()
             }
