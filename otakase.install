@@ -3,20 +3,30 @@
 # An install script runs as root, so $HOME is /root -- the keybinding has to be
 # written as the invoking user or it lands in the wrong config and is owned by
 # the wrong account. SUDO_USER names that person when pacman was reached through
-# sudo, which is how it is normally reached. When it is not set -- a chroot, an
-# image build, a provisioning run, pacman as root directly -- there is no user
-# to act for, so this quietly does nothing and prints the command instead.
+# sudo; pkexec sets PKEXEC_UID instead, which is what a graphical installer or a
+# caller with no terminal to type a password into will use. When neither is set
+# -- a chroot, an image build, pacman as root directly -- there is no user to
+# act for, so this quietly does nothing and prints the command instead.
 #
 # Set OTAKASE_NO_KEYBIND=1 to skip it.
 
 _otakase_as_user() {
-  [ -n "${SUDO_USER:-}" ] || return 1
-  [ "${SUDO_USER}" != "root" ] || return 1
-  local home
-  home=$(getent passwd "$SUDO_USER" | cut -d: -f6) || return 1
+  local user home entry
+  # sudo names the caller; pkexec, used by graphical installers and by agents
+  # with no terminal to type a password into, gives their uid instead.
+  if [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ]; then
+    user="$SUDO_USER"
+  elif [ -n "${PKEXEC_UID:-}" ] && [ "${PKEXEC_UID}" != "0" ]; then
+    user=$(getent passwd "$PKEXEC_UID" | cut -d: -f1) || return 1
+  else
+    return 1
+  fi
+  [ -n "$user" ] || return 1
+  entry=$(getent passwd "$user") || return 1
+  home=$(printf '%s' "$entry" | cut -d: -f6)
   [ -n "$home" ] && [ -d "$home" ] || return 1
   # Runs as them, with their HOME, so the file is written and owned correctly.
-  runuser -u "$SUDO_USER" -- env HOME="$home" XDG_CONFIG_HOME="${home}/.config" \
+  runuser -u "$user" -- env HOME="$home" XDG_CONFIG_HOME="${home}/.config" \
     /usr/bin/otakase "$@" 2>&1 | sed 's/^/  /'
 }
 

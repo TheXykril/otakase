@@ -217,8 +217,9 @@ which is the normal way. The install script finds the invoking user through
 and owned by you rather than root. Uninstalling takes the binding back out
 before the binary disappears.
 
-It skips itself, printing the command instead, when there is no user to act for
-— a chroot, an image build, or pacman run as root directly. Set
+It works through `pkexec` too, which reports the caller as `PKEXEC_UID` rather
+than `SUDO_USER`. It skips itself, printing the command instead, when there is
+no user to act for — a chroot, an image build, or pacman run as root directly. Set
 `OTAKASE_NO_KEYBIND=1` to skip it deliberately. An upgrade only refreshes a
 binding that is already there; it will not re-add one you removed.
 
