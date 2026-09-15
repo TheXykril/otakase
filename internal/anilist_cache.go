@@ -280,6 +280,7 @@ func buildCategorySelectionOptions(list AnimeList, category string) []SelectionO
 			Key:            strconv.Itoa(entry.Media.ID),
 			Label:          WithEpisodeCountsAndNote(title, entry, resume[entry.Media.ID]),
 			Title:          title,
+			Thumbnail:      entry.CoverImage,
 			HasNewEpisodes: hasNew,
 		})
 	}

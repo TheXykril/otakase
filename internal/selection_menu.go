@@ -51,6 +51,14 @@ type optionsRefreshedMsg struct {
 type SelectionRefreshConfig struct {
 	Updates      <-chan AnimeList
 	BuildOptions func(AnimeList) []SelectionOption
+
+	// Categories, when set, draws a tab bar and lets Tab move between them
+	// without leaving the list. LoadCategory supplies the entries for one, and
+	// is expected to be cheap: the whole list is already in memory, so
+	// switching a category is a filter rather than a fetch.
+	Categories     []Tab
+	ActiveCategory string
+	LoadCategory   func(key string) []SelectionOption
 }
 
 type PreviewSelectionRefreshConfig struct {
@@ -1029,6 +1037,7 @@ func dynamicSelectInternal(options []SelectionOption, refreshConfig *SelectionRe
 		addNewOption:  hasAddNew,
 		preserveOrder: preserveOrder,
 	}
+	attachCategoryTabs(model, refreshConfig)
 	attachDetailPane(model)
 	model.filterOptions()
 

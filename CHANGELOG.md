@@ -48,6 +48,13 @@
   is opt-in, so menus that have not asked for it render exactly as before.
   `MenuOrder` keeps its name and is read as both settings.
 
+- **Tab moves between categories in the terminal list.** Watching, planning,
+  completed and the rest are a tab bar across the top rather than a menu you
+  select into and back out of. Switching costs nothing: the whole list is
+  already in memory, so a category is a filter rather than a fetch. `MenuOrder`
+  decides which appear and in what order, and its action entries become a
+  footer.
+
 - **Posters can be drawn in the terminal**, through the Kitty, iTerm2 and Sixel
   protocols. Detection refuses inside tmux and screen, where an image lands in
   the wrong pane or wedges the terminal.

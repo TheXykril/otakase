@@ -296,3 +296,90 @@ func TestPaneIsNotAttachedToAnEmptyMenu(t *testing.T) {
 		t.Error("a pane was attached to an empty menu")
 	}
 }
+
+// Driving the model with real key messages, rather than testing the pieces in
+// isolation, is what shows the wiring actually holds together.
+func TestCategoryTabsDriveTheListEndToEnd(t *testing.T) {
+	lists := map[string][]SelectionOption{
+		// Real options carry both, and the list renders the label.
+		"CURRENT":   {{Key: "1", Title: "Frieren", Label: "Frieren"}, {Key: "2", Title: "Dandadan", Label: "Dandadan"}},
+		"PLANNING":  {{Key: "3", Title: "Monster", Label: "Monster"}},
+		"COMPLETED": {{Key: "4", Title: "Steins;Gate", Label: "Steins;Gate"}},
+	}
+	refresh := &SelectionRefreshConfig{
+		Categories: []Tab{
+			{Key: "CURRENT", Label: "Watching"},
+			{Key: "PLANNING", Label: "Planning"},
+			{Key: "COMPLETED", Label: "Completed"},
+		},
+		ActiveCategory: "PLANNING",
+		LoadCategory:   func(key string) []SelectionOption { return lists[key] },
+	}
+
+	model := &Model{allOptions: lists["PLANNING"]}
+	attachCategoryTabs(model, refresh)
+	model.filterOptions()
+
+	// Bubble Tea sends this on start; without it the model believes it has room
+	// for a single row and everything below the first entry is clipped.
+	sized, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	model = sized.(*Model)
+
+	// Opening a category other than the first must select that tab, not assume
+	// the list starts at the beginning.
+	if got := model.layout.activeTabKey(); got != "PLANNING" {
+		t.Fatalf("the open category should be the active tab, got %q", got)
+	}
+	if view := model.View(); !strings.Contains(view, "Planning") || !strings.Contains(view, "Watching") {
+		t.Errorf("the tab bar is missing from the view:\n%s", view)
+	}
+
+	// Tab forward to Completed.
+	next, _ := model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model = next.(*Model)
+	if got := model.layout.activeTabKey(); got != "COMPLETED" {
+		t.Fatalf("Tab did not advance, got %q", got)
+	}
+	if view := model.View(); !strings.Contains(view, "Steins;Gate") {
+		t.Errorf("the list did not follow the tab:\n%s", view)
+	}
+
+	// Shift+Tab back, and wrap past the start.
+	for i := 0; i < 2; i++ {
+		back, _ := model.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+		model = back.(*Model)
+	}
+	if got := model.layout.activeTabKey(); got != "CURRENT" {
+		t.Fatalf("Shift+Tab did not walk back to the first category, got %q", got)
+	}
+	view := model.View()
+	if !strings.Contains(view, "Frieren") || !strings.Contains(view, "Dandadan") {
+		t.Errorf("the watching list did not come back:\n%s", view)
+	}
+	if strings.Contains(view, "Steins;Gate") {
+		t.Errorf("entries from the previous category are still showing:\n%s", view)
+	}
+}
+
+// One category is not worth a tab bar, and tabs without a loader lead nowhere.
+func TestTabsNeedMoreThanOneCategoryAndALoader(t *testing.T) {
+	loader := func(string) []SelectionOption { return nil }
+
+	single := &Model{}
+	attachCategoryTabs(single, &SelectionRefreshConfig{
+		Categories: []Tab{{Key: "CURRENT", Label: "Watching"}}, LoadCategory: loader,
+	})
+	if single.layout.hasTabs() {
+		t.Error("a single category drew a tab bar")
+	}
+
+	noLoader := &Model{}
+	attachCategoryTabs(noLoader, &SelectionRefreshConfig{
+		Categories: []Tab{{Key: "CURRENT"}, {Key: "PLANNING"}},
+	})
+	if noLoader.layout.hasTabs() {
+		t.Error("tabs were drawn with no way to load a category")
+	}
+
+	attachCategoryTabs(&Model{}, nil) // must not panic
+}

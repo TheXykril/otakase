@@ -742,16 +742,30 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 							Label: "Add new anime",
 						})
 
+						// Tab moves between categories without leaving the list.
+						// The whole list is already in memory, so switching one
+						// is a filter rather than a fetch. activeCategory follows
+						// the tab so a background refresh rebuilds what is on
+						// screen rather than the category first opened.
+						categoryTabs, _ := SplitMenuOrder(userCurdConfig.MenuOrder)
+						activeCategory := categorySelection.Key
+						withAddNew := func(options []SelectionOption) []SelectionOption {
+							return append(options, SelectionOption{
+								Key:   "add_new",
+								Label: "Add new anime",
+							})
+						}
+
 						anilistSelectedOption, err = DynamicSelectWithRefresh(tempOptions, &SelectionRefreshConfig{
 							Updates: user.ListSync.Updates(),
 							BuildOptions: func(list AnimeList) []SelectionOption {
-								updatedOptions := buildCategorySelectionOptions(list, categorySelection.Key)
-
-								updatedOptions = append(updatedOptions, SelectionOption{
-									Key:   "add_new",
-									Label: "Add new anime",
-								})
-								return updatedOptions
+								return withAddNew(buildCategorySelectionOptions(list, activeCategory))
+							},
+							Categories:     categoryTabs,
+							ActiveCategory: activeCategory,
+							LoadCategory: func(key string) []SelectionOption {
+								activeCategory = key
+								return withAddNew(buildCategorySelectionOptions(user.AnimeList, key))
 							},
 						})
 					}

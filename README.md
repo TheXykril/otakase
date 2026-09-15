@@ -135,6 +135,11 @@ Run `otakase` with no arguments to pick from your list. **`otk` is a shorter
 alias for the same program** — every command below works with either.
 Arguments always take precedence over the config file.
 
+In the terminal list, **Tab and Shift+Tab move between your categories** —
+watching, planning, completed and the rest — without going back to the menu.
+Which categories appear, and in what order, is `MenuOrder`. Where your terminal
+can draw pictures, the highlighted show's poster appears beside the list.
+
 | Flag | Description | Default |
 |---|---|---|
 | `-c` | Continue the last episode | |

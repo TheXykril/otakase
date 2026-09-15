@@ -299,3 +299,25 @@ func attachDetailPane(model *Model) {
 	model.layout.pane = true
 	model.posterOf = source.Poster
 }
+
+// attachCategoryTabs gives a menu its tab bar, when the caller supplied the
+// categories and a way to load one.
+//
+// The bar is only worth drawing for more than one category, and only when
+// switching actually leads somewhere, so both the list and the loader are
+// required. The active category is matched by key rather than assumed to be
+// first, or opening "Completed" would draw "Watching" as selected.
+func attachCategoryTabs(model *Model, refresh *SelectionRefreshConfig) {
+	if model == nil || refresh == nil || refresh.LoadCategory == nil || len(refresh.Categories) < 2 {
+		return
+	}
+	model.layout.tabs = refresh.Categories
+	model.layout.activeTab = 0
+	for i, tab := range refresh.Categories {
+		if strings.EqualFold(tab.Key, refresh.ActiveCategory) {
+			model.layout.activeTab = i
+			break
+		}
+	}
+	model.loadTab = refresh.LoadCategory
+}
