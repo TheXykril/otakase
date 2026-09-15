@@ -9,8 +9,12 @@ url="https://github.com/TheXykril/otakase"
 license=('GPL3')
 depends=('mpv')
 optdepends=(
-  'rofi: graphical selection menus'
-  'ueberzugpp: image previews in the terminal'
+  'rofi: graphical selection menus, and the Super+Shift+A keybinding'
+  # Without a terminal there is nowhere else for a message to go, so a launch
+  # from a keybinding that fails is silent without this.
+  'libnotify: progress and errors when launched without a terminal'
+  'xdg-utils: opening the browser for AniList/MyAnimeList sign-in'
+  'ueberzugpp: image previews in the terminal (rofi draws its own)'
   'ffmpeg: saving episodes with -download'
 )
 makedepends=('go' 'git')

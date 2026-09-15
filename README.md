@@ -35,8 +35,12 @@ theme.
 
 ## Install
 
-> Otakase needs **mpv**. `rofi` and `ueberzugpp` are optional, for the graphical
-> menus and image previews. `ffmpeg` is needed only for `-download`.
+> Otakase needs **mpv**. Everything else is optional: `rofi` for the graphical
+> menus (it draws its own poster thumbnails, so `ueberzugpp` is only for
+> previews in the *terminal*), `libnotify` so a launch with no terminal — from
+> the keybinding, say — can still report progress and errors, `xdg-utils` to
+> open the browser for AniList/MyAnimeList sign-in, and `ffmpeg` for
+> `-download`.
 
 ### Arch Linux / Manjaro
 
@@ -193,6 +197,10 @@ no terminal, pick a show, watch it:
 ```bash
 otakase -install-keybind
 ```
+
+Launched this way there is no terminal, so install `rofi` (the menus),
+`libnotify` (progress and errors have nowhere else to go) and `xdg-utils` (the
+sign-in browser, if you have not signed in yet).
 
 It writes to `~/.config/hypr/bindings.lua` on Omarchy, or `hyprland.conf` on a
 stock Hyprland, backs the file up first, and is safe to run twice. If something
