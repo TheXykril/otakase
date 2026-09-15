@@ -244,3 +244,55 @@ func TestSplitMenuOrderToleratesUntidyConfigs(t *testing.T) {
 		t.Error("an empty MenuOrder should produce nothing, not defaults")
 	}
 }
+
+// The conversion from the preview map used to drop the title and the cover, so
+// the terminal menu could not show either even though rofi was handed both.
+func TestPreviewConversionKeepsTitleAndCover(t *testing.T) {
+	converted := previewOptionsToSortedSelection(map[string]RofiSelectPreview{
+		"154587": {Title: "Frieren", CoverImage: "https://example.invalid/frieren.jpg", Rank: 0},
+	})
+	if len(converted) != 1 {
+		t.Fatalf("expected one option, got %d", len(converted))
+	}
+	if converted[0].Title != "Frieren" {
+		t.Errorf("the title was dropped: %+v", converted[0])
+	}
+	if converted[0].Thumbnail != "https://example.invalid/frieren.jpg" {
+		t.Errorf("the cover was dropped: %+v", converted[0])
+	}
+}
+
+// The pane is decided from what is there, not from a setting: covers plus a
+// terminal that can draw them.
+func TestPaneIsNotAttachedWithoutCovers(t *testing.T) {
+	model := &Model{allOptions: []SelectionOption{{Key: "1", Label: "no cover"}}}
+	attachDetailPane(model)
+	if model.layout.pane {
+		t.Error("a pane was attached to a menu with nothing to show in it")
+	}
+	if model.posterOf != nil {
+		t.Error("a poster supplier was attached with no covers to supply")
+	}
+}
+
+// Turning image previews off must be honoured even where covers exist.
+func TestPaneRespectsTheImagePreviewSetting(t *testing.T) {
+	previous := GetGlobalConfig()
+	t.Cleanup(func() { SetGlobalConfig(previous) })
+	SetGlobalConfig(&CurdConfig{ImagePreview: false})
+
+	model := &Model{allOptions: []SelectionOption{{Key: "1", Thumbnail: "https://example.invalid/a.jpg"}}}
+	attachDetailPane(model)
+	if model.layout.pane {
+		t.Error("the pane ignored ImagePreview=false")
+	}
+}
+
+// An empty menu has nothing to describe.
+func TestPaneIsNotAttachedToAnEmptyMenu(t *testing.T) {
+	model := &Model{}
+	attachDetailPane(model)
+	if model.layout.pane {
+		t.Error("a pane was attached to an empty menu")
+	}
+}

@@ -646,7 +646,9 @@ func previewOptionsToSortedSelection(options map[string]RofiSelectPreview) []Sel
 		entries = append(entries, ranked{
 			option: SelectionOption{
 				Label:          opt.Title,
+				Title:          opt.Title,
 				Key:            id,
+				Thumbnail:      opt.CoverImage,
 				HasNewEpisodes: opt.HasNewEpisodes,
 			},
 			rank: opt.Rank,
@@ -1027,6 +1029,7 @@ func dynamicSelectInternal(options []SelectionOption, refreshConfig *SelectionRe
 		addNewOption:  hasAddNew,
 		preserveOrder: preserveOrder,
 	}
+	attachDetailPane(model)
 	model.filterOptions()
 
 	p := tea.NewProgram(model)

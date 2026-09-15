@@ -262,3 +262,40 @@ func SplitMenuOrder(menuOrder string) ([]Tab, []FooterAction) {
 	}
 	return tabs, actions
 }
+
+// attachDetailPane switches the detail pane on when there is something worth
+// putting in it.
+//
+// It is decided from the options rather than configured, because the answer is
+// already knowable: a menu whose entries carry cover art in a terminal that can
+// draw pictures has a pane worth showing, and one without either does not. A
+// setting would only ask the user to tell the program something it can see.
+func attachDetailPane(model *Model) {
+	if model == nil || len(model.allOptions) == 0 {
+		return
+	}
+	config := GetGlobalConfig()
+	if config != nil && !config.ImagePreview {
+		return
+	}
+	withCovers := 0
+	for _, option := range model.allOptions {
+		if option.Thumbnail != "" {
+			withCovers++
+		}
+	}
+	if withCovers == 0 {
+		return
+	}
+	protocol := DetectTerminalImageProtocol()
+	if protocol == TerminalImageNone {
+		return
+	}
+
+	// Sized for a poster in a pane a third of a normal terminal wide. The
+	// protocols speak pixels, not cells, so this is deliberately generous --
+	// scaling down is cheap and scaling up would blur.
+	source := NewPosterSource(protocol, 320, 480)
+	model.layout.pane = true
+	model.posterOf = source.Poster
+}
