@@ -754,23 +754,17 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 							categoryTabs[i].Count = len(getEntriesByCategory(user.AnimeList, categoryTabs[i].Key))
 						}
 						activeCategory := categorySelection.Key
-						withAddNew := func(options []SelectionOption) []SelectionOption {
-							return append(options, SelectionOption{
-								Key:   "add_new",
-								Label: "Add new anime",
-							})
-						}
 
 						anilistSelectedOption, err = DynamicSelectWithRefresh(tempOptions, &SelectionRefreshConfig{
 							Updates: user.ListSync.Updates(),
 							BuildOptions: func(list AnimeList) []SelectionOption {
-								return withAddNew(buildCategorySelectionOptions(list, activeCategory))
+								return buildCategorySelectionOptions(list, activeCategory)
 							},
 							Categories:     categoryTabs,
 							ActiveCategory: activeCategory,
 							LoadCategory: func(key string) []SelectionOption {
 								activeCategory = key
-								return withAddNew(buildCategorySelectionOptions(user.AnimeList, key))
+								return buildCategorySelectionOptions(user.AnimeList, key)
 							},
 						})
 					}

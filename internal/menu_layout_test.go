@@ -431,3 +431,72 @@ func TestTabBarShowsCounts(t *testing.T) {
 		t.Errorf("an empty category printed a zero: %q", empty)
 	}
 }
+
+// filterOptions appends the "add new" entry from a flag, so a replacement list
+// that still carries it shows the entry twice. Both the background refresh and
+// a category switch rebuild from a source that includes it.
+func TestAddNewEntryIsNeverDuplicated(t *testing.T) {
+	withSentinel := []SelectionOption{
+		{Key: "1", Label: "Frieren"},
+		{Key: "add_new", Label: "Add new anime"},
+	}
+	m := &Model{allOptions: withSentinel, addNewOption: true}
+	m.filterOptions()
+
+	count := func(model *Model) int {
+		n := 0
+		for _, option := range model.filteredKeys {
+			if option.Key == "add_new" {
+				n++
+			}
+		}
+		return n
+	}
+	if got := count(m); got != 1 {
+		t.Fatalf("constructing with the sentinel gave %d copies", got)
+	}
+
+	// A replacement that still carries it must not add a second.
+	m.replaceOptions(withSentinel)
+	if got := count(m); got != 1 {
+		t.Errorf("replacing options gave %d copies of the add-new entry", got)
+	}
+
+	// Switching category goes through the same path.
+	tabbed := &Model{allOptions: withSentinel, addNewOption: true}
+	attachCategoryTabs(tabbed, &SelectionRefreshConfig{
+		Categories:     []Tab{{Key: "CURRENT", Label: "Watching"}, {Key: "UNTRACKED", Label: "Untracked"}},
+		ActiveCategory: "CURRENT",
+		LoadCategory:   func(string) []SelectionOption { return withSentinel },
+	})
+	tabbed.filterOptions()
+	switched, _ := tabbed.Update(tea.KeyMsg{Type: tea.KeyRight})
+	if got := count(switched.(*Model)); got != 1 {
+		t.Errorf("switching category gave %d copies of the add-new entry", got)
+	}
+}
+
+// The chrome takes rows. Not counting them made the menu taller than the
+// terminal, and what scrolled off the top was the tab bar.
+func TestRowBudgetLeavesRoomForTheChrome(t *testing.T) {
+	plain := Model{terminalHeight: 30}
+	withTabs := Model{terminalHeight: 30, layout: menuLayout{
+		tabs: []Tab{{Key: "A"}, {Key: "B"}},
+	}}
+	withBoth := Model{terminalHeight: 30, layout: menuLayout{
+		tabs:   []Tab{{Key: "A"}, {Key: "B"}},
+		footer: []FooterAction{{Key: "CONTINUE_LAST", Label: "continue"}},
+	}}
+
+	if withTabs.visibleItemsCount() >= plain.visibleItemsCount() {
+		t.Error("a tab bar takes rows, so fewer entries fit")
+	}
+	if withBoth.visibleItemsCount() >= withTabs.visibleItemsCount() {
+		t.Error("a footer takes rows too")
+	}
+	// A tiny terminal must still show something rather than nothing.
+	tiny := Model{terminalHeight: 3, layout: menuLayout{tabs: []Tab{{Key: "A"}, {Key: "B"}}}}
+	if got := tiny.visibleItemsCount(); got < 1 {
+		t.Errorf("a very short terminal should still show a row, got %d", got)
+	}
+}

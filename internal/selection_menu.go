@@ -327,7 +327,7 @@ func (m *Model) replaceOptions(options []SelectionOption) {
 		previousLabel = m.filteredKeys[m.selected].Label
 	}
 
-	m.allOptions = options
+	m.allOptions = withoutAddNewSentinel(options)
 	m.filterOptions()
 
 	if len(m.filteredKeys) == 0 {
@@ -489,6 +489,18 @@ func (m Model) paneMeta() []string {
 func (m Model) visibleItemsCount() int {
 	// Leave space for the filter and other UI elements
 	count := m.terminalHeight - 4 // Adjust this number based on your terminal layout
+
+	// The chrome added around the list takes rows of its own. Without counting
+	// them the menu is taller than the terminal, which scrolls, and what
+	// scrolls off the top is the tab bar -- so on a long list the categories
+	// became invisible exactly where they are most useful.
+	if m.layout.hasTabs() {
+		count -= 2 // the tabs, and the rule beneath them
+	}
+	if m.layout.hasFooter() {
+		count -= 2 // the footer, and the blank line above it
+	}
+
 	if count < 1 {
 		return 1
 	}
@@ -506,6 +518,13 @@ func displayLabel(opt SelectionOption) string {
 func (m *Model) filterOptions() {
 	m.filteredKeys = nil
 	for _, opt := range m.allOptions {
+		// The add-new entry is pinned below from addNewOption, so letting it
+		// through here as well would list it twice. Guarding at the point of
+		// use makes the rule hold however the options were set, rather than
+		// only when they came through the one path that strips it.
+		if opt.Key == "add_new" {
+			continue
+		}
 		// Small function to also consider new episode from list
 		if strings.Contains(strings.ToLower(displayLabel(opt)), strings.ToLower(m.filter)) {
 			m.filteredKeys = append(m.filteredKeys, opt)
@@ -1037,14 +1056,13 @@ func dynamicSelectInternal(options []SelectionOption, refreshConfig *SelectionRe
 	// Separate out the "add_new" sentinel so it is never sorted alphabetically.
 	// The addNewOption flag causes filterOptions() to append it after the sort.
 	hasAddNew := false
-	cleanOptions := make([]SelectionOption, 0, len(options))
 	for _, opt := range options {
 		if opt.Key == "add_new" {
 			hasAddNew = true
-		} else {
-			cleanOptions = append(cleanOptions, opt)
+			break
 		}
 	}
+	cleanOptions := withoutAddNewSentinel(options)
 
 	model := &Model{
 		allOptions:    cleanOptions,
@@ -1168,4 +1186,22 @@ func parseRofiSelection(err error, rawSelection string, options []SelectionOptio
 	}
 
 	return SelectionOption{}, fmt.Errorf("selected option not found in original list")
+}
+
+// withoutAddNewSentinel removes the "add new" entry from a list of options.
+//
+// filterOptions appends it from the addNewOption flag, so any list that still
+// carries it produces two. Stripping it here rather than at the one original
+// call site covers every later replacement as well: a background refresh and a
+// category switch both rebuild the options from a source that includes it, and
+// both showed the entry twice before this.
+func withoutAddNewSentinel(options []SelectionOption) []SelectionOption {
+	cleaned := make([]SelectionOption, 0, len(options))
+	for _, option := range options {
+		if option.Key == "add_new" {
+			continue
+		}
+		cleaned = append(cleaned, option)
+	}
+	return cleaned
 }
