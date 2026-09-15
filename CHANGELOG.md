@@ -29,8 +29,10 @@ and why.
   reset — signed out of both trackers, no history — with the data still on disk
   under the old name.
 
-- **The Arch package `replaces`/`conflicts` with `curd`**, and installs a `curd`
-  symlink beside `otakase` for muscle memory and any script that calls it.
+- **The Arch package `replaces`/`conflicts` with `curd`**, so installing it
+  removes the old package rather than sitting beside it. The `curd` command is
+  not carried over: the rename is a rename, and leaving the old name working
+  indefinitely only blurs which program is which.
 
 - **The provider canary no longer reports upstream commits.** Watching a parent
   repository for commits to pick up made sense for a fork; this is a
@@ -57,7 +59,7 @@ and why.
 - **`otk`, a short alias.** Same program, same flags — `otakase` is a mouthful
   for something typed several times a day. Installed as a symlink beside
   `otakase` on Linux and macOS, and as a forwarding shim on Windows, where a
-  symlink is not worth the trouble. `curd` still works too.
+  symlink is not worth the trouble.
 
   The updater resolves symlinks before replacing the binary, so `otk -u`
   updates the real executable rather than overwriting the link with it.

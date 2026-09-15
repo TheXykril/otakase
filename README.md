@@ -121,8 +121,11 @@ MyAnimeList tokens and your watch history from `~/.config/curd` and
 `~/.local/share/curd` into its own locations, and repoints `StoragePath` if it
 was still on the old default. A storage path you chose yourself is left alone.
 
-The originals are **copied, not moved**, so an installed `curd` keeps working.
-Delete them once Otakase looks right.
+The originals are **copied, not moved**, so they are still there if you want
+them; delete them once Otakase looks right.
+
+The `curd` command itself is gone — installing Otakase replaces the old package
+rather than sitting beside it. Use `otakase`, or `otk`.
 
 If you had set `CURD_MAL_CLIENT_ID` or `CURD_MAL_CLIENT_SECRET` in a shell
 profile, those names still work. `OTAKASE_MAL_*` takes precedence.
@@ -130,9 +133,8 @@ profile, those names still work. `OTAKASE_MAL_*` takes precedence.
 ## Usage
 
 Run `otakase` with no arguments to pick from your list. **`otk` is a shorter
-alias for the same program** — every command below works with either, and
-`curd` still works too for anyone arriving from the old name. Arguments always
-take precedence over the config file.
+alias for the same program** — every command below works with either.
+Arguments always take precedence over the config file.
 
 | Flag | Description | Default |
 |---|---|---|

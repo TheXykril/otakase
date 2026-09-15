@@ -18,12 +18,10 @@ optdepends=(
   'ffmpeg: saving episodes with -download'
 )
 makedepends=('go' 'git')
-# curd is what this program used to be called. Anyone who has it installed would
-# otherwise end up with two copies of the same tool fighting over /usr/bin.
+# curd is what this program used to be called. Installing this removes that
+# package rather than sitting beside it; the curd command is not carried over.
 conflicts=('curd' 'curd-bin' 'curd-git')
 replaces=('curd')
-# Declared so a future package cannot quietly take the same paths.
-provides=('otakase' 'otk' 'curd')
 install='otakase.install'
 source=("$pkgname-$pkgver.tar.gz::https://github.com/TheXykril/otakase/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=('SKIP')
@@ -46,7 +44,5 @@ package() {
   install -Dm755 otakase "$pkgdir/usr/bin/otakase"
   # otk is the short form, for something typed several times a day.
   ln -s otakase "$pkgdir/usr/bin/otk"
-  # Muscle memory, and any script that still calls curd.
-  ln -s otakase "$pkgdir/usr/bin/curd"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
 }
