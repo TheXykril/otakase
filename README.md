@@ -158,6 +158,9 @@ take precedence over the config file.
 | `-vim-keys` | `j`/`k`/`h`/`l` to move and `/` to search in menus | |
 | `-check-updates` | Look for a newer release while idle | `true` |
 | `-discord-client-id` | Discord application id for Rich Presence | |
+| `-install-keybind` | Bind Super+Shift+A to the rofi menu in your Hyprland config | |
+| `-remove-keybind` | Undo `-install-keybind` | |
+| `-force-keybind` | Let `-install-keybind` take a key something else uses | |
 | `-provider-status` | Probe each configured source and report which respond | |
 | `-provider-status-query` | Search term `-provider-status` probes with | `one piece` |
 | `-change-token` | Change your authentication token | |
@@ -181,6 +184,25 @@ otakase -download -download-dir ~/Videos/anime
 ```
 
 Needs `ffmpeg`. Episodes are saved as `.mp4`.
+
+## Hyprland keybinding
+
+One command binds **Super+Shift+A** to open the rofi menu with poster previews —
+no terminal, pick a show, watch it:
+
+```bash
+otakase -install-keybind
+```
+
+It writes to `~/.config/hypr/bindings.lua` on Omarchy, or `hyprland.conf` on a
+stock Hyprland, backs the file up first, and is safe to run twice. If something
+already owns that key it tells you what and changes nothing; `-force-keybind`
+takes it anyway and comments out the old line rather than deleting it.
+`-remove-keybind` undoes the whole thing.
+
+Installing the package does **not** do this for you. A package is installed as
+root with no user context, so it cannot write to your config — and one that
+tried would be reaching somewhere it does not belong.
 
 ## Tracking
 

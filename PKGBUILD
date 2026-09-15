@@ -20,6 +20,7 @@ conflicts=('curd' 'curd-bin' 'curd-git')
 replaces=('curd')
 # Declared so a future package cannot quietly take the same paths.
 provides=('otakase' 'otk' 'curd')
+install='otakase.install'
 source=("$pkgname-$pkgver.tar.gz::https://github.com/TheXykril/otakase/archive/refs/tags/v${pkgver}.tar.gz")
 sha256sums=('SKIP')
 

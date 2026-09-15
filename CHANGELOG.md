@@ -41,6 +41,19 @@ and why.
 
 ### Added
 
+- **A Hyprland keybinding, on request.** `otakase -install-keybind` binds
+  Super+Shift+A to the rofi menu with poster previews — the launcher-style way
+  to use this: no terminal, pick a show, watch it. It writes Lua on Omarchy and
+  `.conf` syntax on a stock Hyprland, since putting one dialect in the other's
+  file is a parse error rather than a keybinding. It backs the file up, is safe
+  to run twice, and refuses a key something else already owns unless forced —
+  and when forced it comments the old line out rather than leaving two bindings
+  on one combination. `-remove-keybind` reverses it.
+
+  Installing the package deliberately does not do this. A package is installed
+  as root with no user context and cannot write to a user's config; one that
+  tried would be overstepping. The package prints the command instead.
+
 - **`otk`, a short alias.** Same program, same flags — `otakase` is a mouthful
   for something typed several times a day. Installed as a symlink beside
   `otakase` on Linux and macOS, and as a forwarding shim on Windows, where a

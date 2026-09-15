@@ -109,6 +109,9 @@ func main() {
 	downloadRange := flag.String("episodes", "", "Episodes to download, e.g. 5 or 1-12 (default: the selected episode)")
 	flag.StringVar(&userCurdConfig.DownloadDir, "download-dir", userCurdConfig.DownloadDir, "Directory to save downloaded episodes into")
 	providerStatus := flag.Bool("provider-status", false, "Probe every provider and report which ones work")
+	installKeybind := flag.Bool("install-keybind", false, "Add a Super+Shift+A Hyprland binding that opens the rofi menu")
+	removeKeybind := flag.Bool("remove-keybind", false, "Remove the Hyprland binding added by -install-keybind")
+	forceKeybind := flag.Bool("force-keybind", false, "Let -install-keybind replace a binding something else owns")
 	providerStatusQuery := flag.String("provider-status-query", "one piece", "Search query used by -provider-status")
 
 	// Custom help/usage function
@@ -135,6 +138,30 @@ func main() {
 	}
 
 	// Diagnostics run before any UI setup so the output stays plain and pipeable.
+	// Editing the user's Hyprland config is a command they run deliberately,
+	// never something an install does behind their back.
+	if *installKeybind || *removeKeybind {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Could not find your home directory: %v\n", err)
+			os.Exit(1)
+		}
+		var notes []string
+		if *removeKeybind {
+			notes, err = internal.RemoveHyprlandKeybind(home)
+		} else {
+			notes, err = internal.InstallHyprlandKeybind(home, *forceKeybind)
+		}
+		for _, note := range notes {
+			fmt.Println(note)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	if *providerStatus {
 		report := internal.CheckProviders(&userCurdConfig, *providerStatusQuery)
 		fmt.Print(internal.FormatProviderStatus(report, *providerStatusQuery))
