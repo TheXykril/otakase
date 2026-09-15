@@ -137,8 +137,8 @@ Arguments always take precedence over the config file.
 
 In the terminal list, **Tab and Shift+Tab move between your categories** —
 watching, planning, completed and the rest — without going back to the menu.
-Which categories appear, and in what order, is `MenuOrder`. Where your terminal
-can draw pictures, the highlighted show's poster appears beside the list.
+Which categories appear, and in what order, is `MenuOrder`. The highlighted show's
+full title and notes appear beside the list, where the row itself is clipped.
 
 | Flag | Description | Default |
 |---|---|---|

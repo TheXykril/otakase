@@ -55,10 +55,6 @@
   decides which appear and in what order, and its action entries become a
   footer.
 
-- **Posters can be drawn in the terminal**, through the Kitty, iTerm2 and Sixel
-  protocols. Detection refuses inside tmux and screen, where an image lands in
-  the wrong pane or wedges the terminal.
-
 ### Removed
 
 - **ueberzugpp is no longer a dependency.** The function that used it had no

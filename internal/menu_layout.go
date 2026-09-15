@@ -2,7 +2,6 @@ package internal
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -265,46 +264,39 @@ func SplitMenuOrder(menuOrder string) ([]Tab, []FooterAction) {
 	return tabs, actions
 }
 
-// attachDetailPane switches the detail pane on when there is something worth
-// putting in it.
+// attachDetailPane switches on the column beside the list.
 //
-// It is decided from the options rather than configured, because the answer is
-// already knowable: a menu whose entries carry cover art in a terminal that can
-// draw pictures has a pane worth showing, and one without either does not. A
-// setting would only ask the user to tell the program something it can see.
+// It shows text only. Posters were tried here and removed: a terminal image
+// protocol draws outside the text flow, occupies no cells, and is not erased by
+// a repaint, so Bubble Tea -- which repaints by counting lines and moving the
+// cursor up -- miscounted every frame, stacked them down the screen, and left
+// every poster ever drawn on screen at once. Making that work needs the
+// alternate screen, an explicit delete-images sequence each frame, and the
+// terminal's cell size to reserve the space. rofi already draws the poster grid
+// properly, so the terminal has not been left without one.
 func attachDetailPane(model *Model) {
 	if model == nil || len(model.allOptions) == 0 {
 		return
 	}
-	config := GetGlobalConfig()
-	if config != nil && !config.ImagePreview {
-		return
-	}
-	withCovers := 0
-	for _, option := range model.allOptions {
-		if option.Thumbnail != "" {
-			withCovers++
-		}
-	}
-	if withCovers == 0 {
-		Log("Detail pane: off, no entry carries a cover image")
-		return
-	}
-	protocol := DetectTerminalImageProtocol()
-	if protocol == TerminalImageNone {
-		Log(fmt.Sprintf("Detail pane: %d entries have covers, but this terminal draws no images (TERM=%q, multiplexer=%v)",
-			withCovers, os.Getenv("TERM"), insideMultiplexer()))
-		return
-	}
-	Log(fmt.Sprintf("Detail pane: on, %s protocol, %d of %d entries have covers",
-		protocol, withCovers, len(model.allOptions)))
-
-	// Sized for a poster in a pane a third of a normal terminal wide. The
-	// protocols speak pixels, not cells, so this is deliberately generous --
-	// scaling down is cheap and scaling up would blur.
-	source := NewPosterSource(protocol, 320, 480)
 	model.layout.pane = true
-	model.posterOf = source.Poster
+	model.metaOf = paneDetails
+	Log(fmt.Sprintf("Detail pane: on, %d entries", len(model.allOptions)))
+}
+
+// paneDetails is what is known about an entry beyond its title. The label
+// already carries the counts and the airing note, so the pane repeats neither;
+// it shows the parts a truncated row cannot.
+func paneDetails(option SelectionOption) []string {
+	details := []string{}
+	if option.HasNewEpisodes {
+		details = append(details, "new episode")
+	}
+	// The row is clipped to the list width, so the pane is where a long label
+	// can actually be read.
+	if option.Label != "" && option.Label != option.Title {
+		details = append(details, option.Label)
+	}
+	return details
 }
 
 // attachCategoryTabs gives a menu its tab bar, when the caller supplied the

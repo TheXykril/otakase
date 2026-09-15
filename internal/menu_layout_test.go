@@ -262,33 +262,6 @@ func TestPreviewConversionKeepsTitleAndCover(t *testing.T) {
 	}
 }
 
-// The pane is decided from what is there, not from a setting: covers plus a
-// terminal that can draw them.
-func TestPaneIsNotAttachedWithoutCovers(t *testing.T) {
-	model := &Model{allOptions: []SelectionOption{{Key: "1", Label: "no cover"}}}
-	attachDetailPane(model)
-	if model.layout.pane {
-		t.Error("a pane was attached to a menu with nothing to show in it")
-	}
-	if model.posterOf != nil {
-		t.Error("a poster supplier was attached with no covers to supply")
-	}
-}
-
-// Turning image previews off must be honoured even where covers exist.
-func TestPaneRespectsTheImagePreviewSetting(t *testing.T) {
-	previous := GetGlobalConfig()
-	t.Cleanup(func() { SetGlobalConfig(previous) })
-	SetGlobalConfig(&CurdConfig{ImagePreview: false})
-
-	model := &Model{allOptions: []SelectionOption{{Key: "1", Thumbnail: "https://example.invalid/a.jpg"}}}
-	attachDetailPane(model)
-	if model.layout.pane {
-		t.Error("the pane ignored ImagePreview=false")
-	}
-}
-
-// An empty menu has nothing to describe.
 func TestPaneIsNotAttachedToAnEmptyMenu(t *testing.T) {
 	model := &Model{}
 	attachDetailPane(model)
