@@ -181,7 +181,8 @@ func TestTruncateCountsCharactersNotBytes(t *testing.T) {
 func TestSplitMenuOrderReadsTheDefaultConfig(t *testing.T) {
 	tabs, actions := SplitMenuOrder("CURRENT,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER")
 
-	wantTabs := []string{"CURRENT", "ALL", "UNTRACKED"}
+	// UNTRACKED is not here: it reads like a list but runs a search flow.
+	wantTabs := []string{"CURRENT", "ALL"}
 	if len(tabs) != len(wantTabs) {
 		t.Fatalf("expected %d tabs, got %d: %+v", len(wantTabs), len(tabs), tabs)
 	}
@@ -191,7 +192,7 @@ func TestSplitMenuOrderReadsTheDefaultConfig(t *testing.T) {
 		}
 	}
 
-	wantActions := []string{"UPDATE", "REMAP_PROVIDER", "CONTINUE_LAST", "TRACKER", "PROVIDER"}
+	wantActions := []string{"UNTRACKED", "UPDATE", "REMAP_PROVIDER", "CONTINUE_LAST", "TRACKER", "PROVIDER"}
 	if len(actions) != len(wantActions) {
 		t.Fatalf("expected %d actions, got %d: %+v", len(wantActions), len(actions), actions)
 	}
@@ -220,6 +221,11 @@ func TestSplitMenuOrderAcceptsBothRewatchingSpellings(t *testing.T) {
 		tabs, _ := SplitMenuOrder(key)
 		if len(tabs) != 1 || tabs[0].Label != "Rewatching" {
 			t.Errorf("%s did not produce a Rewatching tab: %+v", key, tabs)
+		}
+		// The key must be the one the list filter answers to, or the tab is
+		// drawn and shows nothing.
+		if tabs[0].Key != "REWATCHING" {
+			t.Errorf("%s produced key %q, which getEntriesByCategory does not handle", key, tabs[0].Key)
 		}
 	}
 	// Writing both must not produce the same tab twice.
@@ -498,5 +504,39 @@ func TestRowBudgetLeavesRoomForTheChrome(t *testing.T) {
 	tiny := Model{terminalHeight: 3, layout: menuLayout{tabs: []Tab{{Key: "A"}, {Key: "B"}}}}
 	if got := tiny.visibleItemsCount(); got < 1 {
 		t.Errorf("a very short terminal should still show a row, got %d", got)
+	}
+}
+
+// A tab must be backed by a list. getEntriesByCategory is the authority on
+// which keys are lists, so anything offered as a tab has to be one of them --
+// otherwise the tab draws, shows nothing, and hides whatever the key really did.
+func TestEveryTabKeyIsARealCategory(t *testing.T) {
+	everyKey := "CURRENT,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER," +
+		"PLANNING,COMPLETED,PAUSED,DROPPED,REWATCHING,REPEATING"
+	tabs, actions := SplitMenuOrder(everyKey)
+
+	list := AnimeList{
+		Watching:   []Entry{{Media: Media{ID: 1}}},
+		Planning:   []Entry{{Media: Media{ID: 2}}},
+		Completed:  []Entry{{Media: Media{ID: 3}}},
+		Paused:     []Entry{{Media: Media{ID: 4}}},
+		Dropped:    []Entry{{Media: Media{ID: 5}}},
+		Rewatching: []Entry{{Media: Media{ID: 6}}},
+	}
+	for _, tab := range tabs {
+		if len(getEntriesByCategory(list, tab.Key)) == 0 {
+			t.Errorf("tab %q (%s) is not a category getEntriesByCategory knows", tab.Key, tab.Label)
+		}
+	}
+
+	// And the search flow has to remain reachable as an action.
+	found := false
+	for _, action := range actions {
+		if action.Key == "UNTRACKED" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("UNTRACKED disappeared instead of becoming an action")
 	}
 }

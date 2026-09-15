@@ -218,9 +218,16 @@ func truncate(text string, width int) string {
 	return string(runes[:width-1]) + "…"
 }
 
-// Tab labels are deliberately shorter than the menu entries they replace.
-// A tab bar is horizontal and every column spent on "Currently Watching"
-// is one the next category does not get.
+// menuCategoryLabels maps a MenuOrder key to a tab.
+//
+// A key belongs here only if getEntriesByCategory can return a list for it.
+// Anything else looks like a category and is not one: UNTRACKED reads as a
+// list but runs a search-and-watch flow, and as a tab it produced an empty
+// list with no way to reach the thing it actually does.
+//
+// The labels are deliberately shorter than the menu entries they replace. A tab
+// bar is horizontal, and every column spent on "Currently Watching" is one the
+// next category does not get.
 var menuCategoryLabels = map[string]string{
 	"CURRENT":    "Watching",
 	"PLANNING":   "Planning",
@@ -228,15 +235,24 @@ var menuCategoryLabels = map[string]string{
 	"PAUSED":     "On Hold",
 	"DROPPED":    "Dropped",
 	"REWATCHING": "Rewatching",
-	// AniList calls rewatching REPEATING, and both spellings reach this code.
-	"REPEATING": "Rewatching",
-	"ALL":       "All",
-	"UNTRACKED": "Untracked",
+	"ALL":        "All",
+}
+
+// canonicalCategoryKey maps a spelling onto the one the list filter answers to.
+// AniList calls rewatching REPEATING and the documented config key is
+// REWATCHING; only the latter is a case in getEntriesByCategory, so a tab keyed
+// REPEATING would show nothing.
+func canonicalCategoryKey(key string) string {
+	if key == "REPEATING" {
+		return "REWATCHING"
+	}
+	return key
 }
 
 // menuActions are the entries that do something rather than show a list. The
 // hint is the key that triggers them from the footer.
 var menuActions = map[string]FooterAction{
+	"UNTRACKED":      {Key: "UNTRACKED", Label: "untracked", Hint: "n"},
 	"CONTINUE_LAST":  {Key: "CONTINUE_LAST", Label: "continue", Hint: "c"},
 	"UPDATE":         {Key: "UPDATE", Label: "update", Hint: "u"},
 	"REMAP_PROVIDER": {Key: "REMAP_PROVIDER", Label: "remap", Hint: "r"},
@@ -263,9 +279,10 @@ func SplitMenuOrder(menuOrder string) ([]Tab, []FooterAction) {
 		if key == "" {
 			continue
 		}
+		key = canonicalCategoryKey(key)
 		if label, ok := menuCategoryLabels[key]; ok {
-			if !seenTab[label] {
-				seenTab[label] = true
+			if !seenTab[key] {
+				seenTab[key] = true
 				tabs = append(tabs, Tab{Key: key, Label: label})
 			}
 			continue
