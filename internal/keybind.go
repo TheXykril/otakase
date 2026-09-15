@@ -73,14 +73,34 @@ func (c hyprlandConfig) keybindBlock() string {
 // It is idempotent -- a block it wrote before is replaced rather than appended
 // to -- and it refuses to touch a binding somebody else owns unless forced.
 func InstallHyprlandKeybind(home string, force bool) ([]string, error) {
+	// Asking for it back overrides having removed it before.
+	_ = os.Remove(keybindOptOutPath(home))
 	return installKeybind(home, force, false)
 }
 
 // RefreshHyprlandKeybind updates a binding this program already owns and does
 // nothing otherwise. A package upgrade uses this: re-adding a keybinding the
 // user deliberately removed would be the package arguing with them.
+// RefreshHyprlandKeybind is what a package hook calls. It updates a binding this
+// program already owns, installs one when the user has never had it, and does
+// nothing once they have removed it. An upgrade cannot see the difference
+// between "never installed" and "deleted on purpose" without being told, so
+// removal leaves a marker and this reads it.
 func RefreshHyprlandKeybind(home string) ([]string, error) {
-	return installKeybind(home, false, true)
+	if optedOutOfKeybind(home) {
+		return []string{"keybinding left alone; it was removed previously"}, nil
+	}
+	return installKeybind(home, false, false)
+}
+
+// keybindOptOutPath sits beside the config, which is where a preference belongs.
+func keybindOptOutPath(home string) string {
+	return filepath.Join(home, ".config", AppName, "keybind-optout")
+}
+
+func optedOutOfKeybind(home string) bool {
+	_, err := os.Stat(keybindOptOutPath(home))
+	return err == nil
 }
 
 func installKeybind(home string, force, refreshOnly bool) ([]string, error) {
@@ -164,6 +184,10 @@ func RemoveHyprlandKeybind(home string) ([]string, error) {
 	notes := []string{}
 	if err := writeConfig(cfg.path, updated, &notes); err != nil {
 		return notes, err
+	}
+	if err := os.MkdirAll(filepath.Dir(keybindOptOutPath(home)), 0o755); err == nil {
+		// Remembered so a later upgrade does not put back what was just removed.
+		_ = os.WriteFile(keybindOptOutPath(home), []byte("removed by the user\n"), 0o644)
 	}
 	return append(notes, fmt.Sprintf("removed the %s binding from %s", keybindCombo, cfg.path)), nil
 }

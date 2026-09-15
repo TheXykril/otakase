@@ -56,10 +56,19 @@ MSG
 }
 
 post_upgrade() {
-  # Only update a binding that is already there. Re-adding one the user removed
-  # on purpose would be the package arguing with them.
+  # pacman runs this for a reinstall as well as an upgrade, so it has to handle
+  # the case where no binding exists yet -- someone coming from a version that
+  # never had one. -refresh-keybind installs when there is nothing, updates its
+  # own block when there is, and stays out of the way once the user has removed
+  # it. Printed rather than silenced: a package that edits your config should
+  # say so every time, not only the first time.
   [ -n "${OTAKASE_NO_KEYBIND:-}" ] && return 0
-  _otakase_as_user -refresh-keybind >/dev/null 2>&1 || true
+  echo
+  echo "  Super+Shift+A keybinding:"
+  if ! _otakase_as_user -refresh-keybind; then
+    echo "  (skipped: could not tell which user to set it up for)"
+  fi
+  echo
 }
 
 pre_remove() {
