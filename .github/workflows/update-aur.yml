@@ -5,7 +5,12 @@
 #
 # The names below have been updated for the rename, and `otakase` was free on the
 # AUR when it was chosen, so step 1 may already be done. Still to do:
-#   1. Register `otakase` on the AUR under this account.
+# This publishes `otakase-bin`, which installs the prebuilt release binary. The
+# source-built package is `otakase`, maintained by hand from the PKGBUILD in this
+# repository -- AUR convention reserves the -bin suffix for prebuilt binaries, so
+# the two cannot share a name. See PACKAGING.md.
+#
+#   1. Register `otakase-bin` on the AUR under this account.
 #   2. Add that account's AUR SSH key as the AUR_SSH_PRIVATE_KEY secret.
 #   3. Change the guard to this repository.
 #
@@ -143,32 +148,46 @@ jobs:
           GIT_SSH_COMMAND: ssh -i ~/.ssh/otakase_aur_deploy -o IdentitiesOnly=yes
         run: |
           set -euo pipefail
-          git clone --depth 1 ssh://aur@aur.archlinux.org/otakase.git aur-otakase
+          git clone --depth 1 ssh://aur@aur.archlinux.org/otakase-bin.git aur-otakase-bin
 
       - name: Update AUR package files
-        working-directory: aur-otakase
+        working-directory: aur-otakase-bin
         run: |
           set -euo pipefail
 
           {
             printf '%s\n' '# Maintainer: TheXykril <48257623+TheXykril@users.noreply.github.com>'
-            printf '%s\n' "pkgname='otakase'"
+            printf '%s\n' "pkgname='otakase-bin'"
             printf '%s\n' "pkgver=${{ steps.release.outputs.version }}"
             printf '%s\n' 'pkgrel=1'
             printf '%s\n' 'pkgdesc="Watch anime in CLI with AniList Tracking, Discord RPC, Intro/Outro/Filler/Recap Skipping, etc."'
             printf '%s\n' "arch=('x86_64')"
             printf '%s\n' 'url="https://github.com/TheXykril/otakase"'
             printf '%s\n' "license=('GPL')"
-            printf '%s\n' "depends=('mpv' 'rofi' 'ueberzugpp')"
+            printf '%s\n' "depends=('mpv')"
+            printf '%s\n' "optdepends=('rofi: graphical selection menus, and the Super+Shift+A keybinding'"
+            printf '%s\n' "            'libnotify: progress and errors when launched without a terminal'"
+            printf '%s\n' "            'xdg-utils: opening the browser for AniList/MyAnimeList sign-in'"
+            printf '%s\n' "            'ueberzugpp: image previews in the terminal (rofi draws its own)'"
+            printf '%s\n' "            'ffmpeg: saving episodes with -download')"
             printf '%s\n' "provides=('otakase')"
-            printf '%s\n' "conflicts=('curd')"
+            printf '%s\n' "conflicts=('otakase' 'curd')"
+            printf '%s\n' "replaces=('curd')"
+            printf '%s\n' "install='otakase.install'"
             printf '%s\n' 'source=("https://github.com/TheXykril/otakase/releases/download/v${pkgver}/otakase-linux-x86_64")'
             printf '%s\n' "sha256sums=('${{ steps.release.outputs.sha256 }}')"
             printf '\n'
             printf '%s\n' 'package() {'
             printf '%s\n' '  install -Dm755 "$srcdir/otakase-linux-x86_64" "$pkgdir/usr/bin/otakase"'
+            printf '%s\n' '  ln -s otakase "$pkgdir/usr/bin/otk"'
             printf '%s\n' '}'
           } > PKGBUILD
+
+          # Taken from the tag rather than copied, so it cannot drift from the
+          # source package's copy.
+          curl -fsSL \
+            "https://raw.githubusercontent.com/${{ github.repository }}/v${{ steps.release.outputs.version }}/otakase.install" \
+            -o otakase.install
 
           # Fail fast if checksum/source/install-target drift.
           grep -q '^source=(' PKGBUILD
@@ -176,6 +195,10 @@ jobs:
           grep -q 'otakase-linux-x86_64' PKGBUILD
           grep -q 'install -Dm755 "\$srcdir/otakase-linux-x86_64" "\$pkgdir/usr/bin/otakase"' PKGBUILD
           bash -n PKGBUILD
+          # The hook is fetched over the network; an empty file would ship a
+          # package whose install script quietly does nothing.
+          test -s otakase.install
+          bash -n otakase.install
 
           set +u
           # shellcheck disable=SC1091
@@ -194,6 +217,7 @@ jobs:
             [ -n "${pkgrel:-}" ] && printf '\tpkgrel = %s\n' "$pkgrel"
             [ -n "${epoch:-}" ] && printf '\tepoch = %s\n' "$epoch"
             [ -n "${url:-}" ] && printf '\turl = %s\n' "$url"
+            [ -n "${install:-}" ] && printf '\tinstall = %s\n' "$install"
             for item in "${arch[@]-}"; do [ -n "$item" ] && printf '\tarch = %s\n' "$item"; done
             for item in "${license[@]-}"; do [ -n "$item" ] && printf '\tlicense = %s\n' "$item"; done
             for item in "${makedepends[@]-}"; do [ -n "$item" ] && printf '\tmakedepends = %s\n' "$item"; done
@@ -219,7 +243,7 @@ jobs:
           grep -Fq "sha256sums = ${{ steps.release.outputs.sha256 }}" .SRCINFO
 
       - name: Commit and push to AUR
-        working-directory: aur-otakase
+        working-directory: aur-otakase-bin
         env:
           GIT_SSH_COMMAND: ssh -i ~/.ssh/otakase_aur_deploy -o IdentitiesOnly=yes
         run: |
@@ -233,7 +257,7 @@ jobs:
             exit 0
           fi
 
-          git add PKGBUILD .SRCINFO
+          git add PKGBUILD .SRCINFO otakase.install
           git commit -m "Update to version ${{ steps.release.outputs.version }}"
           git push origin HEAD:master
 
