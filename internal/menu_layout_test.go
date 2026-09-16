@@ -901,3 +901,54 @@ func TestEveryFooterActionHasAHandler(t *testing.T) {
 		}
 	}
 }
+
+// The action handlers must sit where every route to a selection reaches them.
+//
+// They were originally written inside the branch that prompts the category
+// menu, which was correct while that was the only way to choose one. Once an
+// action could also arrive from a key pressed inside a list, that branch was
+// skipped and every action key fell through to being looked up as a category --
+// which has no entries, so all six opened an empty list.
+//
+// Indentation is a crude signal, but this is a routing mistake that compiles,
+// passes every other test, and can only otherwise be caught by running the
+// program and pressing the key.
+func TestActionHandlersAreNotNestedInsideThePrompt(t *testing.T) {
+	source, err := os.ReadFile("curd.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(string(source), "\n")
+
+	depth := func(line string) int { return len(line) - len(strings.TrimLeft(line, "\t")) }
+
+	var anchor int
+	for i, line := range lines {
+		if strings.Contains(line, `if pendingAction.Key != ""`) {
+			anchor = depth(line)
+			_ = i
+			break
+		}
+	}
+	if anchor == 0 {
+		t.Fatal("could not find where an action is taken instead of prompting")
+	}
+
+	for _, key := range []string{"PROVIDER", "TRACKER", "UPDATE", "UNTRACKED", "REMAP_PROVIDER", "CONTINUE_LAST"} {
+		needle := `categorySelection.Key == "` + key + `"`
+		found := false
+		for _, line := range lines {
+			if !strings.Contains(line, needle) {
+				continue
+			}
+			found = true
+			if got := depth(line); got > anchor {
+				t.Errorf("%s is handled %d levels deeper than the selection is made, "+
+					"so a key pressed in a list never reaches it", key, got-anchor)
+			}
+		}
+		if !found {
+			t.Errorf("%s has no handler at all", key)
+		}
+	}
+}

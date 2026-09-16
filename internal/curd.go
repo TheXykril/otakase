@@ -665,39 +665,43 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 						continue
 					}
 
-					// Handle options
-					if categorySelection.Key == "PROVIDER" {
-						ClearScreen()
-						ChangeProvider(userCurdConfig)
-						ClearScreen()
-						continue categorySelectionLoop
-					} else if categorySelection.Key == "TRACKER" {
-						ClearScreen()
-						ChangeTracker(userCurdConfig, user)
-						ClearScreen()
-						continue categorySelectionLoop
-					} else if categorySelection.Key == "UPDATE" {
-						ClearScreen()
-						UpdateAnimeEntry(userCurdConfig, user)
-						// If UpdateAnimeEntry returns, user pressed back - continue to category selection
-						ClearScreen()
-						continue categorySelectionLoop
-					} else if categorySelection.Key == "UNTRACKED" {
-						ClearScreen()
-						WatchUntracked(userCurdConfig)
-						// If WatchUntracked returns, user pressed back OR watched is done- continue to category selection
-						ClearScreen()
-						continue categorySelectionLoop
-					} else if categorySelection.Key == "REMAP_PROVIDER" {
-						ClearScreen()
-						RemapProviderAnime(userCurdConfig, user, databaseAnimes)
-						ClearScreen()
-						continue categorySelectionLoop
-					} else if categorySelection.Key == "CONTINUE_LAST" {
-						anime.Ep.ContinueLast = true
-					}
-
 					ClearScreen()
+				}
+
+				// Handled here rather than beside the prompt above: an action can
+				// also arrive from a key pressed inside a list, and inside the
+				// prompt's branch it was skipped entirely -- every action key fell
+				// through to being looked up as a category, which has no entries
+				// and shows an empty list.
+				if categorySelection.Key == "PROVIDER" {
+					ClearScreen()
+					ChangeProvider(userCurdConfig)
+					ClearScreen()
+					continue categorySelectionLoop
+				} else if categorySelection.Key == "TRACKER" {
+					ClearScreen()
+					ChangeTracker(userCurdConfig, user)
+					ClearScreen()
+					continue categorySelectionLoop
+				} else if categorySelection.Key == "UPDATE" {
+					ClearScreen()
+					UpdateAnimeEntry(userCurdConfig, user)
+					// If UpdateAnimeEntry returns, user pressed back - continue to category selection
+					ClearScreen()
+					continue categorySelectionLoop
+				} else if categorySelection.Key == "UNTRACKED" {
+					ClearScreen()
+					WatchUntracked(userCurdConfig)
+					// If WatchUntracked returns, user pressed back OR watched is done- continue to category selection
+					ClearScreen()
+					continue categorySelectionLoop
+				} else if categorySelection.Key == "REMAP_PROVIDER" {
+					ClearScreen()
+					RemapProviderAnime(userCurdConfig, user, databaseAnimes)
+					ClearScreen()
+					continue categorySelectionLoop
+				} else if categorySelection.Key == "CONTINUE_LAST" {
+					anime.Ep.ContinueLast = true
 				}
 
 				if user.ListSync != nil {
