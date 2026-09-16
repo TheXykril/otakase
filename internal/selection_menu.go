@@ -564,7 +564,7 @@ func (m Model) keyHints() []keyHint {
 	// With the menu skipped there is nothing behind this list, so escape leaves
 	// the program. Saying "back" there would promise a screen that does not
 	// exist.
-	if config := GetGlobalConfig(); config != nil && config.CurrentCategory {
+	if SkipCategoryMenu(nil) {
 		return append(hints, keyHint{Key: "esc", Label: "quit"})
 	}
 	return append(hints, keyHint{Key: "esc", Label: "back"})

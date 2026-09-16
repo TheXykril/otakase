@@ -632,7 +632,7 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 				if pendingAction.Key != "" {
 					categorySelection = pendingAction
 					pendingAction = SelectionOption{}
-				} else if userCurdConfig.CurrentCategory {
+				} else if SkipCategoryMenu(userCurdConfig) {
 					categorySelection = SelectionOption{
 						Key:   "CURRENT",
 						Label: "Currently Watching",
@@ -795,8 +795,9 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 
 					// Handle back navigation - go back to category selection
 					if SelectionMeansBack(anilistSelectedOption) {
-						if userCurdConfig.CurrentCategory {
-							// If CurrentCategory is forced, back means quit
+						if SkipCategoryMenu(userCurdConfig) {
+							// Nothing was shown before this list, so there is
+							// nothing behind it to go back to.
 							ExitCurd(nil)
 						}
 						ClearScreen()

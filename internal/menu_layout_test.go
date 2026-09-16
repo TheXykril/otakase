@@ -979,3 +979,45 @@ func TestEscapeHintMatchesWhatEscapeDoes(t *testing.T) {
 		t.Errorf("the home menu should offer quit, got %q", got.Label)
 	}
 }
+
+// Skipping the menu is a terminal setting. It became reasonable there because
+// the tabs reach every list and the bottom bar every action; rofi has neither,
+// so its menu is still the only route to both and must keep appearing.
+func TestSkippingTheMenuIsATerminalSetting(t *testing.T) {
+	previous := GetGlobalConfig()
+	t.Cleanup(func() { SetGlobalConfig(previous) })
+	SetGlobalConfig(nil)
+
+	cases := []struct {
+		name   string
+		config *CurdConfig
+		want   bool
+	}{
+		{"terminal, setting on", &CurdConfig{CurrentCategory: true}, true},
+		{"terminal, setting off", &CurdConfig{}, false},
+		{"rofi, setting on", &CurdConfig{CurrentCategory: true, RofiSelection: true}, false},
+		{"rofi, setting off", &CurdConfig{RofiSelection: true}, false},
+		// -current asks for this run, whatever is drawing the list.
+		{"rofi, -current given", &CurdConfig{CurrentCategory: true, CurrentCategoryFlag: true, RofiSelection: true}, true},
+		{"no config at all", nil, false},
+	}
+
+	for _, test := range cases {
+		if got := SkipCategoryMenu(test.config); got != test.want {
+			t.Errorf("%s: SkipCategoryMenu() = %v, want %v", test.name, got, test.want)
+		}
+	}
+}
+
+// The setting is not written into a rofi user's config differently, so the
+// escape hint has to follow the same rule the navigation does.
+func TestEscapeHintFollowsRofiToo(t *testing.T) {
+	previous := GetGlobalConfig()
+	t.Cleanup(func() { SetGlobalConfig(previous) })
+
+	SetGlobalConfig(&CurdConfig{CurrentCategory: true, RofiSelection: true})
+	hints := Model{}.keyHints()
+	if got := hints[len(hints)-1]; got.Label != "back" {
+		t.Errorf("under rofi the menu is still behind the list, got %q", got.Label)
+	}
+}

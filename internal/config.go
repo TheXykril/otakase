@@ -40,49 +40,53 @@ type AnilistToken struct {
 
 // CurdConfig struct with field names that match the config keys
 type CurdConfig struct {
-	Player                     string   `config:"Player"`
-	MpvArgs                    []string `config:"MpvArgs"`
-	MpvPlaybackStartTimeout    int      `config:"MpvPlaybackStartTimeout"`
-	SubsLanguage               string   `config:"SubsLanguage"`
-	SubOrDub                   string   `config:"SubOrDub"`
-	SubStyle                   string   `config:"SubStyle"`
-	StoragePath                string   `config:"StoragePath"`
-	AnimeNameLanguage          string   `config:"AnimeNameLanguage"`
-	Theme                      string   `config:"Theme"`
-	ThemeOverrides             string   `config:"ThemeOverrides"`
-	DownloadDir                string   `config:"DownloadDir"`
-	MenuOrder                  string   `config:"MenuOrder"`
-	PercentageToMarkComplete   int      `config:"PercentageToMarkComplete"`
-	NextEpisodePrompt          bool     `config:"NextEpisodePrompt"`
-	AutoAudioFallback          bool     `config:"AutoAudioFallback"`
-	SkipOp                     bool     `config:"SkipOp"`
-	SkipEd                     bool     `config:"SkipEd"`
-	SkipFiller                 bool     `config:"SkipFiller"`
-	ImagePreview               bool     `config:"ImagePreview"`
-	SkipRecap                  bool     `config:"SkipRecap"`
-	RofiSelection              bool     `config:"RofiSelection"`
-	CurrentCategory            bool     `config:"CurrentCategory"`
-	ScoreOnCompletion          bool     `config:"ScoreOnCompletion"`
-	SaveMpvSpeed               bool     `config:"SaveMpvSpeed"`
-	AddMissingOptions          bool     `config:"AddMissingOptions"`
-	AlternateScreen            bool     `config:"AlternateScreen"`
-	DiscordPresence            bool     `config:"DiscordPresence"`
-	DiscordClientId            string   `config:"DiscordClientId"`
-	VimKeys                    bool     `config:"VimKeys"`
-	AnimeSkipClientID          string   `config:"AnimeSkipClientID"`
-	CheckUpdates               bool     `config:"CheckUpdates"`
-	MpvEpisodePlaylist         bool     `config:"MpvEpisodePlaylist"`
-	Provider                   string   `config:"Provider"`
-	DisabledProviders          string   `config:"DisabledProviders"`
-	ManualProviderSearch       bool     `config:"ManualProviderSearch"`
-	TrackingLocal              bool     `config:"TrackingLocal"`
-	TrackingRemote             string   `config:"TrackingRemote"`
-	TrackingConfigured         bool     `config:"TrackingConfigured"`
-	MyAnimeListClientID        string   `config:"MyAnimeListClientID"`
-	MyAnimeListClientSecret    string   `config:"MyAnimeListClientSecret"`
-	MyAnimeListImported        bool     `config:"MyAnimeListImported"`
-	MyAnimeListImportDismissed bool     `config:"MyAnimeListImportDismissed"`
-	ShowNewEpisodes            bool     `config:"ShowNewEpisodes"`
+	Player                   string   `config:"Player"`
+	MpvArgs                  []string `config:"MpvArgs"`
+	MpvPlaybackStartTimeout  int      `config:"MpvPlaybackStartTimeout"`
+	SubsLanguage             string   `config:"SubsLanguage"`
+	SubOrDub                 string   `config:"SubOrDub"`
+	SubStyle                 string   `config:"SubStyle"`
+	StoragePath              string   `config:"StoragePath"`
+	AnimeNameLanguage        string   `config:"AnimeNameLanguage"`
+	Theme                    string   `config:"Theme"`
+	ThemeOverrides           string   `config:"ThemeOverrides"`
+	DownloadDir              string   `config:"DownloadDir"`
+	MenuOrder                string   `config:"MenuOrder"`
+	PercentageToMarkComplete int      `config:"PercentageToMarkComplete"`
+	NextEpisodePrompt        bool     `config:"NextEpisodePrompt"`
+	AutoAudioFallback        bool     `config:"AutoAudioFallback"`
+	SkipOp                   bool     `config:"SkipOp"`
+	SkipEd                   bool     `config:"SkipEd"`
+	SkipFiller               bool     `config:"SkipFiller"`
+	ImagePreview             bool     `config:"ImagePreview"`
+	SkipRecap                bool     `config:"SkipRecap"`
+	RofiSelection            bool     `config:"RofiSelection"`
+	CurrentCategory          bool     `config:"CurrentCategory"`
+	// CurrentCategoryFlag records that -current was given for this run, which
+	// asks for the menu to be skipped whatever the interface. It is not a
+	// setting, so it carries no config tag and is never written to a file.
+	CurrentCategoryFlag        bool   `config:"-"`
+	ScoreOnCompletion          bool   `config:"ScoreOnCompletion"`
+	SaveMpvSpeed               bool   `config:"SaveMpvSpeed"`
+	AddMissingOptions          bool   `config:"AddMissingOptions"`
+	AlternateScreen            bool   `config:"AlternateScreen"`
+	DiscordPresence            bool   `config:"DiscordPresence"`
+	DiscordClientId            string `config:"DiscordClientId"`
+	VimKeys                    bool   `config:"VimKeys"`
+	AnimeSkipClientID          string `config:"AnimeSkipClientID"`
+	CheckUpdates               bool   `config:"CheckUpdates"`
+	MpvEpisodePlaylist         bool   `config:"MpvEpisodePlaylist"`
+	Provider                   string `config:"Provider"`
+	DisabledProviders          string `config:"DisabledProviders"`
+	ManualProviderSearch       bool   `config:"ManualProviderSearch"`
+	TrackingLocal              bool   `config:"TrackingLocal"`
+	TrackingRemote             string `config:"TrackingRemote"`
+	TrackingConfigured         bool   `config:"TrackingConfigured"`
+	MyAnimeListClientID        string `config:"MyAnimeListClientID"`
+	MyAnimeListClientSecret    string `config:"MyAnimeListClientSecret"`
+	MyAnimeListImported        bool   `config:"MyAnimeListImported"`
+	MyAnimeListImportDismissed bool   `config:"MyAnimeListImportDismissed"`
+	ShowNewEpisodes            bool   `config:"ShowNewEpisodes"`
 }
 
 const (
@@ -157,6 +161,27 @@ func defaultConfigMap() map[string]string {
 }
 
 // VimKeysEnabled reports whether selection menus should use vim-style motions.
+// SkipCategoryMenu reports whether to open straight into the watching list
+// rather than showing the category menu first.
+//
+// The setting is a terminal one. Skipping the menu became reasonable there
+// because the tabs now reach every list and the bottom bar every action, so
+// little is lost by landing inside one -- and rofi has neither of those, where
+// the menu is still its only route to the other lists and to the actions.
+// Passing -current asks for this run specifically, and is honoured either way.
+func SkipCategoryMenu(config *CurdConfig) bool {
+	if config == nil {
+		config = globalConfig
+	}
+	if config == nil {
+		return false
+	}
+	if config.CurrentCategoryFlag {
+		return true
+	}
+	return config.CurrentCategory && !config.RofiSelection
+}
+
 func VimKeysEnabled(config *CurdConfig) bool {
 	if config != nil {
 		return config.VimKeys

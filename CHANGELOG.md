@@ -142,6 +142,11 @@
   do; with it on, escape quits rather than promising a screen behind the list
   that is not there.
 
+  It is a terminal setting. What makes skipping the menu reasonable is the tabs
+  and the bottom bar, and rofi has neither — there the menu is still the only
+  way to the other lists and to the actions, so it keeps appearing. `-current`
+  asks for one run specifically and is honoured whichever is drawing the list.
+
 - **Rewatching is offered as a category.** It was always a list the program
   could produce, and was simply missing from the default menu order.
 

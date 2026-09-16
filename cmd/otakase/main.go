@@ -210,6 +210,7 @@ func main() {
 
 	if *currentCategory {
 		userCurdConfig.CurrentCategory = true
+		userCurdConfig.CurrentCategoryFlag = true
 	}
 
 	if *imagePreview {
