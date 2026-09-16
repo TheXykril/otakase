@@ -464,30 +464,32 @@ func UpdateCurd(repo, fileName string) error {
 }
 
 func AddNewAnime(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAnimes *[]Anime) SelectionOption {
-	var query string
-	// Remove the redeclared variable declaration since animeOptions is already declared above
 	var animeMapPreview map[string]RofiSelectPreview
 	var animeOptions []SelectionOption
-	var err error
 	var anilistSelectedOption SelectionOption
 
-	query, err = promptText(userCurdConfig, "Enter the anime name", false)
+	// Backing out of the question, or a search that fails, returns to the list
+	// this was opened from. Both used to close the program, which made opening
+	// this by accident expensive and a dropped connection fatal.
+	query, cancelled, err := promptCancelable(userCurdConfig, "Add",
+		"Search AniList for an anime",
+		"enter to search · esc to go back")
 	if err != nil {
 		Log("Error getting user input: " + err.Error())
-		ExitCurd(fmt.Errorf("Error getting user input: %w", err))
+		return SelectionOption{Key: "-2", Label: "Back"}
+	}
+	if cancelled {
+		return SelectionOption{Key: "-2", Label: "Back"}
 	}
 	if userCurdConfig.RofiSelection && userCurdConfig.ImagePreview {
 		animeMapPreview, err = SearchAnimeAnilistPreview(query, user.Token)
 	} else {
 		animeOptions, err = SearchAnimeAnilist(query, user.Token)
-		if err != nil {
-			Log(fmt.Sprintf("Failed to search anime: %v", err))
-			ExitCurd(fmt.Errorf("Failed to search anime"))
-		}
 	}
 	if err != nil {
 		Log(fmt.Sprintf("Failed to search anime: %v", err))
-		ExitCurd(fmt.Errorf("Failed to search anime"))
+		CurdOut(fmt.Sprintf("Could not search for %q: %v", query, err))
+		return SelectionOption{Key: "-2", Label: "Back"}
 	}
 	if userCurdConfig.RofiSelection && userCurdConfig.ImagePreview {
 		anilistSelectedOption, err = DynamicSelectPreview(animeMapPreview, false)

@@ -518,15 +518,32 @@ func applySelectedProviderMapping(config *CurdConfig, state *providerMappingSear
 	anime.ProviderName = providerNameFromSelection(config, state, selected)
 }
 
-func promptCustomProviderSearchQuery(config *CurdConfig, currentQuery, hint string) (string, bool, bool, error) {
-	manualQuery, err := promptText(config, hint, true)
+// promptCustomProviderSearchQuery asks what to search the providers for,
+// starting from the name that has been tried so far.
+//
+// Escape, or an emptied field, cancels: this question is one keypress away from
+// a list of results, and changing your mind about it should leave the search as
+// it was rather than run it again for nothing.
+func promptCustomProviderSearchQuery(config *CurdConfig, currentQuery, hint string) (string, bool, error) {
+	return customProviderQueryFromAnswer(currentQuery, func() (string, bool, error) {
+		return promptCancelableWithDefault(config, "Provider", "Search providers under a different name", hint, currentQuery)
+	})
+}
+
+// customProviderQueryFromAnswer turns an answer into the name to search for.
+//
+// The asking is a parameter so the rule worth pinning -- that backing out
+// leaves the search as it was, rather than clearing it -- can be tested without
+// a terminal, which the prompt itself needs.
+func customProviderQueryFromAnswer(currentQuery string, ask func() (string, bool, error)) (string, bool, error) {
+	answer, cancelled, err := ask()
 	if err != nil {
-		return "", false, false, err
+		return currentQuery, false, err
 	}
-	if manualQuery == "" {
-		manualQuery = currentQuery
+	if cancelled {
+		return currentQuery, true, nil
 	}
-	return manualQuery, false, false, nil
+	return answer, false, nil
 }
 
 func ResolveAnimeProviderMapping(config *CurdConfig, anime *Anime, query string, anilistEntry *Entry) (ProviderMappingOutcome, error) {
@@ -790,10 +807,19 @@ func persistRemappedProvider(historyPath string, databaseAnimes *[]Anime, anilis
 func handleProviderMappingAction(config *CurdConfig, state *providerMappingSearchState, action, defaultQuery string) (ProviderMappingOutcome, bool, error) {
 	switch action {
 	case "custom":
-		hint := fmt.Sprintf("Enter a search name for configured providers (current: '%s').", state.query)
-		newQuery, _, _, err := promptCustomProviderSearchQuery(config, state.query, hint)
+		hint := fmt.Sprintf("currently %q · enter to search · esc to go back", state.query)
+		newQuery, cancelled, err := promptCustomProviderSearchQuery(config, state.query, hint)
 		if err != nil {
 			return ProviderMappingQuit, false, err
+		}
+		if cancelled {
+			// The name is unchanged, so searching again would repeat a search
+			// that has already failed. Offer the other ways out instead.
+			action, recoveryErr := promptProviderSearchRecovery(config, state, "Search name unchanged.")
+			if recoveryErr != nil {
+				return ProviderMappingQuit, false, recoveryErr
+			}
+			return handleProviderMappingAction(config, state, action, defaultQuery)
 		}
 		state.setManualQuery(newQuery)
 		state.resetToAllProviders()

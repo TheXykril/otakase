@@ -133,6 +133,15 @@ func renderPrompt(section, question, hint string) string {
 // question you had opened by accident closed everything. Backing out of a
 // question is the most ordinary thing to want, and it should cost nothing.
 func promptCancelable(config *CurdConfig, section, question, hint string) (value string, cancelled bool, err error) {
+	return promptCancelableWithDefault(config, section, question, hint, "")
+}
+
+// promptCancelableWithDefault is promptCancelable with the field already
+// holding an answer.
+//
+// A question that is really "change this" starts from what it would change, so
+// correcting one word costs one word rather than retyping the whole line.
+func promptCancelableWithDefault(config *CurdConfig, section, question, hint, initial string) (value string, cancelled bool, err error) {
 	if config != nil && config.RofiSelection {
 		// rofi has its own frame; the hint goes in the prompt where it is the
 		// only place it can be seen.
@@ -144,7 +153,7 @@ func promptCancelable(config *CurdConfig, section, question, hint string) (value
 		return input, input == "", nil
 	}
 
-	model := newPromptModel(section, question, hint, "")
+	model := newPromptModel(section, question, hint, initial)
 	finished, err := tea.NewProgram(model).Run()
 	if err != nil {
 		return "", false, err

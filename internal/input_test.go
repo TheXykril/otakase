@@ -129,3 +129,25 @@ func TestTypingReachesThePromptField(t *testing.T) {
 		t.Errorf("the field holds %q", got)
 	}
 }
+
+// A question that is really "change this" starts from what it would change, so
+// correcting one word costs one word rather than retyping the line.
+func TestAPrefilledPromptStartsFromItsDefault(t *testing.T) {
+	m := newPromptModel("Provider", "Search providers under a different name", "esc to go back", "frieren")
+
+	if got := m.input.Value(); got != "frieren" {
+		t.Errorf("the field starts at %q", got)
+	}
+	if !strings.Contains(m.View(), "frieren") {
+		t.Error("the prompt does not show the name being changed")
+	}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	answered := updated.(promptModel)
+	if answered.cancelled {
+		t.Error("enter on a prefilled prompt should accept the default")
+	}
+	if answered.value() != "frieren" {
+		t.Errorf("enter gave %q rather than the default", answered.value())
+	}
+}

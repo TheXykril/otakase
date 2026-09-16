@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"testing"
 
 	_ "github.com/thexykril/otakase/internal/loadproviders"
@@ -105,5 +106,56 @@ func TestApplyMatchedProviderMappingUsesSequentialProvider(t *testing.T) {
 	applyMatchedProviderMapping(config, state, &anime)
 	if anime.ProviderName != "anineko" || anime.ProviderId != "frieren-beyond-journeys-end" {
 		t.Fatalf("unexpected mapping %+v", anime)
+	}
+}
+
+// Backing out of "search under a different name" leaves the search as it was.
+// The question is one keypress from a list of results, and changing your mind
+// about it should not clear the name that got you there.
+func TestCustomProviderQueryCancelKeepsTheCurrentQuery(t *testing.T) {
+	query, cancelled, err := customProviderQueryFromAnswer("frieren", func() (string, bool, error) {
+		return "", true, nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cancelled {
+		t.Error("cancelling the prompt should be reported as cancelled")
+	}
+	if query != "frieren" {
+		t.Errorf("cancelling changed the query to %q", query)
+	}
+}
+
+func TestCustomProviderQueryUsesTheAnswer(t *testing.T) {
+	query, cancelled, err := customProviderQueryFromAnswer("frieren", func() (string, bool, error) {
+		return "sousou no frieren", false, nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cancelled {
+		t.Error("an answered prompt should not be reported as cancelled")
+	}
+	if query != "sousou no frieren" {
+		t.Errorf("the answer was not used, got %q", query)
+	}
+}
+
+// A prompt that fails is not a prompt that was answered with nothing: the
+// caller reports the failure, and the query it already had survives it.
+func TestCustomProviderQueryKeepsTheQueryOnError(t *testing.T) {
+	failed := errors.New("no terminal")
+	query, cancelled, err := customProviderQueryFromAnswer("frieren", func() (string, bool, error) {
+		return "", false, failed
+	})
+	if !errors.Is(err, failed) {
+		t.Fatalf("expected the prompt error back, got %v", err)
+	}
+	if cancelled {
+		t.Error("an error is not a cancellation")
+	}
+	if query != "frieren" {
+		t.Errorf("the query was lost, got %q", query)
 	}
 }

@@ -75,8 +75,8 @@
   The shape is borrowed from [kari](https://github.com/Dhairya3391/kari); the
   colours are still yours, from the palette.
 
-- **The untracked search can be backed out of, and looks like the rest of the
-  program.** Every way out of it used to close otakase: the prompt reported an
+- **The questions the program asks can be backed out of, and look like the rest
+  of it.** Every way out of the untracked search used to close otakase: the prompt reported an
   empty answer as an error, and each caller turned that into quitting, so
   pressing enter at a question you had opened by accident shut everything. It
   is reached by one keypress from a list, and the cost of pressing that by
@@ -90,6 +90,15 @@
 
   The prompt is drawn in the same frame as the menus, with the way out written
   on it, rather than appearing as a bare line of text.
+
+  The other two questions that ask for a name now behave the same: adding an
+  anime to your list, and searching the providers under a different name.
+  Backing out of either returns to the list it was opened from, and so does a
+  search that fails — a dropped connection while adding an anime used to close
+  the program. The provider question starts from the name that has been tried
+  so far, so correcting one word of it costs one word; leaving it as it is
+  offers the other ways out rather than repeating a search that has already
+  failed.
 
 - **`CurrentCategory` can skip the menu entirely**, opening straight into your
   watching list. It existed only as a command-line flag and was never written
