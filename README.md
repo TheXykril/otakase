@@ -272,27 +272,26 @@ Two of the three work with no setup: the provider in use, then
 
 [Anime-Skip](https://anime-skip.com) is the third source, and the only one that
 needs setting up: its API requires a client id identifying the application, and
-none is bundled.
+none is bundled. The simplest way to turn it on:
 
-Anime-Skip publishes one for its own GraphQL playground, which you can read out
-of the page:
-
-```bash
-curl -s https://api.anime-skip.com/ | grep -o 'Client-ID": "[A-Za-z0-9]*'
+```
+AnimeSkipClientID=auto
 ```
 
-Put it in the config:
+Otakase then reads the client id Anime-Skip publishes for its own GraphQL
+playground, remembers it, and looks for a new one if it ever stops being
+accepted — so a rotated id fixes itself. That id is shared with everyone using
+the playground, which is why it can change, and why it may be rate-limited.
+
+For an id of your own, ask the Anime-Skip maintainers through the links on
+their site and write it in place of `auto`:
 
 ```
 AnimeSkipClientID=your_client_id_here
 ```
 
-That id is shared by everyone using the playground, so it can be rate-limited
-or changed without notice. For one of your own, ask the Anime-Skip maintainers
-through the links on their site.
-
-Leaving `AnimeSkipClientID` empty is fine — Anime-Skip is simply not asked, and
-the other two sources carry on.
+Leaving the setting empty is fine — Anime-Skip is simply not asked, and the
+other two sources carry on.
 
 ## Theming
 
@@ -352,7 +351,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
 | `Theme` | Enum | `auto`, `omarchy`, `builtin` | Which colour palette to use. `auto` follows the desktop on Omarchy. |
 | `ThemeOverrides` | String | `name:#hex` pairs | Replaces named colours on top of the palette in use. See [Theming](#theming). |
-| `AnimeSkipClientID` | String | an Anime-Skip client id | Adds Anime-Skip as a third source of skip timings — see [Adding Anime-Skip](#adding-anime-skip). Empty by default; without it, timings still come from the provider in use and from AniSkip. |
+| `AnimeSkipClientID` | String | `auto`, or an Anime-Skip client id | Adds Anime-Skip as a third source of skip timings — see [Adding Anime-Skip](#adding-anime-skip). `auto` fetches the published playground id and replaces it if it stops working. Empty by default; without it, timings still come from the provider in use and from AniSkip. |
 | `SkipFiller` / `SkipRecap` | Boolean | `true`, `false` | Skip filler episodes and recap sections. |
 | `DiscordPresence` | Boolean | `true`, `false` | Discord Rich Presence. |
 | `RofiSelection` | Boolean | `true`, `false` | Use rofi for selection menus. |

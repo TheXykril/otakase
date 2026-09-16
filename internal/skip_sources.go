@@ -90,32 +90,64 @@ const (
 // like theirs and puts their key at risk of being rate-limited or revoked. With
 // no client id configured the source reports that it knows nothing, and the
 // other sources carry on.
+//
+// Where the id comes from is the clientIDSource's business: one the user wrote
+// down, or -- if they asked for it -- the one Anime-Skip publishes for its own
+// playground, fetched again when it stops being accepted.
 type animeSkipSource struct {
-	clientID string
-	endpoint string
-	http     *http.Client
+	clientIDs clientIDSource
+	endpoint  string
+	http      *http.Client
 }
 
 func newAnimeSkipSource(clientID string) animeSkipSource {
+	return newAnimeSkipSourceFrom(fixedClientID(clientID))
+}
+
+func newAnimeSkipSourceFrom(ids clientIDSource) animeSkipSource {
 	return animeSkipSource{
-		clientID: strings.TrimSpace(clientID),
-		endpoint: animeSkipEndpoint,
-		http:     &http.Client{Timeout: animeSkipTimeout},
+		clientIDs: ids,
+		endpoint:  animeSkipEndpoint,
+		http:      &http.Client{Timeout: animeSkipTimeout},
 	}
 }
 
 func (animeSkipSource) Name() string { return "anime-skip" }
 
 func (s animeSkipSource) Lookup(ref SkipRef) (SkipTimes, bool, error) {
-	if s.clientID == "" || ref.AniListID <= 0 || ref.Episode <= 0 {
+	if s.clientIDs == nil || ref.AniListID <= 0 || ref.Episode <= 0 {
 		return SkipTimes{}, false, nil
 	}
 
-	showID, err := s.findShow(ref.AniListID)
+	times, found, err := s.lookupOnce(ref)
+	if !isRefusedClientIDError(err) {
+		return times, found, err
+	}
+	// The id was refused rather than the request failing, which is what a
+	// rotated id looks like. Ask for another and try once more; a source that
+	// cannot find one says so, and the attempt costs a single request.
+	Log("anime-skip: the client id was refused; looking for a new one")
+	s.clientIDs.Invalidate()
+	return s.lookupOnce(ref)
+}
+
+func (s animeSkipSource) lookupOnce(ref SkipRef) (SkipTimes, bool, error) {
+	clientID, err := s.clientIDs.ClientID()
+	if err != nil {
+		// Not having an id is not a failure of this episode: it means
+		// Anime-Skip cannot be asked at all, which the other sources cover.
+		Log(fmt.Sprintf("anime-skip: no client id: %v", err))
+		return SkipTimes{}, false, nil
+	}
+	if clientID == "" {
+		return SkipTimes{}, false, nil
+	}
+
+	showID, err := s.findShow(clientID, ref.AniListID)
 	if err != nil || showID == "" {
 		return SkipTimes{}, false, err
 	}
-	return s.episodeTimestamps(showID, ref.Episode)
+	return s.episodeTimestamps(clientID, showID, ref.Episode)
 }
 
 type animeSkipErrors struct {
@@ -124,7 +156,7 @@ type animeSkipErrors struct {
 	} `json:"errors"`
 }
 
-func (s animeSkipSource) query(query string, variables map[string]any, out any) error {
+func (s animeSkipSource) query(clientID, query string, variables map[string]any, out any) error {
 	payload, err := json.Marshal(map[string]any{"query": query, "variables": variables})
 	if err != nil {
 		return err
@@ -134,7 +166,7 @@ func (s animeSkipSource) query(query string, variables map[string]any, out any) 
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Client-ID", s.clientID)
+	req.Header.Set("X-Client-ID", clientID)
 
 	resp, err := s.http.Do(req)
 	if err != nil {
@@ -157,7 +189,7 @@ func (s animeSkipSource) query(query string, variables map[string]any, out any) 
 	return json.Unmarshal(body, out)
 }
 
-func (s animeSkipSource) findShow(anilistID int) (string, error) {
+func (s animeSkipSource) findShow(clientID string, anilistID int) (string, error) {
 	const query = `query ($id: String!) {
 		findShowsByExternalId(service: ANILIST, serviceId: $id) { id }
 	}`
@@ -168,7 +200,7 @@ func (s animeSkipSource) findShow(anilistID int) (string, error) {
 			} `json:"findShowsByExternalId"`
 		} `json:"data"`
 	}
-	if err := s.query(query, map[string]any{"id": strconv.Itoa(anilistID)}, &out); err != nil {
+	if err := s.query(clientID, query, map[string]any{"id": strconv.Itoa(anilistID)}, &out); err != nil {
 		return "", err
 	}
 	if len(out.Data.FindShowsByExternalID) == 0 {
@@ -177,7 +209,7 @@ func (s animeSkipSource) findShow(anilistID int) (string, error) {
 	return out.Data.FindShowsByExternalID[0].ID, nil
 }
 
-func (s animeSkipSource) episodeTimestamps(showID string, episode int) (SkipTimes, bool, error) {
+func (s animeSkipSource) episodeTimestamps(clientID, showID string, episode int) (SkipTimes, bool, error) {
 	const query = `query ($showId: ID!) {
 		findEpisodesByShowId(showId: $showId) {
 			number
@@ -197,7 +229,7 @@ func (s animeSkipSource) episodeTimestamps(showID string, episode int) (SkipTime
 			} `json:"findEpisodesByShowId"`
 		} `json:"data"`
 	}
-	if err := s.query(query, map[string]any{"showId": showID}, &out); err != nil {
+	if err := s.query(clientID, query, map[string]any{"showId": showID}, &out); err != nil {
 		return SkipTimes{}, false, err
 	}
 
@@ -270,8 +302,14 @@ func DefaultSkipSources(config *CurdConfig, provider any) []SkipSource {
 		sources = append(sources, providerSkipSource{provider: ranger})
 	}
 	sources = append(sources, aniSkipSource{})
-	if config != nil && strings.TrimSpace(config.AnimeSkipClientID) != "" {
-		sources = append(sources, newAnimeSkipSource(config.AnimeSkipClientID))
+	if config != nil {
+		if configured := strings.TrimSpace(config.AnimeSkipClientID); configured != "" {
+			if strings.EqualFold(configured, AnimeSkipAutoClientID) {
+				sources = append(sources, newAnimeSkipSourceFrom(animeSkipClientIDs(config.StoragePath)))
+			} else {
+				sources = append(sources, newAnimeSkipSource(configured))
+			}
+		}
 	}
 	return sources
 }

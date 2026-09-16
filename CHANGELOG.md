@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`AnimeSkipClientID=auto` sets Anime-Skip up for you.** Anime-Skip needs a
+  client id identifying the application, which until now meant finding one and
+  writing it into the config — and finding it again whenever it changed. With
+  `auto`, otakase reads the id Anime-Skip publishes for its own GraphQL
+  playground, keeps it in the storage directory so a restart costs nothing, and
+  goes looking for a new one the moment the old one stops being accepted. A
+  rotation now fixes itself before the next opening.
+
+  It is a setting rather than the default because that id is Anime-Skip's, and
+  shared with everyone who opens their playground. Pointing every install at it
+  uninvited is their bandwidth and their rate limit; asking for it is your
+  choice to make. An id of your own still goes in the same setting, and empty
+  still means Anime-Skip is not asked at all.
+
+  Only the API saying the id itself was refused starts the search for another.
+  "The header must be passed" means nothing was sent, which no amount of
+  fetching fixes, and a fetch that does not help is not repeated for ten
+  minutes — a page that is down must not cost a request per episode.
+
 ## 1.1.0 — 2026-09-16
 
 ### Added
