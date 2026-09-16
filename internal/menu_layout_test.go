@@ -484,23 +484,39 @@ func TestAddNewEntryIsNeverDuplicated(t *testing.T) {
 }
 
 // The chrome takes rows. Not counting them made the menu taller than the
-// terminal, and what scrolled off the top was the tab bar.
+// terminal, and what scrolled off the top was the header.
 func TestRowBudgetLeavesRoomForTheChrome(t *testing.T) {
 	plain := Model{terminalHeight: 30}
 	withTabs := Model{terminalHeight: 30, layout: menuLayout{
 		tabs: []Tab{{Key: "A"}, {Key: "B"}},
 	}}
-	withBoth := Model{terminalHeight: 30, layout: menuLayout{
-		tabs:   []Tab{{Key: "A"}, {Key: "B"}},
-		footer: []FooterAction{{Key: "CONTINUE_LAST", Label: "continue"}},
-	}}
 
+	// The frame -- breadcrumb, rule, and the key hints with the blank line
+	// above them -- is always drawn, so it is always paid for.
+	if plain.visibleItemsCount() >= plain.terminalHeight-4 {
+		t.Errorf("the frame was not paid for: %d rows for a %d row terminal",
+			plain.visibleItemsCount(), plain.terminalHeight)
+	}
 	if withTabs.visibleItemsCount() >= plain.visibleItemsCount() {
-		t.Error("a tab bar takes rows, so fewer entries fit")
+		t.Error("a tab bar takes rows on top of the frame, so fewer entries fit")
 	}
-	if withBoth.visibleItemsCount() >= withTabs.visibleItemsCount() {
-		t.Error("a footer takes rows too")
+
+	// The whole menu has to fit: what is drawn must never exceed the terminal,
+	// or it scrolls and the header is the first thing lost.
+	m := &Model{
+		allOptions:     make([]SelectionOption, 50),
+		terminalHeight: 24,
+		terminalWidth:  100,
+		layout:         menuLayout{tabs: []Tab{{Key: "A", Label: "A"}, {Key: "B", Label: "B"}}},
 	}
+	for i := range m.allOptions {
+		m.allOptions[i] = SelectionOption{Key: string(rune('a' + i%26)), Label: "entry"}
+	}
+	m.filterOptions()
+	if height := lipgloss.Height(m.View()); height > m.terminalHeight {
+		t.Errorf("the menu is %d rows tall in a %d row terminal, so it will scroll", height, m.terminalHeight)
+	}
+
 	// A tiny terminal must still show something rather than nothing.
 	tiny := Model{terminalHeight: 3, layout: menuLayout{tabs: []Tab{{Key: "A"}, {Key: "B"}}}}
 	if got := tiny.visibleItemsCount(); got < 1 {
@@ -691,5 +707,61 @@ func TestFilterLineOnlyAppearsWhenUsed(t *testing.T) {
 	m.filterOptions()
 	if !strings.Contains(m.View(), "fri") {
 		t.Errorf("a filter in use was not shown:\n%s", m.View())
+	}
+}
+
+// Resizing has to relay everything, not just reflow the text. The frame
+// follows the terminal, so both the rule and the detail column move with it.
+func TestResizeRelaysTheWholeFrame(t *testing.T) {
+	opts := []SelectionOption{
+		{Key: "1", Title: "Frieren", Label: "Frieren · 12/28"},
+		{Key: "2", Title: "Dandadan", Label: "Dandadan · 7/12"},
+	}
+	m := &Model{allOptions: opts}
+	attachCategoryTabs(m, &SelectionRefreshConfig{
+		Categories:     []Tab{{Key: "CURRENT", Label: "Watching"}, {Key: "ALL", Label: "All"}},
+		ActiveCategory: "CURRENT",
+		LoadCategory:   func(string) []SelectionOption { return opts },
+	})
+	attachDetailPane(m)
+	m.filterOptions()
+
+	widthOf := func(width, height int) int {
+		sized, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: height})
+		m = sized.(*Model)
+		return lipgloss.Width(m.View())
+	}
+
+	wide := widthOf(120, 30)
+	narrow := widthOf(70, 20)
+	if narrow >= wide {
+		t.Errorf("the frame did not shrink with the terminal: %d then %d", wide, narrow)
+	}
+	// And it must not overflow what it was given, or the terminal wraps every
+	// line and the layout collapses.
+	if narrow > 70 {
+		t.Errorf("the frame is %d columns wide in a 70 column terminal", narrow)
+	}
+	if back := widthOf(120, 30); back != wide {
+		t.Errorf("growing back gave a different width: %d then %d", wide, back)
+	}
+}
+
+// Rows are cut to the list column. A row that wraps is two lines for one
+// entry, which breaks the count of what fits and the alignment beside it.
+func TestLongRowsAreCutNotWrapped(t *testing.T) {
+	long := strings.Repeat("Very Long Anime Title ", 12)
+	m := &Model{allOptions: []SelectionOption{{Key: "1", Title: "x", Label: long}}}
+	attachDetailPane(m)
+	m.filterOptions()
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	m = sized.(*Model)
+
+	view := m.View()
+	if lipgloss.Width(view) > 80 {
+		t.Errorf("a long row pushed the frame to %d columns", lipgloss.Width(view))
+	}
+	if !strings.Contains(view, "…") {
+		t.Error("a row too long for its column was not marked as cut")
 	}
 }

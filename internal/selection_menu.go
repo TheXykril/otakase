@@ -365,6 +365,10 @@ func (m Model) View() string {
 		return renderTooSmallNotice(m.terminalWidth, m.terminalHeight)
 	}
 
+	contentWidth := m.contentWidth()
+	paneWidth := m.paneWidth(contentWidth)
+	listWidth := contentWidth - paneWidth
+
 	var b strings.Builder
 
 	// A filter line, shown only once there is something in it or the user has
@@ -395,9 +399,13 @@ func (m Model) View() string {
 			// outside, it landed to the left of the selection's border, so a
 			// highlighted new episode read as "[NEW]| Title" with the bar
 			// stranded in the middle.
-			label := m.filteredKeys[i].Label
+			// Cut rather than wrap. A row that wraps is two lines for one
+			// entry, which breaks both the count of what fits on screen and
+			// the alignment of everything beside it.
+			label := truncate(m.filteredKeys[i].Label, listWidth-4)
 			if m.filteredKeys[i].HasNewEpisodes {
-				label = newEpisodeItemStyle.Render("[NEW]") + " " + label
+				label = newEpisodeItemStyle.Render("[NEW]") + " " +
+					truncate(m.filteredKeys[i].Label, listWidth-11)
 			}
 			if i == m.selected {
 				b.WriteString(selectedItemStyle.Render(label) + "\n")
@@ -409,45 +417,95 @@ func (m Model) View() string {
 
 	body := b.String()
 
-	// The tab bar is drawn after the list so it can span exactly the width the
-	// list actually uses. Stretching it to the terminal instead makes the body
-	// as wide as the screen, which pushes the detail pane off to the far edge
-	// with an empty field between them.
-	contentWidth := lipgloss.Width(body)
 	if bar := renderTabBar(m.layout, contentWidth); bar != "" {
 		body = bar + "\n\n" + body
 	}
 
-	if m.layout.pane && m.terminalWidth > 0 {
-		paneWidth := m.terminalWidth / 3
-		if paneWidth > 40 {
-			paneWidth = 40
-		}
-		if paneWidth >= 20 {
-			// Sit the pane beside the text rather than at the far edge of the
-			// terminal. Padding the list to every available column leaves the
-			// two halves separated by an empty field on a wide screen, which
-			// reads as two unrelated things rather than one menu.
-			listWidth := lipgloss.Width(body) + 2
-			if maxList := m.terminalWidth - paneWidth - 2; listWidth > maxList {
-				listWidth = maxList
-			}
-			pane := renderSidePane(m.paneTitle(), m.paneMeta(), paneWidth, lipgloss.Height(body))
-			if pane != "" {
-				left := lipgloss.NewStyle().Width(listWidth).Render(body)
-				body = lipgloss.JoinHorizontal(lipgloss.Top, left, pane)
-			}
+	if paneWidth > 0 {
+		pane := renderSidePane(m.paneTitle(), m.paneMeta(), paneWidth, lipgloss.Height(body))
+		if pane != "" {
+			left := lipgloss.NewStyle().Width(listWidth).Render(body)
+			body = lipgloss.JoinHorizontal(lipgloss.Top, left, pane)
 		}
 	}
 
-	// Header, rule, body, footer -- the frame the whole menu sits in.
-	frameWidth := lipgloss.Width(body)
+	// Header, rule, body, and the key hints along the bottom edge.
 	header := renderBreadcrumb(m.sectionLabel())
-	frame := header + "\n" + renderRule(frameWidth) + "\n" + body
-	if hints := renderKeyHints(m.keyHints(), frameWidth); hints != "" {
-		frame += "\n" + hints
+	top := header + "\n" + renderRule(contentWidth) + "\n" + body
+	hints := renderKeyHints(m.keyHints(), contentWidth)
+
+	return m.fillTerminal(top, hints, contentWidth)
+}
+
+// contentWidth is how wide the menu draws.
+//
+// It follows the terminal so a resize relays everything, rather than being
+// whatever the longest row happened to be -- which left the detail pane
+// wherever the text ended and moved it every time the selection changed. It is
+// capped because a full-width line of text on a very wide terminal is hard to
+// read, and floored so the columns still fit on a narrow one.
+func (m Model) contentWidth() int {
+	if m.terminalWidth <= 0 {
+		// No size reported yet. Bubble Tea sends one on start, so this is the
+		// first frame only; a fixed width keeps that frame sane rather than
+		// letting it depend on whatever the longest row happens to be.
+		return 100
 	}
-	return frame
+	width := m.terminalWidth - 2
+	if width > 160 {
+		width = 160
+	}
+	if width < minMenuWidth {
+		width = minMenuWidth
+	}
+	return width
+}
+
+// paneWidth is how much of the frame the detail column takes, or zero when
+// there is no room for one. A third, within reason: narrower and the titles in
+// it wrap to nothing useful, wider and the list starts losing its own text.
+func (m Model) paneWidth(contentWidth int) int {
+	if !m.layout.pane || contentWidth <= 0 {
+		return 0
+	}
+	width := contentWidth / 3
+	if width > 40 {
+		width = 40
+	}
+	if width < 20 {
+		return 0
+	}
+	return width
+}
+
+// fillTerminal pushes the hints to the bottom edge and centres the whole block,
+// so the menu occupies the terminal instead of huddling in its top-left corner.
+func (m Model) fillTerminal(top, hints string, contentWidth int) string {
+	frame := top
+	if hints != "" {
+		gap := 0
+		if m.terminalHeight > 0 {
+			gap = m.terminalHeight - lipgloss.Height(top) - lipgloss.Height(hints) - 1
+		}
+		if gap < 1 {
+			gap = 1
+		}
+		frame = top + strings.Repeat("\n", gap) + hints
+	}
+	if m.terminalWidth <= contentWidth {
+		return frame
+	}
+	// Indent every line equally rather than styling the block to a width:
+	// the block contains a joined pane whose own padding would otherwise be
+	// recomputed and shift the columns apart.
+	pad := strings.Repeat(" ", (m.terminalWidth-contentWidth)/2)
+	lines := strings.Split(frame, "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = pad + line
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // sectionLabel is what the breadcrumb says after the program's name: the
@@ -531,11 +589,12 @@ func (m Model) visibleItemsCount() int {
 	// them the menu is taller than the terminal, which scrolls, and what
 	// scrolls off the top is the tab bar -- so on a long list the categories
 	// became invisible exactly where they are most useful.
+	// The frame around the list: breadcrumb, its rule, and the key hints with
+	// the blank line above them. Without counting these the menu is taller than
+	// the terminal, it scrolls, and what scrolls away is the header.
+	count -= 4
 	if m.layout.hasTabs() {
-		count -= 2 // the tabs, and the rule beneath them
-	}
-	if m.layout.hasFooter() {
-		count -= 2 // the footer, and the blank line above it
+		count -= 2 // the tabs, and the blank line beneath them
 	}
 
 	if count < 1 {

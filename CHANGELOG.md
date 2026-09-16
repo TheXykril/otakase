@@ -48,6 +48,17 @@
   exclusive. A mistyped colour costs that colour alone: it is reported and
   skipped while the rest apply.
 
+- **The menu fills the terminal and follows a resize.** The frame is measured
+  from the terminal rather than from whatever the longest row happened to be,
+  so the rule spans the window, the detail column sits at a fixed share of it
+  instead of wherever the text ended, and the key hints rest on the bottom
+  edge. Rows are cut to their column rather than wrapped: a row that wraps is
+  two lines for one entry, which breaks both the count of what fits on screen
+  and the alignment of everything beside it.
+
+- **Rewatching is offered as a category.** It was always a real list, just
+  absent from the default menu order.
+
 - **The menu is framed like a proper application.** A breadcrumb naming the
   program and the open category, a rule beneath it, the list, and a centred row
   of key badges along the bottom — the shape borrowed from

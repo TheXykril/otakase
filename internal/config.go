@@ -114,7 +114,7 @@ func defaultConfigMap() map[string]string {
 		"StoragePath":              StoragePathDefault,
 		"AnimeNameLanguage":        "english",
 		"SubsLanguage":             "english",
-		"MenuOrder":                "CURRENT,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER",
+		"MenuOrder":                "CURRENT,REWATCHING,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER",
 		"SubOrDub":                 "sub",
 		"SubStyle":                 "ask",
 		"PercentageToMarkComplete": "85",
