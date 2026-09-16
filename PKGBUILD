@@ -1,7 +1,7 @@
 # Maintainer: TheXykril <48257623+TheXykril@users.noreply.github.com>
 # Continuation of Wraient/curd, rebuilt around provider resolution and theming.
 pkgname='otakase'
-pkgver=1.0.0
+pkgver=1.1.0
 pkgrel=1
 pkgdesc="Watch anime in CLI with AniList/MyAnimeList tracking, Discord RPC, and intro/outro/filler/recap skipping"
 arch=('x86_64' 'aarch64')
