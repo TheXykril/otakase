@@ -619,12 +619,22 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 			// anime.Ep.Resume = true
 
 		} else {
+			// An action chosen by its key from inside a list, to be answered on
+			// the next turn of the loop. It has to live outside the loop: the
+			// selection below is declared inside it and overwritten by the menu
+			// every time round, so handing an action back that way silently
+			// dropped it and showed the menu instead.
+			var pendingAction SelectionOption
+
 			// Navigation loop for category and anime selection
 		categorySelectionLoop:
 			for {
 				// Skip category selection if Current flag is set
 				var categorySelection SelectionOption
-				if userCurdConfig.CurrentCategory {
+				if pendingAction.Key != "" {
+					categorySelection = pendingAction
+					pendingAction = SelectionOption{}
+				} else if userCurdConfig.CurrentCategory {
 					categorySelection = SelectionOption{
 						Key:   "CURRENT",
 						Label: "Currently Watching",
@@ -795,7 +805,7 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 					// the same code: hand the key back to the category loop
 					// rather than duplicating the dispatch here.
 					if isMenuActionKey(anilistSelectedOption.Key) {
-						categorySelection = anilistSelectedOption
+						pendingAction = anilistSelectedOption
 						ClearScreen()
 						continue categorySelectionLoop
 					}

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -870,5 +871,33 @@ func TestPaneDetailDropsTheJoiningPunctuation(t *testing.T) {
 	}
 	if got != "Spirit Chronicles Season 2 · 8/12" {
 		t.Errorf("unexpected detail: %q", got)
+	}
+}
+
+// Every action offered in the bottom bar has to be answered by the loop the
+// caller hands it back to. One that is not falls through to being treated as a
+// category, which produces an empty list and no sign of what went wrong.
+func TestEveryFooterActionHasAHandler(t *testing.T) {
+	_, actions := SplitMenuOrder(
+		"CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER")
+	if len(actions) != 6 {
+		t.Fatalf("expected six actions, got %d", len(actions))
+	}
+
+	source, err := os.ReadFile("curd.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range actions {
+		// The caller dispatches on categorySelection.Key, so each action must
+		// appear there or it silently becomes a category lookup.
+		needle := `categorySelection.Key == "` + action.Key + `"`
+		if !strings.Contains(string(source), needle) {
+			t.Errorf("%s is offered in the bottom bar but nothing handles it", action.Key)
+		}
+		// And it must not also be a category, or the two meanings collide.
+		if _, isCategory := menuCategoryLabels[action.Key]; isCategory {
+			t.Errorf("%s is both an action and a category", action.Key)
+		}
 	}
 }
