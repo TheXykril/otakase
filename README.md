@@ -367,6 +367,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `ImagePreview` | Boolean | `true`, `false` | Poster previews in rofi. |
 | `VimKeys` | Boolean | `true`, `false` | `j`/`k`/`h`/`l` to move and `/` to search in menus, instead of type-to-filter. |
 | `AlternateScreen` | Boolean | `true`, `false` | Use an alternate screen buffer for a cleaner terminal. |
+| `CurrentCategory` | Boolean | `true`, `false` | Open straight into your watching list, skipping the menu. The tabs reach every other list and the bottom bar reaches every action, so the menu is largely redundant. With it on, escape quits rather than going back. |
 | `MenuOrder` | String | comma-separated | Which menu entries appear, and in what order. Choose from `CURRENT`, `ALL`, `UNTRACKED`, `UPDATE`, `REMAP_PROVIDER`, `CONTINUE_LAST`, `PLANNING`, `COMPLETED`, `PAUSED`, `DROPPED`, `REWATCHING`, `TRACKER`, `PROVIDER`. |
 | `Provider` | List | `stacked`, or a single-entry list | Which sources to search and in what order. `stacked` (the default) uses the preferred order with fallback; naming one restricts the search to it. |
 | `ManualProviderSearch` | Boolean | `true`, `false` | Always choose the match yourself instead of matching automatically. |

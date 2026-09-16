@@ -561,6 +561,12 @@ func (m Model) keyHints() []keyHint {
 	if m.isHomeMenu {
 		return append(hints, keyHint{Key: "ctrl+c", Label: "quit"})
 	}
+	// With the menu skipped there is nothing behind this list, so escape leaves
+	// the program. Saying "back" there would promise a screen that does not
+	// exist.
+	if config := GetGlobalConfig(); config != nil && config.CurrentCategory {
+		return append(hints, keyHint{Key: "esc", Label: "quit"})
+	}
 	return append(hints, keyHint{Key: "esc", Label: "back"})
 }
 

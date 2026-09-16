@@ -75,6 +75,13 @@
   The shape is borrowed from [kari](https://github.com/Dhairya3391/kari); the
   colours are still yours, from the palette.
 
+- **`CurrentCategory` can skip the menu entirely**, opening straight into your
+  watching list. It existed only as a command-line flag and was never written
+  into a config, so nothing suggested it was possible. With the tabs reaching
+  every other list and the bottom bar every action, the menu has little left to
+  do; with it on, escape quits rather than promising a screen behind the list
+  that is not there.
+
 - **Rewatching is offered as a category.** It was always a list the program
   could produce, and was simply missing from the default menu order.
 

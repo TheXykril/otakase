@@ -952,3 +952,30 @@ func TestActionHandlersAreNotNestedInsideThePrompt(t *testing.T) {
 		}
 	}
 }
+
+// With the menu skipped there is nothing behind the list, so escape leaves the
+// program. Offering "back" there promises a screen that does not exist.
+func TestEscapeHintMatchesWhatEscapeDoes(t *testing.T) {
+	previous := GetGlobalConfig()
+	t.Cleanup(func() { SetGlobalConfig(previous) })
+
+	lastHint := func(m Model) keyHint {
+		hints := m.keyHints()
+		return hints[len(hints)-1]
+	}
+
+	SetGlobalConfig(&CurdConfig{CurrentCategory: false})
+	if got := lastHint(Model{}); got.Label != "back" {
+		t.Errorf("with a menu behind it, escape goes back, got %q", got.Label)
+	}
+
+	SetGlobalConfig(&CurdConfig{CurrentCategory: true})
+	if got := lastHint(Model{}); got.Label != "quit" {
+		t.Errorf("with the menu skipped, escape quits, got %q", got.Label)
+	}
+
+	// The home menu always quits, whatever the setting.
+	if got := lastHint(Model{isHomeMenu: true}); got.Label != "quit" {
+		t.Errorf("the home menu should offer quit, got %q", got.Label)
+	}
+}
