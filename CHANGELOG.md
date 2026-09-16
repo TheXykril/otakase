@@ -42,52 +42,40 @@
 
 ### Changed
 
+- **The terminal menu is rebuilt.** Your list statuses are a tab bar across the
+  top — watching, rewatching, completed and the rest — with a count beside each
+  one, and ← and → move between them without going back to a menu. Switching is
+  instant: the whole list is already in memory, so a category is a filter
+  rather than a fetch. Beside the list, a pane describes the highlighted entry,
+  which is where a title too long for its row can still be read.
+
+  The frame around it is measured from the terminal, so the rule spans the
+  window, the pane keeps a fixed share of it, and the key hints rest on the
+  bottom edge; resizing relays the lot. Rows are cut to their column rather
+  than wrapped, because a row that becomes two lines breaks the count of what
+  fits on screen. A terminal smaller than 36 × 10 is told to resize instead of
+  being shown something unreadable.
+
+  The keys offered are the keys that work: no category key where there are no
+  categories, quit on the home menu and back inside one, and `j/k` and `tab`
+  under vim keys, where the arrows move the cursor instead. `MenuOrder` is
+  unchanged and still decides what appears — its list entries become tabs and
+  its actions become the footer.
+
+  The shape is borrowed from [kari](https://github.com/Dhairya3391/kari); the
+  colours are still yours, from the palette.
+
+- **Rewatching is offered as a category.** It was always a list the program
+  could produce, and was simply missing from the default menu order.
+
 - **Individual colours can be replaced with your own.** `ThemeOverrides` takes
   `name:#hex` pairs and layers them onto whichever palette is in use, so
   following the desktop theme and disliking one colour in it are no longer
   exclusive. A mistyped colour costs that colour alone: it is reported and
   skipped while the rest apply.
 
-- **The menu fills the terminal and follows a resize.** The frame is measured
-  from the terminal rather than from whatever the longest row happened to be,
-  so the rule spans the window, the detail column sits at a fixed share of it
-  instead of wherever the text ended, and the key hints rest on the bottom
-  edge. Rows are cut to their column rather than wrapped: a row that wraps is
-  two lines for one entry, which breaks both the count of what fits on screen
-  and the alignment of everything beside it.
-
-- **Rewatching is offered as a category.** It was always a real list, just
-  absent from the default menu order.
-
-- **The menu is framed like a proper application.** A breadcrumb naming the
-  program and the open category, a rule beneath it, the list, and a centred row
-  of key badges along the bottom — the shape borrowed from
-  [kari](https://github.com/Dhairya3391/kari), with every colour still coming
-  from your palette rather than hardcoded.
-
-  The keys shown are the keys that work: a menu without categories does not
-  offer a category key, the home menu offers quit where a submenu offers back,
-  and under vim keys the hints say `j/k` and `tab` rather than arrows. The
-  filter line appears only once something is typed, instead of spending a row
-  on an empty `Filter:` on every screen. A terminal smaller than 36 × 10 is
-  told to resize rather than shown something unreadable.
-
-- **← and → move between categories**, alongside Tab, and each tab shows how
-  many entries it holds. The bar worked from the moment it was added, but
-  nothing on screen said so, which made it read as a heading.
-
-- **The Bubble Tea stack moved up** (bubbletea 1.3.10, lipgloss 1.1.0), and the
-  menu gained the parts that surround the list: category tabs from the
-  tracker's own list statuses, an actions footer, and a detail pane. All of it
-  is opt-in, so menus that have not asked for it render exactly as before.
-  `MenuOrder` keeps its name and is read as both settings.
-
-- **Tab moves between categories in the terminal list.** Watching, planning,
-  completed and the rest are a tab bar across the top rather than a menu you
-  select into and back out of. Switching costs nothing: the whole list is
-  already in memory, so a category is a filter rather than a fetch. `MenuOrder`
-  decides which appear and in what order, and its action entries become a
-  footer.
+- **The Bubble Tea stack moved up** — bubbletea 1.3.10, lipgloss 1.1.0,
+  termenv 0.16.0.
 
 ### Removed
 
