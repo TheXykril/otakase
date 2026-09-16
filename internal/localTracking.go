@@ -431,7 +431,7 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 	for {
 		query, cancelled, inputErr := promptCancelable(userCurdConfig, "Untracked",
 			"Search for an anime to watch without tracking it",
-			"enter to search · empty to go back")
+			"enter to search · esc to go back")
 		if inputErr != nil {
 			Log("Error getting user input: " + inputErr.Error())
 			return
@@ -464,7 +464,7 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 
 	episodeNumber, cancelled, err := promptEpisodeCancelable(userCurdConfig, "Untracked",
 		fmt.Sprintf("Which episode of %s?", query),
-		"a number · empty to go back")
+		"a number · esc to go back")
 	if err != nil {
 		Log(fmt.Sprintf("Invalid episode number: %v", err))
 		return

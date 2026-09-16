@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -124,7 +125,7 @@ func renderPrompt(section, question, hint string) string {
 	return b.String()
 }
 
-// promptCancelable asks for a line of text and treats an empty answer as
+// promptCancelable asks a question and treats escape, or an empty answer, as
 // cancelling.
 //
 // The prompts this replaces reported an empty answer as an error, and every
@@ -143,21 +144,35 @@ func promptCancelable(config *CurdConfig, section, question, hint string) (value
 		return input, input == "", nil
 	}
 
-	ClearScreen()
-	fmt.Print(renderPrompt(section, question, hint))
-	input, err := readTrimmedStdinLine()
+	model := newPromptModel(section, question, hint, "")
+	finished, err := tea.NewProgram(model).Run()
 	if err != nil {
 		return "", false, err
 	}
-	input = strings.TrimSpace(input)
-	return input, input == "", nil
+	answered, ok := finished.(promptModel)
+	if !ok {
+		return "", true, nil
+	}
+	return answered.value(), answered.cancelled, nil
 }
 
 // promptEpisodeCancelable asks for an episode number, cancelling on an empty
 // answer and asking again on one that is not a number.
 func promptEpisodeCancelable(config *CurdConfig, section, question, hint string) (int, bool, error) {
+	return episodeFromAnswers(func() (string, bool, error) {
+		return promptCancelable(config, section, question, hint)
+	})
+}
+
+// episodeFromAnswers turns repeated answers into an episode number, asking
+// again after one that is not a number.
+//
+// The asking is a parameter so the retrying can be tested without a terminal:
+// the prompt itself needs one, and the rule worth pinning -- that a typo costs
+// the typo and not the search already done -- is in here, not in the reading.
+func episodeFromAnswers(ask func() (string, bool, error)) (int, bool, error) {
 	for {
-		input, cancelled, err := promptCancelable(config, section, question, hint)
+		input, cancelled, err := ask()
 		if err != nil || cancelled {
 			return 0, true, err
 		}
@@ -165,7 +180,6 @@ func promptEpisodeCancelable(config *CurdConfig, section, question, hint string)
 		if parseErr == nil {
 			return number, false, nil
 		}
-		// A typo should cost the typo, not the answer already given.
-		CurdOut(fmt.Sprintf("%v — try again, or press enter to go back.", parseErr))
+		CurdOut(fmt.Sprintf("%v — try again, or press escape to go back.", parseErr))
 	}
 }

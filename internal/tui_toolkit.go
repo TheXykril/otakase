@@ -7,7 +7,8 @@
 // recorded so the decision survives, and the build tag keeps the packages out
 // of the binary until real code imports them.
 //
-// bubbles is Charm's component library: list, viewport, textinput, help. The
+// bubbles is Charm's component library. textinput is in real use by the
+// prompt; list and viewport are still pinned for later. The
 // menu currently hand-rolls all of those -- the filter is manual string
 // handling and scrolling is manual offset arithmetic, which has already been
 // the source of one bug where the tab bar scrolled off the top.
@@ -20,6 +21,5 @@ package internal
 import (
 	_ "github.com/BourgeoisBear/rasterm"
 	_ "github.com/charmbracelet/bubbles/list"
-	_ "github.com/charmbracelet/bubbles/textinput"
 	_ "github.com/charmbracelet/bubbles/viewport"
 )

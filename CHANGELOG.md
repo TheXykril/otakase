@@ -83,6 +83,11 @@
   accident should be one more keypress. A search that finds nothing, or results
   you do not want, now asks again instead of leaving.
 
+  Escape backs out of it, and so does enter on an empty line. Escape needs the
+  prompt to read keys rather than lines — a terminal in its normal mode hands
+  over nothing until enter, so an escape typed at a line-based prompt arrives
+  buried in the answer, if at all.
+
   The prompt is drawn in the same frame as the menus, with the way out written
   on it, rather than appearing as a bare line of text.
 
