@@ -75,6 +75,17 @@
   The shape is borrowed from [kari](https://github.com/Dhairya3391/kari); the
   colours are still yours, from the palette.
 
+- **The untracked search can be backed out of, and looks like the rest of the
+  program.** Every way out of it used to close otakase: the prompt reported an
+  empty answer as an error, and each caller turned that into quitting, so
+  pressing enter at a question you had opened by accident shut everything. It
+  is reached by one keypress from a list, and the cost of pressing that by
+  accident should be one more keypress. A search that finds nothing, or results
+  you do not want, now asks again instead of leaving.
+
+  The prompt is drawn in the same frame as the menus, with the way out written
+  on it, rather than appearing as a bare line of text.
+
 - **`CurrentCategory` can skip the menu entirely**, opening straight into your
   watching list. It existed only as a command-line flag and was never written
   into a config, so nothing suggested it was possible. With the tabs reaching

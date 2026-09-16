@@ -424,25 +424,35 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 	var err error
 	var anime Anime
 
-	// Anime search and selection loop
+	// Anime search and selection loop. Every way out of it returns rather than
+	// quitting: this is reached by one keypress from a list, and the cost of
+	// pressing it by accident should be one more keypress, not the program
+	// closing.
 	for {
-		// Get anime name from user
-		query, err = promptText(userCurdConfig, "Enter the anime name", false)
-		if err != nil {
-			Log("Error getting user input: " + err.Error())
-			ExitCurd(fmt.Errorf("Error getting user input: %w", err))
+		query, cancelled, inputErr := promptCancelable(userCurdConfig, "Untracked",
+			"Search for an anime to watch without tracking it",
+			"enter to search · empty to go back")
+		if inputErr != nil {
+			Log("Error getting user input: " + inputErr.Error())
+			return
+		}
+		if cancelled {
+			return
 		}
 
 		providerID, providerName, back, searchErr := ResolveUntrackedProviderSearch(userCurdConfig, query)
 		if searchErr != nil {
 			Log(fmt.Sprintf("Failed to search anime: %v", searchErr))
-			ExitCurd(fmt.Errorf("Failed to search anime"))
+			CurdOut(fmt.Sprintf("Could not search for %q: %v", query, searchErr))
+			continue
 		}
 		if back {
 			return
 		}
 		if providerID == "" {
-			ExitCurd(nil)
+			// Nothing chosen from the results: ask again rather than leaving,
+			// since the search itself worked.
+			continue
 		}
 
 		anime.ProviderId = providerID
@@ -452,11 +462,15 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 		break
 	}
 
-	// Get episode number
-	episodeNumber, err := promptPositiveEpisodeNumber(userCurdConfig, "Enter the episode number")
+	episodeNumber, cancelled, err := promptEpisodeCancelable(userCurdConfig, "Untracked",
+		fmt.Sprintf("Which episode of %s?", query),
+		"a number · empty to go back")
 	if err != nil {
 		Log(fmt.Sprintf("Invalid episode number: %v", err))
-		ExitCurd(fmt.Errorf("Invalid episode number"))
+		return
+	}
+	if cancelled {
+		return
 	}
 
 	anime.Ep.Number = episodeNumber

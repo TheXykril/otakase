@@ -7,10 +7,33 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+// stdinReader is kept between calls. A fresh bufio.Reader each time discards
+// whatever it buffered past the line it returned, so a second question asked
+// straight after the first would lose an answer already typed -- pasting two
+// lines, or answering ahead of the prompt.
+var (
+	stdinReaderOnce sync.Once
+	stdinReader     *bufio.Reader
+	stdinSource     *os.File
+	stdinReaderMu   sync.Mutex
 )
 
 func readTrimmedStdinLine() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
+	stdinReaderMu.Lock()
+	// os.Stdin is replaced in tests, so the reader is rebuilt when it changes
+	// rather than being bound once to whatever it was at startup.
+	if stdinReader == nil || stdinSource != os.Stdin {
+		stdinReader = bufio.NewReader(os.Stdin)
+		stdinSource = os.Stdin
+	}
+	reader := stdinReader
+	stdinReaderMu.Unlock()
+
 	input, err := reader.ReadString('\n')
 	if err != nil && err != io.EOF {
 		return "", err
@@ -73,5 +96,76 @@ func isAffirmativeAnswer(answer string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// renderPrompt draws a question in the same frame the menus use, so stepping
+// from a list into a prompt does not look like leaving the program.
+func renderPrompt(section, question, hint string) string {
+	width := lipgloss.Width(question)
+	if w := lipgloss.Width(hint); w > width {
+		width = w
+	}
+	width += 4
+
+	var b strings.Builder
+	b.WriteString(renderBreadcrumb(section))
+	b.WriteString("\n")
+	b.WriteString(renderRule(width))
+	b.WriteString("\n\n")
+	b.WriteString(paneTitleStyle.Render(question))
+	b.WriteString("\n")
+	if hint != "" {
+		b.WriteString(footerTextStyle.Render(hint))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+	b.WriteString(filterLabelStyle.Render("› "))
+	return b.String()
+}
+
+// promptCancelable asks for a line of text and treats an empty answer as
+// cancelling.
+//
+// The prompts this replaces reported an empty answer as an error, and every
+// caller turned that error into quitting the program -- so pressing enter at a
+// question you had opened by accident closed everything. Backing out of a
+// question is the most ordinary thing to want, and it should cost nothing.
+func promptCancelable(config *CurdConfig, section, question, hint string) (value string, cancelled bool, err error) {
+	if config != nil && config.RofiSelection {
+		// rofi has its own frame; the hint goes in the prompt where it is the
+		// only place it can be seen.
+		input, rofiErr := GetUserInputFromRofi(question)
+		if rofiErr != nil {
+			return "", true, nil
+		}
+		input = strings.TrimSpace(input)
+		return input, input == "", nil
+	}
+
+	ClearScreen()
+	fmt.Print(renderPrompt(section, question, hint))
+	input, err := readTrimmedStdinLine()
+	if err != nil {
+		return "", false, err
+	}
+	input = strings.TrimSpace(input)
+	return input, input == "", nil
+}
+
+// promptEpisodeCancelable asks for an episode number, cancelling on an empty
+// answer and asking again on one that is not a number.
+func promptEpisodeCancelable(config *CurdConfig, section, question, hint string) (int, bool, error) {
+	for {
+		input, cancelled, err := promptCancelable(config, section, question, hint)
+		if err != nil || cancelled {
+			return 0, true, err
+		}
+		number, parseErr := parsePositiveIntInput(input, "episode number")
+		if parseErr == nil {
+			return number, false, nil
+		}
+		// A typo should cost the typo, not the answer already given.
+		CurdOut(fmt.Sprintf("%v — try again, or press enter to go back.", parseErr))
 	}
 }
