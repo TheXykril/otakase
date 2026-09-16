@@ -1060,17 +1060,24 @@ func resolveEpisodeLinksWithRecovery(config *CurdConfig, anime *Anime, anilistEn
 			}
 			CurdOut("Still no playable stream after trying other audio.")
 		case "episode":
-			episodePrompt := "Change episode number (if this one is wrong)"
+			episodeHint := "a number · esc to go back"
 			providerName, providerID := AnimeProviderID(anime)
 			if providerID != "" {
 				if episodeList, listErr := EpisodesList(QualifyProviderID(providerName, providerID), config.SubOrDub); listErr == nil && len(episodeList) > 0 {
-					episodePrompt = fmt.Sprintf("Change episode number (provider lists up to %v)", episodeList[len(episodeList)-1])
+					episodeHint = fmt.Sprintf("the provider lists up to %v · esc to go back", episodeList[len(episodeList)-1])
 				}
 			}
-			episodeNumber, promptErr := promptPositiveEpisodeNumber(config, episodePrompt)
+			// Backing out returns to the menu this was chosen from, which is
+			// the loop this continues; a number that is not one is asked for
+			// again by the prompt rather than costing the menu.
+			episodeNumber, cancelled, promptErr := promptEpisodeCancelable(config, "Episode",
+				"Change the episode number, if this one is wrong",
+				episodeHint)
 			if promptErr != nil {
 				Log("Invalid episode input: " + promptErr.Error())
-				CurdOut("Invalid episode number")
+				continue
+			}
+			if cancelled {
 				continue
 			}
 			anime.Ep.Number = episodeNumber

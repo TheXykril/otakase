@@ -75,13 +75,13 @@
   The shape is borrowed from [kari](https://github.com/Dhairya3391/kari); the
   colours are still yours, from the palette.
 
-- **The questions the program asks can be backed out of, and look like the rest
-  of it.** Every way out of the untracked search used to close otakase: the prompt reported an
-  empty answer as an error, and each caller turned that into quitting, so
-  pressing enter at a question you had opened by accident shut everything. It
-  is reached by one keypress from a list, and the cost of pressing that by
-  accident should be one more keypress. A search that finds nothing, or results
-  you do not want, now asks again instead of leaving.
+- **The questions the program asks can be backed out of, and look like the
+  rest of it.** Every way out of the untracked search used to close otakase:
+  the prompt reported an empty answer as an error, and each caller turned that
+  into quitting, so pressing enter at a question you had opened by accident
+  shut everything. It is reached by one keypress from a list, and the cost of
+  pressing that by accident should be one more keypress. A search that finds
+  nothing, or results you do not want, now asks again instead of leaving.
 
   Escape backs out of it, and so does enter on an empty line. Escape needs the
   prompt to read keys rather than lines — a terminal in its normal mode hands
@@ -91,14 +91,22 @@
   The prompt is drawn in the same frame as the menus, with the way out written
   on it, rather than appearing as a bare line of text.
 
-  The other two questions that ask for a name now behave the same: adding an
-  anime to your list, and searching the providers under a different name.
-  Backing out of either returns to the list it was opened from, and so does a
-  search that fails — a dropped connection while adding an anime used to close
-  the program. The provider question starts from the name that has been tried
-  so far, so correcting one word of it costs one word; leaving it as it is
-  offers the other ways out rather than repeating a search that has already
-  failed.
+  Every other question the program asks now works the same way, and the
+  line-based prompt they shared is gone:
+
+  - **Adding an anime to your list**, and **searching the providers under a
+    different name**, return to the list they were opened from. So does a
+    failed search — a dropped connection while adding an anime used to close
+    the program. The provider question starts from the name tried so far, so
+    correcting one word of it costs one word, and leaving it unchanged offers
+    the other ways out rather than repeating a search that has already failed.
+
+  - **The two that ask for an episode number.** Backing out of "change the
+    episode number" returns to the menu it was chosen from. Backing out of the
+    question asked when the total number of episodes cannot be worked out
+    starts from your tracker progress — which is what happens anyway when the
+    total is known, and which used to close the program instead. A number that
+    is not a number is asked for again rather than costing you the menu.
 
 - **`CurrentCategory` can skip the menu entirely**, opening straight into your
   watching list. It existed only as a command-line flag and was never written

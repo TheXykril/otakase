@@ -1,65 +1,13 @@
 package internal
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"os"
 	"strconv"
 	"strings"
-	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
-
-// stdinReader is kept between calls. A fresh bufio.Reader each time discards
-// whatever it buffered past the line it returned, so a second question asked
-// straight after the first would lose an answer already typed -- pasting two
-// lines, or answering ahead of the prompt.
-var (
-	stdinReaderOnce sync.Once
-	stdinReader     *bufio.Reader
-	stdinSource     *os.File
-	stdinReaderMu   sync.Mutex
-)
-
-func readTrimmedStdinLine() (string, error) {
-	stdinReaderMu.Lock()
-	// os.Stdin is replaced in tests, so the reader is rebuilt when it changes
-	// rather than being bound once to whatever it was at startup.
-	if stdinReader == nil || stdinSource != os.Stdin {
-		stdinReader = bufio.NewReader(os.Stdin)
-		stdinSource = os.Stdin
-	}
-	reader := stdinReader
-	stdinReaderMu.Unlock()
-
-	input, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
-		return "", err
-	}
-	return strings.TrimSpace(input), nil
-}
-
-func promptText(config *CurdConfig, prompt string, allowEmpty bool) (string, error) {
-	var input string
-	var err error
-	if config != nil && config.RofiSelection {
-		input, err = GetUserInputFromRofi(prompt)
-	} else {
-		CurdOut(prompt)
-		input, err = readTrimmedStdinLine()
-	}
-	if err != nil {
-		return "", err
-	}
-	input = strings.TrimSpace(input)
-	if input == "" && !allowEmpty {
-		return "", fmt.Errorf("input cannot be empty")
-	}
-	return input, nil
-}
 
 func parseNonNegativeIntInput(input, label string) (int, error) {
 	value, err := strconv.Atoi(strings.TrimSpace(input))
@@ -81,14 +29,6 @@ func parsePositiveIntInput(input, label string) (int, error) {
 		return 0, fmt.Errorf("%s must be greater than zero", label)
 	}
 	return value, nil
-}
-
-func promptPositiveEpisodeNumber(config *CurdConfig, prompt string) (int, error) {
-	input, err := promptText(config, prompt, false)
-	if err != nil {
-		return 0, err
-	}
-	return parsePositiveIntInput(input, "episode number")
 }
 
 func isAffirmativeAnswer(answer string) bool {

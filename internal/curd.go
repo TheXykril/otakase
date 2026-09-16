@@ -1188,12 +1188,22 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 			}
 
 			if anime.TotalEpisodes == 0 {
+				// Not knowing the total is a reason to ask which episode to
+				// start from, not a reason to insist on an answer: the tracker
+				// knows the progress either way. Backing out carries on from
+				// it, which is what the branch below does when the total is
+				// known, rather than closing the program over a question.
+				fromProgress := nextEpisodeFromProgress(selectedAnilistAnime.Progress)
 				CurdOut("Still unable to determine total episodes.")
-				CurdOut(fmt.Sprintf("Your %s progress: %d", RemoteTrackingDisplayName(userCurdConfig), selectedAnilistAnime.Progress))
-				episodeNumber, err := promptPositiveEpisodeNumber(userCurdConfig, "Enter the episode you want to start from")
+				episodeNumber, cancelled, err := promptEpisodeCancelable(userCurdConfig, "Episode",
+					"Which episode do you want to start from?",
+					fmt.Sprintf("a number · esc to continue from %d, your %s progress", fromProgress, RemoteTrackingDisplayName(userCurdConfig)))
 				if err != nil {
 					Log("Invalid episode input: " + err.Error())
-					ExitCurd(fmt.Errorf("Invalid episode number"))
+					cancelled = true
+				}
+				if cancelled {
+					episodeNumber = fromProgress
 				}
 				anime.Ep.Number = episodeNumber
 			} else {
