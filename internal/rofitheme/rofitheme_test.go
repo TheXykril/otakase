@@ -301,3 +301,18 @@ func TestSelectAnimeThemeRendersMessages(t *testing.T) {
 		t.Error("expected the message textbox to be styled")
 	}
 }
+
+// The rename must not look like the user hand-edited every theme. A file curd
+// wrote is still a file this package wrote, and backing the lot up on upgrade
+// would leave a .user-backup beside each one for no reason.
+func TestAThemeWrittenBeforeTheRenameIsStillOurs(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "selectanime.rasi")
+	if err := os.WriteFile(path, []byte("/* "+legacyGeneratedMarker+". Edits are overwritten. */\n"), 0o644); err != nil {
+		t.Fatalf("writing the old theme: %v", err)
+	}
+
+	if !isGenerated(path) {
+		t.Error("a theme carrying the old marker was taken for a hand-edited one")
+	}
+}

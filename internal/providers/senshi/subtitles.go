@@ -165,7 +165,7 @@ func validatedSenshiASSURL(subtitleURL string) string {
 }
 
 func senshiSubtitleCacheDir() string {
-	return filepath.Join(os.TempDir(), "curd", "subtitles")
+	return filepath.Join(os.TempDir(), "otakase", "subtitles")
 }
 
 func cacheSanitizedSenshiVTT(subtitleURL, cacheDir string) (string, error) {

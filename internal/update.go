@@ -587,7 +587,7 @@ func HandlePendingUpdatePrompt(config *CurdConfig, currentVersion string) bool {
 		state.Available = false
 		state.RemindAfter = ""
 		_ = saveUpdatePendingState(config.StoragePath, state)
-		updateUserMessage(config, fmt.Sprintf("Updated to %s. Please restart curd.", state.LatestVersion))
+		updateUserMessage(config, fmt.Sprintf("Updated to %s. Please restart otakase.", state.LatestVersion))
 		return true
 	case "later":
 		until := time.Now().Add(defaultRemindLaterDuration)
@@ -832,13 +832,13 @@ func installExecutableWithSudo(src, dest string) error {
 func createUpdateTempFile(executablePath, binaryName string) (string, *os.File, error) {
 	dir := filepath.Dir(executablePath)
 	// Try same directory first for atomic rename.
-	if f, err := os.CreateTemp(dir, ".curd-download-*"); err == nil {
+	if f, err := os.CreateTemp(dir, ".otakase-download-*"); err == nil {
 		return f.Name(), f, nil
 	}
 	// Fall back to system temp (may be cross-device; replaceExecutable handles that).
-	name := "curd-update-" + binaryName
+	name := "otakase-update-" + binaryName
 	if binaryName == "" {
-		name = "curd-update-bin"
+		name = "otakase-update-bin"
 	}
 	path := filepath.Join(os.TempDir(), name)
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
@@ -857,7 +857,7 @@ func copyFileReplace(src, dst string) error {
 
 	// Write to a sibling temp on the destination filesystem, then rename into place.
 	dir := filepath.Dir(dst)
-	tmp, err := os.CreateTemp(dir, ".curd-update-*")
+	tmp, err := os.CreateTemp(dir, ".otakase-update-*")
 	if err != nil {
 		return err
 	}

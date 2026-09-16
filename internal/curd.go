@@ -159,7 +159,7 @@ func CurdOut(data interface{}) {
 					message := strings.Trim(parts[2], "\"")
 					cmd := exec.Command("notify-send",
 						"-a", DisplayName,
-						"-h", "string:x-canonical-private-synchronous:curd-notification",
+						"-h", "string:x-canonical-private-synchronous:otakase-notification",
 						DisplayName,
 						"-i", parts[1],
 						message)
@@ -172,7 +172,7 @@ func CurdOut(data interface{}) {
 			} else {
 				cmd := exec.Command("notify-send",
 					"-a", DisplayName,
-					"-h", "string:x-canonical-private-synchronous:curd-notification",
+					"-h", "string:x-canonical-private-synchronous:otakase-notification",
 					DisplayName,
 					dataStr)
 				err := cmd.Run()
@@ -1399,7 +1399,7 @@ func StartCurd(userCurdConfig *CurdConfig, anime *Anime) string {
 	// Display starting message with cover image and episode info
 	if anime.CoverImage != "" && userCurdConfig.ImagePreview && userCurdConfig.RofiSelection {
 		// Get the cached image path
-		cacheDir := os.ExpandEnv("${HOME}/.cache/curd/images")
+		cacheDir := os.ExpandEnv("${HOME}/.cache/otakase/images")
 		filename := fmt.Sprintf("%x.jpg", md5.Sum([]byte(anime.CoverImage)))
 		cachePath := filepath.Join(cacheDir, filename)
 

@@ -409,7 +409,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 		if runtime.GOOS == "windows" {
 			mpvSocketPath = fmt.Sprintf(`\\.\pipe\curd_mpvsocket_%s`, randomNumber)
 		} else {
-			mpvSocketPath = fmt.Sprintf("/tmp/curd_mpvsocket_%s", randomNumber)
+			mpvSocketPath = fmt.Sprintf("/tmp/otakase_mpvsocket_%s", randomNumber)
 		}
 	} else {
 		mpvSocketPath = anime.Ep.Player.SocketPath

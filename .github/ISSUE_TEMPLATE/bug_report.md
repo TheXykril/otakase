@@ -23,8 +23,8 @@ If applicable, add screenshots to help explain your problem.
  - Distro: [e.g. Fedora, Arch]
 
 **Debug logs**
-Debug logs are located at ~/.local/share/curd/debug.log (for Linux)
-or C:\.local\share\curd\debug.log (for windows)
+Debug logs are located at ~/.local/share/otakase/debug.log (for Linux)
+or C:\.local\share\otakase\debug.log (for windows)
 
 **Optional context**
 Add any other context about the problem here.

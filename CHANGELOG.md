@@ -159,11 +159,36 @@
 - **The Bubble Tea stack moved up** — bubbletea 1.3.10, lipgloss 1.1.0,
   termenv 0.16.0.
 
+- **The leftovers still calling themselves curd are gone from everything you
+  can see.** "Please restart curd" after an update, the comment at the top of
+  the generated rofi themes, the image cache at `~/.cache/curd/images`, the
+  name of the built-in palette, the debug-log path in the bug report template,
+  and the module paths and config names throughout the provider documentation.
+  Temporary files — the mpv socket, the update downloads, the playlist and
+  torrent scratch directories — are named after this program too.
+
+  A rofi theme written before this still counts as one otakase wrote, so
+  upgrading does not decide every theme was hand-edited and back up the lot.
+
+  What keeps the old name does so deliberately: the files inside your storage
+  directory (`curd_history.txt`, `curd_version`, `curd_id`), because renaming
+  them orphans the history migrated from curd; `CURD_MAL_CLIENT_ID` and
+  `CURD_MAL_CLIENT_SECRET`, which still work; the packaging's `replaces=curd`;
+  and the references to Wraient's own AUR package, which is not ours to touch.
+  Internally the Go code still says `CurdConfig` and `curdhost` — invisible
+  from outside, and a rename of that size is not worth folding into a release.
+
 ### Removed
 
 - **ueberzugpp is no longer a dependency.** The function that used it had no
   callers, and every image preview in the program is drawn by rofi itself
   through its own icon protocol. It had never done anything here.
+
+- **The Nix packaging is gone.** `flake.nix`, `package.nix` and `flake.lock`
+  came from upstream and the rename never reached them, so they no longer
+  built at all: the derivation wraps `$out/bin/curd`, and the binary is
+  `otakase`. The name, homepage, exposed attribute and dependency list were
+  stale alongside it. Arch packaging and the release binaries are unaffected.
 
 ## 1.0.0 — 2026-09-15
 

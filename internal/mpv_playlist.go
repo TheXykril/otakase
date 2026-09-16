@@ -479,7 +479,7 @@ func (c *MPVPlaylistController) writePlaceholderM3U(slots []playlistSlot) (strin
 		dir = os.ExpandEnv(c.config.StoragePath)
 		_ = os.MkdirAll(dir, 0o755)
 	}
-	f, err := os.CreateTemp(dir, "curd-playlist-*.m3u")
+	f, err := os.CreateTemp(dir, "otakase-playlist-*.m3u")
 	if err != nil {
 		return "", err
 	}

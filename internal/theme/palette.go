@@ -58,7 +58,7 @@ type Palette struct {
 // Omarchy is unchanged.
 func Builtin() Palette {
 	return Palette{
-		Name:   "curd",
+		Name:   "otakase",
 		Source: SourceBuiltin,
 		Dark:   true,
 

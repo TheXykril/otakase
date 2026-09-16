@@ -135,7 +135,7 @@ func ensureClient() error {
 		return nil
 	}
 
-	dir, err := os.MkdirTemp("", "curd-torrent-*")
+	dir, err := os.MkdirTemp("", "otakase-torrent-*")
 	if err != nil {
 		return fmt.Errorf("torrentstream: create cache directory: %w", err)
 	}

@@ -1,6 +1,6 @@
-# Curd streaming providers
+# Otakase streaming providers
 
-Curd separates **what you watch** (AniList / local history) from **where streams come from** (providers). Providers are compile-time modules that implement a small interface and register themselves at startup. The host application handles menus, tracking, mpv playback, and provider stack fallback — providers only answer search, episode list, and stream URL questions.
+Otakase separates **what you watch** (AniList / local history) from **where streams come from** (providers). Providers are compile-time modules that implement a small interface and register themselves at startup. The host application handles menus, tracking, mpv playback, and provider stack fallback — providers only answer search, episode list, and stream URL questions.
 
 This document explains the intent of the design, how to add a provider, how users enable or disable providers, and what to do when a new provider needs something the current contract does not cover.
 
@@ -11,8 +11,8 @@ This document explains the intent of the design, how to add a provider, how user
 ### Goals
 
 1. **Adding a provider should be mechanical** — new package, implement three methods, register in `init()`, add one import line. No edits to central maps, name switches, or `curd.go` provider-specific branches.
-2. **Disabling a broken provider should not require a release** — users can turn providers off in `curd.conf` without rebuilding.
-3. **Keep one binary** — providers ship inside the curd repo (or as Go packages imported at build time). We are not using runtime plugin binaries or `.so` loading.
+2. **Disabling a broken provider should not require a release** — users can turn providers off in `otakase.conf` without rebuilding.
+3. **Keep one binary** — providers ship inside the otakase repo (or as Go packages imported at build time). We are not using runtime plugin binaries or `.so` loading.
 4. **Host owns orchestration** — ordered fallback, sub/dub prompts, AniList → provider matching, and mpv IPC stay in `internal/`. Providers return data; they do not drive the watch loop.
 
 ### Non-goals (for now)
@@ -128,7 +128,7 @@ Use `allanime` as a reference for a GraphQL/REST provider, `animepahe` for cooki
 ```go
 package yoursite
 
-import "github.com/wraient/curd/internal/providers"
+import "github.com/thexykril/otakase/internal/providers"
 
 type Provider struct{}
 
@@ -179,9 +179,9 @@ Add a blank import in `internal/loadproviders/load.go`:
 
 ```go
 import (
-    _ "github.com/wraient/curd/internal/providers/allanime"
-    _ "github.com/wraient/curd/internal/providers/animepahe"
-    _ "github.com/wraient/curd/internal/providers/yoursite"
+    _ "github.com/thexykril/otakase/internal/providers/allanime"
+    _ "github.com/thexykril/otakase/internal/providers/animepahe"
+    _ "github.com/thexykril/otakase/internal/providers/yoursite"
 )
 ```
 
@@ -196,7 +196,7 @@ Providers must not call `internal` helpers directly. Use hooks in `internal/curd
 | `curdhost.HTTPClient()` | Shared cookie jar HTTP client |
 | `curdhost.Log(string)` | Debug log (`debug.log` in storage path) |
 | `curdhost.Out(string)` | User-visible terminal message |
-| `curdhost.StoragePath()` | `~/.local/share/curd` (or configured path) |
+| `curdhost.StoragePath()` | `~/.local/share/otakase` (or configured path) |
 | `curdhost.AnimeNameLanguage()` | `"english"` or `"romaji"` for search result labels |
 | `curdhost.HTTPStatusOK` / `HTTPStatusError` | Consistent HTTP error formatting |
 
@@ -223,7 +223,7 @@ if !curdhost.HTTPStatusOK(resp.StatusCode) {
 
 ### 7. User configuration
 
-Users add the provider to their stack in `~/.config/curd/curd.conf`:
+Users add the provider to their stack in `~/.config/otakase/otakase.conf`:
 
 ```ini
 Provider=["yoursite"]
@@ -349,13 +349,13 @@ Key host files:
 ## FAQ
 
 **Why not dynamic plugins?**  
-Curd is a single-session CLI binary. Compile-time modules give fast startup, simple packaging (AUR, nix, releases), and easy debugging. Config-based disable covers “site is broken right now” without a plugin marketplace.
+Otakase is a single-session CLI binary. Compile-time modules give fast startup, simple packaging (AUR, releases), and easy debugging. Config-based disable covers “site is broken right now” without a plugin marketplace.
 
 **Can providers live in another repo?**  
-Yes, as a Go module that imports `github.com/wraient/curd/internal/providers` and `curdhost`, calls `Register` in `init()`, and is blank-imported from a fork or custom `loadproviders` package. Same binary model, different import path.
+Yes, as a Go module that imports `github.com/thexykril/otakase/internal/providers` and `curdhost`, calls `Register` in `init()`, and is blank-imported from a fork or custom `loadproviders` package. Same binary model, different import path.
 
 **What if episode URL resolution is slow?**  
 That is expected for some sites. Do heavy work inside the provider (parallel HTTP, caching cookies on disk under `curdhost.StoragePath()`). The host already prefetches the next episode in a goroutine during playback.
 
 **Who owns breaking site changes?**  
-The provider package. Fix the provider, release curd. Users can disable a broken provider with `DisabledProviders` until a fix ships.
+The provider package. Fix the provider, release otakase. Users can disable a broken provider with `DisabledProviders` until a fix ships.
