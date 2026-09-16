@@ -142,6 +142,12 @@ way to do it when vim keys are on, where the arrows move the cursor instead.
 Which categories appear, and in what order, is `MenuOrder`. The highlighted show's
 full title and notes appear beside the list, where the row itself is clipped.
 
+Along the bottom are the actions, each on a key you can press from anywhere in
+the list: `^u` untracked, `^e` update, `^r` remap provider, `^l` continue last,
+`^t` tracker, `^o` provider — `^` means Ctrl, so `^u` is Ctrl+U. `MenuOrder`
+decides which of them appear and in what order too. Under rofi they stay menu
+entries.
+
 | Flag | Description | Default |
 |---|---|---|
 | `-c` | Continue the last episode | |
@@ -264,43 +270,29 @@ Two of the three work with no setup: the provider in use, then
 
 ### Adding Anime-Skip
 
-The [Anime-Skip](https://anime-skip.com) API requires an `X-Client-ID` header
-identifying the *application* — not you, and not a password. Every request
-without one is rejected:
+[Anime-Skip](https://anime-skip.com) is the third source, and the only one that
+needs setting up: its API requires a client id identifying the application, and
+none is bundled.
 
-```json
-{"errors":[{"message":"The X-Client-ID header must be passed"}]}
-```
-
-Anime-Skip publishes a client id for its own GraphQL playground at
-<https://api.anime-skip.com>. You can read it out of that page:
+Anime-Skip publishes one for its own GraphQL playground, which you can read out
+of the page:
 
 ```bash
 curl -s https://api.anime-skip.com/ | grep -o 'Client-ID": "[A-Za-z0-9]*'
 ```
 
-Put whatever id you use in the config:
+Put it in the config:
 
 ```
 AnimeSkipClientID=your_client_id_here
 ```
 
-Check it works — this should name a show rather than return an error:
-
-```bash
-curl -s -X POST https://api.anime-skip.com/graphql \
-  -H 'Content-Type: application/json' -H 'X-Client-ID: your_client_id_here' \
-  -d '{"query":"query($id:String!){findShowsByExternalId(service:ANILIST,serviceId:$id){name}}","variables":{"id":"154587"}}'
-```
-
-No client id is bundled. The playground's is shared by everyone who uses it and
-may be rate-limited or rotated without notice, and the other ids in circulation
-belong to other projects — borrowing one makes this program's traffic look like
-theirs. If you want a stable id of your own, ask the Anime-Skip maintainers
+That id is shared by everyone using the playground, so it can be rate-limited
+or changed without notice. For one of your own, ask the Anime-Skip maintainers
 through the links on their site.
 
-Leaving `AnimeSkipClientID` empty is fine. The source reports that it knows
-nothing and the other two carry on.
+Leaving `AnimeSkipClientID` empty is fine — Anime-Skip is simply not asked, and
+the other two sources carry on.
 
 ## Theming
 
@@ -360,7 +352,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
 | `Theme` | Enum | `auto`, `omarchy`, `builtin` | Which colour palette to use. `auto` follows the desktop on Omarchy. |
 | `ThemeOverrides` | String | `name:#hex` pairs | Replaces named colours on top of the palette in use. See [Theming](#theming). |
-| `AnimeSkipClientID` | String | an Anime-Skip client id | Adds Anime-Skip as a source of skip timings. Empty by default — the API requires a client id that identifies the application, and none is bundled. Timings still come from the source in use and from AniSkip without it. |
+| `AnimeSkipClientID` | String | an Anime-Skip client id | Adds Anime-Skip as a third source of skip timings — see [Adding Anime-Skip](#adding-anime-skip). Empty by default; without it, timings still come from the provider in use and from AniSkip. |
 | `SkipFiller` / `SkipRecap` | Boolean | `true`, `false` | Skip filler episodes and recap sections. |
 | `DiscordPresence` | Boolean | `true`, `false` | Discord Rich Presence. |
 | `RofiSelection` | Boolean | `true`, `false` | Use rofi for selection menus. |
@@ -389,7 +381,8 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 
 **Nothing is found for a show.** Titles differ between your tracker and the
 sources. Set `ManualProviderSearch=true` to pick the match yourself, or use the
-**Remap** menu entry to correct a bad match permanently.
+**Remap** action — `^r` in the terminal list, a menu entry under rofi — to
+correct a bad match permanently.
 
 **Playback never starts.** Run `otakase -provider-status` to see which
 sources are responding. Check `debug.log`, and raise
