@@ -56,11 +56,21 @@
   fits on screen. A terminal smaller than 36 × 10 is told to resize instead of
   being shown something unreadable.
 
+  Along the bottom, the actions that used to be menu entries are keys you can
+  press from anywhere in the list: `^u` untracked, `^e` update, `^r` remap,
+  `^l` continue, `^t` tracker, `^o` provider. They are ctrl combinations
+  because a plain letter types into the filter, and binding `u` to update would
+  make any title containing a u unsearchable.
+
   The keys offered are the keys that work: no category key where there are no
   categories, quit on the home menu and back inside one, and `j/k` and `tab`
-  under vim keys, where the arrows move the cursor instead. `MenuOrder` is
-  unchanged and still decides what appears — its list entries become tabs and
-  its actions become the footer.
+  under vim keys, where the arrows move the cursor instead. When the bar is
+  wider than the window the least useful hints drop off rather than wrapping.
+
+  `MenuOrder` is unchanged and still decides all of it — its list entries
+  become the tabs, its action entries become the bottom bar, each in the order
+  you wrote them. The default now offers every list: watching, all, planning,
+  on hold, dropped and rewatching.
 
   The shape is borrowed from [kari](https://github.com/Dhairya3391/kari); the
   colours are still yours, from the palette.

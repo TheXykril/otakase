@@ -58,6 +58,10 @@ type SelectionRefreshConfig struct {
 	Categories     []Tab
 	ActiveCategory string
 	LoadCategory   func(key string) []SelectionOption
+
+	// Actions appear along the bottom and end the menu with that action as the
+	// result when their key is pressed.
+	Actions []FooterAction
 }
 
 type PreviewSelectionRefreshConfig struct {
@@ -210,6 +214,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !VimKeysEnabled(nil) && (key == "left" || key == "right") {
 			switchKey = true
 		}
+		// A footer action ends the menu with that action as the result, the
+		// same way choosing it from a list would.
+		if action, ok := m.layout.actionForKey(key); ok {
+			m.filteredKeys = []SelectionOption{{Key: action.Key, Label: action.Label}}
+			m.selected = 0
+			Log(fmt.Sprintf("Menu action: %s via %s", action.Key, action.Hint))
+			return m, tea.Quit
+		}
+
 		if m.layout.hasTabs() && switchKey {
 			delta := 1
 			if key == "shift+tab" || key == "left" {
@@ -543,7 +556,7 @@ func (m Model) keyHints() []keyHint {
 		if action.Hint == "" {
 			continue
 		}
-		hints = append(hints, keyHint{Key: action.Hint, Label: action.Label})
+		hints = append(hints, keyHint{Key: shortKeyLabel(action.Hint), Label: action.Label})
 	}
 	if m.isHomeMenu {
 		return append(hints, keyHint{Key: "ctrl+c", Label: "quit"})

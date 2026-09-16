@@ -747,7 +747,7 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 						// is a filter rather than a fetch. activeCategory follows
 						// the tab so a background refresh rebuilds what is on
 						// screen rather than the category first opened.
-						categoryTabs, _ := SplitMenuOrder(userCurdConfig.MenuOrder)
+						categoryTabs, categoryActions := SplitMenuOrder(userCurdConfig.MenuOrder)
 						// Counting is a filter over a list already in memory, so
 						// every tab can say how much is behind it.
 						for i := range categoryTabs {
@@ -762,6 +762,7 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 							},
 							Categories:     categoryTabs,
 							ActiveCategory: activeCategory,
+							Actions:        categoryActions,
 							LoadCategory: func(key string) []SelectionOption {
 								activeCategory = key
 								return buildCategorySelectionOptions(user.AnimeList, key)
@@ -789,6 +790,16 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 						ClearScreen()
 						continue categorySelectionLoop
 					}
+					// An action chosen by its key from the list is the same
+					// request as choosing it from the menu, so it is answered by
+					// the same code: hand the key back to the category loop
+					// rather than duplicating the dispatch here.
+					if isMenuActionKey(anilistSelectedOption.Key) {
+						categorySelection = anilistSelectedOption
+						ClearScreen()
+						continue categorySelectionLoop
+					}
+
 					if anilistSelectedOption.Key == "" {
 						continue animeSelectionLoop
 					}

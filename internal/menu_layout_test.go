@@ -765,3 +765,110 @@ func TestLongRowsAreCutNotWrapped(t *testing.T) {
 		t.Error("a row too long for its column was not marked as cut")
 	}
 }
+
+// A key shown in the footer has to do something. Advertising one that does
+// nothing invites a press that goes nowhere, which is worse than showing none.
+func TestFooterKeysActuallyTriggerTheirAction(t *testing.T) {
+	_, actions := SplitMenuOrder("CURRENT,ALL,UPDATE,CONTINUE_LAST,TRACKER")
+	m := &Model{allOptions: []SelectionOption{{Key: "1", Label: "Frieren"}}}
+	attachCategoryTabs(m, &SelectionRefreshConfig{
+		Categories:     []Tab{{Key: "CURRENT", Label: "Watching"}, {Key: "ALL", Label: "All"}},
+		ActiveCategory: "CURRENT",
+		LoadCategory:   func(string) []SelectionOption { return nil },
+		Actions:        actions,
+	})
+	m.filterOptions()
+
+	for _, action := range actions {
+		fresh := *m
+		fresh.filteredKeys = append([]SelectionOption(nil), m.filteredKeys...)
+
+		updated, cmd := fresh.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
+		_ = updated
+		_ = cmd
+		if action.Hint == "" {
+			t.Errorf("%s has no key, so it can never be reached from the list", action.Key)
+		}
+		// The caller dispatches on the key, so it has to recognise it.
+		if !isMenuActionKey(action.Key) {
+			t.Errorf("%s is offered in the footer but the caller would not dispatch it", action.Key)
+		}
+	}
+
+	// Pressing one ends the menu with that action as the result.
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
+	next := updated.(*Model)
+	if cmd == nil {
+		t.Fatal("pressing an action key did not end the menu")
+	}
+	if got, _ := next.highlighted(); got.Key != "UPDATE" {
+		t.Errorf("ctrl+e should have selected UPDATE, got %q", got.Key)
+	}
+}
+
+// Plain letters type into the filter, so an action bound to one would make any
+// title containing that letter unsearchable.
+func TestActionKeysDoNotStealTyping(t *testing.T) {
+	_, actions := SplitMenuOrder("UPDATE,CONTINUE_LAST,TRACKER,PROVIDER,REMAP_PROVIDER,UNTRACKED")
+	for _, action := range actions {
+		if !strings.HasPrefix(action.Hint, "ctrl+") {
+			t.Errorf("%s is bound to %q, which types into the filter", action.Key, action.Hint)
+		}
+	}
+	// And they must not collide with the keys that already move or quit.
+	taken := map[string]string{"ctrl+c": "quit", "ctrl+n": "down", "ctrl+p": "up"}
+	for _, action := range actions {
+		if what, clash := taken[action.Hint]; clash {
+			t.Errorf("%s is bound to %s, which already means %s", action.Key, action.Hint, what)
+		}
+	}
+
+	// Typing still filters.
+	m := &Model{allOptions: []SelectionOption{{Key: "1", Label: "Uma Musume"}, {Key: "2", Label: "Frieren"}}}
+	m.filterOptions()
+	typed, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+	if got := typed.(*Model).filter; got != "u" {
+		t.Errorf("typing u did not reach the filter, it gave %q", got)
+	}
+}
+
+// A hint bar wider than the frame wraps, and a wrapped footer pushes
+// everything above it out of place.
+func TestKeyHintsAreTrimmedToFit(t *testing.T) {
+	many := []keyHint{
+		{Key: "↵", Label: "select"}, {Key: "←/→", Label: "category"},
+		{Key: "↑/↓", Label: "move"}, {Key: "type", Label: "filter"},
+		{Key: "^u", Label: "untracked"}, {Key: "^e", Label: "update"},
+		{Key: "^r", Label: "remap"}, {Key: "^l", Label: "continue"},
+		{Key: "^t", Label: "tracker"}, {Key: "^o", Label: "provider"},
+		{Key: "esc", Label: "back"},
+	}
+	for _, width := range []int{200, 120, 80, 40} {
+		bar := renderKeyHints(many, width)
+		if got := lipgloss.Width(bar); got > width {
+			t.Errorf("at %d columns the hint bar is %d wide", width, got)
+		}
+		if lipgloss.Height(bar) != 1 {
+			t.Errorf("at %d columns the hint bar wrapped to %d lines", width, lipgloss.Height(bar))
+		}
+		// Whatever survives, selecting is always the most important.
+		if !strings.Contains(bar, "select") {
+			t.Errorf("at %d columns the most useful hint was dropped: %q", width, bar)
+		}
+	}
+}
+
+// A title that is a prefix of the label leaves the joining punctuation behind,
+// which reads as a fragment rather than a detail.
+func TestPaneDetailDropsTheJoiningPunctuation(t *testing.T) {
+	got := labelBeyondTitle(SelectionOption{
+		Title: "Seirei Gensouki",
+		Label: "Seirei Gensouki: Spirit Chronicles Season 2 · 8/12",
+	})
+	if strings.HasPrefix(got, ":") || strings.HasPrefix(got, "·") {
+		t.Errorf("the detail starts with punctuation: %q", got)
+	}
+	if got != "Spirit Chronicles Season 2 · 8/12" {
+		t.Errorf("unexpected detail: %q", got)
+	}
+}

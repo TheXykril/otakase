@@ -178,7 +178,16 @@ func renderKeyHints(hints []keyHint, width int) string {
 	for _, hint := range hints {
 		parts = append(parts, keyBadgeStyle.Render(hint.Key)+" "+footerTextStyle.Render(hint.Label))
 	}
+
+	// Drop from the end until it fits. The hints are ordered by how much they
+	// are needed, so what goes first is what matters least -- and a bar wider
+	// than the frame wraps, which pushes everything above it out of place.
 	bar := strings.Join(parts, "  ")
+	for len(parts) > 1 && width > 0 && lipgloss.Width(bar) > width {
+		parts = parts[:len(parts)-1]
+		bar = strings.Join(parts, "  ")
+	}
+
 	if width > lipgloss.Width(bar) {
 		return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(bar)
 	}
@@ -330,13 +339,36 @@ func canonicalCategoryKey(key string) string {
 
 // menuActions are the entries that do something rather than show a list. The
 // hint is the key that triggers them from the footer.
+// Actions are bound to ctrl combinations rather than plain letters because a
+// plain letter types into the filter -- binding "u" to update would mean no
+// title containing a u could ever be searched for.
+//
+// ctrl+c, ctrl+n and ctrl+p are left alone: they already quit and move.
 var menuActions = map[string]FooterAction{
-	"UNTRACKED":      {Key: "UNTRACKED", Label: "untracked", Hint: "n"},
-	"CONTINUE_LAST":  {Key: "CONTINUE_LAST", Label: "continue", Hint: "c"},
-	"UPDATE":         {Key: "UPDATE", Label: "update", Hint: "u"},
-	"REMAP_PROVIDER": {Key: "REMAP_PROVIDER", Label: "remap", Hint: "r"},
-	"TRACKER":        {Key: "TRACKER", Label: "tracker", Hint: "t"},
-	"PROVIDER":       {Key: "PROVIDER", Label: "provider", Hint: "p"},
+	"UNTRACKED":      {Key: "UNTRACKED", Label: "untracked", Hint: "ctrl+u"},
+	"CONTINUE_LAST":  {Key: "CONTINUE_LAST", Label: "continue", Hint: "ctrl+l"},
+	"UPDATE":         {Key: "UPDATE", Label: "update", Hint: "ctrl+e"},
+	"REMAP_PROVIDER": {Key: "REMAP_PROVIDER", Label: "remap", Hint: "ctrl+r"},
+	"TRACKER":        {Key: "TRACKER", Label: "tracker", Hint: "ctrl+t"},
+	"PROVIDER":       {Key: "PROVIDER", Label: "provider", Hint: "ctrl+o"},
+}
+
+// actionForKey finds the action a keypress triggers, if any.
+func (l menuLayout) actionForKey(key string) (FooterAction, bool) {
+	for _, action := range l.footer {
+		if action.Hint != "" && action.Hint == key {
+			return action, true
+		}
+	}
+	return FooterAction{}, false
+}
+
+// shortKeyLabel writes ctrl+u as ^u, which is what fits in a footer badge.
+func shortKeyLabel(key string) string {
+	if rest, found := strings.CutPrefix(key, "ctrl+"); found {
+		return "^" + rest
+	}
+	return key
 }
 
 // SplitMenuOrder divides a MenuOrder setting into the categories that become
@@ -422,7 +454,10 @@ func labelBeyondTitle(option SelectionOption) string {
 	}
 	if title != "" && strings.HasPrefix(label, title) {
 		rest := strings.TrimSpace(strings.TrimPrefix(label, title))
-		return strings.TrimSpace(strings.TrimPrefix(rest, "·"))
+		// Whatever joined the title to the rest goes too. A title that is a
+		// prefix of a longer one leaves ": Spirit Chronicles…" behind, which
+		// reads as a fragment rather than a detail.
+		return strings.TrimSpace(strings.TrimLeft(rest, "·:-– "))
 	}
 	return label
 }
@@ -435,6 +470,11 @@ func labelBeyondTitle(option SelectionOption) string {
 // required. The active category is matched by key rather than assumed to be
 // first, or opening "Completed" would draw "Watching" as selected.
 func attachCategoryTabs(model *Model, refresh *SelectionRefreshConfig) {
+	if model != nil && refresh != nil && len(refresh.Actions) > 0 {
+		// The actions bar does not depend on there being categories: a menu can
+		// usefully offer "continue last" with no tabs at all.
+		model.layout.footer = refresh.Actions
+	}
 	if model == nil || refresh == nil || refresh.LoadCategory == nil || len(refresh.Categories) < 2 {
 		if refresh != nil && len(refresh.Categories) < 2 {
 			Log(fmt.Sprintf("Category tabs: off, %d category in MenuOrder", len(refresh.Categories)))
@@ -451,4 +491,12 @@ func attachCategoryTabs(model *Model, refresh *SelectionRefreshConfig) {
 	}
 	model.loadTab = refresh.LoadCategory
 	Log(fmt.Sprintf("Category tabs: on, %d tabs, %q active", len(refresh.Categories), model.layout.activeTabKey()))
+}
+
+// isMenuActionKey reports whether a selection key names an action rather than
+// an entry in a list. It is the single answer to "did the user ask for a thing
+// to happen", used by the menu to trigger one and by the caller to dispatch it.
+func isMenuActionKey(key string) bool {
+	_, ok := menuActions[strings.ToUpper(strings.TrimSpace(key))]
+	return ok
 }
