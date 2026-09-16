@@ -59,22 +59,34 @@ type aniSkipSource struct{}
 
 func (aniSkipSource) Name() string { return "aniskip" }
 
-func (aniSkipSource) Lookup(ref SkipRef) (SkipTimes, bool, error) {
+func (s aniSkipSource) Lookup(ref SkipRef) (SkipTimes, bool, error) {
+	times, _, found, err := s.LookupIdentified(ref)
+	return times, found, err
+}
+
+// LookupIdentified also returns the id of each entry, which is what a vote
+// refers to.
+func (aniSkipSource) LookupIdentified(ref SkipRef) (SkipTimes, SkipIDs, bool, error) {
 	if ref.MalID <= 0 {
 		// Without a MyAnimeList id there is nothing to ask about. This is the
 		// ordinary state for a show tracked only on AniList, not an error.
-		return SkipTimes{}, false, nil
+		return SkipTimes{}, SkipIDs{}, false, nil
 	}
 	body, err := GetAniSkipData(ref.MalID, ref.Episode)
 	if err != nil {
-		return SkipTimes{}, false, err
+		return SkipTimes{}, SkipIDs{}, false, err
 	}
-	probe := Anime{}
-	if err := ParseAniSkipResponse(body, &probe, 0); err != nil {
-		return SkipTimes{}, false, err
+
+	var data skipTimesResponse
+	if err := json.Unmarshal([]byte(body), &data); err != nil {
+		return SkipTimes{}, SkipIDs{}, false, fmt.Errorf("aniskip: %w", err)
 	}
-	times := probe.Ep.SkipTimes
-	return times, usableSpan(times.Op) || usableSpan(times.Ed), nil
+	if !data.Found {
+		return SkipTimes{}, SkipIDs{}, false, nil
+	}
+
+	times, ids := aniSkipTimesFrom(data.Results, 0)
+	return times, ids, usableSpan(times.Op) || usableSpan(times.Ed), nil
 }
 
 const (
@@ -302,6 +314,9 @@ func DefaultSkipSources(config *CurdConfig, provider any) []SkipSource {
 		sources = append(sources, providerSkipSource{provider: ranger})
 	}
 	sources = append(sources, aniSkipSource{})
+	if config != nil && config.IntroDBSkipTimes {
+		sources = append(sources, newIntroDBSource(config.StoragePath))
+	}
 	if config != nil {
 		if configured := strings.TrimSpace(config.AnimeSkipClientID); configured != "" {
 			if strings.EqualFold(configured, AnimeSkipAutoClientID) {
@@ -317,9 +332,9 @@ func DefaultSkipSources(config *CurdConfig, provider any) []SkipSource {
 // ApplySkipTimes resolves an episode's timings and hands them to the player.
 // It reports what happened rather than returning an error: skipping is a
 // convenience, and failing to find timings must never interrupt playback.
-func ApplySkipTimes(anime *Anime, episode int, config *CurdConfig, provider any) {
+func ApplySkipTimes(anime *Anime, episode int, config *CurdConfig, provider any) SkipResolution {
 	if anime == nil || episode <= 0 {
-		return
+		return SkipResolution{}
 	}
 	ref := SkipRef{
 		MalID:     anime.MalId,
@@ -339,10 +354,11 @@ func ApplySkipTimes(anime *Anime, episode int, config *CurdConfig, provider any)
 	Log(fmt.Sprintf("Episode %d: %s", episode, resolution.Describe()))
 
 	if !resolution.Found() {
-		return
+		return resolution
 	}
 	anime.Ep.SkipTimes = resolution.Times
 	if err := SendSkipTimesToMPV(anime); err != nil {
 		Log(fmt.Sprintf("sending skip times to the player: %v", err))
 	}
+	return resolution
 }

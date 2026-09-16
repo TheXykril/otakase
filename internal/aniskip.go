@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"strings"
 )
 
 // skipTimesResponse struct to hold the response from the AniSkip API
@@ -17,6 +18,8 @@ type skipTimesResponse struct {
 // skipResult struct to hold individual skip result data
 type skipResult struct {
 	Interval skipInterval `json:"interval"`
+	SkipType string       `json:"skip_type"`
+	SkipID   string       `json:"skip_id"`
 }
 
 // skipInterval struct to hold the start and end times for skip intervals
@@ -73,24 +76,40 @@ func ParseAniSkipResponse(responseText string, anime *Anime, timePrecision int) 
 		return fmt.Errorf("no skip times found")
 	}
 
-	// Populate skip times for the anime's episode
-	if len(data.Results) > 0 {
-		op := data.Results[0].Interval
-		anime.Ep.SkipTimes.Op = Skip{
-			Start: int(RoundTime(op.StartTime, timePrecision)),
-			End:   int(RoundTime(op.EndTime, timePrecision)),
-		}
-	}
-
-	if len(data.Results) > 1 {
-		ed := data.Results[len(data.Results)-1].Interval
-		anime.Ep.SkipTimes.Ed = Skip{
-			Start: int(RoundTime(ed.StartTime, timePrecision)),
-			End:   int(RoundTime(ed.EndTime, timePrecision)),
-		}
-	}
-
+	// Each result says which it is. Taking the first as the opening and the
+	// last as the ending, as this used to, turns an episode with only an
+	// ending on file into one that skips the ending as though it were the
+	// opening -- which sends the player to the credits a minute in.
+	times, _ := aniSkipTimesFrom(data.Results, timePrecision)
+	anime.Ep.SkipTimes = times
 	return nil
+}
+
+// aniSkipTimesFrom sorts the results into an opening and an ending, keeping the
+// id of each so it can be voted on later.
+func aniSkipTimesFrom(results []skipResult, timePrecision int) (SkipTimes, SkipIDs) {
+	times := SkipTimes{}
+	ids := SkipIDs{}
+
+	for _, result := range results {
+		span := Skip{
+			Start: int(RoundTime(result.Interval.StartTime, timePrecision)),
+			End:   int(RoundTime(result.Interval.EndTime, timePrecision)),
+		}
+		switch strings.ToLower(strings.TrimSpace(result.SkipType)) {
+		case "op", "mixed-op":
+			if !usableSpan(times.Op) {
+				times.Op = span
+				ids.Op = result.SkipID
+			}
+		case "ed", "mixed-ed":
+			if !usableSpan(times.Ed) {
+				times.Ed = span
+				ids.Ed = result.SkipID
+			}
+		}
+	}
+	return times, ids
 }
 
 // GetAndParseAniSkipData fetches and parses skip times for a given anime ID and episode

@@ -665,12 +665,17 @@ func main() {
 			}
 		}()
 
-		// Get skip times Parallel
+		// Get skip times Parallel.
+		//
+		// Through the whole chain -- the provider's own timings, AniSkip,
+		// Anime-Skip -- rather than AniSkip alone. This episode used to ask
+		// only AniSkip while every later one in the playlist asked everything,
+		// so a show AniSkip does not cover started unskipped and then began
+		// skipping an episode later.
 		go func() {
-			if skipErr := internal.GetAndParseAniSkipData(anime.MalId, anime.Ep.Number, 1, &anime); skipErr != nil {
-				internal.Log("Error getting and parsing AniSkip data: " + skipErr.Error())
-			}
+			resolution := internal.ApplySkipTimes(&anime, anime.Ep.Number, &userCurdConfig, internal.GetProvider())
 			internal.Log(anime.Ep.SkipTimes)
+			internal.StartSkipMarker(&userCurdConfig, &anime, anime.Ep.Player.SocketPath, resolution.IDs, skipLoopDone)
 		}()
 
 		// Get video duration

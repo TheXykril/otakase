@@ -36,8 +36,35 @@ type SkipResolution struct {
 	Times     SkipTimes
 	OpSource  string
 	EdSource  string
+	IDs       SkipIDs
 	Attempted []string
 	Errors    []error
+}
+
+// SkipIDs names the entries a resolution came from, where the source has names
+// for them. Only AniSkip does, and only so that an entry that sent the player
+// to the wrong place can be voted down by the person who noticed.
+type SkipIDs struct {
+	Op string
+	Ed string
+}
+
+// identifiedSkipSource is a source whose entries can be referred to afterwards.
+//
+// It is a second method rather than a change to SkipSource because it is true
+// of exactly one source, and every other one would have to grow a return value
+// it has nothing to put in.
+type identifiedSkipSource interface {
+	SkipSource
+	LookupIdentified(ref SkipRef) (SkipTimes, SkipIDs, bool, error)
+}
+
+func lookupSkipSource(source SkipSource, ref SkipRef) (SkipTimes, SkipIDs, bool, error) {
+	if identified, ok := source.(identifiedSkipSource); ok {
+		return identified.LookupIdentified(ref)
+	}
+	times, found, err := source.Lookup(ref)
+	return times, SkipIDs{}, found, err
 }
 
 // Found reports whether anything usable was resolved at all.
@@ -80,7 +107,7 @@ func ResolveSkipTimes(ref SkipRef, sources ...SkipSource) SkipResolution {
 		}
 		resolution.Attempted = append(resolution.Attempted, source.Name())
 
-		times, found, err := source.Lookup(ref)
+		times, ids, found, err := lookupSkipSource(source, ref)
 		if err != nil {
 			resolution.Errors = append(resolution.Errors, fmt.Errorf("%s: %w", source.Name(), err))
 			continue
@@ -91,10 +118,12 @@ func ResolveSkipTimes(ref SkipRef, sources ...SkipSource) SkipResolution {
 		if resolution.OpSource == "" && usableSpan(times.Op) {
 			resolution.Times.Op = times.Op
 			resolution.OpSource = source.Name()
+			resolution.IDs.Op = ids.Op
 		}
 		if resolution.EdSource == "" && usableSpan(times.Ed) {
 			resolution.Times.Ed = times.Ed
 			resolution.EdSource = source.Name()
+			resolution.IDs.Ed = ids.Ed
 		}
 	}
 	return resolution

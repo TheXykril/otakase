@@ -1,5 +1,54 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **You can fix a wrong skip from the player.** `Alt+o` at the start of the
+  opening and again at its end marks it, `Alt+e` does the ending, and `Alt+s`
+  offers what you marked to AniSkip — once to see exactly what will be sent,
+  again to send it. `Alt+u` and `Alt+d` agree or disagree with the skip you were
+  given, so an entry that throws you into the credits can be voted down by the
+  person who noticed rather than surviving because nobody could say anything.
+
+  Everything is drawn on the player's own screen, because that is what you are
+  looking at; a message printed to the terminal behind mpv is a message nobody
+  reads. Nothing leaves the machine on one keypress, and a marked span is
+  checked before it is offered — the right episode, inside its length, and long
+  enough to be an opening rather than a mis-press. These entries are public and
+  every player reading AniSkip inherits them, so a wrong one is worse for
+  everyone than a missing one.
+
+  AniSkip has no accounts. Submissions are filed under an id this program
+  invents and keeps in your storage directory, which says nothing about you or
+  the machine. `ContributeSkipTimes=false` leaves the keys unbound.
+
+- **theintrodb is a fourth source of skip timings.** It knows a great deal,
+  including anime, but files everything under TMDB ids — a third naming of the
+  same shows, which nothing here had. otakase now builds a table mapping AniList
+  ids onto TMDB ones from a public list, keeps it for a month, and consults
+  theintrodb only for episodes the earlier sources could not answer.
+
+  The table is 7MB to build, so it is built in the background and a lookup that
+  arrives first says it does not know rather than waiting: starting an episode
+  is never held up for it. A show whose mapping has no TMDB *season* is left
+  alone — AniList files each cour separately while TMDB groups them, and a
+  mapping without the season sends episode 1 of a second cour to episode 1 of
+  the first. `IntroDBSkipTimes=false` leaves it out.
+
+### Fixed
+
+- **The first episode of a session now asks every skip source.** It asked
+  AniSkip alone while every later episode in the playlist asked the whole chain,
+  so a show AniSkip does not cover started unskipped and then began skipping an
+  episode later. The provider's own timings and Anime-Skip were reachable only
+  after the first episode ended.
+
+- **An episode with only an ending on file no longer skips the opening to it.**
+  AniSkip's results say which each one is, and this took the first as the
+  opening and the last as the ending regardless — so an episode that had only an
+  ending recorded jumped to the credits about a minute in.
+
 ## 1.2.0 — 2026-09-16
 
 ### Added

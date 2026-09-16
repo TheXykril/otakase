@@ -1465,7 +1465,10 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 	// source is consulted, not only AniSkip: a show tracked on AniList alone
 	// has no MyAnimeList id, and used to get no skipping at all as a result.
 	go func(ep int) {
-		ApplySkipTimes(c.anime, ep, GetGlobalConfig(), GetProvider())
+		resolution := ApplySkipTimes(c.anime, ep, GetGlobalConfig(), GetProvider())
+		// The marker follows the playlist: marks belong to the episode they
+		// were made against, and the entry a vote refers to changes with it.
+		UpdateSkipMarker(c.anime, resolution.IDs)
 	}(targetEp)
 
 	// Re-probe alternate for the new episode only after placeholders are rebuilt.

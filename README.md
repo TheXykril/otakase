@@ -265,8 +265,35 @@ has one — they need not be the same source, because AniSkip often knows an
 opening and not an ending, while a provider that ships timings with the stream
 usually knows both.
 
-Two of the three work with no setup: the provider in use, then
-[AniSkip](https://api.aniskip.com/api-docs). The third, Anime-Skip, is optional.
+Three of the four work with no setup: the provider in use, then
+[AniSkip](https://api.aniskip.com/api-docs), then
+[theintrodb](https://theintrodb.org). The fourth, Anime-Skip, is optional.
+
+theintrodb files its timings under TMDB ids, which this program does not use, so
+the first time a show needs it otakase downloads a public table mapping AniList
+ids onto TMDB ones and keeps it for a month. That happens in the background and
+only for episodes the earlier sources could not answer; the episode you are
+starting is never held up for it. Set `IntroDBSkipTimes=false` to leave it out.
+
+### Fixing the times yourself
+
+When a skip is wrong, or missing, you can say so from the player:
+
+| Key | What it does |
+|---|---|
+| `Alt+o` | Mark the opening — once at its start, again at its end |
+| `Alt+e` | The same for the ending |
+| `Alt+s` | Send what you marked to AniSkip — press once to see it, again to send |
+| `Alt+r` | Forget the marks |
+| `Alt+u` | Agree with the skip you were given |
+| `Alt+d` | Report the skip you were given as wrong |
+
+Everything appears on the player's own screen, so you never leave the episode.
+Nothing is sent until you press `Alt+s` a second time, with the exact times on
+screen in between — these entries are public, and every player that reads
+AniSkip inherits them. Submissions are filed under an id this program invents
+and keeps; AniSkip has no accounts and asks for nothing about you. Set
+`ContributeSkipTimes=false` to leave the keys unbound.
 
 ### Adding Anime-Skip
 
@@ -351,6 +378,8 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
 | `Theme` | Enum | `auto`, `omarchy`, `builtin` | Which colour palette to use. `auto` follows the desktop on Omarchy. |
 | `ThemeOverrides` | String | `name:#hex` pairs | Replaces named colours on top of the palette in use. See [Theming](#theming). |
+| `ContributeSkipTimes` | Boolean | `true`, `false` | Bind the player keys for marking, submitting and voting on skip times — see [Fixing the times yourself](#fixing-the-times-yourself). |
+| `IntroDBSkipTimes` | Boolean | `true`, `false` | Ask theintrodb for openings and endings the other sources do not know. Downloads a public id mapping in the background the first time it is needed. |
 | `AnimeSkipClientID` | String | `auto`, or an Anime-Skip client id | Adds Anime-Skip as a third source of skip timings — see [Adding Anime-Skip](#adding-anime-skip). `auto` fetches the published playground id and replaces it if it stops working. Empty by default; without it, timings still come from the provider in use and from AniSkip. |
 | `SkipFiller` / `SkipRecap` | Boolean | `true`, `false` | Skip filler episodes and recap sections. |
 | `DiscordPresence` | Boolean | `true`, `false` | Discord Rich Presence. |

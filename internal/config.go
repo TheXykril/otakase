@@ -74,6 +74,8 @@ type CurdConfig struct {
 	DiscordClientId            string `config:"DiscordClientId"`
 	VimKeys                    bool   `config:"VimKeys"`
 	AnimeSkipClientID          string `config:"AnimeSkipClientID"`
+	ContributeSkipTimes        bool   `config:"ContributeSkipTimes"`
+	IntroDBSkipTimes           bool   `config:"IntroDBSkipTimes"`
 	CheckUpdates               bool   `config:"CheckUpdates"`
 	MpvEpisodePlaylist         bool   `config:"MpvEpisodePlaylist"`
 	Provider                   string `config:"Provider"`
@@ -141,6 +143,8 @@ func defaultConfigMap() map[string]string {
 		"DiscordClientId":            "1287457464148820089",
 		"VimKeys":                    "false",
 		"AnimeSkipClientID":          "",
+		"ContributeSkipTimes":        "true",
+		"IntroDBSkipTimes":           "true",
 		"CheckUpdates":               "true",
 		"MpvEpisodePlaylist":         "true",
 		"Provider":                   "stacked",
