@@ -113,21 +113,48 @@ func promptEpisodeCancelable(config *CurdConfig, section, question, hint string)
 	})
 }
 
+// promptProgressCancelable asks for a tracker progress.
+//
+// Progress is counted from zero rather than one: "none watched yet" is a real
+// answer to it, and the only difference from asking for an episode number.
+func promptProgressCancelable(config *CurdConfig, section, question, hint string) (int, bool, error) {
+	return numberFromAnswers(func(input string) (int, error) {
+		return parseNonNegativeIntInput(input, "progress")
+	}, func() (string, bool, error) {
+		return promptCancelable(config, section, question, hint)
+	})
+}
+
 // episodeFromAnswers turns repeated answers into an episode number, asking
 // again after one that is not a number.
-//
-// The asking is a parameter so the retrying can be tested without a terminal:
-// the prompt itself needs one, and the rule worth pinning -- that a typo costs
-// the typo and not the search already done -- is in here, not in the reading.
 func episodeFromAnswers(ask func() (string, bool, error)) (int, bool, error) {
+	return numberFromAnswers(func(input string) (int, error) {
+		return parsePositiveIntInput(input, "episode number")
+	}, ask)
+}
+
+// numberFromAnswers turns repeated answers into a number.
+func numberFromAnswers(parse func(string) (int, error), ask func() (string, bool, error)) (int, bool, error) {
+	return valueFromAnswers(parse, ask)
+}
+
+// valueFromAnswers turns repeated answers into a value, asking again after one
+// that cannot be read as that value.
+//
+// Both the asking and the parsing are parameters so the retrying can be tested
+// without a terminal: the prompt itself needs one, and the rule worth pinning
+// -- that a typo costs the typo and not the work already done -- is in here,
+// not in the reading.
+func valueFromAnswers[T any](parse func(string) (T, error), ask func() (string, bool, error)) (T, bool, error) {
+	var zero T
 	for {
 		input, cancelled, err := ask()
 		if err != nil || cancelled {
-			return 0, true, err
+			return zero, true, err
 		}
-		number, parseErr := parsePositiveIntInput(input, "episode number")
+		value, parseErr := parse(input)
 		if parseErr == nil {
-			return number, false, nil
+			return value, false, nil
 		}
 		CurdOut(fmt.Sprintf("%v — try again, or press escape to go back.", parseErr))
 	}

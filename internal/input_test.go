@@ -151,3 +151,66 @@ func TestAPrefilledPromptStartsFromItsDefault(t *testing.T) {
 		t.Errorf("enter gave %q rather than the default", answered.value())
 	}
 }
+
+// Progress is counted from zero: "none watched yet" is a real answer, and the
+// only thing separating it from an episode number.
+func TestProgressAcceptsZeroWhereAnEpisodeNumberDoesNot(t *testing.T) {
+	if _, err := parseNonNegativeIntInput("0", "progress"); err != nil {
+		t.Errorf("zero progress was rejected: %v", err)
+	}
+	if _, err := parsePositiveIntInput("0", "episode number"); err == nil {
+		t.Error("episode zero was accepted")
+	}
+}
+
+// Not rating something is the ordinary answer to a question that arrives
+// unbidden after an episode ends. It used to be read as a score of nothing,
+// fail to parse, and close the program.
+func TestBackingOutOfTheScoreIsNotAScore(t *testing.T) {
+	score, cancelled, err := valueFromAnswers(parseAnimeScore, func() (string, bool, error) {
+		return "", true, nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cancelled {
+		t.Error("backing out should be reported as cancelled")
+	}
+	if score != 0 {
+		t.Errorf("a cancelled question produced the score %v", score)
+	}
+}
+
+func TestScoreMustBeWithinTen(t *testing.T) {
+	for _, answer := range []string{"-1", "10.5", "eleven", ""} {
+		if _, err := parseAnimeScore(answer); err == nil {
+			t.Errorf("%q was accepted as a score", answer)
+		}
+	}
+	for _, answer := range []string{"0", "7.5", " 10 "} {
+		if _, err := parseAnimeScore(answer); err != nil {
+			t.Errorf("%q was rejected: %v", answer, err)
+		}
+	}
+}
+
+// A typo costs the typo, not the work already done: the question is asked
+// again rather than handed back as an error.
+func TestAScoreTypoIsAskedAboutAgain(t *testing.T) {
+	answers := []string{"eleven", "8"}
+	asked := 0
+	score, cancelled, err := valueFromAnswers(parseAnimeScore, func() (string, bool, error) {
+		answer := answers[asked]
+		asked++
+		return answer, false, nil
+	})
+	if err != nil || cancelled {
+		t.Fatalf("unexpected outcome: cancelled=%v err=%v", cancelled, err)
+	}
+	if asked != 2 {
+		t.Errorf("the question was asked %d times", asked)
+	}
+	if score != 8 {
+		t.Errorf("got the score %v", score)
+	}
+}

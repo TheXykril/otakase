@@ -873,8 +873,8 @@ func CompleteAniListAnimeRewatch(token string, anime Anime) error {
 
 // Function to rate an anime on AniList
 func RateAniListAnime(token string, mediaID int) error {
-	score, err := promptAnimeScoreValue()
-	if err != nil {
+	score, cancelled, err := promptAnimeScoreValue()
+	if err != nil || cancelled {
 		return err
 	}
 	return saveAniListAnimeScore(token, mediaID, score)

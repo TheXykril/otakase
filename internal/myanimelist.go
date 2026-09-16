@@ -1238,8 +1238,8 @@ func updateMyAnimeListStatus(config *CurdConfig, malID int, status string) error
 }
 
 func rateMyAnimeListAnime(config *CurdConfig, malID int) error {
-	score, err := promptAnimeScoreValue()
-	if err != nil {
+	score, cancelled, err := promptAnimeScoreValue()
+	if err != nil || cancelled {
 		return err
 	}
 	return rateMyAnimeListAnimeWithScore(config, malID, int(score+0.5))

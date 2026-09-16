@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -152,61 +151,55 @@ func persistTrackingConfig(config *CurdConfig) error {
 	return SaveConfigToFile(GlobalConfigPath, configMap)
 }
 
+// promptTrackingInput asks for one of the things setting up a tracker needs: a
+// client id, a secret, a pasted callback URL.
+//
+// Each used to be read as a bare line from a reader built for that one read,
+// which threw away anything typed past it -- so pasting the id and the secret
+// together lost the secret. Where an empty answer already meant something
+// ("optional", "start over"), backing out means that; where it did not, it is
+// the same refusal it always was.
 func promptTrackingInput(prompt string, allowEmpty bool) (string, error) {
-	config := GetGlobalConfig()
-	if config != nil && config.RofiSelection {
-		value, err := GetUserInputFromRofi(prompt)
-		if err != nil {
-			return "", err
-		}
-		value = strings.TrimSpace(value)
-		if value == "" && !allowEmpty {
-			return "", fmt.Errorf("input required")
-		}
-		return value, nil
+	hint := "esc to go back"
+	if allowEmpty {
+		hint = "leave empty to skip · esc to skip"
 	}
 
-	fmt.Print(prompt + ": ")
-	reader := bufio.NewReader(os.Stdin)
-	value, err := reader.ReadString('\n')
+	value, cancelled, err := promptCancelable(GetGlobalConfig(), "Tracker", prompt, hint)
 	if err != nil {
 		return "", err
 	}
-	value = strings.TrimSpace(value)
-	if value == "" && !allowEmpty {
+	if cancelled {
+		if allowEmpty {
+			return "", nil
+		}
 		return "", fmt.Errorf("input required")
 	}
 	return value, nil
 }
 
-func promptAnimeScoreValue() (float64, error) {
-	config := GetGlobalConfig()
-	parseScore := func(raw string) (float64, error) {
-		score, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
-		if err != nil {
-			return 0, err
-		}
-		if score < 0 || score > 10 {
-			return 0, fmt.Errorf("score must be between 0 and 10")
-		}
-		return score, nil
-	}
+// promptAnimeScoreValue asks for a score out of ten, and reports backing out
+// of the question rather than treating it as a score.
+//
+// Not rating something is the ordinary answer to being asked -- the question
+// arrives unbidden after an episode finishes -- and it used to close the
+// program: an empty line failed to parse, and every caller passed that error up
+// to a caller that quit on it.
+func promptAnimeScoreValue() (float64, bool, error) {
+	return valueFromAnswers(parseAnimeScore, func() (string, bool, error) {
+		return promptCancelable(GetGlobalConfig(), "Score", "Rate this anime", "0 to 10 · esc to skip")
+	})
+}
 
-	if config != nil && config.RofiSelection {
-		userInput, err := GetUserInputFromRofi("Enter a score for the anime (0-10)")
-		if err != nil {
-			return 0, err
-		}
-		return parseScore(userInput)
-	}
-
-	fmt.Println("Rate this anime: ")
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
+func parseAnimeScore(raw string) (float64, error) {
+	score, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid score: %w", err)
 	}
-	return parseScore(input)
+	if score < 0 || score > 10 {
+		return 0, fmt.Errorf("score must be between 0 and 10")
+	}
+	return score, nil
 }
 
 func ensureMyAnimeListCredentialsConfigured(config *CurdConfig) error {
@@ -1037,9 +1030,12 @@ func RateAnime(token string, mediaID int) error {
 	case !ShouldWriteRemoteTracking(config, GetGlobalAnime()):
 		return nil
 	case UsesDualRemoteTracking(config):
-		score, err := promptAnimeScoreValue()
+		score, cancelled, err := promptAnimeScoreValue()
 		if err != nil {
 			return err
+		}
+		if cancelled {
+			return nil
 		}
 		var firstErr error
 		if err := saveAniListAnimeScore(token, mediaID, score); err != nil {

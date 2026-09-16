@@ -614,12 +614,22 @@ func ChangeToken(config *CurdConfig, user *User) {
 
 		// Simple CLI fallback
 		fmt.Println("Please visit: https://anilist.co/api/v2/oauth/authorize?client_id=20686&response_type=token&redirect_uri=http://localhost:8000/oauth/callback")
-		fmt.Print("Copy and paste your access token here: ")
-		fmt.Scanln(&user.Token)
 
-		if user.Token == "" {
+		// Read through the same prompt as everything else, so stdin has one
+		// reader: a bare fmt.Scanln here would race the buffered one for
+		// whatever is already typed. Backing out still stops -- there is
+		// nothing this program can do without a token -- but it says so
+		// rather than looking like a crash.
+		pasted, cancelled, inputErr := promptCancelable(config, "Login",
+			"Paste your AniList access token",
+			"the part of the redirect URL after access_token=")
+		if inputErr != nil {
+			Log("Failed to read the pasted token: " + inputErr.Error())
+		}
+		if cancelled || pasted == "" {
 			ExitCurd(fmt.Errorf("no token provided"))
 		}
+		user.Token = pasted
 
 		// Save the manually entered token as JSON format
 		token := &AnilistToken{

@@ -521,8 +521,10 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 		if mpvSocketPath == "android-intent" {
 			CurdOut(fmt.Sprintf("\nOpened external player for Episode %d.", anime.Ep.Number))
 			CurdOut("Press Enter when you have finished watching...")
-			var input string
-			fmt.Scanln(&input)
+			if !AwaitEnter() {
+				Log("stdin ended while waiting for the external player; stopping")
+				return
+			}
 			anime.Ep.Number++
 			anime.Ep.Started = false
 			continue

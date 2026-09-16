@@ -120,8 +120,7 @@ func ExitCurd(err error) {
 		CurdOut(fmt.Sprintf("Error: %v", err))
 		if runtime.GOOS == "windows" {
 			fmt.Println("Press Enter to exit")
-			var wait string
-			fmt.Scanln(&wait)
+			AwaitEnter()
 			exitWithRestore(1)
 		} else {
 			exitWithRestore(1)
@@ -338,23 +337,20 @@ updateOptionLoop:
 						currentProgress = strconv.Itoa(selectedAnilistAnime.Progress)
 					}
 
-					var progress string
-					if userCurdConfig.RofiSelection {
-						progress, err = GetUserInputFromRofi(fmt.Sprintf("Current progress: %s - Enter new progress (episode number)", currentProgress))
-						if err != nil {
-							Log(fmt.Sprintf("Failed to get progress input: %v", err))
-							ExitCurd(fmt.Errorf("Failed to get progress input"))
-						}
-					} else {
-						CurdOut(fmt.Sprintf("Current progress: %s", currentProgress))
-						CurdOut("Enter new progress (episode number):")
-						fmt.Scanln(&progress)
-					}
-
-					progressNum, err := parseNonNegativeIntInput(progress, "progress")
+					// Backing out leaves the progress as it is and returns to
+					// the list, the way backing out of the category question
+					// above does. It used to close the program: the answer was
+					// read as a bare line, and an empty one failed to parse.
+					progressNum, cancelled, err := promptProgressCancelable(userCurdConfig, "Progress",
+						"Set the episodes watched",
+						fmt.Sprintf("currently %s · a number · esc to leave it alone", currentProgress))
 					if err != nil {
-						Log(fmt.Sprintf("Failed to convert progress to number: %v", err))
-						ExitCurd(fmt.Errorf("Failed to convert progress to number"))
+						Log(fmt.Sprintf("Failed to get progress input: %v", err))
+						cancelled = true
+					}
+					if cancelled {
+						ClearScreen()
+						continue animeSelectLoop
 					}
 
 					err = UpdateAnimeProgress(user.Token, animeID, progressNum)
@@ -1211,19 +1207,17 @@ func SetupCurd(userCurdConfig *CurdConfig, anime *Anime, user *User, databaseAni
 			}
 		} else if anime.TotalEpisodes < anime.Ep.Number { // Handle weird cases
 			Log(fmt.Sprintf("Weird case: anime.TotalEpisodes < anime.Ep.Number: %v < %v", anime.TotalEpisodes, anime.Ep.Number))
-			var answer string
-			if userCurdConfig.RofiSelection {
-				userInput, err := GetUserInputFromRofi("Would like to start the anime from beginning? (y/n)")
-				if err != nil {
-					Log("Error getting user input: " + err.Error())
-					ExitCurd(fmt.Errorf("Error getting user input: %w", err))
-				}
-				answer = userInput
-			} else {
-				fmt.Printf("Would like to start the anime from beginning? (y/n)\n")
-				fmt.Scanln(&answer)
+			// The question has an answer either way, so backing out of it is
+			// the same as declining: start at the last episode. Only the rofi
+			// half used to close the program over a failed read.
+			answer, cancelled, err := promptCancelable(userCurdConfig, "Episode",
+				"Start this anime from the beginning?",
+				fmt.Sprintf("y or n · esc to start at episode %d", anime.TotalEpisodes))
+			if err != nil {
+				Log("Error getting user input: " + err.Error())
+				cancelled = true
 			}
-			if isAffirmativeAnswer(answer) {
+			if !cancelled && isAffirmativeAnswer(answer) {
 				anime.Ep.Number = 1
 			} else {
 				anime.Ep.Number = anime.TotalEpisodes

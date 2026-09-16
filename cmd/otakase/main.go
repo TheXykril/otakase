@@ -462,9 +462,12 @@ func main() {
 			internal.CurdOut(fmt.Sprintf("\nOpened external player for Episode %d.", anime.Ep.Number))
 			internal.CurdOut("Press Enter when you have finished watching...")
 
-			// Wait for user input to confirm completion
-			var input string
-			fmt.Scanln(&input)
+			// Wait for user input to confirm completion. A stdin that has
+			// ended is not someone pressing enter, and this loop starts the
+			// next episode each time round.
+			if !internal.AwaitEnter() {
+				internal.ExitCurd(nil)
+			}
 
 			// Mark as completed
 			anime.Ep.IsCompleted = true

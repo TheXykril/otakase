@@ -108,6 +108,33 @@
     total is known, and which used to close the program instead. A number that
     is not a number is asked for again rather than costing you the menu.
 
+  - **Setting your progress, and rating an anime.** Both read a bare line and
+    closed the program when it could not be read as a number — and an empty
+    line cannot, so pressing enter at either was enough. Backing out of the
+    progress question leaves your progress alone and returns to the list;
+    backing out of the rating simply does not rate it, which is the ordinary
+    answer to a question that arrives unasked when an episode ends. A score
+    outside nought to ten, or a typo in either, is asked about again.
+
+  - **"Start this anime from the beginning?"** now offers escape, which means
+    the same as no. Under rofi, a failed read of the answer used to close the
+    program rather than take the default.
+
+  - **Connecting a tracker.** The MyAnimeList client id, secret and pasted
+    callback URL, and a manually pasted AniList token, are asked for in the
+    same frame as everything else. Each was read by a reader built for that one
+    read, which threw away anything typed past it — so pasting the id and the
+    secret together lost the secret — and the length cap on the field would
+    have quietly eaten the end of a pasted callback URL. The questions where an
+    empty answer already meant something ("optional", "start over") take escape
+    as meaning it.
+
+- **A closed stdin no longer spins the external-player loop.** On the Android
+  intent path the program waits for you to press enter after each episode, and
+  it could not tell enter from stdin having ended — so with nothing attached it
+  read an instant answer every time round the loop and opened a player per
+  turn. It now stops.
+
 - **`CurrentCategory` can skip the menu entirely**, opening straight into your
   watching list. It existed only as a command-line flag and was never written
   into a config, so nothing suggested it was possible. With the tabs reaching

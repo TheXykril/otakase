@@ -25,7 +25,10 @@ func newPromptModel(section, question, hint, initial string) promptModel {
 	field.Prompt = "› "
 	field.SetValue(initial)
 	field.Focus()
-	field.CharLimit = 200
+	// No length cap: one of these questions is "paste the callback URL", and
+	// an OAuth code runs to hundreds of characters. A cap that silently eats
+	// the end of a paste is worse than no cap at all.
+	field.CharLimit = 0
 
 	return promptModel{
 		input:    field,
