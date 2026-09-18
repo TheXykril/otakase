@@ -19,7 +19,7 @@ func writeAnilistTokenFileForTest(t *testing.T, dir, token string) {
 	}
 }
 
-func withGlobalConfig(t *testing.T, config *CurdConfig) {
+func withGlobalConfig(t *testing.T, config *Config) {
 	t.Helper()
 	previous := GetGlobalConfig()
 	SetGlobalConfig(config)
@@ -29,7 +29,7 @@ func withGlobalConfig(t *testing.T, config *CurdConfig) {
 func TestAnilistTokenForAPIPrefersStoredToken(t *testing.T) {
 	dir := t.TempDir()
 	writeAnilistTokenFileForTest(t, dir, "stored-anilist-token")
-	withGlobalConfig(t, &CurdConfig{StoragePath: dir})
+	withGlobalConfig(t, &Config{StoragePath: dir})
 
 	// The tracker token (user.Token) may be a MyAnimeList token; the AniList
 	// call must use the real AniList token from disk instead.
@@ -40,7 +40,7 @@ func TestAnilistTokenForAPIPrefersStoredToken(t *testing.T) {
 
 func TestAnilistTokenForAPIFallsBackToCurrentWhenNoStoredToken(t *testing.T) {
 	dir := t.TempDir()
-	withGlobalConfig(t, &CurdConfig{StoragePath: dir})
+	withGlobalConfig(t, &Config{StoragePath: dir})
 
 	if got := anilistTokenForAPI(nil, "some-token"); got != "some-token" {
 		t.Fatalf("anilistTokenForAPI = %q, want some-token", got)
@@ -58,7 +58,7 @@ func TestAnilistTokenForAPIFallsBackWhenNoGlobalConfig(t *testing.T) {
 func TestTryRenewUsesStoredTokenInsteadOfBrowserReauth(t *testing.T) {
 	dir := t.TempDir()
 	writeAnilistTokenFileForTest(t, dir, "stored-anilist-token")
-	withGlobalConfig(t, &CurdConfig{StoragePath: dir})
+	withGlobalConfig(t, &Config{StoragePath: dir})
 
 	// A MyAnimeList tracker token must not trigger a browser re-auth: the real
 	// AniList token is simply swapped in and the request retried.
@@ -77,7 +77,7 @@ func TestTryRenewUsesStoredTokenInsteadOfBrowserReauth(t *testing.T) {
 func TestTryRenewEmptyTokenUsesStoredToken(t *testing.T) {
 	dir := t.TempDir()
 	writeAnilistTokenFileForTest(t, dir, "stored-anilist-token")
-	withGlobalConfig(t, &CurdConfig{StoragePath: dir})
+	withGlobalConfig(t, &Config{StoragePath: dir})
 
 	newToken, renewed, err := tryRenewAniListTokenForAPI("", "invalid token")
 	if err != nil {

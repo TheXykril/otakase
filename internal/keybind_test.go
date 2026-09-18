@@ -152,7 +152,7 @@ func TestKeybindReportsWhenHyprlandIsAbsent(t *testing.T) {
 // combination.
 func TestKeybindForceRetiresTheOldBinding(t *testing.T) {
 	home := hyprHome(t, "bindings.lua",
-		"o.bind(\"SUPER + SHIFT + A\", \"Curd\", \"exec curd\")\n")
+		"o.bind(\"SUPER + SHIFT + A\", \"otakase\", \"exec otakase\")\n")
 
 	if _, err := InstallHyprlandKeybind(home, true); err != nil {
 		t.Fatalf("forced install failed: %v", err)
@@ -172,7 +172,7 @@ func TestKeybindForceRetiresTheOldBinding(t *testing.T) {
 	if active != 1 {
 		t.Errorf("expected exactly one active binding, found %d:\n%s", active, body)
 	}
-	if !strings.Contains(body, "-- o.bind(\"SUPER + SHIFT + A\", \"Curd\"") {
+	if !strings.Contains(body, "-- o.bind(\"SUPER + SHIFT + A\", \"otakase\"") {
 		t.Errorf("the old binding should be commented out, not deleted:\n%s", body)
 	}
 }

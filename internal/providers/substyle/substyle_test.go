@@ -3,21 +3,21 @@ package substyle_test
 import (
 	"testing"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers/substyle"
 )
 
 func TestChooseHardPromptsForSoftFallback(t *testing.T) {
 	substyle.ResetForTest()
 	prompts := 0
-	previousPrompt := curdhost.PromptSelect
-	curdhost.Out = func(string) {}
-	curdhost.PromptSelect = func(options []curdhost.PromptOption) (curdhost.PromptOption, error) {
+	previousPrompt := providerhost.PromptSelect
+	providerhost.Out = func(string) {}
+	providerhost.PromptSelect = func(options []providerhost.PromptOption) (providerhost.PromptOption, error) {
 		prompts++
-		return curdhost.PromptOption{Key: "soft", Label: options[0].Label}, nil
+		return providerhost.PromptOption{Key: "soft", Label: options[0].Label}, nil
 	}
 	t.Cleanup(func() {
-		curdhost.PromptSelect = previousPrompt
+		providerhost.PromptSelect = previousPrompt
 		substyle.ResetForTest()
 	})
 
@@ -32,12 +32,12 @@ func TestChooseHardPromptsForSoftFallback(t *testing.T) {
 
 func TestChooseHardDeclinedSoftFallback(t *testing.T) {
 	substyle.ResetForTest()
-	previousPrompt := curdhost.PromptSelect
-	curdhost.PromptSelect = func([]curdhost.PromptOption) (curdhost.PromptOption, error) {
-		return curdhost.PromptOption{Key: "cancel", Label: "Cancel"}, nil
+	previousPrompt := providerhost.PromptSelect
+	providerhost.PromptSelect = func([]providerhost.PromptOption) (providerhost.PromptOption, error) {
+		return providerhost.PromptOption{Key: "cancel", Label: "Cancel"}, nil
 	}
 	t.Cleanup(func() {
-		curdhost.PromptSelect = previousPrompt
+		providerhost.PromptSelect = previousPrompt
 		substyle.ResetForTest()
 	})
 
@@ -57,10 +57,10 @@ func TestChooseSoftFallsBackToHard(t *testing.T) {
 func TestChooseAskAutoUsesSoftOnly(t *testing.T) {
 	substyle.ResetForTest()
 	messages := 0
-	previousOut := curdhost.Out
-	curdhost.Out = func(string) { messages++ }
+	previousOut := providerhost.Out
+	providerhost.Out = func(string) { messages++ }
 	t.Cleanup(func() {
-		curdhost.Out = previousOut
+		providerhost.Out = previousOut
 		substyle.ResetForTest()
 	})
 

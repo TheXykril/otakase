@@ -1,6 +1,6 @@
 // Package torrentstream plays a torrent without waiting for it to finish.
 //
-// Curd's other providers hand MPV an HTTP URL, so a torrent has to look like
+// otakase's other providers hand MPV an HTTP URL, so a torrent has to look like
 // one too. A local HTTP server backed by a sequential reader does that: pieces
 // are requested in the order the player asks for them, playback starts within
 // seconds of the first block arriving, and seeking works because the reader
@@ -152,7 +152,7 @@ func ensureClient() error {
 		return fmt.Errorf("torrentstream: start torrent client: %w", err)
 	}
 
-	// Port 0: the OS picks a free port, so two Curd instances cannot collide.
+	// Port 0: the OS picks a free port, so two otakase instances cannot collide.
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		c.Close()

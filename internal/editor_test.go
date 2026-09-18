@@ -7,7 +7,7 @@ import (
 )
 
 // EDITOR almost always carries flags. Passing the whole string to exec.Command
-// as the executable name made `curd -e` fail outright.
+// as the executable name made `otakase -e` fail outright.
 func TestSplitEditorCommand(t *testing.T) {
 	cases := []struct {
 		value string
@@ -38,14 +38,14 @@ func TestResolveEditorCommandPutsPathLast(t *testing.T) {
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "code --wait")
 
-	name, args, err := resolveEditorCommand("/home/u/.config/curd/curd.conf")
+	name, args, err := resolveEditorCommand("/home/u/.config/otakase/otakase.conf")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if name != "code" {
 		t.Fatalf("name = %q, want code", name)
 	}
-	want := []string{"--wait", "/home/u/.config/curd/curd.conf"}
+	want := []string{"--wait", "/home/u/.config/otakase/otakase.conf"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args = %#v, want %#v", args, want)
 	}

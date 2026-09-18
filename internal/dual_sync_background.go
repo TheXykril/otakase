@@ -20,7 +20,7 @@ var sleepBetweenRemoteWrites = func() { time.Sleep(remoteTrackerWriteDelay) }
 //
 // The merge itself is local and instant. Only the writes are slow, and nothing
 // on screen depends on them having finished -- the merged list is already what
-// Curd will show. So the writes run behind the menu instead of in front of it.
+// otakase will show. So the writes run behind the menu instead of in front of it.
 //
 // Ordering is safe in practice: these are catch-up writes for entries that
 // differed at launch, and anything the user does this session is written later
@@ -48,7 +48,7 @@ var (
 // call while one is running is ignored rather than queued: the next launch
 // reconciles from scratch anyway, so duplicating in-flight work only doubles
 // the rate limit pressure.
-func startDualSyncWrites(config *CurdConfig, writes dualSyncWrites) {
+func startDualSyncWrites(config *Config, writes dualSyncWrites) {
 	if config == nil || writes.count() == 0 {
 		return
 	}
@@ -89,7 +89,7 @@ func WaitForDualSyncWrites() {
 	}
 }
 
-func runDualSyncWrites(config *CurdConfig, writes dualSyncWrites) {
+func runDualSyncWrites(config *Config, writes dualSyncWrites) {
 	failures := 0
 
 	for index, entry := range writes.aniList {
@@ -125,7 +125,7 @@ func runDualSyncWrites(config *CurdConfig, writes dualSyncWrites) {
 	// every launch; wholesale failure means something is actually wrong.
 	Log(fmt.Sprintf("Dual sync: %d of %d update(s) failed", failures, writes.count()))
 	if failures*2 > writes.count() {
-		CurdOut(fmt.Sprintf("Dual tracking: %d of %d updates could not be synced; see the log.",
+		Out(fmt.Sprintf("Dual tracking: %d of %d updates could not be synced; see the log.",
 			failures, writes.count()))
 	}
 }

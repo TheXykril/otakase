@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers"
 )
 
@@ -311,11 +311,11 @@ func TestSearchAnimeWithProvidersReportsPendingProvidersAsUnreachable(t *testing
 }
 
 // A provider throttling us is temporary. Treating it as definitive means no
-// retry, no cooldown, and a user told their anime does not exist when curd was
+// retry, no cooldown, and a user told their anime does not exist when otakase was
 // simply being rate limited.
 func TestRateLimitsAreRetryable(t *testing.T) {
 	for _, err := range []error{
-		fmt.Errorf("anipub: %w", curdhost.ErrRateLimited),
+		fmt.Errorf("anipub: %w", providerhost.ErrRateLimited),
 		errors.New(`{"error":"Too many requests, try again in a minute"}`),
 		errors.New("anipub request failed with status 429: rate limit exceeded"),
 	} {
@@ -327,7 +327,7 @@ func TestRateLimitsAreRetryable(t *testing.T) {
 
 // ...and it must be reported as the host being unavailable, not as a clean miss.
 func TestRateLimitReadsAsUnreachableNotAMiss(t *testing.T) {
-	failure := providerFailure{provider: "anipub", err: fmt.Errorf("anipub: %w", curdhost.ErrRateLimited)}
+	failure := providerFailure{provider: "anipub", err: fmt.Errorf("anipub: %w", providerhost.ErrRateLimited)}
 	if got := failure.kind(); got != failureUnreachable {
 		t.Fatalf("kind = %v, want failureUnreachable", got)
 	}

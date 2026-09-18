@@ -11,7 +11,7 @@ import (
 )
 
 // Streaming hosts rot constantly: domains lapse, APIs start demanding signatures,
-// and Cloudflare appears overnight. ProviderStatus turns "curd can't find any
+// and Cloudflare appears overnight. ProviderStatus turns "otakase can't find any
 // anime" into a per-provider answer the user can act on.
 
 // ProviderHealth is the outcome of probing one provider.
@@ -45,7 +45,7 @@ func (h ProviderHealth) Summary() string {
 // CheckProviders probes every registered provider with a search and reports what
 // each one did. Disabled providers are probed too, so the report can show whether
 // a provider is down or merely switched off.
-func CheckProviders(config *CurdConfig, query string) []ProviderHealth {
+func CheckProviders(config *Config, query string) []ProviderHealth {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		query = "one piece"

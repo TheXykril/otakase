@@ -252,7 +252,7 @@ func TestARotatedClientIDIsReplacedMidLookup(t *testing.T) {
 // sent to Anime-Skip as a client id, whatever case it is written in.
 func TestAutoSelectsTheResolverAndAnythingElseIsAnID(t *testing.T) {
 	for _, written := range []string{"auto", "Auto", "AUTO"} {
-		sources := DefaultSkipSources(&CurdConfig{AnimeSkipClientID: written, StoragePath: t.TempDir()}, nil)
+		sources := DefaultSkipSources(&Config{AnimeSkipClientID: written, StoragePath: t.TempDir()}, nil)
 		source, ok := lastAnimeSkipSource(sources)
 		if !ok {
 			t.Fatalf("%q did not add Anime-Skip at all", written)
@@ -262,7 +262,7 @@ func TestAutoSelectsTheResolverAndAnythingElseIsAnID(t *testing.T) {
 		}
 	}
 
-	sources := DefaultSkipSources(&CurdConfig{AnimeSkipClientID: "ZGfO0sMF3eCwLYf8yMSCJjlynwNGRXWE"}, nil)
+	sources := DefaultSkipSources(&Config{AnimeSkipClientID: "ZGfO0sMF3eCwLYf8yMSCJjlynwNGRXWE"}, nil)
 	source, ok := lastAnimeSkipSource(sources)
 	if !ok {
 		t.Fatal("a configured id did not add Anime-Skip")
@@ -271,7 +271,7 @@ func TestAutoSelectsTheResolverAndAnythingElseIsAnID(t *testing.T) {
 		t.Errorf("a written id did not reach the source as itself: %#v", source.clientIDs)
 	}
 
-	if _, ok := lastAnimeSkipSource(DefaultSkipSources(&CurdConfig{}, nil)); ok {
+	if _, ok := lastAnimeSkipSource(DefaultSkipSources(&Config{}, nil)); ok {
 		t.Error("Anime-Skip was added with nothing configured")
 	}
 }

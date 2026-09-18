@@ -24,7 +24,7 @@ func isInvalidTokenError(err error) bool {
 	return strings.Contains(lower, "invalid token") || strings.Contains(lower, "invalid_token")
 }
 
-func anilistTokenPath(config *CurdConfig) string {
+func anilistTokenPath(config *Config) string {
 	return filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json")
 }
 
@@ -34,7 +34,7 @@ func anilistTokenPath(config *CurdConfig) string {
 // "Invalid token", which the app misread as expiry and forced a browser
 // re-auth on every run. Prefer the token persisted at anilist_token.json and
 // fall back to the caller's token only when none is stored.
-func anilistTokenForAPI(config *CurdConfig, current string) string {
+func anilistTokenForAPI(config *Config, current string) string {
 	if config == nil {
 		config = GetGlobalConfig()
 	}
@@ -46,7 +46,7 @@ func anilistTokenForAPI(config *CurdConfig, current string) string {
 	return current
 }
 
-func ReauthenticateAniList(config *CurdConfig, user *User, reason string) (string, error) {
+func ReauthenticateAniList(config *Config, user *User, reason string) (string, error) {
 	if config == nil {
 		config = GetGlobalConfig()
 	}
@@ -56,10 +56,10 @@ func ReauthenticateAniList(config *CurdConfig, user *User, reason string) (strin
 
 	tokenPath := anilistTokenPath(config)
 	if reason != "" {
-		CurdOut(fmt.Sprintf("AniList sign-in required (%s). Opening browser...", reason))
+		Out(fmt.Sprintf("AniList sign-in required (%s). Opening browser...", reason))
 		Log(fmt.Sprintf("AniList token invalid (%s), starting browser authentication", reason))
 	} else {
-		CurdOut("AniList sign-in required. Opening browser...")
+		Out("AniList sign-in required. Opening browser...")
 		Log("AniList token invalid, starting browser authentication")
 	}
 

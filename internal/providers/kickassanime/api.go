@@ -1,6 +1,6 @@
 // Package kickassanime resolves episodes from KickassAnime (kaa.lt).
 //
-// It is the most conventional source Curd talks to: a documented-shaped JSON
+// It is the most conventional source otakase talks to: a documented-shaped JSON
 // API with no anti-bot gate, no persisted-query handshake, and stream URLs that
 // sit in the player page rather than behind an obfuscated endpoint. It also
 // carries dubs, which most of the other hosts do not.
@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 )
 
 const (
@@ -24,7 +24,7 @@ const (
 	userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
 
-// localeForMode maps Curd's sub/dub to the locales this host indexes by. A show
+// localeForMode maps otakase's sub/dub to the locales this host indexes by. A show
 // lists the locales it actually has, so asking for a dub that does not exist
 // fails cleanly rather than silently returning the subtitled version.
 func localeForMode(mode string) string {
@@ -80,7 +80,7 @@ func request(method, path string, body []byte, dest any) error {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	resp, err := curdhost.HTTPClient().Do(req)
+	resp, err := providerhost.HTTPClient().Do(req)
 	if err != nil {
 		return fmt.Errorf("kickassanime: request failed: %w", err)
 	}
@@ -90,11 +90,11 @@ func request(method, path string, body []byte, dest any) error {
 	if err != nil {
 		return fmt.Errorf("kickassanime: read response: %w", err)
 	}
-	if curdhost.IsRateLimitedBody(payload) {
-		return curdhost.ErrRateLimited
+	if providerhost.IsRateLimitedBody(payload) {
+		return providerhost.ErrRateLimited
 	}
-	if !curdhost.HTTPStatusOK(resp.StatusCode) {
-		return curdhost.HTTPStatusError("kickassanime "+path, resp.StatusCode, payload)
+	if !providerhost.HTTPStatusOK(resp.StatusCode) {
+		return providerhost.HTTPStatusError("kickassanime "+path, resp.StatusCode, payload)
 	}
 	if dest == nil {
 		return nil
@@ -154,7 +154,7 @@ func fetchPlayerPage(src string) ([]byte, error) {
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Referer", referer)
 
-	resp, err := curdhost.HTTPClient().Do(req)
+	resp, err := providerhost.HTTPClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("kickassanime: player request failed: %w", err)
 	}
@@ -164,8 +164,8 @@ func fetchPlayerPage(src string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("kickassanime: read player page: %w", err)
 	}
-	if !curdhost.HTTPStatusOK(resp.StatusCode) {
-		return nil, curdhost.HTTPStatusError("kickassanime player", resp.StatusCode, page)
+	if !providerhost.HTTPStatusOK(resp.StatusCode) {
+		return nil, providerhost.HTTPStatusError("kickassanime player", resp.StatusCode, page)
 	}
 	return page, nil
 }

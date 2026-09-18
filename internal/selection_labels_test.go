@@ -42,7 +42,7 @@ func TestManualProviderSearchHint(t *testing.T) {
 			},
 		},
 	}
-	hint := ManualProviderSearchHint(&CurdConfig{SubOrDub: "sub"}, entry, "frieren", "sub")
+	hint := ManualProviderSearchHint(&Config{SubOrDub: "sub"}, entry, "frieren", "sub")
 	if !strings.Contains(hint, `Searching for "Frieren"`) {
 		t.Fatalf("unexpected hint: %q", hint)
 	}
@@ -52,10 +52,10 @@ func TestManualProviderSearchHint(t *testing.T) {
 }
 
 func TestManualProviderSearchEnabled(t *testing.T) {
-	if ManualProviderSearchEnabled(&CurdConfig{ManualProviderSearch: true}) != true {
+	if ManualProviderSearchEnabled(&Config{ManualProviderSearch: true}) != true {
 		t.Fatal("expected manual provider search to be enabled")
 	}
-	if ManualProviderSearchEnabled(&CurdConfig{}) != false {
+	if ManualProviderSearchEnabled(&Config{}) != false {
 		t.Fatal("expected manual provider search to be disabled by default")
 	}
 }

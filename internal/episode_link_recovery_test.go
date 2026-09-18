@@ -37,7 +37,7 @@ func TestEpisodeLinkFailureRecoveryOptionsOrder(t *testing.T) {
 
 func TestEpisodeLinkFailureDiagnosisIncludesEpisodeModeProviders(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	cfg := &CurdConfig{Provider: `["anipub","anikoto"]`, SubOrDub: "sub"}
+	cfg := &Config{Provider: `["anipub","anikoto"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{English: "Frieren: Beyond Journey's End"},
 		Ep:           Episode{Number: 12},
@@ -60,7 +60,7 @@ func TestEpisodeLinkFailureDiagnosisIncludesEpisodeModeProviders(t *testing.T) {
 }
 
 func TestPromptEpisodeLinkFailureRecoveryMapsExitKeysToBack(t *testing.T) {
-	cfg := &CurdConfig{SubOrDub: "sub", Provider: `["anikoto"]`}
+	cfg := &Config{SubOrDub: "sub", Provider: `["anikoto"]`}
 	anime := &Anime{Title: AnimeTitle{Romaji: "Example"}, Ep: Episode{Number: 1}}
 
 	withPromptSelect(t, func(options []SelectionOption) (SelectionOption, error) {
@@ -95,7 +95,7 @@ func TestResolveEpisodeLinksWithRecoverySucceedsWithoutRecoveryMenu(t *testing.T
 		return SelectionOption{}, nil
 	})
 
-	cfg := &CurdConfig{Provider: `["anikoto"]`, SubOrDub: "sub"}
+	cfg := &Config{Provider: `["anikoto"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
 		ProviderName: "anikoto",
@@ -154,7 +154,7 @@ func TestResolveEpisodeLinksWithRecoveryOnlyAfterPreferredAndAlternateFail(t *te
 		return SelectionOption{}, nil
 	})
 
-	cfg := &CurdConfig{Provider: `["anikoto","no-anineko"]`, SubOrDub: "sub"}
+	cfg := &Config{Provider: `["anikoto","no-anineko"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
 		ProviderName: "anikoto",
@@ -260,7 +260,7 @@ func TestResolveEpisodeLinksWithRecoveryRemapThenSucceeds(t *testing.T) {
 		}
 	})
 
-	cfg := &CurdConfig{Provider: `["anikoto","no-anineko"]`, SubOrDub: "sub"}
+	cfg := &Config{Provider: `["anikoto","no-anineko"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
 		ProviderName: "anikoto",

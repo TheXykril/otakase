@@ -56,7 +56,7 @@ func TestProviderMappingSearchStateNextProvider(t *testing.T) {
 
 func TestProviderNameFromSelectionUsesSequentialProvider(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	config := &CurdConfig{Provider: `["anipub","anineko"]`}
+	config := &Config{Provider: `["anipub","anineko"]`}
 	state := &providerMappingSearchState{
 		allProviders:  []string{"anipub", "anineko"},
 		sequential:    true,
@@ -81,7 +81,7 @@ func TestProviderNameFromSelectionUsesSequentialProvider(t *testing.T) {
 
 func TestProviderNameFromSelectionUsesQualifiedKey(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	config := &CurdConfig{Provider: `["anipub","anineko"]`}
+	config := &Config{Provider: `["anipub","anineko"]`}
 	state := &providerMappingSearchState{allProviders: []string{"anipub", "anineko"}}
 
 	selected := SelectionOption{
@@ -95,7 +95,7 @@ func TestProviderNameFromSelectionUsesQualifiedKey(t *testing.T) {
 
 func TestApplyMatchedProviderMappingUsesSequentialProvider(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	config := &CurdConfig{Provider: `["anipub","anineko"]`}
+	config := &Config{Provider: `["anipub","anineko"]`}
 	state := &providerMappingSearchState{
 		allProviders:  []string{"anipub", "anineko"},
 		sequential:    true,

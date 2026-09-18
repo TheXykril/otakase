@@ -31,11 +31,11 @@ func (s *stackStubProvider) EpisodesList(showID, mode string) ([]string, error) 
 	return nil, nil
 }
 
-func (s *stackStubProvider) GetEpisodeURL(config CurdConfig, id string, epNo int) ([]string, error) {
+func (s *stackStubProvider) GetEpisodeURL(config Config, id string, epNo int) ([]string, error) {
 	return s.GetEpisodeURLForMode(config, id, epNo, config.SubOrDub)
 }
 
-func (s *stackStubProvider) GetEpisodeURLForMode(config CurdConfig, id string, epNo int, mode string) ([]string, error) {
+func (s *stackStubProvider) GetEpisodeURLForMode(config Config, id string, epNo int, mode string) ([]string, error) {
 	mode = normalizeTranslationType(mode)
 	s.calls = append(s.calls, s.name+":"+mode)
 	if byID, ok := s.episodeErrors[id]; ok {
@@ -80,11 +80,11 @@ func (s *stackStubProviderBridge) EpisodesList(showID, mode string) ([]string, e
 }
 
 func (s *stackStubProviderBridge) GetEpisodeURL(config providers.PlaybackConfig, id string, epNo int) ([]string, error) {
-	return s.stackStubProvider.GetEpisodeURL(CurdConfig{SubOrDub: config.SubOrDub}, id, epNo)
+	return s.stackStubProvider.GetEpisodeURL(Config{SubOrDub: config.SubOrDub}, id, epNo)
 }
 
 func (s *stackStubProviderBridge) GetEpisodeURLForMode(config providers.PlaybackConfig, id string, epNo int, mode string) ([]string, error) {
-	return s.stackStubProvider.GetEpisodeURLForMode(CurdConfig{SubOrDub: config.SubOrDub}, id, epNo, mode)
+	return s.stackStubProvider.GetEpisodeURLForMode(Config{SubOrDub: config.SubOrDub}, id, epNo, mode)
 }
 
 func TestConfiguredProviderNamesAcceptsOrderedLists(t *testing.T) {
@@ -92,14 +92,14 @@ func TestConfiguredProviderNamesAcceptsOrderedLists(t *testing.T) {
 
 	cases := []struct {
 		name string
-		cfg  *CurdConfig
+		cfg  *Config
 		want []string
 	}{
-		{name: "empty", cfg: &CurdConfig{}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb"}},
-		{name: "json list", cfg: &CurdConfig{Provider: `["anikoto","anineko"]`}, want: []string{"anikoto", "anineko"}},
-		{name: "comma list", cfg: &CurdConfig{Provider: "anineko,anikoto"}, want: []string{"anineko", "anikoto"}},
-		{name: "plus list", cfg: &CurdConfig{Provider: "anikoto+anineko"}, want: []string{"anikoto", "anineko"}},
-		{name: "legacy alias", cfg: &CurdConfig{Provider: "stacked"}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb"}},
+		{name: "empty", cfg: &Config{}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb"}},
+		{name: "json list", cfg: &Config{Provider: `["anikoto","anineko"]`}, want: []string{"anikoto", "anineko"}},
+		{name: "comma list", cfg: &Config{Provider: "anineko,anikoto"}, want: []string{"anineko", "anikoto"}},
+		{name: "plus list", cfg: &Config{Provider: "anikoto+anineko"}, want: []string{"anikoto", "anineko"}},
+		{name: "legacy alias", cfg: &Config{Provider: "stacked"}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb"}},
 	}
 
 	for _, tc := range cases {
@@ -135,7 +135,7 @@ func TestCanonicalProviderConfigValueMigratesLegacyValues(t *testing.T) {
 }
 
 func TestLoadConfigMigratesLegacyProviderToList(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "curd.conf")
+	configPath := filepath.Join(t.TempDir(), "otakase.conf")
 	if err := os.WriteFile(configPath, []byte("Provider=anikoto\nAddMissingOptions=true\n"), 0644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestSearchAnimeReturnsProviderQualifiedStackResultsInOrder(t *testing.T) {
 	withProviderFactories(t, anikoto, anineko)
 
 	previousConfig := GetGlobalConfig()
-	SetGlobalConfig(&CurdConfig{Provider: `["anikoto","anineko"]`})
+	SetGlobalConfig(&Config{Provider: `["anikoto","anineko"]`})
 	t.Cleanup(func() { SetGlobalConfig(previousConfig) })
 
 	results, err := SearchAnime("query", "sub")
@@ -209,7 +209,7 @@ func TestResolveEpisodeURLUsesProviderListOrder(t *testing.T) {
 	}
 	withProviderFactories(t, anikoto, anineko)
 
-	cfg := CurdConfig{Provider: `["anineko","anikoto"]`, SubOrDub: "sub"}
+	cfg := Config{Provider: `["anineko","anikoto"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
 		ProviderName: "anikoto",
@@ -253,7 +253,7 @@ func TestResolveEpisodeURLExcludingProviders(t *testing.T) {
 	}
 	withProviderFactories(t, anikoto, anipub)
 
-	cfg := CurdConfig{Provider: `["anipub","anikoto"]`, SubOrDub: "sub"}
+	cfg := Config{Provider: `["anipub","anikoto"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
 		ProviderName: "anipub",
@@ -282,7 +282,7 @@ func TestResolveEpisodeURLExcludingProvidersModeUsesExplicitMode(t *testing.T) {
 	}
 	withProviderFactories(t, anikoto)
 
-	cfg := CurdConfig{Provider: `["anikoto"]`, SubOrDub: "sub"}
+	cfg := Config{Provider: `["anikoto"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
 		ProviderName: "anikoto",
@@ -310,7 +310,7 @@ func TestResolveEpisodeURLAlternateModeWithPromptRequiresApproval(t *testing.T) 
 	}
 	withProviderFactories(t, anikoto)
 
-	cfg := CurdConfig{Provider: `["anikoto"]`, SubOrDub: "sub"}
+	cfg := Config{Provider: `["anikoto"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
 		ProviderName: "anikoto",
@@ -368,7 +368,7 @@ func TestResolveEpisodeURLForPlaybackTriesAllPreferredProvidersBeforeAudioFallba
 		return SelectionOption{}, nil
 	})
 
-	cfg := CurdConfig{Provider: `["anikoto","anineko"]`, SubOrDub: "dub"}
+	cfg := Config{Provider: `["anikoto","anineko"]`, SubOrDub: "dub"}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
 		ProviderName: "anikoto",

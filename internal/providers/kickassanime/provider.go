@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers"
 )
 
@@ -79,13 +79,13 @@ func (p *Provider) EpisodesList(showID, mode string) ([]string, error) {
 
 // requireLocale reports a missing dub as such. The show detail lists the locales
 // actually carried, so this is answerable before any episode request -- and a
-// clean "no dub" lets Curd's audio fallback act instead of failing opaquely.
+// clean "no dub" lets otakase's audio fallback act instead of failing opaquely.
 func requireLocale(showID, locale, mode string) error {
 	show, err := fetchShow(showID)
 	if err != nil {
 		// The listing request below will surface a real outage; do not block on a
 		// detail lookup that is only an optimisation.
-		curdhost.Log(fmt.Sprintf("kickassanime: could not read locales for %q: %v", showID, err))
+		providerhost.Log(fmt.Sprintf("kickassanime: could not read locales for %q: %v", showID, err))
 		return nil
 	}
 	if len(show.Locales) == 0 {
@@ -146,13 +146,13 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 		page, err := fetchPlayerPage(server.Src)
 		if err != nil {
 			lastErr = err
-			curdhost.Log(fmt.Sprintf("kickassanime: server %s unreachable: %v", server.Name, err))
+			providerhost.Log(fmt.Sprintf("kickassanime: server %s unreachable: %v", server.Name, err))
 			continue
 		}
 		sources, err := parsePlayerSources(page)
 		if err != nil {
 			lastErr = err
-			curdhost.Log(fmt.Sprintf("kickassanime: server %s gave nothing playable: %v", server.Name, err))
+			providerhost.Log(fmt.Sprintf("kickassanime: server %s gave nothing playable: %v", server.Name, err))
 			continue
 		}
 

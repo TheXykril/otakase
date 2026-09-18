@@ -10,7 +10,7 @@ import (
 
 // EDITOR almost always carries arguments -- "code --wait", "subl -w",
 // "omarchy-launch-editor --inline" -- but the whole string was being passed to
-// exec.Command as the executable name, so `curd -e` failed with:
+// exec.Command as the executable name, so `otakase -e` failed with:
 //
 //	exec: "omarchy-launch-editor --inline": executable file not found in $PATH
 //
@@ -112,12 +112,12 @@ func resolveEditorCommand(path string) (string, []string, error) {
 func EditConfig(configFilePath string) {
 	name, args, err := resolveEditorCommand(configFilePath)
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error opening config file: %v", err))
+		Out(fmt.Sprintf("Error opening config file: %v", err))
 		return
 	}
 
 	if _, err := exec.LookPath(name); err != nil {
-		CurdOut(fmt.Sprintf("Editor %q not found. Set $EDITOR or $VISUAL to an editor on your PATH.", name))
+		Out(fmt.Sprintf("Editor %q not found. Set $EDITOR or $VISUAL to an editor on your PATH.", name))
 		Log(fmt.Sprintf("Editor lookup failed for %q: %v", name, err))
 		return
 	}
@@ -128,9 +128,9 @@ func EditConfig(configFilePath string) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		CurdOut(fmt.Sprintf("Error opening config file: %v", err))
+		Out(fmt.Sprintf("Error opening config file: %v", err))
 		return
 	}
 
-	CurdOut("Config file edited successfully.")
+	Out("Config file edited successfully.")
 }

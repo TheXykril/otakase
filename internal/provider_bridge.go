@@ -5,15 +5,15 @@ import (
 
 	_ "github.com/thexykril/otakase/internal/loadproviders"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers"
 )
 
 func init() {
-	curdhost.HTTPClient = func() *http.Client { return sharedHTTPClient }
-	curdhost.Log = func(msg string) { _ = Log(msg) }
-	curdhost.Out = func(msg string) { CurdOut(msg) }
-	curdhost.PromptSelect = func(options []curdhost.PromptOption) (curdhost.PromptOption, error) {
+	providerhost.HTTPClient = func() *http.Client { return sharedHTTPClient }
+	providerhost.Log = func(msg string) { _ = Log(msg) }
+	providerhost.Out = func(msg string) { Out(msg) }
+	providerhost.PromptSelect = func(options []providerhost.PromptOption) (providerhost.PromptOption, error) {
 		mapped := make([]SelectionOption, 0, len(options))
 		for _, option := range options {
 			mapped = append(mapped, SelectionOption{
@@ -23,25 +23,25 @@ func init() {
 		}
 		selected, err := promptSelect(mapped)
 		if err != nil {
-			return curdhost.PromptOption{}, err
+			return providerhost.PromptOption{}, err
 		}
-		return curdhost.PromptOption{Key: selected.Key, Label: selected.Label}, nil
+		return providerhost.PromptOption{Key: selected.Key, Label: selected.Label}, nil
 	}
-	curdhost.PersistSubStylePreference = persistSubStylePreference
-	curdhost.CurrentSubStyle = func() string {
+	providerhost.PersistSubStylePreference = persistSubStylePreference
+	providerhost.CurrentSubStyle = func() string {
 		if cfg := GetGlobalConfig(); cfg != nil {
 			return cfg.SubStyle
 		}
 		return ""
 	}
-	curdhost.StoragePath = GetStoragePath
-	curdhost.AnimeNameLanguage = func() string {
+	providerhost.StoragePath = GetStoragePath
+	providerhost.AnimeNameLanguage = func() string {
 		if cfg := GetGlobalConfig(); cfg != nil {
 			return cfg.AnimeNameLanguage
 		}
 		return "english"
 	}
-	curdhost.SetCookiesForAnimepahe = SetCookiesForAnimepahe
+	providerhost.SetCookiesForAnimepahe = SetCookiesForAnimepahe
 }
 
 func normalizeTranslationType(mode string) string {
@@ -86,7 +86,7 @@ func toProviderSelectionOptions(options []SelectionOption) []providers.Selection
 	return result
 }
 
-func toPlaybackConfig(config CurdConfig) providers.PlaybackConfig {
+func toPlaybackConfig(config Config) providers.PlaybackConfig {
 	return providers.PlaybackConfig{
 		SubOrDub: config.SubOrDub,
 		SubStyle: config.SubStyle,
@@ -125,18 +125,18 @@ func (a *providerAdapter) EpisodesList(showID, mode string) ([]string, error) {
 	return a.inner.EpisodesList(showID, mode)
 }
 
-func (a *providerAdapter) GetEpisodeURL(config CurdConfig, id string, epNo int) ([]string, error) {
+func (a *providerAdapter) GetEpisodeURL(config Config, id string, epNo int) ([]string, error) {
 	return a.inner.GetEpisodeURL(toPlaybackConfig(config), id, epNo)
 }
 
-func (a *providerAdapter) GetEpisodeURLForMode(config CurdConfig, id string, epNo int, mode string) ([]string, error) {
+func (a *providerAdapter) GetEpisodeURLForMode(config Config, id string, epNo int, mode string) ([]string, error) {
 	if resolver, ok := a.inner.(providers.ModeResolver); ok {
 		return resolver.GetEpisodeURLForMode(toPlaybackConfig(config), id, epNo, mode)
 	}
 	return a.inner.GetEpisodeURL(toPlaybackConfig(config), id, epNo)
 }
 
-func (a *providerAdapter) GetEpisodeURLForModeWithHints(config CurdConfig, id string, epNo int, mode string) ([]string, map[string]StreamPlaybackHint, error) {
+func (a *providerAdapter) GetEpisodeURLForModeWithHints(config Config, id string, epNo int, mode string) ([]string, map[string]StreamPlaybackHint, error) {
 	if resolver, ok := a.inner.(providers.HintResolver); ok {
 		links, hints, err := resolver.GetEpisodeURLForModeWithHints(toPlaybackConfig(config), id, epNo, mode)
 		return links, fromStreamHints(hints), err

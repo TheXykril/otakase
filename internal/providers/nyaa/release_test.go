@@ -38,7 +38,7 @@ func TestParseReleaseEpisodeNumber(t *testing.T) {
 	}
 }
 
-// A batch has no single episode, and treating one as episode 1 would make Curd
+// A batch has no single episode, and treating one as episode 1 would make otakase
 // download a whole season to play one episode.
 func TestBatchesAreNotGivenAnEpisodeNumber(t *testing.T) {
 	batches := []string{

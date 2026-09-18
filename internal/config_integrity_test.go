@@ -73,7 +73,7 @@ func TestUnknownConfigKeysDoesNotInventSuggestions(t *testing.T) {
 }
 
 func TestSaveConfigToFileRoundTrips(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "curd.conf")
+	path := filepath.Join(t.TempDir(), "otakase.conf")
 	in := map[string]string{"Player": "mpv", "SkipOp": "true", "Provider": "stacked"}
 
 	if err := SaveConfigToFile(path, in); err != nil {
@@ -93,7 +93,7 @@ func TestSaveConfigToFileRoundTrips(t *testing.T) {
 // The write must leave no temporary files behind.
 func TestSaveConfigToFileLeavesNoTempFiles(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "curd.conf")
+	path := filepath.Join(dir, "otakase.conf")
 	if err := SaveConfigToFile(path, map[string]string{"Player": "mpv"}); err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestSaveConfigToFileLeavesNoTempFiles(t *testing.T) {
 // no locking. Concurrent writers must never leave a partial file: every read
 // must see one complete, valid config.
 func TestSaveConfigToFileIsAtomicUnderConcurrentWriters(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "curd.conf")
+	path := filepath.Join(t.TempDir(), "otakase.conf")
 
 	// A long value makes a torn write obvious.
 	long := strings.Repeat("x", 4096)

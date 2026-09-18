@@ -55,7 +55,7 @@ func decodeLanguages(raw []byte) ([]language, error) {
 	return nil, fmt.Errorf("could not decode anidb language list")
 }
 
-// languageTag maps Curd's sub/dub mode onto anidb's track tags.
+// languageTag maps otakase's sub/dub mode onto anidb's track tags.
 func languageTag(mode string) string {
 	if providers.NormalizeTranslationType(mode) == "dub" {
 		return "eng"

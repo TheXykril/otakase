@@ -22,25 +22,25 @@ const (
 	remoteTrackerWriteDelay = 350 * time.Millisecond
 )
 
-func UsesLocalTracking(config *CurdConfig) bool {
+func UsesLocalTracking(config *Config) bool {
 	return true
 }
 
-func UsesRemoteTracking(config *CurdConfig) bool {
+func UsesRemoteTracking(config *Config) bool {
 	if config == nil {
 		return true
 	}
 	return normalizeRemoteTracker(config.TrackingRemote) != TrackingRemoteNone
 }
 
-func ShouldWriteRemoteTracking(config *CurdConfig, anime *Anime) bool {
+func ShouldWriteRemoteTracking(config *Config, anime *Anime) bool {
 	if !UsesRemoteTracking(config) {
 		return false
 	}
 	return anime == nil || !anime.SkipRemoteSync
 }
 
-func UsesAniListTracking(config *CurdConfig) bool {
+func UsesAniListTracking(config *Config) bool {
 	if config == nil {
 		return true
 	}
@@ -52,7 +52,7 @@ func UsesAniListTracking(config *CurdConfig) bool {
 	}
 }
 
-func UsesMyAnimeListTracking(config *CurdConfig) bool {
+func UsesMyAnimeListTracking(config *Config) bool {
 	if config == nil {
 		return false
 	}
@@ -64,14 +64,14 @@ func UsesMyAnimeListTracking(config *CurdConfig) bool {
 	}
 }
 
-func UsesDualRemoteTracking(config *CurdConfig) bool {
+func UsesDualRemoteTracking(config *Config) bool {
 	if config == nil {
 		return false
 	}
 	return normalizeRemoteTracker(config.TrackingRemote) == TrackingRemoteBoth
 }
 
-func trackingCategoryEnabled(config *CurdConfig, key string) bool {
+func trackingCategoryEnabled(config *Config, key string) bool {
 	switch key {
 	case "CURRENT", "ALL", "UNTRACKED", "CONTINUE_LAST", "REMAP_PROVIDER", "PROVIDER":
 		return true
@@ -82,7 +82,7 @@ func trackingCategoryEnabled(config *CurdConfig, key string) bool {
 	}
 }
 
-func EnsureTrackingConfigured(config *CurdConfig) error {
+func EnsureTrackingConfigured(config *Config) error {
 	if config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -100,7 +100,7 @@ func EnsureTrackingConfigured(config *CurdConfig) error {
 		{Key: "anilist+myanimelist", Label: "anilist + myanimelist"},
 	}
 
-	CurdOut("Choose tracking mode. Local history stays enabled in every mode.")
+	Out("Choose tracking mode. Local history stays enabled in every mode.")
 	selected, err := DynamicSelect(options)
 	if err != nil {
 		return err
@@ -130,7 +130,7 @@ func EnsureTrackingConfigured(config *CurdConfig) error {
 	return persistTrackingConfig(config)
 }
 
-func persistTrackingConfig(config *CurdConfig) error {
+func persistTrackingConfig(config *Config) error {
 	if config == nil || GlobalConfigPath == "" {
 		return nil
 	}
@@ -202,13 +202,13 @@ func parseAnimeScore(raw string) (float64, error) {
 	return score, nil
 }
 
-func ensureMyAnimeListCredentialsConfigured(config *CurdConfig) error {
+func ensureMyAnimeListCredentialsConfigured(config *Config) error {
 	clientID, _ := myAnimeListClientCredentials(config)
 	if clientID != "" {
 		return nil
 	}
 
-	CurdOut("MyAnimeList sync needs MAL application credentials.")
+	Out("MyAnimeList sync needs MAL application credentials.")
 	clientIDInput, err := promptTrackingInput("Enter your MyAnimeList client ID", false)
 	if err != nil {
 		return err
@@ -223,7 +223,7 @@ func ensureMyAnimeListCredentialsConfigured(config *CurdConfig) error {
 	return persistTrackingConfig(config)
 }
 
-func ensureAniListTrackerReady(config *CurdConfig, user *User) error {
+func ensureAniListTrackerReady(config *Config, user *User) error {
 	tokenPath := filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json")
 	if token, err := GetTokenFromFile(tokenPath); err == nil && strings.TrimSpace(token) != "" {
 		if user != nil && user.Token == "" {
@@ -236,7 +236,7 @@ func ensureAniListTrackerReady(config *CurdConfig, user *User) error {
 	return nil
 }
 
-func ensureMyAnimeListTrackerReady(config *CurdConfig, user *User) error {
+func ensureMyAnimeListTrackerReady(config *Config, user *User) error {
 	if err := ensureMyAnimeListCredentialsConfigured(config); err != nil {
 		return err
 	}
@@ -246,7 +246,7 @@ func ensureMyAnimeListTrackerReady(config *CurdConfig, user *User) error {
 	return ChangeMyAnimeListToken(config, user)
 }
 
-func EnsureConfiguredTrackersReady(config *CurdConfig, user *User) error {
+func EnsureConfiguredTrackersReady(config *Config, user *User) error {
 	if config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -348,14 +348,14 @@ func confirmRemoteSync(preview remoteSyncPreview) (bool, error) {
 		return true, nil
 	}
 
-	CurdOut(fmt.Sprintf("%s: AniList %d, MyAnimeList %d.", preview.Action, preview.AniListEntries, preview.MyAnimeListEntries))
+	Out(fmt.Sprintf("%s: AniList %d, MyAnimeList %d.", preview.Action, preview.AniListEntries, preview.MyAnimeListEntries))
 	if preview.Deletes > 0 {
-		CurdOut(fmt.Sprintf("This will write %d entries and delete %d entries.", preview.Writes, preview.Deletes))
+		Out(fmt.Sprintf("This will write %d entries and delete %d entries.", preview.Writes, preview.Deletes))
 	} else {
-		CurdOut(fmt.Sprintf("This will write %d entries.", preview.Writes))
+		Out(fmt.Sprintf("This will write %d entries.", preview.Writes))
 	}
 	if preview.MissingMALIDs > 0 {
-		CurdOut(fmt.Sprintf("%d entries need a MyAnimeList ID lookup.", preview.MissingMALIDs))
+		Out(fmt.Sprintf("%d entries need a MyAnimeList ID lookup.", preview.MissingMALIDs))
 	}
 
 	selected, err := promptSelect([]SelectionOption{
@@ -368,7 +368,7 @@ func confirmRemoteSync(preview remoteSyncPreview) (bool, error) {
 	return selected.Key == "continue", nil
 }
 
-func writeTrackingBackup(config *CurdConfig, action string, aniList, myAnimeList AnimeList) (string, error) {
+func writeTrackingBackup(config *Config, action string, aniList, myAnimeList AnimeList) (string, error) {
 	if config == nil {
 		return "", fmt.Errorf("missing config")
 	}
@@ -468,7 +468,7 @@ func mergeEntryMetadata(preferred, fallback Entry) Entry {
 		preferred.Media.Status = fallback.Media.Status
 	}
 	// Only AniList reports a broadcast schedule, so a merge that takes the
-	// MyAnimeList entry -- which is what happens right after Curd pushes progress
+	// MyAnimeList entry -- which is what happens right after otakase pushes progress
 	// there, making it the more recently updated of the two -- silently loses it.
 	// Everything downstream then behaves as though the show's schedule were
 	// unknown: no airing countdown in the list, and no way to tell "you are
@@ -662,7 +662,7 @@ func buildDualRemoteSyncPlan(aniList, myAnimeList AnimeList) dualRemoteSyncPlan 
 	return plan
 }
 
-func syncDualRemoteTrackers(config *CurdConfig, aniListToken string, aniListUser, myAnimeListUser *User) (AnimeList, error) {
+func syncDualRemoteTrackers(config *Config, aniListToken string, aniListUser, myAnimeListUser *User) (AnimeList, error) {
 	if config == nil {
 		return AnimeList{}, fmt.Errorf("missing config")
 	}
@@ -672,7 +672,7 @@ func syncDualRemoteTrackers(config *CurdConfig, aniListToken string, aniListUser
 
 	// The merge is local and instant; the writes it implies are neither, and
 	// nothing on screen waits for them -- the merged list below is already what
-	// Curd shows. So they are handed to the background and the launch continues.
+	// otakase shows. So they are handed to the background and the launch continues.
 	plan := buildDualRemoteSyncPlan(aniListUser.AnimeList, myAnimeListUser.AnimeList)
 	Log(fmt.Sprintf("Dual sync: %d AniList and %d MyAnimeList update(s) queued",
 		len(plan.AniListUpdates), len(plan.MyAnimeListUpdates)))
@@ -693,7 +693,7 @@ func syncDualRemoteTrackers(config *CurdConfig, aniListToken string, aniListUser
 	}
 	return plan.Merged, nil
 }
-func InitializeCombinedRemoteAnimeList(config *CurdConfig, user *User) error {
+func InitializeCombinedRemoteAnimeList(config *Config, user *User) error {
 	aniListToken, err := GetTokenFromFile(filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json"))
 	if err != nil {
 		return err
@@ -755,7 +755,7 @@ const combinedRefreshDeadline = 20 * time.Second
 // spending the real deadline waiting for it.
 var combinedRefreshDeadlineForTest = combinedRefreshDeadline
 
-func refreshCombinedRemoteAnimeList(config *CurdConfig, user, aniListUser, myAnimeListUser *User) {
+func refreshCombinedRemoteAnimeList(config *Config, user, aniListUser, myAnimeListUser *User) {
 	defer user.ListSync.MarkRefreshDone()
 
 	deadline := time.After(combinedRefreshDeadlineForTest)
@@ -790,7 +790,7 @@ func refreshCombinedRemoteAnimeList(config *CurdConfig, user, aniListUser, myAni
 	}
 }
 
-func RefreshCombinedRemoteAnimeList(config *CurdConfig, user *User) error {
+func RefreshCombinedRemoteAnimeList(config *Config, user *User) error {
 	aniListToken, err := GetTokenFromFile(filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json"))
 	if err != nil {
 		return err
@@ -829,26 +829,26 @@ func RefreshCombinedRemoteAnimeList(config *CurdConfig, user *User) error {
 	return nil
 }
 
-func InitializeUserAnimeList(userCurdConfig *CurdConfig, user *User) error {
-	if userCurdConfig == nil || user == nil {
+func InitializeUserAnimeList(userConfig *Config, user *User) error {
+	if userConfig == nil || user == nil {
 		return fmt.Errorf("missing user or config")
 	}
 
-	switch normalizeRemoteTracker(userCurdConfig.TrackingRemote) {
+	switch normalizeRemoteTracker(userConfig.TrackingRemote) {
 	case TrackingRemoteAniList:
-		return InitializeAniListUserAnimeList(userCurdConfig, user)
+		return InitializeAniListUserAnimeList(userConfig, user)
 	case TrackingRemoteMyAnimeList:
-		if err := InitializeMyAnimeListUserAnimeList(userCurdConfig, user); err != nil {
+		if err := InitializeMyAnimeListUserAnimeList(userConfig, user); err != nil {
 			return err
 		}
-		return maybeImportAniListToMyAnimeList(userCurdConfig, user)
+		return maybeImportAniListToMyAnimeList(userConfig, user)
 	case TrackingRemoteBoth:
-		if err := InitializeCombinedRemoteAnimeList(userCurdConfig, user); err != nil {
+		if err := InitializeCombinedRemoteAnimeList(userConfig, user); err != nil {
 			return err
 		}
-		return maybeImportAniListToMyAnimeList(userCurdConfig, user)
+		return maybeImportAniListToMyAnimeList(userConfig, user)
 	default:
-		list := BuildLocalAnimeList(userCurdConfig.StoragePath)
+		list := BuildLocalAnimeList(userConfig.StoragePath)
 		user.AnimeList = list
 		user.ListSync = NewAnimeListSync(list)
 		user.ListSync.MarkRefreshDone()
@@ -856,20 +856,20 @@ func InitializeUserAnimeList(userCurdConfig *CurdConfig, user *User) error {
 	}
 }
 
-func RefreshUserAnimeList(userCurdConfig *CurdConfig, user *User) error {
-	if userCurdConfig == nil || user == nil {
+func RefreshUserAnimeList(userConfig *Config, user *User) error {
+	if userConfig == nil || user == nil {
 		return fmt.Errorf("missing user or config")
 	}
 
-	switch normalizeRemoteTracker(userCurdConfig.TrackingRemote) {
+	switch normalizeRemoteTracker(userConfig.TrackingRemote) {
 	case TrackingRemoteAniList:
-		return RefreshAniListUserAnimeList(userCurdConfig, user)
+		return RefreshAniListUserAnimeList(userConfig, user)
 	case TrackingRemoteMyAnimeList:
-		return RefreshMyAnimeListUserAnimeList(userCurdConfig, user)
+		return RefreshMyAnimeListUserAnimeList(userConfig, user)
 	case TrackingRemoteBoth:
-		return RefreshCombinedRemoteAnimeList(userCurdConfig, user)
+		return RefreshCombinedRemoteAnimeList(userConfig, user)
 	default:
-		list := BuildLocalAnimeList(userCurdConfig.StoragePath)
+		list := BuildLocalAnimeList(userConfig.StoragePath)
 		user.AnimeList = list
 		if user.ListSync == nil {
 			user.ListSync = NewAnimeListSync(list)
@@ -882,7 +882,7 @@ func RefreshUserAnimeList(userCurdConfig *CurdConfig, user *User) error {
 	}
 }
 
-func LoadTokenForConfiguredTracking(config *CurdConfig, user *User) error {
+func LoadTokenForConfiguredTracking(config *Config, user *User) error {
 	if config == nil || user == nil {
 		return fmt.Errorf("missing config or user")
 	}
@@ -918,27 +918,27 @@ func LoadTokenForConfiguredTracking(config *CurdConfig, user *User) error {
 	return nil
 }
 
-func ChangeTrackingToken(config *CurdConfig, user *User) {
+func ChangeTrackingToken(config *Config, user *User) {
 	switch normalizeRemoteTracker(config.TrackingRemote) {
 	case TrackingRemoteAniList:
 		ChangeToken(config, user)
 	case TrackingRemoteMyAnimeList:
 		if err := ChangeMyAnimeListToken(config, user); err != nil {
-			ExitCurd(err)
+			Exit(err)
 		}
 	case TrackingRemoteBoth:
 		if err := ensureMyAnimeListCredentialsConfigured(config); err != nil {
-			ExitCurd(err)
+			Exit(err)
 		}
 		ChangeToken(config, user)
 		if err := ChangeMyAnimeListToken(config, user); err != nil {
-			ExitCurd(err)
+			Exit(err)
 		}
 		if err := LoadTokenForConfiguredTracking(config, user); err != nil {
-			ExitCurd(err)
+			Exit(err)
 		}
 	default:
-		CurdOut("Remote tracking is disabled.")
+		Out("Remote tracking is disabled.")
 	}
 }
 
@@ -1235,7 +1235,7 @@ func AddAnimeToList(animeID int, status string, token string) error {
 	}
 }
 
-func maybeImportAniListToMyAnimeList(config *CurdConfig, user *User) error {
+func maybeImportAniListToMyAnimeList(config *Config, user *User) error {
 	if config == nil || user == nil || !UsesMyAnimeListTracking(config) || config.MyAnimeListImported || config.MyAnimeListImportDismissed || hasAnyEntries(user.AnimeList) {
 		return nil
 	}
@@ -1250,7 +1250,7 @@ func maybeImportAniListToMyAnimeList(config *CurdConfig, user *User) error {
 		{Key: "no", Label: "Start with MyAnimeList as-is"},
 	}
 
-	CurdOut("AniList tracking data was found.")
+	Out("AniList tracking data was found.")
 	selected, err := promptSelect(options)
 	if err != nil {
 		return err
@@ -1272,7 +1272,7 @@ func maybeImportAniListToMyAnimeList(config *CurdConfig, user *User) error {
 	return persistTrackingConfig(config)
 }
 
-func ImportAniListTrackingToMyAnimeList(config *CurdConfig) error {
+func ImportAniListTrackingToMyAnimeList(config *Config) error {
 	aniListTokenPath := filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json")
 	aniListToken, err := GetTokenFromFile(aniListTokenPath)
 	if err != nil {
@@ -1318,7 +1318,7 @@ func ImportAniListTrackingToMyAnimeList(config *CurdConfig) error {
 	return nil
 }
 
-func trackingSummary(config *CurdConfig) string {
+func trackingSummary(config *Config) string {
 	parts := make([]string, 0, 2)
 	if UsesLocalTracking(config) {
 		parts = append(parts, "local")
@@ -1330,7 +1330,7 @@ func trackingSummary(config *CurdConfig) string {
 	return strings.Join(parts, "+")
 }
 
-func RemoteTrackingDisplayName(config *CurdConfig) string {
+func RemoteTrackingDisplayName(config *Config) string {
 	switch normalizeRemoteTracker(config.TrackingRemote) {
 	case TrackingRemoteBoth:
 		return "AniList + MyAnimeList"
@@ -1363,7 +1363,7 @@ func saveAniListTrackedEntry(token string, entry Entry) error {
 	return SaveAniListAnimeListEntry(token, entry.Media.ID, &status, &progress, &repeat, &score, &entry.StartedAt, &entry.CompletedAt)
 }
 
-func saveMyAnimeListTrackedEntry(config *CurdConfig, entry Entry) error {
+func saveMyAnimeListTrackedEntry(config *Config, entry Entry) error {
 	malID := entry.Media.MalID
 	if malID == 0 {
 		var err error
@@ -1410,7 +1410,7 @@ func upsertAnimeListToAniList(token string, list AnimeList) error {
 	return nil
 }
 
-func upsertAnimeListToMyAnimeList(config *CurdConfig, list AnimeList) error {
+func upsertAnimeListToMyAnimeList(config *Config, list AnimeList) error {
 	for _, entry := range getEntriesByCategory(list, "ALL") {
 		if err := saveMyAnimeListTrackedEntry(config, entry); err != nil {
 			return err
@@ -1419,7 +1419,7 @@ func upsertAnimeListToMyAnimeList(config *CurdConfig, list AnimeList) error {
 	return nil
 }
 
-func wipeAniListRemote(config *CurdConfig) error {
+func wipeAniListRemote(config *Config) error {
 	token, err := GetTokenFromFile(filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json"))
 	if err != nil {
 		return err
@@ -1442,7 +1442,7 @@ func wipeAniListRemote(config *CurdConfig) error {
 	return nil
 }
 
-func wipeMyAnimeListRemote(config *CurdConfig) error {
+func wipeMyAnimeListRemote(config *Config) error {
 	list, err := FetchLatestMyAnimeList(config, &User{})
 	if err != nil {
 		return err
@@ -1458,7 +1458,7 @@ func wipeMyAnimeListRemote(config *CurdConfig) error {
 	return nil
 }
 
-func ReplaceMyAnimeListWithAniList(config *CurdConfig) error {
+func ReplaceMyAnimeListWithAniList(config *Config) error {
 	token, err := GetTokenFromFile(filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json"))
 	if err != nil {
 		return err
@@ -1483,21 +1483,21 @@ func ReplaceMyAnimeListWithAniList(config *CurdConfig) error {
 		return err
 	}
 	if !ok {
-		CurdOut("Tracker sync cancelled.")
+		Out("Tracker sync cancelled.")
 		return nil
 	}
 	backupPath, err := writeTrackingBackup(config, "replace-myanimelist-with-anilist", sourceList, targetList)
 	if err != nil {
 		return err
 	}
-	CurdOut(fmt.Sprintf("Tracker backup saved: %s", backupPath))
+	Out(fmt.Sprintf("Tracker backup saved: %s", backupPath))
 	if err := wipeMyAnimeListRemote(config); err != nil {
 		return err
 	}
 	return upsertAnimeListToMyAnimeList(config, sourceList)
 }
 
-func ReplaceAniListWithMyAnimeList(config *CurdConfig) error {
+func ReplaceAniListWithMyAnimeList(config *Config) error {
 	token, err := GetTokenFromFile(filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json"))
 	if err != nil {
 		return err
@@ -1522,21 +1522,21 @@ func ReplaceAniListWithMyAnimeList(config *CurdConfig) error {
 		return err
 	}
 	if !ok {
-		CurdOut("Tracker sync cancelled.")
+		Out("Tracker sync cancelled.")
 		return nil
 	}
 	backupPath, err := writeTrackingBackup(config, "replace-anilist-with-myanimelist", targetList, sourceList)
 	if err != nil {
 		return err
 	}
-	CurdOut(fmt.Sprintf("Tracker backup saved: %s", backupPath))
+	Out(fmt.Sprintf("Tracker backup saved: %s", backupPath))
 	if err := wipeAniListRemote(config); err != nil {
 		return err
 	}
 	return upsertAnimeListToAniList(token, sourceList)
 }
 
-func MergeRemoteLists(config *CurdConfig) error {
+func MergeRemoteLists(config *Config) error {
 	token, err := GetTokenFromFile(filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json"))
 	if err != nil {
 		return err
@@ -1568,19 +1568,19 @@ func MergeRemoteLists(config *CurdConfig) error {
 		return err
 	}
 	if !ok {
-		CurdOut("Tracker sync cancelled.")
+		Out("Tracker sync cancelled.")
 		return nil
 	}
 	backupPath, err := writeTrackingBackup(config, "merge-anilist-and-myanimelist", aniList, myAnimeList)
 	if err != nil {
 		return err
 	}
-	CurdOut(fmt.Sprintf("Tracker backup saved: %s", backupPath))
+	Out(fmt.Sprintf("Tracker backup saved: %s", backupPath))
 	_, err = syncDualRemoteTrackers(config, token, aniListUser, myAnimeListUser)
 	return err
 }
 
-func trackersCanCrossSync(config *CurdConfig) bool {
+func trackersCanCrossSync(config *Config) bool {
 	if _, err := GetTokenFromFile(filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json")); err != nil {
 		return false
 	}
@@ -1590,7 +1590,7 @@ func trackersCanCrossSync(config *CurdConfig) bool {
 	return true
 }
 
-func ChangeTracker(config *CurdConfig, user *User) {
+func ChangeTracker(config *Config, user *User) {
 	options := []SelectionOption{
 		{Key: TrackingRemoteNone, Label: "local"},
 		{Key: TrackingRemoteAniList, Label: "anilist"},
@@ -1608,10 +1608,10 @@ func ChangeTracker(config *CurdConfig, user *User) {
 	config.TrackingConfigured = true
 	normalizeTrackingConfig(config)
 	if err := persistTrackingConfig(config); err != nil {
-		ExitCurd(err)
+		Exit(err)
 	}
 	if err := EnsureConfiguredTrackersReady(config, user); err != nil {
-		ExitCurd(err)
+		Exit(err)
 	}
 
 	if trackersCanCrossSync(config) {
@@ -1621,7 +1621,7 @@ func ChangeTracker(config *CurdConfig, user *User) {
 			{Key: "anilist_to_mal", Label: "Replace MyAnimeList with AniList"},
 			{Key: "mal_to_anilist", Label: "Replace AniList with MyAnimeList"},
 		}
-		CurdOut("Optional tracker sync action:")
+		Out("Optional tracker sync action:")
 		syncSelection, syncErr := DynamicSelect(syncOptions)
 		if syncErr == nil {
 			switch syncSelection.Key {
@@ -1633,13 +1633,13 @@ func ChangeTracker(config *CurdConfig, user *User) {
 				err = ReplaceAniListWithMyAnimeList(config)
 			}
 			if err != nil {
-				ExitCurd(err)
+				Exit(err)
 			}
 		}
 	}
 
 	if err := RefreshUserAnimeList(config, user); err != nil {
-		ExitCurd(err)
+		Exit(err)
 	}
-	CurdOut(fmt.Sprintf("Tracker changed to %s.", selected.Label))
+	Out(fmt.Sprintf("Tracker changed to %s.", selected.Label))
 }

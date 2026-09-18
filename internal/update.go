@@ -23,7 +23,7 @@ import (
 
 const (
 	// DefaultUpdateRepo is the fork every update path pulls from: the
-	// background check, the next-launch prompt, and `curd -u` alike.
+	// background check, the next-launch prompt, and `otakase -u` alike.
 	DefaultUpdateRepo          = "TheXykril/otakase"
 	updatePendingFileName      = "update_pending.json"
 	backgroundUpdateIdleDelay  = 4 * time.Second
@@ -92,7 +92,7 @@ func saveUpdatePendingState(storagePath string, state updatePendingState) error 
 	return os.WriteFile(path, data, 0600)
 }
 
-func curdReleaseBinaryName() (string, error) {
+func releaseBinaryName() (string, error) {
 	switch runtime.GOOS {
 	case "windows":
 		if runtime.GOARCH == "arm64" {
@@ -187,7 +187,7 @@ func isUpdateNewer(latest, current string) bool {
 
 // StartBackgroundUpdateCheck runs after a short idle delay so startup is not blocked.
 // Results are written to StoragePath/update_pending.json for the next launch.
-func StartBackgroundUpdateCheck(config *CurdConfig, currentVersion string) {
+func StartBackgroundUpdateCheck(config *Config, currentVersion string) {
 	if config == nil || !config.CheckUpdates {
 		return
 	}
@@ -201,7 +201,7 @@ func StartBackgroundUpdateCheck(config *CurdConfig, currentVersion string) {
 	})
 }
 
-func checkForUpdateInBackground(config *CurdConfig, currentVersion string) error {
+func checkForUpdateInBackground(config *Config, currentVersion string) error {
 	storagePath := config.StoragePath
 	state := loadUpdatePendingState(storagePath)
 
@@ -228,7 +228,7 @@ func checkForUpdateInBackground(config *CurdConfig, currentVersion string) error
 	state.ReleaseNotes = truncateReleaseNotes(release.Body)
 	state.HTMLURL = release.HTMLURL
 
-	if asset, assetErr := curdReleaseBinaryName(); assetErr == nil {
+	if asset, assetErr := releaseBinaryName(); assetErr == nil {
 		state.AssetName = asset
 	}
 
@@ -253,7 +253,7 @@ func checkForUpdateInBackground(config *CurdConfig, currentVersion string) error
 	return saveUpdatePendingState(storagePath, state)
 }
 
-func pendingUpdateShouldPrompt(config *CurdConfig, currentVersion string, state updatePendingState) bool {
+func pendingUpdateShouldPrompt(config *Config, currentVersion string, state updatePendingState) bool {
 	if config == nil || !config.CheckUpdates {
 		return false
 	}
@@ -501,22 +501,22 @@ func refreshUpdateStateFromGitHub(state *updatePendingState) {
 	state.ReleaseNotes = strings.TrimSpace(release.Body)
 	state.HTMLURL = release.HTMLURL
 	state.CheckedAt = time.Now().UTC().Format(time.RFC3339)
-	if asset, assetErr := curdReleaseBinaryName(); assetErr == nil {
+	if asset, assetErr := releaseBinaryName(); assetErr == nil {
 		state.AssetName = asset
 	}
 	state.Available = true
 }
 
-// updateUserMessage prints a single status line. With Rofi mode, CurdOut becomes
+// updateUserMessage prints a single status line. With Rofi mode, Out becomes
 // notify-send — so we only send one short notification (or log) for status.
-func updateUserMessage(config *CurdConfig, msg string) {
+func updateUserMessage(config *Config, msg string) {
 	msg = strings.TrimSpace(msg)
 	if msg == "" {
 		return
 	}
 	Log(msg)
 	if config != nil && config.RofiSelection {
-		// One short desktop notification, not a barrage of CurdOut lines.
+		// One short desktop notification, not a barrage of Out lines.
 		_ = exec.Command("notify-send", "-a", DisplayName,
 			"-h", "string:x-canonical-private-synchronous:"+AppName+"-update",
 			DisplayName, msg).Run()
@@ -527,7 +527,7 @@ func updateUserMessage(config *CurdConfig, msg string) {
 
 // HandlePendingUpdatePrompt shows a previously detected update (from idle check).
 // Returns true if the caller should exit (user updated or chose to quit the session).
-func HandlePendingUpdatePrompt(config *CurdConfig, currentVersion string) bool {
+func HandlePendingUpdatePrompt(config *Config, currentVersion string) bool {
 	if config == nil || !config.CheckUpdates {
 		return false
 	}
@@ -566,9 +566,9 @@ func HandlePendingUpdatePrompt(config *CurdConfig, currentVersion string) bool {
 		return false
 	}
 	selected = NormalizeSelectionKey(selected)
-	// Quit from the pinned menu must exit the whole program (not fall through to curd).
+	// Quit from the pinned menu must exit the whole program (not fall through to otakase).
 	if SelectionMeansQuit(selected) {
-		ExitCurd(nil)
+		Exit(nil)
 		return true
 	}
 	// Back / empty = dismiss update prompt and continue the session.
@@ -579,7 +579,7 @@ func HandlePendingUpdatePrompt(config *CurdConfig, currentVersion string) bool {
 	switch selected.Key {
 	case "update":
 		updateUserMessage(config, "Downloading and installing update…")
-		if err := UpdateCurd(DefaultUpdateRepo, AppName); err != nil {
+		if err := SelfUpdate(DefaultUpdateRepo, AppName); err != nil {
 			updateUserMessage(config, fmt.Sprintf("Update failed: %v", err))
 			Log(fmt.Sprintf("Update failed: %v", err))
 			return false
@@ -680,7 +680,7 @@ func stdinIsTerminal() bool {
 // preferGUIPasswordPrompt decides whether to open a desktop password dialog.
 //
 //   - Rofi/desktop mode → GUI first (zenity/yad/kdialog)
-//   - Plain CLI with a TTY (e.g. `curd -u` in a terminal) → terminal only
+//   - Plain CLI with a TTY (e.g. `otakase -u` in a terminal) → terminal only
 //   - No TTY but a display → GUI
 func preferGUIPasswordPrompt() bool {
 	rofi := false
@@ -780,7 +780,7 @@ func promptSudoPassword(prompt string) (string, error) {
 		}
 	}
 
-	// Terminal path (CLI `curd -u`, or GUI unavailable).
+	// Terminal path (CLI `otakase -u`, or GUI unavailable).
 	if !tty {
 		return "", fmt.Errorf("no terminal available for password entry; install zenity/yad/kdialog for a GUI prompt")
 	}

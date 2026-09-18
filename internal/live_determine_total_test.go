@@ -12,8 +12,8 @@ func TestLiveDetermineProviderTotalEpisodes(t *testing.T) {
 	if os.Getenv("CURD_LIVE_DETERMINE_TOTAL") == "" {
 		t.Skip("set CURD_LIVE_DETERMINE_TOTAL=1 to run live")
 	}
-	cfg := &CurdConfig{
-		StoragePath: os.ExpandEnv("$HOME/.local/share/curd"),
+	cfg := &Config{
+		StoragePath: os.ExpandEnv("$HOME/.local/share/otakase"),
 		SubOrDub:    "sub",
 		Provider:    "stacked",
 		TrackingRemote: "myanimelist",

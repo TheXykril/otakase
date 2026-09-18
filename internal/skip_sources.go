@@ -308,7 +308,7 @@ func timestampsToSkips(stamps []struct {
 // the stream has already paid for that request. AniSkip follows: it is keyless
 // and covers a great deal. Anime-Skip is last because it needs two requests and
 // a client id, and is therefore the one most often unavailable.
-func DefaultSkipSources(config *CurdConfig, provider any) []SkipSource {
+func DefaultSkipSources(config *Config, provider any) []SkipSource {
 	sources := []SkipSource{}
 	if ranger, ok := provider.(skipRangingProvider); ok && ranger != nil {
 		sources = append(sources, providerSkipSource{provider: ranger})
@@ -332,7 +332,7 @@ func DefaultSkipSources(config *CurdConfig, provider any) []SkipSource {
 // ApplySkipTimes resolves an episode's timings and hands them to the player.
 // It reports what happened rather than returning an error: skipping is a
 // convenience, and failing to find timings must never interrupt playback.
-func ApplySkipTimes(anime *Anime, episode int, config *CurdConfig, provider any) SkipResolution {
+func ApplySkipTimes(anime *Anime, episode int, config *Config, provider any) SkipResolution {
 	if anime == nil || episode <= 0 {
 		return SkipResolution{}
 	}

@@ -22,7 +22,7 @@ func FormatAnimeSearchLabel(title string, episodes int) string {
 	return title
 }
 
-func TrackerEpisodeHint(config *CurdConfig, entry *Entry) string {
+func TrackerEpisodeHint(config *Config, entry *Entry) string {
 	if entry == nil || entry.Media.Episodes <= 0 {
 		return ""
 	}
@@ -126,7 +126,7 @@ func ProviderSearchOptionsForDisplay(options []SelectionOption, entry *Entry) []
 	return display
 }
 
-func ManualProviderSearchEnabled(config *CurdConfig) bool {
+func ManualProviderSearchEnabled(config *Config) bool {
 	return config != nil && config.ManualProviderSearch
 }
 
@@ -159,7 +159,7 @@ func formatEpisodeCountHint(episodes int) string {
 	return "unknown episode count"
 }
 
-func ManualProviderSearchHint(config *CurdConfig, entry *Entry, query, subOrDub string) string {
+func ManualProviderSearchHint(config *Config, entry *Entry, query, subOrDub string) string {
 	title := strings.TrimSpace(query)
 	mediaType := ""
 	episodes := 0
@@ -187,13 +187,13 @@ func ManualProviderSearchHint(config *CurdConfig, entry *Entry, query, subOrDub 
 	return strings.Join(parts, " · ") + " — select the matching provider entry below."
 }
 
-func promptProviderSearchSelectionWithHint(config *CurdConfig, options []SelectionOption, entry *Entry, hint string) (SelectionOption, error) {
+func promptProviderSearchSelectionWithHint(config *Config, options []SelectionOption, entry *Entry, hint string) (SelectionOption, error) {
 	if strings.TrimSpace(hint) != "" {
-		CurdOut(hint)
+		Out(hint)
 	}
 	return DynamicSelect(ProviderSearchOptionsForDisplay(options, entry))
 }
 
-func promptProviderSearchSelection(config *CurdConfig, options []SelectionOption, entry *Entry) (SelectionOption, error) {
+func promptProviderSearchSelection(config *Config, options []SelectionOption, entry *Entry) (SelectionOption, error) {
 	return promptProviderSearchSelectionWithHint(config, options, entry, TrackerEpisodeHint(config, entry))
 }

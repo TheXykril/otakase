@@ -16,7 +16,7 @@ import (
 // every row an undifferentiated wall of text, so the metadata is dimmed and the
 // titles are left to carry the list.
 //
-// Curd already passes -markup-rows, which also means labels are interpreted as
+// otakase already passes -markup-rows, which also means labels are interpreted as
 // pango markup: an unescaped "&" in a title breaks the row. Escaping happens
 // here, and parseRofiSelection unescapes on the way back.
 

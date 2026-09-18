@@ -19,7 +19,7 @@ func TestDownloadEpisodeLive(t *testing.T) {
 		t.Skip("ffmpeg is not installed")
 	}
 
-	config := CurdConfig{Provider: "stacked", SubOrDub: "sub", SubStyle: "soft"}
+	config := Config{Provider: "stacked", SubOrDub: "sub", SubStyle: "soft"}
 	previous := GetGlobalConfig()
 	SetGlobalConfig(&config)
 	t.Cleanup(func() { SetGlobalConfig(previous) })

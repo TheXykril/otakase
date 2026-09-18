@@ -72,7 +72,7 @@ func renderPrompt(section, question, hint string) string {
 // caller turned that error into quitting the program -- so pressing enter at a
 // question you had opened by accident closed everything. Backing out of a
 // question is the most ordinary thing to want, and it should cost nothing.
-func promptCancelable(config *CurdConfig, section, question, hint string) (value string, cancelled bool, err error) {
+func promptCancelable(config *Config, section, question, hint string) (value string, cancelled bool, err error) {
 	return promptCancelableWithDefault(config, section, question, hint, "")
 }
 
@@ -81,7 +81,7 @@ func promptCancelable(config *CurdConfig, section, question, hint string) (value
 //
 // A question that is really "change this" starts from what it would change, so
 // correcting one word costs one word rather than retyping the whole line.
-func promptCancelableWithDefault(config *CurdConfig, section, question, hint, initial string) (value string, cancelled bool, err error) {
+func promptCancelableWithDefault(config *Config, section, question, hint, initial string) (value string, cancelled bool, err error) {
 	if config != nil && config.RofiSelection {
 		// rofi has its own frame; the hint goes in the prompt where it is the
 		// only place it can be seen.
@@ -107,7 +107,7 @@ func promptCancelableWithDefault(config *CurdConfig, section, question, hint, in
 
 // promptEpisodeCancelable asks for an episode number, cancelling on an empty
 // answer and asking again on one that is not a number.
-func promptEpisodeCancelable(config *CurdConfig, section, question, hint string) (int, bool, error) {
+func promptEpisodeCancelable(config *Config, section, question, hint string) (int, bool, error) {
 	return episodeFromAnswers(func() (string, bool, error) {
 		return promptCancelable(config, section, question, hint)
 	})
@@ -117,7 +117,7 @@ func promptEpisodeCancelable(config *CurdConfig, section, question, hint string)
 //
 // Progress is counted from zero rather than one: "none watched yet" is a real
 // answer to it, and the only difference from asking for an episode number.
-func promptProgressCancelable(config *CurdConfig, section, question, hint string) (int, bool, error) {
+func promptProgressCancelable(config *Config, section, question, hint string) (int, bool, error) {
 	return numberFromAnswers(func(input string) (int, error) {
 		return parseNonNegativeIntInput(input, "progress")
 	}, func() (string, bool, error) {
@@ -156,6 +156,6 @@ func valueFromAnswers[T any](parse func(string) (T, error), ask func() (string, 
 		if parseErr == nil {
 			return value, false, nil
 		}
-		CurdOut(fmt.Sprintf("%v — try again, or press escape to go back.", parseErr))
+		Out(fmt.Sprintf("%v — try again, or press escape to go back.", parseErr))
 	}
 }

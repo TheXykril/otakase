@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 )
 
 const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -30,7 +30,7 @@ func fetchString(rawURL, referer string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resp, err := curdhost.HTTPClient().Do(req)
+	resp, err := providerhost.HTTPClient().Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -40,8 +40,8 @@ func fetchString(rawURL, referer string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !curdhost.HTTPStatusOK(resp.StatusCode) {
-		return "", curdhost.HTTPStatusError("anineko request", resp.StatusCode, body)
+	if !providerhost.HTTPStatusOK(resp.StatusCode) {
+		return "", providerhost.HTTPStatusError("anineko request", resp.StatusCode, body)
 	}
 	return string(body), nil
 }
@@ -51,7 +51,7 @@ func fetchBytes(rawURL, referer string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := curdhost.HTTPClient().Do(req)
+	resp, err := providerhost.HTTPClient().Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -61,8 +61,8 @@ func fetchBytes(rawURL, referer string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !curdhost.HTTPStatusOK(resp.StatusCode) {
-		return nil, curdhost.HTTPStatusError("anineko request", resp.StatusCode, body)
+	if !providerhost.HTTPStatusOK(resp.StatusCode) {
+		return nil, providerhost.HTTPStatusError("anineko request", resp.StatusCode, body)
 	}
 	return body, nil
 }

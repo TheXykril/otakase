@@ -28,6 +28,26 @@
   hosts with nothing to do with it; and a CDN special case pointed at
   `allanime.to`, which no longer exists.
 
+### Changed
+
+- **The code no longer calls itself curd.** `CurdConfig` is `Config`, `CurdOut`
+  is `Out`, `ExitCurd` is `Exit`, `SetupCurd`/`StartCurd`/`UpdateCurd` are
+  `Setup`/`StartPlayback`/`SelfUpdate`, `internal/curdhost` is
+  `internal/providerhost`, and `internal/curd.go` is `internal/otakase.go`. The
+  prefix was only ever stutter — the package already says which program this is
+  — so it is gone rather than swapped.
+
+  Two user-visible leftovers went with it: the startup line read "Curd is
+  starting", and the browser page shown while signing in to a tracker was
+  titled "Curd Authentication".
+
+  What still says curd does so deliberately, and must: the files inside your
+  storage directory (`curd_history.txt`, `curd_version`, `curd_id`), the
+  `CURD_MAL_*` variables, the marker identifying rofi themes written before the
+  rename, `curd` as an alias for the built-in palette, `replaces=curd` in the
+  packaging, and the migration that carries a curd install across — which is
+  about curd by definition.
+
 ### Fixed
 
 - **A provider name this build does not have no longer reads as enabled.**

@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 )
 
 // feedURL is Nyaa's RSS endpoint. Category 1_2 is "Anime - English-translated",
@@ -68,7 +68,7 @@ func fetchReleases(query string) ([]Release, error) {
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
 
-	resp, err := curdhost.HTTPClient().Do(req)
+	resp, err := providerhost.HTTPClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("nyaa: search request failed: %w", err)
 	}
@@ -78,8 +78,8 @@ func fetchReleases(query string) ([]Release, error) {
 	if err != nil {
 		return nil, fmt.Errorf("nyaa: read search response: %w", err)
 	}
-	if !curdhost.HTTPStatusOK(resp.StatusCode) {
-		return nil, curdhost.HTTPStatusError("nyaa search", resp.StatusCode, body)
+	if !providerhost.HTTPStatusOK(resp.StatusCode) {
+		return nil, providerhost.HTTPStatusError("nyaa search", resp.StatusCode, body)
 	}
 
 	releases, err := parseFeed(body)

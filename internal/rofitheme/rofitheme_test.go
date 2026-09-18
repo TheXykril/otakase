@@ -149,7 +149,7 @@ func TestRenderedThemesParseInRofi(t *testing.T) {
 	}
 }
 
-// The user may have hand-edited their .rasi files (or an older Curd downloaded
+// The user may have hand-edited their .rasi files (or an older otakase downloaded
 // them). Replacing those without a copy would silently destroy real work.
 func TestWriteAllBacksUpHandEditedThemes(t *testing.T) {
 	dir := t.TempDir()
@@ -214,7 +214,7 @@ func TestWriteAllBacksUpOnlyOnce(t *testing.T) {
 	}
 }
 
-// Curd's own generated files are refreshed silently -- they are not user work.
+// otakase's own generated files are refreshed silently -- they are not user work.
 func TestWriteAllDoesNotBackUpItsOwnOutput(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := WriteAllWithBackups(dir, theme.Builtin()); err != nil {
@@ -302,7 +302,7 @@ func TestSelectAnimeThemeRendersMessages(t *testing.T) {
 	}
 }
 
-// The rename must not look like the user hand-edited every theme. A file curd
+// The rename must not look like the user hand-edited every theme. A file otakase
 // wrote is still a file this package wrote, and backing the lot up on upgrade
 // would leave a .user-backup beside each one for no reason.
 func TestAThemeWrittenBeforeTheRenameIsStillOurs(t *testing.T) {

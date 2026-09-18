@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The failure this guards against: AniList hands Curd a long romaji title, anipub
+// The failure this guards against: AniList hands otakase a long romaji title, anipub
 // indexes the English release title, and the search reports "no results" for a show
 // the provider actually carries.
 func TestBuildSearchQueryVariantsFallsBackToEnglishTitle(t *testing.T) {
@@ -13,7 +13,7 @@ func TestBuildSearchQueryVariantsFallsBackToEnglishTitle(t *testing.T) {
 	english := "Rich Girl Caretaker: I'm Secretly the Caregiver of the Most Popular Girl in This Rich Kid School"
 
 	variants := buildSearchQueryVariants(
-		&CurdConfig{AnimeNameLanguage: "english"},
+		&Config{AnimeNameLanguage: "english"},
 		AnimeTitle{Romaji: romaji, English: english},
 		romaji,
 	)
@@ -36,7 +36,7 @@ func TestBuildSearchQueryVariantsFallsBackToEnglishTitle(t *testing.T) {
 
 func TestBuildSearchQueryVariantsHonorsRomajiPreference(t *testing.T) {
 	variants := buildSearchQueryVariants(
-		&CurdConfig{AnimeNameLanguage: "romaji"},
+		&Config{AnimeNameLanguage: "romaji"},
 		AnimeTitle{Romaji: "Shingeki no Kyojin", English: "Attack on Titan"},
 		"",
 	)
@@ -51,7 +51,7 @@ func TestBuildSearchQueryVariantsHonorsRomajiPreference(t *testing.T) {
 
 func TestBuildSearchQueryVariantsDropsParentheticalsAndSeasons(t *testing.T) {
 	variants := buildSearchQueryVariants(
-		&CurdConfig{},
+		&Config{},
 		AnimeTitle{English: "Some Show (TV) Season 2"},
 		"",
 	)
@@ -63,7 +63,7 @@ func TestBuildSearchQueryVariantsDropsParentheticalsAndSeasons(t *testing.T) {
 
 func TestBuildSearchQueryVariantsSplitsOnSubtitleSeparator(t *testing.T) {
 	variants := buildSearchQueryVariants(
-		&CurdConfig{},
+		&Config{},
 		AnimeTitle{English: "Rich Girl Caretaker: I'm Secretly the Caregiver"},
 		"",
 	)
@@ -75,7 +75,7 @@ func TestBuildSearchQueryVariantsSplitsOnSubtitleSeparator(t *testing.T) {
 
 func TestBuildSearchQueryVariantsDeduplicates(t *testing.T) {
 	variants := buildSearchQueryVariants(
-		&CurdConfig{},
+		&Config{},
 		AnimeTitle{Romaji: "One Piece", English: "One Piece"},
 		"one piece",
 	)

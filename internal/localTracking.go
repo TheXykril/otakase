@@ -14,7 +14,7 @@ import (
 func LocalAddAnime(databaseFile string, anilistID int, providerID string, watchingEpisode int, watchingTime int, animeDuration int, animeName string) {
 	file, err := os.OpenFile(databaseFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error opening file: %v", err))
+		Out(fmt.Sprintf("Error opening file: %v", err))
 		return
 	}
 	defer file.Close()
@@ -30,15 +30,15 @@ func LocalAddAnime(databaseFile string, anilistID int, providerID string, watchi
 		animeName,
 	})
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error writing to file: %v", err))
+		Out(fmt.Sprintf("Error writing to file: %v", err))
 		return
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		CurdOut(fmt.Sprintf("Error flushing file: %v", err))
+		Out(fmt.Sprintf("Error flushing file: %v", err))
 		return
 	}
-	CurdOut("Written to file")
+	Out("Written to file")
 }
 
 // normalizeLocalProviderID strips a provider qualifier from a stored id.
@@ -58,7 +58,7 @@ func LocalDeleteAnime(databaseFile string, anilistID int, providerID string) {
 	animeList := [][]string{}
 	file, err := os.Open(databaseFile)
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error opening file: %v", err))
+		Out(fmt.Sprintf("Error opening file: %v", err))
 		return
 	}
 	defer file.Close()
@@ -66,7 +66,7 @@ func LocalDeleteAnime(databaseFile string, anilistID int, providerID string) {
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error reading file: %v", err))
+		Out(fmt.Sprintf("Error reading file: %v", err))
 		return
 	}
 
@@ -74,7 +74,7 @@ func LocalDeleteAnime(databaseFile string, anilistID int, providerID string) {
 	for _, row := range records {
 		anime := parseAnimeRow(row)
 		if anime == nil {
-			CurdOut(fmt.Sprintf("Skipping invalid local history row: %v", row))
+			Out(fmt.Sprintf("Skipping invalid local history row: %v", row))
 			continue
 		}
 
@@ -88,7 +88,7 @@ func LocalDeleteAnime(databaseFile string, anilistID int, providerID string) {
 	// Write the filtered list back to the file
 	fileWrite, err := os.OpenFile(databaseFile, os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error opening file for writing: %v", err))
+		Out(fmt.Sprintf("Error opening file for writing: %v", err))
 		return
 	}
 	defer fileWrite.Close()
@@ -96,12 +96,12 @@ func LocalDeleteAnime(databaseFile string, anilistID int, providerID string) {
 	writer := csv.NewWriter(fileWrite)
 	err = writer.WriteAll(animeList)
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error writing to file: %v", err))
+		Out(fmt.Sprintf("Error writing to file: %v", err))
 		return
 	}
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		CurdOut(fmt.Sprintf("Error flushing file: %v", err))
+		Out(fmt.Sprintf("Error flushing file: %v", err))
 	}
 }
 
@@ -112,14 +112,14 @@ func LocalGetAllAnime(databaseFile string) []Anime {
 	// Ensure the directory exists
 	dir := filepath.Dir(databaseFile)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		CurdOut(fmt.Sprintf("Error creating directory: %v", err))
+		Out(fmt.Sprintf("Error creating directory: %v", err))
 		return animeList
 	}
 
 	// Open the file, create if it doesn't exist
 	file, err := os.OpenFile(databaseFile, os.O_RDONLY|os.O_CREATE, 0644)
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error opening or creating file: %v", err))
+		Out(fmt.Sprintf("Error opening or creating file: %v", err))
 		return animeList
 	}
 	defer file.Close()
@@ -127,7 +127,7 @@ func LocalGetAllAnime(databaseFile string) []Anime {
 	// If the file was just created, it will be empty, so return an empty list
 	fileInfo, err := file.Stat()
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error getting file info: %v", err))
+		Out(fmt.Sprintf("Error getting file info: %v", err))
 		return animeList
 	}
 	if fileInfo.Size() == 0 {
@@ -137,7 +137,7 @@ func LocalGetAllAnime(databaseFile string) []Anime {
 	reader := csv.NewReader(file)
 	records, err := reader.ReadAll()
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error reading file: %v", err))
+		Out(fmt.Sprintf("Error reading file: %v", err))
 		return animeList
 	}
 
@@ -154,7 +154,7 @@ func LocalGetAllAnime(databaseFile string) []Anime {
 // Function to parse a single row of anime data
 func parseAnimeRow(row []string) *Anime {
 	if len(row) < 5 {
-		CurdOut(fmt.Sprintf("Invalid row format: %v", row))
+		Out(fmt.Sprintf("Invalid row format: %v", row))
 		return nil
 	}
 
@@ -219,7 +219,7 @@ func parseLocalInt(value string) int {
 func parseRequiredLocalInt(value, field string, row []string) (int, bool) {
 	parsed, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil {
-		CurdOut(fmt.Sprintf("Invalid %s in local history row %v: %v", field, row, err))
+		Out(fmt.Sprintf("Invalid %s in local history row %v: %v", field, row, err))
 		return 0, false
 	}
 	return parsed, true
@@ -227,8 +227,8 @@ func parseRequiredLocalInt(value, field string, row []string) (int, bool) {
 
 // Function to get the anime name (English or Romaji) from an Anime struct
 func GetAnimeName(anime Anime) string {
-	userCurdConfig := GetGlobalConfig()
-	if anime.Title.English != "" && useEnglishAnimeNames(userCurdConfig) {
+	userConfig := GetGlobalConfig()
+	if anime.Title.English != "" && useEnglishAnimeNames(userConfig) {
 		return anime.Title.English
 	}
 	if anime.Title.Romaji != "" {
@@ -289,7 +289,7 @@ func LocalUpdateAnime(databaseFile string, anilistID int, providerID string, wat
 	// Write updated list back to file
 	file, err := os.Create(databaseFile)
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error creating file: %v", err))
+		Out(fmt.Sprintf("Error creating file: %v", err))
 		return err
 	}
 	defer file.Close()
@@ -308,14 +308,14 @@ func LocalUpdateAnime(databaseFile string, anilistID int, providerID string, wat
 			GetAnimeName(anime),
 		}
 		if err := writer.Write(record); err != nil {
-			CurdOut(fmt.Sprintf("Error writing record: %v", err))
+			Out(fmt.Sprintf("Error writing record: %v", err))
 			return err
 		}
 	}
 
 	writer.Flush()
 	if err := writer.Error(); err != nil {
-		CurdOut(fmt.Sprintf("Error flushing records: %v", err))
+		Out(fmt.Sprintf("Error flushing records: %v", err))
 		return err
 	}
 
@@ -412,7 +412,7 @@ func LocalRemapAnimeProvider(databaseFile string, anilistID int, providerName, p
 	return writer.Error()
 }
 
-func WatchUntracked(userCurdConfig *CurdConfig) {
+func WatchUntracked(userConfig *Config) {
 	var query string
 	var err error
 	var anime Anime
@@ -422,7 +422,7 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 	// pressing it by accident should be one more keypress, not the program
 	// closing.
 	for {
-		query, cancelled, inputErr := promptCancelable(userCurdConfig, "Untracked",
+		query, cancelled, inputErr := promptCancelable(userConfig, "Untracked",
 			"Search for an anime to watch without tracking it",
 			"enter to search · esc to go back")
 		if inputErr != nil {
@@ -433,10 +433,10 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 			return
 		}
 
-		providerID, providerName, back, searchErr := ResolveUntrackedProviderSearch(userCurdConfig, query)
+		providerID, providerName, back, searchErr := ResolveUntrackedProviderSearch(userConfig, query)
 		if searchErr != nil {
 			Log(fmt.Sprintf("Failed to search anime: %v", searchErr))
-			CurdOut(fmt.Sprintf("Could not search for %q: %v", query, searchErr))
+			Out(fmt.Sprintf("Could not search for %q: %v", query, searchErr))
 			continue
 		}
 		if back {
@@ -455,7 +455,7 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 		break
 	}
 
-	episodeNumber, cancelled, err := promptEpisodeCancelable(userCurdConfig, "Untracked",
+	episodeNumber, cancelled, err := promptEpisodeCancelable(userConfig, "Untracked",
 		fmt.Sprintf("Which episode of %s?", query),
 		"a number · esc to go back")
 	if err != nil {
@@ -481,26 +481,26 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 			anime.Ep.NextEpisode = NextEpisode{}
 		} else {
 			// Preferred-first resolve; diagnosed recovery only after that fails.
-			resolvedLink, ok := resolveEpisodeLinksWithRecovery(userCurdConfig, &anime, nil)
+			resolvedLink, ok := resolveEpisodeLinksWithRecovery(userConfig, &anime, nil)
 			if !ok {
-				ExitCurd(nil)
+				Exit(nil)
 			}
 			anime.Ep.Links = resolvedLink.Links
 			applyStreamPlaybackHints(&anime, anime.Ep.Links, resolvedLink.LinkHints)
 		}
 
 		if len(anime.Ep.Links) == 0 {
-			ExitCurd(fmt.Errorf("No episode links found"))
+			Exit(fmt.Errorf("No episode links found"))
 		}
 
 		title := fmt.Sprintf("%s - Episode %d", GetAnimeName(anime), anime.Ep.Number)
-		CurdOut(title)
+		Out(title)
 
 		// Prefetch next episode in preferred mode only (no audio-mode prompts in background).
-		go prefetchNextUntrackedEpisode(userCurdConfig, &anime)
+		go prefetchNextUntrackedEpisode(userConfig, &anime)
 
 		// Start with provider fallback when playback never begins (shared with tracked path).
-		mpvSocketPath := StartVideoWithProviderFallback(userCurdConfig, &anime, title)
+		mpvSocketPath := StartVideoWithProviderFallback(userConfig, &anime, title)
 		anime.Ep.Player.SocketPath = mpvSocketPath
 		anime.Ep.Started = false
 		anime.Ep.IsCompleted = false
@@ -512,8 +512,8 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 
 		// Android intent path: external player, no IPC monitoring.
 		if mpvSocketPath == "android-intent" {
-			CurdOut(fmt.Sprintf("\nOpened external player for Episode %d.", anime.Ep.Number))
-			CurdOut("Press Enter when you have finished watching...")
+			Out(fmt.Sprintf("\nOpened external player for Episode %d.", anime.Ep.Number))
+			Out("Press Enter when you have finished watching...")
 			if !AwaitEnter() {
 				Log("stdin ended while waiting for the external player; stopping")
 				return
@@ -558,7 +558,7 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 						anime.Ep.Player.SocketPath,
 						anime.Ep.Started,
 						percentageWatched,
-						userCurdConfig.PercentageToMarkComplete,
+						userConfig.PercentageToMarkComplete,
 					)
 					Log(fmt.Sprintf("untracked playback loss: pct=%.1f action=%d", percentageWatched, action))
 					switch action {
@@ -574,19 +574,19 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 						goto nextUntrackedEpisode
 					case PlaybackLossExit:
 						Log("Episode is not completed, exiting")
-						ExitCurd(nil)
+						Exit(nil)
 					}
 				} else if isMPVConnectionGoneError(err) {
 					// Should be rare after StartVideoWithProviderFallback, but exit cleanly.
 					Log("MPV exited before untracked playback was marked started")
-					ExitCurd(nil)
+					Exit(nil)
 				}
 			}
 
 			if timePos != nil {
 				if !anime.Ep.Started {
 					anime.Ep.Started = true
-					if userCurdConfig.SaveMpvSpeed && anime.Ep.Player.Speed > 0 {
+					if userConfig.SaveMpvSpeed && anime.Ep.Player.Speed > 0 {
 						speedCmd := []interface{}{"set_property", "speed", anime.Ep.Player.Speed}
 						if _, speedErr := MPVSendCommand(anime.Ep.Player.SocketPath, speedCmd); speedErr != nil {
 							Log("Error setting playback speed: " + speedErr.Error())
@@ -610,14 +610,14 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 				anime.Ep.Player.PlaybackTime = int(animePosition + 0.5)
 
 				// Skip OP/ED when skip times are known (non-tracking; needs MalId for AniSkip).
-				if userCurdConfig.SkipOp {
+				if userConfig.SkipOp {
 					if anime.Ep.Player.PlaybackTime > anime.Ep.SkipTimes.Op.Start &&
 						anime.Ep.Player.PlaybackTime < anime.Ep.SkipTimes.Op.Start+2 &&
 						anime.Ep.SkipTimes.Op.Start != anime.Ep.SkipTimes.Op.End {
 						SeekMPV(anime.Ep.Player.SocketPath, anime.Ep.SkipTimes.Op.End)
 					}
 				}
-				if userCurdConfig.SkipEd {
+				if userConfig.SkipEd {
 					if anime.Ep.Player.PlaybackTime > anime.Ep.SkipTimes.Ed.Start &&
 						anime.Ep.Player.PlaybackTime < anime.Ep.SkipTimes.Ed.Start+2 &&
 						anime.Ep.SkipTimes.Ed.Start != anime.Ep.SkipTimes.Ed.End {
@@ -638,15 +638,15 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 
 // prefetchNextUntrackedEpisode resolves the next episode in preferred SubOrDub only
 // (no audio-mode prompts) so the next loop iteration can start faster.
-func prefetchNextUntrackedEpisode(userCurdConfig *CurdConfig, anime *Anime) {
-	if userCurdConfig == nil || anime == nil {
+func prefetchNextUntrackedEpisode(userConfig *Config, anime *Anime) {
+	if userConfig == nil || anime == nil {
 		return
 	}
 	nextEpNum := anime.Ep.Number + 1
 	nextEpisode := *anime
 	nextEpisode.ProviderId = anime.ProviderId
 	nextEpisode.ProviderName = anime.ProviderName
-	nextResult, err := ResolveEpisodeURL(*userCurdConfig, &nextEpisode, nextEpNum)
+	nextResult, err := ResolveEpisodeURL(*userConfig, &nextEpisode, nextEpNum)
 	if err != nil {
 		Log(fmt.Sprintf("Error getting next untracked episode link for ep %d: %v", nextEpNum, err))
 		return

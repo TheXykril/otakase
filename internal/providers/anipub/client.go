@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 )
 
 const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -37,7 +37,7 @@ func fetchJSON(rawURL, referer string, dest any) error {
 	}
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := curdhost.HTTPClient().Do(req)
+	resp, err := providerhost.HTTPClient().Do(req)
 	if err != nil {
 		return err
 	}
@@ -47,8 +47,8 @@ func fetchJSON(rawURL, referer string, dest any) error {
 	if err != nil {
 		return err
 	}
-	if !curdhost.HTTPStatusOK(resp.StatusCode) {
-		return curdhost.HTTPStatusError("anipub request", resp.StatusCode, raw)
+	if !providerhost.HTTPStatusOK(resp.StatusCode) {
+		return providerhost.HTTPStatusError("anipub request", resp.StatusCode, raw)
 	}
 	if dest == nil {
 		return nil
@@ -64,7 +64,7 @@ func fetchString(rawURL, referer string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resp, err := curdhost.HTTPClient().Do(req)
+	resp, err := providerhost.HTTPClient().Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -74,8 +74,8 @@ func fetchString(rawURL, referer string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !curdhost.HTTPStatusOK(resp.StatusCode) {
-		return "", curdhost.HTTPStatusError("anipub request", resp.StatusCode, body)
+	if !providerhost.HTTPStatusOK(resp.StatusCode) {
+		return "", providerhost.HTTPStatusError("anipub request", resp.StatusCode, body)
 	}
 	return string(body), nil
 }

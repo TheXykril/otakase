@@ -10,7 +10,7 @@ This document explains the intent of the design, how to add a provider, how user
 
 ### Goals
 
-1. **Adding a provider should be mechanical** — new package, implement three methods, register in `init()`, add one import line. No edits to central maps, name switches, or `curd.go` provider-specific branches.
+1. **Adding a provider should be mechanical** — new package, implement three methods, register in `init()`, add one import line. No edits to central maps, name switches, or `otakase.go` provider-specific branches.
 2. **Disabling a broken provider should not require a release** — users can turn providers off in `otakase.conf` without rebuilding.
 3. **Keep one binary** — providers ship inside the otakase repo (or as Go packages imported at build time). We are not using runtime plugin binaries or `.so` loading.
 4. **Host owns orchestration** — ordered fallback, sub/dub prompts, AniList → provider matching, and mpv IPC stay in `internal/`. Providers return data; they do not drive the watch loop.
@@ -25,10 +25,10 @@ This document explains the intent of the design, how to add a provider, how user
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  internal/ (host)                                      │
-│  SetupCurd · provider stack · mpv · tracking · config   │
+│  internal/ (host)                                       │
+│  Setup · provider stack · mpv · tracking · config        │
 │       │ uses providers.New() + adapter                   │
-│       │ wires curdhost.* hooks for HTTP, log, storage    │
+│       │ wires providerhost.* hooks for HTTP, log, storage │
 └───────┼─────────────────────────────────────────────────┘
         │
         ▼
@@ -41,7 +41,7 @@ This document explains the intent of the design, how to add a provider, how user
 └─────────────────────────────────────────────────────────┘
 ```
 
-Providers **must not** import `internal` (that would create an import cycle). They use `curdhost` for shared services and `providers` for types and registration.
+Providers **must not** import `internal` (that would create an import cycle). They use `providerhost` for shared services and `providers` for types and registration.
 
 ---
 
@@ -186,37 +186,37 @@ import (
 
 `internal` already imports `loadproviders` from `provider_bridge.go`, so registration runs on startup.
 
-### 5. Use `curdhost` for host services
+### 5. Use `providerhost` for host services
 
-Providers must not call `internal` helpers directly. Use hooks in `internal/curdhost/host.go`:
+Providers must not call `internal` helpers directly. Use hooks in `internal/providerhost/host.go`:
 
 | Hook | Use |
 |------|-----|
-| `curdhost.HTTPClient()` | Shared cookie jar HTTP client |
-| `curdhost.Log(string)` | Debug log (`debug.log` in storage path) |
-| `curdhost.Out(string)` | User-visible terminal message |
-| `curdhost.StoragePath()` | `~/.local/share/otakase` (or configured path) |
-| `curdhost.AnimeNameLanguage()` | `"english"` or `"romaji"` for search result labels |
-| `curdhost.HTTPStatusOK` / `HTTPStatusError` | Consistent HTTP error formatting |
+| `providerhost.HTTPClient()` | Shared cookie jar HTTP client |
+| `providerhost.Log(string)` | Debug log (`debug.log` in storage path) |
+| `providerhost.Out(string)` | User-visible terminal message |
+| `providerhost.StoragePath()` | `~/.local/share/otakase` (or configured path) |
+| `providerhost.AnimeNameLanguage()` | `"english"` or `"romaji"` for search result labels |
+| `providerhost.HTTPStatusOK` / `HTTPStatusError` | Consistent HTTP error formatting |
 
 Example:
 
 ```go
-resp, err := curdhost.HTTPClient().Do(req)
+resp, err := providerhost.HTTPClient().Do(req)
 if err != nil {
     return nil, err
 }
 body, _ := io.ReadAll(resp.Body)
 resp.Body.Close()
-if !curdhost.HTTPStatusOK(resp.StatusCode) {
-    return nil, curdhost.HTTPStatusError("yoursite search", resp.StatusCode, body)
+if !providerhost.HTTPStatusOK(resp.StatusCode) {
+    return nil, providerhost.HTTPStatusError("yoursite search", resp.StatusCode, body)
 }
 ```
 
 ### 6. Tests
 
 - Unit tests live in the provider package (`httptest` transport, no live site).
-- Use `curdhost` hooks in test setup (see `anineko/provider_test.go`).
+- Use `providerhost` hooks in test setup (see `anineko/provider_test.go`).
 - Host-level stack tests use `providers.SetFactoryForTest` via `withProviderFactories` in `provider_stack_test.go`.
 - Live tests: gate behind env vars (e.g. `CURD_LIVE_ALLANIME_TEST=1`).
 
@@ -251,7 +251,7 @@ To ship a provider that is **off by default** but opt-in capable, set `DefaultDi
 
 ## When a provider needs something new
 
-Follow this order — prefer extending the contract over special-casing in `curd.go`.
+Follow this order — prefer extending the contract over special-casing in `otakase.go`.
 
 ### A. Needs fit an optional interface
 
@@ -269,13 +269,13 @@ Examples: capability flags (`RequiresBrowser: true`), max quality, consent text.
 
 1. Add the field to `providers.Meta`.
 2. Teach the host to read it via `providers.MetaFor(name)` (config UI, fallback prompts, doctor command).
-3. Do **not** hardcode the provider name in `curd.go`.
+3. Do **not** hardcode the provider name in `otakase.go`.
 
-### C. Needs a new host hook (in `curdhost`)
+### C. Needs a new host hook (in `providerhost`)
 
 Examples: headless browser factory, shared rate limiter, proxy setting.
 
-1. Add a function variable to `internal/curdhost/host.go`.
+1. Add a function variable to `internal/providerhost/host.go`.
 2. Wire it in `internal/provider_bridge.go` `init()` from existing `internal` infrastructure.
 3. Document it in this file.
 4. Use it only from provider packages that need it.
@@ -294,7 +294,7 @@ If every provider needs a new playback preference (e.g. subtitle language on res
 
 Prefer putting provider-specific match data in `SelectionOption.ExtraData` and scoring in the host (see `scoreProviderSearchOption` in `provider.go`).
 
-If matching is truly provider-specific and complex, implement `IDResolver` or export small helpers from your provider package (as `anipub` does for its MegaPlay ids) and call them from the host through interfaces — **never** `if providerName == "yoursite"` in `curd.go`.
+If matching is truly provider-specific and complex, implement `IDResolver` or export small helpers from your provider package (as `anipub` does for its MegaPlay ids) and call them from the host through interfaces — **never** `if providerName == "yoursite"` in `otakase.go`.
 
 ### F. Needs runtime install without rebuild
 
@@ -312,12 +312,12 @@ Document the decision in a short ADR before building. The compile-time registry 
 - [ ] Package under `internal/providers/<name>/`
 - [ ] `register.go` with `providers.Register` and complete `Meta`
 - [ ] Blank import added in `internal/loadproviders/load.go`
-- [ ] Uses `curdhost` only (no `internal` import)
+- [ ] Uses `providerhost` only (no `internal` import)
 - [ ] `provider_test.go` with HTTP mocks
 - [ ] Episode numbers compatible with AniList 1-based progress
 - [ ] Stream URLs return formats mpv can play (m3u8, mp4, etc.)
 - [ ] `Referrer` set correctly if the CDN checks Referer
-- [ ] No provider-specific branches added to `curd.go`
+- [ ] No provider-specific branches added to `otakase.go`
 - [ ] README or this doc updated if new config keys or hooks were added
 
 ---
@@ -351,10 +351,10 @@ Key host files:
 Otakase is a single-session CLI binary. Compile-time modules give fast startup, simple packaging (AUR, releases), and easy debugging. Config-based disable covers “site is broken right now” without a plugin marketplace.
 
 **Can providers live in another repo?**  
-Yes, as a Go module that imports `github.com/thexykril/otakase/internal/providers` and `curdhost`, calls `Register` in `init()`, and is blank-imported from a fork or custom `loadproviders` package. Same binary model, different import path.
+Yes, as a Go module that imports `github.com/thexykril/otakase/internal/providers` and `providerhost`, calls `Register` in `init()`, and is blank-imported from a fork or custom `loadproviders` package. Same binary model, different import path.
 
 **What if episode URL resolution is slow?**  
-That is expected for some sites. Do heavy work inside the provider (parallel HTTP, caching cookies on disk under `curdhost.StoragePath()`). The host already prefetches the next episode in a goroutine during playback.
+That is expected for some sites. Do heavy work inside the provider (parallel HTTP, caching cookies on disk under `providerhost.StoragePath()`). The host already prefetches the next episode in a goroutine during playback.
 
 **Who owns breaking site changes?**  
 The provider package. Fix the provider, release otakase. Users can disable a broken provider with `DisabledProviders` until a fix ships.

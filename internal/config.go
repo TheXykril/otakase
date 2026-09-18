@@ -38,8 +38,8 @@ type AnilistToken struct {
 	ExpiresAt    time.Time `json:"expires_at"`
 }
 
-// CurdConfig struct with field names that match the config keys
-type CurdConfig struct {
+// Config struct with field names that match the config keys
+type Config struct {
 	Player                   string   `config:"Player"`
 	MpvArgs                  []string `config:"MpvArgs"`
 	MpvPlaybackStartTimeout  int      `config:"MpvPlaybackStartTimeout"`
@@ -96,7 +96,7 @@ const (
 	maxMpvPlaybackStartTimeout     = 600
 )
 
-func MpvPlaybackStartTimeoutDuration(config *CurdConfig) time.Duration {
+func MpvPlaybackStartTimeoutDuration(config *Config) time.Duration {
 	seconds := DefaultMpvPlaybackStartTimeout
 	if config != nil && config.MpvPlaybackStartTimeout > 0 {
 		seconds = config.MpvPlaybackStartTimeout
@@ -127,7 +127,7 @@ func defaultConfigMap() map[string]string {
 		"PercentageToMarkComplete": "85",
 		"NextEpisodePrompt":        "false",
 		// A show that exists only in the other language should play, not stop to
-		// ask a question with one useful answer. Curd still says which it used.
+		// ask a question with one useful answer. otakase still says which it used.
 		"AutoAudioFallback":          "true",
 		"SkipOp":                     "true",
 		"SkipEd":                     "true",
@@ -173,7 +173,7 @@ func defaultConfigMap() map[string]string {
 // little is lost by landing inside one -- and rofi has neither of those, where
 // the menu is still its only route to the other lists and to the actions.
 // Passing -current asks for this run specifically, and is honoured either way.
-func SkipCategoryMenu(config *CurdConfig) bool {
+func SkipCategoryMenu(config *Config) bool {
 	if config == nil {
 		config = globalConfig
 	}
@@ -186,7 +186,7 @@ func SkipCategoryMenu(config *CurdConfig) bool {
 	return config.CurrentCategory && !config.RofiSelection
 }
 
-func VimKeysEnabled(config *CurdConfig) bool {
+func VimKeysEnabled(config *Config) bool {
 	if config != nil {
 		return config.VimKeys
 	}
@@ -196,17 +196,17 @@ func VimKeysEnabled(config *CurdConfig) bool {
 	return false
 }
 
-var globalConfig *CurdConfig
+var globalConfig *Config
 
-func SetGlobalConfig(config *CurdConfig) {
+func SetGlobalConfig(config *Config) {
 	globalConfig = config
 }
 
-func GetGlobalConfig() *CurdConfig {
+func GetGlobalConfig() *Config {
 	return globalConfig
 }
 
-func useEnglishAnimeNames(config *CurdConfig) bool {
+func useEnglishAnimeNames(config *Config) bool {
 	return config == nil || strings.EqualFold(strings.TrimSpace(config.AnimeNameLanguage), "english")
 }
 
@@ -267,8 +267,8 @@ func persistSubStylePreference(style string) error {
 	return SaveConfigToFile(GlobalConfigPath, configMap)
 }
 
-// LoadConfig reads or creates the config file, adds missing fields, and returns the populated CurdConfig struct
-func LoadConfig(configPath string) (CurdConfig, error) {
+// LoadConfig reads or creates the config file, adds missing fields, and returns the populated Config struct
+func LoadConfig(configPath string) (Config, error) {
 	configPath = os.ExpandEnv(configPath) // Substitute environment variables like $HOME
 	GlobalConfigPath = configPath
 	createdConfig := false
@@ -276,9 +276,9 @@ func LoadConfig(configPath string) (CurdConfig, error) {
 	// Check if config file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		// Create the config file with default values if it doesn't exist
-		CurdOut("Config file not found. Creating default config...")
+		Out("Config file not found. Creating default config...")
 		if err := createDefaultConfig(configPath); err != nil {
-			return CurdConfig{}, fmt.Errorf("error creating default config file: %v", err)
+			return Config{}, fmt.Errorf("error creating default config file: %v", err)
 		}
 		createdConfig = true
 	}
@@ -286,10 +286,10 @@ func LoadConfig(configPath string) (CurdConfig, error) {
 	// Load the config from file
 	configMap, err := LoadConfigFromFile(configPath)
 	if err != nil {
-		return CurdConfig{}, fmt.Errorf("error loading config file: %v", err)
+		return Config{}, fmt.Errorf("error loading config file: %v", err)
 	}
 
-	// Settings curd does not recognise are kept on disk but never applied, so a
+	// Settings otakase does not recognise are kept on disk but never applied, so a
 	// typo such as SkipOP=true would otherwise fail in complete silence.
 	WarnAboutUnknownConfigKeys(configMap)
 
@@ -347,11 +347,11 @@ func LoadConfig(configPath string) (CurdConfig, error) {
 	// Persist legacy tracking / provider-token normalize (rewrite only those cases).
 	if addMissing && updated {
 		if err := SaveConfigToFile(configPath, fileMap); err != nil {
-			return CurdConfig{}, fmt.Errorf("error saving updated config file: %v", err)
+			return Config{}, fmt.Errorf("error saving updated config file: %v", err)
 		}
 	}
 
-	// Populate the CurdConfig struct from the complete (in-memory) work map
+	// Populate the Config struct from the complete (in-memory) work map
 	config := PopulateConfig(workMap)
 	normalizeTrackingConfig(&config)
 
@@ -419,7 +419,7 @@ func authenticateWithBrowser(tokenPath string) (string, error) {
 			html := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
-    <title>Curd Authentication</title>
+    <title>Otakase Authentication</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 50px; text-align: center; background: #1a1a1a; color: white; }
         .error { color: #f44336; font-size: 18px; margin-bottom: 20px; }
@@ -440,7 +440,7 @@ func authenticateWithBrowser(tokenPath string) (string, error) {
 			html := `<!DOCTYPE html>
 <html>
 <head>
-    <title>Curd Authentication</title>
+    <title>Otakase Authentication</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 50px; text-align: center; background: #1a1a1a; color: white; }
         .error { color: #f44336; font-size: 18px; margin-bottom: 20px; }
@@ -502,7 +502,7 @@ func authenticateWithBrowser(tokenPath string) (string, error) {
 		html := `<!DOCTYPE html>
 <html>
 <head>
-    <title>Curd Authentication</title>
+    <title>Otakase Authentication</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 50px; text-align: center; background: #1a1a1a; color: white; }
         .loading { color: #2196F3; font-size: 18px; margin-bottom: 20px; }
@@ -629,7 +629,7 @@ func GetTokenFromFile(tokenPath string) (string, error) {
 	return plainToken, nil
 }
 
-func ChangeToken(config *CurdConfig, user *User) {
+func ChangeToken(config *Config, user *User) {
 	var err error
 	tokenPath := filepath.Join(os.ExpandEnv(config.StoragePath), "anilist_token.json")
 
@@ -656,7 +656,7 @@ func ChangeToken(config *CurdConfig, user *User) {
 			Log("Failed to read the pasted token: " + inputErr.Error())
 		}
 		if cancelled || pasted == "" {
-			ExitCurd(fmt.Errorf("no token provided"))
+			Exit(fmt.Errorf("no token provided"))
 		}
 		user.Token = pasted
 
@@ -669,12 +669,12 @@ func ChangeToken(config *CurdConfig, user *User) {
 		}
 
 		if err := saveToken(tokenPath, token); err != nil {
-			ExitCurd(fmt.Errorf("failed to save token: %w", err))
+			Exit(fmt.Errorf("failed to save token: %w", err))
 		}
 	}
 
 	if user.Token == "" {
-		ExitCurd(fmt.Errorf("no token provided"))
+		Exit(fmt.Errorf("no token provided"))
 	}
 
 	fmt.Println("Token saved successfully!")
@@ -736,9 +736,9 @@ func SaveConfigToFile(path string, configMap map[string]string) error {
 	return writeFileAtomic(path, buf.Bytes(), 0o644)
 }
 
-// PopulateConfig populates the CurdConfig struct from a map
-func PopulateConfig(configMap map[string]string) CurdConfig {
-	config := CurdConfig{}
+// PopulateConfig populates the Config struct from a map
+func PopulateConfig(configMap map[string]string) Config {
+	config := Config{}
 	configValue := reflect.ValueOf(&config).Elem()
 	defaults := defaultConfigMap()
 
@@ -808,7 +808,7 @@ func normalizeRemoteTracker(value string) string {
 	}
 }
 
-func normalizeTrackingConfig(config *CurdConfig) {
+func normalizeTrackingConfig(config *Config) {
 	if config == nil {
 		return
 	}
@@ -823,7 +823,7 @@ func normalizeTrackingConfig(config *CurdConfig) {
 	config.TrackingLocal = true
 }
 
-func getOrderedCategories(userCurdConfig *CurdConfig) []SelectionOption {
+func getOrderedCategories(userConfig *Config) []SelectionOption {
 	// Define the default categories and all available labels
 	defaultOrder := []string{"CURRENT", "ALL", "UNTRACKED", "UPDATE", "REMAP_PROVIDER", "CONTINUE_LAST", "TRACKER", "PROVIDER"}
 	availableLabels := map[string]string{
@@ -847,11 +847,11 @@ func getOrderedCategories(userCurdConfig *CurdConfig) []SelectionOption {
 	seen := make(map[string]bool)
 
 	// If no menu order specified, use default order
-	if userCurdConfig.MenuOrder == "" {
+	if userConfig.MenuOrder == "" {
 		finalOrder = defaultOrder
 	} else {
 		// Only show items explicitly specified by user
-		menuItems := strings.Split(userCurdConfig.MenuOrder, ",")
+		menuItems := strings.Split(userConfig.MenuOrder, ",")
 		for _, key := range menuItems {
 			key = strings.TrimSpace(key)
 			if _, exists := availableLabels[key]; exists && !seen[key] {
@@ -867,7 +867,7 @@ func getOrderedCategories(userCurdConfig *CurdConfig) []SelectionOption {
 	}
 	orderedCategories := make([]SelectionOption, 0, len(finalOrder))
 	for _, key := range finalOrder {
-		if !trackingCategoryEnabled(userCurdConfig, key) {
+		if !trackingCategoryEnabled(userConfig, key) {
 			continue
 		}
 		orderedCategories = append(orderedCategories, SelectionOption{

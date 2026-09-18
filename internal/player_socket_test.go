@@ -53,7 +53,7 @@ func TestIsMPVConnectionGoneErrorTreatsMissingSocketAsGone(t *testing.T) {
 // deadline when MPV never produced a socket.
 func TestWaitForMPVPlaybackStartStopsWhenSocketMissing(t *testing.T) {
 	start := time.Now()
-	if WaitForMPVPlaybackStart("/tmp/curd-nonexistent-socket-for-test", 2*time.Second) {
+	if WaitForMPVPlaybackStart("/tmp/otakase-nonexistent-socket-for-test", 2*time.Second) {
 		t.Fatal("expected playback start to fail for a socket that does not exist")
 	}
 	if elapsed := time.Since(start); elapsed > time.Second {

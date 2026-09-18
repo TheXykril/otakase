@@ -23,7 +23,7 @@ func TestSortEntriesByRecency(t *testing.T) {
 		entryAt("Middle", now.Add(-24*time.Hour)),
 	}
 
-	sorted := sortEntriesByRecency(entries, &CurdConfig{})
+	sorted := sortEntriesByRecency(entries, &Config{})
 	want := []string{"Newest", "Middle", "Older"}
 	for i, w := range want {
 		if got := sorted[i].Media.Title.English; got != w {
@@ -47,7 +47,7 @@ func TestSortEntriesByRecencyFallsBackToTitle(t *testing.T) {
 		entryAt("Beta", zero),
 	}
 
-	sorted := sortEntriesByRecency(entries, &CurdConfig{})
+	sorted := sortEntriesByRecency(entries, &Config{})
 	want := []string{"alpha", "Beta", "Zeta"}
 	for i, w := range want {
 		if got := sorted[i].Media.Title.English; got != w {

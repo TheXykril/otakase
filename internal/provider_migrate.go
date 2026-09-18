@@ -104,7 +104,7 @@ func migrateProviderConfig(raw string) (string, bool) {
 	return raw, false
 }
 
-func readStoredCurdVersion(storagePath string) string {
+func readStoredVersion(storagePath string) string {
 	path := storageVersionFilePath(storagePath)
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -113,7 +113,7 @@ func readStoredCurdVersion(storagePath string) string {
 	return strings.TrimSpace(string(raw))
 }
 
-func writeStoredCurdVersion(storagePath, version string) error {
+func writeStoredVersion(storagePath, version string) error {
 	storagePath = strings.TrimSpace(storagePath)
 	version = strings.TrimSpace(version)
 	if storagePath == "" || version == "" {
@@ -125,13 +125,13 @@ func writeStoredCurdVersion(storagePath, version string) error {
 	return os.WriteFile(storageVersionFilePath(storagePath), []byte(version+"\n"), 0644)
 }
 
-// configOptionsIntroducedInVersion maps config keys to the first curd release that
+// configOptionsIntroducedInVersion maps config keys to the first otakase release that
 // introduced them. Only these keys are eligible for automatic append on upgrade.
 // Baseline options (Player, StoragePath, …) are NOT listed — they only appear via
 // createDefaultConfig for brand-new installs, never re-appended into sparse configs.
 //
 // When adding a new option:
-//  1. Add it to CurdConfig + defaultConfigMap()
+//  1. Add it to Config + defaultConfigMap()
 //  2. Register it here under the release version that ships it
 //  3. Bump VERSION.txt so MigrateOnVersionUpgrade runs for existing users
 func configOptionsIntroducedInVersion() map[string]string {
@@ -210,19 +210,19 @@ func appendConfigKeys(configPath string, configMap map[string]string, keys []str
 	return nil
 }
 
-// MigrateOnVersionUpgrade updates stored state and config when curd is upgraded.
+// MigrateOnVersionUpgrade updates stored state and config when otakase is upgraded.
 // On version change it appends only config options registered as introduced in
 // versions (storedVersion, appVersion], then runs provider migrations.
 // Same-version launches do not rewrite the config file.
 // Returns whether the config file was updated.
-func MigrateOnVersionUpgrade(configPath string, config *CurdConfig, appVersion string) (bool, error) {
+func MigrateOnVersionUpgrade(configPath string, config *Config, appVersion string) (bool, error) {
 	if config == nil {
 		return false, nil
 	}
 
 	appVersion = strings.TrimSpace(appVersion)
 	if appVersion == "" {
-		appVersion = CurdVersion()
+		appVersion = Version()
 	}
 
 	storagePath := os.ExpandEnv(config.StoragePath)
@@ -230,7 +230,7 @@ func MigrateOnVersionUpgrade(configPath string, config *CurdConfig, appVersion s
 		storagePath = filepath.Join(os.ExpandEnv("$HOME"), ".local", "share", AppName)
 	}
 
-	storedVersion := readStoredCurdVersion(storagePath)
+	storedVersion := readStoredVersion(storagePath)
 	configUpdated := false
 	versionChanged := storedVersion != appVersion
 
@@ -283,8 +283,8 @@ func MigrateOnVersionUpgrade(configPath string, config *CurdConfig, appVersion s
 		}
 	}
 
-	if err := writeStoredCurdVersion(storagePath, appVersion); err != nil {
-		return configUpdated, fmt.Errorf("write curd version file: %w", err)
+	if err := writeStoredVersion(storagePath, appVersion); err != nil {
+		return configUpdated, fmt.Errorf("write version file: %w", err)
 	}
 
 	return configUpdated, nil

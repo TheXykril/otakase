@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 )
 
 var (
@@ -25,8 +25,8 @@ func Normalize(style string) string {
 }
 
 func resolvePreference(fallback string) string {
-	if curdhost.CurrentSubStyle != nil {
-		if live := Normalize(curdhost.CurrentSubStyle()); live != "ask" {
+	if providerhost.CurrentSubStyle != nil {
+		if live := Normalize(providerhost.CurrentSubStyle()); live != "ask" {
 			return live
 		}
 	}
@@ -49,8 +49,8 @@ func rememberChoice(style string) {
 	chosen = style
 	choiceMu.Unlock()
 
-	if curdhost.PersistSubStylePreference != nil {
-		_ = curdhost.PersistSubStylePreference(style)
+	if providerhost.PersistSubStylePreference != nil {
+		_ = providerhost.PersistSubStylePreference(style)
 	}
 }
 
@@ -78,8 +78,8 @@ func Choose(hasSoft, hasHard bool, preference string) (string, error) {
 			return promptBoth()
 		}
 		if hasSoft {
-			if curdhost.Out != nil {
-				curdhost.Out("Using soft subs with external subtitles.")
+			if providerhost.Out != nil {
+				providerhost.Out("Using soft subs with external subtitles.")
 			}
 			rememberChoice("soft")
 			return "soft", nil
@@ -93,14 +93,14 @@ func Choose(hasSoft, hasHard bool, preference string) (string, error) {
 }
 
 func promptBoth() (string, error) {
-	if curdhost.PromptSelect == nil {
+	if providerhost.PromptSelect == nil {
 		rememberChoice("soft")
 		return "soft", nil
 	}
-	if curdhost.Out != nil {
-		curdhost.Out("Both soft-sub and hard-sub streams are available.")
+	if providerhost.Out != nil {
+		providerhost.Out("Both soft-sub and hard-sub streams are available.")
 	}
-	selected, err := curdhost.PromptSelect([]curdhost.PromptOption{
+	selected, err := providerhost.PromptSelect([]providerhost.PromptOption{
 		{Key: "soft", Label: "Soft sub (external subtitles)"},
 		{Key: "hard", Label: "Hard sub (burned-in subtitles)"},
 	})
@@ -116,14 +116,14 @@ func promptBoth() (string, error) {
 }
 
 func promptSoftFallback() (string, error) {
-	if curdhost.PromptSelect == nil {
+	if providerhost.PromptSelect == nil {
 		rememberChoice("soft")
 		return "soft", nil
 	}
-	if curdhost.Out != nil {
-		curdhost.Out("Only soft subs with external subtitles are available.")
+	if providerhost.Out != nil {
+		providerhost.Out("Only soft subs with external subtitles are available.")
 	}
-	selected, err := curdhost.PromptSelect([]curdhost.PromptOption{
+	selected, err := providerhost.PromptSelect([]providerhost.PromptOption{
 		{Key: "soft", Label: "Use soft subs (external subtitles)"},
 		{Key: "cancel", Label: "Cancel"},
 	})

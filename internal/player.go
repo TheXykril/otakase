@@ -164,7 +164,7 @@ func resolveConfiguredPlayerBinary(configuredPlayer string) (string, string, err
 
 	if !strings.EqualFold(configuredPlayer, "mpv") {
 		warning := fmt.Sprintf("Configured player '%s' was not found. Falling back to mpv.", configuredPlayer)
-		CurdOut(warning)
+		Out(warning)
 		Log(warning)
 	}
 
@@ -437,7 +437,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 		if resolveErr != nil {
 			amBinary, resolveErr = resolveExecutable("am")
 			if resolveErr != nil {
-				CurdOut("Error: Android activity manager binary not found")
+				Out("Error: Android activity manager binary not found")
 				return "", fmt.Errorf("failed to locate android activity manager binary: %w", resolveErr)
 			}
 		}
@@ -453,7 +453,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 		command = exec.Command(amBinary, cmdArgs...)
 		err = command.Start()
 		if err != nil {
-			CurdOut("Error: Failed to start android intent")
+			Out("Error: Failed to start android intent")
 			return "", fmt.Errorf("failed to start android intent: %w", err)
 		}
 		return "android-intent", nil
@@ -461,7 +461,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 
 	resolvedPlayerBinary, effectivePlayerName, err := resolveConfiguredPlayerBinary(userConfig.Player)
 	if err != nil {
-		CurdOut("Error: Failed to resolve media player")
+		Out("Error: Failed to resolve media player")
 		Log(fmt.Sprintf("Player resolution failed for '%s': %v", userConfig.Player, err))
 		return "", err
 	}
@@ -477,7 +477,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 	// Start the selected mpv-compatible player process
 	err = command.Start()
 	if err != nil {
-		CurdOut(fmt.Sprintf("Error: Failed to start %s process", effectivePlayerName))
+		Out(fmt.Sprintf("Error: Failed to start %s process", effectivePlayerName))
 		return "", fmt.Errorf("failed to start %s: %w", effectivePlayerName, err)
 	}
 
@@ -546,8 +546,8 @@ func WaitForMPVPlaybackStart(ipcSocketPath string, timeout time.Duration) bool {
 // StartVideoWithProviderFallback starts the current episode links and, if MPV never
 // begins playback, retries other providers. Preferred SubOrDub is exhausted first;
 // only then is an alternate sub/dub mode offered with an explicit user prompt.
-func StartVideoWithProviderFallback(userCurdConfig *CurdConfig, anime *Anime, title string) string {
-	if userCurdConfig == nil || anime == nil {
+func StartVideoWithProviderFallback(userConfig *Config, anime *Anime, title string) string {
+	if userConfig == nil || anime == nil {
 		Log("StartVideoWithProviderFallback: missing config or anime")
 		exitWithRestore(1)
 	}
@@ -556,12 +556,12 @@ func StartVideoWithProviderFallback(userCurdConfig *CurdConfig, anime *Anime, ti
 	}
 
 	var excludedProviders []string
-	activeMode := normalizeTranslationType(userCurdConfig.SubOrDub)
+	activeMode := normalizeTranslationType(userConfig.SubOrDub)
 	alternateModeOffered := false
 
 	for {
 		if len(anime.Ep.Links) == 0 {
-			CurdOut("No episode links found")
+			Out("No episode links found")
 			exitWithRestore(1)
 		}
 
@@ -571,14 +571,14 @@ func StartVideoWithProviderFallback(userCurdConfig *CurdConfig, anime *Anime, ti
 			exitWithRestore(1)
 		}
 
-		if mpvSocketPath == "android-intent" || WaitForMPVPlaybackStart(mpvSocketPath, MpvPlaybackStartTimeoutDuration(userCurdConfig)) {
+		if mpvSocketPath == "android-intent" || WaitForMPVPlaybackStart(mpvSocketPath, MpvPlaybackStartTimeoutDuration(userConfig)) {
 			return mpvSocketPath
 		}
 
 		failedProvider := CurrentAnimeProviderName(anime)
-		playbackTimeout := MpvPlaybackStartTimeoutDuration(userCurdConfig)
+		playbackTimeout := MpvPlaybackStartTimeoutDuration(userConfig)
 		Log(fmt.Sprintf("Playback did not start with provider %s/%s within %s", failedProvider, activeMode, playbackTimeout))
-		CurdOut(fmt.Sprintf("Playback failed to start with %s. Trying another provider...", failedProvider))
+		Out(fmt.Sprintf("Playback failed to start with %s. Trying another provider...", failedProvider))
 
 		if mpvSocketPath != "" {
 			ExitMPV(mpvSocketPath)
@@ -587,19 +587,19 @@ func StartVideoWithProviderFallback(userCurdConfig *CurdConfig, anime *Anime, ti
 		excludedProviders = append(excludedProviders, failedProvider)
 
 		// Prefer remaining providers in the active (initially preferred) audio mode.
-		episodeResult, err := ResolveEpisodeURLExcludingProvidersMode(*userCurdConfig, anime, anime.Ep.Number, excludedProviders, activeMode)
+		episodeResult, err := ResolveEpisodeURLExcludingProvidersMode(*userConfig, anime, anime.Ep.Number, excludedProviders, activeMode)
 		if err == nil && len(episodeResult.Links) > 0 {
 			anime.Ep.Links = episodeResult.Links
 			applyStreamPlaybackHints(anime, anime.Ep.Links, episodeResult.LinkHints)
 			Log(fmt.Sprintf("Retrying playback with %s/%s: %+v", episodeResult.ProviderName, episodeResult.Mode, episodeResult.Links))
-			CurdOut(fmt.Sprintf("Retrying with %s...", episodeResult.ProviderName))
+			Out(fmt.Sprintf("Retrying with %s...", episodeResult.ProviderName))
 			continue
 		}
 
 		// Preferred/active mode exhausted — offer alternate sub/dub once, with a prompt.
-		if !alternateModeOffered && activeMode == normalizeTranslationType(userCurdConfig.SubOrDub) {
+		if !alternateModeOffered && activeMode == normalizeTranslationType(userConfig.SubOrDub) {
 			alternateModeOffered = true
-			episodeResult, err = ResolveEpisodeURLAlternateModeWithPrompt(*userCurdConfig, anime, anime.Ep.Number, nil)
+			episodeResult, err = ResolveEpisodeURLAlternateModeWithPrompt(*userConfig, anime, anime.Ep.Number, nil)
 			if err == nil && len(episodeResult.Links) > 0 {
 				// Alternate mode gets a fresh provider pass, including ones that failed preferred.
 				excludedProviders = nil
@@ -607,12 +607,12 @@ func StartVideoWithProviderFallback(userCurdConfig *CurdConfig, anime *Anime, ti
 				anime.Ep.Links = episodeResult.Links
 				applyStreamPlaybackHints(anime, anime.Ep.Links, episodeResult.LinkHints)
 				Log(fmt.Sprintf("Retrying playback with %s/%s after audio fallback: %+v", episodeResult.ProviderName, episodeResult.Mode, episodeResult.Links))
-				CurdOut(fmt.Sprintf("Retrying with %s (%s)...", episodeResult.ProviderName, episodeResult.Mode))
+				Out(fmt.Sprintf("Retrying with %s (%s)...", episodeResult.ProviderName, episodeResult.Mode))
 				continue
 			}
 		}
 
-		CurdOut("No alternative provider could start playback for this episode.")
+		Out("No alternative provider could start playback for this episode.")
 		if err != nil {
 			Log(fmt.Sprintf("Provider fallback failed: %v", err))
 		}
@@ -675,7 +675,7 @@ const (
 
 // ClassifyPlaybackLoss decides what to do when the monitor loses time-pos.
 // Critical: "property unavailable" while MPV is still running is normal during
-// playlist episode switches and must NOT exit curd. Only a dead MPV process
+// playlist episode switches and must NOT exit otakase. Only a dead MPV process
 // (or a finished episode past the completion %) should end the session.
 func ClassifyPlaybackLoss(socketPath string, started bool, percentageWatched float64, completeThreshold int) PlaybackLossAction {
 	if !started {

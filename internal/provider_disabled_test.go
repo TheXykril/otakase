@@ -47,14 +47,14 @@ func TestConfiguredProviderNamesFiltersDisabledProviders(t *testing.T) {
 
 	cases := []struct {
 		name string
-		cfg  *CurdConfig
+		cfg  *Config
 		want []string
 	}{
-		{name: "empty", cfg: &CurdConfig{}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa"}},
-		{name: "json list", cfg: &CurdConfig{Provider: `["allanime","animepahe"]`}, want: []string{stackHead}},
-		{name: "animepahe only", cfg: &CurdConfig{Provider: `["animepahe"]`}, want: []string{stackHead}},
-		{name: "allanime only", cfg: &CurdConfig{Provider: `["allanime"]`}, want: []string{stackHead}},
-		{name: "legacy alias", cfg: &CurdConfig{Provider: "stacked"}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa"}},
+		{name: "empty", cfg: &Config{}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa"}},
+		{name: "json list", cfg: &Config{Provider: `["allanime","animepahe"]`}, want: []string{stackHead}},
+		{name: "animepahe only", cfg: &Config{Provider: `["animepahe"]`}, want: []string{stackHead}},
+		{name: "allanime only", cfg: &Config{Provider: `["allanime"]`}, want: []string{stackHead}},
+		{name: "legacy alias", cfg: &Config{Provider: "stacked"}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa"}},
 	}
 
 	for _, tc := range cases {
@@ -73,7 +73,7 @@ func TestConfiguredProviderNamesFiltersDisabledProviders(t *testing.T) {
 func TestConfiguredProviderNamesHonorsEnabledProvidersWhenOverridden(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	cfg := &CurdConfig{Provider: `["anidb","nyaa"]`}
+	cfg := &Config{Provider: `["anidb","nyaa"]`}
 	got := ConfiguredProviderNames(cfg)
 	if len(got) != 2 || got[0] != "anidb" || got[1] != "nyaa" {
 		t.Fatalf("got %v, want [anidb nyaa]", got)

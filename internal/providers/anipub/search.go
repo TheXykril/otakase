@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers"
 )
 
@@ -66,10 +66,10 @@ func decodeSearchResults(raw []byte) ([]searchResult, error) {
 
 	// anipub answers HTTP 200 with {"error":"Too many requests, ..."} when it is
 	// throttling. Falling through to the parse path below reported that as
-	// "parse anipub search response", which reads like a bug in curd and, worse,
+	// "parse anipub search response", which reads like a bug in otakase and, worse,
 	// is not retried because it does not look transient.
-	if curdhost.IsRateLimitedBody(raw) {
-		return nil, fmt.Errorf("anipub: %w", curdhost.ErrRateLimited)
+	if providerhost.IsRateLimitedBody(raw) {
+		return nil, fmt.Errorf("anipub: %w", providerhost.ErrRateLimited)
 	}
 
 	var notFound struct {

@@ -32,7 +32,7 @@ func (p *narrowTitleProvider) EpisodesList(showID, mode string) ([]string, error
 	return p.episodes, nil
 }
 
-func (p *narrowTitleProvider) GetEpisodeURL(config CurdConfig, id string, epNo int) ([]string, error) {
+func (p *narrowTitleProvider) GetEpisodeURL(config Config, id string, epNo int) ([]string, error) {
 	return nil, nil
 }
 
@@ -54,7 +54,7 @@ func TestFindProviderIDFallsBackToTitleVariants(t *testing.T) {
 			Romaji:  "Saijo no Osewa: Takane no Hanadarake na Meimonkou de",
 		},
 	}
-	config := &CurdConfig{AnimeNameLanguage: "english"}
+	config := &Config{AnimeNameLanguage: "english"}
 
 	id, err := findProviderIDForAnime(provider, config, anime, "dub")
 	if err != nil {
@@ -80,7 +80,7 @@ func TestFindProviderIDStopsAtTheFirstMatch(t *testing.T) {
 	}
 	anime := &Anime{Title: AnimeTitle{English: "Rich Girl Caretaker: I'm Secretly the Caregiver"}}
 
-	id, err := findProviderIDForAnime(provider, &CurdConfig{AnimeNameLanguage: "english"}, anime, "sub")
+	id, err := findProviderIDForAnime(provider, &Config{AnimeNameLanguage: "english"}, anime, "sub")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestFindProviderIDReportsThePrimaryTitle(t *testing.T) {
 	provider := &narrowTitleProvider{name: "anineko", answers: map[string]string{}}
 	anime := &Anime{Title: AnimeTitle{English: "Some Show That Is Not Carried"}}
 
-	_, err := findProviderIDForAnime(provider, &CurdConfig{AnimeNameLanguage: "english"}, anime, "sub")
+	_, err := findProviderIDForAnime(provider, &Config{AnimeNameLanguage: "english"}, anime, "sub")
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -115,7 +115,7 @@ func TestFindProviderIDUsesTheExistingMapping(t *testing.T) {
 		ProviderId:   "8433",
 	}
 
-	id, err := findProviderIDForAnime(provider, &CurdConfig{}, anime, "sub")
+	id, err := findProviderIDForAnime(provider, &Config{}, anime, "sub")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -157,7 +157,7 @@ func (p *staleMappingProvider) GetEpisodeURL(config providers.PlaybackConfig, id
 	return []string{"https://example.test/stream.m3u8"}, nil
 }
 
-// Curd used to file the id of whichever provider served an episode under the
+// otakase used to file the id of whichever provider served an episode under the
 // name of the first configured one, so an anineko slug was stored as an anipub
 // id and handed back to anipub forever after. Those histories already exist, so
 // a stored id that does not work is re-derived rather than believed.
@@ -175,7 +175,7 @@ func TestStaleStoredMappingIsRederived(t *testing.T) {
 		ProviderName: "anipub",
 		ProviderId:   "rich-girl-caretaker-im-secretly-the-caregiver",
 	}
-	config := CurdConfig{AnimeNameLanguage: "english", SubOrDub: "sub"}
+	config := Config{AnimeNameLanguage: "english", SubOrDub: "sub"}
 
 	result, err := episodeModeResultWithProviders(config, anime, 1, "sub", []string{"anipub"})
 	if err != nil {
@@ -206,7 +206,7 @@ func TestGoodStoredMappingIsNotResearched(t *testing.T) {
 		ProviderId:   "8433",
 	}
 
-	if _, err := episodeModeResultWithProviders(CurdConfig{AnimeNameLanguage: "english"}, anime, 1, "sub", []string{"anipub"}); err != nil {
+	if _, err := episodeModeResultWithProviders(Config{AnimeNameLanguage: "english"}, anime, 1, "sub", []string{"anipub"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if provider.searched != 0 {

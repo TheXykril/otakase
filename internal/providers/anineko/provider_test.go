@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -31,13 +31,13 @@ func testResponse(req *http.Request, statusCode int, body string, headers map[st
 
 func withAninekoTestClient(t *testing.T, client *http.Client) {
 	t.Helper()
-	previous := curdhost.HTTPClient
+	previous := providerhost.HTTPClient
 	t.Cleanup(func() {
-		curdhost.HTTPClient = previous
+		providerhost.HTTPClient = previous
 		resetVibeProxyForTest()
 		resetSubStyleForTest()
 	})
-	curdhost.HTTPClient = func() *http.Client { return client }
+	providerhost.HTTPClient = func() *http.Client { return client }
 }
 
 func TestSearchAnimeParsesResults(t *testing.T) {
@@ -144,12 +144,12 @@ func TestChooseSubStyleHardPromptsForSoftFallback(t *testing.T) {
 		"sub": {"https://vibeplayer.site/soft?sub=https://cdn.example/sub.vtt"},
 	}
 
-	previousPrompt := curdhost.PromptSelect
-	curdhost.PromptSelect = func([]curdhost.PromptOption) (curdhost.PromptOption, error) {
-		return curdhost.PromptOption{Key: "soft", Label: "Use soft subs"}, nil
+	previousPrompt := providerhost.PromptSelect
+	providerhost.PromptSelect = func([]providerhost.PromptOption) (providerhost.PromptOption, error) {
+		return providerhost.PromptOption{Key: "soft", Label: "Use soft subs"}, nil
 	}
 	t.Cleanup(func() {
-		curdhost.PromptSelect = previousPrompt
+		providerhost.PromptSelect = previousPrompt
 		resetSubStyleForTest()
 	})
 
@@ -184,26 +184,26 @@ func TestChooseSubStylePromptSelectOnce(t *testing.T) {
 	}
 
 	prompts := 0
-	previousPrompt := curdhost.PromptSelect
-	previousOut := curdhost.Out
-	previousPersist := curdhost.PersistSubStylePreference
-	previousCurrent := curdhost.CurrentSubStyle
-	curdhost.PromptSelect = func(options []curdhost.PromptOption) (curdhost.PromptOption, error) {
+	previousPrompt := providerhost.PromptSelect
+	previousOut := providerhost.Out
+	previousPersist := providerhost.PersistSubStylePreference
+	previousCurrent := providerhost.CurrentSubStyle
+	providerhost.PromptSelect = func(options []providerhost.PromptOption) (providerhost.PromptOption, error) {
 		prompts++
-		return curdhost.PromptOption{Key: "hard", Label: "Hard sub"}, nil
+		return providerhost.PromptOption{Key: "hard", Label: "Hard sub"}, nil
 	}
-	curdhost.Out = func(string) {}
+	providerhost.Out = func(string) {}
 	saved := ""
-	curdhost.PersistSubStylePreference = func(style string) error {
+	providerhost.PersistSubStylePreference = func(style string) error {
 		saved = style
 		return nil
 	}
-	curdhost.CurrentSubStyle = func() string { return saved }
+	providerhost.CurrentSubStyle = func() string { return saved }
 	t.Cleanup(func() {
-		curdhost.PromptSelect = previousPrompt
-		curdhost.Out = previousOut
-		curdhost.PersistSubStylePreference = previousPersist
-		curdhost.CurrentSubStyle = previousCurrent
+		providerhost.PromptSelect = previousPrompt
+		providerhost.Out = previousOut
+		providerhost.PersistSubStylePreference = previousPersist
+		providerhost.CurrentSubStyle = previousCurrent
 		resetSubStyleForTest()
 	})
 

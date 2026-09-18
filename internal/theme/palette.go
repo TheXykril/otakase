@@ -1,8 +1,8 @@
-// Package theme resolves the colour palette Curd draws its menus with.
+// Package theme resolves the colour palette otakase draws its menus with.
 //
 // On Omarchy the active theme is a directory of generated config fragments under
 // ~/.local/state/omarchy/current/theme, with colors.toml as the canonical source
-// every other fragment is rendered from. Reading that file lets Curd match the
+// every other fragment is rendered from. Reading that file lets otakase match the
 // rest of the desktop instead of shipping its own fixed palette.
 //
 // Nothing here writes to the Omarchy theme; it is read-only.
@@ -21,7 +21,7 @@ import (
 type Source string
 
 const (
-	// SourceBuiltin is Curd's own palette, used off Omarchy or when disabled.
+	// SourceBuiltin is otakase's own palette, used off Omarchy or when disabled.
 	SourceBuiltin Source = "builtin"
 	// SourceOmarchy is the user's active Omarchy theme.
 	SourceOmarchy Source = "omarchy"
@@ -54,7 +54,7 @@ type Palette struct {
 	Cyan    string
 }
 
-// Builtin is Curd's original palette, kept as the fallback so behaviour off
+// Builtin is otakase's original palette, kept as the fallback so behaviour off
 // Omarchy is unchanged.
 func Builtin() Palette {
 	return Palette{
@@ -151,7 +151,7 @@ func parseColorsTOML(content string) map[string]string {
 }
 
 // LoadOmarchy reads the active Omarchy theme. Any colour the theme omits falls
-// back to Curd's builtin palette, so a sparse or unusual theme still renders.
+// back to otakase's builtin palette, so a sparse or unusual theme still renders.
 func LoadOmarchy() (Palette, error) {
 	path := OmarchyThemePath()
 	if path == "" {
@@ -220,7 +220,7 @@ const (
 	ModeAuto Mode = "auto"
 	// ModeOmarchy forces the Omarchy theme, falling back if it cannot be read.
 	ModeOmarchy Mode = "omarchy"
-	// ModeBuiltin forces Curd's own palette.
+	// ModeBuiltin forces otakase's own palette.
 	ModeBuiltin Mode = "builtin"
 )
 

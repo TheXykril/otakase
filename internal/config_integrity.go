@@ -10,7 +10,7 @@ import (
 )
 
 // The config file holds the user's tracker credentials and every preference, and
-// curd rewrites it on most runs (AddMissingOptions defaults to true). It was
+// otakase rewrites it on most runs (AddMissingOptions defaults to true). It was
 // being written with os.Create -- truncate in place, then write -- with no lock
 // and no atomic rename, so a crash or two concurrent runs can leave a mangled
 // file. A real config in the wild carried "nimeListClientID", which is
@@ -21,7 +21,7 @@ import (
 
 // KnownConfigKeys returns every key the config struct understands.
 func KnownConfigKeys() []string {
-	configType := reflect.TypeOf(CurdConfig{})
+	configType := reflect.TypeOf(Config{})
 	keys := make([]string, 0, configType.NumField())
 	for i := 0; i < configType.NumField(); i++ {
 		if tag := configType.Field(i).Tag.Get("config"); tag != "" {
@@ -73,7 +73,7 @@ func editDistance(a, b string) int {
 	return previous[len(b)]
 }
 
-// UnknownConfigKeys returns the keys in a config map that curd does not
+// UnknownConfigKeys returns the keys in a config map that otakase does not
 // understand, sorted, each paired with the closest known key when there is one.
 func UnknownConfigKeys(configMap map[string]string) map[string]string {
 	known := make(map[string]struct{}, 64)
@@ -91,9 +91,9 @@ func UnknownConfigKeys(configMap map[string]string) map[string]string {
 	return unknown
 }
 
-// WarnAboutUnknownConfigKeys tells the user about settings curd ignores, so a
+// WarnAboutUnknownConfigKeys tells the user about settings otakase ignores, so a
 // typo is not silently dropped. Keys are never removed: an unrecognised key may
-// belong to a newer curd the user also runs.
+// belong to a newer otakase the user also runs.
 func WarnAboutUnknownConfigKeys(configMap map[string]string) {
 	unknown := UnknownConfigKeys(configMap)
 	if len(unknown) == 0 {
@@ -111,7 +111,7 @@ func WarnAboutUnknownConfigKeys(configMap map[string]string) {
 		if suggestion := unknown[key]; suggestion != "" {
 			message += fmt.Sprintf(" (did you mean %q?)", suggestion)
 		}
-		CurdOut(message)
+		Out(message)
 		Log(message)
 	}
 }

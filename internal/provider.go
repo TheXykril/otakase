@@ -73,11 +73,11 @@ type Provider interface {
 	Name() string
 	SearchAnime(query, mode string) ([]SelectionOption, error)
 	EpisodesList(showID, mode string) ([]string, error)
-	GetEpisodeURL(config CurdConfig, id string, epNo int) ([]string, error)
+	GetEpisodeURL(config Config, id string, epNo int) ([]string, error)
 }
 
 type ProviderModeResolver interface {
-	GetEpisodeURLForMode(config CurdConfig, id string, epNo int, mode string) ([]string, error)
+	GetEpisodeURLForMode(config Config, id string, epNo int, mode string) ([]string, error)
 }
 
 type ProviderEpisodeResult struct {
@@ -160,7 +160,7 @@ func parseProviderConfig(rawProvider string) []string {
 	return providers
 }
 
-func configuredProviderNames(config *CurdConfig) []string {
+func configuredProviderNames(config *Config) []string {
 	rawProvider := stackedProviderConfigValue
 	if config != nil && strings.TrimSpace(config.Provider) != "" {
 		rawProvider = config.Provider
@@ -169,7 +169,7 @@ func configuredProviderNames(config *CurdConfig) []string {
 	return ensureEnabledProviderNames(parseProviderConfig(rawProvider))
 }
 
-func ConfiguredProviderNames(config *CurdConfig) []string {
+func ConfiguredProviderNames(config *Config) []string {
 	return configuredProviderNames(config)
 }
 
@@ -200,7 +200,7 @@ func formatProviderConfigValue(names []string) string {
 	return "[" + strings.Join(quotedNames, ",") + "]"
 }
 
-func ProviderStackContains(config *CurdConfig, providerName string) bool {
+func ProviderStackContains(config *Config, providerName string) bool {
 	providerName = normalizeProviderName(providerName)
 	if providerName == "" {
 		return false
@@ -301,7 +301,7 @@ func providerIDForAnime(anime *Anime) (providerName, providerID string) {
 	return GetProvider().Name(), anime.ProviderId
 }
 
-func providerNamesForAnime(config *CurdConfig, anime *Anime) []string {
+func providerNamesForAnime(config *Config, anime *Anime) []string {
 	configuredNames := configuredProviderNames(config)
 	providerName, _ := providerIDForAnime(anime)
 	providerName = normalizeProviderName(providerName)
@@ -493,7 +493,7 @@ func appendProviderName(providerNames []string, providerName string) []string {
 	return result
 }
 
-func updateProviderConfig(config *CurdConfig, providerNames []string) error {
+func updateProviderConfig(config *Config, providerNames []string) error {
 	providerValue := formatProviderConfigValue(providerNames)
 	config.Provider = providerValue
 	CurrentProvider = nil
@@ -573,7 +573,7 @@ func getProviderTotalEpisodes(provider Provider, showID, mode string) (int, erro
 // for the title and reading its episode list. This keeps the total findable
 // even when the preferred provider is down or the anime has no mapping yet
 // (e.g. an anime played straight from a MyAnimeList/AniList tracking list).
-func determineProviderTotalEpisodes(config *CurdConfig, query string, anime *Anime, mode string) (int, error) {
+func determineProviderTotalEpisodes(config *Config, query string, anime *Anime, mode string) (int, error) {
 	if anime == nil {
 		return 0, fmt.Errorf("missing anime")
 	}
@@ -642,7 +642,7 @@ func inferTotalEpisodesFromEpisodeList(episodes []string) int {
 	return total
 }
 
-func GetEpisodeURL(config CurdConfig, id string, epNo int) ([]string, error) {
+func GetEpisodeURL(config Config, id string, epNo int) ([]string, error) {
 	providerName, providerID, ok := ParseProviderQualifiedID(id)
 	if !ok {
 		return getProviderEpisodeURLForMode(GetProvider(), config, id, epNo, config.SubOrDub)
@@ -654,7 +654,7 @@ func GetEpisodeURL(config CurdConfig, id string, epNo int) ([]string, error) {
 	return getProviderEpisodeURLForMode(provider, config, providerID, epNo, config.SubOrDub)
 }
 
-func GetEpisodeURLForPlayback(config CurdConfig, id string, epNo int) ([]string, string, error) {
+func GetEpisodeURLForPlayback(config Config, id string, epNo int) ([]string, string, error) {
 	preferredMode := normalizeTranslationType(config.SubOrDub)
 	links, err := GetEpisodeURL(config, id, epNo)
 	if err == nil && len(links) > 0 {
@@ -676,7 +676,7 @@ func GetEpisodeURLForPlayback(config CurdConfig, id string, epNo int) ([]string,
 		return nil, preferredMode, nil
 	}
 
-	CurdOut(audioFallbackPrompt(preferredMode, fallbackMode))
+	Out(audioFallbackPrompt(preferredMode, fallbackMode))
 	selected, selectErr := promptSelect([]SelectionOption{
 		{Key: "play", Label: "Play " + fallbackMode},
 		{Key: "cancel", Label: "Cancel"},
@@ -694,10 +694,10 @@ func GetEpisodeURLForPlayback(config CurdConfig, id string, epNo int) ([]string,
 	return fallbackLinks, fallbackMode, nil
 }
 
-func getProviderEpisodeURLForModeWithHints(provider Provider, config CurdConfig, id string, epNo int, mode string) ([]string, map[string]StreamPlaybackHint, error) {
+func getProviderEpisodeURLForModeWithHints(provider Provider, config Config, id string, epNo int, mode string) ([]string, map[string]StreamPlaybackHint, error) {
 	mode = normalizeTranslationType(mode)
 	if withHints, ok := provider.(interface {
-		GetEpisodeURLForModeWithHints(CurdConfig, string, int, string) ([]string, map[string]StreamPlaybackHint, error)
+		GetEpisodeURLForModeWithHints(Config, string, int, string) ([]string, map[string]StreamPlaybackHint, error)
 	}); ok {
 		return withHints.GetEpisodeURLForModeWithHints(config, id, epNo, mode)
 	}
@@ -711,7 +711,7 @@ func getProviderEpisodeURLForModeWithHints(provider Provider, config CurdConfig,
 	return links, nil, err
 }
 
-func getProviderEpisodeURLForMode(provider Provider, config CurdConfig, id string, epNo int, mode string) ([]string, error) {
+func getProviderEpisodeURLForMode(provider Provider, config Config, id string, epNo int, mode string) ([]string, error) {
 	mode = normalizeTranslationType(mode)
 	if resolver, ok := provider.(ProviderModeResolver); ok {
 		return resolver.GetEpisodeURLForMode(config, id, epNo, mode)
@@ -721,7 +721,7 @@ func getProviderEpisodeURLForMode(provider Provider, config CurdConfig, id strin
 	return provider.GetEpisodeURL(modeConfig, id, epNo)
 }
 
-func episodeModeResult(config CurdConfig, anime *Anime, epNo int, mode string) (ProviderEpisodeResult, error) {
+func episodeModeResult(config Config, anime *Anime, epNo int, mode string) (ProviderEpisodeResult, error) {
 	if anime == nil {
 		modeConfig := config
 		modeConfig.SubOrDub = mode
@@ -734,7 +734,7 @@ func episodeModeResult(config CurdConfig, anime *Anime, epNo int, mode string) (
 	return episodeModeResultWithProviders(config, anime, epNo, mode, providerNames)
 }
 
-func episodeModeResultWithProviders(config CurdConfig, anime *Anime, epNo int, mode string, providerNames []string) (ProviderEpisodeResult, error) {
+func episodeModeResultWithProviders(config Config, anime *Anime, epNo int, mode string, providerNames []string) (ProviderEpisodeResult, error) {
 	mode = normalizeTranslationType(mode)
 	if len(providerNames) == 0 {
 		providerNames = []string{firstEnabledProviderName()}
@@ -756,7 +756,7 @@ func episodeModeResultWithProviders(config CurdConfig, anime *Anime, epNo int, m
 
 		links, linkHints, err := getProviderEpisodeURLForModeWithHints(provider, config, providerID, epNo, mode)
 
-		// A stored id can belong to a different host: curd used to write the id
+		// A stored id can belong to a different host: otakase used to write the id
 		// of whichever provider served an episode next to the name of the first
 		// *configured* one, so anineko slugs ended up filed under "anipub" and
 		// were handed back to anipub on every later run. Re-derive the mapping
@@ -812,16 +812,16 @@ func filterExcludedProviders(providerNames []string, exclude []string) []string 
 }
 
 // ResolveEpisodeURLExcludingProviders tries preferred SubOrDub across providers, skipping exclude.
-func ResolveEpisodeURLExcludingProviders(config CurdConfig, anime *Anime, epNo int, exclude []string) (ProviderEpisodeResult, error) {
+func ResolveEpisodeURLExcludingProviders(config Config, anime *Anime, epNo int, exclude []string) (ProviderEpisodeResult, error) {
 	return resolveEpisodeURLExcludingProvidersMode(config, anime, epNo, exclude, normalizeTranslationType(config.SubOrDub))
 }
 
 // ResolveEpisodeURLExcludingProvidersMode tries an explicit sub/dub mode across providers, skipping exclude.
-func ResolveEpisodeURLExcludingProvidersMode(config CurdConfig, anime *Anime, epNo int, exclude []string, mode string) (ProviderEpisodeResult, error) {
+func ResolveEpisodeURLExcludingProvidersMode(config Config, anime *Anime, epNo int, exclude []string, mode string) (ProviderEpisodeResult, error) {
 	return resolveEpisodeURLExcludingProvidersMode(config, anime, epNo, exclude, mode)
 }
 
-func resolveEpisodeURLExcludingProvidersMode(config CurdConfig, anime *Anime, epNo int, exclude []string, mode string) (ProviderEpisodeResult, error) {
+func resolveEpisodeURLExcludingProvidersMode(config Config, anime *Anime, epNo int, exclude []string, mode string) (ProviderEpisodeResult, error) {
 	mode = normalizeTranslationType(mode)
 	providerNames := filterExcludedProviders(providerNamesForAnime(&config, anime), exclude)
 	if len(providerNames) == 0 {
@@ -832,7 +832,7 @@ func resolveEpisodeURLExcludingProvidersMode(config CurdConfig, anime *Anime, ep
 
 // ResolveEpisodeURLAlternateModeWithPrompt probes the non-preferred sub/dub mode and asks
 // before switching. Preferred mode is never switched silently.
-func ResolveEpisodeURLAlternateModeWithPrompt(config CurdConfig, anime *Anime, epNo int, exclude []string) (ProviderEpisodeResult, error) {
+func ResolveEpisodeURLAlternateModeWithPrompt(config Config, anime *Anime, epNo int, exclude []string) (ProviderEpisodeResult, error) {
 	// AutoAudioFallback is decided here rather than at each call site, so every
 	// route into the alternate audio -- the preferred-first resolve, the recovery
 	// menu, the playlist controller -- obeys the setting the same way.
@@ -844,11 +844,11 @@ func ResolveEpisodeURLAlternateModeWithPrompt(config CurdConfig, anime *Anime, e
 // Some shows exist in one language only, and for those the prompt has a single
 // useful answer -- it just stands between the user and the episode. What was
 // played is still reported, so an automatic switch is never a silent one.
-func ResolveEpisodeURLAlternateModeAuto(config CurdConfig, anime *Anime, epNo int, exclude []string) (ProviderEpisodeResult, error) {
+func ResolveEpisodeURLAlternateModeAuto(config Config, anime *Anime, epNo int, exclude []string) (ProviderEpisodeResult, error) {
 	return resolveEpisodeURLAlternateMode(config, anime, epNo, exclude, false)
 }
 
-func resolveEpisodeURLAlternateMode(config CurdConfig, anime *Anime, epNo int, exclude []string, ask bool) (ProviderEpisodeResult, error) {
+func resolveEpisodeURLAlternateMode(config Config, anime *Anime, epNo int, exclude []string, ask bool) (ProviderEpisodeResult, error) {
 	preferredMode := normalizeTranslationType(config.SubOrDub)
 	fallbackMode := alternateTranslationType(preferredMode)
 
@@ -872,7 +872,7 @@ func resolveEpisodeURLAlternateMode(config CurdConfig, anime *Anime, epNo int, e
 	}
 
 	if ask {
-		CurdOut(audioFallbackPrompt(preferredMode, fallbackMode))
+		Out(audioFallbackPrompt(preferredMode, fallbackMode))
 		selected, selectErr := promptSelect([]SelectionOption{
 			{Key: "play", Label: "Play " + fallbackMode},
 			{Key: "cancel", Label: "Cancel"},
@@ -884,7 +884,7 @@ func resolveEpisodeURLAlternateMode(config CurdConfig, anime *Anime, epNo int, e
 			return ProviderEpisodeResult{}, fmt.Errorf("%s unavailable and %s fallback declined", preferredMode, fallbackMode)
 		}
 	} else {
-		CurdOut(fmt.Sprintf("No %s for episode %d — playing %s.", preferredMode, epNo, fallbackMode))
+		Out(fmt.Sprintf("No %s for episode %d — playing %s.", preferredMode, epNo, fallbackMode))
 	}
 
 	if anime != nil {
@@ -894,11 +894,11 @@ func resolveEpisodeURLAlternateMode(config CurdConfig, anime *Anime, epNo int, e
 	return fallbackResult, nil
 }
 
-func ResolveEpisodeURL(config CurdConfig, anime *Anime, epNo int) (ProviderEpisodeResult, error) {
+func ResolveEpisodeURL(config Config, anime *Anime, epNo int) (ProviderEpisodeResult, error) {
 	return episodeModeResult(config, anime, epNo, config.SubOrDub)
 }
 
-func ResolveEpisodeURLForPlayback(config CurdConfig, anime *Anime, epNo int) (ProviderEpisodeResult, error) {
+func ResolveEpisodeURLForPlayback(config Config, anime *Anime, epNo int) (ProviderEpisodeResult, error) {
 	preferredMode := normalizeTranslationType(config.SubOrDub)
 
 	// 1) Exhaust preferred sub/dub across the full provider stack before any mode switch.
@@ -923,7 +923,7 @@ func ResolveEpisodeURLForPlayback(config CurdConfig, anime *Anime, epNo int) (Pr
 	return fallbackResult, nil
 }
 
-func configForProviderUpdate(config CurdConfig) *CurdConfig {
+func configForProviderUpdate(config Config) *Config {
 	if globalConfig := GetGlobalConfig(); globalConfig != nil && globalConfig.Provider == config.Provider {
 		return globalConfig
 	}
@@ -931,7 +931,7 @@ func configForProviderUpdate(config CurdConfig) *CurdConfig {
 }
 
 func promptAnimepaheEpisodeFallbackConsent(mode string, epNo int) (bool, bool, error) {
-	CurdOut(fmt.Sprintf("No %s stream was found on AllAnime for episode %d. Animepahe may require downloading a Chromium browser for DDoS-Guard verification (~500 MB). Use Animepahe fallback?", normalizeTranslationType(mode), epNo))
+	Out(fmt.Sprintf("No %s stream was found on AllAnime for episode %d. Animepahe may require downloading a Chromium browser for DDoS-Guard verification (~500 MB). Use Animepahe fallback?", normalizeTranslationType(mode), epNo))
 	selected, err := promptSelect([]SelectionOption{
 		{Key: "use", Label: "Use Animepahe fallback"},
 		{Key: "never", Label: "Do not use Animepahe"},
@@ -1061,7 +1061,7 @@ func confidentProviderSearchMatch(options []SelectionOption, anime *Anime, query
 //
 // Variants are ordered exact-first, so a host that answers the real title is
 // never sent the broader simplified forms.
-func findProviderIDForAnime(provider Provider, config *CurdConfig, anime *Anime, mode string) (string, error) {
+func findProviderIDForAnime(provider Provider, config *Config, anime *Anime, mode string) (string, error) {
 	currentProviderName, currentProviderID := providerIDForAnime(anime)
 	if currentProviderName == provider.Name() && currentProviderID != "" {
 		return currentProviderID, nil
@@ -1076,7 +1076,7 @@ func findProviderIDForAnime(provider Provider, config *CurdConfig, anime *Anime,
 }
 
 // searchProviderIDForAnime maps an anime by searching, ignoring any stored id.
-func searchProviderIDForAnime(provider Provider, config *CurdConfig, anime *Anime, mode string) (string, error) {
+func searchProviderIDForAnime(provider Provider, config *Config, anime *Anime, mode string) (string, error) {
 	query := animeSearchTitle(anime)
 	if query == "" {
 		return "", fmt.Errorf("cannot search %s without an anime title", provider.Name())

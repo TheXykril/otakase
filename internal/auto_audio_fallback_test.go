@@ -6,7 +6,7 @@ import (
 
 // dubOnlyStack is a provider stack that carries only the dub of a show, the
 // mirror of the real case: a sub-only show watched with SubOrDub=dub.
-func dubOnlyStack(t *testing.T) (CurdConfig, *Anime) {
+func dubOnlyStack(t *testing.T) (Config, *Anime) {
 	t.Helper()
 	provider := &stackStubProvider{
 		name: "anipub",
@@ -20,7 +20,7 @@ func dubOnlyStack(t *testing.T) (CurdConfig, *Anime) {
 	}
 	withProviderFactories(t, provider)
 
-	config := CurdConfig{Provider: `["anipub"]`, SubOrDub: "sub", AutoAudioFallback: true}
+	config := Config{Provider: `["anipub"]`, SubOrDub: "sub", AutoAudioFallback: true}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
 		ProviderName: "anipub",

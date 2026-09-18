@@ -37,7 +37,7 @@ func captureStartupReports(t *testing.T) func() []string {
 func TestFastStartupSaysNothing(t *testing.T) {
 	read := captureStartupReports(t)
 
-	BeginStartupProgress(&CurdConfig{RofiSelection: true}, "Curd is starting")
+	BeginStartupProgress(&Config{RofiSelection: true}, "otakase is starting")
 	time.Sleep(startupQuietPeriod / 4)
 	EndStartupProgress()
 	time.Sleep(startupQuietPeriod)
@@ -52,7 +52,7 @@ func TestFastStartupSaysNothing(t *testing.T) {
 func TestSlowStartupReportsProgressAndElapsedTime(t *testing.T) {
 	read := captureStartupReports(t)
 
-	BeginStartupProgress(&CurdConfig{RofiSelection: true}, "Signing in to your tracker")
+	BeginStartupProgress(&Config{RofiSelection: true}, "Signing in to your tracker")
 	time.Sleep(startupQuietPeriod + 300*time.Millisecond)
 
 	messages := read()
@@ -79,7 +79,7 @@ func TestSlowStartupReportsProgressAndElapsedTime(t *testing.T) {
 func TestStartupStageUpdatesTheMessage(t *testing.T) {
 	read := captureStartupReports(t)
 
-	BeginStartupProgress(&CurdConfig{RofiSelection: true}, "Curd is starting")
+	BeginStartupProgress(&Config{RofiSelection: true}, "otakase is starting")
 	StartupStage("Loading your anime list")
 	time.Sleep(startupQuietPeriod + 300*time.Millisecond)
 
@@ -94,7 +94,7 @@ func TestStartupStageUpdatesTheMessage(t *testing.T) {
 func TestNoProgressWhenRunningInATerminal(t *testing.T) {
 	read := captureStartupReports(t)
 
-	BeginStartupProgress(&CurdConfig{RofiSelection: false}, "Curd is starting")
+	BeginStartupProgress(&Config{RofiSelection: false}, "otakase is starting")
 	time.Sleep(startupQuietPeriod + 300*time.Millisecond)
 
 	if got := read(); len(got) != 0 {
@@ -103,10 +103,10 @@ func TestNoProgressWhenRunningInATerminal(t *testing.T) {
 }
 
 // Ending twice must not panic on a closed channel; the menus call it on every
-// open, and ExitCurd calls it again on the way out.
+// open, and Exit calls it again on the way out.
 func TestEndStartupProgressIsIdempotent(t *testing.T) {
 	captureStartupReports(t)
-	BeginStartupProgress(&CurdConfig{RofiSelection: true}, "Curd is starting")
+	BeginStartupProgress(&Config{RofiSelection: true}, "otakase is starting")
 	EndStartupProgress()
 	EndStartupProgress()
 	EndStartupProgress()

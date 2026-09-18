@@ -62,8 +62,8 @@ func DownloadPath(dir, title string, episode int, mode string) string {
 }
 
 // ResolveDownloadDir expands the configured download directory, defaulting to
-// ~/Downloads/curd.
-func ResolveDownloadDir(config *CurdConfig) string {
+// ~/Downloads/otakase.
+func ResolveDownloadDir(config *Config) string {
 	dir := ""
 	if config != nil {
 		dir = strings.TrimSpace(config.DownloadDir)
@@ -174,7 +174,7 @@ func runFFmpeg(binary string, args []string, onProgress func(elapsed time.Durati
 }
 
 // DownloadEpisode fetches one episode to dir and returns the file written.
-func DownloadEpisode(config CurdConfig, anime *Anime, episode int, dir string) (string, error) {
+func DownloadEpisode(config Config, anime *Anime, episode int, dir string) (string, error) {
 	binary, err := ffmpegPath()
 	if err != nil {
 		return "", err
@@ -196,7 +196,7 @@ func DownloadEpisode(config CurdConfig, anime *Anime, episode int, dir string) (
 	// already on disk should not cost a provider round trip.
 	expected := DownloadPath(dir, title, episode, normalizeTranslationType(config.SubOrDub))
 	if info, statErr := os.Stat(expected); statErr == nil && info.Size() > 0 {
-		CurdOut(fmt.Sprintf("Episode %d already downloaded: %s", episode, expected))
+		Out(fmt.Sprintf("Episode %d already downloaded: %s", episode, expected))
 		return expected, nil
 	}
 
@@ -217,11 +217,11 @@ func DownloadEpisode(config CurdConfig, anime *Anime, episode int, dir string) (
 	hint := result.LinkHints[streamURL]
 	output := DownloadPath(dir, title, episode, mode)
 
-	// The resolved mode can differ from the configured one when curd falls back
+	// The resolved mode can differ from the configured one when otakase falls back
 	// between sub and dub, so re-check under the name actually being written.
 	if output != expected {
 		if info, statErr := os.Stat(output); statErr == nil && info.Size() > 0 {
-			CurdOut(fmt.Sprintf("Episode %d already downloaded: %s", episode, output))
+			Out(fmt.Sprintf("Episode %d already downloaded: %s", episode, output))
 			return output, nil
 		}
 	}
@@ -235,7 +235,7 @@ func DownloadEpisode(config CurdConfig, anime *Anime, episode int, dir string) (
 		referrer = providers.Referrer(providerName)
 	}
 
-	CurdOut(fmt.Sprintf("Downloading episode %d (%s)...", episode, mode))
+	Out(fmt.Sprintf("Downloading episode %d (%s)...", episode, mode))
 	Log(fmt.Sprintf("Downloading episode %d from %s to %s", episode, streamURL, output))
 
 	lastReport := time.Now()
@@ -246,7 +246,7 @@ func DownloadEpisode(config CurdConfig, anime *Anime, episode int, dir string) (
 			return
 		}
 		lastReport = time.Now()
-		CurdOut(fmt.Sprintf("  episode %d: %s downloaded", episode, elapsed.Round(time.Second)))
+		Out(fmt.Sprintf("  episode %d: %s downloaded", episode, elapsed.Round(time.Second)))
 	}
 
 	progressErr := runFFmpeg(binary, buildFFmpegArgs(streamURL, referrer, hint.Subtitle, output), onProgress)
@@ -254,7 +254,7 @@ func DownloadEpisode(config CurdConfig, anime *Anime, episode int, dir string) (
 		// A subtitle track is a nicety; losing the episode over one is not. Retry
 		// without it rather than failing the download outright.
 		Log(fmt.Sprintf("Episode %d failed with subtitles (%v); retrying without them", episode, progressErr))
-		CurdOut(fmt.Sprintf("  episode %d: subtitles unavailable, downloading video only", episode))
+		Out(fmt.Sprintf("  episode %d: subtitles unavailable, downloading video only", episode))
 		lastReport = time.Now()
 		progressErr = runFFmpeg(binary, buildFFmpegArgs(streamURL, referrer, "", output), onProgress)
 	}
@@ -266,13 +266,13 @@ func DownloadEpisode(config CurdConfig, anime *Anime, episode int, dir string) (
 		return "", progressErr
 	}
 
-	CurdOut(fmt.Sprintf("Saved %s", output))
+	Out(fmt.Sprintf("Saved %s", output))
 	return output, nil
 }
 
 // DownloadEpisodes fetches an inclusive range of episodes, continuing past a
 // failure so one missing episode does not abandon the rest.
-func DownloadEpisodes(config CurdConfig, anime *Anime, from, to int, dir string) []DownloadResult {
+func DownloadEpisodes(config Config, anime *Anime, from, to int, dir string) []DownloadResult {
 	if to < from {
 		from, to = to, from
 	}
@@ -282,7 +282,7 @@ func DownloadEpisodes(config CurdConfig, anime *Anime, from, to int, dir string)
 		path, err := DownloadEpisode(config, anime, episode, dir)
 		results = append(results, DownloadResult{Episode: episode, Path: path, Err: err})
 		if err != nil {
-			CurdOut(fmt.Sprintf("Episode %d failed: %v", episode, err))
+			Out(fmt.Sprintf("Episode %d failed: %v", episode, err))
 			Log(fmt.Sprintf("Download of episode %d failed: %v", episode, err))
 			if err == ErrFFmpegMissing {
 				break

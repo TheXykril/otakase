@@ -28,7 +28,7 @@ func TestFailedPlaylistSwitchRestoresWatchProgress(t *testing.T) {
 
 	// A provider stack that carries nothing: every switch attempt fails.
 	withAllProvidersEnabledForTest(t)
-	config := CurdConfig{Provider: `["anipub"]`, SubOrDub: "dub", PercentageToMarkComplete: 85}
+	config := Config{Provider: `["anipub"]`, SubOrDub: "dub", PercentageToMarkComplete: 85}
 	c := &MPVPlaylistController{
 		config:         &config,
 		anime:          anime,
@@ -80,7 +80,7 @@ func TestFinishedEpisodeIsNotHijackedByPlaylistMovement(t *testing.T) {
 	anime.Ep.Player.PlaybackTime = 1400
 	anime.Ep.Duration = 1440 // ~97%
 
-	config := CurdConfig{PercentageToMarkComplete: 85}
+	config := Config{PercentageToMarkComplete: 85}
 	c := &MPVPlaylistController{config: &config, anime: anime, currentPlaying: 10}
 
 	if !c.episodeFinished() {
@@ -105,7 +105,7 @@ func TestFinishedEpisodeIsNotHijackedByPlaylistMovement(t *testing.T) {
 // dub-configured session watching a sub-only show would otherwise build a
 // playlist whose every entry fails.
 func TestPlaylistFollowsTheAudioActuallyPlaying(t *testing.T) {
-	config := &CurdConfig{SubOrDub: "dub", MpvEpisodePlaylist: true}
+	config := &Config{SubOrDub: "dub", MpvEpisodePlaylist: true}
 
 	// AutoAudioFallback resolved sub for a show with no dub; the playlist must
 	// follow that, not the preference it overrode.
@@ -130,7 +130,7 @@ func TestPlaylistFollowsTheAudioActuallyPlaying(t *testing.T) {
 
 	// A dub that really is playing is followed too.
 	anime.Ep.Mode = "dub"
-	if got := playlistAudioMode(anime, &CurdConfig{SubOrDub: "sub"}); got != "dub" {
+	if got := playlistAudioMode(anime, &Config{SubOrDub: "sub"}); got != "dub" {
 		t.Errorf("expected dub, got %q", got)
 	}
 }
@@ -151,7 +151,7 @@ func TestFinishedEpisodeEndsTheSessionOnlyWhenMPVRanOffTheEnd(t *testing.T) {
 		anime.Ep.Player.PlaybackTime = 1400
 		anime.Ep.Duration = 1440 // ~97%
 		return &MPVPlaylistController{
-			config:         &CurdConfig{PercentageToMarkComplete: 85},
+			config:         &Config{PercentageToMarkComplete: 85},
 			anime:          anime,
 			socket:         "", // no MPV: property reads answer empty, as when idle
 			currentPlaying: 10,

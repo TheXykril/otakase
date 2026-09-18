@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 )
 
 // TestProviderSearchResolvesRomajiOnlyTitlesLive exercises the real fix against
@@ -18,7 +18,7 @@ func TestProviderSearchResolvesRomajiOnlyTitlesLive(t *testing.T) {
 		t.Skip("set CURD_LIVE_SEARCH_TEST=1")
 	}
 
-	config := &CurdConfig{Provider: "stacked", AnimeNameLanguage: "english"}
+	config := &Config{Provider: "stacked", AnimeNameLanguage: "english"}
 	previous := GetGlobalConfig()
 	SetGlobalConfig(config)
 	t.Cleanup(func() { SetGlobalConfig(previous) })
@@ -50,7 +50,7 @@ func TestProviderSearchResolvesRomajiOnlyTitlesLive(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Start from the romaji title, exactly as curd.go seeds the query.
+			// Start from the romaji title, exactly as otakase.go seeds the query.
 			state := &providerMappingSearchState{
 				query:         tc.title.Romaji,
 				allProviders:  configuredProviderNames(config),
@@ -82,7 +82,7 @@ func TestAnipubNeedsEnglishTitleVariantLive(t *testing.T) {
 	english := "Rich Girl Caretaker: I'm Secretly the Caregiver of the Most Popular Girl in This Rich Kid School"
 	title := AnimeTitle{Romaji: romaji, English: english}
 
-	config := &CurdConfig{Provider: `["anipub"]`, AnimeNameLanguage: "english"}
+	config := &Config{Provider: `["anipub"]`, AnimeNameLanguage: "english"}
 	previous := GetGlobalConfig()
 	SetGlobalConfig(config)
 	t.Cleanup(func() { SetGlobalConfig(previous) })
@@ -94,7 +94,7 @@ func TestAnipubNeedsEnglishTitleVariantLive(t *testing.T) {
 	}
 	// Being throttled proves nothing either way, and failing on it would make a
 	// scheduled run cry wolf about a provider that is perfectly healthy.
-	if errors.Is(romajiErr, curdhost.ErrRateLimited) {
+	if errors.Is(romajiErr, providerhost.ErrRateLimited) {
 		t.Skip("anipub is rate limiting; cannot exercise the variant fallback right now")
 	}
 
@@ -105,7 +105,7 @@ func TestAnipubNeedsEnglishTitleVariantLive(t *testing.T) {
 	}
 
 	results, err := searchAnimeForMapping(config, state, "sub")
-	if errors.Is(err, curdhost.ErrRateLimited) {
+	if errors.Is(err, providerhost.ErrRateLimited) {
 		t.Skip("anipub is rate limiting; cannot exercise the variant fallback right now")
 	}
 	if err != nil {

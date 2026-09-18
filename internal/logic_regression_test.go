@@ -110,7 +110,7 @@ func TestSelectionCtrlCSelectsQuit(t *testing.T) {
 
 func TestVimKeysNormalModeNavigatesWithoutFiltering(t *testing.T) {
 	prev := GetGlobalConfig()
-	SetGlobalConfig(&CurdConfig{VimKeys: true})
+	SetGlobalConfig(&Config{VimKeys: true})
 	t.Cleanup(func() { SetGlobalConfig(prev) })
 
 	model := &Model{
@@ -208,7 +208,7 @@ func TestSelectionMeansQuitAndBack(t *testing.T) {
 
 func TestLegacyModeStillTypeToFilter(t *testing.T) {
 	prev := GetGlobalConfig()
-	SetGlobalConfig(&CurdConfig{VimKeys: false})
+	SetGlobalConfig(&Config{VimKeys: false})
 	t.Cleanup(func() { SetGlobalConfig(prev) })
 
 	model := &Model{
@@ -328,7 +328,7 @@ func TestGetProviderNormalizesConfiguredProviderName(t *testing.T) {
 	})
 
 	CurrentProvider = nil
-	SetGlobalConfig(&CurdConfig{Provider: " Anikoto "})
+	SetGlobalConfig(&Config{Provider: " Anikoto "})
 
 	// The point is that a disabled provider falls back to the head of the
 	// stack, whichever that currently is -- naming it here only makes this
@@ -348,7 +348,7 @@ func TestGetProviderFallsBackWhenConfiguredProviderDisabled(t *testing.T) {
 	})
 
 	CurrentProvider = nil
-	SetGlobalConfig(&CurdConfig{Provider: " AnimePahe "})
+	SetGlobalConfig(&Config{Provider: " AnimePahe "})
 
 	want := defaultEnabledProviderStack()[0]
 	if got := GetProvider().Name(); got != want {
@@ -542,7 +542,7 @@ func TestGetEntriesByCategoryDedupesAcrossBuckets(t *testing.T) {
 }
 
 func TestMediaDisplayTitleFallsBackToID(t *testing.T) {
-	title := mediaDisplayTitle(Media{ID: 42}, &CurdConfig{AnimeNameLanguage: "english"})
+	title := mediaDisplayTitle(Media{ID: 42}, &Config{AnimeNameLanguage: "english"})
 	if title != "42" {
 		t.Fatalf("expected ID fallback for empty titles, got %q", title)
 	}

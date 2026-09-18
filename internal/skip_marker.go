@@ -66,7 +66,7 @@ var (
 // One marker serves the whole session. Starting a second for the next episode
 // would leave both listening to the same socket, and every keypress would be
 // answered twice.
-func StartSkipMarker(config *CurdConfig, anime *Anime, socket string, applied SkipIDs, done <-chan struct{}) {
+func StartSkipMarker(config *Config, anime *Anime, socket string, applied SkipIDs, done <-chan struct{}) {
 	if config == nil || anime == nil || !config.ContributeSkipTimes {
 		return
 	}

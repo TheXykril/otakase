@@ -43,7 +43,7 @@ func (p *fakePlaybackProvider) EpisodesList(showID, mode string) ([]string, erro
 	return []string{"1"}, nil
 }
 
-func (p *fakePlaybackProvider) GetEpisodeURL(config CurdConfig, id string, epNo int) ([]string, error) {
+func (p *fakePlaybackProvider) GetEpisodeURL(config Config, id string, epNo int) ([]string, error) {
 	mode := normalizeTranslationType(config.SubOrDub)
 	p.modes = append(p.modes, mode)
 	if err := p.errByMode[mode]; err != nil {
@@ -151,7 +151,7 @@ func TestGetEpisodeURLForPlaybackUsesPreferredAudioOnlyWhenAvailable(t *testing.
 	}
 	withProvider(t, provider)
 
-	links, mode, err := GetEpisodeURLForPlayback(CurdConfig{SubOrDub: "sub"}, "anime-id", 1)
+	links, mode, err := GetEpisodeURLForPlayback(Config{SubOrDub: "sub"}, "anime-id", 1)
 	if err != nil {
 		t.Fatalf("expected preferred audio to succeed: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestGetEpisodeURLForPlaybackRequiresExplicitFallbackApproval(t *testing.T) 
 		return SelectionOption{Key: "play"}, nil
 	})
 
-	links, mode, err := GetEpisodeURLForPlayback(CurdConfig{SubOrDub: "sub"}, "anime-id", 1)
+	links, mode, err := GetEpisodeURLForPlayback(Config{SubOrDub: "sub"}, "anime-id", 1)
 	if err != nil {
 		t.Fatalf("expected accepted fallback to succeed: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestGetEpisodeURLForPlaybackCancelsAudioFallback(t *testing.T) {
 		return SelectionOption{Key: "cancel"}, nil
 	})
 
-	links, mode, err := GetEpisodeURLForPlayback(CurdConfig{SubOrDub: "sub"}, "anime-id", 1)
+	links, mode, err := GetEpisodeURLForPlayback(Config{SubOrDub: "sub"}, "anime-id", 1)
 	if err == nil {
 		t.Fatalf("expected cancelled fallback to return preferred-mode error")
 	}
@@ -208,21 +208,21 @@ func TestGetEpisodeURLForPlaybackCancelsAudioFallback(t *testing.T) {
 }
 
 func TestShouldWriteRemoteTrackingHonorsSessionSkip(t *testing.T) {
-	config := &CurdConfig{TrackingRemote: TrackingRemoteAniList}
+	config := &Config{TrackingRemote: TrackingRemoteAniList}
 	if !ShouldWriteRemoteTracking(config, &Anime{}) {
 		t.Fatalf("expected normal remote tracking to write")
 	}
 	if ShouldWriteRemoteTracking(config, &Anime{SkipRemoteSync: true}) {
 		t.Fatalf("expected session skip flag to suppress remote writes")
 	}
-	if ShouldWriteRemoteTracking(&CurdConfig{TrackingRemote: TrackingRemoteNone}, &Anime{}) {
+	if ShouldWriteRemoteTracking(&Config{TrackingRemote: TrackingRemoteNone}, &Anime{}) {
 		t.Fatalf("expected local-only mode to suppress remote writes")
 	}
 }
 
 func TestMaybeImportAniListToMyAnimeListDismissesWithoutMarkingImported(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "curd.conf")
+	configPath := filepath.Join(tempDir, "otakase.conf")
 	if err := createDefaultConfig(configPath); err != nil {
 		t.Fatalf("create config: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestMaybeImportAniListToMyAnimeListDismissesWithoutMarkingImported(t *testi
 		GlobalConfigPath = previousConfigPath
 	})
 
-	config := &CurdConfig{
+	config := &Config{
 		StoragePath:         tempDir,
 		TrackingRemote:      TrackingRemoteMyAnimeList,
 		TrackingConfigured:  true,
@@ -259,7 +259,7 @@ func TestMaybeImportAniListToMyAnimeListDismissesWithoutMarkingImported(t *testi
 }
 
 func TestWriteTrackingBackupCreatesSnapshot(t *testing.T) {
-	config := &CurdConfig{StoragePath: t.TempDir()}
+	config := &Config{StoragePath: t.TempDir()}
 	aniList := AnimeList{Watching: []Entry{{Media: Media{ID: 1, MalID: 11}, Status: "CURRENT"}}}
 	myAnimeList := AnimeList{Planning: []Entry{{Media: Media{ID: 2, MalID: 22}, Status: "PLANNING"}}}
 
@@ -298,7 +298,7 @@ func TestSelectSequelAndUnreleasedSequelActions(t *testing.T) {
 		return SelectionOption{Key: "1"}, nil
 	})
 
-	selected, ok := selectSequel(&CurdConfig{}, sequels)
+	selected, ok := selectSequel(&Config{}, sequels)
 	if !ok || selected.ID != 2 {
 		t.Fatalf("expected second sequel selection, got ok=%v selected=%+v", ok, selected)
 	}
@@ -308,7 +308,7 @@ func TestSelectSequelAndUnreleasedSequelActions(t *testing.T) {
 		captured = append([]SelectionOption(nil), options...)
 		return SelectionOption{Key: "skip"}, nil
 	})
-	summary := promptSequelAction(&CurdConfig{}, selected, "token")
+	summary := promptSequelAction(&Config{}, selected, "token")
 	if summary != "sequel skipped" {
 		t.Fatalf("expected skipped summary, got %q", summary)
 	}
@@ -321,7 +321,7 @@ func TestSelectSequelAndUnreleasedSequelActions(t *testing.T) {
 
 func TestHandleLastEpisodeCompletionSummarizesSkippedTrackerWrites(t *testing.T) {
 	previousConfig := GetGlobalConfig()
-	config := &CurdConfig{
+	config := &Config{
 		RofiSelection:     false,
 		ScoreOnCompletion: true,
 		TrackingRemote:    TrackingRemoteAniList,

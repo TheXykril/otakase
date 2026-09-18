@@ -19,7 +19,7 @@ var (
 
 // preferredTitleOrder returns the anime titles ordered by the configured display
 // language, so the language the user reads is also the one searched first.
-func preferredTitleOrder(config *CurdConfig, title AnimeTitle) []string {
+func preferredTitleOrder(config *Config, title AnimeTitle) []string {
 	english := strings.TrimSpace(title.English)
 	romaji := strings.TrimSpace(title.Romaji)
 	japanese := strings.TrimSpace(title.Japanese)
@@ -76,7 +76,7 @@ func simplifyQuery(query string) []string {
 // buildSearchQueryVariants produces the ordered, de-duplicated set of queries to
 // try for an anime. The caller's explicit query always leads so a manually typed
 // search is never overridden by a title guess.
-func buildSearchQueryVariants(config *CurdConfig, title AnimeTitle, primary string) []string {
+func buildSearchQueryVariants(config *Config, title AnimeTitle, primary string) []string {
 	ordered := make([]string, 0, 12)
 	seen := make(map[string]struct{}, 12)
 

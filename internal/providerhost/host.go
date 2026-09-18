@@ -1,4 +1,4 @@
-package curdhost
+package providerhost
 
 import (
 	"errors"

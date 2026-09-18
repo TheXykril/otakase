@@ -142,13 +142,13 @@ func TestUnairedEpisodeOffersToTryAnyway(t *testing.T) {
 		return SelectionOption{Key: "wait"}, nil
 	})
 
-	if confirmUnairedEpisode(&CurdConfig{}, 11, availability) {
+	if confirmUnairedEpisode(&Config{}, 11, availability) {
 		t.Error("choosing Done must not start a search")
 	}
 
 	// The escape hatch matters: the schedule comes from a cached list, so an
 	// episode that aired an hour ago can still read as upcoming, and a flat
-	// refusal would have curd overruling the user on something it half knows.
+	// refusal would have otakase overruling the user on something it half knows.
 	var keys []string
 	for _, option := range shown {
 		keys = append(keys, option.Key)
@@ -160,7 +160,7 @@ func TestUnairedEpisodeOffersToTryAnyway(t *testing.T) {
 	withPromptSelect(t, func(options []SelectionOption) (SelectionOption, error) {
 		return SelectionOption{Key: "try"}, nil
 	})
-	if !confirmUnairedEpisode(&CurdConfig{}, 11, availability) {
+	if !confirmUnairedEpisode(&Config{}, 11, availability) {
 		t.Error("choosing to look anyway must proceed")
 	}
 }
@@ -173,7 +173,7 @@ func TestUnairedEpisodePromptFailureDoesNotProceed(t *testing.T) {
 	withPromptSelect(t, func(options []SelectionOption) (SelectionOption, error) {
 		return SelectionOption{}, errors.New("no display")
 	})
-	if confirmUnairedEpisode(&CurdConfig{}, 11, availability) {
+	if confirmUnairedEpisode(&Config{}, 11, availability) {
 		t.Error("a failed prompt must not be treated as consent to search")
 	}
 }

@@ -27,12 +27,12 @@ func TestMpvPlaybackStartTimeoutDurationUsesConfig(t *testing.T) {
 
 func TestIsMPVConnectionGoneError(t *testing.T) {
 	for _, message := range []string{
-		"dial unix /tmp/curd: connect: connection refused",
-		"dial unix /tmp/curd: connect: no such file or directory",
-		"open \\\\.\\pipe\\curd: The system cannot find the file specified.",
-		"read \\\\.\\pipe\\curd: The pipe has been ended.",
-		"write \\\\.\\pipe\\curd: The pipe is being closed.",
-		"read \\\\.\\pipe\\curd: No process is on the other end of the pipe.",
+		"dial unix /tmp/otakase: connect: connection refused",
+		"dial unix /tmp/otakase: connect: no such file or directory",
+		"open \\\\.\\pipe\\otakase: The system cannot find the file specified.",
+		"read \\\\.\\pipe\\otakase: The pipe has been ended.",
+		"write \\\\.\\pipe\\otakase: The pipe is being closed.",
+		"read \\\\.\\pipe\\otakase: No process is on the other end of the pipe.",
 	} {
 		if !isMPVConnectionGoneError(errors.New(message)) {
 			t.Fatalf("expected gone error for %q", message)

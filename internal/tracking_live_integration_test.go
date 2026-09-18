@@ -426,7 +426,7 @@ func TestLiveTrackerContextForcesTerminalPrompts(t *testing.T) {
 		t.Skip("live integration context is covered by the live suite")
 	}
 
-	config := CurdConfig{
+	config := Config{
 		RofiSelection:   true,
 		ImagePreview:    true,
 		AlternateScreen: true,
@@ -441,7 +441,7 @@ func TestLiveTrackerContextForcesTerminalPrompts(t *testing.T) {
 	}
 }
 
-func loadLiveTrackerTestContext(t *testing.T) (*CurdConfig, string, []liveTestAnime, func()) {
+func loadLiveTrackerTestContext(t *testing.T) (*Config, string, []liveTestAnime, func()) {
 	t.Helper()
 
 	if os.Getenv("CURD_RUN_TRACKER_LIVE_INTEGRATION") != "1" {
@@ -499,7 +499,7 @@ func loadLiveTrackerTestContext(t *testing.T) (*CurdConfig, string, []liveTestAn
 	return &config, anilistToken, resolveLiveTestAnime(t), cleanup
 }
 
-func forceTerminalTestMode(config *CurdConfig) {
+func forceTerminalTestMode(config *Config) {
 	config.RofiSelection = false
 	config.ImagePreview = false
 	config.AlternateScreen = false
@@ -558,7 +558,7 @@ func resolveLiveTestAnime(t *testing.T) []liveTestAnime {
 	return resolvedLiveTestAnime
 }
 
-func restoreLiveTrackerState(t *testing.T, config *CurdConfig, anilistToken string, aniListSnapshot, myAnimeListSnapshot AnimeList) {
+func restoreLiveTrackerState(t *testing.T, config *Config, anilistToken string, aniListSnapshot, myAnimeListSnapshot AnimeList) {
 	t.Helper()
 
 	if err := wipeAniListRemote(config); err != nil {
@@ -575,7 +575,7 @@ func restoreLiveTrackerState(t *testing.T, config *CurdConfig, anilistToken stri
 	}
 }
 
-func resetLiveTrackerState(t *testing.T, config *CurdConfig, _ string) {
+func resetLiveTrackerState(t *testing.T, config *Config, _ string) {
 	t.Helper()
 
 	if err := wipeAniListRemote(config); err != nil {
@@ -604,7 +604,7 @@ func liveEntry(anime liveTestAnime, status string, progress int, score float64, 
 	}
 }
 
-func refreshBothTrackers(t *testing.T, config *CurdConfig) {
+func refreshBothTrackers(t *testing.T, config *Config) {
 	t.Helper()
 
 	testConfig := *config
@@ -617,7 +617,7 @@ func refreshBothTrackers(t *testing.T, config *CurdConfig) {
 	}
 }
 
-func fetchBothLists(t *testing.T, config *CurdConfig, anilistToken string) (AnimeList, AnimeList) {
+func fetchBothLists(t *testing.T, config *Config, anilistToken string) (AnimeList, AnimeList) {
 	t.Helper()
 
 	aniList, err := fetchAniListAnimeListFromToken(anilistToken)

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 )
 
 // Run AniPub edge cases in isolation with generous pacing to avoid rate limits:
@@ -20,8 +20,8 @@ func initLiveAnipub(tb testing.TB) {
 	if os.Getenv("CURD_LIVE_ANIPUB") == "" {
 		tb.Skip("set CURD_LIVE_ANIPUB=1 to run isolated long AniPub live tests")
 	}
-	if curdhost.HTTPClient == nil {
-		curdhost.HTTPClient = func() *http.Client { return http.DefaultClient }
+	if providerhost.HTTPClient == nil {
+		providerhost.HTTPClient = func() *http.Client { return http.DefaultClient }
 	}
 }
 

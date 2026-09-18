@@ -16,7 +16,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 )
 
 const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -57,7 +57,7 @@ func fetchString(rawURL, referer string) (string, error) {
 		req.Header.Set("Referer", referer)
 	}
 
-	resp, err := curdhost.HTTPClient().Do(req)
+	resp, err := providerhost.HTTPClient().Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -75,8 +75,8 @@ func fetchString(rawURL, referer string) (string, error) {
 	if isCloudflareChallenge(body) {
 		return "", fmt.Errorf("anidb.app returned a Cloudflare challenge")
 	}
-	if !curdhost.HTTPStatusOK(resp.StatusCode) {
-		return "", curdhost.HTTPStatusError("anidb request", resp.StatusCode, raw)
+	if !providerhost.HTTPStatusOK(resp.StatusCode) {
+		return "", providerhost.HTTPStatusError("anidb request", resp.StatusCode, raw)
 	}
 	return body, nil
 }

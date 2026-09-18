@@ -28,7 +28,7 @@ func TestIsUpdateNewer(t *testing.T) {
 }
 
 func TestPendingUpdateShouldPromptRespectsSkipAndRemind(t *testing.T) {
-	cfg := &CurdConfig{CheckUpdates: true}
+	cfg := &Config{CheckUpdates: true}
 	state := updatePendingState{
 		Available:     true,
 		LatestVersion: "2.1.0",
@@ -58,15 +58,15 @@ func TestPendingUpdateShouldPromptRespectsSkipAndRemind(t *testing.T) {
 func TestCheckForUpdateInBackgroundWritesPendingState(t *testing.T) {
 	storage := t.TempDir()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/repos/TheXykril/curd/releases/latest" {
+		if r.URL.Path != "/repos/TheXykril/otakase/releases/latest" {
 			http.NotFound(w, r)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"tag_name": "v9.9.9",
-			"name":     "Curd v9.9.9",
+			"name":     "otakase v9.9.9",
 			"body":     "## Changes\n- test",
-			"html_url": "https://github.com/TheXykril/curd/releases/tag/v9.9.9",
+			"html_url": "https://github.com/TheXykril/otakase/releases/tag/v9.9.9",
 			"assets":   []map[string]string{},
 		})
 	}))
@@ -79,9 +79,9 @@ func TestCheckForUpdateInBackgroundWritesPendingState(t *testing.T) {
 		Available:     true,
 		LatestVersion: "9.9.9",
 		LatestTag:     "v9.9.9",
-		ReleaseName:   "Curd v9.9.9",
+		ReleaseName:   "otakase v9.9.9",
 		ReleaseNotes:  "## Changes\n- test",
-		HTMLURL:       "https://github.com/TheXykril/curd/releases/tag/v9.9.9",
+		HTMLURL:       "https://github.com/TheXykril/otakase/releases/tag/v9.9.9",
 		CheckedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
 	if err := saveUpdatePendingState(storage, state); err != nil {
@@ -91,7 +91,7 @@ func TestCheckForUpdateInBackgroundWritesPendingState(t *testing.T) {
 	if !loaded.Available || loaded.LatestVersion != "9.9.9" {
 		t.Fatalf("unexpected loaded state: %#v", loaded)
 	}
-	cfg := &CurdConfig{CheckUpdates: true, StoragePath: storage}
+	cfg := &Config{CheckUpdates: true, StoragePath: storage}
 	if !pendingUpdateShouldPrompt(cfg, "2.0.4", loaded) {
 		t.Fatal("expected pending update prompt")
 	}
@@ -142,13 +142,13 @@ func TestPreferGUIPasswordPromptWithRofi(t *testing.T) {
 	prev := GetGlobalConfig()
 	t.Cleanup(func() { SetGlobalConfig(prev) })
 
-	SetGlobalConfig(&CurdConfig{RofiSelection: true})
+	SetGlobalConfig(&Config{RofiSelection: true})
 	if !preferGUIPasswordPrompt() {
 		t.Fatal("expected GUI password preference when RofiSelection is on")
 	}
 
 	// CLI mode (Rofi off): never force GUI just because a display session exists.
-	SetGlobalConfig(&CurdConfig{RofiSelection: false})
+	SetGlobalConfig(&Config{RofiSelection: false})
 	if preferGUIPasswordPrompt() && stdinIsTerminal() {
 		t.Fatal("CLI with a TTY should use terminal password, not GUI")
 	}
@@ -167,7 +167,7 @@ func TestCopyFileReplaceCrossDeviceStyle(t *testing.T) {
 	srcDir := t.TempDir()
 	dstDir := t.TempDir()
 	src := filepath.Join(srcDir, "newbin")
-	dst := filepath.Join(dstDir, "curd")
+	dst := filepath.Join(dstDir, "otakase")
 	if err := os.WriteFile(src, []byte("#!/bin/sh\necho new\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestReplaceExecutableHandlesCrossDevice(t *testing.T) {
 	srcDir := t.TempDir()
 	dstDir := t.TempDir()
 	src := filepath.Join(srcDir, "downloaded")
-	dst := filepath.Join(dstDir, "curd")
+	dst := filepath.Join(dstDir, "otakase")
 	if err := os.WriteFile(src, []byte("new-binary-content"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestReplaceExecutableHandlesCrossDevice(t *testing.T) {
 func TestBuildUpdatePromptMessage(t *testing.T) {
 	prompt, msg := buildUpdatePromptMessage("2.0.1", updatePendingState{
 		LatestVersion: "2.0.2",
-		ReleaseName:   "Curd v2.0.2",
+		ReleaseName:   "otakase v2.0.2",
 		HTMLURL:       "https://example.com",
 		ReleaseNotes:  "## Direct Commits\n- **fixed** stuff",
 	})

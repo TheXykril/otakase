@@ -41,7 +41,7 @@ func TestDualSyncDoesNotBlockTheLaunch(t *testing.T) {
 	}}
 
 	begin := time.Now()
-	startDualSyncWrites(&CurdConfig{}, writes)
+	startDualSyncWrites(&Config{}, writes)
 	elapsed := time.Since(begin)
 
 	// The point of the change: queueing returns immediately even while the
@@ -63,7 +63,7 @@ func TestDualSyncDoesNotBlockTheLaunch(t *testing.T) {
 func TestDualSyncSkipsAnEmptyPlan(t *testing.T) {
 	withInstantRemoteWritePacing(t)
 
-	startDualSyncWrites(&CurdConfig{}, dualSyncWrites{})
+	startDualSyncWrites(&Config{}, dualSyncWrites{})
 	dualSyncMu.Lock()
 	running := dualSyncRunning
 	dualSyncMu.Unlock()
@@ -92,14 +92,14 @@ func TestDualSyncDoesNotStackConcurrentRounds(t *testing.T) {
 	})
 
 	plan := dualSyncWrites{myAnimeList: []Entry{{Media: Media{ID: 1}}, {Media: Media{ID: 2}}}}
-	startDualSyncWrites(&CurdConfig{}, plan)
+	startDualSyncWrites(&Config{}, plan)
 
 	deadline := time.Now().Add(2 * time.Second)
 	for writes.Load() == 0 && time.Now().Before(deadline) {
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	startDualSyncWrites(&CurdConfig{}, plan) // second round while the first is stuck
+	startDualSyncWrites(&Config{}, plan) // second round while the first is stuck
 
 	dualSyncMu.Lock()
 	running := dualSyncRunning

@@ -74,7 +74,7 @@ func endMPVPlaylistSwitch() {
 	mpvPlaylistSwitching.Store(false)
 }
 
-// playlistSlot maps an MPV playlist index to curd episode + audio mode.
+// playlistSlot maps an MPV playlist index to otakase episode + audio mode.
 type playlistSlot struct {
 	Episode int
 	Mode    string // "sub" or "dub"
@@ -88,7 +88,7 @@ type playlistSlot struct {
 // Episode numbers come from a single provider EpisodesList call (not per-episode
 // stream probes). Placeholder rows use a temp M3U so MPV shows clean titles.
 type MPVPlaylistController struct {
-	config *CurdConfig
+	config *Config
 	anime  *Anime
 	socket string
 	done   <-chan struct{}
@@ -137,7 +137,7 @@ func (c *MPVPlaylistController) WaitForPrefetch() {
 // The recorded mode has to be tested before normalising, not after --
 // normalizeTranslationType turns an empty string into "sub", which would quietly
 // override a dub preference whenever nothing had been recorded yet.
-func playlistAudioMode(anime *Anime, config *CurdConfig) string {
+func playlistAudioMode(anime *Anime, config *Config) string {
 	if anime != nil && strings.TrimSpace(anime.Ep.Mode) != "" {
 		return normalizeTranslationType(anime.Ep.Mode)
 	}
@@ -150,7 +150,7 @@ func playlistAudioMode(anime *Anime, config *CurdConfig) string {
 // StartMPVPlaylistController waits until playback is stable, then builds the
 // episode playlist and watches for user selections. Safe to call in a goroutine.
 // Does nothing for android-intent / empty sockets or when disabled in config.
-func StartMPVPlaylistController(config *CurdConfig, anime *Anime, socket string, done <-chan struct{}) {
+func StartMPVPlaylistController(config *Config, anime *Anime, socket string, done <-chan struct{}) {
 	if config == nil || anime == nil || !config.MpvEpisodePlaylist {
 		return
 	}
@@ -787,7 +787,7 @@ func isPlaceholderPath(path string) bool {
 //
 // The episode's real stream is one entry in a playlist whose other rows are
 // placeholders, so when it finishes MPV does not stop -- it moves on, and the
-// next row is a black lavfi clip that runs for a day. Curd used to chase that as
+// next row is a black lavfi clip that runs for a day. otakase used to chase that as
 // though the user had chosen episode 1; refusing to chase it is not enough
 // either, because MPV then sits on blackness forever and the episode never ends,
 // so it is never marked watched.
@@ -873,12 +873,12 @@ func (c *MPVPlaylistController) handlePlaylistJumpSlot(slot playlistSlot, curEp 
 
 	_, _ = MPVSendCommand(c.socket, []interface{}{"show-text", fmt.Sprintf("Loading episode %d…", slot.Episode), 8000})
 	Log(fmt.Sprintf("MPV playlist: SWITCH ep %d → %d (%s) leave=%s", curEp, slot.Episode, slot.Mode, leaveAction))
-	CurdOut(fmt.Sprintf("Loading episode %d…", slot.Episode))
+	Out(fmt.Sprintf("Loading episode %d…", slot.Episode))
 
 	leftEp := curEp
 	if err := c.playSlot(slot); err != nil {
 		Log(fmt.Sprintf("MPV playlist: failed to play ep %d: %v", slot.Episode, err))
-		CurdOut(fmt.Sprintf("Could not play episode %d: %v", slot.Episode, err))
+		Out(fmt.Sprintf("Could not play episode %d: %v", slot.Episode, err))
 		if err2 := c.playSlot(playlistSlot{Episode: curEp, Mode: curMode, Label: c.episodeLabel(curEp, curMode)}); err2 != nil {
 			Log(fmt.Sprintf("MPV playlist: recovery play failed: %v", err2))
 			endMPVPlaylistSwitch()
@@ -928,15 +928,15 @@ func defaultPromptPlaylistEpisodeLeave(fromEp, toEp int, percentageWatched float
 	// Sequential next episode (+1): no menu — same spirit as normal "next ep".
 	if toEp == fromEp+1 {
 		if nearlyDone {
-			CurdOut(fmt.Sprintf("Next episode %d · marking %d watched (was %s)", toEp, fromEp, pctLabel))
+			Out(fmt.Sprintf("Next episode %d · marking %d watched (was %s)", toEp, fromEp, pctLabel))
 			return playlistLeaveMarkLeft, nil
 		}
-		CurdOut(fmt.Sprintf("Next episode %d · last played updated", toEp))
+		Out(fmt.Sprintf("Next episode %d · last played updated", toEp))
 		return playlistLeaveNone, nil
 	}
 
 	// Non-linear jump — ask what to do with upstream progress.
-	CurdOut(fmt.Sprintf("Jump: episode %d (%s) → episode %d", fromEp, pctLabel, toEp))
+	Out(fmt.Sprintf("Jump: episode %d (%s) → episode %d", fromEp, pctLabel, toEp))
 
 	options := []SelectionOption{
 		{Key: "none", Label: fmt.Sprintf("▶ Play episode %d only (don’t change AniList/MAL)", toEp)},
@@ -1178,15 +1178,15 @@ func (c *MPVPlaylistController) finalizePlaylistEpisodeChange(fromEp, toEp int, 
 				if err := UpdateAnimeProgress(token, anime.AnilistId, ep); err != nil {
 					Log(fmt.Sprintf("MPV playlist: UpdateAnimeProgress(%d): %v", ep, err))
 				} else {
-					CurdOut(fmt.Sprintf("Upstream progress → episode %d", ep))
+					Out(fmt.Sprintf("Upstream progress → episode %d", ep))
 				}
 			}(remoteProgress)
 		} else if anime.Rewatching {
 			Log("MPV playlist: rewatching — skipped remote progress update")
 		}
-		CurdOut(fmt.Sprintf("Playing episode %d · upstream progress set to %d", toEp, remoteProgress))
+		Out(fmt.Sprintf("Playing episode %d · upstream progress set to %d", toEp, remoteProgress))
 	} else {
-		CurdOut(fmt.Sprintf("Playing episode %d · last played updated (no upstream change)", toEp))
+		Out(fmt.Sprintf("Playing episode %d · last played updated (no upstream change)", toEp))
 	}
 
 	// Prefetch next episode links in preferred mode (no audio prompts).
@@ -1481,7 +1481,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 		c.probeAndAttachAlternateAudio()
 	}()
 
-	CurdOut(fmt.Sprintf("Playing episode %d (%s)", targetEp, mode))
+	Out(fmt.Sprintf("Playing episode %d (%s)", targetEp, mode))
 	return nil
 }
 

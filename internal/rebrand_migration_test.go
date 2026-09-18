@@ -17,8 +17,8 @@ func TestRenameCarriesOverAPreviousInstall(t *testing.T) {
 
 	legacyConfig := filepath.Join(configDir, "curd")
 	legacyStorage := filepath.Join(home, ".local", "share", "curd")
-	mustWrite(t, filepath.Join(legacyConfig, "curd.conf"),
-		"Player=mpv\nStoragePath=$HOME/.local/share/curd\nSubOrDub=dub\n")
+	mustWrite(t, filepath.Join(legacyConfig, "otakase.conf"),
+		"Player=mpv\nStoragePath=$HOME/.local/share/otakase\nSubOrDub=dub\n")
 	mustWrite(t, filepath.Join(legacyStorage, "token"), "anilist-token")
 	mustWrite(t, filepath.Join(legacyStorage, "history", "curd_history.txt"), "201514\t10\n")
 
@@ -39,7 +39,7 @@ func TestRenameCarriesOverAPreviousInstall(t *testing.T) {
 	if got := string(body); !strings.Contains(got, "SubOrDub=dub") {
 		t.Errorf("settings were lost in the copy: %q", got)
 	}
-	// A StoragePath still naming curd would read the old directory forever.
+	// A StoragePath still naming otakase would read the old directory forever.
 	if got := string(body); !strings.Contains(got, "StoragePath=$HOME/.local/share/otakase") {
 		t.Errorf("StoragePath still points at the old directory: %q", got)
 	}
@@ -52,8 +52,8 @@ func TestRenameCarriesOverAPreviousInstall(t *testing.T) {
 		t.Errorf("watch history did not come across: %v", err)
 	}
 
-	// Copied, not moved: a curd binary that is still installed must keep working.
-	if _, err := os.Stat(filepath.Join(legacyConfig, "curd.conf")); err != nil {
+	// Copied, not moved: a otakase binary that is still installed must keep working.
+	if _, err := os.Stat(filepath.Join(legacyConfig, "otakase.conf")); err != nil {
 		t.Errorf("the original install was destroyed: %v", err)
 	}
 }

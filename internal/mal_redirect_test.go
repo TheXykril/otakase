@@ -26,7 +26,7 @@ func TestMyAnimeListRequestDoesNotFollowRedirects(t *testing.T) {
 	}))
 	defer api.Close()
 
-	config := &CurdConfig{StoragePath: t.TempDir()}
+	config := &Config{StoragePath: t.TempDir()}
 	writeMyAnimeListTestToken(t, config)
 
 	done := make(chan error, 1)
@@ -55,7 +55,7 @@ func TestMyAnimeListRedirectErrorIsLegible(t *testing.T) {
 	}))
 	defer api.Close()
 
-	config := &CurdConfig{StoragePath: t.TempDir()}
+	config := &Config{StoragePath: t.TempDir()}
 	writeMyAnimeListTestToken(t, config)
 
 	var out map[string]any
@@ -72,7 +72,7 @@ func TestMyAnimeListRedirectErrorIsLegible(t *testing.T) {
 
 // writeMyAnimeListTestToken writes a token that will not be considered expired,
 // so the request path is exercised rather than the login flow.
-func writeMyAnimeListTestToken(t *testing.T, config *CurdConfig) {
+func writeMyAnimeListTestToken(t *testing.T, config *Config) {
 	t.Helper()
 	token := &AnilistToken{
 		AccessToken:  "test-token",

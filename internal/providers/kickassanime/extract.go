@@ -125,7 +125,7 @@ func playerOrigin(src string) string {
 	return parsed.Scheme + "://" + parsed.Host
 }
 
-// englishSubtitle picks the track to hand MPV. Curd plays subtitled releases
+// englishSubtitle picks the track to hand MPV. otakase plays subtitled releases
 // with English text, and the host lists a dozen languages per episode.
 func englishSubtitle(tracks []SubtitleTrack) string {
 	for _, track := range tracks {

@@ -34,7 +34,7 @@ func TestNormalizeRemoteTrackerAliases(t *testing.T) {
 func TestNormalizeTrackingConfigAlwaysKeepsLocalHistoryEnabled(t *testing.T) {
 	t.Parallel()
 
-	config := &CurdConfig{
+	config := &Config{
 		TrackingLocal:      false,
 		TrackingRemote:     "none",
 		TrackingConfigured: true,
@@ -53,7 +53,7 @@ func TestNormalizeTrackingConfigAlwaysKeepsLocalHistoryEnabled(t *testing.T) {
 func TestNormalizeTrackingConfigMarksInvalidRemoteForPrompt(t *testing.T) {
 	t.Parallel()
 
-	config := &CurdConfig{
+	config := &Config{
 		TrackingLocal:      true,
 		TrackingRemote:     "totally-invalid",
 		TrackingConfigured: true,
@@ -75,7 +75,7 @@ func TestNormalizeTrackingConfigMarksInvalidRemoteForPrompt(t *testing.T) {
 func TestGetOrderedCategoriesHidesRemoteOnlyEntriesForLocalTracking(t *testing.T) {
 	t.Parallel()
 
-	config := &CurdConfig{
+	config := &Config{
 		MenuOrder:      "CURRENT,UPDATE,PLANNING,ALL,PROVIDER",
 		TrackingLocal:  true,
 		TrackingRemote: TrackingRemoteNone,
@@ -144,7 +144,7 @@ func TestMyAnimeListStatusConversion(t *testing.T) {
 func TestDualSyncModeEnablesBothRemoteTrackers(t *testing.T) {
 	t.Parallel()
 
-	config := &CurdConfig{TrackingRemote: TrackingRemoteBoth}
+	config := &Config{TrackingRemote: TrackingRemoteBoth}
 	if !UsesAniListTracking(config) {
 		t.Fatalf("expected dual-sync mode to include AniList")
 	}

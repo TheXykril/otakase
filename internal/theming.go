@@ -8,9 +8,9 @@ import (
 )
 
 // ApplyThemeFromConfig resolves the colour palette named by the config and
-// installs it into the UI. A theme that cannot be read is not fatal: Curd falls
+// installs it into the UI. A theme that cannot be read is not fatal: otakase falls
 // back to its own palette and logs why.
-func ApplyThemeFromConfig(config *CurdConfig) theme.Palette {
+func ApplyThemeFromConfig(config *Config) theme.Palette {
 	mode := theme.ModeAuto
 	if config != nil {
 		mode = theme.ParseMode(config.Theme)
@@ -44,7 +44,7 @@ func ApplyThemeFromConfig(config *CurdConfig) theme.Palette {
 func WriteRofiThemes(storagePath string) error {
 	backups, err := rofitheme.WriteAllWithBackups(storagePath, theme.Active())
 	for _, backup := range backups {
-		CurdOut(fmt.Sprintf("Saved your customised rofi theme to %s", backup))
+		Out(fmt.Sprintf("Saved your customised rofi theme to %s", backup))
 		Log(fmt.Sprintf("Backed up a hand-edited rofi theme to %s", backup))
 	}
 	return err

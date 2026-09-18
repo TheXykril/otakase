@@ -19,7 +19,7 @@ import (
 
 // sortEntriesByRecency orders entries most-recently-updated first, falling back
 // to the title so the order is stable when timestamps tie or are missing.
-func sortEntriesByRecency(entries []Entry, config *CurdConfig) []Entry {
+func sortEntriesByRecency(entries []Entry, config *Config) []Entry {
 	sorted := append([]Entry(nil), entries...)
 	sort.SliceStable(sorted, func(i, j int) bool {
 		left, right := sorted[i].UpdatedAt, sorted[j].UpdatedAt
@@ -34,7 +34,7 @@ func sortEntriesByRecency(entries []Entry, config *CurdConfig) []Entry {
 
 // formatTimeUntilAiring renders a countdown to the next episode.
 //
-// AniList sends timeUntilAiring with every list fetch and Curd stored it without
+// AniList sends timeUntilAiring with every list fetch and otakase stored it without
 // ever reading it: only the episode number was used, for the "new episode" flag.
 // It costs nothing extra to say when the next one lands.
 func formatTimeUntilAiring(seconds int) string {
@@ -125,7 +125,7 @@ func entryStatusNote(entry Entry, resume string, withCountdown bool) string {
 // resumePointsByAnilistID reads the local watch history into a lookup of resume
 // notes. It is read once per menu build rather than per row: the history is a
 // flat file and re-reading it for every entry would be wasteful on a long list.
-func resumePointsByAnilistID(config *CurdConfig) map[int]string {
+func resumePointsByAnilistID(config *Config) map[int]string {
 	points := make(map[int]string)
 	if config == nil {
 		return points

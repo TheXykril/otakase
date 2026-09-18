@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 )
 
 // decoySegmentMarkers identify ad/decoy segments that the megap.kotocdn.site
@@ -46,7 +46,7 @@ func validateResolvedStream(rawURL string) error {
 	}
 
 	v := &hlsStreamValidator{
-		client:   curdhost.HTTPClient(),
+		client:   providerhost.HTTPClient(),
 		referrer: megaplayBaseURL + "/",
 	}
 
@@ -124,9 +124,9 @@ func (v *hlsStreamValidator) fetch(rawURL string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	if !curdhost.HTTPStatusOK(resp.StatusCode) {
+	if !providerhost.HTTPStatusOK(resp.StatusCode) {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", curdhost.HTTPStatusError("megaplay hls manifest", resp.StatusCode, body)
+		return "", providerhost.HTTPStatusError("megaplay hls manifest", resp.StatusCode, body)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxPlaylistBytes))
 	if err != nil {
@@ -155,7 +155,7 @@ func (v *hlsStreamValidator) fetchRange(rawURL string, start, end int) []byte {
 		return nil
 	}
 	defer resp.Body.Close()
-	if !curdhost.HTTPStatusOK(resp.StatusCode) {
+	if !providerhost.HTTPStatusOK(resp.StatusCode) {
 		return nil
 	}
 

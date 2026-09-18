@@ -6,22 +6,22 @@ import (
 	"strings"
 )
 
-var curdVersion = "dev"
+var appVersion = "dev"
 
-// SetCurdVersion records the running application version for storage migrations.
-func SetCurdVersion(version string) {
+// SetVersion records the running application version for storage migrations.
+func SetVersion(version string) {
 	version = strings.TrimSpace(version)
 	if version != "" {
-		curdVersion = version
+		appVersion = version
 	}
 }
 
-// CurdVersion returns the running application version.
-func CurdVersion() string {
-	if curdVersion == "" {
+// Version returns the running application version.
+func Version() string {
+	if appVersion == "" {
 		return "dev"
 	}
-	return curdVersion
+	return appVersion
 }
 
 func storageVersionFilePath(storagePath string) string {

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Launched from a keybind rather than a terminal, Curd gives no sign it is
+// Launched from a keybind rather than a terminal, otakase gives no sign it is
 // running until its first menu appears. Refreshing a tracker token and pulling
 // a large list can take several seconds, during which the only honest reading
 // of a silent desktop is "did that even start?" -- so people press the key
@@ -40,13 +40,13 @@ type startupProgress struct {
 var (
 	startupMu       sync.Mutex
 	activeStartup   *startupProgress
-	startupReporter = func(message string) { CurdOut(message) }
+	startupReporter = func(message string) { Out(message) }
 )
 
-// BeginStartupProgress starts reporting a slow launch. It is a no-op when Curd
+// BeginStartupProgress starts reporting a slow launch. It is a no-op when otakase
 // is running in a terminal, where its output is already visible.
-func BeginStartupProgress(config *CurdConfig, stage string) {
-	// The clock runs regardless of how Curd was launched: a slow start is worth
+func BeginStartupProgress(config *Config, stage string) {
+	// The clock runs regardless of how otakase was launched: a slow start is worth
 	// recording in a terminal too, where it is merely visible rather than
 	// mysterious.
 	beginStartupClock(stage)
@@ -86,7 +86,7 @@ func StartupStage(stage string) {
 }
 
 // A slow launch is hard to argue about from the outside: the only evidence is
-// that nothing happens for a while. Timing each stage into the log turns "curd
+// that nothing happens for a while. Timing each stage into the log turns "otakase
 // takes a minute" into a line naming which step spent it, and costs one
 // timestamp per stage.
 var (
@@ -135,7 +135,7 @@ func reportStartupTotal() {
 }
 
 // EndStartupProgress stops reporting. It is safe to call more than once, and is
-// called from the menus themselves: a visible menu is its own proof that Curd
+// called from the menus themselves: a visible menu is its own proof that otakase
 // started, and any message still on screen at that point is stale.
 func EndStartupProgress() {
 	reportStartupTotal()

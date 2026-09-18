@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 	_ "github.com/thexykril/otakase/internal/loadproviders"
 	"github.com/thexykril/otakase/internal/providers"
 )
@@ -20,8 +20,8 @@ func initLiveMovies(tb testing.TB) {
 	if os.Getenv("CURD_LIVE_MOVIES") == "" {
 		tb.Skip("set CURD_LIVE_MOVIES=1 to run live movie provider tests")
 	}
-	if curdhost.HTTPClient == nil {
-		curdhost.HTTPClient = func() *http.Client { return http.DefaultClient }
+	if providerhost.HTTPClient == nil {
+		providerhost.HTTPClient = func() *http.Client { return http.DefaultClient }
 	}
 }
 

@@ -98,7 +98,7 @@ func TestMarkingAndSubmittingThroughARealPlayer(t *testing.T) {
 	activeSkipMarker = nil
 	activeSkipMarkerMu.Unlock()
 
-	StartSkipMarker(&CurdConfig{ContributeSkipTimes: true, StoragePath: t.TempDir()},
+	StartSkipMarker(&Config{ContributeSkipTimes: true, StoragePath: t.TempDir()},
 		anime, socket, SkipIDs{}, done)
 
 	press := func(key string) {

@@ -8,7 +8,7 @@ import (
 // Only AniList reports a broadcast schedule. MyAnimeList has no equivalent, so
 // whichever entry wins a dual-tracking merge, the merged one has to keep it.
 //
-// It is the MyAnimeList entry that wins in practice: Curd pushes progress there
+// It is the MyAnimeList entry that wins in practice: otakase pushes progress there
 // when an episode finishes, which makes it the more recently updated of the two.
 // Losing the schedule then makes every show look like its airing dates are
 // unknown -- no countdown in the list, and no way to tell "you are caught up"

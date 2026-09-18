@@ -38,7 +38,7 @@ func withMyAnimeListTokenTestHooks(t *testing.T, client *http.Client) {
 }
 
 func TestRefreshMyAnimeListTokenPreservesRefreshTokenWhenResponseOmitsOne(t *testing.T) {
-	config := &CurdConfig{
+	config := &Config{
 		StoragePath:         t.TempDir(),
 		MyAnimeListClientID: "client-id",
 	}
@@ -82,7 +82,7 @@ func TestRefreshMyAnimeListTokenPreservesRefreshTokenWhenResponseOmitsOne(t *tes
 }
 
 func TestGetMyAnimeListAccessTokenReauthenticatesWhenRefreshFails(t *testing.T) {
-	config := &CurdConfig{
+	config := &Config{
 		StoragePath:         t.TempDir(),
 		MyAnimeListClientID: "client-id",
 	}
@@ -98,7 +98,7 @@ func TestGetMyAnimeListAccessTokenReauthenticatesWhenRefreshFails(t *testing.T) 
 	withMyAnimeListTokenTestHooks(t, &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return testHTTPResponse(req, http.StatusBadRequest, `{"error":"invalid_grant"}`), nil
 	})})
-	authenticateMyAnimeList = func(config *CurdConfig, tokenPath string) (string, error) {
+	authenticateMyAnimeList = func(config *Config, tokenPath string) (string, error) {
 		token := &OAuthToken{
 			AccessToken:  "reauth-access",
 			RefreshToken: "reauth-refresh",
@@ -121,7 +121,7 @@ func TestGetMyAnimeListAccessTokenReauthenticatesWhenRefreshFails(t *testing.T) 
 }
 
 func TestMyAnimeListRequestReauthenticatesWhenUnauthorizedRefreshFails(t *testing.T) {
-	config := &CurdConfig{
+	config := &Config{
 		StoragePath:         t.TempDir(),
 		MyAnimeListClientID: "client-id",
 	}
@@ -157,7 +157,7 @@ func TestMyAnimeListRequestReauthenticatesWhenUnauthorizedRefreshFails(t *testin
 			return nil, nil
 		}
 	})})
-	authenticateMyAnimeList = func(config *CurdConfig, tokenPath string) (string, error) {
+	authenticateMyAnimeList = func(config *Config, tokenPath string) (string, error) {
 		token := &OAuthToken{
 			AccessToken:  "reauth-access",
 			RefreshToken: "reauth-refresh",

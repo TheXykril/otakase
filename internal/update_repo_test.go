@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// `curd -u` downloaded its replacement binary from the upstream repository
+// `otakase -u` downloaded its replacement binary from the upstream repository
 // while every other update path already read this fork, so updating happily
 // overwrote a forked build with one that lacks its providers and fixes. The
 // repository belongs in one constant, and nothing may name another one.
@@ -45,7 +45,7 @@ func TestUpdatePathsUseThisFork(t *testing.T) {
 					if strings.Contains(value, "github.com/thexykril/otakase/") {
 						return true
 					}
-					if strings.EqualFold(value, "wraient/curd") {
+					if strings.EqualFold(value, "wraient/otakase") {
 						t.Errorf("%s:%d: hardcodes the upstream repo %q; use DefaultUpdateRepo",
 							filepath.Base(name), fset.Position(lit.Pos()).Line, value)
 					}

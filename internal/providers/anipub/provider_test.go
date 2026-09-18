@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers"
 )
 
@@ -20,11 +20,11 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func withAnipubTestClient(t *testing.T, client *http.Client) {
 	t.Helper()
-	previous := curdhost.HTTPClient
+	previous := providerhost.HTTPClient
 	t.Cleanup(func() {
-		curdhost.HTTPClient = previous
+		providerhost.HTTPClient = previous
 	})
-	curdhost.HTTPClient = func() *http.Client { return client }
+	providerhost.HTTPClient = func() *http.Client { return client }
 }
 
 func jsonResponse(req *http.Request, statusCode int, payload any) *http.Response {

@@ -34,7 +34,7 @@ func TestCombinedRefreshRepublishesTheMergedList(t *testing.T) {
 
 	updates := user.ListSync.Updates()
 
-	go refreshCombinedRemoteAnimeList(&CurdConfig{StoragePath: t.TempDir()}, user, aniListUser, myAnimeListUser)
+	go refreshCombinedRemoteAnimeList(&Config{StoragePath: t.TempDir()}, user, aniListUser, myAnimeListUser)
 
 	// The refreshes land after the launch has already shown the cached merge.
 	aniListUser.ListSync.Replace(freshAni, false)
@@ -80,7 +80,7 @@ func TestCombinedRefreshGivesUpRatherThanHanging(t *testing.T) {
 	aniListUser := &User{ListSync: NewAnimeListSync(cached)}
 	myAnimeListUser := &User{ListSync: NewAnimeListSync(cached)}
 
-	go refreshCombinedRemoteAnimeList(&CurdConfig{StoragePath: t.TempDir()}, user, aniListUser, myAnimeListUser)
+	go refreshCombinedRemoteAnimeList(&Config{StoragePath: t.TempDir()}, user, aniListUser, myAnimeListUser)
 
 	select {
 	case <-user.ListSync.RefreshDone():

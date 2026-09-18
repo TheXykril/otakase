@@ -24,7 +24,7 @@ func FindKeyByValue(m map[string]string, value string) (string, error) {
 	return "", fmt.Errorf("no key with value %v", value) // Return empty string and false if the value is not found
 }
 
-func mediaDisplayTitle(media Media, config *CurdConfig) string {
+func mediaDisplayTitle(media Media, config *Config) string {
 	if media.Title.English != "" && useEnglishAnimeNames(config) {
 		return media.Title.English
 	}
@@ -46,12 +46,12 @@ func mediaDisplayTitle(media Media, config *CurdConfig) string {
 // GetAnimeMap takes an AnimeList and returns a map with media.id as key and media.title.english as value.
 func GetAnimeMap(animeList AnimeList) map[string]string {
 	animeMap := make(map[string]string)
-	userCurdConfig := GetGlobalConfig()
+	userConfig := GetGlobalConfig()
 
 	// Helper function to populate the map from a slice of entries
 	populateMap := func(entries []Entry) {
 		for _, entry := range entries {
-			animeMap[strconv.Itoa(entry.Media.ID)] = mediaDisplayTitle(entry.Media, userCurdConfig)
+			animeMap[strconv.Itoa(entry.Media.ID)] = mediaDisplayTitle(entry.Media, userConfig)
 		}
 	}
 
@@ -68,14 +68,14 @@ func GetAnimeMap(animeList AnimeList) map[string]string {
 
 // GetAnimeMapPreview takes an AnimeList and returns a map with media.id as key and media.title.english as value.
 func GetAnimeMapPreview(animeList AnimeList) map[string]RofiSelectPreview {
-	userCurdConfig := GetGlobalConfig()
+	userConfig := GetGlobalConfig()
 	animeMap := make(map[string]RofiSelectPreview)
 
 	// Helper function to populate the map from a slice of entries
 	populateMap := func(entries []Entry) {
 		for _, entry := range entries {
 			animeMap[strconv.Itoa(entry.Media.ID)] = RofiSelectPreview{
-				Title:      mediaDisplayTitle(entry.Media, userCurdConfig),
+				Title:      mediaDisplayTitle(entry.Media, userConfig),
 				CoverImage: entry.CoverImage,
 			}
 		}
@@ -432,7 +432,7 @@ func AddAniListAnimeToWatchingList(animeID int, token string) error {
 		return fmt.Errorf("failed to add anime: %w", err)
 	}
 
-	CurdOut(fmt.Sprintf("Anime with ID %d has been added to your watching list.", animeID))
+	Out(fmt.Sprintf("Anime with ID %d has been added to your watching list.", animeID))
 	return nil
 }
 
@@ -748,7 +748,7 @@ func UpdateAniListAnimeProgress(token string, mediaID, progress int) error {
 		return err
 	}
 
-	CurdOut(fmt.Sprint("Anime progress updated! Latest watched episode: ", progress))
+	Out(fmt.Sprint("Anime progress updated! Latest watched episode: ", progress))
 	return nil
 }
 
@@ -767,7 +767,7 @@ func UpdateAniListAnimeStatus(token string, mediaID int, status string) error {
 		"REPEATING": "Rewatching",
 	}
 
-	CurdOut(fmt.Sprintf("Anime status updated to: %s", statusMap[status]))
+	Out(fmt.Sprintf("Anime status updated to: %s", statusMap[status]))
 	return nil
 }
 
@@ -906,7 +906,7 @@ func saveAniListAnimeScore(token string, mediaID int, score float64) error {
 		return err
 	}
 
-	CurdOut(fmt.Sprintf("Successfully rated anime (mediaId: %d) with score: %.2f", mediaID, score))
+	Out(fmt.Sprintf("Successfully rated anime (mediaId: %d) with score: %.2f", mediaID, score))
 	return nil
 }
 
@@ -1519,7 +1519,7 @@ func AddAniListAnimeToList(animeID int, status string, token string) error {
 		"REPEATING": "Rewatching",
 	}
 
-	CurdOut(fmt.Sprintf("Anime added to: %s", statusMap[status]))
+	Out(fmt.Sprintf("Anime added to: %s", statusMap[status]))
 	return nil
 }
 

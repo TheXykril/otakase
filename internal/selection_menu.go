@@ -69,7 +69,7 @@ type PreviewSelectionRefreshConfig struct {
 	BuildOptions func(AnimeList) map[string]RofiSelectPreview
 }
 
-// Menu styles are derived from the active palette rather than fixed, so Curd
+// Menu styles are derived from the active palette rather than fixed, so otakase
 // matches the desktop theme on Omarchy. ApplyTheme rebuilds them; the values here
 // are the builtin palette so the package is usable before it is called.
 var (
@@ -162,7 +162,7 @@ func (m *Model) confirmSelection() tea.Cmd {
 		return nil
 	}
 	if m.filteredKeys[m.selected].Key == "add_new" {
-		CurdOut("Adding a new anime...")
+		Out("Adding a new anime...")
 		m.filteredKeys[m.selected] = SelectionOption{Label: "add_new", Key: "0"}
 	}
 	return tea.Quit
@@ -865,7 +865,7 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 			SelectionOption{Key: "-1", Label: "Quit"},
 		)
 
-		// A menu on screen is proof Curd started; anything still showing is stale.
+		// A menu on screen is proof otakase started; anything still showing is stale.
 		EndStartupProgress()
 
 		configPath := filepath.Join(GetStoragePath(), "selectanimepreview.rasi")
@@ -1071,7 +1071,7 @@ func rofiSelectInternal(options []SelectionOption, isHomeMenu bool, refreshConfi
 	}
 
 	for {
-		// A menu on screen is proof Curd started; anything still showing is stale.
+		// A menu on screen is proof otakase started; anything still showing is stale.
 		EndStartupProgress()
 
 		optionsString := buildRofiOptionsString(currentOptions, isHomeMenu)

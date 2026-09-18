@@ -52,44 +52,44 @@ func main() {
 
 	configFilePath := filepath.Join(configDir, internal.AppName, internal.ConfigFileName())
 
-	// load userCurdConfig
-	userCurdConfig, err := internal.LoadConfig(configFilePath)
+	// load userConfig
+	userConfig, err := internal.LoadConfig(configFilePath)
 	if err != nil {
 		fmt.Println("Error loading config:", err)
 		return
 	}
-	internal.SetCurdVersion(resolvedVersion())
-	if updated, migrateErr := internal.MigrateOnVersionUpgrade(configFilePath, &userCurdConfig, resolvedVersion()); migrateErr != nil {
+	internal.SetVersion(resolvedVersion())
+	if updated, migrateErr := internal.MigrateOnVersionUpgrade(configFilePath, &userConfig, resolvedVersion()); migrateErr != nil {
 		fmt.Println("Error applying storage migration:", migrateErr)
 		return
 	} else if updated {
 		fmt.Println("Updated config for this " + internal.DisplayName + " version (new options and/or migrations).")
 	}
-	internal.SetGlobalConfig(&userCurdConfig)
+	internal.SetGlobalConfig(&userConfig)
 
-	logFile := filepath.Join(os.ExpandEnv(userCurdConfig.StoragePath), "debug.log")
+	logFile := filepath.Join(os.ExpandEnv(userConfig.StoragePath), "debug.log")
 	internal.SetGlobalLogFile(logFile)
 	internal.ClearLogFile(logFile)
 
 	// Flags configured here cause userconfig needs to be changed.
-	flag.StringVar(&userCurdConfig.Player, "player", userCurdConfig.Player, "Player binary for playback (mpv-compatible; falls back to mpv if unavailable)")
-	flag.StringVar(&userCurdConfig.StoragePath, "storage-path", userCurdConfig.StoragePath, "Path to the storage directory")
-	flag.StringVar(&userCurdConfig.SubsLanguage, "subs-lang", userCurdConfig.SubsLanguage, "Subtitles language")
-	flag.IntVar(&userCurdConfig.PercentageToMarkComplete, "percentage-to-mark-complete", userCurdConfig.PercentageToMarkComplete, "Percentage to mark episode as complete")
+	flag.StringVar(&userConfig.Player, "player", userConfig.Player, "Player binary for playback (mpv-compatible; falls back to mpv if unavailable)")
+	flag.StringVar(&userConfig.StoragePath, "storage-path", userConfig.StoragePath, "Path to the storage directory")
+	flag.StringVar(&userConfig.SubsLanguage, "subs-lang", userConfig.SubsLanguage, "Subtitles language")
+	flag.IntVar(&userConfig.PercentageToMarkComplete, "percentage-to-mark-complete", userConfig.PercentageToMarkComplete, "Percentage to mark episode as complete")
 
 	// Boolean flags that accept true/false
-	flag.BoolVar(&userCurdConfig.NextEpisodePrompt, "next-episode-prompt", userCurdConfig.NextEpisodePrompt, "Prompt for the next episode (true/false)")
-	flag.BoolVar(&userCurdConfig.SkipOp, "skip-op", userCurdConfig.SkipOp, "Skip opening (true/false)")
-	flag.BoolVar(&userCurdConfig.SkipEd, "skip-ed", userCurdConfig.SkipEd, "Skip ending (true/false)")
-	flag.BoolVar(&userCurdConfig.SkipFiller, "skip-filler", userCurdConfig.SkipFiller, "Skip filler episodes (true/false)")
-	flag.BoolVar(&userCurdConfig.SkipRecap, "skip-recap", userCurdConfig.SkipRecap, "Skip recap (true/false)")
-	flag.BoolVar(&userCurdConfig.ScoreOnCompletion, "score-on-completion", userCurdConfig.ScoreOnCompletion, "Score on episode completion (true/false)")
-	flag.BoolVar(&userCurdConfig.SaveMpvSpeed, "save-mpv-speed", userCurdConfig.SaveMpvSpeed, "Save MPV speed setting (true/false)")
-	flag.BoolVar(&userCurdConfig.DiscordPresence, "discord-presence", userCurdConfig.DiscordPresence, "Enable Discord presence (true/false)")
-	flag.StringVar(&userCurdConfig.DiscordClientId, "discord-client-id", userCurdConfig.DiscordClientId, "Discord client ID for Rich Presence")
-	flag.BoolVar(&userCurdConfig.VimKeys, "vim-keys", userCurdConfig.VimKeys, "Enable vim motions in selection menus (j/k/h/l, / search) (true/false)")
-	flag.BoolVar(&userCurdConfig.CheckUpdates, "check-updates", userCurdConfig.CheckUpdates, "Check for updates in the background when idle (true/false)")
-	flag.BoolVar(&userCurdConfig.ShowNewEpisodes, "show-new-episodes", userCurdConfig.ShowNewEpisodes, "Show new episode indicators in currently watching list (true/false)")
+	flag.BoolVar(&userConfig.NextEpisodePrompt, "next-episode-prompt", userConfig.NextEpisodePrompt, "Prompt for the next episode (true/false)")
+	flag.BoolVar(&userConfig.SkipOp, "skip-op", userConfig.SkipOp, "Skip opening (true/false)")
+	flag.BoolVar(&userConfig.SkipEd, "skip-ed", userConfig.SkipEd, "Skip ending (true/false)")
+	flag.BoolVar(&userConfig.SkipFiller, "skip-filler", userConfig.SkipFiller, "Skip filler episodes (true/false)")
+	flag.BoolVar(&userConfig.SkipRecap, "skip-recap", userConfig.SkipRecap, "Skip recap (true/false)")
+	flag.BoolVar(&userConfig.ScoreOnCompletion, "score-on-completion", userConfig.ScoreOnCompletion, "Score on episode completion (true/false)")
+	flag.BoolVar(&userConfig.SaveMpvSpeed, "save-mpv-speed", userConfig.SaveMpvSpeed, "Save MPV speed setting (true/false)")
+	flag.BoolVar(&userConfig.DiscordPresence, "discord-presence", userConfig.DiscordPresence, "Enable Discord presence (true/false)")
+	flag.StringVar(&userConfig.DiscordClientId, "discord-client-id", userConfig.DiscordClientId, "Discord client ID for Rich Presence")
+	flag.BoolVar(&userConfig.VimKeys, "vim-keys", userConfig.VimKeys, "Enable vim motions in selection menus (j/k/h/l, / search) (true/false)")
+	flag.BoolVar(&userConfig.CheckUpdates, "check-updates", userConfig.CheckUpdates, "Check for updates in the background when idle (true/false)")
+	flag.BoolVar(&userConfig.ShowNewEpisodes, "show-new-episodes", userConfig.ShowNewEpisodes, "Show new episode indicators in currently watching list (true/false)")
 	continueLast := flag.Bool("c", false, "Continue last episode")
 	addNewAnime := flag.Bool("new", false, "Add new anime")
 	rofiSelection := flag.Bool("rofi", false, "Open selection in rofi")
@@ -107,7 +107,7 @@ func main() {
 	versionFlag := flag.Bool("v", false, "Print version information")
 	downloadFlag := flag.Bool("download", false, "Download episodes instead of playing them (requires ffmpeg)")
 	downloadRange := flag.String("episodes", "", "Episodes to download, e.g. 5 or 1-12 (default: the selected episode)")
-	flag.StringVar(&userCurdConfig.DownloadDir, "download-dir", userCurdConfig.DownloadDir, "Directory to save downloaded episodes into")
+	flag.StringVar(&userConfig.DownloadDir, "download-dir", userConfig.DownloadDir, "Directory to save downloaded episodes into")
 	providerStatus := flag.Bool("provider-status", false, "Probe every provider and report which ones work")
 	installKeybind := flag.Bool("install-keybind", false, "Add a Super+Shift+A Hyprland binding that opens the rofi menu")
 	removeKeybind := flag.Bool("remove-keybind", false, "Remove the Hyprland binding added by -install-keybind")
@@ -126,10 +126,10 @@ func main() {
 	flag.Parse()
 
 	// Validate PercentageToMarkComplete range (0-100) from CLI flag
-	if userCurdConfig.PercentageToMarkComplete < 0 {
-		userCurdConfig.PercentageToMarkComplete = 0
-	} else if userCurdConfig.PercentageToMarkComplete > 100 {
-		userCurdConfig.PercentageToMarkComplete = 100
+	if userConfig.PercentageToMarkComplete < 0 {
+		userConfig.PercentageToMarkComplete = 0
+	} else if userConfig.PercentageToMarkComplete > 100 {
+		userConfig.PercentageToMarkComplete = 100
 	}
 
 	// Check version before screen clearing
@@ -167,7 +167,7 @@ func main() {
 	}
 
 	if *providerStatus {
-		report := internal.CheckProviders(&userCurdConfig, *providerStatusQuery)
+		report := internal.CheckProviders(&userConfig, *providerStatusQuery)
 		fmt.Print(internal.FormatProviderStatus(report, *providerStatusQuery))
 		for _, health := range report {
 			if health.OK() {
@@ -181,26 +181,26 @@ func main() {
 
 	// Apply UI flags before -u so password prompt mode (terminal vs GTK) is correct.
 	if *rofiSelection {
-		userCurdConfig.RofiSelection = true
+		userConfig.RofiSelection = true
 	}
 	if *noRofi || runtime.GOOS == "windows" {
-		userCurdConfig.RofiSelection = false
+		userConfig.RofiSelection = false
 	}
-	// `curd -u` is a CLI operation: always use the terminal for sudo when stdin is a TTY,
-	// even if RofiSelection is enabled in the config file. `curd -e` is the same:
+	// `otakase -u` is a CLI operation: always use the terminal for sudo when stdin is a TTY,
+	// even if RofiSelection is enabled in the config file. `otakase -e` is the same:
 	// it runs an editor in this terminal, so its messages belong here too --
 	// otherwise a failure is delivered as a desktop notification and the terminal
 	// the user is looking at stays silent.
 	if *updateScript || *editConfig {
-		userCurdConfig.RofiSelection = false
+		userConfig.RofiSelection = false
 	}
-	internal.SetGlobalConfig(&userCurdConfig)
+	internal.SetGlobalConfig(&userConfig)
 
 	if *updateScript {
 		repo := internal.DefaultUpdateRepo
 		fileName := internal.AppName
 
-		if err := internal.UpdateCurd(repo, fileName); err != nil {
+		if err := internal.SelfUpdate(repo, fileName); err != nil {
 			fmt.Fprintf(os.Stderr, "Error updating executable: %v\n", err)
 			os.Exit(1)
 		}
@@ -209,16 +209,16 @@ func main() {
 	}
 
 	if *currentCategory {
-		userCurdConfig.CurrentCategory = true
-		userCurdConfig.CurrentCategoryFlag = true
+		userConfig.CurrentCategory = true
+		userConfig.CurrentCategoryFlag = true
 	}
 
 	if *imagePreview {
-		userCurdConfig.ImagePreview = true
+		userConfig.ImagePreview = true
 	}
 
 	if *noImagePreview || runtime.GOOS == "windows" {
-		userCurdConfig.ImagePreview = false
+		userConfig.ImagePreview = false
 	}
 
 	if *editConfig {
@@ -227,28 +227,28 @@ func main() {
 	}
 
 	// Resolve the colour palette before anything draws. On Omarchy this follows
-	// the desktop theme; elsewhere it is curd's own palette.
-	internal.ApplyThemeFromConfig(&userCurdConfig)
+	// the desktop theme; elsewhere it is otakase's own palette.
+	internal.ApplyThemeFromConfig(&userConfig)
 
-	if userCurdConfig.RofiSelection {
+	if userConfig.RofiSelection {
 		// Themes are rendered from the palette on every run, so a desktop theme
 		// change is picked up without the user clearing anything. This also means
 		// the menus no longer need the network before they can be shown.
-		if err := internal.WriteRofiThemes(os.ExpandEnv(userCurdConfig.StoragePath)); err != nil {
+		if err := internal.WriteRofiThemes(os.ExpandEnv(userConfig.StoragePath)); err != nil {
 			internal.Log(fmt.Sprintf("Error writing rofi themes: %v", err))
-			internal.CurdOut(fmt.Sprintf("Error writing rofi themes: %v", err))
-			internal.ExitCurd(err)
+			internal.Out(fmt.Sprintf("Error writing rofi themes: %v", err))
+			internal.Exit(err)
 		}
 	}
 
-	if err := internal.EnsureTrackingConfigured(&userCurdConfig); err != nil {
+	if err := internal.EnsureTrackingConfigured(&userConfig); err != nil {
 		fmt.Println("Error configuring tracking:", err)
 		return
 	}
-	internal.SetGlobalConfig(&userCurdConfig)
+	internal.SetGlobalConfig(&userConfig)
 
 	if *changeToken {
-		internal.ChangeTrackingToken(&userCurdConfig, &user)
+		internal.ChangeTrackingToken(&userConfig, &user)
 		return
 	}
 
@@ -259,48 +259,48 @@ func main() {
 
 	// Set SubOrDub based on the flags
 	if *subFlag {
-		userCurdConfig.SubOrDub = "sub"
+		userConfig.SubOrDub = "sub"
 	} else if *dubFlag {
-		userCurdConfig.SubOrDub = "dub"
+		userConfig.SubOrDub = "dub"
 	}
 	if *softSubFlag {
-		userCurdConfig.SubStyle = "soft"
+		userConfig.SubStyle = "soft"
 	} else if *hardSubFlag {
-		userCurdConfig.SubStyle = "hard"
+		userConfig.SubStyle = "hard"
 	}
 
 	// Show update found by a previous idle check (no network on the hot path).
-	if internal.HandlePendingUpdatePrompt(&userCurdConfig, resolvedVersion()) {
+	if internal.HandlePendingUpdatePrompt(&userConfig, resolvedVersion()) {
 		return
 	}
 
 	// Idle background check — does not block startup; stores result for next launch.
-	internal.StartBackgroundUpdateCheck(&userCurdConfig, resolvedVersion())
+	internal.StartBackgroundUpdateCheck(&userConfig, resolvedVersion())
 
 	// From here on the launch can block on the network, with no terminal to show
-	// it when Curd was started from a keybind.
-	internal.BeginStartupProgress(&userCurdConfig, "Curd is starting")
+	// it when otakase was started from a keybind.
+	internal.BeginStartupProgress(&userConfig, "Otakase is starting")
 
 	// Get the token from the token file for the configured remote tracker.
-	if internal.UsesRemoteTracking(&userCurdConfig) {
+	if internal.UsesRemoteTracking(&userConfig) {
 		internal.StartupStage("Signing in to your tracker")
-		if err := internal.EnsureConfiguredTrackersReady(&userCurdConfig, &user); err != nil {
+		if err := internal.EnsureConfiguredTrackersReady(&userConfig, &user); err != nil {
 			internal.Log("Error preparing trackers: " + err.Error())
-			internal.ExitCurd(err)
+			internal.Exit(err)
 		}
 	}
 
 	// Load animes in database
-	databaseFile := filepath.Join(os.ExpandEnv(userCurdConfig.StoragePath), "curd_history.txt")
+	databaseFile := filepath.Join(os.ExpandEnv(userConfig.StoragePath), "curd_history.txt")
 	databaseAnimes := internal.LocalGetAllAnime(databaseFile)
 
 	if *addNewAnime {
-		internal.AddNewAnime(&userCurdConfig, &anime, &user, &databaseAnimes)
-		// internal.ExitCurd(fmt.Errorf("Added new anime!"))
+		internal.AddNewAnime(&userConfig, &anime, &user, &databaseAnimes)
+		// internal.Exit(fmt.Errorf("Added new anime!"))
 	}
 
 	internal.StartupStage("Loading your anime list")
-	internal.SetupCurd(&userCurdConfig, &anime, &user, &databaseAnimes)
+	internal.Setup(&userConfig, &anime, &user, &databaseAnimes)
 
 	temp_anime, err := internal.FindAnimeByAnilistID(user.AnimeList, strconv.Itoa(anime.AnilistId))
 	if err != nil {
@@ -316,8 +316,8 @@ func main() {
 	}
 
 	anime.Ep.Player.Speed = 1.0
-	if userCurdConfig.DiscordPresence {
-		internal.CurdOut("Starting Discord broadcast.")
+	if userConfig.DiscordPresence {
+		internal.Out("Starting Discord broadcast.")
 	}
 
 	// Get filler list concurrently
@@ -354,7 +354,7 @@ func main() {
 		skipLoopClosed <- false              // Initialize to false (not closed yet)
 
 		// Get MalId and CoverImage (only if discord presence is enabled)
-		if userCurdConfig.DiscordPresence {
+		if userConfig.DiscordPresence {
 			anime.MalId, anime.CoverImage, err = internal.GetAnimeIDAndImage(anime.AnilistId)
 			if err != nil {
 				internal.Log("Error getting anime ID and image: " + err.Error())
@@ -369,7 +369,7 @@ func main() {
 			}
 		}
 
-		// Start curd (loop while episode is playing)
+		// Start otakase (loop while episode is playing)
 		for {
 			// Check if current episode is filler/recap
 			if episodeErr := internal.GetEpisodeData(anime.MalId, anime.Ep.Number, &anime); episodeErr != nil {
@@ -381,7 +381,7 @@ func main() {
 			anime.Ep.IsFiller = internal.IsEpisodeFiller(anime.FillerEpisodes, anime.Ep.Number)
 
 			// If not filler/recap (or skip is disabled), break and continue with playback
-			if !((anime.Ep.IsFiller && userCurdConfig.SkipFiller) || (anime.Ep.IsRecap && userCurdConfig.SkipRecap)) {
+			if !((anime.Ep.IsFiller && userConfig.SkipFiller) || (anime.Ep.IsRecap && userConfig.SkipRecap)) {
 				if anime.Ep.LastWasSkipped {
 					go internal.UpdateAnimeProgress(user.Token, anime.AnilistId, anime.Ep.Number-1)
 				}
@@ -390,11 +390,11 @@ func main() {
 
 			// If it is filler/recap, log it and move to next episode
 			if anime.Ep.IsFiller {
-				internal.CurdOut(fmt.Sprint("Filler episode, skipping: ", anime.Ep.Number))
+				internal.Out(fmt.Sprint("Filler episode, skipping: ", anime.Ep.Number))
 				// Get next canon episode
 				anime.Ep.Number = internal.GetNextCanonEpisode(anime.FillerEpisodes, anime.Ep.Number)
 			} else {
-				internal.CurdOut(fmt.Sprint("Recap episode, skipping: ", anime.Ep.Number))
+				internal.Out(fmt.Sprint("Recap episode, skipping: ", anime.Ep.Number))
 				anime.Ep.Number++
 			}
 
@@ -404,8 +404,8 @@ func main() {
 
 			// Check if we've reached the end of the series
 			if anime.TotalEpisodes > 0 && anime.Ep.Number > anime.TotalEpisodes {
-				internal.CurdOut("Reached end of series")
-				internal.ExitCurd(nil)
+				internal.Out("Reached end of series")
+				internal.Exit(nil)
 			}
 		}
 
@@ -415,59 +415,59 @@ func main() {
 		if *downloadFlag {
 			from, to, rangeErr := internal.ParseEpisodeRange(*downloadRange, anime.Ep.Number)
 			if rangeErr != nil {
-				internal.CurdOut(rangeErr.Error())
-				internal.ExitCurd(rangeErr)
+				internal.Out(rangeErr.Error())
+				internal.Exit(rangeErr)
 			}
 
-			dir := internal.ResolveDownloadDir(&userCurdConfig)
-			internal.CurdOut(fmt.Sprintf("Downloading episodes %d-%d to %s", from, to, dir))
+			dir := internal.ResolveDownloadDir(&userConfig)
+			internal.Out(fmt.Sprintf("Downloading episodes %d-%d to %s", from, to, dir))
 
-			results := internal.DownloadEpisodes(userCurdConfig, &anime, from, to, dir)
+			results := internal.DownloadEpisodes(userConfig, &anime, from, to, dir)
 			failed := 0
 			for _, result := range results {
 				if result.Err != nil {
 					failed++
 				}
 			}
-			internal.CurdOut(fmt.Sprintf("Downloaded %d of %d episode(s).", len(results)-failed, len(results)))
+			internal.Out(fmt.Sprintf("Downloaded %d of %d episode(s).", len(results)-failed, len(results)))
 			if failed > 0 {
-				internal.ExitCurd(fmt.Errorf("%d episode(s) failed to download", failed))
+				internal.Exit(fmt.Errorf("%d episode(s) failed to download", failed))
 			}
-			internal.ExitCurd(nil)
+			internal.Exit(nil)
 			return
 		}
 
 		// Now start playback for the non-filler episode
-		anime.Ep.Player.SocketPath = internal.StartCurd(&userCurdConfig, &anime)
+		anime.Ep.Player.SocketPath = internal.StartPlayback(&userConfig, &anime)
 		internal.Log(fmt.Sprint("Playback starting time: ", anime.Ep.Player.PlaybackTime))
 		internal.Log(anime.Ep.Player.SocketPath)
 
-		// StartCurd reports "could not start playback" by returning an empty
+		// StartPlayback reports "could not start playback" by returning an empty
 		// socket path, having already said why. Continuing past it started the
 		// playback watchers for a session that does not exist, and they then
 		// polled a socket that would never answer -- once a second, forever.
 		if anime.Ep.Player.SocketPath == "" {
 			internal.Log("Playback did not start; no MPV socket")
-			internal.ExitCurd(nil)
+			internal.Exit(nil)
 			return
 		}
 
 		// After playback is running, lazily build MPV episode playlist / audio
 		// options while idle (no startup cost, no mid-buffer stutter).
 		if anime.Ep.Player.SocketPath != "" && anime.Ep.Player.SocketPath != "android-intent" {
-			internal.StartMPVPlaylistController(&userCurdConfig, &anime, anime.Ep.Player.SocketPath, skipLoopDone)
+			internal.StartMPVPlaylistController(&userConfig, &anime, anime.Ep.Player.SocketPath, skipLoopDone)
 		}
 
 		// Handle Android Intent external player
 		if anime.Ep.Player.SocketPath == "android-intent" {
-			internal.CurdOut(fmt.Sprintf("\nOpened external player for Episode %d.", anime.Ep.Number))
-			internal.CurdOut("Press Enter when you have finished watching...")
+			internal.Out(fmt.Sprintf("\nOpened external player for Episode %d.", anime.Ep.Number))
+			internal.Out("Press Enter when you have finished watching...")
 
 			// Wait for user input to confirm completion. A stdin that has
 			// ended is not someone pressing enter, and this loop starts the
 			// next episode each time round.
 			if !internal.AwaitEnter() {
-				internal.ExitCurd(nil)
+				internal.Exit(nil)
 			}
 
 			// Mark as completed
@@ -479,21 +479,21 @@ func main() {
 
 			// Check if we should continue to next episode
 			// On Android we always prompt because we don't know exactly when video ended
-			shouldContinue := internal.NextEpisodePromptCLI(&userCurdConfig)
+			shouldContinue := internal.NextEpisodePromptCLI(&userConfig)
 
 			if shouldContinue {
-				internal.StartNextEpisode(&anime, &userCurdConfig, databaseFile, user.Token)
+				internal.StartNextEpisode(&anime, &userConfig, databaseFile, user.Token)
 				continue
 			} else {
 				// Handle completion if this was the last episode
 				if anime.Ep.Number == anime.TotalEpisodes {
-					internal.HandleLastEpisodeCompletion(&userCurdConfig, &anime, user.Token)
+					internal.HandleLastEpisodeCompletion(&userConfig, &anime, user.Token)
 				}
 				// Update progress for the just finished episode (StartNextEpisode usually does this for previous ep, but here we exit)
 				if !anime.Rewatching {
 					internal.UpdateAnimeProgress(user.Token, anime.AnilistId, anime.Ep.Number)
 				}
-				internal.ExitCurd(nil)
+				internal.Exit(nil)
 			}
 		}
 
@@ -507,23 +507,23 @@ func main() {
 				internal.Log(anime)
 
 				// if filler episode or recap episode and skip is enabled
-				if (anime.Ep.IsFiller && userCurdConfig.SkipFiller) || (anime.Ep.IsRecap && userCurdConfig.SkipRecap) {
-					if anime.Ep.IsFiller && userCurdConfig.SkipFiller {
-						internal.CurdOut(fmt.Sprint("Filler Episode, starting next episode: ", anime.Ep.Number+1))
+				if (anime.Ep.IsFiller && userConfig.SkipFiller) || (anime.Ep.IsRecap && userConfig.SkipRecap) {
+					if anime.Ep.IsFiller && userConfig.SkipFiller {
+						internal.Out(fmt.Sprint("Filler Episode, starting next episode: ", anime.Ep.Number+1))
 						internal.Log("Filler episode detected")
-					} else if anime.Ep.IsRecap && userCurdConfig.SkipRecap {
-						internal.CurdOut(fmt.Sprint("Recap Episode, starting next episode: ", anime.Ep.Number+1))
+					} else if anime.Ep.IsRecap && userConfig.SkipRecap {
+						internal.Out(fmt.Sprint("Recap Episode, starting next episode: ", anime.Ep.Number+1))
 						internal.Log("Recap episode detected")
 					}
 
 					anime.Ep.IsCompleted = true
-					if !userCurdConfig.NextEpisodePrompt {
+					if !userConfig.NextEpisodePrompt {
 						// fmt.Println("[DEBUG] Starting next episode from filler/recap skip")
-						internal.StartNextEpisode(&anime, &userCurdConfig, databaseFile, user.Token)
+						internal.StartNextEpisode(&anime, &userConfig, databaseFile, user.Token)
 					} else {
 						// When NextEpisodePrompt is enabled, just call StartNextEpisode - it handles Rofi prompting internally
 						internal.ExitMPV(anime.Ep.Player.SocketPath)
-						internal.StartNextEpisode(&anime, &userCurdConfig, databaseFile, user.Token)
+						internal.StartNextEpisode(&anime, &userConfig, databaseFile, user.Token)
 						return
 					}
 					// Send command to close MPV
@@ -549,7 +549,7 @@ func main() {
 		// Thread to update Discord presence with simple position-gap seek detection
 		go func() {
 			defer wg.Done()
-			if userCurdConfig.DiscordPresence {
+			if userConfig.DiscordPresence {
 				var lastKnownPauseState bool = false
 				var lastKnownPosition int = 0
 				var lastStateCheck time.Time
@@ -643,9 +643,9 @@ func main() {
 							// Force update on seek events to bypass Discord's internal filtering
 							var presenceErr error
 							if hasSeekEvent {
-								presenceErr = internal.DiscordPresenceWithForce(anime, currentPauseState, currentPos, totalDuration, userCurdConfig.DiscordClientId, true)
+								presenceErr = internal.DiscordPresenceWithForce(anime, currentPauseState, currentPos, totalDuration, userConfig.DiscordClientId, true)
 							} else {
-								presenceErr = internal.DiscordPresence(anime, currentPauseState, currentPos, totalDuration, userCurdConfig.DiscordClientId)
+								presenceErr = internal.DiscordPresence(anime, currentPauseState, currentPos, totalDuration, userConfig.DiscordClientId)
 							}
 
 							if presenceErr != nil {
@@ -673,9 +673,9 @@ func main() {
 		// so a show AniSkip does not cover started unskipped and then began
 		// skipping an episode later.
 		go func() {
-			resolution := internal.ApplySkipTimes(&anime, anime.Ep.Number, &userCurdConfig, internal.GetProvider())
+			resolution := internal.ApplySkipTimes(&anime, anime.Ep.Number, &userConfig, internal.GetProvider())
 			internal.Log(anime.Ep.SkipTimes)
-			internal.StartSkipMarker(&userCurdConfig, &anime, anime.Ep.Player.SocketPath, resolution.IDs, skipLoopDone)
+			internal.StartSkipMarker(&userConfig, &anime, anime.Ep.Player.SocketPath, resolution.IDs, skipLoopDone)
 		}()
 
 		// Get video duration
@@ -693,7 +693,7 @@ func main() {
 								internal.Log(fmt.Sprintf("Video duration: %d seconds", anime.Ep.Duration))
 
 								// Initialize Discord presence with correct duration (first time with real duration)
-								if userCurdConfig.DiscordPresence {
+								if userConfig.DiscordPresence {
 									isPaused, _ := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "pause"})
 									currentPos := 0
 									if timePos, err := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "time-pos"}); err == nil && timePos != nil {
@@ -710,7 +710,7 @@ func main() {
 										}
 									}
 									internal.Log("Initializing Discord presence with real video duration")
-									if presenceErr := internal.DiscordPresence(anime, pauseState, currentPos, anime.Ep.Duration, userCurdConfig.DiscordClientId); presenceErr != nil {
+									if presenceErr := internal.DiscordPresence(anime, pauseState, currentPos, anime.Ep.Duration, userConfig.DiscordClientId); presenceErr != nil {
 										internal.Log("Discord presence error: " + presenceErr.Error())
 									}
 								}
@@ -727,8 +727,8 @@ func main() {
 
 		// Thread for continuous next episode prompt in CLI mode (throughout episode duration)
 		go func() {
-			if userCurdConfig.NextEpisodePrompt && !userCurdConfig.RofiSelection {
-				internal.NextEpisodePromptContinuous(&userCurdConfig, databaseFile, user.Token)
+			if userConfig.NextEpisodePrompt && !userConfig.RofiSelection {
+				internal.NextEpisodePromptContinuous(&userConfig, databaseFile, user.Token)
 				// If the function returns, it means user made a decision
 				// Exit the skip loop - only close if not already closed
 				select {
@@ -770,7 +770,7 @@ func main() {
 						}
 
 						// For CLI mode with next episode prompt, let the continuous prompt handle everything
-						if userCurdConfig.NextEpisodePrompt && !userCurdConfig.RofiSelection {
+						if userConfig.NextEpisodePrompt && !userConfig.RofiSelection {
 							// ...but only while MPV is still there. Once it has exited,
 							// continuing just re-polls a dead socket every second.
 							if internal.MPVConnectionGone(err) && !internal.IsMPVRunning(anime.Ep.Player.SocketPath) {
@@ -786,7 +786,7 @@ func main() {
 								anime.Ep.Player.SocketPath,
 								anime.Ep.Started,
 								percentageWatched,
-								userCurdConfig.PercentageToMarkComplete,
+								userConfig.PercentageToMarkComplete,
 							)
 							internal.Log(fmt.Sprintf("playback loss: pct=%.1f action=%d mpvRunning=%v switching=%v",
 								percentageWatched, action,
@@ -799,7 +799,7 @@ func main() {
 								continue
 							case internal.PlaybackLossExit:
 								internal.Log("Episode is not completed, exiting")
-								internal.ExitCurd(nil)
+								internal.Exit(nil)
 								return
 							case internal.PlaybackLossComplete:
 								// fall through to completion handling below
@@ -810,21 +810,21 @@ func main() {
 							internal.Log(fmt.Sprint(anime.Ep.Player.Speed))
 							internal.Log(fmt.Sprint(anime.Ep.Player.PlaybackTime))
 							internal.Log(fmt.Sprint(anime.Ep.Duration))
-							internal.Log(fmt.Sprint(userCurdConfig.PercentageToMarkComplete))
+							internal.Log(fmt.Sprint(userConfig.PercentageToMarkComplete))
 							anime.Ep.IsCompleted = true
-							if !userCurdConfig.NextEpisodePrompt {
-								internal.StartNextEpisode(&anime, &userCurdConfig, databaseFile, user.Token)
+							if !userConfig.NextEpisodePrompt {
+								internal.StartNextEpisode(&anime, &userConfig, databaseFile, user.Token)
 							} else {
 								// For Rofi mode, show prompt immediately after completion
-								if userCurdConfig.RofiSelection {
-									shouldContinue := internal.NextEpisodePromptRofi(&userCurdConfig)
+								if userConfig.RofiSelection {
+									shouldContinue := internal.NextEpisodePromptRofi(&userConfig)
 									if shouldContinue {
-										internal.StartNextEpisode(&anime, &userCurdConfig, databaseFile, user.Token)
+										internal.StartNextEpisode(&anime, &userConfig, databaseFile, user.Token)
 									} else {
 										// Episode was already marked as completed above
 										// Handle completion if this was the last episode
 										if anime.Ep.Number == anime.TotalEpisodes {
-											internal.HandleLastEpisodeCompletion(&userCurdConfig, &anime, user.Token)
+											internal.HandleLastEpisodeCompletion(&userConfig, &anime, user.Token)
 										}
 										// Update local database with completed episode
 										err := internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, anime.Ep.Player.PlaybackTime, internal.ConvertSecondsToMinutes(anime.Ep.Duration), internal.GetAnimeName(anime), internal.CurrentAnimeProviderName(&anime))
@@ -837,11 +837,11 @@ func main() {
 											if progressErr := internal.UpdateAnimeProgress(user.Token, anime.AnilistId, anime.Ep.Number); progressErr != nil {
 												internal.Log("Error updating Anilist progress on quit: " + progressErr.Error())
 											} else {
-												internal.CurdOut(fmt.Sprintf("Episode completed! Progress updated: %d", anime.Ep.Number))
+												internal.Out(fmt.Sprintf("Episode completed! Progress updated: %d", anime.Ep.Number))
 											}
 										}
 
-										internal.ExitCurd(nil)
+										internal.Exit(nil)
 									}
 								} else {
 									// For CLI mode, let the continuous prompt handle it
@@ -878,7 +878,7 @@ func main() {
 						if !anime.Ep.Started {
 							anime.Ep.Started = true
 							// Set the playback speed
-							if userCurdConfig.SaveMpvSpeed {
+							if userConfig.SaveMpvSpeed {
 								speedCmd := []interface{}{"set_property", "speed", anime.Ep.Player.Speed}
 								if _, speedErr := internal.MPVSendCommand(anime.Ep.Player.SocketPath, speedCmd); speedErr != nil {
 									internal.Log("Error setting playback speed: " + speedErr.Error())
@@ -933,7 +933,7 @@ func main() {
 							internal.Log("Error checking playback status: " + err.Error())
 						} else if !hasPlayback {
 							// For CLI mode with next episode prompt, let the continuous prompt handle everything
-							if userCurdConfig.NextEpisodePrompt && !userCurdConfig.RofiSelection {
+							if userConfig.NextEpisodePrompt && !userConfig.RofiSelection {
 								continue
 							}
 
@@ -942,7 +942,7 @@ func main() {
 								anime.Ep.Player.SocketPath,
 								anime.Ep.Started,
 								percentageWatched,
-								userCurdConfig.PercentageToMarkComplete,
+								userConfig.PercentageToMarkComplete,
 							)
 							internal.Log(fmt.Sprintf("no active playback: pct=%.1f action=%d", percentageWatched, action))
 
@@ -951,21 +951,21 @@ func main() {
 								continue
 							case internal.PlaybackLossExit:
 								internal.Log("Episode is not completed, exiting")
-								internal.ExitCurd(nil)
+								internal.Exit(nil)
 								return
 							case internal.PlaybackLossComplete:
 								// fall through
 							}
 
 							anime.Ep.IsCompleted = true
-							if !userCurdConfig.NextEpisodePrompt {
-								internal.StartNextEpisode(&anime, &userCurdConfig, databaseFile, user.Token)
+							if !userConfig.NextEpisodePrompt {
+								internal.StartNextEpisode(&anime, &userConfig, databaseFile, user.Token)
 							} else {
 								// For Rofi mode, show prompt immediately after completion
-								if userCurdConfig.RofiSelection {
-									shouldContinue := internal.NextEpisodePromptRofi(&userCurdConfig)
+								if userConfig.RofiSelection {
+									shouldContinue := internal.NextEpisodePromptRofi(&userConfig)
 									if shouldContinue {
-										internal.StartNextEpisode(&anime, &userCurdConfig, databaseFile, user.Token)
+										internal.StartNextEpisode(&anime, &userConfig, databaseFile, user.Token)
 									} else {
 										// Episode was already marked as completed above
 										// Update local database with completed episode
@@ -979,11 +979,11 @@ func main() {
 											if progressErr := internal.UpdateAnimeProgress(user.Token, anime.AnilistId, anime.Ep.Number); progressErr != nil {
 												internal.Log("Error updating Anilist progress on quit: " + progressErr.Error())
 											} else {
-												internal.CurdOut(fmt.Sprintf("Episode completed! Progress updated: %d", anime.Ep.Number))
+												internal.Out(fmt.Sprintf("Episode completed! Progress updated: %d", anime.Ep.Number))
 											}
 										}
 
-										internal.ExitCurd(nil)
+										internal.Exit(nil)
 									}
 								} else {
 									// For CLI mode, update progress immediately since episode is 85%+ complete
@@ -998,7 +998,7 @@ func main() {
 										if progressErr := internal.UpdateAnimeProgress(user.Token, anime.AnilistId, anime.Ep.Number); progressErr != nil {
 											internal.Log("Error updating Anilist progress on completion: " + progressErr.Error())
 										} else {
-											internal.CurdOut(fmt.Sprintf("Episode completed! Progress updated: %d", anime.Ep.Number))
+											internal.Out(fmt.Sprintf("Episode completed! Progress updated: %d", anime.Ep.Number))
 										}
 									}
 
@@ -1042,12 +1042,12 @@ func main() {
 				// Exit signal received, break out of the skipLoop
 				break skipLoop
 			default:
-				if userCurdConfig.SkipOp {
+				if userConfig.SkipOp {
 					if anime.Ep.Player.PlaybackTime > anime.Ep.SkipTimes.Op.Start && anime.Ep.Player.PlaybackTime < anime.Ep.SkipTimes.Op.Start+2 && anime.Ep.SkipTimes.Op.Start != anime.Ep.SkipTimes.Op.End {
 						internal.SeekMPV(anime.Ep.Player.SocketPath, anime.Ep.SkipTimes.Op.End)
 					}
 				}
-				if userCurdConfig.SkipEd {
+				if userConfig.SkipEd {
 					if anime.Ep.Player.PlaybackTime > anime.Ep.SkipTimes.Ed.Start && anime.Ep.Player.PlaybackTime < anime.Ep.SkipTimes.Ed.Start+2 && anime.Ep.SkipTimes.Ed.Start != anime.Ep.SkipTimes.Ed.End {
 						internal.SeekMPV(anime.Ep.Player.SocketPath, anime.Ep.SkipTimes.Ed.End)
 					}
@@ -1073,8 +1073,8 @@ func main() {
 
 		// Exit the program if we're starting an episode beyond the total episodes
 		if anime.Ep.Number > anime.TotalEpisodes && anime.TotalEpisodes > 0 {
-			internal.CurdOut("Reached end of series")
-			internal.ExitCurd(nil)
+			internal.Out("Reached end of series")
+			internal.Exit(nil)
 		}
 
 		if anime.Ep.IsCompleted && !anime.Rewatching {
@@ -1101,7 +1101,7 @@ func main() {
 			anime.Ep.IsCompleted = false
 			// Only mark as complete and prompt for rating if we've reached the total episodes
 			// AND the anime is not currently airing (total episodes > 0)
-			if anime.Ep.Number-1 == anime.TotalEpisodes && userCurdConfig.ScoreOnCompletion && anime.TotalEpisodes > 0 {
+			if anime.Ep.Number-1 == anime.TotalEpisodes && userConfig.ScoreOnCompletion && anime.TotalEpisodes > 0 {
 
 				// Get updated anime data to check if it's still airing
 				updatedAnime, err := internal.GetAnimeDataByID(anime.AnilistId, user.Token)
@@ -1109,35 +1109,35 @@ func main() {
 					internal.Log("Error getting updated anime data: " + err.Error())
 				} else if !updatedAnime.IsAiring {
 					anime.Ep.Number = anime.Ep.Number - 1
-					internal.CurdOut("Completed anime.")
+					internal.Out("Completed anime.")
 					if rateErr := internal.RateAnime(user.Token, anime.AnilistId); rateErr != nil {
 						internal.Log("Error rating anime: " + rateErr.Error())
-						internal.CurdOut("Error rating anime: " + rateErr.Error())
+						internal.Out("Error rating anime: " + rateErr.Error())
 					}
 					internal.LocalDeleteAnime(databaseFile, anime.AnilistId, anime.ProviderId)
-					internal.ExitCurd(nil)
+					internal.Exit(nil)
 				}
 			}
 		}
 		if anime.Rewatching && anime.Ep.IsCompleted && anime.Ep.Number-1 == anime.TotalEpisodes {
 			anime.Ep.Number = anime.Ep.Number - 1
-			internal.CurdOut("Completed anime. (Rewatching so no scoring)")
+			internal.Out("Completed anime. (Rewatching so no scoring)")
 			internal.LocalDeleteAnime(databaseFile, anime.AnilistId, anime.ProviderId)
-			internal.ExitCurd(nil)
+			internal.Exit(nil)
 		}
 
 		// Handle next episode logic based on config
 		if anime.Ep.IsCompleted {
-			if userCurdConfig.NextEpisodePrompt {
-				if !userCurdConfig.RofiSelection {
+			if userConfig.NextEpisodePrompt {
+				if !userConfig.RofiSelection {
 					// For CLI mode, the continuous prompt handles everything
-					internal.CurdOut("CLI mode: continuous prompt handling next episode logic")
+					internal.Out("CLI mode: continuous prompt handling next episode logic")
 				}
 				// For both modes, if we reach here, it means the monitoring thread exited
 				// and the episode should transition. Let the normal flow continue.
 			} else {
 				// When NextEpisodePrompt is off, continue automatically
-				internal.StartNextEpisode(&anime, &userCurdConfig, databaseFile, user.Token)
+				internal.StartNextEpisode(&anime, &userConfig, databaseFile, user.Token)
 				continue
 			}
 		}
@@ -1154,11 +1154,11 @@ func main() {
 
 		// If we still don't have links, get them now
 		if len(anime.Ep.Links) == 0 {
-			links, _, err := internal.GetEpisodeURLForPlayback(userCurdConfig, anime.ProviderId, anime.Ep.Number)
+			links, _, err := internal.GetEpisodeURLForPlayback(userConfig, anime.ProviderId, anime.Ep.Number)
 			if err != nil {
 				internal.Log("Failed to get episode links: " + err.Error())
-				internal.CurdOut("Failed to get episode links. Try again later.")
-				internal.ExitCurd(fmt.Errorf("failed to get episode links: %v", err))
+				internal.Out("Failed to get episode links. Try again later.")
+				internal.Exit(fmt.Errorf("failed to get episode links: %v", err))
 				return
 			}
 			anime.Ep.Links = links
@@ -1166,8 +1166,8 @@ func main() {
 
 		// Verify that we have links before starting
 		if len(anime.Ep.Links) == 0 {
-			internal.CurdOut("No episode links found. Try again later.")
-			internal.ExitCurd(fmt.Errorf("no episode links found"))
+			internal.Out("No episode links found. Try again later.")
+			internal.Exit(fmt.Errorf("no episode links found"))
 			return
 		}
 

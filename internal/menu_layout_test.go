@@ -370,7 +370,7 @@ func TestTabsNeedMoreThanOneCategoryAndALoader(t *testing.T) {
 func TestArrowsSwitchCategories(t *testing.T) {
 	previous := GetGlobalConfig()
 	t.Cleanup(func() { SetGlobalConfig(previous) })
-	SetGlobalConfig(&CurdConfig{VimKeys: false})
+	SetGlobalConfig(&Config{VimKeys: false})
 
 	lists := map[string][]SelectionOption{
 		"CURRENT":  {{Key: "1", Label: "Frieren"}},
@@ -401,7 +401,7 @@ func TestArrowsSwitchCategories(t *testing.T) {
 func TestArrowsStillMoveTheCursorUnderVimKeys(t *testing.T) {
 	previous := GetGlobalConfig()
 	t.Cleanup(func() { SetGlobalConfig(previous) })
-	SetGlobalConfig(&CurdConfig{VimKeys: true})
+	SetGlobalConfig(&Config{VimKeys: true})
 
 	m := &Model{allOptions: []SelectionOption{{Key: "1", Label: "a"}, {Key: "2", Label: "b"}}}
 	attachCategoryTabs(m, &SelectionRefreshConfig{
@@ -569,7 +569,7 @@ func TestThemeOverrideReachesTheRenderedMenu(t *testing.T) {
 		ApplyThemeFromConfig(previous)
 	})
 
-	config := &CurdConfig{Theme: "builtin", ThemeOverrides: "accent:#ff6188"}
+	config := &Config{Theme: "builtin", ThemeOverrides: "accent:#ff6188"}
 	SetGlobalConfig(config)
 	palette := ApplyThemeFromConfig(config)
 
@@ -629,7 +629,7 @@ func TestBreadcrumbNamesTheCategory(t *testing.T) {
 func TestKeyHintsOnlyOfferKeysThatWork(t *testing.T) {
 	previous := GetGlobalConfig()
 	t.Cleanup(func() { SetGlobalConfig(previous) })
-	SetGlobalConfig(&CurdConfig{VimKeys: false})
+	SetGlobalConfig(&Config{VimKeys: false})
 
 	plain := Model{isHomeMenu: true}
 	keys := func(m Model) string {
@@ -659,7 +659,7 @@ func TestKeyHintsOnlyOfferKeysThatWork(t *testing.T) {
 
 	// Under vim keys the arrows move the cursor, so the category key differs
 	// and the movement hint has to match what actually moves.
-	SetGlobalConfig(&CurdConfig{VimKeys: true})
+	SetGlobalConfig(&Config{VimKeys: true})
 	if got := keys(tabbed); !strings.Contains(got, "tab") || strings.Contains(got, "←/→") {
 		t.Errorf("under vim keys the category key should be tab: %q", got)
 	}
@@ -884,7 +884,7 @@ func TestEveryFooterActionHasAHandler(t *testing.T) {
 		t.Fatalf("expected six actions, got %d", len(actions))
 	}
 
-	source, err := os.ReadFile("curd.go")
+	source, err := os.ReadFile("otakase.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -914,7 +914,7 @@ func TestEveryFooterActionHasAHandler(t *testing.T) {
 // passes every other test, and can only otherwise be caught by running the
 // program and pressing the key.
 func TestActionHandlersAreNotNestedInsideThePrompt(t *testing.T) {
-	source, err := os.ReadFile("curd.go")
+	source, err := os.ReadFile("otakase.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -964,12 +964,12 @@ func TestEscapeHintMatchesWhatEscapeDoes(t *testing.T) {
 		return hints[len(hints)-1]
 	}
 
-	SetGlobalConfig(&CurdConfig{CurrentCategory: false})
+	SetGlobalConfig(&Config{CurrentCategory: false})
 	if got := lastHint(Model{}); got.Label != "back" {
 		t.Errorf("with a menu behind it, escape goes back, got %q", got.Label)
 	}
 
-	SetGlobalConfig(&CurdConfig{CurrentCategory: true})
+	SetGlobalConfig(&Config{CurrentCategory: true})
 	if got := lastHint(Model{}); got.Label != "quit" {
 		t.Errorf("with the menu skipped, escape quits, got %q", got.Label)
 	}
@@ -990,15 +990,15 @@ func TestSkippingTheMenuIsATerminalSetting(t *testing.T) {
 
 	cases := []struct {
 		name   string
-		config *CurdConfig
+		config *Config
 		want   bool
 	}{
-		{"terminal, setting on", &CurdConfig{CurrentCategory: true}, true},
-		{"terminal, setting off", &CurdConfig{}, false},
-		{"rofi, setting on", &CurdConfig{CurrentCategory: true, RofiSelection: true}, false},
-		{"rofi, setting off", &CurdConfig{RofiSelection: true}, false},
+		{"terminal, setting on", &Config{CurrentCategory: true}, true},
+		{"terminal, setting off", &Config{}, false},
+		{"rofi, setting on", &Config{CurrentCategory: true, RofiSelection: true}, false},
+		{"rofi, setting off", &Config{RofiSelection: true}, false},
 		// -current asks for this run, whatever is drawing the list.
-		{"rofi, -current given", &CurdConfig{CurrentCategory: true, CurrentCategoryFlag: true, RofiSelection: true}, true},
+		{"rofi, -current given", &Config{CurrentCategory: true, CurrentCategoryFlag: true, RofiSelection: true}, true},
 		{"no config at all", nil, false},
 	}
 
@@ -1015,7 +1015,7 @@ func TestEscapeHintFollowsRofiToo(t *testing.T) {
 	previous := GetGlobalConfig()
 	t.Cleanup(func() { SetGlobalConfig(previous) })
 
-	SetGlobalConfig(&CurdConfig{CurrentCategory: true, RofiSelection: true})
+	SetGlobalConfig(&Config{CurrentCategory: true, RofiSelection: true})
 	hints := Model{}.keyHints()
 	if got := hints[len(hints)-1]; got.Label != "back" {
 		t.Errorf("under rofi the menu is still behind the list, got %q", got.Label)

@@ -87,7 +87,7 @@ type pendingMyAnimeListAuth struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-func myAnimeListTokenPath(config *CurdConfig) string {
+func myAnimeListTokenPath(config *Config) string {
 	return filepath.Join(os.ExpandEnv(config.StoragePath), "myanimelist_token.json")
 }
 
@@ -99,11 +99,11 @@ func trackingIDCachePath(storagePath string) string {
 	return filepath.Join(os.ExpandEnv(storagePath), trackingIDCacheFileName)
 }
 
-func myAnimeListPendingAuthPath(config *CurdConfig) string {
+func myAnimeListPendingAuthPath(config *Config) string {
 	return filepath.Join(os.ExpandEnv(config.StoragePath), myAnimeListPendingAuthFile)
 }
 
-func savePendingMyAnimeListAuth(config *CurdConfig, pending pendingMyAnimeListAuth) error {
+func savePendingMyAnimeListAuth(config *Config, pending pendingMyAnimeListAuth) error {
 	storagePath := os.ExpandEnv(config.StoragePath)
 	if err := os.MkdirAll(storagePath, 0o755); err != nil {
 		return err
@@ -115,7 +115,7 @@ func savePendingMyAnimeListAuth(config *CurdConfig, pending pendingMyAnimeListAu
 	return os.WriteFile(myAnimeListPendingAuthPath(config), data, 0o600)
 }
 
-func loadPendingMyAnimeListAuth(config *CurdConfig) (*pendingMyAnimeListAuth, error) {
+func loadPendingMyAnimeListAuth(config *Config) (*pendingMyAnimeListAuth, error) {
 	data, err := os.ReadFile(myAnimeListPendingAuthPath(config))
 	if err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func loadPendingMyAnimeListAuth(config *CurdConfig) (*pendingMyAnimeListAuth, er
 	return &pending, nil
 }
 
-func clearPendingMyAnimeListAuth(config *CurdConfig) {
+func clearPendingMyAnimeListAuth(config *Config) {
 	_ = os.Remove(myAnimeListPendingAuthPath(config))
 }
 
@@ -172,7 +172,7 @@ func extractOAuthCodeFromInput(input string, expectedState string) (string, erro
 	return input, nil
 }
 
-func exchangeMyAnimeListAuthorizationCode(config *CurdConfig, tokenPath string, codeVerifier string, code string) (string, error) {
+func exchangeMyAnimeListAuthorizationCode(config *Config, tokenPath string, codeVerifier string, code string) (string, error) {
 	clientID, clientSecret := myAnimeListClientCredentials(config)
 	form := url.Values{
 		"client_id":     {clientID},
@@ -220,7 +220,7 @@ func exchangeMyAnimeListAuthorizationCode(config *CurdConfig, tokenPath string, 
 	return token.AccessToken, nil
 }
 
-func myAnimeListClientCredentials(config *CurdConfig) (string, string) {
+func myAnimeListClientCredentials(config *Config) (string, string) {
 	if config == nil {
 		return "", ""
 	}
@@ -257,7 +257,7 @@ func randomOAuthString(length int) (string, error) {
 	return string(buf), nil
 }
 
-func authenticateMyAnimeListWithBrowser(config *CurdConfig, tokenPath string) (string, error) {
+func authenticateMyAnimeListWithBrowser(config *Config, tokenPath string) (string, error) {
 	clientID, _ := myAnimeListClientCredentials(config)
 	if clientID == "" {
 		return "", fmt.Errorf("MyAnimeList client ID is not configured")
@@ -276,7 +276,7 @@ func authenticateMyAnimeListWithBrowser(config *CurdConfig, tokenPath string) (s
 	}
 
 	if pending, err := loadPendingMyAnimeListAuth(config); err == nil {
-		CurdOut("Found an unfinished MyAnimeList login.")
+		Out("Found an unfinished MyAnimeList login.")
 		callbackInput, inputErr := promptTrackingInput("Paste the full MyAnimeList callback URL (or just the code), or press Enter to start over", true)
 		if inputErr != nil {
 			return "", inputErr
@@ -382,7 +382,7 @@ func authenticateMyAnimeListWithBrowser(config *CurdConfig, tokenPath string) (s
 
 var authenticateMyAnimeList = authenticateMyAnimeListWithBrowser
 
-func refreshMyAnimeListToken(config *CurdConfig, tokenPath string, refreshToken string) (*OAuthToken, error) {
+func refreshMyAnimeListToken(config *Config, tokenPath string, refreshToken string) (*OAuthToken, error) {
 	clientID, clientSecret := myAnimeListClientCredentials(config)
 	if clientID == "" {
 		return nil, fmt.Errorf("MyAnimeList client ID is not configured")
@@ -442,7 +442,7 @@ func refreshMyAnimeListToken(config *CurdConfig, tokenPath string, refreshToken 
 	return &token, nil
 }
 
-func renewMyAnimeListAccessToken(config *CurdConfig, tokenPath string, token *OAuthToken, reason string) (string, error) {
+func renewMyAnimeListAccessToken(config *Config, tokenPath string, token *OAuthToken, reason string) (string, error) {
 	if token != nil && strings.TrimSpace(token.RefreshToken) != "" {
 		refreshed, refreshErr := refreshMyAnimeListToken(config, tokenPath, token.RefreshToken)
 		if refreshErr == nil {
@@ -451,7 +451,7 @@ func renewMyAnimeListAccessToken(config *CurdConfig, tokenPath string, token *OA
 		Log(fmt.Sprintf("Failed to refresh MyAnimeList token after %s: %v", reason, refreshErr))
 	}
 
-	CurdOut("MyAnimeList sign-in required. Opening browser...")
+	Out("MyAnimeList sign-in required. Opening browser...")
 	Log(fmt.Sprintf("Starting MyAnimeList browser authentication after %s", reason))
 	clearStoredTokenFile(tokenPath)
 
@@ -465,7 +465,7 @@ func renewMyAnimeListAccessToken(config *CurdConfig, tokenPath string, token *OA
 	return accessToken, nil
 }
 
-func GetMyAnimeListAccessToken(config *CurdConfig) (string, error) {
+func GetMyAnimeListAccessToken(config *Config) (string, error) {
 	tokenPath := myAnimeListTokenPath(config)
 	token, err := loadToken(tokenPath)
 	if err != nil {
@@ -485,7 +485,7 @@ func GetMyAnimeListAccessToken(config *CurdConfig) (string, error) {
 	return renewMyAnimeListAccessToken(config, tokenPath, token, "expired token")
 }
 
-func ChangeMyAnimeListToken(config *CurdConfig, user *User) error {
+func ChangeMyAnimeListToken(config *Config, user *User) error {
 	tokenPath := myAnimeListTokenPath(config)
 	accessToken, err := authenticateMyAnimeList(config, tokenPath)
 	if err != nil {
@@ -495,7 +495,7 @@ func ChangeMyAnimeListToken(config *CurdConfig, user *User) error {
 	return nil
 }
 
-func myAnimeListRequest(config *CurdConfig, method, requestURL string, form url.Values, out interface{}) error {
+func myAnimeListRequest(config *Config, method, requestURL string, form url.Values, out interface{}) error {
 	token, err := GetMyAnimeListAccessToken(config)
 	if err != nil {
 		return err
@@ -927,7 +927,7 @@ func lookupAniListMediaByMalIDs(malIDs []int) (map[int]aniListMediaLookupResult,
 	return results, nil
 }
 
-func resolveAniListMediaForMyAnimeList(config *CurdConfig, malID int, fallbackTitle string) (Media, string, error) {
+func resolveAniListMediaForMyAnimeList(config *Config, malID int, fallbackTitle string) (Media, string, error) {
 	cachePayload, err := loadTrackingIDCache(config.StoragePath)
 	if err != nil && !os.IsNotExist(err) {
 		Log(fmt.Sprintf("Failed to load MAL tracking ID cache: %v", err))
@@ -1003,7 +1003,7 @@ func saveMyAnimeListCache(storagePath string, userID int, list AnimeList) error 
 	return nil
 }
 
-func FetchLatestMyAnimeList(config *CurdConfig, user *User) (AnimeList, error) {
+func FetchLatestMyAnimeList(config *Config, user *User) (AnimeList, error) {
 	var result AnimeList
 	nextURL := "/users/@me/animelist"
 	queryValues := url.Values{
@@ -1135,7 +1135,7 @@ func FetchLatestMyAnimeList(config *CurdConfig, user *User) (AnimeList, error) {
 	return result, nil
 }
 
-func refreshMyAnimeListInBackground(config *CurdConfig, user *User) {
+func refreshMyAnimeListInBackground(config *Config, user *User) {
 	if user == nil || user.ListSync == nil {
 		return
 	}
@@ -1155,7 +1155,7 @@ func refreshMyAnimeListInBackground(config *CurdConfig, user *User) {
 	}()
 }
 
-func InitializeMyAnimeListUserAnimeList(config *CurdConfig, user *User) error {
+func InitializeMyAnimeListUserAnimeList(config *Config, user *User) error {
 	cachedPayload, err := loadMyAnimeListCache(config.StoragePath, user.Id)
 	if err == nil {
 		if user.Id == 0 && cachedPayload.UserID != 0 {
@@ -1180,7 +1180,7 @@ func InitializeMyAnimeListUserAnimeList(config *CurdConfig, user *User) error {
 	return nil
 }
 
-func RefreshMyAnimeListUserAnimeList(config *CurdConfig, user *User) error {
+func RefreshMyAnimeListUserAnimeList(config *Config, user *User) error {
 	latestList, err := FetchLatestMyAnimeList(config, user)
 	if err != nil {
 		return err
@@ -1198,7 +1198,7 @@ func RefreshMyAnimeListUserAnimeList(config *CurdConfig, user *User) error {
 	return nil
 }
 
-func updateMyAnimeListListStatus(config *CurdConfig, malID int, payload map[string]string) error {
+func updateMyAnimeListListStatus(config *Config, malID int, payload map[string]string) error {
 	form := url.Values{}
 	for key, value := range payload {
 		if strings.TrimSpace(value) == "" && key != "start_date" && key != "finish_date" {
@@ -1211,17 +1211,17 @@ func updateMyAnimeListListStatus(config *CurdConfig, malID int, payload map[stri
 	return myAnimeListRequest(config, http.MethodPut, fmt.Sprintf("/anime/%d/my_list_status", malID), form, &response)
 }
 
-func updateMyAnimeListProgress(config *CurdConfig, malID int, progress int) error {
+func updateMyAnimeListProgress(config *Config, malID int, progress int) error {
 	if err := updateMyAnimeListListStatus(config, malID, map[string]string{
 		"num_watched_episodes": strconv.Itoa(progress),
 	}); err != nil {
 		return err
 	}
-	CurdOut(fmt.Sprint("Anime progress updated! Latest watched episode: ", progress))
+	Out(fmt.Sprint("Anime progress updated! Latest watched episode: ", progress))
 	return nil
 }
 
-func updateMyAnimeListStatus(config *CurdConfig, malID int, status string) error {
+func updateMyAnimeListStatus(config *Config, malID int, status string) error {
 	payload := map[string]string{
 		"status":        aniListStatusToMyAnimeListStatus(status),
 		"is_rewatching": "false",
@@ -1233,11 +1233,11 @@ func updateMyAnimeListStatus(config *CurdConfig, malID int, status string) error
 	if err := updateMyAnimeListListStatus(config, malID, payload); err != nil {
 		return err
 	}
-	CurdOut(fmt.Sprintf("Anime status updated to: %s", status))
+	Out(fmt.Sprintf("Anime status updated to: %s", status))
 	return nil
 }
 
-func rateMyAnimeListAnime(config *CurdConfig, malID int) error {
+func rateMyAnimeListAnime(config *Config, malID int) error {
 	score, cancelled, err := promptAnimeScoreValue()
 	if err != nil || cancelled {
 		return err
@@ -1245,18 +1245,18 @@ func rateMyAnimeListAnime(config *CurdConfig, malID int) error {
 	return rateMyAnimeListAnimeWithScore(config, malID, int(score+0.5))
 }
 
-func rateMyAnimeListAnimeWithScore(config *CurdConfig, malID int, score int) error {
+func rateMyAnimeListAnimeWithScore(config *Config, malID int, score int) error {
 	if err := updateMyAnimeListListStatus(config, malID, map[string]string{
 		"score": strconv.Itoa(score),
 	}); err != nil {
 		return err
 	}
 
-	CurdOut(fmt.Sprintf("Successfully rated anime (malId: %d) with score: %d", malID, score))
+	Out(fmt.Sprintf("Successfully rated anime (malId: %d) with score: %d", malID, score))
 	return nil
 }
 
-func addMyAnimeListAnimeToList(config *CurdConfig, malID int, status string) error {
+func addMyAnimeListAnimeToList(config *Config, malID int, status string) error {
 	payload := map[string]string{
 		"status":        aniListStatusToMyAnimeListStatus(status),
 		"is_rewatching": "false",
@@ -1268,11 +1268,11 @@ func addMyAnimeListAnimeToList(config *CurdConfig, malID int, status string) err
 	if err := updateMyAnimeListListStatus(config, malID, payload); err != nil {
 		return err
 	}
-	CurdOut(fmt.Sprintf("Anime added to: %s", status))
+	Out(fmt.Sprintf("Anime added to: %s", status))
 	return nil
 }
 
-func completeMyAnimeListRewatch(config *CurdConfig, malID int, anime Anime) error {
+func completeMyAnimeListRewatch(config *Config, malID int, anime Anime) error {
 	completedAt := currentFuzzyDate()
 	startedAt := anime.StartedAt
 	if startedAt == (FuzzyDate{}) {
@@ -1293,7 +1293,7 @@ func completeMyAnimeListRewatch(config *CurdConfig, malID int, anime Anime) erro
 	})
 }
 
-func deleteMyAnimeListEntry(config *CurdConfig, malID int) error {
+func deleteMyAnimeListEntry(config *Config, malID int) error {
 	return myAnimeListRequest(config, http.MethodDelete, fmt.Sprintf("/anime/%d/my_list_status", malID), nil, nil)
 }
 

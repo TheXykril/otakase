@@ -1,6 +1,6 @@
 // Package nyaa resolves episodes from Nyaa's public torrent index.
 //
-// Every other provider Curd ships scrapes a streaming site, and those share a
+// Every other provider otakase ships scrapes a streaming site, and those share a
 // failure mode: they carry a show's back catalogue but lag or omit the episodes
 // that aired this week -- exactly the ones a tracked "continue watching" list
 // asks for. Fansub and web-rip releases are indexed within hours of broadcast,

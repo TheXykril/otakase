@@ -21,7 +21,7 @@ func TestAnikotoMarchLionDubEp1Live(t *testing.T) {
 	if !ok {
 		t.Fatal("expected anikoto provider to implement ProviderModeResolver")
 	}
-	links, err := resolver.GetEpisodeURLForMode(CurdConfig{SubOrDub: "dub"}, showID, 1, "dub")
+	links, err := resolver.GetEpisodeURLForMode(Config{SubOrDub: "dub"}, showID, 1, "dub")
 	if err == nil {
 		for _, link := range links {
 			if strings.Contains(link, "fast4speed.rsvp") {
@@ -47,7 +47,7 @@ func TestAnikotoMarchLionSubEp1Live(t *testing.T) {
 	if !ok {
 		t.Fatal("expected anikoto provider to implement ProviderModeResolver")
 	}
-	links, err := resolver.GetEpisodeURLForMode(CurdConfig{SubOrDub: "sub"}, showID, 1, "sub")
+	links, err := resolver.GetEpisodeURLForMode(Config{SubOrDub: "sub"}, showID, 1, "sub")
 	if err != nil {
 		t.Fatalf("sub episode link lookup failed: %v", err)
 	}

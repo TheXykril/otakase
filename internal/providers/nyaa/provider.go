@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/thexykril/otakase/internal/curdhost"
+	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers"
 	"github.com/thexykril/otakase/internal/torrentstream"
 )
@@ -23,7 +23,7 @@ var dubMarkers = regexp.MustCompile(`(?i)\b(dual[\s-]?audio|dual|dub(bed)?|multi
 // matchesMode reports whether a release can satisfy the requested audio.
 //
 // Asking for a dub and being handed a subtitled release is worse than being
-// told there is none: Curd can fall back to sub deliberately, announcing it,
+// told there is none: otakase can fall back to sub deliberately, announcing it,
 // but it cannot undo playing the wrong audio.
 func matchesMode(release Release, mode string) bool {
 	if providers.NormalizeTranslationType(mode) == "dub" {
@@ -51,7 +51,7 @@ func playableReleases(releases []Release) []Release {
 //
 // This belongs to picking an episode, never to finding a show. Filtering by
 // audio during search made a sub-only show vanish from a dub-configured setup
-// entirely -- every title variant came back "no results", so Curd could not map
+// entirely -- every title variant came back "no results", so otakase could not map
 // the show at all and the audio fallback, which only runs once a provider is
 // mapped, never got its chance.
 func usableReleases(releases []Release, mode string) []Release {
@@ -135,7 +135,7 @@ func (p *Provider) EpisodesList(showID, mode string) ([]string, error) {
 	if len(seen) == 0 {
 		// Distinguish "this show is not indexed" from "it is, but not dubbed".
 		// Only the second can be answered by falling back to the other audio, and
-		// Curd can only make that choice if the error says which it is.
+		// otakase can only make that choice if the error says which it is.
 		if providers.NormalizeTranslationType(mode) == "dub" && len(playableReleases(releases)) > 0 {
 			return nil, fmt.Errorf("no dub releases indexed for %q", showID)
 		}
@@ -179,13 +179,13 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 		if release.Episode != epNo {
 			continue
 		}
-		curdhost.Log(fmt.Sprintf("nyaa: episode %d -> %q (%d seeders, %s)",
+		providerhost.Log(fmt.Sprintf("nyaa: episode %d -> %q (%d seeders, %s)",
 			epNo, release.Title, release.Seeders, release.Size))
 
 		streamURL, err := torrentstream.Stream(release.InfoHash)
 		if err != nil {
 			// Another release may have a healthier swarm.
-			curdhost.Log(fmt.Sprintf("nyaa: %q did not start: %v", release.Title, err))
+			providerhost.Log(fmt.Sprintf("nyaa: %q did not start: %v", release.Title, err))
 			continue
 		}
 		return []string{streamURL}, nil
@@ -197,7 +197,7 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 	return nil, fmt.Errorf("no release indexed for episode %d", epNo)
 }
 
-// ResolveProviderID lets Curd recover when a stored id no longer matches how
+// ResolveProviderID lets otakase recover when a stored id no longer matches how
 // the index titles the show.
 func (p *Provider) ResolveProviderID(providerID, query string) (string, error) {
 	if strings.TrimSpace(providerID) != "" {

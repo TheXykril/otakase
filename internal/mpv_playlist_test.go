@@ -88,7 +88,7 @@ func TestParseEpisodeNumberListDedupesAndSorts(t *testing.T) {
 
 func TestWritePlaceholderM3UHasEXTINFTitles(t *testing.T) {
 	c := &MPVPlaylistController{
-		config: &CurdConfig{StoragePath: t.TempDir()},
+		config: &Config{StoragePath: t.TempDir()},
 		anime:  &Anime{Title: AnimeTitle{English: "Demo"}},
 	}
 	slots := []playlistSlot{
@@ -375,7 +375,7 @@ func TestFinalizePlaylistEpisodeChangeUpdatesLocalHistory(t *testing.T) {
 		Ep:             Episode{Number: 40},
 	}
 	c := &MPVPlaylistController{
-		config:        &CurdConfig{StoragePath: dir, SubOrDub: "sub"},
+		config:        &Config{StoragePath: dir, SubOrDub: "sub"},
 		anime:         anime,
 		preferredMode: "sub",
 		socket:        "", // skip MPV title commands failures are fine
@@ -423,7 +423,7 @@ func TestFinalizePlaylistMarksFillerFromList(t *testing.T) {
 		Ep:             Episode{Number: 1},
 	}
 	c := &MPVPlaylistController{
-		config: &CurdConfig{StoragePath: dir},
+		config: &Config{StoragePath: dir},
 		anime:  anime,
 	}
 	c.finalizePlaylistEpisodeChange(1, 5, "sub", playlistLeaveNone)
@@ -441,7 +441,7 @@ func TestLocalHistoryPath(t *testing.T) {
 	if localHistoryPath("") != "" {
 		t.Fatal("empty storage")
 	}
-	got := localHistoryPath("/tmp/curd-test-store")
+	got := localHistoryPath("/tmp/otakase-test-store")
 	if !strings.HasSuffix(got, "curd_history.txt") {
 		t.Fatalf("got %q", got)
 	}

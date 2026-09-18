@@ -91,15 +91,15 @@ func TestParseEpisodeRange(t *testing.T) {
 }
 
 func TestResolveDownloadDir(t *testing.T) {
-	if got := ResolveDownloadDir(&CurdConfig{DownloadDir: "/explicit/path"}); got != "/explicit/path" {
+	if got := ResolveDownloadDir(&Config{DownloadDir: "/explicit/path"}); got != "/explicit/path" {
 		t.Fatalf("got %q", got)
 	}
 	t.Setenv("CURD_TEST_DL", "/from/env")
-	if got := ResolveDownloadDir(&CurdConfig{DownloadDir: "$CURD_TEST_DL/x"}); got != "/from/env/x" {
+	if got := ResolveDownloadDir(&Config{DownloadDir: "$CURD_TEST_DL/x"}); got != "/from/env/x" {
 		t.Fatalf("expected env expansion, got %q", got)
 	}
 	// An unset directory still resolves somewhere usable.
-	if got := ResolveDownloadDir(&CurdConfig{}); got == "" {
+	if got := ResolveDownloadDir(&Config{}); got == "" {
 		t.Fatal("expected a default download directory")
 	}
 	if got := ResolveDownloadDir(nil); got == "" {
@@ -121,7 +121,7 @@ func TestBuildFFmpegArgsCopiesStreams(t *testing.T) {
 		t.Fatalf("expected the ADTS bitstream filter, got: %s", joined)
 	}
 	if !strings.Contains(joined, "-nostdin") {
-		t.Fatalf("ffmpeg must not consume curd's stdin, got: %s", joined)
+		t.Fatalf("ffmpeg must not consume otakase's stdin, got: %s", joined)
 	}
 	if args[len(args)-1] != "/tmp/out.mp4" {
 		t.Fatalf("output must be the final argument, got: %s", joined)
@@ -195,10 +195,10 @@ func TestBuildFFmpegArgsMuxesSubtitles(t *testing.T) {
 }
 
 func TestDownloadEpisodeRejectsBadInput(t *testing.T) {
-	if _, err := DownloadEpisode(CurdConfig{}, nil, 1, t.TempDir()); err == nil {
+	if _, err := DownloadEpisode(Config{}, nil, 1, t.TempDir()); err == nil {
 		t.Fatal("expected an error for a nil anime")
 	}
-	if _, err := DownloadEpisode(CurdConfig{}, &Anime{}, 0, t.TempDir()); err == nil {
+	if _, err := DownloadEpisode(Config{}, &Anime{}, 0, t.TempDir()); err == nil {
 		t.Fatal("expected an error for episode 0")
 	}
 }
@@ -216,7 +216,7 @@ func TestDownloadEpisodeSkipsExistingFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := DownloadEpisode(CurdConfig{SubOrDub: "sub"}, anime, 1, dir)
+	got, err := DownloadEpisode(Config{SubOrDub: "sub"}, anime, 1, dir)
 	if err != nil {
 		t.Fatalf("expected the existing file to be reused, got %v", err)
 	}

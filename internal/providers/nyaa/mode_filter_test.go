@@ -19,7 +19,7 @@ func parseSeeded(title string, seeders int) Release {
 }
 
 // Filtering by audio during search made a sub-only show disappear entirely from
-// a dub-configured setup: every title variant answered "no results", so Curd
+// a dub-configured setup: every title variant answered "no results", so otakase
 // could not map the show at all, and the automatic audio fallback -- which only
 // runs once a provider is mapped -- never got the chance to switch to sub.
 //

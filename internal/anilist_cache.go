@@ -150,7 +150,7 @@ func FetchLatestAniListAnimeList(token string, userID int) (AnimeList, error) {
 	return ParseAnimeList(userData), nil
 }
 
-func refreshAniListAnimeListInBackground(userCurdConfig *CurdConfig, user *User) {
+func refreshAniListAnimeListInBackground(userConfig *Config, user *User) {
 	if user == nil || user.ListSync == nil {
 		return
 	}
@@ -179,7 +179,7 @@ func refreshAniListAnimeListInBackground(userCurdConfig *CurdConfig, user *User)
 			return
 		}
 
-		if err := saveAniListAnimeListCache(userCurdConfig.StoragePath, user.Id, latestList); err != nil {
+		if err := saveAniListAnimeListCache(userConfig.StoragePath, user.Id, latestList); err != nil {
 			Log(fmt.Sprintf("Failed to save refreshed anime list cache: %v", err))
 		}
 
@@ -187,8 +187,8 @@ func refreshAniListAnimeListInBackground(userCurdConfig *CurdConfig, user *User)
 	}()
 }
 
-func InitializeAniListUserAnimeList(userCurdConfig *CurdConfig, user *User) error {
-	cachedPayload, err := loadAniListAnimeListCache(userCurdConfig.StoragePath, user.Id)
+func InitializeAniListUserAnimeList(userConfig *Config, user *User) error {
+	cachedPayload, err := loadAniListAnimeListCache(userConfig.StoragePath, user.Id)
 	if err == nil {
 		// Seed user ID from cache so we skip the blocking GetAnilistUserID network call.
 		if user.Id == 0 && cachedPayload.UserID != 0 {
@@ -197,7 +197,7 @@ func InitializeAniListUserAnimeList(userCurdConfig *CurdConfig, user *User) erro
 		user.AnimeList = cachedPayload.AnimeList
 		user.ListSync = NewAnimeListSync(cachedPayload.AnimeList)
 		// Refresh user ID + anime list in the background (non-blocking).
-		refreshAniListAnimeListInBackground(userCurdConfig, user)
+		refreshAniListAnimeListInBackground(userConfig, user)
 		return nil
 	}
 
@@ -224,14 +224,14 @@ func InitializeAniListUserAnimeList(userCurdConfig *CurdConfig, user *User) erro
 	user.ListSync = NewAnimeListSync(latestList)
 	// Blocking fetch already has the freshest data — mark done immediately.
 	user.ListSync.MarkRefreshDone()
-	if err := saveAniListAnimeListCache(userCurdConfig.StoragePath, user.Id, latestList); err != nil {
+	if err := saveAniListAnimeListCache(userConfig.StoragePath, user.Id, latestList); err != nil {
 		Log(fmt.Sprintf("Failed to save anime list cache: %v", err))
 	}
 
 	return nil
 }
 
-func RefreshAniListUserAnimeList(userCurdConfig *CurdConfig, user *User) error {
+func RefreshAniListUserAnimeList(userConfig *Config, user *User) error {
 	if user.Id == 0 {
 		userID, username, err := GetAnilistUserID(user.Token)
 		if err != nil {
@@ -255,7 +255,7 @@ func RefreshAniListUserAnimeList(userCurdConfig *CurdConfig, user *User) error {
 		user.ListSync.Replace(latestList, true)
 	}
 
-	if err := saveAniListAnimeListCache(userCurdConfig.StoragePath, user.Id, latestList); err != nil {
+	if err := saveAniListAnimeListCache(userConfig.StoragePath, user.Id, latestList); err != nil {
 		Log(fmt.Sprintf("Failed to save anime list cache: %v", err))
 	}
 
@@ -263,15 +263,15 @@ func RefreshAniListUserAnimeList(userCurdConfig *CurdConfig, user *User) error {
 }
 
 func buildCategorySelectionOptions(list AnimeList, category string) []SelectionOption {
-	userCurdConfig := GetGlobalConfig()
+	userConfig := GetGlobalConfig()
 	options := make([]SelectionOption, 0)
-	resume := resumePointsByAnilistID(userCurdConfig)
+	resume := resumePointsByAnilistID(userConfig)
 
-	for _, entry := range sortEntriesByRecency(getEntriesByCategory(list, category), userCurdConfig) {
-		title := mediaDisplayTitle(entry.Media, userCurdConfig)
+	for _, entry := range sortEntriesByRecency(getEntriesByCategory(list, category), userConfig) {
+		title := mediaDisplayTitle(entry.Media, userConfig)
 
 		hasNew := false
-		if userCurdConfig.ShowNewEpisodes && entry.Media.NextAiringEpisode != nil {
+		if userConfig.ShowNewEpisodes && entry.Media.NextAiringEpisode != nil {
 			nextWatched := nextEpisodeFromProgress(entry.Progress)
 			hasNew = entry.Media.NextAiringEpisode.Episode > nextWatched
 		}
@@ -289,17 +289,17 @@ func buildCategorySelectionOptions(list AnimeList, category string) []SelectionO
 }
 
 func buildCategoryPreviewOptions(list AnimeList, category string) map[string]RofiSelectPreview {
-	userCurdConfig := GetGlobalConfig()
+	userConfig := GetGlobalConfig()
 	options := make(map[string]RofiSelectPreview)
-	resume := resumePointsByAnilistID(userCurdConfig)
+	resume := resumePointsByAnilistID(userConfig)
 
 	// The grid is keyed by a map, which has no order of its own, so each entry
 	// carries the rank it should be displayed at.
-	for rank, entry := range sortEntriesByRecency(getEntriesByCategory(list, category), userCurdConfig) {
-		title := mediaDisplayTitle(entry.Media, userCurdConfig)
+	for rank, entry := range sortEntriesByRecency(getEntriesByCategory(list, category), userConfig) {
+		title := mediaDisplayTitle(entry.Media, userConfig)
 
 		hasNew := false
-		if userCurdConfig.ShowNewEpisodes && entry.Media.NextAiringEpisode != nil {
+		if userConfig.ShowNewEpisodes && entry.Media.NextAiringEpisode != nil {
 			nextWatched := nextEpisodeFromProgress(entry.Progress)
 			hasNew = entry.Media.NextAiringEpisode.Episode > nextWatched
 		}

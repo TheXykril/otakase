@@ -64,7 +64,7 @@ func TestCanonicalProviderConfigValuePrefersStackedToken(t *testing.T) {
 func TestMigrateOnVersionUpgradeWritesVersionAndUpdatesProvider(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "curd.conf")
+	configPath := filepath.Join(tempDir, "otakase.conf")
 	storagePath := filepath.Join(tempDir, "share")
 	if err := os.WriteFile(configPath, []byte("Provider=[\"anineko\",\"nyaa\"]\nStoragePath="+storagePath+"\n"), 0644); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -116,7 +116,7 @@ func TestMigrateOnVersionUpgradeWritesVersionAndUpdatesProvider(t *testing.T) {
 
 func TestLoadConfigDoesNotDumpAllDefaultsIntoSparseFile(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "curd.conf")
+	configPath := filepath.Join(tempDir, "otakase.conf")
 	storagePath := filepath.Join(tempDir, "share")
 	initial := "StoragePath=" + storagePath + "\n" +
 		"AddMissingOptions=true\n" +
@@ -151,7 +151,7 @@ func TestLoadConfigDoesNotDumpAllDefaultsIntoSparseFile(t *testing.T) {
 
 func TestMigrateOnVersionUpgradeInjectsOnlyOptionsForCrossedVersions(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "curd.conf")
+	configPath := filepath.Join(tempDir, "otakase.conf")
 	storagePath := filepath.Join(tempDir, "share")
 	initial := "StoragePath=" + storagePath + "\n" +
 		"AddMissingOptions=true\n" +
@@ -247,7 +247,7 @@ func TestCompareVersionsOrdering(t *testing.T) {
 
 func TestConfiguredProviderNamesUsesStackedByDefault(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	got := ConfiguredProviderNames(&CurdConfig{})
+	got := ConfiguredProviderNames(&Config{})
 	want := []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb"}
 	if len(got) != len(want) {
 		t.Fatalf("got %v, want %v", got, want)
