@@ -24,7 +24,7 @@ func TestADegradedProviderIsDisabledWithAReason(t *testing.T) {
 	}
 }
 
-// allanime, animepahe and senshi were removed in 1.4.0. Nothing should claim
+// allanime, animepahe and senshi were removed in 2.0.0. Nothing should claim
 // they exist -- a name that resolves to no provider must not read as enabled.
 func TestRemovedProvidersAreGone(t *testing.T) {
 	for _, name := range []string{"allanime", "animepahe", "senshi"} {
