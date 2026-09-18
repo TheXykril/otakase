@@ -1300,12 +1300,6 @@ func handleUnreleasedAnime(userCurdConfig *CurdConfig, user *User, anime *Anime,
 }
 
 func StartCurd(userCurdConfig *CurdConfig, anime *Anime) string {
-	if err := resolveRuntimeProviderID(userCurdConfig, anime); err != nil {
-		Log(fmt.Sprintf("Failed to resolve provider id: %v", err))
-		CurdOut("Failed to resolve anime provider id: " + err.Error())
-		exitWithRestore(1)
-	}
-
 	// Validate inputs
 	if anime.ProviderId == "" {
 		CurdOut("Error: No anime ID found")
@@ -1338,7 +1332,7 @@ func StartCurd(userCurdConfig *CurdConfig, anime *Anime) string {
 		}
 	} else {
 		// Preferred-first resolve; diagnosed recovery only after that fails.
-		episodeResult, ok := resolveEpisodeLinksWithRecovery(userCurdConfig, anime, nil, true)
+		episodeResult, ok := resolveEpisodeLinksWithRecovery(userCurdConfig, anime, nil)
 		if !ok {
 			RestoreScreen()
 			return ""
@@ -1422,101 +1416,6 @@ func StartCurd(userCurdConfig *CurdConfig, anime *Anime) string {
 	}
 	title := fmt.Sprintf("%s - Episode %d", GetAnimeName(*anime), anime.Ep.Number)
 	return StartVideoWithProviderFallback(userCurdConfig, anime, title)
-}
-
-func resolveRuntimeProviderID(userCurdConfig *CurdConfig, anime *Anime) error {
-	if anime == nil || anime.ProviderId == "" {
-		return nil
-	}
-
-	providerName, providerID := AnimeProviderID(anime)
-	if providerName != "animepahe" || !ProviderEnabled("animepahe") {
-		return nil
-	}
-	if !ProviderStackContains(userCurdConfig, "animepahe") {
-		return nil
-	}
-
-	provider, err := ProviderByName(providerName)
-	if err != nil {
-		return err
-	}
-
-	query := GetAnimeName(*anime)
-	if query == "" {
-		query = anime.Title.Romaji
-	}
-	if query == "" {
-		query = anime.Title.English
-	}
-
-	resolved, err := resolveProviderID(provider, providerID, query)
-	if err != nil {
-		return err
-	}
-	if resolved != "" && resolved != providerID {
-		Log(fmt.Sprintf("Resolved Animepahe provider id %s to runtime id %s", providerID, resolved))
-		anime.ProviderId = resolved
-		anime.ProviderName = providerName
-	}
-
-	return nil
-}
-
-func reselectProviderAnime(userCurdConfig *CurdConfig, anime *Anime, reason error) bool {
-	providerName, _ := AnimeProviderID(anime)
-	if providerName != "animepahe" || !ProviderEnabled("animepahe") {
-		return false
-	}
-
-	if reason != nil {
-		Log(fmt.Sprintf("Attempting Animepahe provider reselect after error: %v", reason))
-	}
-
-	query := GetAnimeName(*anime)
-	if query == "" {
-		query = anime.Title.Romaji
-	}
-	if query == "" {
-		query = anime.Title.English
-	}
-	if query == "" {
-		return false
-	}
-
-	options, err := SearchAnime(query, userCurdConfig.SubOrDub)
-	if err != nil {
-		Log(fmt.Sprintf("Animepahe provider reselect search failed for %q: %v", query, err))
-		return false
-	}
-	if len(options) == 0 {
-		Log(fmt.Sprintf("Animepahe provider reselect found no results for %q", query))
-		return false
-	}
-
-	CurdOut("The saved Animepahe mapping is stale. Please select the anime again.")
-	var trackerEntry *Entry
-	if anime.TotalEpisodes > 0 {
-		trackerEntry = &Entry{Media: Media{Episodes: anime.TotalEpisodes}}
-	}
-	selected, err := promptProviderSearchSelection(userCurdConfig, options, trackerEntry)
-	if err != nil || selected.Key == "-1" || selected.Key == "-2" || selected.Key == "" {
-		if err != nil {
-			Log(fmt.Sprintf("Animepahe provider reselect failed: %v", err))
-		}
-		return false
-	}
-
-	if selectedProviderName, rawProviderID, ok := ParseProviderQualifiedID(selected.Key); ok {
-		anime.ProviderName = selectedProviderName
-		anime.ProviderId = rawProviderID
-	} else {
-		anime.ProviderName = "animepahe"
-		anime.ProviderId = selected.Key
-	}
-	anime.Ep.NextEpisode = NextEpisode{}
-	Log(fmt.Sprintf("Updated Animepahe ProviderId to %s after stale mapping", anime.ProviderId))
-	return true
 }
 
 func getEntriesByCategory(list AnimeList, category string) []Entry {

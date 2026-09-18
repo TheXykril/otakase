@@ -367,12 +367,12 @@ func TestFinalizePlaylistEpisodeChangeUpdatesLocalHistory(t *testing.T) {
 	dir := t.TempDir()
 	db := filepath.Join(dir, "curd_history.txt")
 	anime := &Anime{
-		AnilistId:    269,
-		ProviderId:   "269",
-		ProviderName: "senshi",
-		Title:        AnimeTitle{English: "Bleach"},
+		AnilistId:      269,
+		ProviderId:     "269",
+		ProviderName:   "anipub",
+		Title:          AnimeTitle{English: "Bleach"},
 		FillerEpisodes: []int{33},
-		Ep:           Episode{Number: 40},
+		Ep:             Episode{Number: 40},
 	}
 	c := &MPVPlaylistController{
 		config:        &CurdConfig{StoragePath: dir, SubOrDub: "sub"},
@@ -417,7 +417,7 @@ func TestFinalizePlaylistMarksFillerFromList(t *testing.T) {
 	anime := &Anime{
 		AnilistId:      1,
 		ProviderId:     "x",
-		ProviderName:   "senshi",
+		ProviderName:   "anipub",
 		Title:          AnimeTitle{English: "Demo"},
 		FillerEpisodes: []int{5},
 		Ep:             Episode{Number: 1},

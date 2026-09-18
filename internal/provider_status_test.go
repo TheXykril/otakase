@@ -25,8 +25,8 @@ func TestProviderHealthSummary(t *testing.T) {
 		t.Fatalf("unhelpful summary %q", healthy)
 	}
 
-	failed := ProviderHealth{Latency: time.Second, Err: errors.New(`Post "https://senshi.live/anime/filter": EOF`)}.Summary()
-	if !strings.Contains(failed, "FAILED") || !strings.Contains(failed, "senshi.live") {
+	failed := ProviderHealth{Latency: time.Second, Err: errors.New(`Post "https://anipub.live/anime/filter": EOF`)}.Summary()
+	if !strings.Contains(failed, "FAILED") || !strings.Contains(failed, "anipub.live") {
 		t.Fatalf("summary must carry the cause, got %q", failed)
 	}
 
@@ -39,7 +39,7 @@ func TestProviderHealthSummary(t *testing.T) {
 func TestFormatProviderStatusReportsStateAndReasons(t *testing.T) {
 	report := []ProviderHealth{
 		{Name: "anipub", Enabled: true, InStack: true, Results: 56, Latency: 161 * time.Millisecond},
-		{Name: "senshi", Enabled: false, DisabledReason: "domain lapsed and is parked for sale", Err: errors.New("EOF")},
+		{Name: "anipub", Enabled: false, DisabledReason: "domain lapsed and is parked for sale", Err: errors.New("EOF")},
 	}
 
 	out := FormatProviderStatus(report, "one piece")
@@ -49,7 +49,7 @@ func TestFormatProviderStatusReportsStateAndReasons(t *testing.T) {
 		"anipub",
 		"enabled, in stack",
 		"56 result(s)",
-		"senshi",
+		"anipub",
 		"disabled",
 		"domain lapsed and is parked for sale",
 		"1 of 2 providers returned results.",

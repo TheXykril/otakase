@@ -12,7 +12,6 @@ import (
 	"github.com/thexykril/otakase/internal/providers"
 	"github.com/thexykril/otakase/internal/providers/anipub"
 	"github.com/thexykril/otakase/internal/providers/anineko"
-	"github.com/thexykril/otakase/internal/providers/senshi"
 )
 
 const liveBenchQuery = "frieren"
@@ -27,18 +26,6 @@ var liveBenchCases = []struct {
 	episodes  func(string, string) ([]string, error)
 	streams   func(string, providers.PlaybackConfig, int) ([]string, map[string]providers.StreamPlaybackHint, error)
 }{
-	{
-		name:     "senshi",
-		provider: "senshi",
-		showID:   "52991",
-		epNo:     1,
-		mode:     "sub",
-		searchFn: func(query, mode string) ([]providers.SelectionOption, error) {
-			return senshiSearch(query, mode)
-		},
-		episodes: senshiEpisodes,
-		streams:  senshiStreams,
-	},
 	{
 		name:     "anipub",
 		provider: "anipub",
@@ -59,21 +46,6 @@ var liveBenchCases = []struct {
 		episodes: nil,
 		streams:  nil,
 	},
-}
-
-func senshiSearch(query, mode string) ([]providers.SelectionOption, error) {
-	p := &senshi.Provider{}
-	return p.SearchAnime(query, mode)
-}
-
-func senshiEpisodes(showID, mode string) ([]string, error) {
-	p := &senshi.Provider{}
-	return p.EpisodesList(showID, mode)
-}
-
-func senshiStreams(showID string, config providers.PlaybackConfig, epNo int) ([]string, map[string]providers.StreamPlaybackHint, error) {
-	p := &senshi.Provider{}
-	return p.GetEpisodeURLForModeWithHints(config, showID, epNo, config.SubOrDub)
 }
 
 func anipubSearch(query, mode string) ([]providers.SelectionOption, error) {

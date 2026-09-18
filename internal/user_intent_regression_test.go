@@ -2,10 +2,8 @@ package internal
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,27 +102,6 @@ func TestGetProviderTotalEpisodesUsesHighestEpisodeAcrossModes(t *testing.T) {
 	}
 }
 
-func TestGetProviderTotalEpisodesQueriesAnimepaheOnce(t *testing.T) {
-	provider := &fakePlaybackProvider{
-		name: "animepahe",
-		episodeListByMode: map[string][]string{
-			"sub": {"1", "500", "1100"},
-		},
-	}
-	withProvider(t, provider)
-
-	total, err := GetProviderTotalEpisodes("one-piece-id", "sub")
-	if err != nil {
-		t.Fatalf("expected animepahe total lookup to succeed: %v", err)
-	}
-	if total != 3 {
-		t.Fatalf("expected animepahe provider total, got %d", total)
-	}
-	if got := strings.Join(provider.episodeModes, ","); got != "sub" {
-		t.Fatalf("expected animepahe to be queried once, got %s", got)
-	}
-}
-
 func TestGetProviderTotalEpisodesReturnsLookupErrorsWhenNoEpisodesFound(t *testing.T) {
 	provider := &fakePlaybackProvider{
 		episodeErrByMode: map[string]error{
@@ -140,45 +117,6 @@ func TestGetProviderTotalEpisodesReturnsLookupErrorsWhenNoEpisodesFound(t *testi
 	}
 	if !strings.Contains(err.Error(), "no sub episodes") || !strings.Contains(err.Error(), "no dub episodes") {
 		t.Fatalf("expected both lookup errors, got %v", err)
-	}
-}
-
-func TestGetAllAnimeEpisodesListUsesValidGraphQLVariableSyntax(t *testing.T) {
-	withAllProvidersEnabledForTest(t)
-	previousClient := sharedHTTPClient
-	t.Cleanup(func() {
-		sharedHTTPClient = previousClient
-	})
-
-	sharedHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		var payload struct {
-			Query     string            `json:"query"`
-			Variables map[string]string `json:"variables"`
-		}
-		if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode allanime episode request: %v", err)
-		}
-		if !strings.Contains(payload.Query, "query ($showId: String!)") {
-			t.Fatalf("episode list query is missing valid variable syntax: %q", payload.Query)
-		}
-		if payload.Variables["showId"] != "show-id" {
-			t.Fatalf("unexpected show id variable: %#v", payload.Variables)
-		}
-		return testHTTPResponse(req, http.StatusOK, `{"data":{"show":{"_id":"show-id","availableEpisodesDetail":{"sub":[1,2,12]}}}}`), nil
-	})}
-
-	episodes, err := func() ([]string, error) {
-		provider, err := ProviderByName("allanime")
-		if err != nil {
-			return nil, err
-		}
-		return provider.EpisodesList("show-id", "sub")
-	}()
-	if err != nil {
-		t.Fatalf("expected allanime episode list lookup to succeed: %v", err)
-	}
-	if got := strings.Join(episodes, ","); got != "1,2,12" {
-		t.Fatalf("unexpected episodes: %s", got)
 	}
 }
 

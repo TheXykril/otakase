@@ -277,12 +277,6 @@ func DownloadEpisodes(config CurdConfig, anime *Anime, from, to int, dir string)
 		from, to = to, from
 	}
 
-	// StartCurd refreshes a stale provider id before playing; downloads must do
-	// the same or they can resolve against an expired session id.
-	if err := resolveRuntimeProviderID(&config, anime); err != nil {
-		Log(fmt.Sprintf("Could not refresh provider id before download: %v", err))
-	}
-
 	results := make([]DownloadResult, 0, to-from+1)
 	for episode := from; episode <= to; episode++ {
 		path, err := DownloadEpisode(config, anime, episode, dir)

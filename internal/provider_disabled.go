@@ -72,6 +72,13 @@ func parseDisabledProviderNames(raw string) []string {
 
 // ProviderEnabled reports whether a provider may be used at runtime.
 func ProviderEnabled(name string) bool {
+	// A name nothing registers is not a provider that happens to be switched
+	// on -- it is one this build does not have. Reading it as enabled is how a
+	// config naming a provider that has since been removed would survive
+	// migration untouched, leaving the user pointed at nothing.
+	if normalizeProviderName(name) == "" {
+		return false
+	}
 	return providerDisabledReason(name) == ""
 }
 
@@ -118,7 +125,7 @@ func filterEnabledProviders(names []string) []string {
 // have to be found before the first frame -- but ahead of the broken ones,
 // because it reliably carries an episode in the week it airs even when every
 // streaming host is still missing it.
-var preferredProviderOrder = []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb", "senshi", "allanime", "animepahe"}
+var preferredProviderOrder = []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb"}
 
 func defaultEnabledProviderStack() []string {
 	registered := providers.RegisteredNames()
@@ -160,7 +167,7 @@ func providerSelectionOptions() []SelectionOption {
 
 	for _, name := range enabled {
 		options = append(options, SelectionOption{
-			Key:   formatProviderConfigValue([]string{name}, false),
+			Key:   formatProviderConfigValue([]string{name}),
 			Label: name,
 		})
 	}

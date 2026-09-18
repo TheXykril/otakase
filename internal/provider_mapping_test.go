@@ -19,14 +19,14 @@ func TestProviderMappingSearchStateNextProvider(t *testing.T) {
 	})
 
 	t.Run("stacked search offers first provider", func(t *testing.T) {
-		state := &providerMappingSearchState{allProviders: []string{"senshi", "anineko", "anipub"}}
-		if got := state.nextProviderLabel(); got != "senshi" {
-			t.Fatalf("nextProviderLabel() = %q, want senshi", got)
+		state := &providerMappingSearchState{allProviders: []string{"anipub", "anineko", "anipub"}}
+		if got := state.nextProviderLabel(); got != "anipub" {
+			t.Fatalf("nextProviderLabel() = %q, want anipub", got)
 		}
 	})
 
 	t.Run("sequential advance walks stack", func(t *testing.T) {
-		state := &providerMappingSearchState{allProviders: []string{"senshi", "anineko", "anipub"}}
+		state := &providerMappingSearchState{allProviders: []string{"anipub", "anineko", "anipub"}}
 		if !state.advanceToNextProvider() {
 			t.Fatal("expected first advance to succeed")
 		}
@@ -56,9 +56,9 @@ func TestProviderMappingSearchStateNextProvider(t *testing.T) {
 
 func TestProviderNameFromSelectionUsesSequentialProvider(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	config := &CurdConfig{Provider: `["senshi","anineko"]`}
+	config := &CurdConfig{Provider: `["anipub","anineko"]`}
 	state := &providerMappingSearchState{
-		allProviders:  []string{"senshi", "anineko"},
+		allProviders:  []string{"anipub", "anineko"},
 		sequential:    true,
 		providerIndex: 1,
 	}
@@ -81,8 +81,8 @@ func TestProviderNameFromSelectionUsesSequentialProvider(t *testing.T) {
 
 func TestProviderNameFromSelectionUsesQualifiedKey(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	config := &CurdConfig{Provider: `["senshi","anineko"]`}
-	state := &providerMappingSearchState{allProviders: []string{"senshi", "anineko"}}
+	config := &CurdConfig{Provider: `["anipub","anineko"]`}
+	state := &providerMappingSearchState{allProviders: []string{"anipub", "anineko"}}
 
 	selected := SelectionOption{
 		Key:   "anineko::frieren-beyond-journeys-end",
@@ -95,9 +95,9 @@ func TestProviderNameFromSelectionUsesQualifiedKey(t *testing.T) {
 
 func TestApplyMatchedProviderMappingUsesSequentialProvider(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	config := &CurdConfig{Provider: `["senshi","anineko"]`}
+	config := &CurdConfig{Provider: `["anipub","anineko"]`}
 	state := &providerMappingSearchState{
-		allProviders:  []string{"senshi", "anineko"},
+		allProviders:  []string{"anipub", "anineko"},
 		sequential:    true,
 		providerIndex: 1,
 	}

@@ -9,8 +9,6 @@ import (
 func dubOnlyStack(t *testing.T) (CurdConfig, *Anime) {
 	t.Helper()
 	provider := &stackStubProvider{
-		// Deliberately not "allanime": that name triggers the unrelated
-		// Animepahe consent prompt and would mask what this test checks.
 		name: "anipub",
 		episodeResults: map[string]map[string][]string{
 			"anipub-id": {"dub": {"anipub-dub"}},
@@ -62,7 +60,7 @@ func TestRecoveryAutoFallsBackBeforeAskingAnything(t *testing.T) {
 	})
 
 	anime.Ep.Number = 1
-	result, ok := resolveEpisodeLinksWithRecovery(&config, anime, nil, false)
+	result, ok := resolveEpisodeLinksWithRecovery(&config, anime, nil)
 	if !ok {
 		t.Fatal("expected recovery to resolve via the alternate audio")
 	}
@@ -88,7 +86,7 @@ func TestAutoAudioFallbackCanBeDisabled(t *testing.T) {
 	})
 
 	anime.Ep.Number = 1
-	if _, ok := resolveEpisodeLinksWithRecovery(&config, anime, nil, false); ok {
+	if _, ok := resolveEpisodeLinksWithRecovery(&config, anime, nil); ok {
 		t.Fatal("expected backing out of the recovery menu to give up")
 	}
 	if asked == 0 {

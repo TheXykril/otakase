@@ -14,10 +14,6 @@ type Meta struct {
 	Referrer        string
 	DefaultDisabled bool
 	DisableReason   string
-	// OptOutToken excludes a provider from automatic fallback prompts, e.g. "no-animepahe".
-	OptOutToken string
-	// FallbackPrompt is shown when the host offers this provider as a fallback.
-	FallbackPrompt string
 }
 
 type entry struct {

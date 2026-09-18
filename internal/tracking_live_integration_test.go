@@ -175,7 +175,7 @@ func TestTrackerLiveIntegration(t *testing.T) {
 		copyTrackerFileForTest(t, filepath.Join(os.ExpandEnv(config.StoragePath), "myanimelist_token.json"), filepath.Join(tempStorage, "myanimelist_token.json"))
 
 		localHistoryPath := filepath.Join(tempStorage, "curd_history.txt")
-		LocalUpdateAnime(localHistoryPath, testAnime[2].AniListID, "local-provider-id", 7, 0, 24, testAnime[2].Title, "allanime")
+		LocalUpdateAnime(localHistoryPath, testAnime[2].AniListID, "local-provider-id", 7, 0, 24, testAnime[2].Title, "anikoto")
 
 		tempConfig := *config
 		tempConfig.StoragePath = tempStorage

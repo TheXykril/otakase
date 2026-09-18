@@ -12,7 +12,7 @@ import (
 // A failed stacked search used to report every provider error concatenated into
 // one line:
 //
-//	all provider searches failed: senshi: Post "https://senshi.live/anime/filter":
+//	all provider searches failed: anikoto: Post "https://noob2.broggl.farm/api":
 //	EOF; anipub: no results for "..."; anineko: context deadline exceeded ...
 //
 // which buries the one distinction that matters to the user: whether the hosts

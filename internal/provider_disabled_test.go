@@ -1,19 +1,20 @@
 package internal
 
-import "testing"
+import (
+	"testing"
 
-func TestProviderEnabledDisablesAllanimeAndAnimepaheByDefault(t *testing.T) {
-	if ProviderEnabled("allanime") != false {
-		t.Fatal("expected allanime to be disabled by default")
-	}
-	if ProviderEnabled("animepahe") != false {
-		t.Fatal("expected animepahe to be disabled by default")
-	}
-	if ProviderEnabled("senshi") != false {
-		t.Fatal("expected senshi to be disabled: its domain lapsed and is parked")
-	}
+	"github.com/thexykril/otakase/internal/providers"
+)
+
+// A provider that stops working is disabled before it is removed, so a stack
+// built from the defaults never offers one that cannot play. anidb is the
+// standing example: its host is serving a maintenance page.
+func TestADegradedProviderIsDisabledWithAReason(t *testing.T) {
 	if ProviderEnabled("anidb") != false {
 		t.Fatal("expected anidb to be disabled while anidb.app is under maintenance")
+	}
+	if reason := ProviderDisabledReason("anidb"); reason == "" {
+		t.Fatal("a disabled provider must say why, or the menu cannot explain itself")
 	}
 	if ProviderEnabled("anipub") != true {
 		t.Fatal("expected anipub to stay enabled")
@@ -21,14 +22,20 @@ func TestProviderEnabledDisablesAllanimeAndAnimepaheByDefault(t *testing.T) {
 	if ProviderEnabled("anineko") != true {
 		t.Fatal("expected anineko to stay enabled")
 	}
-	if reason := ProviderDisabledReason("allanime"); reason == "" {
-		t.Fatal("expected allanime disable reason")
-	}
-	if reason := ProviderDisabledReason("animepahe"); reason == "" {
-		t.Fatal("expected animepahe disable reason")
-	}
-	if reason := ProviderDisabledReason("senshi"); reason == "" {
-		t.Fatal("expected senshi disable reason")
+}
+
+// allanime, animepahe and senshi were removed in 1.4.0. Nothing should claim
+// they exist -- a name that resolves to no provider must not read as enabled.
+func TestRemovedProvidersAreGone(t *testing.T) {
+	for _, name := range []string{"allanime", "animepahe", "senshi"} {
+		if ProviderEnabled(name) {
+			t.Errorf("%s was removed but still reports as enabled", name)
+		}
+		for _, registered := range providers.RegisteredNames() {
+			if registered == name {
+				t.Errorf("%s was removed but is still registered", name)
+			}
+		}
 	}
 }
 
@@ -66,15 +73,15 @@ func TestConfiguredProviderNamesFiltersDisabledProviders(t *testing.T) {
 func TestConfiguredProviderNamesHonorsEnabledProvidersWhenOverridden(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	cfg := &CurdConfig{Provider: `["allanime","animepahe"]`}
+	cfg := &CurdConfig{Provider: `["anidb","nyaa"]`}
 	got := ConfiguredProviderNames(cfg)
-	if len(got) != 2 || got[0] != "allanime" || got[1] != "animepahe" {
-		t.Fatalf("got %v, want [allanime animepahe]", got)
+	if len(got) != 2 || got[0] != "anidb" || got[1] != "nyaa" {
+		t.Fatalf("got %v, want [anidb nyaa]", got)
 	}
 }
 
 func TestProviderByNameRejectsDisabledProvider(t *testing.T) {
-	for _, name := range []string{"animepahe", "allanime"} {
+	for _, name := range []string{"anidb"} {
 		if _, err := ProviderByName(name); err == nil {
 			t.Fatalf("expected disabled provider error for %s", name)
 		}
@@ -84,7 +91,7 @@ func TestProviderByNameRejectsDisabledProvider(t *testing.T) {
 func TestProviderByNameAllowsDisabledProviderWhenOverridden(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	for _, name := range []string{"animepahe", "allanime"} {
+	for _, name := range []string{"anidb"} {
 		provider, err := ProviderByName(name)
 		if err != nil {
 			t.Fatalf("expected %s provider: %v", name, err)

@@ -28,16 +28,28 @@ func isFactoryDefaultProvider(raw string) bool {
 		return true
 	}
 
-	names, declined := parseProviderConfig(raw)
-	if declined {
-		return false
-	}
+	names := parseProviderConfig(raw)
 	switch len(names) {
 	case 0:
 		return true
 	case 1:
-		switch names[0] {
-		case "senshi", "allanime":
+		return !ProviderEnabled(names[0])
+	}
+	return false
+}
+
+// namesRemovedProvider reports whether a config names something this build no
+// longer has.
+//
+// parseProviderConfig cannot answer this: when nothing in a config resolves it
+// substitutes the head of the stack, so a config naming only removed providers
+// comes back looking like a deliberate choice of whatever that happens to be.
+func namesRemovedProvider(raw string) bool {
+	for _, part := range parseProviderConfigParts(raw) {
+		if strings.TrimSpace(strings.Trim(strings.TrimSpace(part), "\"'[]")) == "" {
+			continue
+		}
+		if normalizeProviderName(part) == "" {
 			return true
 		}
 	}
@@ -58,6 +70,14 @@ func providerListsEqual(a, b []string) bool {
 
 func migrateProviderConfig(raw string) (string, bool) {
 	raw = strings.TrimSpace(raw)
+
+	// A list naming a provider that has since been removed is no longer the
+	// list the user chose. Quietly dropping the dead name would leave them on
+	// a shorter stack they never picked, so hand back the current default.
+	if raw != "" && !isStackedProviderConfig(raw) && namesRemovedProvider(raw) {
+		return stackedProviderConfigValue, true
+	}
+
 	if isFactoryDefaultProvider(raw) {
 		if raw == stackedProviderConfigValue {
 			return raw, false
@@ -72,7 +92,7 @@ func migrateProviderConfig(raw string) (string, bool) {
 		return raw, false
 	}
 
-	names, declined := parseProviderConfig(raw)
+	names := parseProviderConfig(raw)
 	if len(names) > 1 {
 		return stackedProviderConfigValue, true
 	}
@@ -81,7 +101,6 @@ func migrateProviderConfig(raw string) (string, bool) {
 	if canonical != raw {
 		return canonical, true
 	}
-	_ = declined
 	return raw, false
 }
 
@@ -290,7 +309,7 @@ func providerConfigDisplayLabel(raw string) string {
 		}
 		return fmt.Sprintf("Default with fallback (%s)", strings.Join(names, " → "))
 	}
-	names, _ := parseProviderConfig(raw)
+	names := parseProviderConfig(raw)
 	if len(names) == 1 {
 		return names[0]
 	}

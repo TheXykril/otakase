@@ -36,7 +36,7 @@ This document explains the intent of the design, how to add a provider, how user
 │  internal/providers/                                     │
 │  registry · types · Provider interface                   │
 ├─────────────────────────────────────────────────────────┤
-│  allanime/   animepahe/   yourprovider/                │
+│  anikoto/    anipub/      yourprovider/                │
 │  search · episodes · streams · register.go               │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -62,7 +62,7 @@ type Provider interface {
 
 | Method | Purpose |
 |--------|---------|
-| `Name()` | Canonical provider id (e.g. `allanime`). Must match `Meta.Name` from registration. |
+| `Name()` | Canonical provider id (e.g. `anikoto`). Must match `Meta.Name` from registration. |
 | `SearchAnime` | Find shows on the streaming site. `mode` is `sub` or `dub` where relevant. |
 | `EpisodesList` | Return episode numbers as strings for a provider show id. |
 | `GetEpisodeURL` | Resolve playable URLs for episode `epNo` (1-based, aligned with AniList progress). |
@@ -99,8 +99,8 @@ The host discovers these via type assertion on the registered provider — no ex
 
 ### Show IDs and the provider stack
 
-- Configured stack: `Provider = ["allanime", "animepahe"]` — tried left to right for search and playback.
-- Qualified ids in menus when multiple providers are active: `allanime::ShowIdHere`.
+- Configured stack: `Provider = ["anikoto", "anipub"]` — tried left to right for search and playback.
+- Qualified ids in menus when multiple providers are active: `anikoto::ShowIdHere`.
 - Host qualifies ids with `providername::id` when merging stacked search results.
 
 Your `Key` in `SearchAnime` should be the **raw** provider id. The host adds the `provider::` prefix when needed.
@@ -121,7 +121,7 @@ internal/providers/yoursite/
   provider_test.go
 ```
 
-Use `allanime` as a reference for a GraphQL/REST provider, `animepahe` for cookie/browser-heavy sites.
+Use `anikoto` as a reference for a JSON/REST provider and `anipub` for one that has to follow an embed chain.
 
 ### 2. Implement `Provider`
 
@@ -165,12 +165,11 @@ func init() {
 
 | Field | Meaning |
 |-------|---------|
-| `Name` | Canonical name (lowercase, no spaces; normalized to compact form e.g. `allanime`). |
+| `Name` | Canonical name (lowercase, no spaces; normalized to compact form e.g. `anikoto`). |
 | `Aliases` | Alternate names accepted in config. |
 | `Referrer` | Default HTTP Referer for mpv when playing this provider's links. |
 | `DefaultDisabled` | If true, provider is off until user enables it (see Animepahe). |
 | `DisableReason` | Shown when a disabled provider is requested. |
-| `OptOutToken` | Config token to permanently skip fallback prompts (e.g. `no-animepahe`). |
 | `FallbackPrompt` | Reserved for host fallback UX (Animepahe chromium warning). |
 
 ### 4. Wire the package into the binary
@@ -179,8 +178,8 @@ Add a blank import in `internal/loadproviders/load.go`:
 
 ```go
 import (
-    _ "github.com/thexykril/otakase/internal/providers/allanime"
-    _ "github.com/thexykril/otakase/internal/providers/animepahe"
+    _ "github.com/thexykril/otakase/internal/providers/anikoto"
+    _ "github.com/thexykril/otakase/internal/providers/anipub"
     _ "github.com/thexykril/otakase/internal/providers/yoursite"
 )
 ```
@@ -217,7 +216,7 @@ if !curdhost.HTTPStatusOK(resp.StatusCode) {
 ### 6. Tests
 
 - Unit tests live in the provider package (`httptest` transport, no live site).
-- Use `curdhost` hooks in test setup (see `animepahe/provider_test.go`).
+- Use `curdhost` hooks in test setup (see `anineko/provider_test.go`).
 - Host-level stack tests use `providers.SetFactoryForTest` via `withProviderFactories` in `provider_stack_test.go`.
 - Live tests: gate behind env vars (e.g. `CURD_LIVE_ALLANIME_TEST=1`).
 
@@ -228,7 +227,7 @@ Users add the provider to their stack in `~/.config/otakase/otakase.conf`:
 ```ini
 Provider=["yoursite"]
 # or fallback stack:
-Provider=["yoursite","allanime"]
+Provider=["yoursite","anikoto"]
 ```
 
 ---
@@ -241,7 +240,7 @@ Disable order (first match wins):
 2. **`DisabledProviders` in config** — runtime kill switch, no rebuild:
 
    ```ini
-   DisabledProviders=["animepahe","yoursite"]
+   DisabledProviders=["anidb","yoursite"]
    ```
 
 3. **`DefaultDisabled` in `Meta`** — compile-time default (Animepahe ships disabled with a reason).
@@ -295,7 +294,7 @@ If every provider needs a new playback preference (e.g. subtitle language on res
 
 Prefer putting provider-specific match data in `SelectionOption.ExtraData` and scoring in the host (see `scoreProviderSearchOption` in `provider.go`).
 
-If matching is truly provider-specific and complex, implement `IDResolver` or export small helpers from your provider package (as `animepahe.ParseProviderID` does) and call them from the host through interfaces — **never** `if providerName == "yoursite"` in `curd.go`.
+If matching is truly provider-specific and complex, implement `IDResolver` or export small helpers from your provider package (as `anipub` does for its MegaPlay ids) and call them from the host through interfaces — **never** `if providerName == "yoursite"` in `curd.go`.
 
 ### F. Needs runtime install without rebuild
 
@@ -327,11 +326,11 @@ Document the decision in a short ADR before building. The compile-time registry 
 
 | Provider | Package | Notes |
 |----------|---------|-------|
-| Senshi | `internal/providers/senshi` | REST search/episodes, direct HLS from `/episode-embeds`, MAL id keys and `/posters/{mal_id}.webp` thumbnails |
+| Anikoto | `internal/providers/anikoto` | AniList media ids as show ids, HLS manifest + subtitle + headers + skip ranges in two requests, `SkipRange` |
 | AniPub | `internal/providers/anipub` | JSON search/info/details APIs, MegaPlay embed resolution via `/stream/getSources`, MAL id in `ExtraData` for tracker matching |
 | AniNeko | `internal/providers/anineko` | AJAX search, HTML scrape, bibiemb/vibeplayer embed resolution, `SubStyle` / `HintResolver` |
-| AllAnime | `internal/providers/allanime` | GraphQL search/episodes, parallel stream resolution, `HintResolver` |
-| Animepahe | `internal/providers/animepahe` | DDoS-Guard + rod browser, `IDResolver`, `DefaultDisabled`, `OptOutToken` |
+| KickAssAnime | `internal/providers/kickassanime` | JSON API, whole seasons rather than only recent episodes, dubs indexed separately |
+| Nyaa | `internal/providers/nyaa` | Torrent RSS + streaming through a torrent client rather than an HTTP host |
 
 Key host files:
 

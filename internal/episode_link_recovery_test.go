@@ -37,19 +37,19 @@ func TestEpisodeLinkFailureRecoveryOptionsOrder(t *testing.T) {
 
 func TestEpisodeLinkFailureDiagnosisIncludesEpisodeModeProviders(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	cfg := &CurdConfig{Provider: `["senshi","allanime"]`, SubOrDub: "sub"}
+	cfg := &CurdConfig{Provider: `["anipub","anikoto"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{English: "Frieren: Beyond Journey's End"},
 		Ep:           Episode{Number: 12},
-		ProviderName: "senshi",
+		ProviderName: "anipub",
 	}
 	msg := episodeLinkFailureDiagnosis(cfg, anime, errors.New("no sub episode links found across providers"))
 	for _, want := range []string{
 		`Couldn't find Episode 12 (sub)`,
 		`Frieren: Beyond Journey's End`,
 		"Tried:",
-		"senshi",
-		"allanime",
+		"anipub",
+		"anikoto",
 		"Reason:",
 		"no sub episode links",
 	} {
@@ -60,7 +60,7 @@ func TestEpisodeLinkFailureDiagnosisIncludesEpisodeModeProviders(t *testing.T) {
 }
 
 func TestPromptEpisodeLinkFailureRecoveryMapsExitKeysToBack(t *testing.T) {
-	cfg := &CurdConfig{SubOrDub: "sub", Provider: `["allanime"]`}
+	cfg := &CurdConfig{SubOrDub: "sub", Provider: `["anikoto"]`}
 	anime := &Anime{Title: AnimeTitle{Romaji: "Example"}, Ep: Episode{Number: 1}}
 
 	withPromptSelect(t, func(options []SelectionOption) (SelectionOption, error) {
@@ -80,12 +80,12 @@ func TestPromptEpisodeLinkFailureRecoveryMapsExitKeysToBack(t *testing.T) {
 
 func TestResolveEpisodeLinksWithRecoverySucceedsWithoutRecoveryMenu(t *testing.T) {
 	provider := &stackStubProvider{
-		name: "allanime",
+		name: "anikoto",
 		episodeResults: map[string]map[string][]string{
-			"allanime-id": {"sub": {"sub-url"}},
+			"anikoto-id": {"sub": {"sub-url"}},
 		},
 		searchResults: map[string][]SelectionOption{
-			"sub": {{Title: "Example", Key: "allanime-id"}},
+			"sub": {{Title: "Example", Key: "anikoto-id"}},
 		},
 	}
 	withProviderFactories(t, provider)
@@ -95,15 +95,15 @@ func TestResolveEpisodeLinksWithRecoverySucceedsWithoutRecoveryMenu(t *testing.T
 		return SelectionOption{}, nil
 	})
 
-	cfg := &CurdConfig{Provider: `["allanime"]`, SubOrDub: "sub"}
+	cfg := &CurdConfig{Provider: `["anikoto"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
-		ProviderName: "allanime",
-		ProviderId:   "allanime-id",
+		ProviderName: "anikoto",
+		ProviderId:   "anikoto-id",
 		Ep:           Episode{Number: 1},
 	}
 
-	result, ok := resolveEpisodeLinksWithRecovery(cfg, anime, nil, false)
+	result, ok := resolveEpisodeLinksWithRecovery(cfg, anime, nil)
 	if !ok {
 		t.Fatal("expected success without recovery")
 	}
@@ -115,16 +115,16 @@ func TestResolveEpisodeLinksWithRecoverySucceedsWithoutRecoveryMenu(t *testing.T
 func TestResolveEpisodeLinksWithRecoveryOnlyAfterPreferredAndAlternateFail(t *testing.T) {
 	// Both modes have zero streams → no alternate prompt (nothing to offer), then recovery.
 	providerBothDead := &stackStubProvider{
-		name: "allanime",
+		name: "anikoto",
 		episodeErrors: map[string]map[string]error{
-			"allanime-id": {
+			"anikoto-id": {
 				"sub": errors.New("no sub"),
 				"dub": errors.New("no dub"),
 			},
 		},
 		searchResults: map[string][]SelectionOption{
-			"sub": {{Title: "Example", Key: "allanime-id"}},
-			"dub": {{Title: "Example", Key: "allanime-id"}},
+			"sub": {{Title: "Example", Key: "anikoto-id"}},
+			"dub": {{Title: "Example", Key: "anikoto-id"}},
 		},
 	}
 	withProviderFactories(t, providerBothDead)
@@ -154,15 +154,15 @@ func TestResolveEpisodeLinksWithRecoveryOnlyAfterPreferredAndAlternateFail(t *te
 		return SelectionOption{}, nil
 	})
 
-	cfg := &CurdConfig{Provider: `["allanime","no-animepahe"]`, SubOrDub: "sub"}
+	cfg := &CurdConfig{Provider: `["anikoto","no-anineko"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
-		ProviderName: "allanime",
-		ProviderId:   "allanime-id",
+		ProviderName: "anikoto",
+		ProviderId:   "anikoto-id",
 		Ep:           Episode{Number: 3},
 	}
 
-	result, ok := resolveEpisodeLinksWithRecovery(cfg, anime, nil, false)
+	result, ok := resolveEpisodeLinksWithRecovery(cfg, anime, nil)
 	if ok || len(result.Links) > 0 {
 		t.Fatalf("expected user back-out after recovery, got ok=%v result=%#v", ok, result)
 	}
@@ -170,22 +170,22 @@ func TestResolveEpisodeLinksWithRecoveryOnlyAfterPreferredAndAlternateFail(t *te
 	if got := strings.Join(promptPhases, ","); got != "recovery" {
 		t.Fatalf("expected recovery only when alternate has no streams, got %q", got)
 	}
-	if len(providerBothDead.calls) < 1 || providerBothDead.calls[0] != "allanime:sub" {
+	if len(providerBothDead.calls) < 1 || providerBothDead.calls[0] != "anikoto:sub" {
 		t.Fatalf("expected preferred sub first, got %#v", providerBothDead.calls)
 	}
 
 	// When alternate streams exist, user is asked before recovery.
 	providerAltOK := &stackStubProvider{
-		name: "allanime",
+		name: "anikoto",
 		episodeResults: map[string]map[string][]string{
-			"allanime-id": {"dub": {"dub-url"}},
+			"anikoto-id": {"dub": {"dub-url"}},
 		},
 		episodeErrors: map[string]map[string]error{
-			"allanime-id": {"sub": errors.New("no sub")},
+			"anikoto-id": {"sub": errors.New("no sub")},
 		},
 		searchResults: map[string][]SelectionOption{
-			"sub": {{Title: "Example", Key: "allanime-id"}},
-			"dub": {{Title: "Example", Key: "allanime-id"}},
+			"sub": {{Title: "Example", Key: "anikoto-id"}},
+			"dub": {{Title: "Example", Key: "anikoto-id"}},
 		},
 	}
 	withProviderFactories(t, providerAltOK)
@@ -203,7 +203,7 @@ func TestResolveEpisodeLinksWithRecoveryOnlyAfterPreferredAndAlternateFail(t *te
 		return SelectionOption{}, nil
 	})
 	anime.Ep.Number = 4
-	if _, ok := resolveEpisodeLinksWithRecovery(cfg, anime, nil, false); ok {
+	if _, ok := resolveEpisodeLinksWithRecovery(cfg, anime, nil); ok {
 		t.Fatal("expected back-out after declining alternate")
 	}
 	if got := strings.Join(promptPhases, ","); got != "alternate-audio,recovery" {
@@ -218,16 +218,16 @@ func TestResolveEpisodeLinksWithRecoveryRemapThenSucceeds(t *testing.T) {
 	// the built-in alternate prompt (user declined it).
 
 	provider := &stackStubProvider{
-		name: "allanime",
+		name: "anikoto",
 		episodeResults: map[string]map[string][]string{
-			"allanime-id": {"dub": {"dub-url"}},
+			"anikoto-id": {"dub": {"dub-url"}},
 		},
 		episodeErrors: map[string]map[string]error{
-			"allanime-id": {"sub": errors.New("no sub")},
+			"anikoto-id": {"sub": errors.New("no sub")},
 		},
 		searchResults: map[string][]SelectionOption{
-			"sub": {{Title: "Example", Key: "allanime-id"}},
-			"dub": {{Title: "Example", Key: "allanime-id"}},
+			"sub": {{Title: "Example", Key: "anikoto-id"}},
+			"dub": {{Title: "Example", Key: "anikoto-id"}},
 		},
 	}
 	withProviderFactories(t, provider)
@@ -260,15 +260,15 @@ func TestResolveEpisodeLinksWithRecoveryRemapThenSucceeds(t *testing.T) {
 		}
 	})
 
-	cfg := &CurdConfig{Provider: `["allanime","no-animepahe"]`, SubOrDub: "sub"}
+	cfg := &CurdConfig{Provider: `["anikoto","no-anineko"]`, SubOrDub: "sub"}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
-		ProviderName: "allanime",
-		ProviderId:   "allanime-id",
+		ProviderName: "anikoto",
+		ProviderId:   "anikoto-id",
 		Ep:           Episode{Number: 1},
 	}
 
-	result, ok := resolveEpisodeLinksWithRecovery(cfg, anime, nil, false)
+	result, ok := resolveEpisodeLinksWithRecovery(cfg, anime, nil)
 	if !ok {
 		t.Fatal("expected recovery audio path to succeed")
 	}

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/thexykril/otakase/internal/providers/animepahe"
+	"github.com/thexykril/otakase/internal/providers/anipub"
 )
 
 func TestFormatAnimeSearchLabel(t *testing.T) {
@@ -18,13 +18,13 @@ func TestFormatAnimeSearchLabel(t *testing.T) {
 
 func TestProviderSearchOptionsForDisplayMarksEpisodeMatch(t *testing.T) {
 	options := []SelectionOption{
-		{Key: "a", Label: "One Piece (1090 episodes) [allanime]", Title: "One Piece"},
+		{Key: "a", Label: "One Piece (1090 episodes) [anikoto]", Title: "One Piece"},
 		{Key: "b", Label: "One Pace (300 episodes) [anineko]", Title: "One Pace"},
 	}
 	entry := &Entry{Media: Media{Episodes: 1090}}
 
 	display := ProviderSearchOptionsForDisplay(options, entry)
-	if display[0].Label != "One Piece (1090 episodes) [allanime] ✓" {
+	if display[0].Label != "One Piece (1090 episodes) [anikoto] ✓" {
 		t.Fatalf("expected match marker on first option, got %q", display[0].Label)
 	}
 	if display[1].Label != "One Pace (300 episodes) [anineko]" {
@@ -63,13 +63,13 @@ func TestManualProviderSearchEnabled(t *testing.T) {
 func TestEnsureEpisodeCountInLabelUsesExtraData(t *testing.T) {
 	option := SelectionOption{
 		Key:       "session",
-		Label:     "Frieren [animepahe]",
+		Label:     "Frieren [anipub]",
 		Title:     "Frieren",
-		ExtraData: animepahe.SearchItem{Title: "Frieren", Episodes: 28},
+		ExtraData: anipub.SearchItem{Name: "Frieren", Episodes: 28},
 	}
 
 	display := ensureEpisodeCountInLabel(option)
-	if display.Label != "Frieren (28 episodes) [animepahe]" {
+	if display.Label != "Frieren (28 episodes) [anipub]" {
 		t.Fatalf("unexpected label: %q", display.Label)
 	}
 }

@@ -13,12 +13,12 @@ func TestProviderFailureKindClassification(t *testing.T) {
 		want    failureKind
 	}{
 		{"clean miss", providerFailure{provider: "anipub", err: errors.New(`no results for "demo"`)}, failureNoResults},
-		{"dead host", providerFailure{provider: "senshi", err: errors.New(`Post "https://senshi.live/anime/filter": EOF`)}, failureUnreachable},
+		{"dead host", providerFailure{provider: "anipub", err: errors.New(`Post "https://anipub.live/anime/filter": EOF`)}, failureUnreachable},
 		{"timeout", providerFailure{provider: "anineko", err: errors.New("context deadline exceeded")}, failureUnreachable},
-		{"never finished", providerFailure{provider: "animepahe", timedOut: true}, failureUnreachable},
+		{"never finished", providerFailure{provider: "anineko", timedOut: true}, failureUnreachable},
 		{"maintenance", providerFailure{provider: "anidb", err: errors.New("anidb.app is under maintenance")}, failureUnreachable},
-		{"cloudflare", providerFailure{provider: "animepahe", err: errors.New("Cloudflare challenge")}, failureUnreachable},
-		{"switched off", providerFailure{provider: "allanime", err: errors.New(`provider "allanime" is disabled: ...`)}, failureDisabled},
+		{"cloudflare", providerFailure{provider: "anineko", err: errors.New("Cloudflare challenge")}, failureUnreachable},
+		{"switched off", providerFailure{provider: "anikoto", err: errors.New(`provider "anikoto" is disabled: ...`)}, failureDisabled},
 		{"odd answer", providerFailure{provider: "anipub", err: errors.New("could not decode search response")}, failureOther},
 	}
 
@@ -69,13 +69,13 @@ func TestProviderSearchErrorAllUnreachable(t *testing.T) {
 // from the others simply not carrying the show.
 func TestProviderSearchErrorGroupsMixedCauses(t *testing.T) {
 	err := newProviderSearchError("Demo Show", []providerFailure{
-		{provider: "senshi", err: errors.New(`Post "https://senshi.live/anime/filter": EOF`)},
+		{provider: "anipub", err: errors.New(`Post "https://anipub.live/anime/filter": EOF`)},
 		{provider: "anipub", err: errors.New(`no results for "Demo Show"`)},
 		{provider: "anineko", err: errors.New(`no results for "Demo Show"`)},
 	})
 
 	message := err.Error()
-	if !strings.Contains(message, "senshi:") {
+	if !strings.Contains(message, "anipub:") {
 		t.Fatalf("expected the unreachable host called out, got: %s", message)
 	}
 	// The two clean misses collapse onto one line rather than repeating.
@@ -83,7 +83,7 @@ func TestProviderSearchErrorGroupsMixedCauses(t *testing.T) {
 		t.Fatalf("expected clean misses grouped on one line, got: %s", message)
 	}
 	// Unreachable hosts are listed before clean misses.
-	if strings.Index(message, "senshi:") > strings.Index(message, "no results") {
+	if strings.Index(message, "anipub:") > strings.Index(message, "no results") {
 		t.Fatalf("expected unreachable hosts listed first, got: %s", message)
 	}
 }

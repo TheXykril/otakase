@@ -1,5 +1,42 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- **allanime, animepahe and senshi are gone.** All three had been disabled for
+  months and none of them could play an episode:
+
+  - senshi's domain lapsed and is parked for sale.
+  - allanime requires a signed request its episode endpoint refuses without
+    (`AA_CRYPTO_MISSING`). Reviving it means solving their signing scheme, not
+    refreshing a hash — and the scheme rotates, so it would need re-solving.
+  - animepahe sits behind a Cloudflare challenge. The bypass here launched a
+    headless Chromium — a ~500MB download — and the cookies it came back with
+    were rejected anyway.
+
+  Keeping a provider that cannot play anything is not free. animepahe alone
+  brought in `go-rod` and a browser automation stack, ~8MB of vendored
+  dependencies now removed, and its quirks had spread through the codebase: a
+  consent prompt for the Chromium download, a `no-animepahe` config token to
+  decline it permanently, per-session id normalisation in the history file, a
+  bespoke episode-count rule, and a stale-mapping reselect pass. All of that is
+  gone with it.
+
+  Two smaller leftovers went too: every provider that registered no Referer
+  inherited allanime's, sending an unrelated — and now unresolvable — domain to
+  hosts with nothing to do with it; and a CDN special case pointed at
+  `allanime.to`, which no longer exists.
+
+### Fixed
+
+- **A provider name this build does not have no longer reads as enabled.**
+  `ProviderEnabled` asked only whether a provider was switched off, so a name
+  nothing registers came back as enabled. A config naming a removed provider
+  therefore survived migration untouched, leaving the user pointed at nothing.
+  Such a config is now replaced with the default stack — as a whole, rather than
+  by quietly dropping the dead name and leaving a shorter stack nobody chose.
+
 ## 1.3.0 — 2026-09-16
 
 ### Added

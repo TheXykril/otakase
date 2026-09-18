@@ -28,9 +28,6 @@ var logFile = "debug.log"
 
 const mpvPlaybackPollInterval = 500 * time.Millisecond
 
-// This is not generic but we have MpvArgs in CurdConfig to add custom ones
-const defaultStreamReferrer = "https://allanime.day/"
-
 // streamHeaderArgs renders a provider's extra HTTP headers as MPV arguments.
 //
 // --http-header-fields-append is used rather than --http-header-fields so these
@@ -57,14 +54,15 @@ func streamHeaderArgs(headers map[string]string) []string {
 	return args
 }
 
-func streamReferrerForLink(link, provider string) string {
-	if strings.Contains(strings.ToLower(link), "tools.fast4speed.rsvp") {
-		return "https://allanime.to"
-	}
-	if referrer := providers.Referrer(provider); referrer != "" {
-		return referrer
-	}
-	return defaultStreamReferrer
+// streamReferrer is the Referer a provider's streams expect, or empty when it
+// registered none -- in which case no Referer is sent at all.
+//
+// There used to be a default here, AllAnime's, inherited by every provider that
+// registered nothing. That named an unrelated site to hosts with no connection
+// to it, and outlived AllAnime itself: the domain it pointed at no longer
+// resolves. A provider that needs a Referer says so in its registration.
+func streamReferrer(provider string) string {
+	return providers.Referrer(provider)
 }
 
 // We should really handle this by Provider but keeping simple string here for now
@@ -326,7 +324,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 	shouldSetDefaultReferrer := isHTTPStreamLink(link) && !hasMPVReferrerArg(args)
 	referrer := strings.TrimSpace(anime.Ep.StreamReferrer)
 	if referrer == "" && shouldSetDefaultReferrer {
-		referrer = streamReferrerForLink(link, CurrentAnimeProviderName(anime))
+		referrer = streamReferrer(CurrentAnimeProviderName(anime))
 	}
 	if referrer != "" && shouldSetDefaultReferrer {
 		args = append(args, fmt.Sprintf("--referrer=%s", referrer))
@@ -350,7 +348,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 		if shouldSetDefaultReferrer {
 			activeReferrer := strings.TrimSpace(anime.Ep.StreamReferrer)
 			if activeReferrer == "" {
-				activeReferrer = streamReferrerForLink(link, CurrentAnimeProviderName(anime))
+				activeReferrer = streamReferrer(CurrentAnimeProviderName(anime))
 			}
 			if activeReferrer != "" {
 				_, referrerErr := MPVSendCommand(mpvSocketPath, []interface{}{"set_property", "referrer", activeReferrer})

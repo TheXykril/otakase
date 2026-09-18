@@ -8,8 +8,8 @@ import (
 
 // Streaming hosts go down for days at a time, and nothing in a search run
 // remembers that. Every search paid the full timeout for a host that had already
-// failed moments earlier -- with senshi that was a guaranteed wasted round trip
-// on every single query.
+// failed moments earlier -- for a host whose domain has lapsed that is a
+// guaranteed wasted round trip on every single query.
 //
 // providerHealth records consecutive unreachable failures per provider and skips
 // a provider for a short cooldown once it has clearly stopped answering. Only

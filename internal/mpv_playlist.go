@@ -1496,7 +1496,7 @@ func loadEpisodeInRunningMPV(socket, link, title string, anime *Anime) error {
 	if anime != nil {
 		referrer = strings.TrimSpace(anime.Ep.StreamReferrer)
 		if referrer == "" {
-			referrer = streamReferrerForLink(link, CurrentAnimeProviderName(anime))
+			referrer = streamReferrer(CurrentAnimeProviderName(anime))
 		}
 	}
 	if referrer != "" {

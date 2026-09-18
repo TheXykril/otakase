@@ -14,7 +14,6 @@ import (
 	"github.com/thexykril/otakase/internal/providers"
 	"github.com/thexykril/otakase/internal/providers/anineko"
 	"github.com/thexykril/otakase/internal/providers/anipub"
-	"github.com/thexykril/otakase/internal/providers/senshi"
 )
 
 // Run with:
@@ -124,18 +123,6 @@ type edgeProvider struct {
 
 func edgeProviders() []edgeProvider {
 	return []edgeProvider{
-		{
-			name: "senshi",
-			search: func(q, mode string) ([]providers.SelectionOption, error) {
-				return (&senshi.Provider{}).SearchAnime(q, mode)
-			},
-			episodes: func(id, mode string) ([]string, error) {
-				return (&senshi.Provider{}).EpisodesList(id, mode)
-			},
-			streams: func(id string, cfg providers.PlaybackConfig, ep int) ([]string, map[string]providers.StreamPlaybackHint, error) {
-				return (&senshi.Provider{}).GetEpisodeURLForModeWithHints(cfg, id, ep, cfg.SubOrDub)
-			},
-		},
 		{
 			name: "anipub",
 			search: func(q, mode string) ([]providers.SelectionOption, error) {
@@ -324,7 +311,7 @@ func TestLiveProviderEdgeCases(t *testing.T) {
 	}
 
 	critical := []string{"english_aot", "single_naruto", "demon_slayer", "dungeon_meshi", "romaji_frieren"}
-	for _, provider := range []string{"senshi", "anineko"} {
+	for _, provider := range []string{"anipub", "anineko"} {
 		for _, caseName := range critical {
 			for _, res := range results {
 				if res.provider == provider && res.caseName == caseName {

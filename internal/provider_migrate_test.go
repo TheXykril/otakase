@@ -66,7 +66,7 @@ func TestMigrateOnVersionUpgradeWritesVersionAndUpdatesProvider(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "curd.conf")
 	storagePath := filepath.Join(tempDir, "share")
-	if err := os.WriteFile(configPath, []byte("Provider=[\"senshi\"]\nStoragePath="+storagePath+"\n"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("Provider=[\"anineko\",\"nyaa\"]\nStoragePath="+storagePath+"\n"), 0644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
@@ -74,7 +74,7 @@ func TestMigrateOnVersionUpgradeWritesVersionAndUpdatesProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if config.Provider != `["senshi"]` {
+	if config.Provider != `["anineko","nyaa"]` {
 		t.Fatalf("pre-migration provider = %q", config.Provider)
 	}
 
@@ -248,7 +248,7 @@ func TestCompareVersionsOrdering(t *testing.T) {
 func TestConfiguredProviderNamesUsesStackedByDefault(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 	got := ConfiguredProviderNames(&CurdConfig{})
-	want := []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb", "senshi", "allanime", "animepahe"}
+	want := []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb"}
 	if len(got) != len(want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}

@@ -48,29 +48,16 @@ func TestParseAnimeRowHandlesLegacyRows(t *testing.T) {
 		t.Fatalf("unexpected legacy duration row parse: %+v", withDuration)
 	}
 
-	current := parseAnimeRow([]string{"123", "provider-id", "4", "55", "24", "animepahe", "Current Title"})
+	current := parseAnimeRow([]string{"123", "provider-id", "4", "55", "24", "anineko", "Current Title"})
 	if current == nil {
 		t.Fatalf("expected current row to parse")
 	}
-	if current.Ep.Duration != 24 || current.ProviderName != "animepahe" || current.Title.Romaji != "Current Title" {
+	if current.Ep.Duration != 24 || current.ProviderName != "anineko" || current.Title.Romaji != "Current Title" {
 		t.Fatalf("unexpected current row parse: %+v", current)
 	}
 
-	if invalid := parseAnimeRow([]string{"bad-id", "provider-id", "4", "55", "24", "allanime", "Broken Title"}); invalid != nil {
+	if invalid := parseAnimeRow([]string{"bad-id", "provider-id", "4", "55", "24", "anikoto", "Broken Title"}); invalid != nil {
 		t.Fatalf("expected invalid AniList ID row to be skipped, got %+v", invalid)
-	}
-}
-
-func TestLocalDeleteAnimeNormalizesAnimepaheIDs(t *testing.T) {
-	historyPath := filepath.Join(t.TempDir(), "history.csv")
-	if err := LocalUpdateAnime(historyPath, 123, "123:session-id", 4, 0, 24, "Current Title", "animepahe"); err != nil {
-		t.Fatalf("write animepahe history: %v", err)
-	}
-
-	LocalDeleteAnime(historyPath, 123, "123:other-session")
-
-	if entries := LocalGetAllAnime(historyPath); len(entries) != 0 {
-		t.Fatalf("expected animepahe history entry to be deleted, got %#v", entries)
 	}
 }
 
@@ -341,14 +328,14 @@ func TestGetProviderNormalizesConfiguredProviderName(t *testing.T) {
 	})
 
 	CurrentProvider = nil
-	SetGlobalConfig(&CurdConfig{Provider: " AllAnime "})
+	SetGlobalConfig(&CurdConfig{Provider: " Anikoto "})
 
 	// The point is that a disabled provider falls back to the head of the
 	// stack, whichever that currently is -- naming it here only makes this
 	// test fail every time the stack is reordered for good reasons.
 	want := defaultEnabledProviderStack()[0]
 	if got := GetProvider().Name(); got != want {
-		t.Fatalf("expected the stack head %q when allanime is disabled, got %q", want, got)
+		t.Fatalf("expected the stack head %q when anikoto is disabled, got %q", want, got)
 	}
 }
 

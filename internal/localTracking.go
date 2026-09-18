@@ -8,12 +8,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/thexykril/otakase/internal/providers/animepahe"
 )
 
 // Function to add an anime entry
-func LocalAddAnime(databaseFile string, anilistID int, allanimeID string, watchingEpisode int, watchingTime int, animeDuration int, animeName string) {
+func LocalAddAnime(databaseFile string, anilistID int, providerID string, watchingEpisode int, watchingTime int, animeDuration int, animeName string) {
 	file, err := os.OpenFile(databaseFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		CurdOut(fmt.Sprintf("Error opening file: %v", err))
@@ -25,7 +23,7 @@ func LocalAddAnime(databaseFile string, anilistID int, allanimeID string, watchi
 
 	err = writer.Write([]string{
 		strconv.Itoa(anilistID),
-		allanimeID,
+		providerID,
 		strconv.Itoa(watchingEpisode),
 		strconv.Itoa(watchingTime),
 		strconv.Itoa(animeDuration),
@@ -43,29 +41,20 @@ func LocalAddAnime(databaseFile string, anilistID int, allanimeID string, watchi
 	CurdOut("Written to file")
 }
 
+// normalizeLocalProviderID strips a provider qualifier from a stored id.
+//
+// It used to also fold animepahe's per-session ids onto something stable, which
+// was the only reason it took a provider name; no remaining provider hands out
+// an id that changes between runs.
 func normalizeLocalProviderID(providerName, providerID, animeName string) string {
 	if _, rawProviderID, ok := ParseProviderQualifiedID(providerID); ok {
 		providerID = rawProviderID
 	}
-
-	if providerName != "animepahe" {
-		return providerID
-	}
-
-	if providerID == "" {
-		return ""
-	}
-
-	stableID := animepahe.StableProviderID(providerID)
-	if stableID != "" {
-		return stableID
-	}
-
 	return providerID
 }
 
 // Function to delete an anime entry by Anilist ID and Allanime ID
-func LocalDeleteAnime(databaseFile string, anilistID int, allanimeID string) {
+func LocalDeleteAnime(databaseFile string, anilistID int, providerID string) {
 	animeList := [][]string{}
 	file, err := os.Open(databaseFile)
 	if err != nil {
@@ -90,7 +79,7 @@ func LocalDeleteAnime(databaseFile string, anilistID int, allanimeID string) {
 		}
 
 		existingProviderID := normalizeLocalProviderID(anime.ProviderName, anime.ProviderId, GetAnimeName(*anime))
-		targetProviderID := normalizeLocalProviderID(anime.ProviderName, allanimeID, GetAnimeName(*anime))
+		targetProviderID := normalizeLocalProviderID(anime.ProviderName, providerID, GetAnimeName(*anime))
 		if anime.AnilistId != anilistID || existingProviderID != targetProviderID {
 			animeList = append(animeList, row)
 		}
@@ -183,6 +172,10 @@ func parseAnimeRow(row []string) *Anime {
 	}
 	animeDuration := 0
 	animeName := strconv.Itoa(anilistID)
+	// Rows this short predate the provider column, and everything written then
+	// came from allanime. The name is kept as the record of what the row is,
+	// even though that provider has since been removed: the entry will be
+	// remapped to a working provider the next time it is played.
 	providerName := "allanime"
 
 	if len(row) >= 7 {
@@ -251,8 +244,8 @@ func GetAnimeName(anime Anime) string {
 }
 
 // Function to update or add a new anime entry
-func LocalUpdateAnime(databaseFile string, anilistID int, allanimeID string, watchingEpisode int, playbackTime int, animeDuration int, animeName string, providerName string) error {
-	allanimeID = normalizeLocalProviderID(providerName, allanimeID, animeName)
+func LocalUpdateAnime(databaseFile string, anilistID int, providerID string, watchingEpisode int, playbackTime int, animeDuration int, animeName string, providerName string) error {
+	providerID = normalizeLocalProviderID(providerName, providerID, animeName)
 	// Read existing entries
 	animeList := LocalGetAllAnime(databaseFile)
 
@@ -260,11 +253,11 @@ func LocalUpdateAnime(databaseFile string, anilistID int, allanimeID string, wat
 	updated := false
 	for i, anime := range animeList {
 		existingProviderID := normalizeLocalProviderID(anime.ProviderName, anime.ProviderId, GetAnimeName(anime))
-		if anime.AnilistId == anilistID && existingProviderID == allanimeID {
+		if anime.AnilistId == anilistID && existingProviderID == providerID {
 			animeList[i].Ep.Number = watchingEpisode
 			animeList[i].Ep.Player.PlaybackTime = playbackTime
 			animeList[i].Ep.Duration = animeDuration
-			animeList[i].ProviderId = allanimeID
+			animeList[i].ProviderId = providerID
 			animeList[i].Title.English = animeName
 			animeList[i].Title.Romaji = animeName
 			animeList[i].ProviderName = providerName
@@ -276,7 +269,7 @@ func LocalUpdateAnime(databaseFile string, anilistID int, allanimeID string, wat
 	if !updated {
 		newAnime := Anime{
 			AnilistId:  anilistID,
-			ProviderId: allanimeID,
+			ProviderId: providerID,
 			Ep: Episode{
 				Number: watchingEpisode,
 				Player: playingVideo{
@@ -330,11 +323,11 @@ func LocalUpdateAnime(databaseFile string, anilistID int, allanimeID string, wat
 }
 
 // Function to find an anime by either Anilist ID or Allanime ID
-func LocalFindAnime(animeList []Anime, anilistID int, allanimeID string) *Anime {
+func LocalFindAnime(animeList []Anime, anilistID int, providerID string) *Anime {
 	var bestMatch *Anime
 	for i := range animeList {
 		anime := &animeList[i]
-		if anime.AnilistId == anilistID || (allanimeID != "" && anime.ProviderId == allanimeID) {
+		if anime.AnilistId == anilistID || (providerID != "" && anime.ProviderId == providerID) {
 			if bestMatch == nil ||
 				anime.Ep.Number > bestMatch.Ep.Number ||
 				(anime.Ep.Number == bestMatch.Ep.Number && anime.Ep.Player.PlaybackTime > bestMatch.Ep.Player.PlaybackTime) {
@@ -488,7 +481,7 @@ func WatchUntracked(userCurdConfig *CurdConfig) {
 			anime.Ep.NextEpisode = NextEpisode{}
 		} else {
 			// Preferred-first resolve; diagnosed recovery only after that fails.
-			resolvedLink, ok := resolveEpisodeLinksWithRecovery(userCurdConfig, &anime, nil, true)
+			resolvedLink, ok := resolveEpisodeLinksWithRecovery(userCurdConfig, &anime, nil)
 			if !ok {
 				ExitCurd(nil)
 			}
