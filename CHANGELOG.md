@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`otakase -setup-anime-skip` gets you a personal Anime-Skip client id.** It
+  opens Anime-Skip's account page in your browser and asks you to paste back
+  the id you create there. That is the most this program can automate:
+  Anime-Skip's own docs say accounts "must be created at
+  anime-skip.com/sign-up" and cannot be created through their API, and
+  creating a client id is a page in account settings with no API at all —
+  unlike AniList, there is no redirect this program can catch the end of. A
+  personal id is rate-limited on its own, rather than sharing the playground
+  id `auto` reads.
+
 ## 2.0.1 — 2026-09-19
 
 ### Changed

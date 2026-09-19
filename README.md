@@ -183,6 +183,7 @@ entries.
 | `-provider-status` | Probe each configured source and report which respond | |
 | `-provider-status-query` | Search term `-provider-status` probes with | `one piece` |
 | `-change-token` | Change your authentication token | |
+| `-setup-anime-skip` | Get a personal Anime-Skip client id and save it | |
 | `-e` | Edit the config file | |
 | `-u` | Update to the latest release | |
 | `-v` | Show the version | |
@@ -310,8 +311,21 @@ playground, remembers it, and looks for a new one if it ever stops being
 accepted — so a rotated id fixes itself. That id is shared with everyone using
 the playground, which is why it can change, and why it may be rate-limited.
 
-For an id of your own, ask the Anime-Skip maintainers through the links on
-their site and write it in place of `auto`:
+For an id of your own, run:
+
+```
+otakase -setup-anime-skip
+```
+
+This opens Anime-Skip's account page in your browser — sign up first if you
+have not already — and asks you to paste back the client id you create there.
+It is the only way to get one: Anime-Skip's accounts and client ids cannot be
+created through their API, only through their site, so this can guide you to
+the right page but not do it for you. The id it saves is yours alone, against
+your own rate limit rather than the shared playground one.
+
+You can also write an id you already have straight into the config, in place
+of `auto`:
 
 ```
 AnimeSkipClientID=your_client_id_here

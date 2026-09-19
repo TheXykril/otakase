@@ -103,6 +103,7 @@ func main() {
 	imagePreview := flag.Bool("image-preview", false, "Show image preview")
 	noImagePreview := flag.Bool("no-image-preview", false, "No image preview")
 	changeToken := flag.Bool("change-token", false, "Change token")
+	setupAnimeSkip := flag.Bool("setup-anime-skip", false, "Create a personal Anime-Skip client id and save it")
 	currentCategory := flag.Bool("current", false, "Current category")
 	updateScript := flag.Bool("u", false, "Update the script")
 	editConfig := flag.Bool("e", false, "Edit config")
@@ -255,6 +256,14 @@ func main() {
 
 	if *changeToken {
 		internal.ChangeTrackingToken(&userConfig, &user)
+		return
+	}
+
+	if *setupAnimeSkip {
+		if err := internal.SetupAnimeSkipClientID(&userConfig); err != nil {
+			fmt.Println("Anime-Skip setup failed:", err)
+			os.Exit(1)
+		}
 		return
 	}
 
