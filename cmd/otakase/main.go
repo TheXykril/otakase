@@ -67,9 +67,15 @@ func main() {
 	}
 	internal.SetGlobalConfig(&userConfig)
 
-	logFile := filepath.Join(os.ExpandEnv(userConfig.StoragePath), "debug.log")
+	storageDir := os.ExpandEnv(userConfig.StoragePath)
+	logFile := filepath.Join(storageDir, internal.LogFileName)
 	internal.SetGlobalLogFile(logFile)
 	internal.ClearLogFile(logFile)
+	// The log used to be a bare debug.log. Leaving one behind would be a file
+	// that looks current and never changes again, which is worth more confusion
+	// than the byte it saves -- it is truncated at every launch anyway, so
+	// nothing in it is wanted.
+	internal.RemoveLegacyLogFile(storageDir)
 
 	// Flags configured here cause userconfig needs to be changed.
 	flag.StringVar(&userConfig.Player, "player", userConfig.Player, "Player binary for playback (mpv-compatible; falls back to mpv if unavailable)")

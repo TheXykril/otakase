@@ -24,8 +24,6 @@ import (
 // Monotonic request id for mpv JSON IPC so we can ignore interleaved events.
 var mpvRequestID atomic.Int64
 
-var logFile = "debug.log"
-
 const mpvPlaybackPollInterval = 500 * time.Millisecond
 
 // streamHeaderArgs renders a provider's extra HTTP headers as MPV arguments.

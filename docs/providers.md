@@ -193,7 +193,7 @@ Providers must not call `internal` helpers directly. Use hooks in `internal/prov
 | Hook | Use |
 |------|-----|
 | `providerhost.HTTPClient()` | Shared cookie jar HTTP client |
-| `providerhost.Log(string)` | Debug log (`debug.log` in storage path) |
+| `providerhost.Log(string)` | Debug log (`otakase-debug.log` in storage path) |
 | `providerhost.Out(string)` | User-visible terminal message |
 | `providerhost.StoragePath()` | `~/.local/share/otakase` (or configured path) |
 | `providerhost.AnimeNameLanguage()` | `"english"` or `"romaji"` for search result labels |

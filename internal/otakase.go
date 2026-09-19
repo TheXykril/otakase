@@ -23,6 +23,29 @@ import (
 
 var alternateScreenActive bool
 
+// LogFileName is the debug log inside the storage directory.
+//
+// It carries the program's name rather than being a bare debug.log, because it
+// leaves that directory constantly: it is the first thing a bug report asks
+// for, and a file called debug.log in someone's downloads folder says nothing
+// about what produced it.
+const LogFileName = "otakase-debug.log"
+
+// legacyLogFileName is what the log was called before it carried a name.
+const legacyLogFileName = "debug.log"
+
+// RemoveLegacyLogFile deletes a log left by an older version, so the storage
+// directory does not keep a stale file that looks like the current one.
+func RemoveLegacyLogFile(storageDir string) {
+	storageDir = strings.TrimSpace(storageDir)
+	if storageDir == "" {
+		return
+	}
+	if err := os.Remove(filepath.Join(storageDir, legacyLogFileName)); err != nil && !os.IsNotExist(err) {
+		Log(fmt.Sprintf("Could not remove the old debug log: %v", err))
+	}
+}
+
 // ClearLogFile removes all contents from the specified log file
 func ClearLogFile(logFile string) error {
 	// Drop any cached append handle first: it still points at the pre-truncation

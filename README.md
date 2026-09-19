@@ -350,9 +350,9 @@ red  green  yellow  blue  magenta  cyan
 ```
 
 A mistyped colour costs that colour and nothing else — it is reported in
-`debug.log` and skipped, and the rest still apply. When any override is in use
-the log names the theme as customised, so a colour you do not recognise is
-traceable.
+`otakase-debug.log` and skipped, and the rest still apply. When any override is
+in use the log names the theme as customised, so a colour you do not recognise
+is traceable.
 
 ## Configuration
 
@@ -403,7 +403,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 |---|---|
 | `~/.config/otakase/otakase.conf` | Your settings |
 | `~/.local/share/otakase/` | Watch history, tokens, logs, cached artwork |
-| `~/.local/share/otakase/debug.log` | The log to check first when something misbehaves |
+| `~/.local/share/otakase/otakase-debug.log` | The log to check first when something misbehaves |
 
 ## Troubleshooting
 
@@ -413,7 +413,7 @@ sources. Set `ManualProviderSearch=true` to pick the match yourself, or use the
 correct a bad match permanently.
 
 **Playback never starts.** Run `otakase -provider-status` to see which
-sources are responding. Check `debug.log`, and raise
+sources are responding. Check `otakase-debug.log`, and raise
 `MpvPlaybackStartTimeout` if your connection is slow.
 
 **The rofi menus look wrong.** Themes are rewritten at every launch, so a
@@ -421,8 +421,8 @@ stale theme fixes itself on the next run. Confirm `rofi` is installed and
 `RofiSelection=true`.
 
 **Progress did not update.** Tracker writes are paced to stay inside API rate
-limits and happen in the background. Check `debug.log` for the write, and that
-`TrackingRemote` is what you expect.
+limits and happen in the background. Check `otakase-debug.log` for the write,
+and that `TrackingRemote` is what you expect.
 
 ## Built with
 

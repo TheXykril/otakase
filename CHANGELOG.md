@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The debug log is now `otakase-debug.log`.** It was a bare `debug.log`, which
+  is fine while it sits in the storage directory and unhelpful the moment it
+  leaves — and leaving is what it is for: it is the first thing a bug report
+  asks for, and a `debug.log` in someone's downloads folder says nothing about
+  what produced it. A log left by an older version is removed on launch rather
+  than kept as a stale file that looks current.
+
 ## 2.0.0 — 2026-09-18
 
 ### Removed
