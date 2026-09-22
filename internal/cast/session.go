@@ -83,7 +83,16 @@ func (s *Session) Progress() (Progress, error) {
 		return Progress{}, fmt.Errorf("cast: could not read the device status: %w", err)
 	}
 
-	_, media, _ := s.app.Status()
+	app, media, _ := s.app.Status()
+	// The receiver going back to its idle screen is the clearest signal the
+	// episode is over. It is checked first because the vendored library never
+	// clears a media status once it has seen one -- relying on PlayerState
+	// alone would leave a caller polling a frozen "PLAYING" forever after the
+	// session goes away (the viewer stops the cast from the Google Home app,
+	// or casts something else to the same device).
+	if app == nil || app.IsIdleScreen {
+		return Progress{Idle: true}, nil
+	}
 	if media == nil {
 		return Progress{Idle: true}, nil
 	}
