@@ -30,7 +30,10 @@ func NewServer(dir string) (*Server, error) {
 		return nil, err
 	}
 
-	listener, err := net.Listen("tcp", ":0")
+	// Bound to the one address the device needs, not every interface: this is
+	// a directory listing of the scratch dir for the length of the episode,
+	// and outboundIP already picked the address the device reaches it on.
+	listener, err := net.Listen("tcp", net.JoinHostPort(addr.String(), "0"))
 	if err != nil {
 		return nil, fmt.Errorf("cast: could not listen: %w", err)
 	}
