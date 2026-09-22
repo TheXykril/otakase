@@ -13,6 +13,14 @@ import (
 // PlaylistName is the playlist ffmpeg writes and the device is pointed at.
 const PlaylistName = "playlist.m3u8"
 
+// Log receives ffmpeg's stderr once it exits, whenever there is any -- even on
+// a clean exit, since ffmpeg can leave the stream broken while still reporting
+// success (Critical 1: "AAC bitstream not in ADTS format and extradata
+// missing", 260 lines of it, exit status 0). It defaults to discarding: this
+// package must not import internal to reach the real logger, so
+// internal/cast_playback.go wires this to it at init.
+var Log = func(string) {}
+
 // BuildRemuxArgs renders the stream into HLS the cast device can play.
 //
 // The device cannot send the headers these providers require, so it never
@@ -82,6 +90,13 @@ func StartRemux(ffmpegPath, streamURL, referrer, outDir string) (*Remux, error) 
 	go func() {
 		defer close(remux.done)
 		err := remux.cmd.Wait()
+		stderr := strings.TrimSpace(remux.stderr.String())
+		// Logged unconditionally, not only on a non-zero exit: Critical 1 is
+		// exactly a case where ffmpeg exits 0 with stderr explaining the stream
+		// it just wrote is broken.
+		if stderr != "" {
+			Log(fmt.Sprintf("cast: ffmpeg stderr: %s", stderr))
+		}
 		remux.mu.Lock()
 		defer remux.mu.Unlock()
 		// A killed process is how Stop ends this, not a failure worth reporting.
@@ -89,7 +104,7 @@ func StartRemux(ffmpegPath, streamURL, referrer, outDir string) (*Remux, error) 
 			return
 		}
 		if err != nil {
-			remux.err = fmt.Errorf("cast: ffmpeg failed: %s", strings.TrimSpace(remux.stderr.String()))
+			remux.err = fmt.Errorf("cast: ffmpeg failed: %s", stderr)
 		}
 	}()
 
