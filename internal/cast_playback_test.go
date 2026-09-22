@@ -214,7 +214,10 @@ func TestWatchCastRemuxFailureDoesNotMarkWatched(t *testing.T) {
 	anime.Ep.Duration = 1440 // a real duration; must survive untouched, not the live edge
 	config := testCastConfig(t)
 
-	err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"})
+	var err error
+	out := captureStdout(t, func() {
+		err = watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"})
+	})
 
 	if !errors.Is(err, failure) {
 		t.Fatalf("expected the remux failure, got %v", err)
@@ -222,9 +225,13 @@ func TestWatchCastRemuxFailureDoesNotMarkWatched(t *testing.T) {
 	if anime.Ep.Duration != 1440 {
 		t.Errorf("duration was overwritten by a truncated live edge: got %d", anime.Ep.Duration)
 	}
-	entries := LocalGetAllAnime(filepath.Join(config.StoragePath, "curd_history.txt"))
-	if animeMarked(entries, anime.AnilistId) {
-		t.Error("a failed remux marked the episode watched")
+	// The history entry savePartial writes here (Important 4: a resume point
+	// for the next launch) is correct and expected -- it is not itself
+	// evidence of a false mark. The signal that matters is this message,
+	// which a real completion would have printed instead of the returned
+	// error.
+	if strings.Contains(out, "marked as watched") {
+		t.Error("a failed remux reported the episode as marked watched")
 	}
 }
 
@@ -289,6 +296,42 @@ func TestWatchCastRemuxFailureOutranksLostDevice(t *testing.T) {
 
 	if !errors.Is(err, failure) {
 		t.Fatalf("expected the remembered remux failure to outrank the lost device, got %v", err)
+	}
+}
+
+// Important 4: a cast that ends without ever marking the episode complete
+// must still offer a resume point next time. The mpv path gets this from its
+// own playback loop; a cast has no loop left once watchCast returns.
+func TestWatchCastSavesPartialProgressOnAnUnmarkedExit(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	server := &fakeServer{}
+	lostContact := errors.New("cast: could not read the device status: EOF")
+
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 200, Duration: 1440}}, // well under the mark threshold
+			{err: lostContact},
+		},
+	}
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	if err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"}); err != nil {
+		t.Fatalf("expected a clean nil return on an unremembered lost-device exit, got %v", err)
+	}
+
+	entries := LocalGetAllAnime(filepath.Join(config.StoragePath, "curd_history.txt"))
+	saved := false
+	for _, e := range entries {
+		if e.AnilistId == anime.AnilistId && e.Ep.Player.PlaybackTime == 200 {
+			saved = true
+		}
+	}
+	if !saved {
+		t.Error("expected a resume point at position 200 to have been saved")
 	}
 }
 

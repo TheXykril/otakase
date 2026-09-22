@@ -250,6 +250,18 @@ func CastEpisode(config *Config, anime *Anime) error {
 		Out("Note: this stream's subtitles cannot be cast. Try SubStyle=hard for a hardsubbed stream.")
 	}
 
+	if anime.Ep.Resume && anime.Ep.Player.PlaybackTime > 0 {
+		// Session.Play always starts at zero: a real resume would need the
+		// seek deferred until the remux has succeeded (an event playlist is
+		// only a few segments long at t=0), which is another timing-dependent
+		// branch in a loop that has already been through several review
+		// rounds. Disclosed instead, so the viewer picking "Episode 5 (15:32)"
+		// is told why it started over rather than left to notice on their own.
+		if resume := formatResumePosition(anime.Ep.Player.PlaybackTime, anime.Ep.Duration); resume != "" {
+			Out(fmt.Sprintf("Note: casting starts from the beginning -- %s is not supported yet.", resume))
+		}
+	}
+
 	if err := s.Play(srv.URL(cast.PlaylistName)); err != nil {
 		return err
 	}
@@ -317,6 +329,23 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 		return remuxDone() && remuxErr == nil && remux.Err() == nil
 	}
 
+	// Written on the way out so a cast that ended early still offers a resume
+	// point next time. The mpv path gets this from its own playback loop; a
+	// cast has no loop left once this function returns. The marked guard
+	// keeps this from overwriting a completed episode's record with an
+	// in-progress one on an exit that follows a successful mark.
+	savePartial := func(position float64) {
+		if marked || position < 1 {
+			return
+		}
+		LocalUpdateAnime(
+			filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt"),
+			anime.AnilistId, anime.ProviderId, anime.Ep.Number,
+			int(position), anime.Ep.Duration,
+			GetAnimeName(*anime), CurrentAnimeProviderName(anime),
+		)
+	}
+
 	for {
 		time.Sleep(castPollInterval)
 
@@ -332,6 +361,7 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 		// dead remux there is no watchable episode left to protect: return
 		// immediately.
 		if serverErr := server.Err(); serverErr != nil {
+			savePartial(lastPosition)
 			return serverErr
 		}
 
@@ -339,6 +369,7 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 		if err != nil {
 			Out(fmt.Sprintf("Lost contact with %s.", device.Name))
 			Log(fmt.Sprintf("cast: lost contact with the device: %v", err))
+			savePartial(lastPosition)
 			// A remembered ffmpeg failure outranks losing the device: if the
 			// remux died and the device then stopped answering, ffmpeg is the
 			// cause worth reporting, and returning nil here would bury it.
@@ -351,11 +382,13 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 		if progress.Idle {
 			if !started {
 				if remuxErr != nil {
+					savePartial(lastPosition)
 					return remuxErr
 				}
 				if time.Now().Before(startupDeadline) {
 					continue
 				}
+				savePartial(lastPosition)
 				return fmt.Errorf("cast: %s never started playing -- it may not be able to reach this machine on the network", device.Name)
 			}
 			// An episode already marked watched is one the viewer saw through,
@@ -367,6 +400,7 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 				Log(fmt.Sprintf("cast: the remux ended badly after the episode was marked watched: %v", remuxErr))
 				remuxErr = nil
 			}
+			savePartial(lastPosition)
 			if remuxErr != nil {
 				return remuxErr
 			}
@@ -391,6 +425,7 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 			lastPosition = progress.Position
 			lastPositionChange = time.Now()
 		} else if started && time.Since(lastPositionChange) >= castStallTimeout {
+			savePartial(lastPosition)
 			return fmt.Errorf("cast: %s stopped reporting progress -- playback may have been stopped on the device", device.Name)
 		}
 
