@@ -1,0 +1,79 @@
+package cast
+
+import (
+	"fmt"
+	"net"
+	"net/http"
+	"time"
+)
+
+// Server hands the remuxed stream to the cast device over the LAN.
+//
+// The device fetches over the network, so this binds to every interface and
+// advertises a routable address. Serving on localhost would be serving to
+// nobody: the Chromecast is a different machine.
+type Server struct {
+	dir      string
+	listener net.Listener
+	server   *http.Server
+	baseURL  string
+}
+
+// NewServer starts serving dir on a free port and returns immediately.
+func NewServer(dir string) (*Server, error) {
+	addr, err := outboundIP()
+	if err != nil {
+		return nil, err
+	}
+
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return nil, fmt.Errorf("cast: could not listen: %w", err)
+	}
+
+	port := listener.Addr().(*net.TCPAddr).Port
+	server := &Server{
+		dir:      dir,
+		listener: listener,
+		baseURL:  fmt.Sprintf("http://%s:%d", addr, port),
+	}
+
+	// http.FileServer resolves ".." itself before touching the filesystem, so a
+	// path climbing out of dir is answered 404 rather than served.
+	server.server = &http.Server{
+		Handler:           http.FileServer(http.Dir(dir)),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	go func() {
+		_ = server.server.Serve(listener)
+	}()
+
+	return server, nil
+}
+
+// URL is where the cast device should fetch name from.
+func (s *Server) URL(name string) string {
+	return s.baseURL + "/" + name
+}
+
+// Close stops serving. A leaked server holds its port for the life of the
+// process, and every episode starts another one.
+func (s *Server) Close() error {
+	return s.server.Close()
+}
+
+// outboundIP finds the address this machine is reachable at from the LAN.
+//
+// It dials a UDP socket rather than scanning interfaces: no packet is sent,
+// but the kernel picks the source address it would route from, which is the
+// one the cast device can reach back on. Scanning interfaces means guessing
+// between a VPN, a container bridge and the real network.
+func outboundIP() (net.IP, error) {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return nil, fmt.Errorf("cast: could not determine this machine's LAN address: %w", err)
+	}
+	defer conn.Close()
+	return conn.LocalAddr().(*net.UDPAddr).IP, nil
+}
