@@ -17,6 +17,11 @@ import (
 // making a conversation out of it.
 const castPollInterval = time.Second
 
+// castStopTimeout bounds the one teardown step that talks to the device. The
+// interrupt path gives every cleanup two seconds between them, so a device
+// that has stopped answering must not be allowed to spend all of it.
+const castStopTimeout = time.Second
+
 // castStartTimeout is how long to wait for ffmpeg to write the first segment
 // before giving up on the stream.
 const castStartTimeout = 30 * time.Second
@@ -105,8 +110,22 @@ func CastEpisode(config *Config, anime *Anime) error {
 	var teardownOnce sync.Once
 	teardown := func() {
 		teardownOnce.Do(func() {
+			// Telling the device to stop is a network round trip, and the only
+			// step here that can hang. It gets its own bound so a device that
+			// has stopped answering cannot starve the steps below it: an
+			// orphaned ffmpeg and a leaked scratch directory are exactly what
+			// this teardown exists to prevent, and on the interrupt path every
+			// cleanup shares one budget.
 			if session != nil {
-				_ = session.Stop()
+				stopped := make(chan struct{})
+				go func() {
+					defer close(stopped)
+					_ = session.Stop()
+				}()
+				select {
+				case <-stopped:
+				case <-time.After(castStopTimeout):
+				}
 			}
 			if server != nil {
 				_ = server.Close()
