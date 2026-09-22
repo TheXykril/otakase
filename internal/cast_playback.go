@@ -257,8 +257,13 @@ func CastEpisode(config *Config, anime *Anime) error {
 		// branch in a loop that has already been through several review
 		// rounds. Disclosed instead, so the viewer picking "Episode 5 (15:32)"
 		// is told why it started over rather than left to notice on their own.
-		if resume := formatResumePosition(anime.Ep.Player.PlaybackTime, anime.Ep.Duration); resume != "" {
-			Out(fmt.Sprintf("Note: casting starts from the beginning -- %s is not supported yet.", resume))
+		// formatResumePosition is the gate rather than the wording: it already
+		// decides when a resume point is worth mentioning at all (too early,
+		// or near enough to the end that resuming is pointless). Its duration
+		// argument is minutes, and Ep.Duration is seconds in memory.
+		if formatResumePosition(anime.Ep.Player.PlaybackTime, ConvertSecondsToMinutes(anime.Ep.Duration)) != "" {
+			Out(fmt.Sprintf("Note: casting starts from the beginning -- resuming at %d:%02d is not supported yet.",
+				anime.Ep.Player.PlaybackTime/60, anime.Ep.Player.PlaybackTime%60))
 		}
 	}
 
@@ -341,7 +346,9 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 		LocalUpdateAnime(
 			filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt"),
 			anime.AnilistId, anime.ProviderId, anime.Ep.Number,
-			int(position), anime.Ep.Duration,
+			// Minutes, as at the mark-complete call above: Ep.Duration is held
+			// in seconds in memory, and this column is read back as minutes.
+			int(position), ConvertSecondsToMinutes(anime.Ep.Duration),
 			GetAnimeName(*anime), CurrentAnimeProviderName(anime),
 		)
 	}
@@ -445,11 +452,16 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 			if err := session.SeekToTime(target); err != nil {
 				Log(fmt.Sprintf("cast: skip failed: %v", err))
 			}
-			// A skip's target is not yet reflected in progress.Position -- the
-			// device only reports it from the next poll on -- so without this
-			// the stall clock would read the gap between "asked to seek" and
-			// "device confirms it" as no progress at all.
-			lastPositionChange = time.Now()
+			// Deliberately no stall-clock reset here. A healthy seek moves the
+			// position, which resets the clock above on the next poll anyway --
+			// so a reset here would only ever take effect when the position is
+			// frozen, which is the one case the stall bound exists to catch.
+			// Worse, NextSkip keeps returning true for as long as the position
+			// is inside a span, so a freeze during the opening or the ending
+			// (when a viewer is most likely to stop the cast from the device)
+			// would restart the clock every second and the bound could never
+			// fire. The cost of leaving it out is a poll or two of a
+			// 120-second budget.
 			continue
 		}
 
@@ -458,7 +470,10 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 			LocalUpdateAnime(
 				filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt"),
 				anime.AnilistId, anime.ProviderId, anime.Ep.Number,
-				int(progress.Position), int(progress.Duration),
+				// Minutes, not seconds: LocalUpdateAnime's animeDuration column
+				// is minutes, which is how formatResumePosition reads it back.
+				// The mpv path converts at its own call site for the same reason.
+				int(progress.Position), ConvertSecondsToMinutes(int(progress.Duration)),
 				GetAnimeName(*anime), CurrentAnimeProviderName(anime),
 			)
 			// GetGlobalUser returns nil when nothing signed in, and local-only

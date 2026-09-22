@@ -151,7 +151,10 @@ func withFastCastTimings(t *testing.T) {
 	prevPoll, prevGrace, prevStall := castPollInterval, castStartupGrace, castStallTimeout
 	castPollInterval = 2 * time.Millisecond
 	castStartupGrace = time.Millisecond
-	castStallTimeout = 10 * time.Millisecond
+	// Wide enough that a test doing real file I/O between two polls (writing
+	// curd_history.txt on a mark) cannot trip the bound by accident, and still
+	// short enough that the stall test finishes in well under its own timeout.
+	castStallTimeout = 500 * time.Millisecond
 	t.Cleanup(func() {
 		castPollInterval, castStartupGrace, castStallTimeout = prevPoll, prevGrace, prevStall
 	})
@@ -394,6 +397,15 @@ func TestWatchCastStallBoundFiresWhenPositionStopsAdvancing(t *testing.T) {
 
 	anime := testCastAnime()
 	config := testCastConfig(t)
+
+	// The frozen position sits inside an enabled skip span, which is the case
+	// that actually holds this fix closed: NextSkip returns true for as long as
+	// the position is within a span, so a stall-clock reset in the skip branch
+	// would restart the bound every poll and it could never fire. A freeze
+	// during the opening or the ending is also when a viewer is most likely to
+	// have stopped the cast from the device.
+	config.SkipOp = true
+	anime.Ep.SkipTimes = SkipTimes{Op: Skip{Start: 20, End: 100}}
 
 	done := make(chan error, 1)
 	go func() {

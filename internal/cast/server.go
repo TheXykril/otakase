@@ -11,9 +11,11 @@ import (
 
 // Server hands the remuxed stream to the cast device over the LAN.
 //
-// The device fetches over the network, so this binds to every interface and
-// advertises a routable address. Serving on localhost would be serving to
-// nobody: the Chromecast is a different machine.
+// The device fetches over the network, so this binds to the machine's routable
+// LAN address rather than to localhost: the Chromecast is a different machine,
+// and serving on loopback would be serving to nobody. It binds to that one
+// address rather than to every interface, because what it serves is a
+// directory listing of the scratch directory for the length of an episode.
 type Server struct {
 	dir      string
 	listener net.Listener
