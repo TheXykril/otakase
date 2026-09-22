@@ -148,6 +148,9 @@ github.com/bradfitz/iter
 # github.com/cespare/xxhash v1.1.0
 ## explicit
 github.com/cespare/xxhash
+# github.com/cespare/xxhash/v2 v2.3.0
+## explicit; go 1.11
+github.com/cespare/xxhash/v2
 # github.com/charmbracelet/bubbles v0.21.0
 ## explicit; go 1.23.0
 github.com/charmbracelet/bubbles/cursor
@@ -228,7 +231,7 @@ github.com/google/go-cmp/cmp/internal/value
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
-# github.com/gorilla/websocket v1.5.0
+# github.com/gorilla/websocket v1.5.3
 ## explicit; go 1.12
 github.com/gorilla/websocket
 # github.com/huandu/xstrings v1.3.2
@@ -288,8 +291,8 @@ github.com/nu7hatch/gouuid
 # github.com/pion/datachannel v1.5.9
 ## explicit; go 1.19
 github.com/pion/datachannel
-# github.com/pion/dtls/v3 v3.0.3
-## explicit; go 1.20
+# github.com/pion/dtls/v3 v3.1.4
+## explicit; go 1.24.0
 github.com/pion/dtls/v3
 github.com/pion/dtls/v3/internal/ciphersuite
 github.com/pion/dtls/v3/internal/ciphersuite/types
@@ -329,7 +332,7 @@ github.com/pion/interceptor/pkg/nack
 github.com/pion/interceptor/pkg/report
 github.com/pion/interceptor/pkg/rfc8888
 github.com/pion/interceptor/pkg/twcc
-# github.com/pion/logging v0.2.3
+# github.com/pion/logging v0.2.4
 ## explicit; go 1.20
 github.com/pion/logging
 # github.com/pion/mdns/v2 v2.0.7
@@ -356,20 +359,27 @@ github.com/pion/sdp/v3
 # github.com/pion/srtp/v3 v3.0.4
 ## explicit; go 1.20
 github.com/pion/srtp/v3
-# github.com/pion/stun/v3 v3.0.0
-## explicit; go 1.19
+# github.com/pion/stun/v3 v3.1.5
+## explicit; go 1.24.0
 github.com/pion/stun/v3
 github.com/pion/stun/v3/internal/hmac
 # github.com/pion/transport/v3 v3.0.7
 ## explicit; go 1.19
 github.com/pion/transport/v3
 github.com/pion/transport/v3/deadline
-github.com/pion/transport/v3/netctx
 github.com/pion/transport/v3/packetio
 github.com/pion/transport/v3/replaydetector
 github.com/pion/transport/v3/stdnet
 github.com/pion/transport/v3/utils/xor
 github.com/pion/transport/v3/vnet
+# github.com/pion/transport/v4 v4.0.2
+## explicit; go 1.24.0
+github.com/pion/transport/v4
+github.com/pion/transport/v4/deadline
+github.com/pion/transport/v4/netctx
+github.com/pion/transport/v4/replaydetector
+github.com/pion/transport/v4/stdnet
+github.com/pion/transport/v4/utils/xor
 # github.com/pion/turn/v4 v4.0.0
 ## explicit; go 1.19
 github.com/pion/turn/v4
@@ -420,7 +430,7 @@ github.com/tidwall/btree
 ## explicit; go 1.17
 github.com/tr1xem/go-discordrpc/client
 github.com/tr1xem/go-discordrpc/internal/ipc
-# github.com/wlynxg/anet v0.0.3
+# github.com/wlynxg/anet v0.0.5
 ## explicit; go 1.20
 github.com/wlynxg/anet
 # github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e
@@ -433,39 +443,45 @@ go.etcd.io/bbolt
 ## explicit; go 1.24.0
 go.opentelemetry.io/auto/sdk
 go.opentelemetry.io/auto/sdk/internal/telemetry
-# go.opentelemetry.io/otel v1.38.0
-## explicit; go 1.23.0
+# go.opentelemetry.io/otel v1.41.0
+## explicit; go 1.24.0
 go.opentelemetry.io/otel
 go.opentelemetry.io/otel/attribute
 go.opentelemetry.io/otel/attribute/internal
+go.opentelemetry.io/otel/attribute/internal/xxhash
 go.opentelemetry.io/otel/baggage
 go.opentelemetry.io/otel/codes
 go.opentelemetry.io/otel/internal/baggage
+go.opentelemetry.io/otel/internal/errorhandler
 go.opentelemetry.io/otel/internal/global
 go.opentelemetry.io/otel/propagation
 go.opentelemetry.io/otel/semconv/v1.37.0
-# go.opentelemetry.io/otel/metric v1.38.0
-## explicit; go 1.23.0
+go.opentelemetry.io/otel/semconv/v1.39.0
+# go.opentelemetry.io/otel/metric v1.41.0
+## explicit; go 1.24.0
 go.opentelemetry.io/otel/metric
 go.opentelemetry.io/otel/metric/embedded
-# go.opentelemetry.io/otel/trace v1.38.0
-## explicit; go 1.23.0
+# go.opentelemetry.io/otel/trace v1.41.0
+## explicit; go 1.24.0
 go.opentelemetry.io/otel/trace
 go.opentelemetry.io/otel/trace/embedded
 go.opentelemetry.io/otel/trace/internal/telemetry
 go.opentelemetry.io/otel/trace/noop
-# golang.org/x/crypto v0.44.0
+# golang.org/x/crypto v0.48.0
 ## explicit; go 1.24.0
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/blake2s
+golang.org/x/crypto/chacha20
+golang.org/x/crypto/chacha20poly1305
 golang.org/x/crypto/cryptobyte
 golang.org/x/crypto/cryptobyte/asn1
-golang.org/x/crypto/curve25519
+golang.org/x/crypto/internal/alias
+golang.org/x/crypto/internal/poly1305
 golang.org/x/crypto/sha3
 # golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6
 ## explicit; go 1.24.0
 golang.org/x/exp/constraints
-# golang.org/x/net v0.47.0
+# golang.org/x/net v0.49.0
 ## explicit; go 1.24.0
 golang.org/x/net/bpf
 golang.org/x/net/dns/dnsmessage
@@ -491,7 +507,7 @@ golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/term v0.37.0
+# golang.org/x/term v0.40.0
 ## explicit; go 1.24.0
 golang.org/x/term
 # golang.org/x/text v0.42.0
