@@ -65,8 +65,13 @@ func Connect(d Device) (*Session, error) {
 // The content type is stated rather than guessed: the stream is served from a
 // directory with no meaningful extension handling, and the Default Media
 // Receiver picks its player from this.
+//
+// Play returns as soon as the device has been told to start, rather than
+// waiting for the episode to finish: the detach flag passed to Load is what
+// makes that happen, and the caller's polling loop -- watched threshold,
+// opening/ending skips, deferred Stop -- depends on Play not blocking.
 func (s *Session) Play(url string) error {
-	if err := s.app.Load(url, 0, "application/x-mpegURL", false, false, false); err != nil {
+	if err := s.app.Load(url, 0, "application/x-mpegURL", false, true, false); err != nil {
 		return fmt.Errorf("cast: could not start playback: %w", err)
 	}
 	return nil
