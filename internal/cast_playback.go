@@ -274,6 +274,12 @@ func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast
 		if err != nil {
 			Out(fmt.Sprintf("Lost contact with %s.", device.Name))
 			Log(fmt.Sprintf("cast: lost contact with the device: %v", err))
+			// A remembered ffmpeg failure outranks losing the device: if the
+			// remux died and the device then stopped answering, ffmpeg is the
+			// cause worth reporting, and returning nil here would bury it.
+			if remuxErr != nil {
+				return remuxErr
+			}
 			return nil
 		}
 
@@ -286,6 +292,15 @@ func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast
 					continue
 				}
 				return fmt.Errorf("cast: %s never started playing -- it may not be able to reach this machine on the network", device.Name)
+			}
+			// An episode already marked watched is one the viewer saw through,
+			// so a failure in ffmpeg's tail is cosmetic by the time it lands:
+			// telling them "Casting failed" about an episode they just
+			// finished would be its own kind of lie. Log it and report the
+			// ending honestly.
+			if remuxErr != nil && marked {
+				Log(fmt.Sprintf("cast: the remux ended badly after the episode was marked watched: %v", remuxErr))
+				remuxErr = nil
 			}
 			if remuxErr != nil {
 				return remuxErr

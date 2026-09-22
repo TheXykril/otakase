@@ -29,7 +29,11 @@ func RegisterExitCleanup(fn func()) (cancel func()) {
 	return func() {
 		exitCleanupMu.Lock()
 		defer exitCleanupMu.Unlock()
-		exitCleanups[i] = nil
+		// Bounds-checked rather than assumed: the registry is reset between
+		// tests, which shortens the slice under a cancel that is still live.
+		if i < len(exitCleanups) {
+			exitCleanups[i] = nil
+		}
 	}
 }
 

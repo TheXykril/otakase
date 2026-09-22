@@ -33,6 +33,10 @@ func TestInstallTerminalInterruptHandlerIsIdempotent(t *testing.T) {
 // its own defer has already torn things down, and a leftover call firing
 // anyway would double-close resources a later cast has already replaced.
 func TestRegisterExitCleanupCancelPreventsRun(t *testing.T) {
+	// Reset on both sides: t.Cleanup only protects whatever runs after this
+	// test, and runExitCleanups below would otherwise also run anything an
+	// earlier test in the package registered without cancelling.
+	resetExitCleanupsForTest()
 	t.Cleanup(resetExitCleanupsForTest)
 
 	ran := false
@@ -50,6 +54,7 @@ func TestRegisterExitCleanupCancelPreventsRun(t *testing.T) {
 // about to exit on a signal -- this is the only path that reaches it, since
 // exitWithRestore calls os.Exit and skips every deferred cleanup.
 func TestRunExitCleanupsRunsRegistered(t *testing.T) {
+	resetExitCleanupsForTest()
 	t.Cleanup(resetExitCleanupsForTest)
 
 	done := make(chan struct{})
