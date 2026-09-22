@@ -15,7 +15,9 @@ import (
 // castPollInterval is how often the device is asked where it is. A second is
 // enough to catch a skip window and to notice the episode ending, without
 // making a conversation out of it.
-const castPollInterval = time.Second
+//
+// A var, not a const: see castStartupGrace below for why.
+var castPollInterval = time.Second
 
 // castStopTimeout bounds the one teardown step that talks to the device. The
 // interrupt path gives every cleanup two seconds between them, so a device
@@ -32,7 +34,36 @@ const castStartTimeout = 30 * time.Second
 // and its status looks identical to an episode that just finished. Without a
 // grace period the first poll would report a full episode watched in a
 // second.
-const castStartupGrace = 30 * time.Second
+//
+// A var, not a const: the final-review test seam needs to shrink this (along
+// with castPollInterval and castStallTimeout) to keep watchCast's table tests
+// fast. Production code never assigns to it.
+var castStartupGrace = 30 * time.Second
+
+func init() {
+	// This package must not import internal, so package cast's stderr logger
+	// (M3: log ffmpeg's stderr on any exit, not only on failure) is wired to
+	// the real one here rather than at its own definition.
+	cast.Log = func(msg string) { Log(msg) }
+}
+
+// Narrow views of the cast session, server and remux, so watchCast -- which is
+// where this feature's failure handling lives -- can be tested without a
+// device or an ffmpeg. The concrete types (*cast.Session, *cast.Server,
+// *cast.Remux) satisfy these as they are; CastEpisode passes them unchanged.
+type castSession interface {
+	Progress() (cast.Progress, error)
+	SeekToTime(seconds float64) error
+}
+
+type castServer interface {
+	Err() error
+}
+
+type castRemux interface {
+	Err() error
+	Done() <-chan struct{}
+}
 
 // castSpansFor turns resolved skip times into spans to seek past, honouring
 // the settings that decide whether each is wanted at all.
@@ -219,7 +250,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 }
 
 // watchCast follows the episode while the device plays it.
-func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast.Server, remux *cast.Remux, device cast.Device) error {
+func watchCast(config *Config, anime *Anime, session castSession, server castServer, remux castRemux, device cast.Device) error {
 	spans := castSpansFor(anime.Ep.SkipTimes, config)
 	marked := false
 
@@ -250,6 +281,20 @@ func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast
 		default:
 			return false
 		}
+	}
+
+	// A remux that has finished *successfully*. remuxDone() alone is true when
+	// ffmpeg died too, and both call sites below would then be reasoning about
+	// a truncated episode: the duration would be the live edge where ffmpeg
+	// stopped, and the mark-complete threshold would be a fraction of it. A
+	// remux that dies two minutes into a 24-minute episode must not mark it
+	// watched at 8:30 and push episode-complete to a tracker.
+	//
+	// Checking both remuxErr and remux.Err() is deliberate: remuxErr is the
+	// remembered copy, and re-reading closes the window where ffmpeg fails
+	// between the top-of-loop check and these two call sites.
+	remuxSucceeded := func() bool {
+		return remuxDone() && remuxErr == nil && remux.Err() == nil
 	}
 
 	for {
@@ -321,8 +366,11 @@ func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast
 		// Until ffmpeg writes EXT-X-ENDLIST the playlist only advertises what
 		// has been remuxed so far, so this duration is a live edge, not an
 		// episode length. Marking against it completes the episode early on any
-		// source slower than playback.
-		if progress.Duration > 0 && remuxDone() {
+		// source slower than playback -- and remuxSucceeded(), not remuxDone(),
+		// is what makes this specifically the *finished* duration: remuxDone()
+		// alone is also true when ffmpeg died, which is a truncated edge, not
+		// a finished one.
+		if progress.Duration > 0 && remuxSucceeded() {
 			anime.Ep.Duration = int(progress.Duration)
 		}
 
@@ -333,7 +381,7 @@ func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast
 			continue
 		}
 
-		if !marked && remuxDone() && cast.ShouldMarkComplete(progress, config.PercentageToMarkComplete) {
+		if !marked && remuxSucceeded() && cast.ShouldMarkComplete(progress, config.PercentageToMarkComplete) {
 			marked = true
 			LocalUpdateAnime(
 				filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt"),
