@@ -1,0 +1,105 @@
+package cast
+
+import (
+	"fmt"
+
+	"github.com/vishen/go-chromecast/application"
+)
+
+// Span is a stretch of an episode worth skipping, in seconds.
+type Span struct {
+	Start float64
+	End   float64
+}
+
+// Progress is where the device is in the episode.
+type Progress struct {
+	Position float64
+	Duration float64
+	// Idle reports that the device has stopped playing -- the episode ended,
+	// or something else took the device over.
+	Idle bool
+}
+
+// ShouldMarkComplete reports whether enough of the episode has played to count
+// as watched, by the same threshold mpv playback uses.
+func ShouldMarkComplete(p Progress, thresholdPercent int) bool {
+	if thresholdPercent <= 0 || p.Duration <= 0 {
+		return false
+	}
+	return p.Position/p.Duration*100 >= float64(thresholdPercent)
+}
+
+// NextSkip reports where to seek to, if the position is inside a span.
+//
+// The end of a span is not inside it: seeking there when the player has just
+// arrived would seek to where it already is, on every poll, forever.
+func NextSkip(position float64, spans []Span) (float64, bool) {
+	for _, span := range spans {
+		if span.End <= span.Start {
+			continue
+		}
+		if position >= span.Start && position < span.End {
+			return span.End, true
+		}
+	}
+	return 0, false
+}
+
+// Session is a connected cast device.
+type Session struct {
+	app *application.Application
+}
+
+// Connect opens a connection to a device and takes over its media receiver.
+func Connect(d Device) (*Session, error) {
+	app := application.NewApplication()
+	if err := app.Start(d.Addr.String(), d.Port); err != nil {
+		return nil, fmt.Errorf("cast: could not connect to %s: %w", d.Name, err)
+	}
+	return &Session{app: app}, nil
+}
+
+// Play loads a URL on the device and starts it.
+//
+// The content type is stated rather than guessed: the stream is served from a
+// directory with no meaningful extension handling, and the Default Media
+// Receiver picks its player from this.
+func (s *Session) Play(url string) error {
+	if err := s.app.Load(url, 0, "application/x-mpegURL", false, false, false); err != nil {
+		return fmt.Errorf("cast: could not start playback: %w", err)
+	}
+	return nil
+}
+
+// Progress asks the device where it is.
+func (s *Session) Progress() (Progress, error) {
+	if err := s.app.Update(); err != nil {
+		return Progress{}, fmt.Errorf("cast: could not read the device status: %w", err)
+	}
+
+	_, media, _ := s.app.Status()
+	if media == nil {
+		return Progress{Idle: true}, nil
+	}
+	return Progress{
+		Position: float64(media.CurrentTime),
+		Duration: float64(media.Media.Duration),
+		Idle:     media.PlayerState == "IDLE",
+	}, nil
+}
+
+// SeekToTime jumps to a position, which is how a skip happens on a device with
+// no IPC socket to seek through.
+func (s *Session) SeekToTime(seconds float64) error {
+	if err := s.app.SeekToTime(float32(seconds)); err != nil {
+		return fmt.Errorf("cast: could not seek: %w", err)
+	}
+	return nil
+}
+
+// Stop ends playback and disconnects, leaving the device on its home screen
+// rather than holding a stream that is about to stop being served.
+func (s *Session) Stop() error {
+	return s.app.Close(true)
+}
