@@ -2,9 +2,11 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/thexykril/otakase/internal/cast"
@@ -18,6 +20,14 @@ const castPollInterval = time.Second
 // castStartTimeout is how long to wait for ffmpeg to write the first segment
 // before giving up on the stream.
 const castStartTimeout = 30 * time.Second
+
+// castStartupGrace is how long an idle status is tolerated before the device
+// has reported anything but idle. Load is fire-and-forget: a device that
+// cannot reach this machine (AP/client isolation, a guest VLAN) never starts,
+// and its status looks identical to an episode that just finished. Without a
+// grace period the first poll would report a full episode watched in a
+// second.
+const castStartupGrace = 30 * time.Second
 
 // castSpansFor turns resolved skip times into spans to seek past, honouring
 // the settings that decide whether each is wanted at all.
@@ -51,6 +61,9 @@ func CastEpisode(config *Config, anime *Anime) error {
 
 	ffmpeg, err := ffmpegPath()
 	if err != nil {
+		if errors.Is(err, ErrFFmpegMissing) {
+			return fmt.Errorf("cast: ffmpeg is required to cast episodes")
+		}
 		return err
 	}
 
@@ -60,12 +73,18 @@ func CastEpisode(config *Config, anime *Anime) error {
 	}
 
 	// The stream is remuxed into a directory per cast and thrown away after:
-	// it is a transcode buffer, not a download.
-	streamDir, err := os.MkdirTemp("", "otakase-cast-")
+	// it is a transcode buffer, not a download. It lives under the storage
+	// path rather than the system temp directory: $TMPDIR is tmpfs on this and
+	// most modern Linux systems, and an event playlist keeps every segment for
+	// the whole episode written so far -- a film would be several GB of RAM.
+	scratchRoot := filepath.Join(os.ExpandEnv(config.StoragePath), "cast-scratch")
+	if err := os.MkdirAll(scratchRoot, 0o755); err != nil {
+		return fmt.Errorf("cast: could not create the stream directory: %w", err)
+	}
+	streamDir, err := os.MkdirTemp(scratchRoot, "otakase-cast-")
 	if err != nil {
 		return fmt.Errorf("cast: could not create the stream directory: %w", err)
 	}
-	defer os.RemoveAll(streamDir)
 
 	streamURL := PrioritizeLink(anime.Ep.Links)
 	referrer := anime.Ep.StreamReferrer
@@ -73,12 +92,40 @@ func CastEpisode(config *Config, anime *Anime) error {
 		referrer = streamReferrer(CurrentAnimeProviderName(anime))
 	}
 
+	// Torn down through one once-guarded function, registered both as a normal
+	// defer and as an exit cleanup: the interrupt handler calls os.Exit, which
+	// skips every deferred cleanup in this call, so a Ctrl+C or SIGTERM mid-cast
+	// would otherwise leave the device holding a stream whose server just died,
+	// ffmpeg orphaned, and the scratch directory on disk.
+	var (
+		remux   *cast.Remux
+		server  *cast.Server
+		session *cast.Session
+	)
+	var teardownOnce sync.Once
+	teardown := func() {
+		teardownOnce.Do(func() {
+			if session != nil {
+				_ = session.Stop()
+			}
+			if server != nil {
+				_ = server.Close()
+			}
+			if remux != nil {
+				remux.Stop()
+			}
+			_ = os.RemoveAll(streamDir)
+		})
+	}
+	cancel := RegisterExitCleanup(teardown)
+	defer cancel()
+	defer teardown()
+
 	Out(fmt.Sprintf("Preparing the stream for %s...", device.Name))
-	remux, err := cast.StartRemux(ffmpeg, streamURL, referrer, streamDir)
+	remux, err = cast.StartRemux(ffmpeg, streamURL, referrer, streamDir)
 	if err != nil {
 		return err
 	}
-	defer remux.Stop()
 
 	playlistErr := make(chan error, 1)
 	go func() {
@@ -105,17 +152,15 @@ func CastEpisode(config *Config, anime *Anime) error {
 		}
 	}
 
-	server, err := cast.NewServer(streamDir)
+	server, err = cast.NewServer(streamDir)
 	if err != nil {
 		return err
 	}
-	defer server.Close()
 
-	session, err := cast.Connect(device)
+	session, err = cast.Connect(device)
 	if err != nil {
 		return err
 	}
-	defer session.Stop()
 
 	if anime.Ep.SubtitleURL != "" {
 		// The Default Media Receiver renders WebVTT only, and Load carries no
@@ -129,36 +174,72 @@ func CastEpisode(config *Config, anime *Anime) error {
 	}
 	Out(fmt.Sprintf("Playing on %s.", device.Name))
 
-	return watchCast(config, anime, session, server)
+	return watchCast(config, anime, session, server, remux, device)
 }
 
 // watchCast follows the episode while the device plays it.
-func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast.Server) error {
+func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast.Server, remux *cast.Remux, device cast.Device) error {
 	spans := castSpansFor(anime.Ep.SkipTimes, config)
 	marked := false
+
+	// started tracks whether the device has ever reported anything but idle.
+	// Session.Progress returns Progress{Idle: true} both for "no status
+	// received yet" and for "the device refused the load" -- the same value
+	// PlayerState == "IDLE" produces once an episode ends. Without this, a
+	// device that never started (AP/client isolation, a guest VLAN) reaches
+	// the viewer as "Playing on X." followed a second later by "Playback
+	// finished." on a black screen.
+	started := false
+	startupDeadline := time.Now().Add(castStartupGrace)
+
+	remuxDone := func() bool {
+		select {
+		case <-remux.Done():
+			return true
+		default:
+			return false
+		}
+	}
 
 	for {
 		time.Sleep(castPollInterval)
 
-		// Checked before the device is polled: a dead server is the cause and
-		// the device going idle is only the symptom, so reporting it first is
-		// what turns "Playback finished." into the truth.
+		// Checked before the device is polled, and before the server: ffmpeg
+		// dying leaves the server healthy and the device playing out what is
+		// already on disk, so this is the failure most likely to reach a
+		// viewer disguised as a finished episode.
+		if remuxErr := remux.Err(); remuxErr != nil {
+			return remuxErr
+		}
 		if serverErr := server.Err(); serverErr != nil {
 			return serverErr
 		}
 
 		progress, err := session.Progress()
 		if err != nil {
+			Out(fmt.Sprintf("Lost contact with %s.", device.Name))
 			Log(fmt.Sprintf("cast: lost contact with the device: %v", err))
 			return nil
 		}
+
 		if progress.Idle {
+			if !started {
+				if time.Now().Before(startupDeadline) {
+					continue
+				}
+				return fmt.Errorf("cast: %s never started playing -- it may not be able to reach this machine on the network", device.Name)
+			}
 			Out("Playback finished.")
 			return nil
 		}
+		started = true
 
 		anime.Ep.Player.PlaybackTime = int(progress.Position)
-		if progress.Duration > 0 {
+		// Until ffmpeg writes EXT-X-ENDLIST the playlist only advertises what
+		// has been remuxed so far, so this duration is a live edge, not an
+		// episode length. Marking against it completes the episode early on any
+		// source slower than playback.
+		if progress.Duration > 0 && remuxDone() {
 			anime.Ep.Duration = int(progress.Duration)
 		}
 
@@ -169,7 +250,7 @@ func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast
 			continue
 		}
 
-		if !marked && cast.ShouldMarkComplete(progress, config.PercentageToMarkComplete) {
+		if !marked && remuxDone() && cast.ShouldMarkComplete(progress, config.PercentageToMarkComplete) {
 			marked = true
 			LocalUpdateAnime(
 				filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt"),

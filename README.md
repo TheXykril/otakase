@@ -169,9 +169,9 @@ entries.
 | `-subs-lang` | Subtitle language | `english` |
 | `-storage-path` | Data directory | `$HOME/.local/share/otakase` |
 | `-download` | Save episodes instead of playing them (needs `ffmpeg`) | |
-| `-cast` | Play on a Chromecast on this network instead of locally | |
 | `-episodes` | Episodes to save, e.g. `5` or `1-12` | selected |
 | `-download-dir` | Where to save them | `$HOME/Downloads/otakase` |
+| `-cast` | Play on a Chromecast on this network instead of locally | |
 | `-current` | Jump straight to what you are currently watching | |
 | `-show-new-episodes` | Mark shows with an unwatched episode in the list | `true` |
 | `-vim-keys` | `j`/`k`/`h`/`l` to move and `/` to search in menus | |
