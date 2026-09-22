@@ -26,7 +26,10 @@
   mpv, and progress is tracked by the same threshold local playback uses.
   Soft subtitles are not carried: the receiver renders WebVTT only, and
   otakase carries ASS in places, so `SubStyle=hard` is the answer where a
-  provider offers a hardsubbed stream.
+  provider offers a hardsubbed stream. Two ways this is not yet parity with
+  local playback: a resume point is disclosed but not honoured -- a cast
+  always starts an episode from the beginning -- and `-cast` plays one
+  episode and stops rather than continuing to the next.
 
 ## 2.0.1 — 2026-09-19
 

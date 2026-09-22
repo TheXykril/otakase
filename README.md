@@ -218,7 +218,12 @@ required for the same reason `-download` needs it.
 
 Openings and endings are still skipped, and progress is still tracked. Soft
 subtitles are not carried: the Chromecast renders only WebVTT, so set
-`SubStyle=hard` for a hardsubbed stream where the provider offers one.
+`SubStyle=hard` for a hardsubbed stream where the provider offers one. A
+resume point from an earlier episode is not honoured yet — casting always
+starts from the beginning, and says so when one exists.
+
+`-cast` plays a single episode and does not continue to the next: otakase
+exits once it ends rather than advancing the way local playback does.
 
 Set `CastDevice` to a device's name to skip being asked which one each time.
 
