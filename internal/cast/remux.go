@@ -107,6 +107,13 @@ func (r *Remux) Err() error {
 	return r.err
 }
 
+// Done is closed when ffmpeg has exited, whatever the reason. A caller
+// waiting for the stream to start uses it to give up the moment there is
+// nothing left to wait for.
+func (r *Remux) Done() <-chan struct{} {
+	return r.done
+}
+
 // WaitForPlaylist blocks until ffmpeg has written the playlist.
 //
 // The device cannot be told to play a file that does not exist yet, and the

@@ -101,6 +101,7 @@ func main() {
 	rofiSelection := flag.Bool("rofi", false, "Open selection in rofi")
 	noRofi := flag.Bool("no-rofi", false, "No rofi")
 	imagePreview := flag.Bool("image-preview", false, "Show image preview")
+	castFlag := flag.Bool("cast", false, "Play on a Chromecast on this network instead of locally")
 	noImagePreview := flag.Bool("no-image-preview", false, "No image preview")
 	changeToken := flag.Bool("change-token", false, "Change token")
 	setupAnimeSkip := flag.Bool("setup-anime-skip", false, "Create a personal Anime-Skip client id and save it")
@@ -282,6 +283,10 @@ func main() {
 		userConfig.SubStyle = "soft"
 	} else if *hardSubFlag {
 		userConfig.SubStyle = "hard"
+	}
+
+	if *castFlag {
+		userConfig.CastToDevice = true
 	}
 
 	// Show update found by a previous idle check (no network on the hot path).

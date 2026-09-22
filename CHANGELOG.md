@@ -14,6 +14,20 @@
   personal id is rate-limited on its own, rather than sharing the playground
   id `auto` reads.
 
+- **`otakase -cast` plays an episode on a Chromecast.** A Chromecast cannot
+  send the `Referer` these hosts require, so it can never fetch a provider URL
+  itself. Otakase remuxes the stream locally with ffmpeg — a container change,
+  not a re-encode, so it costs bandwidth and almost no CPU — serves it from
+  this machine, and points the device at that. No Google developer
+  registration: it uses the Default Media Receiver, the same one every other
+  casting tool uses.
+
+  Openings and endings are still skipped, by seeking the device rather than
+  mpv, and progress is tracked by the same threshold local playback uses.
+  Soft subtitles are not carried: the receiver renders WebVTT only, and
+  otakase carries ASS in places, so `SubStyle=hard` is the answer where a
+  provider offers a hardsubbed stream.
+
 ## 2.0.1 — 2026-09-19
 
 ### Changed

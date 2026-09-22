@@ -89,6 +89,10 @@ type Config struct {
 	MyAnimeListImported        bool   `config:"MyAnimeListImported"`
 	MyAnimeListImportDismissed bool   `config:"MyAnimeListImportDismissed"`
 	ShowNewEpisodes            bool   `config:"ShowNewEpisodes"`
+	CastDevice                 string `config:"CastDevice"`
+	// CastToDevice records that -cast was given for this run. It is not a
+	// setting, so it carries no config tag.
+	CastToDevice bool `config:"-"`
 }
 
 const (
@@ -161,6 +165,7 @@ func defaultConfigMap() map[string]string {
 		"Theme":                      "auto",
 		"ThemeOverrides":             "",
 		"DownloadDir":                "$HOME/Downloads/" + AppName,
+		"CastDevice":                 "",
 	}
 }
 

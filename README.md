@@ -169,6 +169,7 @@ entries.
 | `-subs-lang` | Subtitle language | `english` |
 | `-storage-path` | Data directory | `$HOME/.local/share/otakase` |
 | `-download` | Save episodes instead of playing them (needs `ffmpeg`) | |
+| `-cast` | Play on a Chromecast on this network instead of locally | |
 | `-episodes` | Episodes to save, e.g. `5` or `1-12` | selected |
 | `-download-dir` | Where to save them | `$HOME/Downloads/otakase` |
 | `-current` | Jump straight to what you are currently watching | |
@@ -204,6 +205,22 @@ otakase -download -download-dir ~/Videos/anime
 ```
 
 Needs `ffmpeg`. Episodes are saved as `.mp4`.
+
+## Casting
+
+`otakase -cast` plays the episode on a Chromecast on the same network.
+
+A Chromecast cannot send the headers these streaming hosts require, so it
+cannot fetch a provider's URL directly. Otakase therefore remuxes the stream
+locally with `ffmpeg` — no re-encoding, so it costs bandwidth and almost no
+CPU — serves it from this machine, and points the device at that. `ffmpeg` is
+required for the same reason `-download` needs it.
+
+Openings and endings are still skipped, and progress is still tracked. Soft
+subtitles are not carried: the Chromecast renders only WebVTT, so set
+`SubStyle=hard` for a hardsubbed stream where the provider offers one.
+
+Set `CastDevice` to a device's name to skip being asked which one each time.
 
 ## Hyprland keybinding
 
@@ -381,6 +398,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `SaveMpvSpeed` | Boolean | `true`, `false` | Carry playback speed to the next episode. |
 | `StoragePath` | String | any path, `$VARS` expanded | Where Otakase keeps its data. |
 | `DownloadDir` | String | any path | Where `-download` saves episodes. |
+| `CastDevice` | String | a device name | Cast to this device without asking, when `-cast` is given and the device is found. Empty asks each time. |
 | `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. |
 | `SubStyle` | Enum | `ask`, `soft`, `hard` | External or burned-in subtitles, where both exist. `ask` prompts once and remembers. |
 | `SubsLanguage` | String | `english` | Preferred subtitle language. |

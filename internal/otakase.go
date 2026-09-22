@@ -1438,6 +1438,18 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 		Out(fmt.Sprintf("%s - Episode %d", GetAnimeName(*anime), anime.Ep.Number))
 	}
 	title := fmt.Sprintf("%s - Episode %d", GetAnimeName(*anime), anime.Ep.Number)
+
+	if userConfig.CastToDevice {
+		// Casting owns the episode until it ends, and there is no mpv socket to
+		// hand back: the caller's playback loop has nothing to poll.
+		if err := CastEpisode(userConfig, anime); err != nil {
+			Out("Casting failed: " + err.Error())
+			Log(fmt.Sprintf("cast: %v", err))
+		}
+		RestoreScreen()
+		return ""
+	}
+
 	return StartVideoWithProviderFallback(userConfig, anime, title)
 }
 

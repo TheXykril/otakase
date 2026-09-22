@@ -1,9 +1,11 @@
 package cast
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -17,6 +19,8 @@ type Server struct {
 	listener net.Listener
 	server   *http.Server
 	baseURL  string
+	mu       sync.Mutex
+	err      error
 }
 
 // NewServer starts serving dir on a free port and returns immediately.
@@ -46,7 +50,13 @@ func NewServer(dir string) (*Server, error) {
 	}
 
 	go func() {
-		_ = server.server.Serve(listener)
+		err := server.server.Serve(listener)
+		// Close is how this normally ends; only an unasked-for stop is a fault.
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			server.mu.Lock()
+			server.err = fmt.Errorf("cast: the stream server stopped: %w", err)
+			server.mu.Unlock()
+		}
 	}()
 
 	return server, nil
@@ -55,6 +65,16 @@ func NewServer(dir string) (*Server, error) {
 // URL is where the cast device should fetch name from.
 func (s *Server) URL(name string) string {
 	return s.baseURL + "/" + name
+}
+
+// Err reports why the server stopped serving, or nil while it is still up or
+// if it was closed deliberately. The device gives no sign that its source has
+// died -- it just stops playing -- so the caller polls this to tell a dead
+// server from a finished episode.
+func (s *Server) Err() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.err
 }
 
 // Close stops serving. A leaked server holds its port for the life of the

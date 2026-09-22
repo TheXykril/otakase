@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The Chromecast fetches over the network, so the server has to be reachable
@@ -88,5 +89,23 @@ func TestServerCloseStopsServing(t *testing.T) {
 	}
 	if _, err := http.Get(url); err == nil {
 		t.Error("the server answered after Close")
+	}
+}
+
+// A server that is closed deliberately has not failed, and Err must not
+// invent a fault the caller would report to the viewer as a broken stream.
+func TestServerErrIsNilAfterClose(t *testing.T) {
+	dir := t.TempDir()
+	server, err := NewServer(dir)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	if err := server.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	// Serve returns on its own goroutine; give it a moment to record anything.
+	time.Sleep(50 * time.Millisecond)
+	if err := server.Err(); err != nil {
+		t.Errorf("Err after a deliberate Close: %v", err)
 	}
 }
