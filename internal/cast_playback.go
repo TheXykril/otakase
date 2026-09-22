@@ -486,6 +486,7 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 		return cast.Device{}, fmt.Errorf("cast: no devices found on this network")
 	}
 
+	configuredMissing := false
 	if configured := config.CastDevice; configured != "" {
 		for _, device := range devices {
 			if device.Name == configured {
@@ -493,9 +494,13 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 			}
 		}
 		Out(fmt.Sprintf("%q was not found; pick another device.", configured))
+		configuredMissing = true
 	}
 
-	if len(devices) == 1 {
+	// The lone device is not "another device" when a configured name just
+	// failed to match it -- that is silently ignoring the mismatch and
+	// casting to it anyway, right after telling the user to pick.
+	if len(devices) == 1 && !configuredMissing {
 		return devices[0], nil
 	}
 
