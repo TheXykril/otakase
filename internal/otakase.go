@@ -1440,13 +1440,19 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 	title := fmt.Sprintf("%s - Episode %d", GetAnimeName(*anime), anime.Ep.Number)
 
 	if userConfig.CastToDevice {
+		// Restored before casting rather than after: casting is a long
+		// text-progress operation with no TUI to preserve, every line it prints
+		// over the next 20 minutes needs a real terminal to land in, and a
+		// failure message printed into the alternate buffer would be discarded
+		// by the restore a microsecond later -- the same reason the three
+		// earlier returns above call RestoreScreen() before giving up.
+		RestoreScreen()
 		// Casting owns the episode until it ends, and there is no mpv socket to
 		// hand back: the caller's playback loop has nothing to poll.
 		if err := CastEpisode(userConfig, anime); err != nil {
 			Out("Casting failed: " + err.Error())
 			Log(fmt.Sprintf("cast: %v", err))
 		}
-		RestoreScreen()
 		return ""
 	}
 
