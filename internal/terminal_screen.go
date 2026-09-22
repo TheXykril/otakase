@@ -33,6 +33,15 @@ func RegisterExitCleanup(fn func()) (cancel func()) {
 	}
 }
 
+// resetExitCleanupsForTest drops every registered cleanup. Tests share this
+// package-global registry, so a test that registers must not leak into the
+// next one.
+func resetExitCleanupsForTest() {
+	exitCleanupMu.Lock()
+	defer exitCleanupMu.Unlock()
+	exitCleanups = nil
+}
+
 func runExitCleanups() {
 	exitCleanupMu.Lock()
 	fns := append([]func(){}, exitCleanups...)
@@ -70,10 +79,14 @@ func InstallTerminalInterruptHandler() {
 
 func exitWithRestore(code int) {
 	interruptExitOnce.Do(func() {
-		runExitCleanups()
+		// The terminal comes back first: cleanups can take up to two seconds
+		// (runExitCleanups' budget), and leaving the alternate screen up for
+		// that whole window makes Ctrl+C look like it did nothing.
 		RestoreScreen()
+		runExitCleanups()
 		// The log handle is held open for the process lifetime; release it so the
-		// final lines are flushed to disk before the process goes away.
+		// final lines are flushed to disk before the process goes away. Closed
+		// last so anything a cleanup logs is still captured.
 		_ = CloseLogFile()
 		os.Exit(code)
 	})

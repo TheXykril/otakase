@@ -102,36 +102,49 @@ func CastEpisode(config *Config, anime *Anime) error {
 	// skips every deferred cleanup in this call, so a Ctrl+C or SIGTERM mid-cast
 	// would otherwise leave the device holding a stream whose server just died,
 	// ffmpeg orphaned, and the scratch directory on disk.
+	//
+	// resourceMu guards these three: the interrupt path runs teardown on the
+	// signal-handler goroutine, which has no happens-before edge to this
+	// goroutine's writes below. Without the lock a stale nil read on a weakly
+	// ordered target (this project cross-compiles to arm64) would silently
+	// skip a teardown step -- an orphaned ffmpeg is exactly what this exists
+	// to prevent. Once assigned, this goroutine keeps using its own local
+	// copy (rx, srv, s) rather than reading back through the lock.
 	var (
-		remux   *cast.Remux
-		server  *cast.Server
-		session *cast.Session
+		resourceMu sync.Mutex
+		remux      *cast.Remux
+		server     *cast.Server
+		session    *cast.Session
 	)
 	var teardownOnce sync.Once
 	teardown := func() {
 		teardownOnce.Do(func() {
+			resourceMu.Lock()
+			s, srv, rx := session, server, remux
+			resourceMu.Unlock()
+
 			// Telling the device to stop is a network round trip, and the only
 			// step here that can hang. It gets its own bound so a device that
 			// has stopped answering cannot starve the steps below it: an
 			// orphaned ffmpeg and a leaked scratch directory are exactly what
 			// this teardown exists to prevent, and on the interrupt path every
 			// cleanup shares one budget.
-			if session != nil {
+			if s != nil {
 				stopped := make(chan struct{})
 				go func() {
 					defer close(stopped)
-					_ = session.Stop()
+					_ = s.Stop()
 				}()
 				select {
 				case <-stopped:
 				case <-time.After(castStopTimeout):
 				}
 			}
-			if server != nil {
-				_ = server.Close()
+			if srv != nil {
+				_ = srv.Close()
 			}
-			if remux != nil {
-				remux.Stop()
+			if rx != nil {
+				rx.Stop()
 			}
 			_ = os.RemoveAll(streamDir)
 		})
@@ -141,10 +154,13 @@ func CastEpisode(config *Config, anime *Anime) error {
 	defer teardown()
 
 	Out(fmt.Sprintf("Preparing the stream for %s...", device.Name))
-	remux, err = cast.StartRemux(ffmpeg, streamURL, referrer, streamDir)
+	rx, err := cast.StartRemux(ffmpeg, streamURL, referrer, streamDir)
 	if err != nil {
 		return err
 	}
+	resourceMu.Lock()
+	remux = rx
+	resourceMu.Unlock()
 
 	playlistErr := make(chan error, 1)
 	go func() {
@@ -154,13 +170,13 @@ func CastEpisode(config *Config, anime *Anime) error {
 	select {
 	case err := <-playlistErr:
 		if err != nil {
-			if remuxErr := remux.Err(); remuxErr != nil {
+			if remuxErr := rx.Err(); remuxErr != nil {
 				return remuxErr
 			}
 			return err
 		}
-	case <-remux.Done():
-		if remuxErr := remux.Err(); remuxErr != nil {
+	case <-rx.Done():
+		if remuxErr := rx.Err(); remuxErr != nil {
 			return remuxErr
 		}
 		// ffmpeg exited without complaint, which a stream short enough to
@@ -171,15 +187,21 @@ func CastEpisode(config *Config, anime *Anime) error {
 		}
 	}
 
-	server, err = cast.NewServer(streamDir)
+	srv, err := cast.NewServer(streamDir)
 	if err != nil {
 		return err
 	}
+	resourceMu.Lock()
+	server = srv
+	resourceMu.Unlock()
 
-	session, err = cast.Connect(device)
+	s, err := cast.Connect(device)
 	if err != nil {
 		return err
 	}
+	resourceMu.Lock()
+	session = s
+	resourceMu.Unlock()
 
 	if anime.Ep.SubtitleURL != "" {
 		// The Default Media Receiver renders WebVTT only, and Load carries no
@@ -188,12 +210,12 @@ func CastEpisode(config *Config, anime *Anime) error {
 		Out("Note: this stream's subtitles cannot be cast. Try SubStyle=hard for a hardsubbed stream.")
 	}
 
-	if err := session.Play(server.URL(cast.PlaylistName)); err != nil {
+	if err := s.Play(srv.URL(cast.PlaylistName)); err != nil {
 		return err
 	}
 	Out(fmt.Sprintf("Playing on %s.", device.Name))
 
-	return watchCast(config, anime, session, server, remux, device)
+	return watchCast(config, anime, s, srv, rx, device)
 }
 
 // watchCast follows the episode while the device plays it.
@@ -201,15 +223,25 @@ func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast
 	spans := castSpansFor(anime.Ep.SkipTimes, config)
 	marked := false
 
-	// started tracks whether the device has ever reported anything but idle.
-	// Session.Progress returns Progress{Idle: true} both for "no status
-	// received yet" and for "the device refused the load" -- the same value
-	// PlayerState == "IDLE" produces once an episode ends. Without this, a
-	// device that never started (AP/client isolation, a guest VLAN) reaches
-	// the viewer as "Playing on X." followed a second later by "Playback
-	// finished." on a black screen.
+	// started tracks whether the device has given evidence it is actually
+	// playing -- a position that has moved, not merely a non-idle state. A
+	// Default Media Receiver that accepts the load and then cannot fetch the
+	// stream (AP/client isolation, a guest VLAN) sits in BUFFERING, which is
+	// not idle, for as long as the connection takes to fail; if "non-idle"
+	// were enough, that window would latch started and the IDLE that follows
+	// would read as a finished episode instead of a device that never played
+	// anything. Without this, the viewer sees "Playing on X." followed a
+	// second later by "Playback finished." on a black screen.
 	started := false
 	startupDeadline := time.Now().Add(castStartupGrace)
+
+	// remuxErr is remembered rather than acted on the moment it appears: once
+	// the episode is on disk the device can still play it out, and tearing
+	// down here over a failure in ffmpeg's tail (a truncated end, a 403 on
+	// the last segment) would take away an episode the viewer could have
+	// finished watching. It is reported once playback actually ends, so an
+	// ending is never described as clean when it wasn't.
+	var remuxErr error
 
 	remuxDone := func() bool {
 		select {
@@ -223,13 +255,17 @@ func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast
 	for {
 		time.Sleep(castPollInterval)
 
-		// Checked before the device is polled, and before the server: ffmpeg
-		// dying leaves the server healthy and the device playing out what is
-		// already on disk, so this is the failure most likely to reach a
-		// viewer disguised as a finished episode.
-		if remuxErr := remux.Err(); remuxErr != nil {
-			return remuxErr
+		// Checked before the device is polled: ffmpeg dying leaves the server
+		// healthy and the device playing out what is already on disk, so this
+		// is the failure most likely to reach a viewer disguised as a
+		// finished episode. It is only remembered here, not returned -- see
+		// remuxErr above -- and reported below once playback actually ends.
+		if remuxErr == nil {
+			remuxErr = remux.Err()
 		}
+		// A dead server means nothing further can be fetched, so unlike a
+		// dead remux there is no watchable episode left to protect: return
+		// immediately.
 		if serverErr := server.Err(); serverErr != nil {
 			return serverErr
 		}
@@ -243,15 +279,28 @@ func watchCast(config *Config, anime *Anime, session *cast.Session, server *cast
 
 		if progress.Idle {
 			if !started {
+				if remuxErr != nil {
+					return remuxErr
+				}
 				if time.Now().Before(startupDeadline) {
 					continue
 				}
 				return fmt.Errorf("cast: %s never started playing -- it may not be able to reach this machine on the network", device.Name)
 			}
+			if remuxErr != nil {
+				return remuxErr
+			}
 			Out("Playback finished.")
 			return nil
 		}
-		started = true
+		// Evidence of playback, not merely of a non-idle state: a device that
+		// accepted the load and then could not fetch the stream sits in
+		// BUFFERING -- which is not idle -- for as long as the connection
+		// takes to fail. Only a position that has moved distinguishes a device
+		// that is playing from one that is still trying to.
+		if progress.Position > 0 {
+			started = true
+		}
 
 		anime.Ep.Player.PlaybackTime = int(progress.Position)
 		// Until ffmpeg writes EXT-X-ENDLIST the playlist only advertises what
