@@ -134,10 +134,19 @@ jobs:
       (contains(github.event.head_commit.message, 'release:'))
 
     steps:
+      # No ref: here defaults to checking out the branch tip (github.ref) at
+      # whatever commit main happens to be on when this step runs -- not the
+      # commit that triggered the workflow. This job waits on `build`, which
+      # can run long (the Linux binaries are UPX --ultra-brute compressed on a
+      # release build, which alone can take the better part of an hour), so a
+      # second push landing on main during that wait moved the tag: v2.0.1 was
+      # cut from the commit main had reached by the time this ran, not the one
+      # whose message said "release:". Pin it to that commit explicitly.
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
 
       - name: Checkout MPV binaries
         uses: actions/checkout@v4
