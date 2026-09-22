@@ -2,6 +2,7 @@ package cast
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,6 +19,20 @@ func TestBuildRemuxArgsCopiesStreams(t *testing.T) {
 	}
 	if !strings.Contains(joined, "-nostdin") {
 		t.Fatalf("ffmpeg must not consume otakase's stdin, got: %s", joined)
+	}
+}
+
+// Critical 1: aac_adtstoasc strips ADTS headers for an MP4 container. This
+// output is MPEG-TS, which needs AAC *in* ADTS -- with the filter, ffmpeg
+// exits 0 and every device plays undecodable audio. download.go carries this
+// filter for its own (different) container, which is exactly how it arrived
+// here; this assertion is the one that would have caught it.
+func TestBuildRemuxArgsDoesNotStripADTSHeaders(t *testing.T) {
+	args := BuildRemuxArgs("https://cdn.test/master.m3u8", "", "/tmp/cast")
+	joined := strings.Join(args, " ")
+
+	if strings.Contains(joined, "aac_adtstoasc") {
+		t.Fatalf("aac_adtstoasc strips the ADTS headers this MPEG-TS output needs, got: %s", joined)
 	}
 }
 
@@ -70,6 +85,61 @@ func TestBuildRemuxArgsWritesASeekableEventPlaylist(t *testing.T) {
 	}
 	if args[len(args)-1] != filepath.Join("/tmp/cast", PlaylistName) {
 		t.Errorf("playlist must be the final argument, got: %s", joined)
+	}
+}
+
+// Critical 1's bug exited 0 from both the remux and a decode of its output,
+// and was loud only on stderr -- every prior test in this file asserts
+// argument strings, which is exactly why a broken argument vector shipped.
+// This builds a real TS-HLS source with ffmpeg, remuxes it with the actual
+// BuildRemuxArgs vector, decodes the result, and fails on any decoder
+// complaint.
+func TestRemuxedStreamDecodesCleanly(t *testing.T) {
+	ffmpegBin, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg is not installed")
+	}
+
+	// A ~6 second H.264/AAC source, muxed as HLS so BuildRemuxArgs' own
+	// -allowed_extensions/-extension_picky handling applies to it the same way
+	// it would to a real provider's stream.
+	sourceDir := t.TempDir()
+	sourcePlaylist := filepath.Join(sourceDir, "source.m3u8")
+	build := exec.Command(ffmpegBin,
+		"-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc=size=320x240:rate=15:duration=6",
+		"-f", "lavfi", "-i", "sine=frequency=440:duration=6",
+		"-c:v", "libx264", "-preset", "ultrafast",
+		"-c:a", "aac",
+		"-f", "hls", "-hls_time", "2", "-hls_playlist_type", "event",
+		sourcePlaylist,
+	)
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("could not build the test fixture: %v\n%s", err, out)
+	}
+
+	// The real argument vector, run exactly as StartRemux would run it.
+	outDir := t.TempDir()
+	remux := exec.Command(ffmpegBin, BuildRemuxArgs(sourcePlaylist, "", outDir)...)
+	if out, err := remux.CombinedOutput(); err != nil {
+		t.Fatalf("remux failed: %v\n%s", err, out)
+	}
+
+	// The assertion that catches Critical 1: the bug produced a zero exit
+	// status here too, and was loud only on stderr.
+	decode := exec.Command(ffmpegBin,
+		"-v", "error",
+		"-allowed_extensions", "ALL",
+		"-i", filepath.Join(outDir, PlaylistName),
+		"-f", "null", "-",
+	)
+	var decodeStderr strings.Builder
+	decode.Stderr = &decodeStderr
+	if err := decode.Run(); err != nil {
+		t.Fatalf("decoding the remuxed stream failed: %v\n%s", err, decodeStderr.String())
+	}
+	if stderr := decodeStderr.String(); stderr != "" {
+		t.Fatalf("remuxed stream did not decode cleanly, e.g. Critical 1 (aac_adtstoasc on a TS output):\n%s", stderr)
 	}
 }
 

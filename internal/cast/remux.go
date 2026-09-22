@@ -34,7 +34,12 @@ func BuildRemuxArgs(streamURL, referrer, outDir string) []string {
 	}
 	args = append(args, "-i", streamURL)
 
-	args = append(args, "-c", "copy", "-bsf:a", "aac_adtstoasc")
+	// No -bsf:a aac_adtstoasc here, unlike download.go: that filter strips ADTS
+	// headers for an MP4 container, and these segments are MPEG-TS, which needs
+	// AAC *in* ADTS. With it, ffmpeg logs "AAC bitstream not in ADTS format and
+	// extradata missing" for every frame, still exits 0, and the device plays
+	// undecodable audio while otakase reports a healthy cast.
+	args = append(args, "-c", "copy")
 
 	// An event playlist appends and never drops a segment, so the device can
 	// seek back through everything written so far. VOD would need the whole
