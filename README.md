@@ -227,6 +227,12 @@ exits once it ends rather than advancing the way local playback does.
 
 Set `CastDevice` to a device's name to skip being asked which one each time.
 
+Casting is the one feature no automated test can fully verify — whether the
+device accepts what ffmpeg produced, and whether it can reach this machine,
+are answers only real hardware gives. `docs/casting-verification.md` is the
+checklist to run against a device after changing anything under
+`internal/cast/`.
+
 ## Hyprland keybinding
 
 One command binds **Super+Shift+A** to open the rofi menu with poster previews —
