@@ -148,11 +148,12 @@ func (s *fakeServer) Err() error {
 // observes the change.
 func withFastCastTimings(t *testing.T) {
 	t.Helper()
-	prevPoll, prevGrace := castPollInterval, castStartupGrace
+	prevPoll, prevGrace, prevStall := castPollInterval, castStartupGrace, castStallTimeout
 	castPollInterval = 2 * time.Millisecond
 	castStartupGrace = time.Millisecond
+	castStallTimeout = 10 * time.Millisecond
 	t.Cleanup(func() {
-		castPollInterval, castStartupGrace = prevPoll, prevGrace
+		castPollInterval, castStartupGrace, castStallTimeout = prevPoll, prevGrace, prevStall
 	})
 }
 
@@ -327,5 +328,44 @@ func TestWatchCastMarkedSuppressesALaterRemuxFailure(t *testing.T) {
 	entries := LocalGetAllAnime(filepath.Join(config.StoragePath, "curd_history.txt"))
 	if !animeMarked(entries, anime.AnilistId) {
 		t.Error("expected the episode to have been marked watched before the remux failed")
+	}
+}
+
+// Important 3 (part 2): a frozen position, with the device never reporting
+// idle, must not be polled forever holding ffmpeg, the scratch directory and
+// the HTTP server open. The vendored library never clears a.application when
+// the receiver reports no applications at all, so idle alone cannot be
+// relied on to end this -- run in a goroutine with its own timeout so a
+// regression here fails this test in two seconds instead of hanging it.
+func TestWatchCastStallBoundFiresWhenPositionStopsAdvancing(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	server := &fakeServer{}
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 30, Duration: 600}}, // starts
+			{progress: cast.Progress{Position: 30, Duration: 600}}, // frozen from here on
+		},
+	}
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"})
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected a stall error, got nil")
+		}
+		if !strings.Contains(err.Error(), "stopped reporting progress") {
+			t.Errorf("expected a stall message, got: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("watchCast did not return: the stall bound did not fire")
 	}
 }

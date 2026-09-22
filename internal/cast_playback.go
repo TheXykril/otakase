@@ -40,6 +40,15 @@ const castStartTimeout = 30 * time.Second
 // fast. Production code never assigns to it.
 var castStartupGrace = 30 * time.Second
 
+// castStallTimeout is how long a position may sit unchanged, once the device
+// has started, before watchCast gives up on it. The vendored library never
+// clears a.application when the receiver reports no applications at all, so
+// a session left with nothing playing (the viewer stopped the cast, or cast
+// something else to the same device) can otherwise be polled forever holding
+// ffmpeg, the scratch directory and the HTTP server open. A var for the same
+// reason as castPollInterval and castStartupGrace.
+var castStallTimeout = 2 * time.Minute
+
 func init() {
 	// This package must not import internal, so package cast's stderr logger
 	// (M3: log ffmpeg's stderr on any exit, not only on failure) is wired to
@@ -266,6 +275,17 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 	started := false
 	startupDeadline := time.Now().Add(castStartupGrace)
 
+	// lastPosition/lastPositionChange back Important 3's stall bound: a
+	// stale application status can leave the device reporting a frozen
+	// position forever once the session goes away (Session.Progress's
+	// IsIdleScreen check closes the "receiver went back to idle" case; this
+	// closes "the receiver reports no applications at all", which the
+	// library also never clears). Gated on started, not checked before it:
+	// the BUFFERING-forever case above is an accepted, separate risk this
+	// bound is not meant to police.
+	lastPosition := 0.0
+	lastPositionChange := time.Now()
+
 	// remuxErr is remembered rather than acted on the moment it appears: once
 	// the episode is on disk the device can still play it out, and tearing
 	// down here over a failure in ffmpeg's tail (a truncated end, a 403 on
@@ -362,6 +382,18 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 			started = true
 		}
 
+		// The stall bound: gated on started, since a stuck-before-it-began
+		// device is castStartupGrace's problem, not this one. Compared as a
+		// float64, not the int PlaybackTime below: truncating to int would
+		// round away the sub-second progress a slow poll interval can still
+		// see between ticks, and read as a stall that was not one.
+		if progress.Position != lastPosition {
+			lastPosition = progress.Position
+			lastPositionChange = time.Now()
+		} else if started && time.Since(lastPositionChange) >= castStallTimeout {
+			return fmt.Errorf("cast: %s stopped reporting progress -- playback may have been stopped on the device", device.Name)
+		}
+
 		anime.Ep.Player.PlaybackTime = int(progress.Position)
 		// Until ffmpeg writes EXT-X-ENDLIST the playlist only advertises what
 		// has been remuxed so far, so this duration is a live edge, not an
@@ -378,6 +410,11 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 			if err := session.SeekToTime(target); err != nil {
 				Log(fmt.Sprintf("cast: skip failed: %v", err))
 			}
+			// A skip's target is not yet reflected in progress.Position -- the
+			// device only reports it from the next poll on -- so without this
+			// the stall clock would read the gap between "asked to seek" and
+			// "device confirms it" as no progress at all.
+			lastPositionChange = time.Now()
 			continue
 		}
 
