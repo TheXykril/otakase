@@ -249,7 +249,7 @@ func TestWatchCastBufferingDoesNotLatchStarted(t *testing.T) {
 		steps: []fakeStep{
 			{progress: cast.Progress{Position: 0, Idle: false}}, // BUFFERING
 			{progress: cast.Progress{Position: 0, Idle: false}}, // still BUFFERING
-			{progress: cast.Progress{Idle: true}},                // gives up
+			{progress: cast.Progress{Idle: true}},               // gives up
 		},
 	}
 
@@ -280,7 +280,7 @@ func TestWatchCastRemuxFailureOutranksLostDevice(t *testing.T) {
 	session := &fakeSession{
 		steps: []fakeStep{
 			{progress: cast.Progress{Position: 50, Duration: 600}}, // started latches
-			{err: lostContact},                                     // device stops answering
+			{err: lostContact}, // device stops answering
 		},
 	}
 	session.onCall = func(call int) {
