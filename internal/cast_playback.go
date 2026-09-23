@@ -277,7 +277,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 	// vendored library cannot reach. Burning costs a re-encode, so it happens
 	// only when there is something to burn.
 	remuxArgs := cast.BuildRemuxArgs(streamURL, referrer, streamDir)
-	if anime.Ep.SubtitleURL != "" && config.CastBurnSubtitles {
+	if castShouldBurnSubtitles(config, anime) {
 		castStatus("Fetching subtitles…")
 		subtitlePath, subErr := fetchCastSubtitle(anime.Ep.SubtitleURL, referrer, streamDir)
 		if subErr != nil {
@@ -345,7 +345,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 		// The Default Media Receiver renders WebVTT only, and Load carries no
 		// subtitle track. Say so rather than letting the episode arrive silently
 		// without the subtitles the viewer was expecting.
-		if !config.CastBurnSubtitles {
+		if !config.CastBurnSubtitles && playlistAudioMode(anime, config) != "dub" {
 			Out("Note: this stream has subtitles, and CastBurnSubtitles is off, so they will not appear.")
 		}
 	}

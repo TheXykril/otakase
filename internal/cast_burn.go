@@ -87,3 +87,21 @@ func castBurnEncoder(config *Config, ffmpeg string) cast.Encoder {
 		func(enc cast.Encoder) error { return cast.ProbeEncoder(ffmpeg, enc) },
 		func(path string) bool { _, err := os.Stat(path); return err == nil })
 }
+
+// castShouldBurnSubtitles reports whether this cast has subtitles worth
+// drawing into the picture.
+//
+// A stream carries a subtitle URL whichever audio is playing, so the URL alone
+// is not the question: burning them onto a dub would re-encode the whole
+// episode to draw text the viewer is not reading. playlistAudioMode is what
+// decides, because it already knows that an unset episode mode means the
+// configured preference.
+func castShouldBurnSubtitles(config *Config, anime *Anime) bool {
+	if config == nil || anime == nil || !config.CastBurnSubtitles {
+		return false
+	}
+	if strings.TrimSpace(anime.Ep.SubtitleURL) == "" {
+		return false
+	}
+	return playlistAudioMode(anime, config) != "dub"
+}
