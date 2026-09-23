@@ -145,3 +145,68 @@ func TestCastPanelDrawsFromHomeWhenItOwnsTheScreen(t *testing.T) {
 		t.Error("a panel that owns the screen is still counting lines back")
 	}
 }
+
+// The terminal can be resized mid-episode. A panel that measured once at
+// startup keeps drawing at the old width, which either wraps or leaves a gap.
+func TestCastPanelFollowsAResize(t *testing.T) {
+	width, height := 100, 30
+	panel := &castPanelWriter{home: true, size: func() (int, int) { return width, height }}
+
+	wide := panel.frame(testPanelState())
+	width = 50
+	narrow := panel.frame(testPanelState())
+
+	widest := func(frame string) int {
+		longest := 0
+		for _, line := range strings.Split(frame, "\r\n") {
+			if w := lipglossWidth(line); w > longest {
+				longest = w
+			}
+		}
+		return longest
+	}
+
+	if widest(narrow) >= widest(wide) {
+		t.Errorf("the panel did not narrow with the terminal: %d then %d", widest(wide), widest(narrow))
+	}
+	if widest(narrow) > 50 {
+		t.Errorf("the panel is %d cells wide in a 50-cell terminal", widest(narrow))
+	}
+}
+
+// Centred, so it looks deliberate at any size rather than pinned to a corner.
+func TestCastPanelCentresItselfWhenItOwnsTheScreen(t *testing.T) {
+	panel := &castPanelWriter{home: true, size: func() (int, int) { return 100, 24 }}
+
+	// The frame opens with a cursor escape, which is not whitespace -- so the
+	// blank lines above the panel are counted by finding the framed line
+	// rather than by scanning for the first non-blank one.
+	lines := strings.Split(strings.TrimSuffix(panel.frame(testPanelState()), "\r\n"), "\r\n")
+
+	framedAt := -1
+	for i, line := range lines {
+		if strings.Contains(line, "╭") {
+			framedAt = i
+			break
+		}
+	}
+	if framedAt < 0 {
+		t.Fatal("no framed line was drawn")
+	}
+	if framedAt == 0 {
+		t.Error("the panel is pinned to the top of the screen rather than centred")
+	}
+	if !strings.HasPrefix(lines[framedAt], " ") {
+		t.Error("the panel is flush to the left edge rather than centred")
+	}
+}
+
+// A terminal too short to centre in must still show the panel.
+func TestCastPanelSurvivesAShortTerminal(t *testing.T) {
+	panel := &castPanelWriter{home: true, size: func() (int, int) { return 80, 3 }}
+
+	frame := panel.frame(testPanelState())
+	if !strings.Contains(frame, "PLAYING") {
+		t.Errorf("the panel vanished in a 3-line terminal:\n%q", frame)
+	}
+}

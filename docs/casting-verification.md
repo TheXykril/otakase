@@ -38,6 +38,8 @@ stream for <device>...` → the episode starts within ~30s → `Playing on
       desktop notification instead.
 - [ ] **Your scrollback survives.** After `q`, the terminal is as it was before
       the cast, with the panel gone rather than left behind.
+- [ ] **Resize the window mid-episode.** The panel follows within a second,
+      stays centred, and leaves no trail of the old frame.
 - [ ] **Every control key works**: space pauses and resumes, left/right seek,
       up/down change the TV's volume, `s` jumps the opening, `q` stops and
       saves the position.

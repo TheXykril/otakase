@@ -24,8 +24,9 @@ type castPanelState struct {
 const castPanelMinWidth = 34
 
 // castPanelMaxWidth stops the panel stretching across an ultrawide terminal,
-// where a frame the full width of the screen is harder to read, not easier.
-const castPanelMaxWidth = 72
+// where a frame the full width of the screen is harder to read, not easier --
+// a long line of progress bar tells a viewer nothing the short one did not.
+const castPanelMaxWidth = 84
 
 // castPanelSegment is a run of text with one style. Width is measured on the
 // text, so colour never changes the geometry.
@@ -236,9 +237,15 @@ func castPanelStateStyle(state string) lipgloss.Style {
 // translation that would otherwise return the cursor to the left margin and a
 // bare \n would staircase the frame across the screen.
 type castPanelWriter struct {
-	width int
+	width int  // fixed width, used when size is nil
 	drawn int  // lines currently on screen, 0 when nothing is
 	home  bool // the panel owns the screen and draws from the top left
+
+	// size reports the terminal's width and height. It is read on every frame
+	// rather than once at startup, so a terminal resized mid-episode is
+	// followed rather than ignored. nil means use width and do not centre,
+	// which is the case where the panel shares the terminal with other output.
+	size func() (int, int)
 }
 
 // frame is the escape sequence and text that replaces the panel on screen.
@@ -246,13 +253,56 @@ func (c *castPanelWriter) frame(state castPanelState) string {
 	var out strings.Builder
 	out.WriteString(c.erase())
 
-	lines := castPanelLines(state, c.width)
+	width, height := c.width, 0
+	if c.size != nil {
+		width, height = c.size()
+		// A margin either side, so the frame is not welded to the edges of the
+		// terminal.
+		width -= 4
+	}
+
+	lines := castPanelLines(state, width)
+
+	// Centred, both ways, so the panel looks placed rather than parked in a
+	// corner -- and so it stays put as the terminal changes size.
+	if c.size != nil {
+		termWidth, _ := c.size()
+		lines = castPanelCentre(lines, termWidth, height)
+	}
+
 	for _, line := range lines {
 		out.WriteString(line)
 		out.WriteString("\r\n")
 	}
 	c.drawn = len(lines)
 	return out.String()
+}
+
+// castPanelCentre pads the panel into the middle of a terminal of this size.
+//
+// Vertical centring is dropped when the terminal is too short to hold the
+// panel and any blank lines: showing the panel matters more than placing it.
+func castPanelCentre(lines []string, width, height int) []string {
+	panelWidth := 0
+	for _, line := range lines {
+		if w := lipgloss.Width(line); w > panelWidth {
+			panelWidth = w
+		}
+	}
+
+	if left := (width - panelWidth) / 2; left > 0 {
+		pad := strings.Repeat(" ", left)
+		padded := make([]string, len(lines))
+		for i, line := range lines {
+			padded[i] = pad + line
+		}
+		lines = padded
+	}
+
+	if above := (height - len(lines)) / 2; above > 0 {
+		lines = append(make([]string, above), lines...)
+	}
+	return lines
 }
 
 // clear removes the panel and forgets it, for a message that needs the screen.

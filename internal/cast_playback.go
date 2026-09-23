@@ -477,7 +477,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 		// and wipes, rather than counting back over the last one.
 		release := castTakeScreen()
 		cancelRelease := RegisterExitCleanup(release)
-		panel = &castPanelWriter{width: castTerminalWidth(), home: true}
+		panel = &castPanelWriter{home: true, size: castTerminalSize}
 		castPanelForControls = panel
 		defer func() {
 			castPanelForControls = nil

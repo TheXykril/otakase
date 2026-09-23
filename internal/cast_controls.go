@@ -287,14 +287,16 @@ func startCastControls(config *Config) (<-chan castCommand, bool) {
 	return commands, true
 }
 
-// castTerminalWidth is how wide the panel may be drawn, falling back to a
-// conservative 80 when the terminal will not say.
-func castTerminalWidth() int {
-	width, _, err := term.GetSize(int(os.Stdout.Fd()))
-	if err != nil || width < 1 {
-		return 80
+// castTerminalSize is the terminal's width and height, falling back to a
+// conservative 80x24 when it will not say.
+//
+// Read on every frame rather than once, so the panel follows a resize.
+func castTerminalSize() (int, int) {
+	width, height, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || width < 1 || height < 1 {
+		return 80, 24
 	}
-	return width
+	return width, height
 }
 
 // castStdoutIsTerminal reports whether the panel has somewhere to draw.
