@@ -144,7 +144,7 @@ func defaultConfigMap() map[string]string {
 		"AnimeNameLanguage":        "english",
 		"SubsLanguage":             "english",
 		"CurrentCategory":          "false",
-		"MenuOrder":                "CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER",
+		"MenuOrder":                "CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER,CAST",
 		"SubOrDub":                 "sub",
 		"SubStyle":                 "ask",
 		"PercentageToMarkComplete": "85",
@@ -868,7 +868,13 @@ func getOrderedCategories(userConfig *Config) []SelectionOption {
 		"REWATCHING":     "Rewatching",
 		"TRACKER":        "Change Tracker",
 		"PROVIDER":       "Change Provider",
+		// CAST's label is replaced below with its live state: it is a toggle,
+		// and one whose entry does not say which way it is set is a toggle the
+		// viewer has to guess at. This is the one menu both UIs build from, so
+		// doing it here covers rofi and the terminal alike.
+		"CAST": "Cast",
 	}
+	availableLabels["CAST"] = castMenuLabel(userConfig)
 
 	// Create ordered list to store final result
 	finalOrder := make([]string, 0)

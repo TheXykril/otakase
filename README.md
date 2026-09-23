@@ -260,6 +260,12 @@ port from your LAN, rather than opening the whole ephemeral range:
 sudo ufw allow from 192.168.0.0/24 to any port 8010 proto tcp comment 'otakase cast'
 ```
 
+The menu carries a **Cast** toggle — `[ ] Cast: Off` / `[x] Cast: Office TV` —
+in both the terminal list and rofi, since they share one menu. Select it to turn
+casting on or off for this run; the next show you pick goes wherever the entry
+says. It resets each launch, so casting is never on without you having said so
+this time.
+
 Set `CastDevice` to a device's name to skip being asked which one each time.
 
 Casting is the one feature no automated test can fully verify — whether the

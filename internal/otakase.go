@@ -739,6 +739,13 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					RemapProviderAnime(userConfig, user, databaseAnimes)
 					ClearScreen()
 					continue categorySelectionLoop
+				} else if categorySelection.Key == "CAST" {
+					// A toggle, so it returns to the menu rather than going on
+					// to a show: the entry it just changed is the thing the
+					// viewer wants to see the new state of.
+					toggleCastToDevice(userConfig)
+					ClearScreen()
+					continue categorySelectionLoop
 				} else if categorySelection.Key == "CONTINUE_LAST" {
 					anime.Ep.ContinueLast = true
 				}
