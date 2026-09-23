@@ -186,7 +186,15 @@ func CastEpisode(config *Config, anime *Anime) error {
 			if rx != nil {
 				rx.Stop()
 			}
-			_ = os.RemoveAll(streamDir)
+			// OTAKASE_CAST_KEEP leaves the stream directory behind, so a cast
+			// that failed can be inspected afterwards: what the device was
+			// actually served is otherwise deleted the moment it gives up.
+			if os.Getenv("OTAKASE_CAST_KEEP") != "" {
+				Log("cast: keeping the stream directory: " + streamDir)
+				Out("Kept the stream directory for inspection: " + streamDir)
+			} else {
+				_ = os.RemoveAll(streamDir)
+			}
 		})
 	}
 	cancel := RegisterExitCleanup(teardown)
@@ -194,6 +202,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 	defer teardown()
 
 	Out(fmt.Sprintf("Preparing the stream for %s...", device.Name))
+	Log(fmt.Sprintf("cast: remuxing %s (referrer %q) into %s", streamURL, referrer, streamDir))
 	rx, err := cast.StartRemux(ffmpeg, streamURL, referrer, streamDir)
 	if err != nil {
 		return err

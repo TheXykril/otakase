@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/vishen/go-chromecast/application"
+	"github.com/vishen/go-chromecast/cast"
 )
 
 // Span is a stretch of an episode worth skipping, in seconds.
@@ -49,6 +50,10 @@ func NextSkip(position float64, spans []Span) (float64, bool) {
 // Session is a connected cast device.
 type Session struct {
 	app *application.Application
+
+	// lastStatus is the last device state logged, so polling once a second
+	// does not fill the log with the same line.
+	lastStatus string
 }
 
 // Connect opens a connection to a device and takes over its media receiver.
@@ -84,6 +89,7 @@ func (s *Session) Progress() (Progress, error) {
 	}
 
 	app, media, _ := s.app.Status()
+	s.logStatus(app, media)
 	// The receiver going back to its idle screen is the clearest signal the
 	// episode is over. It is checked first because the vendored library never
 	// clears a media status once it has seen one -- relying on PlayerState
@@ -116,4 +122,29 @@ func (s *Session) SeekToTime(seconds float64) error {
 // rather than holding a stream that is about to stop being served.
 func (s *Session) Stop() error {
 	return s.app.Close(true)
+}
+
+// logStatus records what the device says about itself whenever that changes.
+//
+// A cast that does not start looks the same from the outside whatever the
+// cause, and the device's own player state is the only thing that tells the
+// difference: BUFFERING means it accepted the load and is trying to fetch,
+// IDLE with an idleReason of ERROR means it tried and gave up, and an idle
+// screen means it never took the media at all.
+func (s *Session) logStatus(app *cast.Application, media *cast.Media) {
+	status := "app=<nil>"
+	if app != nil {
+		status = fmt.Sprintf("app=%q idleScreen=%t statusText=%q", app.DisplayName, app.IsIdleScreen, app.StatusText)
+	}
+	if media == nil {
+		status += " media=<nil>"
+	} else {
+		status += fmt.Sprintf(" player=%s idleReason=%q pos=%.1f dur=%.1f contentType=%q",
+			media.PlayerState, media.IdleReason, media.CurrentTime, media.Media.Duration, media.Media.ContentType)
+	}
+	if status == s.lastStatus {
+		return
+	}
+	s.lastStatus = status
+	Log("cast: device status: " + status)
 }
