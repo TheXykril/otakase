@@ -167,8 +167,9 @@ func (r *fakeRemux) succeed() {
 
 // fakeServer is a castServer double.
 type fakeServer struct {
-	mu  sync.Mutex
-	err error
+	mu           sync.Mutex
+	err          error
+	neverFetched bool
 }
 
 func (s *fakeServer) Err() error {
@@ -176,6 +177,17 @@ func (s *fakeServer) Err() error {
 	defer s.mu.Unlock()
 	return s.err
 }
+
+// fetched defaults true: most tests are about a device that did reach us and
+// then misbehaved, and the one test that cares about the firewall path sets it
+// false explicitly.
+func (s *fakeServer) Fetched() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.neverFetched
+}
+
+func (s *fakeServer) URL(name string) string { return "http://192.168.0.115:8010/" + name }
 
 // withFastCastTimings shrinks the timing watchCast polls against so its table
 // tests run in milliseconds instead of the real 30-second/2-minute windows,
@@ -740,5 +752,37 @@ func TestWatchCastSavesPartialProgressOnASignal(t *testing.T) {
 		if entry.Ep.Player.PlaybackTime == 0 {
 			t.Errorf("the position was not saved: row has PlaybackTime 0, wanted about 321")
 		}
+	}
+}
+
+// A device that never fetched anything did not refuse the stream -- nothing
+// reached this machine. Those need different messages, because only one of
+// them is fixed by a firewall rule.
+func TestWatchCastDistinguishesNeverFetchedFromRefused(t *testing.T) {
+	withFastCastTimings(t)
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+	config.CastPort = 8010
+
+	for _, tc := range []struct {
+		name         string
+		neverFetched bool
+		want         string
+	}{
+		{"nothing reached us", true, "never fetched the stream"},
+		{"fetched but would not play", false, "would not play it"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			session := &fakeSession{steps: []fakeStep{{progress: cast.Progress{Idle: true}}}}
+			var err error
+			captureStdout(t, func() {
+				err = watchCast(config, anime, session, &fakeServer{neverFetched: tc.neverFetched},
+					newFakeRemux(), cast.Device{Name: "Living Room"})
+			})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("expected a message containing %q, got %v", tc.want, err)
+			}
+		})
 	}
 }

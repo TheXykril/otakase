@@ -72,6 +72,11 @@ type castSession interface {
 
 type castServer interface {
 	Err() error
+	// Fetched reports whether the device ever asked for anything. A cast that
+	// fails with this false did not fail at the receiver: nothing reached this
+	// machine, which is what a host firewall looks like from here.
+	Fetched() bool
+	URL(name string) string
 }
 
 type castRemux interface {
@@ -459,6 +464,23 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	cancelSave := RegisterExitCleanup(writePartial)
 	defer cancelSave()
 
+	// The panel owns the bottom of the screen while controls are live. It is
+	// published for castOut, which has to clear the frame before printing so a
+	// message does not land inside the box.
+	// Only drawn to a real terminal. Redrawing a frame in place needs cursor
+	// escapes that mean nothing to a pipe or a log file, and a caller that
+	// captures stdout would be handed several kilobytes a second of them --
+	// which deadlocks any test that reads the pipe only after the call returns.
+	var panel *castPanelWriter
+	if commands != nil && castStdoutIsTerminal() {
+		panel = &castPanelWriter{width: castTerminalWidth()}
+		castPanelForControls = panel
+		defer func() {
+			fmt.Print(panel.clear())
+			castPanelForControls = nil
+		}()
+	}
+
 	// Created once, reset only when a poll actually happens: a timer recreated
 	// on every select would let a stream of keypresses postpone Progress()
 	// indefinitely, and with it the remux and server error checks.
@@ -540,7 +562,15 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 					continue
 				}
 				savePartial(lastPosition)
-				return fmt.Errorf("cast: %s never started playing -- it may not be able to reach this machine on the network", device.Name)
+				// Two very different failures used to share one message. If
+				// the device never fetched anything, the receiver never got
+				// the chance to refuse it -- so say that, and say how to fix
+				// the thing that is almost always responsible.
+				if !server.Fetched() {
+					hint := castFirewallHint(config, castServerHost(server.URL("")), castDetectFirewall())
+					return fmt.Errorf("cast: %s never fetched the stream from this machine.\n%s", device.Name, hint)
+				}
+				return fmt.Errorf("cast: %s never started playing -- it fetched the stream but would not play it", device.Name)
 			}
 			// An episode already marked watched is one the viewer saw through,
 			// so a failure in ffmpeg's tail is cosmetic by the time it lands:
@@ -583,12 +613,20 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 
 		anime.Ep.Player.PlaybackTime = int(progress.Position)
 
-		if commands != nil {
+		if panel != nil {
 			state := "PLAYING"
 			if paused {
 				state = "PAUSED"
 			}
-			fmt.Print(castStatusLine(progress.Position, progress.Duration, state, session.Volume()))
+			fmt.Print(panel.frame(castPanelState{
+				Title:    animeName,
+				Episode:  episodeNumber,
+				Device:   device.Name,
+				Position: progress.Position,
+				Duration: progress.Duration,
+				State:    state,
+				Volume:   session.Volume(),
+			}))
 		}
 		// Until ffmpeg writes EXT-X-ENDLIST the playlist only advertises what
 		// has been remuxed so far, so this duration is a live edge, not an

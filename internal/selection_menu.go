@@ -94,6 +94,14 @@ func init() {
 func ApplyTheme(palette theme.Palette) {
 	color := func(value string) lipgloss.Color { return lipgloss.Color(value) }
 
+	// The cast control panel, so it follows the same palette as the menus.
+	castPanelBorderStyle = lipgloss.NewStyle().Foreground(color(palette.Border()))
+	castPanelTitleStyle = lipgloss.NewStyle().Foreground(color(palette.Accent)).Bold(true)
+	castPanelDimStyle = lipgloss.NewStyle().Foreground(color(palette.Muted))
+	castPanelBarStyle = lipgloss.NewStyle().Foreground(color(palette.Accent))
+	castPanelPlayStyle = lipgloss.NewStyle().Foreground(color(palette.Green)).Bold(true)
+	castPanelPauseStyle = lipgloss.NewStyle().Foreground(color(palette.Yellow)).Bold(true)
+
 	titleStyle = lipgloss.NewStyle().
 		Foreground(color(palette.Accent)).
 		Bold(true)

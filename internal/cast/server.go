@@ -26,6 +26,7 @@ type Server struct {
 	baseURL  string
 	mu       sync.Mutex
 	err      error
+	fetched  bool
 }
 
 // NewServer starts serving dir on a free port and returns immediately.
@@ -75,6 +76,9 @@ func NewServerOnPort(dir string, port int) (*Server, error) {
 	server.server = &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			Log(fmt.Sprintf("cast: %s requested %s", r.RemoteAddr, r.URL.Path))
+			server.mu.Lock()
+			server.fetched = true
+			server.mu.Unlock()
 
 			// The receiver plays adaptive media through a web player, which
 			// fetches the manifest and every segment by XHR. Those fetches are
@@ -128,6 +132,18 @@ func (s *Server) Err() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.err
+}
+
+// Fetched reports whether anything has ever asked this server for a file.
+//
+// It is how a caller tells a device that refused what it was served from one
+// that never reached this machine at all -- the second is almost always a host
+// firewall dropping inbound connections, and from the device's own status the
+// two are identical.
+func (s *Server) Fetched() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.fetched
 }
 
 // Close stops serving. A leaked server holds its port for the life of the

@@ -205,3 +205,32 @@ func TestNewServerOnPortZeroPicksAFreePort(t *testing.T) {
 		t.Errorf("URL %q was not given a real port", server.URL("x.m3u8"))
 	}
 }
+
+// Whether the device ever connected is the difference between "it refused what
+// we served" and "nothing reached us", and only the second is a firewall. The
+// caller cannot tell them apart without this.
+func TestServerReportsWhetherItWasEverFetched(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, PlaylistName), []byte("#EXTM3U\n"), 0o644); err != nil {
+		t.Fatalf("writing the playlist: %v", err)
+	}
+	server, err := NewServer(dir)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	defer server.Close()
+
+	if server.Fetched() {
+		t.Error("a server nobody has asked for anything reports having been fetched")
+	}
+
+	resp, err := http.Get(server.URL(PlaylistName))
+	if err != nil {
+		t.Fatalf("fetching: %v", err)
+	}
+	resp.Body.Close()
+
+	if !server.Fetched() {
+		t.Error("a server that served the playlist reports never having been fetched")
+	}
+}

@@ -192,13 +192,26 @@ func applyCastCommand(command castCommand, session castSession, paused *bool, sp
 	return false, position, nil
 }
 
-// castOut prints a message that must not be overwritten by, or overwrite, the
-// status line the controls redraw in place.
+// castPanelForControls is the panel the watch loop draws while controls are
+// live, or nil when they are not. castOut needs to reach it to clear the frame
+// before printing, and the loop is the only writer, so one package-level
+// pointer is simpler than threading it through every message.
+var castPanelForControls *castPanelWriter
+
+// castOut prints a message that must not land on top of the control panel.
+//
+// In raw mode a bare \n does not return the cursor, so the message is written
+// with \r\n line endings rather than through Out, which uses fmt.Println.
 func castOut(haveControls bool, message string) {
-	if haveControls {
-		fmt.Print("\r\033[K")
+	if !haveControls || castPanelForControls == nil {
+		Out(message)
+		return
 	}
-	Out(message)
+	fmt.Print(castPanelForControls.clear())
+	for _, line := range strings.Split(message, "\n") {
+		fmt.Print(line + "\r\n")
+	}
+	Log(message)
 }
 
 // startCastControls puts the terminal in raw mode and reads keys from it until
@@ -259,4 +272,19 @@ func startCastControls(config *Config) (<-chan castCommand, bool) {
 	}()
 
 	return commands, true
+}
+
+// castTerminalWidth is how wide the panel may be drawn, falling back to a
+// conservative 80 when the terminal will not say.
+func castTerminalWidth() int {
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || width < 1 {
+		return 80
+	}
+	return width
+}
+
+// castStdoutIsTerminal reports whether the panel has somewhere to draw.
+func castStdoutIsTerminal() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
 }
