@@ -287,6 +287,7 @@ func main() {
 
 	if *castFlag {
 		userConfig.CastToDevice = true
+		internal.ApplyCastSubStyle(&userConfig, *softSubFlag)
 	}
 
 	// Show update found by a previous idle check (no network on the hot path).

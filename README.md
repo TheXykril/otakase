@@ -216,11 +216,12 @@ locally with `ffmpeg` — no re-encoding, so it costs bandwidth and almost no
 CPU — serves it from this machine, and points the device at that. `ffmpeg` is
 required for the same reason `-download` needs it.
 
-Openings and endings are still skipped, and progress is still tracked. Soft
-subtitles are not carried: the Chromecast renders only WebVTT, so set
-`SubStyle=hard` for a hardsubbed stream where the provider offers one. A
-resume point from an earlier episode is not honoured yet — casting always
-starts from the beginning, and says so when one exists.
+Openings and endings are still skipped, and progress is still tracked. Casting
+asks for the hardsubbed stream, because the Chromecast renders only WebVTT and
+no provider here supplies it — on a provider that offers both, you get burned-in
+subtitles without setting anything. A resume point from an earlier episode is
+not honoured yet — casting always starts from the beginning, and says so when
+one exists.
 
 `-cast` plays a single episode and does not continue to the next: otakase
 exits once it ends rather than advancing the way local playback does.

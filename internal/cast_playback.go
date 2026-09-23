@@ -94,6 +94,27 @@ func castSpansFor(times SkipTimes, config *Config) []cast.Span {
 	return spans
 }
 
+// ApplyCastSubStyle makes a cast ask for the burned-in subtitle variant.
+//
+// The Default Media Receiver renders WebVTT only, and no provider here
+// supplies WebVTT, so a soft-subbed cast plays with no subtitles at all. In
+// memory only: providers read the live preference through
+// providerhost.CurrentSubStyle, which reads this field, so nothing needs to be
+// written to disk -- and rewriting the viewer's stored preference because they
+// cast once would change every later local playback.
+//
+// explicitlyAskedSoft says the viewer passed -softsub on this same run, which
+// is the one case worth answering out loud rather than silently overriding.
+func ApplyCastSubStyle(config *Config, explicitlyAskedSoft bool) {
+	if config == nil {
+		return
+	}
+	if explicitlyAskedSoft {
+		Out("Note: casting cannot show soft subtitles, so the hardsubbed stream is used instead.")
+	}
+	config.SubStyle = "hard"
+}
+
 // CastEpisode plays the already-resolved episode on a Chromecast instead of in
 // mpv, and keeps tracking it while it plays.
 func CastEpisode(config *Config, anime *Anime) error {
