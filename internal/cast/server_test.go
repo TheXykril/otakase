@@ -109,3 +109,61 @@ func TestServerErrIsNilAfterClose(t *testing.T) {
 		t.Errorf("Err after a deliberate Close: %v", err)
 	}
 }
+
+// The receiver fetches the manifest and every segment by XHR, so a response it
+// cannot read cross-origin is a response it cannot play -- and it looks like a
+// perfectly normal request in the server's own log.
+func TestServerSendsCORSHeaders(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, PlaylistName), []byte("#EXTM3U\n"), 0o644); err != nil {
+		t.Fatalf("writing the playlist: %v", err)
+	}
+	server, err := NewServer(dir)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	defer server.Close()
+
+	resp, err := http.Get(server.URL(PlaylistName))
+	if err != nil {
+		t.Fatalf("fetching the playlist: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, "*")
+	}
+}
+
+// The system mime database maps .ts to a text format and .m3u8 to audio on at
+// least some Linux installs, so these are stated rather than inferred: a
+// receiver told a transport stream is text will not play it.
+func TestServerStatesHLSContentTypes(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, PlaylistName), []byte("#EXTM3U\n"), 0o644); err != nil {
+		t.Fatalf("writing the playlist: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "seg00000.ts"), []byte("not really a segment"), 0o644); err != nil {
+		t.Fatalf("writing the segment: %v", err)
+	}
+	server, err := NewServer(dir)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	defer server.Close()
+
+	for name, want := range map[string]string{
+		PlaylistName:  "application/vnd.apple.mpegurl",
+		"seg00000.ts": "video/mp2t",
+	} {
+		resp, err := http.Get(server.URL(name))
+		if err != nil {
+			t.Fatalf("fetching %s: %v", name, err)
+		}
+		got := resp.Header.Get("Content-Type")
+		resp.Body.Close()
+		if got != want {
+			t.Errorf("%s served as %q, want %q", name, got, want)
+		}
+	}
+}

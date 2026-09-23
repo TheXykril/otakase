@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -49,8 +51,40 @@ func NewServer(dir string) (*Server, error) {
 
 	// http.FileServer resolves ".." itself before touching the filesystem, so a
 	// path climbing out of dir is answered 404 rather than served.
+	files := http.FileServer(http.Dir(dir))
+
+	// Every fetch is logged, because whether the device reached us at all is
+	// the first thing worth knowing when a cast does not start: a device that
+	// never appears here failed to reach this machine, and one that fetches
+	// the playlist and then stops rejected what it was given. Without this the
+	// two look identical from the outside.
 	server.server = &http.Server{
-		Handler:           http.FileServer(http.Dir(dir)),
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Log(fmt.Sprintf("cast: %s requested %s", r.RemoteAddr, r.URL.Path))
+
+			// The receiver plays adaptive media through a web player, which
+			// fetches the manifest and every segment by XHR. Those fetches are
+			// cross-origin, so without these headers the response arrives and
+			// the player is then forbidden to read it: the request succeeds,
+			// nothing plays, and the device asks again until it gives up.
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range")
+			w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Range")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			// Stated rather than inferred: mime.TypeByExtension reads the
+			// system database, where .ts is a TypeScript source or a Qt
+			// Linguist catalogue long before it is an MPEG transport stream,
+			// and .m3u8 comes back as audio -- which is not what this is.
+			if ctype := castContentType(r.URL.Path); ctype != "" {
+				w.Header().Set("Content-Type", ctype)
+			}
+
+			files.ServeHTTP(w, r)
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -101,4 +135,21 @@ func outboundIP() (net.IP, error) {
 	}
 	defer conn.Close()
 	return conn.LocalAddr().(*net.UDPAddr).IP, nil
+}
+
+// castContentType is the media type to serve a cast stream's file as, or "" to
+// let net/http decide.
+//
+// The system mime database cannot be trusted for either of these extensions,
+// and a receiver that is told a transport stream is a text file will not play
+// it.
+func castContentType(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".m3u8":
+		return "application/vnd.apple.mpegurl"
+	case ".ts":
+		return "video/mp2t"
+	default:
+		return ""
+	}
 }
