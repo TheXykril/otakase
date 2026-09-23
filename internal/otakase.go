@@ -1447,6 +1447,21 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 		// by the restore a microsecond later -- the same reason the three
 		// earlier returns above call RestoreScreen() before giving up.
 		RestoreScreen()
+
+		// A rofi launch has no terminal to show controls in, so the cast is
+		// handed to one: that process owns ffmpeg, the server, the device and
+		// all tracking, which is what keeps exactly one process writing
+		// history. If it cannot be done the episode still plays here, without
+		// controls, because a missing terminal must not mean a missing episode.
+		if userConfig.RofiSelection {
+			if err := handOffCastToTerminal(userConfig, anime); err != nil {
+				Out("Casting here instead of in a terminal: " + err.Error())
+				Log(fmt.Sprintf("cast: handoff failed: %v", err))
+			} else {
+				return ""
+			}
+		}
+
 		// Casting owns the episode until it ends, and there is no mpv socket to
 		// hand back: the caller's playback loop has nothing to poll.
 		if err := CastEpisode(userConfig, anime); err != nil {

@@ -114,6 +114,19 @@ the outside: missing CORS headers (the device fetched the manifest and could
 not read it), `.ts` served as a text type from the system mime database, and a
 stream declaring H.264 Level 5.0 to a decoder specified for 4.1.
 
+## 5. The rofi handoff
+
+- [ ] **Launch from the Hyprland keybind with casting on.** A terminal opens,
+      showing the status line and the control keys.
+- [ ] **Every key works there**, the same as in a terminal launch.
+- [ ] **Close the window mid-episode.** The TV stops, the position is saved,
+      no ffmpeg survives, and `<StoragePath>/cast-scratch/` is empty.
+- [ ] **Set `CastTerminal` to a command that does not exist.** The episode
+      still casts, in the launching process, with a message saying why there is
+      no window — a missing terminal must never mean a missing episode.
+- [ ] **Check `<StoragePath>/cast-session/` is empty afterwards.** Those files
+      hold a stream URL with an authentication token.
+
 ## Known limits
 
 Not bugs; these are deliberate, and documented in the README.

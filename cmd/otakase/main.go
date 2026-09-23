@@ -102,6 +102,7 @@ func main() {
 	noRofi := flag.Bool("no-rofi", false, "No rofi")
 	imagePreview := flag.Bool("image-preview", false, "Show image preview")
 	castFlag := flag.Bool("cast", false, "Play on a Chromecast on this network instead of locally")
+	castSessionFlag := flag.String("cast-session", "", "Cast the episode described by a handoff file (used internally when casting from rofi)")
 	noImagePreview := flag.Bool("no-image-preview", false, "No image preview")
 	changeToken := flag.Bool("change-token", false, "Change token")
 	setupAnimeSkip := flag.Bool("setup-anime-skip", false, "Create a personal Anime-Skip client id and save it")
@@ -288,6 +289,18 @@ func main() {
 	if *castFlag {
 		userConfig.CastToDevice = true
 		internal.ApplyCastSubStyle(&userConfig, *softSubFlag)
+	}
+
+	// The spawned terminal's entry point: everything above has loaded the
+	// config, and everything below is the picking flow this process does not
+	// need -- the episode was already resolved by the process that spawned it.
+	if *castSessionFlag != "" {
+		internal.RestoreScreen()
+		if err := internal.RunCastSession(&userConfig, *castSessionFlag); err != nil {
+			internal.Out("Casting failed: " + err.Error())
+			internal.Log(fmt.Sprintf("cast: %v", err))
+		}
+		return
 	}
 
 	// Show update found by a previous idle check (no network on the hot path).

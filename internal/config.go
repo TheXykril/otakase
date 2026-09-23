@@ -90,6 +90,10 @@ type Config struct {
 	MyAnimeListImportDismissed bool   `config:"MyAnimeListImportDismissed"`
 	ShowNewEpisodes            bool   `config:"ShowNewEpisodes"`
 	CastDevice                 string `config:"CastDevice"`
+	// CastTerminal is the terminal emulator to open for a cast started from
+	// rofi, which has no terminal of its own to show controls in. Empty means
+	// $TERMINAL, then whatever is installed.
+	CastTerminal string `config:"CastTerminal"`
 	// CastToDevice records that -cast was given for this run. It is not a
 	// setting, so it carries no config tag.
 	CastToDevice bool `config:"-"`
@@ -166,6 +170,7 @@ func defaultConfigMap() map[string]string {
 		"ThemeOverrides":             "",
 		"DownloadDir":                "$HOME/Downloads/" + AppName,
 		"CastDevice":                 "",
+		"CastTerminal":               "",
 	}
 }
 

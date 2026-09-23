@@ -231,6 +231,10 @@ and leaves you the device's own remote.
 `-cast` plays a single episode and does not continue to the next: otakase
 exits once it ends rather than advancing the way local playback does.
 
+Casting from the rofi keybind opens a terminal to show those controls in, and
+that window owns the cast: closing it stops the episode and saves your position.
+Set `CastTerminal` if the wrong emulator opens, or if none is found.
+
 Set `CastDevice` to a device's name to skip being asked which one each time.
 
 Casting is the one feature no automated test can fully verify — whether the
