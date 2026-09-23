@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,19 @@ type Server struct {
 
 // NewServer starts serving dir on a free port and returns immediately.
 func NewServer(dir string) (*Server, error) {
+	return NewServerOnPort(dir, 0)
+}
+
+// NewServerOnPort starts serving dir on the given port, or on a free one when
+// port is 0.
+//
+// A fixed port exists for firewalls. A host that drops inbound connections by
+// default -- ufw's shipped policy, among others -- blocks the device from
+// fetching anything, and the failure is invisible from here: the device simply
+// never connects, which looks exactly like a device that never got the load.
+// A random port cannot be allowed through without opening the whole ephemeral
+// range or the whole subnet; one port can be allowed with one rule.
+func NewServerOnPort(dir string, port int) (*Server, error) {
 	addr, err := outboundIP()
 	if err != nil {
 		return nil, err
@@ -37,16 +51,16 @@ func NewServer(dir string) (*Server, error) {
 	// Bound to the one address the device needs, not every interface: this is
 	// a directory listing of the scratch dir for the length of the episode,
 	// and outboundIP already picked the address the device reaches it on.
-	listener, err := net.Listen("tcp", net.JoinHostPort(addr.String(), "0"))
+	listener, err := net.Listen("tcp", net.JoinHostPort(addr.String(), strconv.Itoa(port)))
 	if err != nil {
 		return nil, fmt.Errorf("cast: could not listen: %w", err)
 	}
 
-	port := listener.Addr().(*net.TCPAddr).Port
+	bound := listener.Addr().(*net.TCPAddr).Port
 	server := &Server{
 		dir:      dir,
 		listener: listener,
-		baseURL:  fmt.Sprintf("http://%s:%d", addr, port),
+		baseURL:  fmt.Sprintf("http://%s:%d", addr, bound),
 	}
 
 	// http.FileServer resolves ".." itself before touching the filesystem, so a

@@ -274,7 +274,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 		}
 	}
 
-	srv, err := cast.NewServer(streamDir)
+	srv, err := cast.NewServerOnPort(streamDir, config.CastPort)
 	if err != nil {
 		return err
 	}

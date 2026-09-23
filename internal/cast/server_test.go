@@ -1,7 +1,9 @@
 package cast
 
 import (
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -165,5 +167,41 @@ func TestServerStatesHLSContentTypes(t *testing.T) {
 		if got != want {
 			t.Errorf("%s served as %q, want %q", name, got, want)
 		}
+	}
+}
+
+// A random port cannot be allowed through a firewall: the rule would have to
+// cover the whole ephemeral range, or the whole LAN. A fixed port lets a
+// viewer open exactly one.
+func TestNewServerOnPortUsesTheRequestedPort(t *testing.T) {
+	// Borrow a free port from the kernel, then hand that number to NewServer.
+	probe, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("finding a free port: %v", err)
+	}
+	port := probe.Addr().(*net.TCPAddr).Port
+	probe.Close()
+
+	server, err := NewServerOnPort(t.TempDir(), port)
+	if err != nil {
+		t.Fatalf("NewServerOnPort: %v", err)
+	}
+	defer server.Close()
+
+	if want := fmt.Sprintf(":%d/", port); !strings.Contains(server.URL("x.m3u8"), want) {
+		t.Errorf("URL %q does not use the requested port %d", server.URL("x.m3u8"), port)
+	}
+}
+
+// Zero keeps today's behaviour: the kernel picks, and nothing needs configuring.
+func TestNewServerOnPortZeroPicksAFreePort(t *testing.T) {
+	server, err := NewServerOnPort(t.TempDir(), 0)
+	if err != nil {
+		t.Fatalf("NewServerOnPort: %v", err)
+	}
+	defer server.Close()
+
+	if strings.Contains(server.URL("x.m3u8"), ":0/") {
+		t.Errorf("URL %q was not given a real port", server.URL("x.m3u8"))
 	}
 }

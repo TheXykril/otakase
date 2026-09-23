@@ -235,6 +235,16 @@ Casting from the rofi keybind opens a terminal to show those controls in, and
 that window owns the cast: closing it stops the episode and saves your position.
 Set `CastTerminal` if the wrong emulator opens, or if none is found.
 
+If your machine runs a firewall that drops inbound connections — ufw's shipped
+policy does — the Chromecast cannot fetch the stream, and the only symptom is
+that the episode never starts. Set `CastPort` to a fixed port and allow that one
+port from your LAN, rather than opening the whole ephemeral range:
+
+```bash
+# CastPort=8010 in the config, then:
+sudo ufw allow from 192.168.0.0/24 to any port 8010 proto tcp comment 'otakase cast'
+```
+
 Set `CastDevice` to a device's name to skip being asked which one each time.
 
 Casting is the one feature no automated test can fully verify — whether the

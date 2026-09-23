@@ -94,6 +94,12 @@ type Config struct {
 	// rofi, which has no terminal of its own to show controls in. Empty means
 	// $TERMINAL, then whatever is installed.
 	CastTerminal string `config:"CastTerminal"`
+	// CastPort is the port the stream server listens on, or 0 for a random
+	// free one. Set it when a firewall drops inbound connections by default:
+	// a random port cannot be allowed through without opening the whole
+	// ephemeral range, and a device that cannot fetch looks identical to one
+	// that never started.
+	CastPort int `config:"CastPort"`
 	// CastToDevice records that -cast was given for this run. It is not a
 	// setting, so it carries no config tag.
 	CastToDevice bool `config:"-"`
@@ -171,6 +177,7 @@ func defaultConfigMap() map[string]string {
 		"DownloadDir":                "$HOME/Downloads/" + AppName,
 		"CastDevice":                 "",
 		"CastTerminal":               "",
+		"CastPort":                   "0",
 	}
 }
 

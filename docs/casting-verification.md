@@ -94,7 +94,10 @@ reported `Playback finished.` instead of the truth.
 lines answer almost everything:
 
 - `cast: <ip> requested /playlist.m3u8` — the device reached this machine. If
-  no request appears at all, it could not, and the problem is the network.
+  **no request appears at all**, it could not. The usual cause is a host
+  firewall dropping inbound connections; set `CastPort` and allow that one port
+  rather than the whole ephemeral range. This failure is indistinguishable from
+  a device that never got the load, which is why the request log exists.
 - `cast: <ip> requested /seg00000.ts` — it accepted the manifest. Playlist
   requests with no segment requests mean it fetched the manifest and refused
   it.
