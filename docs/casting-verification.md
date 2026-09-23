@@ -78,6 +78,36 @@ reported `Playback finished.` instead of the truth.
 - [ ] After a normal finish, the terminal still shows the session's output —
       including `Episode N marked as watched.` — rather than a bare prompt.
 
+## When it does not work
+
+`otakase-debug.log` under the storage path records what the device did. Three
+lines answer almost everything:
+
+- `cast: <ip> requested /playlist.m3u8` — the device reached this machine. If
+  no request appears at all, it could not, and the problem is the network.
+- `cast: <ip> requested /seg00000.ts` — it accepted the manifest. Playlist
+  requests with no segment requests mean it fetched the manifest and refused
+  it.
+- `cast: device status: ... player=... idleReason=...` — what the receiver says
+  about itself. `media=<nil>` means the receiver is running with no media
+  session at all, which is what a stream it cannot decode looks like.
+
+`OTAKASE_CAST_KEEP=1 otakase -cast` keeps the stream directory instead of
+deleting it, so the segments can be probed after a failure:
+
+```bash
+ffprobe -v error -show_entries stream=codec_name,profile,level,width,height \
+    -of default=noprint_wrappers=1 <dir>/seg00000.ts
+```
+
+That directory is the whole episode, so delete it when finished -- half a
+gigabyte is normal.
+
+Three real failures were found this way, and all three looked identical from
+the outside: missing CORS headers (the device fetched the manifest and could
+not read it), `.ts` served as a text type from the system mime database, and a
+stream declaring H.264 Level 5.0 to a decoder specified for 4.1.
+
 ## Known limits
 
 Not bugs; these are deliberate, and documented in the README.
