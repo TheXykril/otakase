@@ -63,6 +63,10 @@ func init() {
 type castSession interface {
 	Progress() (cast.Progress, error)
 	SeekToTime(seconds float64) error
+	Pause() error
+	Unpause() error
+	SetVolume(level float64) error
+	Volume() float64
 }
 
 type castServer interface {
@@ -302,11 +306,26 @@ func CastEpisode(config *Config, anime *Anime) error {
 	}
 	Out(fmt.Sprintf("Playing on %s.", device.Name))
 
-	return watchCast(config, anime, s, srv, rx, device)
+	commands, haveControls := startCastControls(config)
+	if haveControls {
+		Out("  [space] pause   [left/right] seek 10s   [up/down] volume   [s] skip OP/ED   [q] stop")
+	} else {
+		Out("Controls need a terminal; use the device's own remote or app.")
+	}
+
+	return watchCastWithControls(config, anime, s, srv, rx, device, commands)
 }
 
 // watchCast follows the episode while the device plays it.
+// watchCast follows the episode while the device plays it, with no controls.
 func watchCast(config *Config, anime *Anime, session castSession, server castServer, remux castRemux, device cast.Device) error {
+	return watchCastWithControls(config, anime, session, server, remux, device, nil)
+}
+
+// watchCastWithControls is watchCast with a channel of viewer commands. A nil
+// channel blocks forever in the select below, which makes this behave exactly
+// as the plain sleep it replaced.
+func watchCastWithControls(config *Config, anime *Anime, session castSession, server castServer, remux castRemux, device cast.Device, commands <-chan castCommand) error {
 	spans := castSpansFor(anime.Ep.SkipTimes, config)
 	marked := false
 
@@ -320,6 +339,7 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 	// anything. Without this, the viewer sees "Playing on X." followed a
 	// second later by "Playback finished." on a black screen.
 	started := false
+	paused := false
 	startupDeadline := time.Now().Add(castStartupGrace)
 
 	// lastPosition/lastPositionChange back Important 3's stall bound: a
@@ -384,7 +404,32 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 	}
 
 	for {
-		time.Sleep(castPollInterval)
+		// A nil command channel blocks forever, so with no controls this
+		// select degrades to exactly the sleep it replaced.
+		select {
+		case <-time.After(castPollInterval):
+		case command := <-commands:
+			wasPaused := paused
+			stop, err := applyCastCommand(command, session, &paused, spans, lastPosition)
+			if err != nil {
+				Log(fmt.Sprintf("cast: %v", err))
+			}
+			if stop {
+				castOut(commands != nil, "Stopped.")
+				savePartial(lastPosition)
+				return nil
+			}
+			// Only on resume, and deliberately not on every command. While
+			// paused the stall clock is not consulted at all, so by the time
+			// playback resumes it holds a reading as old as the pause and
+			// would fire at once. Resetting on every command instead would
+			// let any repeated keypress hold the bound open forever -- the
+			// same way a reset in the skip branch once made it unreachable.
+			if wasPaused && !paused {
+				lastPositionChange = time.Now()
+			}
+			continue
+		}
 
 		// Checked before the device is polled: ffmpeg dying leaves the server
 		// healthy and the device playing out what is already on disk, so this
@@ -404,7 +449,7 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 
 		progress, err := session.Progress()
 		if err != nil {
-			Out(fmt.Sprintf("Lost contact with %s.", device.Name))
+			castOut(commands != nil, fmt.Sprintf("Lost contact with %s.", device.Name))
 			Log(fmt.Sprintf("cast: lost contact with the device: %v", err))
 			savePartial(lastPosition)
 			// A remembered ffmpeg failure outranks losing the device: if the
@@ -441,7 +486,7 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 			if remuxErr != nil {
 				return remuxErr
 			}
-			Out("Playback finished.")
+			castOut(commands != nil, "Playback finished.")
 			return nil
 		}
 		// Evidence of playback, not merely of a non-idle state: a device that
@@ -461,12 +506,20 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 		if progress.Position != lastPosition {
 			lastPosition = progress.Position
 			lastPositionChange = time.Now()
-		} else if started && time.Since(lastPositionChange) >= castStallTimeout {
+		} else if started && !paused && time.Since(lastPositionChange) >= castStallTimeout {
 			savePartial(lastPosition)
 			return fmt.Errorf("cast: %s stopped reporting progress -- playback may have been stopped on the device", device.Name)
 		}
 
 		anime.Ep.Player.PlaybackTime = int(progress.Position)
+
+		if commands != nil {
+			state := "PLAYING"
+			if paused {
+				state = "PAUSED"
+			}
+			fmt.Print(castStatusLine(progress.Position, progress.Duration, state, session.Volume()))
+		}
 		// Until ffmpeg writes EXT-X-ENDLIST the playlist only advertises what
 		// has been remuxed so far, so this duration is a live edge, not an
 		// episode length. Marking against it completes the episode early on any
@@ -514,7 +567,7 @@ func watchCast(config *Config, anime *Anime, session castSession, server castSer
 					Log(fmt.Sprintf("cast: could not update remote progress: %v", err))
 				}
 			}
-			Out(fmt.Sprintf("Episode %d marked as watched.", anime.Ep.Number))
+			castOut(commands != nil, fmt.Sprintf("Episode %d marked as watched.", anime.Ep.Number))
 		}
 	}
 }

@@ -33,6 +33,12 @@ stream for <device>...` → the episode starts within ~30s → `Playing on
       and none appear. That is expected — set `SubStyle=hard` for a hardsubbed
       stream instead.
 
+- [ ] **Every control key works**: space pauses and resumes, left/right seek,
+      up/down change the TV's volume, `s` jumps the opening, `q` stops and
+      saves the position.
+- [ ] **Pause for three minutes.** The episode must still be there — the stall
+      bound is two minutes and must be suspended while paused.
+
 ## 2. It tracks correctly
 
 - [ ] Seeking from the TV remote or the Google Home app is picked up within

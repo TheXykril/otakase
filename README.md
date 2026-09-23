@@ -223,6 +223,11 @@ subtitles without setting anything. A resume point from an earlier episode is
 not honoured yet — casting always starts from the beginning, and says so when
 one exists.
 
+While a cast plays, the terminal shows where the episode is and takes keys:
+space pauses, the arrows seek ten seconds and change the device volume, `s`
+skips the opening or ending, and `q` stops. A launch with no terminal says so
+and leaves you the device's own remote.
+
 `-cast` plays a single episode and does not continue to the next: otakase
 exits once it ends rather than advancing the way local playback does.
 

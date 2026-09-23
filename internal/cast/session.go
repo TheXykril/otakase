@@ -118,6 +118,55 @@ func (s *Session) SeekToTime(seconds float64) error {
 	return nil
 }
 
+// Pause holds playback on the device.
+func (s *Session) Pause() error {
+	if err := s.app.Pause(); err != nil {
+		return fmt.Errorf("cast: could not pause: %w", err)
+	}
+	return nil
+}
+
+// Unpause resumes playback on the device.
+func (s *Session) Unpause() error {
+	if err := s.app.Unpause(); err != nil {
+		return fmt.Errorf("cast: could not resume: %w", err)
+	}
+	return nil
+}
+
+// clampVolume holds a level inside the 0..1 range the receiver accepts.
+func clampVolume(level float64) float64 {
+	if level < 0 {
+		return 0
+	}
+	if level > 1 {
+		return 1
+	}
+	return level
+}
+
+// SetVolume sets the device volume, on a 0..1 scale.
+//
+// The level is clamped rather than rejected: a viewer holding the volume key
+// at either end should stop moving, not be shown an error.
+func (s *Session) SetVolume(level float64) error {
+	if err := s.app.SetVolume(float32(clampVolume(level))); err != nil {
+		return fmt.Errorf("cast: could not set the volume: %w", err)
+	}
+	return nil
+}
+
+// Volume is the device's last known volume on a 0..1 scale, or 0 if it has not
+// reported one. It reads what the last status refreshed, and does not itself
+// talk to the device.
+func (s *Session) Volume() float64 {
+	v := s.app.Volume()
+	if v == nil {
+		return 0
+	}
+	return float64(v.Level)
+}
+
 // Stop ends playback and disconnects, leaving the device on its home screen
 // rather than holding a stream that is about to stop being served.
 func (s *Session) Stop() error {

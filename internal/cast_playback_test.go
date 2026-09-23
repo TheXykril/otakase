@@ -66,7 +66,42 @@ type fakeSession struct {
 	steps  []fakeStep
 	calls  int
 	seeks  []float64
+	paused bool
+	volume float64
 	onCall func(call int)
+}
+
+func (s *fakeSession) Pause() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.paused = true
+	return nil
+}
+
+func (s *fakeSession) Unpause() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.paused = false
+	return nil
+}
+
+func (s *fakeSession) SetVolume(level float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if level < 0 {
+		level = 0
+	}
+	if level > 1 {
+		level = 1
+	}
+	s.volume = level
+	return nil
+}
+
+func (s *fakeSession) Volume() float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.volume
 }
 
 func (s *fakeSession) Progress() (cast.Progress, error) {
@@ -422,5 +457,151 @@ func TestWatchCastStallBoundFiresWhenPositionStopsAdvancing(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("watchCast did not return: the stall bound did not fire")
+	}
+}
+
+// Pausing must suspend the stall bound. The bound exists to catch a position
+// that has stopped advancing, which is exactly what a paused device looks
+// like -- without this, pausing for two minutes kills the episode.
+func TestWatchCastPauseSuspendsTheStallBound(t *testing.T) {
+	withFastCastTimings(t)
+
+	commands := make(chan castCommand, 4)
+	commands <- castCmdPauseToggle
+
+	remux := newFakeRemux()
+	server := &fakeServer{}
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 30, Duration: 600}},
+			{progress: cast.Progress{Position: 30, Duration: 600}}, // frozen: paused
+		},
+	}
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+	}()
+
+	select {
+	case err := <-done:
+		t.Fatalf("watchCast returned while paused: %v", err)
+	case <-time.After(700 * time.Millisecond):
+		// castStallTimeout is 500ms here and the position has not moved;
+		// still running is the pass.
+	}
+
+	session.mu.Lock()
+	paused := session.paused
+	session.mu.Unlock()
+	if !paused {
+		t.Error("the device was never paused")
+	}
+
+	commands <- castCmdStop
+	<-done
+}
+
+// q ends the cast without marking an episode the viewer did not finish.
+func TestWatchCastStopCommandEndsWithoutMarking(t *testing.T) {
+	withFastCastTimings(t)
+
+	commands := make(chan castCommand, 1)
+	commands <- castCmdStop
+
+	remux := newFakeRemux()
+	server := &fakeServer{}
+	session := &fakeSession{steps: []fakeStep{{progress: cast.Progress{Position: 30, Duration: 600}}}}
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	captureStdout(t, func() {
+		if err := watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands); err != nil {
+			t.Fatalf("stopping should not be an error: %v", err)
+		}
+	})
+
+	history := LocalGetAllAnime(filepath.Join(config.StoragePath, "curd_history.txt"))
+	for _, entry := range history {
+		if entry.AnilistId == anime.AnilistId && entry.Ep.Player.PlaybackTime == 0 {
+			t.Error("stopping wrote a completed entry rather than a partial one")
+		}
+	}
+}
+
+// Review Focus 4. Seeking back in the first seconds must clamp at zero rather
+// than asking the device for a negative position.
+func TestWatchCastSeekBackClampsAtZero(t *testing.T) {
+	withFastCastTimings(t)
+
+	commands := make(chan castCommand, 4)
+	commands <- castCmdSeekBack
+
+	remux := newFakeRemux()
+	server := &fakeServer{}
+	session := &fakeSession{steps: []fakeStep{{progress: cast.Progress{Position: 3, Duration: 600}}}}
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	done := make(chan error, 1)
+	captureStdout(t, func() {
+		go func() {
+			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+		}()
+		time.Sleep(100 * time.Millisecond)
+		commands <- castCmdStop
+		<-done
+	})
+
+	session.mu.Lock()
+	seeks := append([]float64(nil), session.seeks...)
+	session.mu.Unlock()
+
+	if len(seeks) == 0 {
+		t.Fatal("no seek was issued")
+	}
+	for _, s := range seeks {
+		if s < 0 {
+			t.Errorf("seeked to %v, which is before the start of the episode", s)
+		}
+	}
+}
+
+// Review Focus 3, at the loop level: holding the volume key settles at 1.0.
+func TestWatchCastVolumeClampsAtTheTop(t *testing.T) {
+	withFastCastTimings(t)
+
+	commands := make(chan castCommand, 64)
+	for i := 0; i < 30; i++ {
+		commands <- castCmdVolumeUp
+	}
+
+	remux := newFakeRemux()
+	server := &fakeServer{}
+	session := &fakeSession{
+		volume: 0.9,
+		steps:  []fakeStep{{progress: cast.Progress{Position: 30, Duration: 600}}},
+	}
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	done := make(chan error, 1)
+	captureStdout(t, func() {
+		go func() {
+			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+		}()
+		time.Sleep(200 * time.Millisecond)
+		commands <- castCmdStop
+		<-done
+	})
+
+	if got := session.Volume(); got > 1 {
+		t.Errorf("volume reached %v, above the receiver's maximum of 1", got)
 	}
 }
