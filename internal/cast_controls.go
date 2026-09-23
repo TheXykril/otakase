@@ -187,13 +187,11 @@ func applyCastCommand(command castCommand, session castSession, paused *bool, sp
 		if found {
 			return seek(target)
 		}
-		// Said once, however many times the key is pressed: a viewer who holds
-		// s on an episode with no known times would otherwise push the panel
-		// down the screen a line at a time.
-		if !noSpansReported {
-			noSpansReported = true
-			castOut(true, "No opening or ending times are known for this episode.")
-		}
+		// Said on every press. It was limited to once when it printed into the
+		// terminal and pushed the panel down; as a notification there is
+		// nothing to push, and a viewer who missed the first one presses s
+		// again to see it.
+		castOut(true, "No opening or ending times are known for this episode.")
 		return false, position, nil
 	}
 	return false, position, nil
@@ -324,9 +322,6 @@ func castRawModeActive() bool {
 	return castRawMode.active
 }
 
-// noSpansReported keeps the "no skip times" notice to once per cast.
-var noSpansReported bool
-
 // castScreen tracks whether the panel has taken the terminal over, so Out can
 // send a notification instead of printing into a frame it would corrupt.
 var castScreen struct {
@@ -365,4 +360,15 @@ func castTakeScreen() func() {
 			fmt.Print("\033[?25h\033[?1049l")
 		})
 	}
+}
+
+// castControlsPossible reports whether this run can show a control panel at
+// all, which is the same condition startCastControls uses to decide whether to
+// read keys. It is asked before the work starts, so the panel can carry the
+// progress of that work rather than letting it scroll past.
+func castControlsPossible(config *Config) bool {
+	if config != nil && config.RofiSelection {
+		return false
+	}
+	return castStdoutIsTerminal()
 }

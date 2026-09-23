@@ -160,6 +160,30 @@ func CastEpisode(config *Config, anime *Anime) error {
 		return err
 	}
 
+	// The screen is taken as soon as the device is known, and not before:
+	// chooseCastDevice may have to show a menu, which cannot happen under a
+	// takeover. From here on the terminal shows the frame and nothing else --
+	// every message becomes a notification, because Out checks the same flag.
+	var panel *castPanelWriter
+	if commands := castControlsPossible(config); commands {
+		release := castTakeScreen()
+		cancelRelease := RegisterExitCleanup(release)
+		panel = &castPanelWriter{home: true, size: castTerminalSize}
+		castPanelForControls = panel
+		defer func() {
+			castPanelForControls = nil
+			cancelRelease()
+			release()
+		}()
+	}
+	castStatus := func(message string) {
+		if panel != nil {
+			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device.Name, message))
+			return
+		}
+		Out(message)
+	}
+
 	// The stream is remuxed into a directory per cast and thrown away after:
 	// it is a transcode buffer, not a download. It lives under the storage
 	// path rather than the system temp directory: $TMPDIR is tmpfs on this and
@@ -244,7 +268,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 	defer cancel()
 	defer teardown()
 
-	Out(fmt.Sprintf("Preparing the stream for %s...", device.Name))
+	castStatus("Preparing the stream…")
 	Log(fmt.Sprintf("cast: remuxing %s (referrer %q) into %s", streamURL, referrer, streamDir))
 	rx, err := cast.StartRemux(ffmpeg, streamURL, referrer, streamDir)
 	if err != nil {
@@ -322,7 +346,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 	if err := s.Play(srv.URL(cast.PlaylistName)); err != nil {
 		return err
 	}
-	Out(fmt.Sprintf("Playing on %s.", device.Name))
+	castStatus(fmt.Sprintf("Waiting for %s to start…", device.Name))
 
 	commands, haveControls := startCastControls(config)
 	if !haveControls {
@@ -356,7 +380,6 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	// second later by "Playback finished." on a black screen.
 	started := false
 	paused := false
-	noSpansReported = false // one notice per cast, not per process
 	startupDeadline := time.Now().Add(castStartupGrace)
 
 	// lastPosition/lastPositionChange back Important 3's stall bound: a
@@ -470,21 +493,9 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	// escapes that mean nothing to a pipe or a log file, and a caller that
 	// captures stdout would be handed several kilobytes a second of them --
 	// which deadlocks any test that reads the pipe only after the call returns.
-	var panel *castPanelWriter
-	if commands != nil && castStdoutIsTerminal() {
-		// The panel takes the terminal over so it is the only thing on it,
-		// which is also what makes the redraw simple: every frame goes home
-		// and wipes, rather than counting back over the last one.
-		release := castTakeScreen()
-		cancelRelease := RegisterExitCleanup(release)
-		panel = &castPanelWriter{home: true, size: castTerminalSize}
-		castPanelForControls = panel
-		defer func() {
-			castPanelForControls = nil
-			cancelRelease()
-			release()
-		}()
-	}
+	// The panel belongs to CastEpisode, which took the screen before the remux
+	// started so its progress had somewhere to go.
+	panel := castPanelForControls
 
 	// Created once, reset only when a poll actually happens: a timer recreated
 	// on every select would let a stream of keypresses postpone Progress()

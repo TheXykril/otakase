@@ -210,3 +210,34 @@ func TestCastPanelSurvivesAShortTerminal(t *testing.T) {
 		t.Errorf("the panel vanished in a 3-line terminal:\n%q", frame)
 	}
 }
+
+// Before playback there is no position to show, but there is something worth
+// saying -- remuxing, waiting for the device. The frame carries it, so the
+// terminal never has to scroll text past the panel.
+func TestCastPanelStatusFrameCarriesAMessage(t *testing.T) {
+	panel := &castPanelWriter{home: true, size: func() (int, int) { return 80, 24 }}
+
+	frame := panel.status("Rich Girl Caretaker", 12, "Office TV", "Preparing the stream…")
+
+	for _, want := range []string{"Rich Girl Caretaker", "Office TV", "Preparing the stream…"} {
+		if !strings.Contains(frame, want) {
+			t.Errorf("the status frame does not show %q:\n%s", want, frame)
+		}
+	}
+	if strings.Contains(frame, "vol ") {
+		t.Errorf("the status frame shows a volume that is not known yet:\n%s", frame)
+	}
+}
+
+// The status frame and the playing panel share a frame, so switching between
+// them must not leave part of the other behind.
+func TestCastPanelStatusAndPlayingFramesBothRedrawFromHome(t *testing.T) {
+	panel := &castPanelWriter{home: true, size: func() (int, int) { return 80, 24 }}
+
+	if s := panel.status("Show", 1, "TV", "Preparing…"); !strings.HasPrefix(s, "\033[H\033[J") {
+		t.Error("the status frame does not go home and wipe")
+	}
+	if p := panel.frame(testPanelState()); !strings.HasPrefix(p, "\033[H\033[J") {
+		t.Error("the playing frame does not go home and wipe")
+	}
+}

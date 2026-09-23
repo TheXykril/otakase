@@ -305,6 +305,56 @@ func castPanelCentre(lines []string, width, height int) []string {
 	return lines
 }
 
+// status draws the same frame before playback, carrying what otakase is doing
+// instead of a position it does not have yet.
+//
+// It exists so nothing has to scroll past the panel: the terminal shows the
+// frame from the moment a device is chosen, and every message that would have
+// been printed becomes a notification.
+func (c *castPanelWriter) status(title string, episode int, device, message string) string {
+	var out strings.Builder
+	out.WriteString(c.erase())
+
+	width := c.width
+	height := 0
+	if c.size != nil {
+		width, height = c.size()
+		width -= 4
+	}
+
+	lines := castPanelStatusLines(title, episode, device, message, width)
+	if c.size != nil {
+		termWidth, _ := c.size()
+		lines = castPanelCentre(lines, termWidth, height)
+	}
+
+	for _, line := range lines {
+		out.WriteString(line)
+		out.WriteString("\r\n")
+	}
+	c.drawn = len(lines)
+	return out.String()
+}
+
+// castPanelStatusLines is the frame before playback: header, one message, keys.
+func castPanelStatusLines(title string, episode int, device, message string, width int) []string {
+	if width > castPanelMaxWidth {
+		width = castPanelMaxWidth
+	}
+	if width < castPanelMinWidth {
+		return []string{castPanelTruncate(message, width)}
+	}
+
+	inner := width - 4
+	state := castPanelState{Title: title, Episode: episode, Device: device}
+
+	return []string{
+		castPanelTop(state, width),
+		castPanelRow([]castPanelSegment{{message, castPanelDimStyle}}, inner),
+		castPanelBottom(width),
+	}
+}
+
 // clear removes the panel and forgets it, for a message that needs the screen.
 func (c *castPanelWriter) clear() string {
 	erased := c.erase()
