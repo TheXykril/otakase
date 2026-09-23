@@ -472,11 +472,17 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	// which deadlocks any test that reads the pipe only after the call returns.
 	var panel *castPanelWriter
 	if commands != nil && castStdoutIsTerminal() {
-		panel = &castPanelWriter{width: castTerminalWidth()}
+		// The panel takes the terminal over so it is the only thing on it,
+		// which is also what makes the redraw simple: every frame goes home
+		// and wipes, rather than counting back over the last one.
+		release := castTakeScreen()
+		cancelRelease := RegisterExitCleanup(release)
+		panel = &castPanelWriter{width: castTerminalWidth(), home: true}
 		castPanelForControls = panel
 		defer func() {
-			fmt.Print(panel.clear())
 			castPanelForControls = nil
+			cancelRelease()
+			release()
 		}()
 	}
 

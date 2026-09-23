@@ -157,6 +157,16 @@ func Out(data interface{}) {
 	if userConfig == nil {
 		userConfig = &Config{}
 	}
+	// While the cast panel owns the screen, the terminal shows the panel and
+	// nothing else. A message printed into it would either land inside the
+	// frame or scroll it away, so it goes where a launch with no terminal
+	// already sends its messages: a desktop notification.
+	if castPanelOwnsScreen() {
+		notifyDesktop(fmt.Sprintf("%v", data))
+		Log(fmt.Sprintf("%v", data))
+		return
+	}
+
 	if !userConfig.RofiSelection {
 		// Raw mode, which the cast controls turn on, disables the translation
 		// that makes \n also return the cursor. A bare newline there leaves the
@@ -2022,4 +2032,23 @@ func ChangeProvider(userConfig *Config) {
 
 	Out(fmt.Sprintf("\nProvider successfully changed to %s.\n", providerConfigDisplayLabel(userConfig.Provider)))
 	time.Sleep(1 * time.Second)
+}
+
+// notifyDesktop sends a desktop notification, which is how otakase reaches a
+// viewer who is not looking at a terminal -- either because there is none, or
+// because the cast panel owns the one there is.
+func notifyDesktop(message string) {
+	if runtime.GOOS == "linux" {
+		cmd := exec.Command("notify-send",
+			"-a", DisplayName,
+			"-h", "string:x-canonical-private-synchronous:otakase-notification",
+			DisplayName, message)
+		if err := cmd.Run(); err != nil {
+			Log(fmt.Sprintf("Failed to send notification: %v", err))
+		}
+		return
+	}
+	if err := beeep.Notify(DisplayName, message, ""); err != nil {
+		Log(fmt.Sprintf("Failed to send notification: %v", err))
+	}
 }

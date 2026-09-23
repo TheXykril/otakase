@@ -128,3 +128,20 @@ func TestCastPanelKeepsTheDeviceVisibleBesideALongTitle(t *testing.T) {
 		t.Errorf("the header is %d cells wide, over the 72 it was given:\n%s", lipglossWidth(top), top)
 	}
 }
+
+// When the panel owns the screen it redraws by going home and wiping, which is
+// what makes it survive a resize and a frame that changes height. Counting
+// back over the last frame is only for the case where it shares the terminal.
+func TestCastPanelDrawsFromHomeWhenItOwnsTheScreen(t *testing.T) {
+	panel := &castPanelWriter{width: 60, home: true}
+
+	first := panel.frame(testPanelState())
+	if !strings.HasPrefix(first, "\033[H\033[J") {
+		t.Errorf("the first frame does not go home and wipe:\n%q", first[:12])
+	}
+
+	second := panel.frame(testPanelState())
+	if strings.Contains(second, "A") && strings.Contains(second, "\033[4A") {
+		t.Error("a panel that owns the screen is still counting lines back")
+	}
+}

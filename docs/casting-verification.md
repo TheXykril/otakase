@@ -33,6 +33,11 @@ stream for <device>...` → the episode starts within ~30s → `Playing on
       and none appear. That is expected — set `SubStyle=hard` for a hardsubbed
       stream instead.
 
+- [ ] **The panel is the only thing on the terminal.** No text scrolls past it
+      while the episode plays, and anything otakase has to say arrives as a
+      desktop notification instead.
+- [ ] **Your scrollback survives.** After `q`, the terminal is as it was before
+      the cast, with the panel gone rather than left behind.
 - [ ] **Every control key works**: space pauses and resumes, left/right seek,
       up/down change the TV's volume, `s` jumps the opening, `q` stops and
       saves the position.

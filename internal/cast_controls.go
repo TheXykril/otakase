@@ -210,7 +210,9 @@ var castPanelForControls *castPanelWriter
 // In raw mode a bare \n does not return the cursor, so the message is written
 // with \r\n line endings rather than through Out, which uses fmt.Println.
 func castOut(haveControls bool, message string) {
-	if !haveControls || castPanelForControls == nil {
+	// When the panel owns the screen there is nowhere to print: Out turns the
+	// message into a notification, which is the whole point of the takeover.
+	if !haveControls || castPanelForControls == nil || castPanelOwnsScreen() {
 		Out(message)
 		return
 	}
@@ -322,3 +324,43 @@ func castRawModeActive() bool {
 
 // noSpansReported keeps the "no skip times" notice to once per cast.
 var noSpansReported bool
+
+// castScreen tracks whether the panel has taken the terminal over, so Out can
+// send a notification instead of printing into a frame it would corrupt.
+var castScreen struct {
+	mu    sync.Mutex
+	owned bool
+}
+
+func castSetPanelOwnsScreen(owned bool) {
+	castScreen.mu.Lock()
+	castScreen.owned = owned
+	castScreen.mu.Unlock()
+}
+
+// castPanelOwnsScreen reports whether the cast panel is the only thing on the
+// terminal.
+func castPanelOwnsScreen() bool {
+	castScreen.mu.Lock()
+	defer castScreen.mu.Unlock()
+	return castScreen.owned
+}
+
+// castTakeScreen gives the panel the whole terminal: the alternate buffer, so
+// the viewer's scrollback survives, with the cursor hidden so it does not sit
+// blinking inside the frame.
+//
+// It returns the function that gives it back, which the caller must run on
+// every exit -- including the signal path, where it is registered as a cleanup.
+func castTakeScreen() func() {
+	fmt.Print("\033[?1049h\033[2J\033[H\033[?25l")
+	castSetPanelOwnsScreen(true)
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			castSetPanelOwnsScreen(false)
+			fmt.Print("\033[?25h\033[?1049l")
+		})
+	}
+}

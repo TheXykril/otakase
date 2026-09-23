@@ -237,7 +237,8 @@ func castPanelStateStyle(state string) lipgloss.Style {
 // bare \n would staircase the frame across the screen.
 type castPanelWriter struct {
 	width int
-	drawn int // lines currently on screen, 0 when nothing is
+	drawn int  // lines currently on screen, 0 when nothing is
+	home  bool // the panel owns the screen and draws from the top left
 }
 
 // frame is the escape sequence and text that replaces the panel on screen.
@@ -265,6 +266,12 @@ func (c *castPanelWriter) clear() string {
 // screen. Clearing to the end rather than line by line is what makes a frame
 // that shrinks -- a narrowed terminal, a shorter title -- leave nothing behind.
 func (c *castPanelWriter) erase() string {
+	// Owning the screen makes this trivial: go home and wipe. No counting of
+	// lines, and nothing to get wrong when the terminal is resized or a frame
+	// changes height.
+	if c.home {
+		return "\033[H\033[J"
+	}
 	if c.drawn == 0 {
 		return ""
 	}
