@@ -162,3 +162,18 @@ func TestWaitForPlaylistGivesUp(t *testing.T) {
 		t.Error("waiting for a playlist that never appears should fail")
 	}
 }
+
+// A Chromecast decodes H.264 up to Level 4.1, and encoders over-declare: the
+// stream that first exercised this arrived claiming Level 5.0 for 1080p24
+// content that fits inside Level 4.0. The device fetched one segment and
+// dropped the media session, with no error state to read back.
+func TestBuildRemuxArgsCapsTheH264Level(t *testing.T) {
+	args := strings.Join(BuildRemuxArgs("https://example.test/stream.m3u8", "", "/tmp/out"), " ")
+	if !strings.Contains(args, "h264_metadata=level=4.1") {
+		t.Errorf("the H.264 level is not capped for the device's decoder:\n%s", args)
+	}
+	// Still a remux. A level is a field in the SPS, not a reason to re-encode.
+	if !strings.Contains(args, "-c copy") {
+		t.Errorf("the stream is no longer copied:\n%s", args)
+	}
+}

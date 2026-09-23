@@ -49,6 +49,14 @@ func BuildRemuxArgs(streamURL, referrer, outDir string) []string {
 	// undecodable audio while otakase reports a healthy cast.
 	args = append(args, "-c", "copy")
 
+	// Rewrite the declared H.264 level, without touching a single frame.
+	// Encoders routinely over-declare: a 1080p24 stream that fits inside
+	// Level 4.0 arrives claiming Level 5.0, and a Chromecast refuses anything
+	// above the 4.1 its decoder is specified for -- it fetches one segment and
+	// drops the media session. This edits the level field in the SPS only, so
+	// it is still -c copy and still costs no CPU.
+	args = append(args, "-bsf:v", "h264_metadata=level=4.1")
+
 	// An event playlist appends and never drops a segment, so the device can
 	// seek back through everything written so far. VOD would need the whole
 	// duration known before the first segment; live would offer no seek bar.
