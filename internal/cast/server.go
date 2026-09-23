@@ -179,6 +179,12 @@ func castContentType(path string) string {
 		return "application/vnd.apple.mpegurl"
 	case ".ts":
 		return "video/mp2t"
+	case ".vtt":
+		// Stated for the same reason as .ts: this machine's database answers
+		// text/vtt with a charset, another's may answer something else
+		// entirely, and a subtitle rendition the receiver will not read is a
+		// rendition that silently does not appear.
+		return "text/vtt"
 	default:
 		return ""
 	}

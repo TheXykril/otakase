@@ -234,3 +234,28 @@ func TestServerReportsWhetherItWasEverFetched(t *testing.T) {
 		t.Error("a server that served the playlist reports never having been fetched")
 	}
 }
+
+// A WebVTT rendition served as anything but text/vtt is a rendition the
+// receiver will not read, and the system mime database does not reliably know
+// the extension.
+func TestServerStatesTheWebVTTContentType(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "subs.vtt"), []byte("WEBVTT\n"), 0o644); err != nil {
+		t.Fatalf("writing the subtitles: %v", err)
+	}
+	server, err := NewServer(dir)
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	defer server.Close()
+
+	resp, err := http.Get(server.URL("subs.vtt"))
+	if err != nil {
+		t.Fatalf("fetching: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if got := resp.Header.Get("Content-Type"); got != "text/vtt" {
+		t.Errorf("subs.vtt served as %q, want %q", got, "text/vtt")
+	}
+}
