@@ -605,3 +605,140 @@ func TestWatchCastVolumeClampsAtTheTop(t *testing.T) {
 		t.Errorf("volume reached %v, above the receiver's maximum of 1", got)
 	}
 }
+
+// Repeated presses must each act on where the last one left the episode.
+// applyCastCommand works from lastPosition, which only the poll branch
+// refreshed -- so a viewer pressing right six times to skip a recap sent six
+// seeks to the same timestamp and the episode moved ten seconds once.
+func TestWatchCastRepeatedSeeksCompound(t *testing.T) {
+	withFastCastTimings(t)
+
+	commands := make(chan castCommand, 8)
+	commands <- castCmdSeekForward
+	commands <- castCmdSeekForward
+	commands <- castCmdSeekForward
+
+	remux := newFakeRemux()
+	server := &fakeServer{}
+	// The device never reports the new position, which is the point: the
+	// seeks must compound from each other, not from the last poll.
+	session := &fakeSession{steps: []fakeStep{{progress: cast.Progress{Position: 100, Duration: 600}}}}
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	done := make(chan error, 1)
+	captureStdout(t, func() {
+		go func() {
+			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+		}()
+		time.Sleep(150 * time.Millisecond)
+		commands <- castCmdStop
+		<-done
+	})
+
+	session.mu.Lock()
+	seeks := append([]float64(nil), session.seeks...)
+	session.mu.Unlock()
+
+	if len(seeks) < 3 {
+		t.Fatalf("expected three seeks, got %v", seeks)
+	}
+	if seeks[0] == seeks[1] || seeks[1] == seeks[2] {
+		t.Errorf("repeated seeks did not compound: %v -- each press acted on a stale position", seeks)
+	}
+}
+
+// The receiver resumes playback on any seek -- SeekToTime sends
+// ResumeState "PLAYBACK_START" -- so a seek while paused starts the TV again.
+// If watchCast keeps thinking it is paused, the status line lies, space needs
+// two presses to pause again, and the stall bound is gated off !paused for the
+// rest of the episode: a device that stops answering then holds ffmpeg, the
+// scratch directory and the server open forever.
+//
+// The observable difference is the stall bound. With a frozen position, a
+// watchCast that knows the seek resumed playback gives up after
+// castStallTimeout; one that still believes it is paused never does.
+func TestWatchCastSeekingWhilePausedClearsPaused(t *testing.T) {
+	withFastCastTimings(t)
+
+	commands := make(chan castCommand, 8)
+	commands <- castCmdPauseToggle
+	commands <- castCmdSeekForward
+
+	remux := newFakeRemux()
+	server := &fakeServer{}
+	session := &fakeSession{steps: []fakeStep{{progress: cast.Progress{Position: 100, Duration: 600}}}}
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	done := make(chan error, 1)
+	captureStdout(t, func() {
+		go func() {
+			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+		}()
+
+		select {
+		case err := <-done:
+			if err == nil || !strings.Contains(err.Error(), "stopped reporting progress") {
+				t.Errorf("expected the stall bound to fire after the seek resumed playback, got %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Error("the stall bound never fired: watchCast still believes the device is paused after a seek resumed it")
+			commands <- castCmdStop
+			<-done
+		}
+	})
+}
+
+// Closing the spawned window is the intended way to stop a rofi cast, and the
+// README and the hardware checklist both promise it saves your position. That
+// path is a signal, so it runs the exit cleanups and never returns through
+// watchCast -- the position has to be written from a cleanup, not from the
+// function's own exits.
+func TestWatchCastSavesPartialProgressOnASignal(t *testing.T) {
+	withFastCastTimings(t)
+	resetExitCleanupsForTest()
+	t.Cleanup(resetExitCleanupsForTest)
+
+	commands := make(chan castCommand, 4)
+	remux := newFakeRemux()
+	server := &fakeServer{}
+	session := &fakeSession{steps: []fakeStep{{progress: cast.Progress{Position: 321, Duration: 1440}}}}
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	done := make(chan error, 1)
+	var history []Anime
+	captureStdout(t, func() {
+		go func() {
+			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+		}()
+		time.Sleep(120 * time.Millisecond) // let it poll a position
+
+		// What the signal handler does, without exiting the test process.
+		runExitCleanups()
+
+		// Read before stopping: watchCast's own stop path also saves, so
+		// checking afterwards would pass whether or not the cleanup did
+		// anything.
+		history = LocalGetAllAnime(filepath.Join(config.StoragePath, "curd_history.txt"))
+
+		commands <- castCmdStop
+		<-done
+	})
+
+	if !animeMarked(history, anime.AnilistId) {
+		t.Fatal("closing the window wrote no history row at all")
+	}
+	for _, entry := range history {
+		if entry.AnilistId != anime.AnilistId {
+			continue
+		}
+		if entry.Ep.Player.PlaybackTime == 0 {
+			t.Errorf("the position was not saved: row has PlaybackTime 0, wanted about 321")
+		}
+	}
+}

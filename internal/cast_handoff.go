@@ -267,5 +267,29 @@ func RunCastSession(config *Config, path string) error {
 		config.CastDevice = session.Device
 	}
 
-	return CastEpisode(config, castSessionToAnime(session))
+	anime := castSessionToAnime(session)
+
+	// This process reaches casting above the point where main signs the viewer
+	// in, so without this the spawned window would write curd_history.txt,
+	// report the episode watched, and never move AniList or MyAnimeList -- the
+	// tracker silently stops following the one launch path this feature makes
+	// primary. A sign-in failure is reported rather than fatal: local history
+	// still works, and losing the episode over it would be worse.
+	if UsesRemoteTracking(config) {
+		user := GetGlobalUser()
+		if user == nil {
+			user = &User{}
+			SetGlobalUser(user)
+		}
+		if err := EnsureConfiguredTrackersReady(config, user); err != nil {
+			Out("Remote tracking is unavailable for this cast: " + err.Error())
+			Log(fmt.Sprintf("cast: could not ready trackers in the spawned session: %v", err))
+		}
+	}
+
+	// ShouldWriteRemoteTracking reads the global anime, which in this process
+	// is still main's zero value rather than the episode being cast.
+	SetGlobalAnime(anime)
+
+	return CastEpisode(config, anime)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -96,6 +97,18 @@ func castSpansFor(times SkipTimes, config *Config) []cast.Span {
 		spans = append(spans, cast.Span{Start: float64(times.Ed.Start), End: float64(times.Ed.End)})
 	}
 	return spans
+}
+
+// shouldPushRemoteProgress reports whether a remote tracker can be written.
+//
+// A nil check is not enough. main stores a zero-value User globally before any
+// sign-in happens, and the spawned cast process returns into RunCastSession
+// before EnsureConfiguredTrackersReady would have filled it in -- so
+// GetGlobalUser there is non-nil with an empty Token, and an unauthenticated
+// mutation goes out, fails, and is only logged while the viewer is told the
+// episode was marked.
+func shouldPushRemoteProgress(config *Config, user *User) bool {
+	return UsesRemoteTracking(config) && user != nil && strings.TrimSpace(user.Token) != ""
 }
 
 // ApplyCastSubStyle makes a cast ask for the burned-in subtitle variant.
@@ -389,28 +402,78 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	// cast has no loop left once this function returns. The marked guard
 	// keeps this from overwriting a completed episode's record with an
 	// in-progress one on an exit that follows a successful mark.
-	savePartial := func(position float64) {
-		if marked || position < 1 {
+	// Everything an exit needs to write a partial row, guarded because one of
+	// the two callers is the signal-handler goroutine: the window closing runs
+	// this without unwinding the loop, so it cannot read the loop's own
+	// variables.
+	var (
+		savedMu       sync.Mutex
+		savedPosition float64
+		savedDuration int
+		savedMarked   bool
+	)
+	recordPosition := func(position float64) {
+		savedMu.Lock()
+		savedPosition = position
+		savedDuration = anime.Ep.Duration
+		savedMarked = marked
+		savedMu.Unlock()
+	}
+	// Read once, before the loop writes anything: the exit cleanup runs on
+	// another goroutine, and GetAnimeName takes an Anime by value, so calling
+	// it there would copy the whole struct while this loop is writing
+	// Ep.Duration and Ep.Player.PlaybackTime. None of these change during a
+	// cast.
+	historyPath := filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt")
+	animeName := GetAnimeName(*anime)
+	animeProvider := CurrentAnimeProviderName(anime)
+	anilistID, providerID, episodeNumber := anime.AnilistId, anime.ProviderId, anime.Ep.Number
+
+	writePartial := func() {
+		savedMu.Lock()
+		position, duration, alreadyMarked := savedPosition, savedDuration, savedMarked
+		savedMu.Unlock()
+
+		if alreadyMarked || position < 1 {
 			return
 		}
 		LocalUpdateAnime(
-			filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt"),
-			anime.AnilistId, anime.ProviderId, anime.Ep.Number,
+			historyPath,
+			anilistID, providerID, episodeNumber,
 			// Minutes, as at the mark-complete call above: Ep.Duration is held
 			// in seconds in memory, and this column is read back as minutes.
-			int(position), ConvertSecondsToMinutes(anime.Ep.Duration),
-			GetAnimeName(*anime), CurrentAnimeProviderName(anime),
+			int(position), ConvertSecondsToMinutes(duration),
+			animeName, animeProvider,
 		)
 	}
+	savePartial := func(position float64) {
+		recordPosition(position)
+		writePartial()
+	}
+
+	// The window closing is a signal, not a return: the process exits without
+	// unwinding this function, so the position has to be written from a
+	// cleanup or the README's promise that closing the window saves your place
+	// is simply untrue. Cancelled on every normal exit below, where savePartial
+	// is called directly with the position of that moment.
+	cancelSave := RegisterExitCleanup(writePartial)
+	defer cancelSave()
+
+	// Created once, reset only when a poll actually happens: a timer recreated
+	// on every select would let a stream of keypresses postpone Progress()
+	// indefinitely, and with it the remux and server error checks.
+	pollTimer := time.NewTimer(castPollInterval)
+	defer pollTimer.Stop()
 
 	for {
 		// A nil command channel blocks forever, so with no controls this
 		// select degrades to exactly the sleep it replaced.
 		select {
-		case <-time.After(castPollInterval):
+		case <-pollTimer.C:
+			pollTimer.Reset(castPollInterval)
 		case command := <-commands:
 			wasPaused := paused
-			stop, err := applyCastCommand(command, session, &paused, spans, lastPosition)
+			stop, moved, err := applyCastCommand(command, session, &paused, spans, lastPosition)
 			if err != nil {
 				Log(fmt.Sprintf("cast: %v", err))
 			}
@@ -419,6 +482,12 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 				savePartial(lastPosition)
 				return nil
 			}
+			// A command that moved the episode is the freshest position there
+			// is: the device will not report it until the next poll, and
+			// without this every press in a burst acts on the same stale
+			// reading and they collapse into one seek.
+			lastPosition = moved
+			recordPosition(lastPosition)
 			// Only on resume, and deliberately not on every command. While
 			// paused the stall clock is not consulted at all, so by the time
 			// playback resumes it holds a reading as old as the pause and
@@ -505,6 +574,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 		// see between ticks, and read as a stall that was not one.
 		if progress.Position != lastPosition {
 			lastPosition = progress.Position
+			recordPosition(lastPosition)
 			lastPositionChange = time.Now()
 		} else if started && !paused && time.Since(lastPositionChange) >= castStallTimeout {
 			savePartial(lastPosition)
@@ -550,6 +620,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 
 		if !marked && remuxSucceeded() && cast.ShouldMarkComplete(progress, config.PercentageToMarkComplete) {
 			marked = true
+			recordPosition(progress.Position)
 			LocalUpdateAnime(
 				filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt"),
 				anime.AnilistId, anime.ProviderId, anime.Ep.Number,
@@ -562,7 +633,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			// GetGlobalUser returns nil when nothing signed in, and local-only
 			// tracking is a supported mode -- dereferencing it here would panic
 			// on the one path a local-only user reaches.
-			if user := GetGlobalUser(); UsesRemoteTracking(config) && user != nil {
+			if user := GetGlobalUser(); shouldPushRemoteProgress(config, user) {
 				if err := UpdateAnimeProgress(user.Token, anime.AnilistId, anime.Ep.Number); err != nil {
 					Log(fmt.Sprintf("cast: could not update remote progress: %v", err))
 				}

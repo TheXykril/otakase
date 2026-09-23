@@ -124,57 +124,72 @@ func castClock(seconds float64) string {
 // It takes the last known position rather than polling for a fresh one: a
 // keypress should act on what the viewer is looking at, and a poll here would
 // add a network round trip to every press.
-func applyCastCommand(command castCommand, session castSession, paused *bool, spans []cast.Span, position float64) (stop bool, err error) {
+func applyCastCommand(command castCommand, session castSession, paused *bool, spans []cast.Span, position float64) (stop bool, moved float64, err error) {
+	// seek centralises the two things every seek must do besides seeking: it
+	// reports the new position so repeated presses compound instead of each
+	// acting on the last polled one, and it clears paused, because the
+	// receiver resumes playback on any seek (ResumeState "PLAYBACK_START").
+	// Leaving paused set there would desync the status line and, worse, hold
+	// the stall bound off for the rest of the episode.
+	seek := func(target float64) (bool, float64, error) {
+		if target < 0 {
+			target = 0
+		}
+		*paused = false
+		return false, target, session.SeekToTime(target)
+	}
+
 	switch command {
 	case castCmdStop:
-		return true, nil
+		return true, position, nil
 
 	case castCmdPauseToggle:
 		if *paused {
 			*paused = false
-			return false, session.Unpause()
+			return false, position, session.Unpause()
 		}
 		*paused = true
-		return false, session.Pause()
+		return false, position, session.Pause()
 
 	case castCmdSeekBack:
-		target := position - castSeekStep
-		if target < 0 {
-			target = 0
-		}
-		return false, session.SeekToTime(target)
+		return seek(position - castSeekStep)
 
 	case castCmdSeekForward:
-		return false, session.SeekToTime(position + castSeekStep)
+		return seek(position + castSeekStep)
 
 	case castCmdVolumeUp:
-		return false, session.SetVolume(session.Volume() + castVolumeStep)
+		return false, position, session.SetVolume(session.Volume() + castVolumeStep)
 
 	case castCmdVolumeDown:
-		return false, session.SetVolume(session.Volume() - castVolumeStep)
+		return false, position, session.SetVolume(session.Volume() - castVolumeStep)
 
 	case castCmdSkipSpan:
 		// The span the position is inside, if any; otherwise the next one
 		// ahead of it. Pressing s before the opening should reach it.
 		if target, ok := cast.NextSkip(position, spans); ok {
-			return false, session.SeekToTime(target)
+			return seek(target)
 		}
-		next := 0.0
+		// The nearest span that starts ahead of here. Tracked by Start and
+		// seeked to by End, kept as separate variables: comparing a candidate
+		// Start against a stored End picks the wrong span the moment two
+		// overlap.
+		nearestStart, target := 0.0, 0.0
 		found := false
 		for _, span := range spans {
 			if span.End <= span.Start || span.Start <= position {
 				continue
 			}
-			if !found || span.Start < next {
-				next, found = span.End, true
+			if !found || span.Start < nearestStart {
+				nearestStart, target, found = span.Start, span.End, true
 			}
 		}
 		if found {
-			return false, session.SeekToTime(next)
+			return seek(target)
 		}
-		return false, nil
+		castOut(true, "No opening or ending times are known for this episode.")
+		return false, position, nil
 	}
-	return false, nil
+	return false, position, nil
 }
 
 // castOut prints a message that must not be overwritten by, or overwrite, the

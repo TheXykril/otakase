@@ -36,6 +36,10 @@ stream for <device>...` → the episode starts within ~30s → `Playing on
 - [ ] **Every control key works**: space pauses and resumes, left/right seek,
       up/down change the TV's volume, `s` jumps the opening, `q` stops and
       saves the position.
+- [ ] **Press right five times quickly.** The episode must move about fifty
+      seconds, not ten — each press acts on where the last one left it.
+- [ ] **Pause, then seek.** The device resumes on any seek, so the status line
+      must go back to PLAYING rather than staying PAUSED.
 - [ ] **Pause for three minutes.** The episode must still be there — the stall
       bound is two minutes and must be suspended while paused.
 
@@ -119,8 +123,17 @@ stream declaring H.264 Level 5.0 to a decoder specified for 4.1.
 - [ ] **Launch from the Hyprland keybind with casting on.** A terminal opens,
       showing the status line and the control keys.
 - [ ] **Every key works there**, the same as in a terminal launch.
-- [ ] **Close the window mid-episode.** The TV stops, the position is saved,
-      no ffmpeg survives, and `<StoragePath>/cast-scratch/` is empty.
+- [ ] **Close the window mid-episode**, then check each of these separately —
+      a partial pass is not a pass:
+  - [ ] the TV stops playing
+  - [ ] the position was saved (check `curd_history.txt`)
+  - [ ] no ffmpeg process survives
+  - [ ] `<StoragePath>/cast-scratch/` is empty
+- [ ] **Let an episode complete in the spawned window, then check AniList or
+      MyAnimeList actually advanced** — not just `curd_history.txt`. The child
+      process signs in separately from the one that launched it, and local
+      history is written either way, so the terminal line alone cannot tell you
+      remote tracking worked.
 - [ ] **Set `CastTerminal` to a command that does not exist.** The episode
       still casts, in the launching process, with a message saying why there is
       no window — a missing terminal must never mean a missing episode.

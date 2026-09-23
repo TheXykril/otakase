@@ -68,11 +68,24 @@ func runExitCleanups() {
 	}
 }
 
+// interruptSignals are the signals that must restore the terminal and run the
+// exit cleanups before the process goes away.
+//
+// SIGHUP is here because closing a terminal window closes its pty and the
+// kernel sends SIGHUP to the foreground process group. A cast started from
+// rofi runs in a window of its own, and closing that window is the intended
+// way to stop it -- unhandled, the process would die with no teardown, leaving
+// the device playing a stream whose server has gone and a whole episode of
+// segments on disk.
+func interruptSignals() []os.Signal {
+	return []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP}
+}
+
 // InstallTerminalInterruptHandler restores the terminal before exiting on Ctrl+C or SIGTERM.
 func InstallTerminalInterruptHandler() {
 	interruptHandlerOnce.Do(func() {
 		interrupts := make(chan os.Signal, 1)
-		signal.Notify(interrupts, os.Interrupt, syscall.SIGTERM)
+		signal.Notify(interrupts, interruptSignals()...)
 		go func() {
 			for range interrupts {
 				exitWithRestore(130)

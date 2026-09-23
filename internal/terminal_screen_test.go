@@ -69,3 +69,22 @@ func TestRunExitCleanupsRunsRegistered(t *testing.T) {
 		t.Error("a registered cleanup did not run")
 	}
 }
+
+// Closing a terminal window closes its pty, and the kernel sends SIGHUP to the
+// foreground process group. A cast started from rofi lives in a window whose
+// close is the intended stop gesture, so an unhandled SIGHUP means the process
+// dies with no teardown at all: the device is never told to stop and the
+// scratch directory is left on disk.
+func TestInterruptSignalsIncludeHangup(t *testing.T) {
+	signals := interruptSignals()
+
+	want := map[string]bool{"interrupt": false, "terminated": false, "hangup": false}
+	for _, s := range signals {
+		want[s.String()] = true
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("%s is not handled; signals = %v", name, signals)
+		}
+	}
+}
