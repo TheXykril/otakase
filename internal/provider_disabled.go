@@ -125,7 +125,7 @@ func filterEnabledProviders(names []string) []string {
 // have to be found before the first frame -- but ahead of the broken ones,
 // because it reliably carries an episode in the week it airs even when every
 // streaming host is still missing it.
-var preferredProviderOrder = []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb"}
+var preferredProviderOrder = []string{"anikoto", "kickassanime", "anizone", "anipub", "anineko", "nyaa", "anidb"}
 
 func defaultEnabledProviderStack() []string {
 	registered := providers.RegisteredNames()
