@@ -29,9 +29,12 @@ stream for <device>...` → the episode starts within ~30s → `Playing on
       healthy cast. `TestRemuxedStreamDecodesCleanly` now guards it, but only
       the device's own decoder settles it.
 - [ ] Video plays without stutter or artefacts.
-- [ ] If the provider offered soft subtitles, otakase says they cannot be cast
-      and none appear. That is expected — set `SubStyle=hard` for a hardsubbed
-      stream instead.
+- [ ] **Subtitles appear**, on a stream that has them. They are drawn into the
+      picture, so they cannot be turned off from the TV — that is expected.
+      `.ass` styling and positioning should look as it does in mpv.
+- [ ] **Check which encoder was used**: `grep 'burning subtitles' ` the debug
+      log. If it fell back to `libx264`, the GPU probe failed — worth knowing,
+      since the CPU cost is much higher on a long film.
 
 - [ ] **The panel is the only thing on the terminal.** No text scrolls past it
       while the episode plays, and anything otakase has to say arrives as a

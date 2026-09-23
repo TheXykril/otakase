@@ -83,12 +83,18 @@ type Remux struct {
 
 // StartRemux begins remuxing and returns without waiting for the first segment.
 func StartRemux(ffmpegPath, streamURL, referrer, outDir string) (*Remux, error) {
+	return StartFFmpeg(ffmpegPath, BuildRemuxArgs(streamURL, referrer, outDir), outDir)
+}
+
+// StartFFmpeg runs a prepared ffmpeg command and watches it the same way,
+// whether it is copying the stream or burning subtitles into it.
+func StartFFmpeg(ffmpegPath string, args []string, outDir string) (*Remux, error) {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return nil, fmt.Errorf("cast: could not create the stream directory: %w", err)
 	}
 
 	remux := &Remux{done: make(chan struct{})}
-	remux.cmd = exec.Command(ffmpegPath, BuildRemuxArgs(streamURL, referrer, outDir)...)
+	remux.cmd = exec.Command(ffmpegPath, args...)
 	remux.cmd.Stderr = &remux.stderr
 
 	if err := remux.cmd.Start(); err != nil {

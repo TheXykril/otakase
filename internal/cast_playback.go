@@ -270,7 +270,29 @@ func CastEpisode(config *Config, anime *Anime) error {
 
 	castStatus("Preparing the stream…")
 	Log(fmt.Sprintf("cast: remuxing %s (referrer %q) into %s", streamURL, referrer, streamDir))
-	rx, err := cast.StartRemux(ffmpeg, streamURL, referrer, streamDir)
+	// Subtitles are drawn into the picture when the stream has them, which is
+	// the only way a Chromecast shows them: it renders WebVTT alone, no
+	// provider here supplies WebVTT, and the receiver will not enable a
+	// subtitle track from an HLS manifest without a Cast track API the
+	// vendored library cannot reach. Burning costs a re-encode, so it happens
+	// only when there is something to burn.
+	remuxArgs := cast.BuildRemuxArgs(streamURL, referrer, streamDir)
+	if anime.Ep.SubtitleURL != "" && config.CastBurnSubtitles {
+		castStatus("Fetching subtitles…")
+		subtitlePath, subErr := fetchCastSubtitle(anime.Ep.SubtitleURL, referrer, streamDir)
+		if subErr != nil {
+			// The episode is worth more than its subtitles: play it without.
+			Out("Subtitles could not be fetched, casting without them: " + subErr.Error())
+			Log(fmt.Sprintf("cast: %v", subErr))
+		} else {
+			castStatus("Preparing the stream with subtitles…")
+			encoder := castBurnEncoder(config, ffmpeg)
+			Log(fmt.Sprintf("cast: burning subtitles with %s (hardware=%t)", encoder.Name, encoder.Hardware()))
+			remuxArgs = cast.BuildBurnArgs(streamURL, referrer, subtitlePath, streamDir, encoder)
+		}
+	}
+
+	rx, err := cast.StartFFmpeg(ffmpeg, remuxArgs, streamDir)
 	if err != nil {
 		return err
 	}
@@ -323,7 +345,9 @@ func CastEpisode(config *Config, anime *Anime) error {
 		// The Default Media Receiver renders WebVTT only, and Load carries no
 		// subtitle track. Say so rather than letting the episode arrive silently
 		// without the subtitles the viewer was expecting.
-		Out("Note: this stream's subtitles cannot be cast. Try SubStyle=hard for a hardsubbed stream.")
+		if !config.CastBurnSubtitles {
+			Out("Note: this stream has subtitles, and CastBurnSubtitles is off, so they will not appear.")
+		}
 	}
 
 	if anime.Ep.Resume && anime.Ep.Player.PlaybackTime > 0 {

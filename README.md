@@ -216,12 +216,23 @@ locally with `ffmpeg` — no re-encoding, so it costs bandwidth and almost no
 CPU — serves it from this machine, and points the device at that. `ffmpeg` is
 required for the same reason `-download` needs it.
 
-Openings and endings are still skipped, and progress is still tracked. Casting
-asks for the hardsubbed stream, because the Chromecast renders only WebVTT and
-no provider here supplies it — on a provider that offers both, you get burned-in
-subtitles without setting anything. A resume point from an earlier episode is
-not honoured yet — casting always starts from the beginning, and says so when
-one exists.
+Openings and endings are still skipped, and progress is still tracked.
+
+Subtitles reach the TV the only way they can. A Chromecast renders WebVTT and
+nothing else, no provider here supplies WebVTT, and the receiver will not enable
+a subtitle track from an HLS manifest. So casting asks for a provider's
+hardsubbed stream where one exists, and where it does not, otakase draws the
+subtitles into the picture itself — which means re-encoding the video, the one
+thing the copy path never does. It uses your GPU if it can, and checks that it
+works before relying on it. `CastBurnSubtitles=false` turns it off;
+`CastEncoder` forces `vaapi` or `software` if the detection picks wrong.
+
+Styling survives this, which is the reason it is done this way round: an `.ass`
+subtitle's fonts, colours and positioning are drawn exactly as the fansub
+intended, where converting to WebVTT would have flattened them.
+
+A resume point from an earlier episode is not honoured yet — casting always
+starts from the beginning, and says so when one exists.
 
 While a cast plays, the terminal shows a control panel and nothing else —
 where the episode is, what it is playing on, and the keys: space pauses, the

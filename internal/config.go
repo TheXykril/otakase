@@ -100,6 +100,15 @@ type Config struct {
 	// ephemeral range, and a device that cannot fetch looks identical to one
 	// that never started.
 	CastPort int `config:"CastPort"`
+	// CastBurnSubtitles draws a stream's subtitles into the picture when
+	// casting it. The Chromecast cannot render the subtitle files these
+	// providers supply, so this is the only way to see them on a soft-subbed
+	// stream -- at the cost of re-encoding the video, which the copy path
+	// never does.
+	CastBurnSubtitles bool `config:"CastBurnSubtitles"`
+	// CastEncoder forces the encoder used for that: "vaapi", "software", or
+	// empty to detect what this machine can actually do.
+	CastEncoder string `config:"CastEncoder"`
 	// CastToDevice records that -cast was given for this run. It is not a
 	// setting, so it carries no config tag.
 	CastToDevice bool `config:"-"`
@@ -178,6 +187,8 @@ func defaultConfigMap() map[string]string {
 		"CastDevice":                 "",
 		"CastTerminal":               "",
 		"CastPort":                   "0",
+		"CastBurnSubtitles":          "true",
+		"CastEncoder":                "",
 	}
 }
 
