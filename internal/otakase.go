@@ -158,7 +158,15 @@ func Out(data interface{}) {
 		userConfig = &Config{}
 	}
 	if !userConfig.RofiSelection {
-		fmt.Println(fmt.Sprintf("%v", data))
+		// Raw mode, which the cast controls turn on, disables the translation
+		// that makes \n also return the cursor. A bare newline there leaves the
+		// next line starting wherever the last one ended, and the output walks
+		// diagonally across the screen.
+		if castRawModeActive() {
+			fmt.Print(fmt.Sprintf("%v", data) + "\r\n")
+		} else {
+			fmt.Println(fmt.Sprintf("%v", data))
+		}
 	} else {
 		switch runtime.GOOS {
 		case "windows":

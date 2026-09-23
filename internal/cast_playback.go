@@ -325,9 +325,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 	Out(fmt.Sprintf("Playing on %s.", device.Name))
 
 	commands, haveControls := startCastControls(config)
-	if haveControls {
-		Out("  [space] pause   [left/right] seek 10s   [up/down] volume   [s] skip OP/ED   [q] stop")
-	} else {
+	if !haveControls {
 		Out("Controls need a terminal; use the device's own remote or app.")
 	}
 
@@ -358,6 +356,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	// second later by "Playback finished." on a black screen.
 	started := false
 	paused := false
+	noSpansReported = false // one notice per cast, not per process
 	startupDeadline := time.Now().Add(castStartupGrace)
 
 	// lastPosition/lastPositionChange back Important 3's stall bound: a

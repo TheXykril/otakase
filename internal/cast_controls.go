@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"golang.org/x/term"
 
@@ -186,7 +187,13 @@ func applyCastCommand(command castCommand, session castSession, paused *bool, sp
 		if found {
 			return seek(target)
 		}
-		castOut(true, "No opening or ending times are known for this episode.")
+		// Said once, however many times the key is pressed: a viewer who holds
+		// s on an episode with no known times would otherwise push the panel
+		// down the screen a line at a time.
+		if !noSpansReported {
+			noSpansReported = true
+			castOut(true, "No opening or ending times are known for this episode.")
+		}
 		return false, position, nil
 	}
 	return false, position, nil
@@ -239,7 +246,11 @@ func startCastControls(config *Config) (<-chan castCommand, bool) {
 	// Raw mode outlives every defer in this call when the process exits on a
 	// signal, and a terminal left raw is a terminal the viewer has to reset by
 	// hand. The exit path restores it for the same reason it tears down ffmpeg.
-	restore := func() { _ = term.Restore(fd, state) }
+	castSetRawMode(true)
+	restore := func() {
+		castSetRawMode(false)
+		_ = term.Restore(fd, state)
+	}
 	RegisterExitCleanup(restore)
 
 	commands := make(chan castCommand, 8)
@@ -288,3 +299,26 @@ func castTerminalWidth() int {
 func castStdoutIsTerminal() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
 }
+
+// castRawMode records whether the terminal is in raw mode, so Out can pick the
+// line ending that works there. A package-level flag rather than a parameter
+// because Out is called from everywhere and only the cast path changes this.
+var castRawMode struct {
+	mu     sync.Mutex
+	active bool
+}
+
+func castSetRawMode(active bool) {
+	castRawMode.mu.Lock()
+	castRawMode.active = active
+	castRawMode.mu.Unlock()
+}
+
+func castRawModeActive() bool {
+	castRawMode.mu.Lock()
+	defer castRawMode.mu.Unlock()
+	return castRawMode.active
+}
+
+// noSpansReported keeps the "no skip times" notice to once per cast.
+var noSpansReported bool

@@ -112,3 +112,19 @@ func TestCastPanelClearForgetsTheFrame(t *testing.T) {
 		t.Error("after clearing, the next frame still tried to erase a panel that is gone")
 	}
 }
+
+// Light-novel titles are long. The device has to stay readable anyway: it is
+// the only thing telling the viewer where the episode is playing.
+func TestCastPanelKeepsTheDeviceVisibleBesideALongTitle(t *testing.T) {
+	state := testPanelState()
+	state.Title = "Rich Girl Caretaker: I'm Secretly the Caregiver of the Most Popular Girl in This Rich Kid School"
+
+	top := castPanelLines(state, 72)[0]
+
+	if !strings.Contains(top, "Office TV") {
+		t.Errorf("a long title pushed the device out of the header:\n%s", top)
+	}
+	if lipglossWidth(top) > 72 {
+		t.Errorf("the header is %d cells wide, over the 72 it was given:\n%s", lipglossWidth(top), top)
+	}
+}

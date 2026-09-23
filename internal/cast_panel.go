@@ -110,11 +110,16 @@ func castPanelTop(state castPanelState, width int) string {
 		right = fmt.Sprintf(" %s ", state.Device)
 	}
 
-	// The show's title is what gives when there is not enough room: the
-	// episode number and the device are short and both matter.
+	// The show's title is what gives when there is not enough room: the episode
+	// number and the device are short and both matter, and a full light-novel
+	// title would otherwise eat the whole frame and push the device out.
 	fixed := 2 + lipgloss.Width(right) + 2 // corners plus two dashes
-	if over := lipgloss.Width(left) + fixed - width; over > 0 {
-		left = castPanelTruncate(left, max(0, lipgloss.Width(left)-over))
+	budget := width - fixed
+	if half := width / 2; budget > half {
+		budget = half
+	}
+	if lipgloss.Width(left) > budget {
+		left = castPanelTruncate(left, budget)
 	}
 
 	fill := width - 2 - lipgloss.Width(left) - lipgloss.Width(right)
@@ -187,7 +192,12 @@ func castPanelTruncate(text string, width int) string {
 	if lipgloss.Width(text) <= width {
 		return text + strings.Repeat(" ", width-lipgloss.Width(text))
 	}
-	return lipgloss.NewStyle().MaxWidth(width).Render(text)
+	// An ellipsis, so a cut title reads as a cut title rather than as a
+	// rendering fault.
+	if width == 1 {
+		return "\u2026"
+	}
+	return lipgloss.NewStyle().MaxWidth(width-1).Render(text) + "\u2026"
 }
 
 // lipglossWidth measures a rendered line in terminal cells, ignoring the ANSI
