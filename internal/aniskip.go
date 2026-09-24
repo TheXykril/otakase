@@ -123,6 +123,12 @@ func GetAndParseAniSkipData(animeMalId int, episode int, timePrecision int, anim
 
 // Function to send OP and ED timings to MPV
 func SendSkipTimesToMPV(anime *Anime) error {
+	// Casting resolves skip times with no player running, and a command sent
+	// to an empty socket path is a round trip to nowhere that logged an error
+	// every time.
+	if anime == nil || anime.Ep.Player.SocketPath == "" {
+		return nil
+	}
 	chapterList := []map[string]interface{}{
 		{
 			"title": "Pre-Opening",

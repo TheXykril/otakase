@@ -176,6 +176,16 @@ func CastEpisode(config *Config, anime *Anime) error {
 			release()
 		}()
 	}
+	// Resolved here because casting reaches nothing that would do it for us:
+	// StartPlayback runs the whole cast inline and hands back no socket path,
+	// and main exits on that before the goroutine local playback relies on has
+	// started. Without this the spans below are always empty, so no opening is
+	// ever skipped and pressing s reports -- accurately -- that nothing is
+	// known.
+	ensureCastSkipTimes(anime, config, func(a *Anime, episode int, cfg *Config, provider any) {
+		ApplySkipTimes(a, episode, cfg, provider)
+	})
+
 	castStatus := func(message string) {
 		if panel != nil {
 			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device.Name, message))

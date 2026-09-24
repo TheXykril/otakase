@@ -57,8 +57,10 @@ stream for <device>...` → the episode starts within ~30s → `Playing on
 
 - [ ] Seeking from the TV remote or the Google Home app is picked up within
       about a second.
-- [ ] With `SkipOp`/`SkipEd` on and known skip times, the opening and ending
-      are jumped automatically.
+- [ ] With `SkipOp`/`SkipEd` on, **the opening is jumped automatically** —
+      casting resolves its own skip times, because it never reaches the place
+      local playback gets them from. If nothing skips, check the debug log for
+      a skip lookup line before assuming the show has no times.
 - [ ] At `PercentageToMarkComplete` (85% by default), otakase prints
       `Episode N marked as watched.`, `curd_history.txt` gains an entry, and
       the tracker updates if remote tracking is on.
