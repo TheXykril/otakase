@@ -241,3 +241,35 @@ func TestCastPanelStatusAndPlayingFramesBothRedrawFromHome(t *testing.T) {
 		t.Error("the playing frame does not go home and wipe")
 	}
 }
+
+// The episode number is the shortest and most load-bearing thing in the
+// header, and truncating title-and-episode as one string ate it first: the
+// trim runs off the end, and the end is where the episode number sits.
+func TestCastPanelKeepsTheEpisodeNumberBesideALongTitle(t *testing.T) {
+	state := testPanelState()
+	state.Title = "Rich Girl Caretaker: I'm Secretly the Caregiver of the Most Popular Girl in This Rich Kid School"
+
+	top := castPanelLines(state, 84)[0]
+
+	if !strings.Contains(top, "Ep 12") {
+		t.Errorf("a long title cut the episode number out of the header:\n%s", top)
+	}
+	if !strings.Contains(top, "Office TV") {
+		t.Errorf("a long title pushed the device out of the header:\n%s", top)
+	}
+	if lipglossWidth(top) > 84 {
+		t.Errorf("the header is %d cells wide, over the 84 it was given", lipglossWidth(top))
+	}
+}
+
+// A title short enough to fit keeps every character -- nothing is trimmed just
+// because the budget exists.
+func TestCastPanelDoesNotTrimAShortTitle(t *testing.T) {
+	state := testPanelState()
+	state.Title = "Frieren"
+
+	top := castPanelLines(state, 84)[0]
+	if !strings.Contains(top, "Frieren · Ep 12") {
+		t.Errorf("a short title was altered:\n%s", top)
+	}
+}

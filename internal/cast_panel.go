@@ -105,23 +105,35 @@ func castPanelRow(segments []castPanelSegment, inner int) string {
 
 // castPanelTop is the framed header carrying the show, episode and device.
 func castPanelTop(state castPanelState, width int) string {
-	left := fmt.Sprintf(" %s · Ep %d ", state.Title, state.Episode)
 	right := ""
 	if state.Device != "" {
 		right = fmt.Sprintf(" %s ", state.Device)
 	}
 
-	// The show's title is what gives when there is not enough room: the episode
+	// The episode number is reserved before the title is measured, and the
+	// title is trimmed to whatever is left over. Trimming the two together cut
+	// the episode number off first -- it sits at the end, which is where a
+	// trim starts eating -- so a long title left the header saying nothing
+	// about which episode was playing.
+	episode := fmt.Sprintf(" · Ep %d ", state.Episode)
+
+	// The title is what gives when there is not enough room: the episode
 	// number and the device are short and both matter, and a full light-novel
-	// title would otherwise eat the whole frame and push the device out.
-	fixed := 2 + lipgloss.Width(right) + 2 // corners plus two dashes
+	// title would otherwise eat the whole frame.
+	fixed := 2 + lipgloss.Width(right) + lipgloss.Width(episode) + 2 // corners, episode, two dashes
 	budget := width - fixed
 	if half := width / 2; budget > half {
 		budget = half
 	}
-	if lipgloss.Width(left) > budget {
-		left = castPanelTruncate(left, budget)
+
+	title := " " + state.Title
+	if budget < 1 {
+		budget = 1
 	}
+	if lipgloss.Width(title) > budget {
+		title = castPanelTruncate(title, budget)
+	}
+	left := title + episode
 
 	fill := width - 2 - lipgloss.Width(left) - lipgloss.Width(right)
 	if fill < 0 {
