@@ -175,3 +175,177 @@ func TestResolveCastTerminalReportsWhenNoneIsInstalled(t *testing.T) {
 		t.Error("no terminal is installed, but resolveCastTerminal found one")
 	}
 }
+
+// Critical 1. The spawned process never reaches StartPlayback, which is the
+// only place that resolves episode links. StartNextEpisode clears Ep.Links "to
+// force fetching new ones", so without a resolve of its own the rofi cast
+// played episode 1, counted down ten seconds and printed "cast: no episode
+// links".
+func TestCastSessionEpisodeResolvesLinksWhenItHasNone(t *testing.T) {
+	config := testCastConfig(t)
+	anime := testCastAnime()
+	anime.Ep.Links = nil
+
+	resolved := 0
+	restoreResolve := stubEpisodeLinkResolve(t, func(cfg *Config, a *Anime, entry *Entry) (ProviderEpisodeResult, bool) {
+		resolved++
+		return ProviderEpisodeResult{
+			Links:        []string{"https://example.test/ep5.m3u8"},
+			Mode:         "sub",
+			ProviderName: "test-provider",
+		}, true
+	})
+	defer restoreResolve()
+
+	var castWith []string
+	restoreCast := stubCastEpisodeForSession(t, func(cfg *Config, a *Anime) error {
+		castWith = append([]string{}, a.Ep.Links...)
+		return nil
+	})
+	defer restoreCast()
+
+	if err := castSessionEpisode(config, anime); err != nil {
+		t.Fatalf("castSessionEpisode: %v", err)
+	}
+	if resolved != 1 {
+		t.Errorf("resolved %d times, want 1", resolved)
+	}
+	if len(castWith) != 1 || castWith[0] != "https://example.test/ep5.m3u8" {
+		t.Errorf("cast received links %v, want the resolved one", castWith)
+	}
+}
+
+// Links already in hand -- the first episode out of the handoff file, or a
+// prefetched next one -- must not be thrown away and fetched again.
+func TestCastSessionEpisodeKeepsLinksItAlreadyHas(t *testing.T) {
+	config := testCastConfig(t)
+	anime := testCastAnime()
+	anime.Ep.Links = []string{"https://example.test/handed-off.m3u8"}
+
+	restoreResolve := stubEpisodeLinkResolve(t, func(cfg *Config, a *Anime, entry *Entry) (ProviderEpisodeResult, bool) {
+		t.Error("resolved links that were already present")
+		return ProviderEpisodeResult{}, false
+	})
+	defer restoreResolve()
+
+	restoreCast := stubCastEpisodeForSession(t, func(cfg *Config, a *Anime) error { return nil })
+	defer restoreCast()
+
+	if err := castSessionEpisode(config, anime); err != nil {
+		t.Fatalf("castSessionEpisode: %v", err)
+	}
+}
+
+// A resolve the viewer backed out of, or that found nothing, must end the
+// season rather than reach CastEpisode with an empty list.
+func TestCastSessionEpisodeStopsWhenNothingResolves(t *testing.T) {
+	config := testCastConfig(t)
+	anime := testCastAnime()
+	anime.Ep.Links = nil
+
+	restoreResolve := stubEpisodeLinkResolve(t, func(cfg *Config, a *Anime, entry *Entry) (ProviderEpisodeResult, bool) {
+		return ProviderEpisodeResult{}, false
+	})
+	defer restoreResolve()
+
+	restoreCast := stubCastEpisodeForSession(t, func(cfg *Config, a *Anime) error {
+		t.Error("cast was reached with no links")
+		return nil
+	})
+	defer restoreCast()
+
+	if err := castSessionEpisode(config, anime); err == nil {
+		t.Error("castSessionEpisode returned no error when nothing resolved")
+	}
+}
+
+// TotalEpisodes and Rewatching decide whether the season ends and whether the
+// tracker is written. Without them in the handoff file advanceDecision sees a
+// show that never ends and a viewer who is not rewatching, so the spawned
+// process would run past the finale and overwrite a rewatcher's completed
+// entry.
+func TestCastSessionCarriesTotalEpisodesAndRewatching(t *testing.T) {
+	config := testCastConfig(t)
+	anime := testCastAnime()
+	anime.TotalEpisodes = 12
+	anime.Rewatching = true
+
+	path, err := writeCastSession(config, anime, "Office TV")
+	if err != nil {
+		t.Fatalf("writeCastSession: %v", err)
+	}
+	session, err := readCastSession(path)
+	if err != nil {
+		t.Fatalf("readCastSession: %v", err)
+	}
+
+	rebuilt := castSessionToAnime(session)
+	if rebuilt.TotalEpisodes != 12 {
+		t.Errorf("TotalEpisodes = %d, want 12", rebuilt.TotalEpisodes)
+	}
+	if !rebuilt.Rewatching {
+		t.Error("Rewatching was lost across the handoff")
+	}
+}
+
+// A file written by the build installed before this change has version 1 and
+// none of the new fields. It must still load, with zero values, rather than
+// leaving a viewer who upgraded mid-cast with a window that refuses the file.
+func TestCastSessionReadsAnOlderVersion(t *testing.T) {
+	config := testCastConfig(t)
+	dir := castSessionDir(config)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	path := filepath.Join(dir, "session-old.json")
+	old := `{"version":1,"anilist_id":424242,"episode_number":5,"links":["https://example.test/a.m3u8"]}`
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	session, err := readCastSession(path)
+	if err != nil {
+		t.Fatalf("readCastSession refused an older file: %v", err)
+	}
+	if session.EpisodeNumber != 5 {
+		t.Errorf("episode = %d, want 5", session.EpisodeNumber)
+	}
+	if session.TotalEpisodes != 0 || session.Rewatching {
+		t.Errorf("missing fields did not default to zero: total=%d rewatching=%v",
+			session.TotalEpisodes, session.Rewatching)
+	}
+}
+
+// A file from a build newer than this one may describe things this one cannot
+// do, so it is still refused rather than guessed at.
+func TestCastSessionRefusesANewerVersion(t *testing.T) {
+	config := testCastConfig(t)
+	dir := castSessionDir(config)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	path := filepath.Join(dir, "session-new.json")
+	if err := os.WriteFile(path, []byte(`{"version":99}`), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if _, err := readCastSession(path); err == nil {
+		t.Error("readCastSession accepted a version this build does not understand")
+	}
+}
+
+// stubEpisodeLinkResolve replaces the resolve behind ResolveEpisodeLinks.
+func stubEpisodeLinkResolve(t *testing.T, fn func(*Config, *Anime, *Entry) (ProviderEpisodeResult, bool)) func() {
+	t.Helper()
+	previous := episodeLinkResolver
+	episodeLinkResolver = fn
+	return func() { episodeLinkResolver = previous }
+}
+
+// stubCastEpisodeForSession replaces the cast the spawned loop runs.
+func stubCastEpisodeForSession(t *testing.T, fn func(*Config, *Anime) error) func() {
+	t.Helper()
+	previous := castEpisodeForSession
+	castEpisodeForSession = fn
+	return func() { castEpisodeForSession = previous }
+}

@@ -12,9 +12,13 @@ import (
 )
 
 // castSessionVersion is the schema of the handoff file. A child reading a
-// version it does not know refuses the file rather than guessing at a
-// tokened URL inside it.
-const castSessionVersion = 1
+// version newer than this refuses the file rather than guessing at a tokened
+// URL inside it; an older one is read, because every field added since is
+// additive and its zero value is what that build meant.
+//
+// 2 added TotalEpisodes and Rewatching, which the spawned process needs to
+// know when the season ends and whether the tracker may be written.
+const castSessionVersion = 2
 
 // castSessionFile is one resolved episode, handed from the process that picked
 // it to the process that casts it.
@@ -42,6 +46,14 @@ type castSessionFile struct {
 	SkipTimes      SkipTimes         `json:"skip_times"`
 	Resume         bool              `json:"resume"`
 	PlaybackTime   int               `json:"playback_time"`
+
+	// TotalEpisodes is what tells the spawned process the season has an end:
+	// without it advanceDecision's atEnd is permanently false there, so the
+	// series never finishes and HandleLastEpisodeCompletion never fires.
+	TotalEpisodes int `json:"total_episodes"`
+	// Rewatching stops the spawned process writing progress over the completed
+	// entry a rewatch already has.
+	Rewatching bool `json:"rewatching"`
 
 	Device string `json:"device"`
 }
@@ -76,6 +88,8 @@ func writeCastSession(config *Config, anime *Anime, device string) (string, erro
 		SkipTimes:      anime.Ep.SkipTimes,
 		Resume:         anime.Ep.Resume,
 		PlaybackTime:   anime.Ep.Player.PlaybackTime,
+		TotalEpisodes:  anime.TotalEpisodes,
+		Rewatching:     anime.Rewatching,
 		Device:         device,
 	}
 
@@ -126,8 +140,12 @@ func readCastSession(path string) (*castSessionFile, error) {
 	if err := json.Unmarshal(encoded, &session); err != nil {
 		return nil, fmt.Errorf("cast: could not decode the session file: %w", err)
 	}
-	if session.Version != castSessionVersion {
-		return nil, fmt.Errorf("cast: session file version %d, this build understands %d", session.Version, castSessionVersion)
+	// Only a file from a newer build is refused. One from an older build is
+	// missing fields added since, and their zero values are exactly what that
+	// build meant -- refusing it would strand a viewer who upgraded between the
+	// rofi pick and the window opening.
+	if session.Version < 1 || session.Version > castSessionVersion {
+		return nil, fmt.Errorf("cast: session file version %d, this build understands up to %d", session.Version, castSessionVersion)
 	}
 	return &session, nil
 }
@@ -171,7 +189,30 @@ func castSessionToAnime(session *castSessionFile) *Anime {
 	anime.Ep.SkipTimes = session.SkipTimes
 	anime.Ep.Resume = session.Resume
 	anime.Ep.Player.PlaybackTime = session.PlaybackTime
+	anime.TotalEpisodes = session.TotalEpisodes
+	anime.Rewatching = session.Rewatching
 	return anime
+}
+
+// castEpisodeForSession is the cast castSessionEpisode runs. A variable so the
+// spawned loop can be tested without a device.
+var castEpisodeForSession = CastEpisode
+
+// castSessionEpisode casts one episode for the spawned session, resolving its
+// stream first when it has none.
+//
+// The handoff file carries the links for the first episode only. Every episode
+// after it arrives from StartNextEpisode, which clears Ep.Links "to force
+// fetching new ones" -- a fetch main's loop performs inside StartPlayback and
+// this process never reaches. So it is performed here, through the same helper.
+func castSessionEpisode(config *Config, anime *Anime) error {
+	if anime == nil {
+		return fmt.Errorf("cast: nothing to play")
+	}
+	if len(anime.Ep.Links) == 0 && !ResolveEpisodeLinks(config, anime) {
+		return fmt.Errorf("cast: could not find a stream for episode %d", anime.Ep.Number)
+	}
+	return castEpisodeForSession(config, anime)
 }
 
 // castTerminalCandidates are the emulators tried when nothing is configured,
@@ -299,7 +340,7 @@ func RunCastSession(config *Config, path string) error {
 	var lastErr error
 	runCastLoop(
 		func() error {
-			lastErr = CastEpisode(config, anime)
+			lastErr = castSessionEpisode(config, anime)
 			return lastErr
 		},
 		func() bool {
