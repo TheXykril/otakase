@@ -224,3 +224,50 @@ func TestCastAwaitStillStopsOnALiveKeypress(t *testing.T) {
 		t.Fatal("the countdown never finished")
 	}
 }
+
+// Important 3, the lesser version. The terminal cast rejoins main's playback
+// loop, which skips filler at the top of the next iteration: after episode 12
+// StartNextEpisode sets 13, and if 13 is filler that loop jumps to the next
+// canon episode. The countdown promised 13 and the viewer got 15.
+func TestCastNextEpisodeNumberFollowsTheFillerSkip(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		skipFiller bool
+		filler     []int
+		watched    int
+		want       int
+	}{
+		{"one filler episode is stepped over", true, []int{13}, 12, 14},
+		{"a run of filler is walked in one go", true, []int{13, 14}, 12, 15},
+		{"a canon next episode is left alone", true, []int{17}, 12, 13},
+		{"SkipFiller off keeps the plain next episode", false, []int{13, 14}, 12, 13},
+		{"no filler list means no jump to render", true, nil, 12, 13},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{SkipFiller: tc.skipFiller}
+			anime := &Anime{TotalEpisodes: 24, FillerEpisodes: tc.filler}
+			anime.Ep.Number = tc.watched
+
+			if got := castNextEpisodeNumber(config, anime); got != tc.want {
+				t.Errorf("castNextEpisodeNumber = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// The number the panel shows is the number the label carries: a regression
+// here is invisible unless the two are checked together.
+func TestCastCountdownMessageNamesTheEpisodeThatWillPlay(t *testing.T) {
+	config := &Config{SkipFiller: true}
+	anime := &Anime{TotalEpisodes: 24, FillerEpisodes: []int{13, 14}}
+	anime.Ep.Number = 12
+
+	line := castCountdownMessage(anime.Ep.Number, castNextEpisodeNumber(config, anime), castCountdownDuration)
+
+	if !strings.Contains(line, "Episode 15") {
+		t.Errorf("countdown line %q does not name episode 15, the one main's loop will play", line)
+	}
+	if strings.Contains(line, "Episode 13") {
+		t.Errorf("countdown line %q still promises the filler episode", line)
+	}
+}

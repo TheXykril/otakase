@@ -51,12 +51,37 @@ func castSeasonFinished(anime *Anime) bool {
 	return anime != nil && anime.TotalEpisodes > 0 && anime.Ep.Number >= anime.TotalEpisodes
 }
 
-// castCountdownMessage is the line the panel shows while the countdown runs.
+// castNextEpisodeNumber is the episode the countdown should promise.
 //
-// next is always the watched episode plus one. SkipFiller does not change that:
-// it only picks which episode the prefetch in main's loop fetches ahead, while
-// StartNextEpisode always advances by one, so there is no jump to render here
-// and no reason to ask a provider what the next canon episode is.
+// StartNextEpisode only ever advances by one, but the terminal cast rejoins
+// main's playback loop, which skips filler at the top of the next iteration
+// (cmd/otakase/main.go): episode 13 being filler makes it jump to the next
+// canon episode. Promising 13 and then playing 15 is telling the viewer
+// something that does not happen, so the jump is applied to the label too.
+//
+// GetNextCanonEpisode is pure and FillerEpisodes is already on the struct, so
+// this costs nothing and asks nobody -- and it walks a whole run of filler in
+// one call, exactly as main's loop does by going round again.
+//
+// With no filler list -- the spawned cast session carries none -- the answer is
+// the plain next episode, which is also what that process actually plays: its
+// loop does no filler skipping at all.
+//
+// Recap skipping is deliberately not mirrored. IsRecap comes from Jikan
+// (GetEpisodeData), not from anything on the struct, so deciding it here would
+// mean a network call to render a label; and main's loop advances past a recap
+// one at a time, so a run of them cannot be resolved locally either.
+func castNextEpisodeNumber(config *Config, anime *Anime) int {
+	if anime == nil {
+		return 0
+	}
+	if config != nil && config.SkipFiller && len(anime.FillerEpisodes) > 0 {
+		return GetNextCanonEpisode(anime.FillerEpisodes, anime.Ep.Number)
+	}
+	return anime.Ep.Number + 1
+}
+
+// castCountdownMessage is the line the panel shows while the countdown runs.
 func castCountdownMessage(watched, next int, remaining time.Duration) string {
 	seconds := int(remaining.Seconds() + 0.5)
 	if seconds < 0 {
@@ -117,7 +142,7 @@ func castAwaitNextEpisode(config *Config, anime *Anime, panel *castPanelWriter, 
 		if panel != nil {
 			fmt.Print(panel.status(
 				GetAnimeName(*anime), anime.Ep.Number, config.CastDevice,
-				castCountdownMessage(anime.Ep.Number, anime.Ep.Number+1, castCountdownDuration-elapsed),
+				castCountdownMessage(anime.Ep.Number, castNextEpisodeNumber(config, anime), castCountdownDuration-elapsed),
 			))
 		}
 	}
