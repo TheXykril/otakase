@@ -292,6 +292,38 @@ func handOffCastToTerminal(config *Config, anime *Anime) error {
 	return nil
 }
 
+// prepareCastSessionUser gives the spawned session the user every later step
+// needs, signing in to the configured trackers when there are any.
+//
+// The user is set whatever TrackingRemote says. AdvanceAfterEpisode refuses a
+// nil user, so with tracking off the spawned cast used to finish episode 1 and
+// exit -- after the viewer had watched a ten-second countdown promising the
+// next one -- and the LocalUpdateAnime write behind the same guard, which needs
+// no tracker at all, was skipped with it.
+//
+// A sign-in failure is reported rather than fatal: local history still works,
+// and losing the episode over it would be worse.
+func prepareCastSessionUser(config *Config) *User {
+	user := GetGlobalUser()
+	if user == nil {
+		user = &User{}
+		SetGlobalUser(user)
+	}
+
+	// This process reaches casting above the point where main signs the viewer
+	// in, so without this the spawned window would write curd_history.txt,
+	// report the episode watched, and never move AniList or MyAnimeList -- the
+	// tracker silently stops following the one launch path this feature makes
+	// primary.
+	if UsesRemoteTracking(config) {
+		if err := EnsureConfiguredTrackersReady(config, user); err != nil {
+			Out("Remote tracking is unavailable for this cast: " + err.Error())
+			Log(fmt.Sprintf("cast: could not ready trackers in the spawned session: %v", err))
+		}
+	}
+	return user
+}
+
 // RunCastSession casts the episode named by a handoff file.
 //
 // This is the spawned terminal's entry point. RofiSelection is cleared because
@@ -311,23 +343,7 @@ func RunCastSession(config *Config, path string) error {
 
 	anime := castSessionToAnime(session)
 
-	// This process reaches casting above the point where main signs the viewer
-	// in, so without this the spawned window would write curd_history.txt,
-	// report the episode watched, and never move AniList or MyAnimeList -- the
-	// tracker silently stops following the one launch path this feature makes
-	// primary. A sign-in failure is reported rather than fatal: local history
-	// still works, and losing the episode over it would be worse.
-	if UsesRemoteTracking(config) {
-		user := GetGlobalUser()
-		if user == nil {
-			user = &User{}
-			SetGlobalUser(user)
-		}
-		if err := EnsureConfiguredTrackersReady(config, user); err != nil {
-			Out("Remote tracking is unavailable for this cast: " + err.Error())
-			Log(fmt.Sprintf("cast: could not ready trackers in the spawned session: %v", err))
-		}
-	}
+	prepareCastSessionUser(config)
 
 	// ShouldWriteRemoteTracking reads the global anime, which in this process
 	// is still main's zero value rather than the episode being cast.

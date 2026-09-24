@@ -349,3 +349,50 @@ func stubCastEpisodeForSession(t *testing.T, fn func(*Config, *Anime) error) fun
 	castEpisodeForSession = fn
 	return func() { castEpisodeForSession = previous }
 }
+
+// Important 4. SetGlobalUser used to sit under "if UsesRemoteTracking", so
+// with TrackingRemote=none GetGlobalUser stayed nil, AdvanceAfterEpisode's
+// nil-user guard returned false, and the spawned cast silently stopped after
+// episode 1 -- having just shown the viewer a countdown saying the next one was
+// starting. The same guard also skipped the LocalUpdateAnime write, which needs
+// no tracker at all.
+func TestCastSessionUserExistsWithTrackingOff(t *testing.T) {
+	previous := GetGlobalUser()
+	t.Cleanup(func() { SetGlobalUser(previous) })
+	SetGlobalUser(nil)
+
+	config := testCastConfig(t)
+	config.TrackingRemote = "none"
+
+	prepareCastSessionUser(config)
+
+	if GetGlobalUser() == nil {
+		t.Fatal("no user was set with remote tracking off")
+	}
+}
+
+// And the advance itself must then run: continue mid-season, and write local
+// history, with no tracker configured.
+func TestCastAdvanceWorksWithTrackingOff(t *testing.T) {
+	previousAnime := GetGlobalAnime()
+	t.Cleanup(func() { SetGlobalAnime(previousAnime) })
+
+	storage := t.TempDir()
+	config := &Config{StoragePath: storage, TrackingRemote: "none", PercentageToMarkComplete: 85}
+	databaseFile := filepath.Join(storage, "curd_history.txt")
+
+	anime := &Anime{AnilistId: 424242, ProviderId: "p", TotalEpisodes: 12}
+	anime.Title.Romaji = "Test Show"
+	anime.Ep.Number = 5
+	SetGlobalAnime(anime)
+
+	if !AdvanceAfterEpisode(config, anime, prepareCastSessionUser(config), databaseFile, func() bool { return true }) {
+		t.Fatal("the advance declined to continue with remote tracking off")
+	}
+	if anime.Ep.Number != 6 {
+		t.Errorf("episode = %d after advancing, want 6", anime.Ep.Number)
+	}
+	if _, err := os.Stat(databaseFile); err != nil {
+		t.Errorf("local history was not written with remote tracking off: %v", err)
+	}
+}
