@@ -236,8 +236,8 @@ starts from the beginning, and says so when one exists.
 
 While a cast plays, the terminal shows a control panel and nothing else —
 where the episode is, what it is playing on, and the keys: space pauses, the
-arrows seek ten seconds and change the device volume, `s` skips the opening or
-ending, and `q` stops. Anything otakase needs to tell you meanwhile arrives as
+arrows seek ten seconds and change the device volume, and `q` stops. Openings
+and endings are skipped automatically, the same as local playback. Anything otakase needs to tell you meanwhile arrives as
 a desktop notification rather than scrolling through the panel. Your scrollback
 is untouched: the panel draws on the alternate screen and gives it back when
 the episode ends. A launch with no terminal says so and leaves you the device's

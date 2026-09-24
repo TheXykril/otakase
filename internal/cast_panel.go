@@ -136,9 +136,9 @@ func castPanelTop(state castPanelState, width int) string {
 
 // castPanelBottom is the framed footer carrying the keys.
 func castPanelBottom(width int) string {
-	keys := " space · ←→ · ↑↓ · s skip · q stop "
+	keys := " space · ←→ · ↑↓ · q stop "
 	if lipgloss.Width(keys)+2 > width {
-		keys = " space ←→ ↑↓ s q "
+		keys = " space ←→ ↑↓ q "
 	}
 	if lipgloss.Width(keys)+2 > width {
 		keys = ""

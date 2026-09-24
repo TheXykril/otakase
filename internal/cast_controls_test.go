@@ -17,7 +17,6 @@ func TestDecodeCastKey(t *testing.T) {
 		{"space pauses", []byte(" "), castCmdPauseToggle, 1},
 		{"q stops", []byte("q"), castCmdStop, 1},
 		{"ctrl-c stops", []byte{0x03}, castCmdStop, 1},
-		{"s skips a span", []byte("s"), castCmdSkipSpan, 1},
 		{"right seeks forward", []byte{0x1b, '[', 'C'}, castCmdSeekForward, 3},
 		{"left seeks back", []byte{0x1b, '[', 'D'}, castCmdSeekBack, 3},
 		{"up raises volume", []byte{0x1b, '[', 'A'}, castCmdVolumeUp, 3},

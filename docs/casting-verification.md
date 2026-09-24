@@ -44,8 +44,7 @@ stream for <device>...` → the episode starts within ~30s → `Playing on
 - [ ] **Resize the window mid-episode.** The panel follows within a second,
       stays centred, and leaves no trail of the old frame.
 - [ ] **Every control key works**: space pauses and resumes, left/right seek,
-      up/down change the TV's volume, `s` jumps the opening, `q` stops and
-      saves the position.
+      up/down change the TV's volume, `q` stops and saves the position.
 - [ ] **Press right five times quickly.** The episode must move about fifty
       seconds, not ten — each press acts on where the last one left it.
 - [ ] **Pause, then seek.** The device resumes on any seek, so the status line

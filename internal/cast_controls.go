@@ -21,7 +21,6 @@ const (
 	castCmdSeekForward
 	castCmdVolumeUp
 	castCmdVolumeDown
-	castCmdSkipSpan
 	castCmdStop
 )
 
@@ -72,8 +71,6 @@ func decodeCastKey(buf []byte) (castCommand, int) {
 		return castCmdPauseToggle, 1
 	case 'q', 'Q', 0x03:
 		return castCmdStop, 1
-	case 's', 'S':
-		return castCmdSkipSpan, 1
 	}
 	return castCmdNone, 1
 }
@@ -164,35 +161,6 @@ func applyCastCommand(command castCommand, session castSession, paused *bool, sp
 	case castCmdVolumeDown:
 		return false, position, session.SetVolume(session.Volume() - castVolumeStep)
 
-	case castCmdSkipSpan:
-		// The span the position is inside, if any; otherwise the next one
-		// ahead of it. Pressing s before the opening should reach it.
-		if target, ok := cast.NextSkip(position, spans); ok {
-			return seek(target)
-		}
-		// The nearest span that starts ahead of here. Tracked by Start and
-		// seeked to by End, kept as separate variables: comparing a candidate
-		// Start against a stored End picks the wrong span the moment two
-		// overlap.
-		nearestStart, target := 0.0, 0.0
-		found := false
-		for _, span := range spans {
-			if span.End <= span.Start || span.Start <= position {
-				continue
-			}
-			if !found || span.Start < nearestStart {
-				nearestStart, target, found = span.Start, span.End, true
-			}
-		}
-		if found {
-			return seek(target)
-		}
-		// Said on every press. It was limited to once when it printed into the
-		// terminal and pushed the panel down; as a notification there is
-		// nothing to push, and a viewer who missed the first one presses s
-		// again to see it.
-		castOut(true, "No opening or ending times are known for this episode.")
-		return false, position, nil
 	}
 	return false, position, nil
 }
