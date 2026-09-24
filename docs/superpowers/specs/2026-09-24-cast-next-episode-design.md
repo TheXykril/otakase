@@ -72,6 +72,47 @@ the loop must not advance. `CastEpisode` distinguishes the two: an episode that
 reached its end returns `"cast"`, a stop returns `""` with no error, and main
 exits quietly on the second without reporting a failure that did not happen.
 
+## 1a. The spawned process advances through the same code
+
+Casting from rofi does not run in the process that picked the show. The parent
+resolves the episode, writes a session file, spawns a terminal and exits; the
+cast happens in a second process entering at `cmd/otakase/main.go`'s
+`-cast-session` branch, which calls `RunCastSession` and returns.
+
+That process has no show to select, so it cannot enter main's loop at the top.
+Left alone, "rejoin the loop" would fix a terminal launch and do nothing for a
+keybind launch — which is the way casting is mostly started.
+
+So the part of main's loop that runs **after** an episode is extracted into one
+function both callers use:
+
+```go
+// AdvanceAfterEpisode completes the episode just watched and prepares the next
+// one on anime, reporting whether there is another to play.
+func AdvanceAfterEpisode(config *Config, anime *Anime, user *User, databaseFile string) bool
+```
+
+It is the block at `cmd/otakase/main.go:507-530` as it stands: mark complete,
+write local history, ask, and on yes `StartNextEpisode`; on no,
+`HandleLastEpisodeCompletion` for a finished series and `UpdateAnimeProgress`
+unless rewatching. Main's loop calls it in place of that block. The spawned
+process calls it in a small loop of its own that casts, advances, and casts
+again.
+
+**One implementation, two callers** — which is the property that made this
+design worth choosing over a cast playlist controller. The loop in the spawned
+process contains no decisions of its own: it calls `AdvanceAfterEpisode` and
+`CastEpisode` and does nothing else.
+
+Filler and recap need no extraction. Main's loop checks them **before**
+playback at `cmd/otakase/main.go:415-418`, so a terminal launch that rejoins
+the loop gets that free; the spawned process's loop runs the same
+`IsEpisodeFiller` check before casting the next episode.
+
+**The extraction must not change local playback.** It is a move, not a rewrite:
+the same calls in the same order, with the loop's `continue` and `Exit(nil)`
+becoming the returned boolean.
+
 ## 2. The countdown prompt
 
 `NextEpisodePromptCLI` blocks on a selection menu at the keyboard. Casting's
