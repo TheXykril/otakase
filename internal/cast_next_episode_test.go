@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -64,5 +65,57 @@ func TestCastCountdownMessage(t *testing.T) {
 		if !strings.Contains(line, want) {
 			t.Errorf("the countdown line does not mention %q: %s", want, line)
 		}
+	}
+}
+
+// Review Focus 1. A provider link that has rotted fails every episode in
+// seconds. A loop that advances on failure marks a whole season watched in
+// about a minute, and the viewer finds out from their tracker.
+func TestCastLoopStopsOnFailure(t *testing.T) {
+	episodes := 0
+	cast := func() error {
+		episodes++
+		return errors.New("cast: no episode links")
+	}
+	advanced := 0
+	advance := func() bool {
+		advanced++
+		return true
+	}
+
+	runCastLoop(cast, advance)
+
+	if episodes != 1 {
+		t.Errorf("a failing cast was attempted %d times, want 1", episodes)
+	}
+	if advanced != 0 {
+		t.Errorf("the loop advanced %d times past an episode that never played", advanced)
+	}
+}
+
+// Stopping is not completing: the viewer asked for this to end.
+func TestCastLoopStopsWhenTheViewerStops(t *testing.T) {
+	advanced := 0
+	runCastLoop(
+		func() error { return ErrCastStopped },
+		func() bool { advanced++; return true },
+	)
+
+	if advanced != 0 {
+		t.Errorf("pressing q advanced %d times", advanced)
+	}
+}
+
+// The ordinary case: episodes play until there is no next one.
+func TestCastLoopRunsUntilThereIsNoNextEpisode(t *testing.T) {
+	episodes := 0
+	remaining := 3
+	runCastLoop(
+		func() error { episodes++; return nil },
+		func() bool { remaining--; return remaining > 0 },
+	)
+
+	if episodes != 3 {
+		t.Errorf("played %d episodes, want 3", episodes)
 	}
 }

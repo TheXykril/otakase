@@ -415,7 +415,16 @@ func CastEpisode(config *Config, anime *Anime) error {
 		Out("Controls need a terminal; use the device's own remote or app.")
 	}
 
-	return watchCastWithControls(config, anime, s, srv, rx, device, commands)
+	if err := watchCastWithControls(config, anime, s, srv, rx, device, commands); err != nil {
+		return err
+	}
+
+	// The countdown runs in this episode's panel, which still owns the screen:
+	// the teardown below has not run yet, so there is a frame to draw in.
+	if !castAwaitNextEpisode(config, anime, panel, commands) {
+		return ErrCastStopped
+	}
+	return nil
 }
 
 // watchCast follows the episode while the device plays it.

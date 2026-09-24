@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -291,5 +292,23 @@ func RunCastSession(config *Config, path string) error {
 	// is still main's zero value rather than the episode being cast.
 	SetGlobalAnime(anime)
 
-	return CastEpisode(config, anime)
+	// The spawned process has no show to select, so it cannot enter main's
+	// loop at the top. It runs the same advance instead, so a rofi cast and a
+	// local playback continue through one implementation.
+	databaseFile := filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt")
+	var lastErr error
+	runCastLoop(
+		func() error {
+			lastErr = CastEpisode(config, anime)
+			return lastErr
+		},
+		func() bool {
+			return AdvanceAfterEpisode(config, anime, GetGlobalUser(), databaseFile)
+		},
+	)
+
+	if errors.Is(lastErr, ErrCastStopped) {
+		return nil
+	}
+	return lastErr
 }

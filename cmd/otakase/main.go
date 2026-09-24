@@ -480,6 +480,20 @@ func main() {
 		// socket path, having already said why. Continuing past it started the
 		// playback watchers for a session that does not exist, and they then
 		// polled a socket that would never answer -- once a second, forever.
+		// A cast played the episode somewhere else and is finished, the same
+		// shape as the android-intent case below: carry on rather than poll a
+		// socket that will never exist. The literal matches what
+		// internal.castSocketSentinel returns; main is a different package and
+		// cannot see it, which is how the android-intent sentinel is written
+		// here too.
+		if anime.Ep.Player.SocketPath == "cast" {
+			if internal.AdvanceAfterEpisode(&userConfig, &anime, &user, databaseFile) {
+				continue
+			}
+			internal.Exit(nil)
+			return
+		}
+
 		if anime.Ep.Player.SocketPath == "" {
 			internal.Log("Playback did not start; no MPV socket")
 			internal.Exit(nil)

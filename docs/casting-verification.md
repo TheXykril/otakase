@@ -154,12 +154,22 @@ stream declaring H.264 Level 5.0 to a decoder specified for 4.1.
 - [ ] **Check `<StoragePath>/cast-session/` is empty afterwards.** Those files
       hold a stream URL with an authentication token.
 
+## 6. Continuing to the next episode
+
+- [ ] **Let an episode finish.** The panel shows a countdown and the next
+      episode starts on its own.
+- [ ] **Press a key during the countdown.** It stops, and otakase exits without
+      starting the next episode.
+- [ ] **Check the tracker advanced for both episodes**, not just the first.
+- [ ] **Between episodes**, confirm `<StoragePath>/cast-scratch/` holds one
+      episode at a time rather than accumulating.
+- [ ] **Press `q` during an episode.** The next one must not start — stopping
+      is not finishing.
+
 ## Known limits
 
 Not bugs; these are deliberate, and documented in the README.
 
-- `-cast` plays **one episode** and does not advance to the next, so it never
-  reaches the next-episode prompt or end-of-series scoring.
 - Casting always starts from the beginning. It tells you when you had a resume
   position, and it writes your position back on exit so local playback can
   resume from it later.

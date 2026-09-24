@@ -243,8 +243,11 @@ is untouched: the panel draws on the alternate screen and gives it back when
 the episode ends. A launch with no terminal says so and leaves you the device's
 own remote.
 
-`-cast` plays a single episode and does not continue to the next: otakase
-exits once it ends rather than advancing the way local playback does.
+Casting continues to the next episode the way local playback does. When one
+ends, the panel counts down ten seconds and starts the next — any key stops it.
+`NextEpisodePrompt=false` skips the countdown entirely, and filler episodes,
+the end of a series and your tracker are all handled the same way they are
+locally, because it is the same code.
 
 Casting from the rofi keybind opens a terminal to show those controls in, and
 that window owns the cast: closing it stops the episode and saves your position.

@@ -49,3 +49,61 @@ func castCountdownMessage(watched, next int, remaining time.Duration) string {
 	}
 	return fmt.Sprintf("Episode %d watched · Episode %d in %ds — any key to stop", watched, next, seconds)
 }
+
+// castAwaitNextEpisode counts down to the next episode in the panel, reporting
+// whether it should start.
+//
+// A nil panel means no terminal to draw in -- the countdown still runs, it is
+// simply not shown, because a viewer who cannot see it can still be waiting for
+// the next episode.
+func castAwaitNextEpisode(config *Config, anime *Anime, panel *castPanelWriter, commands <-chan castCommand) bool {
+	started := time.Now()
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		var pressed bool
+		select {
+		case <-ticker.C:
+		case <-commands:
+			pressed = true
+		}
+
+		elapsed := time.Since(started)
+		switch castCountdownTick(elapsed, pressed, config) {
+		case castCountdownAdvance:
+			return true
+		case castCountdownCancelled:
+			return false
+		}
+
+		if panel != nil {
+			fmt.Print(panel.status(
+				GetAnimeName(*anime), anime.Ep.Number, config.CastDevice,
+				castCountdownMessage(anime.Ep.Number, anime.Ep.Number+1, castCountdownDuration-elapsed),
+			))
+		}
+	}
+}
+
+// runCastLoop casts episodes until there is no next one, the viewer stops, or
+// something fails.
+//
+// It holds no decisions of its own: cast plays one episode and reports how it
+// ended, advance completes it and prepares the next. Both are injected, which
+// is what lets the loop be tested without a device -- and what keeps the
+// advancing logic in one place rather than two.
+func runCastLoop(cast func() error, advance func() bool) {
+	for {
+		err := cast()
+		if err != nil {
+			// A failure and a stop both end the loop. Advancing past an
+			// episode that never played would mark a season watched in about a
+			// minute on a provider link that has rotted.
+			return
+		}
+		if !advance() {
+			return
+		}
+	}
+}
