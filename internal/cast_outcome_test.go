@@ -37,10 +37,6 @@ func TestCastOutcomeForError(t *testing.T) {
 // A wrapped stop is still a stop: the error travels up through CastEpisode,
 // and a comparison by value rather than errors.Is would miss it.
 func TestCastOutcomeRecognisesAWrappedStop(t *testing.T) {
-	socket, reported := castOutcome(errors.New("cast: " + ErrCastStopped.Error()))
-	_ = socket
-	_ = reported
-
 	wrapped := errors.Join(ErrCastStopped, errors.New("and something else"))
 	if socket, _ := castOutcome(wrapped); socket != "" {
 		t.Errorf("a wrapped stop was treated as a finished episode (socket %q)", socket)

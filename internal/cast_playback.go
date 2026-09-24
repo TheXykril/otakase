@@ -629,7 +629,9 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			if remuxErr != nil {
 				return remuxErr
 			}
-			return nil
+			// Losing the device mid-episode is a failure, not a completion:
+			// nothing has finished, and the caller must not advance.
+			return fmt.Errorf("cast: lost contact with %s", device.Name)
 		}
 
 		if progress.Idle {

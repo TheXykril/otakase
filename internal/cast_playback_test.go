@@ -369,8 +369,11 @@ func TestWatchCastSavesPartialProgressOnAnUnmarkedExit(t *testing.T) {
 	anime := testCastAnime()
 	config := testCastConfig(t)
 
-	if err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"}); err != nil {
-		t.Fatalf("expected a clean nil return on an unremembered lost-device exit, got %v", err)
+	// Losing the device mid-episode is a failure, not a clean finish: the
+	// caller must not advance to the next episode on it, only resume from
+	// where it left off.
+	if err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"}); err == nil {
+		t.Fatal("expected an error on an unremembered lost-device exit, got nil")
 	}
 
 	entries := LocalGetAllAnime(filepath.Join(config.StoragePath, "curd_history.txt"))
