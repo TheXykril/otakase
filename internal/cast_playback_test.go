@@ -532,8 +532,8 @@ func TestWatchCastStopCommandEndsWithoutMarking(t *testing.T) {
 	config := testCastConfig(t)
 
 	captureStdout(t, func() {
-		if err := watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands); err != nil {
-			t.Fatalf("stopping should not be an error: %v", err)
+		if err := watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands); !errors.Is(err, ErrCastStopped) {
+			t.Fatalf("stopping should report ErrCastStopped, got: %v", err)
 		}
 	})
 

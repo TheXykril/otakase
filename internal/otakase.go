@@ -1489,11 +1489,13 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 
 		// Casting owns the episode until it ends, and there is no mpv socket to
 		// hand back: the caller's playback loop has nothing to poll.
-		if err := CastEpisode(userConfig, anime); err != nil {
-			Out("Casting failed: " + err.Error())
-			Log(fmt.Sprintf("cast: %v", err))
+		castErr := CastEpisode(userConfig, anime)
+		socket, report := castOutcome(castErr)
+		if report {
+			Out("Casting failed: " + castErr.Error())
+			Log(fmt.Sprintf("cast: %v", castErr))
 		}
-		return ""
+		return socket
 	}
 
 	return StartVideoWithProviderFallback(userConfig, anime, title)

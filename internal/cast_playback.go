@@ -137,6 +137,34 @@ func ApplyCastSubStyle(config *Config, explicitlyAskedSoft bool) {
 	config.SubStyle = "hard"
 }
 
+// ErrCastStopped reports that the viewer ended the cast themselves.
+//
+// It is not a failure and it is not a finished episode: nothing is wrong, and
+// nothing should advance. Without it both look like the nil a finished episode
+// returns, and pressing q would start the next episode.
+var ErrCastStopped = errors.New("cast: stopped by the viewer")
+
+// castSocketSentinel is what StartPlayback hands back for a cast that played
+// an episode through.
+//
+// It follows the android-intent sentinel already in cmd/otakase/main.go: a
+// player that ran somewhere else and is now finished, whose caller should carry
+// on rather than poll a socket that will never exist.
+const castSocketSentinel = "cast"
+
+// castOutcome turns a cast's error into the socket path StartPlayback returns
+// and whether the failure is worth reporting to the viewer.
+func castOutcome(err error) (socket string, report bool) {
+	switch {
+	case err == nil:
+		return castSocketSentinel, false
+	case errors.Is(err, ErrCastStopped):
+		return "", false
+	default:
+		return "", true
+	}
+}
+
 // CastEpisode plays the already-resolved episode on a Chromecast instead of in
 // mpv, and keeps tracking it while it plays.
 func CastEpisode(config *Config, anime *Anime) error {
@@ -552,7 +580,9 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			if stop {
 				castOut(commands != nil, "Stopped.")
 				savePartial(lastPosition)
-				return nil
+				// Not nil: a finished episode returns nil, and the caller
+				// advances on that. The viewer asked for this to end.
+				return ErrCastStopped
 			}
 			// A command that moved the episode is the freshest position there
 			// is: the device will not report it until the next poll, and
