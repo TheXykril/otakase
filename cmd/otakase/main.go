@@ -504,31 +504,13 @@ func main() {
 				internal.Exit(nil)
 			}
 
-			// Mark as completed
-			anime.Ep.IsCompleted = true
-
-			// Update progress for the finished episode
-			// Local update
-			internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, 0, 0, internal.GetAnimeName(anime), internal.CurrentAnimeProviderName(&anime))
-
-			// Check if we should continue to next episode
-			// On Android we always prompt because we don't know exactly when video ended
-			shouldContinue := internal.NextEpisodePromptCLI(&userConfig)
-
-			if shouldContinue {
-				internal.StartNextEpisode(&anime, &userConfig, databaseFile, user.Token)
+			// The same call the spawned cast process makes, so a rofi cast and
+			// a local playback advance through one implementation rather than
+			// two that can drift.
+			if internal.AdvanceAfterEpisode(&userConfig, &anime, &user, databaseFile) {
 				continue
-			} else {
-				// Handle completion if this was the last episode
-				if anime.Ep.Number == anime.TotalEpisodes {
-					internal.HandleLastEpisodeCompletion(&userConfig, &anime, user.Token)
-				}
-				// Update progress for the just finished episode (StartNextEpisode usually does this for previous ep, but here we exit)
-				if !anime.Rewatching {
-					internal.UpdateAnimeProgress(user.Token, anime.AnilistId, anime.Ep.Number)
-				}
-				internal.Exit(nil)
 			}
+			internal.Exit(nil)
 		}
 
 		wg.Add(1)
