@@ -374,9 +374,6 @@ func TestCastSessionUserExistsWithTrackingOff(t *testing.T) {
 // And the advance itself must then run: continue mid-season, and write local
 // history, with no tracker configured.
 func TestCastAdvanceWorksWithTrackingOff(t *testing.T) {
-	previousAnime := GetGlobalAnime()
-	t.Cleanup(func() { SetGlobalAnime(previousAnime) })
-
 	storage := t.TempDir()
 	config := &Config{StoragePath: storage, TrackingRemote: "none", PercentageToMarkComplete: 85}
 	databaseFile := filepath.Join(storage, "curd_history.txt")
@@ -384,7 +381,9 @@ func TestCastAdvanceWorksWithTrackingOff(t *testing.T) {
 	anime := &Anime{AnilistId: 424242, ProviderId: "p", TotalEpisodes: 12}
 	anime.Title.Romaji = "Test Show"
 	anime.Ep.Number = 5
-	SetGlobalAnime(anime)
+	// The global anime is deliberately left alone: StartNextEpisode reports
+	// progress from a goroutine that reads it, and this package's globals are
+	// unguarded, so a cleanup writing it back would race that goroutine.
 
 	if !AdvanceAfterEpisode(config, anime, prepareCastSessionUser(config), databaseFile, func() bool { return true }) {
 		t.Fatal("the advance declined to continue with remote tracking off")

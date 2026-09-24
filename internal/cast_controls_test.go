@@ -187,3 +187,47 @@ func TestCastControlsRememberThereIsNoTerminal(t *testing.T) {
 		t.Errorf("the terminal was set up %d times, want 1", starts)
 	}
 }
+
+// Minor 6. castSetRawMode used to disagree with the tty across episodes: raw
+// mode was entered per episode and the restores registered for the exit ran
+// FIFO, so the flag ended up false while the terminal was still raw and Out
+// printed bare \n into it, walking the output diagonally. With one entry and
+// one restore for the process, the flag and the tty cannot come apart -- and a
+// whole season leaves the terminal cooked.
+func TestCastControlsLeaveTheTerminalCookedAfterASeason(t *testing.T) {
+	resetCastControlsForTest(t)
+	resetExitCleanupsForTest()
+	t.Cleanup(resetExitCleanupsForTest)
+	t.Cleanup(func() { castSetRawMode(false) })
+
+	// Stands in for castControlsBeginTerminal, which needs a tty: the same
+	// bookkeeping, without term.MakeRaw.
+	entries := 0
+	castControlsBegin = func(config *Config) bool {
+		entries++
+		castSetRawMode(true)
+		RegisterExitCleanup(func() { castSetRawMode(false) })
+		return true
+	}
+
+	for episode := 0; episode < 6; episode++ {
+		_, release, ok := startCastControls(nil)
+		if !ok {
+			t.Fatalf("episode %d was refused controls", episode+1)
+		}
+		release()
+	}
+
+	if entries != 1 {
+		t.Errorf("raw mode was entered %d times, want 1", entries)
+	}
+	if !castRawModeActive() {
+		t.Error("the raw-mode flag went false while the terminal was still raw")
+	}
+
+	runExitCleanups()
+
+	if castRawModeActive() {
+		t.Error("the terminal was left raw after the exit cleanups ran")
+	}
+}
