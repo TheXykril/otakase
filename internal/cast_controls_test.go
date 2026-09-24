@@ -5,6 +5,23 @@ import (
 	"testing"
 )
 
+// resetCastControlsForTest puts the process-wide controls back to untouched and
+// restores the real terminal setup afterwards. The singleton is package state
+// that every test in this package shares.
+func resetCastControlsForTest(t *testing.T) {
+	t.Helper()
+	previous := castControlsBegin
+	castControls.mu.Lock()
+	castControls.begun, castControls.usable, castControls.live = false, false, nil
+	castControls.mu.Unlock()
+	t.Cleanup(func() {
+		castControlsBegin = previous
+		castControls.mu.Lock()
+		castControls.begun, castControls.usable, castControls.live = false, false, nil
+		castControls.mu.Unlock()
+	})
+}
+
 // Every key a viewer can press, decoded from the bytes a terminal in raw mode
 // actually delivers.
 func TestDecodeCastKey(t *testing.T) {
@@ -71,5 +88,102 @@ func TestCastStatusLineToleratesAnUnknownDuration(t *testing.T) {
 	}
 	if strings.Contains(line, "NaN") || strings.Contains(line, "Inf") {
 		t.Errorf("status line %q has a number built by dividing by zero", line)
+	}
+}
+
+// Critical 2. CastEpisode used to run exactly once per process, so
+// startCastControls could start a reader goroutine and enter raw mode every
+// time it was called. Now that a cast plays a whole season, a second call must
+// not start a second reader: two goroutines blocked on the same stdin split
+// the keypresses between them, and a second term.MakeRaw snapshots the *raw*
+// termios as the state to restore, which leaves the viewer's shell raw.
+func TestCastControlsStartOneReaderForTheProcess(t *testing.T) {
+	resetCastControlsForTest(t)
+
+	starts := 0
+	castControlsBegin = func(config *Config) bool {
+		starts++
+		return true
+	}
+
+	first, releaseFirst, ok := startCastControls(nil)
+	if !ok {
+		t.Fatal("first subscription was refused")
+	}
+	releaseFirst()
+
+	second, releaseSecond, ok := startCastControls(nil)
+	if !ok {
+		t.Fatal("second subscription was refused")
+	}
+	defer releaseSecond()
+
+	if starts != 1 {
+		t.Errorf("the reader was started %d times, want 1", starts)
+	}
+	if first == second {
+		t.Error("the second subscription reused the first one's channel")
+	}
+
+	// Exactly one live subscription: a decoded key reaches the episode that is
+	// playing now and nothing else.
+	castDeliverCommand(castCmdStop)
+
+	select {
+	case got := <-second:
+		if got != castCmdStop {
+			t.Errorf("live subscription got %v, want castCmdStop", got)
+		}
+	default:
+		t.Error("the live subscription did not receive the command")
+	}
+	select {
+	case got := <-first:
+		t.Errorf("the released subscription received %v; it is not live any more", got)
+	default:
+	}
+}
+
+// A release must not unsubscribe whoever took over after it: a double release
+// from a defer plus an explicit call would otherwise silence the live episode.
+func TestCastControlsReleaseOnlyClearsItsOwnSubscription(t *testing.T) {
+	resetCastControlsForTest(t)
+	castControlsBegin = func(config *Config) bool { return true }
+
+	_, releaseFirst, _ := startCastControls(nil)
+	releaseFirst()
+
+	second, releaseSecond, _ := startCastControls(nil)
+	defer releaseSecond()
+
+	releaseFirst() // the stale release runs again
+
+	castDeliverCommand(castCmdPauseToggle)
+	select {
+	case <-second:
+	default:
+		t.Error("a stale release from the previous episode cleared the live subscription")
+	}
+}
+
+// A run with no terminal has no controls, and asking again must not retry the
+// terminal setup on every episode.
+func TestCastControlsRememberThereIsNoTerminal(t *testing.T) {
+	resetCastControlsForTest(t)
+
+	starts := 0
+	castControlsBegin = func(config *Config) bool {
+		starts++
+		return false
+	}
+
+	if _, _, ok := startCastControls(nil); ok {
+		t.Error("controls were reported available with no terminal")
+	}
+	if _, _, ok := startCastControls(nil); ok {
+		t.Error("controls were reported available on the second ask")
+	}
+	if starts != 1 {
+		t.Errorf("the terminal was set up %d times, want 1", starts)
 	}
 }

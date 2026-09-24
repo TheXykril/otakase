@@ -189,31 +189,121 @@ func castOut(haveControls bool, message string) {
 	Log(message)
 }
 
-// startCastControls puts the terminal in raw mode and reads keys from it until
-// the process exits, reporting whether controls are available at all.
+// castControls is the process-wide keyboard reader.
 //
-// They need a terminal to read from: a rofi launch has no stdin worth reading,
-// and a piped one is not a viewer. When unavailable the caller carries on with
-// no controls rather than failing, because a cast with no keyboard is still a
-// cast.
-func startCastControls(config *Config) (<-chan castCommand, bool) {
+// CastEpisode used to run once per process, so each call could enter raw mode
+// and start a reader of its own. A cast now plays a whole season, and doing it
+// per episode breaks twice over: two goroutines parked in os.Stdin.Read split
+// the keypresses between them, roughly half of them vanishing into the
+// abandoned channel of a finished episode, and a second term.MakeRaw snapshots
+// the already-raw termios as the state to restore -- so the restores registered
+// for the exit run in the wrong direction and leave the viewer's shell raw.
+//
+// So the terminal is taken over once and the reader runs for the process
+// lifetime. Each episode takes a subscription instead and releases it on the
+// way out; the reader fans every decoded command to the live subscription only.
+//
+// The reader is not stopped between episodes on purpose: it is parked in
+// os.Stdin.Read and would not notice a stop channel until the next keypress,
+// which is exactly the window where two readers would race.
+var castControls struct {
+	mu sync.Mutex
+	// begun records that the terminal setup has been attempted, so a run with
+	// no terminal does not retry it on every episode.
+	begun bool
+	// usable records whether that attempt succeeded.
+	usable bool
+	// live is the subscription of the episode playing now, or nil between
+	// episodes.
+	live chan castCommand
+}
+
+// castControlsBegin puts the terminal in raw mode and starts the one reader
+// goroutine, reporting whether controls are available at all.
+//
+// A variable so a test can exercise the subscription bookkeeping twice in one
+// process without a tty -- which is precisely what no existing test could do,
+// and how a per-episode reader got this far.
+var castControlsBegin = castControlsBeginTerminal
+
+// startCastControls subscribes this episode to the viewer's keypresses.
+//
+// It reports whether controls are available at all: they need a terminal to
+// read from, a rofi launch has no stdin worth reading and a piped one is not a
+// viewer. When unavailable the caller carries on with no controls rather than
+// failing, because a cast with no keyboard is still a cast.
+//
+// The returned release ends this episode's subscription and must be called on
+// every path out, so the next episode's keys are not delivered to a channel
+// nobody is reading.
+func startCastControls(config *Config) (commands <-chan castCommand, release func(), ok bool) {
+	castControls.mu.Lock()
+	defer castControls.mu.Unlock()
+
+	if !castControls.begun {
+		castControls.begun = true
+		castControls.usable = castControlsBegin(config)
+	}
+	if !castControls.usable {
+		return nil, func() {}, false
+	}
+
+	subscription := make(chan castCommand, 8)
+	castControls.live = subscription
+
+	var once sync.Once
+	return subscription, func() {
+		once.Do(func() {
+			castControls.mu.Lock()
+			defer castControls.mu.Unlock()
+			// Compared rather than simply cleared: a stale release running
+			// after the next episode subscribed must not silence it.
+			if castControls.live == subscription {
+				castControls.live = nil
+			}
+		})
+	}, true
+}
+
+// castDeliverCommand hands one decoded command to the episode playing now.
+//
+// A command decoded between episodes has nowhere to go and is dropped: the
+// countdown holds a subscription of its own while it runs.
+func castDeliverCommand(command castCommand) {
+	castControls.mu.Lock()
+	live := castControls.live
+	castControls.mu.Unlock()
+
+	if live == nil {
+		return
+	}
+	select {
+	case live <- command:
+	default: // a viewer leaning on a key is not a queue
+	}
+}
+
+// castControlsBeginTerminal is the real terminal setup behind castControlsBegin.
+func castControlsBeginTerminal(config *Config) bool {
 	if config != nil && config.RofiSelection {
-		return nil, false
+		return false
 	}
 	fd := int(os.Stdin.Fd())
 	if !term.IsTerminal(fd) {
-		return nil, false
+		return false
 	}
 
 	state, err := term.MakeRaw(fd)
 	if err != nil {
 		Log(fmt.Sprintf("cast: could not read keys: %v", err))
-		return nil, false
+		return false
 	}
 
 	// Raw mode outlives every defer in this call when the process exits on a
 	// signal, and a terminal left raw is a terminal the viewer has to reset by
 	// hand. The exit path restores it for the same reason it tears down ffmpeg.
+	// Registered exactly once, because the state captured above is the cooked
+	// one only for the first call.
 	castSetRawMode(true)
 	restore := func() {
 		castSetRawMode(false)
@@ -221,7 +311,6 @@ func startCastControls(config *Config) (<-chan castCommand, bool) {
 	}
 	RegisterExitCleanup(restore)
 
-	commands := make(chan castCommand, 8)
 	go func() {
 		defer restore()
 		buf := make([]byte, 0, 16)
@@ -237,10 +326,7 @@ func startCastControls(config *Config) (<-chan castCommand, bool) {
 					}
 					buf = buf[used:]
 					if command != castCmdNone {
-						select {
-						case commands <- command:
-						default: // a viewer leaning on a key is not a queue
-						}
+						castDeliverCommand(command)
 					}
 				}
 			}
@@ -250,7 +336,7 @@ func startCastControls(config *Config) (<-chan castCommand, bool) {
 		}
 	}()
 
-	return commands, true
+	return true
 }
 
 // castTerminalSize is the terminal's width and height, falling back to a

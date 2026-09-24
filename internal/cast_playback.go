@@ -410,10 +410,14 @@ func CastEpisode(config *Config, anime *Anime) error {
 	}
 	castStatus(fmt.Sprintf("Waiting for %s to start…", device.Name))
 
-	commands, haveControls := startCastControls(config)
+	commands, releaseControls, haveControls := startCastControls(config)
 	if !haveControls {
 		Out("Controls need a terminal; use the device's own remote or app.")
 	}
+	// Released here rather than at the top of the function because the
+	// subscription must outlive the countdown below, which reads the same
+	// channel. The next episode takes a subscription of its own.
+	defer releaseControls()
 
 	if err := watchCastWithControls(config, anime, s, srv, rx, device, commands); err != nil {
 		return err
