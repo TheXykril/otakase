@@ -41,7 +41,22 @@ func castCountdownTick(elapsed time.Duration, keyPressed bool, config *Config) c
 	return castCountdownWaiting
 }
 
+// castSeasonFinished reports that the episode just watched was the last one
+// this show has, so there is nothing to count down to.
+//
+// It asks the same question advanceDecision's atEnd does, and must keep giving
+// the same answer: the countdown promising an episode the advance then declines
+// to play is what this exists to prevent.
+func castSeasonFinished(anime *Anime) bool {
+	return anime != nil && anime.TotalEpisodes > 0 && anime.Ep.Number >= anime.TotalEpisodes
+}
+
 // castCountdownMessage is the line the panel shows while the countdown runs.
+//
+// next is always the watched episode plus one. SkipFiller does not change that:
+// it only picks which episode the prefetch in main's loop fetches ahead, while
+// StartNextEpisode always advances by one, so there is no jump to render here
+// and no reason to ask a provider what the next canon episode is.
 func castCountdownMessage(watched, next int, remaining time.Duration) string {
 	seconds := int(remaining.Seconds() + 0.5)
 	if seconds < 0 {
@@ -57,6 +72,15 @@ func castCountdownMessage(watched, next int, remaining time.Duration) string {
 // simply not shown, because a viewer who cannot see it can still be waiting for
 // the next episode.
 func castAwaitNextEpisode(config *Config, anime *Anime, panel *castPanelWriter, commands <-chan castCommand) bool {
+	// At the end of a season there is no next episode to offer. Counting down
+	// anyway told the viewer "Episode 12 watched · Episode 13 in 10s" on a path
+	// every finished show reaches, and made them wait ten seconds for the score
+	// prompt AdvanceAfterEpisode was always going to show instead. Returning
+	// true hands straight to the advance, which declines and completes the show.
+	if castSeasonFinished(anime) {
+		return true
+	}
+
 	started := time.Now()
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()

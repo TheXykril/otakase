@@ -119,3 +119,56 @@ func TestCastLoopRunsUntilThereIsNoNextEpisode(t *testing.T) {
 		t.Errorf("played %d episodes, want 3", episodes)
 	}
 }
+
+// Important 3. On the last episode of a season the countdown used to promise
+// an episode that does not exist -- "Episode 12 watched · Episode 13 in 10s"
+// -- for ten seconds, and only then did AdvanceAfterEpisode decline and run
+// completion. The viewer was told something false on the path every finished
+// show reaches, and made to wait for the score prompt.
+func TestCastAwaitSkipsTheCountdownAtTheEndOfASeason(t *testing.T) {
+	config := &Config{NextEpisodePrompt: true}
+	anime := &Anime{TotalEpisodes: 12}
+	anime.Ep.Number = 12
+
+	// A closed channel: any tick of the countdown would read a "keypress" from
+	// it and cancel, so returning true can only mean it never started.
+	commands := make(chan castCommand)
+	close(commands)
+
+	done := make(chan bool, 1)
+	go func() { done <- castAwaitNextEpisode(config, anime, nil, commands) }()
+
+	select {
+	case advanced := <-done:
+		if !advanced {
+			t.Error("the finale returned cancelled; it must hand straight to the advance")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the countdown ran on the last episode of the season")
+	}
+}
+
+// castSeasonFinished must agree with advanceDecision's atEnd: a countdown that
+// promises an episode the advance then declines to play is the bug.
+func TestCastSeasonFinishedAgreesWithAdvanceDecision(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		total   int
+		episode int
+	}{
+		{"mid season", 12, 5},
+		{"last episode", 12, 12},
+		{"past the end", 12, 13},
+		{"unknown length", 0, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			anime := &Anime{TotalEpisodes: tc.total}
+			anime.Ep.Number = tc.episode
+
+			wantEnd := advanceDecision(anime, true).SeriesFinished
+			if got := castSeasonFinished(anime); got != wantEnd {
+				t.Errorf("castSeasonFinished = %v, advanceDecision's atEnd = %v", got, wantEnd)
+			}
+		})
+	}
+}
