@@ -41,7 +41,15 @@ func advanceDecision(anime *Anime, wantsNext bool) advanceOutcome {
 // It is the block that used to sit inside main's playback loop, moved here so
 // the process spawned for a rofi cast runs the same code rather than a second
 // copy of it. Nothing about it is cast-specific.
-func AdvanceAfterEpisode(config *Config, anime *Anime, user *User, databaseFile string) bool {
+//
+// wantsNext supplies the viewer's answer to "start the next episode?". The two
+// callers ask differently -- local playback and an android-intent launch ask
+// with a menu (NextEpisodePromptCLI), while a cast has already asked with its
+// own countdown by the time this is called, and asking again would put an
+// interactive menu in front of a viewer across the room. A nil wantsNext is
+// treated as "no": a caller that forgot to supply an answer must not silently
+// advance.
+func AdvanceAfterEpisode(config *Config, anime *Anime, user *User, databaseFile string, wantsNext func() bool) bool {
 	if config == nil || anime == nil || user == nil {
 		return false
 	}
@@ -50,7 +58,11 @@ func AdvanceAfterEpisode(config *Config, anime *Anime, user *User, databaseFile 
 	LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, 0, 0,
 		GetAnimeName(*anime), CurrentAnimeProviderName(anime))
 
-	decided := advanceDecision(anime, NextEpisodePromptCLI(config))
+	answer := false
+	if wantsNext != nil {
+		answer = wantsNext()
+	}
+	decided := advanceDecision(anime, answer)
 
 	if decided.Continue {
 		StartNextEpisode(anime, config, databaseFile, user.Token)

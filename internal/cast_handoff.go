@@ -303,7 +303,10 @@ func RunCastSession(config *Config, path string) error {
 			return lastErr
 		},
 		func() bool {
-			return AdvanceAfterEpisode(config, anime, GetGlobalUser(), databaseFile)
+			// The countdown in CastEpisode already asked, and the loop only
+			// reaches here when it said advance: asking again would put an
+			// interactive menu in front of a viewer across the room.
+			return AdvanceAfterEpisode(config, anime, GetGlobalUser(), databaseFile, func() bool { return true })
 		},
 	)
 

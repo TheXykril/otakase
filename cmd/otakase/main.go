@@ -487,7 +487,10 @@ func main() {
 		// cannot see it, which is how the android-intent sentinel is written
 		// here too.
 		if anime.Ep.Player.SocketPath == "cast" {
-			if internal.AdvanceAfterEpisode(&userConfig, &anime, &user, databaseFile) {
+			// The countdown inside CastEpisode already asked, and this branch
+			// is only reached when it said advance: asking again would put an
+			// interactive menu in front of a viewer across the room.
+			if internal.AdvanceAfterEpisode(&userConfig, &anime, &user, databaseFile, func() bool { return true }) {
 				continue
 			}
 			internal.Exit(nil)
@@ -520,8 +523,11 @@ func main() {
 
 			// The same call the spawned cast process makes, so a rofi cast and
 			// a local playback advance through one implementation rather than
-			// two that can drift.
-			if internal.AdvanceAfterEpisode(&userConfig, &anime, &user, databaseFile) {
+			// two that can drift. Unlike a cast, nothing has asked yet here, so
+			// this asks with the same menu local playback always has.
+			if internal.AdvanceAfterEpisode(&userConfig, &anime, &user, databaseFile, func() bool {
+				return internal.NextEpisodePromptCLI(&userConfig)
+			}) {
 				continue
 			}
 			internal.Exit(nil)
