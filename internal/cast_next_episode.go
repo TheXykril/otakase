@@ -81,6 +81,19 @@ func castAwaitNextEpisode(config *Config, anime *Anime, panel *castPanelWriter, 
 		return true
 	}
 
+	// A key pressed in the last second of the episode is still sitting in the
+	// buffered command channel when the episode finishes: the watch loop returns
+	// on its own without draining it. Left there it cancels the countdown on the
+	// first tick, so the season stops with no keypress the viewer would
+	// recognise as having stopped it. Only what arrives from here on counts.
+	for drained := false; !drained; {
+		select {
+		case <-commands:
+		default:
+			drained = true
+		}
+	}
+
 	started := time.Now()
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()

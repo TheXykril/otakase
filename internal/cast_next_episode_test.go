@@ -172,3 +172,55 @@ func TestCastSeasonFinishedAgreesWithAdvanceDecision(t *testing.T) {
 		})
 	}
 }
+
+// Minor 5. The commands channel is buffered and nothing drains it on the
+// finish path, so a key pressed in the last second of the episode was still
+// there when the countdown started and cancelled it on the first tick -- the
+// season stopping with no keypress the viewer would connect to it.
+func TestCastAwaitIgnoresAKeyPressedDuringTheEpisode(t *testing.T) {
+	// Prompting off so the first tick decides: a stale key still cancels there,
+	// which is the bug, and the test does not have to sit through ten seconds.
+	config := &Config{NextEpisodePrompt: false}
+	anime := &Anime{TotalEpisodes: 12}
+	anime.Ep.Number = 5
+
+	commands := make(chan castCommand, 8)
+	commands <- castCmdSeekForward // pressed while the episode was still playing
+
+	done := make(chan bool, 1)
+	go func() { done <- castAwaitNextEpisode(config, anime, nil, commands) }()
+
+	select {
+	case advanced := <-done:
+		if !advanced {
+			t.Error("a keypress left over from the episode cancelled the countdown")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the countdown never finished")
+	}
+}
+
+// A key pressed during the countdown itself still stops it.
+func TestCastAwaitStillStopsOnALiveKeypress(t *testing.T) {
+	config := &Config{NextEpisodePrompt: true}
+	anime := &Anime{TotalEpisodes: 12}
+	anime.Ep.Number = 5
+
+	commands := make(chan castCommand, 8)
+	done := make(chan bool, 1)
+	go func() { done <- castAwaitNextEpisode(config, anime, nil, commands) }()
+
+	// After the drain, not before: the countdown ticks every 250ms, so this
+	// lands well inside the ten seconds.
+	time.Sleep(500 * time.Millisecond)
+	commands <- castCmdStop
+
+	select {
+	case advanced := <-done:
+		if advanced {
+			t.Error("a key pressed during the countdown did not stop it")
+		}
+	case <-time.After(castCountdownDuration + 5*time.Second):
+		t.Fatal("the countdown never finished")
+	}
+}
