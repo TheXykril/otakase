@@ -382,6 +382,11 @@ func RunCastSession(config *Config, path string) error {
 
 	config.RofiSelection = false
 	config.CastToDevice = true
+	// The viewer is across the room. A menu opened here blocks the season on an
+	// answer nobody is there to give, and its keystrokes would be split with the
+	// process-global cast reader anyway. Prompts on this path take a declared
+	// default and report it -- see docs/cast-window-prompts.md.
+	config.CastNonInteractive = true
 	if session.Device != "" {
 		config.CastDevice = session.Device
 	}

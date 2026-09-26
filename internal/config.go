@@ -112,6 +112,16 @@ type Config struct {
 	// CastToDevice records that -cast was given for this run. It is not a
 	// setting, so it carries no config tag.
 	CastToDevice bool `config:"-"`
+	// CastNonInteractive records that this process is the terminal a rofi cast
+	// was handed off to, and so has a viewer who is not at the keyboard.
+	//
+	// It is not a setting either. What it changes is that a prompt with no
+	// answer available resolves to its declared default instead of drawing a
+	// menu: the process-global cast reader is parked in os.Stdin.Read for the
+	// whole run and would split the keystrokes with a Bubble Tea reader on the
+	// same descriptor, and a menu nobody is at blocks the season outright.
+	// See docs/cast-window-prompts.md.
+	CastNonInteractive bool `config:"-"`
 }
 
 const (

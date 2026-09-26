@@ -82,6 +82,15 @@ func promptCancelable(config *Config, section, question, hint string) (value str
 // A question that is really "change this" starts from what it would change, so
 // correcting one word costs one word rather than retyping the whole line.
 func promptCancelableWithDefault(config *Config, section, question, hint, initial string) (value string, cancelled bool, err error) {
+	// Same reasoning as dynamicSelectInternal: this builds its own Bubble Tea
+	// program, so it needs the same refusal rather than a second code path.
+	// A cancelled prompt is the honest answer here -- there is no value to
+	// invent, and every caller already treats cancelled as "back out".
+	if castWindowNonInteractive() {
+		Log("cast: skipped a text prompt with no viewer at the keyboard")
+		return "", true, nil
+	}
+
 	if config != nil && config.RofiSelection {
 		// rofi has its own frame; the hint goes in the prompt where it is the
 		// only place it can be seen.
