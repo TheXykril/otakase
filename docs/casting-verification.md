@@ -104,6 +104,51 @@ reported `Playback finished.` instead of the truth.
 - [ ] After a normal finish, the terminal still shows the session's output —
       including `Episode N marked as watched.` — rather than a bare prompt.
 
+## Before blaming the code: is the device even reaching this machine?
+
+The single most expensive failure in this feature's history is a cast that works
+on one day and silently does nothing the next, and the cause is almost always
+the host firewall rather than the code.
+
+**The trap: `ufw status` lies.** It reads the *saved config*, not the live
+kernel ruleset. Docker rewrites the iptables filter table when its daemon or any
+container starts, without going through ufw, so the running ruleset can lose
+rules the config still lists. The symptom is a device that accepts `LAUNCH` and
+`LOAD`, then never fetches anything -- no media session is ever created, which
+reads like a refused load but is usually a dropped packet.
+
+Check the live chain, not the status:
+
+```bash
+sudo iptables -L ufw-user-input -n -v | grep -E "8010|48010"
+```
+
+An empty result means the rule is in the config and not in the kernel. Re-apply
+it with `ufw allow` rather than editing the rules file, because `ufw allow`
+writes the config *and* applies it:
+
+```bash
+sudo ufw allow from 192.168.0.0/24 to any port 8010 proto tcp comment 'otakase cast'
+```
+
+Expect to do this again after a Docker restart. `sudo iptables -L DOCKER-USER -n -v`
+shows whether Docker is intercepting ahead of ufw's chain.
+
+**Also check the service, not just the file:** `/etc/nftables.conf` on some
+systems carries a `policy drop` input chain that looks entirely guilty, while
+`nftables.service` is disabled and the file is not loaded at all. Confirm with
+`systemctl is-enabled nftables` before blaming it.
+
+**And watch the log, not the symptom.** A device that plays a public stream but
+not yours is a network problem. A device that plays neither is a receiver
+problem. A browser on a phone that shows an error page looks identical whether
+the packet was dropped or the URL was wrong -- the server's access log is what
+distinguishes them.
+
+One more measurement trap: a device that still has a previous stream loaded will
+report it as playing. Stop the media and confirm the receiver is idle before
+concluding anything from a status reading.
+
 ## When it does not work
 
 `otakase-debug.log` under the storage path records what the device did. Three
