@@ -226,33 +226,31 @@ func stripForTest(line string) string {
 	return out.String()
 }
 
-// Once the viewer has touched the score there is no clock and no deadline. The
-// window is for absence -- a cast window nobody is at has to resolve by itself --
-// not a budget for answering. A viewer standing at the keyboard moving a number
-// has shown they are there, and a fixed deadline used to cut them off halfway
-// through a run of presses with the score nearly chosen and no way to save it.
-func TestTouchingTheScoreRemovesTheDeadline(t *testing.T) {
+// Once the viewer has touched the score, the ten seconds is gone. It is a window
+// for absence, not a budget for answering: a viewer shown a clock is being
+// rushed, and ten seconds cuts them off halfway through a run of presses with the
+// score nearly chosen and no way to save it.
+func TestTouchingTheScoreSurvivesTheOpeningWindow(t *testing.T) {
 	resetCastControlsForTest(t)
 	resetCastSessionScreen(t)
 	holdCastSessionPanel(t)
 	castControlsBegin = func(*Config) bool { return true }
+	shortenCastScoreEngagedWindow(t, 3*time.Second)
 
 	anime := &Anime{}
 	anime.Title.Romaji = "Test Show"
 	anime.Ep.Number = 12
 
-	const window = 300 * time.Millisecond
 	go func() {
 		waitForCastSubscription(t)
 		time.Sleep(150 * time.Millisecond) // clear the pre-loop drain
 		castDeliverCommand(castCmdVolumeDown)
-		// Well past the window that would have applied. With the deadline still
-		// running this is where the picker would have declined.
-		time.Sleep(4 * window)
+		// Comfortably past the ten seconds that would have applied.
+		time.Sleep(1500 * time.Millisecond)
 		castDeliverCommand(castCmdSelect)
 	}()
 
-	score, given := castAwaitScore(&Config{}, anime, window)
+	score, given := castAwaitScore(&Config{}, anime, 300*time.Millisecond)
 
 	if !given {
 		t.Fatal("the picker declined long after the viewer started choosing")
@@ -260,6 +258,101 @@ func TestTouchingTheScoreRemovesTheDeadline(t *testing.T) {
 	if score != 7 {
 		t.Errorf("score = %d, want 7", score)
 	}
+}
+
+// Every press puts the window back, not just the first. Someone choosing a
+// number thinks in pauses, and a deadline measured from their first keypress
+// expires mid-thought with no clock on the panel to explain it.
+//
+// Fed on a cadence longer than the window: with the window set from the first
+// press alone this declines partway through.
+func TestEveryPressRenewsTheWindow(t *testing.T) {
+	resetCastControlsForTest(t)
+	resetCastSessionScreen(t)
+	holdCastSessionPanel(t)
+	castControlsBegin = func(*Config) bool { return true }
+	// The window is longer than the gap between presses, which is the whole
+	// point: renewing keeps it alive, a deadline from the first press alone would
+	// not survive the gap.
+	shortenCastScoreEngagedWindow(t, 700*time.Millisecond)
+
+	anime := &Anime{}
+	anime.Title.Romaji = "Test Show"
+	anime.Ep.Number = 12
+
+	const presses = 4
+	go func() {
+		waitForCastSubscription(t)
+		time.Sleep(150 * time.Millisecond)
+		for i := 0; i < presses; i++ {
+			castDeliverCommand(castCmdVolumeDown)
+			time.Sleep(400 * time.Millisecond)
+		}
+		castDeliverCommand(castCmdSelect)
+	}()
+
+	score, given := castAwaitScore(&Config{}, anime, 300*time.Millisecond)
+
+	if !given {
+		t.Fatal("the picker declined on a deadline set by the first keypress")
+	}
+	if score != 8-presses {
+		t.Errorf("score = %d, want %d", score, 8-presses)
+	}
+}
+
+// And it still ends on its own, or a viewer who taps a key and walks away
+// leaves the window hung on the prompt -- the same failure the ten seconds was
+// there to prevent, wearing a different hat.
+//
+// Bounded by a wait rather than by the call returning, because removing the
+// engaged deadline does not make this test fail: it makes the picker wait
+// forever, which takes the whole suite with it instead of reporting anything.
+func TestTheWindowStillEndsWhileChoosing(t *testing.T) {
+	resetCastControlsForTest(t)
+	resetCastSessionScreen(t)
+	holdCastSessionPanel(t)
+	castControlsBegin = func(*Config) bool { return true }
+	shortenCastScoreEngagedWindow(t, 400*time.Millisecond)
+
+	anime := &Anime{}
+	anime.Title.Romaji = "Test Show"
+	anime.Ep.Number = 12
+
+	go func() {
+		waitForCastSubscription(t)
+		time.Sleep(150 * time.Millisecond)
+		castDeliverCommand(castCmdVolumeDown)
+	}()
+
+	type outcome struct {
+		score int
+		given bool
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		score, given := castAwaitScore(&Config{}, anime, 300*time.Millisecond)
+		done <- outcome{score, given}
+	}()
+
+	select {
+	case got := <-done:
+		if got.given {
+			t.Errorf("a score of %d was saved with nobody there to save it", got.score)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the picker never gave up: the engaged window is what stops a " +
+			"viewer who taps a key and walks away from hanging the window")
+	}
+}
+
+// shortenCastScoreEngagedWindow makes the two minutes test-sized, and puts it
+// back. The var exists for this.
+func shortenCastScoreEngagedWindow(t *testing.T, window time.Duration) {
+	t.Helper()
+	previous := castScoreEngagedWindow
+	castScoreEngagedWindow = window
+	t.Cleanup(func() { castScoreEngagedWindow = previous })
 }
 
 // And the clock comes off the panel the moment they start, rather than sitting
@@ -326,6 +419,8 @@ func TestQDeclinesTheRatingOnceChoosing(t *testing.T) {
 	holdCastSessionPanel(t)
 	castControlsBegin = func(*Config) bool { return true }
 
+	shortenCastScoreEngagedWindow(t, 5*time.Second)
+
 	anime := &Anime{}
 	anime.Title.Romaji = "Test Show"
 	anime.Ep.Number = 12
@@ -337,7 +432,6 @@ func TestQDeclinesTheRatingOnceChoosing(t *testing.T) {
 		castDeliverCommand(castCmdStop)
 	}()
 
-	// A short window that would have expired first if the deadline still applied.
 	started := time.Now()
 	if score, given := castAwaitScore(&Config{}, anime, 200*time.Millisecond); given {
 		t.Errorf("q saved a rating of %d instead of declining it", score)

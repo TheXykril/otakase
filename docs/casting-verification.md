@@ -186,12 +186,14 @@ cases only a real device and a real room can settle.
       same frame as the episode countdown -- header, message row, keys. It opens
       at 8/10 and shows `Ns to answer`, counting down from 10.
 - [ ] **Press ↑ once, then take 30 seconds deciding.** The clock must vanish and
-      the picker must still be there. From that point nothing times out: Enter
-      saves, q declines, and the footer should now read `q to skip`.
-- [ ] **Press ↑↓ and walk away.** The panel stays on the rating prompt forever.
-      That is deliberate — engagement is taken as consent to take your time — and
-      it is the one way this window can hang, so it is worth knowing it exists.
-      Closing the window is always an exit.
+      the picker must still be there. The footer should now read `q to skip`.
+- [ ] **Press ↑, pause 30s, press ↓, pause 30s, then Enter.** It must still be
+      waiting. Every press puts the two minutes back, so a deadline set by the
+      first keypress cannot expire mid-thought.
+- [ ] **Press ↑ and then walk away for more than two minutes.** It declines on
+      its own. That deadline is deliberately not on the panel, so this is the one
+      thing worth confirming by hand: the season should end normally with
+      `rating skipped (cast window)`, not sit on the prompt.
 - [ ] **↑ and ↓ move the score, Enter saves it.** Then the panel reads
       `Rated N.` and the summary reads `rating saved (N)`. Press nothing and it
       reads `No answer -- rating skipped.` with `rating skipped (cast window)`.

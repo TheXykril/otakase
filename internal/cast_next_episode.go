@@ -163,6 +163,17 @@ const (
 	castScoreStart = 8
 )
 
+// castScoreEngagedWindow is how long the picker waits after any input before
+// giving up on the viewer.
+//
+// An inactivity window, so every press puts it back: someone deliberating with
+// pauses -- tap, think, tap -- must not be cut off on a deadline set by their
+// first keypress, least of all when the clock is not on the panel to warn them.
+// Two minutes of genuine stillness is not interrupting anybody.
+//
+// A var so a test can shrink it, for the same reason castStallTimeout is one.
+var castScoreEngagedWindow = 2 * time.Minute
+
 // The two footers. They differ because what the viewer can do differs.
 //
 // Before they have touched anything, the only outcomes are "save" and "be
@@ -234,13 +245,30 @@ func castAwaitScore(config *Config, anime *Anime, window time.Duration) (int, bo
 	// It exists because a cast window nobody is at must resolve on its own rather
 	// than sit on a prompt forever -- that hang is the failure this whole feature
 	// exists to remove. It is not a budget for answering: choosing a score is a
-	// run of keypresses, and a fixed deadline cuts the viewer off halfway through
-	// with a score nearly chosen and no way to save it. So the first adjustment
-	// ends the clock and with it the deadline. Someone standing at the keyboard
-	// moving a number has shown they are there, and from then on Enter saves and
-	// q declines -- both stated on the panel, so neither is a guess.
+	// run of keypresses, and ten seconds cuts the viewer off halfway through with
+	// a score nearly chosen and no way to save it.
+	//
+	// So the first adjustment swaps it for the longer one, and the clock comes off
+	// the panel. From then on Enter saves and q declines, both named on screen.
+	// The deadline does not go away with the clock: a viewer who touches a key and
+	// walks away would otherwise leave the window hung on the rating prompt, which
+	// is the same failure wearing a different hat. Two minutes is long enough that
+	// nobody is actually going to be interrupted by it, and short enough that the
+	// window still resolves if they do.
+	// The first adjustment swaps the short window for the long one and takes the
+	// clock off the panel; every later one puts the long window back.
+	//
+	// Resetting on each press is the part that matters. Someone choosing a number
+	// thinks in pauses -- tap, consider, tap -- and a deadline measured from the
+	// first keypress would expire mid-thought with nothing on screen to explain
+	// it. The clock is what makes a deadline fair, and it is gone by then, so the
+	// window has to be generous and has to be renewed by the act of carrying on.
 	engaged := false
 	deadline := time.Now().Add(window)
+	engage := func() {
+		engaged = true
+		deadline = time.Now().Add(castScoreEngagedWindow)
+	}
 
 	draw := func() {
 		message := castScoreChoosingMessage(score)
@@ -286,12 +314,12 @@ func castAwaitScore(config *Config, anime *Anime, window time.Duration) (int, bo
 					if score < castScoreMax {
 						score++
 					}
-					engaged = true
+					engage()
 				case castCmdVolumeDown:
 					if score > castScoreMin {
 						score--
 					}
-					engaged = true
+					engage()
 				case castCmdSelect:
 					return score, true
 				case castCmdStop:
@@ -313,9 +341,12 @@ func castAwaitScore(config *Config, anime *Anime, window time.Duration) (int, bo
 		// Expiry after the drain, so a key arriving in the last tick still counts.
 		// The reverse order is the mistake castCountdownTick documents: a viewer
 		// reaching for the keyboard as the timer runs out means accept, not "too
-		// late". Skipped once they are choosing -- the clock is off the panel by
-		// then, so a deadline that still applied would be one they cannot see.
-		if !engaged && !time.Now().Before(deadline) {
+		// late".
+		//
+		// Applies once they are choosing too, which is the whole reason the
+		// engaged window exists: the clock is off the panel by then, so a deadline
+		// that did not apply would be one they could neither see nor outlast.
+		if !time.Now().Before(deadline) {
 			return 0, false
 		}
 
