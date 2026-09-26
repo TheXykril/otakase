@@ -334,6 +334,141 @@ func TestCastSessionRefusesANewerVersion(t *testing.T) {
 	}
 }
 
+// The regression the Critical-1 fix created. Carrying TotalEpisodes is what
+// made HandleLastEpisodeCompletion reachable inside the spawned process at
+// all, and that function reaches four fields of the Anime the handoff file
+// never carried. So a viewer finishing the finale of a show they were on their
+// fourth rewatch of, from a rofi cast, had AniList told repeat=1 with today's
+// date as the start date -- silently, and not recoverable from our side. The
+// same episode cast from the terminal writes it correctly, which is the kind
+// of bug nobody suspects the cast feature of.
+//
+// This walks the whole path rather than the round trip alone, because the two
+// halves can each be right while the composition is wrong: the file carries
+// the field and the completion still reads a different one.
+func TestRewatchCompletionFromAHandedOffCastKeepsTheRealCountAndStartDate(t *testing.T) {
+	config := testCastConfig(t)
+
+	// What the launching process holds, having loaded the entry from AniList.
+	launching := testCastAnime()
+	launching.Rewatching = true
+	launching.TotalEpisodes = 12
+	launching.Ep.Number = 12
+	launching.Repeat = 3
+	launching.StartedAt = FuzzyDate{Year: 2024, Month: 1, Day: 15}
+
+	path, err := writeCastSession(config, launching, "Office TV")
+	if err != nil {
+		t.Fatalf("writeCastSession: %v", err)
+	}
+	session, err := readCastSession(path)
+	if err != nil {
+		t.Fatalf("readCastSession: %v", err)
+	}
+
+	// What the spawned process actually holds by the time it finishes the season.
+	spawned := castSessionToAnime(session)
+	completedAt := FuzzyDate{Year: 2026, Month: 9, Day: 26}
+	repeat, startedAt := anilistRewatchCompletion(*spawned, completedAt)
+
+	if repeat != 4 {
+		t.Errorf("repeat = %d, want 4: the handoff lost the rewatch count, so the "+
+			"tracker is told this was the first pass", repeat)
+	}
+	if startedAt != launching.StartedAt {
+		t.Errorf("startedAt = %+v, want %+v: the real start date was overwritten",
+			startedAt, launching.StartedAt)
+	}
+	if startedAt == completedAt {
+		t.Error("startedAt fell back to the completion date, which stamps today " +
+			"over the date the viewer actually started")
+	}
+}
+
+// The other two fields TotalEpisodes made reachable are not data but gates:
+// IsAiring decides whether the score prompt and the COMPLETED write happen at
+// all, and SkipRemoteSync is the viewer having answered "continue without
+// updating tracker". Both default to false in a struct decoded from JSON, so
+// losing them does the opposite of the safe thing -- a still-airing finale gets
+// marked completed, and an opted-out tracker entry gets written anyway.
+func TestCastSessionCarriesTheCompletionGates(t *testing.T) {
+	config := testCastConfig(t)
+	anime := testCastAnime()
+	anime.TotalEpisodes = 12
+	anime.Rewatching = true
+	anime.IsAiring = true
+	anime.SkipRemoteSync = true
+
+	path, err := writeCastSession(config, anime, "Office TV")
+	if err != nil {
+		t.Fatalf("writeCastSession: %v", err)
+	}
+	session, err := readCastSession(path)
+	if err != nil {
+		t.Fatalf("readCastSession: %v", err)
+	}
+	rebuilt := castSessionToAnime(session)
+
+	if !rebuilt.IsAiring {
+		t.Error("IsAiring was lost: a finale AniList still reports as releasing " +
+			"would be marked COMPLETED")
+	}
+	if !rebuilt.SkipRemoteSync {
+		t.Error("SkipRemoteSync was lost: a tracker the viewer opted out of " +
+			"would be written to anyway")
+	}
+	if ShouldWriteRemoteTracking(&Config{TrackingRemote: "anilist"}, rebuilt) {
+		t.Error("ShouldWriteRemoteTracking ignored the carried SkipRemoteSync: " +
+			"the opted-out entry would be written to")
+	}
+}
+
+// And the fields must survive a real write/read, not just a struct copy --
+// which is what makes this a test of the handoff rather than of the struct.
+func TestCastSessionRoundTripsRewatchCountAndDates(t *testing.T) {
+	config := testCastConfig(t)
+	anime := testCastAnime()
+	anime.Repeat = 2
+	anime.StartedAt = FuzzyDate{Year: 2023, Month: 6, Day: 1}
+	anime.CompletedAt = FuzzyDate{Year: 2023, Month: 11, Day: 20}
+
+	path, err := writeCastSession(config, anime, "Office TV")
+	if err != nil {
+		t.Fatalf("writeCastSession: %v", err)
+	}
+	session, err := readCastSession(path)
+	if err != nil {
+		t.Fatalf("readCastSession: %v", err)
+	}
+	rebuilt := castSessionToAnime(session)
+
+	if rebuilt.Repeat != 2 {
+		t.Errorf("Repeat = %d, want 2", rebuilt.Repeat)
+	}
+	if rebuilt.StartedAt != (FuzzyDate{Year: 2023, Month: 6, Day: 1}) {
+		t.Errorf("StartedAt = %+v, want 2023-06-01", rebuilt.StartedAt)
+	}
+	if rebuilt.CompletedAt != (FuzzyDate{Year: 2023, Month: 11, Day: 20}) {
+		t.Errorf("CompletedAt = %+v, want 2023-11-20", rebuilt.CompletedAt)
+	}
+}
+
+// A viewer who started on the same day they finished has no StartedAt to
+// preserve, and the entry should say so rather than record a zero date.
+func TestAnilistRewatchCompletionFallsBackToTheCompletionDate(t *testing.T) {
+	anime := Anime{Repeat: 0}
+	completedAt := FuzzyDate{Year: 2026, Month: 9, Day: 26}
+
+	repeat, startedAt := anilistRewatchCompletion(anime, completedAt)
+
+	if repeat != 1 {
+		t.Errorf("repeat = %d, want 1", repeat)
+	}
+	if startedAt != completedAt {
+		t.Errorf("startedAt = %+v, want the completion date %+v", startedAt, completedAt)
+	}
+}
+
 // stubEpisodeLinkResolve replaces the resolve behind ResolveEpisodeLinks.
 func stubEpisodeLinkResolve(t *testing.T, fn func(*Config, *Anime, *Entry) (ProviderEpisodeResult, bool)) func() {
 	t.Helper()

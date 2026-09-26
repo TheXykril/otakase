@@ -16,8 +16,14 @@ import (
 // URL inside it; an older one is read, because every field added since is
 // additive and its zero value is what that build meant.
 //
-// 2 added TotalEpisodes and Rewatching, which the spawned process needs to
-// know when the season ends and whether the tracker may be written.
+// 2 added the fields the spawned process needs once it can finish a season:
+// TotalEpisodes and Rewatching, and the completion state Repeat, StartedAt,
+// CompletedAt, IsAiring and SkipRemoteSync that TotalEpisodes makes reachable.
+//
+// No further bump is needed as fields are added at this version: the reader
+// accepts anything up to it, missing fields decode to zero, and a version 1
+// file carries no TotalEpisodes -- so it cannot reach the completion path that
+// reads the rest at all.
 const castSessionVersion = 2
 
 // castSessionFile is one resolved episode, handed from the process that picked
@@ -55,6 +61,35 @@ type castSessionFile struct {
 	// entry a rewatch already has.
 	Rewatching bool `json:"rewatching"`
 
+	// The fields below belong to the same completion path that TotalEpisodes
+	// made reachable in this process for the first time. Carrying TotalEpisodes
+	// without them is worse than carrying neither: the completion runs, and runs
+	// on zero values.
+	//
+	// Repeat and StartedAt are the ones that lose data. CompleteAniListAnimeRewatch
+	// writes anime.Repeat+1, so a viewer finishing their fourth rewatch from a
+	// rofi cast would have AniList told "repeat 1", and with StartedAt zero it
+	// stamps today over the date they actually started. Both are silent and
+	// neither is recoverable.
+	Repeat    int       `json:"repeat"`
+	StartedAt FuzzyDate `json:"started_at"`
+	// CompletedAt is not read by the completion path -- that dates the finished
+	// entry from today, not from this field. It is carried because it is the
+	// rest of the entry's completion state, and because a path that reconciles
+	// against the existing entry rather than overwriting it would otherwise
+	// silently see zero. Do not read the carrying as the field mattering today.
+	CompletedAt FuzzyDate `json:"completed_at"`
+	// IsAiring gates both the score prompt and the COMPLETED write. AniList
+	// commonly still reports RELEASING for hours after a finale, and main's
+	// process does neither in that window; false here made the spawned one do
+	// both.
+	IsAiring bool `json:"is_airing"`
+	// SkipRemoteSync is the viewer having chosen "Continue without updating
+	// tracker" on a completed show. It is tagged json:"-" on Anime, so nothing
+	// but an explicit field here carries it, and without it their status is
+	// written to COMPLETED anyway.
+	SkipRemoteSync bool `json:"skip_remote_sync"`
+
 	Device string `json:"device"`
 }
 
@@ -90,6 +125,11 @@ func writeCastSession(config *Config, anime *Anime, device string) (string, erro
 		PlaybackTime:   anime.Ep.Player.PlaybackTime,
 		TotalEpisodes:  anime.TotalEpisodes,
 		Rewatching:     anime.Rewatching,
+		Repeat:         anime.Repeat,
+		StartedAt:      anime.StartedAt,
+		CompletedAt:    anime.CompletedAt,
+		IsAiring:       anime.IsAiring,
+		SkipRemoteSync: anime.SkipRemoteSync,
 		Device:         device,
 	}
 
@@ -191,6 +231,11 @@ func castSessionToAnime(session *castSessionFile) *Anime {
 	anime.Ep.Player.PlaybackTime = session.PlaybackTime
 	anime.TotalEpisodes = session.TotalEpisodes
 	anime.Rewatching = session.Rewatching
+	anime.Repeat = session.Repeat
+	anime.StartedAt = session.StartedAt
+	anime.CompletedAt = session.CompletedAt
+	anime.IsAiring = session.IsAiring
+	anime.SkipRemoteSync = session.SkipRemoteSync
 	return anime
 }
 
