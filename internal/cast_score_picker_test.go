@@ -2,6 +2,7 @@ package internal
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -133,8 +134,112 @@ func TestRateAnimeWithScoreDoesNotPrompt(t *testing.T) {
 	}
 }
 
-// driveCastScore runs the picker and feeds it the given commands.
+// The window must be visible while it runs. It was computed and then used only
+// in the no-panel branch, so the panel showed a bare "8/10" and the viewer had no
+// way of knowing how long they had.
+func TestScorePickerShowsTheTimeRemaining(t *testing.T) {
+	resetCastControlsForTest(t)
+	resetCastSessionScreen(t)
+	holdCastSessionPanel(t)
+	castControlsBegin = func(*Config) bool { return true }
+
+	anime := &Anime{}
+	anime.Title.Romaji = "Test Show"
+	anime.Ep.Number = 12
+
+	// Long enough that only the opening frame is drawn, and it must carry seconds.
+	out := captureStdout(t, func() {
+		castAwaitScore(&Config{}, anime, 20*time.Second)
+	})
+
+	if !strings.Contains(out, "Rate this anime:  8/10") {
+		t.Fatalf("the score is not shown:\n%s", out)
+	}
+	if !strings.Contains(out, "20s to answer") && !strings.Contains(out, "19s to answer") {
+		t.Errorf("the panel does not say how long is left:\n%s", out)
+	}
+}
+
+// Choosing a score is a run of keypresses. A fixed deadline shuts the window on
+// someone halfway through the run -- arrows pressed, score nearly chosen, and no
+// way to save it. Every adjustment buys another window.
+func TestAdjustingTheScoreExtendsTheWindow(t *testing.T) {
+	resetCastControlsForTest(t)
+	resetCastSessionScreen(t)
+	holdCastSessionPanel(t)
+	castControlsBegin = func(*Config) bool { return true }
+
+	anime := &Anime{}
+	anime.Title.Romaji = "Test Show"
+	anime.Ep.Number = 12
+
+	// A window shorter than the whole run of keys, so a fixed deadline would
+	// expire partway through and decline.
+	const window = 400 * time.Millisecond
+	go func() {
+		waitForCastSubscription(t)
+		time.Sleep(150 * time.Millisecond) // clear the pre-loop drain
+		for i := 0; i < 4; i++ {
+			castDeliverCommand(castCmdVolumeDown)
+			time.Sleep(250 * time.Millisecond) // each gap is most of the window
+		}
+		castDeliverCommand(castCmdSelect)
+	}()
+
+	score, given := castAwaitScore(&Config{}, anime, window)
+
+	if !given {
+		t.Fatal("the window expired while the viewer was still choosing")
+	}
+	if score != 4 {
+		t.Errorf("score = %d, want 4: four adjustments from 8", score)
+	}
+}
+
+// And the window still ends on its own when nobody touches it, or the cast
+// hangs on a question.
+func TestScorePickerDeclinesWhenLeftAlone(t *testing.T) {
+	resetCastControlsForTest(t)
+	resetCastSessionScreen(t)
+	holdCastSessionPanel(t)
+	castControlsBegin = func(*Config) bool { return true }
+
+	anime := &Anime{}
+	anime.Title.Romaji = "Test Show"
+	anime.Ep.Number = 12
+
+	started := time.Now()
+	if score, given := castAwaitScore(&Config{}, anime, 300*time.Millisecond); given {
+		t.Errorf("a score of %d was saved with no keypress at all", score)
+	}
+	elapsed := time.Since(started)
+	if elapsed < 250*time.Millisecond {
+		t.Errorf("declined after %v, want the window to actually run", elapsed)
+	}
+	if elapsed > 3*time.Second {
+		t.Errorf("took %v to decline, want it to end near the window", elapsed)
+	}
+}
+
+// waitForCastSubscription blocks until the picker has subscribed.
 //
+// castDeliverCommand drops a command when no episode holds one, which is right in
+// production and makes this flaky: a burst delivered before the subscription
+// exists is discarded.
+func waitForCastSubscription(t *testing.T) {
+	t.Helper()
+	for i := 0; i < 2000; i++ {
+		castControls.mu.Lock()
+		ready := castControls.live != nil
+		castControls.mu.Unlock()
+		if ready {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("the picker never subscribed")
+}
+
 // Delivery waits for the subscription to exist. castDeliverCommand drops a
 // command when no episode holds one, which is correct in production and would
 // make this flaky: a goroutine started first would have its whole burst
@@ -151,15 +256,7 @@ func driveCastScore(t *testing.T, anime *Anime, commands []castCommand) (int, bo
 	castControlsBegin = func(*Config) bool { return true }
 
 	go func() {
-		for {
-			castControls.mu.Lock()
-			ready := castControls.live != nil
-			castControls.mu.Unlock()
-			if ready {
-				break
-			}
-			time.Sleep(time.Millisecond)
-		}
+		waitForCastSubscription(t)
 		// The picker subscribes and then discards whatever the episode left
 		// buffered, so a key delivered the instant the subscription appears is
 		// thrown away with it. A real viewer's keypress comes well after that.

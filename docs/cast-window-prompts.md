@@ -92,6 +92,10 @@ Set on a per-run config flag, `CastNonInteractive`, tagged `config:"-"` the way
   saved". The countdown is now the score picker itself: ↑↓ move between 1 and 10,
   Enter saves, and only the window running out declines. Nothing else declines,
   so a stray keypress cannot rate or un-rate a show on the viewer's behalf.
+  The window is an inactivity timeout, not a budget: every ↑↓ buys another ten
+  seconds, so a viewer partway through a run of presses is not cut off, and only
+  leaving it alone declines. The panel also shows the time remaining, because a
+  deadline the viewer cannot see is one they cannot plan around.
   This needs the panel to be held for the whole cast, which is also what removed
   the alt-buffer blink between episodes.
 - **Sequel** — decline. Declining is reported. A countdown here would be

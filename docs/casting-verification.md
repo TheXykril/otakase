@@ -184,7 +184,10 @@ cases only a real device and a real room can settle.
       window should close or return to a prompt on its own.
 - [ ] **At the end of a season, a score picker appears in the panel**, in the
       same frame as the episode countdown -- header, message row, keys. It opens
-      at 8/10 and counts down from 10s.
+      at 8/10 and shows `Ns to answer`, counting down from 10.
+- [ ] **Take longer than 10s to choose, pressing ↑↓ as you go.** It must not cut
+      you off. Each adjustment buys another 10s; only leaving it alone for 10s
+      declines. A score half-chosen and then discarded is the bug this replaced.
 - [ ] **↑ and ↓ move the score, Enter saves it.** Then the panel reads
       `Rated N.` and the summary reads `rating saved (N)`. Press nothing and it
       reads `No answer -- rating skipped.` with `rating skipped (cast window)`.

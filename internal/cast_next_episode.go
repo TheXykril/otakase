@@ -2,7 +2,7 @@ package internal
 
 import (
 	"fmt"
-	"strconv"
+
 	"strings"
 	"time"
 )
@@ -198,22 +198,27 @@ func castAwaitScore(config *Config, anime *Anime, window time.Duration) (int, bo
 	}
 
 	score := castScoreStart
-	started := time.Now()
+	// An inactivity window rather than a budget for the whole question. Choosing
+	// a score is a run of keypresses, and a fixed deadline cuts the viewer off
+	// halfway through the run -- arrows pressed, a score nearly chosen, and the
+	// window shuts on them. Anyone deliberately picking has already shown they are
+	// there, so every adjustment buys another window. The window running out is
+	// still the only thing that declines.
+	deadline := time.Now().Add(window)
 
 	draw := func() {
-		remaining := window - time.Since(started)
-		seconds := int(remaining.Seconds() + 0.5)
+		seconds := int(time.Until(deadline).Seconds() + 0.5)
 		if seconds < 0 {
 			seconds = 0
 		}
-		message := fmt.Sprintf("Rate this anime:  %d/%d", score, castScoreMax)
+		message := fmt.Sprintf("Rate this anime:  %d/%d  ·  %ds to answer",
+			score, castScoreMax, seconds)
 		if panel := castPanelForControls; panel != nil {
 			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number,
 				config.CastDevice, message, castScoreKeys))
 			return
 		}
-		fmt.Print("\r  " + message + "  (" + strconv.Itoa(seconds) + "s)" +
-			strings.Repeat(" ", 40) + "\r")
+		fmt.Print("\r  " + message + strings.Repeat(" ", 40) + "\r")
 	}
 
 	// Drawn before the loop: a tick is 250ms, so waiting for one would leave the
@@ -241,10 +246,12 @@ func castAwaitScore(config *Config, anime *Anime, window time.Duration) (int, bo
 					if score < castScoreMax {
 						score++
 					}
+					deadline = time.Now().Add(window)
 				case castCmdVolumeDown:
 					if score > castScoreMin {
 						score--
 					}
+					deadline = time.Now().Add(window)
 				case castCmdSelect:
 					return score, true
 				case castCmdStop:
@@ -265,7 +272,7 @@ func castAwaitScore(config *Config, anime *Anime, window time.Duration) (int, bo
 		// The reverse order is the mistake castCountdownTick documents: a viewer
 		// reaching for the keyboard as the timer runs out means accept, not "too
 		// late".
-		if window-time.Since(started) <= 0 {
+		if !time.Now().Before(deadline) {
 			return 0, false
 		}
 
