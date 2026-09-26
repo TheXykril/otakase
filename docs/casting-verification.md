@@ -166,6 +166,46 @@ stream declaring H.264 Level 5.0 to a decoder specified for 4.1.
 - [ ] **Press `q` during an episode.** The next one must not start — stopping
       is not finishing.
 
+## 7. The spawned window answers for itself
+
+A cast launched from the rofi keybind runs in a terminal the viewer is not at.
+Nothing in that window may wait for a keyboard — see
+`cast-window-prompts.md` for what each prompt decides instead. These are the
+cases only a real device and a real room can settle.
+
+- [ ] **Finish a whole season from a rofi launch without touching the
+      keyboard.** The window must never show a menu, a text prompt, or sit
+      waiting. The last thing printed should be a completion summary, and the
+      window should close or return to a prompt on its own.
+- [ ] **At the end of a season, watch the rating countdown.** It should appear
+      as ordinary text — no alternate buffer, no full-screen frame — tick down
+      from 10s, and then skip the rating. Press a key mid-countdown instead: the
+      rating should go through and the summary should say `rating saved` rather
+      than `rating skipped (cast window)`.
+- [ ] **Confirm the summary names what it assumed.** It should read
+      `rating skipped (cast window)` and `sequel skipped (cast window)` rather
+      than the plain `rating skipped`, so a suppressed decision is visible
+      rather than silent.
+- [ ] **Your AniList list is untouched by the suppressed prompts.** A cast
+      finale must not have added a sequel to Watching or Plan to Watch, and
+      `SkipRemoteSync` must still hold — check the entry by hand.
+- [ ] **Force a dead end mid-season.** The reliable way is to point
+      `Provider` at a hostname that does not resolve *while casting a season
+      that already has episode 1 cached*, then let the countdown carry into
+      episode 2. Expect: the diagnosis printed legibly (on one line, not
+      walking diagonally), one automatic re-search, then
+      `Could not find a stream for episode 2; stopping the cast.` It must
+      **stop** — this path used to be an unbounded `for {}` that only a viewer
+      backing out could end, and an auto-answer without a bound turns it into an
+      infinite loop.
+- [ ] **Watch the diagnosis text specifically.** It is printed in raw mode, where
+      a bare `\n` does not return the cursor. If it runs diagonally down the
+      window, the `\r\n` handling regressed.
+- [ ] **Confirm the window is not left raw** after any of the above. If
+      keystrokes echo oddly afterwards, `reset` and report it — a prompt ending
+      while the cast reader is still parked is exactly the sequence that would
+      do that.
+
 ## Known limits
 
 Not bugs; these are deliberate, and documented in the README.

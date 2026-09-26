@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -145,6 +146,63 @@ func castAwaitNextEpisode(config *Config, anime *Anime, panel *castPanelWriter, 
 				castCountdownMessage(anime.Ep.Number, castNextEpisodeNumber(config, anime), castCountdownDuration-elapsed),
 			))
 		}
+	}
+}
+
+// castAwaitYesNo waits out a window for the viewer to accept something,
+// reporting whether they did.
+//
+// A sibling of castAwaitNextEpisode rather than a call into it, for two reasons.
+// The panel is gone by the time this runs -- CastEpisode releases it in a defer,
+// so there is nothing to draw a status line into and the countdown is plain
+// terminal output. And the subscription is gone too: that helper is handed the
+// episode's command channel, while this has to take a fresh one, or the
+// process-global reader would swallow the keypress meant to accept and the
+// viewer could not answer at all.
+//
+// It takes a subscription only when a terminal is there to answer with. Without
+// one it declines at once rather than waiting out a countdown nobody can see.
+func castAwaitYesNo(config *Config, question string, window time.Duration) bool {
+	commands, release, ok := startCastControls(config)
+	if !ok {
+		Log(fmt.Sprintf("cast: no keyboard for %q, declining", question))
+		return false
+	}
+	defer release()
+
+	// Whatever was pressed during the episode is still buffered, and the first
+	// tick would read it as an answer to a question that had not been asked yet.
+	// Same drain the episode countdown does.
+	for drained := false; !drained; {
+		select {
+		case <-commands:
+		default:
+			drained = true
+		}
+	}
+
+	started := time.Now()
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+		case <-commands:
+			// Carriage return and trailing spaces so the countdown line is
+			// overwritten rather than left stacked above the outcome.
+			fmt.Print("\r" + strings.Repeat(" ", castStatusBarWidth+64) + "\r")
+			return true
+		}
+
+		remaining := window - time.Since(started)
+		if remaining <= 0 {
+			fmt.Print("\r" + strings.Repeat(" ", castStatusBarWidth+64) + "\r")
+			return false
+		}
+		seconds := int(remaining.Seconds() + 0.5)
+		fmt.Print(fmt.Sprintf("\r  %s — %ds to answer, any key to accept%s",
+			question, seconds, strings.Repeat(" ", 24)))
 	}
 }
 

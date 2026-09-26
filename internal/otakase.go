@@ -1813,31 +1813,49 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 	summary := []string{}
 	canWriteRemote := ShouldWriteRemoteTracking(userConfig, anime)
 
+	// One place decides whether a rating actually happened, so the menu and the
+	// countdown cannot report it differently.
+	applyRating := func() {
+		if err := RateAnime(userToken, anime.AnilistId); err != nil {
+			Log(fmt.Sprintf("Error rating anime: %v", err))
+			Out("Failed to rate anime")
+			summary = append(summary, "rating failed")
+			return
+		}
+		Out("Anime rated successfully!")
+		summary = append(summary, "rating saved")
+	}
+
 	if userConfig.ScoreOnCompletion && !anime.IsAiring && canWriteRemote {
 		Out("You've completed this anime! Would you like to rate it?")
 
-		scoreOptions := []SelectionOption{
-			{Key: "yes", Label: "Yes, rate this anime"},
-			{Key: "no", Label: "No, skip rating"},
-		}
-
-		selectedOption, err := DynamicSelect(scoreOptions)
-		if err != nil {
-			Log(fmt.Sprintf("Error in score prompt selection: %v", err))
-		} else if selectedOption.Key == "yes" {
-			err = RateAnime(userToken, anime.AnilistId)
-			if err != nil {
-				Log(fmt.Sprintf("Error rating anime: %v", err))
-				Out("Failed to rate anime")
-				summary = append(summary, "rating failed")
+		if castWindowNonInteractive() {
+			// Counted down rather than declined outright: the viewer may well be
+			// watching, and ten seconds is enough to walk over to a keyboard. What
+			// is not acceptable is a menu that blocks the season on an answer
+			// nobody is there to give. See docs/cast-window-prompts.md.
+			if castAwaitYesNo(userConfig, "Rate this anime?", castCountdownDuration) {
+				applyRating()
 			} else {
-				Out("Anime rated successfully!")
-				summary = append(summary, "rating saved")
+				Out("No answer -- skipping the rating.")
+				summary = append(summary, "rating skipped (cast window)")
 			}
 		} else {
-			summary = append(summary, "rating skipped")
+			scoreOptions := []SelectionOption{
+				{Key: "yes", Label: "Yes, rate this anime"},
+				{Key: "no", Label: "No, skip rating"},
+			}
+
+			selectedOption, err := DynamicSelect(scoreOptions)
+			if err != nil {
+				Log(fmt.Sprintf("Error in score prompt selection: %v", err))
+			} else if selectedOption.Key == "yes" {
+				applyRating()
+			} else {
+				summary = append(summary, "rating skipped")
+			}
+			// Back (-2) and no are treated as skip
 		}
-		// Back (-2) and no are treated as skip
 	} else {
 		summary = append(summary, "rating skipped")
 	}
@@ -1896,6 +1914,17 @@ func handleSequelCheck(userConfig *Config, anime *Anime, userToken string) (summ
 	if len(sequels) == 0 {
 		Log("No sequel found for this anime")
 		return "no sequel found"
+	}
+
+	// Declined whole, ahead of both the "which one" and the "what do you want to
+	// do with it" menus: a further instalment is a different show to put on a
+	// list, not a continuation of this one, and it is not a decision to make on
+	// someone's behalf while they are not there to make it. Reported rather than
+	// dropped -- see docs/cast-window-prompts.md.
+	if castWindowNonInteractive() {
+		title := sequelDisplayTitle(userConfig, &sequels[0])
+		Out(fmt.Sprintf("Sequel available: %s. Leaving your list alone.", title))
+		return "sequel skipped (cast window)"
 	}
 
 	sequel := &sequels[0]
