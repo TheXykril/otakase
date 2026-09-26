@@ -134,10 +134,15 @@ func TestRateAnimeWithScoreDoesNotPrompt(t *testing.T) {
 	}
 }
 
-// The window must be visible while it runs. It was computed and then used only
-// in the no-panel branch, so the panel showed a bare "8/10" and the viewer had no
-// way of knowing how long they had.
-func TestScorePickerShowsTheTimeRemaining(t *testing.T) {
+// The window must be visible while it runs, and it must say what happens if it
+// runs out.
+//
+// The clock was computed and then used only in the no-panel branch, so the panel
+// showed a bare "8/10" with no time at all. Then, once the clock was drawn, it
+// read "9s to answer" -- which a viewer left alone would reasonably take as a
+// countdown to being rated 8, rather than to losing the rating. Both are the
+// same failure: the panel not telling the viewer what it is about to do to them.
+func TestScorePickerShowsTheClockAndTheConsequence(t *testing.T) {
 	resetCastControlsForTest(t)
 	resetCastSessionScreen(t)
 	holdCastSessionPanel(t)
@@ -147,7 +152,7 @@ func TestScorePickerShowsTheTimeRemaining(t *testing.T) {
 	anime.Title.Romaji = "Test Show"
 	anime.Ep.Number = 12
 
-	// Long enough that only the opening frame is drawn, and it must carry seconds.
+	// Long enough that only the opening frame is drawn, and it must carry both.
 	out := captureStdout(t, func() {
 		castAwaitScore(&Config{}, anime, 20*time.Second)
 	})
@@ -155,15 +160,78 @@ func TestScorePickerShowsTheTimeRemaining(t *testing.T) {
 	if !strings.Contains(out, "Rate this anime:  8/10") {
 		t.Fatalf("the score is not shown:\n%s", out)
 	}
-	if !strings.Contains(out, "20s to answer") && !strings.Contains(out, "19s to answer") {
+	if !strings.Contains(out, "20s left") && !strings.Contains(out, "19s left") {
 		t.Errorf("the panel does not say how long is left:\n%s", out)
+	}
+	// The consequence, which is the part that was missing: doing nothing has to
+	// read as losing the rating, not as getting one.
+	if !strings.Contains(out, "or it is skipped") {
+		t.Errorf("the panel does not say that doing nothing means no rating:\n%s", out)
 	}
 }
 
-// Choosing a score is a run of keypresses. A fixed deadline shuts the window on
-// someone halfway through the run -- arrows pressed, score nearly chosen, and no
-// way to save it. Every adjustment buys another window.
-func TestAdjustingTheScoreExtendsTheWindow(t *testing.T) {
+// Held separately because this is the sentence a rewrite would quietly drop, and
+// the picker is the one place in the cast flow where the default outcome is to
+// lose something the viewer wanted.
+func TestScoreMessageNamesTheOutcomeOfWaiting(t *testing.T) {
+	message := castScoreMessage(8, 7)
+
+	if !strings.Contains(message, "8/10") {
+		t.Errorf("the message does not show the score: %q", message)
+	}
+	if !strings.Contains(message, "7s left") {
+		t.Errorf("the message does not show the clock: %q", message)
+	}
+}
+
+// The consequence lives in the footer rather than the message, because the
+// message row truncates from the right and the consequence is exactly what must
+// not be the part that gets cut. Held separately so a tidy-up that merges the
+// two lines back together fails here rather than in front of a viewer on a
+// narrow terminal.
+func TestScoreConsequenceIsInTheFooterNotTheMessage(t *testing.T) {
+	if strings.Contains(castScoreMessage(8, 7), "skipped") {
+		t.Error("the message carries the consequence, where truncation eats it")
+	}
+	if !strings.Contains(castScoreKeysUntouched, "skipped") {
+		t.Errorf("the footer does not say that waiting loses the rating: %q", castScoreKeysUntouched)
+	}
+	// And the footer has to survive a narrow terminal, which is the whole reason
+	// for the split. A cast window is an ordinary terminal and may be tiled.
+	const wanted = "↑↓ score · enter save · or it is skipped"
+	for _, width := range []int{50, 44, 40} {
+		lines := castPanelStatusLines("Test Show", 12, "FakeTV",
+			castScoreMessage(8, 7), width, castScoreKeysUntouched)
+		if lipglossWidth(stripForTest(lines[2])) < lipglossWidth(wanted) {
+			t.Errorf("at width %d the footer's consequence is truncated: %q",
+				width, stripForTest(lines[2]))
+		}
+	}
+}
+
+// stripForTest removes the styling so a width can be measured on the text.
+func stripForTest(line string) string {
+	out := strings.Builder{}
+	inEscape := false
+	for _, r := range line {
+		switch {
+		case r == 0x1b:
+			inEscape = true
+		case inEscape && r == 'm':
+			inEscape = false
+		case !inEscape:
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
+}
+
+// Once the viewer has touched the score there is no clock and no deadline. The
+// window is for absence -- a cast window nobody is at has to resolve by itself --
+// not a budget for answering. A viewer standing at the keyboard moving a number
+// has shown they are there, and a fixed deadline used to cut them off halfway
+// through a run of presses with the score nearly chosen and no way to save it.
+func TestTouchingTheScoreRemovesTheDeadline(t *testing.T) {
 	resetCastControlsForTest(t)
 	resetCastSessionScreen(t)
 	holdCastSessionPanel(t)
@@ -173,26 +241,109 @@ func TestAdjustingTheScoreExtendsTheWindow(t *testing.T) {
 	anime.Title.Romaji = "Test Show"
 	anime.Ep.Number = 12
 
-	// A window shorter than the whole run of keys, so a fixed deadline would
-	// expire partway through and decline.
-	const window = 400 * time.Millisecond
+	const window = 300 * time.Millisecond
 	go func() {
 		waitForCastSubscription(t)
 		time.Sleep(150 * time.Millisecond) // clear the pre-loop drain
-		for i := 0; i < 4; i++ {
-			castDeliverCommand(castCmdVolumeDown)
-			time.Sleep(250 * time.Millisecond) // each gap is most of the window
-		}
+		castDeliverCommand(castCmdVolumeDown)
+		// Well past the window that would have applied. With the deadline still
+		// running this is where the picker would have declined.
+		time.Sleep(4 * window)
 		castDeliverCommand(castCmdSelect)
 	}()
 
 	score, given := castAwaitScore(&Config{}, anime, window)
 
 	if !given {
-		t.Fatal("the window expired while the viewer was still choosing")
+		t.Fatal("the picker declined long after the viewer started choosing")
 	}
-	if score != 4 {
-		t.Errorf("score = %d, want 4: four adjustments from 8", score)
+	if score != 7 {
+		t.Errorf("score = %d, want 7", score)
+	}
+}
+
+// And the clock comes off the panel the moment they start, rather than sitting
+// there counting at someone who is choosing.
+func TestClockDisappearsOnceTheViewerIsChoosing(t *testing.T) {
+	resetCastControlsForTest(t)
+	resetCastSessionScreen(t)
+	holdCastSessionPanel(t)
+	castControlsBegin = func(*Config) bool { return true }
+
+	anime := &Anime{}
+	anime.Title.Romaji = "Test Show"
+	anime.Ep.Number = 12
+
+	out := captureStdout(t, func() {
+		go func() {
+			waitForCastSubscription(t)
+			time.Sleep(150 * time.Millisecond)
+			castDeliverCommand(castCmdVolumeUp)
+			time.Sleep(400 * time.Millisecond)
+			castDeliverCommand(castCmdSelect)
+		}()
+		castAwaitScore(&Config{}, anime, 20*time.Second)
+	})
+
+	if !strings.Contains(out, "Rate this anime:  8/10  ·  ") {
+		t.Fatalf("the opening frame does not show a clock:\n%s", out)
+	}
+
+	// Every frame after the first adjustment must carry no clock. Compared per
+	// frame rather than by substring, because the panel redraws in place and the
+	// engaged frames are the ones that matter.
+	var frames []string
+	for _, line := range strings.Split(out, "\r\n") {
+		if strings.Contains(line, "Rate this anime:") {
+			frames = append(frames, line)
+		}
+	}
+	if len(frames) < 2 {
+		t.Fatalf("expected an opening frame and at least one after a keypress, got %d:\n%s",
+			len(frames), out)
+	}
+	if !strings.Contains(frames[0], "s left") {
+		t.Errorf("the opening frame has no clock: %q", frames[0])
+	}
+	for i, frame := range frames[1:] {
+		if strings.Contains(frame, "s left") {
+			t.Errorf("frame %d still shows a clock while choosing: %q", i+1, frame)
+		}
+	}
+	if !strings.Contains(out, "9/10") {
+		t.Errorf("the adjustment was not shown:\n%s", out)
+	}
+	if !strings.Contains(out, "q to skip") {
+		t.Errorf("q is not offered as the way to decline once choosing:\n%s", out)
+	}
+}
+
+// With the deadline gone once engaged, q is the only way out -- so it has to
+// decline rather than fall through to a timeout the viewer can no longer see.
+func TestQDeclinesTheRatingOnceChoosing(t *testing.T) {
+	resetCastControlsForTest(t)
+	resetCastSessionScreen(t)
+	holdCastSessionPanel(t)
+	castControlsBegin = func(*Config) bool { return true }
+
+	anime := &Anime{}
+	anime.Title.Romaji = "Test Show"
+	anime.Ep.Number = 12
+
+	go func() {
+		waitForCastSubscription(t)
+		time.Sleep(150 * time.Millisecond)
+		castDeliverCommand(castCmdVolumeUp)
+		castDeliverCommand(castCmdStop)
+	}()
+
+	// A short window that would have expired first if the deadline still applied.
+	started := time.Now()
+	if score, given := castAwaitScore(&Config{}, anime, 200*time.Millisecond); given {
+		t.Errorf("q saved a rating of %d instead of declining it", score)
+	}
+	if elapsed := time.Since(started); elapsed > 3*time.Second {
+		t.Errorf("q took %v to decline", elapsed)
 	}
 }
 

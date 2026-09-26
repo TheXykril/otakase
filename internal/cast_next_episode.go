@@ -163,9 +163,40 @@ const (
 	castScoreStart = 8
 )
 
-// castScoreKeys is what the panel footer says while a score is being picked. The
-// playback keys would be a lie here: there is nothing playing to pause or seek.
-const castScoreKeys = " ↑↓ score · enter save "
+// The two footers. They differ because what the viewer can do differs.
+//
+// Before they have touched anything, the only outcomes are "save" and "be
+// skipped", so that is what the footer says. Once they are choosing, the clock
+// is gone and q is the only way out, so the footer says that instead -- a viewer
+// who has just been given all the time in the world should not have to guess
+// how to give it back.
+const (
+	castScoreKeysUntouched = " ↑↓ score · enter save · or it is skipped "
+	castScoreKeysChoosing  = " ↑↓ score · enter save · q to skip "
+)
+
+// castScoreMessage is the picker's line while nobody has touched it: the score
+// and the time left to do something about it.
+//
+// The consequence of doing nothing is in the footer rather than here, because the
+// message row truncates from the right on a narrow terminal and the consequence
+// is the part that must survive. The episode countdown gets this for free by
+// naming its outcome inline; here it has to be stated.
+func castScoreMessage(score, seconds int) string {
+	return fmt.Sprintf("Rate this anime:  %d/%d  ·  %ds left", score, castScoreMax, seconds)
+}
+
+// castScoreChoosingMessage is the picker's line once the viewer is choosing: the
+// score, and no clock.
+//
+// No clock because they are standing at the keyboard choosing a number, and a
+// number counting down at them is pressure rather than information. A viewer told
+// "9s to answer" and left to watch it run out also reasonably concludes they are
+// about to be rated 8 rather than about to lose the rating, which is the same
+// confusion with the arithmetic in it.
+func castScoreChoosingMessage(score int) string {
+	return fmt.Sprintf("Rate this anime:  %d/%d", score, castScoreMax)
+}
 
 // castAwaitScore asks for a score in the panel, reporting the score and whether
 // one was given.
@@ -198,24 +229,33 @@ func castAwaitScore(config *Config, anime *Anime, window time.Duration) (int, bo
 	}
 
 	score := castScoreStart
-	// An inactivity window rather than a budget for the whole question. Choosing
-	// a score is a run of keypresses, and a fixed deadline cuts the viewer off
-	// halfway through the run -- arrows pressed, a score nearly chosen, and the
-	// window shuts on them. Anyone deliberately picking has already shown they are
-	// there, so every adjustment buys another window. The window running out is
-	// still the only thing that declines.
+	// The window is for absence, not for the question.
+	//
+	// It exists because a cast window nobody is at must resolve on its own rather
+	// than sit on a prompt forever -- that hang is the failure this whole feature
+	// exists to remove. It is not a budget for answering: choosing a score is a
+	// run of keypresses, and a fixed deadline cuts the viewer off halfway through
+	// with a score nearly chosen and no way to save it. So the first adjustment
+	// ends the clock and with it the deadline. Someone standing at the keyboard
+	// moving a number has shown they are there, and from then on Enter saves and
+	// q declines -- both stated on the panel, so neither is a guess.
+	engaged := false
 	deadline := time.Now().Add(window)
 
 	draw := func() {
-		seconds := int(time.Until(deadline).Seconds() + 0.5)
-		if seconds < 0 {
-			seconds = 0
+		message := castScoreChoosingMessage(score)
+		keys := castScoreKeysChoosing
+		if !engaged {
+			seconds := int(time.Until(deadline).Seconds() + 0.5)
+			if seconds < 0 {
+				seconds = 0
+			}
+			message = castScoreMessage(score, seconds)
+			keys = castScoreKeysUntouched
 		}
-		message := fmt.Sprintf("Rate this anime:  %d/%d  ·  %ds to answer",
-			score, castScoreMax, seconds)
 		if panel := castPanelForControls; panel != nil {
 			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number,
-				config.CastDevice, message, castScoreKeys))
+				config.CastDevice, message, keys))
 			return
 		}
 		fmt.Print("\r  " + message + strings.Repeat(" ", 40) + "\r")
@@ -246,17 +286,19 @@ func castAwaitScore(config *Config, anime *Anime, window time.Duration) (int, bo
 					if score < castScoreMax {
 						score++
 					}
-					deadline = time.Now().Add(window)
+					engaged = true
 				case castCmdVolumeDown:
 					if score > castScoreMin {
 						score--
 					}
-					deadline = time.Now().Add(window)
+					engaged = true
 				case castCmdSelect:
 					return score, true
 				case castCmdStop:
-					// q stops the cast, so it must not also save a rating on
-					// the way past.
+					// q declines the rating. It does not stop the cast: the season
+					// is already over, so there is nothing playing to stop, and
+					// declining is what a viewer pressing q here means. The
+					// completion still runs, which is the point.
 					return 0, false
 				default:
 					// Seek and pause mean nothing here. Ignoring them is the
@@ -271,8 +313,9 @@ func castAwaitScore(config *Config, anime *Anime, window time.Duration) (int, bo
 		// Expiry after the drain, so a key arriving in the last tick still counts.
 		// The reverse order is the mistake castCountdownTick documents: a viewer
 		// reaching for the keyboard as the timer runs out means accept, not "too
-		// late".
-		if !time.Now().Before(deadline) {
+		// late". Skipped once they are choosing -- the clock is off the panel by
+		// then, so a deadline that still applied would be one they cannot see.
+		if !engaged && !time.Now().Before(deadline) {
 			return 0, false
 		}
 

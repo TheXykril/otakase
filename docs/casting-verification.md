@@ -185,9 +185,13 @@ cases only a real device and a real room can settle.
 - [ ] **At the end of a season, a score picker appears in the panel**, in the
       same frame as the episode countdown -- header, message row, keys. It opens
       at 8/10 and shows `Ns to answer`, counting down from 10.
-- [ ] **Take longer than 10s to choose, pressing ↑↓ as you go.** It must not cut
-      you off. Each adjustment buys another 10s; only leaving it alone for 10s
-      declines. A score half-chosen and then discarded is the bug this replaced.
+- [ ] **Press ↑ once, then take 30 seconds deciding.** The clock must vanish and
+      the picker must still be there. From that point nothing times out: Enter
+      saves, q declines, and the footer should now read `q to skip`.
+- [ ] **Press ↑↓ and walk away.** The panel stays on the rating prompt forever.
+      That is deliberate — engagement is taken as consent to take your time — and
+      it is the one way this window can hang, so it is worth knowing it exists.
+      Closing the window is always an exit.
 - [ ] **↑ and ↓ move the score, Enter saves it.** Then the panel reads
       `Rated N.` and the summary reads `rating saved (N)`. Press nothing and it
       reads `No answer -- rating skipped.` with `rating skipped (cast window)`.
