@@ -182,11 +182,21 @@ cases only a real device and a real room can settle.
       keyboard.** The window must never show a menu, a text prompt, or sit
       waiting. The last thing printed should be a completion summary, and the
       window should close or return to a prompt on its own.
-- [ ] **At the end of a season, watch the rating countdown.** It is drawn in the
-      same panel frame as the episode countdown -- header, message row, keys --
-      not as bare text. It ticks from 10s. Then the panel says how it ended:
-      `Rating saved.` if a key was pressed, `No answer -- rating skipped.` if
-      not. An empty message row means the frame was blanked and never replaced.
+- [ ] **At the end of a season, a score picker appears in the panel**, in the
+      same frame as the episode countdown -- header, message row, keys. It opens
+      at 8/10 and counts down from 10s.
+- [ ] **↑ and ↓ move the score, Enter saves it.** Then the panel reads
+      `Rated N.` and the summary reads `rating saved (N)`. Press nothing and it
+      reads `No answer -- rating skipped.` with `rating skipped (cast window)`.
+- [ ] **Press ↑ three times quickly — it must move three points, not one.**
+      Reading one key per tick is how the first version of this ate every
+      keypress.
+- [ ] **Press space or an arrow left/right during the picker.** Nothing should
+      happen. Those are playback controls, and a viewer pressing one by accident
+      must not have their rating written or discarded.
+- [ ] **Check the rating on the tracker, not just the panel.** `Rated 8.` with no
+      score on the entry means the write failed while the panel claimed success,
+      which is the bug this replaced.
 - [ ] **Confirm the summary names what it assumed.** It should read
       `rating skipped (cast window)` and `sequel skipped (cast window)` rather
       than the plain `rating skipped`, so a suppressed decision is visible

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1024,6 +1025,16 @@ func UpdateAnimeStatus(token string, mediaID int, status string) error {
 	}
 }
 
+// ErrRatingDeclined reports that the viewer chose not to rate, rather than that
+// rating failed.
+//
+// It exists because the two were indistinguishable: RateAnime returned nil when
+// the score prompt was cancelled, so every caller took the success branch and
+// announced a rating that was never written. Escaping the prompt in a terminal
+// did it too, and a cast window did it every time.
+var ErrRatingDeclined = errors.New("rating declined")
+
+// RateAnime asks for a score and writes it.
 func RateAnime(token string, mediaID int) error {
 	config := GetGlobalConfig()
 	switch {
@@ -1035,8 +1046,28 @@ func RateAnime(token string, mediaID int) error {
 			return err
 		}
 		if cancelled {
-			return nil
+			return ErrRatingDeclined
 		}
+		return RateAnimeWithScore(token, mediaID, score)
+	default:
+		// These two ask nothing, so there is no prompt to decline.
+		return RateAnimeWithScore(token, mediaID, 0)
+	}
+}
+
+// RateAnimeWithScore writes a rating that has already been decided.
+//
+// The score-taking and the writing are separate because the cast panel decides
+// the score with arrow keys and cannot open a prompt for it, and because a
+// caller holding a score should not be made to answer a question to use it.
+// score is only consulted for dual tracking; the single-tracker paths prompt
+// inside the tracker APIs themselves.
+func RateAnimeWithScore(token string, mediaID int, score float64) error {
+	config := GetGlobalConfig()
+	switch {
+	case !ShouldWriteRemoteTracking(config, GetGlobalAnime()):
+		return nil
+	case UsesDualRemoteTracking(config):
 		var firstErr error
 		if err := saveAniListAnimeScore(token, mediaID, score); err != nil {
 			firstErr = err

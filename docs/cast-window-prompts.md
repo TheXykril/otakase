@@ -84,8 +84,16 @@ Set on a per-run config flag, `CastNonInteractive`, tagged `config:"-"` the way
   auto-remap would loop forever, which is a worse hang than the prompt. One
   attempt, mirroring the `attemptedAutoAudio` flag already in that loop, then
   back out with the diagnosis printed.
-- **Rate this anime** — a countdown, then decline. The viewer may well be
-  watching; ten seconds is enough to walk over. Declining is reported.
+- **Rate this anime** — asked in the panel, with arrows and Enter. It started as
+  a countdown and declined, which was wrong twice over: accepting it led to
+  `RateAnime`, which opens *another* prompt for the score, and that prompt is
+  exactly what a cast window cannot show. So the accept key produced no rating —
+  and, because a cancelled prompt returned nil, a summary reading "rating
+  saved". The countdown is now the score picker itself: ↑↓ move between 1 and 10,
+  Enter saves, and only the window running out declines. Nothing else declines,
+  so a stray keypress cannot rate or un-rate a show on the viewer's behalf.
+  This needs the panel to be held for the whole cast, which is also what removed
+  the alt-buffer blink between episodes.
 - **Sequel** — decline. Declining is reported. A countdown here would be
   answering a question about a different show, which is not a thing to decide on
   the viewer's behalf.

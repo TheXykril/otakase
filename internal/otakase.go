@@ -3,6 +3,7 @@ package internal
 import (
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1813,32 +1814,47 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 	summary := []string{}
 	canWriteRemote := ShouldWriteRemoteTracking(userConfig, anime)
 
-	// One place decides whether a rating actually happened, so the menu and the
-	// countdown cannot report it differently.
+	// One place decides whether a rating actually happened, so the menu, the
+	// cast panel and the escape key cannot report it differently.
+	//
+	// A declined rating is not a failed one. RateAnime cannot tell them apart on
+	// error alone, and conflating them is how "Anime rated successfully!" came to
+	// be printed for a rating that was never written.
 	applyRating := func() {
-		if err := RateAnime(userToken, anime.AnilistId); err != nil {
+		err := RateAnime(userToken, anime.AnilistId)
+		switch {
+		case errors.Is(err, ErrRatingDeclined):
+			Out("Rating skipped.")
+			summary = append(summary, "rating skipped")
+		case err != nil:
 			Log(fmt.Sprintf("Error rating anime: %v", err))
 			Out("Failed to rate anime")
 			summary = append(summary, "rating failed")
-			return
+		default:
+			Out("Anime rated successfully!")
+			summary = append(summary, "rating saved")
 		}
-		Out("Anime rated successfully!")
-		summary = append(summary, "rating saved")
 	}
 
 	if userConfig.ScoreOnCompletion && !anime.IsAiring && canWriteRemote {
 		Out("You've completed this anime! Would you like to rate it?")
 
 		if castWindowNonInteractive() {
-			// Counted down rather than declined outright: the viewer may well be
-			// watching, and ten seconds is enough to walk over to a keyboard. What
-			// is not acceptable is a menu that blocks the season on an answer
-			// nobody is there to give. See docs/cast-window-prompts.md.
-			if castAwaitYesNo(userConfig, anime, "Rate this anime?", castCountdownDuration) {
-				applyRating()
-				castPanelSay(userConfig, anime, "Rating saved.")
+			// Asked in the panel rather than answered for the viewer, because the
+			// alternative is a countdown whose only outcomes are "write a rating
+			// nobody chose" and "write nothing at all". Arrows and one key work
+			// from a sofa; typing a number does not. See
+			// docs/cast-window-prompts.md.
+			if score, given := castAwaitScore(userConfig, anime, castCountdownDuration); given {
+				if err := RateAnimeWithScore(userToken, anime.AnilistId, float64(score)); err != nil {
+					Log(fmt.Sprintf("Error rating anime: %v", err))
+					castPanelSay(userConfig, anime, "Rating failed.")
+					summary = append(summary, "rating failed")
+				} else {
+					castPanelSay(userConfig, anime, fmt.Sprintf("Rated %d.", score))
+					summary = append(summary, fmt.Sprintf("rating saved (%d)", score))
+				}
 			} else {
-				Out("No answer -- skipping the rating.")
 				castPanelSay(userConfig, anime, "No answer -- rating skipped.")
 				summary = append(summary, "rating skipped (cast window)")
 			}

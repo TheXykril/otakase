@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -144,8 +145,131 @@ func castAwaitNextEpisode(config *Config, anime *Anime, panel *castPanelWriter, 
 			fmt.Print(panel.status(
 				GetAnimeName(*anime), anime.Ep.Number, config.CastDevice,
 				castCountdownMessage(anime.Ep.Number, castNextEpisodeNumber(config, anime), castCountdownDuration-elapsed),
+				castPanelPlaybackKeys,
 			))
 		}
+	}
+}
+
+// castScoreMin and castScoreMax are the ends of the score the panel offers.
+// AniList takes 0 to 10, but 0 means "no score" to it, so 1 is the lowest worth
+// offering someone who chose to answer at all.
+const (
+	castScoreMin = 1
+	castScoreMax = 10
+	// castScoreStart is where the picker opens. High enough that a viewer who
+	// walks over and hits enter immediately has not understated the show, which
+	// is the mistake that is harder to notice and easier to leave in a tracker.
+	castScoreStart = 8
+)
+
+// castScoreKeys is what the panel footer says while a score is being picked. The
+// playback keys would be a lie here: there is nothing playing to pause or seek.
+const castScoreKeys = " ↑↓ score · enter save "
+
+// castAwaitScore asks for a score in the panel, reporting the score and whether
+// one was given.
+//
+// The panel is across the room, so this is arrows and one key rather than a
+// typed number: asking someone to type "7" at a keyboard they are not standing
+// at is how you get a show rated 1. Nothing but Enter accepts, so a stray
+// keypress cannot decline on the viewer's behalf -- the window is the only thing
+// that declines, and it says so on screen.
+//
+// Takes a subscription of its own for the same reason castAwaitYesNo does: the
+// episode that just finished released theirs, and the process-global reader
+// would eat the keypress meant for this.
+func castAwaitScore(config *Config, anime *Anime, window time.Duration) (int, bool) {
+	commands, release, ok := startCastControls(config)
+	if !ok {
+		Log("cast: no keyboard to pick a score with")
+		return 0, false
+	}
+	defer release()
+
+	// A key pressed during the episode is still buffered, and the first tick
+	// would read it as an answer to a question not yet asked.
+	for drained := false; !drained; {
+		select {
+		case <-commands:
+		default:
+			drained = true
+		}
+	}
+
+	score := castScoreStart
+	started := time.Now()
+
+	draw := func() {
+		remaining := window - time.Since(started)
+		seconds := int(remaining.Seconds() + 0.5)
+		if seconds < 0 {
+			seconds = 0
+		}
+		message := fmt.Sprintf("Rate this anime:  %d/%d", score, castScoreMax)
+		if panel := castPanelForControls; panel != nil {
+			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number,
+				config.CastDevice, message, castScoreKeys))
+			return
+		}
+		fmt.Print("\r  " + message + "  (" + strconv.Itoa(seconds) + "s)" +
+			strings.Repeat(" ", 40) + "\r")
+	}
+
+	// Drawn before the loop: a tick is 250ms, so waiting for one would leave the
+	// question unseen for a quarter second, and a window shorter than a tick
+	// would never be shown at all.
+	draw()
+
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		// The ticker only wakes the loop; it never takes a command. A select over
+		// both consumes whichever is ready and throws it away, which with one
+		// keypress per tick silently discards every key the viewer presses.
+		<-ticker.C
+
+		// Drained rather than one per tick, so three quick taps move three points
+		// instead of arriving over three quarters of a second.
+		drained := false
+		for !drained {
+			select {
+			case command := <-commands:
+				switch command {
+				case castCmdVolumeUp:
+					if score < castScoreMax {
+						score++
+					}
+				case castCmdVolumeDown:
+					if score > castScoreMin {
+						score--
+					}
+				case castCmdSelect:
+					return score, true
+				case castCmdStop:
+					// q stops the cast, so it must not also save a rating on
+					// the way past.
+					return 0, false
+				default:
+					// Seek and pause mean nothing here. Ignoring them is the
+					// point: a viewer pressing something unexpected must not
+					// decline on their behalf.
+				}
+			default:
+				drained = true
+			}
+		}
+
+		// Expiry after the drain, so a key arriving in the last tick still counts.
+		// The reverse order is the mistake castCountdownTick documents: a viewer
+		// reaching for the keyboard as the timer runs out means accept, not "too
+		// late".
+		if window-time.Since(started) <= 0 {
+			return 0, false
+		}
+
+		draw()
 	}
 }
 
@@ -186,7 +310,7 @@ func castAwaitYesNo(config *Config, anime *Anime, question string, window time.D
 
 	draw := func(message string) {
 		if panel := castPanelForControls; panel != nil {
-			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, config.CastDevice, message))
+			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, config.CastDevice, message, castPanelPlaybackKeys))
 			return
 		}
 		// Carriage return and trailing spaces so the line is overwritten rather

@@ -223,7 +223,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 
 	castStatus := func(message string) {
 		if panel != nil {
-			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device.Name, message))
+			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device.Name, message, castPanelPlaybackKeys))
 			return
 		}
 		Out(message)

@@ -22,6 +22,11 @@ const (
 	castCmdVolumeUp
 	castCmdVolumeDown
 	castCmdStop
+	// castCmdSelect is Enter. It exists for the prompts the panel asks, which
+	// need a way to say yes; during playback nothing acts on it, because
+	// applyCastCommand falls through to a no-op for a command it has no case
+	// for.
+	castCmdSelect
 )
 
 // castSeekStep is how far one arrow press moves the position.
@@ -69,6 +74,10 @@ func decodeCastKey(buf []byte) (castCommand, int) {
 	switch buf[0] {
 	case ' ':
 		return castCmdPauseToggle, 1
+	case '\r', '\n':
+		// Enter, which in raw mode arrives as a bare CR. A prompt drawn in the
+		// panel needs an accept that is not also a playback control.
+		return castCmdSelect, 1
 	case 'q', 'Q', 0x03:
 		return castCmdStop, 1
 	}
@@ -501,7 +510,7 @@ func castPanelSay(config *Config, anime *Anime, message string) {
 	if config != nil {
 		device = config.CastDevice
 	}
-	fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device, message))
+	fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device, message, castPanelPlaybackKeys))
 }
 
 // castDeferredSummary is a completion summary held back while a cast window owns
