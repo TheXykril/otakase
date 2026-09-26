@@ -395,6 +395,14 @@ func RunCastSession(config *Config, path string) error {
 
 	prepareCastSessionUser(config)
 
+	// The terminal is taken once for the whole cast rather than per episode, so
+	// the panel does not blink between episodes and the season-end prompts have
+	// the same frame to draw in that the episodes did. Held after RofiSelection
+	// is forced off above, because that is what castControlsPossible reads.
+	if beginCastSessionScreen(config) {
+		defer endCastSessionScreen()
+	}
+
 	// ShouldWriteRemoteTracking reads the global anime, which in this process
 	// is still main's zero value rather than the episode being cast.
 	SetGlobalAnime(anime)
@@ -416,6 +424,14 @@ func RunCastSession(config *Config, path string) error {
 			return AdvanceAfterEpisode(config, anime, GetGlobalUser(), databaseFile, func() bool { return true })
 		},
 	)
+
+	// Released before the summary prints, so the summary is the last thing in
+	// the scrollback rather than a notification fired from behind a panel that
+	// is on its way out.
+	endCastSessionScreen()
+	if summary := takeCastDeferredSummary(); summary != "" {
+		Out(summary)
+	}
 
 	if errors.Is(lastErr, ErrCastStopped) {
 		return nil

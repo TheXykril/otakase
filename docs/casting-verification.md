@@ -38,9 +38,14 @@ stream for <device>...` → the episode starts within ~30s → `Playing on
 
 - [ ] **The panel is the only thing on the terminal.** No text scrolls past it
       while the episode plays, and anything otakase has to say arrives as a
-      desktop notification instead.
+      desktop notification instead. Between episodes too: the panel is held for
+      the whole cast, so there is no gap where plain text gets through.
 - [ ] **Your scrollback survives.** After `q`, the terminal is as it was before
       the cast, with the panel gone rather than left behind.
+- [ ] **The panel does not blink between episodes.** It is taken once for the
+      cast and held, so the frame is continuous from the first episode to the
+      last. Any flicker at an episode boundary means the screen is still being
+      taken per episode.
 - [ ] **Resize the window mid-episode.** The panel follows within a second,
       stays centred, and leaves no trail of the old frame.
 - [ ] **Every control key works**: space pauses and resumes, left/right seek,
@@ -177,30 +182,35 @@ cases only a real device and a real room can settle.
       keyboard.** The window must never show a menu, a text prompt, or sit
       waiting. The last thing printed should be a completion summary, and the
       window should close or return to a prompt on its own.
-- [ ] **At the end of a season, watch the rating countdown.** It should appear
-      as ordinary text — no alternate buffer, no full-screen frame — tick down
-      from 10s, and then skip the rating. Press a key mid-countdown instead: the
-      rating should go through and the summary should say `rating saved` rather
-      than `rating skipped (cast window)`.
+- [ ] **At the end of a season, watch the rating countdown.** It is drawn in the
+      same panel frame as the episode countdown -- header, message row, keys --
+      not as bare text. It ticks from 10s. Then the panel says how it ended:
+      `Rating saved.` if a key was pressed, `No answer -- rating skipped.` if
+      not. An empty message row means the frame was blanked and never replaced.
 - [ ] **Confirm the summary names what it assumed.** It should read
       `rating skipped (cast window)` and `sequel skipped (cast window)` rather
       than the plain `rating skipped`, so a suppressed decision is visible
       rather than silent.
+- [ ] **The completion summary reaches the terminal, not a notification.** It is
+      held while the panel owns the screen and printed once the screen is
+      released, so it is the last line in the scrollback. If it arrives as a
+      desktop notification instead, the deferral is broken.
 - [ ] **Your AniList list is untouched by the suppressed prompts.** A cast
       finale must not have added a sequel to Watching or Plan to Watch, and
       `SkipRemoteSync` must still hold — check the entry by hand.
 - [ ] **Force a dead end mid-season.** The reliable way is to point
       `Provider` at a hostname that does not resolve *while casting a season
       that already has episode 1 cached*, then let the countdown carry into
-      episode 2. Expect: the diagnosis printed legibly (on one line, not
-      walking diagonally), one automatic re-search, then
+      episode 2. Expect one automatic re-search and then
       `Could not find a stream for episode 2; stopping the cast.` It must
       **stop** — this path used to be an unbounded `for {}` that only a viewer
       backing out could end, and an auto-answer without a bound turns it into an
       infinite loop.
-- [ ] **Watch the diagnosis text specifically.** It is printed in raw mode, where
-      a bare `\n` does not return the cursor. If it runs diagonally down the
-      window, the `\r\n` handling regressed.
+- [ ] **The dead-end diagnosis reaches you somehow** — the panel holds the
+      terminal for the whole cast, so it arrives as a desktop notification
+      rather than as text on screen. If nothing arrives at all, check
+      `otakase-debug.log`; the panel is only allowed to swallow it into a
+      notification, never discard it.
 - [ ] **Confirm the window is not left raw** after any of the above. If
       keystrokes echo oddly afterwards, `reset` and report it — a prompt ending
       while the cast reader is still parked is exactly the sequence that would

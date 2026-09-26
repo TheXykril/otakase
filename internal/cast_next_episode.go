@@ -152,17 +152,20 @@ func castAwaitNextEpisode(config *Config, anime *Anime, panel *castPanelWriter, 
 // castAwaitYesNo waits out a window for the viewer to accept something,
 // reporting whether they did.
 //
-// A sibling of castAwaitNextEpisode rather than a call into it, for two reasons.
-// The panel is gone by the time this runs -- CastEpisode releases it in a defer,
-// so there is nothing to draw a status line into and the countdown is plain
-// terminal output. And the subscription is gone too: that helper is handed the
-// episode's command channel, while this has to take a fresh one, or the
-// process-global reader would swallow the keypress meant to accept and the
-// viewer could not answer at all.
+// Drawn in the same frame as the episode countdown rather than as bare text: a
+// cast session holds the terminal for the whole cast, so the panel this reaches
+// is the one the viewer has been watching all season. Without a panel -- a cast
+// launched in a terminal that has already released it -- it falls back to plain
+// output, which is worse but still better than blocking.
 //
-// It takes a subscription only when a terminal is there to answer with. Without
-// one it declines at once rather than waiting out a countdown nobody can see.
-func castAwaitYesNo(config *Config, question string, window time.Duration) bool {
+// It takes a subscription of its own, because the episode that just finished
+// released theirs and the process-global reader would otherwise swallow the
+// keypress meant to accept.
+//
+// It leaves the last countdown frame on screen rather than blanking it, because
+// a panel with an empty message row looks broken. The caller follows with
+// castPanelSay to say how it ended.
+func castAwaitYesNo(config *Config, anime *Anime, question string, window time.Duration) bool {
 	commands, release, ok := startCastControls(config)
 	if !ok {
 		Log(fmt.Sprintf("cast: no keyboard for %q, declining", question))
@@ -181,7 +184,23 @@ func castAwaitYesNo(config *Config, question string, window time.Duration) bool 
 		}
 	}
 
+	draw := func(message string) {
+		if panel := castPanelForControls; panel != nil {
+			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, config.CastDevice, message))
+			return
+		}
+		// Carriage return and trailing spaces so the line is overwritten rather
+		// than left stacked above the outcome.
+		fmt.Print("\r  " + message + strings.Repeat(" ", 40) + "\r")
+	}
+
 	started := time.Now()
+	// Drawn before the loop rather than on the first tick. A tick is 250ms, so
+	// waiting for one would leave the question invisible for a quarter of a
+	// second -- and a window shorter than a tick would never be shown at all.
+	draw(fmt.Sprintf("%s — %ds to answer, any key to accept",
+		question, int(window.Seconds()+0.5)))
+
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -189,20 +208,15 @@ func castAwaitYesNo(config *Config, question string, window time.Duration) bool 
 		select {
 		case <-ticker.C:
 		case <-commands:
-			// Carriage return and trailing spaces so the countdown line is
-			// overwritten rather than left stacked above the outcome.
-			fmt.Print("\r" + strings.Repeat(" ", castStatusBarWidth+64) + "\r")
 			return true
 		}
 
 		remaining := window - time.Since(started)
 		if remaining <= 0 {
-			fmt.Print("\r" + strings.Repeat(" ", castStatusBarWidth+64) + "\r")
 			return false
 		}
-		seconds := int(remaining.Seconds() + 0.5)
-		fmt.Print(fmt.Sprintf("\r  %s — %ds to answer, any key to accept%s",
-			question, seconds, strings.Repeat(" ", 24)))
+		draw(fmt.Sprintf("%s — %ds to answer, any key to accept",
+			question, int(remaining.Seconds()+0.5)))
 	}
 }
 

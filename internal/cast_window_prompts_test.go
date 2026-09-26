@@ -230,7 +230,7 @@ func TestCastAwaitYesNoDeclinesWhenNobodyAnswers(t *testing.T) {
 	castControlsBegin = func(*Config) bool { return true }
 
 	started := time.Now()
-	if castAwaitYesNo(&Config{}, "Rate this anime?", 200*time.Millisecond) {
+	if castAwaitYesNo(&Config{}, &Anime{}, "Rate this anime?", 200*time.Millisecond) {
 		t.Error("the rating countdown accepted with no keypress")
 	}
 	// It waited, rather than declining immediately.
@@ -247,7 +247,7 @@ func TestCastAwaitYesNoDeclinesWithNoTerminal(t *testing.T) {
 	castControlsBegin = func(*Config) bool { return false }
 
 	started := time.Now()
-	if castAwaitYesNo(&Config{}, "Rate this anime?", 10*time.Second) {
+	if castAwaitYesNo(&Config{}, &Anime{}, "Rate this anime?", 10*time.Second) {
 		t.Error("the rating countdown accepted with no keyboard to answer with")
 	}
 	if elapsed := time.Since(started); elapsed > 2*time.Second {
@@ -268,7 +268,7 @@ func TestCastAwaitYesNoAcceptsAKeypress(t *testing.T) {
 		castDeliverCommand(castCmdPauseToggle) // any key will do
 	}()
 
-	if !castAwaitYesNo(&Config{}, "Rate this anime?", 10*time.Second) {
+	if !castAwaitYesNo(&Config{}, &Anime{}, "Rate this anime?", 10*time.Second) {
 		t.Error("the rating countdown ignored a keypress")
 	}
 }

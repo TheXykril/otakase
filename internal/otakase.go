@@ -1834,10 +1834,12 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 			// watching, and ten seconds is enough to walk over to a keyboard. What
 			// is not acceptable is a menu that blocks the season on an answer
 			// nobody is there to give. See docs/cast-window-prompts.md.
-			if castAwaitYesNo(userConfig, "Rate this anime?", castCountdownDuration) {
+			if castAwaitYesNo(userConfig, anime, "Rate this anime?", castCountdownDuration) {
 				applyRating()
+				castPanelSay(userConfig, anime, "Rating saved.")
 			} else {
 				Out("No answer -- skipping the rating.")
+				castPanelSay(userConfig, anime, "No answer -- rating skipped.")
 				summary = append(summary, "rating skipped (cast window)")
 			}
 		} else {
@@ -1886,7 +1888,16 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 		summary = append(summary, sequelSummary)
 	}
 	if len(summary) > 0 {
-		Out("Completion summary: " + strings.Join(summary, "; "))
+		line := "Completion summary: " + strings.Join(summary, "; ")
+		// A cast window holding the terminal would turn this into a desktop
+		// notification, and this is the one line a viewer comes back to. Held
+		// until the session releases the screen, then printed to the terminal
+		// where it lands in the scrollback.
+		if castPanelOwnsScreen() {
+			deferCastSummary(line)
+			return
+		}
+		Out(line)
 	}
 }
 
