@@ -7,9 +7,8 @@ import (
 	"time"
 
 	"github.com/vishen/go-chromecast/application"
-	"github.com/vishen/go-chromecast/cast"
+	castproto "github.com/vishen/go-chromecast/cast"
 )
-
 
 // Span is a stretch of an episode worth skipping, in seconds.
 type Span struct {
@@ -55,6 +54,10 @@ func NextSkip(position float64, spans []Span) (float64, bool) {
 type Session struct {
 	app *application.Application
 
+	// conn is the same connection the application uses, kept so a LOAD can be
+	// sent with a duration the vendored Load has no argument for. See load.go.
+	conn messageSender
+
 	// lastStatus is the last device state logged, so polling once a second
 	// does not fill the log with the same line.
 	lastStatus string
@@ -63,10 +66,18 @@ type Session struct {
 // Connect opens a connection to a device and takes over its media receiver.
 func Connect(d Device) (*Session, error) {
 	app := application.NewApplication()
+
+	// The application builds its own connection and keeps it private. Installing
+	// the same kind of connection here keeps a reference to it, which is what
+	// lets PlayWithDuration send a LOAD the library cannot express -- see
+	// load.go. SetConn before Start: Start is what opens it.
+	conn := castproto.NewConnection()
+	app.SetConn(conn)
+
 	if err := app.Start(d.Addr.String(), d.Port); err != nil {
 		return nil, fmt.Errorf("cast: could not connect to %s: %w", d.Name, err)
 	}
-	return &Session{app: app}, nil
+	return &Session{app: app, conn: conn}, nil
 }
 
 // Play loads a URL on the device and starts it.
@@ -106,8 +117,58 @@ var launchRetryInterval = 2 * time.Second
 // one.
 func (s *Session) PlayWithin(url string, within time.Duration) error {
 	return playWithin(func(u string) error {
-		return s.app.Load(u, 0, "application/x-mpegURL", false, true, false)
+		return s.app.Load(u, 0, castLoadContentType, false, true, false)
 	}, url, within)
+}
+
+// PlayWithDuration loads a URL and tells the device how long it is.
+//
+// The receiver reports dur=-1.0 for a stream whose playlist has no
+// EXT-X-ENDLIST, and refuses to seek inside one, so an episode cast this way
+// cannot be skipped through. The LOAD message can carry a duration, which the
+// vendored Load has no argument for, so this sends its own.
+//
+// A duration of zero sends exactly what the vendored path sends, so a caller
+// with no probed length loses nothing by coming through here.
+func (s *Session) PlayWithDuration(url string, duration float64, within time.Duration) error {
+	if s.conn == nil {
+		// A session built without a connection reference -- only a test does
+		// this -- can still cast, just without the duration.
+		return s.PlayWithin(url, within)
+	}
+
+	if err := sendLaunchReceiver(s.conn); err != nil {
+		return err
+	}
+
+	transportID, err := awaitReceiver(s.app.Update, func() string {
+		app, _, _ := s.app.Status()
+		if app == nil {
+			return ""
+		}
+		return app.TransportId
+	}, within)
+	if err != nil {
+		return err
+	}
+
+	// Update once more before the LOAD: this is what performs the CONNECT on the
+	// running receiver's own namespace, without which it discards the LOAD.
+	if err := s.app.Update(); err != nil {
+		return fmt.Errorf("cast: could not reach the receiver after it launched: %w", err)
+	}
+
+	Log(fmt.Sprintf("cast: loading with duration=%.1f", duration))
+	if err := sendLoadMedia(s.conn, transportID, url, castLoadContentType, duration); err != nil {
+		return err
+	}
+
+	// The media session has to exist before a pause or a seek can name it, and
+	// it is the status response that fills it in.
+	return awaitMedia(s.app.Update, func() bool {
+		_, media, _ := s.app.Status()
+		return media != nil
+	}, within)
 }
 
 // playWithin holds the retry rule, separated from the device so it can be
@@ -228,7 +289,7 @@ func (s *Session) Stop() error {
 // difference: BUFFERING means it accepted the load and is trying to fetch,
 // IDLE with an idleReason of ERROR means it tried and gave up, and an idle
 // screen means it never took the media at all.
-func (s *Session) logStatus(app *cast.Application, media *cast.Media) {
+func (s *Session) logStatus(app *castproto.Application, media *castproto.Media) {
 	status := "app=<nil>"
 	if app != nil {
 		status = fmt.Sprintf("app=%q idleScreen=%t statusText=%q", app.DisplayName, app.IsIdleScreen, app.StatusText)

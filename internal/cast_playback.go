@@ -446,7 +446,16 @@ func CastEpisode(config *Config, anime *Anime) error {
 		}
 	}
 
-	if err := s.Play(srv.URL(cast.PlaylistName)); err != nil {
+	// The duration goes in the LOAD, not just the panel. The receiver reports
+	// dur=-1.0 for a playlist with no EXT-X-ENDLIST and refuses to seek inside
+	// one, and the LOAD message is the only other place the protocol offers to
+	// state a length. Whether the receiver honours it is what this run finds
+	// out; a zero here sends exactly what the vendored Load sent before.
+	probedDuration := 0.0
+	if !durationEstimated && anime.Ep.Duration > 0 {
+		probedDuration = float64(anime.Ep.Duration)
+	}
+	if err := s.PlayWithDuration(srv.URL(cast.PlaylistName), probedDuration, castStartTimeout); err != nil {
 		return err
 	}
 	castStatus(fmt.Sprintf("Waiting for %s to start…", device.Name))
