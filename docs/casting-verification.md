@@ -38,9 +38,14 @@ stream for <device>...` → the episode starts within ~30s → `Playing on
 
 - [ ] **The panel is the only thing on the terminal.** No text scrolls past it
       while the episode plays, and anything otakase has to say arrives as a
-      desktop notification instead.
+      desktop notification instead. Between episodes too: the panel is held for
+      the whole cast, so there is no gap where plain text gets through.
 - [ ] **Your scrollback survives.** After `q`, the terminal is as it was before
       the cast, with the panel gone rather than left behind.
+- [ ] **The panel does not blink between episodes.** It is taken once for the
+      cast and held, so the frame is continuous from the first episode to the
+      last. Any flicker at an episode boundary means the screen is still being
+      taken per episode.
 - [ ] **Resize the window mid-episode.** The panel follows within a second,
       stays centred, and leaves no trail of the old frame.
 - [ ] **Every control key works**: space pauses and resumes, left/right seek,
@@ -98,6 +103,51 @@ reported `Playback finished.` instead of the truth.
       you.
 - [ ] After a normal finish, the terminal still shows the session's output —
       including `Episode N marked as watched.` — rather than a bare prompt.
+
+## Before blaming the code: is the device even reaching this machine?
+
+The single most expensive failure in this feature's history is a cast that works
+on one day and silently does nothing the next, and the cause is almost always
+the host firewall rather than the code.
+
+**The trap: `ufw status` lies.** It reads the *saved config*, not the live
+kernel ruleset. Docker rewrites the iptables filter table when its daemon or any
+container starts, without going through ufw, so the running ruleset can lose
+rules the config still lists. The symptom is a device that accepts `LAUNCH` and
+`LOAD`, then never fetches anything -- no media session is ever created, which
+reads like a refused load but is usually a dropped packet.
+
+Check the live chain, not the status:
+
+```bash
+sudo iptables -L ufw-user-input -n -v | grep -E "8010|48010"
+```
+
+An empty result means the rule is in the config and not in the kernel. Re-apply
+it with `ufw allow` rather than editing the rules file, because `ufw allow`
+writes the config *and* applies it:
+
+```bash
+sudo ufw allow from 192.168.0.0/24 to any port 8010 proto tcp comment 'otakase cast'
+```
+
+Expect to do this again after a Docker restart. `sudo iptables -L DOCKER-USER -n -v`
+shows whether Docker is intercepting ahead of ufw's chain.
+
+**Also check the service, not just the file:** `/etc/nftables.conf` on some
+systems carries a `policy drop` input chain that looks entirely guilty, while
+`nftables.service` is disabled and the file is not loaded at all. Confirm with
+`systemctl is-enabled nftables` before blaming it.
+
+**And watch the log, not the symptom.** A device that plays a public stream but
+not yours is a network problem. A device that plays neither is a receiver
+problem. A browser on a phone that shows an error page looks identical whether
+the packet was dropped or the URL was wrong -- the server's access log is what
+distinguishes them.
+
+One more measurement trap: a device that still has a previous stream loaded will
+report it as playing. Stop the media and confirm the receiver is idle before
+concluding anything from a status reading.
 
 ## When it does not work
 
@@ -165,6 +215,70 @@ stream declaring H.264 Level 5.0 to a decoder specified for 4.1.
       episode at a time rather than accumulating.
 - [ ] **Press `q` during an episode.** The next one must not start — stopping
       is not finishing.
+
+## 7. The spawned window answers for itself
+
+A cast launched from the rofi keybind runs in a terminal the viewer is not at.
+Nothing in that window may wait for a keyboard — see
+`cast-window-prompts.md` for what each prompt decides instead. These are the
+cases only a real device and a real room can settle.
+
+- [ ] **Finish a whole season from a rofi launch without touching the
+      keyboard.** The window must never show a menu, a text prompt, or sit
+      waiting. The last thing printed should be a completion summary, and the
+      window should close or return to a prompt on its own.
+- [ ] **At the end of a season, a score picker appears in the panel**, in the
+      same frame as the episode countdown -- header, message row, keys. It opens
+      at 8/10 and shows `Ns to answer`, counting down from 10.
+- [ ] **Press ↑ once, then take 30 seconds deciding.** The clock must vanish and
+      the picker must still be there. The footer should now read `q to skip`.
+- [ ] **Press ↑, pause 30s, press ↓, pause 30s, then Enter.** It must still be
+      waiting. Every press puts the two minutes back, so a deadline set by the
+      first keypress cannot expire mid-thought.
+- [ ] **Press ↑ and then walk away for more than two minutes.** It declines on
+      its own. That deadline is deliberately not on the panel, so this is the one
+      thing worth confirming by hand: the season should end normally with
+      `rating skipped (cast window)`, not sit on the prompt.
+- [ ] **↑ and ↓ move the score, Enter saves it.** Then the panel reads
+      `Rated N.` and the summary reads `rating saved (N)`. Press nothing and it
+      reads `No answer -- rating skipped.` with `rating skipped (cast window)`.
+- [ ] **Press ↑ three times quickly — it must move three points, not one.**
+      Reading one key per tick is how the first version of this ate every
+      keypress.
+- [ ] **Press space or an arrow left/right during the picker.** Nothing should
+      happen. Those are playback controls, and a viewer pressing one by accident
+      must not have their rating written or discarded.
+- [ ] **Check the rating on the tracker, not just the panel.** `Rated 8.` with no
+      score on the entry means the write failed while the panel claimed success,
+      which is the bug this replaced.
+- [ ] **Confirm the summary names what it assumed.** It should read
+      `rating skipped (cast window)` and `sequel skipped (cast window)` rather
+      than the plain `rating skipped`, so a suppressed decision is visible
+      rather than silent.
+- [ ] **The completion summary reaches the terminal, not a notification.** It is
+      held while the panel owns the screen and printed once the screen is
+      released, so it is the last line in the scrollback. If it arrives as a
+      desktop notification instead, the deferral is broken.
+- [ ] **Your AniList list is untouched by the suppressed prompts.** A cast
+      finale must not have added a sequel to Watching or Plan to Watch, and
+      `SkipRemoteSync` must still hold — check the entry by hand.
+- [ ] **Force a dead end mid-season.** The reliable way is to point
+      `Provider` at a hostname that does not resolve *while casting a season
+      that already has episode 1 cached*, then let the countdown carry into
+      episode 2. Expect one automatic re-search and then
+      `Could not find a stream for episode 2; stopping the cast.` It must
+      **stop** — this path used to be an unbounded `for {}` that only a viewer
+      backing out could end, and an auto-answer without a bound turns it into an
+      infinite loop.
+- [ ] **The dead-end diagnosis reaches you somehow** — the panel holds the
+      terminal for the whole cast, so it arrives as a desktop notification
+      rather than as text on screen. If nothing arrives at all, check
+      `otakase-debug.log`; the panel is only allowed to swallow it into a
+      notification, never discard it.
+- [ ] **Confirm the window is not left raw** after any of the above. If
+      keystrokes echo oddly afterwards, `reset` and report it — a prompt ending
+      while the cast reader is still parked is exactly the sequence that would
+      do that.
 
 ## Known limits
 

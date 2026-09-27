@@ -217,7 +217,7 @@ func TestCastPanelSurvivesAShortTerminal(t *testing.T) {
 func TestCastPanelStatusFrameCarriesAMessage(t *testing.T) {
 	panel := &castPanelWriter{home: true, size: func() (int, int) { return 80, 24 }}
 
-	frame := panel.status("Rich Girl Caretaker", 12, "Office TV", "Preparing the stream…")
+	frame := panel.status("Rich Girl Caretaker", 12, "Office TV", "Preparing the stream…", castPanelPlaybackKeys)
 
 	for _, want := range []string{"Rich Girl Caretaker", "Office TV", "Preparing the stream…"} {
 		if !strings.Contains(frame, want) {
@@ -234,7 +234,7 @@ func TestCastPanelStatusFrameCarriesAMessage(t *testing.T) {
 func TestCastPanelStatusAndPlayingFramesBothRedrawFromHome(t *testing.T) {
 	panel := &castPanelWriter{home: true, size: func() (int, int) { return 80, 24 }}
 
-	if s := panel.status("Show", 1, "TV", "Preparing…"); !strings.HasPrefix(s, "\033[H\033[J") {
+	if s := panel.status("Show", 1, "TV", "Preparing…", castPanelPlaybackKeys); !strings.HasPrefix(s, "\033[H\033[J") {
 		t.Error("the status frame does not go home and wipe")
 	}
 	if p := panel.frame(testPanelState()); !strings.HasPrefix(p, "\033[H\033[J") {

@@ -3,6 +3,7 @@ package internal
 import (
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -408,7 +409,14 @@ updateOptionLoop:
 					Out(fmt.Sprintf("Current score: %s", currentScore))
 
 					err = RateAnime(user.Token, animeID)
-					if err != nil {
+					switch {
+					case errors.Is(err, ErrRatingDeclined):
+						// Escaping the prompt is an answer, not a failure. This
+						// used to exit the program with "Failed to update anime
+						// score" because the decline was indistinguishable from
+						// a broken write.
+						Out("Score unchanged.")
+					case err != nil:
 						Log(fmt.Sprintf("Failed to update anime score: %v", err))
 						Exit(fmt.Errorf("Failed to update anime score"))
 					}
@@ -1813,31 +1821,66 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 	summary := []string{}
 	canWriteRemote := ShouldWriteRemoteTracking(userConfig, anime)
 
+	// One place decides whether a rating actually happened, so the menu, the
+	// cast panel and the escape key cannot report it differently.
+	//
+	// A declined rating is not a failed one. RateAnime cannot tell them apart on
+	// error alone, and conflating them is how "Anime rated successfully!" came to
+	// be printed for a rating that was never written.
+	applyRating := func() {
+		err := RateAnime(userToken, anime.AnilistId)
+		switch {
+		case errors.Is(err, ErrRatingDeclined):
+			Out("Rating skipped.")
+			summary = append(summary, "rating skipped")
+		case err != nil:
+			Log(fmt.Sprintf("Error rating anime: %v", err))
+			Out("Failed to rate anime")
+			summary = append(summary, "rating failed")
+		default:
+			Out("Anime rated successfully!")
+			summary = append(summary, "rating saved")
+		}
+	}
+
 	if userConfig.ScoreOnCompletion && !anime.IsAiring && canWriteRemote {
 		Out("You've completed this anime! Would you like to rate it?")
 
-		scoreOptions := []SelectionOption{
-			{Key: "yes", Label: "Yes, rate this anime"},
-			{Key: "no", Label: "No, skip rating"},
-		}
-
-		selectedOption, err := DynamicSelect(scoreOptions)
-		if err != nil {
-			Log(fmt.Sprintf("Error in score prompt selection: %v", err))
-		} else if selectedOption.Key == "yes" {
-			err = RateAnime(userToken, anime.AnilistId)
-			if err != nil {
-				Log(fmt.Sprintf("Error rating anime: %v", err))
-				Out("Failed to rate anime")
-				summary = append(summary, "rating failed")
+		if castWindowNonInteractive() {
+			// Asked in the panel rather than answered for the viewer, because the
+			// alternative is a countdown whose only outcomes are "write a rating
+			// nobody chose" and "write nothing at all". Arrows and one key work
+			// from a sofa; typing a number does not. See
+			// docs/cast-window-prompts.md.
+			if score, given := castAwaitScore(userConfig, anime, castCountdownDuration); given {
+				if err := RateAnimeWithScore(userToken, anime.AnilistId, float64(score)); err != nil {
+					Log(fmt.Sprintf("Error rating anime: %v", err))
+					castPanelSay(userConfig, anime, "Rating failed.")
+					summary = append(summary, "rating failed")
+				} else {
+					castPanelSay(userConfig, anime, fmt.Sprintf("Rated %d.", score))
+					summary = append(summary, fmt.Sprintf("rating saved (%d)", score))
+				}
 			} else {
-				Out("Anime rated successfully!")
-				summary = append(summary, "rating saved")
+				castPanelSay(userConfig, anime, "No answer -- rating skipped.")
+				summary = append(summary, "rating skipped (cast window)")
 			}
 		} else {
-			summary = append(summary, "rating skipped")
+			scoreOptions := []SelectionOption{
+				{Key: "yes", Label: "Yes, rate this anime"},
+				{Key: "no", Label: "No, skip rating"},
+			}
+
+			selectedOption, err := DynamicSelect(scoreOptions)
+			if err != nil {
+				Log(fmt.Sprintf("Error in score prompt selection: %v", err))
+			} else if selectedOption.Key == "yes" {
+				applyRating()
+			} else {
+				summary = append(summary, "rating skipped")
+			}
+			// Back (-2) and no are treated as skip
 		}
-		// Back (-2) and no are treated as skip
 	} else {
 		summary = append(summary, "rating skipped")
 	}
@@ -1868,7 +1911,16 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 		summary = append(summary, sequelSummary)
 	}
 	if len(summary) > 0 {
-		Out("Completion summary: " + strings.Join(summary, "; "))
+		line := "Completion summary: " + strings.Join(summary, "; ")
+		// A cast window holding the terminal would turn this into a desktop
+		// notification, and this is the one line a viewer comes back to. Held
+		// until the session releases the screen, then printed to the terminal
+		// where it lands in the scrollback.
+		if castPanelOwnsScreen() {
+			deferCastSummary(line)
+			return
+		}
+		Out(line)
 	}
 }
 
@@ -1896,6 +1948,17 @@ func handleSequelCheck(userConfig *Config, anime *Anime, userToken string) (summ
 	if len(sequels) == 0 {
 		Log("No sequel found for this anime")
 		return "no sequel found"
+	}
+
+	// Declined whole, ahead of both the "which one" and the "what do you want to
+	// do with it" menus: a further instalment is a different show to put on a
+	// list, not a continuation of this one, and it is not a decision to make on
+	// someone's behalf while they are not there to make it. Reported rather than
+	// dropped -- see docs/cast-window-prompts.md.
+	if castWindowNonInteractive() {
+		title := sequelDisplayTitle(userConfig, &sequels[0])
+		Out(fmt.Sprintf("Sequel available: %s. Leaving your list alone.", title))
+		return "sequel skipped (cast window)"
 	}
 
 	sequel := &sequels[0]

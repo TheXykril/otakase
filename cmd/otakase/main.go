@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -1146,7 +1147,11 @@ func main() {
 				} else if !updatedAnime.IsAiring {
 					anime.Ep.Number = anime.Ep.Number - 1
 					internal.Out("Completed anime.")
-					if rateErr := internal.RateAnime(user.Token, anime.AnilistId); rateErr != nil {
+					// A decline is the viewer's own choice, so it is not reported
+					// back to them as an error.
+					if rateErr := internal.RateAnime(user.Token, anime.AnilistId); errors.Is(rateErr, internal.ErrRatingDeclined) {
+						internal.Out("Score unchanged.")
+					} else if rateErr != nil {
 						internal.Log("Error rating anime: " + rateErr.Error())
 						internal.Out("Error rating anime: " + rateErr.Error())
 					}

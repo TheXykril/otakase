@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1024,19 +1025,83 @@ func UpdateAnimeStatus(token string, mediaID int, status string) error {
 	}
 }
 
+// ErrRatingDeclined reports that the viewer chose not to rate, rather than that
+// rating failed.
+//
+// It exists because the two were indistinguishable: RateAnime returned nil when
+// the score prompt was cancelled, so every caller took the success branch and
+// announced a rating that was never written. Escaping the prompt in a terminal
+// did it too, and a cast window did it every time.
+var ErrRatingDeclined = errors.New("rating declined")
+
+// RateAnime asks for a score and writes it.
 func RateAnime(token string, mediaID int) error {
 	config := GetGlobalConfig()
 	switch {
 	case !ShouldWriteRemoteTracking(config, GetGlobalAnime()):
 		return nil
-	case UsesDualRemoteTracking(config):
+	default:
+		// Every configuration asks here, and a decline is reported as one. The
+		// single-tracker cases used to delegate the asking to RateAnimeWithScore,
+		// which swallowed the cancel and returned nil -- so escaping the score
+		// prompt printed "Anime rated successfully!" with nothing written, on
+		// the commonest configuration there is. ErrRatingDeclined was added to
+		// end that, and only reached dual-tracking viewers until this.
 		score, cancelled, err := promptAnimeScoreValue()
 		if err != nil {
 			return err
 		}
 		if cancelled {
-			return nil
+			return ErrRatingDeclined
 		}
+		return RateAnimeWithScore(token, mediaID, score)
+	}
+}
+
+// RateAnimeWithScore writes a rating that has already been decided.
+//
+// The score-taking and the writing are separate because the cast panel decides
+// the score with arrow keys and cannot open a prompt for it, and because a
+// caller holding a score should not be made to answer a question to use it.
+// score is only consulted for dual tracking; the single-tracker paths prompt
+// inside the tracker APIs themselves.
+// ratingRoute is where a score goes.
+//
+// Separated from the writing so it can be tested without a network, in the same
+// spirit as advanceDecision and anilistRewatchCompletion. The routing is what
+// broke: a single-tracker config took a branch that ignored the score it was
+// handed and re-opened the prompt, and no test could see that because every
+// test of it was configured onto one of the other branches.
+type ratingRoute int
+
+const (
+	ratingRouteNone ratingRoute = iota
+	ratingRouteDual
+	ratingRouteAniList
+	ratingRouteMyAnimeList
+)
+
+func ratingRouteFor(config *Config, anime *Anime) ratingRoute {
+	switch {
+	case !ShouldWriteRemoteTracking(config, anime):
+		return ratingRouteNone
+	case UsesDualRemoteTracking(config):
+		return ratingRouteDual
+	case UsesAniListTracking(config):
+		return ratingRouteAniList
+	case UsesMyAnimeListTracking(config):
+		return ratingRouteMyAnimeList
+	default:
+		return ratingRouteNone
+	}
+}
+
+func RateAnimeWithScore(token string, mediaID int, score float64) error {
+	config := GetGlobalConfig()
+	switch ratingRouteFor(config, GetGlobalAnime()) {
+	case ratingRouteNone:
+		return nil
+	case ratingRouteDual:
 		var firstErr error
 		if err := saveAniListAnimeScore(token, mediaID, score); err != nil {
 			firstErr = err
@@ -1052,14 +1117,21 @@ func RateAnime(token string, mediaID int) error {
 			firstErr = err
 		}
 		return firstErr
-	case UsesAniListTracking(config):
-		return RateAniListAnime(token, mediaID)
-	case UsesMyAnimeListTracking(config):
+	// Both single-tracker cases write the score they were handed. Calling
+	// RateAniListAnime or rateMyAnimeListAnime here instead re-entered the
+	// interactive prompt and discarded this argument entirely, which on a cast
+	// meant the score the viewer picked with the arrows never reached a writer:
+	// the prompt was auto-cancelled by CastNonInteractive, the cancel was
+	// reported as nil, and the panel said "Rated 9." with nothing saved.
+	// Prompting belongs to RateAnime, which is the function that asks.
+	case ratingRouteAniList:
+		return saveAniListAnimeScore(token, mediaID, score)
+	case ratingRouteMyAnimeList:
 		malID, err := resolveMyAnimeListID(mediaID)
 		if err != nil {
 			return err
 		}
-		return rateMyAnimeListAnime(config, malID)
+		return rateMyAnimeListAnimeWithScore(config, malID, int(score+0.5))
 	default:
 		return nil
 	}

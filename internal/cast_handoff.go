@@ -61,18 +61,23 @@ type castSessionFile struct {
 	// entry a rewatch already has.
 	Rewatching bool `json:"rewatching"`
 
-	// The four fields below are read by HandleLastEpisodeCompletion and its
-	// callees, which TotalEpisodes made reachable in this process for the first
-	// time. Carrying TotalEpisodes without them is worse than carrying neither:
-	// the completion runs, and runs on zero values.
+	// The fields below belong to the same completion path that TotalEpisodes
+	// made reachable in this process for the first time. Carrying TotalEpisodes
+	// without them is worse than carrying neither: the completion runs, and runs
+	// on zero values.
 	//
 	// Repeat and StartedAt are the ones that lose data. CompleteAniListAnimeRewatch
 	// writes anime.Repeat+1, so a viewer finishing their fourth rewatch from a
 	// rofi cast would have AniList told "repeat 1", and with StartedAt zero it
 	// stamps today over the date they actually started. Both are silent and
 	// neither is recoverable.
-	Repeat      int       `json:"repeat"`
-	StartedAt   FuzzyDate `json:"started_at"`
+	Repeat    int       `json:"repeat"`
+	StartedAt FuzzyDate `json:"started_at"`
+	// CompletedAt is not read by the completion path -- that dates the finished
+	// entry from today, not from this field. It is carried because it is the
+	// rest of the entry's completion state, and because a path that reconciles
+	// against the existing entry rather than overwriting it would otherwise
+	// silently see zero. Do not read the carrying as the field mattering today.
 	CompletedAt FuzzyDate `json:"completed_at"`
 	// IsAiring gates both the score prompt and the COMPLETED write. AniList
 	// commonly still reports RELEASING for hours after a finale, and main's
@@ -380,6 +385,11 @@ func prepareCastSessionUser(config *Config) *User {
 func prepareCastSession(config *Config, session *castSessionFile) (*Anime, string) {
 	config.RofiSelection = false
 	config.CastToDevice = true
+	// The viewer is across the room. A menu opened here blocks the season on an
+	// answer nobody is there to give, and its keystrokes would be split with the
+	// process-global cast reader anyway. Prompts on this path take a declared
+	// default and report it -- see docs/cast-window-prompts.md.
+	config.CastNonInteractive = true
 	if session.Device != "" {
 		config.CastDevice = session.Device
 	}
@@ -387,6 +397,14 @@ func prepareCastSession(config *Config, session *castSessionFile) (*Anime, strin
 	anime := castSessionToAnime(session)
 
 	prepareCastSessionUser(config)
+
+	// The terminal is taken once for the whole cast rather than per episode, so
+	// the panel does not blink between episodes and the season-end prompts have
+	// the same frame to draw in that the episodes did. Held after RofiSelection
+	// is forced off above, because that is what castControlsPossible reads.
+	if beginCastSessionScreen(config) {
+		defer endCastSessionScreen()
+	}
 
 	// ShouldWriteRemoteTracking reads the global anime, which in this process
 	// is still main's zero value rather than the episode being cast.
@@ -402,6 +420,16 @@ func RunCastSession(config *Config, path string) error {
 	}
 
 	anime, databaseFile := prepareCastSession(config, session)
+
+	// The terminal is taken once for the whole cast rather than per episode, so
+	// the panel does not blink between episodes and the season-end prompts have
+	// the same frame to draw in that the episodes did. Held after
+	// prepareCastSession has forced RofiSelection off, because that is what
+	// castControlsPossible reads.
+	if beginCastSessionScreen(config) {
+		defer endCastSessionScreen()
+	}
+
 	var lastErr error
 	runCastLoop(
 		func() error {
@@ -415,6 +443,14 @@ func RunCastSession(config *Config, path string) error {
 			return AdvanceAfterEpisode(config, anime, GetGlobalUser(), databaseFile, func() bool { return true })
 		},
 	)
+
+	// Released before the summary prints, so the summary is the last thing in
+	// the scrollback rather than a notification fired from behind a panel that
+	// is on its way out.
+	endCastSessionScreen()
+	if summary := takeCastDeferredSummary(); summary != "" {
+		Out(summary)
+	}
 
 	if errors.Is(lastErr, ErrCastStopped) {
 		return nil

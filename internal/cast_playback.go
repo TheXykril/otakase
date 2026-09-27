@@ -192,8 +192,15 @@ func CastEpisode(config *Config, anime *Anime) error {
 	// chooseCastDevice may have to show a menu, which cannot happen under a
 	// takeover. From here on the terminal shows the frame and nothing else --
 	// every message becomes a notification, because Out checks the same flag.
+	//
+	// A cast session already holding the terminal for the whole cast owns the
+	// panel; taking it again here would blink the screen off and straight back
+	// on. Taking it here is the fallback for a cast launched directly in a
+	// terminal, which has no session around it.
 	var panel *castPanelWriter
-	if commands := castControlsPossible(config); commands {
+	if castPanelForControls != nil {
+		panel = castPanelForControls
+	} else if commands := castControlsPossible(config); commands {
 		release := castTakeScreen()
 		cancelRelease := RegisterExitCleanup(release)
 		panel = &castPanelWriter{home: true, size: castTerminalSize}
@@ -216,7 +223,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 
 	castStatus := func(message string) {
 		if panel != nil {
-			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device.Name, message))
+			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device.Name, message, castPanelPlaybackKeys))
 			return
 		}
 		Out(message)

@@ -72,9 +72,13 @@ func castPanelLines(state castPanelState, width int) []string {
 			{strings.Repeat(" ", max(1, inner-lipgloss.Width(status)-lipgloss.Width(volume))), lipgloss.NewStyle()},
 			{volume, castPanelDimStyle},
 		}, inner),
-		castPanelBottom(width),
+		castPanelBottom(width, castPanelPlaybackKeys),
 	}
 }
+
+// castPanelPlaybackKeys is what the footer says while an episode plays. A prompt
+// drawn in the same frame passes its own.
+const castPanelPlaybackKeys = " space · ←→ · ↑↓ · q stop "
 
 // castPanelPlainLine is the fallback for a terminal too narrow to frame.
 func castPanelPlainLine(state castPanelState, width int) string {
@@ -147,8 +151,11 @@ func castPanelTop(state castPanelState, width int) string {
 }
 
 // castPanelBottom is the framed footer carrying the keys.
-func castPanelBottom(width int) string {
-	keys := " space · ←→ · ↑↓ · q stop "
+//
+// The keys are a parameter because the panel is not only a player: a prompt
+// drawn in the same frame has different ones, and a viewer told "q stop" while
+// being asked to rate something has been told the wrong thing.
+func castPanelBottom(width int, keys string) string {
 	if lipgloss.Width(keys)+2 > width {
 		keys = " space ←→ ↑↓ q "
 	}
@@ -323,7 +330,7 @@ func castPanelCentre(lines []string, width, height int) []string {
 // It exists so nothing has to scroll past the panel: the terminal shows the
 // frame from the moment a device is chosen, and every message that would have
 // been printed becomes a notification.
-func (c *castPanelWriter) status(title string, episode int, device, message string) string {
+func (c *castPanelWriter) status(title string, episode int, device, message string, keys string) string {
 	var out strings.Builder
 	out.WriteString(c.erase())
 
@@ -334,7 +341,7 @@ func (c *castPanelWriter) status(title string, episode int, device, message stri
 		width -= 4
 	}
 
-	lines := castPanelStatusLines(title, episode, device, message, width)
+	lines := castPanelStatusLines(title, episode, device, message, width, keys)
 	if c.size != nil {
 		termWidth, _ := c.size()
 		lines = castPanelCentre(lines, termWidth, height)
@@ -349,7 +356,7 @@ func (c *castPanelWriter) status(title string, episode int, device, message stri
 }
 
 // castPanelStatusLines is the frame before playback: header, one message, keys.
-func castPanelStatusLines(title string, episode int, device, message string, width int) []string {
+func castPanelStatusLines(title string, episode int, device, message string, width int, keys string) []string {
 	if width > castPanelMaxWidth {
 		width = castPanelMaxWidth
 	}
@@ -363,7 +370,7 @@ func castPanelStatusLines(title string, episode int, device, message string, wid
 	return []string{
 		castPanelTop(state, width),
 		castPanelRow([]castPanelSegment{{message, castPanelDimStyle}}, inner),
-		castPanelBottom(width),
+		castPanelBottom(width, keys),
 	}
 }
 

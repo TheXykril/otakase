@@ -22,6 +22,11 @@ const (
 	castCmdVolumeUp
 	castCmdVolumeDown
 	castCmdStop
+	// castCmdSelect is Enter. It exists for the prompts the panel asks, which
+	// need a way to say yes; during playback nothing acts on it, because
+	// applyCastCommand falls through to a no-op for a command it has no case
+	// for.
+	castCmdSelect
 )
 
 // castSeekStep is how far one arrow press moves the position.
@@ -69,6 +74,10 @@ func decodeCastKey(buf []byte) (castCommand, int) {
 	switch buf[0] {
 	case ' ':
 		return castCmdPauseToggle, 1
+	case '\r', '\n':
+		// Enter, which in raw mode arrives as a bare CR. A prompt drawn in the
+		// panel needs an accept that is not also a playback control.
+		return castCmdSelect, 1
 	case 'q', 'Q', 0x03:
 		return castCmdStop, 1
 	}
@@ -167,8 +176,10 @@ func applyCastCommand(command castCommand, session castSession, paused *bool, sp
 
 // castPanelForControls is the panel the watch loop draws while controls are
 // live, or nil when they are not. castOut needs to reach it to clear the frame
-// before printing, and the loop is the only writer, so one package-level
-// pointer is simpler than threading it through every message.
+// before printing, and the season-end prompts reach it to draw their countdowns,
+// so it is package-level rather than threaded through every message. One writer
+// at a time: a cast session sets it for the whole cast, and CastEpisode sets it
+// only when no session already holds the screen.
 var castPanelForControls *castPanelWriter
 
 // castOut prints a message that must not land on top of the control panel.
@@ -424,6 +435,114 @@ func castTakeScreen() func() {
 			fmt.Print("\033[?25h\033[?1049l")
 		})
 	}
+}
+
+// castSessionScreen is the terminal held for a whole cast rather than one
+// episode at a time.
+//
+// Taking the screen per episode made it blink between episodes, and left the
+// season-end prompts with nowhere to draw: CastEpisode releases the panel on its
+// way out, so the rating countdown had bare text to fall back on. Holding it for
+// the cast fixes both.
+//
+// The cost is the messages that used to print between episodes. They become
+// desktop notifications, because Out sends them there whenever the panel owns
+// the screen -- the same rule that already applies while an episode plays. The
+// completion summary is the exception, and is deferred rather than notified: it
+// is the one thing a viewer comes back to, so it is printed to the terminal once
+// the screen is released.
+//
+// Strictly one owner at a time. CastEpisode falls back to taking the screen
+// itself when no session holds it, which is the path a cast launched directly in
+// a terminal takes.
+var castSessionScreen struct {
+	mu      sync.Mutex
+	panel   *castPanelWriter
+	release func()
+	cancel  func()
+}
+
+// beginCastSessionScreen takes the terminal for a whole cast, reporting whether
+// there was a terminal to take.
+func beginCastSessionScreen(config *Config) bool {
+	castSessionScreen.mu.Lock()
+	defer castSessionScreen.mu.Unlock()
+	if castSessionScreen.panel != nil {
+		return true
+	}
+	if !castControlsPossible(config) {
+		return false
+	}
+
+	release := castTakeScreen()
+	castSessionScreen.release = release
+	castSessionScreen.cancel = RegisterExitCleanup(release)
+	castSessionScreen.panel = &castPanelWriter{home: true, size: castTerminalSize}
+	castPanelForControls = castSessionScreen.panel
+	return true
+}
+
+// endCastSessionScreen gives the terminal back. Safe to call when no session
+// holds it, so a caller does not have to remember whether it took one.
+func endCastSessionScreen() {
+	castSessionScreen.mu.Lock()
+	defer castSessionScreen.mu.Unlock()
+	if castSessionScreen.panel == nil {
+		return
+	}
+	castPanelForControls = nil
+	castSessionScreen.panel = nil
+	if castSessionScreen.cancel != nil {
+		castSessionScreen.cancel()
+	}
+	if castSessionScreen.release != nil {
+		castSessionScreen.release()
+	}
+	// Cleared here as well as by the release, because this is the ownership
+	// transition and it should not depend on a closure registered elsewhere
+	// remembering to do it. Setting it twice is harmless.
+	castSetPanelOwnsScreen(false)
+	castSessionScreen.cancel = nil
+	castSessionScreen.release = nil
+}
+
+// castPanelSay replaces the panel's message line, for a moment that has no
+// position to tick -- what the season ended, what a countdown concluded.
+//
+// It is a no-op without a panel, so a caller does not have to know whether one
+// is on screen.
+func castPanelSay(config *Config, anime *Anime, message string) {
+	panel := castPanelForControls
+	if panel == nil || anime == nil {
+		return
+	}
+	device := ""
+	if config != nil {
+		device = config.CastDevice
+	}
+	fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device, message, castPanelPlaybackKeys))
+}
+
+// castDeferredSummary is a completion summary held back while a cast window owns
+// the screen, printed once the screen is released so it lands in the scrollback
+// rather than a notification.
+var castDeferredSummary struct {
+	mu      sync.Mutex
+	summary string
+}
+
+func deferCastSummary(summary string) {
+	castDeferredSummary.mu.Lock()
+	castDeferredSummary.summary = summary
+	castDeferredSummary.mu.Unlock()
+}
+
+func takeCastDeferredSummary() string {
+	castDeferredSummary.mu.Lock()
+	defer castDeferredSummary.mu.Unlock()
+	summary := castDeferredSummary.summary
+	castDeferredSummary.summary = ""
+	return summary
 }
 
 // castControlsPossible reports whether this run can show a control panel at
