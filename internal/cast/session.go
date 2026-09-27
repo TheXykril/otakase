@@ -1,11 +1,15 @@
 package cast
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/vishen/go-chromecast/application"
 	"github.com/vishen/go-chromecast/cast"
 )
+
 
 // Span is a stretch of an episode worth skipping, in seconds.
 type Span struct {
@@ -76,10 +80,54 @@ func Connect(d Device) (*Session, error) {
 // makes that happen, and the caller's polling loop -- watched threshold,
 // opening/ending skips, deferred Stop -- depends on Play not blocking.
 func (s *Session) Play(url string) error {
-	if err := s.app.Load(url, 0, "application/x-mpegURL", false, true, false); err != nil {
-		return fmt.Errorf("cast: could not start playback: %w", err)
+	return s.PlayWithin(url, DefaultLaunchTimeout)
+}
+
+// DefaultLaunchTimeout is how long PlayWithin keeps trying to get the receiver
+// running.
+//
+// The vendored library waits five seconds for any response and then gives up
+// (application.sendAndWait). Launching the Default Media Receiver on a TV that
+// is waking from standby regularly takes longer than that, and the error it
+// produces -- `unable to change to appID "CC1AD845": context deadline exceeded`
+// -- reads like a broken device rather than an impatient client. Patching the
+// vendored timeout would be undone by the next `go mod vendor`, so the retry
+// lives here instead.
+const DefaultLaunchTimeout = 90 * time.Second
+
+// launchRetryInterval is the pause between attempts. The device is booting an
+// app; polling it faster does not make that quicker.
+var launchRetryInterval = 2 * time.Second
+
+// PlayWithin loads a URL, retrying the launch until the deadline passes.
+//
+// Only the timeout is retried. A device that refuses the stream refuses it the
+// same way every time, so retrying that would turn a clear failure into a long
+// one.
+func (s *Session) PlayWithin(url string, within time.Duration) error {
+	return playWithin(func(u string) error {
+		return s.app.Load(u, 0, "application/x-mpegURL", false, true, false)
+	}, url, within)
+}
+
+// playWithin holds the retry rule, separated from the device so it can be
+// tested without one.
+func playWithin(load func(string) error, url string, within time.Duration) error {
+	deadline := time.Now().Add(within)
+	var lastErr error
+	for attempt := 1; ; attempt++ {
+		err := load(url)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if !errors.Is(err, context.DeadlineExceeded) || !time.Now().Before(deadline) {
+			break
+		}
+		Log(fmt.Sprintf("cast: the device has not finished launching yet (attempt %d): %v", attempt, err))
+		time.Sleep(launchRetryInterval)
 	}
-	return nil
+	return fmt.Errorf("cast: could not start playback: %w", lastErr)
 }
 
 // Progress asks the device where it is.
