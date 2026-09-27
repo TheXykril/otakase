@@ -169,3 +169,40 @@ func TestCategoryNormalisation(t *testing.T) {
 		}
 	}
 }
+
+// The host answers /link for a dub category even when the show has no dub,
+// returning the sub stream under the dub label. Downstream cannot tell:
+// ProviderEpisodeResult.Mode is the mode that was requested, so the episode
+// plays with Japanese audio while the program believes it is a dub, and a cast
+// then skips burning the subtitles that stream is carrying.
+//
+// Refusing here is what lets GetEpisodeURLForPlayback's fallback offer sub
+// instead of silently mislabelling it. Episode 2 of the stub exists in sub only.
+func TestADubRequestIsRefusedWhenTheShowHasNoDub(t *testing.T) {
+	provider := stubHost(t)
+
+	links, _, err := provider.GetEpisodeURLForModeWithHints(
+		providers.PlaybackConfig{SubOrDub: "dub"}, "154587", 2, "dub")
+
+	if err == nil {
+		t.Fatalf("a dub request for a sub-only episode returned %d links and no error", len(links))
+	}
+	if len(links) != 0 {
+		t.Errorf("links = %v, want none: these would play as sub audio labelled dub", links)
+	}
+}
+
+// And the episode that does have a dub still resolves, so the check refuses the
+// missing case rather than the feature.
+func TestADubRequestStillWorksWhenTheDubExists(t *testing.T) {
+	provider := stubHost(t)
+
+	links, _, err := provider.GetEpisodeURLForModeWithHints(
+		providers.PlaybackConfig{SubOrDub: "dub"}, "154587", 1, "dub")
+	if err != nil {
+		t.Fatalf("episode 1 has a dub, got %v", err)
+	}
+	if len(links) == 0 {
+		t.Error("no links for an episode that does have a dub")
+	}
+}
