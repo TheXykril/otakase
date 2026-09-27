@@ -138,37 +138,53 @@ func (s *Session) PlayWithDuration(url string, duration float64, within time.Dur
 	}
 
 	if err := sendLaunchReceiver(s.conn); err != nil {
-		return err
+		return s.fallBackToVendoredLoad(url, within, err)
 	}
 
-	transportID, err := awaitReceiver(s.app.Update, func() string {
+	transportID, err := awaitReceiver(s.app.Update, func() (string, string) {
 		app, _, _ := s.app.Status()
 		if app == nil {
-			return ""
+			return "", ""
 		}
-		return app.TransportId
+		return app.AppId, app.TransportId
 	}, within)
 	if err != nil {
-		return err
+		return s.fallBackToVendoredLoad(url, within, err)
 	}
 
 	// Update once more before the LOAD: this is what performs the CONNECT on the
 	// running receiver's own namespace, without which it discards the LOAD.
 	if err := s.app.Update(); err != nil {
-		return fmt.Errorf("cast: could not reach the receiver after it launched: %w", err)
+		return s.fallBackToVendoredLoad(url, within, fmt.Errorf("cast: could not reach the receiver after it launched: %w", err))
 	}
 
-	Log(fmt.Sprintf("cast: loading with duration=%.1f", duration))
+	Log(fmt.Sprintf("cast: loading with duration=%.1f on %s", duration, transportID))
 	if err := sendLoadMedia(s.conn, transportID, url, castLoadContentType, duration); err != nil {
-		return err
+		return s.fallBackToVendoredLoad(url, within, err)
 	}
 
 	// The media session has to exist before a pause or a seek can name it, and
 	// it is the status response that fills it in.
-	return awaitMedia(s.app.Update, func() bool {
+	if err := awaitMedia(s.app.Update, func() bool {
 		_, media, _ := s.app.Status()
 		return media != nil
-	}, within)
+	}, within); err != nil {
+		return s.fallBackToVendoredLoad(url, within, err)
+	}
+	return nil
+}
+
+// fallBackToVendoredLoad plays the episode the way it was played before the
+// duration was ever sent.
+//
+// The duration in the LOAD is an experiment: it is how seeking might start
+// working, and an episode is worth more than a seek. Every failure in the path
+// above therefore ends here rather than at the viewer, who would otherwise get
+// a device that connected and then played nothing -- which is precisely what one
+// wrong transport id did on hardware.
+func (s *Session) fallBackToVendoredLoad(url string, within time.Duration, cause error) error {
+	Log(fmt.Sprintf("cast: loading with a stated duration did not work (%v), playing without one", cause))
+	return s.PlayWithin(url, within)
 }
 
 // playWithin holds the retry rule, separated from the device so it can be

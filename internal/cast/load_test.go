@@ -3,6 +3,7 @@ package cast
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -164,7 +165,7 @@ func TestWaitingForTheReceiverOutlastsATelevisionWakingUp(t *testing.T) {
 		return nil
 	}
 
-	got, err := awaitReceiver(refresh, func() string { return transport }, time.Second)
+	got, err := awaitReceiver(refresh, func() (string, string) { return DefaultReceiverApp, transport }, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +182,7 @@ func TestAReceiverThatNeverLaunchesIsReported(t *testing.T) {
 	launchRetryInterval = time.Millisecond
 	defer func() { launchRetryInterval = previous }()
 
-	_, err := awaitReceiver(func() error { return nil }, func() string { return "" }, 5*time.Millisecond)
+	_, err := awaitReceiver(func() error { return nil }, func() (string, string) { return "", "" }, 5*time.Millisecond)
 	if err == nil {
 		t.Fatal("a receiver that never launched was reported as ready")
 	}
@@ -212,5 +213,53 @@ func TestAnEpisodeThatNeverStartsPlayingIsReported(t *testing.T) {
 
 	if err := awaitMedia(func() error { return nil }, func() bool { return false }, 5*time.Millisecond); err == nil {
 		t.Fatal("a device that never reported media was treated as playing")
+	}
+}
+
+// A device on its idle screen is already running an app -- the backdrop -- which
+// reports a transport id of its own. Loading onto that one connects to the
+// device and plays nothing, with no error from the receiver to say why: the cast
+// looked like it worked and then sat there until the wait for a media session
+// ran out. This is the hardware failure that followed the first version of this
+// path, and it is the reason the app id is checked and not just the address.
+func TestTheBackdropsAddressIsNotMistakenForTheMediaReceivers(t *testing.T) {
+	previous := launchRetryInterval
+	launchRetryInterval = time.Millisecond
+	defer func() { launchRetryInterval = previous }()
+
+	polls := 0
+	receiver := func() (string, string) {
+		polls++
+		if polls < 3 {
+			// What an idle television answers: a real app, a real address,
+			// nothing that can play an episode.
+			return "E8C28D3C", "backdrop-transport"
+		}
+		return DefaultReceiverApp, "media-transport"
+	}
+
+	got, err := awaitReceiver(func() error { return nil }, receiver, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "media-transport" {
+		t.Fatalf("resolved %q, want the media receiver's address", got)
+	}
+}
+
+func TestADeviceStuckOnTheBackdropIsReportedWithWhatItIsRunning(t *testing.T) {
+	previous := launchRetryInterval
+	launchRetryInterval = time.Millisecond
+	defer func() { launchRetryInterval = previous }()
+
+	_, err := awaitReceiver(func() error { return nil },
+		func() (string, string) { return "E8C28D3C", "backdrop-transport" }, 5*time.Millisecond)
+	if err == nil {
+		t.Fatal("a device still on its backdrop was reported as ready to play")
+	}
+	// The app it is actually running is the one fact that distinguishes this
+	// from a device that answered nothing at all.
+	if !strings.Contains(err.Error(), "E8C28D3C") {
+		t.Fatalf("the error does not say what the device is running: %v", err)
 	}
 }

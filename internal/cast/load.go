@@ -121,33 +121,48 @@ func sendLoadMedia(conn messageSender, transportID, url, contentType string, dur
 	return nil
 }
 
-// awaitReceiver polls until the receiver has launched and reports its address,
-// which is what a LOAD has to be addressed to.
+// awaitReceiver polls until the media receiver has launched and reports its
+// address, which is what a LOAD has to be addressed to.
 //
-// The library's own launch waits on a status response with a five second
+// The app ID is checked, not just the address. A device sitting on its idle
+// screen is already running an app -- the backdrop -- and that app reports a
+// transport id of its own. Accepting the first address offered sends the LOAD to
+// the backdrop, which cannot play anything and does not say so: the cast
+// connects, nothing plays, and the wait for a media session runs out ninety
+// seconds later. That is exactly how this failed on hardware.
+//
+// The library's own launch waits on a single status response with a five second
 // deadline, which a television waking from standby regularly misses. This polls
 // instead, so a slow device is only slow.
-func awaitReceiver(refresh func() error, transportID func() string, within time.Duration) (string, error) {
+func awaitReceiver(refresh func() error, receiver func() (appID, transportID string), within time.Duration) (string, error) {
 	deadline := time.Now().Add(within)
 	var lastErr error
+	lastApp := ""
 	for attempt := 1; ; attempt++ {
 		if err := refresh(); err != nil {
 			lastErr = err
-		} else if id := strings.TrimSpace(transportID()); id != "" {
-			return id, nil
+		} else {
+			appID, transportID := receiver()
+			appID, transportID = strings.TrimSpace(appID), strings.TrimSpace(transportID)
+			if appID != "" {
+				lastApp = appID
+			}
+			if appID == DefaultReceiverApp && transportID != "" {
+				return transportID, nil
+			}
 		}
 		if !time.Now().Before(deadline) {
 			break
 		}
 		if attempt == 1 || attempt%5 == 0 {
-			Log(fmt.Sprintf("cast: waiting for the receiver to finish launching (attempt %d)", attempt))
+			Log(fmt.Sprintf("cast: waiting for the media receiver to finish launching (attempt %d, the device is running %q)", attempt, lastApp))
 		}
 		time.Sleep(launchRetryInterval)
 	}
 	if lastErr != nil {
-		return "", fmt.Errorf("cast: the receiver did not finish launching: %w", lastErr)
+		return "", fmt.Errorf("cast: the media receiver did not finish launching: %w", lastErr)
 	}
-	return "", fmt.Errorf("cast: the receiver did not finish launching within %s", within)
+	return "", fmt.Errorf("cast: the media receiver did not finish launching within %s (the device is running %q)", within, lastApp)
 }
 
 // awaitMedia polls until the device reports a media session.
