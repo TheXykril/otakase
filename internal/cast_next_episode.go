@@ -111,9 +111,14 @@ func castAwaitNextEpisode(config *Config, anime *Anime, panel *castPanelWriter, 
 	// on its own without draining it. Left there it cancels the countdown on the
 	// first tick, so the season stops with no keypress the viewer would
 	// recognise as having stopped it. Only what arrives from here on counts.
+	// A receive on a closed channel succeeds forever, so the loop has to stop on
+	// the closed case as well as on the empty one. Nothing closes a subscription
+	// in production today, but a test that hands over a closed channel should
+	// fail rather than spin a goroutine at full tilt.
 	for drained := false; !drained; {
 		select {
-		case <-commands:
+		case _, open := <-commands:
+			drained = !open
 		default:
 			drained = true
 		}
