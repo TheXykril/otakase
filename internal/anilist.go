@@ -859,15 +859,27 @@ func SaveAniListAnimeListEntry(token string, mediaID int, status *string, progre
 	return nil
 }
 
-func CompleteAniListAnimeRewatch(token string, anime Anime) error {
-	status := "COMPLETED"
-	progress := anime.Ep.Number
-	repeat := anime.Repeat + 1
-	completedAt := currentFuzzyDate()
-	startedAt := anime.StartedAt
+// anilistRewatchCompletion is what finishing a rewatch writes to the entry: one
+// more repeat than it already had, and the date the viewer actually started
+// rather than today.
+//
+// Separated from the request so it can be tested without a network -- and
+// because both values come off the Anime struct, which is exactly what a
+// process that did not load the entry itself is liable to be missing.
+func anilistRewatchCompletion(anime Anime, completedAt FuzzyDate) (repeat int, startedAt FuzzyDate) {
+	repeat = anime.Repeat + 1
+	startedAt = anime.StartedAt
 	if startedAt == (FuzzyDate{}) {
 		startedAt = completedAt
 	}
+	return repeat, startedAt
+}
+
+func CompleteAniListAnimeRewatch(token string, anime Anime) error {
+	status := "COMPLETED"
+	progress := anime.Ep.Number
+	completedAt := currentFuzzyDate()
+	repeat, startedAt := anilistRewatchCompletion(anime, completedAt)
 	return SaveAniListAnimeListEntry(token, anime.AnilistId, &status, &progress, &repeat, nil, &startedAt, &completedAt)
 }
 

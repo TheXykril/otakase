@@ -171,6 +171,7 @@ entries.
 | `-download` | Save episodes instead of playing them (needs `ffmpeg`) | |
 | `-episodes` | Episodes to save, e.g. `5` or `1-12` | selected |
 | `-download-dir` | Where to save them | `$HOME/Downloads/otakase` |
+| `-cast` | Play on a Chromecast on this network instead of locally | |
 | `-current` | Jump straight to what you are currently watching | |
 | `-show-new-episodes` | Mark shows with an unwatched episode in the list | `true` |
 | `-vim-keys` | `j`/`k`/`h`/`l` to move and `/` to search in menus | |
@@ -204,6 +205,49 @@ otakase -download -download-dir ~/Videos/anime
 ```
 
 Needs `ffmpeg`. Episodes are saved as `.mp4`.
+
+## Casting
+
+`otakase -cast` plays the episode on a Chromecast on the same network. The menu
+also carries a **Cast** toggle (`[ ] Cast: Off` / `[x] Cast: Office TV`) that
+does the same thing per-run; `CastDevice` skips being asked which device each
+time.
+
+A Chromecast can't fetch a provider's URL directly (it can't send the headers
+these hosts require), so otakase remuxes the stream with `ffmpeg` — no
+re-encoding — and serves it from this machine instead. `ffmpeg` is required,
+same as for `-download`.
+
+**Subtitles** are burned into the picture, since the receiver only renders
+WebVTT and no provider here supplies that. Uses your GPU when it can.
+`CastBurnSubtitles=false` turns this off; `CastEncoder` forces `vaapi` or
+`software` if detection picks wrong.
+
+**Seeking and resuming** both work by rebuilding the stream at that position
+and handing the device a new one — the receiver can't actually seek a stream
+of unknown length, it just silently ignores the request. Rebuilding costs a
+couple of seconds, which is why a press moves 30 seconds and a held key waits
+for you to stop before it moves.
+
+While casting, the terminal shows a control panel: position, device, and
+keys — space pauses, arrows seek/adjust volume, `q` stops. Anything else
+otakase needs to tell you arrives as a desktop notification instead of
+interrupting the panel. Next episode, filler skip, and tracker updates all
+work the same as local playback.
+
+From the rofi keybind, casting opens its own terminal (`CastTerminal` if the
+wrong one opens); closing that window stops the episode and saves position.
+
+**If the episode never starts**, it's almost always a firewall dropping the
+connection. otakase detects this, prints the exact fix command, and copies it
+to your clipboard — paste it in a terminal and cast again. If that doesn't
+fix it (a second firewall service or Docker can override it silently), see
+`docs/casting-verification.md` for the full diagnosis and manual commands.
+
+Casting is the one feature automated tests can't fully cover — whether a
+device accepts what was built and whether it can reach this machine are
+hardware-only answers. `docs/casting-verification.md` is the checklist to run
+after touching anything under `internal/cast/`.
 
 ## Hyprland keybinding
 
@@ -381,6 +425,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `SaveMpvSpeed` | Boolean | `true`, `false` | Carry playback speed to the next episode. |
 | `StoragePath` | String | any path, `$VARS` expanded | Where Otakase keeps its data. |
 | `DownloadDir` | String | any path | Where `-download` saves episodes. |
+| `CastDevice` | String | a device name | Cast to this device without asking, when `-cast` is given and the device is found. Empty asks each time. |
 | `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. |
 | `SubStyle` | Enum | `ask`, `soft`, `hard` | External or burned-in subtitles, where both exist. `ask` prompts once and remembers. |
 | `SubsLanguage` | String | `english` | Preferred subtitle language. |

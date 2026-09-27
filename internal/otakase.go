@@ -3,6 +3,7 @@ package internal
 import (
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -157,8 +158,26 @@ func Out(data interface{}) {
 	if userConfig == nil {
 		userConfig = &Config{}
 	}
+	// While the cast panel owns the screen, the terminal shows the panel and
+	// nothing else. A message printed into it would either land inside the
+	// frame or scroll it away, so it goes where a launch with no terminal
+	// already sends its messages: a desktop notification.
+	if castPanelOwnsScreen() {
+		notifyDesktop(fmt.Sprintf("%v", data))
+		Log(fmt.Sprintf("%v", data))
+		return
+	}
+
 	if !userConfig.RofiSelection {
-		fmt.Println(fmt.Sprintf("%v", data))
+		// Raw mode, which the cast controls turn on, disables the translation
+		// that makes \n also return the cursor. A bare newline there leaves the
+		// next line starting wherever the last one ended, and the output walks
+		// diagonally across the screen.
+		if castRawModeActive() {
+			fmt.Print(fmt.Sprintf("%v", data) + "\r\n")
+		} else {
+			fmt.Println(fmt.Sprintf("%v", data))
+		}
 	} else {
 		switch runtime.GOOS {
 		case "windows":
@@ -390,7 +409,14 @@ updateOptionLoop:
 					Out(fmt.Sprintf("Current score: %s", currentScore))
 
 					err = RateAnime(user.Token, animeID)
-					if err != nil {
+					switch {
+					case errors.Is(err, ErrRatingDeclined):
+						// Escaping the prompt is an answer, not a failure. This
+						// used to exit the program with "Failed to update anime
+						// score" because the decline was indistinguishable from
+						// a broken write.
+						Out("Score unchanged.")
+					case err != nil:
 						Log(fmt.Sprintf("Failed to update anime score: %v", err))
 						Exit(fmt.Errorf("Failed to update anime score"))
 					}
@@ -581,6 +607,25 @@ func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[
 	return anilistSelectedOption
 }
 
+// trackerEpisodeDuration answers what Ep.Duration should hold before anything
+// has measured the episode, given what it holds now and what the tracker says.
+//
+// The tracker reports an average episode length in minutes; Ep.Duration is
+// seconds. It is the only length known before playback starts, and casting has
+// nothing better: the receiver reports dur=-1 for the whole episode, because
+// the remux writes no EXT-X-ENDLIST until it finishes, so without this the cast
+// panel has no total to show at all.
+//
+// A measured duration always wins. mpv overwrites this with the real length of
+// the file it opened, and a finished remux does the same for a cast, so this
+// only fills the gap where nothing has measured anything yet.
+func trackerEpisodeDuration(current int, media Media) int {
+	if current > 0 || media.Duration <= 0 {
+		return current
+	}
+	return media.Duration * 60
+}
+
 func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime) {
 	var err error
 	var startingRewatch bool
@@ -719,6 +764,13 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 				} else if categorySelection.Key == "REMAP_PROVIDER" {
 					ClearScreen()
 					RemapProviderAnime(userConfig, user, databaseAnimes)
+					ClearScreen()
+					continue categorySelectionLoop
+				} else if categorySelection.Key == "CAST" {
+					// A toggle, so it returns to the menu rather than going on
+					// to a show: the entry it just changed is the thing the
+					// viewer wants to see the new state of.
+					toggleCastToDevice(userConfig)
 					ClearScreen()
 					continue categorySelectionLoop
 				} else if categorySelection.Key == "CONTINUE_LAST" {
@@ -896,6 +948,7 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					ID:       fallbackAnime.AnilistId,
 					MalID:    fallbackAnime.MalId,
 					Episodes: fallbackAnime.TotalEpisodes,
+					Duration: ConvertSecondsToMinutes(fallbackAnime.Ep.Duration),
 					Title:    fallbackAnime.Title,
 					Status:   "FINISHED",
 				},
@@ -914,6 +967,7 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 		// Set anime entry
 		anime.Title = selectedAnilistAnime.Media.Title
 		anime.TotalEpisodes = selectedAnilistAnime.Media.Episodes
+		anime.Ep.Duration = trackerEpisodeDuration(anime.Ep.Duration, selectedAnilistAnime.Media)
 		anime.CoverImage = selectedAnilistAnime.CoverImage
 		if selectedAnilistAnime.Media.MalID != 0 {
 			anime.MalId = selectedAnilistAnime.Media.MalID
@@ -1062,6 +1116,35 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 			} else {
 				anime.Ep.Number = animePointer.Ep.Number
 			}
+		}
+
+		// Which episode is playing is settled above, so this is where the resume
+		// position can be taken from the row that holds it: the one written for
+		// that episode, by the provider about to play it. What was used instead
+		// was the row LocalFindAnime returned, which is the furthest-ahead row for
+		// the show -- the right answer for "where is this show up to" and the
+		// wrong one for "where in this episode was I". A show watched through
+		// three providers, one of them an episode ahead, therefore resumed from
+		// that row: a nine minute position replaced by a one second one, which
+		// the resume gate then rejected as too early to bother with, so nothing
+		// resumed and nothing said why.
+		//
+		// Only when something already intends to resume. An explicitly cleared
+		// position -- the viewer choosing the tracker's episode over the local
+		// one -- stays cleared.
+		if anime.Ep.Resume || anime.Ep.Player.PlaybackTime > 0 {
+			if row := LocalFindEpisode(*databaseAnimes, anime.AnilistId, anime.Ep.Number, CurrentAnimeProviderName(anime)); row != nil {
+				anime.Ep.Player.PlaybackTime = row.Ep.Player.PlaybackTime
+				anime.Ep.Resume = row.Ep.Player.PlaybackTime > 0
+			} else {
+				// No row for this episode at all, so the position belongs to a
+				// different one and carrying it would resume an episode the
+				// viewer has not started.
+				anime.Ep.Player.PlaybackTime = 0
+				anime.Ep.Resume = false
+			}
+			Log(fmt.Sprintf("Resume position for episode %d on %s: %ds (resume=%t)",
+				anime.Ep.Number, CurrentAnimeProviderName(anime), anime.Ep.Player.PlaybackTime, anime.Ep.Resume))
 		}
 
 		if startingRewatch {
@@ -1322,6 +1405,33 @@ func handleUnreleasedAnime(userConfig *Config, user *User, anime *Anime, entry E
 	anime.Ep.ContinueLast = false
 }
 
+// episodeLinkResolver is the resolve ResolveEpisodeLinks runs. A variable so a
+// test can drive the callers without a provider or a network.
+var episodeLinkResolver = resolveEpisodeLinksWithRecovery
+
+// ResolveEpisodeLinks fills anime.Ep with a playable stream for the episode it
+// names, reporting whether it found one.
+//
+// Preferred-first resolve; the diagnosed recovery menu only after that fails.
+// ok=false means nothing played and the caller should stop -- either the
+// resolve found nothing or the viewer backed out of the recovery menu.
+//
+// It is shared rather than inlined into StartPlayback because the process
+// spawned for a rofi cast never reaches StartPlayback: it casts episode after
+// episode itself, and StartNextEpisode clears Ep.Links "to force fetching new
+// ones" without fetching anything. This is that fetch, for both callers.
+func ResolveEpisodeLinks(config *Config, anime *Anime) bool {
+	episodeResult, ok := episodeLinkResolver(config, anime, nil)
+	if !ok {
+		return false
+	}
+	Log(fmt.Sprintf("Successfully retrieved %s/%s episode link. Links count: %d", episodeResult.ProviderName, episodeResult.Mode, len(episodeResult.Links)))
+	anime.Ep.Links = episodeResult.Links
+	anime.Ep.Mode = episodeResult.Mode
+	applyStreamPlaybackHints(anime, anime.Ep.Links, episodeResult.LinkHints)
+	return true
+}
+
 func StartPlayback(userConfig *Config, anime *Anime) string {
 	// Validate inputs
 	if anime.ProviderId == "" {
@@ -1353,17 +1463,9 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 			anime.ProviderName = anime.Ep.NextEpisode.ProviderName
 			anime.ProviderId = anime.Ep.NextEpisode.ProviderId
 		}
-	} else {
-		// Preferred-first resolve; diagnosed recovery only after that fails.
-		episodeResult, ok := resolveEpisodeLinksWithRecovery(userConfig, anime, nil)
-		if !ok {
-			RestoreScreen()
-			return ""
-		}
-		Log(fmt.Sprintf("Successfully retrieved %s/%s episode link. Links count: %d", episodeResult.ProviderName, episodeResult.Mode, len(episodeResult.Links)))
-		anime.Ep.Links = episodeResult.Links
-		anime.Ep.Mode = episodeResult.Mode
-		applyStreamPlaybackHints(anime, anime.Ep.Links, episodeResult.LinkHints)
+	} else if !ResolveEpisodeLinks(userConfig, anime) {
+		RestoreScreen()
+		return ""
 	}
 
 	if len(anime.Ep.Links) == 0 {
@@ -1438,6 +1540,41 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 		Out(fmt.Sprintf("%s - Episode %d", GetAnimeName(*anime), anime.Ep.Number))
 	}
 	title := fmt.Sprintf("%s - Episode %d", GetAnimeName(*anime), anime.Ep.Number)
+
+	if userConfig.CastToDevice {
+		// Restored before casting rather than after: casting is a long
+		// text-progress operation with no TUI to preserve, every line it prints
+		// over the next 20 minutes needs a real terminal to land in, and a
+		// failure message printed into the alternate buffer would be discarded
+		// by the restore a microsecond later -- the same reason the three
+		// earlier returns above call RestoreScreen() before giving up.
+		RestoreScreen()
+
+		// A rofi launch has no terminal to show controls in, so the cast is
+		// handed to one: that process owns ffmpeg, the server, the device and
+		// all tracking, which is what keeps exactly one process writing
+		// history. If it cannot be done the episode still plays here, without
+		// controls, because a missing terminal must not mean a missing episode.
+		if userConfig.RofiSelection {
+			if err := handOffCastToTerminal(userConfig, anime); err != nil {
+				Out("Casting here instead of in a terminal: " + err.Error())
+				Log(fmt.Sprintf("cast: handoff failed: %v", err))
+			} else {
+				return ""
+			}
+		}
+
+		// Casting owns the episode until it ends, and there is no mpv socket to
+		// hand back: the caller's playback loop has nothing to poll.
+		castErr := CastEpisode(userConfig, anime)
+		socket, report := castOutcome(castErr)
+		if report {
+			Out("Casting failed: " + castErr.Error())
+			Log(fmt.Sprintf("cast: %v", castErr))
+		}
+		return socket
+	}
+
 	return StartVideoWithProviderFallback(userConfig, anime, title)
 }
 
@@ -1734,31 +1871,66 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 	summary := []string{}
 	canWriteRemote := ShouldWriteRemoteTracking(userConfig, anime)
 
+	// One place decides whether a rating actually happened, so the menu, the
+	// cast panel and the escape key cannot report it differently.
+	//
+	// A declined rating is not a failed one. RateAnime cannot tell them apart on
+	// error alone, and conflating them is how "Anime rated successfully!" came to
+	// be printed for a rating that was never written.
+	applyRating := func() {
+		err := RateAnime(userToken, anime.AnilistId)
+		switch {
+		case errors.Is(err, ErrRatingDeclined):
+			Out("Rating skipped.")
+			summary = append(summary, "rating skipped")
+		case err != nil:
+			Log(fmt.Sprintf("Error rating anime: %v", err))
+			Out("Failed to rate anime")
+			summary = append(summary, "rating failed")
+		default:
+			Out("Anime rated successfully!")
+			summary = append(summary, "rating saved")
+		}
+	}
+
 	if userConfig.ScoreOnCompletion && !anime.IsAiring && canWriteRemote {
 		Out("You've completed this anime! Would you like to rate it?")
 
-		scoreOptions := []SelectionOption{
-			{Key: "yes", Label: "Yes, rate this anime"},
-			{Key: "no", Label: "No, skip rating"},
-		}
-
-		selectedOption, err := DynamicSelect(scoreOptions)
-		if err != nil {
-			Log(fmt.Sprintf("Error in score prompt selection: %v", err))
-		} else if selectedOption.Key == "yes" {
-			err = RateAnime(userToken, anime.AnilistId)
-			if err != nil {
-				Log(fmt.Sprintf("Error rating anime: %v", err))
-				Out("Failed to rate anime")
-				summary = append(summary, "rating failed")
+		if castWindowNonInteractive() {
+			// Asked in the panel rather than answered for the viewer, because the
+			// alternative is a countdown whose only outcomes are "write a rating
+			// nobody chose" and "write nothing at all". Arrows and one key work
+			// from a sofa; typing a number does not. See
+			// docs/cast-window-prompts.md.
+			if score, given := castAwaitScore(userConfig, anime, castCountdownDuration); given {
+				if err := RateAnimeWithScore(userToken, anime.AnilistId, float64(score)); err != nil {
+					Log(fmt.Sprintf("Error rating anime: %v", err))
+					castPanelSay(userConfig, anime, "Rating failed.")
+					summary = append(summary, "rating failed")
+				} else {
+					castPanelSay(userConfig, anime, fmt.Sprintf("Rated %d.", score))
+					summary = append(summary, fmt.Sprintf("rating saved (%d)", score))
+				}
 			} else {
-				Out("Anime rated successfully!")
-				summary = append(summary, "rating saved")
+				castPanelSay(userConfig, anime, "No answer -- rating skipped.")
+				summary = append(summary, "rating skipped (cast window)")
 			}
 		} else {
-			summary = append(summary, "rating skipped")
+			scoreOptions := []SelectionOption{
+				{Key: "yes", Label: "Yes, rate this anime"},
+				{Key: "no", Label: "No, skip rating"},
+			}
+
+			selectedOption, err := DynamicSelect(scoreOptions)
+			if err != nil {
+				Log(fmt.Sprintf("Error in score prompt selection: %v", err))
+			} else if selectedOption.Key == "yes" {
+				applyRating()
+			} else {
+				summary = append(summary, "rating skipped")
+			}
+			// Back (-2) and no are treated as skip
 		}
-		// Back (-2) and no are treated as skip
 	} else {
 		summary = append(summary, "rating skipped")
 	}
@@ -1789,8 +1961,29 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 		summary = append(summary, sequelSummary)
 	}
 	if len(summary) > 0 {
-		Out("Completion summary: " + strings.Join(summary, "; "))
+		line := "Completion summary: " + strings.Join(summary, "; ")
+		// A cast window holding the terminal would turn this into a desktop
+		// notification, and this is the one line a viewer comes back to. Held
+		// until the session releases the screen, then printed to the terminal
+		// where it lands in the scrollback.
+		emitCompletionSummary(line)
 	}
+}
+
+// emitCompletionSummary sends the completion summary wherever it can actually be
+// read: held for the session when a cast panel owns the terminal, printed
+// otherwise.
+//
+// A cast window holding the terminal would turn Out into a desktop notification,
+// and this is the one line a viewer comes back to. Split out of
+// HandleLastEpisodeCompletion so the choice is testable: a test that calls
+// deferCastSummary itself passes whether or not this branch exists at all.
+func emitCompletionSummary(line string) {
+	if castPanelOwnsScreen() {
+		deferCastSummary(line)
+		return
+	}
+	Out(line)
 }
 
 // handleSequelCheck checks for sequels and prompts the user accordingly
@@ -1817,6 +2010,17 @@ func handleSequelCheck(userConfig *Config, anime *Anime, userToken string) (summ
 	if len(sequels) == 0 {
 		Log("No sequel found for this anime")
 		return "no sequel found"
+	}
+
+	// Declined whole, ahead of both the "which one" and the "what do you want to
+	// do with it" menus: a further instalment is a different show to put on a
+	// list, not a continuation of this one, and it is not a decision to make on
+	// someone's behalf while they are not there to make it. Reported rather than
+	// dropped -- see docs/cast-window-prompts.md.
+	if castWindowNonInteractive() {
+		title := sequelDisplayTitle(userConfig, &sequels[0])
+		Out(fmt.Sprintf("Sequel available: %s. Leaving your list alone.", title))
+		return "sequel skipped (cast window)"
 	}
 
 	sequel := &sequels[0]
@@ -1981,4 +2185,23 @@ func ChangeProvider(userConfig *Config) {
 
 	Out(fmt.Sprintf("\nProvider successfully changed to %s.\n", providerConfigDisplayLabel(userConfig.Provider)))
 	time.Sleep(1 * time.Second)
+}
+
+// notifyDesktop sends a desktop notification, which is how otakase reaches a
+// viewer who is not looking at a terminal -- either because there is none, or
+// because the cast panel owns the one there is.
+func notifyDesktop(message string) {
+	if runtime.GOOS == "linux" {
+		cmd := exec.Command("notify-send",
+			"-a", DisplayName,
+			"-h", "string:x-canonical-private-synchronous:otakase-notification",
+			DisplayName, message)
+		if err := cmd.Run(); err != nil {
+			Log(fmt.Sprintf("Failed to send notification: %v", err))
+		}
+		return
+	}
+	if err := beeep.Notify(DisplayName, message, ""); err != nil {
+		Log(fmt.Sprintf("Failed to send notification: %v", err))
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers"
 )
 
@@ -111,8 +112,42 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 // The host serves its segments from a CDN that rejects requests without a
 // referrer and a browser user-agent, and it states both in the response rather
 // than leaving them to be discovered by a 403. They are passed through as-is.
+// requireCategory reports whether this show carries the requested episode in the
+// requested language, so a mode the show does not have fails here rather than
+// resolving to the other one under the wrong label.
+func (p *Provider) requireCategory(showID, category string, epNo int) error {
+	episodes, err := p.api().episodes(showID)
+	if err != nil {
+		// The listing is a check, not the stream. If it cannot be fetched, let
+		// the stream request be the thing that succeeds or fails.
+		providerhost.Log(fmt.Sprintf("anikoto: could not confirm %s availability for %s: %v", category, showID, err))
+		return nil
+	}
+	for _, ep := range episodes {
+		if ep.Number == epNo && strings.EqualFold(ep.Category, category) {
+			return nil
+		}
+	}
+	return fmt.Errorf("anikoto: %s has no %s for episode %d", showID, category, epNo)
+}
+
 func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig, id string, epNo int, mode string) ([]string, map[string]providers.StreamPlaybackHint, error) {
 	category := normalizeCategory(mode)
+
+	// The host answers /link for a dub category even when the show has no dub,
+	// returning the sub stream under the dub label. Nothing downstream can tell:
+	// ProviderEpisodeResult.Mode is the mode that was asked for, so the episode
+	// plays with Japanese audio while the program believes it is a dub -- and
+	// the cast then skips burning the subtitles it needed.
+	//
+	// EpisodesList already refuses a category a show does not carry, for exactly
+	// this reason. Applying the same rule here costs one extra request and lets
+	// GetEpisodeURLForPlayback's existing fallback offer the other language
+	// rather than silently mislabelling this one.
+	if err := p.requireCategory(id, category, epNo); err != nil {
+		return nil, nil, err
+	}
+
 	response, err := p.api().link(id, category, epNo)
 	if err != nil {
 		return nil, nil, err

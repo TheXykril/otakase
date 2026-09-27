@@ -351,6 +351,31 @@ var menuActions = map[string]FooterAction{
 	"REMAP_PROVIDER": {Key: "REMAP_PROVIDER", Label: "remap", Hint: "ctrl+r"},
 	"TRACKER":        {Key: "TRACKER", Label: "tracker", Hint: "ctrl+t"},
 	"PROVIDER":       {Key: "PROVIDER", Label: "provider", Hint: "ctrl+o"},
+	// The label here is a placeholder: CAST reports whether it is on, so its
+	// text is replaced with the live state by applyDynamicActionLabels before
+	// either menu renders it.
+	"CAST": {Key: "CAST", Label: "cast", Hint: "ctrl+k"},
+}
+
+// applyDynamicActionLabels replaces the labels of actions that report state
+// rather than naming a destination.
+//
+// CAST is the only one: it is a toggle, and a toggle whose entry does not say
+// which way it is set is a toggle a viewer has to guess at.
+func applyDynamicActionLabels(actions []FooterAction, config *Config, terminal bool) []FooterAction {
+	out := make([]FooterAction, len(actions))
+	copy(out, actions)
+	for i := range out {
+		if out[i].Key != "CAST" {
+			continue
+		}
+		if terminal {
+			out[i].Label = castActionCheckbox(config)
+			continue
+		}
+		out[i].Label = castActionLabel(config)
+	}
+	return out
 }
 
 // actionForKey finds the action a keypress triggers, if any.

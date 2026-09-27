@@ -3,6 +3,7 @@ package internal
 import (
 	"bytes"
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -93,6 +94,14 @@ func init() {
 // ApplyTheme rebuilds the menu styles from a palette.
 func ApplyTheme(palette theme.Palette) {
 	color := func(value string) lipgloss.Color { return lipgloss.Color(value) }
+
+	// The cast control panel, so it follows the same palette as the menus.
+	castPanelBorderStyle = lipgloss.NewStyle().Foreground(color(palette.Border()))
+	castPanelTitleStyle = lipgloss.NewStyle().Foreground(color(palette.Accent)).Bold(true)
+	castPanelDimStyle = lipgloss.NewStyle().Foreground(color(palette.Muted))
+	castPanelBarStyle = lipgloss.NewStyle().Foreground(color(palette.Accent))
+	castPanelPlayStyle = lipgloss.NewStyle().Foreground(color(palette.Green)).Bold(true)
+	castPanelPauseStyle = lipgloss.NewStyle().Foreground(color(palette.Yellow)).Bold(true)
 
 	titleStyle = lipgloss.NewStyle().
 		Foreground(color(palette.Accent)).
@@ -1157,11 +1166,36 @@ func DynamicSelectWithRefresh(options []SelectionOption, refreshConfig *Selectio
 	return dynamicSelectInternal(options, refreshConfig, false)
 }
 
+// ErrCastNonInteractive is what a menu returns rather than draw itself in a
+// window whose viewer is not at the keyboard.
+//
+// It exists as a last resort. Every prompt reachable from a spawned cast takes a
+// declared default before it gets here, but that list was built by reading call
+// sites, and reading call sites is how a function with no callers came to be
+// listed as a live consent prompt. A prompt added later on any path should
+// decline and say so, not block a season on a window nobody is watching.
+var ErrCastNonInteractive = errors.New("selection: interactive menu unavailable in a spawned cast window")
+
+// castWindowNonInteractive reports whether this process is a cast window opened
+// for a viewer elsewhere, where a menu would have no one to answer it.
+func castWindowNonInteractive() bool {
+	config := GetGlobalConfig()
+	return config != nil && config.CastNonInteractive
+}
+
 func dynamicSelectInternal(options []SelectionOption, refreshConfig *SelectionRefreshConfig, preserveOrder bool) (SelectionOption, error) {
 	isHomeMenu := detectHomeMenu(options)
 
 	if isHomeMenu {
 		options = sortHomeMenuOptions(options)
+	}
+
+	// Before the rofi branch, because a spawned cast forces RofiSelection off
+	// and would otherwise fall through to a Bubble Tea program competing with
+	// the cast reader for stdin.
+	if castWindowNonInteractive() {
+		Log("cast: skipped an interactive menu with no viewer at the keyboard")
+		return SelectionOption{}, ErrCastNonInteractive
 	}
 
 	if config := GetGlobalConfig(); config != nil && config.RofiSelection {

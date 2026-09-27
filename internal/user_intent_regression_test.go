@@ -284,7 +284,7 @@ func TestConfirmProviderMatchRequiresUserApproval(t *testing.T) {
 		return SelectionOption{Key: "manual"}, nil
 	})
 
-	if confirmProviderMatch(SelectionOption{Label: "Example"}, "title") {
+	if confirmProviderMatch(nil, SelectionOption{Label: "Example"}, "title") {
 		t.Fatalf("manual selection should reject guessed provider match")
 	}
 }

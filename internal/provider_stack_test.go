@@ -95,11 +95,11 @@ func TestConfiguredProviderNamesAcceptsOrderedLists(t *testing.T) {
 		cfg  *Config
 		want []string
 	}{
-		{name: "empty", cfg: &Config{}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb"}},
+		{name: "empty", cfg: &Config{}, want: []string{"anikoto", "kickassanime", "anizone", "anipub", "anineko", "nyaa", "anidb"}},
 		{name: "json list", cfg: &Config{Provider: `["anikoto","anineko"]`}, want: []string{"anikoto", "anineko"}},
 		{name: "comma list", cfg: &Config{Provider: "anineko,anikoto"}, want: []string{"anineko", "anikoto"}},
 		{name: "plus list", cfg: &Config{Provider: "anikoto+anineko"}, want: []string{"anikoto", "anineko"}},
-		{name: "legacy alias", cfg: &Config{Provider: "stacked"}, want: []string{"anikoto", "kickassanime", "anipub", "anineko", "nyaa", "anidb"}},
+		{name: "legacy alias", cfg: &Config{Provider: "stacked"}, want: []string{"anikoto", "kickassanime", "anizone", "anipub", "anineko", "nyaa", "anidb"}},
 	}
 
 	for _, tc := range cases {

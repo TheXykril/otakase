@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -101,6 +102,8 @@ func main() {
 	rofiSelection := flag.Bool("rofi", false, "Open selection in rofi")
 	noRofi := flag.Bool("no-rofi", false, "No rofi")
 	imagePreview := flag.Bool("image-preview", false, "Show image preview")
+	castFlag := flag.Bool("cast", false, "Play on a Chromecast on this network instead of locally")
+	castSessionFlag := flag.String("cast-session", "", "Cast the episode described by a handoff file (used internally when casting from rofi)")
 	noImagePreview := flag.Bool("no-image-preview", false, "No image preview")
 	changeToken := flag.Bool("change-token", false, "Change token")
 	setupAnimeSkip := flag.Bool("setup-anime-skip", false, "Create a personal Anime-Skip client id and save it")
@@ -284,6 +287,29 @@ func main() {
 		userConfig.SubStyle = "hard"
 	}
 
+	if *castFlag {
+		userConfig.CastToDevice = true
+		internal.ApplyCastSubStyle(&userConfig, *softSubFlag)
+	}
+
+	// The spawned terminal's entry point: everything above has loaded the
+	// config, and everything below is the picking flow this process does not
+	// need -- the episode was already resolved by the process that spawned it.
+	if *castSessionFlag != "" {
+		internal.RestoreScreen()
+		if err := internal.RunCastSession(&userConfig, *castSessionFlag); err != nil {
+			internal.Out("Casting failed: " + err.Error())
+			internal.Log(fmt.Sprintf("cast: %v", err))
+		}
+		// Exit rather than return: the cast controls restore the terminal from a
+		// cleanup that only runExitCleanups reaches, and a plain return does not
+		// reach it. Returning here left the tty raw after q or a finished season,
+		// which is invisible while the spawned window closes itself and very
+		// visible when the session was started from an ordinary terminal.
+		internal.Exit(nil)
+		return
+	}
+
 	// Show update found by a previous idle check (no network on the hot path).
 	if internal.HandlePendingUpdatePrompt(&userConfig, resolvedVersion()) {
 		return
@@ -461,6 +487,23 @@ func main() {
 		// socket path, having already said why. Continuing past it started the
 		// playback watchers for a session that does not exist, and they then
 		// polled a socket that would never answer -- once a second, forever.
+		// A cast played the episode somewhere else and is finished, the same
+		// shape as the android-intent case below: carry on rather than poll a
+		// socket that will never exist. The literal matches what
+		// internal.castSocketSentinel returns; main is a different package and
+		// cannot see it, which is how the android-intent sentinel is written
+		// here too.
+		if anime.Ep.Player.SocketPath == "cast" {
+			// The countdown inside CastEpisode already asked, and this branch
+			// is only reached when it said advance: asking again would put an
+			// interactive menu in front of a viewer across the room.
+			if internal.AdvanceAfterEpisode(&userConfig, &anime, &user, databaseFile, func() bool { return true }) {
+				continue
+			}
+			internal.Exit(nil)
+			return
+		}
+
 		if anime.Ep.Player.SocketPath == "" {
 			internal.Log("Playback did not start; no MPV socket")
 			internal.Exit(nil)
@@ -485,31 +528,16 @@ func main() {
 				internal.Exit(nil)
 			}
 
-			// Mark as completed
-			anime.Ep.IsCompleted = true
-
-			// Update progress for the finished episode
-			// Local update
-			internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, 0, 0, internal.GetAnimeName(anime), internal.CurrentAnimeProviderName(&anime))
-
-			// Check if we should continue to next episode
-			// On Android we always prompt because we don't know exactly when video ended
-			shouldContinue := internal.NextEpisodePromptCLI(&userConfig)
-
-			if shouldContinue {
-				internal.StartNextEpisode(&anime, &userConfig, databaseFile, user.Token)
+			// The same call the spawned cast process makes, so a rofi cast and
+			// a local playback advance through one implementation rather than
+			// two that can drift. Unlike a cast, nothing has asked yet here, so
+			// this asks with the same menu local playback always has.
+			if internal.AdvanceAfterEpisode(&userConfig, &anime, &user, databaseFile, func() bool {
+				return internal.NextEpisodePromptCLI(&userConfig)
+			}) {
 				continue
-			} else {
-				// Handle completion if this was the last episode
-				if anime.Ep.Number == anime.TotalEpisodes {
-					internal.HandleLastEpisodeCompletion(&userConfig, &anime, user.Token)
-				}
-				// Update progress for the just finished episode (StartNextEpisode usually does this for previous ep, but here we exit)
-				if !anime.Rewatching {
-					internal.UpdateAnimeProgress(user.Token, anime.AnilistId, anime.Ep.Number)
-				}
-				internal.Exit(nil)
 			}
+			internal.Exit(nil)
 		}
 
 		wg.Add(1)
@@ -697,44 +725,48 @@ func main() {
 		go func() {
 			for {
 				if anime.Ep.Started {
-					if anime.Ep.Duration == 0 {
-						// Get video duration
-						durationPos, err := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "duration"})
-						if err != nil {
-							internal.Log("Error getting video duration: " + err.Error())
-						} else if durationPos != nil {
-							if duration, ok := durationPos.(float64); ok {
-								anime.Ep.Duration = int(duration + 0.5) // Round to nearest integer
-								internal.Log(fmt.Sprintf("Video duration: %d seconds", anime.Ep.Duration))
+					// Asked every time playback starts, not only when the duration is
+					// still unset: Setup now seeds Ep.Duration with the tracker's average
+					// episode length, so the cast panel has a total to show before
+					// anything has been measured. mpv reports the real length of the file
+					// in hand and has to win over that estimate. The loop breaks after
+					// this one attempt either way, so guarding it would also leave this
+					// goroutine spinning for the rest of the episode.
+					durationPos, err := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "duration"})
+					if err != nil {
+						internal.Log("Error getting video duration: " + err.Error())
+					} else if durationPos != nil {
+						if duration, ok := durationPos.(float64); ok {
+							anime.Ep.Duration = int(duration + 0.5) // Round to nearest integer
+							internal.Log(fmt.Sprintf("Video duration: %d seconds", anime.Ep.Duration))
 
-								// Initialize Discord presence with correct duration (first time with real duration)
-								if userConfig.DiscordPresence {
-									isPaused, _ := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "pause"})
-									currentPos := 0
-									if timePos, err := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "time-pos"}); err == nil && timePos != nil {
-										if pos, ok := timePos.(float64); ok {
-											currentPos = int(pos + 0.5)
-										}
-									}
-									pauseState := false
-									if isPaused != nil {
-										if value, ok := isPaused.(bool); ok {
-											pauseState = value
-										} else {
-											internal.Log(fmt.Sprintf("Error: pause state is not a bool (%T)", isPaused))
-										}
-									}
-									internal.Log("Initializing Discord presence with real video duration")
-									if presenceErr := internal.DiscordPresence(anime, pauseState, currentPos, anime.Ep.Duration, userConfig.DiscordClientId); presenceErr != nil {
-										internal.Log("Discord presence error: " + presenceErr.Error())
+							// Initialize Discord presence with correct duration (first time with real duration)
+							if userConfig.DiscordPresence {
+								isPaused, _ := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "pause"})
+								currentPos := 0
+								if timePos, err := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "time-pos"}); err == nil && timePos != nil {
+									if pos, ok := timePos.(float64); ok {
+										currentPos = int(pos + 0.5)
 									}
 								}
-							} else {
-								internal.Log("Error: duration is not a float64")
+								pauseState := false
+								if isPaused != nil {
+									if value, ok := isPaused.(bool); ok {
+										pauseState = value
+									} else {
+										internal.Log(fmt.Sprintf("Error: pause state is not a bool (%T)", isPaused))
+									}
+								}
+								internal.Log("Initializing Discord presence with real video duration")
+								if presenceErr := internal.DiscordPresence(anime, pauseState, currentPos, anime.Ep.Duration, userConfig.DiscordClientId); presenceErr != nil {
+									internal.Log("Discord presence error: " + presenceErr.Error())
+								}
 							}
+						} else {
+							internal.Log("Error: duration is not a float64")
 						}
-						break
 					}
+					break
 				}
 				time.Sleep(1 * time.Second)
 			}
@@ -1125,7 +1157,11 @@ func main() {
 				} else if !updatedAnime.IsAiring {
 					anime.Ep.Number = anime.Ep.Number - 1
 					internal.Out("Completed anime.")
-					if rateErr := internal.RateAnime(user.Token, anime.AnilistId); rateErr != nil {
+					// A decline is the viewer's own choice, so it is not reported
+					// back to them as an error.
+					if rateErr := internal.RateAnime(user.Token, anime.AnilistId); errors.Is(rateErr, internal.ErrRatingDeclined) {
+						internal.Out("Score unchanged.")
+					} else if rateErr != nil {
 						internal.Log("Error rating anime: " + rateErr.Error())
 						internal.Out("Error rating anime: " + rateErr.Error())
 					}

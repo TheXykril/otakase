@@ -137,7 +137,14 @@ func searchAnimeForMapping(config *Config, state *providerMappingSearchState, mo
 	return nil, firstErr
 }
 
-func confirmProviderMatch(option SelectionOption, reason string) bool {
+// confirmProviderMatch asks whether to trust a matched provider entry.
+//
+// A spawned cast window has nobody to ask, so it accepts. That is the better of
+// the two answers here rather than a policy imposed on it: this is only reached
+// on an exact title and episode-count match, and the alternative -- "select
+// manually" -- is a menu that cannot be shown, which would end the episode
+// instead. See docs/cast-window-prompts.md.
+func confirmProviderMatch(config *Config, option SelectionOption, reason string) bool {
 	label := option.Label
 	if label == "" {
 		label = option.Title
@@ -147,6 +154,10 @@ func confirmProviderMatch(option SelectionOption, reason string) bool {
 	}
 
 	Out(fmt.Sprintf("Provider match found by %s: %s", reason, label))
+	if castWindowNonInteractive() {
+		Out("Using it -- there is no one at the keyboard to confirm.")
+		return true
+	}
 	selected, err := promptSelect([]SelectionOption{
 		{Key: "use", Label: "Use this match"},
 		{Key: "manual", Label: "Select manually"},
@@ -246,7 +257,7 @@ func autoMatchProviderListing(config *Config, anime *Anime, animeList []Selectio
 		targetLabel := fmt.Sprintf("%v (%d episodes)", userQuery, anilistEntry.Media.Episodes)
 		for _, option := range animeList {
 			if fmt.Sprintf("%s (%d episodes)", option.Title, anilistEntry.Media.Episodes) == targetLabel {
-				if confirmProviderMatch(option, "title and episode count") {
+				if confirmProviderMatch(config, option, "title and episode count") {
 					anime.ProviderId = option.Key
 					Log(fmt.Sprintf("User confirmed exact text match. Setting ProviderId to: %s", anime.ProviderId))
 					return true
@@ -324,7 +335,11 @@ func selectWithOptionalMessage(config *Config, options []SelectionOption, prompt
 		return RofiSelectWithMessage(options, false, prompt, message)
 	}
 	if strings.TrimSpace(message) != "" {
-		fmt.Println(message)
+		// Out, not fmt.Println: in raw mode a bare \n does not return the
+		// cursor, so this printed diagonally, and when the cast panel owns the
+		// alternate buffer it landed in the middle of the held frame. Out
+		// handles both. Reachable here on the episode 2+ cast recovery path.
+		Out(message)
 	}
 	return promptSelectOrdered(options)
 }
@@ -806,6 +821,10 @@ func episodeLinkFailureDiagnosis(config *Config, anime *Anime, lastErr error) st
 // promptEpisodeLinkFailureRecovery shows a diagnosed dead-end after full resolve
 // failure. Returns: remap | audio | episode | back
 // DynamicSelect still injects Back/Quit; both map to "back" (single exit path).
+//
+// With no viewer at the keyboard it takes the one answer that needs no menu --
+// search for the show again -- and the caller bounds that to a single attempt
+// before backing out. See docs/cast-window-prompts.md.
 func promptEpisodeLinkFailureRecovery(config *Config, anime *Anime, lastErr error, includeAudio bool) string {
 	preferredMode := "sub"
 	if config != nil {
@@ -817,11 +836,18 @@ func promptEpisodeLinkFailureRecovery(config *Config, anime *Anime, lastErr erro
 
 	var selected SelectionOption
 	var err error
-	if config != nil && config.RofiSelection {
+	switch {
+	case castWindowNonInteractive():
+		// Out rather than fmt.Println: the cast window is in raw mode, where a
+		// bare \n does not return the cursor and the diagnosis walks diagonally
+		// across the screen. Out already handles that.
+		Out(diagnosis)
+		return "remap"
+	case config != nil && config.RofiSelection:
 		// Put diagnosis in Rofi -mesg — avoid one notify-send per Out line.
 		selected, err = RofiSelectWithMessage(options, false, "Playback recovery", diagnosis)
-	} else {
-		fmt.Println(diagnosis)
+	default:
+		Out(diagnosis)
 		selected, err = promptSelectOrdered(options)
 	}
 	if err != nil {
@@ -853,6 +879,12 @@ func resolveEpisodeLinksWithRecovery(config *Config, anime *Anime, anilistEntry 
 	var lastErr error
 	includeAudio := true
 	attemptedAutoAudio := false
+	// This loop is bounded today only by a viewer eventually backing out of the
+	// recovery menu, and a spawned cast window has nobody to back out with -- it
+	// answers the menu itself. So it gets its own bound: one automatic remap,
+	// then stop. Mirrors attemptedAutoAudio above. Ignored when a viewer is
+	// present, which is why it is checked only inside the non-interactive branch.
+	attemptedRemap := false
 
 	for {
 		result, err := ResolveEpisodeURLForPlayback(*config, anime, anime.Ep.Number)
@@ -882,6 +914,22 @@ func resolveEpisodeLinksWithRecovery(config *Config, anime *Anime, anilistEntry 
 
 		switch promptEpisodeLinkFailureRecovery(config, anime, lastErr, includeAudio) {
 		case "remap":
+			if castWindowNonInteractive() {
+				// The one answer available without a viewer, spent once. A
+				// successful remap retries the resolve; a second arrival here
+				// means it did not help, and a third would loop forever.
+				if attemptedRemap {
+					Out(fmt.Sprintf("Could not find a stream for episode %d; stopping the cast.", anime.Ep.Number))
+					return ProviderEpisodeResult{}, false
+				}
+				attemptedRemap = true
+				Out("Searched for the show again; retrying the episode.")
+				if !RemapAnimeProviderOnEpisodeFailure(config, anime, anilistEntry) {
+					Out("Could not find the show again; stopping the cast.")
+					return ProviderEpisodeResult{}, false
+				}
+				continue
+			}
 			if RemapAnimeProviderOnEpisodeFailure(config, anime, anilistEntry) {
 				// Full preferred-first resolve again after remap.
 				continue

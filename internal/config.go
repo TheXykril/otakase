@@ -89,6 +89,39 @@ type Config struct {
 	MyAnimeListImported        bool   `config:"MyAnimeListImported"`
 	MyAnimeListImportDismissed bool   `config:"MyAnimeListImportDismissed"`
 	ShowNewEpisodes            bool   `config:"ShowNewEpisodes"`
+	CastDevice                 string `config:"CastDevice"`
+	// CastTerminal is the terminal emulator to open for a cast started from
+	// rofi, which has no terminal of its own to show controls in. Empty means
+	// $TERMINAL, then whatever is installed.
+	CastTerminal string `config:"CastTerminal"`
+	// CastPort is the port the stream server listens on, or 0 for a random
+	// free one. Set it when a firewall drops inbound connections by default:
+	// a random port cannot be allowed through without opening the whole
+	// ephemeral range, and a device that cannot fetch looks identical to one
+	// that never started.
+	CastPort int `config:"CastPort"`
+	// CastBurnSubtitles draws a stream's subtitles into the picture when
+	// casting it. The Chromecast cannot render the subtitle files these
+	// providers supply, so this is the only way to see them on a soft-subbed
+	// stream -- at the cost of re-encoding the video, which the copy path
+	// never does.
+	CastBurnSubtitles bool `config:"CastBurnSubtitles"`
+	// CastEncoder forces the encoder used for that: "vaapi", "software", or
+	// empty to detect what this machine can actually do.
+	CastEncoder string `config:"CastEncoder"`
+	// CastToDevice records that -cast was given for this run. It is not a
+	// setting, so it carries no config tag.
+	CastToDevice bool `config:"-"`
+	// CastNonInteractive records that this process is the terminal a rofi cast
+	// was handed off to, and so has a viewer who is not at the keyboard.
+	//
+	// It is not a setting either. What it changes is that a prompt with no
+	// answer available resolves to its declared default instead of drawing a
+	// menu: the process-global cast reader is parked in os.Stdin.Read for the
+	// whole run and would split the keystrokes with a Bubble Tea reader on the
+	// same descriptor, and a menu nobody is at blocks the season outright.
+	// See docs/cast-window-prompts.md.
+	CastNonInteractive bool `config:"-"`
 }
 
 const (
@@ -121,7 +154,7 @@ func defaultConfigMap() map[string]string {
 		"AnimeNameLanguage":        "english",
 		"SubsLanguage":             "english",
 		"CurrentCategory":          "false",
-		"MenuOrder":                "CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER",
+		"MenuOrder":                "CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER,CAST",
 		"SubOrDub":                 "sub",
 		"SubStyle":                 "ask",
 		"PercentageToMarkComplete": "85",
@@ -161,6 +194,11 @@ func defaultConfigMap() map[string]string {
 		"Theme":                      "auto",
 		"ThemeOverrides":             "",
 		"DownloadDir":                "$HOME/Downloads/" + AppName,
+		"CastDevice":                 "",
+		"CastTerminal":               "",
+		"CastPort":                   "0",
+		"CastBurnSubtitles":          "true",
+		"CastEncoder":                "",
 	}
 }
 
@@ -840,7 +878,13 @@ func getOrderedCategories(userConfig *Config) []SelectionOption {
 		"REWATCHING":     "Rewatching",
 		"TRACKER":        "Change Tracker",
 		"PROVIDER":       "Change Provider",
+		// CAST's label is replaced below with its live state: it is a toggle,
+		// and one whose entry does not say which way it is set is a toggle the
+		// viewer has to guess at. This is the one menu both UIs build from, so
+		// doing it here covers rofi and the terminal alike.
+		"CAST": "Cast",
 	}
+	availableLabels["CAST"] = castMenuLabel(userConfig)
 
 	// Create ordered list to store final result
 	finalOrder := make([]string, 0)
