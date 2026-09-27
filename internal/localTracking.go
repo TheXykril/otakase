@@ -659,3 +659,39 @@ func prefetchNextUntrackedEpisode(userConfig *Config, anime *Anime) {
 		Mode:         nextResult.Mode,
 	}
 }
+
+// LocalFindEpisode returns the history row for one episode of one show.
+//
+// LocalFindAnime answers a different question: it returns the furthest-ahead row
+// for the show, which is what "where is this show up to" needs. For "where in
+// this episode was I" it is wrong, and wrong in a way that hides itself. A show
+// watched through more than one provider has a row each, and if any of them is
+// further ahead its position wins -- so a nine minute position in the episode
+// about to play was replaced by a one second position in a later one, and the
+// resume did nothing at all.
+//
+// The row written by providerName is preferred, because that is the one the
+// position being looked for was written to, and a position from another provider
+// is a position in a different encode of the episode.
+func LocalFindEpisode(animeList []Anime, anilistID, episode int, providerName string) *Anime {
+	providerName = strings.TrimSpace(strings.ToLower(providerName))
+
+	var best *Anime
+	bestProvider := false
+	for i := range animeList {
+		row := &animeList[i]
+		if row.AnilistId != anilistID || row.Ep.Number != episode {
+			continue
+		}
+		sameProvider := providerName != "" && strings.EqualFold(strings.TrimSpace(row.ProviderName), providerName)
+		switch {
+		case best == nil:
+		case sameProvider && !bestProvider:
+		case sameProvider == bestProvider && row.Ep.Player.PlaybackTime > best.Ep.Player.PlaybackTime:
+		default:
+			continue
+		}
+		best, bestProvider = row, sameProvider
+	}
+	return best
+}

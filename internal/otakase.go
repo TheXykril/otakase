@@ -1118,6 +1118,35 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 			}
 		}
 
+		// Which episode is playing is settled above, so this is where the resume
+		// position can be taken from the row that holds it: the one written for
+		// that episode, by the provider about to play it. What was used instead
+		// was the row LocalFindAnime returned, which is the furthest-ahead row for
+		// the show -- the right answer for "where is this show up to" and the
+		// wrong one for "where in this episode was I". A show watched through
+		// three providers, one of them an episode ahead, therefore resumed from
+		// that row: a nine minute position replaced by a one second one, which
+		// the resume gate then rejected as too early to bother with, so nothing
+		// resumed and nothing said why.
+		//
+		// Only when something already intends to resume. An explicitly cleared
+		// position -- the viewer choosing the tracker's episode over the local
+		// one -- stays cleared.
+		if anime.Ep.Resume || anime.Ep.Player.PlaybackTime > 0 {
+			if row := LocalFindEpisode(*databaseAnimes, anime.AnilistId, anime.Ep.Number, CurrentAnimeProviderName(anime)); row != nil {
+				anime.Ep.Player.PlaybackTime = row.Ep.Player.PlaybackTime
+				anime.Ep.Resume = row.Ep.Player.PlaybackTime > 0
+			} else {
+				// No row for this episode at all, so the position belongs to a
+				// different one and carrying it would resume an episode the
+				// viewer has not started.
+				anime.Ep.Player.PlaybackTime = 0
+				anime.Ep.Resume = false
+			}
+			Log(fmt.Sprintf("Resume position for episode %d on %s: %ds (resume=%t)",
+				anime.Ep.Number, CurrentAnimeProviderName(anime), anime.Ep.Player.PlaybackTime, anime.Ep.Resume))
+		}
+
 		if startingRewatch {
 			anime.Ep.Player.PlaybackTime = 0
 			anime.Ep.Resume = false
