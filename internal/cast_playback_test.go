@@ -628,6 +628,7 @@ func TestWatchCastVolumeClampsAtTheTop(t *testing.T) {
 // position, so that six presses moved the episode ten seconds once.
 func TestWatchCastRepeatedSeeksCompoundIntoOneJump(t *testing.T) {
 	withFastCastTimings(t)
+	withFastSeekDebounce(t)
 
 	commands := make(chan castCommand, 8)
 	commands <- castCmdSeekForward
@@ -672,6 +673,7 @@ func TestWatchCastRepeatedSeeksCompoundIntoOneJump(t *testing.T) {
 // holding a key that no longer ends anything.
 func TestAStopInsideASeekBurstStillStops(t *testing.T) {
 	withFastCastTimings(t)
+	withFastSeekDebounce(t)
 
 	commands := make(chan castCommand, 8)
 	commands <- castCmdSeekForward

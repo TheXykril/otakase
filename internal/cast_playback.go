@@ -440,7 +440,10 @@ func CastEpisode(config *Config, anime *Anime) error {
 	// The generation currently playing, so the one it replaces can be cleared.
 	playing := first
 	seeking := &castSeekingSession{inner: s, restart: func(target float64) error {
-		castStatus(fmt.Sprintf("Seeking to %d:%02d…", int(target)/60, int(target)%60))
+		// No status here: the watch loop shows the destination as the presses
+		// arrive, before this runs, which is the only moment a viewer can still
+		// be told anything -- rebuilding the stream blocks that loop.
+		Log(fmt.Sprintf("cast: rebuilding the stream at %.1f", target))
 
 		next, startErr := source.start(target)
 		if startErr != nil {
@@ -654,19 +657,36 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			pollTimer.Reset(castPollInterval)
 		case command := <-commands:
 			wasPaused := paused
-			// A seek restarts the stream, which costs a second or two, so a
-			// burst of presses is collapsed into the single jump the viewer
-			// meant rather than restarting once per press. Presses that are not
-			// seeks come back in pending and are applied below, in order.
-			steps, pending := coalesceSeeks(command, commands)
-			if steps != 0 {
-				command = castCmdSeekForward
-				if steps < 0 {
-					command = castCmdSeekBack
-					steps = -steps
-				}
+
+			var (
+				stop    bool
+				moved   float64
+				err     error
+				pending []castCommand
+			)
+			if _, isSeek := seekStepFor(command); isSeek {
+				// A seek restarts the stream, which takes seconds and blocks
+				// this loop for all of them. So the presses are gathered first,
+				// with the destination shown as each one arrives, and the
+				// restart runs once the viewer has stopped pressing. Without
+				// this, a second press changed nothing on screen until the first
+				// seek had finished.
+				var target float64
+				target, pending = collectSeekTarget(command, commands, lastPosition, func(target float64) {
+					// Shown on every press, which is the point: the restart that
+					// follows freezes this loop, so the destination has to be on
+					// screen before it starts.
+					message := fmt.Sprintf("Seeking to %s…", castClock(target))
+					if panel != nil {
+						fmt.Print(panel.status(animeName, episodeNumber, device.Name, message, castPanelPlaybackKeys))
+						return
+					}
+					castOut(commands != nil, message)
+				})
+				moved, err = applyCastSeek(session, &paused, target)
+			} else {
+				stop, moved, err = applyCastCommand(command, session, &paused, spans, lastPosition)
 			}
-			stop, moved, err := applyCastCommandSteps(command, session, &paused, spans, lastPosition, steps)
 			// Logged whether or not it worked. A seek that the receiver quietly
 			// declines is indistinguishable from a keypress that never arrived,
 			// and the two have completely different causes -- one is this

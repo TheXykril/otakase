@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/term"
 
@@ -30,7 +31,12 @@ const (
 )
 
 // castSeekStep is how far one arrow press moves the position.
-const castSeekStep = 10.0
+// castSeekStep is how far one press moves the episode.
+//
+// Thirty seconds rather than ten, because a cast seek costs a stream restart:
+// measured at about seven seconds on real hardware, which is a bad trade for ten
+// seconds of episode.
+const castSeekStep = 30.0
 
 // castVolumeStep is how much one arrow press moves the device volume, on the
 // 0..1 scale the receiver uses.
@@ -132,15 +138,6 @@ func castClock(seconds float64) string {
 // keypress should act on what the viewer is looking at, and a poll here would
 // add a network round trip to every press.
 func applyCastCommand(command castCommand, session castSession, paused *bool, spans []cast.Span, position float64) (stop bool, moved float64, err error) {
-	return applyCastCommandSteps(command, session, paused, spans, position, 1)
-}
-
-// applyCastCommandSteps is applyCastCommand with a seek of several steps at once,
-// which is how a burst of presses becomes one jump. See coalesceSeeks.
-func applyCastCommandSteps(command castCommand, session castSession, paused *bool, spans []cast.Span, position float64, steps int) (stop bool, moved float64, err error) {
-	if steps < 1 {
-		steps = 1
-	}
 	// seek centralises the two things every seek must do besides seeking: it
 	// reports the new position so repeated presses compound instead of each
 	// acting on the last polled one, and it clears paused, because the
@@ -168,10 +165,10 @@ func applyCastCommandSteps(command castCommand, session castSession, paused *boo
 		return false, position, session.Pause()
 
 	case castCmdSeekBack:
-		return seek(position - castSeekStep*float64(steps))
+		return seek(position - castSeekStep)
 
 	case castCmdSeekForward:
-		return seek(position + castSeekStep*float64(steps))
+		return seek(position + castSeekStep)
 
 	case castCmdVolumeUp:
 		return false, position, session.SetVolume(session.Volume() + castVolumeStep)
@@ -567,47 +564,100 @@ func castControlsPossible(config *Config) bool {
 	return castStdoutIsTerminal()
 }
 
-// coalesceSeeks collapses a burst of seek presses into one.
+// castSeekDebounce is how long a seek waits for the next press before it runs.
 //
-// Seeking a cast episode restarts ffmpeg at the target, which costs a second or
-// two. Applying a burst one press at a time would restart the stream once per
-// press -- eight times for one held key, since that is the buffer -- and each
-// restart throws away the work of the one before it. The viewer means one jump.
+// A variable so tests do not spend it. It is deliberately longer than a
+// comfortable double press and far shorter than the restart it is saving.
+var castSeekDebounce = 450 * time.Millisecond
+
+// seekStepFor reports which way a press moves the episode, if it moves it at all.
+func seekStepFor(command castCommand) (int, bool) {
+	switch command {
+	case castCmdSeekForward:
+		return 1, true
+	case castCmdSeekBack:
+		return -1, true
+	}
+	return 0, false
+}
+
+// collectSeekTarget gathers a burst of presses into one destination, showing each
+// press as it arrives.
+//
+// Seeking a cast episode restarts ffmpeg, which takes several seconds and blocks
+// this loop for all of them. Running a seek per press therefore does two bad
+// things: it restarts the stream once per press, each restart discarding the work
+// of the one before it, and it stops reading the keyboard while it happens -- so
+// a viewer pressing again sees nothing change until the first seek has finished.
+// Waiting a moment for the next press fixes both: show is called for every press,
+// while the restart happens once, after the viewer stops.
 //
 // Presses that are not seeks are handed back rather than dropped: a viewer who
-// seeks and then immediately stops must still stop.
-func coalesceSeeks(first castCommand, commands <-chan castCommand) (steps int, pending []castCommand) {
-	stepFor := func(command castCommand) (int, bool) {
-		switch command {
-		case castCmdSeekForward:
-			return 1, true
-		case castCmdSeekBack:
-			return -1, true
-		}
-		return 0, false
-	}
-
-	step, isSeek := stepFor(first)
+// seeks and then stops must still stop.
+func collectSeekTarget(first castCommand, commands <-chan castCommand, position float64, show func(target float64)) (target float64, pending []castCommand) {
+	steps, isSeek := seekStepFor(first)
 	if !isSeek {
-		return 0, nil
+		return position, nil
 	}
-	steps = step
 
-	// Only what is already waiting: this drains the queue, it does not wait for
-	// a viewer who might press again.
+	target = position + castSeekStep*float64(steps)
+	if target < 0 {
+		target = 0
+	}
+	if show != nil {
+		show(target)
+	}
+
+	timer := time.NewTimer(castSeekDebounce)
+	defer timer.Stop()
+
 	for {
 		select {
 		case command, open := <-commands:
 			if !open {
-				return steps, pending
+				return target, pending
 			}
-			if step, isSeek := stepFor(command); isSeek {
-				steps += step
+			if step, isSeek := seekStepFor(command); isSeek {
+				target += castSeekStep * float64(step)
+				if target < 0 {
+					target = 0
+				}
+				if show != nil {
+					show(target)
+				}
+				// Reset per press, so a viewer walking through a recap keeps
+				// moving the target rather than triggering a restart every
+				// window.
+				if !timer.Stop() {
+					// Drained only when it had already fired, which the select
+					// above would otherwise have taken on the next pass.
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(castSeekDebounce)
 				continue
 			}
 			pending = append(pending, command)
-		default:
-			return steps, pending
+		case <-timer.C:
+			return target, pending
 		}
 	}
+}
+
+// applyCastSeek moves the episode to an absolute position.
+//
+// Absolute rather than a number of steps: the target was worked out while the
+// presses were still arriving, and re-deriving it here from a position the poll
+// may since have refreshed would undo the burst.
+func applyCastSeek(session castSession, paused *bool, target float64) (moved float64, err error) {
+	if target < 0 {
+		target = 0
+	}
+	// Cleared for the same reason the seek inside applyCastCommand clears it: the
+	// receiver resumes playback on any seek, and a panel left showing PAUSED
+	// would also hold the stall bound off for the rest of the episode.
+	*paused = false
+	return target, session.SeekToTime(target)
 }

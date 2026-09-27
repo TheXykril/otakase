@@ -237,46 +237,102 @@ func TestCastControlsLeaveTheTerminalCookedAfterASeason(t *testing.T) {
 	}
 }
 
+// withFastSeekDebounce shortens the wait for the next press, which tests should
+// not spend.
+func withFastSeekDebounce(t *testing.T) {
+	previous := castSeekDebounce
+	castSeekDebounce = 10 * time.Millisecond
+	t.Cleanup(func() { castSeekDebounce = previous })
+}
+
 // Seeking restarts ffmpeg, so a held key must not mean one restart per press:
-// eight restarts, each throwing away the work of the one before it, for a viewer
-// who meant a single jump.
+// eight restarts, each discarding the work of the one before it, for a viewer who
+// meant a single jump.
 func TestAHeldSeekKeyBecomesOneJump(t *testing.T) {
+	withFastSeekDebounce(t)
+
 	commands := make(chan castCommand, 8)
 	for i := 0; i < 5; i++ {
 		commands <- castCmdSeekForward
 	}
 
-	steps, pending := coalesceSeeks(castCmdSeekForward, commands)
-	if steps != 6 {
-		t.Fatalf("six presses collapsed to %d steps", steps)
+	target, pending := collectSeekTarget(castCmdSeekForward, commands, 100, nil)
+	if want := 100 + 6*castSeekStep; target != want {
+		t.Fatalf("six presses from 100 reached %.0f, want %.0f", target, want)
 	}
 	if len(pending) != 0 {
 		t.Fatalf("seeks were handed back as pending: %v", pending)
 	}
 }
 
+// The lag the viewer reported: the restart blocks the watch loop, so a press
+// during it changed nothing on screen until the restart had finished. Each press
+// has to be shown as it arrives, before any restart runs.
+func TestEveryPressInABurstIsShownAsItArrives(t *testing.T) {
+	withFastSeekDebounce(t)
+
+	commands := make(chan castCommand, 8)
+	commands <- castCmdSeekForward
+	commands <- castCmdSeekForward
+
+	shown := []float64{}
+	target, _ := collectSeekTarget(castCmdSeekForward, commands, 0, func(t float64) {
+		shown = append(shown, t)
+	})
+
+	if len(shown) != 3 {
+		t.Fatalf("three presses were shown as %v", shown)
+	}
+	// Each one further along than the last, so the viewer watches the
+	// destination move rather than waiting for a single number at the end.
+	for i := 1; i < len(shown); i++ {
+		if shown[i] <= shown[i-1] {
+			t.Fatalf("the shown destination did not advance: %v", shown)
+		}
+	}
+	if shown[len(shown)-1] != target {
+		t.Fatalf("the last shown destination %v is not the one sought %v", shown[len(shown)-1], target)
+	}
+}
+
 func TestSeeksInOppositeDirectionsCancelOut(t *testing.T) {
+	withFastSeekDebounce(t)
+
 	commands := make(chan castCommand, 8)
 	commands <- castCmdSeekBack
 	commands <- castCmdSeekForward
 
 	// A viewer overshooting and correcting inside one burst means the net move,
-	// and a restart for each direction would be two restarts to arrive where
-	// they started.
-	if steps, _ := coalesceSeeks(castCmdSeekForward, commands); steps != 1 {
-		t.Fatalf("forward, back, forward netted %d steps, want 1", steps)
+	// and a restart per direction would be three restarts to arrive one step on.
+	target, _ := collectSeekTarget(castCmdSeekForward, commands, 100, nil)
+	if want := 100 + castSeekStep; target != want {
+		t.Fatalf("forward, back, forward from 100 reached %.0f, want %.0f", target, want)
+	}
+}
+
+func TestSeekingBackPastTheStartStopsAtTheStart(t *testing.T) {
+	withFastSeekDebounce(t)
+
+	commands := make(chan castCommand, 8)
+	commands <- castCmdSeekBack
+	commands <- castCmdSeekBack
+
+	if target, _ := collectSeekTarget(castCmdSeekBack, commands, 20, nil); target != 0 {
+		t.Fatalf("seeking back past the start reached %.0f", target)
 	}
 }
 
 func TestOtherPressesInABurstAreHandedBackInOrder(t *testing.T) {
+	withFastSeekDebounce(t)
+
 	commands := make(chan castCommand, 8)
 	commands <- castCmdSeekForward
 	commands <- castCmdPauseToggle
 	commands <- castCmdVolumeUp
 
-	steps, pending := coalesceSeeks(castCmdSeekForward, commands)
-	if steps != 2 {
-		t.Fatalf("two seeks collapsed to %d steps", steps)
+	target, pending := collectSeekTarget(castCmdSeekForward, commands, 0, nil)
+	if want := 2 * castSeekStep; target != want {
+		t.Fatalf("two seeks reached %.0f, want %.0f", target, want)
 	}
 	// Dropped presses are the failure this guards: a viewer whose stop or pause
 	// vanished because it arrived while they were still holding the arrow.
@@ -286,47 +342,53 @@ func TestOtherPressesInABurstAreHandedBackInOrder(t *testing.T) {
 }
 
 func TestANonSeekPressIsLeftEntirelyAlone(t *testing.T) {
+	withFastSeekDebounce(t)
+
 	commands := make(chan castCommand, 8)
 	commands <- castCmdSeekForward
 
-	// Only a seek starts a burst. A pause must not swallow the seek behind it.
-	steps, pending := coalesceSeeks(castCmdPauseToggle, commands)
-	if steps != 0 || pending != nil {
-		t.Fatalf("a pause collapsed %d steps and %v", steps, pending)
+	// Only a seek starts a burst, and a pause must not swallow the seek behind it
+	// or wait a debounce window to do nothing.
+	target, pending := collectSeekTarget(castCmdPauseToggle, commands, 42, nil)
+	if target != 42 || pending != nil {
+		t.Fatalf("a pause produced target %v and pending %v", target, pending)
 	}
 	if len(commands) != 1 {
 		t.Fatal("a pause consumed the press behind it")
 	}
 }
 
-func TestABurstStopsAtAnEmptyQueueRatherThanWaiting(t *testing.T) {
-	// Draining what is queued, not waiting for a viewer who might press again:
-	// waiting would delay every single seek by however long the window was.
-	commands := make(chan castCommand, 8)
-	done := make(chan int, 1)
+func TestALoneSeekWaitsOnlyTheDebounceWindow(t *testing.T) {
+	withFastSeekDebounce(t)
+
+	// The window is what a viewer waits before the stream restarts, so it has to
+	// end on its own rather than needing another press.
+	done := make(chan float64, 1)
 	go func() {
-		steps, _ := coalesceSeeks(castCmdSeekForward, commands)
-		done <- steps
+		target, _ := collectSeekTarget(castCmdSeekForward, make(chan castCommand), 0, nil)
+		done <- target
 	}()
 
 	select {
-	case steps := <-done:
-		if steps != 1 {
-			t.Fatalf("a lone press collapsed to %d steps", steps)
+	case target := <-done:
+		if target != castSeekStep {
+			t.Fatalf("a lone press reached %.0f", target)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("coalesceSeeks waited for a press that never came")
+	case <-time.After(2 * time.Second):
+		t.Fatal("a lone seek waited for a press that never came")
 	}
 }
 
 func TestAClosedChannelEndsTheBurst(t *testing.T) {
+	withFastSeekDebounce(t)
+
 	commands := make(chan castCommand, 8)
 	commands <- castCmdSeekForward
 	close(commands)
 
-	// The reader closes the channel between episodes, and a drain that treated
-	// the closed channel as an endless stream of zero commands would spin.
-	if steps, _ := coalesceSeeks(castCmdSeekForward, commands); steps != 2 {
-		t.Fatalf("a burst ending in a closed channel collapsed to %d steps", steps)
+	// The reader closes the channel between episodes, and a drain that read a
+	// closed channel as an endless stream of zero commands would spin.
+	if target, _ := collectSeekTarget(castCmdSeekForward, commands, 0, nil); target != 2*castSeekStep {
+		t.Fatalf("a burst ending in a closed channel reached %.0f", target)
 	}
 }
