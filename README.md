@@ -240,9 +240,10 @@ wrong one opens); closing that window stops the episode and saves position.
 
 **If the episode never starts**, it's almost always a firewall dropping the
 connection. otakase detects this, prints the exact fix command, and copies it
-to your clipboard — paste it in a terminal and cast again. If that doesn't
-fix it (a second firewall service or Docker can override it silently), see
-`docs/casting-verification.md` for the full diagnosis and manual commands.
+to your clipboard — paste it in a terminal and cast again. If that doesn't fix
+it (a second firewall service or Docker can override it silently), see the
+[Casting Problems wiki page](https://github.com/TheXykril/otakase/wiki/Casting-Problems)
+for the full diagnosis and manual commands.
 
 Casting is the one feature automated tests can't fully cover — whether a
 device accepts what was built and whether it can reach this machine are
@@ -465,6 +466,10 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `~/.local/share/otakase/otakase-debug.log` | The log to check first when something misbehaves |
 
 ## Troubleshooting
+
+Longer answers, and anything about casting, live on the
+[wiki](https://github.com/TheXykril/otakase/wiki) instead of growing this file
+forever.
 
 **Nothing is found for a show.** Titles differ between your tracker and the
 sources. Set `ManualProviderSearch=true` to pick the match yourself, or use the
