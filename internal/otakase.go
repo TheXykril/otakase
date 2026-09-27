@@ -607,6 +607,25 @@ func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[
 	return anilistSelectedOption
 }
 
+// trackerEpisodeDuration answers what Ep.Duration should hold before anything
+// has measured the episode, given what it holds now and what the tracker says.
+//
+// The tracker reports an average episode length in minutes; Ep.Duration is
+// seconds. It is the only length known before playback starts, and casting has
+// nothing better: the receiver reports dur=-1 for the whole episode, because
+// the remux writes no EXT-X-ENDLIST until it finishes, so without this the cast
+// panel has no total to show at all.
+//
+// A measured duration always wins. mpv overwrites this with the real length of
+// the file it opened, and a finished remux does the same for a cast, so this
+// only fills the gap where nothing has measured anything yet.
+func trackerEpisodeDuration(current int, media Media) int {
+	if current > 0 || media.Duration <= 0 {
+		return current
+	}
+	return media.Duration * 60
+}
+
 func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime) {
 	var err error
 	var startingRewatch bool
@@ -929,6 +948,7 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					ID:       fallbackAnime.AnilistId,
 					MalID:    fallbackAnime.MalId,
 					Episodes: fallbackAnime.TotalEpisodes,
+					Duration: ConvertSecondsToMinutes(fallbackAnime.Ep.Duration),
 					Title:    fallbackAnime.Title,
 					Status:   "FINISHED",
 				},
@@ -947,6 +967,7 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 		// Set anime entry
 		anime.Title = selectedAnilistAnime.Media.Title
 		anime.TotalEpisodes = selectedAnilistAnime.Media.Episodes
+		anime.Ep.Duration = trackerEpisodeDuration(anime.Ep.Duration, selectedAnilistAnime.Media)
 		anime.CoverImage = selectedAnilistAnime.CoverImage
 		if selectedAnilistAnime.Media.MalID != 0 {
 			anime.MalId = selectedAnilistAnime.Media.MalID

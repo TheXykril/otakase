@@ -725,44 +725,48 @@ func main() {
 		go func() {
 			for {
 				if anime.Ep.Started {
-					if anime.Ep.Duration == 0 {
-						// Get video duration
-						durationPos, err := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "duration"})
-						if err != nil {
-							internal.Log("Error getting video duration: " + err.Error())
-						} else if durationPos != nil {
-							if duration, ok := durationPos.(float64); ok {
-								anime.Ep.Duration = int(duration + 0.5) // Round to nearest integer
-								internal.Log(fmt.Sprintf("Video duration: %d seconds", anime.Ep.Duration))
+					// Asked every time playback starts, not only when the duration is
+					// still unset: Setup now seeds Ep.Duration with the tracker's average
+					// episode length, so the cast panel has a total to show before
+					// anything has been measured. mpv reports the real length of the file
+					// in hand and has to win over that estimate. The loop breaks after
+					// this one attempt either way, so guarding it would also leave this
+					// goroutine spinning for the rest of the episode.
+					durationPos, err := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "duration"})
+					if err != nil {
+						internal.Log("Error getting video duration: " + err.Error())
+					} else if durationPos != nil {
+						if duration, ok := durationPos.(float64); ok {
+							anime.Ep.Duration = int(duration + 0.5) // Round to nearest integer
+							internal.Log(fmt.Sprintf("Video duration: %d seconds", anime.Ep.Duration))
 
-								// Initialize Discord presence with correct duration (first time with real duration)
-								if userConfig.DiscordPresence {
-									isPaused, _ := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "pause"})
-									currentPos := 0
-									if timePos, err := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "time-pos"}); err == nil && timePos != nil {
-										if pos, ok := timePos.(float64); ok {
-											currentPos = int(pos + 0.5)
-										}
-									}
-									pauseState := false
-									if isPaused != nil {
-										if value, ok := isPaused.(bool); ok {
-											pauseState = value
-										} else {
-											internal.Log(fmt.Sprintf("Error: pause state is not a bool (%T)", isPaused))
-										}
-									}
-									internal.Log("Initializing Discord presence with real video duration")
-									if presenceErr := internal.DiscordPresence(anime, pauseState, currentPos, anime.Ep.Duration, userConfig.DiscordClientId); presenceErr != nil {
-										internal.Log("Discord presence error: " + presenceErr.Error())
+							// Initialize Discord presence with correct duration (first time with real duration)
+							if userConfig.DiscordPresence {
+								isPaused, _ := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "pause"})
+								currentPos := 0
+								if timePos, err := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "time-pos"}); err == nil && timePos != nil {
+									if pos, ok := timePos.(float64); ok {
+										currentPos = int(pos + 0.5)
 									}
 								}
-							} else {
-								internal.Log("Error: duration is not a float64")
+								pauseState := false
+								if isPaused != nil {
+									if value, ok := isPaused.(bool); ok {
+										pauseState = value
+									} else {
+										internal.Log(fmt.Sprintf("Error: pause state is not a bool (%T)", isPaused))
+									}
+								}
+								internal.Log("Initializing Discord presence with real video duration")
+								if presenceErr := internal.DiscordPresence(anime, pauseState, currentPos, anime.Ep.Duration, userConfig.DiscordClientId); presenceErr != nil {
+									internal.Log("Discord presence error: " + presenceErr.Error())
+								}
 							}
+						} else {
+							internal.Log("Error: duration is not a float64")
 						}
-						break
 					}
+					break
 				}
 				time.Sleep(1 * time.Second)
 			}
