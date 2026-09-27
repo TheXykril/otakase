@@ -208,99 +208,46 @@ Needs `ffmpeg`. Episodes are saved as `.mp4`.
 
 ## Casting
 
-`otakase -cast` plays the episode on a Chromecast on the same network.
+`otakase -cast` plays the episode on a Chromecast on the same network. The menu
+also carries a **Cast** toggle (`[ ] Cast: Off` / `[x] Cast: Office TV`) that
+does the same thing per-run; `CastDevice` skips being asked which device each
+time.
 
-A Chromecast cannot send the headers these streaming hosts require, so it
-cannot fetch a provider's URL directly. Otakase therefore remuxes the stream
-locally with `ffmpeg` — no re-encoding, so it costs bandwidth and almost no
-CPU — serves it from this machine, and points the device at that. `ffmpeg` is
-required for the same reason `-download` needs it.
+A Chromecast can't fetch a provider's URL directly (it can't send the headers
+these hosts require), so otakase remuxes the stream with `ffmpeg` — no
+re-encoding — and serves it from this machine instead. `ffmpeg` is required,
+same as for `-download`.
 
-Openings and endings are still skipped, and progress is still tracked.
+**Subtitles** are burned into the picture, since the receiver only renders
+WebVTT and no provider here supplies that. Uses your GPU when it can.
+`CastBurnSubtitles=false` turns this off; `CastEncoder` forces `vaapi` or
+`software` if detection picks wrong.
 
-Subtitles reach the TV the only way they can. A Chromecast renders WebVTT and
-nothing else, no provider here supplies WebVTT, and the receiver will not enable
-a subtitle track from an HLS manifest. So casting asks for a provider's
-hardsubbed stream where one exists, and where it does not, otakase draws the
-subtitles into the picture itself — which means re-encoding the video, the one
-thing the copy path never does. It uses your GPU if it can, and checks that it
-works before relying on it. `CastBurnSubtitles=false` turns it off;
-`CastEncoder` forces `vaapi` or `software` if the detection picks wrong.
+**Seeking and resuming** both work by rebuilding the stream at that position
+and handing the device a new one — the receiver can't actually seek a stream
+of unknown length, it just silently ignores the request. Rebuilding costs a
+couple of seconds, which is why a press moves 30 seconds and a held key waits
+for you to stop before it moves.
 
-Styling survives this, which is the reason it is done this way round: an `.ass`
-subtitle's fonts, colours and positioning are drawn exactly as the fansub
-intended, where converting to WebVTT would have flattened them.
+While casting, the terminal shows a control panel: position, device, and
+keys — space pauses, arrows seek/adjust volume, `q` stops. Anything else
+otakase needs to tell you arrives as a desktop notification instead of
+interrupting the panel. Next episode, filler skip, and tracker updates all
+work the same as local playback.
 
-A part-watched episode resumes where you left it. The device cannot seek a
-stream of unknown length — it accepts the request and keeps playing where it
-was — so seeking and resuming both work by rebuilding the stream from that
-point and handing the device a new one. That costs a few seconds of
-rebuffering, which is why a press moves thirty seconds rather than ten, and why
-a burst of presses waits for you to stop before it moves.
+From the rofi keybind, casting opens its own terminal (`CastTerminal` if the
+wrong one opens); closing that window stops the episode and saves position.
 
-While a cast plays, the terminal shows a control panel and nothing else —
-where the episode is, what it is playing on, and the keys: space pauses, the
-arrows seek thirty seconds and change the device volume, and `q` stops. Openings
-and endings are skipped automatically, the same as local playback. Anything otakase needs to tell you meanwhile arrives as
-a desktop notification rather than scrolling through the panel. Your scrollback
-is untouched: the panel draws on the alternate screen and gives it back when
-the episode ends. A launch with no terminal says so and leaves you the device's
-own remote.
+**If the episode never starts**, it's almost always a firewall dropping the
+connection. otakase detects this, prints the exact fix command, and copies it
+to your clipboard — paste it in a terminal and cast again. If that doesn't
+fix it (a second firewall service or Docker can override it silently), see
+`docs/casting-verification.md` for the full diagnosis and manual commands.
 
-Casting continues to the next episode the way local playback does. When one
-ends, the panel counts down ten seconds and starts the next — any key stops it.
-`NextEpisodePrompt=false` skips the countdown entirely, and filler episodes,
-the end of a series and your tracker are all handled the same way they are
-locally, because it is the same code.
-
-Casting from the rofi keybind opens a terminal to show those controls in, and
-that window owns the cast: closing it stops the episode and saves your position.
-Set `CastTerminal` if the wrong emulator opens, or if none is found.
-
-**If the episode never starts**, the most common cause is a firewall on this
-machine blocking the Chromecast from reaching it — ufw's default policy does
-this out of the box. otakase detects this itself: when a cast fails because the
-device never fetched anything, it names your firewall and your subnet, prints
-the exact command to fix it, and copies that command to your clipboard. Open a
-terminal, paste, run it, then cast again — the window this message appeared in
-may already be gone by the time you read it, so the clipboard is what actually
-carries the fix forward.
-
-If it cannot tell what firewall you're running, or the command it gives
-doesn't help, run this by hand — replace `192.168.0.0/24` with your own
-network if it's different:
-
-```bash
-# Set CastPort=8010 in the config first, then:
-sudo ufw allow from 192.168.0.0/24 to any port 8010 proto tcp comment 'otakase cast'
-```
-
-A fixed `CastPort` matters here too: without one, otakase picks a random port
-each time, and you'd have to open the whole ephemeral range instead of one.
-
-Two things this can't catch on its own, because checking them needs root:
-- Some setups run a **second** firewall tool (like `iptables.service`) that
-  reapplies its own rules over ufw at every boot — so `ufw status` shows the
-  rule allowed, but the connection is still blocked. If the command above
-  didn't fix it, check for another firewall service running alongside ufw.
-- Docker changes firewall rules too, if it's installed and running.
-
-otakase never changes firewall rules itself, even when it could work out how —
-only you should be typing `sudo`.
-
-The menu carries a **Cast** toggle — `[ ] Cast: Off` / `[x] Cast: Office TV` —
-in both the terminal list and rofi, since they share one menu. Select it to turn
-casting on or off for this run; the next show you pick goes wherever the entry
-says. It resets each launch, so casting is never on without you having said so
-this time.
-
-Set `CastDevice` to a device's name to skip being asked which one each time.
-
-Casting is the one feature no automated test can fully verify — whether the
-device accepts what ffmpeg produced, and whether it can reach this machine,
-are answers only real hardware gives. `docs/casting-verification.md` is the
-checklist to run against a device after changing anything under
-`internal/cast/`.
+Casting is the one feature automated tests can't fully cover — whether a
+device accepts what was built and whether it can reach this machine are
+hardware-only answers. `docs/casting-verification.md` is the checklist to run
+after touching anything under `internal/cast/`.
 
 ## Hyprland keybinding
 
