@@ -301,6 +301,12 @@ func main() {
 			internal.Out("Casting failed: " + err.Error())
 			internal.Log(fmt.Sprintf("cast: %v", err))
 		}
+		// Exit rather than return: the cast controls restore the terminal from a
+		// cleanup that only runExitCleanups reaches, and a plain return does not
+		// reach it. Returning here left the tty raw after q or a finished season,
+		// which is invisible while the spawned window closes itself and very
+		// visible when the session was started from an ordinary terminal.
+		internal.Exit(nil)
 		return
 	}
 

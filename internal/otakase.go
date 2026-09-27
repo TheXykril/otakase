@@ -1916,12 +1916,24 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 		// notification, and this is the one line a viewer comes back to. Held
 		// until the session releases the screen, then printed to the terminal
 		// where it lands in the scrollback.
-		if castPanelOwnsScreen() {
-			deferCastSummary(line)
-			return
-		}
-		Out(line)
+		emitCompletionSummary(line)
 	}
+}
+
+// emitCompletionSummary sends the completion summary wherever it can actually be
+// read: held for the session when a cast panel owns the terminal, printed
+// otherwise.
+//
+// A cast window holding the terminal would turn Out into a desktop notification,
+// and this is the one line a viewer comes back to. Split out of
+// HandleLastEpisodeCompletion so the choice is testable: a test that calls
+// deferCastSummary itself passes whether or not this branch exists at all.
+func emitCompletionSummary(line string) {
+	if castPanelOwnsScreen() {
+		deferCastSummary(line)
+		return
+	}
+	Out(line)
 }
 
 // handleSequelCheck checks for sequels and prompts the user accordingly
