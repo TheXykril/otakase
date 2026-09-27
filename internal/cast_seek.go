@@ -287,16 +287,52 @@ func awaitPlaylist(remux *cast.Remux, dir string) error {
 // stream of its own. Until the stream could be rebuilt at an offset this was not
 // possible at all, and a part-watched episode was disclosed and then started over.
 //
-// formatResumePosition is the gate, the same one the list rows use to decide
-// whether a resume point is worth showing: it rejects a position too early to be
-// worth anything and one near enough to the end that resuming is pointless. Its
-// duration argument is minutes, and Ep.Duration is seconds in memory.
-func castResumeAt(anime *Anime) float64 {
-	if anime == nil || !anime.Ep.Resume || anime.Ep.Player.PlaybackTime <= 0 {
+// The position is read from the history file here rather than taken from the
+// anime as it arrives, because which episode is playing can change after the
+// position was attached to it -- and does, routinely. A cast launched from rofi
+// runs in a second process that never sees the picking flow at all: it rebuilds
+// the anime from a handoff file, so whatever position that file carries was
+// resolved against whichever episode the first process had in mind. Casting
+// episode 10 with a position belonging to episode 11 is how this last failed:
+// one second, rejected as too early to be worth a restart, silently.
+//
+// formatResumePosition is the gate, the same one the list rows use: it rejects a
+// position too early to be worth anything and one near enough to the end that
+// resuming is pointless. Its duration argument is minutes, and Ep.Duration is
+// seconds in memory.
+func castResumeAt(config *Config, anime *Anime) float64 {
+	if anime == nil {
 		return 0
 	}
-	if formatResumePosition(anime.Ep.Player.PlaybackTime, ConvertSecondsToMinutes(anime.Ep.Duration)) == "" {
+	// Nothing intends to resume: either the episode was never started, or the
+	// viewer said to start it over -- a rewatch, or the tracker's episode chosen
+	// over the local one. Both clear these deliberately, and both must stay
+	// cleared however tempting the row in the history file looks.
+	if !anime.Ep.Resume && anime.Ep.Player.PlaybackTime <= 0 {
 		return 0
 	}
-	return float64(anime.Ep.Player.PlaybackTime)
+
+	playbackTime := anime.Ep.Player.PlaybackTime
+	if config != nil {
+		historyPath := filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt")
+		provider := CurrentAnimeProviderName(anime)
+		if row := LocalFindEpisode(LocalGetAllAnime(historyPath), anime.AnilistId, anime.Ep.Number, provider); row != nil {
+			playbackTime = row.Ep.Player.PlaybackTime
+		} else {
+			// A row for this episode is what a resume needs. Without one the
+			// carried position belongs to a different episode, and using it
+			// would resume one the viewer has not started.
+			playbackTime = 0
+		}
+		Log(fmt.Sprintf("cast: resume position for episode %d on %s: %ds", anime.Ep.Number, provider, playbackTime))
+	}
+
+	if playbackTime <= 0 {
+		return 0
+	}
+	if formatResumePosition(playbackTime, ConvertSecondsToMinutes(anime.Ep.Duration)) == "" {
+		Log(fmt.Sprintf("cast: not resuming at %ds: too early or too near the end to be worth rebuilding the stream", playbackTime))
+		return 0
+	}
+	return float64(playbackTime)
 }

@@ -386,7 +386,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 	// worth acting on -- too early to be worth anything, or near enough to the
 	// end that resuming is pointless. Its duration argument is minutes, and
 	// Ep.Duration is seconds in memory.
-	resumeAt := castResumeAt(anime)
+	resumeAt := castResumeAt(config, anime)
 	if resumeAt > 0 {
 		castStatus(fmt.Sprintf("Resuming at %s…", castClock(resumeAt)))
 		Log(fmt.Sprintf("cast: resuming at %.1f", resumeAt))

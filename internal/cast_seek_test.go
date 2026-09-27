@@ -372,69 +372,119 @@ func TestARebuiltStreamCarriesTheOffsetAndTheShiftedSubtitles(t *testing.T) {
 	}
 }
 
+// castResumeFixture writes a history file the way a cast does, and returns a
+// config pointing at it.
+func castResumeFixture(t *testing.T, rows string) *Config {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "curd_history.txt"), []byte(rows), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return &Config{StoragePath: dir}
+}
+
+// The history your own file held: three providers, one of them an episode ahead.
+const castResumeHistory = `201514,"Saijo no Osewa",11,1,0,nyaa,Rich Girl Caretaker
+201514,201514,10,548,0,anikoto,Rich Girl Caretaker
+201514,lpams7m8,10,387,24,anizone,Rich Girl Caretaker
+`
+
+func castResumeAnime(episode, carried int, provider string) *Anime {
+	anime := &Anime{AnilistId: 201514, ProviderName: provider}
+	anime.Ep.Number = episode
+	anime.Ep.Resume = true
+	anime.Ep.Player.PlaybackTime = carried
+	anime.Ep.Duration = 1480
+	return anime
+}
+
 // Casting used to start a part-watched episode over and say so, because the
 // device cannot seek. Rebuilding the stream at an offset is what makes a resume
 // possible: it is the first seek, made before playback begins.
 func TestACastResumesWhereTheEpisodeWasLeft(t *testing.T) {
-	anime := &Anime{}
-	anime.Ep.Resume = true
-	anime.Ep.Player.PlaybackTime = 932
-	anime.Ep.Duration = 1480
+	config := castResumeFixture(t, castResumeHistory)
 
-	if got := castResumeAt(anime); got != 932 {
-		t.Fatalf("a resume at 15:32 produced %.0f", got)
+	if got := castResumeAt(config, castResumeAnime(10, 387, "anizone")); got != 387 {
+		t.Fatalf("a resume at 6:27 produced %.0f", got)
+	}
+}
+
+// How this last failed. A cast launched from rofi runs in a second process that
+// never sees the picking flow: it rebuilds the anime from a handoff file, so the
+// position it carries was resolved against whichever episode the first process
+// had in mind. Episode 10 arrived carrying episode 11's one second, which the
+// gate then rejected as too early to bother with, silently.
+func TestACastIgnoresAPositionBelongingToAnotherEpisode(t *testing.T) {
+	config := castResumeFixture(t, castResumeHistory)
+
+	if got := castResumeAt(config, castResumeAnime(10, 1, "anizone")); got != 387 {
+		t.Fatalf("episode 10 carrying episode 11's position resumed at %.0f, want 387", got)
+	}
+}
+
+func TestACastResumesFromTheProviderAboutToPlay(t *testing.T) {
+	config := castResumeFixture(t, castResumeHistory)
+
+	// Two providers hold a position in this episode, in different encodes of it.
+	if got := castResumeAt(config, castResumeAnime(10, 1, "anikoto")); got != 548 {
+		t.Fatalf("anikoto resumed at %.0f, want its own 548", got)
+	}
+}
+
+func TestAnEpisodeWithNoSavedPositionStartsAtTheBeginning(t *testing.T) {
+	config := castResumeFixture(t, castResumeHistory)
+
+	// Episode 12 has no row. Falling back to another episode's position would
+	// resume one the viewer never started.
+	if got := castResumeAt(config, castResumeAnime(12, 548, "anizone")); got != 0 {
+		t.Fatalf("an episode with no saved position resumed at %.0f", got)
 	}
 }
 
 func TestAnEpisodeNotBeingResumedStartsAtTheBeginning(t *testing.T) {
-	anime := &Anime{}
-	anime.Ep.Player.PlaybackTime = 932
-	anime.Ep.Duration = 1480
+	config := castResumeFixture(t, castResumeHistory)
 
-	// Resume is what the viewer chose in the menu. A saved position on its own is
-	// not a request to use it -- starting a rewatch mid-episode would be wrong.
-	if got := castResumeAt(anime); got != 0 {
-		t.Fatalf("an episode not being resumed started at %.0f", got)
+	anime := castResumeAnime(10, 0, "anizone")
+	// Both cleared is what a rewatch and "use the tracker's episode" leave
+	// behind, and both mean start over however good the row in the file looks.
+	anime.Ep.Resume = false
+
+	if got := castResumeAt(config, anime); got != 0 {
+		t.Fatalf("an episode being started over resumed at %.0f", got)
 	}
 }
 
 func TestAResumePointTooEarlyToMatterIsIgnored(t *testing.T) {
-	anime := &Anime{}
-	anime.Ep.Resume = true
-	anime.Ep.Player.PlaybackTime = resumeMinSeconds - 1
-	anime.Ep.Duration = 1480
+	config := castResumeFixture(t, "201514,201514,10,30,0,anikoto,Rich Girl Caretaker\n")
 
 	// Rebuilding the stream costs seconds, which is more than this would save.
-	if got := castResumeAt(anime); got != 0 {
-		t.Fatalf("a resume point under a minute produced %.0f", got)
+	if got := castResumeAt(config, castResumeAnime(10, 30, "anikoto")); got != 0 {
+		t.Fatalf("a resume point of thirty seconds produced %.0f", got)
 	}
 }
 
 func TestAResumePointNearTheEndIsIgnored(t *testing.T) {
-	anime := &Anime{}
-	anime.Ep.Resume = true
-	anime.Ep.Duration = 1480
-	anime.Ep.Player.PlaybackTime = int(float64(anime.Ep.Duration)*resumeMaxFraction) + 30
-
 	// The episode is effectively over: a stream starting in the credits is done
-	// before it buffers, which is the same reason a seek will not land there.
-	if got := castResumeAt(anime); got != 0 {
+	// before it buffers, the same reason a seek will not land there.
+	config := castResumeFixture(t, "201514,201514,10,1470,0,anikoto,Rich Girl Caretaker\n")
+
+	if got := castResumeAt(config, castResumeAnime(10, 1470, "anikoto")); got != 0 {
 		t.Fatalf("a resume point in the credits produced %.0f", got)
 	}
 }
 
 // A resumed cast reports episode time from its first poll. Without the base the
-// panel would show 0:00 for an episode playing at 15:32, and the progress written
+// panel would show 0:00 for an episode playing at 6:27, and the progress written
 // back to the trackers would walk the episode backwards.
 func TestAResumedCastReportsEpisodeTimeImmediately(t *testing.T) {
 	inner := &fakeInnerSession{position: 4, duration: -1}
-	session := &castSeekingSession{inner: inner, base: 932, duration: 1480}
+	session := &castSeekingSession{inner: inner, base: 387, duration: 1480}
 
 	progress, err := session.Progress()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if progress.Position != 936 {
-		t.Fatalf("a resumed cast reported %.1f, want 936", progress.Position)
+	if progress.Position != 391 {
+		t.Fatalf("a resumed cast reported %.1f, want 391", progress.Position)
 	}
 }
