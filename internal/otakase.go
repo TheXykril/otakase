@@ -138,7 +138,16 @@ func Exit(err error) {
 		}
 	}
 
-	Out("Have a great day!")
+	// A real terminal gets a one-line goodbye; rofi does not. otakase launched
+	// from rofi is a fresh process per action -- opening the menu, handing off
+	// a cast, adding a show -- and each one reaches this same Exit(), so a
+	// desktop notification here would fire after every one of them, not only
+	// when someone is actually done with the tool. Out() would turn this into
+	// exactly that notification whenever RofiSelection is set, so it is
+	// skipped there rather than shown and immediately regretted.
+	if exitGreetingWanted(GetGlobalConfig()) {
+		Out("Have a great day!")
+	}
 	// If the error is not about the connection refused, print the error
 	if err != nil && (socketPath == "" || !strings.Contains(err.Error(), "dial unix "+socketPath+": connect: connection refused")) {
 		Out(fmt.Sprintf("Error: %v", err))
@@ -151,6 +160,22 @@ func Exit(err error) {
 		}
 	}
 	exitWithRestore(0)
+}
+
+// exitGreetingWanted answers whether "Have a great day!" is worth showing on
+// this exit.
+//
+// A real terminal keeps it -- one harmless line at the end of an interactive
+// session. Rofi mode drops it: rofi launches otakase fresh for every action,
+// so every one of those routine exits would otherwise surface as a desktop
+// notification, which reads as otakase saying goodbye after something as
+// small as opening the menu.
+//
+// A nil config -- Exit() reachable before SetGlobalConfig has run -- keeps the
+// greeting: RofiSelection defaults false, and Out() treats a nil config the
+// same way.
+func exitGreetingWanted(cfg *Config) bool {
+	return cfg == nil || !cfg.RofiSelection
 }
 
 func Out(data interface{}) {
