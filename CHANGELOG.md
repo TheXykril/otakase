@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.1.0 — 2026-09-27
 
 ### Added
 
@@ -14,22 +14,48 @@
   personal id is rate-limited on its own, rather than sharing the playground
   id `auto` reads.
 
-- **`otakase -cast` plays an episode on a Chromecast.** A Chromecast cannot
-  send the `Referer` these hosts require, so it can never fetch a provider URL
-  itself. Otakase remuxes the stream locally with ffmpeg — a container change,
-  not a re-encode, so it costs bandwidth and almost no CPU — serves it from
-  this machine, and points the device at that. No Google developer
-  registration: it uses the Default Media Receiver, the same one every other
-  casting tool uses.
+- **`otakase -cast` plays on a Chromecast.** A Chromecast cannot send the
+  `Referer` these hosts require, so it can never fetch a provider URL itself.
+  Otakase remuxes the stream locally with ffmpeg — a container change, not a
+  re-encode, so it costs bandwidth and almost no CPU — serves it from this
+  machine, and points the device at that. No Google developer registration: it
+  uses the Default Media Receiver, the same one every other casting tool uses.
 
-  Openings and endings are still skipped, by seeking the device rather than
-  mpv, and progress is tracked by the same threshold local playback uses.
-  Soft subtitles are not carried: the receiver renders WebVTT only, and
-  otakase carries ASS in places, so `SubStyle=hard` is the answer where a
-  provider offers a hardsubbed stream. Two ways this is not yet parity with
-  local playback: a resume point is disclosed but not honoured -- a cast
-  always starts an episode from the beginning -- and `-cast` plays one
-  episode and stops rather than continuing to the next.
+  Subtitles are burned into the picture when a provider has no WebVTT track —
+  which is every provider here — using your GPU when it can. Openings and
+  endings are skipped, filler and recaps are handled, and progress is tracked
+  the same as local playback, because it runs through the same code once an
+  episode starts.
+
+  The receiver cannot seek a stream of unknown length on its own — it accepts
+  the request and keeps playing where it was — so seeking and resuming both
+  work by rebuilding the stream from that position and handing the device a
+  new one, subtitles re-synced to match. This is also how a part-watched
+  episode now resumes where you left it, rather than starting over.
+
+  A firewall dropping the connection is the most common reason a cast never
+  starts. Otakase detects the firewall, prints the exact command to fix it,
+  and copies that command to your clipboard, since the window the message
+  appears in is usually gone before there is time to copy it by hand.
+
+  Casting continues to the next episode the same way local playback does,
+  rather than stopping after one.
+
+### Fixed
+
+- **A rating could be silently lost.** On a config tracking only AniList or
+  only MyAnimeList, declining the score prompt was reported as a save. The
+  prompt now always runs, and a decline says so rather than nothing at all.
+- **A show with no dub could play one anyway, with no subtitles.** anikoto
+  answered a dub request with whatever stream it had rather than refusing one
+  the show does not carry, so the automatic fallback to sub never had a
+  reason to run. It now refuses correctly, and the fallback plays sub with
+  subtitles instead.
+- **Rofi could say goodbye far too often.** Otakase launched from rofi runs a
+  fresh process for every action — opening the menu, handing off a cast,
+  adding a show — and each one used to send a desktop notification saying
+  "Have a great day!" on exit, however small the action. That notification is
+  gone in rofi mode; a real terminal session still gets the one-line goodbye.
 
 ## 2.0.1 — 2026-09-19
 
