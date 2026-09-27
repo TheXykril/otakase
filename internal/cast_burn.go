@@ -91,17 +91,24 @@ func castBurnEncoder(config *Config, ffmpeg string) cast.Encoder {
 // castShouldBurnSubtitles reports whether this cast has subtitles worth
 // drawing into the picture.
 //
-// A stream carries a subtitle URL whichever audio is playing, so the URL alone
-// is not the question: burning them onto a dub would re-encode the whole
-// episode to draw text the viewer is not reading. playlistAudioMode is what
-// decides, because it already knows that an unset episode mode means the
-// configured preference.
+// The subtitle URL is the whole question. It used to be gated on the audio not
+// being a dub as well, on the reasoning that burning text onto a dub re-encodes
+// an episode to draw something the viewer is not reading.
+//
+// That gate has been removed because it rested on a mode nothing verifies.
+// ProviderEpisodeResult.Mode is the mode that was *requested*, never the one the
+// host actually served (internal/provider.go, episodeModeResult), and a request
+// for a dub that the show has no dub for comes back as sub audio still labelled
+// dub. Observed on anikoto: a dub-category request returned Japanese audio with
+// a subtitle track attached, so the one episode that most needed subtitles was
+// the one that skipped them, silently.
+//
+// A stream that ships a subtitle track is treated as a stream worth burning it
+// onto. The cost of being wrong is a re-encode on a genuine dub that also
+// carries captions, and CastBurnSubtitles turns that off.
 func castShouldBurnSubtitles(config *Config, anime *Anime) bool {
 	if config == nil || anime == nil || !config.CastBurnSubtitles {
 		return false
 	}
-	if strings.TrimSpace(anime.Ep.SubtitleURL) == "" {
-		return false
-	}
-	return playlistAudioMode(anime, config) != "dub"
+	return strings.TrimSpace(anime.Ep.SubtitleURL) != ""
 }

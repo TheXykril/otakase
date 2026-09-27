@@ -335,10 +335,8 @@ func CastEpisode(config *Config, anime *Anime) error {
 		switch {
 		case config != nil && !config.CastBurnSubtitles:
 			Log("cast: not burning subtitles: CastBurnSubtitles is off")
-		case strings.TrimSpace(anime.Ep.SubtitleURL) == "":
-			Log("cast: not burning subtitles: this provider gave no subtitle track for this episode")
 		default:
-			Log("cast: not burning subtitles: the audio is a dub")
+			Log("cast: not burning subtitles: this provider gave no subtitle track for this episode")
 		}
 	}
 	if castShouldBurnSubtitles(config, anime) {

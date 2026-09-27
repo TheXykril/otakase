@@ -2,9 +2,11 @@ package internal
 
 import "testing"
 
-// Burning subtitles onto a dub is a re-encode that draws text nobody asked
-// for. The stream carries a subtitle URL either way -- whether it is wanted
-// depends on what is actually being listened to.
+// A stream that carries a subtitle track gets it burned in; that is the only
+// question. The audio mode used to gate this too, and it was removed because
+// nothing verifies it: the mode is the one that was requested, not the one the
+// host served, so a dub request for a show with no dub arrived as sub audio
+// labelled dub and skipped the subtitles it needed.
 func TestCastShouldBurnSubtitles(t *testing.T) {
 	withSubs := func(mode string) *Anime {
 		a := &Anime{}
@@ -21,10 +23,14 @@ func TestCastShouldBurnSubtitles(t *testing.T) {
 		want  bool
 	}{
 		{"subbed audio with subtitles", withSubs("sub"), on, true},
-		{"dubbed audio needs no subtitles", withSubs("dub"), on, false},
+		// Burned even though the mode says dub: the mode is a request, and a
+		// dub request for a show without one returns sub audio under this label.
+		// A wasted re-encode on a real dub is the lesser failure, and
+		// CastBurnSubtitles turns it off.
+		{"a dub label does not stop it, because the label is unverified", withSubs("dub"), on, true},
 		{"turned off in the config", withSubs("sub"), &Config{CastBurnSubtitles: false, SubOrDub: "sub"}, false},
 		{"nothing to burn", &Anime{}, on, false},
-		{"mode unset falls back to the configured audio", withSubs(""), &Config{CastBurnSubtitles: true, SubOrDub: "dub"}, false},
+		{"a configured dub preference does not stop it either", withSubs(""), &Config{CastBurnSubtitles: true, SubOrDub: "dub"}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := castShouldBurnSubtitles(tc.cfg, tc.anime); got != tc.want {
