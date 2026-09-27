@@ -371,3 +371,70 @@ func TestARebuiltStreamCarriesTheOffsetAndTheShiftedSubtitles(t *testing.T) {
 		t.Fatalf("the original subtitle file was modified:\n%s", original)
 	}
 }
+
+// Casting used to start a part-watched episode over and say so, because the
+// device cannot seek. Rebuilding the stream at an offset is what makes a resume
+// possible: it is the first seek, made before playback begins.
+func TestACastResumesWhereTheEpisodeWasLeft(t *testing.T) {
+	anime := &Anime{}
+	anime.Ep.Resume = true
+	anime.Ep.Player.PlaybackTime = 932
+	anime.Ep.Duration = 1480
+
+	if got := castResumeAt(anime); got != 932 {
+		t.Fatalf("a resume at 15:32 produced %.0f", got)
+	}
+}
+
+func TestAnEpisodeNotBeingResumedStartsAtTheBeginning(t *testing.T) {
+	anime := &Anime{}
+	anime.Ep.Player.PlaybackTime = 932
+	anime.Ep.Duration = 1480
+
+	// Resume is what the viewer chose in the menu. A saved position on its own is
+	// not a request to use it -- starting a rewatch mid-episode would be wrong.
+	if got := castResumeAt(anime); got != 0 {
+		t.Fatalf("an episode not being resumed started at %.0f", got)
+	}
+}
+
+func TestAResumePointTooEarlyToMatterIsIgnored(t *testing.T) {
+	anime := &Anime{}
+	anime.Ep.Resume = true
+	anime.Ep.Player.PlaybackTime = resumeMinSeconds - 1
+	anime.Ep.Duration = 1480
+
+	// Rebuilding the stream costs seconds, which is more than this would save.
+	if got := castResumeAt(anime); got != 0 {
+		t.Fatalf("a resume point under a minute produced %.0f", got)
+	}
+}
+
+func TestAResumePointNearTheEndIsIgnored(t *testing.T) {
+	anime := &Anime{}
+	anime.Ep.Resume = true
+	anime.Ep.Duration = 1480
+	anime.Ep.Player.PlaybackTime = int(float64(anime.Ep.Duration)*resumeMaxFraction) + 30
+
+	// The episode is effectively over: a stream starting in the credits is done
+	// before it buffers, which is the same reason a seek will not land there.
+	if got := castResumeAt(anime); got != 0 {
+		t.Fatalf("a resume point in the credits produced %.0f", got)
+	}
+}
+
+// A resumed cast reports episode time from its first poll. Without the base the
+// panel would show 0:00 for an episode playing at 15:32, and the progress written
+// back to the trackers would walk the episode backwards.
+func TestAResumedCastReportsEpisodeTimeImmediately(t *testing.T) {
+	inner := &fakeInnerSession{position: 4, duration: -1}
+	session := &castSeekingSession{inner: inner, base: 932, duration: 1480}
+
+	progress, err := session.Progress()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if progress.Position != 936 {
+		t.Fatalf("a resumed cast reported %.1f, want 936", progress.Position)
+	}
+}

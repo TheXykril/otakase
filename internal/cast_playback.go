@@ -377,7 +377,22 @@ func CastEpisode(config *Config, anime *Anime) error {
 		}
 	}
 
-	first, err := source.start(0)
+	// Resuming is a seek before there is anything to seek: the stream is built
+	// from the saved position, so what the device is handed is the rest of the
+	// episode as a stream of its own and it never has to seek at all.
+	//
+	// formatResumePosition is the gate rather than the wording, as it was when
+	// this could only be disclosed: it already decides when a resume point is
+	// worth acting on -- too early to be worth anything, or near enough to the
+	// end that resuming is pointless. Its duration argument is minutes, and
+	// Ep.Duration is seconds in memory.
+	resumeAt := castResumeAt(anime)
+	if resumeAt > 0 {
+		castStatus(fmt.Sprintf("Resuming at %s…", castClock(resumeAt)))
+		Log(fmt.Sprintf("cast: resuming at %.1f", resumeAt))
+	}
+
+	first, err := source.start(resumeAt)
 	if err != nil {
 		return err
 	}
@@ -411,23 +426,6 @@ func CastEpisode(config *Config, anime *Anime) error {
 		}
 	}
 
-	if anime.Ep.Resume && anime.Ep.Player.PlaybackTime > 0 {
-		// Session.Play always starts at zero: a real resume would need the
-		// seek deferred until the remux has succeeded (an event playlist is
-		// only a few segments long at t=0), which is another timing-dependent
-		// branch in a loop that has already been through several review
-		// rounds. Disclosed instead, so the viewer picking "Episode 5 (15:32)"
-		// is told why it started over rather than left to notice on their own.
-		// formatResumePosition is the gate rather than the wording: it already
-		// decides when a resume point is worth mentioning at all (too early,
-		// or near enough to the end that resuming is pointless). Its duration
-		// argument is minutes, and Ep.Duration is seconds in memory.
-		if formatResumePosition(anime.Ep.Player.PlaybackTime, ConvertSecondsToMinutes(anime.Ep.Duration)) != "" {
-			Out(fmt.Sprintf("Note: casting starts from the beginning -- resuming at %d:%02d is not supported yet.",
-				anime.Ep.Player.PlaybackTime/60, anime.Ep.Player.PlaybackTime%60))
-		}
-	}
-
 	if err := s.Play(srv.URL(first.path)); err != nil {
 		return err
 	}
@@ -439,7 +437,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 	// currently playing. See cast_seek.go.
 	// The generation currently playing, so the one it replaces can be cleared.
 	playing := first
-	seeking := &castSeekingSession{inner: s, restart: func(target float64) error {
+	seeking := &castSeekingSession{inner: s, base: resumeAt, restart: func(target float64) error {
 		// No status here: the watch loop shows the destination as the presses
 		// arrive, before this runs, which is the only moment a viewer can still
 		// be told anything -- rebuilding the stream blocks that loop.

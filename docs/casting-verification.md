@@ -329,8 +329,10 @@ cases only a real device and a real room can settle.
 
 Not bugs; these are deliberate, and documented in the README.
 
-- Casting always starts from the beginning. It tells you when you had a resume
-  position, and it writes your position back on exit so local playback can
-  resume from it later.
+- Seeking and resuming both rebuild the stream from the target, because the
+  receiver ignores SEEK on a playlist with no EXT-X-ENDLIST. Each one costs a
+  few seconds of rebuffering. Worth checking on hardware: that burned subtitles
+  are still in sync after a seek, and that the panel reports episode time rather
+  than the rebuilt stream's own clock.
 - Soft subtitles cannot be cast; the Default Media Receiver renders WebVTT
   only.

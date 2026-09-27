@@ -231,12 +231,16 @@ Styling survives this, which is the reason it is done this way round: an `.ass`
 subtitle's fonts, colours and positioning are drawn exactly as the fansub
 intended, where converting to WebVTT would have flattened them.
 
-A resume point from an earlier episode is not honoured yet — casting always
-starts from the beginning, and says so when one exists.
+A part-watched episode resumes where you left it. The device cannot seek a
+stream of unknown length — it accepts the request and keeps playing where it
+was — so seeking and resuming both work by rebuilding the stream from that
+point and handing the device a new one. That costs a few seconds of
+rebuffering, which is why a press moves thirty seconds rather than ten, and why
+a burst of presses waits for you to stop before it moves.
 
 While a cast plays, the terminal shows a control panel and nothing else —
 where the episode is, what it is playing on, and the keys: space pauses, the
-arrows seek ten seconds and change the device volume, and `q` stops. Openings
+arrows seek thirty seconds and change the device volume, and `q` stops. Openings
 and endings are skipped automatically, the same as local playback. Anything otakase needs to tell you meanwhile arrives as
 a desktop notification rather than scrolling through the panel. Your scrollback
 is untouched: the panel draws on the alternate screen and gives it back when

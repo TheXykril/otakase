@@ -279,3 +279,24 @@ func awaitPlaylist(remux *cast.Remux, dir string) error {
 		return <-written
 	}
 }
+
+// castResumeAt answers where in the episode a cast should begin.
+//
+// Resuming is the first seek, made before playback starts: the stream is built
+// from the saved position, so the device is handed the rest of the episode as a
+// stream of its own. Until the stream could be rebuilt at an offset this was not
+// possible at all, and a part-watched episode was disclosed and then started over.
+//
+// formatResumePosition is the gate, the same one the list rows use to decide
+// whether a resume point is worth showing: it rejects a position too early to be
+// worth anything and one near enough to the end that resuming is pointless. Its
+// duration argument is minutes, and Ep.Duration is seconds in memory.
+func castResumeAt(anime *Anime) float64 {
+	if anime == nil || !anime.Ep.Resume || anime.Ep.Player.PlaybackTime <= 0 {
+		return 0
+	}
+	if formatResumePosition(anime.Ep.Player.PlaybackTime, ConvertSecondsToMinutes(anime.Ep.Duration)) == "" {
+		return 0
+	}
+	return float64(anime.Ep.Player.PlaybackTime)
+}
