@@ -3,6 +3,7 @@ package internal
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // resetCastControlsForTest puts the process-wide controls back to untouched and
@@ -233,5 +234,99 @@ func TestCastControlsLeaveTheTerminalCookedAfterASeason(t *testing.T) {
 
 	if castRawModeActive() {
 		t.Error("the terminal was left raw after the exit cleanups ran")
+	}
+}
+
+// Seeking restarts ffmpeg, so a held key must not mean one restart per press:
+// eight restarts, each throwing away the work of the one before it, for a viewer
+// who meant a single jump.
+func TestAHeldSeekKeyBecomesOneJump(t *testing.T) {
+	commands := make(chan castCommand, 8)
+	for i := 0; i < 5; i++ {
+		commands <- castCmdSeekForward
+	}
+
+	steps, pending := coalesceSeeks(castCmdSeekForward, commands)
+	if steps != 6 {
+		t.Fatalf("six presses collapsed to %d steps", steps)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("seeks were handed back as pending: %v", pending)
+	}
+}
+
+func TestSeeksInOppositeDirectionsCancelOut(t *testing.T) {
+	commands := make(chan castCommand, 8)
+	commands <- castCmdSeekBack
+	commands <- castCmdSeekForward
+
+	// A viewer overshooting and correcting inside one burst means the net move,
+	// and a restart for each direction would be two restarts to arrive where
+	// they started.
+	if steps, _ := coalesceSeeks(castCmdSeekForward, commands); steps != 1 {
+		t.Fatalf("forward, back, forward netted %d steps, want 1", steps)
+	}
+}
+
+func TestOtherPressesInABurstAreHandedBackInOrder(t *testing.T) {
+	commands := make(chan castCommand, 8)
+	commands <- castCmdSeekForward
+	commands <- castCmdPauseToggle
+	commands <- castCmdVolumeUp
+
+	steps, pending := coalesceSeeks(castCmdSeekForward, commands)
+	if steps != 2 {
+		t.Fatalf("two seeks collapsed to %d steps", steps)
+	}
+	// Dropped presses are the failure this guards: a viewer whose stop or pause
+	// vanished because it arrived while they were still holding the arrow.
+	if len(pending) != 2 || pending[0] != castCmdPauseToggle || pending[1] != castCmdVolumeUp {
+		t.Fatalf("pending presses came back as %v", pending)
+	}
+}
+
+func TestANonSeekPressIsLeftEntirelyAlone(t *testing.T) {
+	commands := make(chan castCommand, 8)
+	commands <- castCmdSeekForward
+
+	// Only a seek starts a burst. A pause must not swallow the seek behind it.
+	steps, pending := coalesceSeeks(castCmdPauseToggle, commands)
+	if steps != 0 || pending != nil {
+		t.Fatalf("a pause collapsed %d steps and %v", steps, pending)
+	}
+	if len(commands) != 1 {
+		t.Fatal("a pause consumed the press behind it")
+	}
+}
+
+func TestABurstStopsAtAnEmptyQueueRatherThanWaiting(t *testing.T) {
+	// Draining what is queued, not waiting for a viewer who might press again:
+	// waiting would delay every single seek by however long the window was.
+	commands := make(chan castCommand, 8)
+	done := make(chan int, 1)
+	go func() {
+		steps, _ := coalesceSeeks(castCmdSeekForward, commands)
+		done <- steps
+	}()
+
+	select {
+	case steps := <-done:
+		if steps != 1 {
+			t.Fatalf("a lone press collapsed to %d steps", steps)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("coalesceSeeks waited for a press that never came")
+	}
+}
+
+func TestAClosedChannelEndsTheBurst(t *testing.T) {
+	commands := make(chan castCommand, 8)
+	commands <- castCmdSeekForward
+	close(commands)
+
+	// The reader closes the channel between episodes, and a drain that treated
+	// the closed channel as an endless stream of zero commands would spin.
+	if steps, _ := coalesceSeeks(castCmdSeekForward, commands); steps != 2 {
+		t.Fatalf("a burst ending in a closed channel collapsed to %d steps", steps)
 	}
 }

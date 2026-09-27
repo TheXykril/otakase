@@ -622,10 +622,11 @@ func TestWatchCastVolumeClampsAtTheTop(t *testing.T) {
 }
 
 // Repeated presses must each act on where the last one left the episode.
-// applyCastCommand works from lastPosition, which only the poll branch
-// refreshed -- so a viewer pressing right six times to skip a recap sent six
-// seeks to the same timestamp and the episode moved ten seconds once.
-func TestWatchCastRepeatedSeeksCompound(t *testing.T) {
+// Seeking a cast episode restarts ffmpeg at the target, so a burst of presses
+// must arrive as one jump: one restart, to the destination all the presses add up
+// to. The bug this still guards is the original one -- presses acting on a stale
+// position, so that six presses moved the episode ten seconds once.
+func TestWatchCastRepeatedSeeksCompoundIntoOneJump(t *testing.T) {
 	withFastCastTimings(t)
 
 	commands := make(chan castCommand, 8)
@@ -636,7 +637,7 @@ func TestWatchCastRepeatedSeeksCompound(t *testing.T) {
 	remux := newFakeRemux()
 	server := &fakeServer{}
 	// The device never reports the new position, which is the point: the
-	// seeks must compound from each other, not from the last poll.
+	// destination must come from the presses, not from the last poll.
 	session := &fakeSession{steps: []fakeStep{{progress: cast.Progress{Position: 100, Duration: 600}}}}
 
 	anime := testCastAnime()
@@ -656,11 +657,37 @@ func TestWatchCastRepeatedSeeksCompound(t *testing.T) {
 	seeks := append([]float64(nil), session.seeks...)
 	session.mu.Unlock()
 
-	if len(seeks) < 3 {
-		t.Fatalf("expected three seeks, got %v", seeks)
+	if len(seeks) != 1 {
+		t.Fatalf("a burst of three presses produced %d seeks (%v), want one", len(seeks), seeks)
 	}
-	if seeks[0] == seeks[1] || seeks[1] == seeks[2] {
-		t.Errorf("repeated seeks did not compound: %v -- each press acted on a stale position", seeks)
+	// Three steps of ten seconds. A seek to 10 would be the original bug: every
+	// press acting on the same stale position, so the burst moved ten seconds.
+	if want := 3 * castSeekStep; seeks[0] != want {
+		t.Fatalf("three presses sought to %.0f, want %.0f", seeks[0], want)
+	}
+}
+
+// A viewer who seeks and then immediately stops must still stop: the stop
+// arrives in the same burst as the seeks, and dropping it would leave them
+// holding a key that no longer ends anything.
+func TestAStopInsideASeekBurstStillStops(t *testing.T) {
+	withFastCastTimings(t)
+
+	commands := make(chan castCommand, 8)
+	commands <- castCmdSeekForward
+	commands <- castCmdSeekForward
+	commands <- castCmdStop
+
+	session := &fakeSession{steps: []fakeStep{{progress: cast.Progress{Position: 100, Duration: 600}}}}
+
+	var err error
+	captureStdout(t, func() {
+		err = watchCastWithControls(testCastConfig(t), testCastAnime(), session, &fakeServer{},
+			newFakeRemux(), cast.Device{Name: "Living Room"}, commands, false)
+	})
+
+	if !errors.Is(err, ErrCastStopped) {
+		t.Fatalf("a stop inside a seek burst returned %v", err)
 	}
 }
 

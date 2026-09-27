@@ -10,7 +10,6 @@ import (
 	"github.com/vishen/go-chromecast/cast"
 )
 
-
 // Span is a stretch of an episode worth skipping, in seconds.
 type Span struct {
 	Start float64

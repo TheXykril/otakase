@@ -132,6 +132,15 @@ func castClock(seconds float64) string {
 // keypress should act on what the viewer is looking at, and a poll here would
 // add a network round trip to every press.
 func applyCastCommand(command castCommand, session castSession, paused *bool, spans []cast.Span, position float64) (stop bool, moved float64, err error) {
+	return applyCastCommandSteps(command, session, paused, spans, position, 1)
+}
+
+// applyCastCommandSteps is applyCastCommand with a seek of several steps at once,
+// which is how a burst of presses becomes one jump. See coalesceSeeks.
+func applyCastCommandSteps(command castCommand, session castSession, paused *bool, spans []cast.Span, position float64, steps int) (stop bool, moved float64, err error) {
+	if steps < 1 {
+		steps = 1
+	}
 	// seek centralises the two things every seek must do besides seeking: it
 	// reports the new position so repeated presses compound instead of each
 	// acting on the last polled one, and it clears paused, because the
@@ -159,10 +168,10 @@ func applyCastCommand(command castCommand, session castSession, paused *bool, sp
 		return false, position, session.Pause()
 
 	case castCmdSeekBack:
-		return seek(position - castSeekStep)
+		return seek(position - castSeekStep*float64(steps))
 
 	case castCmdSeekForward:
-		return seek(position + castSeekStep)
+		return seek(position + castSeekStep*float64(steps))
 
 	case castCmdVolumeUp:
 		return false, position, session.SetVolume(session.Volume() + castVolumeStep)
@@ -556,4 +565,49 @@ func castControlsPossible(config *Config) bool {
 		return false
 	}
 	return castStdoutIsTerminal()
+}
+
+// coalesceSeeks collapses a burst of seek presses into one.
+//
+// Seeking a cast episode restarts ffmpeg at the target, which costs a second or
+// two. Applying a burst one press at a time would restart the stream once per
+// press -- eight times for one held key, since that is the buffer -- and each
+// restart throws away the work of the one before it. The viewer means one jump.
+//
+// Presses that are not seeks are handed back rather than dropped: a viewer who
+// seeks and then immediately stops must still stop.
+func coalesceSeeks(first castCommand, commands <-chan castCommand) (steps int, pending []castCommand) {
+	stepFor := func(command castCommand) (int, bool) {
+		switch command {
+		case castCmdSeekForward:
+			return 1, true
+		case castCmdSeekBack:
+			return -1, true
+		}
+		return 0, false
+	}
+
+	step, isSeek := stepFor(first)
+	if !isSeek {
+		return 0, nil
+	}
+	steps = step
+
+	// Only what is already waiting: this drains the queue, it does not wait for
+	// a viewer who might press again.
+	for {
+		select {
+		case command, open := <-commands:
+			if !open {
+				return steps, pending
+			}
+			if step, isSeek := stepFor(command); isSeek {
+				steps += step
+				continue
+			}
+			pending = append(pending, command)
+		default:
+			return steps, pending
+		}
+	}
 }

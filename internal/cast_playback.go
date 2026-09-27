@@ -344,7 +344,12 @@ func CastEpisode(config *Config, anime *Anime) error {
 	// subtitle track from an HLS manifest without a Cast track API the
 	// vendored library cannot reach. Burning costs a re-encode, so it happens
 	// only when there is something to burn.
-	remuxArgs := cast.BuildRemuxArgs(streamURL, referrer, streamDir)
+	source := &castStreamSource{
+		ffmpeg:    ffmpeg,
+		streamURL: streamURL,
+		referrer:  referrer,
+		rootDir:   streamDir,
+	}
 	if !castShouldBurnSubtitles(config, anime) {
 		// Said out loud, because a cast that silently plays without subtitles
 		// looks identical to one where burning failed, and the viewer is left
@@ -367,42 +372,19 @@ func CastEpisode(config *Config, anime *Anime) error {
 			castStatus("Preparing the stream with subtitles…")
 			encoder := castBurnEncoder(config, ffmpeg)
 			Log(fmt.Sprintf("cast: burning subtitles with %s (hardware=%t)", encoder.Name, encoder.Hardware()))
-			remuxArgs = cast.BuildBurnArgs(streamURL, referrer, subtitlePath, streamDir, encoder)
+			source.subtitlePath = subtitlePath
+			source.encoder = encoder
 		}
 	}
 
-	rx, err := cast.StartFFmpeg(ffmpeg, remuxArgs, streamDir)
+	first, err := source.start(0)
 	if err != nil {
 		return err
 	}
 	resourceMu.Lock()
-	remux = rx
+	remux = first.remux
 	resourceMu.Unlock()
-
-	playlistErr := make(chan error, 1)
-	go func() {
-		playlistErr <- cast.WaitForPlaylist(streamDir, castStartTimeout)
-	}()
-
-	select {
-	case err := <-playlistErr:
-		if err != nil {
-			if remuxErr := rx.Err(); remuxErr != nil {
-				return remuxErr
-			}
-			return err
-		}
-	case <-rx.Done():
-		if remuxErr := rx.Err(); remuxErr != nil {
-			return remuxErr
-		}
-		// ffmpeg exited without complaint, which a stream short enough to
-		// finish before the wait noticed will do. The playlist was written
-		// either way, so take the wait's own answer.
-		if err := <-playlistErr; err != nil {
-			return err
-		}
-	}
+	remuxes := newCastRemuxSwitch(first.remux)
 
 	srv, err := cast.NewServerOnPort(streamDir, config.CastPort)
 	if err != nil {
@@ -446,8 +428,50 @@ func CastEpisode(config *Config, anime *Anime) error {
 		}
 	}
 
-	if err := s.Play(srv.URL(cast.PlaylistName)); err != nil {
+	if err := s.Play(srv.URL(first.path)); err != nil {
 		return err
+	}
+
+	// The device cannot seek, so a seek rebuilds the stream at the target and
+	// hands the device a new one. The wrapper keeps everything above it in
+	// episode time -- the panel, the progress written to the trackers, the
+	// completion threshold -- rather than in the clock of whichever stream is
+	// currently playing. See cast_seek.go.
+	// The generation currently playing, so the one it replaces can be cleared.
+	playing := first
+	seeking := &castSeekingSession{inner: s, restart: func(target float64) error {
+		castStatus(fmt.Sprintf("Seeking to %d:%02d…", int(target)/60, int(target)%60))
+
+		next, startErr := source.start(target)
+		if startErr != nil {
+			return startErr
+		}
+
+		previous := remuxes.swap(next.remux)
+		resourceMu.Lock()
+		remux = next.remux
+		resourceMu.Unlock()
+
+		if err := s.Play(srv.URL(next.path)); err != nil {
+			return err
+		}
+
+		// The generation just left behind holds every segment written for it,
+		// which for a long episode is hundreds of megabytes. The device has
+		// moved on to the new stream, so it is no longer fetching from there.
+		if previous != nil && playing.dir != "" && playing.dir != next.dir {
+			if err := os.RemoveAll(playing.dir); err != nil {
+				Log(fmt.Sprintf("cast: could not clear the previous stream: %v", err))
+			}
+		}
+		playing = next
+		return nil
+	}}
+	if !durationEstimated && anime.Ep.Duration > 0 {
+		// Only a measured length: a seek guard built on the tracker's average
+		// would refuse the last minutes of an episode that runs longer than
+		// average, and allow a seek past the end of one that runs shorter.
+		seeking.duration = float64(anime.Ep.Duration)
 	}
 	castStatus(fmt.Sprintf("Waiting for %s to start…", device.Name))
 
@@ -460,7 +484,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 	// channel. The next episode takes a subscription of its own.
 	defer releaseControls()
 
-	if err := watchCastWithControls(config, anime, s, srv, rx, device, commands, durationEstimated); err != nil {
+	if err := watchCastWithControls(config, anime, seeking, srv, remuxes, device, commands, durationEstimated); err != nil {
 		return err
 	}
 
@@ -630,7 +654,19 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			pollTimer.Reset(castPollInterval)
 		case command := <-commands:
 			wasPaused := paused
-			stop, moved, err := applyCastCommand(command, session, &paused, spans, lastPosition)
+			// A seek restarts the stream, which costs a second or two, so a
+			// burst of presses is collapsed into the single jump the viewer
+			// meant rather than restarting once per press. Presses that are not
+			// seeks come back in pending and are applied below, in order.
+			steps, pending := coalesceSeeks(command, commands)
+			if steps != 0 {
+				command = castCmdSeekForward
+				if steps < 0 {
+					command = castCmdSeekBack
+					steps = -steps
+				}
+			}
+			stop, moved, err := applyCastCommandSteps(command, session, &paused, spans, lastPosition, steps)
 			// Logged whether or not it worked. A seek that the receiver quietly
 			// declines is indistinguishable from a keypress that never arrived,
 			// and the two have completely different causes -- one is this
@@ -661,6 +697,27 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			// same way a reset in the skip branch once made it unreachable.
 			if wasPaused && !paused {
 				lastPositionChange = time.Now()
+			}
+
+			// Whatever arrived during the burst that was not a seek. A stop in
+			// here ends the episode exactly as one arriving on its own does.
+			for _, queued := range pending {
+				wasPaused := paused
+				stop, moved, err := applyCastCommand(queued, session, &paused, spans, lastPosition)
+				Log(fmt.Sprintf("cast: queued command %d at pos=%.1f -> pos=%.1f err=%v", queued, lastPosition, moved, err))
+				if err != nil {
+					Log(fmt.Sprintf("cast: %v", err))
+				}
+				if stop {
+					castOut(commands != nil, "Stopped.")
+					savePartial(lastPosition)
+					return ErrCastStopped
+				}
+				lastPosition = moved
+				recordPosition(lastPosition)
+				if wasPaused && !paused {
+					lastPositionChange = time.Now()
+				}
 			}
 			continue
 		}
