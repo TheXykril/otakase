@@ -245,11 +245,6 @@ it (a second firewall service or Docker can override it silently), see the
 [Casting Problems wiki page](https://github.com/TheXykril/otakase/wiki/Casting-Problems)
 for the full diagnosis and manual commands.
 
-Casting is the one feature automated tests can't fully cover — whether a
-device accepts what was built and whether it can reach this machine are
-hardware-only answers. `docs/casting-verification.md` is the checklist to run
-after touching anything under `internal/cast/`.
-
 ## Hyprland keybinding
 
 One command binds **Super+Shift+A** to open the rofi menu with poster previews —
