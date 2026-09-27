@@ -257,15 +257,33 @@ Casting from the rofi keybind opens a terminal to show those controls in, and
 that window owns the cast: closing it stops the episode and saves your position.
 Set `CastTerminal` if the wrong emulator opens, or if none is found.
 
-If your machine runs a firewall that drops inbound connections — ufw's shipped
-policy does — the Chromecast cannot fetch the stream, and the only symptom is
-that the episode never starts. Set `CastPort` to a fixed port and allow that one
-port from your LAN, rather than opening the whole ephemeral range:
+**If the episode never starts**, the most common cause is a firewall on this
+machine blocking the Chromecast from reaching it — ufw's default policy does
+this out of the box. otakase detects this itself: when a cast fails because the
+device never fetched anything, it prints the exact command to fix it, naming
+your firewall and your subnet. Run the command it gives you, then cast again.
+
+If it cannot tell what firewall you're running, or the command it gives
+doesn't help, run this by hand — replace `192.168.0.0/24` with your own
+network if it's different:
 
 ```bash
-# CastPort=8010 in the config, then:
+# Set CastPort=8010 in the config first, then:
 sudo ufw allow from 192.168.0.0/24 to any port 8010 proto tcp comment 'otakase cast'
 ```
+
+A fixed `CastPort` matters here too: without one, otakase picks a random port
+each time, and you'd have to open the whole ephemeral range instead of one.
+
+Two things this can't catch on its own, because checking them needs root:
+- Some setups run a **second** firewall tool (like `iptables.service`) that
+  reapplies its own rules over ufw at every boot — so `ufw status` shows the
+  rule allowed, but the connection is still blocked. If the command above
+  didn't fix it, check for another firewall service running alongside ufw.
+- Docker changes firewall rules too, if it's installed and running.
+
+otakase never changes firewall rules itself, even when it could work out how —
+only you should be typing `sudo`.
 
 The menu carries a **Cast** toggle — `[ ] Cast: Off` / `[x] Cast: Office TV` —
 in both the terminal list and rofi, since they share one menu. Select it to turn
