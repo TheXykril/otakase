@@ -150,13 +150,17 @@ func TestCastControlsReleaseOnlyClearsItsOwnSubscription(t *testing.T) {
 	resetCastControlsForTest(t)
 	castControlsBegin = func(config *Config) bool { return true }
 
+	// The interleave the comparison guards: the next episode subscribes before
+	// the previous episode's release has run. Releasing first and then calling
+	// it a second time does not reach the comparison at all, because the release
+	// is wrapped in sync.Once and the second call returns without doing
+	// anything -- that version of this test passed with the comparison deleted.
 	_, releaseFirst, _ := startCastControls(nil)
-	releaseFirst()
 
 	second, releaseSecond, _ := startCastControls(nil)
 	defer releaseSecond()
 
-	releaseFirst() // the stale release runs again
+	releaseFirst() // runs for the first time, but its subscription is stale
 
 	castDeliverCommand(castCmdPauseToggle)
 	select {

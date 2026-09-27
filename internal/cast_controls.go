@@ -311,6 +311,16 @@ func castControlsBeginTerminal(config *Config) bool {
 	}
 	RegisterExitCleanup(restore)
 
+	// Known limitation: this reader owns fd 0 for the process's whole life, so it
+	// competes with any interactive prompt that runs between episodes -- the
+	// provider-failure recovery menu on a failed resolve, and the score prompt at
+	// the end of a season. Both share stdin with it and lose roughly half their
+	// keystrokes. A suspend flag does not fix it: the goroutine is parked inside
+	// os.Stdin.Read and consumes the next byte whatever its state, and a byte
+	// read here cannot be handed back for a Bubble Tea prompt to read again.
+	// Fixing it properly means deciding whether a spawned cast window should host
+	// interactive prompts at all, given the countdown exists precisely because
+	// that viewer is across the room. Left as it is deliberately.
 	go func() {
 		defer restore()
 		buf := make([]byte, 0, 16)
