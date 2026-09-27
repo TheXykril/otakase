@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +29,17 @@ var Log = func(string) {}
 // local stream the device fetches instead. Nothing is re-encoded -- this is a
 // container change, so it costs bandwidth and almost no CPU.
 func BuildRemuxArgs(streamURL, referrer, outDir string) []string {
+	return BuildRemuxArgsFrom(streamURL, referrer, outDir, 0)
+}
+
+// BuildRemuxArgsFrom is BuildRemuxArgs starting the stream at an offset.
+//
+// A cast episode cannot be seeked on the device: the receiver accepts SEEK and
+// ignores it, because an event playlist has no length it can seek within. The
+// stream is therefore rebuilt from the target instead, and the offset belongs
+// before -i, where ffmpeg seeks the input rather than decoding everything up to
+// the target and throwing it away.
+func BuildRemuxArgsFrom(streamURL, referrer, outDir string, startAt float64) []string {
 	args := []string{"-hide_banner", "-loglevel", "error", "-stats_period", "1"}
 
 	// Providers routinely disguise HLS segments as images (…/seg-1-f1-v1-a1.jpg)
@@ -40,6 +52,7 @@ func BuildRemuxArgs(streamURL, referrer, outDir string) []string {
 	if referrer = strings.TrimSpace(referrer); referrer != "" {
 		args = append(args, "-headers", "Referer: "+referrer+"\r\n")
 	}
+	args = append(args, seekArgs(startAt)...)
 	args = append(args, "-i", streamURL)
 
 	// No -bsf:a aac_adtstoasc here, unlike download.go: that filter strips ADTS
@@ -163,4 +176,16 @@ func WaitForPlaylist(outDir string, timeout time.Duration) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return fmt.Errorf("cast: the stream did not start within %s", timeout)
+}
+
+// seekArgs is the input-side seek shared by the remux and the burn.
+//
+// Before -i and not after it: after -i ffmpeg decodes the whole episode up to
+// the target before writing anything, which on a twenty-four minute episode is
+// a wait the viewer reads as a broken seek.
+func seekArgs(startAt float64) []string {
+	if startAt <= 0 {
+		return nil
+	}
+	return []string{"-ss", strconv.FormatFloat(startAt, 'f', 3, 64)}
 }
