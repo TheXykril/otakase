@@ -16,8 +16,14 @@ import (
 // URL inside it; an older one is read, because every field added since is
 // additive and its zero value is what that build meant.
 //
-// 2 added TotalEpisodes and Rewatching, which the spawned process needs to
-// know when the season ends and whether the tracker may be written.
+// 2 added the fields the spawned process needs once it can finish a season:
+// TotalEpisodes and Rewatching, and the completion state Repeat, StartedAt,
+// CompletedAt, IsAiring and SkipRemoteSync that TotalEpisodes makes reachable.
+//
+// No further bump is needed as fields are added at this version: the reader
+// accepts anything up to it, missing fields decode to zero, and a version 1
+// file carries no TotalEpisodes -- so it cannot reach the completion path that
+// reads the rest at all.
 const castSessionVersion = 2
 
 // castSessionFile is one resolved episode, handed from the process that picked
@@ -55,6 +61,30 @@ type castSessionFile struct {
 	// entry a rewatch already has.
 	Rewatching bool `json:"rewatching"`
 
+	// The four fields below are read by HandleLastEpisodeCompletion and its
+	// callees, which TotalEpisodes made reachable in this process for the first
+	// time. Carrying TotalEpisodes without them is worse than carrying neither:
+	// the completion runs, and runs on zero values.
+	//
+	// Repeat and StartedAt are the ones that lose data. CompleteAniListAnimeRewatch
+	// writes anime.Repeat+1, so a viewer finishing their fourth rewatch from a
+	// rofi cast would have AniList told "repeat 1", and with StartedAt zero it
+	// stamps today over the date they actually started. Both are silent and
+	// neither is recoverable.
+	Repeat      int       `json:"repeat"`
+	StartedAt   FuzzyDate `json:"started_at"`
+	CompletedAt FuzzyDate `json:"completed_at"`
+	// IsAiring gates both the score prompt and the COMPLETED write. AniList
+	// commonly still reports RELEASING for hours after a finale, and main's
+	// process does neither in that window; false here made the spawned one do
+	// both.
+	IsAiring bool `json:"is_airing"`
+	// SkipRemoteSync is the viewer having chosen "Continue without updating
+	// tracker" on a completed show. It is tagged json:"-" on Anime, so nothing
+	// but an explicit field here carries it, and without it their status is
+	// written to COMPLETED anyway.
+	SkipRemoteSync bool `json:"skip_remote_sync"`
+
 	Device string `json:"device"`
 }
 
@@ -90,6 +120,11 @@ func writeCastSession(config *Config, anime *Anime, device string) (string, erro
 		PlaybackTime:   anime.Ep.Player.PlaybackTime,
 		TotalEpisodes:  anime.TotalEpisodes,
 		Rewatching:     anime.Rewatching,
+		Repeat:         anime.Repeat,
+		StartedAt:      anime.StartedAt,
+		CompletedAt:    anime.CompletedAt,
+		IsAiring:       anime.IsAiring,
+		SkipRemoteSync: anime.SkipRemoteSync,
 		Device:         device,
 	}
 
@@ -191,6 +226,11 @@ func castSessionToAnime(session *castSessionFile) *Anime {
 	anime.Ep.Player.PlaybackTime = session.PlaybackTime
 	anime.TotalEpisodes = session.TotalEpisodes
 	anime.Rewatching = session.Rewatching
+	anime.Repeat = session.Repeat
+	anime.StartedAt = session.StartedAt
+	anime.CompletedAt = session.CompletedAt
+	anime.IsAiring = session.IsAiring
+	anime.SkipRemoteSync = session.SkipRemoteSync
 	return anime
 }
 
@@ -329,12 +369,15 @@ func prepareCastSessionUser(config *Config) *User {
 // This is the spawned terminal's entry point. RofiSelection is cleared because
 // this process does have a terminal: Out must print here rather than raise a
 // desktop notification.
-func RunCastSession(config *Config, path string) error {
-	session, err := readCastSession(path)
-	if err != nil {
-		return err
-	}
-
+// prepareCastSession turns a handoff file into the state the spawned process
+// needs before it can cast: the episode, the process globals the tracking code
+// reads, and the history file's path.
+//
+// Split out of RunCastSession so the wiring is testable without a Chromecast.
+// Every line here was a defect at some point -- a missing user stopped the
+// season advancing, and a zero global anime sent tracking writes to the wrong
+// entry -- and a test that calls RunCastSession cannot reach any of it.
+func prepareCastSession(config *Config, session *castSessionFile) (*Anime, string) {
 	config.RofiSelection = false
 	config.CastToDevice = true
 	if session.Device != "" {
@@ -349,10 +392,16 @@ func RunCastSession(config *Config, path string) error {
 	// is still main's zero value rather than the episode being cast.
 	SetGlobalAnime(anime)
 
-	// The spawned process has no show to select, so it cannot enter main's
-	// loop at the top. It runs the same advance instead, so a rofi cast and a
-	// local playback continue through one implementation.
-	databaseFile := filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt")
+	return anime, filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt")
+}
+
+func RunCastSession(config *Config, path string) error {
+	session, err := readCastSession(path)
+	if err != nil {
+		return err
+	}
+
+	anime, databaseFile := prepareCastSession(config, session)
 	var lastErr error
 	runCastLoop(
 		func() error {

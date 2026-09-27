@@ -395,3 +395,100 @@ func TestCastAdvanceWorksWithTrackingOff(t *testing.T) {
 		t.Errorf("local history was not written with remote tracking off: %v", err)
 	}
 }
+
+// Carrying TotalEpisodes made HandleLastEpisodeCompletion reachable in the
+// spawned process for the first time, and that path reads fields the handoff
+// file did not carry. Repeat is the one that destroys data: a viewer finishing
+// their fourth rewatch from a rofi cast had AniList told "repeat 1", and with
+// StartedAt zero the original start date was overwritten with today.
+func TestCastSessionCarriesTheRewatchEntry(t *testing.T) {
+	config := testCastConfig(t)
+	anime := testCastAnime()
+	anime.Rewatching = true
+	anime.Repeat = 3
+	anime.StartedAt = FuzzyDate{Year: 2023, Month: 4, Day: 11}
+	anime.CompletedAt = FuzzyDate{Year: 2023, Month: 6, Day: 20}
+	anime.IsAiring = true
+	anime.SkipRemoteSync = true
+
+	path, err := writeCastSession(config, anime, "")
+	if err != nil {
+		t.Fatalf("writeCastSession: %v", err)
+	}
+	session, err := readCastSession(path)
+	if err != nil {
+		t.Fatalf("readCastSession: %v", err)
+	}
+	restored := castSessionToAnime(session)
+
+	if restored.Repeat != 3 {
+		t.Errorf("Repeat = %d, want 3", restored.Repeat)
+	}
+	if restored.StartedAt != anime.StartedAt {
+		t.Errorf("StartedAt = %v, want %v", restored.StartedAt, anime.StartedAt)
+	}
+	if restored.CompletedAt != anime.CompletedAt {
+		t.Errorf("CompletedAt = %v, want %v", restored.CompletedAt, anime.CompletedAt)
+	}
+	if !restored.IsAiring {
+		t.Error("IsAiring was lost, so a still-airing show would be marked COMPLETED")
+	}
+	if !restored.SkipRemoteSync {
+		t.Error("SkipRemoteSync was lost, so a viewer who declined tracking would be written anyway")
+	}
+
+	// The consequence, at the function that does the writing.
+	completedAt := FuzzyDate{Year: 2026, Month: 9, Day: 27}
+	repeat, startedAt := anilistRewatchCompletion(*restored, completedAt)
+	if repeat != 4 {
+		t.Errorf("repeat written = %d, want 4", repeat)
+	}
+	if startedAt != anime.StartedAt {
+		t.Errorf("startedAt written = %v, want the original %v", startedAt, anime.StartedAt)
+	}
+}
+
+// The two tracking-off tests call prepareCastSessionUser directly, so deleting
+// its call site left the suite green while the spawned cast stopped advancing
+// after episode 1 again. This covers the wiring instead of the helper.
+func TestPrepareCastSessionWiresTheUserAndTheGlobalAnime(t *testing.T) {
+	previousUser := GetGlobalUser()
+	previousAnime := GetGlobalAnime()
+	t.Cleanup(func() {
+		SetGlobalUser(previousUser)
+		SetGlobalAnime(previousAnime)
+	})
+	SetGlobalUser(nil)
+
+	config := testCastConfig(t)
+	config.TrackingRemote = "none"
+	config.RofiSelection = true
+
+	anime, databaseFile := prepareCastSession(config, &castSessionFile{
+		Version:       castSessionVersion,
+		AnilistID:     4321,
+		Title:         "Mushishi",
+		EpisodeNumber: 7,
+		TotalEpisodes: 26,
+		Device:        "Bedroom TV",
+	})
+
+	if GetGlobalUser() == nil {
+		t.Error("no user was set, so AdvanceAfterEpisode would decline to continue")
+	}
+	if GetGlobalAnime().AnilistId != 4321 {
+		t.Errorf("global anime = %d, want the episode being cast", GetGlobalAnime().AnilistId)
+	}
+	if anime.Ep.Number != 7 || anime.TotalEpisodes != 26 {
+		t.Errorf("anime = ep %d of %d, want ep 7 of 26", anime.Ep.Number, anime.TotalEpisodes)
+	}
+	if config.RofiSelection {
+		t.Error("RofiSelection was left on, so the spawned process would try to draw a rofi menu")
+	}
+	if !config.CastToDevice || config.CastDevice != "Bedroom TV" {
+		t.Errorf("cast target = %v/%q, want true/\"Bedroom TV\"", config.CastToDevice, config.CastDevice)
+	}
+	if databaseFile == "" {
+		t.Error("no history file path")
+	}
+}
