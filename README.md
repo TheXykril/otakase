@@ -260,8 +260,11 @@ Set `CastTerminal` if the wrong emulator opens, or if none is found.
 **If the episode never starts**, the most common cause is a firewall on this
 machine blocking the Chromecast from reaching it — ufw's default policy does
 this out of the box. otakase detects this itself: when a cast fails because the
-device never fetched anything, it prints the exact command to fix it, naming
-your firewall and your subnet. Run the command it gives you, then cast again.
+device never fetched anything, it names your firewall and your subnet, prints
+the exact command to fix it, and copies that command to your clipboard. Open a
+terminal, paste, run it, then cast again — the window this message appeared in
+may already be gone by the time you read it, so the clipboard is what actually
+carries the fix forward.
 
 If it cannot tell what firewall you're running, or the command it gives
 doesn't help, run this by hand — replace `192.168.0.0/24` with your own

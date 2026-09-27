@@ -787,7 +787,8 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 				// the chance to refuse it -- so say that, and say how to fix
 				// the thing that is almost always responsible.
 				if !server.Fetched() {
-					hint := castFirewallHint(config, castServerHost(server.URL("")), castDetectFirewall())
+					hint, command := castFirewallHintWithCommand(config, castServerHost(server.URL("")), castDetectFirewall())
+					hint = castCopyFirewallCommand(command, hint)
 					return fmt.Errorf("cast: %s never fetched the stream from this machine.\n%s", device.Name, hint)
 				}
 				return fmt.Errorf("cast: %s never started playing -- it fetched the stream but would not play it", device.Name)

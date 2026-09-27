@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/atotto/clipboard"
 )
 
 // castDetectFirewall names the host firewall that is running, or "" when none
@@ -55,6 +57,18 @@ func castLocalSubnet(addr string) string {
 // side effect of watching an episode -- nor should it prompt for a password to
 // do so. The viewer runs one line they can read first.
 func castFirewallHint(config *Config, serverAddr, firewall string) string {
+	message, _ := castFirewallHintWithCommand(config, serverAddr, firewall)
+	return message
+}
+
+// castFirewallHintWithCommand is castFirewallHint, plus the bare command by
+// itself. Nothing can paste "sudo ufw allow from ..." into a terminal without
+// also pasting the sentence in front of it, so the two are kept apart here and
+// joined only for what gets printed.
+//
+// command is "" when there is nothing to run yet -- the CastPort-unset case,
+// where the fix is a config edit rather than a shell command.
+func castFirewallHintWithCommand(config *Config, serverAddr, firewall string) (message, command string) {
 	subnet := castLocalSubnet(serverAddr)
 	if subnet == "" {
 		subnet = "192.168.0.0/24"
@@ -66,18 +80,49 @@ func castFirewallHint(config *Config, serverAddr, firewall string) string {
 	if config == nil || config.CastPort == 0 {
 		b.WriteString("Set CastPort in the config to a fixed port (otakase -e), then allow that one port.\n")
 		b.WriteString("A random port cannot be allowed without opening the whole ephemeral range.")
-		return b.String()
+		return b.String(), ""
 	}
 
 	switch firewall {
 	case "firewalld":
+		command = fmt.Sprintf("sudo firewall-cmd --add-port=%d/tcp && sudo firewall-cmd --runtime-to-permanent", config.CastPort)
 		b.WriteString(fmt.Sprintf("Allow the port this cast used:\n  sudo firewall-cmd --add-port=%d/tcp\n", config.CastPort))
 		b.WriteString("  sudo firewall-cmd --runtime-to-permanent")
 	default:
-		b.WriteString(fmt.Sprintf("Allow the port this cast used:\n  sudo ufw allow from %s to any port %d proto tcp comment 'otakase cast'",
-			subnet, config.CastPort))
+		command = fmt.Sprintf("sudo ufw allow from %s to any port %d proto tcp comment 'otakase cast'", subnet, config.CastPort)
+		b.WriteString("Allow the port this cast used:\n  " + command)
 	}
-	return b.String()
+	return b.String(), command
+}
+
+// castCopyFirewallCommand puts command on the clipboard and says so in
+// message, so the fix survives however long the viewer actually gets to read
+// the screen before it moves on.
+//
+// This is the reason the command is copied at all rather than just printed
+// bigger: the terminal this prints into is the one the failing cast is about
+// to close, whether that terminal came from a rofi launch or an ordinary one.
+// The message alone would flash and be gone; the command in the clipboard
+// survives into whatever terminal the viewer opens next.
+//
+// A failed copy is not worth failing the cast over -- a headless session with
+// no clipboard to reach is the ordinary case on a server, not an error -- so it
+// only changes which sentence gets appended.
+//
+// A variable so a test can fail the copy deterministically: whether the real
+// one succeeds depends on this machine having a clipboard tool installed at
+// all, which the test runner cannot assume either way.
+var clipboardWriteAll = clipboard.WriteAll
+
+func castCopyFirewallCommand(command, message string) string {
+	if command == "" {
+		return message
+	}
+	if err := clipboardWriteAll(command); err != nil {
+		Log(fmt.Sprintf("cast: could not copy the firewall command to the clipboard: %v", err))
+		return message + "\n(Copy the line above and run it.)"
+	}
+	return message + "\n(Copied to your clipboard -- paste it into a terminal and run it.)"
 }
 
 // castServerHost is the address out of a server URL, for building a firewall
