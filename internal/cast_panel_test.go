@@ -273,3 +273,39 @@ func TestCastPanelDoesNotTrimAShortTitle(t *testing.T) {
 		t.Errorf("a short title was altered:\n%s", top)
 	}
 }
+
+// AniList reports an average episode length for a series, not the length of the
+// episode in hand: 24:00 for one that runs 24:40. Casting falls back to that
+// average whenever the probe could not read the source, and a viewer shown a
+// flat total has no way to tell that from a measurement -- they just see the
+// bar stop short of the end.
+func TestAnEstimatedTotalIsMarkedAsAnEstimate(t *testing.T) {
+	state := testPanelState()
+	state.Duration = 24 * 60
+	state.Estimated = true
+
+	rendered := strings.Join(castPanelLines(state, 60), "\n")
+	if !strings.Contains(rendered, "~24:00") {
+		t.Fatalf("an estimated total was not marked as one:\n%s", rendered)
+	}
+}
+
+func TestAMeasuredTotalIsShownPlainly(t *testing.T) {
+	rendered := strings.Join(castPanelLines(testPanelState(), 60), "\n")
+	if strings.Contains(rendered, "~") {
+		t.Fatalf("a measured total was marked as an estimate:\n%s", rendered)
+	}
+}
+
+// The narrow fallback shows the same clock and needs the same distinction: a
+// terminal too small to frame is not a terminal owed worse information.
+func TestTheNarrowPanelAlsoMarksAnEstimate(t *testing.T) {
+	state := testPanelState()
+	state.Duration = 24 * 60
+	state.Estimated = true
+
+	line := castPanelPlainLine(state, castPanelMinWidth-1)
+	if !strings.Contains(line, "~") {
+		t.Fatalf("the narrow panel dropped the estimate mark: %q", line)
+	}
+}

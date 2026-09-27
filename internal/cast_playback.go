@@ -321,6 +321,23 @@ func CastEpisode(config *Config, anime *Anime) error {
 
 	castStatus("Preparing the stream…")
 	Log(fmt.Sprintf("cast: remuxing %s (referrer %q) into %s", streamURL, referrer, streamDir))
+
+	// The device reports dur=-1 for the whole episode, so the panel's total has
+	// to come from here. The tracker's average episode length is a fallback
+	// worth having but only an average -- 24:00 for an episode that runs 24:40 --
+	// and the source playlist knows exactly. ffprobe reads it without fetching a
+	// segment, so this costs one request. A failure is not worth stopping for:
+	// the estimate still shows a total, marked as an estimate.
+	durationEstimated := true
+	if ffprobe, probeErr := cast.FFprobePathFor(ffmpeg); probeErr != nil {
+		Log(fmt.Sprintf("cast: no ffprobe to read the episode's length with: %v", probeErr))
+	} else if seconds, probeErr := cast.ProbeDuration(ffprobe, streamURL, referrer); probeErr != nil {
+		Log(fmt.Sprintf("cast: %v", probeErr))
+	} else {
+		anime.Ep.Duration = int(seconds + 0.5)
+		durationEstimated = false
+		Log(fmt.Sprintf("cast: the episode is %d seconds long", anime.Ep.Duration))
+	}
 	// Subtitles are drawn into the picture when the stream has them, which is
 	// the only way a Chromecast shows them: it renders WebVTT alone, no
 	// provider here supplies WebVTT, and the receiver will not enable a
@@ -443,7 +460,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 	// channel. The next episode takes a subscription of its own.
 	defer releaseControls()
 
-	if err := watchCastWithControls(config, anime, s, srv, rx, device, commands); err != nil {
+	if err := watchCastWithControls(config, anime, s, srv, rx, device, commands, durationEstimated); err != nil {
 		return err
 	}
 
@@ -457,14 +474,17 @@ func CastEpisode(config *Config, anime *Anime) error {
 
 // watchCast follows the episode while the device plays it.
 // watchCast follows the episode while the device plays it, with no controls.
-func watchCast(config *Config, anime *Anime, session castSession, server castServer, remux castRemux, device cast.Device) error {
-	return watchCastWithControls(config, anime, session, server, remux, device, nil)
+func watchCast(config *Config, anime *Anime, session castSession, server castServer, remux castRemux, device cast.Device, durationEstimated bool) error {
+	return watchCastWithControls(config, anime, session, server, remux, device, nil, durationEstimated)
 }
 
 // watchCastWithControls is watchCast with a channel of viewer commands. A nil
 // channel blocks forever in the select below, which makes this behave exactly
 // as the plain sleep it replaced.
-func watchCastWithControls(config *Config, anime *Anime, session castSession, server castServer, remux castRemux, device cast.Device, commands <-chan castCommand) error {
+// durationEstimated says Ep.Duration is the tracker's average episode length
+// rather than this episode's measured one, so the panel can mark the total as
+// an estimate instead of presenting a guess as a reading.
+func watchCastWithControls(config *Config, anime *Anime, session castSession, server castServer, remux castRemux, device cast.Device, commands <-chan castCommand, durationEstimated bool) error {
 	spans := castSpansFor(anime.Ep.SkipTimes, config)
 	marked := false
 
@@ -750,17 +770,20 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			// the episode is, so prefer that and fall back to the device only
 			// when we were told nothing.
 			total := progress.Duration
+			estimated := false
 			if total <= 0 && anime.Ep.Duration > 0 {
 				total = float64(anime.Ep.Duration)
+				estimated = durationEstimated
 			}
 			fmt.Print(panel.frame(castPanelState{
-				Title:    animeName,
-				Episode:  episodeNumber,
-				Device:   device.Name,
-				Position: progress.Position,
-				Duration: total,
-				State:    state,
-				Volume:   session.Volume(),
+				Title:     animeName,
+				Episode:   episodeNumber,
+				Device:    device.Name,
+				Position:  progress.Position,
+				Duration:  total,
+				Estimated: estimated,
+				State:     state,
+				Volume:    session.Volume(),
 			}))
 		}
 		// Until ffmpeg writes EXT-X-ENDLIST the playlist only advertises what

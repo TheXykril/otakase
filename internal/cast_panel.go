@@ -14,8 +14,26 @@ type castPanelState struct {
 	Device   string
 	Position float64
 	Duration float64
-	State    string
-	Volume   float64
+	// Estimated says the duration is the tracker's average episode length
+	// rather than this episode's real one, which is worth showing differently:
+	// the average was 24:00 for an episode that ran 24:40, so a viewer reading
+	// a flat total would see the bar stop short of the end and have no way to
+	// tell an estimate from a measurement.
+	Estimated bool
+	State     string
+	Volume    float64
+}
+
+// castPanelTotal formats the total for the clock, marking an estimate with a
+// leading tilde and an unknown length with dashes.
+func castPanelTotal(state castPanelState) string {
+	if state.Duration <= 0 {
+		return "--:--"
+	}
+	if state.Estimated {
+		return "~" + castClock(state.Duration)
+	}
+	return castClock(state.Duration)
 }
 
 // castPanelMinWidth is the narrowest terminal the boxed panel is drawn in.
@@ -51,11 +69,7 @@ func castPanelLines(state castPanelState, width int) []string {
 	inner := width - 4 // two border cells and one space of padding each side
 
 	elapsed := castClock(state.Position)
-	total := "--:--"
-	if state.Duration > 0 {
-		total = castClock(state.Duration)
-	}
-	clock := fmt.Sprintf("%s / %s", elapsed, total)
+	clock := fmt.Sprintf("%s / %s", elapsed, castPanelTotal(state))
 
 	bar := castPanelBar(state.Position, state.Duration, inner-lipgloss.Width(clock)-2)
 	volume := fmt.Sprintf("vol %d%%", int(state.Volume*100+0.5))
@@ -88,11 +102,7 @@ const castPanelDoneKeys = " season finished "
 
 // castPanelPlainLine is the fallback for a terminal too narrow to frame.
 func castPanelPlainLine(state castPanelState, width int) string {
-	total := "--:--"
-	if state.Duration > 0 {
-		total = castClock(state.Duration)
-	}
-	line := fmt.Sprintf("%s %s/%s %d%%", state.State, castClock(state.Position), total, int(state.Volume*100+0.5))
+	line := fmt.Sprintf("%s %s/%s %d%%", state.State, castClock(state.Position), castPanelTotal(state), int(state.Volume*100+0.5))
 	return castPanelTruncate(line, width)
 }
 

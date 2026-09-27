@@ -266,7 +266,7 @@ func TestWatchCastRemuxFailureDoesNotMarkWatched(t *testing.T) {
 
 	var err error
 	out := captureStdout(t, func() {
-		err = watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"})
+		err = watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, false)
 	})
 
 	if !errors.Is(err, failure) {
@@ -306,7 +306,7 @@ func TestWatchCastBufferingDoesNotLatchStarted(t *testing.T) {
 	anime := testCastAnime()
 	config := testCastConfig(t)
 
-	err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Guest VLAN TV"})
+	err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Guest VLAN TV"}, false)
 
 	if err == nil {
 		t.Fatal(`expected a startup-failure error, got nil (would print "Playback finished.")`)
@@ -342,7 +342,7 @@ func TestWatchCastRemuxFailureOutranksLostDevice(t *testing.T) {
 	anime := testCastAnime()
 	config := testCastConfig(t)
 
-	err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"})
+	err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, false)
 
 	if !errors.Is(err, failure) {
 		t.Fatalf("expected the remembered remux failure to outrank the lost device, got %v", err)
@@ -372,7 +372,7 @@ func TestWatchCastSavesPartialProgressOnAnUnmarkedExit(t *testing.T) {
 	// Losing the device mid-episode is a failure, not a clean finish: the
 	// caller must not advance to the next episode on it, only resume from
 	// where it left off.
-	if err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"}); err == nil {
+	if err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, false); err == nil {
 		t.Fatal("expected an error on an unremembered lost-device exit, got nil")
 	}
 
@@ -416,7 +416,7 @@ func TestWatchCastMarkedSuppressesALaterRemuxFailure(t *testing.T) {
 	anime := testCastAnime()
 	config := testCastConfig(t)
 
-	err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"})
+	err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, false)
 
 	if err != nil {
 		t.Fatalf("a failure discovered after the episode was marked watched should read as a clean finish, got %v", err)
@@ -459,7 +459,7 @@ func TestWatchCastStallBoundFiresWhenPositionStopsAdvancing(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"})
+		done <- watchCast(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, false)
 	}()
 
 	select {
@@ -498,7 +498,7 @@ func TestWatchCastPauseSuspendsTheStallBound(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+		done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands, false)
 	}()
 
 	select {
@@ -535,7 +535,7 @@ func TestWatchCastStopCommandEndsWithoutMarking(t *testing.T) {
 	config := testCastConfig(t)
 
 	captureStdout(t, func() {
-		if err := watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands); !errors.Is(err, ErrCastStopped) {
+		if err := watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands, false); !errors.Is(err, ErrCastStopped) {
 			t.Fatalf("stopping should report ErrCastStopped, got: %v", err)
 		}
 	})
@@ -566,7 +566,7 @@ func TestWatchCastSeekBackClampsAtZero(t *testing.T) {
 	done := make(chan error, 1)
 	captureStdout(t, func() {
 		go func() {
-			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands, false)
 		}()
 		time.Sleep(100 * time.Millisecond)
 		commands <- castCmdStop
@@ -609,7 +609,7 @@ func TestWatchCastVolumeClampsAtTheTop(t *testing.T) {
 	done := make(chan error, 1)
 	captureStdout(t, func() {
 		go func() {
-			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands, false)
 		}()
 		time.Sleep(200 * time.Millisecond)
 		commands <- castCmdStop
@@ -645,7 +645,7 @@ func TestWatchCastRepeatedSeeksCompound(t *testing.T) {
 	done := make(chan error, 1)
 	captureStdout(t, func() {
 		go func() {
-			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands, false)
 		}()
 		time.Sleep(150 * time.Millisecond)
 		commands <- castCmdStop
@@ -691,7 +691,7 @@ func TestWatchCastSeekingWhilePausedClearsPaused(t *testing.T) {
 	done := make(chan error, 1)
 	captureStdout(t, func() {
 		go func() {
-			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands, false)
 		}()
 
 		select {
@@ -729,7 +729,7 @@ func TestWatchCastSavesPartialProgressOnASignal(t *testing.T) {
 	var history []Anime
 	captureStdout(t, func() {
 		go func() {
-			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands)
+			done <- watchCastWithControls(config, anime, session, server, remux, cast.Device{Name: "Living Room"}, commands, false)
 		}()
 		time.Sleep(120 * time.Millisecond) // let it poll a position
 
@@ -781,7 +781,7 @@ func TestWatchCastDistinguishesNeverFetchedFromRefused(t *testing.T) {
 			var err error
 			captureStdout(t, func() {
 				err = watchCast(config, anime, session, &fakeServer{neverFetched: tc.neverFetched},
-					newFakeRemux(), cast.Device{Name: "Living Room"})
+					newFakeRemux(), cast.Device{Name: "Living Room"}, false)
 			})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("expected a message containing %q, got %v", tc.want, err)
