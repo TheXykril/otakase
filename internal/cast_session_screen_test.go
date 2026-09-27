@@ -74,10 +74,14 @@ func TestCompletionSummaryIsHeldUntilTheScreenIsReleased(t *testing.T) {
 	holdCastSessionPanel(t)
 
 	line := "Completion summary: rating skipped (cast window); sequel skipped (cast window)"
-	deferCastSummary(line)
 
-	// While the screen is held, taking it must not yield the line -- that is the
-	// path that would have notified instead of printed.
+	// Through emitCompletionSummary, not deferCastSummary. Calling the defer
+	// directly asserts that a setter sets, and passes even if the branch that
+	// chooses to defer is deleted -- which is the failure this guards: without
+	// it the summary goes to Out, becomes a desktop notification fired from
+	// behind the panel, and the one line the viewer came back for is gone.
+	emitCompletionSummary(line)
+
 	if got := takeCastDeferredSummary(); got != line {
 		t.Fatalf("deferred summary = %q, want %q", got, line)
 	}
@@ -93,9 +97,12 @@ func TestCompletionSummaryIsNotHeldWithoutACastWindow(t *testing.T) {
 	resetCastSessionScreen(t)
 	castSetPanelOwnsScreen(false)
 
-	if castPanelOwnsScreen() {
-		t.Fatal("a panel owns the screen with no cast window running")
-	}
+	// Again through the real decision. The previous version of this test called
+	// takeCastDeferredSummary immediately after the reset had already emptied it,
+	// so it asserted that a cleared variable was clear and would have passed
+	// against an implementation that deferred every summary into the void.
+	emitCompletionSummary("Completion summary: rating saved (9)")
+
 	if got := takeCastDeferredSummary(); got != "" {
 		t.Errorf("a summary was deferred with nothing to defer it for: %q", got)
 	}

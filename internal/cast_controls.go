@@ -520,7 +520,9 @@ func castPanelSay(config *Config, anime *Anime, message string) {
 	if config != nil {
 		device = config.CastDevice
 	}
-	fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device, message, castPanelPlaybackKeys))
+	// Done rather than playback keys: every caller of this draws after the season
+	// has finished, so offering space/arrows/q would name keys that do nothing.
+	fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device, message, castPanelDoneKeys))
 }
 
 // castDeferredSummary is a completion summary held back while a cast window owns

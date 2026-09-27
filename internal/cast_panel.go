@@ -80,6 +80,12 @@ func castPanelLines(state castPanelState, width int) []string {
 // drawn in the same frame passes its own.
 const castPanelPlaybackKeys = " space · ←→ · ↑↓ · q stop "
 
+// castPanelDoneKeys is the footer for a frame drawn after the season is over.
+// The playback keys are wrong there: nothing is playing, so space, the arrows
+// and q do nothing, and a viewer told "q stop" while being shown the result of
+// their rating has been told the wrong thing.
+const castPanelDoneKeys = " season finished "
+
 // castPanelPlainLine is the fallback for a terminal too narrow to frame.
 func castPanelPlainLine(state castPanelState, width int) string {
 	total := "--:--"

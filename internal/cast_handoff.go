@@ -317,7 +317,22 @@ func handOffCastToTerminal(config *Config, anime *Anime) error {
 		return fmt.Errorf("cast: could not find this program on disk: %w", err)
 	}
 
-	path, err := writeCastSession(config, anime, config.CastDevice)
+	// The device is resolved here, in the process that still has a viewer at the
+	// keyboard, rather than in the window that does not. The spawned session runs
+	// with CastNonInteractive set, so with two or more devices on the network and
+	// no CastDevice configured its own picker refuses, CastEpisode returns the
+	// refusal, and the window closes on "interactive menu unavailable" without
+	// naming what to set. Asking now turns that dead end into one menu.
+	device := config.CastDevice
+	if device == "" {
+		chosen, err := chooseCastDevice(config)
+		if err != nil {
+			return fmt.Errorf("cast: no device to cast to -- set CastDevice in the config to skip this: %w", err)
+		}
+		device = chosen.Name
+	}
+
+	path, err := writeCastSession(config, anime, device)
 	if err != nil {
 		return err
 	}
