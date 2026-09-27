@@ -27,7 +27,9 @@ const castStopTimeout = time.Second
 
 // castStartTimeout is how long to wait for ffmpeg to write the first segment
 // before giving up on the stream.
-const castStartTimeout = 30 * time.Second
+// 90s rather than 30s. Burning subtitles re-encodes the video, so the first
+// segment can take considerably longer to appear than a stream copy does.
+const castStartTimeout = 90 * time.Second
 
 // castStartupGrace is how long an idle status is tolerated before the device
 // has reported anything but idle. Load is fire-and-forget: a device that
@@ -39,7 +41,11 @@ const castStartTimeout = 30 * time.Second
 // A var, not a const: the final-review test seam needs to shrink this (along
 // with castPollInterval and castStallTimeout) to keep watchCast's table tests
 // fast. Production code never assigns to it.
-var castStartupGrace = 30 * time.Second
+// 90s rather than 30s: a TV waking from standby, joining Wi-Fi and buffering a
+// first segment regularly needs more than half a minute, and the cost of
+// waiting too long is a pause before an error, while the cost of giving up too
+// soon is a cast that failed for no reason the viewer can see.
+var castStartupGrace = 90 * time.Second
 
 // castStallTimeout is how long a position may sit unchanged, once the device
 // has started, before watchCast gives up on it. The vendored library never
@@ -322,6 +328,19 @@ func CastEpisode(config *Config, anime *Anime) error {
 	// vendored library cannot reach. Burning costs a re-encode, so it happens
 	// only when there is something to burn.
 	remuxArgs := cast.BuildRemuxArgs(streamURL, referrer, streamDir)
+	if !castShouldBurnSubtitles(config, anime) {
+		// Said out loud, because a cast that silently plays without subtitles
+		// looks identical to one where burning failed, and the viewer is left
+		// guessing which. Each reason below is a different thing to fix.
+		switch {
+		case config != nil && !config.CastBurnSubtitles:
+			Log("cast: not burning subtitles: CastBurnSubtitles is off")
+		case strings.TrimSpace(anime.Ep.SubtitleURL) == "":
+			Log("cast: not burning subtitles: this provider gave no subtitle track for this episode")
+		default:
+			Log("cast: not burning subtitles: the audio is a dub")
+		}
+	}
 	if castShouldBurnSubtitles(config, anime) {
 		castStatus("Fetching subtitles…")
 		subtitlePath, subErr := fetchCastSubtitle(anime.Ep.SubtitleURL, referrer, streamDir)
@@ -594,6 +613,12 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 		case command := <-commands:
 			wasPaused := paused
 			stop, moved, err := applyCastCommand(command, session, &paused, spans, lastPosition)
+			// Logged whether or not it worked. A seek that the receiver quietly
+			// declines is indistinguishable from a keypress that never arrived,
+			// and the two have completely different causes -- one is this
+			// program, the other is the stream having no known duration to seek
+			// within.
+			Log(fmt.Sprintf("cast: command %d at pos=%.1f -> pos=%.1f err=%v", command, lastPosition, moved, err))
 			if err != nil {
 				Log(fmt.Sprintf("cast: %v", err))
 			}
@@ -720,12 +745,22 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			if paused {
 				state = "PAUSED"
 			}
+			// The device reports dur=-1 for the whole episode: ffmpeg writes no
+			// EXT-X-ENDLIST until the remux finishes, so the receiver treats the
+			// playlist as live and never learns a length. The panel showed --:--
+			// for the total because of it. The provider already told us how long
+			// the episode is, so prefer that and fall back to the device only
+			// when we were told nothing.
+			total := progress.Duration
+			if total <= 0 && anime.Ep.Duration > 0 {
+				total = float64(anime.Ep.Duration)
+			}
 			fmt.Print(panel.frame(castPanelState{
 				Title:    animeName,
 				Episode:  episodeNumber,
 				Device:   device.Name,
 				Position: progress.Position,
-				Duration: progress.Duration,
+				Duration: total,
 				State:    state,
 				Volume:   session.Volume(),
 			}))
