@@ -201,3 +201,27 @@ func TestRoundingDoesNotProduceAnImpossibleTimestamp(t *testing.T) {
 		t.Fatalf("3599.9999 formatted as %q", got)
 	}
 }
+
+// The direction matters, and it was documented backwards at first. A cue drawn
+// against the rebuilt stream's own clock lands *after* the dialogue it belongs
+// to, by the seek distance -- so the shift moves cues earlier, never later.
+//
+// Measured with ffmpeg on a black test video: a cue at 0:20 burned into a stream
+// restarted at 0:15 appears at output 0:20 unshifted, and at output 0:05 shifted.
+func TestTheShiftMovesCuesEarlierNotLater(t *testing.T) {
+	got := shiftFixture(t, `WEBVTT
+
+1
+00:00:20.000 --> 00:00:25.000
+MARK
+`, 15)
+
+	if !strings.Contains(got, "00:00:05.000 --> 00:00:10.000") {
+		t.Fatalf("a cue at 0:20 seeked past 0:15 did not become 0:05:\n%s", got)
+	}
+	// 0:35 would be the wrong direction, and the one that leaves subtitles
+	// trailing the dialogue by the seek distance.
+	if strings.Contains(got, "00:00:35.000") {
+		t.Fatalf("the shift moved the cue later instead of earlier:\n%s", got)
+	}
+}

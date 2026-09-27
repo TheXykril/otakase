@@ -45,7 +45,7 @@ func BuildBurnArgs(streamURL, referrer, subtitlePath, outDir string, enc Encoder
 // The subtitle file passed here must already be shifted by the same offset --
 // see ShiftWebVTT. The filter reads cue timings as they are written, and a
 // stream restarted at the target plays from zero, so an unshifted file would
-// show every line early by exactly the seek distance.
+// show every line the seek distance too late.
 func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Encoder, startAt float64) []string {
 	args := []string{"-hide_banner"}
 

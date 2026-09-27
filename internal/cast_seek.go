@@ -77,7 +77,7 @@ func (s *castStreamSource) start(startAt float64) (stream, error) {
 		shifted := filepath.Join(dir, "subtitles.vtt")
 		if err := cast.ShiftWebVTT(s.subtitlePath, shifted, startAt); err != nil {
 			// Subtitles that cannot be shifted are worth less than the seek:
-			// burn the original and let them run early rather than refusing to
+			// burn the original and let them run late rather than refusing to
 			// move at all.
 			Log(fmt.Sprintf("cast: %v", err))
 			shifted = s.subtitlePath

@@ -8,10 +8,16 @@ import (
 )
 
 // Seeking a cast episode restarts the remux at an offset, so the stream the
-// device plays begins at the seek target rather than at zero. Burned subtitles
-// do not follow: the subtitles filter reads a file whose cues are stamped
-// against the original episode, and a video that now starts at 0 would show a
-// line meant for 12:00 twelve minutes early.
+// device plays begins at the seek target rather than at zero. Burned subtitles do
+// not follow: ffmpeg rebases the output timestamps to zero after an input seek
+// and the subtitles filter works on that rebased clock, while the file's cues are
+// still stamped against the original episode. A line written for 12:00 is
+// therefore drawn at 12:00 of the *new* stream -- twelve minutes after the
+// dialogue it belongs to, once the stream already starts at 12:00.
+//
+// Measured rather than assumed: a cue at 0:20 burned into a stream restarted at
+// 0:15 lands at output 0:20 unshifted, and at output 0:05 -- where it belongs --
+// once shifted.
 //
 // The cues are therefore shifted to match. Shifting the file is done rather than
 // asking ffmpeg to preserve timestamps (-copyts), because preserved timestamps
