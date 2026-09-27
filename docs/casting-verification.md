@@ -111,11 +111,56 @@ on one day and silently does nothing the next, and the cause is almost always
 the host firewall rather than the code.
 
 **The trap: `ufw status` lies.** It reads the *saved config*, not the live
-kernel ruleset. Docker rewrites the iptables filter table when its daemon or any
-container starts, without going through ufw, so the running ruleset can lose
-rules the config still lists. The symptom is a device that accepts `LAUNCH` and
-`LOAD`, then never fetches anything -- no media session is ever created, which
-reads like a refused load but is usually a dropped packet.
+kernel ruleset, so a rule can be listed and absent at the same time. The symptom
+is a device that accepts `LAUNCH` and `LOAD`, then never fetches anything -- no
+media session is ever created, which reads like a refused load but is usually a
+dropped packet. The server's request log settles it: no `requested` line means
+nothing arrived.
+
+Two mechanisms produce it, and they look identical from here:
+
+1. **`iptables.service` restoring a stale snapshot.** It runs `iptables-restore`
+   from `/etc/iptables/iptables.rules` at boot, which ufw knows nothing about.
+   Whichever service writes last wins, so ufw's rules can be wiped at every
+   boot. Confirmed on this machine in September 2026: the snapshot was dated
+   May, carried `:INPUT DROP`, held allow-rules for a NordVPN install that had
+   since been removed, and mentioned port 8010 nowhere. ufw reported the cast
+   rule present throughout.
+
+   On a ufw system this service is redundant -- ufw persists its own rules --
+   and running both means two owners for one table:
+
+   ```bash
+   systemctl is-enabled iptables ip6tables   # expect disabled on a ufw host
+   sudo systemctl disable --now iptables
+   ```
+
+2. **Docker rewriting the filter table** when its daemon or any container
+   starts, also without going through ufw. Check `systemctl is-active docker`
+   before reaching for this one; it is not the cause when Docker is inactive.
+
+Check which firewalls actually own the table before diagnosing anything:
+
+```bash
+for s in ufw iptables ip6tables nftables firewalld docker; do
+  printf '%s: enabled=%s active=%s\n' "$s" \
+    "$(systemctl is-enabled $s 2>/dev/null || echo n/a)" \
+    "$(systemctl is-active $s 2>/dev/null || echo n/a)"
+done
+```
+
+**Prove inbound works without spending a cast on it.** Bind a plain HTTP server
+to the LAN address and fetch it from a phone on the same Wi-Fi. This takes the
+program out of the question entirely -- if this fails, the bug is not in this
+repo:
+
+```bash
+python3 -m http.server 8010 --bind <this-machine-lan-ip>
+# then open http://<this-machine-lan-ip>:8010/ on a phone
+```
+
+A `200` in that server's output is inbound confirmed. Silence is a dropped
+packet.
 
 Check the live chain, not the status:
 
