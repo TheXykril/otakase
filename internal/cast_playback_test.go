@@ -127,6 +127,55 @@ func (s *fakeSession) SeekToTime(seconds float64) error {
 	return nil
 }
 
+// slowProgressSession is a castSession whose Progress call sleeps for a
+// caller-controlled duration -- it exists only to test progressWithin's
+// bound, not the wider watchCast loop, which is why it does not join
+// fakeSession's scripted-steps machinery.
+type slowProgressSession struct {
+	delay time.Duration
+}
+
+func (s *slowProgressSession) Progress() (cast.Progress, error) {
+	time.Sleep(s.delay)
+	return cast.Progress{Position: 42}, nil
+}
+func (s *slowProgressSession) SeekToTime(seconds float64) error { return nil }
+func (s *slowProgressSession) Pause() error                     { return nil }
+func (s *slowProgressSession) Unpause() error                   { return nil }
+func (s *slowProgressSession) SetVolume(level float64) error    { return nil }
+func (s *slowProgressSession) Volume() float64                  { return 0 }
+
+// A device that stops acknowledging traffic without closing the connection
+// must not be allowed to hold the poll loop hostage for however long the OS
+// takes to notice -- see castProgressTimeout's doc comment for why the
+// vendored library cannot be trusted to bound this on its own.
+func TestProgressWithinGivesUpWhenTheDeviceNeverAnswers(t *testing.T) {
+	session := &slowProgressSession{delay: 200 * time.Millisecond}
+
+	start := time.Now()
+	_, err := progressWithin(session, 20*time.Millisecond)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected a timeout error")
+	}
+	if elapsed >= 200*time.Millisecond {
+		t.Fatalf("progressWithin waited for the slow call (%s) instead of giving up at its own bound", elapsed)
+	}
+}
+
+func TestProgressWithinReturnsAFastResult(t *testing.T) {
+	session := &fakeSession{steps: []fakeStep{{progress: cast.Progress{Position: 7}}}}
+
+	progress, err := progressWithin(session, time.Second)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if progress.Position != 7 {
+		t.Fatalf("got position %v, want 7", progress.Position)
+	}
+}
+
 // fakeRemux is a castRemux double whose error and done state a test flips
 // mid-run, typically from a fakeSession's onCall hook.
 type fakeRemux struct {
@@ -346,6 +395,71 @@ func TestWatchCastRemuxFailureOutranksLostDevice(t *testing.T) {
 
 	if !errors.Is(err, failure) {
 		t.Fatalf("expected the remembered remux failure to outrank the lost device, got %v", err)
+	}
+}
+
+// Confirmed on hardware: some receivers stop answering status polls right at
+// the true end of a stream they have already fully received. When that
+// happens after the episode is both marked watched and fully delivered, it
+// must read as a finish, not a failure -- the viewer should get the normal
+// next-episode countdown, not an error.
+func TestWatchCastTreatsLostContactAsFinishedOnceMarkedAndFullyDelivered(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	server := &fakeServer{}
+	lostContact := errors.New("cast: device did not respond to a status check within 10s")
+
+	session := &fakeSession{
+		steps: []fakeStep{
+			// Crosses the 85% mark-complete threshold while the remux has
+			// already finished successfully.
+			{progress: cast.Progress{Position: 1230, Duration: 1440}},
+			{err: lostContact},
+		},
+	}
+	session.onCall = func(call int) {
+		if call == 0 {
+			remux.succeed()
+		}
+	}
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	if err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Office TV"}, false); err != nil {
+		t.Fatalf("expected a finish, got an error: %v", err)
+	}
+}
+
+// The same lost-contact error before the episode is marked (or before the
+// remux has finished delivering it) must still fail hard: nothing here
+// proves the episode is actually done.
+func TestWatchCastStillFailsOnLostContactBeforeMarked(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	server := &fakeServer{}
+	lostContact := errors.New("cast: device did not respond to a status check within 10s")
+
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 200, Duration: 1440}}, // well under the mark threshold
+			{err: lostContact},
+		},
+	}
+	session.onCall = func(call int) {
+		if call == 0 {
+			remux.succeed()
+		}
+	}
+
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	err := watchCast(config, anime, session, server, remux, cast.Device{Name: "Office TV"}, false)
+	if err == nil {
+		t.Fatal("expected an error: the episode was never marked watched")
 	}
 }
 
