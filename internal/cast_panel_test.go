@@ -67,6 +67,20 @@ func TestCastPanelToleratesAnUnknownDuration(t *testing.T) {
 	}
 }
 
+// Real content can run a touch past the declared duration -- trailing
+// container padding, or a poll landing mid-way through the final second
+// before the episode is confirmed finished. "24:02 / 24:00" reads as a bug;
+// the panel must clamp the elapsed clock to the total instead.
+func TestCastPanelClampsPositionPastDuration(t *testing.T) {
+	state := testPanelState()
+	state.Position = state.Duration + 2 // 1453 vs 1451
+	rendered := strings.Join(castPanelLines(state, 60), "\n")
+
+	if !strings.Contains(rendered, "24:11 / 24:11") {
+		t.Errorf("expected the clock clamped to the total (24:11 / 24:11):\n%s", rendered)
+	}
+}
+
 // The panel is redrawn in place, so it has to erase exactly what it drew last
 // time. Getting this wrong leaves a trail of stale frames down the terminal.
 func TestCastPanelRedrawErasesThePreviousFrame(t *testing.T) {
