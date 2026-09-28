@@ -17,8 +17,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    # No permissions at all, not even read: this job can run an untrusted
+    # PR's own code (the pull_request event, or workflow_dispatch's pr_number
+    # input), and the repo is public, so actions/checkout below fetches over
+    # anonymous HTTPS without needing a token. contents: read was never load
+    # bearing here -- nothing in this job pushes, comments, or reads through
+    # the API -- it just handed a real token to code this job cannot trust.
+    permissions: {}
     env:
       # A release commit is the only one that needs the macOS and Windows
       # targets; the same marker the release job below keys off.
@@ -42,6 +47,11 @@ jobs:
         with:
           fetch-depth: 0 # Fetch all history and tags
           ref: ${{ github.event.pull_request.head.sha || (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
+          # No token to persist: this checkout can hold untrusted PR code,
+          # and a persisted credential is exactly what that code would go
+          # looking for. The job has none anyway (permissions: {} above),
+          # but this also blocks the plain git CLI here from picking one up.
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -401,7 +411,7 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: "v${{ env.OTAKASE_VERSION }}"
           name: "Otakase v${{ env.OTAKASE_VERSION }}"
