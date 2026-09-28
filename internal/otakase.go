@@ -1927,6 +1927,13 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 			// nobody chose" and "write nothing at all". Arrows and one key work
 			// from a sofa; typing a number does not. See
 			// docs/cast-window-prompts.md.
+			//
+			// The cast session is already torn down by this point (CastEpisode
+			// returned before HandleLastEpisodeCompletion runs), so this
+			// reconnects just long enough to show a card -- decoration, not a
+			// dependency: any failure here falls back to the terminal-only
+			// prompt this already was.
+			releaseRatingCard := pushCastRatingCard(userConfig, anime)
 			if score, given := castAwaitScore(userConfig, anime, castCountdownDuration); given {
 				if err := RateAnimeWithScore(userToken, anime.AnilistId, float64(score)); err != nil {
 					Log(fmt.Sprintf("Error rating anime: %v", err))
@@ -1940,6 +1947,7 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 				castPanelSay(userConfig, anime, "No answer -- rating skipped.")
 				summary = append(summary, "rating skipped (cast window)")
 			}
+			releaseRatingCard()
 		} else {
 			scoreOptions := []SelectionOption{
 				{Key: "yes", Label: "Yes, rate this anime"},

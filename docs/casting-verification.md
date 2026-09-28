@@ -331,6 +331,15 @@ cases only a real device and a real room can settle.
       keystrokes echo oddly afterwards, `reset` and report it — a prompt ending
       while the cast reader is still parked is exactly the sequence that would
       do that.
+- [ ] **At season end, the TV reconnects and shows a rating card** — cover
+      art, the anime's title, "Rate this anime — check your terminal" —
+      while the terminal panel runs the actual score picker. Confirm the
+      device returns to its own idle screen once a score is given or the
+      window times out (not left showing the card forever).
+- [ ] **Power the device off (or block it at the firewall) before the season
+      ends.** The score picker in the terminal must still work exactly as
+      before this feature existed -- no delay, no error shown to the
+      viewer, just a log line about the reconnect failing.
 
 ## Known limits
 
