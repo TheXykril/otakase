@@ -144,6 +144,28 @@ func playWithin(load func(string) error, url string, within time.Duration) error
 	return fmt.Errorf("cast: could not start playback: %w", lastErr)
 }
 
+// defaultMediaReceiverAppID is the Default Media Receiver's Cast app ID.
+// PlayWithin's doc comment above names it in the error text this project
+// already logs; this is the same ID as a named constant.
+const defaultMediaReceiverAppID = "CC1AD845"
+
+// ReceiverIsAvailable reports whether the device is idle or already running
+// the Default Media Receiver -- safe to load a stream or a card onto without
+// interrupting a different app the viewer switched to.
+//
+// A status read that fails is treated as available rather than unavailable:
+// this guards against pulling the device away from something else, not
+// against a transient network hiccup, and the caller's own next call (the
+// Load this guards) will fail loudly on its own if the device is genuinely
+// unreachable.
+func (s *Session) ReceiverIsAvailable() bool {
+	if err := s.app.Update(); err != nil {
+		return true
+	}
+	app, _, _ := s.app.Status()
+	return app == nil || app.IsIdleScreen || app.AppId == defaultMediaReceiverAppID
+}
+
 // Progress asks the device where it is.
 func (s *Session) Progress() (Progress, error) {
 	if err := s.app.Update(); err != nil {

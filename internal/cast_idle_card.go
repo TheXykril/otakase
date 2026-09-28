@@ -9,6 +9,7 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	"io"
+	"strings"
 
 	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
@@ -25,6 +26,19 @@ const (
 	idleCardHeight     = 720
 	idleCardBandHeight = 160
 )
+
+// sanitizeForCardFont maps a string to what basicfont.Face7x13 can actually
+// draw. The face only covers U+0020-U+007E; anything else -- an em dash, an
+// accented letter, a non-Latin title -- draws as an unreadable replacement
+// box on the device instead. '?' is at least legible.
+func sanitizeForCardFont(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r > 0x7E {
+			return '?'
+		}
+		return r
+	}, s)
+}
 
 // composeIdleCard draws cover art, stretched to fill the frame, under a dark
 // band carrying up to a few lines of text.
@@ -56,7 +70,7 @@ func composeIdleCard(cover image.Image, lines []string) []byte {
 			Face: face,
 			Dot:  fixed.Point26_6{X: fixed.I(40), Y: fixed.I(y)},
 		}
-		drawer.DrawString(line)
+		drawer.DrawString(sanitizeForCardFont(line))
 		y += lineHeight
 	}
 

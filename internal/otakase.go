@@ -1934,6 +1934,7 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 			// dependency: any failure here falls back to the terminal-only
 			// prompt this already was.
 			releaseRatingCard := pushCastRatingCard(userConfig, anime)
+			cancelRatingCardExitCleanup := RegisterExitCleanup(releaseRatingCard)
 			if score, given := castAwaitScore(userConfig, anime, castCountdownDuration); given {
 				if err := RateAnimeWithScore(userToken, anime.AnilistId, float64(score)); err != nil {
 					Log(fmt.Sprintf("Error rating anime: %v", err))
@@ -1947,6 +1948,7 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 				castPanelSay(userConfig, anime, "No answer -- rating skipped.")
 				summary = append(summary, "rating skipped (cast window)")
 			}
+			cancelRatingCardExitCleanup()
 			releaseRatingCard()
 		} else {
 			scoreOptions := []SelectionOption{

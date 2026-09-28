@@ -81,6 +81,14 @@ func TestFetchCoverImageReportsA404(t *testing.T) {
 	}
 }
 
+func TestSanitizeForCardFontReplacesNonASCIIWithQuestionMarks(t *testing.T) {
+	got := sanitizeForCardFont("Pokémon — 日本語")
+	want := "Pok?mon ? ???"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 func TestBuildIdleCardPNGNeverErrorsWhenTheCoverCannotBeFetched(t *testing.T) {
 	data := buildIdleCardPNG("http://127.0.0.1:1/no-such-host", []string{"Title", "Message"})
 	if _, err := png.Decode(bytes.NewReader(data)); err != nil {

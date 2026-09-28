@@ -495,11 +495,11 @@ func CastEpisode(config *Config, anime *Anime) error {
 	// episode that just finished. Skipped when the season is over -- the
 	// device is about to be disconnected by this function's teardown, and
 	// pushCastRatingCard (season end) shows its own card instead.
-	if !castSeasonFinished(anime) {
+	if !castSeasonFinished(anime) && s.ReceiverIsAvailable() {
 		next := castNextEpisodeNumber(config, anime)
 		lines := []string{
 			GetAnimeName(*anime),
-			fmt.Sprintf("Episode %d watched — Episode %d up next", anime.Ep.Number, next),
+			fmt.Sprintf("Episode %d watched - Episode %d up next", anime.Ep.Number, next),
 		}
 		card := buildIdleCardPNG(anime.CoverImage, lines)
 		idlePath := filepath.Join(streamDir, "idle.png")
