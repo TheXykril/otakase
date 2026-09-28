@@ -915,6 +915,17 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	}
 }
 
+// findCastDeviceByName looks for an exact name match among discovered
+// devices, taking the first if more than one answers with the same name.
+func findCastDeviceByName(devices []cast.Device, name string) (cast.Device, bool) {
+	for _, device := range devices {
+		if device.Name == name {
+			return device, true
+		}
+	}
+	return cast.Device{}, false
+}
+
 // chooseCastDevice finds the device to play on, asking only when the answer is
 // not already obvious.
 func chooseCastDevice(config *Config) (cast.Device, error) {
@@ -929,10 +940,8 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 
 	configuredMissing := false
 	if configured := config.CastDevice; configured != "" {
-		for _, device := range devices {
-			if device.Name == configured {
-				return device, nil
-			}
+		if device, ok := findCastDeviceByName(devices, configured); ok {
+			return device, nil
 		}
 		Out(fmt.Sprintf("%q was not found; pick another device.", configured))
 		configuredMissing = true

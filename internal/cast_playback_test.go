@@ -818,3 +818,33 @@ func TestWatchCastDistinguishesNeverFetchedFromRefused(t *testing.T) {
 		})
 	}
 }
+
+func TestFindCastDeviceByNameMatchesExactly(t *testing.T) {
+	devices := []cast.Device{
+		{Name: "Living Room TV"},
+		{Name: "Bedroom TV"},
+	}
+
+	got, ok := findCastDeviceByName(devices, "Bedroom TV")
+	if !ok || got.Name != "Bedroom TV" {
+		t.Fatalf("got %+v, %v; want Bedroom TV, true", got, ok)
+	}
+}
+
+func TestFindCastDeviceByNameReportsNoMatch(t *testing.T) {
+	devices := []cast.Device{{Name: "Living Room TV"}}
+
+	if _, ok := findCastDeviceByName(devices, "Kitchen TV"); ok {
+		t.Fatal("expected no match")
+	}
+}
+
+func TestFindCastDeviceByNameTakesTheFirstOfDuplicates(t *testing.T) {
+	first := cast.Device{Name: "TV", UUID: "first"}
+	devices := []cast.Device{first, {Name: "TV", UUID: "second"}}
+
+	got, ok := findCastDeviceByName(devices, "TV")
+	if !ok || got.UUID != "first" {
+		t.Fatalf("got %+v, %v; want the first duplicate", got, ok)
+	}
+}
