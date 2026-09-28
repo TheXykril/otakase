@@ -59,6 +59,16 @@ type castPanelSegment struct {
 // to be \r\n rather than \n, because raw mode turns off the translation that
 // would otherwise return the cursor to the left margin.
 func castPanelLines(state castPanelState, width int) []string {
+	// The declared duration is an estimate (a pre-playback probe, or the
+	// tracker's average): real content can run a touch past it -- trailing
+	// container padding, or a poll landing mid-way through the final second
+	// before the episode is confirmed finished. "24:02 / 24:00" reads as a
+	// bug even though nothing is wrong, so this clamps for display only;
+	// state is a local copy, so nothing downstream of this call sees the
+	// change.
+	if state.Duration > 0 && state.Position > state.Duration {
+		state.Position = state.Duration
+	}
 	if width > castPanelMaxWidth {
 		width = castPanelMaxWidth
 	}

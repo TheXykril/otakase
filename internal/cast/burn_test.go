@@ -43,6 +43,19 @@ func TestBuildBurnArgsStaysWithinTheDeviceProfile(t *testing.T) {
 	}
 }
 
+// Without an explicit rate-passthrough, ffmpeg's default frame-rate handling
+// can duplicate or drop re-encoded video frames to force a constant rate,
+// while the copied audio track keeps its original timestamps untouched --
+// drifting the two apart, worst right after a seek restarts the encoder's
+// rate assumption from a fresh point in the source.
+func TestBuildBurnArgsKeepsVideoAndAudioTimestampsInSync(t *testing.T) {
+	args := burnArgs(Encoder{Name: "libx264"})
+
+	if !strings.Contains(args, "-fps_mode passthrough") {
+		t.Errorf("video frames are not passed through as-is, which can drift out of sync with the copied audio:\n%s", args)
+	}
+}
+
 // The subtitles filter takes a path, and ffmpeg's filter syntax gives : and \
 // and ' their own meanings -- a storage path containing any of them would
 // otherwise be read as filter syntax rather than as a filename.

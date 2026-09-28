@@ -25,6 +25,42 @@ var castPollInterval = time.Second
 // that has stopped answering must not be allowed to spend all of it.
 const castStopTimeout = time.Second
 
+// castProgressTimeout bounds a single status check against the device.
+//
+// The vendored library sets no read or write deadline on its connection: a
+// device that stops acknowledging traffic without closing the connection --
+// wifi power-save is a common trigger, and this project has seen it cluster
+// near the end of an episode -- leaves the write itself blocked on the OS's
+// own TCP retransmission timeout, tens of seconds, well past the library's
+// own 5s response-wait (which never starts, because the write that would
+// lead to it is what is stuck). Without this bound, a dead connection reads
+// as a frozen panel for half a minute before "lost contact" ever appears.
+const castProgressTimeout = 10 * time.Second
+
+// progressWithin calls session.Progress with an external bound, for the
+// reason castProgressTimeout documents. The goroutine below is not
+// cancellable -- the vendored call underneath takes no context -- so a
+// progress call that is still stuck when within elapses keeps running and
+// writes to done on its own time; done is buffered so that write never
+// blocks, and nothing here reads it again once this function has returned.
+func progressWithin(session castSession, within time.Duration) (cast.Progress, error) {
+	type result struct {
+		progress cast.Progress
+		err      error
+	}
+	done := make(chan result, 1)
+	go func() {
+		p, err := session.Progress()
+		done <- result{p, err}
+	}()
+	select {
+	case r := <-done:
+		return r.progress, r.err
+	case <-time.After(within):
+		return cast.Progress{}, fmt.Errorf("cast: device did not respond to a status check within %s", within)
+	}
+}
+
 // castStartTimeout is how long to wait for ffmpeg to write the first segment
 // before giving up on the stream.
 // 90s rather than 30s. Burning subtitles re-encodes the video, so the first
@@ -756,10 +792,26 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			return serverErr
 		}
 
-		progress, err := session.Progress()
+		progress, err := progressWithin(session, castProgressTimeout)
 		if err != nil {
-			castOut(commands != nil, fmt.Sprintf("Lost contact with %s.", device.Name))
 			Log(fmt.Sprintf("cast: lost contact with the device: %v", err))
+			// Some receivers go unresponsive to status polls right at the
+			// true end of a stream they have already fully received, rather
+			// than reporting idle promptly -- confirmed on hardware: the
+			// whole episode was already delivered (remuxSucceeded, i.e.
+			// EXT-X-ENDLIST was written) and the watched threshold had
+			// already been crossed (marked) before contact was lost. That
+			// combination is what makes this safe to treat as a finish
+			// instead of a failure -- unlike marked alone, it cannot fire
+			// on an episode still being delivered when the connection
+			// happened to drop, since there is nothing left it could have
+			// missed.
+			if marked && remuxSucceeded() {
+				castOut(commands != nil, "Lost contact near the end -- treating the episode as finished.")
+				savePartial(lastPosition)
+				return nil
+			}
+			castOut(commands != nil, fmt.Sprintf("Lost contact with %s.", device.Name))
 			savePartial(lastPosition)
 			// A remembered ffmpeg failure outranks losing the device: if the
 			// remux died and the device then stopped answering, ffmpeg is the
@@ -917,6 +969,14 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 
 // chooseCastDevice finds the device to play on, asking only when the answer is
 // not already obvious.
+//
+// castSessionDevice remembers which device the viewer picked this run, so a
+// later episode in the same process -- the normal case, since runCastLoop
+// calls this again for every episode -- does not re-prompt when nothing in
+// the config says which device to use. Session-only: never written to
+// config, gone the moment the process exits.
+var castSessionDevice string
+
 func chooseCastDevice(config *Config) (cast.Device, error) {
 	Out("Looking for cast devices...")
 	devices, err := cast.Discover(context.Background(), cast.DefaultDiscoveryTimeout)
@@ -931,17 +991,29 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 	if configured := config.CastDevice; configured != "" {
 		for _, device := range devices {
 			if device.Name == configured {
+				castSessionDevice = device.Name
 				return device, nil
 			}
 		}
 		Out(fmt.Sprintf("%q was not found; pick another device.", configured))
 		configuredMissing = true
+	} else if castSessionDevice != "" {
+		// Nothing configured, but this run already picked once -- honour
+		// that pick again rather than asking a second time. Falls through
+		// to the normal menu if the remembered device is no longer
+		// answering discovery (turned off, renamed).
+		for _, device := range devices {
+			if device.Name == castSessionDevice {
+				return device, nil
+			}
+		}
 	}
 
 	// The lone device is not "another device" when a configured name just
 	// failed to match it -- that is silently ignoring the mismatch and
 	// casting to it anyway, right after telling the user to pick.
 	if len(devices) == 1 && !configuredMissing {
+		castSessionDevice = devices[0].Name
 		return devices[0], nil
 	}
 
@@ -955,6 +1027,7 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 	}
 	for _, device := range devices {
 		if device.UUID == selected.Key {
+			castSessionDevice = device.Name
 			return device, nil
 		}
 	}

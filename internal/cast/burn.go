@@ -78,6 +78,14 @@ func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Enc
 		"-c:v", enc.Name,
 		"-profile:v", "high",
 		"-level", castBurnLevel,
+		// Without this, ffmpeg's default frame-rate handling can duplicate or
+		// drop video frames to force a constant rate while the audio track
+		// below is copied verbatim with its original timestamps untouched --
+		// the two drift apart, worst right after a seek, where the encoder
+		// restarts its rate assumption from a fresh, likely irregular, point
+		// in the source. Passthrough keeps every input frame's own
+		// timestamp, exactly matching what -c:a copy already does for audio.
+		"-fps_mode", "passthrough",
 	)
 	if !enc.Hardware() {
 		// Fast enough to stay well ahead of playback, which is the only
