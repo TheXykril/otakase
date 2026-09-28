@@ -1,5 +1,45 @@
 # Changelog
 
+## 2.1.2 — 2026-09-28
+
+### Fixed
+
+- **Casting could hang for 36-41 seconds and error out** when the device
+  stopped answering status polls -- the vendored Chromecast library sets no
+  read/write deadline on its connection. Status checks now give up after
+  10 seconds.
+- **Casting could error out instead of advancing** when a device went
+  unresponsive right at the true end of an already fully-delivered episode
+  (confirmed on hardware). That case now advances to the next episode like
+  any other clean finish, while a genuine mid-episode drop still fails as
+  before.
+- **The cast device could be re-prompted for on every episode** when no
+  device was set in the config and more than one was on the network. The
+  picked device is now remembered for the rest of the run.
+- **Audio could drift out of sync with video after seeking**, on a cast with
+  subtitles burned in. The re-encode had no explicit frame-rate handling, so
+  ffmpeg could duplicate or drop video frames to hold a constant rate while
+  the copied audio track kept its original timestamps.
+- **The cast panel could show a position past the total** (e.g. "24:02 /
+  24:00") when real content ran a couple seconds past the probed duration.
+  The displayed position is now clamped to the total.
+- **A build made without the release `-ldflags` (any plain `go build`, not
+  the `Build/` scripts or the AUR package) reported itself as v2.0.7**
+  instead of a development build, which could also trigger a false "update
+  available" prompt against every real release. Falls back to `dev` now.
+- **The rofi update dialog's changelog could render as an unstyled white
+  box** when a lot of release notes were concatenated (skipping several
+  updates at once) and the truncation cut the generated markup mid-tag.
+  Notes are now truncated before conversion, so the markup stays well-formed.
+
+### Security
+
+- Pinned `softprops/action-gh-release` to a commit hash instead of a mutable
+  tag in the release workflow.
+- The CI build job -- which can run an untrusted pull request's own code --
+  now runs with no permissions at all instead of `contents: read`, and does
+  not persist a checkout credential.
+
 ## 2.1.1 — 2026-09-28
 
 ### Fixed
