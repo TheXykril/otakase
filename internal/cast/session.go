@@ -98,14 +98,29 @@ const DefaultLaunchTimeout = 90 * time.Second
 // app; polling it faster does not make that quicker.
 var launchRetryInterval = 2 * time.Second
 
-// PlayWithin loads a URL, retrying the launch until the deadline passes.
+// PlayWithin loads a URL as an HLS stream, retrying the launch until the
+// deadline passes.
 //
 // Only the timeout is retried. A device that refuses the stream refuses it the
 // same way every time, so retrying that would turn a clear failure into a long
 // one.
 func (s *Session) PlayWithin(url string, within time.Duration) error {
+	return s.loadWithin(url, "application/x-mpegURL", within)
+}
+
+// PlayImage loads a still image on the device -- the idle/rating card shown
+// between episodes and at season end. It uses the same launch-retry behavior
+// as PlayWithin: a device waking from standby needs the same grace whether
+// what it is asked to show is a stream or a picture.
+func (s *Session) PlayImage(url string) error {
+	return s.loadWithin(url, "image/png", DefaultLaunchTimeout)
+}
+
+// loadWithin is the shared retry loop under Play and PlayImage, parameterized
+// on content type so a still image does not have to pretend to be HLS.
+func (s *Session) loadWithin(url, contentType string, within time.Duration) error {
 	return playWithin(func(u string) error {
-		return s.app.Load(u, 0, "application/x-mpegURL", false, true, false)
+		return s.app.Load(u, 0, contentType, false, true, false)
 	}, url, within)
 }
 
