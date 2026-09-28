@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"sort"
 
 	// "io"
@@ -454,7 +455,7 @@ func authenticateWithBrowser(tokenPath string) (string, error) {
 
 		if errorParam != "" {
 			w.WriteHeader(http.StatusBadRequest)
-			html := fmt.Sprintf(`<!DOCTYPE html>
+			htmlBody := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
     <title>Otakase Authentication</title>
@@ -467,15 +468,15 @@ func authenticateWithBrowser(tokenPath string) (string, error) {
     <div class="error">Authentication failed: %s</div>
     <p>You can close this window and try again.</p>
 </body>
-</html>`, errorParam)
-			fmt.Fprint(w, html)
+</html>`, html.EscapeString(errorParam))
+			fmt.Fprint(w, htmlBody)
 			errCh <- fmt.Errorf("oauth error: %s", errorParam)
 			return
 		}
 
 		if code == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			html := `<!DOCTYPE html>
+			htmlBody := `<!DOCTYPE html>
 <html>
 <head>
     <title>Otakase Authentication</title>
@@ -489,7 +490,7 @@ func authenticateWithBrowser(tokenPath string) (string, error) {
     <p>You can close this window and try again.</p>
 </body>
 </html>`
-			fmt.Fprint(w, html)
+			fmt.Fprint(w, htmlBody)
 			errCh <- fmt.Errorf("no authorization code received")
 			return
 		}
@@ -537,7 +538,7 @@ func authenticateWithBrowser(tokenPath string) (string, error) {
 		}()
 
 		// Show success page immediately
-		html := `<!DOCTYPE html>
+		htmlBody := `<!DOCTYPE html>
 <html>
 <head>
     <title>Otakase Authentication</title>
@@ -551,7 +552,7 @@ func authenticateWithBrowser(tokenPath string) (string, error) {
     <p>Exchanging authorization code for token. You can close this window.</p>
 </body>
 </html>`
-		fmt.Fprint(w, html)
+		fmt.Fprint(w, htmlBody)
 	})
 
 	// Start server in background
