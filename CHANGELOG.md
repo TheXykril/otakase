@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.1 — 2026-09-28
+
+### Fixed
+
+- **The AniList OAuth callback reflected an error parameter into its response
+  page unescaped.** The local callback server binds `:8000` on all
+  interfaces, not just localhost, so a crafted `error` value reaching it
+  during authentication could execute script in that page. The value is now
+  HTML-escaped before being written out.
+
 ## 2.1.0 — 2026-09-27
 
 ### Added
