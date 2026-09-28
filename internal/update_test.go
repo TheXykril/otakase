@@ -225,6 +225,33 @@ func TestBuildUpdatePromptMessage(t *testing.T) {
 	}
 }
 
+// A viewer who has skipped several releases gets every intervening release's
+// notes concatenated, which can run well past the truncation limit. Cutting
+// the already-built pango markup at an arbitrary rune offset can land
+// mid-tag -- an unclosed <span> that pango's markup parser rejects outright,
+// which rofi then renders unstyled (a plain white box) instead of erroring
+// visibly. The fix truncates the plain markdown before conversion, so every
+// <span> markdownToPango emits is complete.
+func TestBuildUpdatePromptMessageProducesBalancedMarkupWhenNotesAreLong(t *testing.T) {
+	var notes strings.Builder
+	for i := 0; i < 40; i++ {
+		notes.WriteString("## Release notes section\n- **fixed** something with `code` and a [link](https://example.com/x)\n\n")
+	}
+
+	_, msg := buildUpdatePromptMessageMode("2.0.1", updatePendingState{
+		LatestVersion: "2.5.0",
+		ReleaseName:   "otakase v2.5.0",
+		HTMLURL:       "https://example.com",
+		ReleaseNotes:  notes.String(),
+	}, true)
+
+	opens := strings.Count(msg, "<span")
+	closes := strings.Count(msg, "</span>")
+	if opens != closes {
+		t.Fatalf("unbalanced markup: %d <span> vs %d </span> in:\n%s", opens, closes, msg)
+	}
+}
+
 func TestMarkdownToPangoColorsHeadingsAndBullets(t *testing.T) {
 	md := "## Direct Commits\n- fix: something\n**Full Changelog**: https://example.com/compare"
 	got := markdownToPango(md)

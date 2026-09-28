@@ -18,7 +18,14 @@ var version string // Will be set by ldflags during build
 
 func resolvedVersion() string {
 	if version == "" {
-		return "2.0.7"
+		// A build that skipped -ldflags -X main.version=... (a local go
+		// build, not one of the Build/ scripts or the PKGBUILD). "dev"
+		// matches internal.Version()'s own fallback, and compareVersions
+		// treats it as never outdated -- a fixed old version string here
+		// would instead compare as genuinely behind every real release,
+		// forever prompting an update that would just reinstall the same
+		// unflagged build.
+		return "dev"
 	}
 
 	return version
