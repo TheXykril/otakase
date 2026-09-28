@@ -260,6 +260,13 @@ stream declaring H.264 Level 5.0 to a decoder specified for 4.1.
       episode at a time rather than accumulating.
 - [ ] **Press `q` during an episode.** The next one must not start — stopping
       is not finishing.
+- [ ] **Between episodes, the TV shows the idle card** — cover art, the
+      anime's title, and "Episode N watched — Episode N+1 up next" — instead
+      of the Default Media Receiver's own idle screen, for the whole
+      countdown.
+- [ ] **At the end of a season, the idle card does not flash on screen right
+      before the device disconnects.** The countdown is skipped entirely at
+      season end (see `castSeasonFinished`), and so is this card.
 
 ## 7. The spawned window answers for itself
 

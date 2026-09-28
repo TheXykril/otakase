@@ -489,6 +489,27 @@ func CastEpisode(config *Config, anime *Anime) error {
 		return err
 	}
 
+	// Shown before the countdown starts, not during it: the device player
+	// would otherwise sit on the Default Media Receiver's own idle screen for
+	// the whole countdown, which looks like the cast died rather than like an
+	// episode that just finished. Skipped when the season is over -- the
+	// device is about to be disconnected by this function's teardown, and
+	// pushCastRatingCard (season end) shows its own card instead.
+	if !castSeasonFinished(anime) {
+		next := castNextEpisodeNumber(config, anime)
+		lines := []string{
+			GetAnimeName(*anime),
+			fmt.Sprintf("Episode %d watched — Episode %d up next", anime.Ep.Number, next),
+		}
+		card := buildIdleCardPNG(anime.CoverImage, lines)
+		idlePath := filepath.Join(streamDir, "idle.png")
+		if err := os.WriteFile(idlePath, card, 0o644); err != nil {
+			Log(fmt.Sprintf("cast: could not write the idle card: %v", err))
+		} else if err := s.PlayImage(srv.URL("idle.png")); err != nil {
+			Log(fmt.Sprintf("cast: could not show the idle card: %v", err))
+		}
+	}
+
 	// The countdown runs in this episode's panel, which still owns the screen:
 	// the teardown below has not run yet, so there is a frame to draw in.
 	if !castAwaitNextEpisode(config, anime, panel, commands) {
