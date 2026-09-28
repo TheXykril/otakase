@@ -423,7 +423,15 @@ func buildUpdatePromptMessageMode(currentVersion string, state updatePendingStat
 			b.WriteString(`<span foreground="#6EC6FF" underline="single">` + escapePango(state.HTMLURL) + `</span>` + "\n")
 		}
 		b.WriteString("\n")
-		b.WriteString(markdownToPango(notes))
+		// Truncated before conversion, not after: notes here can be several
+		// releases' worth concatenated (a viewer who skipped a few updates
+		// sees all of them), and cutting the already-built markup at an
+		// arbitrary rune offset can land mid-tag -- an unclosed <span> that
+		// pango's markup parser rejects outright, which is what left the
+		// dialog rendering unstyled (a plain white box) instead of showing
+		// the error. Truncating the plain text first means markdownToPango
+		// only ever sees, and only ever emits, complete tags.
+		b.WriteString(markdownToPango(truncateReleaseNotes(notes)))
 		message = strings.TrimSpace(b.String())
 		// Pango is verbose; soft-cap markup length.
 		if len([]rune(message)) > maxReleaseNotesRunes*3 {
