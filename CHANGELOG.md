@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.3 — 2026-09-29
+
+### Fixed
+
+- **Audio ran up to a few seconds behind the picture after a seek**, on a
+  cast with subtitles burned in -- including the automatic opening skip at
+  the start of an episode. The video was re-encoded and cut at the seek
+  target, but the copied audio could only start at the keyframe before it,
+  and the device plays both from their first sample. The audio is now
+  re-encoded too, so both tracks start at the same point.
+
 ## 2.1.2 — 2026-09-28
 
 ### Fixed
