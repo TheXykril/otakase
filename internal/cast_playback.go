@@ -458,6 +458,9 @@ func CastEpisode(config *Config, anime *Anime) error {
 		headers:   anime.Ep.StreamHeaders,
 		rootDir:   streamDir,
 		maps:      tracks.Maps,
+		chooseEncoder: func() cast.Encoder {
+			return castBurnEncoder(config, ffmpeg)
+		},
 	}
 	burn := castShouldBurnSubtitles(config, anime, tracks.AudioLanguage)
 	if !burn {

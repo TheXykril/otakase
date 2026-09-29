@@ -54,6 +54,12 @@ stream for <device>...` → the episode starts within ~30s → `Playing on
       seconds, not ten — each press acts on where the last one left it.
 - [ ] **Pause, then seek.** The device resumes on any seek, so the status line
       must go back to PLAYING rather than staying PAUSED.
+- [ ] **Lips match the voice after every restart**, on a dub and on a sub:
+      from the start, after a resume, and after seeking both ways. A restart
+      re-encodes even with nothing to burn, so on a dub the debug log shows a
+      `cast: re-encoding with` line after the first seek. Audio that trails the
+      picture by seconds on a dub only after a seek means a copied restart is
+      back.
 - [ ] **Pause for three minutes.** The episode must still be there — the stall
       bound is two minutes and must be suspended while paused.
 

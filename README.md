@@ -234,7 +234,9 @@ turns burning off; `CastEncoder` forces `vaapi` or
 `software` if detection picks wrong.
 
 **Seeking** takes a couple of seconds to restart the stream, so a press moves
-30 seconds and a held key waits until you let go.
+30 seconds and a held key waits until you let go. A seek or a resume
+re-encodes the stream even when there are no subtitles to burn, so the sound
+and the picture start together.
 
 While casting, the terminal shows a control panel: position, device, and
 keys — space pauses, arrows seek/adjust volume, `q` stops. Anything else

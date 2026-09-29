@@ -347,7 +347,9 @@ func TestARebuiltStreamCarriesTheOffsetAndTheShiftedSubtitles(t *testing.T) {
 	}
 
 	joined := strings.Join(got, " ")
-	if !strings.Contains(joined, "-ss 600.000") {
+	// Seeked short of the target and trimmed the rest of the way: see
+	// cast.castSeekPreroll.
+	if !strings.Contains(joined, "-ss 585.000") || !strings.Contains(joined, "trim=start=15.000") {
 		t.Fatalf("the offset did not reach ffmpeg:\n%s", joined)
 	}
 	if !strings.Contains(joined, "subtitles=") {
@@ -553,5 +555,55 @@ func TestARebuiltStreamSendsTheProvidersHeaders(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(got, " "), "Origin: https://player.test") {
 		t.Fatalf("the rebuilt stream dropped the provider's headers:\n%s", strings.Join(got, " "))
+	}
+}
+
+// A stream with nothing to burn is copied only from zero. Anywhere else it is
+// re-encoded, because a copy starts each track on its own packet boundary --
+// seconds apart on a host serving audio and video separately. The encoder is
+// chosen once, on the first restart, not at the start of every cast.
+func TestOnlyAStreamFromZeroIsCopied(t *testing.T) {
+	root := t.TempDir()
+	chosen := 0
+	source := &castStreamSource{
+		ffmpeg:    "unused",
+		streamURL: "https://host/master.m3u8",
+		rootDir:   root,
+		chooseEncoder: func() cast.Encoder {
+			chosen++
+			return cast.Encoder{Name: "h264_vaapi", Device: "/dev/dri/renderD128"}
+		},
+	}
+	var got []string
+	source.launch = func(_ string, args []string, outDir string) (*cast.Remux, error) {
+		got = args
+		playlist := filepath.Join(outDir, cast.PlaylistName)
+		return cast.StartFFmpeg("/bin/sh", []string{"-c", fmt.Sprintf("printf '#EXTM3U\\n' > %q", playlist)}, outDir)
+	}
+
+	if _, err := source.start(0); err != nil {
+		t.Fatal(err)
+	}
+	if joined := strings.Join(got, " "); !strings.Contains(joined, "-c copy") {
+		t.Fatalf("a stream from zero was not copied:\n%s", joined)
+	}
+	if chosen != 0 {
+		t.Fatalf("the encoder was chosen for a copied stream")
+	}
+
+	for _, at := range []float64{306, 476.8} {
+		if _, err := source.start(at); err != nil {
+			t.Fatal(err)
+		}
+		joined := strings.Join(got, " ")
+		if strings.Contains(joined, "-c copy") || !strings.Contains(joined, "-c:v h264_vaapi") || !strings.Contains(joined, "-c:a aac") {
+			t.Fatalf("a restart at %.1f was not re-encoded:\n%s", at, joined)
+		}
+		if strings.Contains(joined, "subtitles=") {
+			t.Fatalf("a restart with no subtitles draws some:\n%s", joined)
+		}
+	}
+	if chosen != 1 {
+		t.Fatalf("the encoder was chosen %d times, want once", chosen)
 	}
 }

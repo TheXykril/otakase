@@ -2,8 +2,10 @@ package cast
 
 import (
 	"fmt"
+	"math"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -43,9 +45,13 @@ func BuildBurnArgs(streamURL, referrer, subtitlePath, outDir string, enc Encoder
 // BuildBurnArgsFrom is BuildBurnArgs starting the stream at an offset.
 //
 // The subtitle file passed here must already be shifted by the same offset --
-// see ShiftWebVTT. The filter reads cue timings as they are written, and a
+// see ShiftSubtitles. The filter reads cue timings as they are written, and a
 // stream restarted at the target plays from zero, so an unshifted file would
 // show every line the seek distance too late.
+//
+// An empty subtitlePath re-encodes without drawing anything. That is how a
+// stream with no subtitles to burn is restarted at an offset: see
+// BuildRemuxArgsFrom for why copying cannot start it there in sync.
 func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Encoder, startAt float64, maps []string, headers map[string]string) []string {
 	args := []string{"-hide_banner"}
 
@@ -61,17 +67,33 @@ func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Enc
 
 	// -headers is a per-input option: it applies only to the next -i.
 	args = append(args, inputHeaderArgs(referrer, headers)...)
-	args = append(args, seekArgs(startAt)...)
+	// The input is seeked short of the target and the rest is trimmed away
+	// frame by frame, below. See castSeekPreroll.
+	preroll := math.Min(startAt, castSeekPreroll)
+	args = append(args, seekArgs(startAt-preroll)...)
 	args = append(args, "-i", streamURL)
 	args = append(args, maps...)
 
-	filter := "subtitles=" + escapeFilterPath(subtitlePath)
+	var filters []string
+	if preroll > 0 {
+		// First, so everything after it -- the subtitles above all, which were
+		// shifted by the whole target -- sees the target as zero.
+		filters = append(filters, fmt.Sprintf("trim=start=%s,setpts=PTS-%s/TB", seconds(preroll), seconds(preroll)))
+	}
+	// The backstop for a keyframe further past the seek point than the
+	// preroll reaches: the first frame is held from zero until the next one,
+	// so the picture still starts where the sound does. With the preroll
+	// doing its job this holds nothing.
+	filters = append(filters, "fps=source_fps:start_time=0")
+	if subtitlePath != "" {
+		filters = append(filters, "subtitles="+escapeFilterPath(subtitlePath))
+	}
 	if enc.Hardware() {
 		// The subtitles are drawn on the CPU, then the frames go to the GPU in
 		// the pixel format the encoder takes.
-		filter += ",format=nv12,hwupload"
+		filters = append(filters, "format=nv12,hwupload")
 	}
-	args = append(args, "-vf", filter)
+	args = append(args, "-vf", strings.Join(filters, ","))
 
 	args = append(args,
 		"-c:v", enc.Name,
@@ -81,8 +103,8 @@ func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Enc
 		// drop video frames to force a constant rate while the audio keeps
 		// its source timestamps -- the two drift apart, worst right after a
 		// seek, where the encoder restarts its rate assumption from a fresh,
-		// likely irregular, point in the source. Passthrough keeps every
-		// input frame's own timestamp.
+		// likely irregular, point in the source. Passthrough keeps the
+		// timestamps the filters above settled.
 		"-fps_mode", "passthrough",
 	)
 	if !enc.Hardware() {
@@ -97,6 +119,18 @@ func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Enc
 	// itself. The audio then leads the video by up to a segment, and the
 	// receiver plays each from its first sample, so the sound runs that far
 	// behind the picture. Encoding the audio trims it at the target too.
+	//
+	// aresample then holds the audio to its timestamps: first_pts=0 starts it
+	// at the same zero as the video, padding with silence when the source's
+	// audio begins later, and async fills any gap the source leaves between
+	// frames. A receiver that counts samples rather than reading every
+	// timestamp -- and one that plays each track from its first sample -- then
+	// hears the audio exactly where the timestamps put it.
+	audioFilters := []string{"aresample=async=1:first_pts=0"}
+	if preroll > 0 {
+		audioFilters = append([]string{fmt.Sprintf("atrim=start=%s,asetpts=PTS-%s/TB", seconds(preroll), seconds(preroll))}, audioFilters...)
+	}
+	args = append(args, "-af", strings.Join(audioFilters, ","))
 	args = append(args, "-c:a", "aac", "-b:a", "192k")
 
 	args = append(args,
@@ -109,6 +143,22 @@ func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Enc
 
 	args = append(args, "-nostdin", "-y", filepath.Join(outDir, PlaylistName))
 	return args
+}
+
+// castSeekPreroll is how far short of a seek target the input is seeked.
+//
+// ffmpeg's HLS reader starts audio at the target but drops video up to the
+// next keyframe, and a host may space its keyframes ten seconds apart:
+// anizone's are at 490.4s and 496.4s, so a resume at 493s began the picture
+// 3.4s after the sound. The receiver plays each track from its first sample,
+// so the voice ran 3.4s behind the mouths for the whole episode. Seeking this
+// far early lands on a keyframe before the target, and the trim filters then
+// cut both tracks at the target itself, to the frame and to the sample.
+const castSeekPreroll = 15.0
+
+// seconds formats a filter argument in seconds, to the millisecond.
+func seconds(value float64) string {
+	return strconv.FormatFloat(value, 'f', 3, 64)
 }
 
 // escapeFilterPath makes a path safe to embed in an ffmpeg filter argument.

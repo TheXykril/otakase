@@ -47,7 +47,11 @@ type castStreamSource struct {
 	// every shift is taken from it, so offsets stay absolute rather than
 	// compounding with each seek.
 	subtitlePath string
-	encoder      cast.Encoder
+	// encoder re-encodes the video, whenever it is drawn on or restarted at an
+	// offset. Left empty, chooseEncoder picks it the first time it is needed,
+	// so a cast that is never re-encoded never pays for the hardware probe.
+	encoder       cast.Encoder
+	chooseEncoder func() cast.Encoder
 	// maps names the video and audio to play, from cast.SelectTracks; nil
 	// leaves the choice to ffmpeg. The same every generation, so a seek keeps
 	// the language the cast began in.
@@ -78,6 +82,13 @@ func (s *castStreamSource) start(startAt float64) (stream, error) {
 	s.generation++
 
 	args := cast.BuildRemuxArgsFrom(s.streamURL, s.referrer, dir, startAt, s.maps, s.headers)
+	if s.subtitlePath == "" && startAt > 0 {
+		// Copying starts each track on its own packet boundary, seconds apart
+		// on a host that serves audio and video separately, so a stream that
+		// starts anywhere but zero is re-encoded to start both at the target.
+		// See cast.BuildRemuxArgsFrom.
+		args = cast.BuildBurnArgsFrom(s.streamURL, s.referrer, "", dir, s.reencoder(), startAt, s.maps, s.headers)
+	}
 	if s.subtitlePath != "" {
 		// Shifted into this generation's own directory, from the original, so a
 		// second seek does not shift an already-shifted file. The original's
@@ -114,6 +125,18 @@ func (s *castStreamSource) start(startAt float64) (stream, error) {
 		// not necessarily on the same kind of machine as the one serving it.
 		path: "g" + strconv.Itoa(s.generation-1) + "/" + cast.PlaylistName,
 	}, nil
+}
+
+// reencoder is the encoder for a re-encoded generation, chosen once.
+func (s *castStreamSource) reencoder() cast.Encoder {
+	if s.encoder.Name == "" {
+		s.encoder = cast.Encoder{Name: "libx264"}
+		if s.chooseEncoder != nil {
+			s.encoder = s.chooseEncoder()
+		}
+		Log(fmt.Sprintf("cast: re-encoding with %s (hardware=%t)", s.encoder.Name, s.encoder.Hardware()))
+	}
+	return s.encoder
 }
 
 // castRemuxSwitch is the remux the watch loop watches, which changes under it

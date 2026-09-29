@@ -40,6 +40,16 @@ func BuildRemuxArgs(streamURL, referrer, outDir string) []string {
 // before -i, where ffmpeg seeks the input rather than decoding everything up to
 // the target and throwing it away.
 //
+// Copying cannot start both tracks at an offset in sync, though. A copied
+// track can only start on a whole packet -- video on a keyframe -- and a host
+// that serves audio and video as separate HLS playlists cuts each on its own
+// boundaries. Measured on anizone, a copy restarted at 476.8s began its audio
+// at 471.2s and its video at 475.0s: timestamps still consistent, but a
+// receiver that plays each track from its first sample runs the sound 3.8s
+// behind the picture. So only a stream starting at zero is copied; every
+// restart goes through BuildBurnArgsFrom, which trims both tracks at the
+// target. See castStreamSource.start.
+//
 // maps are -map arguments from SelectTracks, or nil to leave the choice of
 // streams to ffmpeg. headers are any the provider needs beyond the referrer.
 func BuildRemuxArgsFrom(streamURL, referrer, outDir string, startAt float64, maps []string, headers map[string]string) []string {
