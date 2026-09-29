@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.2.1 — 2026-09-29
+
+### Fixed
+
+- **The voice ran seconds behind the picture on a cast** after a resume or
+  a seek. The stream restarts at the target, and on hosts that space their
+  keyframes far apart (anizone: up to 10 seconds) the picture could only
+  start at the next keyframe while the sound started at the target; the
+  device plays both from their first sample. The stream is now read from
+  a little before the target and both tracks are cut at it exactly. Casts
+  without burned subtitles are re-encoded after a seek for the same
+  reason, and now start where the seek asked instead of seconds earlier.
+- **Burned ASS subtitles were late after a seek**, or missing until the
+  first late line. Only WebVTT timings were moved with the restart point.
+- **A dub cast played the Japanese track** on hosts that serve every dub in
+  one stream (anizone, kickassanime). The cast now picks the audio in the
+  requested language, and burns subtitles only when that audio is not
+  English. Local playback in mpv prefers the dub's track too.
+- **kickassanime casts could not fetch a segment**: its CDN needs the
+  Origin header, which ffmpeg was never sent.
+- **A device blocked by the firewall** now gets a hint in the cast panel
+  naming the port after 20 seconds without a fetch, with the fix copied to
+  the clipboard. A failed cast in a spawned window waits for q or enter
+  instead of closing on its error.
+
 ## 2.2.0 — 2026-09-29
 
 ### Added
