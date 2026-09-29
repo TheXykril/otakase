@@ -14,15 +14,16 @@ func burnArgs(enc Encoder) string {
 }
 
 // Burning subtitles means re-encoding the video, which is the one thing the
-// copy path never does. The audio is still copied: nothing is drawn on it.
-func TestBuildBurnArgsReencodesVideoAndCopiesAudio(t *testing.T) {
+// copy path never does. The audio is re-encoded too, so a seek trims both
+// tracks at the same point.
+func TestBuildBurnArgsReencodesVideoAndAudio(t *testing.T) {
 	args := burnArgs(Encoder{Name: "libx264"})
 
 	if !strings.Contains(args, "-c:v libx264") {
 		t.Errorf("video is not being re-encoded:\n%s", args)
 	}
-	if !strings.Contains(args, "-c:a copy") {
-		t.Errorf("audio is being re-encoded for no reason:\n%s", args)
+	if !strings.Contains(args, "-c:a aac") {
+		t.Errorf("audio is copied, which starts it at the keyframe before a seek target while the video starts at the target:\n%s", args)
 	}
 	if strings.Contains(args, "-c copy") {
 		t.Errorf("the blanket copy survived, which cannot burn anything:\n%s", args)
@@ -45,14 +46,14 @@ func TestBuildBurnArgsStaysWithinTheDeviceProfile(t *testing.T) {
 
 // Without an explicit rate-passthrough, ffmpeg's default frame-rate handling
 // can duplicate or drop re-encoded video frames to force a constant rate,
-// while the copied audio track keeps its original timestamps untouched --
+// while the audio keeps its source timestamps --
 // drifting the two apart, worst right after a seek restarts the encoder's
 // rate assumption from a fresh point in the source.
 func TestBuildBurnArgsKeepsVideoAndAudioTimestampsInSync(t *testing.T) {
 	args := burnArgs(Encoder{Name: "libx264"})
 
 	if !strings.Contains(args, "-fps_mode passthrough") {
-		t.Errorf("video frames are not passed through as-is, which can drift out of sync with the copied audio:\n%s", args)
+		t.Errorf("video frames are not passed through as-is, which can drift out of sync with the audio:\n%s", args)
 	}
 }
 

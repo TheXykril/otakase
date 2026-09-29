@@ -10,8 +10,8 @@ import (
 // Encoder is how the video is re-encoded when subtitles are burned into it.
 //
 // Burning is the one thing the copy path cannot do: the subtitles are drawn
-// onto the frames, so the frames have to be written again. Everything else
-// about the stream -- the audio, the segmenting, the playlist -- is unchanged.
+// onto the frames, so the frames have to be written again. The segmenting and
+// the playlist are unchanged.
 type Encoder struct {
 	// Name is the ffmpeg encoder, e.g. "libx264" or "h264_vaapi".
 	Name string
@@ -79,12 +79,11 @@ func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Enc
 		"-profile:v", "high",
 		"-level", castBurnLevel,
 		// Without this, ffmpeg's default frame-rate handling can duplicate or
-		// drop video frames to force a constant rate while the audio track
-		// below is copied verbatim with its original timestamps untouched --
-		// the two drift apart, worst right after a seek, where the encoder
-		// restarts its rate assumption from a fresh, likely irregular, point
-		// in the source. Passthrough keeps every input frame's own
-		// timestamp, exactly matching what -c:a copy already does for audio.
+		// drop video frames to force a constant rate while the audio keeps
+		// its source timestamps -- the two drift apart, worst right after a
+		// seek, where the encoder restarts its rate assumption from a fresh,
+		// likely irregular, point in the source. Passthrough keeps every
+		// input frame's own timestamp.
 		"-fps_mode", "passthrough",
 	)
 	if !enc.Hardware() {
@@ -93,8 +92,13 @@ func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Enc
 		args = append(args, "-preset", "veryfast")
 	}
 
-	// Nothing is drawn on the audio, so it is still copied.
-	args = append(args, "-c:a", "copy")
+	// Nothing is drawn on the audio, but it is encoded anyway. A copied track
+	// cannot be cut mid-packet, so after a seek it starts at the keyframe
+	// before the target while the re-encoded video starts at the target
+	// itself. The audio then leads the video by up to a segment, and the
+	// receiver plays each from its first sample, so the sound runs that far
+	// behind the picture. Encoding the audio trims it at the target too.
+	args = append(args, "-c:a", "aac", "-b:a", "192k")
 
 	args = append(args,
 		"-f", "hls",
