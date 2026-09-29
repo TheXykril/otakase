@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.2.0 — 2026-09-29
+
+### Added
+
+- **Casting from Untracked Watching.** It used to ignore casting and open
+  the episode in mpv. It now casts with the same panel, skips and
+  next-episode countdown as every other list, and still writes nothing:
+  no history, no tracker progress, no resume position. Skip times are
+  found by matching the show's exact title on AniList; a show whose title
+  does not match exactly is cast without them rather than with a sequel's.
+
+### Fixed
+
+- **The cast panel froze at the end of an episode** ("23:41 / 23:41,
+  PLAYING") for two minutes and then reported the cast as failed. Some
+  receivers never say an episode has ended; the episode now finishes on
+  the last update before the end, and the countdown starts right away.
+- **Skipping an ending that runs almost to the end of the episode** failed
+  and was retried every second, leaving the ending playing. The skip now
+  lands a couple of seconds earlier when it has to, so whatever follows
+  the ending still plays; if even that fails, the device is paused and the
+  episode finishes.
+- **Seeking past the watched threshold marked the episode as watched**
+  while it was still playing. A cast is now judged by where playback was
+  when it ended, as local playback is.
+- **Esc in the cast device menu under rofi** had to be pressed twice: the
+  first one fell back to casting in place, which showed the menu again.
+
 ## 2.1.3 — 2026-09-29
 
 ### Fixed
