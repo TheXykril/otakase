@@ -21,10 +21,10 @@ theme.
 
 ## Features
 
-- Search runs concurrently with ordered fallback, up to 1080p
+- Searches several sources at once and falls back when one fails, up to 1080p
 - Plays this week's episodes without waiting for a download, keeping nothing afterwards
 - Falls back to the other audio automatically when a show exists in only one language
-- Stream, or save episodes with `-download`
+- Stream, save episodes with `-download`, or cast them to a Chromecast
 - Track locally, on AniList, on MyAnimeList, or on both at once
 - Browser-based AniList and MyAnimeList sign-in
 - Skips openings, endings, filler episodes and recaps
@@ -43,9 +43,8 @@ theme.
 
 ### Arch Linux / Manjaro
 
-Build from source with the bundled PKGBUILD — pacman then tracks it like any
-other package, and the test suite runs as part of the build, so a broken build
-fails before it is installed:
+Build from source with the bundled PKGBUILD, so pacman tracks it like any
+other package:
 
 ```bash
 sudo pacman -S --needed go git mpv
@@ -143,10 +142,22 @@ Which categories appear, and in what order, is `MenuOrder`. The highlighted show
 full title and notes appear beside the list, where the row itself is clipped.
 
 Along the bottom are the actions, each on a key you can press from anywhere in
-the list: `^u` untracked, `^e` update, `^r` remap provider, `^l` continue last,
-`^t` tracker, `^o` provider — `^` means Ctrl, so `^u` is Ctrl+U. `MenuOrder`
-decides which of them appear and in what order too. Under rofi they stay menu
-entries.
+the list — `^` means Ctrl, so `^u` is Ctrl+U. `MenuOrder` decides which of them
+appear and in what order too. Under rofi they stay menu entries.
+
+| Key | Menu entry | What it does |
+|---|---|---|
+| `^u` | Untracked Watching | Search any show and watch it without touching your list, history or tracker |
+| `^e` | Update (Episode, Status, Score) | Change a show's progress, status or score by hand |
+| `^r` | Remap Provider | Fix a show that plays the wrong anime, by picking the right match |
+| `^l` | Continue Last Session | Resume the show you watched last |
+| `^t` | Change Tracker | Switch between local, AniList, MyAnimeList or both |
+| `^o` | Change Provider | Pick which sources are searched, and in what order |
+| `^k` | Cast | Toggle casting for this run — shows `[ ] Cast: Off` or `[x] Cast: <device>` |
+
+The category entries — Currently Watching, Show All, Plan to Watch, Completed,
+Paused, Dropped, Rewatching — are the tabs in the terminal list and plain
+entries under rofi.
 
 | Flag | Description | Default |
 |---|---|---|
@@ -209,25 +220,20 @@ Needs `ffmpeg`. Episodes are saved as `.mp4`.
 ## Casting
 
 `otakase -cast` plays the episode on a Chromecast on the same network. The menu
-also carries a **Cast** toggle (`[ ] Cast: Off` / `[x] Cast: Office TV`) that
-does the same thing per-run; `CastDevice` skips being asked which device each
-time.
+also carries a **Cast** toggle (`[ ] Cast: Off` / `[x] Cast: Office TV`, `^k`
+in the terminal list) that does the same thing per-run; `CastDevice` skips
+being asked which device each time. Casting works from **Untracked Watching**
+too, and like local untracked playback it records nothing.
 
-A Chromecast can't fetch a provider's URL directly (it can't send the headers
-these hosts require), so otakase remuxes the stream with `ffmpeg` — no
-re-encoding — and serves it from this machine instead. `ffmpeg` is required,
-same as for `-download`.
+Casting needs `ffmpeg`, same as `-download`. The stream is served from this
+computer, so keep otakase running while you watch.
 
-**Subtitles** are burned into the picture, since the receiver only renders
-WebVTT and no provider here supplies that. Uses your GPU when it can.
+**Subtitles** are burned into the picture, using your GPU when it can.
 `CastBurnSubtitles=false` turns this off; `CastEncoder` forces `vaapi` or
 `software` if detection picks wrong.
 
-**Seeking and resuming** both work by rebuilding the stream at that position
-and handing the device a new one — the receiver can't actually seek a stream
-of unknown length, it just silently ignores the request. Rebuilding costs a
-couple of seconds, which is why a press moves 30 seconds and a held key waits
-for you to stop before it moves.
+**Seeking** takes a couple of seconds to restart the stream, so a press moves
+30 seconds and a held key waits until you let go.
 
 While casting, the terminal shows a control panel: position, device, and
 keys — space pauses, arrows seek/adjust volume, `q` stops. Anything else
@@ -240,7 +246,9 @@ wrong one opens); closing that window stops the episode and saves position.
 
 **If the episode never starts**, it's almost always a firewall dropping the
 connection. otakase detects this, prints the exact fix command, and copies it
-to your clipboard — paste it in a terminal and cast again. If that doesn't fix
+to your clipboard — paste it in a terminal and cast again. The stream server
+uses a random port by default; set `CastPort` to a fixed one so a single
+firewall rule covers every cast. If that doesn't fix
 it (a second firewall service or Docker can override it silently), see the
 [Casting Problems wiki page](https://github.com/TheXykril/otakase/wiki/Casting-Problems)
 for the full diagnosis and manual commands.
@@ -264,17 +272,10 @@ already owns that key it tells you what and changes nothing; `-force-keybind`
 takes it anyway and comments out the old line rather than deleting it.
 `-remove-keybind` undoes the whole thing.
 
-**Installing the package does this for you** when you install it with `sudo`,
-which is the normal way. The install script finds the invoking user through
-`SUDO_USER` and runs the command as them, so the file is written to your config
-and owned by you rather than root. Uninstalling takes the binding back out
-before the binary disappears.
-
-It works through `pkexec` too, which reports the caller as `PKEXEC_UID` rather
-than `SUDO_USER`. It skips itself, printing the command instead, when there is
-no user to act for — a chroot, an image build, or pacman run as root directly. Set
-`OTAKASE_NO_KEYBIND=1` to skip it deliberately. An upgrade only refreshes a
-binding that is already there; it will not re-add one you removed.
+**Installing the package does this for you**, and uninstalling removes the
+binding again. Set `OTAKASE_NO_KEYBIND=1` before installing to skip it. An
+upgrade only refreshes a binding that is already there; it will not re-add one
+you removed.
 
 ## Tracking
 
@@ -300,21 +301,14 @@ continue, run the command again and paste the full callback URL when prompted.
 
 ## Skip timings
 
-Openings and endings are skipped using whatever source knows them. The opening
-is taken from the first source that has one and the ending from the first that
-has one — they need not be the same source, because AniSkip often knows an
-opening and not an ending, while a provider that ships timings with the stream
-usually knows both.
+Openings and endings are skipped using whichever source knows them, asked in
+this order: the provider in use, [AniSkip](https://api.aniskip.com/api-docs),
+[theintrodb](https://theintrodb.org), and optionally Anime-Skip. The first
+three need no setup.
 
-Three of the four work with no setup: the provider in use, then
-[AniSkip](https://api.aniskip.com/api-docs), then
-[theintrodb](https://theintrodb.org). The fourth, Anime-Skip, is optional.
-
-theintrodb files its timings under TMDB ids, which this program does not use, so
-the first time a show needs it otakase downloads a public table mapping AniList
-ids onto TMDB ones and keeps it for a month. That happens in the background and
-only for episodes the earlier sources could not answer; the episode you are
-starting is never held up for it. Set `IntroDBSkipTimes=false` to leave it out.
+The first time theintrodb is needed, otakase downloads a small lookup table in
+the background; playback is never held up for it. Set `IntroDBSkipTimes=false`
+to leave theintrodb out.
 
 ### Fixing the times yourself
 
@@ -338,18 +332,15 @@ and keeps; AniSkip has no accounts and asks for nothing about you. Set
 
 ### Adding Anime-Skip
 
-[Anime-Skip](https://anime-skip.com) is the third source, and the only one that
-needs setting up: its API requires a client id identifying the application, and
-none is bundled. The simplest way to turn it on:
+[Anime-Skip](https://anime-skip.com) is the fourth source, and the only one
+that needs a client id. The simplest way to turn it on:
 
 ```
 AnimeSkipClientID=auto
 ```
 
-Otakase then reads the client id Anime-Skip publishes for its own GraphQL
-playground, remembers it, and looks for a new one if it ever stops being
-accepted — so a rotated id fixes itself. That id is shared with everyone using
-the playground, which is why it can change, and why it may be rate-limited.
+Otakase then uses Anime-Skip's public shared id and replaces it on its own if
+it changes. Being shared, it may be rate-limited.
 
 For an id of your own, run:
 
@@ -359,10 +350,6 @@ otakase -setup-anime-skip
 
 This opens Anime-Skip's account page in your browser — sign up first if you
 have not already — and asks you to paste back the client id you create there.
-It is the only way to get one: Anime-Skip's accounts and client ids cannot be
-created through their API, only through their site, so this can guide you to
-the right page but not do it for you. The id it saves is yours alone, against
-your own rate limit rather than the shared playground one.
 
 You can also write an id you already have straight into the config, in place
 of `auto`:
@@ -372,12 +359,11 @@ AnimeSkipClientID=your_client_id_here
 ```
 
 Leaving the setting empty is fine — Anime-Skip is simply not asked, and the
-other two sources carry on.
+other sources carry on.
 
 ## Theming
 
-The menus — both rofi and terminal — are rendered from a colour palette at every
-launch. On [Omarchy](https://omarchy.org) that palette follows the current
+The menus — both rofi and terminal — follow a colour palette. On [Omarchy](https://omarchy.org) that palette follows the current
 desktop theme, so changing your theme changes the menus with no extra step.
 Elsewhere Otakase uses its own palette. `Theme` picks between them: `auto` (the
 default), `omarchy`, or `builtin`.
@@ -403,10 +389,8 @@ foreground  foreground-dark  foreground-bright
 red  green  yellow  blue  magenta  cyan
 ```
 
-A mistyped colour costs that colour and nothing else — it is reported in
-`otakase-debug.log` and skipped, and the rest still apply. When any override is
-in use the log names the theme as customised, so a colour you do not recognise
-is traceable.
+A mistyped colour is skipped and noted in `otakase-debug.log`; the rest still
+apply.
 
 ## Configuration
 
@@ -422,6 +406,10 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `StoragePath` | String | any path, `$VARS` expanded | Where Otakase keeps its data. |
 | `DownloadDir` | String | any path | Where `-download` saves episodes. |
 | `CastDevice` | String | a device name | Cast to this device without asking, when `-cast` is given and the device is found. Empty asks each time. |
+| `CastTerminal` | String | a terminal emulator | Terminal opened for a cast started from rofi. Empty uses `$TERMINAL`, then whatever is installed. |
+| `CastPort` | Integer | `0`–`65535` | Port the cast stream server listens on. `0` (the default) picks a free one; fix it to allow a single port through a firewall. |
+| `CastBurnSubtitles` | Boolean | `true`, `false` | Burn subtitles into the picture when casting. Costs a re-encode. Default `true`. |
+| `CastEncoder` | Enum | empty, `vaapi`, `software` | Encoder for burned subtitles. Empty detects what this machine can do. |
 | `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. |
 | `SubStyle` | Enum | `ask`, `soft`, `hard` | External or burned-in subtitles, where both exist. `ask` prompts once and remembers. |
 | `SubsLanguage` | String | `english` | Preferred subtitle language. |
@@ -435,16 +423,19 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `ThemeOverrides` | String | `name:#hex` pairs | Replaces named colours on top of the palette in use. See [Theming](#theming). |
 | `ContributeSkipTimes` | Boolean | `true`, `false` | Bind the player keys for marking, submitting and voting on skip times — see [Fixing the times yourself](#fixing-the-times-yourself). |
 | `IntroDBSkipTimes` | Boolean | `true`, `false` | Ask theintrodb for openings and endings the other sources do not know. Downloads a public id mapping in the background the first time it is needed. |
-| `AnimeSkipClientID` | String | `auto`, or an Anime-Skip client id | Adds Anime-Skip as a third source of skip timings — see [Adding Anime-Skip](#adding-anime-skip). `auto` fetches the published playground id and replaces it if it stops working. Empty by default; without it, timings still come from the provider in use and from AniSkip. |
+| `AnimeSkipClientID` | String | `auto`, or an Anime-Skip client id | Adds Anime-Skip as a source of skip timings — see [Adding Anime-Skip](#adding-anime-skip). `auto` uses the public shared id. Empty by default. |
 | `SkipFiller` / `SkipRecap` | Boolean | `true`, `false` | Skip filler episodes and recap sections. |
 | `DiscordPresence` | Boolean | `true`, `false` | Discord Rich Presence. |
+| `DiscordClientId` | String | Discord application id | Application Rich Presence reports as. |
+| `ShowNewEpisodes` | Boolean | `true`, `false` | Mark shows with an unwatched aired episode in the list. Default `true`. |
 | `RofiSelection` | Boolean | `true`, `false` | Use rofi for selection menus. |
 | `ImagePreview` | Boolean | `true`, `false` | Poster previews in rofi. |
 | `VimKeys` | Boolean | `true`, `false` | `j`/`k`/`h`/`l` to move and `/` to search in menus, instead of type-to-filter. |
 | `AlternateScreen` | Boolean | `true`, `false` | Use an alternate screen buffer for a cleaner terminal. |
-| `CurrentCategory` | Boolean | `true`, `false` | Open straight into your watching list, skipping the menu. The tabs reach every other list and the bottom bar reaches every action, so the menu is largely redundant. With it on, escape quits rather than going back. Terminal only — rofi has no tabs or bottom bar, so it keeps its menu. `-current` skips it for one run either way. |
-| `MenuOrder` | String | comma-separated | Which menu entries appear, and in what order. Choose from `CURRENT`, `ALL`, `UNTRACKED`, `UPDATE`, `REMAP_PROVIDER`, `CONTINUE_LAST`, `PLANNING`, `COMPLETED`, `PAUSED`, `DROPPED`, `REWATCHING`, `TRACKER`, `PROVIDER`. |
+| `CurrentCategory` | Boolean | `true`, `false` | Open straight into your watching list, skipping the menu; the tabs and bottom bar still reach everything. Escape then quits. Terminal only. `-current` does the same for one run. |
+| `MenuOrder` | String | comma-separated | Which menu entries appear, and in what order. Choose from `CURRENT`, `ALL`, `UNTRACKED`, `UPDATE`, `REMAP_PROVIDER`, `CONTINUE_LAST`, `PLANNING`, `COMPLETED`, `PAUSED`, `DROPPED`, `REWATCHING`, `TRACKER`, `PROVIDER`, `CAST`. `TRACKER` is always added if left out. |
 | `Provider` | List | `stacked`, or a single-entry list | Which sources to search and in what order. `stacked` (the default) uses the preferred order with fallback; naming one restricts the search to it. |
+| `DisabledProviders` | List | provider names, e.g. `["nyaa"]` | Sources never searched, even under `stacked`. |
 | `ManualProviderSearch` | Boolean | `true`, `false` | Always choose the match yourself instead of matching automatically. |
 | `TrackingRemote` | Enum | `none`, `anilist`, `myanimelist`, `anilist+myanimelist` | Which tracker to sync with. |
 | `MyAnimeListClientID` | String | MAL OAuth client ID | Used for MyAnimeList sign-in. |
