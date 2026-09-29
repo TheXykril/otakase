@@ -52,6 +52,36 @@ func streamHeaderArgs(headers map[string]string) []string {
 	return args
 }
 
+// mpvDubLanguages and mpvSubLanguages are the audio languages mpv prefers for
+// each mode, in both the two- and three-letter codes hosts tag tracks with.
+const (
+	mpvDubLanguages = "en,eng"
+	mpvSubLanguages = "ja,jpn"
+)
+
+// mpvAudioLanguageArgs tells mpv which audio to prefer.
+//
+// Some hosts serve one stream carrying every dub they have, with Japanese
+// marked default, and mpv plays the default unless told otherwise: a dub was
+// heard in Japanese. A stream with one audio track, or none in the preferred
+// language, plays as before -- --alang only ranks the tracks there are. A
+// viewer's own --alang in MpvArgs is left to win.
+func mpvAudioLanguageArgs(mode string, callerArgs []string) []string {
+	for _, arg := range callerArgs {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(arg)), "--alang") {
+			return nil
+		}
+	}
+	return []string{"--alang=" + mpvAudioLanguages(mode)}
+}
+
+func mpvAudioLanguages(mode string) string {
+	if normalizeTranslationType(mode) == "dub" {
+		return mpvDubLanguages
+	}
+	return mpvSubLanguages
+}
+
 // streamReferrer is the Referer a provider's streams expect, or empty when it
 // registered none -- in which case no Referer is sent at all.
 //
@@ -331,6 +361,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 	// with 403 unless Origin names the player's domain, and --referrer cannot
 	// set Origin, so a provider that knows this passes the headers along.
 	args = append(args, streamHeaderArgs(anime.Ep.StreamHeaders)...)
+	args = append(args, mpvAudioLanguageArgs(playlistAudioMode(anime, userConfig), args)...)
 
 	subtitleURL := strings.TrimSpace(anime.Ep.SubtitleURL)
 	if subtitleURL != "" && !callerHasSubtitleArg {
@@ -353,6 +384,14 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 				if referrerErr != nil {
 					Log(fmt.Sprintf("Failed to set referrer property: %v", referrerErr))
 				}
+			}
+		}
+
+		// The next episode may resolve in the other mode after a fallback, and
+		// --alang was fixed when this instance started.
+		if len(mpvAudioLanguageArgs("", userConfig.MpvArgs)) > 0 {
+			if _, alangErr := MPVSendCommand(mpvSocketPath, []interface{}{"set_property", "alang", mpvAudioLanguages(playlistAudioMode(anime, userConfig))}); alangErr != nil {
+				Log(fmt.Sprintf("Failed to set the audio language: %v", alangErr))
 			}
 		}
 
@@ -602,6 +641,9 @@ func StartVideoWithProviderFallback(userConfig *Config, anime *Anime, title stri
 				// Alternate mode gets a fresh provider pass, including ones that failed preferred.
 				excludedProviders = nil
 				activeMode = normalizeTranslationType(episodeResult.Mode)
+				// Recorded on the episode, which is what picks the audio
+				// language mpv prefers.
+				anime.Ep.Mode = episodeResult.Mode
 				anime.Ep.Links = episodeResult.Links
 				applyStreamPlaybackHints(anime, anime.Ep.Links, episodeResult.LinkHints)
 				Log(fmt.Sprintf("Retrying playback with %s/%s after audio fallback: %+v", episodeResult.ProviderName, episodeResult.Mode, episodeResult.Links))
