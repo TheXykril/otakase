@@ -1,7 +1,6 @@
 package cast
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,24 +16,6 @@ import (
 //
 // The source playlist knows exactly, and ffprobe reads it without fetching a
 // single segment, so the real length is available before playback starts.
-
-// ProbeDurationArgs assembles the ffprobe command that reads a stream's length.
-func ProbeDurationArgs(streamURL, referrer string) []string {
-	args := []string{"-hide_banner", "-v", "error"}
-
-	// The same two allowances the remux needs: providers disguise HLS segments
-	// as images, and ffprobe rejects unrecognised extensions exactly as ffmpeg
-	// does. Without these a probe fails on the streams most in need of it.
-	args = append(args, "-allowed_extensions", "ALL", "-extension_picky", "0")
-
-	// Per-input option, so it has to precede -i, the same as in BuildRemuxArgs.
-	if referrer = strings.TrimSpace(referrer); referrer != "" {
-		args = append(args, "-headers", "Referer: "+referrer+"\r\n")
-	}
-
-	args = append(args, "-show_entries", "format=duration", "-of", "default=nw=1:nk=1")
-	return append(args, "-i", streamURL)
-}
 
 // ParseProbedDuration reads the seconds out of ffprobe's output.
 //
@@ -74,20 +55,4 @@ func FFprobePathFor(ffmpegPath string) (string, error) {
 		}
 	}
 	return exec.LookPath("ffprobe")
-}
-
-// ProbeDuration asks ffprobe how long a stream is.
-//
-// Only the playlist is fetched, not the media, so this costs one request even
-// on an episode that takes minutes to remux.
-func ProbeDuration(ffprobePath, streamURL, referrer string) (float64, error) {
-	out, err := exec.Command(ffprobePath, ProbeDurationArgs(streamURL, referrer)...).Output()
-	if err != nil {
-		return 0, fmt.Errorf("cast: could not read the stream's length: %w", err)
-	}
-	seconds, ok := ParseProbedDuration(string(out))
-	if !ok {
-		return 0, fmt.Errorf("cast: the stream did not report a length")
-	}
-	return seconds, nil
 }

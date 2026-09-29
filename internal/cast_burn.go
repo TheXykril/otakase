@@ -91,24 +91,43 @@ func castBurnEncoder(config *Config, ffmpeg string) cast.Encoder {
 // castShouldBurnSubtitles reports whether this cast has subtitles worth
 // drawing into the picture.
 //
-// The subtitle URL is the whole question. It used to be gated on the audio not
-// being a dub as well, on the reasoning that burning text onto a dub re-encodes
-// an episode to draw something the viewer is not reading.
+// It is decided by the audio that plays, as the stream itself labels it:
+// English needs nothing drawn over it, and anything else -- Japanese under a
+// dub label included -- gets the subtitles. audioLanguage comes from
+// cast.SelectTracks and is "" when the stream does not say.
 //
-// That gate has been removed because it rested on a mode nothing verifies.
-// ProviderEpisodeResult.Mode is the mode that was *requested*, never the one the
-// host actually served (internal/provider.go, episodeModeResult), and a request
-// for a dub that the show has no dub for comes back as sub audio still labelled
-// dub. Observed on anikoto: a dub-category request returned Japanese audio with
-// a subtitle track attached, so the one episode that most needed subtitles was
-// the one that skipped them, silently.
-//
-// A stream that ships a subtitle track is treated as a stream worth burning it
-// onto. The cost of being wrong is a re-encode on a genuine dub that also
-// carries captions, and CastBurnSubtitles turns that off.
-func castShouldBurnSubtitles(config *Config, anime *Anime) bool {
+// Only then does the requested mode decide, and it can be trusted now where it
+// once could not: this gate was removed (85a7959) because anikoto answered a
+// dub request for a show without a dub with the sub stream, labelled dub. The
+// provider refuses that request since 1358628, so a dub label reaching here is
+// a dub. Burning regardless put the host's full English dialogue track over
+// English audio on every real dub.
+func castShouldBurnSubtitles(config *Config, anime *Anime, audioLanguage string) bool {
 	if config == nil || anime == nil || !config.CastBurnSubtitles {
 		return false
 	}
-	return strings.TrimSpace(anime.Ep.SubtitleURL) != ""
+	if strings.TrimSpace(anime.Ep.SubtitleURL) == "" {
+		return false
+	}
+	switch audioLanguage {
+	case "en":
+		return false
+	case "":
+		return playlistAudioMode(anime, config) != "dub"
+	default:
+		return true
+	}
+}
+
+// castLanguageName is a normalised language code for a message.
+func castLanguageName(code string) string {
+	switch code {
+	case "ja":
+		return "Japanese"
+	case "en":
+		return "English"
+	case "":
+		return "the host's default audio"
+	}
+	return "the " + code + " audio"
 }

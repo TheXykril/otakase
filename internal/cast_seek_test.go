@@ -488,3 +488,70 @@ func TestAResumedCastReportsEpisodeTimeImmediately(t *testing.T) {
 		t.Fatalf("a resumed cast reported %.1f, want 391", progress.Position)
 	}
 }
+
+// ASS subtitles (anizone serves them) are shifted too, and keep their own
+// extension so nothing downstream reads them as WebVTT.
+func TestARebuiltStreamShiftsASSSubtitles(t *testing.T) {
+	root := t.TempDir()
+	subtitles := filepath.Join(root, "subtitles.ass")
+	body := "[Script Info]\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
+		"Dialogue: 0,0:10:10.00,0:10:12.00,Default,,0,0,0,,Line.\n"
+	if err := os.WriteFile(subtitles, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	source := &castStreamSource{
+		ffmpeg:       "unused",
+		streamURL:    "https://host/master.m3u8",
+		rootDir:      root,
+		subtitlePath: subtitles,
+		encoder:      cast.Encoder{Name: "libx264"},
+	}
+	var got []string
+	source.launch = func(_ string, args []string, outDir string) (*cast.Remux, error) {
+		got = args
+		playlist := filepath.Join(outDir, cast.PlaylistName)
+		return cast.StartFFmpeg("/bin/sh", []string{"-c", fmt.Sprintf("printf '#EXTM3U\\n' > %q", playlist)}, outDir)
+	}
+
+	generation, err := source.start(600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shiftedPath := filepath.Join(generation.dir, "subtitles.ass")
+	shifted, err := os.ReadFile(shiftedPath)
+	if err != nil {
+		t.Fatalf("no shifted .ass file: %v", err)
+	}
+	if !strings.Contains(string(shifted), "0:00:10.00,0:00:12.00") {
+		t.Fatalf("the ASS subtitles were not shifted by the seek:\n%s", shifted)
+	}
+	if !strings.Contains(strings.Join(got, " "), "subtitles.ass") {
+		t.Fatalf("ffmpeg was not given the shifted .ass file:\n%s", strings.Join(got, " "))
+	}
+}
+
+// The provider's headers reach every generation of the stream, not only the
+// first: a seek that dropped Origin would 403 on its first segment.
+func TestARebuiltStreamSendsTheProvidersHeaders(t *testing.T) {
+	root := t.TempDir()
+	source := &castStreamSource{
+		ffmpeg:    "unused",
+		streamURL: "https://host/master.m3u8",
+		referrer:  "https://kaa.test/",
+		headers:   map[string]string{"Origin": "https://player.test"},
+		rootDir:   root,
+	}
+	var got []string
+	source.launch = func(_ string, args []string, outDir string) (*cast.Remux, error) {
+		got = args
+		playlist := filepath.Join(outDir, cast.PlaylistName)
+		return cast.StartFFmpeg("/bin/sh", []string{"-c", fmt.Sprintf("printf '#EXTM3U\\n' > %q", playlist)}, outDir)
+	}
+	if _, err := source.start(120); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(got, " "), "Origin: https://player.test") {
+		t.Fatalf("the rebuilt stream dropped the provider's headers:\n%s", strings.Join(got, " "))
+	}
+}

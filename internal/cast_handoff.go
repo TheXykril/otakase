@@ -483,6 +483,28 @@ func RunCastSession(config *Config, path string) error {
 	return lastErr
 }
 
+// WaitBeforeClosingCastWindow holds a failed cast's window open until the
+// viewer presses q or enter.
+//
+// The spawned window closes the moment this process exits, so a failure
+// printed just before the exit was on screen for a frame: a firewall that
+// blocked the device read as a window that simply vanished, with the fix it
+// named never seen. It waits only where there is a keyboard to answer it;
+// without one it returns at once rather than leave a process nobody can end.
+func WaitBeforeClosingCastWindow(config *Config) {
+	commands, release, ok := startCastControls(config)
+	if !ok {
+		return
+	}
+	defer release()
+	Out("Press q or enter to close this window.")
+	for command := range commands {
+		if command == castCmdStop || command == castCmdSelect {
+			return
+		}
+	}
+}
+
 // advanceUntrackedCast moves an untracked cast on to the next episode.
 //
 // AdvanceAfterEpisode is the tracked path's: it writes the finished episode to

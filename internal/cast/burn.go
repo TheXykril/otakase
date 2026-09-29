@@ -37,7 +37,7 @@ const castBurnLevel = "4.1"
 // referrer handling, the same tolerance for disguised segments, the same event
 // playlist -- and differs only in re-encoding the video instead of copying it.
 func BuildBurnArgs(streamURL, referrer, subtitlePath, outDir string, enc Encoder) []string {
-	return BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir, enc, 0)
+	return BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir, enc, 0, nil, nil)
 }
 
 // BuildBurnArgsFrom is BuildBurnArgs starting the stream at an offset.
@@ -46,7 +46,7 @@ func BuildBurnArgs(streamURL, referrer, subtitlePath, outDir string, enc Encoder
 // see ShiftWebVTT. The filter reads cue timings as they are written, and a
 // stream restarted at the target plays from zero, so an unshifted file would
 // show every line the seek distance too late.
-func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Encoder, startAt float64) []string {
+func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Encoder, startAt float64, maps []string, headers map[string]string) []string {
 	args := []string{"-hide_banner"}
 
 	// Named before the input, because it sets up the device the filter chain
@@ -60,11 +60,10 @@ func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Enc
 	args = append(args, "-allowed_extensions", "ALL", "-extension_picky", "0")
 
 	// -headers is a per-input option: it applies only to the next -i.
-	if referrer = strings.TrimSpace(referrer); referrer != "" {
-		args = append(args, "-headers", "Referer: "+referrer+"\r\n")
-	}
+	args = append(args, inputHeaderArgs(referrer, headers)...)
 	args = append(args, seekArgs(startAt)...)
 	args = append(args, "-i", streamURL)
+	args = append(args, maps...)
 
 	filter := "subtitles=" + escapeFilterPath(subtitlePath)
 	if enc.Hardware() {

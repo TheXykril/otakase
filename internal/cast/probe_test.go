@@ -9,7 +9,7 @@ import (
 )
 
 func TestTheProbeAllowsTheDisguisedSegmentsTheRemuxAllows(t *testing.T) {
-	args := strings.Join(ProbeDurationArgs("https://example.test/master.m3u8", ""), " ")
+	args := strings.Join(ProbeStreamArgs("https://example.test/master.m3u8", "", nil), " ")
 	// Providers serve HLS segments named .jpg. ffprobe refuses unrecognised
 	// extensions exactly as ffmpeg does, so a probe without these fails on the
 	// streams that need a probe most.
@@ -21,7 +21,7 @@ func TestTheProbeAllowsTheDisguisedSegmentsTheRemuxAllows(t *testing.T) {
 }
 
 func TestTheProbeSendsTheReferrerBeforeTheInput(t *testing.T) {
-	args := ProbeDurationArgs("https://example.test/master.m3u8", "https://player.test/")
+	args := ProbeStreamArgs("https://example.test/master.m3u8", "https://player.test/", nil)
 
 	headers, input := -1, -1
 	for i, arg := range args {
@@ -46,7 +46,7 @@ func TestTheProbeSendsTheReferrerBeforeTheInput(t *testing.T) {
 }
 
 func TestAStreamWithNoReferrerSendsNoHeaders(t *testing.T) {
-	for _, arg := range ProbeDurationArgs("https://example.test/master.m3u8", "   ") {
+	for _, arg := range ProbeStreamArgs("https://example.test/master.m3u8", "   ", nil) {
 		if arg == "-headers" {
 			t.Fatal("a blank referrer still produced a -headers option")
 		}

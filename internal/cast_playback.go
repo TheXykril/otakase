@@ -100,6 +100,14 @@ var castStallTimeout = 2 * time.Minute
 // castStallTimeout and was then told the cast had failed.
 var castEndStallTimeout = 5 * time.Second
 
+// castFetchHintDelay is how long the device may go without asking this machine
+// for anything before the panel says a firewall may be blocking it. Short of
+// castStartupGrace on purpose: that bound has to allow for a TV waking from
+// standby, but a device that has fetched nothing after this long is usually not
+// going to, and the viewer can act on the hint while the cast is still waiting.
+// A var for the same reason as castPollInterval.
+var castFetchHintDelay = 20 * time.Second
+
 // castEndSlack is how close to the end a frozen position must be to count as
 // the end rather than a stall: the receiver's last reported position lands a
 // fraction of a second either side of the measured duration.
@@ -407,21 +415,35 @@ func CastEpisode(config *Config, anime *Anime) error {
 	castStatus("Preparing the stream…")
 	Log(fmt.Sprintf("cast: remuxing %s (referrer %q) into %s", streamURL, referrer, streamDir))
 
-	// The device reports dur=-1 for the whole episode, so the panel's total has
-	// to come from here. The tracker's average episode length is a fallback
-	// worth having but only an average -- 24:00 for an episode that runs 24:40 --
-	// and the source playlist knows exactly. ffprobe reads it without fetching a
-	// segment, so this costs one request. A failure is not worth stopping for:
-	// the estimate still shows a total, marked as an estimate.
+	// One probe of the source answers two questions. The device reports dur=-1
+	// for the whole episode, so the panel's total has to come from here: the
+	// tracker's average is a fallback worth having but only an average -- 24:00
+	// for an episode that runs 24:40. And a stream carrying several dubs needs
+	// the one asked for named, or ffmpeg casts whichever the host marks default.
+	// A failure is not worth stopping for: the estimate still shows a total,
+	// and ffmpeg still picks a track.
 	durationEstimated := true
+	mode := playlistAudioMode(anime, config)
+	var tracks cast.TrackSelection
 	if ffprobe, probeErr := cast.FFprobePathFor(ffmpeg); probeErr != nil {
-		Log(fmt.Sprintf("cast: no ffprobe to read the episode's length with: %v", probeErr))
-	} else if seconds, probeErr := cast.ProbeDuration(ffprobe, streamURL, referrer); probeErr != nil {
+		Log(fmt.Sprintf("cast: no ffprobe to read the stream with: %v", probeErr))
+	} else if info, probeErr := cast.ProbeStream(ffprobe, streamURL, referrer, anime.Ep.StreamHeaders); probeErr != nil {
 		Log(fmt.Sprintf("cast: %v", probeErr))
 	} else {
-		anime.Ep.Duration = int(seconds + 0.5)
-		durationEstimated = false
-		Log(fmt.Sprintf("cast: the episode is %d seconds long", anime.Ep.Duration))
+		if info.Duration > 0 {
+			anime.Ep.Duration = int(info.Duration + 0.5)
+			durationEstimated = false
+			Log(fmt.Sprintf("cast: the episode is %d seconds long", anime.Ep.Duration))
+		}
+		want := "ja"
+		if mode == "dub" {
+			want = "en"
+		}
+		tracks = cast.SelectTracks(info, want)
+		Log(fmt.Sprintf("cast: %d audio tracks, playing %q with %v", len(info.Audio), tracks.AudioLanguage, tracks.Maps))
+		if mode == "dub" && len(info.Audio) > 1 && tracks.AudioLanguage != "en" {
+			Out("This stream has no English audio, so the cast plays " + castLanguageName(tracks.AudioLanguage) + ".")
+		}
 	}
 	// Subtitles are drawn into the picture when the stream has them, which is
 	// the only way a Chromecast shows them: it renders WebVTT alone, no
@@ -433,20 +455,25 @@ func CastEpisode(config *Config, anime *Anime) error {
 		ffmpeg:    ffmpeg,
 		streamURL: streamURL,
 		referrer:  referrer,
+		headers:   anime.Ep.StreamHeaders,
 		rootDir:   streamDir,
+		maps:      tracks.Maps,
 	}
-	if !castShouldBurnSubtitles(config, anime) {
+	burn := castShouldBurnSubtitles(config, anime, tracks.AudioLanguage)
+	if !burn {
 		// Said out loud, because a cast that silently plays without subtitles
 		// looks identical to one where burning failed, and the viewer is left
 		// guessing which. Each reason below is a different thing to fix.
 		switch {
 		case config != nil && !config.CastBurnSubtitles:
 			Log("cast: not burning subtitles: CastBurnSubtitles is off")
+		case strings.TrimSpace(anime.Ep.SubtitleURL) != "":
+			Log(fmt.Sprintf("cast: not burning subtitles: the audio is a dub (language %q, mode %s)", tracks.AudioLanguage, mode))
 		default:
 			Log("cast: not burning subtitles: this provider gave no subtitle track for this episode")
 		}
 	}
-	if castShouldBurnSubtitles(config, anime) {
+	if burn {
 		castStatus("Fetching subtitles…")
 		subtitlePath, subErr := fetchCastSubtitle(anime.Ep.SubtitleURL, referrer, streamDir)
 		if subErr != nil {
@@ -610,6 +637,8 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	started := false
 	paused := false
 	startupDeadline := time.Now().Add(castStartupGrace)
+	fetchHintAt := time.Now().Add(castFetchHintDelay)
+	fetchHinted := false
 
 	// lastPosition/lastPositionChange back Important 3's stall bound: a
 	// stale application status can leave the device reporting a frozen
@@ -944,6 +973,19 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			// Losing the device mid-episode is a failure, not a completion:
 			// nothing has finished, and the caller must not advance.
 			return fmt.Errorf("cast: lost contact with %s", device.Name)
+		}
+
+		// Before the idle check, because a device that cannot reach this
+		// machine may sit in BUFFERING rather than IDLE while it tries.
+		if !started && !fetchHinted && !server.Fetched() && !time.Now().Before(fetchHintAt) {
+			fetchHinted = true
+			hint := castWaitingFirewallHint(config, castServerHost(server.URL("")), castDetectFirewall(), device.Name)
+			Log("cast: " + strings.ReplaceAll(hint, "\n", " "))
+			if panel != nil {
+				fmt.Print(panel.status(animeName, episodeNumber, device.Name, hint, castPanelPlaybackKeys))
+			} else {
+				castOut(commands != nil, hint)
+			}
 		}
 
 		if progress.Idle {

@@ -1270,3 +1270,53 @@ func TestWatchCastUntrackedWritesNoHistory(t *testing.T) {
 		t.Errorf("an untracked cast wrote history: %+v", entries)
 	}
 }
+
+// A device that has fetched nothing is told about well before the grace gives
+// up: the failure used to be the first the viewer heard of a firewall, ninety
+// seconds in, and the window closed on it.
+func TestWatchCastHintsAtAFirewallWhileStillWaiting(t *testing.T) {
+	withFastCastTimings(t)
+	castStartupGrace = 200 * time.Millisecond
+	prevHint := castFetchHintDelay
+	castFetchHintDelay = time.Millisecond
+	t.Cleanup(func() { castFetchHintDelay = prevHint })
+
+	previous := clipboardWriteAll
+	clipboardWriteAll = func(string) error { return nil }
+	t.Cleanup(func() { clipboardWriteAll = previous })
+
+	config := testCastConfig(t)
+	config.CastPort = 8010
+	session := &fakeSession{steps: []fakeStep{{progress: cast.Progress{Idle: true}}}}
+
+	out := captureStdout(t, func() {
+		_ = watchCast(config, testCastAnime(), session, &fakeServer{neverFetched: true},
+			newFakeRemux(), cast.Device{Name: "Living Room"}, false)
+	})
+
+	if strings.Count(out, "firewall may be blocking port 8010") != 1 {
+		t.Errorf("expected the hint exactly once while waiting, got:\n%s", out)
+	}
+}
+
+// A device that did fetch the stream is not held up as a firewall problem.
+func TestWatchCastNoFirewallHintOnceFetched(t *testing.T) {
+	withFastCastTimings(t)
+	castStartupGrace = 50 * time.Millisecond
+	prevHint := castFetchHintDelay
+	castFetchHintDelay = time.Millisecond
+	t.Cleanup(func() { castFetchHintDelay = prevHint })
+
+	config := testCastConfig(t)
+	config.CastPort = 8010
+	session := &fakeSession{steps: []fakeStep{{progress: cast.Progress{Idle: true}}}}
+
+	out := captureStdout(t, func() {
+		_ = watchCast(config, testCastAnime(), session, &fakeServer{},
+			newFakeRemux(), cast.Device{Name: "Living Room"}, false)
+	})
+
+	if strings.Contains(out, "firewall") {
+		t.Errorf("hinted at a firewall for a device that fetched the stream:\n%s", out)
+	}
+}

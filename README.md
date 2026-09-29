@@ -228,8 +228,9 @@ too, and like local untracked playback it records nothing.
 Casting needs `ffmpeg`, same as `-download`. The stream is served from this
 computer, so keep otakase running while you watch.
 
-**Subtitles** are burned into the picture, using your GPU when it can.
-`CastBurnSubtitles=false` turns this off; `CastEncoder` forces `vaapi` or
+**Subtitles** are burned into the picture, using your GPU when it can. A dub
+plays its English audio track and gets no subtitles. `CastBurnSubtitles=false`
+turns burning off; `CastEncoder` forces `vaapi` or
 `software` if detection picks wrong.
 
 **Seeking** takes a couple of seconds to restart the stream, so a press moves

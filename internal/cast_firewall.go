@@ -125,6 +125,28 @@ func castCopyFirewallCommand(command, message string) string {
 	return message + "\n(Copied to your clipboard -- paste it into a terminal and run it.)"
 }
 
+// castWaitingFirewallHint is the panel message for a device that has accepted
+// the load and still not asked this machine for anything.
+//
+// It is shown while the cast is still waiting, well before castStartupGrace
+// gives up, because the failure itself used to be the first word of it: ninety
+// seconds of "Waiting for X to start…" and then a window that closed. The fix
+// is copied now rather than at the failure, so it is on the clipboard even if
+// the viewer closes the window instead of waiting the grace out.
+func castWaitingFirewallHint(config *Config, serverAddr, firewall, device string) string {
+	if config == nil || config.CastPort == 0 {
+		return fmt.Sprintf("No request from %s yet -- a firewall may be blocking it.\n", device) +
+			"Set CastPort (otakase -e) to a fixed port, then allow that port."
+	}
+	lead := fmt.Sprintf("No request from %s yet -- a firewall may be blocking port %d.\n", device, config.CastPort)
+	_, command := castFirewallHintWithCommand(config, serverAddr, firewall)
+	if err := clipboardWriteAll(command); err != nil {
+		Log(fmt.Sprintf("cast: could not copy the firewall command to the clipboard: %v", err))
+		return lead + "Run: " + command
+	}
+	return lead + "The fix is on your clipboard -- paste it into a terminal."
+}
+
 // castServerHost is the address out of a server URL, for building a firewall
 // hint that names this machine's own subnet.
 func castServerHost(rawURL string) string {

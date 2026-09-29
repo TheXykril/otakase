@@ -143,3 +143,56 @@ func TestCastLocalSubnet(t *testing.T) {
 		}
 	}
 }
+
+// The hint shown while a cast is still waiting copies the fix at once, so it is
+// on the clipboard even if the viewer closes the window before the grace runs
+// out, and it names the port on its first line, which is the one a narrow
+// panel keeps.
+func TestCastWaitingFirewallHintCopiesTheFix(t *testing.T) {
+	previous := clipboardWriteAll
+	written := ""
+	clipboardWriteAll = func(text string) error { written = text; return nil }
+	defer func() { clipboardWriteAll = previous }()
+
+	got := castWaitingFirewallHint(&Config{CastPort: 8010}, "192.168.1.20", "ufw", "Living Room")
+
+	if !strings.Contains(written, "port 8010") {
+		t.Errorf("wrote %q to the clipboard, want the ufw command for port 8010", written)
+	}
+	first, rest, _ := strings.Cut(got, "\n")
+	if !strings.Contains(first, "Living Room") || !strings.Contains(first, "8010") {
+		t.Errorf("the first line does not name the device and port: %q", first)
+	}
+	if !strings.Contains(rest, "clipboard") {
+		t.Errorf("a successful copy did not say so: %q", got)
+	}
+}
+
+func TestCastWaitingFirewallHintWithoutCopyShowsTheCommand(t *testing.T) {
+	previous := clipboardWriteAll
+	clipboardWriteAll = func(string) error { return errors.New("no clipboard on this machine") }
+	defer func() { clipboardWriteAll = previous }()
+
+	got := castWaitingFirewallHint(&Config{CastPort: 8010}, "192.168.1.20", "ufw", "Living Room")
+
+	if !strings.Contains(got, "sudo ufw allow") || strings.Contains(got, "clipboard") {
+		t.Errorf("a failed copy should leave the command readable and claim nothing: %q", got)
+	}
+}
+
+// With no fixed port there is nothing to allow, so nothing is copied.
+func TestCastWaitingFirewallHintWithoutAPortAsksForOne(t *testing.T) {
+	previous := clipboardWriteAll
+	copied := false
+	clipboardWriteAll = func(string) error { copied = true; return nil }
+	defer func() { clipboardWriteAll = previous }()
+
+	got := castWaitingFirewallHint(&Config{}, "192.168.1.20", "ufw", "Living Room")
+
+	if copied {
+		t.Error("copied a command with no port to allow")
+	}
+	if !strings.Contains(got, "CastPort") {
+		t.Errorf("the hint does not say to set CastPort: %q", got)
+	}
+}

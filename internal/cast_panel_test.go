@@ -323,3 +323,14 @@ func TestTheNarrowPanelAlsoMarksAnEstimate(t *testing.T) {
 		t.Fatalf("the narrow panel dropped the estimate mark: %q", line)
 	}
 }
+
+// A message of several lines gets a row each, between the header and footer.
+func TestCastPanelStatusLinesOneRowPerMessageLine(t *testing.T) {
+	lines := castPanelStatusLines("Show", 1, "TV", "first\nsecond", 60, castPanelPlaybackKeys)
+	if len(lines) != 4 {
+		t.Fatalf("got %d lines, want header, two rows, footer: %q", len(lines), lines)
+	}
+	if !strings.Contains(lines[1], "first") || !strings.Contains(lines[2], "second") {
+		t.Errorf("rows out of order: %q", lines)
+	}
+}

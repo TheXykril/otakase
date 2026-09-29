@@ -2,11 +2,10 @@ package internal
 
 import "testing"
 
-// A stream that carries a subtitle track gets it burned in; that is the only
-// question. The audio mode used to gate this too, and it was removed because
-// nothing verifies it: the mode is the one that was requested, not the one the
-// host served, so a dub request for a show with no dub arrived as sub audio
-// labelled dub and skipped the subtitles it needed.
+// Burning follows the audio that actually plays, read from the stream, not the
+// mode that was asked for: an English track needs no subtitles drawn over it,
+// and a Japanese one does whatever the request said. Only when the stream does
+// not say does the requested mode decide.
 func TestCastShouldBurnSubtitles(t *testing.T) {
 	withSubs := func(mode string) *Anime {
 		a := &Anime{}
@@ -20,20 +19,19 @@ func TestCastShouldBurnSubtitles(t *testing.T) {
 		name  string
 		anime *Anime
 		cfg   *Config
+		audio string
 		want  bool
 	}{
-		{"subbed audio with subtitles", withSubs("sub"), on, true},
-		// Burned even though the mode says dub: the mode is a request, and a
-		// dub request for a show without one returns sub audio under this label.
-		// A wasted re-encode on a real dub is the lesser failure, and
-		// CastBurnSubtitles turns it off.
-		{"a dub label does not stop it, because the label is unverified", withSubs("dub"), on, true},
-		{"turned off in the config", withSubs("sub"), &Config{CastBurnSubtitles: false, SubOrDub: "sub"}, false},
-		{"nothing to burn", &Anime{}, on, false},
-		{"a configured dub preference does not stop it either", withSubs(""), &Config{CastBurnSubtitles: true, SubOrDub: "dub"}, true},
+		{"subbed audio with subtitles", withSubs("sub"), on, "", true},
+		{"English audio is a dub whatever the label", withSubs("sub"), on, "en", false},
+		{"Japanese audio under a dub label still gets them", withSubs("dub"), on, "ja", true},
+		{"an unknown language on a dub request trusts the request", withSubs("dub"), on, "", false},
+		{"the configured dub preference counts as the request", withSubs(""), &Config{CastBurnSubtitles: true, SubOrDub: "dub"}, "", false},
+		{"turned off in the config", withSubs("sub"), &Config{CastBurnSubtitles: false, SubOrDub: "sub"}, "ja", false},
+		{"nothing to burn", &Anime{}, on, "ja", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := castShouldBurnSubtitles(tc.cfg, tc.anime); got != tc.want {
+			if got := castShouldBurnSubtitles(tc.cfg, tc.anime, tc.audio); got != tc.want {
 				t.Errorf("castShouldBurnSubtitles = %v, want %v", got, tc.want)
 			}
 		})

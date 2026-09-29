@@ -182,7 +182,7 @@ func TestBuildRemuxArgsCapsTheH264Level(t *testing.T) {
 // from the target instead. Where the offset goes decides whether that takes a
 // moment or most of an episode.
 func TestASeekingRemuxSeeksTheInputRatherThanDecodingUpToIt(t *testing.T) {
-	args := BuildRemuxArgsFrom("https://host/master.m3u8", "", "/tmp/out", 754.5)
+	args := BuildRemuxArgsFrom("https://host/master.m3u8", "", "/tmp/out", 754.5, nil, nil)
 
 	ss, input := -1, -1
 	for i, arg := range args {
@@ -209,7 +209,7 @@ func TestASeekingRemuxSeeksTheInputRatherThanDecodingUpToIt(t *testing.T) {
 func TestAStreamStartingAtZeroCarriesNoOffset(t *testing.T) {
 	// The ordinary first play goes through the same builder, and an -ss 0 is a
 	// difference in the command line for no difference in the output.
-	for _, arg := range BuildRemuxArgsFrom("https://host/master.m3u8", "", "/tmp/out", 0) {
+	for _, arg := range BuildRemuxArgsFrom("https://host/master.m3u8", "", "/tmp/out", 0, nil, nil) {
 		if arg == "-ss" {
 			t.Fatal("a stream starting at zero was given an -ss")
 		}
@@ -217,7 +217,7 @@ func TestAStreamStartingAtZeroCarriesNoOffset(t *testing.T) {
 }
 
 func TestASeekingRemuxKeepsTheRefererAndTheDisguisedSegments(t *testing.T) {
-	args := strings.Join(BuildRemuxArgsFrom("https://host/master.m3u8", "https://player.test/", "/tmp/out", 60), " ")
+	args := strings.Join(BuildRemuxArgsFrom("https://host/master.m3u8", "https://player.test/", "/tmp/out", 60, nil, nil), " ")
 
 	// A seek must not quietly drop the two things that make these streams work
 	// at all, or seeking would fail on exactly the providers that need them.

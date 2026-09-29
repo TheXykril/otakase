@@ -36,6 +36,9 @@ type castStreamSource struct {
 	ffmpeg    string
 	streamURL string
 	referrer  string
+	// headers are any the provider needs beyond the referrer, as mpv is sent
+	// them: one host 403s its segments without Origin.
+	headers map[string]string
 	// rootDir holds one directory per generation. The device is given a new URL
 	// each time, because a device handed the same URL twice may serve the
 	// episode out of its own cache and never ask for the new segments.
@@ -45,6 +48,10 @@ type castStreamSource struct {
 	// compounding with each seek.
 	subtitlePath string
 	encoder      cast.Encoder
+	// maps names the video and audio to play, from cast.SelectTracks; nil
+	// leaves the choice to ffmpeg. The same every generation, so a seek keeps
+	// the language the cast began in.
+	maps []string
 
 	generation int
 
@@ -70,19 +77,21 @@ func (s *castStreamSource) start(startAt float64) (stream, error) {
 	}
 	s.generation++
 
-	args := cast.BuildRemuxArgsFrom(s.streamURL, s.referrer, dir, startAt)
+	args := cast.BuildRemuxArgsFrom(s.streamURL, s.referrer, dir, startAt, s.maps, s.headers)
 	if s.subtitlePath != "" {
 		// Shifted into this generation's own directory, from the original, so a
-		// second seek does not shift an already-shifted file.
-		shifted := filepath.Join(dir, "subtitles.vtt")
-		if err := cast.ShiftWebVTT(s.subtitlePath, shifted, startAt); err != nil {
+		// second seek does not shift an already-shifted file. The original's
+		// extension is kept: it names the format, and an ASS file written out
+		// as subtitles.vtt says the wrong one.
+		shifted := filepath.Join(dir, "subtitles"+filepath.Ext(s.subtitlePath))
+		if err := cast.ShiftSubtitles(s.subtitlePath, shifted, startAt); err != nil {
 			// Subtitles that cannot be shifted are worth less than the seek:
 			// burn the original and let them run late rather than refusing to
 			// move at all.
 			Log(fmt.Sprintf("cast: %v", err))
 			shifted = s.subtitlePath
 		}
-		args = cast.BuildBurnArgsFrom(s.streamURL, s.referrer, shifted, dir, s.encoder, startAt)
+		args = cast.BuildBurnArgsFrom(s.streamURL, s.referrer, shifted, dir, s.encoder, startAt, s.maps, s.headers)
 	}
 
 	launch := s.launch

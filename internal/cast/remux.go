@@ -29,7 +29,7 @@ var Log = func(string) {}
 // local stream the device fetches instead. Nothing is re-encoded -- this is a
 // container change, so it costs bandwidth and almost no CPU.
 func BuildRemuxArgs(streamURL, referrer, outDir string) []string {
-	return BuildRemuxArgsFrom(streamURL, referrer, outDir, 0)
+	return BuildRemuxArgsFrom(streamURL, referrer, outDir, 0, nil, nil)
 }
 
 // BuildRemuxArgsFrom is BuildRemuxArgs starting the stream at an offset.
@@ -39,7 +39,10 @@ func BuildRemuxArgs(streamURL, referrer, outDir string) []string {
 // stream is therefore rebuilt from the target instead, and the offset belongs
 // before -i, where ffmpeg seeks the input rather than decoding everything up to
 // the target and throwing it away.
-func BuildRemuxArgsFrom(streamURL, referrer, outDir string, startAt float64) []string {
+//
+// maps are -map arguments from SelectTracks, or nil to leave the choice of
+// streams to ffmpeg. headers are any the provider needs beyond the referrer.
+func BuildRemuxArgsFrom(streamURL, referrer, outDir string, startAt float64, maps []string, headers map[string]string) []string {
 	args := []string{"-hide_banner", "-loglevel", "error", "-stats_period", "1"}
 
 	// Providers routinely disguise HLS segments as images (…/seg-1-f1-v1-a1.jpg)
@@ -49,11 +52,10 @@ func BuildRemuxArgsFrom(streamURL, referrer, outDir string, startAt float64) []s
 	args = append(args, "-allowed_extensions", "ALL", "-extension_picky", "0")
 
 	// -headers is a per-input option: it applies only to the next -i.
-	if referrer = strings.TrimSpace(referrer); referrer != "" {
-		args = append(args, "-headers", "Referer: "+referrer+"\r\n")
-	}
+	args = append(args, inputHeaderArgs(referrer, headers)...)
 	args = append(args, seekArgs(startAt)...)
 	args = append(args, "-i", streamURL)
+	args = append(args, maps...)
 
 	// No -bsf:a aac_adtstoasc here, unlike download.go: that filter strips ADTS
 	// headers for an MP4 container, and these segments are MPEG-TS, which needs

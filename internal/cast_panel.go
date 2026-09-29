@@ -387,17 +387,21 @@ func castPanelStatusLines(title string, episode int, device, message string, wid
 		width = castPanelMaxWidth
 	}
 	if width < castPanelMinWidth {
-		return []string{castPanelTruncate(message, width)}
+		first, _, _ := strings.Cut(message, "\n")
+		return []string{castPanelTruncate(first, width)}
 	}
 
 	inner := width - 4
 	state := castPanelState{Title: title, Episode: episode, Device: device}
 
-	return []string{
-		castPanelTop(state, width),
-		castPanelRow([]castPanelSegment{{message, castPanelDimStyle}}, inner),
-		castPanelBottom(width, keys),
+	// One row per line of the message: each row still truncates from the
+	// right, so a message that must survive a narrow terminal puts what matters
+	// first on its own line.
+	lines := []string{castPanelTop(state, width)}
+	for _, line := range strings.Split(message, "\n") {
+		lines = append(lines, castPanelRow([]castPanelSegment{{line, castPanelDimStyle}}, inner))
 	}
+	return append(lines, castPanelBottom(width, keys))
 }
 
 // clear removes the panel and forgets it, for a message that needs the screen.

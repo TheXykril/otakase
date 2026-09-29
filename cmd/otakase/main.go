@@ -307,6 +307,7 @@ func main() {
 		if err := internal.RunCastSession(&userConfig, *castSessionFlag); err != nil {
 			internal.Out("Casting failed: " + err.Error())
 			internal.Log(fmt.Sprintf("cast: %v", err))
+			internal.WaitBeforeClosingCastWindow(&userConfig)
 		}
 		// Exit rather than return: the cast controls restore the terminal from a
 		// cleanup that only runExitCleanups reaches, and a plain return does not
