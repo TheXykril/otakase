@@ -1581,7 +1581,10 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 		// history. If it cannot be done the episode still plays here, without
 		// controls, because a missing terminal must not mean a missing episode.
 		if userConfig.RofiSelection {
-			if err := handOffCastToTerminal(userConfig, anime); err != nil {
+			if err := handOffCastToTerminal(userConfig, anime); errors.Is(err, ErrCastStopped) {
+				// The viewer escaped the device menu: nothing to fall back to.
+				return ""
+			} else if err != nil {
 				Out("Casting here instead of in a terminal: " + err.Error())
 				Log(fmt.Sprintf("cast: handoff failed: %v", err))
 			} else {

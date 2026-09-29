@@ -62,13 +62,17 @@ type fakeStep struct {
 // a test can flip the remux or server fake at an exact poll -- deterministic
 // without a fake clock.
 type fakeSession struct {
-	mu     sync.Mutex
-	steps  []fakeStep
-	calls  int
-	seeks  []float64
-	paused bool
-	volume float64
-	onCall func(call int)
+	mu    sync.Mutex
+	steps []fakeStep
+	calls int
+	seeks []float64
+	// seekErr is what every SeekToTime returns, for a rebuild that fails;
+	// seekErrs fails only the listed targets.
+	seekErr  error
+	seekErrs map[float64]error
+	paused   bool
+	volume   float64
+	onCall   func(call int)
 }
 
 func (s *fakeSession) Pause() error {
@@ -124,7 +128,10 @@ func (s *fakeSession) SeekToTime(seconds float64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.seeks = append(s.seeks, seconds)
-	return nil
+	if err, ok := s.seekErrs[seconds]; ok {
+		return err
+	}
+	return s.seekErr
 }
 
 // slowProgressSession is a castSession whose Progress call sleeps for a
@@ -244,15 +251,16 @@ func (s *fakeServer) URL(name string) string { return "http://192.168.0.115:8010
 // observes the change.
 func withFastCastTimings(t *testing.T) {
 	t.Helper()
-	prevPoll, prevGrace, prevStall := castPollInterval, castStartupGrace, castStallTimeout
+	prevPoll, prevGrace, prevStall, prevEnd := castPollInterval, castStartupGrace, castStallTimeout, castEndStallTimeout
 	castPollInterval = 2 * time.Millisecond
 	castStartupGrace = time.Millisecond
 	// Wide enough that a test doing real file I/O between two polls (writing
 	// curd_history.txt on a mark) cannot trip the bound by accident, and still
 	// short enough that the stall test finishes in well under its own timeout.
 	castStallTimeout = 500 * time.Millisecond
+	castEndStallTimeout = 50 * time.Millisecond
 	t.Cleanup(func() {
-		castPollInterval, castStartupGrace, castStallTimeout = prevPoll, prevGrace, prevStall
+		castPollInterval, castStartupGrace, castStallTimeout, castEndStallTimeout = prevPoll, prevGrace, prevStall, prevEnd
 	})
 }
 
@@ -930,5 +938,335 @@ func TestWatchCastDistinguishesNeverFetchedFromRefused(t *testing.T) {
 				t.Errorf("expected a message containing %q, got %v", tc.want, err)
 			}
 		})
+	}
+}
+
+// A receiver that plays the last segment of a fully delivered episode and then
+// sits on the final frame reporting PLAYING must be read as a finished episode,
+// promptly -- not as a stall two minutes later. Seen on hardware: the panel
+// froze at 23:41 / 23:41 and the cast then ended with "stopped reporting
+// progress".
+func TestWatchCastFrozenAtTheEndIsAFinish(t *testing.T) {
+	withFastCastTimings(t)
+	// Longer than the test waits: a finish must come from the end-of-episode
+	// check, not the general stall bound.
+	castStallTimeout = time.Minute
+
+	remux := newFakeRemux()
+	remux.succeed()
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 1400, Duration: 1421}},
+			{progress: cast.Progress{Position: 1421.1, Duration: 1421}}, // frozen from here on
+		},
+	}
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- watchCast(config, anime, session, &fakeServer{}, remux, cast.Device{Name: "Office TV"}, false)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("expected a clean finish, got: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("watchCast did not return on a device frozen at the end")
+	}
+	entries := LocalGetAllAnime(filepath.Join(config.StoragePath, "curd_history.txt"))
+	if !animeMarked(entries, anime.AnilistId) {
+		t.Error("the episode was not marked watched")
+	}
+}
+
+// A frozen position well short of the end is still a stall, not a finish.
+func TestWatchCastFrozenBeforeTheEndIsStillAStall(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	remux.succeed()
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 600, Duration: 1421}},
+			{progress: cast.Progress{Position: 700, Duration: 1421}},
+		},
+	}
+
+	err := watchCast(testCastConfig(t), testCastAnime(), session, &fakeServer{}, remux, cast.Device{Name: "Office TV"}, false)
+	if err == nil || !strings.Contains(err.Error(), "stopped reporting progress") {
+		t.Fatalf("expected a stall error, got: %v", err)
+	}
+}
+
+// An ending that stops a few seconds short of the end is still skipped with a
+// rebuild: what follows it (a post-credits line, a preview) is worth seeing.
+func TestWatchCastSkippingAnEndingNearTheEndStillSeeks(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	remux.succeed()
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 1328, Duration: 1421}},
+			{progress: cast.Progress{Idle: true}},
+		},
+	}
+	anime := testCastAnime()
+	anime.Ep.SkipTimes = SkipTimes{Ed: Skip{Start: 1327, End: 1416}}
+	config := testCastConfig(t)
+	config.SkipEd = true
+
+	if err := watchCast(config, anime, session, &fakeServer{}, remux, cast.Device{Name: "Office TV"}, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(session.seeks) != 1 || session.seeks[0] != 1416 {
+		t.Errorf("expected one seek to 1416, got %v", session.seeks)
+	}
+}
+
+// When that rebuild fails -- seen on hardware: too few frames left for the
+// encoder -- nothing but the skipped ending is left to play, so the episode
+// finishes rather than retrying every poll or playing the ending out.
+func TestWatchCastFailedSkipNearTheEndFinishes(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	remux.succeed()
+	session := &fakeSession{
+		seekErr: errors.New("ffmpeg failed"),
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 1300, Duration: 1421}},
+			{progress: cast.Progress{Position: 1328, Duration: 1421}},
+		},
+	}
+	anime := testCastAnime()
+	anime.Ep.SkipTimes = SkipTimes{Ed: Skip{Start: 1327, End: 1416}}
+	config := testCastConfig(t)
+	config.SkipEd = true
+
+	if err := watchCast(config, anime, session, &fakeServer{}, remux, cast.Device{Name: "Office TV"}, false); err != nil {
+		t.Fatalf("expected a clean finish, got: %v", err)
+	}
+	// The skip itself, then each earlier retry.
+	if len(session.seeks) != 1+castSkipBackOffTries {
+		t.Errorf("expected %d seek attempts, got %v", 1+castSkipBackOffTries, session.seeks)
+	}
+	if !session.paused {
+		t.Error("the device was left playing the ending it was told to skip")
+	}
+	entries := LocalGetAllAnime(filepath.Join(config.StoragePath, "curd_history.txt"))
+	if !animeMarked(entries, anime.AnilistId) {
+		t.Error("the episode was not marked watched")
+	}
+}
+
+// A rebuild that fails near the end is retried a little earlier, and the first
+// start that works is kept.
+func TestWatchCastFailedSkipNearTheEndRetriesEarlier(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	remux.succeed()
+	session := &fakeSession{
+		seekErrs: map[float64]error{1416: errors.New("no frames")},
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 1328, Duration: 1421}},
+			// Still inside the ending, where the back-off put it on purpose:
+			// seen on hardware, this used to trigger the skip again, fail, and
+			// finish the episode before the last seconds played.
+			{progress: cast.Progress{Position: 1414, Duration: 1421}},
+			{progress: cast.Progress{Position: 1415, Duration: 1421}},
+			{progress: cast.Progress{Idle: true}},
+		},
+	}
+	anime := testCastAnime()
+	anime.Ep.SkipTimes = SkipTimes{Ed: Skip{Start: 1327, End: 1416}}
+	config := testCastConfig(t)
+	config.SkipEd = true
+
+	if err := watchCast(config, anime, session, &fakeServer{}, remux, cast.Device{Name: "Office TV"}, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []float64{1416, 1414}
+	if len(session.seeks) != len(want) || session.seeks[0] != want[0] || session.seeks[1] != want[1] {
+		t.Errorf("expected seeks %v, got %v", want, session.seeks)
+	}
+	if session.paused {
+		t.Error("the device was paused although the retry worked")
+	}
+}
+
+// An ending that runs to the last second has nothing after it: finish without
+// a rebuild.
+func TestWatchCastSkippingAnEndingThatRunsToTheEndFinishes(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	remux.succeed()
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 1328, Duration: 1421}},
+		},
+	}
+	anime := testCastAnime()
+	anime.Ep.SkipTimes = SkipTimes{Ed: Skip{Start: 1327, End: 1421}}
+	config := testCastConfig(t)
+	config.SkipEd = true
+
+	if err := watchCast(config, anime, session, &fakeServer{}, remux, cast.Device{Name: "Office TV"}, false); err != nil {
+		t.Fatalf("expected a clean finish, got: %v", err)
+	}
+	if len(session.seeks) != 0 {
+		t.Errorf("expected no seek, got %v", session.seeks)
+	}
+	if !session.paused {
+		t.Error("the device was left playing the ending it was told to skip")
+	}
+}
+
+// A skip whose rebuild fails is tried once, not on every poll.
+func TestWatchCastFailedSkipIsNotRetried(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	session := &fakeSession{
+		seekErr: errors.New("ffmpeg failed"),
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 10, Duration: 1421}},
+			{progress: cast.Progress{Position: 11, Duration: 1421}},
+			{progress: cast.Progress{Position: 12, Duration: 1421}},
+			{progress: cast.Progress{Position: 13, Duration: 1421}},
+			{progress: cast.Progress{Idle: true}},
+		},
+	}
+	anime := testCastAnime()
+	anime.Ep.SkipTimes = SkipTimes{Op: Skip{Start: 0, End: 90}}
+	config := testCastConfig(t)
+	config.SkipOp = true
+
+	if err := watchCast(config, anime, session, &fakeServer{}, remux, cast.Device{Name: "Office TV"}, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(session.seeks) != 1 {
+		t.Errorf("expected one seek attempt, got %d", len(session.seeks))
+	}
+}
+
+// The receiver stops answering as the last segment plays out, so the episode is
+// finished on the last poll before the end rather than after a 10s timeout.
+func TestWatchCastFinishesJustBeforeTheEnd(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	remux.succeed()
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 1419, Duration: 1421}},
+			{progress: cast.Progress{Position: 1420.4, Duration: 1421}},
+			{err: errors.New("device did not respond")},
+		},
+	}
+	anime := testCastAnime()
+	config := testCastConfig(t)
+
+	if err := watchCast(config, anime, session, &fakeServer{}, remux, cast.Device{Name: "Office TV"}, false); err != nil {
+		t.Fatalf("expected a clean finish, got: %v", err)
+	}
+	if session.calls != 2 {
+		t.Errorf("expected to finish on the second poll, took %d", session.calls)
+	}
+	entries := LocalGetAllAnime(filepath.Join(config.StoragePath, "curd_history.txt"))
+	if !animeMarked(entries, anime.AnilistId) {
+		t.Error("the episode was not marked watched")
+	}
+}
+
+// Near the live edge of an unfinished remux is ffmpeg running behind, not the end.
+func TestWatchCastNearTheLiveEdgeIsNotTheEnd(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 100, Duration: 200}},
+			{progress: cast.Progress{Position: 199.5, Duration: 200}},
+			{progress: cast.Progress{Position: 201, Duration: 300}},
+			{progress: cast.Progress{Idle: true}},
+		},
+	}
+
+	if err := watchCast(testCastConfig(t), testCastAnime(), session, &fakeServer{}, remux, cast.Device{Name: "Office TV"}, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if session.calls != 4 {
+		t.Errorf("finished early at the live edge: %d polls", session.calls)
+	}
+}
+
+// Passing the watched threshold -- by seeking past it, typically -- must not
+// mark an episode that is still playing. It is marked when the cast ends, as
+// the mpv path does.
+func TestWatchCastMarksWhenTheEpisodeEndsNotWhenTheThresholdIsPassed(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	remux.succeed()
+	anime := testCastAnime()
+	config := testCastConfig(t)
+	historyPath := filepath.Join(config.StoragePath, "curd_history.txt")
+
+	var markedMidPlay bool
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 100, Duration: 1000}},
+			{progress: cast.Progress{Position: 900, Duration: 1000}}, // a seek past 85%
+			{progress: cast.Progress{Position: 910, Duration: 1000}},
+			{progress: cast.Progress{Position: 920, Duration: 1000}},
+			{progress: cast.Progress{Idle: true}},
+		},
+	}
+	session.onCall = func(call int) {
+		if call == 3 && animeMarked(LocalGetAllAnime(historyPath), anime.AnilistId) {
+			markedMidPlay = true
+		}
+	}
+
+	if err := watchCast(config, anime, session, &fakeServer{}, remux, cast.Device{Name: "Office TV"}, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if markedMidPlay {
+		t.Error("the episode was marked while it was still playing")
+	}
+	if !animeMarked(LocalGetAllAnime(historyPath), anime.AnilistId) {
+		t.Error("the episode was not marked when it ended")
+	}
+}
+
+// An untracked cast plays like any other but writes nothing: no history row
+// when it finishes, and none for a partial position when it is stopped.
+func TestWatchCastUntrackedWritesNoHistory(t *testing.T) {
+	withFastCastTimings(t)
+
+	remux := newFakeRemux()
+	remux.succeed()
+	session := &fakeSession{
+		steps: []fakeStep{
+			{progress: cast.Progress{Position: 100, Duration: 1000}},
+			{progress: cast.Progress{Position: 950, Duration: 1000}},
+			{progress: cast.Progress{Idle: true}},
+		},
+	}
+	anime := testCastAnime()
+	anime.Untracked = true
+	config := testCastConfig(t)
+
+	if err := watchCast(config, anime, session, &fakeServer{}, remux, cast.Device{Name: "Office TV"}, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if entries := LocalGetAllAnime(filepath.Join(config.StoragePath, "curd_history.txt")); len(entries) != 0 {
+		t.Errorf("an untracked cast wrote history: %+v", entries)
 	}
 }

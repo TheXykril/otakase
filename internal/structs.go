@@ -24,6 +24,9 @@ type Anime struct {
 	FillerEpisodes []int
 	IsAiring       bool
 	SkipRemoteSync bool `json:"-"`
+	// Untracked is an episode from Untracked Watching: played, never written
+	// to the history file or a tracker. A cast reads it to skip every write.
+	Untracked bool `json:"-"`
 }
 
 type FuzzyDate struct {

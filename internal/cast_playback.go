@@ -92,6 +92,55 @@ var castStartupGrace = 90 * time.Second
 // reason as castPollInterval and castStartupGrace.
 var castStallTimeout = 2 * time.Minute
 
+// castEndStallTimeout is how long a position may sit unchanged at the very end
+// of a fully delivered episode before watchCast calls it finished. Some
+// receivers never report IDLE after the last segment of an HLS stream that was
+// loaded as live (no EXT-X-ENDLIST yet): they sit on the final frame reporting
+// PLAYING, and without this the viewer watched a frozen panel for the whole of
+// castStallTimeout and was then told the cast had failed.
+var castEndStallTimeout = 5 * time.Second
+
+// castEndSlack is how close to the end a frozen position must be to count as
+// the end rather than a stall: the receiver's last reported position lands a
+// fraction of a second either side of the measured duration.
+const castEndSlack = 3.0
+
+// castSkipBackOffStep and castSkipBackOffTries shape the retry of a skip whose
+// rebuild failed near the end: each try starts the stream this much earlier.
+// Small steps replay as little of the ending as possible, and five of them
+// reach back past any final segment a provider has served here so far (the
+// longest seen is about 10s). A failed try costs about two seconds.
+const (
+	castSkipBackOffStep  = 2.0
+	castSkipBackOffTries = 5
+)
+
+// castSkipBackOff retries a failed skip progressively earlier, never at or
+// before where playback already is, reporting whether one of them worked.
+func castSkipBackOff(session castSession, target, position float64) bool {
+	for try := 1; try <= castSkipBackOffTries; try++ {
+		earlier := target - castSkipBackOffStep*float64(try)
+		if earlier <= position {
+			return false
+		}
+		err := session.SeekToTime(earlier)
+		Log(fmt.Sprintf("cast: retrying the skip at %.1f: err=%v", earlier, err))
+		if err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// castEndLead is how far before the end the episode is called finished. At
+// least one poll interval, so the last answer before the receiver goes quiet is
+// always inside it.
+const castEndLead = 1.0
+
+// castSkipNothingLeft is how close to the end a skip must land for there to be
+// nothing after it worth rebuilding a stream for.
+const castSkipNothingLeft = 1.0
+
 func init() {
 	// This package must not import internal, so package cast's stderr logger
 	// (M3: log ffmpeg's stderr on any exit, not only on failure) is wired to
@@ -635,13 +684,14 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	animeName := GetAnimeName(*anime)
 	animeProvider := CurrentAnimeProviderName(anime)
 	anilistID, providerID, episodeNumber := anime.AnilistId, anime.ProviderId, anime.Ep.Number
+	untracked := anime.Untracked
 
 	writePartial := func() {
 		savedMu.Lock()
 		position, duration, alreadyMarked := savedPosition, savedDuration, savedMarked
 		savedMu.Unlock()
 
-		if alreadyMarked || position < 1 {
+		if alreadyMarked || position < 1 || untracked {
 			return
 		}
 		LocalUpdateAnime(
@@ -665,6 +715,78 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	// is called directly with the position of that moment.
 	cancelSave := RegisterExitCleanup(writePartial)
 	defer cancelSave()
+
+	// markWatched records the episode as seen, locally and on the remote
+	// tracker. Callers check remuxSucceeded() first: see its comment for why a
+	// truncated stream must not mark anything.
+	markWatched := func(position, duration float64) {
+		marked = true
+		recordPosition(position)
+		if untracked {
+			return
+		}
+		LocalUpdateAnime(
+			historyPath,
+			anilistID, providerID, episodeNumber,
+			// Minutes, not seconds: LocalUpdateAnime's animeDuration column
+			// is minutes, which is how formatResumePosition reads it back.
+			// The mpv path converts at its own call site for the same reason.
+			int(position), ConvertSecondsToMinutes(int(duration)),
+			animeName, animeProvider,
+		)
+		// GetGlobalUser returns nil when nothing signed in, and local-only
+		// tracking is a supported mode -- dereferencing it here would panic
+		// on the one path a local-only user reaches.
+		if user := GetGlobalUser(); shouldPushRemoteProgress(config, user) {
+			if err := UpdateAnimeProgress(user.Token, anilistID, episodeNumber); err != nil {
+				Log(fmt.Sprintf("cast: could not update remote progress: %v", err))
+			}
+		}
+		castOut(commands != nil, fmt.Sprintf("Episode %d marked as watched.", episodeNumber))
+	}
+
+	// reached records that the position is past the watched threshold, against
+	// a finished remux's duration. The episode is marked from it when the cast
+	// ends, however it ends -- finished, stopped, or the device lost -- which
+	// is how the mpv path judges it too: by where playback was when it
+	// stopped, not by where it once passed through.
+	reached := false
+	reachedDuration := 0.0
+	defer func() {
+		// Checked against lastPosition as well: a seek back out of the
+		// threshold moves it at once, before any poll could clear reached.
+		final := cast.Progress{Position: lastPosition, Duration: reachedDuration}
+		if !marked && reached && cast.ShouldMarkComplete(final, config.PercentageToMarkComplete) {
+			markWatched(lastPosition, reachedDuration)
+		}
+	}()
+
+	// finish ends a cast that played through, however the end was noticed:
+	// the device going idle, the ending skip running to the end, or the
+	// device freezing on the last frame.
+	finish := func() error {
+		// An episode already marked watched is one the viewer saw through,
+		// so a failure in ffmpeg's tail is cosmetic by the time it lands:
+		// telling them "Casting failed" about an episode they just
+		// finished would be its own kind of lie. Log it and report the
+		// ending honestly.
+		if remuxErr != nil && (marked || reached) {
+			Log(fmt.Sprintf("cast: the remux ended badly after the episode was marked watched: %v", remuxErr))
+			remuxErr = nil
+		}
+		savePartial(lastPosition)
+		if remuxErr != nil {
+			return remuxErr
+		}
+		castOut(commands != nil, "Playback finished.")
+		return nil
+	}
+
+	// A skip whose rebuild failed is not retried: the loop would otherwise
+	// launch another ffmpeg every poll for as long as the position stays in
+	// the span, each one failing the same way. A skip that landed early on
+	// purpose (castSkipBackOff) is recorded here too.
+	failedSkips := map[float64]bool{}
 
 	// The panel owns the bottom of the screen while controls are live. It is
 	// published for castOut, which has to clear the frame before printing so a
@@ -806,7 +928,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			// on an episode still being delivered when the connection
 			// happened to drop, since there is nothing left it could have
 			// missed.
-			if marked && remuxSucceeded() {
+			if (marked || reached) && remuxSucceeded() {
 				castOut(commands != nil, "Lost contact near the end -- treating the episode as finished.")
 				savePartial(lastPosition)
 				return nil
@@ -845,21 +967,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 				}
 				return fmt.Errorf("cast: %s never started playing -- it fetched the stream but would not play it", device.Name)
 			}
-			// An episode already marked watched is one the viewer saw through,
-			// so a failure in ffmpeg's tail is cosmetic by the time it lands:
-			// telling them "Casting failed" about an episode they just
-			// finished would be its own kind of lie. Log it and report the
-			// ending honestly.
-			if remuxErr != nil && marked {
-				Log(fmt.Sprintf("cast: the remux ended badly after the episode was marked watched: %v", remuxErr))
-				remuxErr = nil
-			}
-			savePartial(lastPosition)
-			if remuxErr != nil {
-				return remuxErr
-			}
-			castOut(commands != nil, "Playback finished.")
-			return nil
+			return finish()
 		}
 		// Evidence of playback, not merely of a non-idle state: a device that
 		// accepted the load and then could not fetch the stream sits in
@@ -879,6 +987,17 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			lastPosition = progress.Position
 			recordPosition(lastPosition)
 			lastPositionChange = time.Now()
+		} else if started && !paused && remuxSucceeded() && progress.Duration > 0 &&
+			progress.Position >= progress.Duration-castEndSlack &&
+			time.Since(lastPositionChange) >= castEndStallTimeout {
+			// Frozen on the last frame of an episode that was fully delivered:
+			// the receiver has played everything there is and simply never
+			// said so. See castEndStallTimeout.
+			Log(fmt.Sprintf("cast: the device stopped at %.1f of %.1f, treating the episode as finished", progress.Position, progress.Duration))
+			if !marked && cast.ShouldMarkComplete(progress, config.PercentageToMarkComplete) {
+				markWatched(progress.Position, progress.Duration)
+			}
+			return finish()
 		} else if started && !paused && time.Since(lastPositionChange) >= castStallTimeout {
 			savePartial(lastPosition)
 			return fmt.Errorf("cast: %s stopped reporting progress -- playback may have been stopped on the device", device.Name)
@@ -914,6 +1033,22 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 				Volume:    session.Volume(),
 			}))
 		}
+		// Finished a moment early, on the last poll before the end. Receivers
+		// stop answering status checks as the last segment plays out (seen on
+		// hardware: the final answer at 6.8s of a 7.4s stream, then silence
+		// until castProgressTimeout), so waiting for the true end cost the
+		// viewer ten seconds of a frozen panel before the countdown. Only a
+		// finished remux: before that the duration is the live edge, and being
+		// near it means ffmpeg is behind, not that the episode is over.
+		if started && !paused && remuxSucceeded() && progress.Duration > 0 &&
+			progress.Position >= progress.Duration-castEndLead {
+			Log(fmt.Sprintf("cast: at %.1f of %.1f, finishing", progress.Position, progress.Duration))
+			if !marked && cast.ShouldMarkComplete(progress, config.PercentageToMarkComplete) {
+				markWatched(progress.Position, progress.Duration)
+			}
+			return finish()
+		}
+
 		// Until ffmpeg writes EXT-X-ENDLIST the playlist only advertises what
 		// has been remuxed so far, so this duration is a live edge, not an
 		// episode length. Marking against it completes the episode early on any
@@ -925,9 +1060,45 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			anime.Ep.Duration = int(progress.Duration)
 		}
 
-		if target, ok := cast.NextSkip(progress.Position, spans); ok {
+		if target, ok := cast.NextSkip(progress.Position, spans); ok && !failedSkips[target] {
+			// finishAtEnd ends the episode on the device's behalf. The receiver
+			// is paused first, or the ending the viewer asked to skip plays on
+			// under the next-episode countdown: returning only stops this loop
+			// watching, not the receiver playing.
+			finishAtEnd := func() error {
+				if err := session.Pause(); err != nil {
+					Log(fmt.Sprintf("cast: could not hold the ending: %v", err))
+				}
+				end := cast.Progress{Position: progress.Duration, Duration: progress.Duration}
+				if !marked && remuxSucceeded() && cast.ShouldMarkComplete(end, config.PercentageToMarkComplete) {
+					markWatched(progress.Duration, progress.Duration)
+				}
+				return finish()
+			}
+			nearEnd := progress.Duration > 0 && target >= progress.Duration-castSeekTailGuard
+			// An ending that runs right to the last second leaves nothing after
+			// it to rebuild a stream for.
+			if progress.Duration > 0 && target >= progress.Duration-castSkipNothingLeft {
+				Log(fmt.Sprintf("cast: the skip to %.1f reaches the end of the episode, finishing", target))
+				return finishAtEnd()
+			}
 			if err := session.SeekToTime(target); err != nil {
 				Log(fmt.Sprintf("cast: skip failed: %v", err))
+				// A few seconds after an ending are still worth a rebuild -- a
+				// post-credits line, a preview -- so it is tried. But ffmpeg's
+				// HLS demuxer produces no frames at all for a start inside the
+				// source's last segment (seen on hardware: a 6.4s final segment
+				// at 1414.6, and -ss 1415 onwards gave nothing while 1414 played
+				// to the end), and a hardware encoder then refuses to open. So
+				// the rebuild is retried a little earlier, replaying a few
+				// seconds of the ending rather than losing what follows it.
+				if nearEnd && !castSkipBackOff(session, target, progress.Position) {
+					return finishAtEnd()
+				}
+				// Settled either way. After a back-off the stream starts inside
+				// the span on purpose, and without this the next poll would
+				// read that as the ending still playing and skip it again.
+				failedSkips[target] = true
 			}
 			// Deliberately no stall-clock reset here. A healthy seek moves the
 			// position, which resets the clock above on the next poll anyway --
@@ -942,27 +1113,16 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			continue
 		}
 
-		if !marked && remuxSucceeded() && cast.ShouldMarkComplete(progress, config.PercentageToMarkComplete) {
-			marked = true
-			recordPosition(progress.Position)
-			LocalUpdateAnime(
-				filepath.Join(os.ExpandEnv(config.StoragePath), "curd_history.txt"),
-				anime.AnilistId, anime.ProviderId, anime.Ep.Number,
-				// Minutes, not seconds: LocalUpdateAnime's animeDuration column
-				// is minutes, which is how formatResumePosition reads it back.
-				// The mpv path converts at its own call site for the same reason.
-				int(progress.Position), ConvertSecondsToMinutes(int(progress.Duration)),
-				GetAnimeName(*anime), CurrentAnimeProviderName(anime),
-			)
-			// GetGlobalUser returns nil when nothing signed in, and local-only
-			// tracking is a supported mode -- dereferencing it here would panic
-			// on the one path a local-only user reaches.
-			if user := GetGlobalUser(); shouldPushRemoteProgress(config, user) {
-				if err := UpdateAnimeProgress(user.Token, anime.AnilistId, anime.Ep.Number); err != nil {
-					Log(fmt.Sprintf("cast: could not update remote progress: %v", err))
-				}
-			}
-			castOut(commands != nil, fmt.Sprintf("Episode %d marked as watched.", anime.Ep.Number))
+		// Only noted here, not written: the episode is marked when the cast
+		// ends (the deferred check above), as the mpv path does. Marking the
+		// moment the position crossed the threshold meant a seek past it marked
+		// an episode the viewer was still watching -- or had seeked into by
+		// mistake and then back out of, which clears it again below.
+		if !cast.ShouldMarkComplete(progress, config.PercentageToMarkComplete) {
+			reached = false
+		} else if remuxSucceeded() {
+			reached = true
+			reachedDuration = progress.Duration
 		}
 	}
 }
@@ -1024,6 +1184,12 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 	selected, err := DynamicSelectPreserveOrder(options)
 	if err != nil {
 		return cast.Device{}, err
+	}
+	// Escape is the viewer declining, not a failure: reported as a stop, so
+	// no caller retries it -- the rofi handoff used to fall back to casting in
+	// place and show this same menu a second time.
+	if selected.Key == "-1" || selected.Key == "-2" {
+		return cast.Device{}, ErrCastStopped
 	}
 	for _, device := range devices {
 		if device.UUID == selected.Key {
