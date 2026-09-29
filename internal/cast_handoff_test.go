@@ -627,3 +627,61 @@ func TestPrepareCastSessionWiresTheUserAndTheGlobalAnime(t *testing.T) {
 		t.Error("no history file path")
 	}
 }
+
+// Untracked is json:"-" on Anime, so only the session file's own field carries
+// it. Lost, the spawned window would write history and push tracker progress
+// for a show the viewer chose not to track.
+func TestCastSessionCarriesUntracked(t *testing.T) {
+	config := testCastConfig(t)
+	anime := testCastAnime()
+	anime.Untracked = true
+
+	path, err := writeCastSession(config, anime, "Office TV")
+	if err != nil {
+		t.Fatalf("writeCastSession: %v", err)
+	}
+	session, err := readCastSession(path)
+	if err != nil {
+		t.Fatalf("readCastSession: %v", err)
+	}
+	if !castSessionToAnime(session).Untracked {
+		t.Error("Untracked was lost across the handoff")
+	}
+}
+
+// Moving an untracked cast on must drop everything that belonged to the
+// episode just played, or the next one is cast from the old stream.
+func TestAdvanceUntrackedCastClearsTheFinishedEpisode(t *testing.T) {
+	anime := testCastAnime()
+	anime.Untracked = true
+	anime.Ep.Links = []string{"https://example.test/ep5.m3u8"}
+	anime.Ep.SubtitleURL = "https://example.test/ep5.vtt"
+	anime.Ep.Duration = 1421
+	anime.Ep.SkipTimes = SkipTimes{Ed: Skip{Start: 1327, End: 1416}}
+	anime.Ep.Player.PlaybackTime = 1420
+
+	advanceUntrackedCast(anime)
+
+	if anime.Ep.Number != 6 {
+		t.Errorf("episode = %d, want 6", anime.Ep.Number)
+	}
+	if len(anime.Ep.Links) != 0 || anime.Ep.SubtitleURL != "" || anime.Ep.Duration != 0 ||
+		anime.Ep.SkipTimes != (SkipTimes{}) || anime.Ep.Player.PlaybackTime != 0 {
+		t.Errorf("the finished episode's state was carried over: %+v", anime.Ep)
+	}
+	if !anime.Untracked {
+		t.Error("the show stopped being untracked")
+	}
+}
+
+// A provider and AniList routinely punctuate one title differently; the skip
+// lookup for an untracked show must still see them as the same title, and
+// must not see a sequel as it.
+func TestUntrackedTitleKeyIgnoresPunctuationOnly(t *testing.T) {
+	if untrackedTitleKey("Frieren: Beyond Journey's End") != untrackedTitleKey("Frieren: Beyond Journey’s End") {
+		t.Error("a curly apostrophe broke the match")
+	}
+	if untrackedTitleKey("Demon King Daimao") == untrackedTitleKey("Demon King Daimao 2") {
+		t.Error("a sequel matched the original")
+	}
+}

@@ -89,6 +89,10 @@ type castSessionFile struct {
 	// but an explicit field here carries it, and without it their status is
 	// written to COMPLETED anyway.
 	SkipRemoteSync bool `json:"skip_remote_sync"`
+	// Untracked is tagged json:"-" on Anime for the same reason, and without
+	// it here the spawned window would write history and push progress for a
+	// show the viewer asked not to track.
+	Untracked bool `json:"untracked"`
 
 	Device string `json:"device"`
 }
@@ -130,6 +134,7 @@ func writeCastSession(config *Config, anime *Anime, device string) (string, erro
 		CompletedAt:    anime.CompletedAt,
 		IsAiring:       anime.IsAiring,
 		SkipRemoteSync: anime.SkipRemoteSync,
+		Untracked:      anime.Untracked,
 		Device:         device,
 	}
 
@@ -236,6 +241,7 @@ func castSessionToAnime(session *castSessionFile) *Anime {
 	anime.CompletedAt = session.CompletedAt
 	anime.IsAiring = session.IsAiring
 	anime.SkipRemoteSync = session.SkipRemoteSync
+	anime.Untracked = session.Untracked
 	return anime
 }
 
@@ -455,6 +461,10 @@ func RunCastSession(config *Config, path string) error {
 			// The countdown in CastEpisode already asked, and the loop only
 			// reaches here when it said advance: asking again would put an
 			// interactive menu in front of a viewer across the room.
+			if anime.Untracked {
+				advanceUntrackedCast(anime)
+				return true
+			}
 			return AdvanceAfterEpisode(config, anime, GetGlobalUser(), databaseFile, func() bool { return true })
 		},
 	)
@@ -471,4 +481,23 @@ func RunCastSession(config *Config, path string) error {
 		return nil
 	}
 	return lastErr
+}
+
+// advanceUntrackedCast moves an untracked cast on to the next episode.
+//
+// AdvanceAfterEpisode is the tracked path's: it writes the finished episode to
+// the history file and the tracker, which is exactly what Untracked Watching
+// promises not to do. An untracked show has no episode count to stop at, so
+// the next episode is simply asked for; when the provider has none, resolving
+// its stream fails and the season ends there.
+func advanceUntrackedCast(anime *Anime) {
+	anime.Ep.Number++
+	anime.Ep.Links = nil
+	anime.Ep.StreamReferrer = ""
+	anime.Ep.StreamHeaders = nil
+	anime.Ep.SubtitleURL = ""
+	anime.Ep.Duration = 0
+	anime.Ep.SkipTimes = SkipTimes{}
+	anime.Ep.Resume = false
+	anime.Ep.Player.PlaybackTime = 0
 }

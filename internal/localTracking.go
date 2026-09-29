@@ -2,12 +2,15 @@ package internal
 
 import (
 	"encoding/csv"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Function to add an anime entry
@@ -433,7 +436,7 @@ func WatchUntracked(userConfig *Config) {
 			return
 		}
 
-		providerID, providerName, back, searchErr := ResolveUntrackedProviderSearch(userConfig, query)
+		providerID, providerName, picked, back, searchErr := ResolveUntrackedProviderSearch(userConfig, query)
 		if searchErr != nil {
 			Log(fmt.Sprintf("Failed to search anime: %v", searchErr))
 			Out(fmt.Sprintf("Could not search for %q: %v", query, searchErr))
@@ -452,6 +455,13 @@ func WatchUntracked(userConfig *Config) {
 		anime.ProviderName = providerName
 		anime.Title.English = query
 		anime.Title.Romaji = query
+		// The picked show's own title, not what was typed: it is what the
+		// skip-time lookup matches against, and what the cast panel shows.
+		if title := strings.TrimSpace(picked.Title); title != "" {
+			anime.Title.English = title
+			anime.Title.Romaji = title
+		}
+		anime.MalId = malIDFromProviderExtraData(picked.ExtraData)
 		break
 	}
 
@@ -495,6 +505,18 @@ func WatchUntracked(userConfig *Config) {
 
 		title := fmt.Sprintf("%s - Episode %d", GetAnimeName(anime), anime.Ep.Number)
 		Out(title)
+
+		// Casting takes the episode instead of mpv. Before the prefetch: the
+		// next episode's links are resolved when the loop comes round, and a
+		// rofi cast hands the whole season to another process anyway.
+		if userConfig.CastToDevice {
+			anime.Untracked = true
+			if !castUntrackedEpisode(userConfig, &anime) {
+				return
+			}
+			advanceUntrackedCast(&anime)
+			continue
+		}
 
 		// Prefetch next episode in preferred mode only (no audio-mode prompts in background).
 		go prefetchNextUntrackedEpisode(userConfig, &anime)
@@ -694,4 +716,122 @@ func LocalFindEpisode(animeList []Anime, anilistID, episode int, providerName st
 		best, bestProvider = row, sameProvider
 	}
 	return best
+}
+
+// castUntrackedEpisode casts one Untracked Watching episode, reporting whether
+// to go on to the next one.
+//
+// The same shape as StartPlayback's cast branch, which Untracked Watching
+// never reaches: it starts mpv itself, so -cast used to be ignored here and
+// the episode opened locally. With rofi the season is handed to a terminal
+// window, which advances it on its own; this process is then done with it.
+func castUntrackedEpisode(config *Config, anime *Anime) bool {
+	RestoreScreen()
+
+	// Skip times come from AniSkip and the like, which are keyed by MAL id,
+	// and an untracked show arrives with none unless its provider attached
+	// one. Looked up once for the show, before the handoff, so the terminal
+	// window inherits it.
+	if anime.MalId == 0 {
+		anime.MalId = lookupUntrackedMalID(GetAnimeName(*anime))
+	}
+
+	if config.RofiSelection {
+		err := handOffCastToTerminal(config, anime)
+		if err == nil {
+			// The window owns the season now. Returning would reopen the
+			// menu under it, which is not what the tracked path does either:
+			// main exits once a rofi cast is handed off.
+			Exit(nil)
+		}
+		if errors.Is(err, ErrCastStopped) {
+			return false
+		}
+		Out("Casting here instead of in a terminal: " + err.Error())
+		Log(fmt.Sprintf("cast: handoff failed: %v", err))
+	}
+
+	err := CastEpisode(config, anime)
+	if err == nil {
+		return true
+	}
+	if !errors.Is(err, ErrCastStopped) {
+		Out("Casting failed: " + err.Error())
+		Log(fmt.Sprintf("cast: %v", err))
+	}
+	return false
+}
+
+// lookupUntrackedMalID finds the MAL id of an untracked show by its title, or 0.
+//
+// Only an exact title match is taken. A near miss is usually another season or
+// a sequel, and its skip times would jump to the wrong place in this episode --
+// worse than not skipping at all.
+func lookupUntrackedMalID(title string) int {
+	want := untrackedTitleKey(title)
+	if want == "" {
+		return 0
+	}
+
+	requestBody, err := json.Marshal(map[string]interface{}{
+		"query": `query ($search: String) {
+			Page(page: 1, perPage: 10) {
+				media(search: $search, type: ANIME) {
+					idMal
+					title { romaji english }
+				}
+			}
+		}`,
+		"variables": map[string]string{"search": title},
+	})
+	if err != nil {
+		return 0
+	}
+	body, err := doAniListSearchRequest("https://graphql.anilist.co", requestBody, "")
+	if err != nil {
+		Log(fmt.Sprintf("untracked: could not look up %q on AniList: %v", title, err))
+		return 0
+	}
+
+	var response struct {
+		Data struct {
+			Page struct {
+				Media []struct {
+					IDMal int `json:"idMal"`
+					Title struct {
+						Romaji  string `json:"romaji"`
+						English string `json:"english"`
+					} `json:"title"`
+				} `json:"media"`
+			} `json:"Page"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		Log(fmt.Sprintf("untracked: could not read AniList's answer for %q: %v", title, err))
+		return 0
+	}
+	for _, media := range response.Data.Page.Media {
+		if media.IDMal == 0 {
+			continue
+		}
+		if untrackedTitleKey(media.Title.Romaji) == want || untrackedTitleKey(media.Title.English) == want {
+			Log(fmt.Sprintf("untracked: %q is MAL %d", title, media.IDMal))
+			return media.IDMal
+		}
+	}
+	Log(fmt.Sprintf("untracked: no exact AniList match for %q, casting without skip times", title))
+	return 0
+}
+
+// untrackedTitleKey reduces a title to its lowercase letters and digits, so
+// punctuation that differs between a provider and AniList -- a curly
+// apostrophe, a colon, a dash -- does not stop an exact match.
+func untrackedTitleKey(title string) string {
+	var key strings.Builder
+	for _, r := range strings.ToLower(title) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			key.WriteRune(r)
+		}
+	}
+	return key.String()
 }

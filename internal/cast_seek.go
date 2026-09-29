@@ -301,7 +301,8 @@ func awaitPlaylist(remux *cast.Remux, dir string) error {
 // resuming is pointless. Its duration argument is minutes, and Ep.Duration is
 // seconds in memory.
 func castResumeAt(config *Config, anime *Anime) float64 {
-	if anime == nil {
+	// An untracked episode has no history row to resume from.
+	if anime == nil || anime.Untracked {
 		return 0
 	}
 	// Nothing intends to resume: either the episode was never started, or the

@@ -983,7 +983,11 @@ func resolveEpisodeLinksWithRecovery(config *Config, anime *Anime, anilistEntry 
 	}
 }
 
-func ResolveUntrackedProviderSearch(config *Config, initialQuery string) (providerID, providerName string, back bool, err error) {
+// ResolveUntrackedProviderSearch asks for the show to watch untracked. The
+// picked option is returned alongside its id, because its title and any MAL id
+// the provider attached are the only things that can identify the show later:
+// an untracked show has no tracker entry to look them up from.
+func ResolveUntrackedProviderSearch(config *Config, initialQuery string) (providerID, providerName string, picked SelectionOption, back bool, err error) {
 	state := &providerMappingSearchState{
 		query:        initialQuery,
 		allProviders: configuredProviderNames(config),
@@ -995,20 +999,20 @@ func ResolveUntrackedProviderSearch(config *Config, initialQuery string) (provid
 			Log(fmt.Sprintf("Provider search failed: %v", searchErr))
 			action, actionErr := promptProviderSearchRecovery(config, state, fmt.Sprintf("Provider search failed for '%s': %v", state.query, searchErr))
 			if actionErr != nil {
-				return "", "", false, actionErr
+				return "", "", SelectionOption{}, false, actionErr
 			}
 			if action == "back" {
-				return "", "", true, nil
+				return "", "", SelectionOption{}, true, nil
 			}
 			if action == "quit" {
-				return "", "", false, nil
+				return "", "", SelectionOption{}, false, nil
 			}
 			_, cont, handleErr := handleProviderMappingAction(config, state, action, initialQuery)
 			if handleErr != nil {
-				return "", "", false, handleErr
+				return "", "", SelectionOption{}, false, handleErr
 			}
 			if !cont {
-				return "", "", false, nil
+				return "", "", SelectionOption{}, false, nil
 			}
 			continue
 		}
@@ -1016,20 +1020,20 @@ func ResolveUntrackedProviderSearch(config *Config, initialQuery string) (provid
 		if len(animeList) == 0 {
 			action, actionErr := promptProviderSearchRecovery(config, state, "")
 			if actionErr != nil {
-				return "", "", false, actionErr
+				return "", "", SelectionOption{}, false, actionErr
 			}
 			if action == "back" {
-				return "", "", true, nil
+				return "", "", SelectionOption{}, true, nil
 			}
 			if action == "quit" {
-				return "", "", false, nil
+				return "", "", SelectionOption{}, false, nil
 			}
 			_, cont, handleErr := handleProviderMappingAction(config, state, action, initialQuery)
 			if handleErr != nil {
-				return "", "", false, handleErr
+				return "", "", SelectionOption{}, false, handleErr
 			}
 			if !cont {
-				return "", "", false, nil
+				return "", "", SelectionOption{}, false, nil
 			}
 			continue
 		}
@@ -1039,20 +1043,20 @@ func ResolveUntrackedProviderSearch(config *Config, initialQuery string) (provid
 			Log(fmt.Sprintf("Failed to select anime: %v", selectErr))
 			action, actionErr := promptProviderMatchRecovery(config, state)
 			if actionErr != nil {
-				return "", "", false, actionErr
+				return "", "", SelectionOption{}, false, actionErr
 			}
 			if action == "back" {
-				return "", "", true, nil
+				return "", "", SelectionOption{}, true, nil
 			}
 			if action == "quit" {
-				return "", "", false, nil
+				return "", "", SelectionOption{}, false, nil
 			}
 			_, cont, handleErr := handleProviderMappingAction(config, state, action, initialQuery)
 			if handleErr != nil {
-				return "", "", false, handleErr
+				return "", "", SelectionOption{}, false, handleErr
 			}
 			if !cont {
-				return "", "", false, nil
+				return "", "", SelectionOption{}, false, nil
 			}
 			continue
 		}
@@ -1061,29 +1065,29 @@ func ResolveUntrackedProviderSearch(config *Config, initialQuery string) (provid
 		case "-1":
 			action, actionErr := promptProviderMatchRecovery(config, state)
 			if actionErr != nil {
-				return "", "", false, actionErr
+				return "", "", SelectionOption{}, false, actionErr
 			}
 			if action == "back" {
-				return "", "", true, nil
+				return "", "", SelectionOption{}, true, nil
 			}
 			if action == "quit" {
-				return "", "", false, nil
+				return "", "", SelectionOption{}, false, nil
 			}
 			_, cont, handleErr := handleProviderMappingAction(config, state, action, initialQuery)
 			if handleErr != nil {
-				return "", "", false, handleErr
+				return "", "", SelectionOption{}, false, handleErr
 			}
 			if !cont {
-				return "", "", false, nil
+				return "", "", SelectionOption{}, false, nil
 			}
 			continue
 		case "-2":
-			return "", "", true, nil
+			return "", "", SelectionOption{}, true, nil
 		default:
 			if name, rawID, ok := ParseProviderQualifiedID(selected.Key); ok {
-				return rawID, name, false, nil
+				return rawID, name, selected, false, nil
 			}
-			return selected.Key, providerNameFromSelection(config, state, selected), false, nil
+			return selected.Key, providerNameFromSelection(config, state, selected), selected, false, nil
 		}
 	}
 }
