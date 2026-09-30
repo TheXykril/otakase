@@ -416,7 +416,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `CastEncoder` | Enum | empty, `vaapi`, `software` | Encoder for burned subtitles. Empty detects what this machine can do. |
 | `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. |
 | `SubStyle` | Enum | `ask`, `soft`, `hard` | External or burned-in subtitles, where both exist. `ask` prompts once and remembers. |
-| `SubsLanguage` | String | `english` | Preferred subtitle language. |
+| `SubsLanguage` | String | `english` | Preferred subtitle language, as a name or code (`english`, `pt`, `spa`). Switching language in mpv (the `j` key) is remembered for that show in `show_prefs.json` and wins over this. |
 | `AutoAudioFallback` | Boolean | `true`, `false` | Play the other language when a show is carried in only one, instead of asking. Default `true`. |
 | `AnimeNameLanguage` | Enum | `english`, `romaji` | Preferred title language. |
 | `PercentageToMarkComplete` | Integer | `0`–`100` | Watched percentage that counts as complete. |

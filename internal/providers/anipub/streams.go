@@ -33,7 +33,7 @@ func getEpisodeStreamsForMode(showID string, config providers.PlaybackConfig, ep
 			return nil, nil, err
 		}
 	}
-	streamURL, subtitle, err := resolveMegaplayStream(videoLink, mode)
+	streamURL, subtitle, tracks, err := resolveMegaplayStream(videoLink, mode)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -47,8 +47,9 @@ func getEpisodeStreamsForMode(showID string, config providers.PlaybackConfig, ep
 
 	hints := map[string]providers.StreamPlaybackHint{
 		streamURL: {
-			Referrer: megaplayBaseURL + "/",
-			Subtitle: subtitle,
+			Referrer:  megaplayBaseURL + "/",
+			Subtitle:  subtitle,
+			Subtitles: tracks,
 		},
 	}
 	return []string{streamURL}, hints, nil

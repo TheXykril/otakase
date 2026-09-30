@@ -249,8 +249,10 @@ func DownloadEpisode(config Config, anime *Anime, episode int, dir string) (stri
 		Out(fmt.Sprintf("  episode %d: %s downloaded", episode, elapsed.Round(time.Second)))
 	}
 
-	progressErr := runFFmpeg(binary, buildFFmpegArgs(streamURL, referrer, hint.Subtitle, output), onProgress)
-	if progressErr != nil && hint.Subtitle != "" {
+	// The same language the player would show, not only the provider's default.
+	subtitleURL := pickSubtitleForHint(&config, anime, hint)
+	progressErr := runFFmpeg(binary, buildFFmpegArgs(streamURL, referrer, subtitleURL, output), onProgress)
+	if progressErr != nil && subtitleURL != "" {
 		// A subtitle track is a nicety; losing the episode over one is not. Retry
 		// without it rather than failing the download outright.
 		Log(fmt.Sprintf("Episode %d failed with subtitles (%v); retrying without them", episode, progressErr))

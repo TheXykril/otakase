@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // The player is an Astro island, and it carries everything needed in the
@@ -123,6 +125,20 @@ func playerOrigin(src string) string {
 		return ""
 	}
 	return parsed.Scheme + "://" + parsed.Host
+}
+
+// providerTracks lists every subtitle the host offers, for the player to
+// choose among.
+func providerTracks(tracks []SubtitleTrack) []providers.SubtitleTrack {
+	result := make([]providers.SubtitleTrack, 0, len(tracks))
+	for _, track := range tracks {
+		label := track.Name
+		if label == "" {
+			label = track.Language
+		}
+		result = append(result, providers.SubtitleTrack{URL: track.URL, Language: track.Language, Label: label})
+	}
+	return result
 }
 
 // englishSubtitle picks the track to hand MPV. otakase plays subtitled releases

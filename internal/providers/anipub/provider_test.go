@@ -247,7 +247,7 @@ func TestResolveMegaplayStreamUsesDubMode(t *testing.T) {
 	t.Cleanup(func() { megaplayBaseURL = originalMega })
 	megaplayBaseURL = megaplay.URL
 
-	streamURL, subtitle, err := resolveMegaplayStream("https://anipub.xyz/video/42/sub", "dub")
+	streamURL, subtitle, _, err := resolveMegaplayStream("https://anipub.xyz/video/42/sub", "dub")
 	if err != nil {
 		t.Fatalf("resolveMegaplayStream: %v", err)
 	}

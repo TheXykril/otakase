@@ -385,6 +385,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 	// set Origin, so a provider that knows this passes the headers along.
 	args = append(args, streamHeaderArgs(anime.Ep.StreamHeaders)...)
 	args = append(args, mpvAudioLanguageArgs(playlistAudioMode(anime, userConfig), args)...)
+	args = append(args, mpvSubtitleLanguageArgs(subtitleLanguageFor(userConfig, anime), args)...)
 
 	subtitleURL := strings.TrimSpace(anime.Ep.SubtitleURL)
 	if subtitleURL != "" && !callerHasSubtitleArg {
@@ -415,6 +416,13 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 		if len(mpvAudioLanguageArgs("", userConfig.MpvArgs)) > 0 {
 			if _, alangErr := MPVSendCommand(mpvSocketPath, []interface{}{"set_property", "alang", mpvAudioLanguages(playlistAudioMode(anime, userConfig))}); alangErr != nil {
 				Log(fmt.Sprintf("Failed to set the audio language: %v", alangErr))
+			}
+		}
+
+		// --slang too, and this may be another show with another language.
+		if slang := mpvSubtitleLanguageArgs(subtitleLanguageFor(userConfig, anime), userConfig.MpvArgs); len(slang) > 0 {
+			if _, slangErr := MPVSendCommand(mpvSocketPath, []interface{}{"set_property", "slang", strings.TrimPrefix(slang[0], "--slang=")}); slangErr != nil {
+				Log(fmt.Sprintf("Failed to set the subtitle language: %v", slangErr))
 			}
 		}
 

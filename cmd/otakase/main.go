@@ -944,6 +944,10 @@ func main() {
 							if skipErr := internal.SendSkipTimesToMPV(&anime); skipErr != nil {
 								internal.Log("Error sending skip times to MPV: " + skipErr.Error())
 							}
+
+							// The provider's other subtitle languages, for mpv's
+							// own subtitle key.
+							internal.OfferAlternateSubtitles(&anime)
 						}
 
 						// If resume is true, seek to the playback time
@@ -964,6 +968,7 @@ func main() {
 							internal.Log("Error updating local database: " + updateErr.Error())
 						}
 						internal.NoteSyncedResume(&userConfig, &anime)
+						internal.NoteSubtitleChoice(&userConfig, &anime)
 					}
 
 					// Check if anything is playing; if not and episode was started, classify the loss.
