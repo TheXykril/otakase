@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thexykril/otakase/internal/cast"
 )
 
 func TestSanitizeFilename(t *testing.T) {
@@ -193,7 +195,8 @@ func TestBuildFFmpegArgsMuxesSubtitles(t *testing.T) {
 
 	// ...but the HLS demuxer options must not be repeated before the WebVTT
 	// input; ffmpeg fails with "Option extension_picky not found".
-	if strings.Count(joined, "-extension_picky") != 1 {
+	// -extension_picky itself is left out for an ffmpeg too old to know it.
+	if strings.Count(joined, "-extension_picky") > 1 {
 		t.Fatalf("HLS options must apply only to the stream input, got: %s", joined)
 	}
 	if strings.Count(joined, "-allowed_extensions") != 1 {
@@ -279,7 +282,7 @@ func TestBuildFFmpegArgsMKVKeepsSubtitles(t *testing.T) {
 	if strings.Contains(joined, "mov_text") {
 		t.Fatalf("MKV must not convert subtitles to mov_text: %s", joined)
 	}
-	for _, want := range []string{"-map 0:v:0", "-map 0:a:0", "-map 1:0", "-extension_picky 0", "aac_adtstoasc"} {
+	for _, want := range []string{"-map 0:v:0", "-map 0:a:0", "-map 1:0", strings.Join(cast.HLSInputArgs(), " "), "aac_adtstoasc"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("expected %q, got: %s", want, joined)
 		}

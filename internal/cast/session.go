@@ -59,8 +59,9 @@ type Session struct {
 	lastStatus string
 }
 
-// Connect opens a connection to a device and takes over its media receiver.
-func Connect(d Device) (*Session, error) {
+// connectChromecast opens a connection to a Chromecast and takes over its media
+// receiver.
+func connectChromecast(d Device) (*Session, error) {
 	app := application.NewApplication()
 	if err := app.Start(d.Addr.String(), d.Port); err != nil {
 		return nil, fmt.Errorf("cast: could not connect to %s: %w", d.Name, err)

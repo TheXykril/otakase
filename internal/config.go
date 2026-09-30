@@ -67,7 +67,10 @@ type Config struct {
 	// CurrentCategoryFlag records that -current was given for this run, which
 	// asks for the menu to be skipped whatever the interface. It is not a
 	// setting, so it carries no config tag and is never written to a file.
-	CurrentCategoryFlag        bool   `config:"-"`
+	CurrentCategoryFlag bool `config:"-"`
+	// SubOrDubFlag records that -sub or -dub was given for this run, which
+	// outranks the audio remembered for a show. Not a setting either.
+	SubOrDubFlag               bool   `config:"-"`
 	ScoreOnCompletion          bool   `config:"ScoreOnCompletion"`
 	SaveMpvSpeed               bool   `config:"SaveMpvSpeed"`
 	AddMissingOptions          bool   `config:"AddMissingOptions"`
@@ -102,6 +105,12 @@ type Config struct {
 	// ephemeral range, and a device that cannot fetch looks identical to one
 	// that never started.
 	CastPort int `config:"CastPort"`
+	// KodiHost names Kodi instances to offer as cast devices when discovery
+	// does not find them -- another subnet, or zeroconf turned off in Kodi.
+	// host or host:port, several separated by commas.
+	KodiHost     string `config:"KodiHost"`
+	KodiUser     string `config:"KodiUser"`
+	KodiPassword string `config:"KodiPassword"`
 	// CastBurnSubtitles draws a stream's subtitles into the picture when
 	// casting it. The Chromecast cannot render the subtitle files these
 	// providers supply, so this is the only way to see them on a soft-subbed
@@ -111,6 +120,11 @@ type Config struct {
 	// CastEncoder forces the encoder used for that: "vaapi", "software", or
 	// empty to detect what this machine can actually do.
 	CastEncoder string `config:"CastEncoder"`
+	// Quality is the picture height to play HLS streams at: "best" leaves
+	// the master playlist as the provider gave it, a number of lines (1080,
+	// 720, 480) picks the nearest variant at or below. A show can override
+	// it in show_prefs.json.
+	Quality string `config:"Quality"`
 	// CastToDevice records that -cast was given for this run. It is not a
 	// setting, so it carries no config tag.
 	CastToDevice bool `config:"-"`
@@ -159,6 +173,7 @@ func defaultConfigMap() map[string]string {
 		"MenuOrder":                "CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER,CAST",
 		"SubOrDub":                 "sub",
 		"SubStyle":                 "ask",
+		"Quality":                  "best",
 		"PercentageToMarkComplete": "85",
 		"NextEpisodePrompt":        "false",
 		// A show that exists only in the other language should play, not stop to
@@ -200,6 +215,9 @@ func defaultConfigMap() map[string]string {
 		"CastDevice":                 "",
 		"CastTerminal":               "",
 		"CastPort":                   "0",
+		"KodiHost":                   "",
+		"KodiUser":                   "",
+		"KodiPassword":               "",
 		"CastBurnSubtitles":          "true",
 		"CastEncoder":                "",
 	}

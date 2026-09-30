@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thexykril/otakase/internal/cast"
 	"github.com/thexykril/otakase/internal/providers"
 )
 
@@ -224,7 +225,7 @@ func (job ffmpegJob) args() []string {
 		// "not in allowed_segment_extensions". These are HLS demuxer options and must
 		// NOT be given for any other input -- a WebVTT file or a Matroska release --
 		// which rejects them outright.
-		args = append(args, "-allowed_extensions", "ALL", "-extension_picky", "0")
+		args = append(args, cast.HLSInputArgs()...)
 	}
 	requestHeaders()
 	args = append(args, "-i", job.Stream)
@@ -376,7 +377,8 @@ func DownloadEpisode(config Config, anime *Anime, episode int, dir string) (stri
 		Stream:   streamURL,
 		Referrer: referrer,
 		Headers:  hint.Headers,
-		Subtitle: hint.Subtitle,
+		// The same language the player would show, not only the provider's default.
+		Subtitle: pickSubtitleForHint(&config, anime, hint),
 		Output:   output,
 	}
 

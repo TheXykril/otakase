@@ -109,7 +109,7 @@ func main() {
 	rofiSelection := flag.Bool("rofi", false, "Open selection in rofi")
 	noRofi := flag.Bool("no-rofi", false, "No rofi")
 	imagePreview := flag.Bool("image-preview", false, "Show image preview")
-	castFlag := flag.Bool("cast", false, "Play on a Chromecast on this network instead of locally")
+	castFlag := flag.Bool("cast", false, "Play on a Chromecast, DLNA TV or Kodi on this network instead of locally")
 	castSessionFlag := flag.String("cast-session", "", "Cast the episode described by a handoff file (used internally when casting from rofi)")
 	noImagePreview := flag.Bool("no-image-preview", false, "No image preview")
 	changeToken := flag.Bool("change-token", false, "Change token")
@@ -286,8 +286,10 @@ func main() {
 	// Set SubOrDub based on the flags
 	if *subFlag {
 		userConfig.SubOrDub = "sub"
+		userConfig.SubOrDubFlag = true
 	} else if *dubFlag {
 		userConfig.SubOrDub = "dub"
+		userConfig.SubOrDubFlag = true
 	}
 	if *softSubFlag {
 		userConfig.SubStyle = "soft"
@@ -945,6 +947,10 @@ func main() {
 							if skipErr := internal.SendSkipTimesToMPV(&anime); skipErr != nil {
 								internal.Log("Error sending skip times to MPV: " + skipErr.Error())
 							}
+
+							// The provider's other subtitle languages, for mpv's
+							// own subtitle key.
+							internal.OfferAlternateSubtitles(&anime)
 						}
 
 						// If resume is true, seek to the playback time
@@ -965,6 +971,7 @@ func main() {
 							internal.Log("Error updating local database: " + updateErr.Error())
 						}
 						internal.NoteSyncedResume(&userConfig, &anime)
+						internal.NoteSubtitleChoice(&userConfig, &anime)
 					}
 
 					// Check if anything is playing; if not and episode was started, classify the loss.

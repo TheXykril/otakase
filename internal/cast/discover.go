@@ -13,14 +13,8 @@ import (
 // deadline rather than a duration anything waits out in full.
 const DefaultDiscoveryTimeout = 3 * time.Second
 
-// Discover lists the Chromecasts on the local network.
-func Discover(ctx context.Context, timeout time.Duration) ([]Device, error) {
-	if timeout <= 0 {
-		timeout = DefaultDiscoveryTimeout
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
+// discoverChromecasts lists the Chromecasts on the local network.
+func discoverChromecasts(ctx context.Context) ([]Device, error) {
 	found, err := dns.DiscoverCastDNSEntries(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cast: discovery failed: %w", err)

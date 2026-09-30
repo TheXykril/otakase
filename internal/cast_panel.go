@@ -104,7 +104,7 @@ func castPanelLines(state castPanelState, width int) []string {
 
 // castPanelPlaybackKeys is what the footer says while an episode plays. A prompt
 // drawn in the same frame passes its own.
-const castPanelPlaybackKeys = " space · ←→ · ↑↓ · q stop "
+const castPanelPlaybackKeys = " space · ←→ · ↑↓ · a audio · q stop "
 
 // castPanelDoneKeys is the footer for a frame drawn after the season is over.
 // The playback keys are wrong there: nothing is playing, so space, the arrows

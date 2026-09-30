@@ -168,9 +168,10 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 		// to be told about.
 		hints := map[string]providers.StreamPlaybackHint{
 			sources.Manifest: {
-				Referrer: referer,
-				Subtitle: englishSubtitle(sources.Subtitles),
-				Headers:  map[string]string{"Origin": playerOrigin(server.Src)},
+				Referrer:  referer,
+				Subtitle:  englishSubtitle(sources.Subtitles),
+				Subtitles: providerTracks(sources.Subtitles),
+				Headers:   map[string]string{"Origin": playerOrigin(server.Src)},
 			},
 		}
 		return []string{sources.Manifest}, hints, nil

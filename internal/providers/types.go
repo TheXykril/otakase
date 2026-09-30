@@ -25,6 +25,20 @@ type StreamPlaybackHint struct {
 	// unless Origin names the player's domain, and MPV's --referrer cannot set
 	// Origin. Anything here is passed through to the player as-is.
 	Headers map[string]string
+	// Subtitles lists every subtitle track the host offers for the stream, so
+	// the player can use a language other than the one Subtitle defaults to.
+	// Empty when the host offers one track or none.
+	Subtitles []SubtitleTrack
+}
+
+// SubtitleTrack is one external subtitle file a host offers.
+type SubtitleTrack struct {
+	URL string
+	// Language is whatever the host calls it: a code ("en", "por") or a name
+	// ("English", "Portuguese - Brazilian"). LanguageMatches reads either.
+	Language string
+	// Label is the host's own name for the track, shown in the player.
+	Label string
 }
 
 // Provider resolves catalog search, episode lists, and stream URLs.

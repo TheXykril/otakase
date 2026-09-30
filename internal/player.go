@@ -384,7 +384,9 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 	// with 403 unless Origin names the player's domain, and --referrer cannot
 	// set Origin, so a provider that knows this passes the headers along.
 	args = append(args, streamHeaderArgs(anime.Ep.StreamHeaders)...)
+	args = append(args, mpvHLSBitrateArgs(anime.Ep.StreamHLSBitrate, args)...)
 	args = append(args, mpvAudioLanguageArgs(playlistAudioMode(anime, userConfig), args)...)
+	args = append(args, mpvSubtitleLanguageArgs(subtitleLanguageFor(userConfig, anime), args)...)
 
 	subtitleURL := strings.TrimSpace(anime.Ep.SubtitleURL)
 	if subtitleURL != "" && !callerHasSubtitleArg {
@@ -418,6 +420,13 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 			}
 		}
 
+		// --slang too, and this may be another show with another language.
+		if slang := mpvSubtitleLanguageArgs(subtitleLanguageFor(userConfig, anime), userConfig.MpvArgs); len(slang) > 0 {
+			if _, slangErr := MPVSendCommand(mpvSocketPath, []interface{}{"set_property", "slang", strings.TrimPrefix(slang[0], "--slang=")}); slangErr != nil {
+				Log(fmt.Sprintf("Failed to set the subtitle language: %v", slangErr))
+			}
+		}
+
 		// --sub-file is global in mpv: it attaches to every file loaded after
 		// it, not just the one it was started with. Without clearing it, the
 		// next episode opens with the first episode's subtitles.
@@ -426,6 +435,11 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 		}
 		if !hasMPVHeaderArg(userConfig.MpvArgs) {
 			resetMPVStreamHeaders(MPVSendCommand, mpvSocketPath, anime.Ep.StreamHeaders)
+		}
+		// hls-bitrate too: a cap chosen for the last episode would otherwise
+		// hold this one to that variant's bandwidth.
+		if !hasMPVHLSBitrateArg(userConfig.MpvArgs) {
+			resetMPVHLSBitrate(MPVSendCommand, mpvSocketPath, anime.Ep.StreamHLSBitrate)
 		}
 
 		// Load the new file in the existing MPV instance
