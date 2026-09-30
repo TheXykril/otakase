@@ -183,6 +183,7 @@ entries under rofi.
 | `-download` | Save episodes instead of playing them (needs `ffmpeg`) | |
 | `-episodes` | Episodes to save, e.g. `5` or `1-12` | selected |
 | `-download-dir` | Where to save them | `$HOME/Downloads/otakase` |
+| `-download-format` | Container for downloads, `mkv` or `mp4` | `mkv` |
 | `-cast` | Play on a Chromecast on this network instead of locally | |
 | `-current` | Jump straight to what you are currently watching | |
 | `-show-new-episodes` | Mark shows with an unwatched episode in the list | `true` |
@@ -216,7 +217,7 @@ otakase -download -episodes 1-12    # a range
 otakase -download -download-dir ~/Videos/anime
 ```
 
-Needs `ffmpeg`. Episodes are saved as `.mp4`.
+Needs `ffmpeg`. Episodes are saved as `.mkv`, keeping every audio track and styled subtitles; `-download-format mp4` saves MP4 instead. A finished episode is never fetched twice, whichever format it was saved in.
 
 ## Casting
 
@@ -409,6 +410,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `SaveMpvSpeed` | Boolean | `true`, `false` | Carry playback speed to the next episode. |
 | `StoragePath` | String | any path, `$VARS` expanded | Where Otakase keeps its data. |
 | `DownloadDir` | String | any path | Where `-download` saves episodes. |
+| `DownloadFormat` | Enum | `mkv`, `mp4` | Container for downloads. `mkv` (the default) keeps every audio track, ASS subtitles and their fonts; `mp4` suits devices that play nothing else. Each episode also gets a small `.otakase.json` naming the show, episode and skip times. |
 | `CastDevice` | String | a device name | Cast to this device without asking, when `-cast` is given and the device is found. Empty asks each time. |
 | `CastTerminal` | String | a terminal emulator | Terminal opened for a cast started from rofi. Empty uses `$TERMINAL`, then whatever is installed. |
 | `CastPort` | Integer | `0`–`65535` | Port the cast stream server listens on. `0` (the default) picks a free one; fix it to allow a single port through a firewall. |

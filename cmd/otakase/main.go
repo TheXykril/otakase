@@ -125,6 +125,7 @@ func main() {
 	downloadFlag := flag.Bool("download", false, "Download episodes instead of playing them (requires ffmpeg)")
 	downloadRange := flag.String("episodes", "", "Episodes to download, e.g. 5 or 1-12 (default: the selected episode)")
 	flag.StringVar(&userConfig.DownloadDir, "download-dir", userConfig.DownloadDir, "Directory to save downloaded episodes into")
+	flag.StringVar(&userConfig.DownloadFormat, "download-format", userConfig.DownloadFormat, "Container for downloaded episodes: mkv or mp4")
 	providerStatus := flag.Bool("provider-status", false, "Probe every provider and report which ones work")
 	installKeybind := flag.Bool("install-keybind", false, "Add a Super+Shift+A Hyprland binding that opens the rofi menu")
 	removeKeybind := flag.Bool("remove-keybind", false, "Remove the Hyprland binding added by -install-keybind")
