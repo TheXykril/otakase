@@ -142,6 +142,13 @@ func main() {
 
 	flag.Parse()
 
+	// The countdown replaces the menu that asked about the next episode after
+	// each one: Esc on it is the "no", and playback then just ends. The menu
+	// is still there for anyone who turns the countdown off.
+	if userConfig.NextEpisodeCountdown > 0 {
+		userConfig.NextEpisodePrompt = false
+	}
+
 	// Validate PercentageToMarkComplete range (0-100) from CLI flag
 	if userConfig.PercentageToMarkComplete < 0 {
 		userConfig.PercentageToMarkComplete = 0

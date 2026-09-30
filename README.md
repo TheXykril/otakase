@@ -420,8 +420,8 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `AutoAudioFallback` | Boolean | `true`, `false` | Play the other language when a show is carried in only one, instead of asking. Default `true`. |
 | `AnimeNameLanguage` | Enum | `english`, `romaji` | Preferred title language. |
 | `PercentageToMarkComplete` | Integer | `0`–`100` | Watched percentage that counts as complete. |
-| `NextEpisodePrompt` | Boolean | `true`, `false` | Ask before playing the next episode. |
-| `NextEpisodeCountdown` | Integer | `5` | When the ending starts, mpv shows "Episode 13 in 5s": Enter plays it now, Esc keeps watching the credits. Seconds to count; `0` turns it off. Not shown when `NextEpisodePrompt` is on, on the last episode, or when `SkipEd` skips the ending. Needs mpv 0.36 or newer for the keys. |
+| `NextEpisodeCountdown` | Integer | `5` | When the ending starts, mpv shows "Episode 13 in 5s": Enter plays it now, Esc keeps watching the credits and ends playback with them. Seconds to count; `0` turns it off. Not shown on the last episode, or when `SkipEd` skips the ending. Needs mpv 0.36 or newer for the keys. |
+| `NextEpisodePrompt` | Boolean | `true`, `false` | With the countdown off, ask in a menu before playing the next episode. Ignored while `NextEpisodeCountdown` is on. |
 | `ScoreOnCompletion` | Boolean | `true`, `false` | Prompt to rate a show when you finish it. |
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
 | `Theme` | Enum | `auto`, `omarchy`, `builtin` | Which colour palette to use. `auto` follows the desktop on Omarchy. |

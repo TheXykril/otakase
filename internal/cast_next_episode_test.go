@@ -44,6 +44,15 @@ func TestCastCountdownRespectsTheNoPromptSetting(t *testing.T) {
 	}
 }
 
+// The countdown replaced the prompt, so it counts down on a cast too.
+func TestCastCountdownWaitsWhenTheCountdownIsOn(t *testing.T) {
+	config := &Config{NextEpisodeCountdown: 5}
+
+	if got := castCountdownTick(0, false, config); got != castCountdownWaiting {
+		t.Errorf("with the countdown on, a zero-elapsed tick returned %v, want waiting", got)
+	}
+}
+
 // Review Focus 2. A key during the countdown is the viewer saying stop, even
 // though the episode completed and the loop would otherwise be entitled to go
 // on.

@@ -13,8 +13,9 @@ import (
 // A cast has counted down to the next episode since it learned to play one
 // (castAwaitNextEpisode); local mpv jumped straight on when the file ended, or,
 // with NextEpisodePrompt, dropped to a menu once mpv had closed. This brings the
-// cast behaviour into mpv itself: when the ending starts, mpv shows "Episode 13
-// in 5s", Enter plays it at once, Esc lets the credits run.
+// cast behaviour into mpv itself and replaces that menu: when the ending starts,
+// mpv shows "Episode 13 in 5s", Enter plays it at once, Esc lets the credits run
+// and playback ends with them.
 //
 // The main loop owns the timing, since it already ticks once a second and owns
 // the playback position; the script only draws the line and reads the two keys.
@@ -102,10 +103,6 @@ func countdownStart(config *Config, anime *Anime) int {
 	if config == nil || anime == nil || config.NextEpisodeCountdown <= 0 {
 		return 0
 	}
-	// NextEpisodePrompt means "always ask me": its menu stays in charge.
-	if config.NextEpisodePrompt {
-		return 0
-	}
 	duration := anime.Ep.Duration
 	if duration <= 0 {
 		return 0
@@ -146,6 +143,27 @@ type countdownState struct {
 	key       string
 	startedAt int // playback position the countdown began at, or -1
 	done      bool
+	// declined is set when the viewer chose to keep watching: this episode
+	// ends playback instead of moving on.
+	declined bool
+	// held is set once a declined episode has been left for another one
+	// (a playlist pick), whose end should not be held as well.
+	held bool
+}
+
+// enter switches the countdown to the episode key names, and reports whether
+// mpv is still set to hold the last frame for an episode the viewer has since
+// left.
+func (s *countdownState) enter(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if key != s.key {
+		s.held = s.held || s.declined
+		s.key, s.startedAt, s.done, s.declined = key, -1, false, false
+	}
+	held := s.held
+	s.held = false
+	return held
 }
 
 var localCountdown = &countdownState{startedAt: -1}
@@ -158,7 +176,8 @@ func (s *countdownState) tick(key string, start, position, seconds int, answer s
 	defer s.mu.Unlock()
 
 	if key != s.key {
-		s.key, s.startedAt, s.done = key, -1, false
+		s.held = s.held || s.declined
+		s.key, s.startedAt, s.done, s.declined = key, -1, false, false
 	}
 	if s.done || start <= 0 {
 		return countdownIdle, 0
@@ -176,6 +195,7 @@ func (s *countdownState) tick(key string, start, position, seconds int, answer s
 	switch answer {
 	case "cancel":
 		s.done = true
+		s.declined = true
 		return countdownHide, 0
 	case "play":
 		s.done = true
@@ -193,6 +213,25 @@ func (s *countdownState) tick(key string, start, position, seconds int, answer s
 		return countdownAdvance, 0
 	}
 	return countdownShow, remaining
+}
+
+// declinedFor reports whether the viewer chose to keep watching the episode
+// key names.
+func (s *countdownState) declinedFor(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.key == key && s.declined
+}
+
+func countdownKey(anime *Anime) string {
+	return fmt.Sprintf("%d:%d", anime.AnilistId, anime.Ep.Number)
+}
+
+// NextEpisodeDeclined reports whether the viewer pressed Esc on this
+// episode's countdown. Playback then ends with the episode instead of going
+// on to the next one.
+func NextEpisodeDeclined(anime *Anime) bool {
+	return anime != nil && localCountdown.declinedFor(countdownKey(anime))
 }
 
 // countdownMessage is the line the countdown shows.
@@ -213,7 +252,25 @@ func NextEpisodeCountdown(config *Config, anime *Anime) bool {
 	}
 	socket := anime.Ep.Player.SocketPath
 	start := countdownStart(config, anime)
-	key := fmt.Sprintf("%d:%d", anime.AnilistId, anime.Ep.Number)
+	key := countdownKey(anime)
+	if localCountdown.enter(key) {
+		// The viewer left an episode they had chosen to watch to the end;
+		// this one moves on as usual.
+		_, _ = MPVSendCommand(socket, []interface{}{"set_property", "keep-open", "no"})
+	}
+
+	if localCountdown.declinedFor(key) {
+		// The credits run to the end and stop there. The playlist would
+		// otherwise carry straight on into the next episode, so mpv holds
+		// the last frame and is closed once it gets there.
+		if reached, err := MPVSendCommand(socket, []interface{}{"get_property", "eof-reached"}); err == nil && reached == true {
+			Log(fmt.Sprintf("countdown: episode %d ended, not moving on", anime.Ep.Number))
+			if _, err := MPVSendCommand(socket, []interface{}{"quit"}); err != nil {
+				Log(fmt.Sprintf("countdown: could not close mpv: %v", err))
+			}
+		}
+		return false
+	}
 
 	answer := ""
 	if start > 0 && anime.Ep.Player.PlaybackTime >= start {
@@ -230,6 +287,11 @@ func NextEpisodeCountdown(config *Config, anime *Anime) bool {
 		showCountdown(socket, countdownMessage(anime.Ep.Number+1, remaining))
 	case countdownHide:
 		showCountdown(socket, "")
+		if localCountdown.declinedFor(key) {
+			if _, err := MPVSendCommand(socket, []interface{}{"set_property", "keep-open", "yes"}); err != nil {
+				Log(fmt.Sprintf("countdown: could not hold the last frame: %v", err))
+			}
+		}
 	case countdownAdvance:
 		showCountdown(socket, "")
 		Log(fmt.Sprintf("countdown: moving on from episode %d", anime.Ep.Number))

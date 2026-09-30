@@ -33,8 +33,9 @@ func castCountdownTick(elapsed time.Duration, keyPressed bool, config *Config) c
 	if keyPressed {
 		return castCountdownCancelled
 	}
-	// NextEpisodePrompt=false already means "do not ask" for local playback.
-	if config != nil && !config.NextEpisodePrompt {
+	// Nothing asks for a countdown: neither the old prompt nor the countdown
+	// that replaced it.
+	if config != nil && !config.NextEpisodePrompt && config.NextEpisodeCountdown <= 0 {
 		return castCountdownAdvance
 	}
 	if elapsed >= castCountdownDuration {

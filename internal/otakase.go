@@ -1818,6 +1818,22 @@ func NextEpisodePromptRofi(userConfig *Config) bool {
 
 // StartNextEpisode handles the logic for starting the next episode
 // It updates the episode number, resets necessary flags, and handles database updates
+// finishWithoutNextEpisode records the episode just watched and ends the
+// session, leaving the next episode to resume from next time.
+func finishWithoutNextEpisode(anime *Anime, databaseFile string, userToken string) {
+	next := anime.Ep.Number + 1
+	if err := LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, next, 0, 0, GetAnimeName(*anime), CurrentAnimeProviderName(anime)); err != nil {
+		Log("Error updating local database: " + err.Error())
+	}
+	if !anime.Rewatching {
+		if err := UpdateAnimeProgress(userToken, anime.AnilistId, anime.Ep.Number); err != nil {
+			Log("Error updating Anilist progress: " + err.Error())
+		}
+	}
+	Out(fmt.Sprintf("Episode %d watched. Episode %d is next.", anime.Ep.Number, next))
+	Exit(nil)
+}
+
 func StartNextEpisode(anime *Anime, userConfig *Config, databaseFile string, userToken string) {
 	// Save previous episode number for progress update
 	prevEpisode := anime.Ep.Number
@@ -1837,6 +1853,12 @@ func StartNextEpisode(anime *Anime, userConfig *Config, databaseFile string, use
 
 		Out("Series completed!")
 		Exit(nil)
+		return
+	}
+
+	// Esc on the countdown: this episode was the last one for now.
+	if NextEpisodeDeclined(anime) {
+		finishWithoutNextEpisode(anime, databaseFile, userToken)
 		return
 	}
 

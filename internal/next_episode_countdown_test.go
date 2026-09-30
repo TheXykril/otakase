@@ -29,7 +29,6 @@ func TestCountdownStart(t *testing.T) {
 
 	cases := map[string]func(*Config, *Anime){
 		"off":             func(c *Config, a *Anime) { c.NextEpisodeCountdown = 0 },
-		"prompt wins":     func(c *Config, a *Anime) { c.NextEpisodePrompt = true },
 		"ending skipped":  func(c *Config, a *Anime) { c.SkipEd = true },
 		"last episode":    func(c *Config, a *Anime) { a.Ep.Number = 24 },
 		"no duration yet": func(c *Config, a *Anime) { a.Ep.Duration = 0 },
@@ -91,6 +90,35 @@ func TestCountdownAnswers(t *testing.T) {
 	}
 	if action, _ := s.tick("a", 100, 110, 5, ""); action != countdownIdle {
 		t.Fatalf("after Esc the credits play on, got %v", action)
+	}
+	if !s.declinedFor("a") {
+		t.Fatal("Esc should end playback with this episode")
+	}
+	if s.declinedFor("b") {
+		t.Fatal("Esc on one episode declined another")
+	}
+}
+
+// Leaving a declined episode for another releases the held last frame once,
+// and the new episode counts down as usual.
+func TestCountdownDeclineIsPerEpisode(t *testing.T) {
+	s := &countdownState{startedAt: -1}
+	s.tick("a", 100, 100, 5, "")
+	s.tick("a", 100, 101, 5, "cancel")
+	if s.enter("a") {
+		t.Fatal("still on the declined episode, nothing to release")
+	}
+	if !s.enter("b") {
+		t.Fatal("moving on should release the hold")
+	}
+	if s.enter("b") {
+		t.Fatal("the hold was released twice")
+	}
+	if s.declinedFor("b") {
+		t.Fatal("the new episode starts undeclined")
+	}
+	if action, _ := s.tick("b", 100, 100, 5, ""); action != countdownShow {
+		t.Fatalf("new episode countdown: %v", action)
 	}
 }
 
