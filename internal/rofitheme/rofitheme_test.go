@@ -295,10 +295,15 @@ func TestSelectAnimeThemeRendersMessages(t *testing.T) {
 		t.Fatalf("mainbox children %q must include message, or -mesg is never drawn", children[1])
 	}
 
-	// A message must also be styled, or it inherits defaults that clash with the
-	// rest of the menu.
-	if !strings.Contains(rendered, "message textbox") {
-		t.Error("expected the message textbox to be styled")
+	// A message must also be styled, or it inherits rofi's default white
+	// background. rofi 1.7 matches the text widget as plain `textbox`; the
+	// `message textbox` form matches nothing, which is how the update notes
+	// ended up as light text on white.
+	if !regexp.MustCompile(`(?m)^textbox\s*\{`).MatchString(rendered) {
+		t.Error("expected the message textbox to be styled as `textbox`")
+	}
+	if strings.Contains(rendered, "message textbox") {
+		t.Error("`message textbox` matches nothing in rofi 1.7; style `textbox` instead")
 	}
 }
 
