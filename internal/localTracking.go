@@ -462,6 +462,11 @@ func WatchUntracked(userConfig *Config) {
 			anime.Title.Romaji = title
 		}
 		anime.MalId = malIDFromProviderExtraData(picked.ExtraData)
+		// Skip services key on these ids, and an untracked show arrives with
+		// none unless its provider attached one.
+		ensureUntrackedIDs(&anime)
+		// Having ids now makes the show look trackable; it is not.
+		anime.Untracked = true
 		break
 	}
 
@@ -524,6 +529,12 @@ func WatchUntracked(userConfig *Config) {
 		anime.Ep.SkipTimes = SkipTimes{}
 
 		Log(fmt.Sprintf("Started mpv with socket path: %s", anime.Ep.Player.SocketPath))
+
+		// The same lookup tracked playback makes. It used to be cast-only, so
+		// an untracked show played in mpv never skipped anything.
+		if mpvSocketPath != "android-intent" {
+			go ApplySkipTimes(&anime, anime.Ep.Number, userConfig, GetProvider())
+		}
 
 		// Android intent path: external player, no IPC monitoring.
 		if mpvSocketPath == "android-intent" {
@@ -624,20 +635,9 @@ func WatchUntracked(userConfig *Config) {
 
 				anime.Ep.Player.PlaybackTime = int(animePosition + 0.5)
 
-				// Skip OP/ED when skip times are known (non-tracking; needs MalId for AniSkip).
-				if userConfig.SkipOp {
-					if anime.Ep.Player.PlaybackTime > anime.Ep.SkipTimes.Op.Start &&
-						anime.Ep.Player.PlaybackTime < anime.Ep.SkipTimes.Op.Start+2 &&
-						anime.Ep.SkipTimes.Op.Start != anime.Ep.SkipTimes.Op.End {
-						SeekMPV(anime.Ep.Player.SocketPath, anime.Ep.SkipTimes.Op.End)
-					}
-				}
-				if userConfig.SkipEd {
-					if anime.Ep.Player.PlaybackTime > anime.Ep.SkipTimes.Ed.Start &&
-						anime.Ep.Player.PlaybackTime < anime.Ep.SkipTimes.Ed.Start+2 &&
-						anime.Ep.SkipTimes.Ed.Start != anime.Ep.SkipTimes.Ed.End {
-						SeekMPV(anime.Ep.Player.SocketPath, anime.Ep.SkipTimes.Ed.End)
-					}
+				// Skip the opening, ending and recap when their times are known.
+				if target, ok := SkipSeekTarget(anime.Ep.SkipTimes, anime.Ep.Player.PlaybackTime, userConfig); ok {
+					SeekMPV(anime.Ep.Player.SocketPath, target)
 				}
 
 				if speed, speedErr := GetMPVPlaybackSpeed(anime.Ep.Player.SocketPath); speedErr == nil {
@@ -726,9 +726,7 @@ func castUntrackedEpisode(config *Config, anime *Anime) bool {
 	// and an untracked show arrives with none unless its provider attached
 	// one. Looked up once for the show, before the handoff, so the terminal
 	// window inherits it.
-	if anime.MalId == 0 {
-		anime.MalId = lookupUntrackedMalID(GetAnimeName(*anime))
-	}
+	ensureUntrackedIDs(anime)
 
 	if config.RofiSelection {
 		err := handOffCastToTerminal(config, anime)
@@ -756,21 +754,39 @@ func castUntrackedEpisode(config *Config, anime *Anime) bool {
 	return false
 }
 
-// lookupUntrackedMalID finds the MAL id of an untracked show by its title, or 0.
+// ensureUntrackedIDs fills in the MAL and AniList ids of an untracked show from
+// its title, where they are missing. Once per show: an episode later the title
+// is the same.
+func ensureUntrackedIDs(anime *Anime) {
+	if anime == nil || (anime.MalId != 0 && anime.AnilistId != 0) {
+		return
+	}
+	malID, anilistID := lookupUntrackedIDs(GetAnimeName(*anime))
+	if anime.MalId == 0 {
+		anime.MalId = malID
+	}
+	if anime.AnilistId == 0 {
+		anime.AnilistId = anilistID
+	}
+}
+
+// lookupUntrackedIDs finds the MAL and AniList ids of an untracked show by its
+// title, or zeros.
 //
 // Only an exact title match is taken. A near miss is usually another season or
 // a sequel, and its skip times would jump to the wrong place in this episode --
 // worse than not skipping at all.
-func lookupUntrackedMalID(title string) int {
+func lookupUntrackedIDs(title string) (malID, anilistID int) {
 	want := untrackedTitleKey(title)
 	if want == "" {
-		return 0
+		return 0, 0
 	}
 
 	requestBody, err := json.Marshal(map[string]interface{}{
 		"query": `query ($search: String) {
 			Page(page: 1, perPage: 10) {
 				media(search: $search, type: ANIME) {
+					id
 					idMal
 					title { romaji english }
 				}
@@ -779,18 +795,19 @@ func lookupUntrackedMalID(title string) int {
 		"variables": map[string]string{"search": title},
 	})
 	if err != nil {
-		return 0
+		return 0, 0
 	}
-	body, err := doAniListSearchRequest("https://graphql.anilist.co", requestBody, "")
+	body, err := doAniListSearchRequest(untrackedAniListEndpoint, requestBody, "")
 	if err != nil {
 		Log(fmt.Sprintf("untracked: could not look up %q on AniList: %v", title, err))
-		return 0
+		return 0, 0
 	}
 
 	var response struct {
 		Data struct {
 			Page struct {
 				Media []struct {
+					ID    int `json:"id"`
 					IDMal int `json:"idMal"`
 					Title struct {
 						Romaji  string `json:"romaji"`
@@ -802,20 +819,23 @@ func lookupUntrackedMalID(title string) int {
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		Log(fmt.Sprintf("untracked: could not read AniList's answer for %q: %v", title, err))
-		return 0
+		return 0, 0
 	}
 	for _, media := range response.Data.Page.Media {
-		if media.IDMal == 0 {
+		if media.ID == 0 && media.IDMal == 0 {
 			continue
 		}
 		if untrackedTitleKey(media.Title.Romaji) == want || untrackedTitleKey(media.Title.English) == want {
-			Log(fmt.Sprintf("untracked: %q is MAL %d", title, media.IDMal))
-			return media.IDMal
+			Log(fmt.Sprintf("untracked: %q is AniList %d, MAL %d", title, media.ID, media.IDMal))
+			return media.IDMal, media.ID
 		}
 	}
-	Log(fmt.Sprintf("untracked: no exact AniList match for %q, casting without skip times", title))
-	return 0
+	Log(fmt.Sprintf("untracked: no exact AniList match for %q, playing without skip times", title))
+	return 0, 0
 }
+
+// untrackedAniListEndpoint is a variable so tests can answer for AniList.
+var untrackedAniListEndpoint = "https://graphql.anilist.co"
 
 // untrackedTitleKey reduces a title to its lowercase letters and digits, so
 // punctuation that differs between a provider and AniList -- a curly

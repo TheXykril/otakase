@@ -200,6 +200,9 @@ func castSpansFor(times SkipTimes, config *Config) []cast.Span {
 	if config.SkipEd && times.Ed.End > times.Ed.Start {
 		spans = append(spans, cast.Span{Start: float64(times.Ed.Start), End: float64(times.Ed.End)})
 	}
+	if config.SkipRecap && times.Recap.End > times.Recap.Start {
+		spans = append(spans, cast.Span{Start: float64(times.Recap.Start), End: float64(times.Recap.End)})
+	}
 	return spans
 }
 
