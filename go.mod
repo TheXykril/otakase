@@ -14,7 +14,7 @@ require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/tr1xem/go-discordrpc v1.0.0
 	github.com/vishen/go-chromecast v0.3.4
-	golang.org/x/term v0.45.0
+	golang.org/x/term v0.46.0
 )
 
 require (
