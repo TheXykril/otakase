@@ -81,7 +81,7 @@ func trackingCategoryEnabled(config *Config, key string) bool {
 		// learns that stats come from AniList or MyAnimeList, which a missing
 		// entry would never tell them.
 		return true
-	case "UPDATE", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REWATCHING":
+	case "UPDATE", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REWATCHING", "SURPRISE":
 		return UsesRemoteTracking(config)
 	default:
 		return true

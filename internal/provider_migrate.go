@@ -186,6 +186,72 @@ func injectConfigOptionsSince(configMap map[string]string, fromVersion, toVersio
 	return added
 }
 
+// menuKeysIntroducedInVersion lists MenuOrder entries by the release that
+// added them. MenuOrder shows only what it names, so an entry added after
+// someone saved a MenuOrder of their own would never reach them otherwise.
+func menuKeysIntroducedInVersion() map[string]string {
+	return map[string]string{
+		"SURPRISE": "26.1.0",
+		"STATS":    "26.1.0",
+	}
+}
+
+// injectMenuKeysSince adds the menu entries introduced in versions
+// (fromVersion, toVersion] to a saved MenuOrder that lacks them, each after
+// the entry it follows in the default order, or at the end. It reports the
+// keys added. A config without a MenuOrder already gets the default, which
+// has them.
+func injectMenuKeysSince(configMap map[string]string, fromVersion, toVersion string) []string {
+	current, exists := configMap["MenuOrder"]
+	if !exists || strings.TrimSpace(current) == "" {
+		return nil
+	}
+	order := []string{}
+	present := map[string]bool{}
+	for _, raw := range strings.Split(current, ",") {
+		key := strings.TrimSpace(raw)
+		if key == "" {
+			continue
+		}
+		order = append(order, key)
+		present[strings.ToUpper(key)] = true
+	}
+	defaults := strings.Split(defaultConfigMap()["MenuOrder"], ",")
+
+	introduced := menuKeysIntroducedInVersion()
+	keys := make([]string, 0, len(introduced))
+	for key := range introduced {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	added := []string{}
+	for _, key := range keys {
+		since := introduced[key]
+		if !versionLess(fromVersion, since) || !versionLessOrEqual(since, toVersion) || present[key] {
+			continue
+		}
+		at := len(order)
+		for i, defaultKey := range defaults {
+			if defaultKey != key || i == 0 {
+				continue
+			}
+			for j, existing := range order {
+				if strings.EqualFold(existing, defaults[i-1]) {
+					at = j + 1
+				}
+			}
+		}
+		order = append(order[:at], append([]string{key}, order[at:]...)...)
+		present[key] = true
+		added = append(added, key)
+	}
+	if len(added) > 0 {
+		configMap["MenuOrder"] = strings.Join(order, ",")
+	}
+	return added
+}
+
 // appendConfigKeys appends only the given keys to the config file so existing
 // user options and ordering are left untouched.
 func appendConfigKeys(configPath string, configMap map[string]string, keys []string) error {
@@ -258,6 +324,18 @@ func MigrateOnVersionUpgrade(configPath string, config *Config, appVersion strin
 				}
 				configUpdated = true
 				Log(fmt.Sprintf("Injected config options for upgrade %s → %s: %s",
+					storedVersion, appVersion, strings.Join(added, ", ")))
+			}
+		}
+
+		if addMissing {
+			if added := injectMenuKeysSince(configMap, storedVersion, appVersion); len(added) > 0 {
+				// MenuOrder is already in the file; rewrite it with the entries.
+				if err := SaveConfigToFile(configPath, configMap); err != nil {
+					return configUpdated, fmt.Errorf("add new menu entries: %w", err)
+				}
+				configUpdated = true
+				Log(fmt.Sprintf("Added menu entries for upgrade %s → %s: %s",
 					storedVersion, appVersion, strings.Join(added, ", ")))
 			}
 		}

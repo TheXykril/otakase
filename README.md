@@ -24,7 +24,7 @@ theme.
 - Searches several sources at once and falls back when one fails, up to 1080p
 - Plays this week's episodes without waiting for a download, keeping nothing afterwards
 - Falls back to the other audio automatically when a show exists in only one language
-- Stream, save episodes with `-download`, or cast them to a Chromecast
+- Stream, save episodes with `-download`, or cast them to a Chromecast or DLNA TV
 - Track locally, on AniList, on MyAnimeList, or on both at once
 - Browser-based AniList and MyAnimeList sign-in
 - Skips openings, endings, filler episodes and recaps
@@ -152,6 +152,7 @@ appear and in what order too. Under rofi they stay menu entries.
 | `^e` | Update (Episode, Status, Score) | Change a show's progress, status or score by hand |
 | `^r` | Remap Provider | Fix a show that plays the wrong anime, by picking the right match |
 | `^l` | Continue Last Session | Resume the show you watched last |
+| `^g` | Surprise Me | A random show from Plan to Watch, with Reroll; starting it offers to move it to Watching |
 | `^t` | Change Tracker | Switch between local, AniList, MyAnimeList or both |
 | `^o` | Change Provider | Pick which sources are searched, and in what order |
 | `^k` | Cast | Toggle casting for this run — shows `[ ] Cast: Off` or `[x] Cast: <device>` |
@@ -160,6 +161,16 @@ appear and in what order too. Under rofi they stay menu entries.
 The category entries — Currently Watching, Show All, Plan to Watch, Completed,
 Paused, Dropped, Rewatching — are the tabs in the terminal list and plain
 entries under rofi.
+
+The menu opens with the shows you played last, newest first, such as
+`▶ Frieren · ep 13 at 12:34`. Picking one resumes it where you stopped.
+`ContinueWatchingRows` sets how many are shown; `0` hides them.
+
+**Add new anime**, at the end of a list, searches AniList and asks which list
+to put the show on. *Already watched some elsewhere* asks how many episodes
+you have seen, records them, and starts at the next one; all of them marks the
+show completed. Progress set this way, with Update, or on another device is
+followed next time you play the show, rather than an older local position.
 
 | Flag | Description | Default |
 |---|---|---|
@@ -184,7 +195,8 @@ entries under rofi.
 | `-download` | Save episodes instead of playing them (needs `ffmpeg`) | |
 | `-episodes` | Episodes to save, e.g. `5` or `1-12` | selected |
 | `-download-dir` | Where to save them | `$HOME/Downloads/otakase` |
-| `-cast` | Play on a Chromecast on this network instead of locally | |
+| `-download-format` | Container for downloads, `mkv` or `mp4` | `mkv` |
+| `-cast` | Play on a Chromecast, DLNA TV or Kodi on this network instead of locally | |
 | `-current` | Jump straight to what you are currently watching | |
 | `-show-new-episodes` | Mark shows with an unwatched episode in the list | `true` |
 | `-vim-keys` | `j`/`k`/`h`/`l` to move and `/` to search in menus | |
@@ -234,11 +246,23 @@ otakase -download -episodes 1-12    # a range
 otakase -download -download-dir ~/Videos/anime
 ```
 
-Needs `ffmpeg`. Episodes are saved as `.mp4`.
+Needs `ffmpeg`. Episodes are saved as `.mkv`, keeping every audio track and styled subtitles; `-download-format mp4` saves MP4 instead. A finished episode is never fetched twice, whichever format it was saved in.
 
 ## Casting
 
-`otakase -cast` plays the episode on a Chromecast on the same network. The menu
+`otakase -cast` plays the episode on a Chromecast, a DLNA TV or Kodi on the
+same network. Most smart TVs are DLNA renderers (LG, Samsung, Sony, Hisense,
+Philips); they are listed next to Chromecasts, marked `· DLNA`. A TV that is
+both can show up twice, and the Chromecast entry is the one with the better
+controls. A DLNA TV is sent one plain MPEG-TS stream, so it needs nothing
+installed; if it does not appear, check that the TV's "media renderer" or
+"DLNA" setting is on and that your firewall lets UDP answers back in.
+
+**Kodi** (on its own, or on an Android TV box, Fire TV or Raspberry Pi) is
+listed marked `· Kodi` once *Settings > Services > Control > Allow remote
+control via HTTP* is on. If it does not show up, set `KodiHost` to its address
+(`192.168.1.20` or `192.168.1.20:8080`); if its web server has a password, set
+`KodiUser` and `KodiPassword` to match. The menu
 also carries a **Cast** toggle (`[ ] Cast: Off` / `[x] Cast: Office TV`, `^k`
 in the terminal list) that does the same thing per-run; `CastDevice` skips
 being asked which device each time. Casting works from **Untracked Watching**
@@ -258,7 +282,8 @@ re-encodes the stream even when there are no subtitles to burn, so the sound
 and the picture start together.
 
 While casting, the terminal shows a control panel: position, device, and
-keys — space pauses, arrows seek/adjust volume, `q` stops. Anything else
+keys — space pauses, arrows seek/adjust volume, `a` switches between sub and dub
+from where you are, `q` stops. Anything else
 otakase needs to tell you arrives as a desktop notification instead of
 interrupting the panel. Next episode, filler skip, and tracker updates all
 work the same as local playback.
@@ -427,14 +452,19 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `SaveMpvSpeed` | Boolean | `true`, `false` | Carry playback speed to the next episode. |
 | `StoragePath` | String | any path, `$VARS` expanded | Where Otakase keeps its data. |
 | `DownloadDir` | String | any path | Where `-download` saves episodes. |
+| `DownloadFormat` | Enum | `mkv`, `mp4` | Container for downloads. `mkv` (the default) keeps every audio track, ASS subtitles and their fonts; `mp4` suits devices that play nothing else. Each episode also gets a small `.otakase.json` naming the show, episode and skip times. |
 | `CastDevice` | String | a device name | Cast to this device without asking, when `-cast` is given and the device is found. Empty asks each time. |
 | `CastTerminal` | String | a terminal emulator | Terminal opened for a cast started from rofi. Empty uses `$TERMINAL`, then whatever is installed. |
 | `CastPort` | Integer | `0`–`65535` | Port the cast stream server listens on. `0` (the default) picks a free one; fix it to allow a single port through a firewall. |
+| `KodiHost` | String | `host` or `host:port`, comma-separated | Kodi instances to offer for casting when discovery does not find them. Port defaults to `8080`. |
+| `KodiUser` | String | any | User name of Kodi's web server, when it asks for one. |
+| `KodiPassword` | String | any | Password of Kodi's web server, when it asks for one. |
 | `CastBurnSubtitles` | Boolean | `true`, `false` | Burn subtitles into the picture when casting. Costs a re-encode. Default `true`. |
 | `CastEncoder` | Enum | empty, `vaapi`, `software` | Encoder for burned subtitles. Empty detects what this machine can do. |
-| `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. |
+| `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. Switching a show to the other audio (the player's `(DUB)`/`(SUB)` playlist row, or `a` while casting) is remembered for that show; `-sub` and `-dub` still win for a run. |
 | `SubStyle` | Enum | `ask`, `soft`, `hard` | External or burned-in subtitles, where both exist. `ask` prompts once and remembers. |
-| `SubsLanguage` | String | `english` | Preferred subtitle language. |
+| `SubsLanguage` | String | `english` | Preferred subtitle language, as a name or code (`english`, `pt`, `spa`). Switching language in mpv (the `j` key) is remembered for that show in `show_prefs.json` and wins over this. |
+| `Quality` | String | `best`, `1080`, `720`, `480`, or any number of lines | Picture height for HLS streams, in mpv, casts and downloads. `best` (the default) plays the provider's stream untouched; a number picks the nearest variant at or below it, else the smallest above. Set a different one per show from the update menu (*Quality for this show*); it is kept in `show_prefs.json`. |
 | `AutoAudioFallback` | Boolean | `true`, `false` | Play the other language when a show is carried in only one, instead of asking. Default `true`. |
 | `AnimeNameLanguage` | Enum | `english`, `romaji` | Preferred title language. |
 | `PercentageToMarkComplete` | Integer | `0`–`100` | Watched percentage that counts as complete. |
@@ -455,7 +485,8 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `VimKeys` | Boolean | `true`, `false` | `j`/`k`/`h`/`l` to move and `/` to search in menus, instead of type-to-filter. |
 | `AlternateScreen` | Boolean | `true`, `false` | Use an alternate screen buffer for a cleaner terminal. |
 | `CurrentCategory` | Boolean | `true`, `false` | Open straight into your watching list, skipping the menu; the tabs and bottom bar still reach everything. Escape then quits. Terminal only. `-current` does the same for one run. |
-| `MenuOrder` | String | comma-separated | Which menu entries appear, and in what order. Choose from `CURRENT`, `ALL`, `UNTRACKED`, `UPDATE`, `REMAP_PROVIDER`, `CONTINUE_LAST`, `PLANNING`, `COMPLETED`, `PAUSED`, `DROPPED`, `REWATCHING`, `TRACKER`, `PROVIDER`, `CAST`, `STATS`. `TRACKER` is always added if left out. |
+| `MenuOrder` | String | comma-separated | Which menu entries appear, and in what order. Choose from `CURRENT`, `ALL`, `UNTRACKED`, `UPDATE`, `REMAP_PROVIDER`, `CONTINUE_LAST`, `SURPRISE`, `PLANNING`, `COMPLETED`, `PAUSED`, `DROPPED`, `REWATCHING`, `TRACKER`, `PROVIDER`, `CAST`, `STATS`. `TRACKER` is always added if left out. Entries added in a new release are added to a saved `MenuOrder` once, on upgrade. |
+| `ContinueWatchingRows` | Integer | `0` or more | How many recently played shows open the menu. Default `5`; `0` hides them. |
 | `Provider` | List | `stacked`, or a single-entry list | Which sources to search and in what order. `stacked` (the default) uses the preferred order with fallback; naming one restricts the search to it. |
 | `DisabledProviders` | List | provider names, e.g. `["nyaa"]` | Sources never searched, even under `stacked`. |
 | `ManualProviderSearch` | Boolean | `true`, `false` | Always choose the match yourself instead of matching automatically. |
