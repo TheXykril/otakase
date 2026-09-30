@@ -27,6 +27,9 @@ type Anime struct {
 	// Untracked is an episode from Untracked Watching: played, never written
 	// to the history file or a tracker. A cast reads it to skip every write.
 	Untracked bool `json:"-"`
+	// syncedResume is the position another device left in the tracker entry,
+	// kept so a cast started after the lookup can still use it.
+	syncedResume syncedResume
 }
 
 type FuzzyDate struct {

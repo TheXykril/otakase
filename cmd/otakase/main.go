@@ -963,6 +963,7 @@ func main() {
 						if updateErr := internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, anime.Ep.Player.PlaybackTime, internal.ConvertSecondsToMinutes(anime.Ep.Duration), internal.GetAnimeName(anime), internal.CurrentAnimeProviderName(&anime)); updateErr != nil {
 							internal.Log("Error updating local database: " + updateErr.Error())
 						}
+						internal.NoteSyncedResume(&userConfig, &anime)
 					}
 
 					// Check if anything is playing; if not and episode was started, classify the loss.

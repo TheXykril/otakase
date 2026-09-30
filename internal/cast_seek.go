@@ -357,6 +357,10 @@ func castResumeAt(config *Config, anime *Anime) float64 {
 			// would resume one the viewer has not started.
 			playbackTime = 0
 		}
+		// A position another device left for this episode, when it got further.
+		if synced := syncedResumeFor(anime); synced > playbackTime {
+			playbackTime = synced
+		}
 		Log(fmt.Sprintf("cast: resume position for episode %d on %s: %ds", anime.Ep.Number, provider, playbackTime))
 	}
 

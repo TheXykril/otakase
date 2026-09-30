@@ -30,7 +30,8 @@ theme.
 - Skips openings, endings, filler episodes and recaps
 - Discord Rich Presence
 - rofi menus with image previews, themed from your desktop colours on Omarchy
-- Resumes where you left off, and remembers your mpv speed
+- Resumes where you left off, even on another device: the position is kept in your AniList note or MyAnimeList comment as `[otakase:5@754]` (episode 5, 754 s in), next to anything else you wrote there
+- Remembers your mpv speed
 - Configurable through a plain-text config file
 
 ## Install

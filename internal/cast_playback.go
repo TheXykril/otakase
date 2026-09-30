@@ -720,6 +720,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	animeProvider := CurrentAnimeProviderName(anime)
 	anilistID, providerID, episodeNumber := anime.AnilistId, anime.ProviderId, anime.Ep.Number
 	untracked := anime.Untracked
+	syncsResume := ShouldWriteRemoteTracking(config, anime)
 
 	writePartial := func() {
 		savedMu.Lock()
@@ -737,6 +738,9 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			int(position), ConvertSecondsToMinutes(duration),
 			animeName, animeProvider,
 		)
+		if syncsResume {
+			syncedResumePusher.note(config, anilistID, episodeNumber, int(position))
+		}
 	}
 	savePartial := func(position float64) {
 		recordPosition(position)
@@ -750,6 +754,12 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	// is called directly with the position of that moment.
 	cancelSave := RegisterExitCleanup(writePartial)
 	defer cancelSave()
+	// Registered after writePartial so the position it records on the way
+	// out is the one written to the trackers.
+	if syncsResume {
+		cancelFlush := RegisterExitCleanup(syncedResumePusher.flush)
+		defer cancelFlush()
+	}
 
 	// markWatched records the episode as seen, locally and on the remote
 	// tracker. Callers check remuxSucceeded() first: see its comment for why a

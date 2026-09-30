@@ -1172,6 +1172,12 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 				anime.Ep.Number, CurrentAnimeProviderName(anime), anime.Ep.Player.PlaybackTime, anime.Ep.Resume))
 		}
 
+		// Another device may have got further into this episode. Not on a
+		// rewatch, which starts every episode over.
+		if !startingRewatch {
+			ApplySyncedResume(userConfig, anime)
+		}
+
 		if startingRewatch {
 			anime.Ep.Player.PlaybackTime = 0
 			anime.Ep.Resume = false
