@@ -155,6 +155,7 @@ appear and in what order too. Under rofi they stay menu entries.
 | `^t` | Change Tracker | Switch between local, AniList, MyAnimeList or both |
 | `^o` | Change Provider | Pick which sources are searched, and in what order |
 | `^k` | Cast | Toggle casting for this run — shows `[ ] Cast: Off` or `[x] Cast: <device>` |
+| `^s` | Stats | Your watch totals and recent history, read from your tracker (see below) |
 
 The category entries — Currently Watching, Show All, Plan to Watch, Completed,
 Paused, Dropped, Rewatching — are the tabs in the terminal list and plain
@@ -207,6 +208,23 @@ otakase -c                          # continue where you left off
 otakase -rofi -image-preview        # graphical menu with posters
 otakase -dub -next-episode-prompt   # dub, asking before each next episode
 ```
+
+### Stats
+
+The Stats page is read from your tracker each time it opens, and kept for five
+minutes so opening it again is instant. Nothing is stored on disk.
+
+- **AniList** gives all-time totals — anime, episodes, time watched, mean
+  score, top genres, formats and statuses — plus the last 90 days of list
+  activity: episodes and hours this week and this month, your current and
+  longest daily streak, and the show you binged most.
+- **MyAnimeList** gives all-time totals only. It keeps no dated history, so
+  there are no weekly numbers or streaks.
+- **Local tracking** has no totals to show; the page says to switch to AniList
+  or MyAnimeList.
+
+With both trackers on, AniList is used, since only it has the history.
+Time is estimated from episode counts, so skipped openings are not subtracted.
 
 ### Saving episodes
 
@@ -437,7 +455,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `VimKeys` | Boolean | `true`, `false` | `j`/`k`/`h`/`l` to move and `/` to search in menus, instead of type-to-filter. |
 | `AlternateScreen` | Boolean | `true`, `false` | Use an alternate screen buffer for a cleaner terminal. |
 | `CurrentCategory` | Boolean | `true`, `false` | Open straight into your watching list, skipping the menu; the tabs and bottom bar still reach everything. Escape then quits. Terminal only. `-current` does the same for one run. |
-| `MenuOrder` | String | comma-separated | Which menu entries appear, and in what order. Choose from `CURRENT`, `ALL`, `UNTRACKED`, `UPDATE`, `REMAP_PROVIDER`, `CONTINUE_LAST`, `PLANNING`, `COMPLETED`, `PAUSED`, `DROPPED`, `REWATCHING`, `TRACKER`, `PROVIDER`, `CAST`. `TRACKER` is always added if left out. |
+| `MenuOrder` | String | comma-separated | Which menu entries appear, and in what order. Choose from `CURRENT`, `ALL`, `UNTRACKED`, `UPDATE`, `REMAP_PROVIDER`, `CONTINUE_LAST`, `PLANNING`, `COMPLETED`, `PAUSED`, `DROPPED`, `REWATCHING`, `TRACKER`, `PROVIDER`, `CAST`, `STATS`. `TRACKER` is always added if left out. |
 | `Provider` | List | `stacked`, or a single-entry list | Which sources to search and in what order. `stacked` (the default) uses the preferred order with fallback; naming one restricts the search to it. |
 | `DisabledProviders` | List | provider names, e.g. `["nyaa"]` | Sources never searched, even under `stacked`. |
 | `ManualProviderSearch` | Boolean | `true`, `false` | Always choose the match yourself instead of matching automatically. |

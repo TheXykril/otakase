@@ -155,7 +155,7 @@ func defaultConfigMap() map[string]string {
 		"AnimeNameLanguage":        "english",
 		"SubsLanguage":             "english",
 		"CurrentCategory":          "false",
-		"MenuOrder":                "CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER,CAST",
+		"MenuOrder":                "CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER,CAST,STATS",
 		"SubOrDub":                 "sub",
 		"SubStyle":                 "ask",
 		"PercentageToMarkComplete": "85",
@@ -864,7 +864,7 @@ func normalizeTrackingConfig(config *Config) {
 
 func getOrderedCategories(userConfig *Config) []SelectionOption {
 	// Define the default categories and all available labels
-	defaultOrder := []string{"CURRENT", "ALL", "UNTRACKED", "UPDATE", "REMAP_PROVIDER", "CONTINUE_LAST", "TRACKER", "PROVIDER"}
+	defaultOrder := []string{"CURRENT", "ALL", "UNTRACKED", "UPDATE", "REMAP_PROVIDER", "CONTINUE_LAST", "TRACKER", "PROVIDER", "STATS"}
 	availableLabels := map[string]string{
 		"CURRENT":        "Currently Watching",
 		"ALL":            "Show All",
@@ -884,6 +884,8 @@ func getOrderedCategories(userConfig *Config) []SelectionOption {
 		// viewer has to guess at. This is the one menu both UIs build from, so
 		// doing it here covers rofi and the terminal alike.
 		"CAST": "Cast",
+		// Read from the tracker each time it opens; see watch_stats.go.
+		"STATS": "Stats",
 	}
 	availableLabels["CAST"] = castMenuLabel(userConfig)
 
