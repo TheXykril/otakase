@@ -1223,6 +1223,7 @@ func writeLastPlayedAnimeID(storagePath string, anilistID int) {
 	if err := os.WriteFile(idPath, []byte(strconv.Itoa(anilistID)), 0o644); err != nil {
 		Log(fmt.Sprintf("MPV playlist: write curd_id: %v", err))
 	}
+	noteRecentShow(storagePath, anilistID, time.Now())
 }
 
 func (c *MPVPlaylistController) prefetchAfterPlaylistSwitch(currentEp int) {
@@ -1316,7 +1317,9 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 		links        []string
 		referrer     string
 		subtitle     string
+		subtitles    []SubtitleTrack
 		headers      map[string]string
+		hlsBitrate   int
 		skipTimes    SkipTimes
 		nextEpisode  NextEpisode
 	}{
@@ -1327,7 +1330,9 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 		links:        anime.Ep.Links,
 		referrer:     anime.Ep.StreamReferrer,
 		subtitle:     anime.Ep.SubtitleURL,
+		subtitles:    anime.Ep.SubtitleTracks,
 		headers:      anime.Ep.StreamHeaders,
+		hlsBitrate:   anime.Ep.StreamHLSBitrate,
 		skipTimes:    anime.Ep.SkipTimes,
 		nextEpisode:  anime.Ep.NextEpisode,
 	}
@@ -1340,7 +1345,9 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 		anime.Ep.Links = restore.links
 		anime.Ep.StreamReferrer = restore.referrer
 		anime.Ep.SubtitleURL = restore.subtitle
+		anime.Ep.SubtitleTracks = restore.subtitles
 		anime.Ep.StreamHeaders = restore.headers
+		anime.Ep.StreamHLSBitrate = restore.hlsBitrate
 		anime.Ep.SkipTimes = restore.skipTimes
 		anime.Ep.NextEpisode = restore.nextEpisode
 	}
@@ -1356,6 +1363,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 	anime.Ep.NextEpisode = NextEpisode{}
 	anime.Ep.StreamReferrer = ""
 	anime.Ep.SubtitleURL = ""
+	anime.Ep.SubtitleTracks = nil
 	anime.Ep.SkipTimes = SkipTimes{}
 
 	Log(fmt.Sprintf("MPV playlist: resolving stream for episode %d (%s) [was %d]", targetEp, mode, prevEp))
@@ -1446,6 +1454,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 	}(c.socket)
 
 	c.mu.Lock()
+	previousMode := c.currentMode
 	c.currentPlaying = targetEp
 	c.currentMode = mode
 	// The alternate is always the *other* mode from what is now playing, so after
@@ -1461,6 +1470,14 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 
 	// Stream is live — safe for the main loop again.
 	endMPVPlaylistSwitch()
+
+	// Picking the other audio row is a choice about the show, not the episode:
+	// it is what the next launch should play. Only a switch that got the
+	// audio asked for counts; one that fell back to the same audio chose
+	// nothing.
+	if previousMode != "" && mode != previousMode && normalizeTranslationType(slot.Mode) == mode {
+		rememberShowAudioMode(c.config.StoragePath, c.anime.AnilistId, mode)
+	}
 
 	// Refresh skip times in background (non-blocking for playback). Every
 	// source is consulted, not only AniSkip: a show tracked on AniList alone
@@ -1514,6 +1531,10 @@ func loadEpisodeInRunningMPV(socket, link, title string, anime *Anime) error {
 	if cfg := GetGlobalConfig(); anime != nil && (cfg == nil || !hasMPVHeaderArg(cfg.MpvArgs)) {
 		resetMPVStreamHeaders(MPVSendCommand, socket, anime.Ep.StreamHeaders)
 	}
+	// And its hls-bitrate, which holds the last episode's quality cap.
+	if cfg := GetGlobalConfig(); anime != nil && (cfg == nil || !hasMPVHLSBitrateArg(cfg.MpvArgs)) {
+		resetMPVHLSBitrate(MPVSendCommand, socket, anime.Ep.StreamHLSBitrate)
+	}
 
 	opts := "force-media-title=" + escapeMPVOptionValue(title)
 	// Explicit replace so we never append a second "current" by accident.
@@ -1530,10 +1551,14 @@ func loadEpisodeInRunningMPV(socket, link, title string, anime *Anime) error {
 
 	if anime != nil {
 		sub := strings.TrimSpace(anime.Ep.SubtitleURL)
-		if sub != "" {
+		tracks := anime.Ep.SubtitleTracks
+		if sub != "" || len(anime.Ep.SubtitleTracks) > 0 {
 			go func() {
 				_ = waitForMPVFileReady(socket, link, 12*time.Second)
-				_, _ = MPVSendCommand(socket, []interface{}{"sub-add", sub, "select"})
+				if sub != "" {
+					_, _ = MPVSendCommand(socket, []interface{}{"sub-add", sub, "select"})
+				}
+				addAlternateSubtitles(MPVSendCommand, socket, sub, tracks)
 			}()
 		}
 	}

@@ -360,6 +360,7 @@ func canonicalCategoryKey(key string) string {
 var menuActions = map[string]FooterAction{
 	"UNTRACKED":      {Key: "UNTRACKED", Label: "untracked", Hint: "ctrl+u"},
 	"CONTINUE_LAST":  {Key: "CONTINUE_LAST", Label: "continue", Hint: "ctrl+l"},
+	"SURPRISE":       {Key: "SURPRISE", Label: "surprise", Hint: "ctrl+g"},
 	"UPDATE":         {Key: "UPDATE", Label: "update", Hint: "ctrl+e"},
 	"REMAP_PROVIDER": {Key: "REMAP_PROVIDER", Label: "remap", Hint: "ctrl+r"},
 	"TRACKER":        {Key: "TRACKER", Label: "tracker", Hint: "ctrl+t"},
@@ -368,6 +369,9 @@ var menuActions = map[string]FooterAction{
 	// text is replaced with the live state by applyDynamicActionLabels before
 	// either menu renders it.
 	"CAST": {Key: "CAST", Label: "cast", Hint: "ctrl+k"},
+	// ctrl+s is free here, and it reaches the menu as a key rather than
+	// freezing the terminal: raw mode switches off XON/XOFF flow control.
+	"STATS": {Key: "STATS", Label: "stats", Hint: "ctrl+s"},
 }
 
 // applyDynamicActionLabels replaces the labels of actions that report state

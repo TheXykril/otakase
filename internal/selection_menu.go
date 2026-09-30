@@ -785,6 +785,14 @@ func sortHomeMenuOptions(options []SelectionOption) []SelectionOption {
 	}
 
 	sorted := make([]SelectionOption, 0, len(options))
+	// Continue-watching rows lead: they are the shows most likely wanted, and
+	// no MenuOrder names them.
+	for _, opt := range options {
+		if _, isRow := resumeRowAnilistID(opt.Key); isRow {
+			sorted = append(sorted, opt)
+			delete(optMap, opt.Key)
+		}
+	}
 	for _, key := range menuOrder {
 		if opt, exists := optMap[key]; exists {
 			sorted = append(sorted, opt)

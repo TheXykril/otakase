@@ -155,6 +155,7 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 
 	ordered := orderStreams(response.Streams)
 	subtitle := preferredSubtitle(response.Subtitles)
+	tracks := subtitleTracks(response.Subtitles)
 
 	urls := make([]string, 0, len(ordered))
 	hints := make(map[string]providers.StreamPlaybackHint, len(ordered))
@@ -176,9 +177,10 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 			headers["Referer"] = refer
 		}
 		hints[s.URL] = providers.StreamPlaybackHint{
-			Referrer: refer,
-			Subtitle: subtitle,
-			Headers:  headers,
+			Referrer:  refer,
+			Subtitle:  subtitle,
+			Subtitles: tracks,
+			Headers:   headers,
 		}
 	}
 	if len(urls) == 0 {
@@ -200,6 +202,18 @@ func orderStreams(streams []stream) []stream {
 		return ordered[i].Priority < ordered[j].Priority
 	})
 	return ordered
+}
+
+// subtitleTracks lists every subtitle the host offers.
+func subtitleTracks(subtitles []subtitle) []providers.SubtitleTrack {
+	var tracks []providers.SubtitleTrack
+	for _, sub := range subtitles {
+		if sub.File == "" {
+			continue
+		}
+		tracks = append(tracks, providers.SubtitleTrack{URL: sub.File, Language: sub.Language, Label: sub.Label})
+	}
+	return tracks
 }
 
 // preferredSubtitle picks the track to hand the player: the one marked default,
