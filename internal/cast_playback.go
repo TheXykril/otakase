@@ -158,7 +158,7 @@ func init() {
 
 // Narrow views of the cast session, server and remux, so watchCast -- which is
 // where this feature's failure handling lives -- can be tested without a
-// device or an ffmpeg. The concrete types (*cast.Session, *cast.Server,
+// device or an ffmpeg. The concrete types (any cast.Player, *cast.Server,
 // *cast.Remux) satisfy these as they are; CastEpisode passes them unchanged.
 type castSession interface {
 	Progress() (cast.Progress, error)
@@ -385,7 +385,7 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 		resourceMu sync.Mutex
 		remux      *cast.Remux
 		server     *cast.Server
-		session    *cast.Session
+		session    cast.Player
 	)
 	var teardownOnce sync.Once
 	teardown := func() {
