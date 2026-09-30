@@ -30,6 +30,28 @@ func TestIsUpdateNewer(t *testing.T) {
 	}
 }
 
+// Releases switched from semver to YY.DROP.HOTFIX at 26.1.0. Every install
+// still on 2.x has to be offered the first year release, and the year
+// numbering has to order itself after that.
+func TestIsUpdateNewerAcrossYearVersions(t *testing.T) {
+	newer := [][2]string{
+		{"v26.1.0", "2.2.2"},
+		{"26.1.0", "2.99.99"},
+		{"26.1.1", "26.1.0"},
+		{"26.2.0", "26.1.9"},
+		{"26.10.0", "26.9.0"},
+		{"27.1.0", "26.12.3"},
+	}
+	for _, pair := range newer {
+		if !isUpdateNewer(pair[0], pair[1]) {
+			t.Errorf("expected %s newer than %s", pair[0], pair[1])
+		}
+		if isUpdateNewer(pair[1], pair[0]) {
+			t.Errorf("expected %s not newer than %s", pair[1], pair[0])
+		}
+	}
+}
+
 func TestPendingUpdateShouldPromptRespectsSkipAndRemind(t *testing.T) {
 	cfg := &Config{CheckUpdates: true}
 	state := updatePendingState{

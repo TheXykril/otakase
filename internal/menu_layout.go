@@ -161,6 +161,19 @@ func renderBreadcrumb(section string) string {
 	return crumb
 }
 
+// renderHeader draws the breadcrumb with the running version at the right
+// edge, dimmed like the rest of the chrome. The version is dropped when the
+// line is too narrow for both, since where you are matters more.
+func renderHeader(section string, width int) string {
+	crumb := renderBreadcrumb(section)
+	version := crumbSepStyle.Render(DisplayVersion())
+	gap := width - lipgloss.Width(crumb) - lipgloss.Width(version)
+	if gap < 2 {
+		return crumb
+	}
+	return crumb + strings.Repeat(" ", gap) + version
+}
+
 // renderRule draws the line under the header, the width of the content.
 func renderRule(width int) string {
 	if width <= 0 {
