@@ -41,16 +41,20 @@ func watchStatsPage(config *Config) (string, []statsSection) {
 	return "Stats · " + stats.Source, buildStatsSections(stats, time.Now())
 }
 
-// showWatchStatsRofi puts the page in rofi's message area above a single Back
-// entry, the same way release notes are shown.
+// showWatchStatsRofi puts the page in rofi's message area above the Back and
+// Quit rows every rofi menu gets, the same way release notes are shown.
 func showWatchStatsRofi(title, body string) {
 	palette := theme.Active()
 	message := `<span foreground="` + palette.Accent + `"><b>` + escapePango(title) + `</b></span>` + "\n\n" +
 		// Monospace so the columns of labels and values line up.
 		`<tt>` + escapePango(body) + `</tt>`
-	_, err := RofiSelectWithMessage([]SelectionOption{{Key: "back", Label: "Back"}}, false, "Stats", message)
+	selected, err := RofiSelectWithMessage(nil, false, "Stats", message)
 	if err != nil {
 		Log(fmt.Sprintf("Stats: rofi: %v", err))
+		return
+	}
+	if SelectionMeansQuit(NormalizeSelectionKey(selected)) {
+		Exit(nil)
 	}
 }
 
