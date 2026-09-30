@@ -76,6 +76,11 @@ func trackingCategoryEnabled(config *Config, key string) bool {
 	switch key {
 	case "CURRENT", "ALL", "UNTRACKED", "CONTINUE_LAST", "REMAP_PROVIDER", "PROVIDER":
 		return true
+	case "STATS":
+		// Shown with local tracking too: the page is where a local-only user
+		// learns that stats come from AniList or MyAnimeList, which a missing
+		// entry would never tell them.
+		return true
 	case "UPDATE", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REWATCHING", "SURPRISE":
 		return UsesRemoteTracking(config)
 	default:

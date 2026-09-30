@@ -192,6 +192,7 @@ func injectConfigOptionsSince(configMap map[string]string, fromVersion, toVersio
 func menuKeysIntroducedInVersion() map[string]string {
 	return map[string]string{
 		"SURPRISE": "26.1.0",
+		"STATS":    "26.1.0",
 	}
 }
 

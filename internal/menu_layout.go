@@ -369,6 +369,9 @@ var menuActions = map[string]FooterAction{
 	// text is replaced with the live state by applyDynamicActionLabels before
 	// either menu renders it.
 	"CAST": {Key: "CAST", Label: "cast", Hint: "ctrl+k"},
+	// ctrl+s is free here, and it reaches the menu as a key rather than
+	// freezing the terminal: raw mode switches off XON/XOFF flow control.
+	"STATS": {Key: "STATS", Label: "stats", Hint: "ctrl+s"},
 }
 
 // applyDynamicActionLabels replaces the labels of actions that report state

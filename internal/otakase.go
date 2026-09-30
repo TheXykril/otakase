@@ -825,6 +825,13 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					toggleCastToDevice(userConfig)
 					ClearScreen()
 					continue categorySelectionLoop
+				} else if categorySelection.Key == "STATS" {
+					// A page to read rather than a list to pick from, so leaving
+					// it returns to the menu it was opened from.
+					ClearScreen()
+					ShowWatchStats(userConfig)
+					ClearScreen()
+					continue categorySelectionLoop
 				} else if categorySelection.Key == "CONTINUE_LAST" {
 					anime.Ep.ContinueLast = true
 				} else if categorySelection.Key == "SURPRISE" {

@@ -56,11 +56,12 @@ func TestInjectMenuKeysSince(t *testing.T) {
 		t.Fatalf("same version added %v", added)
 	}
 	added := injectMenuKeysSince(m, "2.2.2", "26.1.0")
-	if len(added) != 1 || added[0] != "SURPRISE" {
+	if strings.Join(added, ",") != "STATS,SURPRISE" {
 		t.Fatalf("added %v", added)
 	}
-	// Placed where the default order has it: after Continue Last Session.
-	if m["MenuOrder"] != "CURRENT,ALL,CONTINUE_LAST,SURPRISE,TRACKER" {
+	// Placed where the default order has it: Surprise Me after Continue Last
+	// Session; Stats, whose neighbour Cast is missing, at the end.
+	if m["MenuOrder"] != "CURRENT,ALL,CONTINUE_LAST,SURPRISE,TRACKER,STATS" {
 		t.Fatalf("MenuOrder = %q", m["MenuOrder"])
 	}
 	if again := injectMenuKeysSince(m, "2.2.2", "26.1.0"); len(again) != 0 {
@@ -70,7 +71,7 @@ func TestInjectMenuKeysSince(t *testing.T) {
 	// Without its neighbour it goes at the end.
 	m = map[string]string{"MenuOrder": "ALL, CURRENT"}
 	injectMenuKeysSince(m, "2.2.2", "26.1.0")
-	if m["MenuOrder"] != "ALL,CURRENT,SURPRISE" {
+	if m["MenuOrder"] != "ALL,CURRENT,STATS,SURPRISE" {
 		t.Fatalf("MenuOrder = %q", m["MenuOrder"])
 	}
 
