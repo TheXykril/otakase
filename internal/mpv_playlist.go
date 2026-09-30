@@ -1223,6 +1223,7 @@ func writeLastPlayedAnimeID(storagePath string, anilistID int) {
 	if err := os.WriteFile(idPath, []byte(strconv.Itoa(anilistID)), 0o644); err != nil {
 		Log(fmt.Sprintf("MPV playlist: write curd_id: %v", err))
 	}
+	noteRecentShow(storagePath, anilistID, time.Now())
 }
 
 func (c *MPVPlaylistController) prefetchAfterPlaylistSwitch(currentEp int) {

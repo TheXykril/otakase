@@ -360,6 +360,7 @@ func canonicalCategoryKey(key string) string {
 var menuActions = map[string]FooterAction{
 	"UNTRACKED":      {Key: "UNTRACKED", Label: "untracked", Hint: "ctrl+u"},
 	"CONTINUE_LAST":  {Key: "CONTINUE_LAST", Label: "continue", Hint: "ctrl+l"},
+	"SURPRISE":       {Key: "SURPRISE", Label: "surprise", Hint: "ctrl+g"},
 	"UPDATE":         {Key: "UPDATE", Label: "update", Hint: "ctrl+e"},
 	"REMAP_PROVIDER": {Key: "REMAP_PROVIDER", Label: "remap", Hint: "ctrl+r"},
 	"TRACKER":        {Key: "TRACKER", Label: "tracker", Hint: "ctrl+t"},
