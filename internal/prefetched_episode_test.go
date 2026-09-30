@@ -46,6 +46,7 @@ func TestUsePrefetchedEpisodeIgnoresAnotherEpisode(t *testing.T) {
 
 func TestApplySkipTimesForgetsThePreviousEpisodesTimes(t *testing.T) {
 	anime := &Anime{}
+	anime.Ep.Number = 2
 	anime.Ep.SkipTimes = SkipTimes{Op: Skip{Start: 0, End: 60}}
 
 	// No MyAnimeList id and no provider: no source can answer.

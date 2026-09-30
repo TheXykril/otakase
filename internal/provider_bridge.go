@@ -145,6 +145,17 @@ func (a *providerAdapter) GetEpisodeURLForModeWithHints(config Config, id string
 	return links, nil, err
 }
 
+// SkipRange passes on the opening and ending a provider ships with its streams.
+// Without it the adapter hid them: the skip lookup asks for this method, and
+// no provider it was handed ever had it. A provider with nothing to say
+// reports nothing, which the lookup reads as "ask the next source".
+func (a *providerAdapter) SkipRange(id, mode string, epNo int) (intro, outro []int, err error) {
+	if ranger, ok := a.inner.(providers.SkipRanger); ok {
+		return ranger.SkipRange(id, mode, epNo)
+	}
+	return nil, nil, nil
+}
+
 func resolveProviderID(provider Provider, providerID, query string) (string, error) {
 	inner := unwrapProvider(provider)
 	if inner == nil {

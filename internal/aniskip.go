@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -20,6 +21,9 @@ type skipResult struct {
 	Interval skipInterval `json:"interval"`
 	SkipType string       `json:"skip_type"`
 	SkipID   string       `json:"skip_id"`
+	// EpisodeLength is the length of the release the entry was timed against.
+	// Only the v2 API reports it; zero means unknown.
+	EpisodeLength float64 `json:"episode_length"`
 }
 
 // skipInterval struct to hold the start and end times for skip intervals
@@ -28,10 +32,129 @@ type skipInterval struct {
 	EndTime   float64 `json:"end_time"`
 }
 
+// aniSkipReadBase is a variable so tests can point the read at a local server;
+// nothing else replaces it.
+var (
+	aniSkipReadBase = "https://api.aniskip.com/v2/skip-times"
+	aniSkipV1Base   = "https://api.aniskip.com/v1/skip-times"
+)
+
+// aniSkipLengthTolerance is how far an entry's recorded episode length may be
+// from the file playing and still be trusted for it. Two encodes of the same
+// cut differ by a second or two; a cut with a cold open, a recap or a sponsor
+// card added differs by far more, and its timings belong to that cut.
+const aniSkipLengthTolerance = 20.0
+
+// aniSkipV2Response is the v2 answer, which unlike v1 says how long the
+// episode was that each entry was timed against.
+type aniSkipV2Response struct {
+	Found   bool `json:"found"`
+	Results []struct {
+		Interval struct {
+			StartTime float64 `json:"startTime"`
+			EndTime   float64 `json:"endTime"`
+		} `json:"interval"`
+		SkipType      string  `json:"skipType"`
+		SkipID        string  `json:"skipId"`
+		EpisodeLength float64 `json:"episodeLength"`
+	} `json:"results"`
+}
+
+// getAniSkipResults fetches every entry AniSkip has for an episode, with the
+// episode length each was timed against.
+//
+// It asks v2 for all lengths and chooses locally, so the choice can be
+// explained in a log and tested. When v2 cannot be used it falls back to v1,
+// which answers without lengths -- the times are then taken as they come, as
+// they always were.
+func getAniSkipResults(malID, episode int) ([]skipResult, bool, error) {
+	url := fmt.Sprintf("%s/%d/%d?types=op&types=ed&types=mixed-op&types=mixed-ed&episodeLength=0",
+		aniSkipReadBase, malID, episode)
+	resp, err := sharedHTTPClient.Get(url)
+	if err == nil {
+		defer resp.Body.Close()
+		switch resp.StatusCode {
+		case http.StatusNotFound:
+			return nil, false, nil
+		case http.StatusOK:
+			body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+			if readErr != nil {
+				return nil, false, fmt.Errorf("aniskip: %w", readErr)
+			}
+			var data aniSkipV2Response
+			if jsonErr := json.Unmarshal(body, &data); jsonErr != nil {
+				return nil, false, fmt.Errorf("aniskip: %w", jsonErr)
+			}
+			results := make([]skipResult, 0, len(data.Results))
+			for _, r := range data.Results {
+				results = append(results, skipResult{
+					Interval:      skipInterval{StartTime: r.Interval.StartTime, EndTime: r.Interval.EndTime},
+					SkipType:      r.SkipType,
+					SkipID:        r.SkipID,
+					EpisodeLength: r.EpisodeLength,
+				})
+			}
+			return results, data.Found && len(results) > 0, nil
+		}
+		Log(fmt.Sprintf("aniskip v2: status %d; asking v1", resp.StatusCode))
+	} else {
+		Log(fmt.Sprintf("aniskip v2: %v; asking v1", err))
+	}
+
+	body, err := GetAniSkipData(malID, episode)
+	if err != nil {
+		return nil, false, err
+	}
+	var data skipTimesResponse
+	if err := json.Unmarshal([]byte(body), &data); err != nil {
+		return nil, false, fmt.Errorf("aniskip: %w", err)
+	}
+	return data.Results, data.Found, nil
+}
+
+// aniSkipResultsForLength keeps the entries that fit a file of the given
+// length, closest match first.
+//
+// AniSkip keeps entries for every release anyone timed, and the same episode is
+// cut differently by different sources: one has a cold open before the
+// opening, another does not. An entry for the other cut sends the player to
+// the wrong place -- a skip from 0:00 to 1:00 in an episode whose opening
+// starts at 2:45. With no length known, the entries are kept as they came.
+func aniSkipResultsForLength(results []skipResult, length float64) []skipResult {
+	if length <= 0 {
+		return results
+	}
+	type ranked struct {
+		result skipResult
+		off    float64
+	}
+	kept := make([]ranked, 0, len(results))
+	for _, result := range results {
+		if result.Interval.EndTime > length+1 {
+			// Runs past the end of this file: timed against a longer cut.
+			continue
+		}
+		off := aniSkipLengthTolerance
+		if result.EpisodeLength > 0 {
+			off = math.Abs(result.EpisodeLength - length)
+			if off > aniSkipLengthTolerance {
+				continue
+			}
+		}
+		kept = append(kept, ranked{result: result, off: off})
+	}
+	sort.SliceStable(kept, func(i, j int) bool { return kept[i].off < kept[j].off })
+
+	out := make([]skipResult, 0, len(kept))
+	for _, k := range kept {
+		out = append(out, k.result)
+	}
+	return out
+}
+
 // GetAniSkipData fetches skip times data for a given anime ID and episode
 func GetAniSkipData(animeMalId int, episode int) (string, error) {
-	baseURL := "https://api.aniskip.com/v1/skip-times"
-	url := fmt.Sprintf("%s/%d/%d?types=op&types=ed", baseURL, animeMalId, episode)
+	url := fmt.Sprintf("%s/%d/%d?types=op&types=ed", aniSkipV1Base, animeMalId, episode)
 
 	resp, err := sharedHTTPClient.Get(url)
 	if err != nil {

@@ -1509,6 +1509,11 @@ func loadEpisodeInRunningMPV(socket, link, title string, anime *Anime) error {
 	if cfg := GetGlobalConfig(); cfg == nil || !hasMPVSubtitleArg(cfg.MpvArgs) {
 		clearMPVSubtitleFiles(MPVSendCommand, socket)
 	}
+	// So are its extra headers, and this episode may come from another
+	// provider whose CDN wants different ones.
+	if cfg := GetGlobalConfig(); anime != nil && (cfg == nil || !hasMPVHeaderArg(cfg.MpvArgs)) {
+		resetMPVStreamHeaders(MPVSendCommand, socket, anime.Ep.StreamHeaders)
+	}
 
 	opts := "force-media-title=" + escapeMPVOptionValue(title)
 	// Explicit replace so we never append a second "current" by accident.

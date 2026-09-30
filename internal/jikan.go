@@ -9,6 +9,16 @@ import (
 )
 
 // GetEpisodeData fetches episode data for a given anime ID and episode number
+// clearEpisodeDetails forgets what was known about the last episode, so an
+// episode Jikan cannot describe is not shown with the previous one's title.
+func clearEpisodeDetails(anime *Anime) {
+	anime.Ep.Title = AnimeTitle{}
+	anime.Ep.Aired = ""
+	anime.Ep.Synopsis = ""
+	anime.Ep.IsFiller = false
+	anime.Ep.IsRecap = false
+}
+
 func GetEpisodeData(animeID int, episodeNo int, anime *Anime) error {
 	url := fmt.Sprintf("https://api.jikan.moe/v4/anime/%d/episodes/%d", animeID, episodeNo)
 
@@ -17,8 +27,7 @@ func GetEpisodeData(animeID int, episodeNo int, anime *Anime) error {
 	if err != nil {
 		Log(fmt.Sprintf("Warning: Jikan API error: %v - continuing without filler data", err))
 		// Set default values when API fails
-		anime.Ep.IsFiller = false
-		anime.Ep.IsRecap = false
+		clearEpisodeDetails(anime)
 		return nil // Return nil to allow the application to continue
 	}
 
@@ -29,8 +38,7 @@ func GetEpisodeData(animeID int, episodeNo int, anime *Anime) error {
 	if !ok {
 		Log("Warning: Invalid Jikan API response - continuing without filler data")
 		// Set default values when response is invalid
-		anime.Ep.IsFiller = false
-		anime.Ep.IsRecap = false
+		clearEpisodeDetails(anime)
 		return nil // Return nil to allow the application to continue
 	}
 	// Helper function to safely get string value
@@ -39,14 +47,6 @@ func GetEpisodeData(animeID int, episodeNo int, anime *Anime) error {
 			return value
 		}
 		return ""
-	}
-
-	// Helper function to safely get int value
-	getIntValue := func(field string) int {
-		if value, ok := data[field].(float64); ok {
-			return int(value)
-		}
-		return 0
 	}
 
 	// Helper function to safely get bool value
@@ -62,7 +62,10 @@ func GetEpisodeData(animeID int, episodeNo int, anime *Anime) error {
 	anime.Ep.Title.English = getStringValue("title")
 	anime.Ep.Title.Japanese = getStringValue("title_japanese")
 	anime.Ep.Aired = getStringValue("aired")
-	anime.Ep.Duration = getIntValue("duration")
+	// Jikan's duration is not taken: the player measures the file actually
+	// playing, and this answer can land after it and replace that with a
+	// listing's figure -- or with zero, which leaves the episode unable to
+	// count as watched.
 	anime.Ep.IsFiller = getBoolValue("filler")
 	anime.Ep.IsRecap = getBoolValue("recap")
 	anime.Ep.Synopsis = getStringValue("synopsis")
