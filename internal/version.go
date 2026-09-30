@@ -24,11 +24,26 @@ func Version() string {
 	return appVersion
 }
 
+// DisplayVersion is the version as the menus show it: "v26.1.0" for a
+// release, or the raw string ("dev") for a build without one.
+func DisplayVersion() string {
+	version := Version()
+	if parseVersionParts(version) == nil {
+		return version
+	}
+	return "v" + strings.TrimLeft(version, "vV")
+}
+
 func storageVersionFilePath(storagePath string) string {
 	return filepath.Join(strings.TrimSpace(storagePath), "curd_version")
 }
 
-// parseVersionParts parses "2.0.3" / "v2.0.3-rc1" into [major, minor, patch].
+// parseVersionParts parses "26.1.0" / "v2.0.3-rc1" into three numbers.
+//
+// Releases are numbered YY.DROP.HOTFIX since 26.1.0 (see CONTRIBUTING.md), and
+// were semver before that. Both are three numbers compared left to right, so
+// 26.1.0 is newer than 2.2.2 with no special case: the year outranks any old
+// major version.
 // Non-numeric suffixes are ignored. Unparseable versions return nil.
 func parseVersionParts(version string) []int {
 	version = strings.TrimSpace(version)

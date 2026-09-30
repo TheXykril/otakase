@@ -66,7 +66,10 @@ type Config struct {
 	// CurrentCategoryFlag records that -current was given for this run, which
 	// asks for the menu to be skipped whatever the interface. It is not a
 	// setting, so it carries no config tag and is never written to a file.
-	CurrentCategoryFlag        bool   `config:"-"`
+	CurrentCategoryFlag bool `config:"-"`
+	// SubOrDubFlag records that -sub or -dub was given for this run, which
+	// outranks the audio remembered for a show. Not a setting either.
+	SubOrDubFlag               bool   `config:"-"`
 	ScoreOnCompletion          bool   `config:"ScoreOnCompletion"`
 	SaveMpvSpeed               bool   `config:"SaveMpvSpeed"`
 	AddMissingOptions          bool   `config:"AddMissingOptions"`

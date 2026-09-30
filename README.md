@@ -240,7 +240,8 @@ re-encodes the stream even when there are no subtitles to burn, so the sound
 and the picture start together.
 
 While casting, the terminal shows a control panel: position, device, and
-keys — space pauses, arrows seek/adjust volume, `q` stops. Anything else
+keys — space pauses, arrows seek/adjust volume, `a` switches between sub and dub
+from where you are, `q` stops. Anything else
 otakase needs to tell you arrives as a desktop notification instead of
 interrupting the panel. Next episode, filler skip, and tracker updates all
 work the same as local playback.
@@ -414,7 +415,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `CastPort` | Integer | `0`–`65535` | Port the cast stream server listens on. `0` (the default) picks a free one; fix it to allow a single port through a firewall. |
 | `CastBurnSubtitles` | Boolean | `true`, `false` | Burn subtitles into the picture when casting. Costs a re-encode. Default `true`. |
 | `CastEncoder` | Enum | empty, `vaapi`, `software` | Encoder for burned subtitles. Empty detects what this machine can do. |
-| `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. |
+| `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. Switching a show to the other audio (the player's `(DUB)`/`(SUB)` playlist row, or `a` while casting) is remembered for that show; `-sub` and `-dub` still win for a run. |
 | `SubStyle` | Enum | `ask`, `soft`, `hard` | External or burned-in subtitles, where both exist. `ask` prompts once and remembers. |
 | `SubsLanguage` | String | `english` | Preferred subtitle language, as a name or code (`english`, `pt`, `spa`). Switching language in mpv (the `j` key) is remembered for that show in `show_prefs.json` and wins over this. |
 | `Quality` | String | `best`, `1080`, `720`, `480`, or any number of lines | Picture height for HLS streams, in mpv, casts and downloads. `best` (the default) plays the provider's stream untouched; a number picks the nearest variant at or below it, else the smallest above. Set a different one per show from the update menu (*Quality for this show*); it is kept in `show_prefs.json`. |
@@ -478,6 +479,19 @@ stale theme fixes itself on the next run. Confirm `rofi` is installed and
 **Progress did not update.** Tracker writes are paced to stay inside API rate
 limits and happen in the background. Check `otakase-debug.log` for the write,
 and that `TrackingRemote` is what you expect.
+
+## Versions
+
+Releases are numbered by year, the way Minecraft numbers its drops:
+`YY.DROP.HOTFIX`. `26.1.0` is the first feature release of 2026, `26.1.1` a
+fix on top of it, `26.2.0` the next feature release, and `27.1.0` the first
+of 2027. Before 26.1.0 releases used semver (the last was 2.2.2); updating
+from those works as usual, since 26 counts as newer than 2.
+
+The running version is at the right of the menu header in the terminal and
+of the search bar in rofi, and `otakase -v` prints it. Breaking changes are
+called out in [CHANGELOG.md](CHANGELOG.md) rather than in the number. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for how a release is cut.
 
 ## Built with
 

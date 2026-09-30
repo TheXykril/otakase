@@ -1007,6 +1007,9 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 
 		// Set anime entry
 		anime.Title = selectedAnilistAnime.Media.Title
+		// Before anything asks a provider for episodes: the audio remembered
+		// for this show decides which ones.
+		applyShowAudioMode(userConfig, anime)
 		anime.TotalEpisodes = selectedAnilistAnime.Media.Episodes
 		anime.Ep.Duration = trackerEpisodeDuration(anime.Ep.Duration, selectedAnilistAnime.Media)
 		anime.CoverImage = selectedAnilistAnime.CoverImage
