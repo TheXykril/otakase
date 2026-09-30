@@ -959,6 +959,10 @@ func main() {
 						}
 
 						anime.Ep.Player.PlaybackTime = int(animePosition + 0.5) // Round to nearest integer
+						// At the ending, count down to the next episode. When it
+						// moves on it closes mpv, and the next tick finds playback
+						// stopped with the episode watched.
+						internal.NextEpisodeCountdown(&userConfig, &anime)
 						// Update Local Database
 						if updateErr := internal.LocalUpdateAnime(databaseFile, anime.AnilistId, anime.ProviderId, anime.Ep.Number, anime.Ep.Player.PlaybackTime, internal.ConvertSecondsToMinutes(anime.Ep.Duration), internal.GetAnimeName(anime), internal.CurrentAnimeProviderName(&anime)); updateErr != nil {
 							internal.Log("Error updating local database: " + updateErr.Error())

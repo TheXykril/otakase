@@ -489,6 +489,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 	// Keep the window open after episode completes, new episode starts in the same mpv window
 	args = append(args, "--force-window=yes", "--idle=yes")
 	args = append(args, titleArgs...)
+	args = append(args, countdownScriptArgs(userConfig)...)
 
 	// Prepare arguments for mpv-compatible players.
 	var mpvArgs []string

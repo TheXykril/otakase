@@ -55,14 +55,17 @@ type Config struct {
 	MenuOrder                string   `config:"MenuOrder"`
 	PercentageToMarkComplete int      `config:"PercentageToMarkComplete"`
 	NextEpisodePrompt        bool     `config:"NextEpisodePrompt"`
-	AutoAudioFallback        bool     `config:"AutoAudioFallback"`
-	SkipOp                   bool     `config:"SkipOp"`
-	SkipEd                   bool     `config:"SkipEd"`
-	SkipFiller               bool     `config:"SkipFiller"`
-	ImagePreview             bool     `config:"ImagePreview"`
-	SkipRecap                bool     `config:"SkipRecap"`
-	RofiSelection            bool     `config:"RofiSelection"`
-	CurrentCategory          bool     `config:"CurrentCategory"`
+	// NextEpisodeCountdown is how many seconds mpv counts down, once the
+	// ending starts, before playing the next episode; 0 turns it off.
+	NextEpisodeCountdown int  `config:"NextEpisodeCountdown"`
+	AutoAudioFallback    bool `config:"AutoAudioFallback"`
+	SkipOp               bool `config:"SkipOp"`
+	SkipEd               bool `config:"SkipEd"`
+	SkipFiller           bool `config:"SkipFiller"`
+	ImagePreview         bool `config:"ImagePreview"`
+	SkipRecap            bool `config:"SkipRecap"`
+	RofiSelection        bool `config:"RofiSelection"`
+	CurrentCategory      bool `config:"CurrentCategory"`
 	// CurrentCategoryFlag records that -current was given for this run, which
 	// asks for the menu to be skipped whatever the interface. It is not a
 	// setting, so it carries no config tag and is never written to a file.
@@ -160,6 +163,7 @@ func defaultConfigMap() map[string]string {
 		"SubStyle":                 "ask",
 		"PercentageToMarkComplete": "85",
 		"NextEpisodePrompt":        "false",
+		"NextEpisodeCountdown":     "5",
 		// A show that exists only in the other language should play, not stop to
 		// ask a question with one useful answer. otakase still says which it used.
 		"AutoAudioFallback":          "true",
