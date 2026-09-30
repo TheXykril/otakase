@@ -1076,6 +1076,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 				Estimated: estimated,
 				State:     state,
 				Volume:    session.Volume(),
+				Skips:     spans,
 			}))
 		}
 		// Finished a moment early, on the last poll before the end. Receivers

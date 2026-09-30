@@ -100,6 +100,7 @@ func ApplyTheme(palette theme.Palette) {
 	castPanelTitleStyle = lipgloss.NewStyle().Foreground(color(palette.Accent)).Bold(true)
 	castPanelDimStyle = lipgloss.NewStyle().Foreground(color(palette.Muted))
 	castPanelBarStyle = lipgloss.NewStyle().Foreground(color(palette.Accent))
+	castPanelSkipStyle = lipgloss.NewStyle().Foreground(color(palette.Magenta))
 	castPanelPlayStyle = lipgloss.NewStyle().Foreground(color(palette.Green)).Bold(true)
 	castPanelPauseStyle = lipgloss.NewStyle().Foreground(color(palette.Yellow)).Bold(true)
 
