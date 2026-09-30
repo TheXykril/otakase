@@ -6,10 +6,6 @@
 
 **After:**
 
-## How
-
-<!-- The approach in a few lines, and anything a reviewer should look at closely. -->
-
 ## Testing
 
 - [ ] `go vet ./...`
