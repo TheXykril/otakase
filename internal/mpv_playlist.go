@@ -1253,6 +1253,7 @@ func (c *MPVPlaylistController) prefetchAfterPlaylistSwitch(currentEp int) {
 		ProviderName: result.ProviderName,
 		ProviderId:   result.ProviderID,
 		Mode:         result.Mode,
+		LinkHints:    result.LinkHints,
 	}
 	c.mu.Unlock()
 	Log(fmt.Sprintf("MPV playlist: prefetched episode %d", nextEp))
@@ -1501,6 +1502,12 @@ func loadEpisodeInRunningMPV(socket, link, title string, anime *Anime) error {
 	}
 	if referrer != "" {
 		_, _ = MPVSendCommand(socket, []interface{}{"set_property", "referrer", referrer})
+	}
+
+	// The --sub-file mpv was started with applies to every file it loads, so
+	// the new episode would open with the first episode's subtitles too.
+	if cfg := GetGlobalConfig(); cfg == nil || !hasMPVSubtitleArg(cfg.MpvArgs) {
+		clearMPVSubtitleFiles(MPVSendCommand, socket)
 	}
 
 	opts := "force-media-title=" + escapeMPVOptionValue(title)

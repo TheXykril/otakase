@@ -1480,15 +1480,7 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 		}
 	}
 
-	if (anime.Ep.NextEpisode.Number == anime.Ep.Number) && (len(anime.Ep.NextEpisode.Links) > 0) {
-		anime.Ep.Links = anime.Ep.NextEpisode.Links
-		anime.Ep.StreamReferrer = ""
-		anime.Ep.SubtitleURL = ""
-		if anime.Ep.NextEpisode.ProviderName != "" {
-			anime.ProviderName = anime.Ep.NextEpisode.ProviderName
-			anime.ProviderId = anime.Ep.NextEpisode.ProviderId
-		}
-	} else if !ResolveEpisodeLinks(userConfig, anime) {
+	if !UsePrefetchedEpisode(anime) && !ResolveEpisodeLinks(userConfig, anime) {
 		RestoreScreen()
 		return ""
 	}
@@ -1522,6 +1514,7 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 					ProviderName: nextResult.ProviderName,
 					ProviderId:   nextResult.ProviderID,
 					Mode:         nextResult.Mode,
+					LinkHints:    nextResult.LinkHints,
 				}
 			}
 		} else {
@@ -1852,14 +1845,7 @@ func StartNextEpisode(anime *Anime, userConfig *Config, databaseFile string, use
 	}
 
 	// Use prefetched links if available for the next episode
-	if (anime.Ep.NextEpisode.Number == anime.Ep.Number) && (len(anime.Ep.NextEpisode.Links) > 0) {
-		anime.Ep.Links = anime.Ep.NextEpisode.Links
-		anime.Ep.StreamReferrer = ""
-		anime.Ep.SubtitleURL = ""
-		if anime.Ep.NextEpisode.ProviderName != "" {
-			anime.ProviderName = anime.Ep.NextEpisode.ProviderName
-			anime.ProviderId = anime.Ep.NextEpisode.ProviderId
-		}
+	if UsePrefetchedEpisode(anime) {
 		Log(fmt.Sprintf("Using prefetched links for episode %d", anime.Ep.Number))
 	} else {
 		// Clear links to force fetching new ones
@@ -1867,9 +1853,11 @@ func StartNextEpisode(anime *Anime, userConfig *Config, databaseFile string, use
 		Log(fmt.Sprintf("No prefetched links available for episode %d, will fetch new ones", anime.Ep.Number))
 	}
 
-	// Reset episode flags
+	// Reset episode flags. The skip times are the last episode's until this
+	// one's are looked up, and skipping by them jumps somewhere arbitrary.
 	anime.Ep.Started = false
 	anime.Ep.IsCompleted = false
+	anime.Ep.SkipTimes = SkipTimes{}
 
 	// Log the transition
 	Log("Completed episode, starting next.")

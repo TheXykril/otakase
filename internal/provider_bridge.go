@@ -167,6 +167,32 @@ func unwrapProvider(provider Provider) providers.Provider {
 	return nil
 }
 
+// UsePrefetchedEpisode makes the prefetched next episode the one to play, if it
+// is the episode anime is now on. It reports whether it did.
+//
+// The links and their playback hints are taken together. Taking the links
+// alone left the subtitles unset, and the player went on showing the ones it
+// was given for the previous episode.
+func UsePrefetchedEpisode(anime *Anime) bool {
+	if anime == nil {
+		return false
+	}
+	next := anime.Ep.NextEpisode
+	if next.Number != anime.Ep.Number || len(next.Links) == 0 {
+		return false
+	}
+	anime.Ep.Links = next.Links
+	applyStreamPlaybackHints(anime, next.Links, next.LinkHints)
+	if next.Mode != "" {
+		anime.Ep.Mode = next.Mode
+	}
+	if next.ProviderName != "" {
+		anime.ProviderName = next.ProviderName
+		anime.ProviderId = next.ProviderId
+	}
+	return true
+}
+
 func applyStreamPlaybackHints(anime *Anime, links []string, hints map[string]StreamPlaybackHint) {
 	if anime == nil || len(links) == 0 {
 		return
