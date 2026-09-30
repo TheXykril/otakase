@@ -186,7 +186,8 @@ func TestBuildFFmpegArgsMuxesSubtitles(t *testing.T) {
 
 	// ...but the HLS demuxer options must not be repeated before the WebVTT
 	// input; ffmpeg fails with "Option extension_picky not found".
-	if strings.Count(joined, "-extension_picky") != 1 {
+	// -extension_picky itself is left out for an ffmpeg too old to know it.
+	if strings.Count(joined, "-extension_picky") > 1 {
 		t.Fatalf("HLS options must apply only to the stream input, got: %s", joined)
 	}
 	if strings.Count(joined, "-allowed_extensions") != 1 {

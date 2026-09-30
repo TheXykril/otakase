@@ -65,7 +65,7 @@ func ProbeStreamArgs(streamURL, referrer string, headers map[string]string) []st
 	// The same two allowances the remux needs: providers disguise HLS segments
 	// as images, and ffprobe rejects unrecognised extensions exactly as ffmpeg
 	// does. Without these a probe fails on the streams most in need of it.
-	args = append(args, "-allowed_extensions", "ALL", "-extension_picky", "0")
+	args = append(args, HLSInputArgs()...)
 
 	// Per-input option, so it has to precede -i, the same as in BuildRemuxArgs.
 	args = append(args, inputHeaderArgs(referrer, headers)...)
