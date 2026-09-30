@@ -7,9 +7,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thexykril/otakase/internal/theme"
 )
 
 func TestIsUpdateNewer(t *testing.T) {
@@ -260,6 +263,29 @@ func TestMarkdownToPangoColorsHeadingsAndBullets(t *testing.T) {
 	}
 	if !strings.Contains(got, "Direct Commits") || !strings.Contains(got, "•") {
 		t.Fatalf("expected heading/bullet conversion, got %q", got)
+	}
+}
+
+// The notes used fixed pastels (#FFD166, #E6E6FA, ...) picked for a dark
+// background. On a light palette they were near-invisible, so every colour in
+// the rofi message must come from the active palette.
+func TestUpdatePromptMessageUsesThePaletteColours(t *testing.T) {
+	_, msg := buildUpdatePromptMessageMode("2.0.1", updatePendingState{
+		LatestVersion: "2.0.2",
+		ReleaseName:   "otakase v2.0.2",
+		HTMLURL:       "https://example.com",
+		ReleaseNotes:  "## Fixed\n- **subs** no longer stale\n- `code` and [link](https://example.com)",
+	}, true)
+
+	p := theme.Active()
+	allowed := map[string]bool{}
+	for _, c := range []string{p.Foreground, p.Muted, p.Accent, p.Red, p.Green, p.Yellow, p.Blue, p.Magenta} {
+		allowed[strings.ToLower(c)] = true
+	}
+	for _, m := range regexp.MustCompile(`foreground="([^"]+)"`).FindAllStringSubmatch(msg, -1) {
+		if !allowed[strings.ToLower(m[1])] {
+			t.Errorf("colour %s is not from the active palette", m[1])
+		}
 	}
 }
 

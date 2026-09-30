@@ -296,6 +296,7 @@ var (
 
 // markdownToPango turns common GitHub release markdown into Rofi-friendly Pango.
 func markdownToPango(md string) string {
+	p := theme.Active()
 	lines := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
 	out := make([]string, 0, len(lines))
 	for _, line := range lines {
@@ -306,18 +307,18 @@ func markdownToPango(md string) string {
 			continue
 		case strings.HasPrefix(trimmed, "### "):
 			text := escapePango(strings.TrimPrefix(trimmed, "### "))
-			out = append(out, `<span foreground="#FFD166"><b>`+text+`</b></span>`)
+			out = append(out, `<span foreground="`+p.Yellow+`"><b>`+text+`</b></span>`)
 		case strings.HasPrefix(trimmed, "## "):
 			text := escapePango(strings.TrimPrefix(trimmed, "## "))
-			out = append(out, `<span foreground="#7CB9E8" size="large"><b>`+text+`</b></span>`)
+			out = append(out, `<span foreground="`+p.Accent+`" size="large"><b>`+text+`</b></span>`)
 		case strings.HasPrefix(trimmed, "# "):
 			text := escapePango(strings.TrimPrefix(trimmed, "# "))
-			out = append(out, `<span foreground="#7CFC98" size="large"><b>`+text+`</b></span>`)
+			out = append(out, `<span foreground="`+p.Green+`" size="large"><b>`+text+`</b></span>`)
 		case strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* "):
 			body := strings.TrimPrefix(strings.TrimPrefix(trimmed, "- "), "* ")
-			out = append(out, `<span foreground="#98FB98">•</span> `+inlineMarkdownToPango(body))
+			out = append(out, `<span foreground="`+p.Green+`">•</span> `+inlineMarkdownToPango(body))
 		case strings.HasPrefix(trimmed, "**Full Changelog**") || strings.HasPrefix(strings.ToLower(trimmed), "**full changelog**"):
-			out = append(out, `<span foreground="#B0B0B0">`+inlineMarkdownToPango(trimmed)+`</span>`)
+			out = append(out, `<span foreground="`+p.Muted+`">`+inlineMarkdownToPango(trimmed)+`</span>`)
 		default:
 			out = append(out, inlineMarkdownToPango(trimmed))
 		}
@@ -326,23 +327,24 @@ func markdownToPango(md string) string {
 }
 
 func inlineMarkdownToPango(s string) string {
+	p := theme.Active()
 	// Links first (before escaping full string piece by piece)
 	s = mdLinkRe.ReplaceAllStringFunc(s, func(m string) string {
 		parts := mdLinkRe.FindStringSubmatch(m)
 		if len(parts) != 3 {
 			return escapePango(m)
 		}
-		return `<span foreground="#6EC6FF" underline="single">` + escapePango(parts[1]) + `</span>`
+		return `<span foreground="` + p.Blue + `" underline="single">` + escapePango(parts[1]) + `</span>`
 	})
 	// Escape remaining raw text while preserving spans we inserted — do a simple pass:
 	// split on existing span tags is hard; re-process from original for bold/code on non-link text.
 	// Safer path: escape whole line then re-apply patterns on escaped text where ** still present.
 	if !strings.Contains(s, "<span") {
 		s = escapePango(s)
-		s = mdBoldRe.ReplaceAllString(s, `<span foreground="#FFFFFF"><b>$1</b></span>`)
-		s = mdCodeRe.ReplaceAllString(s, `<span foreground="#E0B0FF" face="monospace">$1</span>`)
+		s = mdBoldRe.ReplaceAllString(s, `<span foreground="`+p.Foreground+`"><b>$1</b></span>`)
+		s = mdCodeRe.ReplaceAllString(s, `<span foreground="`+p.Magenta+`" face="monospace">$1</span>`)
 		s = mdURLRe.ReplaceAllStringFunc(s, func(u string) string {
-			return `<span foreground="#6EC6FF" underline="single">` + u + `</span>`
+			return `<span foreground="` + p.Blue + `" underline="single">` + u + `</span>`
 		})
 		return s
 	}
@@ -409,18 +411,21 @@ func buildUpdatePromptMessageMode(currentVersion string, state updatePendingStat
 	}
 
 	if forRofi {
+		// Colours come from the active palette, like the terminal notes and
+		// the menu around them: fixed pastels were unreadable on a light theme.
+		p := theme.Active()
 		var b strings.Builder
 		title := state.ReleaseName
 		if title == "" {
 			title = DisplayName + " " + to
 		}
-		b.WriteString(`<span foreground="#7CFC98" size="large"><b>🚀 ` + escapePango(title) + `</b></span>` + "\n")
-		b.WriteString(`<span foreground="#E6E6FA">Current </span>`)
-		b.WriteString(`<span foreground="#FF8A80"><b>` + escapePango(from) + `</b></span>`)
-		b.WriteString(`<span foreground="#E6E6FA">  →  Latest </span>`)
-		b.WriteString(`<span foreground="#7CFC98"><b>` + escapePango(to) + `</b></span>` + "\n")
+		b.WriteString(`<span foreground="` + p.Green + `" size="large"><b>🚀 ` + escapePango(title) + `</b></span>` + "\n")
+		b.WriteString(`<span foreground="` + p.Muted + `">Current </span>`)
+		b.WriteString(`<span foreground="` + p.Red + `"><b>` + escapePango(from) + `</b></span>`)
+		b.WriteString(`<span foreground="` + p.Muted + `">  →  Latest </span>`)
+		b.WriteString(`<span foreground="` + p.Green + `"><b>` + escapePango(to) + `</b></span>` + "\n")
 		if state.HTMLURL != "" {
-			b.WriteString(`<span foreground="#6EC6FF" underline="single">` + escapePango(state.HTMLURL) + `</span>` + "\n")
+			b.WriteString(`<span foreground="` + p.Blue + `" underline="single">` + escapePango(state.HTMLURL) + `</span>` + "\n")
 		}
 		b.WriteString("\n")
 		// Truncated before conversion, not after: notes here can be several
@@ -433,10 +438,17 @@ func buildUpdatePromptMessageMode(currentVersion string, state updatePendingStat
 		// only ever sees, and only ever emits, complete tags.
 		b.WriteString(markdownToPango(truncateReleaseNotes(notes)))
 		message = strings.TrimSpace(b.String())
-		// Pango is verbose; soft-cap markup length.
+		// Pango is verbose; soft-cap markup length. Cut at a line break: every
+		// line closes its own tags, so a cut there cannot leave one open the way
+		// a cut at a rune offset could -- and pango rejects the whole message
+		// over one unclosed tag.
 		if len([]rune(message)) > maxReleaseNotesRunes*3 {
 			r := []rune(message)
-			message = string(r[:maxReleaseNotesRunes*3]) + "\n<span foreground=\"#9A9A9A\">… (truncated — full notes on GitHub)</span>"
+			cut := string(r[:maxReleaseNotesRunes*3])
+			if i := strings.LastIndex(cut, "\n"); i > 0 {
+				cut = cut[:i]
+			}
+			message = cut + "\n<span foreground=\"" + p.Muted + "\">… (truncated — full notes on GitHub)</span>"
 		}
 		return prompt, message
 	}

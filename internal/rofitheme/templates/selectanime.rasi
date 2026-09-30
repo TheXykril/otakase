@@ -49,7 +49,11 @@ mainbox {
 }
 
 /* A message is explanation, not a choice: it reads at the same size as a row but
-   in the dimmed colour, so it never competes with what is selectable. */
+   in the dimmed colour, so it never competes with what is selectable.
+
+   The text widget is styled as plain `textbox`, which is what rofi 1.7 matches.
+   Scoped under `message` it matched nothing, and the widget kept rofi's
+   default white background -- the update notes were light text on white. */
 message {
     background-color: transparent;
     padding:          6px 12px 8px 12px;
@@ -57,7 +61,7 @@ message {
     border-color:     @rule;
 }
 
-message textbox {
+textbox {
     background-color: transparent;
     text-color:       @muted;
     font:             "{{ .Font }}";
