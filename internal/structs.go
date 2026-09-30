@@ -52,16 +52,19 @@ type SkipTimes struct {
 }
 
 type Episode struct {
-	Title          AnimeTitle        `json:"title"`
-	Number         int               `json:"number"`
-	SkipTimes      SkipTimes         `json:"skip_times"`
-	Player         playingVideo      `json:"player"`
-	Resume         bool              `json:"resume"`
-	Started        bool              `json:"started"`
-	Duration       int               `json:"duration"`
-	Links          []string          `json:"links"`
-	StreamReferrer string            `json:"-"`
-	SubtitleURL    string            `json:"-"`
+	Title          AnimeTitle   `json:"title"`
+	Number         int          `json:"number"`
+	SkipTimes      SkipTimes    `json:"skip_times"`
+	Player         playingVideo `json:"player"`
+	Resume         bool         `json:"resume"`
+	Started        bool         `json:"started"`
+	Duration       int          `json:"duration"`
+	Links          []string     `json:"links"`
+	StreamReferrer string       `json:"-"`
+	SubtitleURL    string       `json:"-"`
+	// SubtitleTracks is every subtitle the provider offered for this episode,
+	// SubtitleURL among them; the rest are offered to mpv to switch to.
+	SubtitleTracks []SubtitleTrack   `json:"-"`
 	StreamHeaders  map[string]string `json:"-"`
 	// Mode is the audio actually playing, which is not always the audio that was
 	// asked for: AutoAudioFallback plays sub when a show has no dub. Anything
@@ -101,6 +104,9 @@ type StreamPlaybackHint struct {
 	// Headers are extra HTTP headers the stream's CDN requires; see the
 	// providers package for why a referrer alone is sometimes not enough.
 	Headers map[string]string
+	// Subtitles is every subtitle track the provider offered; Subtitle is the
+	// one its own default picked.
+	Subtitles []SubtitleTrack
 }
 
 type playingVideo struct {

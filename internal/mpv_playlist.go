@@ -1316,6 +1316,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 		links        []string
 		referrer     string
 		subtitle     string
+		subtitles    []SubtitleTrack
 		headers      map[string]string
 		skipTimes    SkipTimes
 		nextEpisode  NextEpisode
@@ -1327,6 +1328,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 		links:        anime.Ep.Links,
 		referrer:     anime.Ep.StreamReferrer,
 		subtitle:     anime.Ep.SubtitleURL,
+		subtitles:    anime.Ep.SubtitleTracks,
 		headers:      anime.Ep.StreamHeaders,
 		skipTimes:    anime.Ep.SkipTimes,
 		nextEpisode:  anime.Ep.NextEpisode,
@@ -1340,6 +1342,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 		anime.Ep.Links = restore.links
 		anime.Ep.StreamReferrer = restore.referrer
 		anime.Ep.SubtitleURL = restore.subtitle
+		anime.Ep.SubtitleTracks = restore.subtitles
 		anime.Ep.StreamHeaders = restore.headers
 		anime.Ep.SkipTimes = restore.skipTimes
 		anime.Ep.NextEpisode = restore.nextEpisode
@@ -1356,6 +1359,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 	anime.Ep.NextEpisode = NextEpisode{}
 	anime.Ep.StreamReferrer = ""
 	anime.Ep.SubtitleURL = ""
+	anime.Ep.SubtitleTracks = nil
 	anime.Ep.SkipTimes = SkipTimes{}
 
 	Log(fmt.Sprintf("MPV playlist: resolving stream for episode %d (%s) [was %d]", targetEp, mode, prevEp))
@@ -1530,10 +1534,14 @@ func loadEpisodeInRunningMPV(socket, link, title string, anime *Anime) error {
 
 	if anime != nil {
 		sub := strings.TrimSpace(anime.Ep.SubtitleURL)
-		if sub != "" {
+		tracks := anime.Ep.SubtitleTracks
+		if sub != "" || len(anime.Ep.SubtitleTracks) > 0 {
 			go func() {
 				_ = waitForMPVFileReady(socket, link, 12*time.Second)
-				_, _ = MPVSendCommand(socket, []interface{}{"sub-add", sub, "select"})
+				if sub != "" {
+					_, _ = MPVSendCommand(socket, []interface{}{"sub-add", sub, "select"})
+				}
+				addAlternateSubtitles(MPVSendCommand, socket, sub, tracks)
 			}()
 		}
 	}

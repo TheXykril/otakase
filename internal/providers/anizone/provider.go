@@ -158,10 +158,23 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 	}
 
 	hint := providers.StreamPlaybackHint{
-		Referrer: referer,
-		Subtitle: p.preferredSubtitle(player),
+		Referrer:  referer,
+		Subtitle:  p.preferredSubtitle(player),
+		Subtitles: subtitleTracks(player),
 	}
 	return []string{player.Src}, map[string]providers.StreamPlaybackHint{player.Src: hint}, nil
+}
+
+// subtitleTracks lists every subtitle the player offers.
+func subtitleTracks(player playerConfig) []providers.SubtitleTrack {
+	var tracks []providers.SubtitleTrack
+	for _, track := range player.Subtitles {
+		if track.File == "" {
+			continue
+		}
+		tracks = append(tracks, providers.SubtitleTrack{URL: track.File, Language: track.Language, Label: track.Title})
+	}
+	return tracks
 }
 
 // preferredSubtitle picks the track to play, favouring the viewer's language
