@@ -53,6 +53,7 @@ type Config struct {
 	ThemeOverrides           string   `config:"ThemeOverrides"`
 	DownloadDir              string   `config:"DownloadDir"`
 	MenuOrder                string   `config:"MenuOrder"`
+	ContinueWatchingRows     int      `config:"ContinueWatchingRows"`
 	PercentageToMarkComplete int      `config:"PercentageToMarkComplete"`
 	NextEpisodePrompt        bool     `config:"NextEpisodePrompt"`
 	AutoAudioFallback        bool     `config:"AutoAudioFallback"`
@@ -155,7 +156,8 @@ func defaultConfigMap() map[string]string {
 		"AnimeNameLanguage":        "english",
 		"SubsLanguage":             "english",
 		"CurrentCategory":          "false",
-		"MenuOrder":                "CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER,CAST",
+		"MenuOrder":                "CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,SURPRISE,TRACKER,PROVIDER,CAST",
+		"ContinueWatchingRows":     "5",
 		"SubOrDub":                 "sub",
 		"SubStyle":                 "ask",
 		"PercentageToMarkComplete": "85",
@@ -872,6 +874,7 @@ func getOrderedCategories(userConfig *Config) []SelectionOption {
 		"UPDATE":         "Update (Episode, Status, Score)",
 		"REMAP_PROVIDER": "Remap Provider",
 		"CONTINUE_LAST":  "Continue Last Session",
+		"SURPRISE":       "Surprise Me",
 		"PLANNING":       "Plan to Watch",
 		"COMPLETED":      "Completed",
 		"PAUSED":         "Paused",

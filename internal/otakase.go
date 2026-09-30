@@ -734,6 +734,12 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					// Create category selection map
 					// Get ordered categories
 					orderedCategories := getOrderedCategories(userConfig)
+					// The shows played last come first, so picking one up
+					// again is a single choice.
+					if user.ListSync != nil {
+						user.AnimeList = user.ListSync.Current()
+					}
+					orderedCategories = append(continueWatchingRows(userConfig, &user.AnimeList), orderedCategories...)
 
 					// Use DynamicSelect with ordered categories directly
 					categorySelection, err = DynamicSelect(orderedCategories)
@@ -800,6 +806,25 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					continue categorySelectionLoop
 				} else if categorySelection.Key == "CONTINUE_LAST" {
 					anime.Ep.ContinueLast = true
+				} else if categorySelection.Key == "SURPRISE" {
+					ClearScreen()
+					if user.ListSync != nil {
+						user.AnimeList = user.ListSync.Current()
+					}
+					picked, ok := SurpriseMe(userConfig, user.AnimeList)
+					ClearScreen()
+					if !ok {
+						continue categorySelectionLoop
+					}
+					anime.AnilistId = picked
+					anilistSelectedOption = SelectionOption{Key: strconv.Itoa(picked)}
+					break categorySelectionLoop
+				} else if id, ok := resumeRowAnilistID(categorySelection.Key); ok {
+					// A continue-watching row: the same as choosing the show
+					// from its list, which resumes from the watch history.
+					anime.AnilistId = id
+					anilistSelectedOption = SelectionOption{Key: strconv.Itoa(id)}
+					break categorySelectionLoop
 				}
 
 				if user.ListSync != nil {
@@ -1528,16 +1553,9 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 		}
 	}()
 
-	// Write anime.AnilistId to curd_id in the storage path
-	idFilePath := filepath.Join(os.ExpandEnv(userConfig.StoragePath), "curd_id")
-	Log(fmt.Sprintf("idFilePath: %v", idFilePath))
-	if err := os.MkdirAll(filepath.Dir(idFilePath), 0755); err != nil {
-		Log(fmt.Sprintf("Failed to create directory for curd_id: %v", err))
-	} else {
-		if err := os.WriteFile(idFilePath, []byte(fmt.Sprintf("%d", anime.AnilistId)), 0644); err != nil {
-			Log(fmt.Sprintf("Failed to write AnilistId to file: %v", err))
-		}
-	}
+	// Remember the show for Continue Last Session and the continue-watching
+	// rows of the home menu.
+	writeLastPlayedAnimeID(userConfig.StoragePath, anime.AnilistId)
 
 	// Display starting message with cover image and episode info
 	if anime.CoverImage != "" && userConfig.ImagePreview && userConfig.RofiSelection {

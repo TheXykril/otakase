@@ -76,7 +76,7 @@ func trackingCategoryEnabled(config *Config, key string) bool {
 	switch key {
 	case "CURRENT", "ALL", "UNTRACKED", "CONTINUE_LAST", "REMAP_PROVIDER", "PROVIDER":
 		return true
-	case "UPDATE", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REWATCHING":
+	case "UPDATE", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REWATCHING", "SURPRISE":
 		return UsesRemoteTracking(config)
 	default:
 		return true
