@@ -1,24 +1,20 @@
-//go:build windows && !linux && !freebsd && !netbsd && !openbsd && !darwin && !js
-// +build windows,!linux,!freebsd,!netbsd,!openbsd,!darwin,!js
+//go:build windows && go1.21 && !linux && !freebsd && !netbsd && !openbsd && !darwin && !js
 
 package beeep
 
 import (
-	"bufio"
-	"bytes"
-	"errors"
-	"os/exec"
-	"strings"
-	"syscall"
+	"fmt"
+	"image/png"
+	"os"
 	"time"
 
-	toast "github.com/go-toast/toast"
+	"git.sr.ht/~jackmordaunt/go-toast"
+	"github.com/sergeymakinen/go-ico"
 	"github.com/tadvi/systray"
 	"golang.org/x/sys/windows/registry"
 )
 
 var isWindows10 bool
-var applicationID string
 
 func init() {
 	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, registry.QUERY_VALUE)
@@ -33,47 +29,56 @@ func init() {
 	}
 
 	isWindows10 = maj == 10
-
-	if isWindows10 {
-		applicationID = appID()
-	}
 }
 
 // Notify sends desktop notification.
-func Notify(title, message, appIcon string) error {
-	if isWindows10 {
-		return toastNotify(title, message, appIcon)
+// The icon can be string with a path to png file or png []byte data. Stock icon names can also be used where supported.
+//
+// On Windows 10/11 it will use Windows Runtime COM API and will fall back to PowerShell. Windows 7 will use win32 API.
+func Notify(title, message string, icon any) error {
+	var img string
+	switch i := icon.(type) {
+	case string:
+		img = i
+	case []byte:
+		var err error
+		img, err = bytesToFilename(i)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(img)
+	default:
+		return fmt.Errorf("unsupported argument: %T", icon)
 	}
 
-	err := baloonNotify(title, message, appIcon, false)
-	if err != nil {
-		e := msgNotify(title, message)
-		if e != nil {
-			return errors.New("beeep: " + err.Error() + "; " + e.Error())
+	if isWindows10 {
+		if err := toastNotify(title, message, img, false); err != nil {
+			return err
+		}
+
+		time.Sleep(time.Millisecond * 100)
+	} else {
+		if err := balloonNotify(title, message, img); err != nil {
+			return err
 		}
 	}
 
 	return nil
-
 }
 
-func msgNotify(title, message string) error {
-	msg, err := exec.LookPath("msg")
-	if err != nil {
-		return err
-	}
-	cmd := exec.Command(msg, "*", "/TIME:3", title+"\n\n"+message)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	return cmd.Run()
-}
-
-func baloonNotify(title, message, appIcon string, bigIcon bool) error {
+func balloonNotify(title, message, icon string) error {
 	tray, err := systray.New()
 	if err != nil {
 		return err
 	}
 
-	err = tray.ShowCustom(pathAbs(appIcon), title)
+	tmp, err := pngToIco(pathAbs(icon))
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp)
+
+	err = tray.ShowCustom(tmp, title)
 	if err != nil {
 		return err
 	}
@@ -82,46 +87,71 @@ func baloonNotify(title, message, appIcon string, bigIcon bool) error {
 		go func() {
 			_ = tray.Run()
 		}()
-		time.Sleep(3 * time.Second)
+		time.Sleep(timeout)
 		_ = tray.Stop()
 	}()
 
-	return tray.ShowMessage(title, message, bigIcon)
-}
-
-func toastNotify(title, message, appIcon string) error {
-	notification := toastNotification(title, message, pathAbs(appIcon))
-	return notification.Push()
-}
-
-func toastNotification(title, message, appIcon string) toast.Notification {
-	return toast.Notification{
-		AppID:   applicationID,
-		Title:   title,
-		Message: message,
-		Icon:    appIcon,
-	}
-}
-
-func appID() string {
-	defID := "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe"
-	cmd := exec.Command("powershell", "-NoProfile", "Get-StartApps")
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	out, err := cmd.Output()
+	err = tray.ShowMessage(title, message, true)
 	if err != nil {
-		return defID
+		return err
 	}
 
-	scanner := bufio.NewScanner(bytes.NewReader(out))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.Contains(line, "powershell.exe") {
-			sp := strings.Split(line, " ")
-			if len(sp) > 0 {
-				return sp[len(sp)-1]
-			}
-		}
+	return nil
+}
+
+func toastNotify(title, message, icon string, urgent bool) error {
+	n := toast.Notification{
+		AppID: AppName,
+		Title: title,
+		Body:  message,
+		Icon:  pathAbs(icon),
 	}
 
-	return defID
+	n.Duration = toast.Short
+	if timeout.Seconds() > 10 {
+		n.Duration = toast.Long
+	}
+
+	if urgent {
+		n.Audio = toast.Default
+	} else {
+		n.Audio = toast.Silent
+	}
+
+	err := n.Push()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func pngToIco(icon string) (string, error) {
+	var out string
+
+	f, err := os.Open(icon)
+	if err != nil {
+		return out, err
+	}
+	defer f.Close()
+
+	img, err := png.Decode(f)
+	if err != nil {
+		return out, err
+	}
+
+	tmp, err := os.CreateTemp(os.TempDir(), "beeep*.ico")
+	if err != nil {
+		return out, err
+	}
+	defer tmp.Close()
+
+	out = tmp.Name()
+
+	err = ico.Encode(tmp, img)
+	if err != nil {
+		return out, err
+	}
+
+	return out, nil
 }
