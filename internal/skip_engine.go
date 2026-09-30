@@ -17,6 +17,11 @@ type SkipRef struct {
 	Mode       string
 	Provider   string
 	ProviderID string
+	// EpisodeLength is how long the file being played is, in seconds, or zero
+	// when that is not known yet. AniSkip files each entry with the length of
+	// the release it was timed against, and an entry for a different cut of the
+	// episode skips the wrong stretch of this one.
+	EpisodeLength float64
 }
 
 // SkipSource is one place intro and outro timings can come from.

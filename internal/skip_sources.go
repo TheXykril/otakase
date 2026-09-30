@@ -72,20 +72,15 @@ func (aniSkipSource) LookupIdentified(ref SkipRef) (SkipTimes, SkipIDs, bool, er
 		// ordinary state for a show tracked only on AniList, not an error.
 		return SkipTimes{}, SkipIDs{}, false, nil
 	}
-	body, err := GetAniSkipData(ref.MalID, ref.Episode)
+	results, found, err := getAniSkipResults(ref.MalID, ref.Episode)
 	if err != nil {
 		return SkipTimes{}, SkipIDs{}, false, err
 	}
-
-	var data skipTimesResponse
-	if err := json.Unmarshal([]byte(body), &data); err != nil {
-		return SkipTimes{}, SkipIDs{}, false, fmt.Errorf("aniskip: %w", err)
-	}
-	if !data.Found {
+	if !found {
 		return SkipTimes{}, SkipIDs{}, false, nil
 	}
 
-	times, ids := aniSkipTimesFrom(data.Results, 0)
+	times, ids := aniSkipTimesFrom(aniSkipResultsForLength(results, ref.EpisodeLength), 0)
 	return times, ids, usableSpan(times.Op) || usableSpan(times.Ed), nil
 }
 
@@ -337,14 +332,16 @@ func ApplySkipTimes(anime *Anime, episode int, config *Config, provider any) Ski
 		return SkipResolution{}
 	}
 	ref := SkipRef{
-		MalID:     anime.MalId,
-		AniListID: anime.AnilistId,
-		Episode:   episode,
-		Mode:      anime.Ep.Mode,
+		MalID:         anime.MalId,
+		AniListID:     anime.AnilistId,
+		Episode:       episode,
+		Mode:          anime.Ep.Mode,
+		EpisodeLength: mpvEpisodeLength(anime.Ep.Player.SocketPath, skipLengthWait),
 	}
+	provider = skipProviderFor(anime, provider)
 	if named, ok := provider.(interface{ Name() string }); ok && named != nil {
 		ref.Provider = named.Name()
-		ref.ProviderID = anime.ProviderId
+		_, ref.ProviderID = providerIDForAnime(anime)
 	}
 
 	resolution := ResolveSkipTimes(ref, DefaultSkipSources(config, provider)...)
@@ -352,6 +349,15 @@ func ApplySkipTimes(anime *Anime, episode int, config *Config, provider any) Ski
 		Log(fmt.Sprintf("skip lookup: %v", err))
 	}
 	Log(fmt.Sprintf("Episode %d: %s", episode, resolution.Describe()))
+
+	// The lookup can take a while -- four services, some with long timeouts --
+	// and the viewer may have moved on meanwhile. These times are for the
+	// episode that was asked about, and skipping the one now playing by them
+	// jumps somewhere arbitrary.
+	if anime.Ep.Number != episode {
+		Log(fmt.Sprintf("Episode %d: skip times arrived after moving on to episode %d; dropped", episode, anime.Ep.Number))
+		return SkipResolution{}
+	}
 
 	// Replaced even when nothing was found: what is there otherwise is the
 	// previous episode's, and an episode with no timings must not skip by them.
@@ -363,4 +369,54 @@ func ApplySkipTimes(anime *Anime, episode int, config *Config, provider any) Ski
 		Log(fmt.Sprintf("sending skip times to the player: %v", err))
 	}
 	return resolution
+}
+
+// skipLengthWait is how long a skip lookup waits for the player to know how long
+// the file is. It usually knows before the first frame, and a lookup that has to
+// go without it only loses the length check.
+const skipLengthWait = 8 * time.Second
+
+// mpvEpisodeLength asks the player how long the file it is playing is, waiting
+// up to wait for it to find out. Zero means unknown: no player, or none that
+// answered in time.
+func mpvEpisodeLength(socket string, wait time.Duration) float64 {
+	if socket == "" || socket == "android-intent" || socket == "cast" {
+		return 0
+	}
+	deadline := time.Now().Add(wait)
+	for {
+		if length, err := mpvFloatProperty(socket, "duration"); err == nil && length > 1 {
+			return length
+		}
+		if time.Now().After(deadline) {
+			return 0
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+// skipProviderFor picks the provider to ask for an episode's timings: the one
+// the episode is actually streaming from.
+//
+// Callers pass the configured provider, which is not always the one playing --
+// a fallback or a remembered pairing can put a show on another. Asking the
+// configured one with the playing one's id either fails or, worse, answers for
+// whatever show that id happens to name there.
+func skipProviderFor(anime *Anime, provider any) any {
+	if provider == nil {
+		return nil
+	}
+	name, _ := providerIDForAnime(anime)
+	if name == "" {
+		return provider
+	}
+	if named, ok := provider.(interface{ Name() string }); ok && named != nil &&
+		normalizeProviderName(named.Name()) == name {
+		return provider
+	}
+	playing, err := ProviderByName(name)
+	if err != nil {
+		return nil
+	}
+	return playing
 }

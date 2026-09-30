@@ -33,6 +33,19 @@ const mpvPlaybackPollInterval = 500 * time.Millisecond
 // names are sorted so a given episode always launches MPV the same way, which
 // matters when comparing two runs in a log.
 func streamHeaderArgs(headers map[string]string) []string {
+	lines := streamHeaderLines(headers)
+	if len(lines) == 0 {
+		return nil
+	}
+	args := make([]string, 0, len(lines))
+	for _, line := range lines {
+		args = append(args, "--http-header-fields-append="+line)
+	}
+	return args
+}
+
+// streamHeaderLines renders headers as "Name: value" lines, sorted by name.
+func streamHeaderLines(headers map[string]string) []string {
 	if len(headers) == 0 {
 		return nil
 	}
@@ -44,12 +57,22 @@ func streamHeaderArgs(headers map[string]string) []string {
 	}
 	sort.Strings(names)
 
-	args := make([]string, 0, len(names))
+	lines := make([]string, 0, len(names))
 	for _, name := range names {
-		args = append(args, fmt.Sprintf("--http-header-fields-append=%s: %s",
-			strings.TrimSpace(name), strings.TrimSpace(headers[name])))
+		lines = append(lines, fmt.Sprintf("%s: %s", strings.TrimSpace(name), strings.TrimSpace(headers[name])))
 	}
-	return args
+	return lines
+}
+
+// hasMPVHeaderArg reports whether the user set mpv's extra HTTP headers
+// themselves, in which case a running instance's list is theirs to keep.
+func hasMPVHeaderArg(args []string) bool {
+	for _, arg := range args {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(arg)), "--http-header-fields") {
+			return true
+		}
+	}
+	return false
 }
 
 // mpvDubLanguages and mpvSubLanguages are the audio languages mpv prefers for
@@ -400,6 +423,9 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 		// next episode opens with the first episode's subtitles.
 		if !callerHasSubtitleArg {
 			clearMPVSubtitleFiles(MPVSendCommand, mpvSocketPath)
+		}
+		if !hasMPVHeaderArg(userConfig.MpvArgs) {
+			resetMPVStreamHeaders(MPVSendCommand, mpvSocketPath, anime.Ep.StreamHeaders)
 		}
 
 		// Load the new file in the existing MPV instance
@@ -919,6 +945,26 @@ type mpvCommandSender func(string, []interface{}) (interface{}, error)
 func clearMPVSubtitleFiles(send mpvCommandSender, ipcSocketPath string) {
 	if _, err := send(ipcSocketPath, []interface{}{"change-list", "sub-files", "clr", ""}); err != nil {
 		Log(fmt.Sprintf("Failed to clear the previous subtitle files: %v", err))
+	}
+}
+
+// resetMPVStreamHeaders makes a running instance send this episode's extra
+// HTTP headers and no others.
+//
+// Like --sub-file, the headers an instance was started with are global: they go
+// with every file loaded after, so the next episode -- possibly from another
+// provider, whose CDN wants different ones or none -- was requested with the
+// first episode's. Call it before loading another episode into a running
+// instance, and only when the user has not set headers of their own.
+func resetMPVStreamHeaders(send mpvCommandSender, ipcSocketPath string, headers map[string]string) {
+	if _, err := send(ipcSocketPath, []interface{}{"change-list", "http-header-fields", "clr", ""}); err != nil {
+		Log(fmt.Sprintf("Failed to clear the previous stream headers: %v", err))
+		return
+	}
+	for _, line := range streamHeaderLines(headers) {
+		if _, err := send(ipcSocketPath, []interface{}{"change-list", "http-header-fields", "append", line}); err != nil {
+			Log(fmt.Sprintf("Failed to set a stream header: %v", err))
+		}
 	}
 }
 
