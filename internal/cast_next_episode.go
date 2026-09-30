@@ -11,7 +11,22 @@ import (
 //
 // Long enough to reach a keyboard from a sofa, short enough that a viewer who
 // wants the next episode is not made to sit through a timer.
-const castCountdownDuration = 10 * time.Second
+//
+// A var so a test can shrink it.
+var castCountdownDuration = 10 * time.Second
+
+// The CastNextEpisode values.
+const (
+	CastNextEpisodeCountdown = "countdown"
+	CastNextEpisodeStop      = "stop"
+)
+
+// castStopsAfterEpisode reports whether a cast ends with the episode rather
+// than counting down to the next one. Anything but "stop" counts down, so a
+// typo keeps the season going instead of ending it.
+func castStopsAfterEpisode(config *Config) bool {
+	return config != nil && strings.EqualFold(strings.TrimSpace(config.CastNextEpisode), CastNextEpisodeStop)
+}
 
 // castCountdownDecision is what one tick of the countdown concluded.
 type castCountdownDecision int
@@ -33,9 +48,10 @@ func castCountdownTick(elapsed time.Duration, keyPressed bool, config *Config) c
 	if keyPressed {
 		return castCountdownCancelled
 	}
-	// NextEpisodePrompt=false already means "do not ask" for local playback.
-	if config != nil && !config.NextEpisodePrompt {
-		return castCountdownAdvance
+	// CastNextEpisode=stop: the cast ends with the video. NextEpisodePrompt
+	// plays no part; a menu is no use to a viewer across the room.
+	if castStopsAfterEpisode(config) {
+		return castCountdownCancelled
 	}
 	if elapsed >= castCountdownDuration {
 		return castCountdownAdvance
@@ -106,6 +122,11 @@ func castAwaitNextEpisode(config *Config, anime *Anime, panel *castPanelWriter, 
 	// true hands straight to the advance, which declines and completes the show.
 	if castSeasonFinished(anime) {
 		return true
+	}
+	// Set to end with the video: nothing to count down to. The episode was
+	// already recorded as watched while it played.
+	if castStopsAfterEpisode(config) {
+		return false
 	}
 
 	// A key pressed in the last second of the episode is still sitting in the

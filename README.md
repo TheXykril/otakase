@@ -461,6 +461,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `KodiPassword` | String | any | Password of Kodi's web server, when it asks for one. |
 | `CastBurnSubtitles` | Boolean | `true`, `false` | Burn subtitles into the picture when casting. Costs a re-encode. Default `true`. |
 | `CastEncoder` | Enum | empty, `vaapi`, `software` | Encoder for burned subtitles. Empty detects what this machine can do. |
+| `CastNextEpisode` | Enum | `countdown`, `stop` | When a cast episode ends: `countdown` (the default) counts down 10 seconds on the panel and plays the next one, any key stops it; `stop` ends the cast with the video. |
 | `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. Switching a show to the other audio (the player's `(DUB)`/`(SUB)` playlist row, or `a` while casting) is remembered for that show; `-sub` and `-dub` still win for a run. |
 | `SubStyle` | Enum | `ask`, `soft`, `hard` | External or burned-in subtitles, where both exist. `ask` prompts once and remembers. |
 | `SubsLanguage` | String | `english` | Preferred subtitle language, as a name or code (`english`, `pt`, `spa`). Switching language in mpv (the `j` key) is remembered for that show in `show_prefs.json` and wins over this. |
@@ -468,7 +469,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `AutoAudioFallback` | Boolean | `true`, `false` | Play the other language when a show is carried in only one, instead of asking. Default `true`. |
 | `AnimeNameLanguage` | Enum | `english`, `romaji` | Preferred title language. |
 | `PercentageToMarkComplete` | Integer | `0`–`100` | Watched percentage that counts as complete. |
-| `NextEpisodePrompt` | Boolean | `true`, `false` | Ask before playing the next episode. |
+| `NextEpisodePrompt` | Boolean | `true`, `false` | In mpv, ask before playing the next episode; `false` plays it straight away. Casting has `CastNextEpisode` instead. |
 | `ScoreOnCompletion` | Boolean | `true`, `false` | Prompt to rate a show when you finish it. |
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
 | `Theme` | Enum | `auto`, `omarchy`, `builtin` | Which colour palette to use. `auto` follows the desktop on Omarchy. |

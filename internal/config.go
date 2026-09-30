@@ -121,6 +121,10 @@ type Config struct {
 	// CastEncoder forces the encoder used for that: "vaapi", "software", or
 	// empty to detect what this machine can actually do.
 	CastEncoder string `config:"CastEncoder"`
+	// CastNextEpisode is what a cast does when an episode ends: "countdown"
+	// counts down on the panel and plays the next one, "stop" ends the cast.
+	// Local playback has NextEpisodePrompt for the same question.
+	CastNextEpisode string `config:"CastNextEpisode"`
 	// Quality is the picture height to play HLS streams at: "best" leaves
 	// the master playlist as the provider gave it, a number of lines (1080,
 	// 720, 480) picks the nearest variant at or below. A show can override
@@ -222,6 +226,7 @@ func defaultConfigMap() map[string]string {
 		"KodiPassword":               "",
 		"CastBurnSubtitles":          "true",
 		"CastEncoder":                "",
+		"CastNextEpisode":            CastNextEpisodeCountdown,
 	}
 }
 

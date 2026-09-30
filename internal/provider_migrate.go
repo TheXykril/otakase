@@ -143,6 +143,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"CheckUpdates": "2.0.4",
 		// 2.0.5 — MPV episode playlist + alternate audio entries
 		"MpvEpisodePlaylist": "2.0.5",
+		// 26.1.0 — what a cast does when an episode ends
+		"CastNextEpisode": "26.1.0",
 	}
 }
 
