@@ -478,6 +478,19 @@ stale theme fixes itself on the next run. Confirm `rofi` is installed and
 limits and happen in the background. Check `otakase-debug.log` for the write,
 and that `TrackingRemote` is what you expect.
 
+## Versions
+
+Releases are numbered by year, the way Minecraft numbers its drops:
+`YY.DROP.HOTFIX`. `26.1.0` is the first feature release of 2026, `26.1.1` a
+fix on top of it, `26.2.0` the next feature release, and `27.1.0` the first
+of 2027. Before 26.1.0 releases used semver (the last was 2.2.2); updating
+from those works as usual, since 26 counts as newer than 2.
+
+The running version is at the right of the menu header in the terminal and
+of the search bar in rofi, and `otakase -v` prints it. Breaking changes are
+called out in [CHANGELOG.md](CHANGELOG.md) rather than in the number. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for how a release is cut.
+
 ## Built with
 
 [AniList](https://anilist.co) and [MyAnimeList](https://myanimelist.net) for

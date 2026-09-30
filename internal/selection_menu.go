@@ -453,7 +453,7 @@ func (m Model) View() string {
 	}
 
 	// Header, rule, body, and the key hints along the bottom edge.
-	header := renderBreadcrumb(m.sectionLabel())
+	header := renderHeader(m.sectionLabel(), contentWidth)
 	top := header + "\n" + renderRule(contentWidth) + "\n" + body
 	hints := renderKeyHints(m.keyHints(), contentWidth)
 
@@ -883,7 +883,8 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 		// -format i returns the index of the chosen row. The label cannot be used:
 		// the grid clips it to the column width, so what comes back for a long
 		// title is not the string the option carries.
-		cmd := exec.Command("rofi", "-dmenu", "-theme", configPath, "-show-icons", "-markup-rows", "-p", "Select Anime", "-i", "-no-custom", "-format", "i")
+		args := []string{"-dmenu", "-theme", configPath, "-show-icons", "-markup-rows", "-p", "Select Anime", "-i", "-no-custom", "-format", "i"}
+		cmd := exec.Command("rofi", append(args, rofiVersionThemeArgs()...)...)
 		cmd.Stdin = strings.NewReader(rofiInput.String())
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
@@ -1087,6 +1088,7 @@ func rofiSelectInternal(options []SelectionOption, isHomeMenu bool, refreshConfi
 		optionsString := buildRofiOptionsString(currentOptions, isHomeMenu)
 		configPath := filepath.Join(GetStoragePath(), "selectanime.rasi")
 		args := []string{"-dmenu", "-theme", configPath, "-i", "-markup", "-markup-rows", "-p", prompt}
+		args = append(args, rofiVersionThemeArgs()...)
 		if msg := strings.TrimSpace(message); msg != "" {
 			args = append(args, "-mesg", msg)
 		}
@@ -1275,6 +1277,18 @@ func dynamicSelectInternal(options []SelectionOption, refreshConfig *SelectionRe
 		return SelectionOption{Key: "-1", Label: "Quit"}, nil
 	}
 	return SelectionOption{Key: "-2", Label: "Back"}, nil
+}
+
+// rofiVersionThemeArgs puts the running version at the right end of the
+// search bar, in the theme's dimmed colour. The generated themes give the
+// input bar only an entry, so this adds a second widget beside it rather than
+// changing anything the theme files draw.
+func rofiVersionThemeArgs() []string {
+	version := strings.NewReplacer(`"`, "", `\`, "").Replace(DisplayVersion())
+	return []string{"-theme-str", fmt.Sprintf(
+		`inputbar { children: [ entry, textbox-version ]; } `+
+			`textbox-version { expand: false; content: "%s"; background-color: transparent; text-color: @muted; vertical-align: 0.5; markup: false; }`,
+		version)}
 }
 
 func buildRofiOptionsString(options []SelectionOption, isHomeMenu bool) string {
