@@ -472,12 +472,19 @@ func buildUpdatePromptMessageMode(currentVersion string, state updatePendingStat
 		b.WriteString(link.Render(state.HTMLURL) + "\n")
 	}
 	b.WriteString("\n")
+	// Cut the notes themselves, on a line break, before styling them. Only
+	// appending the marker printed every note anyway, under a "truncated" line.
+	truncated := false
+	if r := []rune(notes); len(r) > maxReleaseNotesRunes {
+		cut := string(r[:maxReleaseNotesRunes])
+		if i := strings.LastIndex(cut, "\n"); i > 0 {
+			cut = cut[:i]
+		}
+		notes, truncated = strings.TrimSpace(cut), true
+	}
 	b.WriteString(markdownToTerminal(notes))
 	message = strings.TrimSpace(b.String())
-	// Cap plain-ish length for terminal
-	plain := ansiStrip.ReplaceAllString(message, "")
-	if len([]rune(plain)) > maxReleaseNotesRunes {
-		// Keep header + truncated notes roughly
+	if truncated {
 		message = message + "\n" + label.Render("… (truncated — full notes on GitHub)")
 	}
 	return prompt, message

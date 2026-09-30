@@ -289,6 +289,27 @@ func TestUpdatePromptMessageUsesThePaletteColours(t *testing.T) {
 	}
 }
 
+// The terminal prompt said "truncated" but printed every note anyway, which
+// can scroll the prompt itself off screen after a few skipped releases.
+func TestTerminalUpdateNotesAreActuallyTruncated(t *testing.T) {
+	var notes strings.Builder
+	for i := 0; i < 200; i++ {
+		notes.WriteString("- fixed something that was broken\n")
+	}
+	_, msg := buildUpdatePromptMessageMode("2.0.1", updatePendingState{
+		LatestVersion: "2.5.0",
+		ReleaseNotes:  notes.String(),
+	}, false)
+
+	plain := ansiStrip.ReplaceAllString(msg, "")
+	if !strings.Contains(plain, "truncated") {
+		t.Fatal("expected the truncation marker")
+	}
+	if n := len([]rune(plain)); n > maxReleaseNotesRunes+400 {
+		t.Fatalf("terminal message is %d runes; notes were not cut to %d", n, maxReleaseNotesRunes)
+	}
+}
+
 func TestUpdateActionOptionsOrder(t *testing.T) {
 	opts := updateActionOptions()
 	if len(opts) < 1 || opts[0].Key != "update" {
