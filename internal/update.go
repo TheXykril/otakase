@@ -141,11 +141,15 @@ func truncateReleaseNotes(notes string) string {
 	return string(runes[:maxReleaseNotesRunes]) + "\n… (truncated)"
 }
 
-func fetchLatestGitHubRelease(repo string) (githubReleaseAPI, error) {
+// githubAPIBase is where release lookups go; tests point it at a local server.
+var githubAPIBase = "https://api.github.com"
+
+// fetchGitHubRelease reads one release: which is "latest" or "tags/<tag>".
+func fetchGitHubRelease(repo, which string) (githubReleaseAPI, error) {
 	if strings.TrimSpace(repo) == "" {
 		repo = DefaultUpdateRepo
 	}
-	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)
+	url := fmt.Sprintf("%s/repos/%s/releases/%s", githubAPIBase, repo, which)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return githubReleaseAPI{}, err
@@ -171,7 +175,7 @@ func fetchLatestGitHubRelease(repo string) (githubReleaseAPI, error) {
 		return githubReleaseAPI{}, err
 	}
 	if strings.TrimSpace(release.TagName) == "" {
-		return githubReleaseAPI{}, fmt.Errorf("latest release has no tag")
+		return githubReleaseAPI{}, fmt.Errorf("release %s has no tag", which)
 	}
 	return release, nil
 }
@@ -182,7 +186,7 @@ func isUpdateNewer(latest, current string) bool {
 	if latest == "" || current == "" {
 		return false
 	}
-	return versionLess(current, latest)
+	return compareUpdateVersions(current, latest) < 0
 }
 
 // StartBackgroundUpdateCheck runs after a short idle delay so startup is not blocked.
@@ -213,11 +217,10 @@ func checkForUpdateInBackground(config *Config, currentVersion string) error {
 		}
 	}
 
-	release, err := fetchLatestGitHubRelease(DefaultUpdateRepo)
+	release, latest, err := fetchUpdateRelease(DefaultUpdateRepo, config.DevBuilds)
 	if err != nil {
 		return err
 	}
-	latest := normalizeReleaseVersion(release.TagName)
 	state.CheckedAt = time.Now().UTC().Format(time.RFC3339)
 	state.LatestTag = release.TagName
 	state.LatestVersion = latest
@@ -503,16 +506,15 @@ func updateActionOptions() []SelectionOption {
 
 // refreshUpdateStateFromGitHub reloads tag/name/body/url from the live release API
 // so the prompt shows real markdown notes instead of a stale/test seed.
-func refreshUpdateStateFromGitHub(state *updatePendingState) {
+func refreshUpdateStateFromGitHub(state *updatePendingState, devBuilds bool) {
 	if state == nil {
 		return
 	}
-	release, err := fetchLatestGitHubRelease(DefaultUpdateRepo)
+	release, latest, err := fetchUpdateRelease(DefaultUpdateRepo, devBuilds)
 	if err != nil {
 		Log(fmt.Sprintf("Could not refresh release notes from GitHub: %v", err))
 		return
 	}
-	latest := normalizeReleaseVersion(release.TagName)
 	if latest == "" {
 		return
 	}
@@ -564,7 +566,7 @@ func HandlePendingUpdatePrompt(config *Config, currentVersion string) bool {
 	}
 
 	// Pull live release markdown from GitHub so notes match the release page.
-	refreshUpdateStateFromGitHub(&state)
+	refreshUpdateStateFromGitHub(&state, config.DevBuilds)
 	if !pendingUpdateShouldPrompt(config, currentVersion, state) {
 		// e.g. already up to date after refresh
 		state.Available = false
@@ -606,7 +608,7 @@ func HandlePendingUpdatePrompt(config *Config, currentVersion string) bool {
 	switch selected.Key {
 	case "update":
 		updateUserMessage(config, "Downloading and installing update…")
-		if err := SelfUpdate(DefaultUpdateRepo, AppName); err != nil {
+		if err := SelfUpdate(DefaultUpdateRepo, state.LatestTag); err != nil {
 			updateUserMessage(config, fmt.Sprintf("Update failed: %v", err))
 			Log(fmt.Sprintf("Update failed: %v", err))
 			return false

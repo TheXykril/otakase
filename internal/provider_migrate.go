@@ -145,6 +145,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"MpvEpisodePlaylist": "2.0.5",
 		// 26.1.0 — what a cast does when an episode ends
 		"CastNextEpisode": "26.1.0",
+		// 26.1.0 — update to dev builds
+		"DevBuilds": "26.1.0",
 	}
 }
 

@@ -83,6 +83,7 @@ type Config struct {
 	ContributeSkipTimes        bool   `config:"ContributeSkipTimes"`
 	IntroDBSkipTimes           bool   `config:"IntroDBSkipTimes"`
 	CheckUpdates               bool   `config:"CheckUpdates"`
+	DevBuilds                  bool   `config:"DevBuilds"`
 	MpvEpisodePlaylist         bool   `config:"MpvEpisodePlaylist"`
 	Provider                   string `config:"Provider"`
 	DisabledProviders          string `config:"DisabledProviders"`
@@ -202,6 +203,7 @@ func defaultConfigMap() map[string]string {
 		"ContributeSkipTimes":        "true",
 		"IntroDBSkipTimes":           "true",
 		"CheckUpdates":               "true",
+		"DevBuilds":                  "false",
 		"MpvEpisodePlaylist":         "true",
 		"Provider":                   "stacked",
 		"DisabledProviders":          "[]",

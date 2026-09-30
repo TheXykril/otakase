@@ -215,10 +215,7 @@ func main() {
 	internal.SetGlobalConfig(&userConfig)
 
 	if *updateScript {
-		repo := internal.DefaultUpdateRepo
-		fileName := internal.AppName
-
-		if err := internal.SelfUpdate(repo, fileName); err != nil {
+		if err := internal.SelfUpdate(internal.DefaultUpdateRepo, internal.UpdateReleaseTag(&userConfig)); err != nil {
 			fmt.Fprintf(os.Stderr, "Error updating executable: %v\n", err)
 			os.Exit(1)
 		}
