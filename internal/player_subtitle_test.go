@@ -2,6 +2,7 @@ package internal
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -27,5 +28,18 @@ func TestWaitForMPVFileReadyRetriesUntilPropertiesExist(t *testing.T) {
 	}
 	if pathCalls != 3 {
 		t.Fatalf("path queried %d times, want 3", pathCalls)
+	}
+}
+
+func TestClearMPVSubtitleFilesEmptiesTheGlobalList(t *testing.T) {
+	var got []interface{}
+	send := func(socket string, command []interface{}) (interface{}, error) {
+		got = command
+		return nil, nil
+	}
+	clearMPVSubtitleFiles(send, "sock")
+	want := []interface{}{"change-list", "sub-files", "clr", ""}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("command = %v, want %v", got, want)
 	}
 }

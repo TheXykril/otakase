@@ -78,6 +78,9 @@ type NextEpisode struct {
 	ProviderName string
 	ProviderId   string
 	Mode         string
+	// LinkHints are the referrer, subtitles and headers each link was resolved
+	// with. They belong to this episode's links, so they travel with them.
+	LinkHints map[string]StreamPlaybackHint
 }
 
 type NextAiringEpisodeInfo struct {
