@@ -1450,6 +1450,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 	}(c.socket)
 
 	c.mu.Lock()
+	previousMode := c.currentMode
 	c.currentPlaying = targetEp
 	c.currentMode = mode
 	// The alternate is always the *other* mode from what is now playing, so after
@@ -1465,6 +1466,14 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 
 	// Stream is live — safe for the main loop again.
 	endMPVPlaylistSwitch()
+
+	// Picking the other audio row is a choice about the show, not the episode:
+	// it is what the next launch should play. Only a switch that got the
+	// audio asked for counts; one that fell back to the same audio chose
+	// nothing.
+	if previousMode != "" && mode != previousMode && normalizeTranslationType(slot.Mode) == mode {
+		rememberShowAudioMode(c.config.StoragePath, c.anime.AnilistId, mode)
+	}
 
 	// Refresh skip times in background (non-blocking for playback). Every
 	// source is consulted, not only AniSkip: a show tracked on AniList alone
