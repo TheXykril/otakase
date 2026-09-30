@@ -165,6 +165,12 @@ The menu opens with the shows you played last, newest first, such as
 `▶ Frieren · ep 13 at 12:34`. Picking one resumes it where you stopped.
 `ContinueWatchingRows` sets how many are shown; `0` hides them.
 
+**Add new anime**, at the end of a list, searches AniList and asks which list
+to put the show on. *Already watched some elsewhere* asks how many episodes
+you have seen, records them, and starts at the next one; all of them marks the
+show completed. Progress set this way, with Update, or on another device is
+followed next time you play the show, rather than an older local position.
+
 | Flag | Description | Default |
 |---|---|---|
 | `-c` | Continue the last episode | |
