@@ -285,8 +285,10 @@ func main() {
 	// Set SubOrDub based on the flags
 	if *subFlag {
 		userConfig.SubOrDub = "sub"
+		userConfig.SubOrDubFlag = true
 	} else if *dubFlag {
 		userConfig.SubOrDub = "dub"
+		userConfig.SubOrDubFlag = true
 	}
 	if *softSubFlag {
 		userConfig.SubStyle = "soft"

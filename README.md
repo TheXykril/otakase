@@ -240,7 +240,8 @@ re-encodes the stream even when there are no subtitles to burn, so the sound
 and the picture start together.
 
 While casting, the terminal shows a control panel: position, device, and
-keys — space pauses, arrows seek/adjust volume, `q` stops. Anything else
+keys — space pauses, arrows seek/adjust volume, `a` switches between sub and dub
+from where you are, `q` stops. Anything else
 otakase needs to tell you arrives as a desktop notification instead of
 interrupting the panel. Next episode, filler skip, and tracker updates all
 work the same as local playback.
@@ -414,7 +415,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `CastPort` | Integer | `0`–`65535` | Port the cast stream server listens on. `0` (the default) picks a free one; fix it to allow a single port through a firewall. |
 | `CastBurnSubtitles` | Boolean | `true`, `false` | Burn subtitles into the picture when casting. Costs a re-encode. Default `true`. |
 | `CastEncoder` | Enum | empty, `vaapi`, `software` | Encoder for burned subtitles. Empty detects what this machine can do. |
-| `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. |
+| `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. Switching a show to the other audio (the player's `(DUB)`/`(SUB)` playlist row, or `a` while casting) is remembered for that show; `-sub` and `-dub` still win for a run. |
 | `SubStyle` | Enum | `ask`, `soft`, `hard` | External or burned-in subtitles, where both exist. `ask` prompts once and remembers. |
 | `SubsLanguage` | String | `english` | Preferred subtitle language, as a name or code (`english`, `pt`, `spa`). Switching language in mpv (the `j` key) is remembered for that show in `show_prefs.json` and wins over this. |
 | `AutoAudioFallback` | Boolean | `true`, `false` | Play the other language when a show is carried in only one, instead of asking. Default `true`. |
