@@ -66,3 +66,21 @@ func TestPlayerConfigRequiresAPlayer(t *testing.T) {
 		t.Error("the player pattern matched a page with no player on it")
 	}
 }
+
+func TestHasEnglishAudio(t *testing.T) {
+	cases := map[string]bool{
+		// A plain stream: Japanese audio muxed in, nothing to choose.
+		"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nv.m3u8\n":                                                                                             false,
+		"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"Japanese\",LANGUAGE=\"ja\"\n":                                                          false,
+		"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"Japanese\",LANGUAGE=\"ja\"\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",LANGUAGE=\"eng\"\n": true,
+		"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",NAME=\"English\"\n":                                                                           true,
+		"#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"a\",LANGUAGE=\"en-US\"\n":                                                                         true,
+		// English subtitles are not an English dub.
+		"#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"s\",NAME=\"English\",LANGUAGE=\"en\"\n": false,
+	}
+	for master, want := range cases {
+		if got := hasEnglishAudio(master); got != want {
+			t.Errorf("hasEnglishAudio(%q) = %v, want %v", master, got, want)
+		}
+	}
+}
