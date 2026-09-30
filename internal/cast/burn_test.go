@@ -94,7 +94,7 @@ func TestBuildBurnArgsKeepsTheStreamWorkarounds(t *testing.T) {
 	args := BuildBurnArgs("https://host.test/master.m3u8", "https://ref.test/", "/tmp/subs.ass", "/tmp/out", Encoder{Name: "libx264"})
 
 	joined := strings.Join(args, " ")
-	for _, want := range []string{"-allowed_extensions ALL", "-extension_picky 0", "-hls_playlist_type event"} {
+	for _, want := range []string{strings.Join(HLSInputArgs(), " "), "-hls_playlist_type event"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %q:\n%s", want, joined)
 		}

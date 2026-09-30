@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thexykril/otakase/internal/cast"
 	"github.com/thexykril/otakase/internal/providers"
 )
 
@@ -111,7 +112,7 @@ func buildFFmpegArgs(streamURL, referrer, subtitleURL, output string) []string {
 	// does not recognise, so without this a perfectly good stream fails with
 	// "not in allowed_segment_extensions". These are HLS demuxer options and must
 	// NOT be repeated before a WebVTT input, which rejects them outright.
-	args = append(args, "-allowed_extensions", "ALL", "-extension_picky", "0")
+	args = append(args, cast.HLSInputArgs()...)
 	referrerHeader()
 	args = append(args, "-i", streamURL)
 
