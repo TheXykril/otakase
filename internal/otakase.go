@@ -263,6 +263,7 @@ func UpdateAnimeEntry(userConfig *Config, user *User) {
 		{Key: "CATEGORY", Label: "Change Anime Category"},
 		{Key: "PROGRESS", Label: "Change Progress"},
 		{Key: "SCORE", Label: "Add/Change Score"},
+		{Key: "QUALITY", Label: "Quality for this show"},
 	}
 
 	// Navigation loop for update option selection
@@ -445,6 +446,21 @@ updateOptionLoop:
 						Log(fmt.Sprintf("Failed to update anime score: %v", err))
 						Exit(fmt.Errorf("Failed to update anime score"))
 					}
+
+				case "QUALITY":
+					// Kept locally in show_prefs.json, not on the tracker, so
+					// there is no list to refresh afterwards.
+					changed, qualityErr := PromptShowQuality(userConfig, animeID)
+					if qualityErr != nil {
+						Log(fmt.Sprintf("Failed to set the show's quality: %v", qualityErr))
+						Out("Could not save the quality for this show.")
+						return
+					}
+					if !changed {
+						ClearScreen()
+						continue animeSelectLoop
+					}
+					return
 				}
 
 				if err := RefreshUserAnimeList(userConfig, user); err != nil {

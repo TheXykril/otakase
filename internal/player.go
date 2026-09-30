@@ -384,6 +384,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 	// with 403 unless Origin names the player's domain, and --referrer cannot
 	// set Origin, so a provider that knows this passes the headers along.
 	args = append(args, streamHeaderArgs(anime.Ep.StreamHeaders)...)
+	args = append(args, mpvHLSBitrateArgs(anime.Ep.StreamHLSBitrate, args)...)
 	args = append(args, mpvAudioLanguageArgs(playlistAudioMode(anime, userConfig), args)...)
 	args = append(args, mpvSubtitleLanguageArgs(subtitleLanguageFor(userConfig, anime), args)...)
 
@@ -434,6 +435,11 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 		}
 		if !hasMPVHeaderArg(userConfig.MpvArgs) {
 			resetMPVStreamHeaders(MPVSendCommand, mpvSocketPath, anime.Ep.StreamHeaders)
+		}
+		// hls-bitrate too: a cap chosen for the last episode would otherwise
+		// hold this one to that variant's bandwidth.
+		if !hasMPVHLSBitrateArg(userConfig.MpvArgs) {
+			resetMPVHLSBitrate(MPVSendCommand, mpvSocketPath, anime.Ep.StreamHLSBitrate)
 		}
 
 		// Load the new file in the existing MPV instance

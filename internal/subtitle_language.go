@@ -25,6 +25,9 @@ type ShowPrefs struct {
 	// SubtitleLanguage is the canonical language name ("english",
 	// "portuguese") the viewer last picked in the player for this show.
 	SubtitleLanguage string `json:"subtitleLanguage,omitempty"`
+	// Quality overrides the Quality setting for this show: "best" or a
+	// number of lines. Empty follows the setting.
+	Quality string `json:"quality,omitempty"`
 	// AudioMode is "sub" or "dub", whichever the viewer last switched this
 	// show to.
 	AudioMode string `json:"audioMode,omitempty"`

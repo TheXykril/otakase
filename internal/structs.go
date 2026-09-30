@@ -66,6 +66,9 @@ type Episode struct {
 	// SubtitleURL among them; the rest are offered to mpv to switch to.
 	SubtitleTracks []SubtitleTrack   `json:"-"`
 	StreamHeaders  map[string]string `json:"-"`
+	// StreamHLSBitrate caps mpv at one variant of an HLS master whose audio
+	// is a separate rendition; see applyQualityPreference. Zero is no cap.
+	StreamHLSBitrate int `json:"-"`
 	// Mode is the audio actually playing, which is not always the audio that was
 	// asked for: AutoAudioFallback plays sub when a show has no dub. Anything
 	// resolving a further episode has to follow what is playing rather than the
@@ -107,6 +110,9 @@ type StreamPlaybackHint struct {
 	// Subtitles is every subtitle track the provider offered; Subtitle is the
 	// one its own default picked.
 	Subtitles []SubtitleTrack
+	// HLSBitrate is the bandwidth of the variant Quality chose, when the link
+	// had to stay the master; zero when nothing was chosen.
+	HLSBitrate int
 }
 
 type playingVideo struct {

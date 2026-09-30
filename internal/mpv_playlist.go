@@ -1318,6 +1318,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 		subtitle     string
 		subtitles    []SubtitleTrack
 		headers      map[string]string
+		hlsBitrate   int
 		skipTimes    SkipTimes
 		nextEpisode  NextEpisode
 	}{
@@ -1330,6 +1331,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 		subtitle:     anime.Ep.SubtitleURL,
 		subtitles:    anime.Ep.SubtitleTracks,
 		headers:      anime.Ep.StreamHeaders,
+		hlsBitrate:   anime.Ep.StreamHLSBitrate,
 		skipTimes:    anime.Ep.SkipTimes,
 		nextEpisode:  anime.Ep.NextEpisode,
 	}
@@ -1344,6 +1346,7 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 		anime.Ep.SubtitleURL = restore.subtitle
 		anime.Ep.SubtitleTracks = restore.subtitles
 		anime.Ep.StreamHeaders = restore.headers
+		anime.Ep.StreamHLSBitrate = restore.hlsBitrate
 		anime.Ep.SkipTimes = restore.skipTimes
 		anime.Ep.NextEpisode = restore.nextEpisode
 	}
@@ -1526,6 +1529,10 @@ func loadEpisodeInRunningMPV(socket, link, title string, anime *Anime) error {
 	// provider whose CDN wants different ones.
 	if cfg := GetGlobalConfig(); anime != nil && (cfg == nil || !hasMPVHeaderArg(cfg.MpvArgs)) {
 		resetMPVStreamHeaders(MPVSendCommand, socket, anime.Ep.StreamHeaders)
+	}
+	// And its hls-bitrate, which holds the last episode's quality cap.
+	if cfg := GetGlobalConfig(); anime != nil && (cfg == nil || !hasMPVHLSBitrateArg(cfg.MpvArgs)) {
+		resetMPVHLSBitrate(MPVSendCommand, socket, anime.Ep.StreamHLSBitrate)
 	}
 
 	opts := "force-media-title=" + escapeMPVOptionValue(title)
