@@ -22,6 +22,8 @@ func (k Kind) Label() string {
 		return "Chromecast"
 	case KindDLNA:
 		return "DLNA"
+	case KindKodi:
+		return "Kodi"
 	default:
 		return strings.ToUpper(string(k))
 	}
@@ -74,6 +76,17 @@ var backends = []backend{
 		discover: discoverDLNA,
 		connect: func(d Device) (Player, error) {
 			p, err := connectDLNA(d)
+			if err != nil {
+				return nil, err
+			}
+			return p, nil
+		},
+	},
+	{
+		kind:     KindKodi,
+		discover: discoverKodi,
+		connect: func(d Device) (Player, error) {
+			p, err := connectKodi(d)
 			if err != nil {
 				return nil, err
 			}

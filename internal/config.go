@@ -104,6 +104,12 @@ type Config struct {
 	// ephemeral range, and a device that cannot fetch looks identical to one
 	// that never started.
 	CastPort int `config:"CastPort"`
+	// KodiHost names Kodi instances to offer as cast devices when discovery
+	// does not find them -- another subnet, or zeroconf turned off in Kodi.
+	// host or host:port, several separated by commas.
+	KodiHost     string `config:"KodiHost"`
+	KodiUser     string `config:"KodiUser"`
+	KodiPassword string `config:"KodiPassword"`
 	// CastBurnSubtitles draws a stream's subtitles into the picture when
 	// casting it. The Chromecast cannot render the subtitle files these
 	// providers supply, so this is the only way to see them on a soft-subbed
@@ -207,6 +213,9 @@ func defaultConfigMap() map[string]string {
 		"CastDevice":                 "",
 		"CastTerminal":               "",
 		"CastPort":                   "0",
+		"KodiHost":                   "",
+		"KodiUser":                   "",
+		"KodiPassword":               "",
 		"CastBurnSubtitles":          "true",
 		"CastEncoder":                "",
 	}

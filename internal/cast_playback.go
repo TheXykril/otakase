@@ -1225,6 +1225,11 @@ var castSessionDevice string
 
 func chooseCastDevice(config *Config) (cast.Device, error) {
 	Out("Looking for cast devices...")
+	cast.SetKodi(cast.KodiSettings{
+		Hosts:    strings.Split(config.KodiHost, ","),
+		User:     config.KodiUser,
+		Password: config.KodiPassword,
+	})
 	devices, err := cast.Discover(context.Background(), cast.DefaultDiscoveryTimeout)
 	if err != nil {
 		return cast.Device{}, err
