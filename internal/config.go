@@ -52,6 +52,7 @@ type Config struct {
 	Theme                    string   `config:"Theme"`
 	ThemeOverrides           string   `config:"ThemeOverrides"`
 	DownloadDir              string   `config:"DownloadDir"`
+	DownloadFormat           string   `config:"DownloadFormat"`
 	MenuOrder                string   `config:"MenuOrder"`
 	PercentageToMarkComplete int      `config:"PercentageToMarkComplete"`
 	NextEpisodePrompt        bool     `config:"NextEpisodePrompt"`
@@ -210,6 +211,7 @@ func defaultConfigMap() map[string]string {
 		"Theme":                      "auto",
 		"ThemeOverrides":             "",
 		"DownloadDir":                "$HOME/Downloads/" + AppName,
+		"DownloadFormat":             "mkv",
 		"CastDevice":                 "",
 		"CastTerminal":               "",
 		"CastPort":                   "0",
