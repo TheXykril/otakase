@@ -598,6 +598,7 @@ func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[
 		{Key: "DROPPED", Label: "Dropped"},
 		{Key: "PLANNING", Label: "Plan to Watch"},
 		{Key: "REPEATING", Label: "Rewatching"}, // Anilist uses REPEATING for rewatching
+		{Key: watchedElsewhereKey, Label: "Already watched some elsewhere"},
 	}
 
 	ClearScreen()
@@ -616,6 +617,10 @@ func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[
 	// Handle back button - return to caller
 	if categorySelection.Key == "-2" {
 		return SelectionOption{Key: "-2", Label: "Back"}
+	}
+
+	if categorySelection.Key == watchedElsewhereKey {
+		return addWatchedElsewhere(userConfig, user, animeID, anilistSelectedOption)
 	}
 
 	err = UpdateAnimeStatus(user.Token, animeID, categorySelection.Key)
@@ -1138,6 +1143,14 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					anime.Ep.Player.PlaybackTime = 0
 					anime.Ep.Resume = false
 				}
+			} else if animePointer.Ep.Number < anilistEpisode && !startingRewatch {
+				// The tracker is ahead: episodes were marked watched by hand,
+				// or on another device. The local row is simply stale, and
+				// following it would offer an episode already seen.
+				Log(fmt.Sprintf("Local history episode (%d) is behind the tracker (%d); using the tracker", animePointer.Ep.Number, anilistEpisode))
+				anime.Ep.Number = anilistEpisode
+				anime.Ep.Player.PlaybackTime = 0
+				anime.Ep.Resume = false
 			} else {
 				anime.Ep.Number = animePointer.Ep.Number
 			}
