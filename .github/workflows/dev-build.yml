@@ -2,9 +2,11 @@ name: Dev Build
 
 # Publishes what is on main as the "dev" pre-release, for trying unreleased
 # work before a real release is cut. Run it by hand from the Actions tab.
+# The app reads the version from the release title, so keep it
+# "Otakase <version>".
 #
 # The release is marked pre-release and never "latest", so the in-app update
-# check (which reads /releases/latest) and the AUR script ignore it. Each run
+# check ignores it unless DevBuilds=true, and the AUR script ignores it. Each run
 # replaces the previous dev release and moves the "dev" tag; the tag does not
 # start with "v", so the release job's changelog range skips it.
 
@@ -12,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version the dev build is heading to (shown as <version>-dev.<commit>)"
+        description: "Version the dev build is heading to (shown as <version>-dev.<run number>)"
         required: true
         default: "26.1.0"
         type: string
@@ -54,7 +56,9 @@ jobs:
             exit 1
           fi
           # The Build/ scripts read VERSION.txt; this change stays in the runner.
-          dev_version="${BASE_VERSION}-dev.${GITHUB_SHA::7}"
+          # The run number only goes up, so the update check (DevBuilds=true)
+          # can tell a newer dev build from an older one.
+          dev_version="${BASE_VERSION}-dev.${GITHUB_RUN_NUMBER}"
           echo "$dev_version" > VERSION.txt
           echo "DEV_VERSION=$dev_version" >> "$GITHUB_ENV"
 
@@ -76,13 +80,13 @@ jobs:
           cat > notes.md <<EOF
           Development build of \`main\` at ${GITHUB_SHA::7}, version \`$DEV_VERSION\`.
 
-          Not a release: it can be broken, and it is replaced by the next dev build. The app's update check never offers it.
+          Not a release: it can be broken, and it is replaced by the next dev build. The app offers it only with \`DevBuilds=true\` in the config.
 
           Windows: this is the bare \`.exe\` without the installer, so it needs \`mpv\` on your PATH.
           EOF
           gh release create dev dist/* \
             --target "$GITHUB_SHA" \
-            --title "Dev build $DEV_VERSION" \
+            --title "Otakase $DEV_VERSION" \
             --notes-file notes.md \
             --prerelease \
             --latest=false

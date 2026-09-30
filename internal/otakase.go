@@ -475,7 +475,9 @@ updateOptionLoop:
 	}
 }
 
-func SelfUpdate(repo, fileName string) error {
+// SelfUpdate replaces the running binary with the one from the release
+// tagged tag, or from the latest release when tag is empty.
+func SelfUpdate(repo, tag string) error {
 	// Get the path of the currently running executable
 	executablePath, err := os.Executable()
 	if err != nil {
@@ -490,13 +492,13 @@ func SelfUpdate(repo, fileName string) error {
 	if err != nil {
 		return err
 	}
-	_ = fileName // retained for call-site compatibility
-
 	if strings.TrimSpace(repo) == "" {
 		repo = DefaultUpdateRepo
 	}
-	// GitHub release URL for otakase
 	url := fmt.Sprintf("https://github.com/%s/releases/latest/download/%s", repo, binaryName)
+	if tag = strings.TrimSpace(tag); tag != "" {
+		url = fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, tag, binaryName)
+	}
 
 	// Prefer a temp file next to the executable (same filesystem → atomic rename).
 	// Fall back to OS temp dir when the install dir is not writable (e.g. /usr/bin).

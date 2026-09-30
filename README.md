@@ -495,6 +495,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `MyAnimeListClientID` | String | MAL OAuth client ID | Used for MyAnimeList sign-in. |
 | `MyAnimeListClientSecret` | String | MAL OAuth secret | Optional; used for sign-in and token refresh. |
 | `CheckUpdates` | Boolean | `true`, `false` | Check for a newer release while idle, and offer it at the next launch. Default `true`. |
+| `DevBuilds` | Boolean | `true`, `false` | Also offer dev builds (the `dev` pre-release on GitHub, built from unreleased work on `main`) when one is newer than the latest release, in the update check and in `-u`. They can be broken. Default `false`. |
 | `AddMissingOptions` | Boolean | `true`, `false` | On a version upgrade, append newly added options to your config file. Default `true`. |
 
 ## Where your data lives
