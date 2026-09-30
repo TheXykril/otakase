@@ -110,6 +110,10 @@ type Config struct {
 	// CastEncoder forces the encoder used for that: "vaapi", "software", or
 	// empty to detect what this machine can actually do.
 	CastEncoder string `config:"CastEncoder"`
+	// CastNextEpisode is what a cast does when an episode ends: "countdown"
+	// counts down on the panel and plays the next one, "stop" ends the cast.
+	// Local playback has NextEpisodePrompt for the same question.
+	CastNextEpisode string `config:"CastNextEpisode"`
 	// CastToDevice records that -cast was given for this run. It is not a
 	// setting, so it carries no config tag.
 	CastToDevice bool `config:"-"`
@@ -200,6 +204,7 @@ func defaultConfigMap() map[string]string {
 		"CastPort":                   "0",
 		"CastBurnSubtitles":          "true",
 		"CastEncoder":                "",
+		"CastNextEpisode":            CastNextEpisodeCountdown,
 	}
 }
 

@@ -414,13 +414,14 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `CastPort` | Integer | `0`–`65535` | Port the cast stream server listens on. `0` (the default) picks a free one; fix it to allow a single port through a firewall. |
 | `CastBurnSubtitles` | Boolean | `true`, `false` | Burn subtitles into the picture when casting. Costs a re-encode. Default `true`. |
 | `CastEncoder` | Enum | empty, `vaapi`, `software` | Encoder for burned subtitles. Empty detects what this machine can do. |
+| `CastNextEpisode` | Enum | `countdown`, `stop` | When a cast episode ends: `countdown` (the default) counts down 10 seconds on the panel and plays the next one, any key stops it; `stop` ends the cast with the video. |
 | `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. |
 | `SubStyle` | Enum | `ask`, `soft`, `hard` | External or burned-in subtitles, where both exist. `ask` prompts once and remembers. |
 | `SubsLanguage` | String | `english` | Preferred subtitle language. |
 | `AutoAudioFallback` | Boolean | `true`, `false` | Play the other language when a show is carried in only one, instead of asking. Default `true`. |
 | `AnimeNameLanguage` | Enum | `english`, `romaji` | Preferred title language. |
 | `PercentageToMarkComplete` | Integer | `0`–`100` | Watched percentage that counts as complete. |
-| `NextEpisodePrompt` | Boolean | `true`, `false` | Ask before playing the next episode. |
+| `NextEpisodePrompt` | Boolean | `true`, `false` | In mpv, ask before playing the next episode; `false` plays it straight away. Casting has `CastNextEpisode` instead. |
 | `ScoreOnCompletion` | Boolean | `true`, `false` | Prompt to rate a show when you finish it. |
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
 | `Theme` | Enum | `auto`, `omarchy`, `builtin` | Which colour palette to use. `auto` follows the desktop on Omarchy. |

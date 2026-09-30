@@ -11,7 +11,7 @@ import (
 // should not walk to the keyboard between episodes, but should be able to stop
 // it if they are at the desk.
 func TestCastCountdownTick(t *testing.T) {
-	prompting := &Config{NextEpisodePrompt: true}
+	prompting := &Config{CastNextEpisode: CastNextEpisodeCountdown}
 
 	for _, tc := range []struct {
 		name    string
@@ -34,13 +34,35 @@ func TestCastCountdownTick(t *testing.T) {
 	}
 }
 
-// NextEpisodePrompt=false already means "do not ask me" for local playback, and
-// it means the same here: no countdown, no wait.
-func TestCastCountdownRespectsTheNoPromptSetting(t *testing.T) {
-	config := &Config{NextEpisodePrompt: false}
+// CastNextEpisode=stop ends the cast with the video: no countdown, no wait.
+func TestCastStopSettingEndsWithTheVideo(t *testing.T) {
+	config := &Config{CastNextEpisode: "Stop"}
 
-	if got := castCountdownTick(0, false, config); got != castCountdownAdvance {
-		t.Errorf("with prompting off, a zero-elapsed tick returned %v, want advance", got)
+	if got := castCountdownTick(0, false, config); got != castCountdownCancelled {
+		t.Errorf("with CastNextEpisode=stop, a zero-elapsed tick returned %v, want cancelled", got)
+	}
+
+	anime := &Anime{TotalEpisodes: 12}
+	anime.Ep.Number = 5
+	done := make(chan bool, 1)
+	go func() { done <- castAwaitNextEpisode(config, anime, nil, make(chan castCommand)) }()
+	select {
+	case advanced := <-done:
+		if advanced {
+			t.Error("CastNextEpisode=stop went on to the next episode")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("CastNextEpisode=stop still counted down")
+	}
+}
+
+// NextEpisodePrompt is local playback's setting; a cast counts down whatever
+// it says.
+func TestCastCountdownIgnoresNextEpisodePrompt(t *testing.T) {
+	for _, prompt := range []bool{true, false} {
+		if got := castCountdownTick(0, false, &Config{NextEpisodePrompt: prompt}); got != castCountdownWaiting {
+			t.Errorf("NextEpisodePrompt=%v: tick returned %v, want waiting", prompt, got)
+		}
 	}
 }
 
@@ -48,7 +70,7 @@ func TestCastCountdownRespectsTheNoPromptSetting(t *testing.T) {
 // though the episode completed and the loop would otherwise be entitled to go
 // on.
 func TestCastCountdownCancelBeatsExpiry(t *testing.T) {
-	config := &Config{NextEpisodePrompt: true}
+	config := &Config{}
 
 	if got := castCountdownTick(castCountdownDuration*2, true, config); got != castCountdownCancelled {
 		t.Errorf("a keypress past the deadline returned %v, want cancelled", got)
@@ -126,7 +148,7 @@ func TestCastLoopRunsUntilThereIsNoNextEpisode(t *testing.T) {
 // completion. The viewer was told something false on the path every finished
 // show reaches, and made to wait for the score prompt.
 func TestCastAwaitSkipsTheCountdownAtTheEndOfASeason(t *testing.T) {
-	config := &Config{NextEpisodePrompt: true}
+	config := &Config{}
 	anime := &Anime{TotalEpisodes: 12}
 	anime.Ep.Number = 12
 
@@ -178,9 +200,12 @@ func TestCastSeasonFinishedAgreesWithAdvanceDecision(t *testing.T) {
 // there when the countdown started and cancelled it on the first tick -- the
 // season stopping with no keypress the viewer would connect to it.
 func TestCastAwaitIgnoresAKeyPressedDuringTheEpisode(t *testing.T) {
-	// Prompting off so the first tick decides: a stale key still cancels there,
-	// which is the bug, and the test does not have to sit through ten seconds.
-	config := &Config{NextEpisodePrompt: false}
+	// A short countdown so the test does not sit through ten seconds; a stale
+	// key would cancel it on the first tick, which is the bug.
+	previous := castCountdownDuration
+	castCountdownDuration = 300 * time.Millisecond
+	t.Cleanup(func() { castCountdownDuration = previous })
+	config := &Config{}
 	anime := &Anime{TotalEpisodes: 12}
 	anime.Ep.Number = 5
 
@@ -202,7 +227,7 @@ func TestCastAwaitIgnoresAKeyPressedDuringTheEpisode(t *testing.T) {
 
 // A key pressed during the countdown itself still stops it.
 func TestCastAwaitStillStopsOnALiveKeypress(t *testing.T) {
-	config := &Config{NextEpisodePrompt: true}
+	config := &Config{}
 	anime := &Anime{TotalEpisodes: 12}
 	anime.Ep.Number = 5
 
