@@ -1097,15 +1097,8 @@ func main() {
 				// Exit signal received, break out of the skipLoop
 				break skipLoop
 			default:
-				if userConfig.SkipOp {
-					if anime.Ep.Player.PlaybackTime > anime.Ep.SkipTimes.Op.Start && anime.Ep.Player.PlaybackTime < anime.Ep.SkipTimes.Op.Start+2 && anime.Ep.SkipTimes.Op.Start != anime.Ep.SkipTimes.Op.End {
-						internal.SeekMPV(anime.Ep.Player.SocketPath, anime.Ep.SkipTimes.Op.End)
-					}
-				}
-				if userConfig.SkipEd {
-					if anime.Ep.Player.PlaybackTime > anime.Ep.SkipTimes.Ed.Start && anime.Ep.Player.PlaybackTime < anime.Ep.SkipTimes.Ed.Start+2 && anime.Ep.SkipTimes.Ed.Start != anime.Ep.SkipTimes.Ed.End {
-						internal.SeekMPV(anime.Ep.Player.SocketPath, anime.Ep.SkipTimes.Ed.End)
-					}
+				if target, ok := internal.SkipSeekTarget(anime.Ep.SkipTimes, anime.Ep.Player.PlaybackTime, &userConfig); ok {
+					internal.SeekMPV(anime.Ep.Player.SocketPath, target)
 				}
 				if _, positionErr := internal.MPVSendCommand(anime.Ep.Player.SocketPath, []interface{}{"get_property", "time-pos"}); positionErr == nil && anime.Ep.Started {
 					speed, speedErr := internal.GetMPVPlaybackSpeed(anime.Ep.Player.SocketPath)

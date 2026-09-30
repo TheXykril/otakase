@@ -68,7 +68,7 @@ type aniSkipV2Response struct {
 // which answers without lengths -- the times are then taken as they come, as
 // they always were.
 func getAniSkipResults(malID, episode int) ([]skipResult, bool, error) {
-	url := fmt.Sprintf("%s/%d/%d?types=op&types=ed&types=mixed-op&types=mixed-ed&episodeLength=0",
+	url := fmt.Sprintf("%s/%d/%d?types=op&types=ed&types=mixed-op&types=mixed-ed&types=recap&episodeLength=0",
 		aniSkipReadBase, malID, episode)
 	resp, err := sharedHTTPClient.Get(url)
 	if err == nil {
@@ -229,6 +229,10 @@ func aniSkipTimesFrom(results []skipResult, timePrecision int) (SkipTimes, SkipI
 			if !usableSpan(times.Ed) {
 				times.Ed = span
 				ids.Ed = result.SkipID
+			}
+		case "recap":
+			if !usableSpan(times.Recap) {
+				times.Recap = span
 			}
 		}
 	}

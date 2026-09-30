@@ -20,7 +20,7 @@ func ensureCastSkipTimes(anime *Anime, config *Config, resolve castSkipResolver)
 	if anime == nil || resolve == nil {
 		return
 	}
-	if anime.Ep.SkipTimes.Op.End > 0 || anime.Ep.SkipTimes.Ed.End > 0 {
+	if anime.Ep.SkipTimes.Op.End > 0 || anime.Ep.SkipTimes.Ed.End > 0 || anime.Ep.SkipTimes.Recap.End > 0 {
 		return
 	}
 	resolve(anime, anime.Ep.Number, config, GetProvider())

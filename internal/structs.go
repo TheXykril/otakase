@@ -43,6 +43,9 @@ type Skip struct {
 type SkipTimes struct {
 	Op Skip `json:"op"`
 	Ed Skip `json:"ed"`
+	// Recap is a "previously on" stretch inside an episode, where one is on
+	// file. Skipped under SkipRecap, like a whole recap episode.
+	Recap Skip `json:"recap,omitempty"`
 }
 
 type Episode struct {

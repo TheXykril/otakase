@@ -38,12 +38,13 @@ type SkipSource interface {
 // can say "opening from anikoto, ending from aniskip" rather than leaving the
 // user to guess why only half an episode skipped.
 type SkipResolution struct {
-	Times     SkipTimes
-	OpSource  string
-	EdSource  string
-	IDs       SkipIDs
-	Attempted []string
-	Errors    []error
+	Times       SkipTimes
+	OpSource    string
+	EdSource    string
+	RecapSource string
+	IDs         SkipIDs
+	Attempted   []string
+	Errors      []error
 }
 
 // SkipIDs names the entries a resolution came from, where the source has names
@@ -74,7 +75,7 @@ func lookupSkipSource(source SkipSource, ref SkipRef) (SkipTimes, SkipIDs, bool,
 
 // Found reports whether anything usable was resolved at all.
 func (r SkipResolution) Found() bool {
-	return r.Times.Op.End > r.Times.Op.Start || r.Times.Ed.End > r.Times.Ed.Start
+	return usableSpan(r.Times.Op) || usableSpan(r.Times.Ed) || usableSpan(r.Times.Recap)
 }
 
 // Describe summarises the outcome for a log line.
@@ -88,6 +89,9 @@ func (r SkipResolution) Describe() string {
 	}
 	if r.EdSource != "" {
 		parts = append(parts, fmt.Sprintf("ending %d-%ds from %s", r.Times.Ed.Start, r.Times.Ed.End, r.EdSource))
+	}
+	if r.RecapSource != "" {
+		parts = append(parts, fmt.Sprintf("recap %d-%ds from %s", r.Times.Recap.Start, r.Times.Recap.End, r.RecapSource))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -130,6 +134,13 @@ func ResolveSkipTimes(ref SkipRef, sources ...SkipSource) SkipResolution {
 			resolution.EdSource = source.Name()
 			resolution.IDs.Ed = ids.Ed
 		}
+		// A recap is taken where it turns up, but not waited for: few
+		// episodes have one, and asking every source for it would cost the
+		// requests the order above is there to save.
+		if resolution.RecapSource == "" && usableSpan(times.Recap) {
+			resolution.Times.Recap = times.Recap
+			resolution.RecapSource = source.Name()
+		}
 	}
 	return resolution
 }
@@ -137,6 +148,32 @@ func ResolveSkipTimes(ref SkipRef, sources ...SkipSource) SkipResolution {
 // usableSpan rejects a span that would send the player somewhere wrong. A zero
 // span means "not known"; a reversed or negative one means the service answered
 // with something broken, and skipping to it is worse than not skipping.
+// SkipSeekTarget says where to jump from position, if anywhere: the end of the
+// opening, ending or recap the viewer has just entered, among those the config
+// asks to skip. Only the first two seconds of a span count, so seeking back
+// into one to watch it is left alone.
+func SkipSeekTarget(times SkipTimes, position int, config *Config) (int, bool) {
+	if config == nil {
+		return 0, false
+	}
+	for _, candidate := range []struct {
+		span    Skip
+		enabled bool
+	}{
+		{times.Op, config.SkipOp},
+		{times.Ed, config.SkipEd},
+		{times.Recap, config.SkipRecap},
+	} {
+		if !candidate.enabled || !usableSpan(candidate.span) {
+			continue
+		}
+		if position > candidate.span.Start && position < candidate.span.Start+2 {
+			return candidate.span.End, true
+		}
+	}
+	return 0, false
+}
+
 func usableSpan(span Skip) bool {
 	return span.End > span.Start && span.End > 0 && span.Start >= 0
 }
