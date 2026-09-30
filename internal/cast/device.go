@@ -1,4 +1,4 @@
-// Package cast plays a stream on a Chromecast on the local network.
+// Package cast plays a stream on a cast device on the local network.
 //
 // It deliberately knows nothing about otakase's types: internal imports this
 // package for the bridge, so importing internal back would be a cycle. Values
@@ -12,18 +12,33 @@ import (
 	"github.com/vishen/go-chromecast/dns"
 )
 
-// Device is one Chromecast found on the network.
+// Device is one cast device found on the network.
 type Device struct {
 	Name string
 	UUID string
 	Addr net.IP
 	Port int
+	// Kind is the protocol the device speaks. Empty means a Chromecast, the
+	// only kind there was before there were others.
+	Kind Kind
 }
 
 // String names a device the way a menu should show it: the friendly name, and
-// the address to tell two rooms with the same name apart.
+// the address to tell two rooms with the same name apart. A device that is not
+// a Chromecast also says what it is, since one TV can answer as both.
 func (d Device) String() string {
-	return fmt.Sprintf("%s (%s:%d)", d.Name, d.Addr, d.Port)
+	name := fmt.Sprintf("%s (%s:%d)", d.Name, d.Addr, d.Port)
+	if kind := d.kind(); kind != KindChromecast {
+		name += " · " + kind.Label()
+	}
+	return name
+}
+
+func (d Device) kind() Kind {
+	if d.Kind == "" {
+		return KindChromecast
+	}
+	return d.Kind
 }
 
 // devicesFromEntries turns discovery results into devices worth offering.
@@ -59,6 +74,7 @@ func devicesFromEntries(entries []dns.CastEntry) []Device {
 			UUID: entry.UUID,
 			Addr: addr,
 			Port: entry.Port,
+			Kind: KindChromecast,
 		})
 	}
 	return devices
