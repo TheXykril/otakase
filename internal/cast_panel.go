@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/thexykril/otakase/internal/cast"
 )
 
 // castPanelState is everything the control panel shows.
@@ -22,6 +24,9 @@ type castPanelState struct {
 	Estimated bool
 	State     string
 	Volume    float64
+	// Skips are the opening and ending otakase will seek past, marked on the
+	// bar so a viewer can see where they are before the jump happens.
+	Skips []cast.Span
 }
 
 // castPanelTotal formats the total for the clock, marking an estimate with a
@@ -81,16 +86,13 @@ func castPanelLines(state castPanelState, width int) []string {
 	elapsed := castClock(state.Position)
 	clock := fmt.Sprintf("%s / %s", elapsed, castPanelTotal(state))
 
-	bar := castPanelBar(state.Position, state.Duration, inner-lipgloss.Width(clock)-2)
+	bar := castPanelBar(state.Position, state.Duration, state.Skips, inner-lipgloss.Width(clock)-2)
 	volume := fmt.Sprintf("vol %d%%", int(state.Volume*100+0.5))
 	status := castPanelStateMark(state.State) + " " + state.State
 
 	return []string{
 		castPanelTop(state, width),
-		castPanelRow([]castPanelSegment{
-			{bar, castPanelBarStyle},
-			{"  " + clock, castPanelDimStyle},
-		}, inner),
+		castPanelRow(append(bar, castPanelSegment{"  " + clock, castPanelDimStyle}), inner),
 		castPanelRow([]castPanelSegment{
 			{status, castPanelStateStyle(state.State)},
 			{strings.Repeat(" ", max(1, inner-lipgloss.Width(status)-lipgloss.Width(volume))), lipgloss.NewStyle()},
@@ -199,12 +201,18 @@ func castPanelBottom(width int, keys string) string {
 }
 
 // castPanelBar is the progress bar, drawn with full and empty blocks.
-func castPanelBar(position, duration float64, width int) string {
+//
+// Cells that overlap a skip span are drawn with their own glyphs and colour:
+// dark shade where already played, light shade where still ahead. The glyphs
+// differ as well as the colour, so the marks still read on a terminal without
+// colour. A span shorter than one cell still takes the cell it falls in, so a
+// short opening never vanishes from a narrow bar.
+func castPanelBar(position, duration float64, skips []cast.Span, width int) []castPanelSegment {
 	if width < 1 {
-		return ""
+		return nil
 	}
 	if duration <= 0 {
-		return strings.Repeat("░", width)
+		return []castPanelSegment{{strings.Repeat("░", width), castPanelBarStyle}}
 	}
 	filled := int(position / duration * float64(width))
 	if filled < 0 {
@@ -213,7 +221,49 @@ func castPanelBar(position, duration float64, width int) string {
 	if filled > width {
 		filled = width
 	}
-	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
+
+	var segments []castPanelSegment
+	var run strings.Builder
+	var runStyle lipgloss.Style
+	runSkip := false
+	for i := 0; i < width; i++ {
+		start := float64(i) / float64(width) * duration
+		end := float64(i+1) / float64(width) * duration
+		skip := castPanelCellSkipped(start, end, skips)
+
+		glyph := "░"
+		switch {
+		case skip && i < filled:
+			glyph = "▓"
+		case skip:
+			glyph = "▒"
+		case i < filled:
+			glyph = "█"
+		}
+
+		if i > 0 && skip != runSkip {
+			segments = append(segments, castPanelSegment{run.String(), runStyle})
+			run.Reset()
+		}
+		runSkip = skip
+		runStyle = castPanelBarStyle
+		if skip {
+			runStyle = castPanelSkipStyle
+		}
+		run.WriteString(glyph)
+	}
+	return append(segments, castPanelSegment{run.String(), runStyle})
+}
+
+// castPanelCellSkipped reports whether the stretch of the episode one bar cell
+// covers overlaps any skip span.
+func castPanelCellSkipped(start, end float64, skips []cast.Span) bool {
+	for _, span := range skips {
+		if span.End > span.Start && span.Start < end && span.End > start {
+			return true
+		}
+	}
+	return false
 }
 
 // castPanelStateMark is the glyph that makes the player state readable at a
@@ -257,6 +307,7 @@ var (
 	castPanelTitleStyle  = lipgloss.NewStyle().Bold(true)
 	castPanelDimStyle    = lipgloss.NewStyle()
 	castPanelBarStyle    = lipgloss.NewStyle()
+	castPanelSkipStyle   = lipgloss.NewStyle()
 	castPanelPlayStyle   = lipgloss.NewStyle()
 	castPanelPauseStyle  = lipgloss.NewStyle()
 )

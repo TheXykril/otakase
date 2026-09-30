@@ -3,6 +3,8 @@ package internal
 import (
 	"strings"
 	"testing"
+
+	"github.com/thexykril/otakase/internal/cast"
 )
 
 func testPanelState() castPanelState {
@@ -332,5 +334,43 @@ func TestCastPanelStatusLinesOneRowPerMessageLine(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], "first") || !strings.Contains(lines[2], "second") {
 		t.Errorf("rows out of order: %q", lines)
+	}
+}
+
+// The opening and ending are marked on the bar, played part and unplayed part
+// in their own glyphs, and the bar keeps its full width.
+func TestCastPanelBarMarksSkips(t *testing.T) {
+	skips := []cast.Span{{Start: 0, End: 20}, {Start: 80, End: 90}}
+	var plain strings.Builder
+	for _, segment := range castPanelBar(30, 100, skips, 10) {
+		plain.WriteString(segment.text)
+	}
+	if got, want := plain.String(), "▓▓█░░░░░▒░"; got != want {
+		t.Errorf("bar = %q, want %q", got, want)
+	}
+}
+
+// A skip shorter than one cell still shows, so a short opening does not vanish
+// from a narrow bar.
+func TestCastPanelBarKeepsShortSkipVisible(t *testing.T) {
+	var plain strings.Builder
+	for _, segment := range castPanelBar(0, 1000, []cast.Span{{Start: 500, End: 501}}, 10) {
+		plain.WriteString(segment.text)
+	}
+	if !strings.Contains(plain.String(), "▒") {
+		t.Errorf("a one-second skip is missing from the bar: %q", plain.String())
+	}
+}
+
+// Skips must not change the panel's geometry.
+func TestCastPanelWidthUnchangedBySkips(t *testing.T) {
+	state := testPanelState()
+	state.Skips = []cast.Span{{Start: 90, End: 180}, {Start: 1360, End: 1450}}
+	for _, width := range []int{34, 60, 84} {
+		for i, line := range castPanelLines(state, width) {
+			if got := lipglossWidth(line); got != width {
+				t.Errorf("width %d, line %d is %d wide", width, i, got)
+			}
+		}
 	}
 }
