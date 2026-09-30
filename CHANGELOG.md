@@ -27,6 +27,10 @@
   HTTP headers**, which could fail on a provider whose CDN wants others.
 - **An episode could fail to count as watched.** The episode length from
   Jikan could replace the length mpv measured, or set it to zero.
+- **The update notes in rofi were light text on a white box.** They now sit
+  on the menu's own background, in your theme's colours.
+- **Long update notes in the terminal were not cut.** The prompt said
+  "truncated" but printed every note, which could push it off screen.
 
 ## 2.2.1 — 2026-09-29
 
