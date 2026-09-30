@@ -26,15 +26,15 @@ type megaplayRoute struct {
 	mode string
 }
 
-func resolveMegaplayStream(videoLink, mode string) (string, string, error) {
+func resolveMegaplayStream(videoLink, mode string) (string, string, []providers.SubtitleTrack, error) {
 	videoLink = strings.TrimSpace(videoLink)
 	if videoLink == "" {
-		return "", "", fmt.Errorf("empty video link")
+		return "", "", nil, fmt.Errorf("empty video link")
 	}
 
 	route, err := parseVideoLink(videoLink)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 	mode = providers.NormalizeTranslationType(mode)
 	linkMode := "sub"
@@ -45,26 +45,26 @@ func resolveMegaplayStream(videoLink, mode string) (string, string, error) {
 	streamPage := fmt.Sprintf("%s/%s/%s", megaplayBaseURL, route.path, linkMode)
 	html, err := fetchString(streamPage, baseURL+"/")
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 
 	dataID := dataIDRE.FindStringSubmatch(html)
 	if len(dataID) < 2 {
-		return "", "", fmt.Errorf("megaplay data-id not found")
+		return "", "", nil, fmt.Errorf("megaplay data-id not found")
 	}
 
 	sourcesURL := fmt.Sprintf("%s/stream/getSources?id=%s", megaplayBaseURL, dataID[1])
 	var payload megaplaySourcesResponse
 	if err := fetchJSON(sourcesURL, streamPage, &payload); err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 
 	streamURL := strings.TrimSpace(payload.Sources.File)
 	if streamURL == "" {
-		return "", "", fmt.Errorf("megaplay stream url missing")
+		return "", "", nil, fmt.Errorf("megaplay stream url missing")
 	}
 	subtitle := pickSubtitleTrack(payload, mode)
-	return streamURL, subtitle, nil
+	return streamURL, subtitle, subtitleTracks(payload, mode), nil
 }
 
 // parseVideoLink maps an anipub episode link onto its megaplay stream route.
@@ -96,6 +96,24 @@ func parseVideoLink(videoLink string) (megaplayRoute, error) {
 	}
 
 	return megaplayRoute{}, fmt.Errorf("unsupported video link %q", videoLink)
+}
+
+// subtitleTracks lists every caption track the host offers, so the player can
+// pick a language other than the one chosen by default.
+func subtitleTracks(payload megaplaySourcesResponse, mode string) []providers.SubtitleTrack {
+	if mode == "dub" {
+		return nil
+	}
+	var tracks []providers.SubtitleTrack
+	for _, track := range payload.Tracks {
+		file := strings.TrimSpace(track.File)
+		if file == "" || !strings.EqualFold(strings.TrimSpace(track.Kind), "captions") {
+			continue
+		}
+		label := strings.TrimSpace(track.Label)
+		tracks = append(tracks, providers.SubtitleTrack{URL: file, Language: label, Label: label})
+	}
+	return tracks
 }
 
 func pickSubtitleTrack(payload megaplaySourcesResponse, mode string) string {

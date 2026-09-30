@@ -13,7 +13,7 @@ func TestTheProbeAllowsTheDisguisedSegmentsTheRemuxAllows(t *testing.T) {
 	// Providers serve HLS segments named .jpg. ffprobe refuses unrecognised
 	// extensions exactly as ffmpeg does, so a probe without these fails on the
 	// streams that need a probe most.
-	for _, want := range []string{"-allowed_extensions ALL", "-extension_picky 0"} {
+	for _, want := range []string{strings.Join(HLSInputArgs(), " ")} {
 		if !strings.Contains(args, want) {
 			t.Fatalf("probe args %q are missing %q", args, want)
 		}

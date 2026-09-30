@@ -59,7 +59,7 @@ func BuildRemuxArgsFrom(streamURL, referrer, outDir string, startAt float64, map
 	// to slip past filters. ffmpeg's HLS demuxer rejects any segment extension
 	// it does not recognise, so without this a perfectly good stream fails with
 	// "not in allowed_segment_extensions".
-	args = append(args, "-allowed_extensions", "ALL", "-extension_picky", "0")
+	args = append(args, HLSInputArgs()...)
 
 	// -headers is a per-input option: it applies only to the next -i.
 	args = append(args, inputHeaderArgs(referrer, headers)...)

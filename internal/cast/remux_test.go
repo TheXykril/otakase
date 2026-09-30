@@ -45,8 +45,8 @@ func TestBuildRemuxArgsToleratesDisguisedSegments(t *testing.T) {
 	if !strings.Contains(joined, "-allowed_extensions ALL") {
 		t.Errorf("expected -allowed_extensions ALL, got: %s", joined)
 	}
-	if !strings.Contains(joined, "-extension_picky 0") {
-		t.Errorf("expected -extension_picky 0, got: %s", joined)
+	if !strings.Contains(joined, strings.Join(HLSInputArgs(), " ")) {
+		t.Errorf("expected the HLS input options, got: %s", joined)
 	}
 }
 
@@ -221,7 +221,7 @@ func TestASeekingRemuxKeepsTheRefererAndTheDisguisedSegments(t *testing.T) {
 
 	// A seek must not quietly drop the two things that make these streams work
 	// at all, or seeking would fail on exactly the providers that need them.
-	for _, want := range []string{"-allowed_extensions ALL", "-extension_picky 0", "Referer: https://player.test/"} {
+	for _, want := range []string{strings.Join(HLSInputArgs(), " "), "Referer: https://player.test/"} {
 		if !strings.Contains(args, want) {
 			t.Fatalf("seeking args lost %q:\n%s", want, args)
 		}

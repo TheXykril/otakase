@@ -157,11 +157,56 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 		return nil, nil, fmt.Errorf("anizone: the player carries no stream for %s episode %d", id, epNo)
 	}
 
+	// anizone lists a show once and serves each episode as one stream, so a
+	// request for dub gets the same stream as sub. Answering it with the
+	// Japanese stream labelled "dub" is how a show with no dub came to be
+	// saved and played as one; the stream only counts as dub when it carries
+	// an English audio track.
+	if strings.EqualFold(strings.TrimSpace(mode), "dub") {
+		master, err := fetch(player.Src)
+		if err != nil {
+			return nil, nil, fmt.Errorf("anizone: could not check %s episode %d for English audio: %w", id, epNo, err)
+		}
+		if !hasEnglishAudio(master) {
+			return nil, nil, fmt.Errorf("anizone: no dub for %s episode %d", id, epNo)
+		}
+	}
+
 	hint := providers.StreamPlaybackHint{
-		Referrer: referer,
-		Subtitle: p.preferredSubtitle(player),
+		Referrer:  referer,
+		Subtitle:  p.preferredSubtitle(player),
+		Subtitles: subtitleTracks(player),
 	}
 	return []string{player.Src}, map[string]providers.StreamPlaybackHint{player.Src: hint}, nil
+}
+
+// hasEnglishAudio reports whether an HLS master playlist offers an English
+// audio rendition.
+func hasEnglishAudio(master string) bool {
+	for _, line := range strings.Split(master, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "#EXT-X-MEDIA:") || !strings.Contains(line, "TYPE=AUDIO") {
+			continue
+		}
+		upper := strings.ToUpper(line)
+		if strings.Contains(upper, `LANGUAGE="EN"`) || strings.Contains(upper, `LANGUAGE="ENG"`) ||
+			strings.Contains(upper, `LANGUAGE="EN-`) || strings.Contains(upper, "ENGLISH") {
+			return true
+		}
+	}
+	return false
+}
+
+// subtitleTracks lists every subtitle the player offers.
+func subtitleTracks(player playerConfig) []providers.SubtitleTrack {
+	var tracks []providers.SubtitleTrack
+	for _, track := range player.Subtitles {
+		if track.File == "" {
+			continue
+		}
+		tracks = append(tracks, providers.SubtitleTrack{URL: track.File, Language: track.Language, Label: track.Title})
+	}
+	return tracks
 }
 
 // preferredSubtitle picks the track to play, favouring the viewer's language

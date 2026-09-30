@@ -676,19 +676,26 @@ func GetEpisodeURLForPlayback(config Config, id string, epNo int) ([]string, str
 		return nil, preferredMode, nil
 	}
 
-	Out(audioFallbackPrompt(preferredMode, fallbackMode))
-	selected, selectErr := promptSelect([]SelectionOption{
-		{Key: "play", Label: "Play " + fallbackMode},
-		{Key: "cancel", Label: "Cancel"},
-	})
-	if selectErr != nil {
-		return nil, preferredMode, selectErr
-	}
-	if selected.Key != "play" {
-		if preferredErr != nil {
-			return nil, preferredMode, preferredErr
+	// Like every other fallback, this one asks only when AutoAudioFallback is
+	// off. It used to ask regardless, so the next episode of a show with no
+	// dub stopped on a question with one useful answer.
+	if !config.AutoAudioFallback {
+		Out(audioFallbackPrompt(preferredMode, fallbackMode))
+		selected, selectErr := promptSelect([]SelectionOption{
+			{Key: "play", Label: "Play " + fallbackMode},
+			{Key: "cancel", Label: "Cancel"},
+		})
+		if selectErr != nil {
+			return nil, preferredMode, selectErr
 		}
-		return nil, preferredMode, nil
+		if selected.Key != "play" {
+			if preferredErr != nil {
+				return nil, preferredMode, preferredErr
+			}
+			return nil, preferredMode, nil
+		}
+	} else {
+		Out(fmt.Sprintf("No %s for episode %d — playing %s.", preferredMode, epNo, fallbackMode))
 	}
 
 	return fallbackLinks, fallbackMode, nil
@@ -781,13 +788,17 @@ func episodeModeResultWithProviders(config Config, anime *Anime, epNo int, mode 
 
 		anime.ProviderName = providerName
 		anime.ProviderId = providerID
-		return ProviderEpisodeResult{
+		result := ProviderEpisodeResult{
 			Links:        links,
 			LinkHints:    linkHints,
 			ProviderName: providerName,
 			ProviderID:   providerID,
 			Mode:         mode,
-		}, nil
+		}
+		// Every way an episode is resolved for playing, casting or
+		// downloading ends here, so the quality is chosen once for all.
+		applyQualityPreference(&config, anime, &result)
+		return result, nil
 	}
 
 	return ProviderEpisodeResult{}, fmt.Errorf("no %s episode links found across providers %s for %q episode %d: %s", mode, strings.Join(providerNames, ","), animeSearchTitle(anime), epNo, strings.Join(errors, "; "))

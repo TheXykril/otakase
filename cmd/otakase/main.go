@@ -109,7 +109,7 @@ func main() {
 	rofiSelection := flag.Bool("rofi", false, "Open selection in rofi")
 	noRofi := flag.Bool("no-rofi", false, "No rofi")
 	imagePreview := flag.Bool("image-preview", false, "Show image preview")
-	castFlag := flag.Bool("cast", false, "Play on a Chromecast on this network instead of locally")
+	castFlag := flag.Bool("cast", false, "Play on a Chromecast, DLNA TV or Kodi on this network instead of locally")
 	castSessionFlag := flag.String("cast-session", "", "Cast the episode described by a handoff file (used internally when casting from rofi)")
 	noImagePreview := flag.Bool("no-image-preview", false, "No image preview")
 	changeToken := flag.Bool("change-token", false, "Change token")
@@ -125,6 +125,7 @@ func main() {
 	downloadFlag := flag.Bool("download", false, "Download episodes instead of playing them (requires ffmpeg)")
 	downloadRange := flag.String("episodes", "", "Episodes to download, e.g. 5 or 1-12 (default: the selected episode)")
 	flag.StringVar(&userConfig.DownloadDir, "download-dir", userConfig.DownloadDir, "Directory to save downloaded episodes into")
+	flag.StringVar(&userConfig.DownloadFormat, "download-format", userConfig.DownloadFormat, "Container for downloaded episodes: mkv or mp4")
 	providerStatus := flag.Bool("provider-status", false, "Probe every provider and report which ones work")
 	installKeybind := flag.Bool("install-keybind", false, "Add a Super+Shift+A Hyprland binding that opens the rofi menu")
 	removeKeybind := flag.Bool("remove-keybind", false, "Remove the Hyprland binding added by -install-keybind")
@@ -285,8 +286,10 @@ func main() {
 	// Set SubOrDub based on the flags
 	if *subFlag {
 		userConfig.SubOrDub = "sub"
+		userConfig.SubOrDubFlag = true
 	} else if *dubFlag {
 		userConfig.SubOrDub = "dub"
+		userConfig.SubOrDubFlag = true
 	}
 	if *softSubFlag {
 		userConfig.SubStyle = "soft"
@@ -944,6 +947,10 @@ func main() {
 							if skipErr := internal.SendSkipTimesToMPV(&anime); skipErr != nil {
 								internal.Log("Error sending skip times to MPV: " + skipErr.Error())
 							}
+
+							// The provider's other subtitle languages, for mpv's
+							// own subtitle key.
+							internal.OfferAlternateSubtitles(&anime)
 						}
 
 						// If resume is true, seek to the playback time
@@ -964,6 +971,7 @@ func main() {
 							internal.Log("Error updating local database: " + updateErr.Error())
 						}
 						internal.NoteSyncedResume(&userConfig, &anime)
+						internal.NoteSubtitleChoice(&userConfig, &anime)
 					}
 
 					// Check if anything is playing; if not and episode was started, classify the loss.

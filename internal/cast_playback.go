@@ -158,7 +158,7 @@ func init() {
 
 // Narrow views of the cast session, server and remux, so watchCast -- which is
 // where this feature's failure handling lives -- can be tested without a
-// device or an ffmpeg. The concrete types (*cast.Session, *cast.Server,
+// device or an ffmpeg. The concrete types (any cast.Player, *cast.Server,
 // *cast.Remux) satisfy these as they are; CastEpisode passes them unchanged.
 type castSession interface {
 	Progress() (cast.Progress, error)
@@ -270,6 +270,19 @@ func castOutcome(err error) (socket string, report bool) {
 // CastEpisode plays the already-resolved episode on a Chromecast instead of in
 // mpv, and keeps tracking it while it plays.
 func CastEpisode(config *Config, anime *Anime) error {
+	var device *cast.Device
+	for {
+		err := castEpisodeOnce(config, anime, device)
+		var switched *castAudioSwitch
+		if !errors.As(err, &switched) {
+			return err
+		}
+		device = &switched.device
+		switchCastAudio(config, anime, switched.position)
+	}
+}
+
+func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 	if config == nil || anime == nil {
 		return fmt.Errorf("cast: nothing to play")
 	}
@@ -285,8 +298,12 @@ func CastEpisode(config *Config, anime *Anime) error {
 		return err
 	}
 
-	device, err := chooseCastDevice(config)
-	if err != nil {
+	// Restarted in the other language, the episode stays on the device it
+	// was on, without looking for devices again.
+	var device cast.Device
+	if reuse != nil {
+		device = *reuse
+	} else if device, err = chooseCastDevice(config); err != nil {
 		return err
 	}
 
@@ -368,7 +385,7 @@ func CastEpisode(config *Config, anime *Anime) error {
 		resourceMu sync.Mutex
 		remux      *cast.Remux
 		server     *cast.Server
-		session    *cast.Session
+		session    cast.Player
 	)
 	var teardownOnce sync.Once
 	teardown := func() {
@@ -897,6 +914,11 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			if err != nil {
 				Log(fmt.Sprintf("cast: %v", err))
 			}
+			if stop && command == castCmdSwitchAudio {
+				castOut(commands != nil, "Switching audio…")
+				savePartial(lastPosition)
+				return &castAudioSwitch{position: lastPosition, device: device}
+			}
 			if stop {
 				castOut(commands != nil, "Stopped.")
 				savePartial(lastPosition)
@@ -928,6 +950,11 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 				Log(fmt.Sprintf("cast: queued command %d at pos=%.1f -> pos=%.1f err=%v", queued, lastPosition, moved, err))
 				if err != nil {
 					Log(fmt.Sprintf("cast: %v", err))
+				}
+				if stop && queued == castCmdSwitchAudio {
+					castOut(commands != nil, "Switching audio…")
+					savePartial(lastPosition)
+					return &castAudioSwitch{position: lastPosition, device: device}
 				}
 				if stop {
 					castOut(commands != nil, "Stopped.")
@@ -1198,6 +1225,11 @@ var castSessionDevice string
 
 func chooseCastDevice(config *Config) (cast.Device, error) {
 	Out("Looking for cast devices...")
+	cast.SetKodi(cast.KodiSettings{
+		Hosts:    strings.Split(config.KodiHost, ","),
+		User:     config.KodiUser,
+		Password: config.KodiPassword,
+	})
 	devices, err := cast.Discover(context.Background(), cast.DefaultDiscoveryTimeout)
 	if err != nil {
 		return cast.Device{}, err

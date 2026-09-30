@@ -263,6 +263,7 @@ func UpdateAnimeEntry(userConfig *Config, user *User) {
 		{Key: "CATEGORY", Label: "Change Anime Category"},
 		{Key: "PROGRESS", Label: "Change Progress"},
 		{Key: "SCORE", Label: "Add/Change Score"},
+		{Key: "QUALITY", Label: "Quality for this show"},
 	}
 
 	// Navigation loop for update option selection
@@ -445,6 +446,21 @@ updateOptionLoop:
 						Log(fmt.Sprintf("Failed to update anime score: %v", err))
 						Exit(fmt.Errorf("Failed to update anime score"))
 					}
+
+				case "QUALITY":
+					// Kept locally in show_prefs.json, not on the tracker, so
+					// there is no list to refresh afterwards.
+					changed, qualityErr := PromptShowQuality(userConfig, animeID)
+					if qualityErr != nil {
+						Log(fmt.Sprintf("Failed to set the show's quality: %v", qualityErr))
+						Out("Could not save the quality for this show.")
+						return
+					}
+					if !changed {
+						ClearScreen()
+						continue animeSelectLoop
+					}
+					return
 				}
 
 				if err := RefreshUserAnimeList(userConfig, user); err != nil {
@@ -598,6 +614,7 @@ func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[
 		{Key: "DROPPED", Label: "Dropped"},
 		{Key: "PLANNING", Label: "Plan to Watch"},
 		{Key: "REPEATING", Label: "Rewatching"}, // Anilist uses REPEATING for rewatching
+		{Key: watchedElsewhereKey, Label: "Already watched some elsewhere"},
 	}
 
 	ClearScreen()
@@ -616,6 +633,10 @@ func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[
 	// Handle back button - return to caller
 	if categorySelection.Key == "-2" {
 		return SelectionOption{Key: "-2", Label: "Back"}
+	}
+
+	if categorySelection.Key == watchedElsewhereKey {
+		return addWatchedElsewhere(userConfig, user, animeID, anilistSelectedOption)
 	}
 
 	err = UpdateAnimeStatus(user.Token, animeID, categorySelection.Key)
@@ -734,6 +755,12 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					// Create category selection map
 					// Get ordered categories
 					orderedCategories := getOrderedCategories(userConfig)
+					// The shows played last come first, so picking one up
+					// again is a single choice.
+					if user.ListSync != nil {
+						user.AnimeList = user.ListSync.Current()
+					}
+					orderedCategories = append(continueWatchingRows(userConfig, &user.AnimeList), orderedCategories...)
 
 					// Use DynamicSelect with ordered categories directly
 					categorySelection, err = DynamicSelect(orderedCategories)
@@ -798,8 +825,34 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					toggleCastToDevice(userConfig)
 					ClearScreen()
 					continue categorySelectionLoop
+				} else if categorySelection.Key == "STATS" {
+					// A page to read rather than a list to pick from, so leaving
+					// it returns to the menu it was opened from.
+					ClearScreen()
+					ShowWatchStats(userConfig)
+					ClearScreen()
+					continue categorySelectionLoop
 				} else if categorySelection.Key == "CONTINUE_LAST" {
 					anime.Ep.ContinueLast = true
+				} else if categorySelection.Key == "SURPRISE" {
+					ClearScreen()
+					if user.ListSync != nil {
+						user.AnimeList = user.ListSync.Current()
+					}
+					picked, ok := SurpriseMe(userConfig, user.AnimeList)
+					ClearScreen()
+					if !ok {
+						continue categorySelectionLoop
+					}
+					anime.AnilistId = picked
+					anilistSelectedOption = SelectionOption{Key: strconv.Itoa(picked)}
+					break categorySelectionLoop
+				} else if id, ok := resumeRowAnilistID(categorySelection.Key); ok {
+					// A continue-watching row: the same as choosing the show
+					// from its list, which resumes from the watch history.
+					anime.AnilistId = id
+					anilistSelectedOption = SelectionOption{Key: strconv.Itoa(id)}
+					break categorySelectionLoop
 				}
 
 				if user.ListSync != nil {
@@ -991,6 +1044,9 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 
 		// Set anime entry
 		anime.Title = selectedAnilistAnime.Media.Title
+		// Before anything asks a provider for episodes: the audio remembered
+		// for this show decides which ones.
+		applyShowAudioMode(userConfig, anime)
 		anime.TotalEpisodes = selectedAnilistAnime.Media.Episodes
 		anime.Ep.Duration = trackerEpisodeDuration(anime.Ep.Duration, selectedAnilistAnime.Media)
 		anime.CoverImage = selectedAnilistAnime.CoverImage
@@ -1138,6 +1194,14 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					anime.Ep.Player.PlaybackTime = 0
 					anime.Ep.Resume = false
 				}
+			} else if animePointer.Ep.Number < anilistEpisode && !startingRewatch {
+				// The tracker is ahead: episodes were marked watched by hand,
+				// or on another device. The local row is simply stale, and
+				// following it would offer an episode already seen.
+				Log(fmt.Sprintf("Local history episode (%d) is behind the tracker (%d); using the tracker", animePointer.Ep.Number, anilistEpisode))
+				anime.Ep.Number = anilistEpisode
+				anime.Ep.Player.PlaybackTime = 0
+				anime.Ep.Resume = false
 			} else {
 				anime.Ep.Number = animePointer.Ep.Number
 			}
@@ -1528,16 +1592,9 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 		}
 	}()
 
-	// Write anime.AnilistId to curd_id in the storage path
-	idFilePath := filepath.Join(os.ExpandEnv(userConfig.StoragePath), "curd_id")
-	Log(fmt.Sprintf("idFilePath: %v", idFilePath))
-	if err := os.MkdirAll(filepath.Dir(idFilePath), 0755); err != nil {
-		Log(fmt.Sprintf("Failed to create directory for curd_id: %v", err))
-	} else {
-		if err := os.WriteFile(idFilePath, []byte(fmt.Sprintf("%d", anime.AnilistId)), 0644); err != nil {
-			Log(fmt.Sprintf("Failed to write AnilistId to file: %v", err))
-		}
-	}
+	// Remember the show for Continue Last Session and the continue-watching
+	// rows of the home menu.
+	writeLastPlayedAnimeID(userConfig.StoragePath, anime.AnilistId)
 
 	// Display starting message with cover image and episode info
 	if anime.CoverImage != "" && userConfig.ImagePreview && userConfig.RofiSelection {

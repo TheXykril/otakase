@@ -28,6 +28,9 @@ const (
 	// applyCastCommand falls through to a no-op for a command it has no case
 	// for.
 	castCmdSelect
+	// castCmdSwitchAudio is a: play the episode in the other language from
+	// where it is.
+	castCmdSwitchAudio
 )
 
 // castSeekStep is how far one arrow press moves the position.
@@ -86,6 +89,8 @@ func decodeCastKey(buf []byte) (castCommand, int) {
 		return castCmdSelect, 1
 	case 'q', 'Q', 0x03:
 		return castCmdStop, 1
+	case 'a', 'A':
+		return castCmdSwitchAudio, 1
 	}
 	return castCmdNone, 1
 }
@@ -153,7 +158,8 @@ func applyCastCommand(command castCommand, session castSession, paused *bool, sp
 	}
 
 	switch command {
-	case castCmdStop:
+	case castCmdStop, castCmdSwitchAudio:
+		// Switching audio ends this stream too; the caller starts the other.
 		return true, position, nil
 
 	case castCmdPauseToggle:
