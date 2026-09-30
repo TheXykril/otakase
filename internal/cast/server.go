@@ -101,6 +101,13 @@ func NewServerOnPort(dir string, port int) (*Server, error) {
 				w.Header().Set("Content-Type", ctype)
 			}
 
+			// A DLNA renderer is given one continuous transport stream,
+			// assembled from the playlist's segments as they are written.
+			if strings.HasSuffix(r.URL.Path, "/"+ProgressiveName) {
+				serveProgressive(w, r, dir, r.URL.Path)
+				return
+			}
+
 			files.ServeHTTP(w, r)
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
