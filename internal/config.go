@@ -110,6 +110,11 @@ type Config struct {
 	// CastEncoder forces the encoder used for that: "vaapi", "software", or
 	// empty to detect what this machine can actually do.
 	CastEncoder string `config:"CastEncoder"`
+	// Quality is the picture height to play HLS streams at: "best" leaves
+	// the master playlist as the provider gave it, a number of lines (1080,
+	// 720, 480) picks the nearest variant at or below. A show can override
+	// it in show_prefs.json.
+	Quality string `config:"Quality"`
 	// CastToDevice records that -cast was given for this run. It is not a
 	// setting, so it carries no config tag.
 	CastToDevice bool `config:"-"`
@@ -158,6 +163,7 @@ func defaultConfigMap() map[string]string {
 		"MenuOrder":                "CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER,CAST",
 		"SubOrDub":                 "sub",
 		"SubStyle":                 "ask",
+		"Quality":                  "best",
 		"PercentageToMarkComplete": "85",
 		"NextEpisodePrompt":        "false",
 		// A show that exists only in the other language should play, not stop to

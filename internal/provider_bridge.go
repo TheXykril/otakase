@@ -215,10 +215,12 @@ func applyStreamPlaybackHints(anime *Anime, links []string, hints map[string]Str
 		anime.Ep.SubtitleURL = pickSubtitleForHint(GetGlobalConfig(), anime, hint)
 		anime.Ep.SubtitleTracks = hint.Subtitles
 		anime.Ep.StreamHeaders = hint.Headers
+		anime.Ep.StreamHLSBitrate = hint.HLSBitrate
 		return
 	}
 	anime.Ep.StreamReferrer = ""
 	anime.Ep.SubtitleURL = ""
 	anime.Ep.SubtitleTracks = nil
 	anime.Ep.StreamHeaders = nil
+	anime.Ep.StreamHLSBitrate = 0
 }
