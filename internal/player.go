@@ -395,6 +395,13 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 			}
 		}
 
+		// --sub-file is global in mpv: it attaches to every file loaded after
+		// it, not just the one it was started with. Without clearing it, the
+		// next episode opens with the first episode's subtitles.
+		if !callerHasSubtitleArg {
+			clearMPVSubtitleFiles(MPVSendCommand, mpvSocketPath)
+		}
+
 		// Load the new file in the existing MPV instance
 		command := []interface{}{"loadfile", link}
 		_, err = MPVSendCommand(mpvSocketPath, command)
@@ -905,6 +912,15 @@ func SeekMPV(ipcSocketPath string, time int) (interface{}, error) {
 }
 
 type mpvCommandSender func(string, []interface{}) (interface{}, error)
+
+// clearMPVSubtitleFiles empties mpv's global external subtitle list, which the
+// --sub-file this instance was started with filled. Call it before loading
+// another episode into a running instance, then sub-add that episode's own.
+func clearMPVSubtitleFiles(send mpvCommandSender, ipcSocketPath string) {
+	if _, err := send(ipcSocketPath, []interface{}{"change-list", "sub-files", "clr", ""}); err != nil {
+		Log(fmt.Sprintf("Failed to clear the previous subtitle files: %v", err))
+	}
+}
 
 func waitForMPVFileReady(ipcSocketPath, expectedPath string, timeout time.Duration) error {
 	return waitForMPVFileReadyWith(MPVSendCommand, ipcSocketPath, expectedPath, timeout, 100*time.Millisecond)

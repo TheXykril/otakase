@@ -480,14 +480,7 @@ func WatchUntracked(userConfig *Config) {
 
 	for {
 		// Prefer prefetched next-episode links when available (same as tracked path).
-		if anime.Ep.NextEpisode.Number == anime.Ep.Number && len(anime.Ep.NextEpisode.Links) > 0 {
-			anime.Ep.Links = anime.Ep.NextEpisode.Links
-			anime.Ep.StreamReferrer = ""
-			anime.Ep.SubtitleURL = ""
-			if anime.Ep.NextEpisode.ProviderName != "" {
-				anime.ProviderName = anime.Ep.NextEpisode.ProviderName
-				anime.ProviderId = anime.Ep.NextEpisode.ProviderId
-			}
+		if UsePrefetchedEpisode(&anime) {
 			anime.Ep.NextEpisode = NextEpisode{}
 		} else {
 			// Preferred-first resolve; diagnosed recovery only after that fails.
@@ -679,6 +672,7 @@ func prefetchNextUntrackedEpisode(userConfig *Config, anime *Anime) {
 		ProviderName: nextResult.ProviderName,
 		ProviderId:   nextResult.ProviderID,
 		Mode:         nextResult.Mode,
+		LinkHints:    nextResult.LinkHints,
 	}
 }
 

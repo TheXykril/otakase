@@ -1203,9 +1203,8 @@ func main() {
 
 		// Wait for up to 5 seconds for prefetched links to become available
 		for i := 0; i < 5; i++ {
-			if anime.Ep.NextEpisode.Number == anime.Ep.Number && len(anime.Ep.NextEpisode.Links) > 0 {
+			if internal.UsePrefetchedEpisode(&anime) {
 				internal.Log("Using prefetched next episode link")
-				anime.Ep.Links = anime.Ep.NextEpisode.Links
 				break
 			}
 			time.Sleep(1 * time.Second)

@@ -353,10 +353,12 @@ func ApplySkipTimes(anime *Anime, episode int, config *Config, provider any) Ski
 	}
 	Log(fmt.Sprintf("Episode %d: %s", episode, resolution.Describe()))
 
+	// Replaced even when nothing was found: what is there otherwise is the
+	// previous episode's, and an episode with no timings must not skip by them.
+	anime.Ep.SkipTimes = resolution.Times
 	if !resolution.Found() {
 		return resolution
 	}
-	anime.Ep.SkipTimes = resolution.Times
 	if err := SendSkipTimesToMPV(anime); err != nil {
 		Log(fmt.Sprintf("sending skip times to the player: %v", err))
 	}
