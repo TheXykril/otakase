@@ -183,7 +183,7 @@ entries under rofi.
 | `-download` | Save episodes instead of playing them (needs `ffmpeg`) | |
 | `-episodes` | Episodes to save, e.g. `5` or `1-12` | selected |
 | `-download-dir` | Where to save them | `$HOME/Downloads/otakase` |
-| `-cast` | Play on a Chromecast or DLNA TV on this network instead of locally | |
+| `-cast` | Play on a Chromecast, DLNA TV or Kodi on this network instead of locally | |
 | `-current` | Jump straight to what you are currently watching | |
 | `-show-new-episodes` | Mark shows with an unwatched episode in the list | `true` |
 | `-vim-keys` | `j`/`k`/`h`/`l` to move and `/` to search in menus | |
@@ -220,13 +220,19 @@ Needs `ffmpeg`. Episodes are saved as `.mp4`.
 
 ## Casting
 
-`otakase -cast` plays the episode on a Chromecast or a DLNA TV on the same
-network. Most smart TVs are DLNA renderers (LG, Samsung, Sony, Hisense,
+`otakase -cast` plays the episode on a Chromecast, a DLNA TV or Kodi on the
+same network. Most smart TVs are DLNA renderers (LG, Samsung, Sony, Hisense,
 Philips); they are listed next to Chromecasts, marked `· DLNA`. A TV that is
 both can show up twice, and the Chromecast entry is the one with the better
 controls. A DLNA TV is sent one plain MPEG-TS stream, so it needs nothing
 installed; if it does not appear, check that the TV's "media renderer" or
-"DLNA" setting is on and that your firewall lets UDP answers back in. The menu
+"DLNA" setting is on and that your firewall lets UDP answers back in.
+
+**Kodi** (on its own, or on an Android TV box, Fire TV or Raspberry Pi) is
+listed marked `· Kodi` once *Settings > Services > Control > Allow remote
+control via HTTP* is on. If it does not show up, set `KodiHost` to its address
+(`192.168.1.20` or `192.168.1.20:8080`); if its web server has a password, set
+`KodiUser` and `KodiPassword` to match. The menu
 also carries a **Cast** toggle (`[ ] Cast: Off` / `[x] Cast: Office TV`, `^k`
 in the terminal list) that does the same thing per-run; `CastDevice` skips
 being asked which device each time. Casting works from **Untracked Watching**
@@ -418,6 +424,9 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `CastDevice` | String | a device name | Cast to this device without asking, when `-cast` is given and the device is found. Empty asks each time. |
 | `CastTerminal` | String | a terminal emulator | Terminal opened for a cast started from rofi. Empty uses `$TERMINAL`, then whatever is installed. |
 | `CastPort` | Integer | `0`–`65535` | Port the cast stream server listens on. `0` (the default) picks a free one; fix it to allow a single port through a firewall. |
+| `KodiHost` | String | `host` or `host:port`, comma-separated | Kodi instances to offer for casting when discovery does not find them. Port defaults to `8080`. |
+| `KodiUser` | String | any | User name of Kodi's web server, when it asks for one. |
+| `KodiPassword` | String | any | Password of Kodi's web server, when it asks for one. |
 | `CastBurnSubtitles` | Boolean | `true`, `false` | Burn subtitles into the picture when casting. Costs a re-encode. Default `true`. |
 | `CastEncoder` | Enum | empty, `vaapi`, `software` | Encoder for burned subtitles. Empty detects what this machine can do. |
 | `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. |
