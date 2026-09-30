@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.2.2 — 2026-09-30
+
+### Added
+
+- **Recap scenes are skipped.** A "previously on" stretch inside an episode
+  is skipped under `SkipRecap` when AniSkip has it on file, in mpv and on a
+  cast.
+- **Untracked watching skips openings and endings in mpv.** It used to look
+  up skip times only when casting. The show is matched to AniList by exact
+  title only, so a near miss gets no skips rather than another season's.
+- **The cast panel marks the opening and ending** on its progress bar.
+
+### Fixed
+
+- **The next episode showed the previous episode's subtitles** in a running
+  mpv, and could play with none of its own.
+- **Skips landed in the wrong place.** An AniSkip entry timed against another
+  cut of the episode (one without the cold open) skipped 0:00–1:00 of an
+  episode whose opening starts at 2:45. Entries are now matched to the length
+  of the file playing. A lookup that finished after moving to the next
+  episode no longer becomes that episode's skip times.
+- **A provider's own skip times were never used.** They are now, from the
+  provider the episode is actually streaming from.
+- **Later episodes in a running mpv were requested with the first episode's
+  HTTP headers**, which could fail on a provider whose CDN wants others.
+- **An episode could fail to count as watched.** The episode length from
+  Jikan could replace the length mpv measured, or set it to zero.
+
 ## 2.2.1 — 2026-09-29
 
 ### Fixed
