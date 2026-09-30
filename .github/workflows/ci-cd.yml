@@ -43,7 +43,7 @@ jobs:
           fi
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # Fetch all history and tags
           ref: ${{ github.event.pull_request.head.sha || (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
@@ -172,13 +172,13 @@ jobs:
       # cut from the commit main had reached by the time this ran, not the one
       # whose message said "release:". Pin it to that commit explicitly.
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
 
       - name: Checkout MPV binaries
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: mpv-binaries
           path: mpv-temp
