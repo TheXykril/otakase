@@ -24,7 +24,7 @@ theme.
 - Searches several sources at once and falls back when one fails, up to 1080p
 - Plays this week's episodes without waiting for a download, keeping nothing afterwards
 - Falls back to the other audio automatically when a show exists in only one language
-- Stream, save episodes with `-download`, or cast them to a Chromecast
+- Stream, save episodes with `-download`, or cast them to a Chromecast or DLNA TV
 - Track locally, on AniList, on MyAnimeList, or on both at once
 - Browser-based AniList and MyAnimeList sign-in
 - Skips openings, endings, filler episodes and recaps
@@ -183,7 +183,7 @@ entries under rofi.
 | `-download` | Save episodes instead of playing them (needs `ffmpeg`) | |
 | `-episodes` | Episodes to save, e.g. `5` or `1-12` | selected |
 | `-download-dir` | Where to save them | `$HOME/Downloads/otakase` |
-| `-cast` | Play on a Chromecast on this network instead of locally | |
+| `-cast` | Play on a Chromecast or DLNA TV on this network instead of locally | |
 | `-current` | Jump straight to what you are currently watching | |
 | `-show-new-episodes` | Mark shows with an unwatched episode in the list | `true` |
 | `-vim-keys` | `j`/`k`/`h`/`l` to move and `/` to search in menus | |
@@ -220,7 +220,13 @@ Needs `ffmpeg`. Episodes are saved as `.mp4`.
 
 ## Casting
 
-`otakase -cast` plays the episode on a Chromecast on the same network. The menu
+`otakase -cast` plays the episode on a Chromecast or a DLNA TV on the same
+network. Most smart TVs are DLNA renderers (LG, Samsung, Sony, Hisense,
+Philips); they are listed next to Chromecasts, marked `· DLNA`. A TV that is
+both can show up twice, and the Chromecast entry is the one with the better
+controls. A DLNA TV is sent one plain MPEG-TS stream, so it needs nothing
+installed; if it does not appear, check that the TV's "media renderer" or
+"DLNA" setting is on and that your firewall lets UDP answers back in. The menu
 also carries a **Cast** toggle (`[ ] Cast: Off` / `[x] Cast: Office TV`, `^k`
 in the terminal list) that does the same thing per-run; `CastDevice` skips
 being asked which device each time. Casting works from **Untracked Watching**

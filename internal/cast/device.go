@@ -21,6 +21,8 @@ type Device struct {
 	// Kind is the protocol the device speaks. Empty means a Chromecast, the
 	// only kind there was before there were others.
 	Kind Kind
+	// Location is where a DLNA renderer describes itself; empty otherwise.
+	Location string
 }
 
 // String names a device the way a menu should show it: the friendly name, and

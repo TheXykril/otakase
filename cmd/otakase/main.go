@@ -109,7 +109,7 @@ func main() {
 	rofiSelection := flag.Bool("rofi", false, "Open selection in rofi")
 	noRofi := flag.Bool("no-rofi", false, "No rofi")
 	imagePreview := flag.Bool("image-preview", false, "Show image preview")
-	castFlag := flag.Bool("cast", false, "Play on a Chromecast on this network instead of locally")
+	castFlag := flag.Bool("cast", false, "Play on a Chromecast or DLNA TV on this network instead of locally")
 	castSessionFlag := flag.String("cast-session", "", "Cast the episode described by a handoff file (used internally when casting from rofi)")
 	noImagePreview := flag.Bool("no-image-preview", false, "No image preview")
 	changeToken := flag.Bool("change-token", false, "Change token")
