@@ -147,17 +147,22 @@ func castWaitingFirewallHint(config *Config, serverAddr, firewall, device string
 	return lead + "The fix is on your clipboard -- paste it into a terminal."
 }
 
-// castDiscoveryFirewallHint is the line to print when discovery found nothing
-// and a host firewall is on, or "" when there is no firewall to blame.
+// castDiscoveryFirewallHint is what to add to "no devices found" when a host
+// firewall is on, plus the bare command to put on the clipboard. Both are ""
+// when there is no firewall to blame.
 //
 // Discovery answers are inbound UDP that ufw and firewalld drop by default,
 // which looks exactly like an empty network. The rules are the three ports a
 // cast uses: the SSDP answers (DLNA), mDNS (Chromecast, Kodi), and the stream
 // server the device fetches from. Each is limited to the LAN, and a port left
 // random gets a config hint instead of a rule, since it cannot be allowed.
-func castDiscoveryFirewallHint(config *Config, localAddr, firewall string) string {
+//
+// It goes into the error rather than out on its own: the search runs before
+// the cast panel opens, from a terminal menu or from rofi, and the error is
+// the one message every one of those shows.
+func castDiscoveryFirewallHint(config *Config, localAddr, firewall string) (message, command string) {
 	if firewall == "" {
-		return ""
+		return "", ""
 	}
 	subnet := castLocalSubnet(localAddr)
 	if subnet == "" {
@@ -191,11 +196,12 @@ func castDiscoveryFirewallHint(config *Config, localAddr, firewall string) strin
 		rules = append(rules, "sudo firewall-cmd --reload")
 	}
 
-	hint := fmt.Sprintf("%s may be hiding devices; allow discovery: %s", firewall, strings.Join(rules, " && "))
+	command = strings.Join(rules, " && ")
+	message = fmt.Sprintf("%s is on and may be dropping their answers. Allow them:\n  %s", firewall, command)
 	if len(unset) > 0 {
-		hint += fmt.Sprintf(" (and set %s to a fixed port with otakase -e)", strings.Join(unset, " and "))
+		message += fmt.Sprintf("\nAlso set %s to a fixed port (otakase -e).", strings.Join(unset, " and "))
 	}
-	return hint
+	return message, command
 }
 
 // castServerHost is the address out of a server URL, for building a firewall

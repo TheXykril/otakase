@@ -270,8 +270,9 @@ sudo ufw allow from 192.168.0.0/24 to any port 5353 proto udp   # mDNS (Chromeca
 sudo ufw allow from 192.168.0.0/24 to any port 8010 proto tcp   # the stream
 ```
 
-When a search finds nothing and ufw or firewalld is on, otakase prints these
-rules for your own subnet and ports.
+When a search finds nothing and ufw or firewalld is on, the "no devices
+found" message (in the terminal, or a desktop notification from rofi) carries
+these rules for your own subnet and ports, and copies them to your clipboard.
 
 **Kodi** (on its own, or on an Android TV box, Fire TV or Raspberry Pi) is
 listed marked `· Kodi` once *Settings > Services > Control > Allow remote

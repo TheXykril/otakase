@@ -198,29 +198,29 @@ func TestCastWaitingFirewallHintWithoutAPortAsksForOne(t *testing.T) {
 }
 
 // The discovery hint names all three ports a cast needs, each limited to the
-// LAN, on one line.
+// LAN, and the command to copy is all of them and nothing else.
 func TestCastDiscoveryFirewallHintUfw(t *testing.T) {
-	got := castDiscoveryFirewallHint(&Config{CastPort: 8010, CastDiscoveryPort: 8011}, "192.168.0.17", "ufw")
+	got, command := castDiscoveryFirewallHint(&Config{CastPort: 8010, CastDiscoveryPort: 8011}, "192.168.0.17", "ufw")
 	for _, want := range []string{
 		"sudo ufw allow from 192.168.0.0/24 to any port 8011 proto udp",
 		"sudo ufw allow from 192.168.0.0/24 to any port 5353 proto udp",
 		"sudo ufw allow from 192.168.0.0/24 to any port 8010 proto tcp",
 	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("hint lacks %q:\n%s", want, got)
+		if !strings.Contains(got, want) || !strings.Contains(command, want) {
+			t.Errorf("hint or command lacks %q:\n%s\n%s", want, got, command)
 		}
 	}
-	if strings.Contains(got, "\n") {
-		t.Errorf("hint is more than one line:\n%s", got)
+	if strings.Contains(command, "\n") || strings.Contains(command, "Allow") {
+		t.Errorf("command is not just the rules: %q", command)
 	}
 }
 
 // A random port cannot be allowed, so the hint says to fix it instead of
 // printing a rule for port 0.
 func TestCastDiscoveryFirewallHintRandomPorts(t *testing.T) {
-	got := castDiscoveryFirewallHint(&Config{}, "192.168.0.17", "ufw")
-	if strings.Contains(got, "port 0 ") {
-		t.Errorf("hint allows port 0:\n%s", got)
+	got, command := castDiscoveryFirewallHint(&Config{}, "192.168.0.17", "ufw")
+	if strings.Contains(command, "port 0 ") {
+		t.Errorf("command allows port 0: %s", command)
 	}
 	for _, want := range []string{"CastDiscoveryPort", "CastPort", "port 5353 proto udp"} {
 		if !strings.Contains(got, want) {
@@ -230,7 +230,7 @@ func TestCastDiscoveryFirewallHintRandomPorts(t *testing.T) {
 }
 
 func TestCastDiscoveryFirewallHintFirewalld(t *testing.T) {
-	got := castDiscoveryFirewallHint(&Config{CastPort: 8010, CastDiscoveryPort: 8011}, "192.168.0.17", "firewalld")
+	got, _ := castDiscoveryFirewallHint(&Config{CastPort: 8010, CastDiscoveryPort: 8011}, "192.168.0.17", "firewalld")
 	for _, want := range []string{"--add-port=8011/udp", "--add-port=5353/udp", "--add-port=8010/tcp", "firewall-cmd --reload"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("hint lacks %q:\n%s", want, got)
@@ -240,7 +240,7 @@ func TestCastDiscoveryFirewallHintFirewalld(t *testing.T) {
 
 // No firewall, nothing to blame: the hint stays silent.
 func TestCastDiscoveryFirewallHintNoFirewall(t *testing.T) {
-	if got := castDiscoveryFirewallHint(&Config{CastDiscoveryPort: 8011}, "192.168.0.17", ""); got != "" {
-		t.Errorf("hint without a firewall: %q", got)
+	if got, command := castDiscoveryFirewallHint(&Config{CastDiscoveryPort: 8011}, "192.168.0.17", ""); got != "" || command != "" {
+		t.Errorf("hint without a firewall: %q %q", got, command)
 	}
 }

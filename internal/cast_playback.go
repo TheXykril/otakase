@@ -1237,12 +1237,13 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 		return cast.Device{}, err
 	}
 	if len(devices) == 0 {
+		const none = "cast: no devices found on this network"
 		if runtime.GOOS == "linux" {
-			if hint := castDiscoveryFirewallHint(config, cast.LocalAddress(), castDetectFirewall()); hint != "" {
-				Out(hint)
+			if hint, command := castDiscoveryFirewallHint(config, cast.LocalAddress(), castDetectFirewall()); hint != "" {
+				return cast.Device{}, errors.New(none + "\n" + castCopyFirewallCommand(command, hint))
 			}
 		}
-		return cast.Device{}, fmt.Errorf("cast: no devices found on this network")
+		return cast.Device{}, errors.New(none)
 	}
 
 	configuredMissing := false
