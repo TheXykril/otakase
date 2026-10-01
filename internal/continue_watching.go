@@ -31,6 +31,8 @@ const resumeRowPrefix = "RESUME:"
 type recentShow struct {
 	AnilistID int       `json:"anilist_id"`
 	PlayedAt  time.Time `json:"played_at"`
+	// Adult is the tracker's 18+ flag when the show was played.
+	Adult bool `json:"adult,omitempty"`
 }
 
 func recentShowsPath(storagePath string) string {
@@ -58,13 +60,14 @@ func loadRecentShows(storagePath string) []recentShow {
 	return shows
 }
 
-// noteRecentShow moves a show to the front of the recent list.
-func noteRecentShow(storagePath string, anilistID int, now time.Time) {
+// noteRecentShow moves a show to the front of the recent list, marked 18+ or
+// not so the rows can leave it out.
+func noteRecentShow(storagePath string, anilistID int, adult bool, now time.Time) {
 	path := recentShowsPath(storagePath)
 	if path == "" || anilistID <= 0 {
 		return
 	}
-	shows := []recentShow{{AnilistID: anilistID, PlayedAt: now.UTC()}}
+	shows := []recentShow{{AnilistID: anilistID, PlayedAt: now.UTC(), Adult: adult}}
 	for _, show := range loadRecentShows(storagePath) {
 		if show.AnilistID != anilistID && show.AnilistID > 0 && len(shows) < recentShowsKept {
 			shows = append(shows, show)
@@ -106,11 +109,17 @@ func continueWatchingRows(config *Config, list *AnimeList) []SelectionOption {
 		return nil
 	}
 	history := LocalGetAllAnime(localHistoryPath(config.StoragePath))
+	// The home menu opens with these rows, whoever is looking at the screen,
+	// so 18+ shows need their own opt-in on top of AdultContent.
+	showAdult := config.AdultContent && config.ContinueWatchingAdult
 
 	rows := []SelectionOption{}
 	for _, show := range recent {
 		if len(rows) >= config.ContinueWatchingRows {
 			break
+		}
+		if show.Adult && !showAdult {
+			continue
 		}
 		entry := LocalFindAnime(history, show.AnilistID, "")
 		if entry == nil {
@@ -118,7 +127,8 @@ func continueWatchingRows(config *Config, list *AnimeList) []SelectionOption {
 		}
 		if list != nil && UsesRemoteTracking(config) {
 			listed, err := FindAnimeByAnilistID(*list, strconv.Itoa(show.AnilistID))
-			if err != nil || (listed.Media.IsAdult && !config.AdultContent) {
+			// The list's flag also covers shows recorded before Adult was.
+			if err != nil || (listed.Media.IsAdult && !showAdult) {
 				continue
 			}
 		}

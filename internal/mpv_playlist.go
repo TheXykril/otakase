@@ -1134,7 +1134,7 @@ func (c *MPVPlaylistController) finalizePlaylistEpisodeChange(fromEp, toEp int, 
 	}
 
 	// Last-played anime id (Continue Last Session).
-	writeLastPlayedAnimeID(c.config.StoragePath, anime.AnilistId)
+	writeLastPlayedAnimeID(c.config.StoragePath, anime.AnilistId, anime.IsAdult)
 
 	// Local history: current episode is now toEp at position 0.
 	dbPath := localHistoryPath(c.config.StoragePath)
@@ -1207,7 +1207,7 @@ func localHistoryPath(storagePath string) string {
 	return filepath.Join(storagePath, "curd_history.txt")
 }
 
-func writeLastPlayedAnimeID(storagePath string, anilistID int) {
+func writeLastPlayedAnimeID(storagePath string, anilistID int, adult bool) {
 	if anilistID <= 0 {
 		return
 	}
@@ -1223,7 +1223,7 @@ func writeLastPlayedAnimeID(storagePath string, anilistID int) {
 	if err := os.WriteFile(idPath, []byte(strconv.Itoa(anilistID)), 0o644); err != nil {
 		Log(fmt.Sprintf("MPV playlist: write curd_id: %v", err))
 	}
-	noteRecentShow(storagePath, anilistID, time.Now())
+	noteRecentShow(storagePath, anilistID, adult, time.Now())
 }
 
 func (c *MPVPlaylistController) prefetchAfterPlaylistSwitch(currentEp int) {

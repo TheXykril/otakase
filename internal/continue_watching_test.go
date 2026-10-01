@@ -12,7 +12,7 @@ func TestNoteRecentShowKeepsNewestFirstWithoutRepeats(t *testing.T) {
 	dir := t.TempDir()
 	base := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 	for i, id := range []int{1, 2, 3, 2} {
-		noteRecentShow(dir, id, base.Add(time.Duration(i)*time.Minute))
+		noteRecentShow(dir, id, false, base.Add(time.Duration(i)*time.Minute))
 	}
 	shows := loadRecentShows(dir)
 	got := []int{}
@@ -27,7 +27,7 @@ func TestNoteRecentShowKeepsNewestFirstWithoutRepeats(t *testing.T) {
 	}
 
 	for id := 10; id < 10+recentShowsKept+5; id++ {
-		noteRecentShow(dir, id, base)
+		noteRecentShow(dir, id, false, base)
 	}
 	if n := len(loadRecentShows(dir)); n != recentShowsKept {
 		t.Fatalf("kept %d shows, want %d", n, recentShowsKept)
@@ -76,7 +76,7 @@ func TestContinueWatchingRows(t *testing.T) {
 	}
 	base := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 	for i, id := range []int{303, 999, 101, 202} {
-		noteRecentShow(dir, id, base.Add(time.Duration(i)*time.Minute))
+		noteRecentShow(dir, id, false, base.Add(time.Duration(i)*time.Minute))
 	}
 
 	config := &Config{StoragePath: dir, ContinueWatchingRows: 5, TrackingRemote: TrackingRemoteAniList}
@@ -116,5 +116,45 @@ func TestSortHomeMenuOptionsPutsResumeRowsFirst(t *testing.T) {
 	}
 	if strings.Join(keys, ",") != "RESUME:1,RESUME:2,CURRENT,ALL" {
 		t.Fatalf("order = %v", keys)
+	}
+}
+
+// 18+ shows get a continue-watching row only with both AdultContent and
+// ContinueWatchingAdult on, whether the recent list or the tracker marks them.
+func TestContinueWatchingAdultShows(t *testing.T) {
+	dir := t.TempDir()
+	history := "101,provider-a,13,754,24,Frieren\n404,provider-b,2,0,8,Adult Show\n505,provider-c,1,0,8,Old Adult Show\n"
+	if err := os.WriteFile(filepath.Join(dir, "curd_history.txt"), []byte(history), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	noteRecentShow(dir, 101, false, base)
+	noteRecentShow(dir, 505, false, base.Add(time.Minute)) // recorded before the flag
+	noteRecentShow(dir, 404, true, base.Add(2*time.Minute))
+
+	list := &AnimeList{Watching: []Entry{{Media: Media{ID: 101}}, {Media: Media{ID: 404, IsAdult: true}}, {Media: Media{ID: 505, IsAdult: true}}}}
+	keys := func(config *Config, list *AnimeList) []string {
+		var got []string
+		for _, row := range continueWatchingRows(config, list) {
+			got = append(got, row.Key)
+		}
+		return got
+	}
+
+	remote := &Config{StoragePath: dir, ContinueWatchingRows: 5, TrackingRemote: TrackingRemoteAniList, AdultContent: true}
+	if got := keys(remote, list); len(got) != 1 || got[0] != "RESUME:101" {
+		t.Fatalf("AdultContent only: rows = %v, want Frieren only", got)
+	}
+	local := &Config{StoragePath: dir, ContinueWatchingRows: 5, AdultContent: true}
+	if got := keys(local, nil); len(got) != 2 || got[0] != "RESUME:505" {
+		t.Fatalf("local tracking: rows = %v, want the flagged show left out", got)
+	}
+	remote.ContinueWatchingAdult = true
+	if got := keys(remote, list); len(got) != 3 {
+		t.Fatalf("opted in: rows = %v, want all three", got)
+	}
+	remote.AdultContent = false
+	if got := keys(remote, list); len(got) != 1 {
+		t.Fatalf("AdultContent off: rows = %v, want Frieren only", got)
 	}
 }
