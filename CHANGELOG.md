@@ -1,5 +1,65 @@
 # Changelog
 
+## 26.1.0 — 2026-10-01
+
+Releases are now numbered by year: `YY.DROP.HOTFIX`. 26.1.0 is the first
+feature release of 2026 and updates from 2.2.2 like any other version. The
+version is shown in the menu header and the rofi search bar.
+
+### Added
+
+- **Cast to DLNA TVs and Kodi.** `-cast` lists DLNA/UPnP TVs (marked
+  `· DLNA`) and Kodi (marked `· Kodi`) next to Chromecasts, with subtitles
+  burned in. Pause, seek, volume and stop work from the terminal as before.
+  Kodi needs its web server on; set `KodiUser`/`KodiPassword`, and `KodiHost`
+  if it is not found on its own.
+- **Next episode after a cast.** `CastNextEpisode=countdown` (the default)
+  counts down 10 seconds on the panel and plays the next episode, any key
+  stops it; `stop` ends with the video. `NextEpisodePrompt` is now mpv only.
+- **Switch sub/dub while casting** with `a`: the episode restarts in the
+  other audio at the same spot.
+- **Sub or dub is remembered per show.** Switching audio in mpv or on a cast
+  sets that show's default; other shows keep `SubOrDub`. `-sub`/`-dub` still
+  win for one run.
+- **Subtitle language is remembered per show.** Switching with `j` in mpv
+  sets it for that show; others use `SubsLanguage`.
+- **Quality per show.** `Quality` (`best`, `1080`, `720`, `480`) applies to
+  mpv, casts and downloads, and Update → *Quality for this show* overrides
+  it for one show.
+- **Downloads save as MKV** by default, keeping every audio track and styled
+  subtitles, with a `.otakase.json` file of episode info next to each one.
+  `-download-format mp4` and `DownloadFormat` choose MP4. Episodes already
+  downloaded are skipped.
+- **Continue watching.** The menu opens with up to 5 rows like
+  `▶ Frieren · ep 13 at 12:34` that resume at that spot.
+- **Surprise Me** (`ctrl+g`) picks a random Plan to Watch show, with reroll,
+  and offers to move it to Watching when you start it.
+- **Stats** (`ctrl+s`): episodes, time watched, mean score and recent
+  history, read from your tracker.
+- **Already watched some elsewhere.** Adding a show can record the episodes
+  you have seen and start at the next one, or mark it completed.
+- **Watch position syncs between devices** through a tag in your AniList
+  notes / MyAnimeList comments, so another machine resumes at the same spot.
+- **Dev builds.** `DevBuilds=true` also offers the `dev` pre-release, built
+  from unreleased work, in the update check.
+
+### Changed
+
+- A saved custom `MenuOrder` gains the new Surprise Me and Stats rows once.
+- When the tracker is ahead of your local history (another device, Update),
+  the tracker's episode plays instead of the stale local one.
+
+### Fixed
+
+- **Shows private on AniList were copied to MyAnimeList**, where anyone can
+  see them. They are no longer added to or updated on MyAnimeList. Ones
+  already copied stay there until you delete them.
+- **anizone passed its Japanese stream off as a dub.**
+- **`AutoAudioFallback` still asked sub or dub** on some paths.
+- **Torrent (nyaa) downloads failed**, and ffmpeg before 7.1 rejected the
+  `-extension_picky` option.
+- **The rofi Stats page showed two Back rows.**
+
 ## 2.2.2 — 2026-09-30
 
 ### Added
