@@ -1050,6 +1050,7 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 		// for this show decides which ones.
 		applyShowAudioMode(userConfig, anime)
 		anime.TotalEpisodes = selectedAnilistAnime.Media.Episodes
+		anime.IsAdult = selectedAnilistAnime.Media.IsAdult
 		anime.Ep.Duration = trackerEpisodeDuration(anime.Ep.Duration, selectedAnilistAnime.Media)
 		anime.CoverImage = selectedAnilistAnime.CoverImage
 		if selectedAnilistAnime.Media.MalID != 0 {
@@ -1130,6 +1131,10 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 		} else if animePointer.ProviderId == "" {
 			needsProviderSearch = true
 		} else if animePointer.ProviderName != "" && !ProviderStackContains(userConfig, animePointer.ProviderName) {
+			needsProviderSearch = true
+		} else if animePointer.ProviderName != "" && !providerSuitsShow(userConfig, anime, animePointer.ProviderName) {
+			// Mapped before AdultContent routed the show elsewhere, often onto
+			// a same-named series on a general host.
 			needsProviderSearch = true
 		}
 

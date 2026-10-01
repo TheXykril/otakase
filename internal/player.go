@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/thexykril/otakase/internal/providers"
+	"github.com/thexykril/otakase/internal/torrentstream"
 )
 
 // Monotonic request id for mpv JSON IPC so we can ignore interleaved events.
@@ -627,6 +629,19 @@ func WaitForMPVPlaybackStart(ipcSocketPath string, timeout time.Duration) bool {
 	return false
 }
 
+// torrentPlaybackStartTimeout is the least a torrent link gets to start. Its
+// first frame waits on peers and on pieces nobody has fetched yet; 45 seconds
+// was measured on a well-seeded release, which the regular wait cuts off.
+const torrentPlaybackStartTimeout = 120 * time.Second
+
+func playbackStartTimeout(config *Config, links []string) time.Duration {
+	timeout := MpvPlaybackStartTimeoutDuration(config)
+	if len(links) > 0 && torrentstream.IsStreamURL(PrioritizeLink(links)) && timeout < torrentPlaybackStartTimeout {
+		return torrentPlaybackStartTimeout
+	}
+	return timeout
+}
+
 // StartVideoWithProviderFallback starts the current episode links and, if MPV never
 // begins playback, retries other providers. Preferred SubOrDub is exhausted first;
 // only then is an alternate sub/dub mode offered with an explicit user prompt.
@@ -655,12 +670,13 @@ func StartVideoWithProviderFallback(userConfig *Config, anime *Anime, title stri
 			exitWithRestore(1)
 		}
 
-		if mpvSocketPath == "android-intent" || WaitForMPVPlaybackStart(mpvSocketPath, MpvPlaybackStartTimeoutDuration(userConfig)) {
+		playbackTimeout := playbackStartTimeout(userConfig, anime.Ep.Links)
+		if mpvSocketPath == "android-intent" || WaitForMPVPlaybackStart(mpvSocketPath, playbackTimeout) {
 			return mpvSocketPath
 		}
 
 		failedProvider := CurrentAnimeProviderName(anime)
-		playbackTimeout := MpvPlaybackStartTimeoutDuration(userConfig)
+		failedLinks := slices.Clone(anime.Ep.Links)
 		Log(fmt.Sprintf("Playback did not start with provider %s/%s within %s", failedProvider, activeMode, playbackTimeout))
 		Out(fmt.Sprintf("Playback failed to start with %s. Trying another provider...", failedProvider))
 
@@ -683,7 +699,7 @@ func StartVideoWithProviderFallback(userConfig *Config, anime *Anime, title stri
 		// Preferred/active mode exhausted — offer alternate sub/dub once, with a prompt.
 		if !alternateModeOffered && activeMode == normalizeTranslationType(userConfig.SubOrDub) {
 			alternateModeOffered = true
-			episodeResult, err = ResolveEpisodeURLAlternateModeWithPrompt(*userConfig, anime, anime.Ep.Number, nil)
+			episodeResult, err = ResolveEpisodeURLAlternateModeAfterFailure(*userConfig, anime, anime.Ep.Number, nil, failedLinks)
 			if err == nil && len(episodeResult.Links) > 0 {
 				// Alternate mode gets a fresh provider pass, including ones that failed preferred.
 				excludedProviders = nil

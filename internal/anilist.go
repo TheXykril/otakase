@@ -1281,6 +1281,7 @@ func GetAnimeDataByID(id int, token string) (Anime, error) {
 		Media(id: $id, type: ANIME) {
 			id
 			idMal
+			isAdult
 			episodes
 			duration
 			status
@@ -1330,6 +1331,7 @@ func GetAnimeDataByID(id int, token string) (Anime, error) {
 	if malID, ok := media["idMal"].(float64); ok {
 		anime.MalId = int(malID)
 	}
+	anime.IsAdult, _ = media["isAdult"].(bool)
 
 	// Safely handle episodes field which might be nil for currently airing shows
 	if episodes, ok := media["episodes"].(float64); ok {

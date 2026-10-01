@@ -75,6 +75,7 @@ func TestSeriesKeyGroupsReleasesOfOneShow(t *testing.T) {
 		"[SubsPlease] Saijo no Osewa - 09 (720p) [E1F3DA9A].mkv",
 		"[ASW] Saijo no Osewa - 10 [1080p HEVC x265 10Bit][AAC]",
 		"[Erai-raws] Saijo no Osewa - 10 [1080p CR WEB-DL AVC AAC][MultiSub][78ABD684]",
+		"Saijo no Osewa - 06 - English Softsubs",
 	}
 	first := seriesKey(same[0])
 	if first == "" {
@@ -93,5 +94,19 @@ func TestSeriesKeyGroupsReleasesOfOneShow(t *testing.T) {
 func TestSukebeiSearchesItsOwnFeed(t *testing.T) {
 	if p := NewSukebei(); p.Name() != "sukebei" || p.feed == New().feed {
 		t.Fatalf("sukebei provider = %+v, want its own name and feed", p)
+	}
+}
+
+func TestDubOnly(t *testing.T) {
+	cases := map[string]bool{
+		"[Doomdos] - Overflow - 06 [Uncensored] [Dub] [1080p OV WEB-DL]":                                         true,
+		"[HentaiHub] Overflow S01E06 Pouring My Heart Out to You 1080p UNCENSORED OV WEB-DL (English Dub)":       true,
+		"[HentaiHub] Overflow S01E01 Soft Sisters 1080p UNCENSORED OV WEB-DL DUAL FLAC2.0 (Dual-Audio, Eng-Sub)": false,
+		"[SakuraCircle] Overflow - 06 - English Softsubs":                                                        false,
+	}
+	for title, want := range cases {
+		if got := dubOnly(parseRelease(title)); got != want {
+			t.Errorf("dubOnly(%q) = %v, want %v", title, got, want)
+		}
 	}
 }

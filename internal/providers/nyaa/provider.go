@@ -30,6 +30,17 @@ func (p *Provider) Name() string { return p.name }
 // is overwhelmingly subtitled, so dub is opt-in rather than assumed.
 var dubMarkers = regexp.MustCompile(`(?i)\b(dual[\s-]?audio|dual|dub(bed)?|multi[\s-]?audio)\b`)
 
+// dualMarkers identify a release that carries the original audio alongside
+// the dub.
+var dualMarkers = regexp.MustCompile(`(?i)\b(dual[\s-]?audio|dual|multi[\s-]?audio)\b`)
+
+// dubOnly reports a release that is dubbed with no original audio. Asked for
+// sub, one is a last resort: on sukebei the best-seeded copy of an episode is
+// often an English dub.
+func dubOnly(release Release) bool {
+	return dubMarkers.MatchString(release.Title) && !dualMarkers.MatchString(release.Title)
+}
+
 // matchesMode reports whether a release can satisfy the requested audio.
 //
 // Asking for a dub and being handed a subtitled release is worse than being
@@ -179,7 +190,13 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 	// require it: the same show is published under several spellings, and
 	// demanding an exact match makes episodes that exist look missing.
 	candidates := usableReleases(releases, mode)
+	wantSub := providers.NormalizeTranslationType(mode) != "dub"
 	sort.SliceStable(candidates, func(i, j int) bool {
+		if wantSub {
+			if a, b := dubOnly(candidates[i]), dubOnly(candidates[j]); a != b {
+				return b
+			}
+		}
 		return seriesKey(candidates[i].Title) == id && seriesKey(candidates[j].Title) != id
 	})
 

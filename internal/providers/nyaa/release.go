@@ -97,7 +97,7 @@ func stripQualityHints(title string) string {
 // bracketed technical tags removed.
 var (
 	bracketed    = regexp.MustCompile(`[\[(][^\])]*[\])]`)
-	episodeTail  = regexp.MustCompile(`(?i)\s-\s\d{1,4}(v\d)?\s*$|\s(?i:S\d{1,2}E\d{1,4}).*$`)
+	episodeTail  = regexp.MustCompile(`(?i)\s-\s\d{1,4}(v\d)?(\s+-\s.*)?\s*$|\s(?i:S\d{1,2}E\d{1,4}).*$`)
 	multiSpaceRE = regexp.MustCompile(`\s+`)
 )
 

@@ -102,9 +102,6 @@ func searchAnimeForMapping(config *Config, state *providerMappingSearchState, mo
 	}
 
 	runSearch := func(query string) ([]SelectionOption, error) {
-		if !state.sequential && len(providers) == len(state.allProviders) {
-			return SearchAnime(query, mode)
-		}
 		return searchAnimeWithProviders(providers, query, mode)
 	}
 
@@ -432,7 +429,7 @@ func ResolveAnimeProviderMapping(config *Config, anime *Anime, query string, ani
 func resolveAnimeProviderMapping(config *Config, anime *Anime, query string, anilistEntry *Entry, manualOnly bool) (ProviderMappingOutcome, error) {
 	state := &providerMappingSearchState{
 		query:         query,
-		allProviders:  configuredProviderNames(config),
+		allProviders:  providerNamesForShow(config, anime),
 		queryVariants: buildSearchQueryVariants(config, anime.Title, query),
 	}
 	if len(state.queryVariants) > 1 {
@@ -628,6 +625,7 @@ func RemapProviderAnime(userConfig *Config, user *User, databaseAnimes *[]Anime)
 		Title:         anilistEntry.Media.Title,
 		TotalEpisodes: anilistEntry.Media.Episodes,
 		CoverImage:    anilistEntry.CoverImage,
+		IsAdult:       anilistEntry.Media.IsAdult,
 	}
 
 	outcome, mappingErr := resolveAnimeProviderMapping(userConfig, &anime, query, anilistEntry, true)
@@ -797,7 +795,7 @@ func episodeLinkFailureDiagnosis(config *Config, anime *Anime, lastErr error) st
 		mode = normalizeTranslationType(config.SubOrDub)
 	}
 
-	providers := configuredProviderNames(config)
+	providers := providerNamesForShow(config, anime)
 	tried := "none"
 	if len(providers) > 0 {
 		tried = strings.Join(providers, ", ")
