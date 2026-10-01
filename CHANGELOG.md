@@ -1,5 +1,20 @@
 # Changelog
 
+## 26.1.2 — 2026-10-01
+
+### Added
+
+- **`ContinueWatchingAdult`** (default `false`). With `AdultContent=true`,
+  it also lets titles marked 18+ into the continue-watching rows.
+
+### Changed
+
+- **Continue-watching rows leave out titles marked 18+** unless
+  `ContinueWatchingAdult` is on. Before, `AdultContent=true` was enough, and
+  with local-only tracking they were never left out.
+- The update prompt no longer fetches a separate extra-notes file; release
+  notes are all in one place.
+
 ## 26.1.1 — 2026-10-01
 
 ### Fixed
