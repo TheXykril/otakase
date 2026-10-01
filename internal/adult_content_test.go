@@ -38,3 +38,28 @@ func TestMergeKeepsAdultFlag(t *testing.T) {
 		t.Fatal("merge dropped the adult flag")
 	}
 }
+
+// sukebei only carries adult titles, so it is in the provider stack only
+// while AdultContent is on.
+func TestSukebeiFollowsAdultContent(t *testing.T) {
+	previous := GetGlobalConfig()
+	t.Cleanup(func() { SetGlobalConfig(previous) })
+
+	SetGlobalConfig(&Config{AdultContent: false})
+	if ProviderEnabled("sukebei") {
+		t.Fatal("sukebei enabled with AdultContent=false")
+	}
+	for _, name := range defaultEnabledProviderStack() {
+		if name == "sukebei" {
+			t.Fatal("sukebei in the default stack with AdultContent=false")
+		}
+	}
+
+	SetGlobalConfig(&Config{AdultContent: true})
+	if !ProviderEnabled("sukebei") {
+		t.Fatalf("sukebei disabled with AdultContent=true: %s", ProviderDisabledReason("sukebei"))
+	}
+	if !ProviderEnabled("nyaa") {
+		t.Fatal("nyaa should stay enabled")
+	}
+}
