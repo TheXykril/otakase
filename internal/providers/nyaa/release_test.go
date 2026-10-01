@@ -89,3 +89,9 @@ func TestSeriesKeyGroupsReleasesOfOneShow(t *testing.T) {
 		t.Errorf("unexpected series key %q", first)
 	}
 }
+
+func TestSukebeiSearchesItsOwnFeed(t *testing.T) {
+	if p := NewSukebei(); p.Name() != "sukebei" || p.feed == New().feed {
+		t.Fatalf("sukebei provider = %+v, want its own name and feed", p)
+	}
+}

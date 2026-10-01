@@ -117,7 +117,8 @@ func continueWatchingRows(config *Config, list *AnimeList) []SelectionOption {
 			continue
 		}
 		if list != nil && UsesRemoteTracking(config) {
-			if _, err := FindAnimeByAnilistID(*list, strconv.Itoa(show.AnilistID)); err != nil {
+			listed, err := FindAnimeByAnilistID(*list, strconv.Itoa(show.AnilistID))
+			if err != nil || (listed.Media.IsAdult && !config.AdultContent) {
 				continue
 			}
 		}

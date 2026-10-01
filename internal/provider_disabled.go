@@ -28,6 +28,11 @@ func providerDisabledReason(name string) string {
 	if meta.DefaultDisabled {
 		return meta.DisableReason
 	}
+	if meta.Adult {
+		if config := GetGlobalConfig(); config == nil || !config.AdultContent {
+			return meta.DisableReason
+		}
+	}
 	return ""
 }
 
@@ -125,7 +130,11 @@ func filterEnabledProviders(names []string) []string {
 // have to be found before the first frame -- but ahead of the broken ones,
 // because it reliably carries an episode in the week it airs even when every
 // streaming host is still missing it.
-var preferredProviderOrder = []string{"anikoto", "kickassanime", "anizone", "anipub", "anineko", "nyaa", "anidb"}
+//
+// sukebei comes last of the working ones: it carries only adult titles, which
+// none of the others do, so it is the one left to try for those, and is only
+// in the stack at all when AdultContent is on.
+var preferredProviderOrder = []string{"anikoto", "kickassanime", "anizone", "anipub", "anineko", "nyaa", "sukebei", "anidb"}
 
 func defaultEnabledProviderStack() []string {
 	registered := providers.RegisteredNames()

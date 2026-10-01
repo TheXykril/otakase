@@ -173,6 +173,9 @@ type Media struct {
 	Title             AnimeTitle             `json:"title"`
 	Status            string                 `json:"status"`
 	NextAiringEpisode *NextAiringEpisodeInfo `json:"nextAiringEpisode,omitempty"`
+	// IsAdult marks 18+ titles: AniList's isAdult, or MyAnimeList rating
+	// them "black" (explicit). AdultContent=false hides them.
+	IsAdult bool `json:"isAdult,omitempty"`
 }
 
 type Entry struct {
@@ -186,6 +189,9 @@ type Entry struct {
 	CompletedAt FuzzyDate `json:"completedAt"`
 	CoverImage  string    `json:"coverImage"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+	// Private is AniList's "hide from other users" flag. MyAnimeList has no
+	// such flag, so a private entry is kept off MyAnimeList entirely.
+	Private bool `json:"private,omitempty"`
 }
 
 type AnimeList struct {

@@ -216,9 +216,9 @@ func SearchAnimeAnilistPreview(query, token string) (map[string]RofiSelectPrevie
 	url := "https://graphql.anilist.co"
 
 	queryString := `
-	query ($search: String) {
+	query ($search: String, $isAdult: Boolean) {
 		Page(page: 1, perPage: 50) {
-			media(search: $search, type: ANIME) {
+			media(search: $search, type: ANIME, isAdult: $isAdult) {
 				id
 				episodes
 				title {
@@ -233,7 +233,7 @@ func SearchAnimeAnilistPreview(query, token string) (map[string]RofiSelectPrevie
 		}
 	}`
 
-	variables := map[string]string{"search": query}
+	variables := searchVariables(query)
 	requestBody, err := json.Marshal(map[string]interface{}{
 		"query":     queryString,
 		"variables": variables,
@@ -294,9 +294,9 @@ func SearchAnimeAnilist(query, token string) ([]SelectionOption, error) {
 	url := "https://graphql.anilist.co"
 
 	queryString := `
-	query ($search: String) {
+	query ($search: String, $isAdult: Boolean) {
 		Page(page: 1, perPage: 50) {
-			media(search: $search, type: ANIME) {
+			media(search: $search, type: ANIME, isAdult: $isAdult) {
 				id
 				episodes
 				title {
@@ -308,7 +308,7 @@ func SearchAnimeAnilist(query, token string) ([]SelectionOption, error) {
 		}
 	}`
 
-	variables := map[string]string{"search": query}
+	variables := searchVariables(query)
 	requestBody, err := json.Marshal(map[string]interface{}{
 		"query":     queryString,
 		"variables": variables,
@@ -522,9 +522,11 @@ func GetUserData(token string, userID int) (map[string]interface{}, error) {
 				isCustomList
 				entries {
 					id
+					private
 					media {
 						id
 						idMal
+						isAdult
 						episodes
 						duration
 						format
@@ -586,9 +588,11 @@ func GetUserDataPreview(token string, userID int) (map[string]interface{}, error
 				isCustomList
 				entries {
 					id
+					private
 					media {
 						id
 						idMal
+						isAdult
 						episodes
 						duration
 						format
@@ -1183,6 +1187,8 @@ func ParseAnimeList(input map[string]interface{}) AnimeList {
 				CompletedAt: parseFuzzyDate(entryData["completedAt"]),
 				UpdatedAt:   time.Unix(int64(toInt(entryData["updatedAt"])), 0).UTC(),
 			}
+			animeEntry.Private, _ = entryData["private"].(bool)
+			animeEntry.Media.IsAdult, _ = media["isAdult"].(bool)
 			if score, ok := entryData["score"].(float64); ok {
 				animeEntry.Score = score
 			}

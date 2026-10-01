@@ -267,7 +267,7 @@ func buildCategorySelectionOptions(list AnimeList, category string) []SelectionO
 	options := make([]SelectionOption, 0)
 	resume := resumePointsByAnilistID(userConfig)
 
-	for _, entry := range sortEntriesByRecency(getEntriesByCategory(list, category), userConfig) {
+	for _, entry := range sortEntriesByRecency(visibleEntriesByCategory(list, category, userConfig), userConfig) {
 		title := mediaDisplayTitle(entry.Media, userConfig)
 
 		hasNew := false
@@ -295,7 +295,7 @@ func buildCategoryPreviewOptions(list AnimeList, category string) map[string]Rof
 
 	// The grid is keyed by a map, which has no order of its own, so each entry
 	// carries the rank it should be displayed at.
-	for rank, entry := range sortEntriesByRecency(getEntriesByCategory(list, category), userConfig) {
+	for rank, entry := range sortEntriesByRecency(visibleEntriesByCategory(list, category, userConfig), userConfig) {
 		title := mediaDisplayTitle(entry.Media, userConfig)
 
 		hasNew := false

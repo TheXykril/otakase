@@ -131,6 +131,9 @@ type Config struct {
 	// 720, 480) picks the nearest variant at or below. A show can override
 	// it in show_prefs.json.
 	Quality string `config:"Quality"`
+	// AdultContent shows 18+ titles in your lists and in search. Off hides
+	// them; they stay on the tracker and keep syncing.
+	AdultContent bool `config:"AdultContent"`
 	// CastToDevice records that -cast was given for this run. It is not a
 	// setting, so it carries no config tag.
 	CastToDevice bool `config:"-"`
@@ -204,6 +207,7 @@ func defaultConfigMap() map[string]string {
 		"IntroDBSkipTimes":           "true",
 		"CheckUpdates":               "true",
 		"DevBuilds":                  "false",
+		"AdultContent":               "false",
 		"MpvEpisodePlaylist":         "true",
 		"Provider":                   "stacked",
 		"DisabledProviders":          "[]",

@@ -20,6 +20,10 @@ import (
 // the ranking below decides between them.
 const feedURL = "https://nyaa.si/?page=rss&c=1_2&f=0&q="
 
+// sukebeiFeedURL is the same index software on Nyaa's adult sister site.
+// Category 1_1 is "Art - Anime".
+const sukebeiFeedURL = "https://sukebei.nyaa.si/?page=rss&c=1_1&f=0&q="
+
 type rssFeed struct {
 	Items []rssItem `xml:"channel>item"`
 }
@@ -48,21 +52,22 @@ type cachedFeed struct {
 	fetched  time.Time
 }
 
-// fetchReleases returns the indexed releases matching query, most seeded first.
-func fetchReleases(query string) ([]Release, error) {
+// fetchReleases returns the releases in feed matching query, most seeded first.
+func fetchReleases(feed, query string) ([]Release, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, fmt.Errorf("nyaa: empty search query")
 	}
 
 	feedMu.Lock()
-	if cached, ok := feedCache[query]; ok && time.Since(cached.fetched) < feedCacheTTL {
+	cacheKey := feed + query
+	if cached, ok := feedCache[cacheKey]; ok && time.Since(cached.fetched) < feedCacheTTL {
 		feedMu.Unlock()
 		return cached.releases, nil
 	}
 	feedMu.Unlock()
 
-	req, err := http.NewRequest("GET", feedURL+url.QueryEscape(query), nil)
+	req, err := http.NewRequest("GET", feed+url.QueryEscape(query), nil)
 	if err != nil {
 		return nil, fmt.Errorf("nyaa: build request: %w", err)
 	}
@@ -88,7 +93,7 @@ func fetchReleases(query string) ([]Release, error) {
 	}
 
 	feedMu.Lock()
-	feedCache[query] = cachedFeed{releases: releases, fetched: time.Now()}
+	feedCache[cacheKey] = cachedFeed{releases: releases, fetched: time.Now()}
 	feedMu.Unlock()
 	return releases, nil
 }

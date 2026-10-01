@@ -485,6 +485,11 @@ func mergeEntryMetadata(preferred, fallback Entry) Entry {
 	if preferred.Media.Format == "" {
 		preferred.Media.Format = fallback.Media.Format
 	}
+	// A property of the show, not the list entry: either tracker saying so
+	// is enough.
+	if fallback.Media.IsAdult {
+		preferred.Media.IsAdult = true
+	}
 	if preferred.CoverImage == "" {
 		preferred.CoverImage = fallback.CoverImage
 	}
@@ -639,6 +644,8 @@ func buildDualRemoteSyncPlan(aniList, myAnimeList AnimeList) dualRemoteSyncPlan 
 	}
 	sort.Ints(orderedIDs)
 
+	noteAniListPrivateEntries(aniList)
+
 	mergedEntries := make(map[int]Entry, len(orderedIDs))
 	plan := dualRemoteSyncPlan{}
 	for _, id := range orderedIDs {
@@ -648,16 +655,21 @@ func buildDualRemoteSyncPlan(aniList, myAnimeList AnimeList) dualRemoteSyncPlan 
 		switch {
 		case hasAni && hasMal:
 			winner := mergeAnimeEntries(aniEntry, malEntry)
+			// Only AniList knows an entry is private; a merge that takes the
+			// MyAnimeList side must not drop it, nor carry a stale flag over.
+			winner.Private = aniEntry.Private
 			mergedEntries[id] = winner
 			if !entriesEquivalentForSync(aniEntry, winner) {
 				plan.AniListUpdates = append(plan.AniListUpdates, winner)
 			}
-			if !myAnimeListEntriesEquivalentForSync(malEntry, winner) {
+			if !aniEntry.Private && !myAnimeListEntriesEquivalentForSync(malEntry, winner) {
 				plan.MyAnimeListUpdates = append(plan.MyAnimeListUpdates, winner)
 			}
 		case hasAni:
 			mergedEntries[id] = aniEntry
-			plan.MyAnimeListUpdates = append(plan.MyAnimeListUpdates, aniEntry)
+			if !aniEntry.Private {
+				plan.MyAnimeListUpdates = append(plan.MyAnimeListUpdates, aniEntry)
+			}
 		case hasMal:
 			mergedEntries[id] = malEntry
 			plan.AniListUpdates = append(plan.AniListUpdates, malEntry)
@@ -1368,7 +1380,7 @@ func ImportAniListTrackingToMyAnimeList(config *Config) error {
 
 	sourceList := ParseAnimeList(userData)
 	for _, entry := range getEntriesByCategory(sourceList, "ALL") {
-		if entry.Media.MalID == 0 {
+		if entry.Media.MalID == 0 || entry.Private {
 			continue
 		}
 

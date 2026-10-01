@@ -918,7 +918,7 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 						// Counting is a filter over a list already in memory, so
 						// every tab can say how much is behind it.
 						for i := range categoryTabs {
-							categoryTabs[i].Count = len(getEntriesByCategory(user.AnimeList, categoryTabs[i].Key))
+							categoryTabs[i].Count = len(visibleEntriesByCategory(user.AnimeList, categoryTabs[i].Key, userConfig))
 						}
 						activeCategory := categorySelection.Key
 

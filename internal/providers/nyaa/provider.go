@@ -12,9 +12,19 @@ import (
 	"github.com/thexykril/otakase/internal/torrentstream"
 )
 
-type Provider struct{}
+// Provider searches one Nyaa-software index: nyaa itself, or sukebei.
+type Provider struct {
+	name string
+	feed string
+}
 
-func (p *Provider) Name() string { return "nyaa" }
+// New is the nyaa provider.
+func New() *Provider { return &Provider{name: "nyaa", feed: feedURL} }
+
+// NewSukebei is the provider for sukebei, Nyaa's adult sister site.
+func NewSukebei() *Provider { return &Provider{name: "sukebei", feed: sukebeiFeedURL} }
+
+func (p *Provider) Name() string { return p.name }
 
 // dubMarkers identify a release that carries an English audio track. The index
 // is overwhelmingly subtitled, so dub is opt-in rather than assumed.
@@ -66,7 +76,7 @@ func usableReleases(releases []Release, mode string) []Release {
 }
 
 func (p *Provider) SearchAnime(query, mode string) ([]providers.SelectionOption, error) {
-	releases, err := fetchReleases(query)
+	releases, err := fetchReleases(p.feed, query)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +127,7 @@ func (p *Provider) SearchAnime(query, mode string) ([]providers.SelectionOption,
 }
 
 func (p *Provider) EpisodesList(showID, mode string) ([]string, error) {
-	releases, err := fetchReleases(showID)
+	releases, err := fetchReleases(p.feed, showID)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +170,7 @@ func (p *Provider) GetEpisodeURL(config providers.PlaybackConfig, id string, epN
 }
 
 func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id string, epNo int, mode string) ([]string, error) {
-	releases, err := fetchReleases(id)
+	releases, err := fetchReleases(p.feed, id)
 	if err != nil {
 		return nil, err
 	}
@@ -179,13 +189,13 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 		if release.Episode != epNo {
 			continue
 		}
-		providerhost.Log(fmt.Sprintf("nyaa: episode %d -> %q (%d seeders, %s)",
-			epNo, release.Title, release.Seeders, release.Size))
+		providerhost.Log(fmt.Sprintf("%s: episode %d -> %q (%d seeders, %s)",
+			p.name, epNo, release.Title, release.Seeders, release.Size))
 
 		streamURL, err := torrentstream.Stream(release.InfoHash)
 		if err != nil {
 			// Another release may have a healthier swarm.
-			providerhost.Log(fmt.Sprintf("nyaa: %q did not start: %v", release.Title, err))
+			providerhost.Log(fmt.Sprintf("%s: %q did not start: %v", p.name, release.Title, err))
 			continue
 		}
 		return []string{streamURL}, nil

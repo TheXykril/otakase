@@ -54,6 +54,8 @@ type myAnimeListAnimeNode struct {
 	NumEpisodes            int                          `json:"num_episodes"`
 	AverageEpisodeDuration int                          `json:"average_episode_duration"`
 	Status                 string                       `json:"status"`
+	// NSFW is MyAnimeList's rating: "white", "gray" or "black" (explicit).
+	NSFW string `json:"nsfw"`
 }
 
 type myAnimeListListStatus struct {
@@ -861,7 +863,7 @@ func lookupAniListMediaByMalIDs(malIDs []int) (map[int]aniListMediaLookupResult,
 	var query strings.Builder
 	query.WriteString("query {")
 	for idx, malID := range malIDs {
-		fmt.Fprintf(&query, " m%d: Media(idMal: %d, type: ANIME) { id idMal episodes duration status format title { romaji english native } coverImage { large } }", idx, malID)
+		fmt.Fprintf(&query, " m%d: Media(idMal: %d, type: ANIME) { id idMal episodes duration status format isAdult title { romaji english native } coverImage { large } }", idx, malID)
 	}
 	query.WriteString(" }")
 
@@ -917,6 +919,7 @@ func lookupAniListMediaByMalIDs(malIDs []int) (map[int]aniListMediaLookupResult,
 		if duration, ok := rawMedia["duration"].(float64); ok {
 			media.Duration = int(duration)
 		}
+		media.IsAdult, _ = rawMedia["isAdult"].(bool)
 		cover := ""
 		if coverImage, ok := rawMedia["coverImage"].(map[string]interface{}); ok {
 			cover = safeAniListString(coverImage["large"])
@@ -1008,7 +1011,7 @@ func FetchLatestMyAnimeList(config *Config, user *User) (AnimeList, error) {
 	nextURL := "/users/@me/animelist"
 	queryValues := url.Values{
 		"limit":  {"1000"},
-		"fields": {"list_status,num_episodes,average_episode_duration,alternative_titles,main_picture,status"},
+		"fields": {"list_status,num_episodes,average_episode_duration,alternative_titles,main_picture,status,nsfw"},
 		"sort":   {"list_updated_at"},
 	}
 
@@ -1064,6 +1067,9 @@ func FetchLatestMyAnimeList(config *Config, user *User) (AnimeList, error) {
 			}
 			media := lookup.Media
 			cover := lookup.Cover
+			if item.Node.NSFW == "black" {
+				media.IsAdult = true
+			}
 
 			if media.Title.English == "" && item.Node.AlternativeTitles.En != "" {
 				media.Title.English = item.Node.AlternativeTitles.En
@@ -1199,6 +1205,10 @@ func RefreshMyAnimeListUserAnimeList(config *Config, user *User) error {
 }
 
 func updateMyAnimeListListStatus(config *Config, malID int, payload map[string]string) error {
+	if isAniListPrivateMyAnimeListID(malID) {
+		Log(fmt.Sprintf("MyAnimeList: not writing %d, it is private on AniList", malID))
+		return nil
+	}
 	form := url.Values{}
 	for key, value := range payload {
 		if strings.TrimSpace(value) == "" && key != "start_date" && key != "finish_date" {

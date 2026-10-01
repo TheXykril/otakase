@@ -147,6 +147,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"CastNextEpisode": "26.1.0",
 		// 26.1.0 — update to dev builds
 		"DevBuilds": "26.1.0",
+		// 26.1.0 — hide 18+ titles
+		"AdultContent": "26.1.0",
 	}
 }
 

@@ -14,6 +14,9 @@ type Meta struct {
 	Referrer        string
 	DefaultDisabled bool
 	DisableReason   string
+	// Adult marks a provider that serves 18+ titles only. It is used only
+	// when the AdultContent setting is on.
+	Adult bool
 }
 
 type entry struct {
