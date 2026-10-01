@@ -134,6 +134,9 @@ type Config struct {
 	// AdultContent shows 18+ titles in your lists and in search. Off hides
 	// them; they stay on the tracker and keep syncing.
 	AdultContent bool `config:"AdultContent"`
+	// ContinueWatchingAdult lets 18+ shows into the continue-watching rows.
+	// They open the home menu, so it is off by default and needs AdultContent.
+	ContinueWatchingAdult bool `config:"ContinueWatchingAdult"`
 	// CastToDevice records that -cast was given for this run. It is not a
 	// setting, so it carries no config tag.
 	CastToDevice bool `config:"-"`
@@ -208,6 +211,7 @@ func defaultConfigMap() map[string]string {
 		"CheckUpdates":               "true",
 		"DevBuilds":                  "false",
 		"AdultContent":               "false",
+		"ContinueWatchingAdult":      "false",
 		"MpvEpisodePlaylist":         "true",
 		"Provider":                   "stacked",
 		"DisabledProviders":          "[]",

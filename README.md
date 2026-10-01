@@ -496,7 +496,8 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `MyAnimeListClientSecret` | String | MAL OAuth secret | Optional; used for sign-in and token refresh. |
 | `CheckUpdates` | Boolean | `true`, `false` | Check for a newer release while idle, and offer it at the next launch. Default `true`. |
 | `DevBuilds` | Boolean | `true`, `false` | Also offer dev builds (the `dev` pre-release on GitHub, built from unreleased work on `main`) when one is newer than the latest release, in the update check and in `-u`. They can be broken. Default `false`. |
-| `AdultContent` | Boolean | `true`, `false` | Show 18+ titles (AniList "adult", MyAnimeList rated explicit) in your lists, Surprise Me and AniList search (continue-watching rows never show them). When `false` they are hidden but stay on your tracker and keep syncing. Provider search when watching untracked is not filtered. Default `false`. |
+| `AdultContent` | Boolean | `true`, `false` | Show 18+ titles (AniList "adult", MyAnimeList rated explicit) in your lists, Surprise Me and AniList search (continue-watching rows only with `ContinueWatchingAdult`). When `false` they are hidden but stay on your tracker and keep syncing. Provider search when watching untracked is not filtered. Default `false`. |
+| `ContinueWatchingAdult` | Boolean | `true`, `false` | Show 18+ titles in the continue-watching rows that open the menu. Needs `AdultContent=true`. Default `false`, so they stay off the first screen. |
 | `AddMissingOptions` | Boolean | `true`, `false` | On a version upgrade, append newly added options to your config file. Default `true`. |
 
 ## Where your data lives
