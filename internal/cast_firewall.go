@@ -147,6 +147,57 @@ func castWaitingFirewallHint(config *Config, serverAddr, firewall, device string
 	return lead + "The fix is on your clipboard -- paste it into a terminal."
 }
 
+// castDiscoveryFirewallHint is the line to print when discovery found nothing
+// and a host firewall is on, or "" when there is no firewall to blame.
+//
+// Discovery answers are inbound UDP that ufw and firewalld drop by default,
+// which looks exactly like an empty network. The rules are the three ports a
+// cast uses: the SSDP answers (DLNA), mDNS (Chromecast, Kodi), and the stream
+// server the device fetches from. Each is limited to the LAN, and a port left
+// random gets a config hint instead of a rule, since it cannot be allowed.
+func castDiscoveryFirewallHint(config *Config, localAddr, firewall string) string {
+	if firewall == "" {
+		return ""
+	}
+	subnet := castLocalSubnet(localAddr)
+	if subnet == "" {
+		subnet = "192.168.0.0/24"
+	}
+	discoveryPort, castPort := 0, 0
+	if config != nil {
+		discoveryPort, castPort = config.CastDiscoveryPort, config.CastPort
+	}
+
+	var rules, unset []string
+	add := func(port int, proto string) {
+		if firewall == "firewalld" {
+			rules = append(rules, fmt.Sprintf("sudo firewall-cmd --permanent --add-port=%d/%s", port, proto))
+			return
+		}
+		rules = append(rules, fmt.Sprintf("sudo ufw allow from %s to any port %d proto %s", subnet, port, proto))
+	}
+	if discoveryPort > 0 {
+		add(discoveryPort, "udp")
+	} else {
+		unset = append(unset, "CastDiscoveryPort")
+	}
+	add(5353, "udp")
+	if castPort > 0 {
+		add(castPort, "tcp")
+	} else {
+		unset = append(unset, "CastPort")
+	}
+	if firewall == "firewalld" {
+		rules = append(rules, "sudo firewall-cmd --reload")
+	}
+
+	hint := fmt.Sprintf("%s may be hiding devices; allow discovery: %s", firewall, strings.Join(rules, " && "))
+	if len(unset) > 0 {
+		hint += fmt.Sprintf(" (and set %s to a fixed port with otakase -e)", strings.Join(unset, " and "))
+	}
+	return hint
+}
+
 // castServerHost is the address out of a server URL, for building a firewall
 // hint that names this machine's own subnet.
 func castServerHost(rawURL string) string {

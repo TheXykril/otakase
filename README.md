@@ -256,7 +256,22 @@ Philips); they are listed next to Chromecasts, marked `· DLNA`. A TV that is
 both can show up twice, and the Chromecast entry is the one with the better
 controls. A DLNA TV is sent one plain MPEG-TS stream, so it needs nothing
 installed; if it does not appear, check that the TV's "media renderer" or
-"DLNA" setting is on and that your firewall lets UDP answers back in.
+"DLNA" setting is on and that your firewall lets its answers back in.
+
+**Behind a firewall** (ufw, firewalld), discovery answers arrive as inbound UDP
+and are dropped by default, so the TV looks absent. TVs answer on
+`CastDiscoveryPort` (UDP, `8011` by default), Chromecast and Kodi on mDNS
+(`5353/udp`), and the TV fetches the stream from `CastPort` (TCP). With
+`CastPort=8010` and a `192.168.0.x` network, these three rules cover it:
+
+```sh
+sudo ufw allow from 192.168.0.0/24 to any port 8011 proto udp   # TV answers (DLNA)
+sudo ufw allow from 192.168.0.0/24 to any port 5353 proto udp   # mDNS (Chromecast, Kodi)
+sudo ufw allow from 192.168.0.0/24 to any port 8010 proto tcp   # the stream
+```
+
+When a search finds nothing and ufw or firewalld is on, otakase prints these
+rules for your own subnet and ports.
 
 **Kodi** (on its own, or on an Android TV box, Fire TV or Raspberry Pi) is
 listed marked `· Kodi` once *Settings > Services > Control > Allow remote
@@ -456,6 +471,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `CastDevice` | String | a device name | Cast to this device without asking, when `-cast` is given and the device is found. Empty asks each time. |
 | `CastTerminal` | String | a terminal emulator | Terminal opened for a cast started from rofi. Empty uses `$TERMINAL`, then whatever is installed. |
 | `CastPort` | Integer | `0`–`65535` | Port the cast stream server listens on. `0` (the default) picks a free one; fix it to allow a single port through a firewall. |
+| `CastDiscoveryPort` | Integer | `0`–`65535` | UDP port device discovery listens for TV answers on (default `8011`), so one firewall rule lets them in. `0` picks a random one. |
 | `KodiHost` | String | `host` or `host:port`, comma-separated | Kodi instances to offer for casting when discovery does not find them. Port defaults to `8080`. |
 | `KodiUser` | String | any | User name of Kodi's web server, when it asks for one. |
 | `KodiPassword` | String | any | Password of Kodi's web server, when it asks for one. |

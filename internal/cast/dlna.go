@@ -77,7 +77,7 @@ func discoverDLNA(ctx context.Context) ([]Device, error) {
 // ssdpSearch multicasts one search and collects the description URLs that
 // answer before the context ends.
 func ssdpSearch(ctx context.Context, target string) ([]string, error) {
-	conn, err := net.ListenPacket("udp4", ":0")
+	conn, err := listenSSDP(currentDiscoveryPort())
 	if err != nil {
 		return nil, fmt.Errorf("SSDP: %w", err)
 	}
@@ -128,6 +128,25 @@ func ssdpSearch(ctx context.Context, target string) ([]string, error) {
 		locations = append(locations, location)
 	}
 	return locations, nil
+}
+
+// listenSSDP opens the socket a search is sent from and answered on.
+//
+// Renderers answer an M-SEARCH by unicast to the port it came from, so that
+// port is the one a host firewall has to let in. A random one cannot be
+// allowed without opening every UDP port to the LAN; a fixed one is a single
+// rule. When the fixed port is taken -- a second otakase searching at the same
+// moment, or something else holding it -- a random one is used instead, so
+// discovery still works wherever no firewall is in the way.
+func listenSSDP(port int) (net.PacketConn, error) {
+	if port > 0 {
+		conn, err := net.ListenPacket("udp4", ":"+strconv.Itoa(port))
+		if err == nil {
+			return conn, nil
+		}
+		Log(fmt.Sprintf("cast: could not listen on discovery port %d, using a random one: %v", port, err))
+	}
+	return net.ListenPacket("udp4", ":0")
 }
 
 // ssdpHeader reads one header from an SSDP response, case-insensitively.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -1230,11 +1231,17 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 		User:     config.KodiUser,
 		Password: config.KodiPassword,
 	})
+	cast.SetDiscoveryPort(config.CastDiscoveryPort)
 	devices, err := cast.Discover(context.Background(), cast.DefaultDiscoveryTimeout)
 	if err != nil {
 		return cast.Device{}, err
 	}
 	if len(devices) == 0 {
+		if runtime.GOOS == "linux" {
+			if hint := castDiscoveryFirewallHint(config, cast.LocalAddress(), castDetectFirewall()); hint != "" {
+				Out(hint)
+			}
+		}
 		return cast.Device{}, fmt.Errorf("cast: no devices found on this network")
 	}
 

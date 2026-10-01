@@ -196,3 +196,51 @@ func TestCastWaitingFirewallHintWithoutAPortAsksForOne(t *testing.T) {
 		t.Errorf("the hint does not say to set CastPort: %q", got)
 	}
 }
+
+// The discovery hint names all three ports a cast needs, each limited to the
+// LAN, on one line.
+func TestCastDiscoveryFirewallHintUfw(t *testing.T) {
+	got := castDiscoveryFirewallHint(&Config{CastPort: 8010, CastDiscoveryPort: 8011}, "192.168.0.17", "ufw")
+	for _, want := range []string{
+		"sudo ufw allow from 192.168.0.0/24 to any port 8011 proto udp",
+		"sudo ufw allow from 192.168.0.0/24 to any port 5353 proto udp",
+		"sudo ufw allow from 192.168.0.0/24 to any port 8010 proto tcp",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("hint lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "\n") {
+		t.Errorf("hint is more than one line:\n%s", got)
+	}
+}
+
+// A random port cannot be allowed, so the hint says to fix it instead of
+// printing a rule for port 0.
+func TestCastDiscoveryFirewallHintRandomPorts(t *testing.T) {
+	got := castDiscoveryFirewallHint(&Config{}, "192.168.0.17", "ufw")
+	if strings.Contains(got, "port 0 ") {
+		t.Errorf("hint allows port 0:\n%s", got)
+	}
+	for _, want := range []string{"CastDiscoveryPort", "CastPort", "port 5353 proto udp"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("hint lacks %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestCastDiscoveryFirewallHintFirewalld(t *testing.T) {
+	got := castDiscoveryFirewallHint(&Config{CastPort: 8010, CastDiscoveryPort: 8011}, "192.168.0.17", "firewalld")
+	for _, want := range []string{"--add-port=8011/udp", "--add-port=5353/udp", "--add-port=8010/tcp", "firewall-cmd --reload"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("hint lacks %q:\n%s", want, got)
+		}
+	}
+}
+
+// No firewall, nothing to blame: the hint stays silent.
+func TestCastDiscoveryFirewallHintNoFirewall(t *testing.T) {
+	if got := castDiscoveryFirewallHint(&Config{CastDiscoveryPort: 8011}, "192.168.0.17", ""); got != "" {
+		t.Errorf("hint without a firewall: %q", got)
+	}
+}
