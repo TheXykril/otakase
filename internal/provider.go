@@ -302,7 +302,7 @@ func providerIDForAnime(anime *Anime) (providerName, providerID string) {
 }
 
 func providerNamesForAnime(config *Config, anime *Anime) []string {
-	configuredNames := configuredProviderNames(config)
+	configuredNames := providerNamesForShow(config, anime)
 	providerName, _ := providerIDForAnime(anime)
 	providerName = normalizeProviderName(providerName)
 
@@ -315,7 +315,7 @@ func providerNamesForAnime(config *Config, anime *Anime) []string {
 		seen[name] = struct{}{}
 		result = append(result, name)
 	}
-	if providerName != "" && !ProviderEnabled(providerName) {
+	if providerName != "" && (!ProviderEnabled(providerName) || !providerSuitsShow(config, anime, providerName)) {
 		providerName = ""
 	}
 	if providerName != "" {

@@ -23,6 +23,10 @@ type Anime struct {
 	ProviderName   string // newly added for history migration
 	FillerEpisodes []int
 	IsAiring       bool
+	// IsAdult is the tracker's 18+ flag. With AdultContent on, such a show
+	// is looked for only on adult providers, which are the only ones that
+	// carry it.
+	IsAdult        bool `json:"-"`
 	SkipRemoteSync bool `json:"-"`
 	// Untracked is an episode from Untracked Watching: played, never written
 	// to the history file or a tracker. A cast reads it to skip every write.

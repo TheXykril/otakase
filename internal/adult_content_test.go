@@ -63,3 +63,43 @@ func TestSukebeiFollowsAdultContent(t *testing.T) {
 		t.Fatal("nyaa should stay enabled")
 	}
 }
+
+// With AdultContent on, an adult show is looked for on sukebei alone, and any
+// other show never on sukebei.
+func TestProviderNamesForShowRoutesAdultShows(t *testing.T) {
+	previous := GetGlobalConfig()
+	t.Cleanup(func() { SetGlobalConfig(previous) })
+	config := &Config{AdultContent: true}
+	SetGlobalConfig(config)
+
+	adult := &Anime{IsAdult: true}
+	if got := providerNamesForShow(config, adult); len(got) != 1 || got[0] != "sukebei" {
+		t.Fatalf("adult show providers = %v, want [sukebei]", got)
+	}
+	for _, name := range providerNamesForShow(config, &Anime{}) {
+		if name == "sukebei" {
+			t.Fatal("a general show was routed to sukebei")
+		}
+	}
+	// A stack written without sukebei still sends adult shows there.
+	config.Provider = `["anikoto","nyaa"]`
+	if got := providerNamesForShow(config, adult); len(got) != 1 || got[0] != "sukebei" {
+		t.Fatalf("adult show providers with a custom stack = %v, want [sukebei]", got)
+	}
+	// A stored mapping onto a general host is not trusted for an adult show.
+	if providerSuitsShow(config, adult, "anikoto") || !providerSuitsShow(config, adult, "sukebei") {
+		t.Fatal("providerSuitsShow wrong for an adult show")
+	}
+
+	// AdultContent off: nothing changes, the adult flag is ignored.
+	config.AdultContent = false
+	config.Provider = ""
+	for _, name := range providerNamesForShow(config, adult) {
+		if name == "sukebei" {
+			t.Fatal("sukebei used with AdultContent=false")
+		}
+	}
+	if !providerSuitsShow(config, adult, "anikoto") {
+		t.Fatal("with AdultContent=false a general host should suit any show")
+	}
+}
