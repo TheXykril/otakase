@@ -207,26 +207,94 @@ func TestMigrateOnVersionUpgradeInjectsOnlyOptionsForCrossedVersions(t *testing.
 	}
 }
 
-func TestInjectConfigOptionsSinceOnlyCrossedVersions(t *testing.T) {
-	m := map[string]string{"Player": "mpv"}
-	// Already on 2.0.3 — nothing new.
-	if added := injectConfigOptionsSince(m, "2.0.3", "2.0.3"); len(added) != 0 {
-		t.Fatalf("same version should inject nothing, got %v", added)
+func TestInjectMissingConfigOptionsAddsOnlyRegisteredMissingKeys(t *testing.T) {
+	m := map[string]string{"Player": "mpv", "VimKeys": "true"}
+	added := injectMissingConfigOptions(m)
+	if len(added) != len(configOptionsIntroducedInVersion())-1 {
+		t.Fatalf("expected every registered option but VimKeys, got %v", added)
 	}
-	// 2.0.2 → 2.0.3 gets VimKeys + timeout only.
-	added := injectConfigOptionsSince(m, "2.0.2", "2.0.3")
-	if len(added) != 2 {
-		t.Fatalf("expected 2 options for 2.0.2→2.0.3, got %v", added)
+	if m["VimKeys"] != "true" {
+		t.Fatalf("an option already set must be left alone, got VimKeys=%q", m["VimKeys"])
 	}
-	want := map[string]bool{"VimKeys": true, "MpvPlaybackStartTimeout": true}
-	for _, key := range added {
-		if !want[key] {
-			t.Fatalf("unexpected injected key %q in %v", key, added)
+	if _, exists := m["SkipOp"]; exists {
+		t.Fatal("baseline options must not be injected")
+	}
+	if second := injectMissingConfigOptions(m); len(second) != 0 {
+		t.Fatalf("second inject should be empty, got %v", second)
+	}
+}
+
+// An option added to defaultConfigMap but never registered was silently never
+// added to existing configs, which is how ContinueWatchingRows, Quality, the
+// Kodi and Cast options and others went missing on upgrade.
+func TestEveryDefaultConfigOptionIsClassified(t *testing.T) {
+	introduced := configOptionsIntroducedInVersion()
+	baseline := baselineConfigOptions()
+	for key := range defaultConfigMap() {
+		_, registered := introduced[key]
+		switch {
+		case registered && baseline[key]:
+			t.Errorf("%s is both baseline and registered as introduced", key)
+		case !registered && !baseline[key]:
+			t.Errorf("%s is in defaultConfigMap but not registered in configOptionsIntroducedInVersion", key)
 		}
 	}
-	// Already present keys are skipped.
-	if second := injectConfigOptionsSince(m, "2.0.2", "2.0.3"); len(second) != 0 {
-		t.Fatalf("second inject should be empty, got %v", second)
+	for key := range introduced {
+		if _, ok := defaultConfigMap()[key]; !ok {
+			t.Errorf("%s is registered but has no default", key)
+		}
+	}
+}
+
+func migrateFrom(t *testing.T, storedVersion, appVersion string, extra string) string {
+	t.Helper()
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "otakase.conf")
+	storagePath := filepath.Join(tempDir, "share")
+	initial := "StoragePath=" + storagePath + "\nProvider=stacked\n" + extra
+	if err := os.WriteFile(configPath, []byte(initial), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if err := writeStoredVersion(storagePath, storedVersion); err != nil {
+		t.Fatalf("write version: %v", err)
+	}
+	config := PopulateConfig(map[string]string{"StoragePath": storagePath, "Provider": "stacked"})
+	if _, err := MigrateOnVersionUpgrade(configPath, &config, appVersion); err != nil {
+		t.Fatalf("MigrateOnVersionUpgrade: %v", err)
+	}
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	return string(after)
+}
+
+// Options whose release the user already passed still arrive on the next
+// upgrade, so a late registration reaches them.
+func TestUpgradeAddsOptionsFromReleasesAlreadyPassed(t *testing.T) {
+	text := migrateFrom(t, "26.1.0", "26.1.1", "")
+	for _, want := range []string{"ContinueWatchingRows=5", "Quality=best", "KodiHost=", "CastPort=0", "DevBuilds=false"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("expected %q after upgrade:\n%s", want, text)
+		}
+	}
+}
+
+// A dev build counts as the release it leads to, so 26.1.0-dev.4 -> 26.1.0
+// used to cross no version at all and add nothing.
+func TestUpgradeFromDevBuildToItsReleaseAddsOptions(t *testing.T) {
+	text := migrateFrom(t, "26.1.0-dev.4", "26.1.0", "")
+	for _, want := range []string{"AdultContent=false", "CastNextEpisode="} {
+		if !strings.Contains(text, want) {
+			t.Errorf("expected %q after upgrade:\n%s", want, text)
+		}
+	}
+}
+
+func TestUpgradeRespectsAddMissingOptionsFalse(t *testing.T) {
+	text := migrateFrom(t, "2.2.2", "26.1.0", "AddMissingOptions=false\n")
+	if strings.Contains(text, "DevBuilds=") {
+		t.Fatalf("AddMissingOptions=false must not add options:\n%s", text)
 	}
 }
 

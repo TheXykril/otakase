@@ -411,10 +411,9 @@ func LoadConfig(configPath string) (Config, error) {
 		}
 	}
 
-	// New config keys are NOT bulk-appended here. Only MigrateOnVersionUpgrade
-	// injects options registered in configOptionsIntroducedInVersion() for the
-	// versions the user actually crossed — so sparse configs never get every
-	// historical default dumped in on a normal launch.
+	// New config keys are NOT appended here. MigrateOnVersionUpgrade adds the
+	// options registered in configOptionsIntroducedInVersion() when the version
+	// changes, so a normal launch never rewrites the file.
 
 	// Persist legacy tracking / provider-token normalize (rewrite only those cases).
 	if addMissing && updated {
