@@ -1601,7 +1601,7 @@ func StartPlayback(userConfig *Config, anime *Anime) string {
 
 	// Remember the show for Continue Last Session and the continue-watching
 	// rows of the home menu.
-	writeLastPlayedAnimeID(userConfig.StoragePath, anime.AnilistId)
+	writeLastPlayedAnimeID(userConfig.StoragePath, anime.AnilistId, anime.IsAdult)
 
 	// Display starting message with cover image and episode info
 	if anime.CoverImage != "" && userConfig.ImagePreview && userConfig.RofiSelection {

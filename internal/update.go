@@ -221,7 +221,6 @@ func checkForUpdateInBackground(config *Config, currentVersion string) error {
 	if err != nil {
 		return err
 	}
-	release = withExtraNotes(release, config.AdultContent)
 	state.CheckedAt = time.Now().UTC().Format(time.RFC3339)
 	state.LatestTag = release.TagName
 	state.LatestVersion = latest
@@ -507,7 +506,7 @@ func updateActionOptions() []SelectionOption {
 
 // refreshUpdateStateFromGitHub reloads tag/name/body/url from the live release API
 // so the prompt shows real markdown notes instead of a stale/test seed.
-func refreshUpdateStateFromGitHub(state *updatePendingState, devBuilds, extraNotes bool) {
+func refreshUpdateStateFromGitHub(state *updatePendingState, devBuilds bool) {
 	if state == nil {
 		return
 	}
@@ -519,7 +518,6 @@ func refreshUpdateStateFromGitHub(state *updatePendingState, devBuilds, extraNot
 	if latest == "" {
 		return
 	}
-	release = withExtraNotes(release, extraNotes)
 	// If GitHub moved past what we flagged, still show the newest release.
 	state.LatestTag = release.TagName
 	state.LatestVersion = latest
@@ -568,7 +566,7 @@ func HandlePendingUpdatePrompt(config *Config, currentVersion string) bool {
 	}
 
 	// Pull live release markdown from GitHub so notes match the release page.
-	refreshUpdateStateFromGitHub(&state, config.DevBuilds, config.AdultContent)
+	refreshUpdateStateFromGitHub(&state, config.DevBuilds)
 	if !pendingUpdateShouldPrompt(config, currentVersion, state) {
 		// e.g. already up to date after refresh
 		state.Available = false

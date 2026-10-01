@@ -1,6 +1,0 @@
-# GitHub's generated release notes list every merged pull request. A pull
-# request labelled skip-changelog is left out of them.
-changelog:
-  exclude:
-    labels:
-      - skip-changelog

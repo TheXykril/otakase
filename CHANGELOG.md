@@ -8,7 +8,15 @@
   earlier (`ContinueWatchingRows`, `Quality`, `DownloadFormat`, the Kodi and
   cast options and others) were missing from configs created before them.
   They are now added on upgrade.
-- Provider fixes and more reliable playback start.
+- **Titles marked 18+ keep to their own source.** With `AdultContent=true`
+  they are looked up only on the provider meant for them, and other shows
+  no longer search it. A saved match that pointed one elsewhere is searched
+  again, and asked for sub, dub-only copies are picked last.
+- **Streams from that source start reliably.** They get up to 120 seconds to
+  begin instead of 20, only the episode being watched downloads, and a slow
+  start no longer ends in a false "no dub, playing sub".
+- Search results no longer list one show as several rows such as
+  "Title - 06 - English Softsubs".
 
 ## 26.1.0 — 2026-10-01
 
@@ -52,6 +60,9 @@ version is shown in the menu header and the rofi search bar.
   notes / MyAnimeList comments, so another machine resumes at the same spot.
 - **Dev builds.** `DevBuilds=true` also offers the `dev` pre-release, built
   from unreleased work, in the update check.
+- **`AdultContent`** (default `false`) hides titles marked 18+ from your
+  lists, Surprise Me and AniList search; they stay on your tracker and keep
+  syncing. Set it to `true` to show them and to enable a provider for them.
 
 ### Changed
 

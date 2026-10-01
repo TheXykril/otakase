@@ -12,7 +12,7 @@ func TestNoteRecentShowKeepsNewestFirstWithoutRepeats(t *testing.T) {
 	dir := t.TempDir()
 	base := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 	for i, id := range []int{1, 2, 3, 2} {
-		noteRecentShow(dir, id, base.Add(time.Duration(i)*time.Minute))
+		noteRecentShow(dir, id, false, base.Add(time.Duration(i)*time.Minute))
 	}
 	shows := loadRecentShows(dir)
 	got := []int{}
@@ -27,7 +27,7 @@ func TestNoteRecentShowKeepsNewestFirstWithoutRepeats(t *testing.T) {
 	}
 
 	for id := 10; id < 10+recentShowsKept+5; id++ {
-		noteRecentShow(dir, id, base)
+		noteRecentShow(dir, id, false, base)
 	}
 	if n := len(loadRecentShows(dir)); n != recentShowsKept {
 		t.Fatalf("kept %d shows, want %d", n, recentShowsKept)
@@ -76,7 +76,7 @@ func TestContinueWatchingRows(t *testing.T) {
 	}
 	base := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 	for i, id := range []int{303, 999, 101, 202} {
-		noteRecentShow(dir, id, base.Add(time.Duration(i)*time.Minute))
+		noteRecentShow(dir, id, false, base.Add(time.Duration(i)*time.Minute))
 	}
 
 	config := &Config{StoragePath: dir, ContinueWatchingRows: 5, TrackingRemote: TrackingRemoteAniList}
@@ -116,5 +116,31 @@ func TestSortHomeMenuOptionsPutsResumeRowsFirst(t *testing.T) {
 	}
 	if strings.Join(keys, ",") != "RESUME:1,RESUME:2,CURRENT,ALL" {
 		t.Fatalf("order = %v", keys)
+	}
+}
+
+// 18+ shows never get a continue-watching row, with AdultContent on or off:
+// playing one takes it off the recent list, and one recorded before that rule
+// is skipped when the tracker marks it adult.
+func TestContinueWatchingLeavesOutAdultShows(t *testing.T) {
+	dir := t.TempDir()
+	history := "101,provider-a,13,754,24,Frieren\n404,provider-b,2,0,8,Adult Show\n"
+	if err := os.WriteFile(filepath.Join(dir, "curd_history.txt"), []byte(history), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	noteRecentShow(dir, 101, false, base)
+	noteRecentShow(dir, 404, false, base.Add(time.Minute))
+
+	config := &Config{StoragePath: dir, ContinueWatchingRows: 5, TrackingRemote: TrackingRemoteAniList, AdultContent: true}
+	list := &AnimeList{Watching: []Entry{{Media: Media{ID: 101}}, {Media: Media{ID: 404, IsAdult: true}}}}
+	if rows := continueWatchingRows(config, list); len(rows) != 1 || rows[0].Key != "RESUME:101" {
+		t.Fatalf("rows = %+v, want Frieren only", rows)
+	}
+
+	noteRecentShow(dir, 404, true, base.Add(2*time.Minute))
+	shows := loadRecentShows(dir)
+	if len(shows) != 1 || shows[0].AnilistID != 101 {
+		t.Fatalf("recent = %+v, want the adult show removed", shows)
 	}
 }

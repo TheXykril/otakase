@@ -58,13 +58,18 @@ func loadRecentShows(storagePath string) []recentShow {
 	return shows
 }
 
-// noteRecentShow moves a show to the front of the recent list.
-func noteRecentShow(storagePath string, anilistID int, now time.Time) {
+// noteRecentShow moves a show to the front of the recent list. An 18+ show is
+// taken off it instead: the home menu opens with these rows, whoever is
+// looking at the screen, so they never name one, AdultContent or not.
+func noteRecentShow(storagePath string, anilistID int, adult bool, now time.Time) {
 	path := recentShowsPath(storagePath)
 	if path == "" || anilistID <= 0 {
 		return
 	}
 	shows := []recentShow{{AnilistID: anilistID, PlayedAt: now.UTC()}}
+	if adult {
+		shows = nil
+	}
 	for _, show := range loadRecentShows(storagePath) {
 		if show.AnilistID != anilistID && show.AnilistID > 0 && len(shows) < recentShowsKept {
 			shows = append(shows, show)
@@ -118,7 +123,8 @@ func continueWatchingRows(config *Config, list *AnimeList) []SelectionOption {
 		}
 		if list != nil && UsesRemoteTracking(config) {
 			listed, err := FindAnimeByAnilistID(*list, strconv.Itoa(show.AnilistID))
-			if err != nil || (listed.Media.IsAdult && !config.AdultContent) {
+			// Shows recorded before 18+ ones were kept off the list.
+			if err != nil || listed.Media.IsAdult {
 				continue
 			}
 		}
