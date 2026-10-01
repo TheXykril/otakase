@@ -1,0 +1,50 @@
+name: Extra Notes
+
+# Attaches notes-extra.md to a published release. The app shows it above the
+# release notes only for viewers who enabled it in their config; everyone else
+# never downloads it. The text lives only on the release, not in the repo.
+#
+# Run it by hand from the Actions tab after a release is out. Write "\n" for a
+# line break, e.g. "### Details\n- First line\n- Second line". Running it again
+# replaces the file; leave the notes empty to remove it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v26.1.1 (empty = latest release)"
+        required: false
+        type: string
+      notes:
+        description: 'Markdown; "\n" for a line break (empty = remove)'
+        required: false
+        type: string
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Attach notes-extra.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release view --json tagName --jq .tagName)
+          fi
+          if ! [[ "$TAG" =~ ^v[0-9A-Za-z.+-]+$ ]]; then
+            echo "::error::tag must look like v26.1.1, got: $TAG"
+            exit 1
+          fi
+          if [ -z "$NOTES" ]; then
+            gh release delete-asset "$TAG" notes-extra.md --yes || true
+            echo "Removed notes-extra.md from $TAG"
+            exit 0
+          fi
+          printf '%s\n' "${NOTES//\\n/$'\n'}" > notes-extra.md
+          gh release upload "$TAG" notes-extra.md --clobber
+          echo "Attached notes-extra.md to $TAG"
