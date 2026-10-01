@@ -125,15 +125,17 @@ func writeStoredVersion(storagePath, version string) error {
 	return os.WriteFile(storageVersionFilePath(storagePath), []byte(version+"\n"), 0644)
 }
 
-// configOptionsIntroducedInVersion maps config keys to the first otakase release that
-// introduced them. Only these keys are eligible for automatic append on upgrade.
-// Baseline options (Player, StoragePath, …) are NOT listed — they only appear via
-// createDefaultConfig for brand-new installs, never re-appended into sparse configs.
+// configOptionsIntroducedInVersion maps config keys to the otakase release that
+// introduced them. Only these keys are appended to an existing config on
+// upgrade; baseline options (Player, StoragePath, …) are listed in
+// baselineConfigOptions instead and only appear via createDefaultConfig, so a
+// sparse hand-written config never gets every historical default dumped in.
 //
 // When adding a new option:
 //  1. Add it to Config + defaultConfigMap()
 //  2. Register it here under the release version that ships it
-//  3. Bump VERSION.txt so MigrateOnVersionUpgrade runs for existing users
+//
+// TestEveryDefaultConfigOptionIsClassified fails until step 2 is done.
 func configOptionsIntroducedInVersion() map[string]string {
 	return map[string]string{
 		// 2.0.3 — playback fallback timeout + vim selection motions
@@ -143,20 +145,64 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"CheckUpdates": "2.0.4",
 		// 2.0.5 — MPV episode playlist + alternate audio entries
 		"MpvEpisodePlaylist": "2.0.5",
+		// 1.1.0 — straight into the watching list, AnimeSkip client, theme tweaks
+		"CurrentCategory":   "1.1.0",
+		"AnimeSkipClientID": "1.1.0",
+		"ThemeOverrides":    "1.1.0",
+		// 1.3.0 — skip-time sources
+		"ContributeSkipTimes": "1.3.0",
+		"IntroDBSkipTimes":    "1.3.0",
+		// 2.1.0 — casting
+		"CastDevice":        "2.1.0",
+		"CastTerminal":      "2.1.0",
+		"CastPort":          "2.1.0",
+		"CastBurnSubtitles": "2.1.0",
+		"CastEncoder":       "2.1.0",
 		// 26.1.0 — what a cast does when an episode ends
 		"CastNextEpisode": "26.1.0",
 		// 26.1.0 — update to dev builds
 		"DevBuilds": "26.1.0",
 		// 26.1.0 — hide 18+ titles
 		"AdultContent": "26.1.0",
+		// 26.1.0 — continue-watching rows, quality, downloads, Kodi casting
+		"ContinueWatchingRows": "26.1.0",
+		"Quality":              "26.1.0",
+		"DownloadFormat":       "26.1.0",
+		"KodiHost":             "26.1.0",
+		"KodiUser":             "26.1.0",
+		"KodiPassword":         "26.1.0",
 	}
 }
 
-// injectConfigOptionsSince appends defaults for options introduced in versions
-// (fromVersion, toVersion] that are still missing from configMap.
-// Example: from 2.0.2 → 2.0.3 injects only keys introduced in 2.0.3, not every
-// historical default.
-func injectConfigOptionsSince(configMap map[string]string, fromVersion, toVersion string) []string {
+// baselineConfigOptions are the options every config has had from the start.
+// They are written by createDefaultConfig and never appended on upgrade.
+func baselineConfigOptions() map[string]bool {
+	return map[string]bool{
+		"Player": true, "MpvArgs": true, "StoragePath": true,
+		"AnimeNameLanguage": true, "SubsLanguage": true, "MenuOrder": true,
+		"SubOrDub": true, "SubStyle": true, "PercentageToMarkComplete": true,
+		"NextEpisodePrompt": true, "AutoAudioFallback": true,
+		"SkipOp": true, "SkipEd": true, "SkipFiller": true, "SkipRecap": true,
+		"RofiSelection": true, "ImagePreview": true, "ScoreOnCompletion": true,
+		"SaveMpvSpeed": true, "AddMissingOptions": true, "AlternateScreen": true,
+		"DiscordPresence": true, "DiscordClientId": true,
+		"Provider": true, "DisabledProviders": true, "ManualProviderSearch": true,
+		"TrackingLocal": true, "TrackingRemote": true, "TrackingConfigured": true,
+		"MyAnimeListClientID": true, "MyAnimeListClientSecret": true,
+		"MyAnimeListImported": true, "MyAnimeListImportDismissed": true,
+		"ShowNewEpisodes": true, "Theme": true, "DownloadDir": true,
+	}
+}
+
+// injectMissingConfigOptions adds the default of every registered option the
+// config lacks and reports the keys added.
+//
+// It deliberately ignores the version the user upgraded from. Gating on it
+// lost options twice over: one registered late (after the user had already
+// passed its release) was never added, and a dev build counts as the release
+// it leads to, so going from 26.1.0-dev.4 to 26.1.0 crossed "nothing" and
+// skipped every 26.1.0 option added after dev.4.
+func injectMissingConfigOptions(configMap map[string]string) []string {
 	if configMap == nil {
 		return nil
 	}
@@ -171,14 +217,6 @@ func injectConfigOptionsSince(configMap map[string]string, fromVersion, toVersio
 
 	added := make([]string, 0)
 	for _, key := range keys {
-		since := introduced[key]
-		// Only options born after the user's previous version and at/before this release.
-		if !versionLess(fromVersion, since) {
-			continue // introduced at or before fromVersion — user already "passed" that release
-		}
-		if !versionLessOrEqual(since, toVersion) {
-			continue // not shipped yet in toVersion
-		}
 		if _, exists := configMap[key]; exists {
 			continue
 		}
@@ -283,8 +321,8 @@ func appendConfigKeys(configPath string, configMap map[string]string, keys []str
 }
 
 // MigrateOnVersionUpgrade updates stored state and config when otakase is upgraded.
-// On version change it appends only config options registered as introduced in
-// versions (storedVersion, appVersion], then runs provider migrations.
+// On version change it appends registered config options the file lacks, then
+// runs provider migrations.
 // Same-version launches do not rewrite the config file.
 // Returns whether the config file was updated.
 func MigrateOnVersionUpgrade(configPath string, config *Config, appVersion string) (bool, error) {
@@ -324,7 +362,7 @@ func MigrateOnVersionUpgrade(configPath string, config *Config, appVersion strin
 		}
 
 		if addMissing {
-			if added := injectConfigOptionsSince(configMap, storedVersion, appVersion); len(added) > 0 {
+			if added := injectMissingConfigOptions(configMap); len(added) > 0 {
 				if err := appendConfigKeys(configPath, configMap, added); err != nil {
 					return false, fmt.Errorf("append new config options: %w", err)
 				}
