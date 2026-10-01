@@ -50,7 +50,7 @@ func surpriseLabel(entry Entry, config *Config) string {
 // SurpriseMe offers random shows from Plan to Watch until one is started or
 // the viewer goes back. It returns the AniList id of the show to start.
 func SurpriseMe(config *Config, list AnimeList) (int, bool) {
-	planned := list.Planning
+	planned := hideAdultEntries(list.Planning, config)
 	if len(planned) == 0 {
 		Out("Plan to Watch is empty, so there is nothing to pick from.")
 		return 0, false

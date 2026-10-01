@@ -485,6 +485,11 @@ func mergeEntryMetadata(preferred, fallback Entry) Entry {
 	if preferred.Media.Format == "" {
 		preferred.Media.Format = fallback.Media.Format
 	}
+	// A property of the show, not the list entry: either tracker saying so
+	// is enough.
+	if fallback.Media.IsAdult {
+		preferred.Media.IsAdult = true
+	}
 	if preferred.CoverImage == "" {
 		preferred.CoverImage = fallback.CoverImage
 	}

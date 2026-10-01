@@ -173,6 +173,9 @@ type Media struct {
 	Title             AnimeTitle             `json:"title"`
 	Status            string                 `json:"status"`
 	NextAiringEpisode *NextAiringEpisodeInfo `json:"nextAiringEpisode,omitempty"`
+	// IsAdult marks 18+ titles: AniList's isAdult, or MyAnimeList rating
+	// them "black" (explicit). AdultContent=false hides them.
+	IsAdult bool `json:"isAdult,omitempty"`
 }
 
 type Entry struct {
