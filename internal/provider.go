@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -847,7 +848,15 @@ func ResolveEpisodeURLAlternateModeWithPrompt(config Config, anime *Anime, epNo 
 	// AutoAudioFallback is decided here rather than at each call site, so every
 	// route into the alternate audio -- the preferred-first resolve, the recovery
 	// menu, the playlist controller -- obeys the setting the same way.
-	return resolveEpisodeURLAlternateMode(config, anime, epNo, exclude, !config.AutoAudioFallback)
+	return resolveEpisodeURLAlternateMode(config, anime, epNo, exclude, !config.AutoAudioFallback, nil)
+}
+
+// ResolveEpisodeURLAlternateModeAfterFailure is the prompt variant for a
+// stream that never started. When the other audio resolves to the very links
+// that just failed -- a dual-audio torrent serves both -- switching cannot
+// help, so it reports that instead of announcing a missing dub.
+func ResolveEpisodeURLAlternateModeAfterFailure(config Config, anime *Anime, epNo int, exclude []string, failed []string) (ProviderEpisodeResult, error) {
+	return resolveEpisodeURLAlternateMode(config, anime, epNo, exclude, !config.AutoAudioFallback, failed)
 }
 
 // ResolveEpisodeURLAlternateModeAuto switches to the other audio without asking.
@@ -856,10 +865,10 @@ func ResolveEpisodeURLAlternateModeWithPrompt(config Config, anime *Anime, epNo 
 // useful answer -- it just stands between the user and the episode. What was
 // played is still reported, so an automatic switch is never a silent one.
 func ResolveEpisodeURLAlternateModeAuto(config Config, anime *Anime, epNo int, exclude []string) (ProviderEpisodeResult, error) {
-	return resolveEpisodeURLAlternateMode(config, anime, epNo, exclude, false)
+	return resolveEpisodeURLAlternateMode(config, anime, epNo, exclude, false, nil)
 }
 
-func resolveEpisodeURLAlternateMode(config Config, anime *Anime, epNo int, exclude []string, ask bool) (ProviderEpisodeResult, error) {
+func resolveEpisodeURLAlternateMode(config Config, anime *Anime, epNo int, exclude []string, ask bool, failed []string) (ProviderEpisodeResult, error) {
 	preferredMode := normalizeTranslationType(config.SubOrDub)
 	fallbackMode := alternateTranslationType(preferredMode)
 
@@ -880,6 +889,9 @@ func resolveEpisodeURLAlternateMode(config Config, anime *Anime, epNo int, exclu
 			return ProviderEpisodeResult{}, fallbackErr
 		}
 		return ProviderEpisodeResult{}, fmt.Errorf("no %s streams available", fallbackMode)
+	}
+	if len(failed) > 0 && slices.Equal(fallbackResult.Links, failed) {
+		return ProviderEpisodeResult{}, fmt.Errorf("%s resolves to the same stream that failed to start", fallbackMode)
 	}
 
 	if ask {

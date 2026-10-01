@@ -47,7 +47,14 @@ var (
 	dataDir  string
 	listener net.Listener
 	served   = map[string]*torrent.File{}
+	// active is the file the player is reading. Only it downloads; a torrent
+	// resolved ahead of time, for the next episode, waits until it is played.
+	active *torrent.File
 )
+
+// tailBytes is how much of a file's end is fetched early. Matroska keeps its
+// seek index there and players read it on open, before the first frame.
+const tailBytes = 4 << 20
 
 // videoExtensions are the containers worth playing; a torrent usually also
 // carries samples, subtitles and NFO files.
@@ -97,10 +104,10 @@ func Stream(infoHash string) (string, error) {
 		return "", fmt.Errorf("torrentstream: %q contains no video file", t.Name())
 	}
 
-	// Ask for the start of the file first so playback can begin while the rest
-	// is still arriving.
-	file.SetPriority(torrent.PiecePriorityNow)
-
+	// No download yet. Marking every piece urgent here made a 450 MiB file
+	// compete with itself, so the opening bytes and the seek index arrived no
+	// sooner than anything else, and a next episode resolved ahead of time
+	// downloaded alongside the one being watched. The first read activates it.
 	mu.Lock()
 	served[infoHash] = file
 	port := listener.Addr().(*net.TCPAddr).Port
@@ -172,6 +179,9 @@ func serveFile(w http.ResponseWriter, r *http.Request) {
 
 	mu.Lock()
 	file, ok := served[infoHash]
+	if ok && file != active {
+		activate(file)
+	}
 	mu.Unlock()
 	if !ok {
 		http.NotFound(w, r)
@@ -187,6 +197,38 @@ func serveFile(w http.ResponseWriter, r *http.Request) {
 	reader.SetResponsive()
 
 	http.ServeContent(w, r, file.DisplayPath(), time.Time{}, reader)
+}
+
+// activate makes file the one that downloads: the rest of it in the
+// background behind what the reader asks for, its tail early, and the file
+// played before it no longer. Called with mu held.
+func activate(file *torrent.File) {
+	if active != nil {
+		active.SetPriority(torrent.PiecePriorityNone)
+	}
+	active = file
+	file.SetPriority(torrent.PiecePriorityNormal)
+
+	t := file.Torrent()
+	if info := t.Info(); info != nil && info.PieceLength > 0 {
+		begin, end := file.BeginPieceIndex(), file.EndPieceIndex()
+		tail := int((tailBytes + info.PieceLength - 1) / info.PieceLength)
+		for i := max(begin, end-tail); i < end; i++ {
+			t.Piece(i).SetPriority(torrent.PiecePriorityHigh)
+		}
+	}
+}
+
+// IsStreamURL reports whether a link is one Stream returned. A torrent needs
+// peers before its first frame, so callers give it longer to start.
+func IsStreamURL(link string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+	if listener == nil {
+		return false
+	}
+	prefix := fmt.Sprintf("http://127.0.0.1:%d/", listener.Addr().(*net.TCPAddr).Port)
+	return strings.HasPrefix(link, prefix)
 }
 
 // Shutdown stops the client and deletes everything it downloaded.
@@ -206,4 +248,5 @@ func Shutdown() {
 		dataDir = ""
 	}
 	served = map[string]*torrent.File{}
+	active = nil
 }
