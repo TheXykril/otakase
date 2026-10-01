@@ -1,5 +1,15 @@
 # Changelog
 
+## 26.1.1 — 2026-10-01
+
+### Fixed
+
+- **New settings reach existing configs.** Options added in 26.1.0 and
+  earlier (`ContinueWatchingRows`, `Quality`, `DownloadFormat`, the Kodi and
+  cast options and others) were missing from configs created before them.
+  They are now added on upgrade.
+- Provider fixes and more reliable playback start.
+
 ## 26.1.0 — 2026-10-01
 
 Releases are now numbered by year: `YY.DROP.HOTFIX`. 26.1.0 is the first
