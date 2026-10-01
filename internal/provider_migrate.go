@@ -171,8 +171,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"KodiHost":             "26.1.0",
 		"KodiUser":             "26.1.0",
 		"KodiPassword":         "26.1.0",
-		// 26.2.0 — 18+ shows in continue watching, opt-in
-		"ContinueWatchingAdult": "26.2.0",
+		// 26.1.2 — 18+ shows in continue watching, opt-in
+		"ContinueWatchingAdult": "26.1.2",
 	}
 }
 
