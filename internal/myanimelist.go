@@ -1199,6 +1199,10 @@ func RefreshMyAnimeListUserAnimeList(config *Config, user *User) error {
 }
 
 func updateMyAnimeListListStatus(config *Config, malID int, payload map[string]string) error {
+	if isAniListPrivateMyAnimeListID(malID) {
+		Log(fmt.Sprintf("MyAnimeList: not writing %d, it is private on AniList", malID))
+		return nil
+	}
 	form := url.Values{}
 	for key, value := range payload {
 		if strings.TrimSpace(value) == "" && key != "start_date" && key != "finish_date" {

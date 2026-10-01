@@ -186,6 +186,9 @@ type Entry struct {
 	CompletedAt FuzzyDate `json:"completedAt"`
 	CoverImage  string    `json:"coverImage"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+	// Private is AniList's "hide from other users" flag. MyAnimeList has no
+	// such flag, so a private entry is kept off MyAnimeList entirely.
+	Private bool `json:"private,omitempty"`
 }
 
 type AnimeList struct {

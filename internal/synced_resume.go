@@ -305,6 +305,9 @@ func fetchMyAnimeListEntryComments(config *Config, malID int) (string, bool, err
 }
 
 func saveMyAnimeListEntryComments(config *Config, malID int, comments string) error {
+	if isAniListPrivateMyAnimeListID(malID) {
+		return nil
+	}
 	var response myAnimeListListStatus
 	form := url.Values{"comments": {comments}}
 	return myAnimeListRequest(config, http.MethodPut, fmt.Sprintf("/anime/%d/my_list_status", malID), form, &response)
