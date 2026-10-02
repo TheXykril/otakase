@@ -7,6 +7,7 @@ or use it; that is all in the [README](https://github.com/TheXykril/otakase#read
 
 - **[Providers](Developer-Providers)** — how stream sources are built, registered and turned off, and how to add one
 - **[Casting Verification](Developer-Casting-Verification)** — checking casting against a real Chromecast, DLNA TV or Kodi
+- **[Versions and releases](Developer-Releases)** — the `YY.DROP.HOTFIX` numbering and how a release is cut
 - **[Cast Window Prompts](Developer-Cast-Window-Prompts)** — what prompts do in a terminal opened by a rofi cast, where nobody is watching
 
 ## Building and testing
@@ -32,8 +33,8 @@ including ffmpeg's own output during casts and downloads.
 ## Pull requests and releases
 
 Open pull requests against `main` with a conventional title and fill in the
-template. Version numbering and how a release is cut are in
-[CONTRIBUTING.md](https://github.com/TheXykril/otakase/blob/main/CONTRIBUTING.md).
+template. Version numbering and how a release is cut are on
+[Versions and releases](Developer-Releases).
 
 ## Editing this wiki
 
