@@ -1,5 +1,26 @@
 # Changelog
 
+## 26.2.0 — 2026-10-02
+
+### Added
+
+- **`otakase -cast-setup`** lets casting through your firewall in one go.
+  It fixes `CastPort` and `CastDiscoveryPort` if they are random, shows the
+  rules for ufw or firewalld (local network only, tagged `otakase cast`),
+  runs them with sudo after you say yes, then lists the devices it finds.
+- **Fix the firewall now.** When a cast search finds no devices and ufw or
+  firewalld is on, the menu offers to fix it there and searches again. The
+  password prompt is the same one `otakase -u` uses and lists every command
+  it will run.
+- **`CastDiscoveryPort`** (UDP, default `8011`, `0` for random). DLNA TVs
+  answer the search on this port, so one firewall rule lets them in instead
+  of opening all UDP. Existing configs get it on upgrade.
+
+### Changed
+
+- **"No devices found" says why.** With a firewall on, the message carries
+  the exact rules for your network and copies them to the clipboard.
+
 ## 26.1.2 — 2026-10-01
 
 ### Added
