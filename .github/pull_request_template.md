@@ -14,7 +14,7 @@
 
 ## Checklist
 
-- [ ] README updated if a setting, flag or key binding changed
+- [ ] README or wiki (`wiki/`) updated if a setting, flag or key binding changed
 - [ ] No version bump or `release:` commit (releases are cut separately)
 
 <!-- Related issue: Fixes # -->
