@@ -290,7 +290,8 @@ control via HTTP* is on. If it does not show up, set `KodiHost` to its address
 also carries a **Cast** toggle (`[ ] Cast: Off` / `[x] Cast: Office TV`, `^k`
 in the terminal list) that does the same thing per-run. otakase asks which
 device to use once per run, even when only one is found; `CastDevice` skips
-the question. Casting works from **Untracked Watching**
+the question. The device list ends with **Rescan for devices**, for a TV that
+was still waking up, and the same entry is offered when nothing was found. Casting works from **Untracked Watching**
 too, and like local untracked playback it records nothing.
 
 Casting needs `ffmpeg`, same as `-download`. The stream is served from this

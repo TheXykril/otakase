@@ -1231,10 +1231,23 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 		User:     config.KodiUser,
 		Password: config.KodiPassword,
 	})
+	for {
+		device, rescan, err := castPickDevice(config)
+		if !rescan {
+			return device, err
+		}
+		Out("Looking for cast devices again...")
+	}
+}
+
+// castPickDevice is one search and one pick. rescan is true when the viewer
+// asked to search again, from the picker or from the menu an empty search
+// shows.
+func castPickDevice(config *Config) (device cast.Device, rescan bool, err error) {
 	cast.SetDiscoveryPort(config.CastDiscoveryPort)
 	devices, err := cast.Discover(context.Background(), cast.DefaultDiscoveryTimeout)
 	if err != nil {
-		return cast.Device{}, err
+		return cast.Device{}, false, err
 	}
 	if len(devices) == 0 {
 		const none = "cast: no devices found on this network"
@@ -1242,25 +1255,20 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 		if runtime.GOOS == "linux" {
 			firewall = castDetectFirewall()
 		}
-		if firewall != "" && castOfferFirewallFix(config, firewall) {
-			cast.SetDiscoveryPort(config.CastDiscoveryPort)
-			if devices, err = cast.Discover(context.Background(), cast.DefaultDiscoveryTimeout); err != nil {
-				return cast.Device{}, err
-			}
+		if castNoDevicesMenu(config, firewall) {
+			return cast.Device{}, true, nil
 		}
-		if len(devices) == 0 {
-			if hint, command := castDiscoveryFirewallHint(config, cast.LocalAddress(), firewall); hint != "" {
-				return cast.Device{}, errors.New(none + "\n" + castCopyFirewallCommand(command, hint))
-			}
-			return cast.Device{}, errors.New(none)
+		if hint, command := castDiscoveryFirewallHint(config, cast.LocalAddress(), firewall); hint != "" {
+			return cast.Device{}, false, errors.New(none + "\n" + castCopyFirewallCommand(command, hint))
 		}
+		return cast.Device{}, false, errors.New(none)
 	}
 
 	if configured := config.CastDevice; configured != "" {
 		for _, device := range devices {
 			if device.Name == configured {
 				castSessionDevice = device.Name
-				return device, nil
+				return device, false, nil
 			}
 		}
 		Out(fmt.Sprintf("%q was not found; pick another device.", configured))
@@ -1271,7 +1279,7 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 		// answering discovery (turned off, renamed).
 		for _, device := range devices {
 			if device.Name == castSessionDevice {
-				return device, nil
+				return device, false, nil
 			}
 		}
 	}
@@ -1280,27 +1288,31 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 	// only one on is not necessarily the one the viewer meant, and starting a
 	// stream on the wrong screen is worse than one press of enter. CastDevice
 	// is what skips the question, and a device picked earlier this run is
-	// not asked about again.
-
-	options := make([]SelectionOption, 0, len(devices))
+	// not asked about again. Rescan sits under the devices for a TV that is
+	// still waking up.
+	options := make([]SelectionOption, 0, len(devices)+1)
 	for _, device := range devices {
 		options = append(options, SelectionOption{Key: device.UUID, Label: device.String()})
 	}
+	options = append(options, castRescanOption)
 	selected, err := DynamicSelectPreserveOrder(options)
 	if err != nil {
-		return cast.Device{}, err
+		return cast.Device{}, false, err
 	}
 	// Escape is the viewer declining, not a failure: reported as a stop, so
 	// no caller retries it -- the rofi handoff used to fall back to casting in
 	// place and show this same menu a second time.
 	if selected.Key == "-1" || selected.Key == "-2" {
-		return cast.Device{}, ErrCastStopped
+		return cast.Device{}, false, ErrCastStopped
+	}
+	if selected.Key == castRescanKey {
+		return cast.Device{}, true, nil
 	}
 	for _, device := range devices {
 		if device.UUID == selected.Key {
 			castSessionDevice = device.Name
-			return device, nil
+			return device, false, nil
 		}
 	}
-	return cast.Device{}, fmt.Errorf("cast: no device chosen")
+	return cast.Device{}, false, fmt.Errorf("cast: no device chosen")
 }
