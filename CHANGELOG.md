@@ -1,5 +1,26 @@
 # Changelog
 
+## 26.3.0 — 2026-10-02
+
+### Added
+
+- **Rescan for devices.** The cast device list (rofi and terminal) ends with
+  a Rescan entry, for a TV that was still waking up.
+- **A menu when no devices are found**, instead of an error: Rescan, Fix the
+  firewall now (when ufw or firewalld is on), or Cancel.
+
+### Changed
+
+- **The device is always confirmed.** otakase asks which device to cast to
+  even when only one is found. `CastDevice` still skips the question, and a
+  device picked earlier in the run is reused for the next episode.
+
+### Fixed
+
+- **TVs that ask to allow this device.** LG webOS, Hisense and other DLNA TVs
+  show an "allow this device?" prompt the first time. otakase now waits up
+  to two minutes for you to accept it on the TV, instead of failing.
+
 ## 26.2.0 — 2026-10-02
 
 ### Added
