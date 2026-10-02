@@ -7,7 +7,7 @@ four interactive prompts that can now open a full-screen menu in that window and
 wait for an answer nobody is there to give.
 
 This is a record of what those prompts should do instead, and why. It is the
-companion to `casting-verification.md`, which is how any of it gets checked
+companion to [Casting Verification](Developer-Casting-Verification), which is how any of it gets checked
 against a real device.
 
 ## Why the window cannot simply prompt
@@ -136,4 +136,4 @@ and a log line rather than hanging a window across the room.
   In raw mode `\n` does not return the cursor, which `Out` already guards
   against; the diagnosis prints diagonally. Fixed here, on the episode 2+ path
   where it is otherwise only reachable.
-- None of this is verified against hardware. See `casting-verification.md`.
+- None of this is verified against hardware. See [Casting Verification](Developer-Casting-Verification).

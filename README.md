@@ -261,28 +261,13 @@ installed; if it does not appear, check that the TV's "media renderer" or
 first time, most TVs ask on screen whether to allow this device: otakase
 waits up to two minutes for you to accept it there.
 
-**Behind a firewall** (ufw, firewalld), discovery answers arrive as inbound UDP
-and are dropped by default, so the TV looks absent. Run `otakase -cast-setup`
-once: it sets `CastPort` and `CastDiscoveryPort` if they are random, shows the
-rules below for your subnet, runs them with `sudo` after you say yes, then
-searches and lists the devices it finds. It asks for your password the same
-way `otakase -u` does. When a cast search finds nothing with a firewall on,
-otakase also offers **Fix the firewall now** right there, which does the same
-and searches again. TVs answer on
-`CastDiscoveryPort` (UDP, `8011` by default), Chromecast and Kodi on mDNS
-(`5353/udp`), and the TV fetches the stream from `CastPort` (TCP). To do it by
-hand: with `CastPort=8010` and a `192.168.0.x` network, these three rules
-cover it:
-
-```sh
-sudo ufw allow from 192.168.0.0/24 to any port 8011 proto udp   # TV answers (DLNA)
-sudo ufw allow from 192.168.0.0/24 to any port 5353 proto udp   # mDNS (Chromecast, Kodi)
-sudo ufw allow from 192.168.0.0/24 to any port 8010 proto tcp   # the stream
-```
-
-When a search finds nothing and ufw or firewalld is on, the "no devices
-found" message (in the terminal, or a desktop notification from rofi) carries
-these rules for your own subnet and ports, and copies them to your clipboard.
+**Behind a firewall** (ufw, firewalld) the TV looks absent, because its
+answers are dropped. Run `otakase -cast-setup` once: it fixes the cast ports,
+shows the firewall rules for your network, runs them with `sudo` if you say
+yes, then lists the devices it finds. When a search finds nothing with a
+firewall on, otakase offers **Fix the firewall now** right there too. The
+rules to type by hand are on the
+[Casting Problems wiki page](https://github.com/TheXykril/otakase/wiki/Casting-Problems).
 
 **Kodi** (on its own, or on an Android TV box, Fire TV or Raspberry Pi) is
 listed marked `· Kodi` once *Settings > Services > Control > Allow remote
@@ -319,14 +304,11 @@ work the same as local playback.
 From the rofi keybind, casting opens its own terminal (`CastTerminal` if the
 wrong one opens); closing that window stops the episode and saves position.
 
-**If the episode never starts**, it's almost always a firewall dropping the
-connection. otakase detects this, prints the exact fix command, and copies it
-to your clipboard — paste it in a terminal and cast again. The stream server
-uses a random port by default; set `CastPort` to a fixed one so a single
-firewall rule covers every cast. If that doesn't fix
-it (a second firewall service or Docker can override it silently), see the
-[Casting Problems wiki page](https://github.com/TheXykril/otakase/wiki/Casting-Problems)
-for the full diagnosis and manual commands.
+**If the episode never starts**, it's almost always a firewall. otakase
+prints the fix and copies it to your clipboard: paste it in a terminal and
+cast again. Set `CastPort` to a fixed port so one rule covers every cast.
+Still stuck? See
+[Casting Problems](https://github.com/TheXykril/otakase/wiki/Casting-Problems).
 
 ## Hyprland keybinding
 
@@ -570,8 +552,7 @@ from those works as usual, since 26 counts as newer than 2.
 
 The running version is at the right of the menu header in the terminal and
 of the search bar in rofi, and `otakase -v` prints it. Breaking changes are
-called out in [CHANGELOG.md](CHANGELOG.md) rather than in the number. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for how a release is cut.
+called out in [CHANGELOG.md](CHANGELOG.md) rather than in the number.
 
 ## Built with
 
@@ -585,6 +566,11 @@ Otakase continues [curd](https://github.com/Wraient/curd) by Wraient and its
 contributors. [ani-cli](https://github.com/pystardust/ani-cli) and
 [jerry](https://github.com/justchokingaround/jerry) came first, and this owes
 both.
+
+## Contributing
+
+Building, testing, internals and how releases are cut are in the
+[Developer section of the wiki](https://github.com/TheXykril/otakase/wiki/Developer).
 
 ## Licence
 
