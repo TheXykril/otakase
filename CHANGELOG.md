@@ -1,5 +1,14 @@
 # Changelog
 
+## 26.3.1 — 2026-10-02
+
+### Fixed
+
+- **DLNA casts no longer stop after a couple of minutes** on TVs that keep
+  reporting the same playback position (seen on Hisense). otakase now counts
+  the time itself when the TV's position stops moving, so the cast keeps
+  going and progress is still saved.
+
 ## 26.3.0 — 2026-10-02
 
 ### Added
