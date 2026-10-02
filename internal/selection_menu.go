@@ -853,6 +853,9 @@ func DynamicSelectPreview(options map[string]RofiSelectPreview, addnewoption boo
 }
 
 func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addnewoption bool, refreshConfig *PreviewSelectionRefreshConfig) (SelectionOption, error) {
+	// A menu on screen answers "is it still working" by itself.
+	defer suspendBusy()()
+
 	go preDownloadImages(options, 14)
 
 	// Removed boilerplate check
@@ -1084,6 +1087,9 @@ func RofiSelectWithRefresh(options []SelectionOption, isHomeMenu bool, refreshCo
 }
 
 func rofiSelectInternal(options []SelectionOption, isHomeMenu bool, refreshConfig *SelectionRefreshConfig, prompt, message string) (SelectionOption, error) {
+	// A menu on screen answers "is it still working" by itself.
+	defer suspendBusy()()
+
 	currentOptions := options
 	if strings.TrimSpace(prompt) == "" {
 		prompt = "Select"
@@ -1195,6 +1201,9 @@ func castWindowNonInteractive() bool {
 }
 
 func dynamicSelectInternal(options []SelectionOption, refreshConfig *SelectionRefreshConfig, preserveOrder bool) (SelectionOption, error) {
+	// A menu on screen answers "is it still working" by itself.
+	defer suspendBusy()()
+
 	isHomeMenu := detectHomeMenu(options)
 
 	if isHomeMenu {
@@ -1212,6 +1221,10 @@ func dynamicSelectInternal(options []SelectionOption, refreshConfig *SelectionRe
 	if config := GetGlobalConfig(); config != nil && config.RofiSelection {
 		return RofiSelectWithRefresh(options, isHomeMenu, refreshConfig)
 	}
+
+	// The terminal launch's spinner ends at its first menu, as the rofi
+	// notification does.
+	EndStartupProgress()
 
 	// Separate out the "add_new" sentinel so it is never sorted alphabetically.
 	// The addNewOption flag causes filterOptions() to append it after the sort.

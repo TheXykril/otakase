@@ -71,7 +71,9 @@ func CastSetup(config *Config) error {
 		Password: config.KodiPassword,
 	})
 	cast.SetDiscoveryPort(config.CastDiscoveryPort)
+	endBusy := BeginBusy(config, "Looking for cast devices")
 	devices, err := cast.Discover(context.Background(), cast.DefaultDiscoveryTimeout)
+	endBusy()
 	if err != nil {
 		return err
 	}
@@ -120,6 +122,7 @@ func castSetupFixPorts(out io.Writer, config *Config, configPath string) error {
 // castSetupConfirm asks a yes/no question that defaults to yes. Ended stdin is
 // a no: nobody answered.
 func castSetupConfirm(out io.Writer, question string) bool {
+	defer suspendBusy()()
 	fmt.Fprint(out, question)
 	line, err := stdinLineReader().ReadString('\n')
 	if err != nil && line == "" {

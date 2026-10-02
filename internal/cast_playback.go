@@ -1252,7 +1252,9 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 // shows.
 func castPickDevice(config *Config) (device cast.Device, rescan bool, err error) {
 	cast.SetDiscoveryPort(config.CastDiscoveryPort)
+	endBusy := BeginBusy(config, "Looking for cast devices")
 	devices, err := cast.Discover(context.Background(), cast.DefaultDiscoveryTimeout)
+	endBusy()
 	if err != nil {
 		return cast.Device{}, false, err
 	}

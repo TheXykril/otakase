@@ -132,7 +132,9 @@ func ApplySyncedResume(config *Config, anime *Anime) {
 	if anime == nil || anime.Untracked || anime.AnilistId == 0 || !UsesRemoteTracking(config) {
 		return
 	}
+	endBusy := BeginBusy(config, "Checking where you left off")
 	remote, ok := fetchSyncedResume(config, anime.AnilistId)
+	endBusy()
 	if !ok || remote.Episode != anime.Ep.Number {
 		return
 	}

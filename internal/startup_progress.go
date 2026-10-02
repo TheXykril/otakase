@@ -38,13 +38,15 @@ type startupProgress struct {
 }
 
 var (
-	startupMu       sync.Mutex
-	activeStartup   *startupProgress
+	startupMu     sync.Mutex
+	activeStartup *startupProgress
+	// startupBusyEnd ends the terminal spinner a launch in a terminal shows.
+	startupBusyEnd  func()
 	startupReporter = func(message string) { Out(message) }
 )
 
-// BeginStartupProgress starts reporting a slow launch. It is a no-op when otakase
-// is running in a terminal, where its output is already visible.
+// BeginStartupProgress starts reporting a slow launch: a notification when
+// launched from rofi, a spinner in a terminal.
 func BeginStartupProgress(config *Config, stage string) {
 	// The clock runs regardless of how otakase was launched: a slow start is worth
 	// recording in a terminal too, where it is merely visible rather than
@@ -52,6 +54,18 @@ func BeginStartupProgress(config *Config, stage string) {
 	beginStartupClock(stage)
 
 	if config == nil || !config.RofiSelection {
+		// A terminal shows output, but nothing is printed while the tracker
+		// signs in or the list loads, so it gets the spinner instead.
+		startupMu.Lock()
+		running := startupBusyEnd != nil
+		startupMu.Unlock()
+		if config != nil && !running {
+			// BeginBusy takes startupMu itself, so it runs outside it.
+			end := BeginBusy(config, stage)
+			startupMu.Lock()
+			startupBusyEnd = end
+			startupMu.Unlock()
+		}
 		return
 	}
 
@@ -73,6 +87,8 @@ func BeginStartupProgress(config *Config, stage string) {
 // StartupStage updates what the launch is currently waiting on.
 func StartupStage(stage string) {
 	recordStartupStageTiming(stage)
+
+	setBusyStage(stage)
 
 	startupMu.Lock()
 	progress := activeStartup
@@ -143,7 +159,12 @@ func EndStartupProgress() {
 	startupMu.Lock()
 	progress := activeStartup
 	activeStartup = nil
+	endBusy := startupBusyEnd
+	startupBusyEnd = nil
 	startupMu.Unlock()
+	if endBusy != nil {
+		endBusy()
+	}
 	if progress == nil {
 		return
 	}

@@ -36,6 +36,9 @@ func GetTokenFromRofi() (string, error) {
 
 // GetUserInputFromRofi prompts the user for input using Rofi with a custom message
 func GetUserInputFromRofi(message string) (string, error) {
+	// A menu on screen answers "is it still working" by itself.
+	defer suspendBusy()()
+
 	// Create the Rofi command
 	cmd := exec.Command("rofi", "-dmenu", "-theme", filepath.Join(GetStoragePath(), "userinput.rasi"), "-p", "Input", "-mesg", message)
 
