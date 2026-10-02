@@ -288,8 +288,9 @@ control via HTTP* is on. If it does not show up, set `KodiHost` to its address
 (`192.168.1.20` or `192.168.1.20:8080`); if its web server has a password, set
 `KodiUser` and `KodiPassword` to match. The menu
 also carries a **Cast** toggle (`[ ] Cast: Off` / `[x] Cast: Office TV`, `^k`
-in the terminal list) that does the same thing per-run; `CastDevice` skips
-being asked which device each time. Casting works from **Untracked Watching**
+in the terminal list) that does the same thing per-run. otakase asks which
+device to use once per run, even when only one is found; `CastDevice` skips
+the question. Casting works from **Untracked Watching**
 too, and like local untracked playback it records nothing.
 
 Casting needs `ffmpeg`, same as `-download`. The stream is served from this

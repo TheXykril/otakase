@@ -1256,7 +1256,6 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 		}
 	}
 
-	configuredMissing := false
 	if configured := config.CastDevice; configured != "" {
 		for _, device := range devices {
 			if device.Name == configured {
@@ -1265,7 +1264,6 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 			}
 		}
 		Out(fmt.Sprintf("%q was not found; pick another device.", configured))
-		configuredMissing = true
 	} else if castSessionDevice != "" {
 		// Nothing configured, but this run already picked once -- honour
 		// that pick again rather than asking a second time. Falls through
@@ -1278,13 +1276,11 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 		}
 	}
 
-	// The lone device is not "another device" when a configured name just
-	// failed to match it -- that is silently ignoring the mismatch and
-	// casting to it anyway, right after telling the user to pick.
-	if len(devices) == 1 && !configuredMissing {
-		castSessionDevice = devices[0].Name
-		return devices[0], nil
-	}
+	// Asked even when only one device answered: a TV that happens to be the
+	// only one on is not necessarily the one the viewer meant, and starting a
+	// stream on the wrong screen is worse than one press of enter. CastDevice
+	// is what skips the question, and a device picked earlier this run is
+	// not asked about again.
 
 	options := make([]SelectionOption, 0, len(devices))
 	for _, device := range devices {
