@@ -1,5 +1,23 @@
 # Changelog
 
+## 26.4.0 — 2026-10-02
+
+### Added
+
+- **otakase now shows when it is working.** Slow steps (searching AniList or
+  the providers, finding an episode's stream, looking for cast devices,
+  refreshing your list, checking where you left off, and a slow start) show a
+  spinner with the step and the seconds spent in a terminal, or a desktop
+  notification when launched from rofi. Quick steps stay silent, and the
+  indicator hides while a menu is open.
+
+### Changed
+
+- **Notifications update in place.** A message that repeats, like a step
+  counting its seconds, now changes one notification instead of stacking new
+  ones, on GNOME, KDE, mako and dunst alike. Progress notifications go away
+  shortly after the step finishes.
+
 ## 26.3.1 — 2026-10-02
 
 ### Fixed
