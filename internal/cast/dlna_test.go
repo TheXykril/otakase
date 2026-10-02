@@ -86,6 +86,7 @@ type fakeRenderer struct {
 	mu      sync.Mutex
 	actions []string
 	state   string
+	relTime string
 	refuse  map[string]bool
 }
 
@@ -100,6 +101,10 @@ func (f *fakeRenderer) handler(w http.ResponseWriter, r *http.Request) {
 		delete(f.refuse, action)
 	}
 	state := f.state
+	relTime := f.relTime
+	if relTime == "" {
+		relTime = "0:01:30"
+	}
 	f.mu.Unlock()
 
 	if refuse {
@@ -111,7 +116,7 @@ func (f *fakeRenderer) handler(w http.ResponseWriter, r *http.Request) {
 	case "GetTransportInfo":
 		io.WriteString(w, `<s:Envelope><s:Body><u:GetTransportInfoResponse><CurrentTransportState>`+state+`</CurrentTransportState></u:GetTransportInfoResponse></s:Body></s:Envelope>`)
 	case "GetPositionInfo":
-		io.WriteString(w, `<s:Envelope><s:Body><u:GetPositionInfoResponse><TrackDuration>0:24:00</TrackDuration><RelTime>0:01:30</RelTime></u:GetPositionInfoResponse></s:Body></s:Envelope>`)
+		io.WriteString(w, `<s:Envelope><s:Body><u:GetPositionInfoResponse><TrackDuration>0:24:00</TrackDuration><RelTime>`+relTime+`</RelTime></u:GetPositionInfoResponse></s:Body></s:Envelope>`)
 	case "GetVolume":
 		io.WriteString(w, `<s:Envelope><s:Body><u:GetVolumeResponse><CurrentVolume>40</CurrentVolume></u:GetVolumeResponse></s:Body></s:Envelope>`)
 	default:
@@ -297,5 +302,68 @@ func TestAwaitApprovalReturnsOtherErrors(t *testing.T) {
 	err := (&dlnaPlayer{name: "LG"}).awaitApproval(func() error { return want })
 	if !errors.Is(err, want) || notices != 0 {
 		t.Errorf("err %v, notices %d", err, notices)
+	}
+}
+
+// A TV that says PLAYING but never moves its position (seen on a Hisense with
+// a stream of unknown length) is counted from the clock instead, so the cast
+// is not taken for stalled. Paused time is not counted.
+func TestDLNAPlayerCountsAFrozenPositionFromTheClock(t *testing.T) {
+	now := time.Unix(1000, 0)
+	defer func(f func() time.Time) { dlnaNow = f }(dlnaNow)
+	dlnaNow = func() time.Time { return now }
+
+	fake := &fakeRenderer{state: "PLAYING", relTime: "0:00:00"}
+	server := httptest.NewServer(http.HandlerFunc(fake.handler))
+	defer server.Close()
+	p := &dlnaPlayer{name: "TV", avTransport: server.URL + "/av", renderingCtl: server.URL + "/rc"}
+
+	at := func(seconds int) float64 {
+		now = time.Unix(1000+int64(seconds), 0)
+		progress, err := p.Progress()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return progress.Position
+	}
+	if got := at(0); got != 0 {
+		t.Fatalf("start: %v", got)
+	}
+	if got := at(5); got != 0 {
+		t.Fatalf("before the clock is trusted: %v", got)
+	}
+	if got := at(30); got != 30 {
+		t.Fatalf("after 30s playing: %v", got)
+	}
+	fake.setState("PAUSED_PLAYBACK")
+	at(40)
+	if got := at(100); got != 40 {
+		t.Fatalf("paused time counted: %v", got)
+	}
+	fake.setState("PLAYING")
+	at(110)
+	if got := at(120); got != 50 {
+		t.Fatalf("after resuming: %v", got)
+	}
+}
+
+// A TV whose own position moves is believed, clock or not.
+func TestDLNAPlayerTrustsAMovingPosition(t *testing.T) {
+	now := time.Unix(1000, 0)
+	defer func(f func() time.Time) { dlnaNow = f }(dlnaNow)
+	dlnaNow = func() time.Time { return now }
+
+	fake := &fakeRenderer{state: "PLAYING", relTime: "0:00:01"}
+	server := httptest.NewServer(http.HandlerFunc(fake.handler))
+	defer server.Close()
+	p := &dlnaPlayer{name: "TV", avTransport: server.URL + "/av", renderingCtl: server.URL + "/rc"}
+
+	p.Progress()
+	fake.mu.Lock()
+	fake.relTime = "0:00:20"
+	fake.mu.Unlock()
+	now = now.Add(60 * time.Second)
+	if progress, _ := p.Progress(); progress.Position != 20 {
+		t.Fatalf("position %v, want the device's 20", progress.Position)
 	}
 }
