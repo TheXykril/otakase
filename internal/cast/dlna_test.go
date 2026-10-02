@@ -1,6 +1,7 @@
 package cast
 
 import (
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 const testDescription = `<?xml version="1.0"?>
@@ -228,5 +230,72 @@ func TestSetDiscoveryPortRejectsOutOfRange(t *testing.T) {
 	SetDiscoveryPort(70000)
 	if got := currentDiscoveryPort(); got != 0 {
 		t.Errorf("port %d, want 0 (random)", got)
+	}
+}
+
+// The refusals a TV gives while its "allow this device?" prompt is up are
+// waited on; anything else is a real error.
+func TestDLNAAwaitingApproval(t *testing.T) {
+	cases := []struct {
+		err  error
+		want bool
+	}{
+		{&soapRefusal{status: http.StatusUnauthorized}, true},
+		{&soapRefusal{status: http.StatusForbidden}, true},
+		{&soapRefusal{status: http.StatusInternalServerError, code: "606"}, true},
+		{&soapRefusal{status: http.StatusInternalServerError, code: "701"}, false},
+		{errors.New("something else"), false},
+		{nil, false},
+	}
+	for _, c := range cases {
+		if got := dlnaAwaitingApproval(c.err); got != c.want {
+			t.Errorf("%v: got %v, want %v", c.err, got, c.want)
+		}
+	}
+}
+
+// Once the viewer accepts on the TV, the same order goes through, and the
+// viewer was told once.
+func TestAwaitApprovalRetriesUntilAllowed(t *testing.T) {
+	defer func(wait, retry time.Duration) { DLNAApprovalWait, dlnaApprovalRetry = wait, retry }(DLNAApprovalWait, dlnaApprovalRetry)
+	DLNAApprovalWait, dlnaApprovalRetry = time.Second, time.Millisecond
+	notices := 0
+	SetApprovalNotice(func(string) { notices++ })
+	defer SetApprovalNotice(nil)
+
+	tries := 0
+	err := (&dlnaPlayer{name: "LG"}).awaitApproval(func() error {
+		tries++
+		if tries < 3 {
+			return &soapRefusal{status: http.StatusUnauthorized}
+		}
+		return nil
+	})
+	if err != nil || tries != 3 || notices != 1 {
+		t.Errorf("err %v, tries %d, notices %d", err, tries, notices)
+	}
+}
+
+// A TV nobody answers gives up when the wait runs out, saying what to do.
+func TestAwaitApprovalGivesUp(t *testing.T) {
+	defer func(wait, retry time.Duration) { DLNAApprovalWait, dlnaApprovalRetry = wait, retry }(DLNAApprovalWait, dlnaApprovalRetry)
+	DLNAApprovalWait, dlnaApprovalRetry = 20*time.Millisecond, time.Millisecond
+	err := (&dlnaPlayer{name: "LG"}).awaitApproval(func() error {
+		return &soapRefusal{status: http.StatusForbidden}
+	})
+	if err == nil || !strings.Contains(err.Error(), "accept it on the TV") {
+		t.Errorf("err %v", err)
+	}
+}
+
+// A real refusal is returned at once, without waiting or telling the viewer.
+func TestAwaitApprovalReturnsOtherErrors(t *testing.T) {
+	notices := 0
+	SetApprovalNotice(func(string) { notices++ })
+	defer SetApprovalNotice(nil)
+	want := &soapRefusal{status: http.StatusInternalServerError, code: "714"}
+	err := (&dlnaPlayer{name: "LG"}).awaitApproval(func() error { return want })
+	if !errors.Is(err, want) || notices != 0 {
+		t.Errorf("err %v, notices %d", err, notices)
 	}
 }

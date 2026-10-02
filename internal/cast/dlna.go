@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -298,12 +300,82 @@ func soapCall(controlURL, serviceType, action string, args [][2]string) (map[str
 	}
 	fields := soapFields(raw)
 	if resp.StatusCode != http.StatusOK {
-		if code := fields["errorCode"]; code != "" {
-			return fields, fmt.Errorf("cast: %s refused: UPnP error %s %s", action, code, fields["errorDescription"])
-		}
-		return fields, fmt.Errorf("cast: %s refused: %s", action, resp.Status)
+		return fields, &soapRefusal{action: action, status: resp.StatusCode, statusText: resp.Status, code: fields["errorCode"], description: fields["errorDescription"]}
 	}
 	return fields, nil
+}
+
+// soapRefusal is a renderer answering an action with an error, kept apart so
+// a refusal that only means "not allowed yet" can be told from a real one.
+type soapRefusal struct {
+	action      string
+	status      int
+	statusText  string
+	code        string
+	description string
+}
+
+func (e *soapRefusal) Error() string {
+	if e.code != "" {
+		return fmt.Sprintf("cast: %s refused: UPnP error %s %s", e.action, e.code, e.description)
+	}
+	return fmt.Sprintf("cast: %s refused: %s", e.action, e.statusText)
+}
+
+// dlnaAwaitingApproval reports whether err looks like a TV that has not been
+// allowed to take orders from this machine yet.
+//
+// Most smart TVs (LG webOS, Hisense, Samsung) put up an "allow this device?"
+// prompt the first time an unknown controller talks to them. While it is up
+// they either hold the request until it times out or refuse it as
+// unauthorized; once the viewer accepts, the same request goes through.
+func dlnaAwaitingApproval(err error) bool {
+	if err == nil {
+		return false
+	}
+	var refusal *soapRefusal
+	if errors.As(err, &refusal) {
+		switch refusal.status {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return true
+		}
+		// 606 is UPnP's "action not authorized".
+		return refusal.code == "606"
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	return errors.Is(err, syscall.ECONNRESET)
+}
+
+// DLNAApprovalWait is how long a cast waits for the viewer to accept this
+// machine on the TV before giving up. A var so tests need not wait it out.
+var DLNAApprovalWait = 2 * time.Minute
+
+// dlnaApprovalRetry is the pause between tries while waiting.
+var dlnaApprovalRetry = 2 * time.Second
+
+var (
+	approvalMu     sync.Mutex
+	approvalNotice func(device string)
+)
+
+// SetApprovalNotice sets what to call, once per cast, when a TV looks like it
+// is asking the viewer to allow this machine. nil turns it off.
+func SetApprovalNotice(notice func(device string)) {
+	approvalMu.Lock()
+	approvalNotice = notice
+	approvalMu.Unlock()
+}
+
+func noticeApproval(device string) {
+	approvalMu.Lock()
+	notice := approvalNotice
+	approvalMu.Unlock()
+	if notice != nil {
+		notice(device)
+	}
 }
 
 // soapFields collects every element holding only text, by local name.
@@ -388,7 +460,7 @@ func (p *dlnaPlayer) Play(streamURL string) error {
 		_, err := p.av("SetAVTransportURI", [2]string{"CurrentURI", streamURL}, [2]string{"CurrentURIMetaData", metadata})
 		return err
 	}
-	if err := set(); err != nil {
+	if err := p.awaitApproval(set); err != nil {
 		// Many renderers refuse a new URI while one is playing (error 701,
 		// "transition not available"); stopping first is what they expect.
 		_, _ = p.av("Stop")
@@ -400,6 +472,26 @@ func (p *dlnaPlayer) Play(streamURL string) error {
 		return err
 	}
 	return nil
+}
+
+// awaitApproval runs the first order a TV gets, and keeps retrying it while
+// the TV looks like it is asking the viewer to allow this machine, telling
+// the viewer once. Any other error, or the wait running out, is returned.
+func (p *dlnaPlayer) awaitApproval(first func() error) error {
+	err := first()
+	if !dlnaAwaitingApproval(err) {
+		return err
+	}
+	noticeApproval(p.name)
+	Log(fmt.Sprintf("cast: %s is not answering yet, waiting for it to be allowed: %v", p.name, err))
+	deadline := time.Now().Add(DLNAApprovalWait)
+	for time.Now().Before(deadline) {
+		time.Sleep(dlnaApprovalRetry)
+		if err = first(); !dlnaAwaitingApproval(err) {
+			return err
+		}
+	}
+	return fmt.Errorf("cast: %s was not allowed to play from this machine in time -- accept it on the TV and cast again: %w", p.name, err)
 }
 
 func (p *dlnaPlayer) Progress() (Progress, error) {

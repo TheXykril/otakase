@@ -257,7 +257,9 @@ Philips); they are listed next to Chromecasts, marked `· DLNA`. A TV that is
 both can show up twice, and the Chromecast entry is the one with the better
 controls. A DLNA TV is sent one plain MPEG-TS stream, so it needs nothing
 installed; if it does not appear, check that the TV's "media renderer" or
-"DLNA" setting is on and that your firewall lets its answers back in.
+"DLNA" setting is on and that your firewall lets its answers back in. The
+first time, most TVs ask on screen whether to allow this device: otakase
+waits up to two minutes for you to accept it there.
 
 **Behind a firewall** (ufw, firewalld), discovery answers arrive as inbound UDP
 and are dropped by default, so the TV looks absent. Run `otakase -cast-setup`

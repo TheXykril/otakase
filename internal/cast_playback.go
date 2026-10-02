@@ -562,6 +562,13 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 		}
 	}
 
+	// A TV that has not seen this machine before usually asks the viewer to
+	// allow it before taking any order; the DLNA player waits for that, and
+	// this is how the viewer learns why nothing is happening yet.
+	cast.SetApprovalNotice(func(name string) {
+		castStatus(fmt.Sprintf("%s may be asking to allow this device -- accept it on the TV. Waiting...", name))
+	})
+	defer cast.SetApprovalNotice(nil)
 	if err := s.Play(srv.URL(first.path)); err != nil {
 		return err
 	}
