@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -54,6 +55,7 @@ type busyIndicator struct {
 	// lastNotice is when a notification last went out, from this indicator or
 	// from Out, so a message Out just sent is not replaced before it is read.
 	lastNotice time.Time
+	announced  bool
 }
 
 var (
@@ -67,6 +69,8 @@ var (
 	busyTerminal = func() bool { return term.IsTerminal(int(os.Stderr.Fd())) }
 	// busyNotifier sends the rofi-mode notification.
 	busyNotifier = func(message string) { Out(message) }
+	// busyNotifyRepeats is whether a notification can be refreshed in place.
+	busyNotifyRepeats = runtime.GOOS == "linux"
 )
 
 // BeginBusy shows that otakase is working on stage until the returned function
@@ -179,6 +183,7 @@ func suspendBusy() func() {
 		if b.suspended == 0 {
 			b.started = time.Now()
 			b.lastNotice = time.Time{}
+			b.announced = false
 		}
 	})
 }
@@ -251,11 +256,16 @@ func (b *busyIndicator) tick(now time.Time) {
 		return
 	}
 
-	if elapsed < busyNotifyQuietPeriod || now.Sub(b.lastNotice) < busyNotifyTickInterval {
+	// Only notify-send can update a notification in place (see
+	// desktop_notify.go). Elsewhere each one is a new toast, so the step is
+	// announced once rather than stacked every few seconds.
+	repeat := busyNotifyRepeats || !b.announced
+	if elapsed < busyNotifyQuietPeriod || now.Sub(b.lastNotice) < busyNotifyTickInterval || !repeat {
 		b.mu.Unlock()
 		return
 	}
 	message := busyNotifyMessage(b.stage, elapsed)
+	b.announced = true
 	b.mu.Unlock()
 
 	// Out calls back into busyNoteOutput, so the lock is not held here; that

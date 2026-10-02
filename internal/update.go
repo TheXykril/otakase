@@ -546,9 +546,7 @@ func updateUserMessage(config *Config, msg string) {
 	Log(msg)
 	if config != nil && config.RofiSelection {
 		// One short desktop notification, not a barrage of Out lines.
-		_ = exec.Command("notify-send", "-a", DisplayName,
-			"-h", "string:x-canonical-private-synchronous:"+AppName+"-update",
-			DisplayName, msg).Run()
+		_ = sendLinuxNotification(AppName+"-update", "", msg)
 		return
 	}
 	fmt.Println(msg)

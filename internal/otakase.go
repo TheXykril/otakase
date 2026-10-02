@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -226,27 +225,12 @@ func Out(data interface{}) {
 				if len(parts) == 3 {
 					// Remove quotes from the message
 					message := strings.Trim(parts[2], "\"")
-					cmd := exec.Command("notify-send",
-						"-a", DisplayName,
-						"-h", "string:x-canonical-private-synchronous:otakase-notification",
-						DisplayName,
-						"-i", parts[1],
-						message)
-					err := cmd.Run()
-					if err != nil {
-						Log(fmt.Sprintf("%v", cmd))
+					if err := sendLinuxNotification(notifyTagMain, parts[1], message); err != nil {
 						Log(fmt.Sprintf("Failed to send notification: %v", err))
 					}
 				}
 			} else {
-				cmd := exec.Command("notify-send",
-					"-a", DisplayName,
-					"-h", "string:x-canonical-private-synchronous:otakase-notification",
-					DisplayName,
-					dataStr)
-				err := cmd.Run()
-				if err != nil {
-					Log(fmt.Sprintf("%v", cmd))
+				if err := sendLinuxNotification(notifyTagMain, "", dataStr); err != nil {
 					Log(fmt.Sprintf("Failed to send notification: %v", err))
 				}
 			}
@@ -2286,11 +2270,7 @@ func ChangeProvider(userConfig *Config) {
 // because the cast panel owns the one there is.
 func notifyDesktop(message string) {
 	if runtime.GOOS == "linux" {
-		cmd := exec.Command("notify-send",
-			"-a", DisplayName,
-			"-h", "string:x-canonical-private-synchronous:otakase-notification",
-			DisplayName, message)
-		if err := cmd.Run(); err != nil {
+		if err := sendLinuxNotification(notifyTagMain, "", message); err != nil {
 			Log(fmt.Sprintf("Failed to send notification: %v", err))
 		}
 		return

@@ -183,3 +183,21 @@ func TestBusySpinnerLineShowsSeconds(t *testing.T) {
 		t.Errorf("expected seconds, got %q", got)
 	}
 }
+
+// Where a notification cannot be updated in place, a slow step is announced
+// once rather than as a new toast every few seconds.
+func TestBusyNotifiesOnceWhereNotificationsStack(t *testing.T) {
+	read := captureBusyNotifications(t)
+	previousTerminal, previousRepeats := busyTerminal, busyNotifyRepeats
+	busyTerminal = func() bool { return false }
+	busyNotifyRepeats = false
+	t.Cleanup(func() { busyTerminal, busyNotifyRepeats = previousTerminal, previousRepeats })
+
+	end := BeginBusy(&Config{RofiSelection: true}, "Finding episode 2")
+	time.Sleep(busyNotifyQuietPeriod + busyNotifyTickInterval + 500*time.Millisecond)
+	end()
+
+	if got := read(); len(got) != 1 {
+		t.Fatalf("expected a single notification, got %v", got)
+	}
+}
