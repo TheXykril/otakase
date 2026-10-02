@@ -1,18 +1,22 @@
 package internal
 
+import "sync/atomic"
+
 var (
-	globalAnime   *Anime
+	// globalAnime is read from background goroutines (tracker updates started
+	// by StartNextEpisode) while the main flow replaces it, so it is atomic.
+	globalAnime   atomic.Pointer[Anime]
 	globalLogFile string
 )
 
 // SetGlobalAnime sets the global anime reference
 func SetGlobalAnime(anime *Anime) {
-	globalAnime = anime
+	globalAnime.Store(anime)
 }
 
 // GetGlobalAnime gets the global anime reference
 func GetGlobalAnime() *Anime {
-	return globalAnime
+	return globalAnime.Load()
 }
 
 // SetGlobalLogFile sets the global log file path
