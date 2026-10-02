@@ -104,6 +104,7 @@ func searchAnimeForMapping(config *Config, state *providerMappingSearchState, mo
 	runSearch := func(query string) ([]SelectionOption, error) {
 		return searchAnimeWithProviders(providers, query, mode)
 	}
+	defer BeginBusy(config, "Searching "+state.currentProviderLabel())()
 
 	queries := state.queryVariants
 	if len(queries) == 0 {

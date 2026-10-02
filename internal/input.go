@@ -82,6 +82,9 @@ func promptCancelable(config *Config, section, question, hint string) (value str
 // A question that is really "change this" starts from what it would change, so
 // correcting one word costs one word rather than retyping the whole line.
 func promptCancelableWithDefault(config *Config, section, question, hint, initial string) (value string, cancelled bool, err error) {
+	// A menu on screen answers "is it still working" by itself.
+	defer suspendBusy()()
+
 	// Same reasoning as dynamicSelectInternal: this builds its own Bubble Tea
 	// program, so it needs the same refusal rather than a second code path.
 	// A cancelled prompt is the honest answer here -- there is no value to

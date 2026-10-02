@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -122,6 +121,7 @@ func Exit(err error) {
 	// Quitting during a slow launch must not leave a "starting..." notification
 	// on screen describing something that is no longer happening.
 	EndStartupProgress()
+	EndAllBusy()
 
 	// Torrent-backed playback keeps a client and a temporary cache directory
 	// alive for the session. Leaving either behind would mean a stray port and a
@@ -183,6 +183,7 @@ func Out(data interface{}) {
 	if userConfig == nil {
 		userConfig = &Config{}
 	}
+	busyNoteOutput()
 	// While the cast panel owns the screen, the terminal shows the panel and
 	// nothing else. A message printed into it would either land inside the
 	// frame or scroll it away, so it goes where a launch with no terminal
@@ -224,27 +225,12 @@ func Out(data interface{}) {
 				if len(parts) == 3 {
 					// Remove quotes from the message
 					message := strings.Trim(parts[2], "\"")
-					cmd := exec.Command("notify-send",
-						"-a", DisplayName,
-						"-h", "string:x-canonical-private-synchronous:otakase-notification",
-						DisplayName,
-						"-i", parts[1],
-						message)
-					err := cmd.Run()
-					if err != nil {
-						Log(fmt.Sprintf("%v", cmd))
+					if err := sendLinuxNotification(notifyTagMain, parts[1], message); err != nil {
 						Log(fmt.Sprintf("Failed to send notification: %v", err))
 					}
 				}
 			} else {
-				cmd := exec.Command("notify-send",
-					"-a", DisplayName,
-					"-h", "string:x-canonical-private-synchronous:otakase-notification",
-					DisplayName,
-					dataStr)
-				err := cmd.Run()
-				if err != nil {
-					Log(fmt.Sprintf("%v", cmd))
+				if err := sendLinuxNotification(notifyTagMain, "", dataStr); err != nil {
 					Log(fmt.Sprintf("Failed to send notification: %v", err))
 				}
 			}
@@ -569,11 +555,13 @@ func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[
 	if cancelled {
 		return SelectionOption{Key: "-2", Label: "Back"}
 	}
+	endBusy := BeginBusy(userConfig, "Searching AniList")
 	if userConfig.RofiSelection && userConfig.ImagePreview {
 		animeMapPreview, err = SearchAnimeAnilistPreview(query, user.Token)
 	} else {
 		animeOptions, err = SearchAnimeAnilist(query, user.Token)
 	}
+	endBusy()
 	if err != nil {
 		Log(fmt.Sprintf("Failed to search anime: %v", err))
 		Out(fmt.Sprintf("Could not search for %q: %v", query, err))
@@ -998,12 +986,14 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 		// instant the goroutine completes — no polling, no race with the UI
 		// Updates consumer that already drained the updates channel.
 		if user.ListSync != nil {
+			endBusy := BeginBusy(userConfig, "Refreshing your anime list")
 			select {
 			case <-user.ListSync.RefreshDone():
 				Log("Background refresh done, using latest anime list for playback")
 			case <-time.After(10 * time.Second):
 				Log("Timed out waiting for background anime list refresh; using cached list")
 			}
+			endBusy()
 			user.AnimeList = user.ListSync.Current()
 		}
 
@@ -1523,7 +1513,9 @@ var episodeLinkResolver = resolveEpisodeLinksWithRecovery
 // episode itself, and StartNextEpisode clears Ep.Links "to force fetching new
 // ones" without fetching anything. This is that fetch, for both callers.
 func ResolveEpisodeLinks(config *Config, anime *Anime) bool {
+	endBusy := BeginBusy(config, fmt.Sprintf("Finding episode %d", anime.Ep.Number))
 	episodeResult, ok := episodeLinkResolver(config, anime, nil)
+	endBusy()
 	if !ok {
 		return false
 	}
@@ -2278,11 +2270,7 @@ func ChangeProvider(userConfig *Config) {
 // because the cast panel owns the one there is.
 func notifyDesktop(message string) {
 	if runtime.GOOS == "linux" {
-		cmd := exec.Command("notify-send",
-			"-a", DisplayName,
-			"-h", "string:x-canonical-private-synchronous:otakase-notification",
-			DisplayName, message)
-		if err := cmd.Run(); err != nil {
+		if err := sendLinuxNotification(notifyTagMain, "", message); err != nil {
 			Log(fmt.Sprintf("Failed to send notification: %v", err))
 		}
 		return

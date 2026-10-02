@@ -35,6 +35,7 @@ func stdinLineReader() *bufio.Reader {
 // round, and a stdin that answers instantly and forever would spin them --
 // opening a player per turn, with nobody there to watch it.
 func AwaitEnter() bool {
+	defer suspendBusy()()
 	_, err := stdinLineReader().ReadString('\n')
 	return err == nil
 }
