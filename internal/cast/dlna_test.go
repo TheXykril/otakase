@@ -2,6 +2,7 @@ package cast
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -180,5 +181,52 @@ func TestDLNAPlayerVolume(t *testing.T) {
 	fake.mu.Unlock()
 	if !strings.Contains(last, "<DesiredVolume>100</DesiredVolume>") {
 		t.Fatalf("last call = %s", last)
+	}
+}
+
+// The search socket sits on the configured port, so one firewall rule covers
+// the answers.
+func TestListenSSDPUsesFixedPort(t *testing.T) {
+	probe, err := net.ListenPacket("udp4", ":0")
+	if err != nil {
+		t.Skip("no UDP:", err)
+	}
+	port := probe.LocalAddr().(*net.UDPAddr).Port
+	probe.Close()
+
+	conn, err := listenSSDP(port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if got := conn.LocalAddr().(*net.UDPAddr).Port; got != port {
+		t.Errorf("listening on %d, want %d", got, port)
+	}
+}
+
+// A taken port falls back to a random one rather than failing discovery.
+func TestListenSSDPFallsBackWhenPortTaken(t *testing.T) {
+	held, err := net.ListenPacket("udp4", ":0")
+	if err != nil {
+		t.Skip("no UDP:", err)
+	}
+	defer held.Close()
+	port := held.LocalAddr().(*net.UDPAddr).Port
+
+	conn, err := listenSSDP(port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if got := conn.LocalAddr().(*net.UDPAddr).Port; got == port {
+		t.Errorf("listened on the held port %d", port)
+	}
+}
+
+func TestSetDiscoveryPortRejectsOutOfRange(t *testing.T) {
+	t.Cleanup(func() { SetDiscoveryPort(DefaultDiscoveryPort) })
+	SetDiscoveryPort(70000)
+	if got := currentDiscoveryPort(); got != 0 {
+		t.Errorf("port %d, want 0 (random)", got)
 	}
 }

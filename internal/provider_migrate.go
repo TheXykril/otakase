@@ -173,6 +173,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"KodiPassword":         "26.1.0",
 		// 26.1.2 — 18+ shows in continue watching, opt-in
 		"ContinueWatchingAdult": "26.1.2",
+		// 26.1.3 — fixed discovery port, so a firewall can let answers in
+		"CastDiscoveryPort": "26.1.3",
 	}
 }
 

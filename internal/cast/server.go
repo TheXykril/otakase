@@ -174,6 +174,16 @@ func outboundIP() (net.IP, error) {
 	return conn.LocalAddr().(*net.UDPAddr).IP, nil
 }
 
+// LocalAddress is this machine's LAN address, or "" when it has none -- for
+// naming the subnet in a firewall hint.
+func LocalAddress() string {
+	ip, err := outboundIP()
+	if err != nil {
+		return ""
+	}
+	return ip.String()
+}
+
 // castContentType is the media type to serve a cast stream's file as, or "" to
 // let net/http decide.
 //
