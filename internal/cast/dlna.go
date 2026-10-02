@@ -416,6 +416,62 @@ type dlnaPlayer struct {
 	// over -- which it reports between two streams -- not the end.
 	playing bool
 	volume  float64
+
+	// Some TVs (seen on a Hisense) report PLAYING but never move RelTime on
+	// a stream with no known length, which read as a stall and stopped a cast
+	// that was playing fine. The clock counts the time spent PLAYING instead,
+	// and stands in for RelTime until the device shows its own moving.
+	clock         float64
+	clockAt       time.Time
+	firstReported float64
+	reportedMoves bool
+	reportedSeen  bool
+	usingClock    bool
+}
+
+// dlnaClockAfter is how long a renderer may report PLAYING with a position
+// that never moves before the clock is trusted over it.
+const dlnaClockAfter = 10 * time.Second
+
+// dlnaNow is the clock the position estimate reads; tests replace it.
+var dlnaNow = time.Now
+
+// resetClock forgets the estimate, for a new stream.
+func (p *dlnaPlayer) resetClock() {
+	p.clock, p.clockAt = 0, time.Time{}
+	p.firstReported, p.reportedMoves, p.reportedSeen, p.usingClock = 0, false, false, false
+}
+
+// position is the reported position, or the clock's estimate when the
+// renderer has been PLAYING for a while without ever moving its own. Called
+// with mu held.
+func (p *dlnaPlayer) position(state string, reported float64) float64 {
+	now := dlnaNow()
+	if !p.clockAt.IsZero() {
+		p.clock += now.Sub(p.clockAt).Seconds()
+	}
+	if state == "PLAYING" {
+		p.clockAt = now
+	} else {
+		p.clockAt = time.Time{}
+	}
+
+	if !p.reportedSeen {
+		p.firstReported, p.reportedSeen = reported, true
+	} else if reported != p.firstReported {
+		p.reportedMoves = true
+	}
+	if p.reportedMoves {
+		return reported
+	}
+	if p.clock >= dlnaClockAfter.Seconds() {
+		if !p.usingClock {
+			p.usingClock = true
+			Log(fmt.Sprintf("cast: %s reports no playback position; counting it from the clock", p.name))
+		}
+		return p.firstReported + p.clock
+	}
+	return reported
 }
 
 func connectDLNA(d Device) (*dlnaPlayer, error) {
@@ -450,6 +506,7 @@ func (p *dlnaPlayer) Play(streamURL string) error {
 	streamURL = progressiveURL(streamURL)
 	p.mu.Lock()
 	p.playing = false
+	p.resetClock()
 	p.mu.Unlock()
 
 	metadata := `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">` +
@@ -512,6 +569,7 @@ func (p *dlnaPlayer) Progress() (Progress, error) {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	progress.Position = p.position(state, progress.Position)
 	switch state {
 	case "PLAYING", "PAUSED_PLAYBACK":
 		p.playing = true
