@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -147,39 +148,25 @@ func castWaitingFirewallHint(config *Config, serverAddr, firewall, device string
 	return lead + "The fix is on your clipboard -- paste it into a terminal."
 }
 
-// castDiscoveryFirewallHint is what to add to "no devices found" when a host
-// firewall is on, plus the bare command to put on the clipboard. Both are ""
-// when there is no firewall to blame.
+// castDiscoveryFirewallRules are the commands that let a cast through the
+// firewall, each as its argv, and the config keys left random that no rule
+// can cover.
 //
-// Discovery answers are inbound UDP that ufw and firewalld drop by default,
-// which looks exactly like an empty network. The rules are the three ports a
-// cast uses: the SSDP answers (DLNA), mDNS (Chromecast, Kodi), and the stream
-// server the device fetches from. Each is limited to the LAN, and a port left
-// random gets a config hint instead of a rule, since it cannot be allowed.
-//
-// It goes into the error rather than out on its own: the search runs before
-// the cast panel opens, from a terminal menu or from rofi, and the error is
-// the one message every one of those shows.
-func castDiscoveryFirewallHint(config *Config, localAddr, firewall string) (message, command string) {
-	if firewall == "" {
-		return "", ""
-	}
-	subnet := castLocalSubnet(localAddr)
-	if subnet == "" {
-		subnet = "192.168.0.0/24"
-	}
+// The rules are the three ports a cast uses: the SSDP answers (DLNA), mDNS
+// (Chromecast, Kodi), and the stream server the device fetches from. Each is
+// limited to the LAN and, on ufw, tagged so it is easy to find and delete. A
+// port left random is named in unset instead, since it cannot be allowed.
+func castDiscoveryFirewallRules(config *Config, subnet, firewall string) (rules [][]string, unset []string) {
 	discoveryPort, castPort := 0, 0
 	if config != nil {
 		discoveryPort, castPort = config.CastDiscoveryPort, config.CastPort
 	}
-
-	var rules, unset []string
 	add := func(port int, proto string) {
 		if firewall == "firewalld" {
-			rules = append(rules, fmt.Sprintf("sudo firewall-cmd --permanent --add-port=%d/%s", port, proto))
+			rules = append(rules, []string{"sudo", "firewall-cmd", "--permanent", fmt.Sprintf("--add-port=%d/%s", port, proto)})
 			return
 		}
-		rules = append(rules, fmt.Sprintf("sudo ufw allow from %s to any port %d proto %s", subnet, port, proto))
+		rules = append(rules, []string{"sudo", "ufw", "allow", "from", subnet, "to", "any", "port", strconv.Itoa(port), "proto", proto, "comment", "otakase cast"})
 	}
 	if discoveryPort > 0 {
 		add(discoveryPort, "udp")
@@ -193,11 +180,49 @@ func castDiscoveryFirewallHint(config *Config, localAddr, firewall string) (mess
 		unset = append(unset, "CastPort")
 	}
 	if firewall == "firewalld" {
-		rules = append(rules, "sudo firewall-cmd --reload")
+		rules = append(rules, []string{"sudo", "firewall-cmd", "--reload"})
 	}
+	return rules, unset
+}
 
-	command = strings.Join(rules, " && ")
-	message = fmt.Sprintf("%s is on and may be dropping their answers. Allow them:\n  %s", firewall, command)
+// castShellCommand joins argvs into one line a shell runs as they were meant,
+// quoting only the words that need it.
+func castShellCommand(rules [][]string) string {
+	lines := make([]string, 0, len(rules))
+	for _, argv := range rules {
+		words := make([]string, len(argv))
+		for i, word := range argv {
+			if strings.ContainsAny(word, " '\"$\\") {
+				word = "'" + strings.ReplaceAll(word, "'", `'\''`) + "'"
+			}
+			words[i] = word
+		}
+		lines = append(lines, strings.Join(words, " "))
+	}
+	return strings.Join(lines, " && ")
+}
+
+// castDiscoveryFirewallHint is what to add to "no devices found" when a host
+// firewall is on, plus the bare command to put on the clipboard. Both are ""
+// when there is no firewall to blame.
+//
+// Discovery answers are inbound UDP that ufw and firewalld drop by default,
+// which looks exactly like an empty network.
+//
+// It goes into the error rather than out on its own: the search runs before
+// the cast panel opens, from a terminal menu or from rofi, and the error is
+// the one message every one of those shows.
+func castDiscoveryFirewallHint(config *Config, localAddr, firewall string) (message, command string) {
+	if firewall == "" {
+		return "", ""
+	}
+	subnet := castLocalSubnet(localAddr)
+	if subnet == "" {
+		subnet = "192.168.0.0/24"
+	}
+	rules, unset := castDiscoveryFirewallRules(config, subnet, firewall)
+	command = castShellCommand(rules)
+	message = fmt.Sprintf("%s is on and may be dropping their answers. Run otakase -cast-setup to fix it, or allow them yourself:\n  %s", firewall, command)
 	if len(unset) > 0 {
 		message += fmt.Sprintf("\nAlso set %s to a fixed port (otakase -e).", strings.Join(unset, " and "))
 	}

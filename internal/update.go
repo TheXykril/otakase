@@ -730,7 +730,8 @@ func preferGUIPasswordPrompt() bool {
 }
 
 // promptSudoPasswordGUI tries GTK/desktop password dialogs (zenity → yad → kdialog).
-func promptSudoPasswordGUI(prompt string) (string, error) {
+// title is the dialog's window title.
+func promptSudoPasswordGUI(title, prompt string) (string, error) {
 	if prompt == "" {
 		prompt = "Enter your password to install the " + DisplayName + " update:"
 	}
@@ -741,11 +742,11 @@ func promptSudoPasswordGUI(prompt string) (string, error) {
 	}
 	dialogs := []dialog{
 		// GTK (GNOME / many desktops)
-		{"zenity", []string{"--password", "--title=" + DisplayName + " Update", "--text=" + prompt}},
+		{"zenity", []string{"--password", "--title=" + title, "--text=" + prompt}},
 		// GTK-based yad
-		{"yad", []string{"--entry", "--hide-text", "--title=" + DisplayName + " Update", "--text=" + prompt, "--button=OK:0", "--button=Cancel:1"}},
+		{"yad", []string{"--entry", "--hide-text", "--title=" + title, "--text=" + prompt, "--button=OK:0", "--button=Cancel:1"}},
 		// KDE
-		{"kdialog", []string{"--title", DisplayName + " Update", "--password", prompt}},
+		{"kdialog", []string{"--title", title, "--password", prompt}},
 	}
 
 	for _, d := range dialogs {
@@ -776,6 +777,12 @@ func promptSudoPasswordGUI(prompt string) (string, error) {
 }
 
 func promptSudoPassword(prompt string) (string, error) {
+	return promptSudoPasswordTitled(DisplayName+" Update", prompt)
+}
+
+// promptSudoPasswordTitled is promptSudoPassword with the desktop dialog's
+// title chosen by the caller, for sudo asks that are not an update.
+func promptSudoPasswordTitled(title, prompt string) (string, error) {
 	if prompt == "" {
 		prompt = "Administrator password (sudo) to install update: "
 	}
@@ -788,7 +795,7 @@ func promptSudoPassword(prompt string) (string, error) {
 
 	// Rofi/desktop: try zenity/yad/kdialog first.
 	if preferGUIPasswordPrompt() {
-		if password, err := promptSudoPasswordGUI(prompt); err == nil {
+		if password, err := promptSudoPasswordGUI(title, prompt); err == nil {
 			return password, nil
 		} else {
 			Log(fmt.Sprintf("GUI password prompt unavailable (%v)", err))

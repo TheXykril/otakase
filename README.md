@@ -197,6 +197,7 @@ followed next time you play the show, rather than an older local position.
 | `-download-dir` | Where to save them | `$HOME/Downloads/otakase` |
 | `-download-format` | Container for downloads, `mkv` or `mp4` | `mkv` |
 | `-cast` | Play on a Chromecast, DLNA TV or Kodi on this network instead of locally | |
+| `-cast-setup` | Let casting through your firewall: fixes the cast ports, shows the rules and runs them with sudo if you say yes, then lists the devices it finds | |
 | `-current` | Jump straight to what you are currently watching | |
 | `-show-new-episodes` | Mark shows with an unwatched episode in the list | `true` |
 | `-vim-keys` | `j`/`k`/`h`/`l` to move and `/` to search in menus | |
@@ -259,10 +260,17 @@ installed; if it does not appear, check that the TV's "media renderer" or
 "DLNA" setting is on and that your firewall lets its answers back in.
 
 **Behind a firewall** (ufw, firewalld), discovery answers arrive as inbound UDP
-and are dropped by default, so the TV looks absent. TVs answer on
+and are dropped by default, so the TV looks absent. Run `otakase -cast-setup`
+once: it sets `CastPort` and `CastDiscoveryPort` if they are random, shows the
+rules below for your subnet, runs them with `sudo` after you say yes, then
+searches and lists the devices it finds. It asks for your password the same
+way `otakase -u` does. When a cast search finds nothing with a firewall on,
+otakase also offers **Fix the firewall now** right there, which does the same
+and searches again. TVs answer on
 `CastDiscoveryPort` (UDP, `8011` by default), Chromecast and Kodi on mDNS
-(`5353/udp`), and the TV fetches the stream from `CastPort` (TCP). With
-`CastPort=8010` and a `192.168.0.x` network, these three rules cover it:
+(`5353/udp`), and the TV fetches the stream from `CastPort` (TCP). To do it by
+hand: with `CastPort=8010` and a `192.168.0.x` network, these three rules
+cover it:
 
 ```sh
 sudo ufw allow from 192.168.0.0/24 to any port 8011 proto udp   # TV answers (DLNA)

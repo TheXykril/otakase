@@ -110,6 +110,7 @@ func main() {
 	noRofi := flag.Bool("no-rofi", false, "No rofi")
 	imagePreview := flag.Bool("image-preview", false, "Show image preview")
 	castFlag := flag.Bool("cast", false, "Play on a Chromecast, DLNA TV or Kodi on this network instead of locally")
+	castSetupFlag := flag.Bool("cast-setup", false, "Let casting through this machine's firewall: fix the cast ports, allow them (asks first), then search for devices")
 	castSessionFlag := flag.String("cast-session", "", "Cast the episode described by a handoff file (used internally when casting from rofi)")
 	noImagePreview := flag.Bool("no-image-preview", false, "No image preview")
 	changeToken := flag.Bool("change-token", false, "Change token")
@@ -179,6 +180,14 @@ func main() {
 		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	if *castSetupFlag {
+		if err := internal.CastSetup(&userConfig); err != nil {
+			fmt.Fprintln(os.Stderr, "Cast setup failed:", err)
 			os.Exit(1)
 		}
 		os.Exit(0)
