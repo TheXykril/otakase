@@ -3,8 +3,10 @@ package internal
 import (
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // A message that updates -- a slow step counting its seconds, a download's
@@ -40,6 +42,12 @@ var (
 // sendLinuxNotification shows message under tag, replacing the last one sent
 // under the same tag. icon may be empty.
 func sendLinuxNotification(tag, icon, message string) error {
+	return sendLinuxNotificationFor(tag, icon, message, 0)
+}
+
+// sendLinuxNotificationFor is sendLinuxNotification with an expiry; zero
+// leaves it to the daemon.
+func sendLinuxNotificationFor(tag, icon, message string, expire time.Duration) error {
 	notifyMu.Lock()
 	defer notifyMu.Unlock()
 
@@ -50,6 +58,9 @@ func sendLinuxNotification(tag, icon, message string) error {
 	}
 	if icon != "" {
 		base = append(base, "-i", icon)
+	}
+	if expire > 0 {
+		base = append(base, "-t", strconv.Itoa(int(expire.Milliseconds())))
 	}
 
 	if !notifyNoPrintID {

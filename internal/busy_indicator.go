@@ -37,6 +37,7 @@ const (
 	// startup one does and refreshes as often.
 	busyNotifyQuietPeriod  = startupQuietPeriod
 	busyNotifyTickInterval = startupTickInterval
+	busyNotifyExpire       = busyNotifyTickInterval + 2*time.Second
 )
 
 var busyFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -67,8 +68,19 @@ var (
 	busyOutput io.Writer = os.Stderr
 	// busyTerminal reports whether there is a terminal to draw on.
 	busyTerminal = func() bool { return term.IsTerminal(int(os.Stderr.Fd())) }
-	// busyNotifier sends the rofi-mode notification.
-	busyNotifier = func(message string) { Out(message) }
+	// busyNotifier sends the rofi-mode notification. On Linux it expires a
+	// little after the next refresh would have come, so once the step is done
+	// the popup goes away rather than saying "Finding episode 5" over the
+	// episode that is already playing.
+	busyNotifier = func(message string) {
+		if runtime.GOOS != "linux" {
+			Out(message)
+			return
+		}
+		if err := sendLinuxNotificationFor(notifyTagMain, "", message, busyNotifyExpire); err != nil {
+			Log(fmt.Sprintf("Failed to send notification: %v", err))
+		}
+	}
 	// busyNotifyRepeats is whether a notification can be refreshed in place.
 	busyNotifyRepeats = runtime.GOOS == "linux"
 )
@@ -266,10 +278,10 @@ func (b *busyIndicator) tick(now time.Time) {
 	}
 	message := busyNotifyMessage(b.stage, elapsed)
 	b.announced = true
+	b.lastNotice = now
 	b.mu.Unlock()
 
-	// Out calls back into busyNoteOutput, so the lock is not held here; that
-	// call also stamps lastNotice, which is what spaces the next one.
+	// Out calls back into busyNoteOutput, so the lock is not held here.
 	busyNotifier(message)
 }
 

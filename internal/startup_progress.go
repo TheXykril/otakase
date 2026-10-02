@@ -195,6 +195,12 @@ func (p *startupProgress) run() {
 	defer ticker.Stop()
 
 	p.announce()
+	// Where a notification cannot be replaced in place (see
+	// desktop_notify.go), each refresh would be one more toast.
+	if !busyNotifyRepeats {
+		<-p.done
+		return
+	}
 	for {
 		select {
 		case <-p.done:

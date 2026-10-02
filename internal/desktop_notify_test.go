@@ -105,3 +105,18 @@ func TestNotificationKeepsPrintIDWhenDaemonIsDown(t *testing.T) {
 		t.Error("a failed retry should leave -p on")
 	}
 }
+
+// A progress notification expires on its own once nothing refreshes it.
+func TestNotificationExpiryIsPassedOn(t *testing.T) {
+	calls := captureNotifySend(t, func([]string) (string, error) { return "1", nil })
+
+	_ = sendLinuxNotificationFor(notifyTagMain, "", "Searching… (2s)", busyNotifyExpire)
+	_ = sendLinuxNotification(notifyTagMain, "", "Done")
+
+	if got := argAfter((*calls)[0], "-t"); got != "5000" {
+		t.Errorf("expected a 5000ms expiry, got %q in %v", got, (*calls)[0])
+	}
+	if slices.Contains((*calls)[1], "-t") {
+		t.Errorf("an ordinary message should keep the daemon's timeout: %v", (*calls)[1])
+	}
+}
