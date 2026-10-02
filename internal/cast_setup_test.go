@@ -85,12 +85,9 @@ func TestCastShellCommandQuotes(t *testing.T) {
 }
 
 // A rofi cast's own terminal has no menu to ask in, so it is never offered.
-func TestCastOfferFirewallFixSkipsNonInteractive(t *testing.T) {
-	if castOfferFirewallFix(&Config{CastNonInteractive: true}, "ufw") {
-		t.Error("offered a fix with no menu to ask in")
-	}
-	if castOfferFirewallFix(&Config{}, "") {
-		t.Error("offered a fix with no firewall")
+func TestCastNoDevicesMenuSkipsNonInteractive(t *testing.T) {
+	if castNoDevicesMenu(&Config{CastNonInteractive: true}, "ufw") {
+		t.Error("asked with no menu to ask in")
 	}
 }
 

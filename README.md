@@ -257,7 +257,9 @@ Philips); they are listed next to Chromecasts, marked `· DLNA`. A TV that is
 both can show up twice, and the Chromecast entry is the one with the better
 controls. A DLNA TV is sent one plain MPEG-TS stream, so it needs nothing
 installed; if it does not appear, check that the TV's "media renderer" or
-"DLNA" setting is on and that your firewall lets its answers back in.
+"DLNA" setting is on and that your firewall lets its answers back in. The
+first time, most TVs ask on screen whether to allow this device: otakase
+waits up to two minutes for you to accept it there.
 
 **Behind a firewall** (ufw, firewalld), discovery answers arrive as inbound UDP
 and are dropped by default, so the TV looks absent. Run `otakase -cast-setup`
@@ -288,8 +290,10 @@ control via HTTP* is on. If it does not show up, set `KodiHost` to its address
 (`192.168.1.20` or `192.168.1.20:8080`); if its web server has a password, set
 `KodiUser` and `KodiPassword` to match. The menu
 also carries a **Cast** toggle (`[ ] Cast: Off` / `[x] Cast: Office TV`, `^k`
-in the terminal list) that does the same thing per-run; `CastDevice` skips
-being asked which device each time. Casting works from **Untracked Watching**
+in the terminal list) that does the same thing per-run. otakase asks which
+device to use once per run, even when only one is found; `CastDevice` skips
+the question. The device list ends with **Rescan for devices**, for a TV that
+was still waking up, and the same entry is offered when nothing was found. Casting works from **Untracked Watching**
 too, and like local untracked playback it records nothing.
 
 Casting needs `ffmpeg`, same as `-download`. The stream is served from this

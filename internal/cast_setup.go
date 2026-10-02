@@ -188,23 +188,47 @@ func castSetupRun(rules [][]string, password string, command func(string, ...str
 	return nil
 }
 
-// castOfferFirewallFix asks, from the menu the search was started from, whether
-// to fix the firewall now, and does it if so. It reports whether the rules
-// went in, so the caller knows a second search is worth it.
+// castRescanKey is the menu key of the entry that searches again, in the
+// device picker and in the menu shown when nothing was found.
+const castRescanKey = "rescan"
+
+// castRescanOption is that entry, kept last so the devices come first.
+var castRescanOption = SelectionOption{Key: castRescanKey, Label: "↻ Rescan for devices"}
+
+// castNoDevicesMenu asks, from the menu the search was started from, what to
+// do about an empty search: look again (a TV just turned on), fix the
+// firewall when one is on, or give up. It reports whether a second search is
+// worth it.
 //
 // A rofi cast's own terminal cannot show a menu, so it is not asked there;
 // the error still carries the rules and the pointer to -cast-setup.
-func castOfferFirewallFix(config *Config, firewall string) bool {
-	if config == nil || config.CastNonInteractive || firewall == "" {
+func castNoDevicesMenu(config *Config, firewall string) bool {
+	if config == nil || config.CastNonInteractive {
 		return false
 	}
-	selected, err := DynamicSelectPreserveOrder([]SelectionOption{
-		{Key: "fix", Label: "No devices found: " + firewall + " may be blocking them. Fix the firewall now"},
-		{Key: "skip", Label: "Not now"},
-	})
-	if err != nil || selected.Key != "fix" {
+	options := []SelectionOption{castRescanOption}
+	if firewall != "" {
+		options = append(options, SelectionOption{Key: "fix", Label: "Fix the firewall now (" + firewall + " may be blocking devices)"})
+	}
+	options = append(options, SelectionOption{Key: "cancel", Label: "Cancel"})
+	Out("No cast devices found.")
+	selected, err := DynamicSelectPreserveOrder(options)
+	if err != nil {
 		return false
 	}
+	switch selected.Key {
+	case castRescanKey:
+		return true
+	case "fix":
+		return castFixFirewallNow(config, firewall)
+	}
+	return false
+}
+
+// castFixFirewallNow fixes the cast ports and allows them through the
+// firewall, asking for the password first. It reports whether the rules went
+// in.
+func castFixFirewallNow(config *Config, firewall string) bool {
 	if err := castSetupFixPorts(io.Discard, config, GlobalConfigPath); err != nil {
 		Out("Could not save the cast ports: " + err.Error())
 		return false
@@ -219,6 +243,6 @@ func castOfferFirewallFix(config *Config, firewall string) bool {
 		Out("Firewall not changed: " + err.Error())
 		return false
 	}
-	Out("Firewall updated. Looking for cast devices again...")
+	Out("Firewall updated.")
 	return true
 }
