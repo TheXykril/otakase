@@ -152,7 +152,7 @@ type Config struct {
 	// menu: the process-global cast reader is parked in os.Stdin.Read for the
 	// whole run and would split the keystrokes with a Bubble Tea reader on the
 	// same descriptor, and a menu nobody is at blocks the season outright.
-	// See docs/cast-window-prompts.md.
+	// See wiki/Developer-Cast-Window-Prompts.md.
 	CastNonInteractive bool `config:"-"`
 }
 

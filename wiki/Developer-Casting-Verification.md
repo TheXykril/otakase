@@ -271,7 +271,7 @@ stream declaring H.264 Level 5.0 to a decoder specified for 4.1.
 
 A cast launched from the rofi keybind runs in a terminal the viewer is not at.
 Nothing in that window may wait for a keyboard — see
-`cast-window-prompts.md` for what each prompt decides instead. These are the
+[Cast Window Prompts](Developer-Cast-Window-Prompts) for what each prompt decides instead. These are the
 cases only a real device and a real room can settle.
 
 - [ ] **Finish a whole season from a rofi launch without touching the

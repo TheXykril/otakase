@@ -141,7 +141,7 @@ func searchAnimeForMapping(config *Config, state *providerMappingSearchState, mo
 // the two answers here rather than a policy imposed on it: this is only reached
 // on an exact title and episode-count match, and the alternative -- "select
 // manually" -- is a menu that cannot be shown, which would end the episode
-// instead. See docs/cast-window-prompts.md.
+// instead. See wiki/Developer-Cast-Window-Prompts.md.
 func confirmProviderMatch(config *Config, option SelectionOption, reason string) bool {
 	label := option.Label
 	if label == "" {
@@ -823,7 +823,7 @@ func episodeLinkFailureDiagnosis(config *Config, anime *Anime, lastErr error) st
 //
 // With no viewer at the keyboard it takes the one answer that needs no menu --
 // search for the show again -- and the caller bounds that to a single attempt
-// before backing out. See docs/cast-window-prompts.md.
+// before backing out. See wiki/Developer-Cast-Window-Prompts.md.
 func promptEpisodeLinkFailureRecovery(config *Config, anime *Anime, lastErr error, includeAudio bool) string {
 	preferredMode := "sub"
 	if config != nil {
