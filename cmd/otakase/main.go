@@ -115,7 +115,6 @@ func main() {
 	noImagePreview := flag.Bool("no-image-preview", false, "No image preview")
 	changeToken := flag.Bool("change-token", false, "Change token")
 	setupAnimeSkip := flag.Bool("setup-anime-skip", false, "Create a personal Anime-Skip client id and save it")
-	currentCategory := flag.Bool("current", false, "Current category")
 	updateScript := flag.Bool("u", false, "Update the script")
 	editConfig := flag.Bool("e", false, "Edit config")
 	subFlag := flag.Bool("sub", false, "Watch sub version")
@@ -230,11 +229,6 @@ func main() {
 		}
 		fmt.Println("Program Updated!")
 		os.Exit(0)
-	}
-
-	if *currentCategory {
-		userConfig.CurrentCategory = true
-		userConfig.CurrentCategoryFlag = true
 	}
 
 	if *imagePreview {

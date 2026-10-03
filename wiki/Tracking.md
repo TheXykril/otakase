@@ -35,7 +35,7 @@ you have seen, records them, and starts at the next one; all of them marks the
 show completed. Progress set this way, with Update, or on another device is
 followed next time you play the show, rather than an older local position.
 
-The menu opens with the shows you played last, newest first. `ContinueWatchingRows` sets how many are shown; `0` hides them.
+The Watching list opens with the shows you played last, newest first, while `MenuActions` has `CONTINUE_LAST`. `ContinueWatchingRows` sets how many are shown; `0` hides them.
 
 ## Coming from curd
 

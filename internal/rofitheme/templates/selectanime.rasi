@@ -115,11 +115,12 @@ element alternate.normal {
     background-color: transparent;
 }
 
-/* Faint fill plus an outline, and the text takes the accent -- the treatment
-   Omarchy uses for a selected row. */
+/* Faint fill plus an outline, the treatment Omarchy uses for a selected row.
+   The text brightens rather than taking the accent, which marks the shows
+   to continue. */
 element selected.normal {
     background-color: @sel-fill;
-    text-color:       @accent;
+    text-color:       {{ .SelectedText }};
     border:           1px;
     border-color:     @sel-edge;
     border-radius:    4px;

@@ -13,7 +13,7 @@ import (
 )
 
 // Continue watching: the shows played most recently, as the first rows of the
-// home menu, so picking one up again is one choice rather than a category and
+// Watching list when MenuActions names CONTINUE_LAST, so picking one up again is one choice rather than a category and
 // a search. "Continue Last Session" only ever reached the single last show.
 //
 // The watch history already holds each show's episode and position, but not
@@ -127,17 +127,20 @@ func continueWatchingRows(config *Config, list *AnimeList) []SelectionOption {
 		if entry == nil {
 			continue
 		}
+		cover := ""
 		if list != nil && UsesRemoteTracking(config) {
 			listed, err := FindAnimeByAnilistID(*list, strconv.Itoa(show.AnilistID))
 			// The list's flag also covers shows recorded before Adult was.
 			if err != nil || (listed.Media.IsAdult && !showAdult) {
 				continue
 			}
+			cover = listed.CoverImage
 		}
 		rows = append(rows, SelectionOption{
-			Key:   resumeRowPrefix + strconv.Itoa(show.AnilistID),
-			Label: continueWatchingLabel(GetAnimeName(*entry), entry.Ep.Number, entry.Ep.Player.PlaybackTime),
-			Icon:  icons.Play,
+			Key:       resumeRowPrefix + strconv.Itoa(show.AnilistID),
+			Label:     continueWatchingLabel(GetAnimeName(*entry), entry.Ep.Number, entry.Ep.Player.PlaybackTime),
+			Icon:      icons.Play,
+			Thumbnail: cover,
 		})
 	}
 	return rows

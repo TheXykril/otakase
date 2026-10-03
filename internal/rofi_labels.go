@@ -28,6 +28,10 @@ var (
 	rofiMetaSeparator = regexp.MustCompile(`\s+[·—•]\s`)
 	// pangoEntity matches the escapes pango recognises.
 	pangoEntity = regexp.MustCompile(`&(amp|lt|gt|quot|#39);`)
+	// rofiResumePoint matches where a show stopped, "resume 12:34" on a list
+	// row and "ep 13 at 12:34" on a continue row, to colour it apart from the
+	// counts around it.
+	rofiResumePoint = regexp.MustCompile(`\bresume \d+:\d{2}(:\d{2})?|\bep \d+( at \d+:\d{2}(:\d{2})?)?`)
 )
 
 // escapePango lives in update.go, which already needed it for release notes.
@@ -88,7 +92,31 @@ func rofiRowMarkup(label string) string {
 		return escapePango(title)
 	}
 	return fmt.Sprintf("%s <span foreground=\"%s\">%s</span>",
-		escapePango(title), rofiMetaColor, escapePango(meta))
+		escapePango(title), rofiMetaColor, metaMarkup(meta))
+}
+
+// metaMarkup escapes a row's metadata and picks out where the show stopped in
+// the resume colour; the rest takes the dimmed colour of the span around it.
+func metaMarkup(meta string) string {
+	var out strings.Builder
+	last := 0
+	for _, match := range rofiResumePoint.FindAllStringIndex(meta, -1) {
+		out.WriteString(escapePango(meta[last:match[0]]))
+		fmt.Fprintf(&out, "<span foreground=\"%s\">%s</span>", rofiResumeColor, escapePango(meta[match[0]:match[1]]))
+		last = match[1]
+	}
+	out.WriteString(escapePango(meta[last:]))
+	return out.String()
+}
+
+// continueRowMarkup colours a whole continue row, icon and title, so the shows
+// to pick up stand apart from the list below them. The metadata keeps its own
+// colours from the spans inside.
+func continueRowMarkup(opt SelectionOption, markup string) string {
+	if _, isRow := resumeRowAnilistID(opt.Key); !isRow {
+		return markup
+	}
+	return fmt.Sprintf("<span foreground=\"%s\">%s</span>", rofiContinueColor, markup)
 }
 
 // gridLabelGap separates a truncated title from its counts. splitRofiLabel
@@ -126,7 +154,7 @@ func GridRowMarkup(label string, capacity int) string {
 		escapePango(truncateRunes(title, budget)),
 		rofiMetaColor,
 		escapePango(gridLabelGap),
-		escapePango(meta))
+		metaMarkup(meta))
 }
 
 // gridLabelMinTitle is the fewest title characters worth showing.

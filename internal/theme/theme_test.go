@@ -203,3 +203,33 @@ func TestResolveBuiltinNeverTouchesOmarchy(t *testing.T) {
 	}
 	t.Cleanup(func() { SetActive(Builtin()) })
 }
+
+// A muted grey that sinks into the background is brought up until it reads,
+// and one that already reads is left as the theme chose it.
+func TestEnsureContrast(t *testing.T) {
+	got := EnsureContrast("#333333", "#0b0b0b", "#bebebe", minTextContrast)
+	if ratio := contrastRatio("#0b0b0b", got); ratio < minTextContrast {
+		t.Fatalf("EnsureContrast = %s, contrast %.2f, want >= %.1f", got, ratio, minTextContrast)
+	}
+	if got := EnsureContrast("#a0a0a0", "#0b0b0b", "#bebebe", minTextContrast); got != "#a0a0a0" {
+		t.Fatalf("readable colour changed to %s", got)
+	}
+	// A light theme's yellow is mixed toward its dark text.
+	got = EnsureContrast("#f0e000", "#ffffff", "#222222", minTextContrast)
+	if ratio := contrastRatio("#ffffff", got); ratio < minTextContrast {
+		t.Fatalf("light theme: %s has contrast %.2f", got, ratio)
+	}
+}
+
+// A grey accent would draw the shows to continue dimmer than the rest of the
+// list, so they take the brightest text instead.
+func TestContinueTextAvoidsGreyAccent(t *testing.T) {
+	p := Palette{Background: "#171717", Foreground: "#cacccc", BrightForeground: "#a5aeb4", Accent: "#798186"}
+	if got := p.ContinueText(); got != "#cacccc" {
+		t.Fatalf("ContinueText = %s, want the brightest text", got)
+	}
+	p.Accent = "#7aa2f7"
+	if got := p.ContinueText(); got != "#7aa2f7" {
+		t.Fatalf("ContinueText = %s, want the accent", got)
+	}
+}

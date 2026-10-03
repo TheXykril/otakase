@@ -337,7 +337,7 @@ func TestStatsKeyOpensTheStatsPage(t *testing.T) {
 		seen[action.Hint] = key
 	}
 
-	if !strings.Contains(defaultConfigMap()["MenuOrder"], "STATS") {
-		t.Error("new installs should get STATS in MenuOrder")
+	if !strings.Contains(strings.Join(defaultMenuKeys(), ","), "STATS") {
+		t.Error("new installs should get STATS in the menu")
 	}
 }

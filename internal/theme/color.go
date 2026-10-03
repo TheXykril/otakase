@@ -172,3 +172,70 @@ func (p Palette) Surface() string {
 func (p Palette) Border() string {
 	return Mix(p.Background, p.Muted, 0.75)
 }
+
+// minTextContrast is the least a coloured part of a row may stand off the
+// background. It is WCAG's figure for large text, low enough to let a dimmed
+// count still look dimmed, high enough that it can be read.
+const minTextContrast = 3.0
+
+// EnsureContrast returns color, mixed toward toward in small steps until it
+// stands at least min off background. A theme's muted grey is chosen to recede,
+// and on some themes -- Matte Black, Nord, Everforest -- it recedes into the
+// background altogether; this keeps its hue while making it readable.
+func EnsureContrast(color, background, toward string, min float64) string {
+	if !isHexColor(color) {
+		return color
+	}
+	if !isHexColor(toward) || contrastRatio(background, toward) < min {
+		toward = ReadableOn(background, "#000000", "#ffffff")
+	}
+	for step := 0; step <= 10; step++ {
+		mixed := Mix(color, toward, float64(step)/10)
+		if contrastRatio(background, mixed) >= min {
+			return mixed
+		}
+	}
+	return normalizeHex(toward)
+}
+
+// Text roles: each kind of text in a menu row takes its own theme colour, so a
+// row reads at a glance -- the show to continue, where it stopped -- rather
+// than as one grey line. Four colours and no more: titles, the shows to
+// continue, where they stopped, and everything else dimmed. Each is held to
+// minTextContrast against the background, whatever the theme picked.
+
+// MetaText is for what a row says about a show: counts, key hints, the search
+// placeholder.
+func (p Palette) MetaText() string {
+	return EnsureContrast(p.Muted, p.Background, p.Foreground, minTextContrast)
+}
+
+// ResumeText is for where a show stopped: "resume 12:34", "ep 13 at 12:34".
+func (p Palette) ResumeText() string {
+	return EnsureContrast(p.Yellow, p.Background, p.Foreground, minTextContrast)
+}
+
+// ContinueText is for the titles of the shows to continue, which lead the list.
+// A grey accent -- Solitude's -- would draw them dimmer than the titles below,
+// the opposite of leading, so they take the theme's brightest text instead.
+func (p Palette) ContinueText() string {
+	if isGrey(p.Accent) {
+		return p.SelectedText()
+	}
+	return EnsureContrast(p.Accent, p.Background, p.Foreground, minTextContrast)
+}
+
+// isGrey reports whether a colour has next to no hue.
+func isGrey(color string) bool {
+	r, g, b, ok := rgb(color)
+	if !ok {
+		return false
+	}
+	return math.Max(r, math.Max(g, b))-math.Min(r, math.Min(g, b)) < 24
+}
+
+// SelectedText is for the row under the cursor: the brightest text the theme
+// has, since the accent now marks the shows to continue.
+func (p Palette) SelectedText() string {
+	return ReadableOn(p.Background, p.BrightForeground, p.Foreground)
+}

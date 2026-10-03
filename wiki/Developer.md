@@ -42,9 +42,17 @@ theirs from their keys. Text that is not a menu row can use
 
 Icons go on actions and categories, not on rows that are values (an anime
 title, a quality, a tracker name): a column of the same icon says nothing.
-The terminal's category tabs take the same icon as the category's main menu
-entry (`categoryIcon`). A toggle shows its state in its icon and its words, not
-a checkbox: the cast entry uses `CastOff` while casting is off.
+The terminal's category tabs and rofi's Lists menu share each list's icon
+(`categoryIcon`), and rofi's toolbar buttons use the action's. A toggle shows
+its state in its icon and its words, not a checkbox: the cast button uses
+`CastOff` while casting is off.
+
+rofi's toolbar (`internal/rofi_toolbar.go`) is a row of rofi `button-*`
+widgets added to the theme's mainbox with `-theme-str`. Each button's action
+is a `kb-custom-N` binding, so a click and its Ctrl key both end the menu with
+exit code `9+N`. The rofi defaults on the same keys are unbound for that menu,
+or rofi refuses to start. In rasi, keep one quoted string per line: rofi's
+lexer reads a string to the last quote on its line.
 
 otakase embeds `internal/icons/font/OtakaseSymbols.ttf`, Symbols Nerd Font Mono
 cut down to only the glyphs in use, and installs it to the user's font

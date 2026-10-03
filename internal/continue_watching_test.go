@@ -102,23 +102,6 @@ func TestContinueWatchingRows(t *testing.T) {
 	}
 }
 
-func TestSortHomeMenuOptionsPutsResumeRowsFirst(t *testing.T) {
-	previous := GetGlobalConfig()
-	SetGlobalConfig(&Config{MenuOrder: "CURRENT,ALL"})
-	t.Cleanup(func() { SetGlobalConfig(previous) })
-
-	sorted := sortHomeMenuOptions([]SelectionOption{
-		{Key: "ALL"}, {Key: "CURRENT"}, {Key: "RESUME:1"}, {Key: "RESUME:2"},
-	})
-	keys := []string{}
-	for _, opt := range sorted {
-		keys = append(keys, opt.Key)
-	}
-	if strings.Join(keys, ",") != "RESUME:1,RESUME:2,CURRENT,ALL" {
-		t.Fatalf("order = %v", keys)
-	}
-}
-
 // 18+ shows get a continue-watching row only with both AdultContent and
 // ContinueWatchingAdult on, whether the recent list or the tracker marks them.
 func TestContinueWatchingAdultShows(t *testing.T) {

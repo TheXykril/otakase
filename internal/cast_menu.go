@@ -57,10 +57,9 @@ func toggleCastToDevice(config *Config) {
 	Log("cast: enabled from the menu")
 }
 
-// castMenuLabel is the category menu's entry for the cast toggle.
+// castMenuLabel is the text of the cast toggle: rofi's toolbar button.
 //
-// The terminal menu and rofi share this menu, so both get the same words. The
-// words carry the state on their own, so the entry still reads right with
+// The words carry the state on their own, so the button still reads right with
 // icons off; with them on, castMenuIcon shows it as well.
 func castMenuLabel(config *Config) string {
 	if config != nil && config.CastToDevice {
