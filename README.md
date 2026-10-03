@@ -24,6 +24,7 @@ theme.
 - Resumes where you left off, even on another device
 - Discord Rich Presence
 - rofi menus with poster previews, themed from your desktop colours on Omarchy
+- Its own look in mpv, in the same colours, with a skip button and the next episode a click away
 
 ## Install
 
@@ -204,6 +205,7 @@ people change:
 | `CastDevice` | Cast to this device without asking |
 | `Theme` | `auto` follows your desktop on Omarchy; `builtin` uses otakase's own colours |
 | `Icons` | Icons in the menus: `auto` (default), `true` or `false` for plain text |
+| `MpvSkin` | otakase's look in mpv: `auto` (default, unless you already use your own mpv skin), `true`, or `false` for mpv's usual look |
 
 Every setting is explained on the
 [Configuration](https://github.com/TheXykril/otakase/wiki/Configuration) wiki
@@ -231,7 +233,8 @@ contributors. [ani-cli](https://github.com/pystardust/ani-cli) and
 both. Lists and metadata come from [AniList](https://anilist.co) and
 [MyAnimeList](https://myanimelist.net), skip times from
 [AniSkip](https://api.aniskip.com/api-docs) and others, and filler episode
-numbers from [Jikan](https://jikan.moe/).
+numbers from [Jikan](https://jikan.moe/). The player look is built on
+[uosc](https://github.com/tomasklaen/uosc).
 
 ## Contributing
 

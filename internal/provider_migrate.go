@@ -178,6 +178,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"Icons": "26.5.0",
 		// 26.6.0 — the menu's actions get their own setting
 		"MenuActions": "26.6.0",
+		// 26.7.0 — otakase's own look in mpv
+		"MpvSkin": "26.7.0",
 	}
 }
 

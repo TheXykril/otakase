@@ -45,6 +45,7 @@ type AnilistToken struct {
 type Config struct {
 	Player                   string   `config:"Player"`
 	MpvArgs                  []string `config:"MpvArgs"`
+	MpvSkin                  string   `config:"MpvSkin"`
 	MpvPlaybackStartTimeout  int      `config:"MpvPlaybackStartTimeout"`
 	SubsLanguage             string   `config:"SubsLanguage"`
 	SubOrDub                 string   `config:"SubOrDub"`
@@ -180,6 +181,7 @@ func defaultConfigMap() map[string]string {
 	return map[string]string{
 		"Player":                  "mpv",
 		"MpvArgs":                 "[]",
+		"MpvSkin":                 "auto",
 		"MpvPlaybackStartTimeout": "20",
 		"StoragePath":             StoragePathDefault,
 		"AnimeNameLanguage":       "english",
