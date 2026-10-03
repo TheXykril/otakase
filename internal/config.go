@@ -1002,10 +1002,14 @@ func getOrderedCategories(userConfig *Config) []SelectionOption {
 		if !trackingCategoryEnabled(userConfig, key) {
 			continue
 		}
+		icon := categoryIcon(key)
+		if key == "CAST" {
+			icon = castMenuIcon(userConfig)
+		}
 		orderedCategories = append(orderedCategories, SelectionOption{
 			Key:   key,
 			Label: availableLabels[key],
-			Icon:  categoryIcon(key),
+			Icon:  icon,
 		})
 	}
 

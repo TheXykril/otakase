@@ -53,6 +53,7 @@ const (
 	Tracker    Icon = 0xF04E6 // nf-md-sync
 	Provider   Icon = 0xF048B // nf-md-server
 	Cast       Icon = 0xF0118 // nf-md-cast
+	CastOff    Icon = 0xF078A // nf-md-cast_off
 	Stats      Icon = 0xF0128 // nf-md-chart_bar
 
 	// Actions inside menus.
@@ -82,7 +83,7 @@ var All = []Icon{
 	Download, Changelog, OpenLink, Clock, Skip, BellOff, Play, Tag,
 	Back, Quit, Add,
 	Watching, AllShows, Search, Edit, Remap, History, Surprise, Planning,
-	Completed, Paused, Dropped, Rewatching, Tracker, Provider, Cast, Stats,
+	Completed, Paused, Dropped, Rewatching, Tracker, Provider, Cast, CastOff, Stats,
 	Folder, Counter, Star, Quality, Info, Yes, No, Next, Refresh, Firewall,
 	Number, Audio, Pin, Undo, TV, Merge, Import, Calendar,
 }
