@@ -1,5 +1,31 @@
 # Changelog
 
+## 26.5.0 — 2026-10-03
+
+### Added
+
+- **Icons in the menus.** Menus in rofi and the terminal show small line
+  icons in front of their entries: the main menu, list categories, the
+  episode, cast, quality and update menus. otakase carries the few glyphs it
+  needs in a tiny font and installs it for you on Linux. The new `Icons`
+  setting picks `auto` (the default: on where the font can be shown), `true`
+  or `false`. Rows that are values, like titles or qualities, stay plain.
+- **Read the changelog before updating.** The update prompt has a "Read the
+  changelog" page with every release between yours and the new one, grouped
+  into Added, Changed and Fixed, and an entry to open the release page in
+  your browser.
+
+### Changed
+
+- **Updates are offered in the same run.** The update check starts at launch,
+  alongside the tracker sign-in, and a new release is offered before the
+  first menu instead of on the next launch.
+- **A cleaner update prompt.** It shows a short summary of what is new, read
+  from this changelog, instead of the raw release text, and long notes no
+  longer scroll off the screen in the terminal.
+- **No emoji in the episode jump menu.** Its entries use the same icons as
+  the other menus, or plain text with icons off.
+
 ## 26.4.0 — 2026-10-02
 
 ### Added
