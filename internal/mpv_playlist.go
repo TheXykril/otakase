@@ -11,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/thexykril/otakase/internal/icons"
 )
 
 // Matches "Episode 12" / "Ep 12" in MPV playlist titles we set.
@@ -939,18 +941,18 @@ func defaultPromptPlaylistEpisodeLeave(fromEp, toEp int, percentageWatched float
 	Out(fmt.Sprintf("Jump: episode %d (%s) → episode %d", fromEp, pctLabel, toEp))
 
 	options := []SelectionOption{
-		{Key: "none", Label: fmt.Sprintf("▶ Play episode %d only (don’t change AniList/MAL)", toEp)},
-		{Key: "mark", Label: fmt.Sprintf("✓ Mark episode %d watched, then play %d", fromEp, toEp)},
-		{Key: "setwatch", Label: fmt.Sprintf("📌 Set progress to %d (watching %d), play %d", maxInt(0, toEp-1), toEp, toEp)},
-		{Key: "cancel", Label: fmt.Sprintf("↩ Cancel — stay on episode %d", fromEp)},
+		{Key: "none", Label: fmt.Sprintf("Play episode %d only (don’t change AniList/MAL)", toEp), Icon: icons.Play},
+		{Key: "mark", Label: fmt.Sprintf("Mark episode %d watched, then play %d", fromEp, toEp), Icon: icons.Yes},
+		{Key: "setwatch", Label: fmt.Sprintf("Set progress to %d (watching %d), play %d", maxInt(0, toEp-1), toEp, toEp), Icon: icons.Pin},
+		{Key: "cancel", Label: fmt.Sprintf("Cancel, stay on episode %d", fromEp), Icon: icons.Undo},
 	}
 	// If they were almost done, put "mark left" first.
 	if nearlyDone {
 		options = []SelectionOption{
-			{Key: "mark", Label: fmt.Sprintf("✓ Mark episode %d watched (you were %s), play %d", fromEp, pctLabel, toEp)},
-			{Key: "none", Label: fmt.Sprintf("▶ Play episode %d only (don’t change AniList/MAL)", toEp)},
-			{Key: "setwatch", Label: fmt.Sprintf("📌 Set progress to %d (watching %d), play %d", maxInt(0, toEp-1), toEp, toEp)},
-			{Key: "cancel", Label: fmt.Sprintf("↩ Cancel — stay on episode %d", fromEp)},
+			{Key: "mark", Label: fmt.Sprintf("Mark episode %d watched (you were %s), play %d", fromEp, pctLabel, toEp), Icon: icons.Yes},
+			{Key: "none", Label: fmt.Sprintf("Play episode %d only (don’t change AniList/MAL)", toEp), Icon: icons.Play},
+			{Key: "setwatch", Label: fmt.Sprintf("Set progress to %d (watching %d), play %d", maxInt(0, toEp-1), toEp, toEp), Icon: icons.Pin},
+			{Key: "cancel", Label: fmt.Sprintf("Cancel, stay on episode %d", fromEp), Icon: icons.Undo},
 		}
 	}
 

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/providers/anipub"
 )
 
@@ -157,8 +158,8 @@ func confirmProviderMatch(config *Config, option SelectionOption, reason string)
 		return true
 	}
 	selected, err := promptSelect([]SelectionOption{
-		{Key: "use", Label: "Use this match"},
-		{Key: "manual", Label: "Select manually"},
+		{Key: "use", Label: "Use this match", Icon: icons.Yes},
+		{Key: "manual", Label: "Select manually", Icon: icons.AllShows},
 	})
 	if err != nil {
 		Log(fmt.Sprintf("Error confirming provider match: %v", err))
@@ -271,15 +272,16 @@ func autoMatchProviderListing(config *Config, anime *Anime, animeList []Selectio
 
 func promptProviderSearchRecovery(config *Config, state *providerMappingSearchState, reason string) (action string, err error) {
 	options := []SelectionOption{
-		{Key: "custom", Label: "Search with a different name"},
+		{Key: "custom", Label: "Search with a different name", Icon: icons.Search},
 	}
 	if next := state.nextProviderLabel(); next != "" {
 		options = append(options, SelectionOption{
 			Key:   "next_provider",
 			Label: fmt.Sprintf("Try next provider (%s)", next),
+			Icon:  icons.Skip,
 		})
 	}
-	options = append(options, SelectionOption{Key: "back", Label: "Back to menu"})
+	options = append(options, SelectionOption{Key: "back", Label: "Back to menu", Icon: icons.Back})
 
 	message := reason
 	if message == "" {
@@ -302,16 +304,17 @@ func promptProviderSearchRecovery(config *Config, state *providerMappingSearchSt
 
 func promptProviderMatchRecovery(config *Config, state *providerMappingSearchState) (action string, err error) {
 	options := []SelectionOption{
-		{Key: "pick", Label: "Pick from search results"},
-		{Key: "custom", Label: "Search with a different name"},
+		{Key: "pick", Label: "Pick from search results", Icon: icons.AllShows},
+		{Key: "custom", Label: "Search with a different name", Icon: icons.Search},
 	}
 	if next := state.nextProviderLabel(); next != "" {
 		options = append(options, SelectionOption{
 			Key:   "next_provider",
 			Label: fmt.Sprintf("Try next provider (%s)", next),
+			Icon:  icons.Skip,
 		})
 	}
-	options = append(options, SelectionOption{Key: "back", Label: "Back to menu"})
+	options = append(options, SelectionOption{Key: "back", Label: "Back to menu", Icon: icons.Back})
 
 	selected, err := selectWithOptionalMessage(config, options, "Provider match", "We didn't find an automatic provider match.")
 	if err != nil {
@@ -763,17 +766,19 @@ func episodeLinkFailureRecoveryOptions(preferredMode string, includeAudio bool) 
 
 	// No numeric indices — callers must use DynamicSelectPreserveOrder / Rofi (keeps order).
 	options := []SelectionOption{
-		{Key: "remap", Label: "Search for this anime again"},
+		{Key: "remap", Label: "Search for this anime again", Icon: icons.Search},
 	}
 	if includeAudio {
 		options = append(options, SelectionOption{
 			Key:   "audio",
 			Label: fmt.Sprintf("Try other audio (%s)", alternateMode),
+			Icon:  icons.Audio,
 		})
 	}
 	options = append(options, SelectionOption{
 		Key:   "episode",
 		Label: "Change episode number (if this one is wrong)",
+		Icon:  icons.Number,
 	})
 	return options
 }

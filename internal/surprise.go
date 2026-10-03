@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strings"
+
+	"github.com/thexykril/otakase/internal/icons"
 )
 
 // Surprise Me: a random show from Plan to Watch, for when the list is long and
@@ -61,9 +63,9 @@ func SurpriseMe(config *Config, list AnimeList) (int, bool) {
 		pick, _ := surprisePick(planned, previous, rand.IntN)
 		previous = pick.Media.ID
 
-		options := []SelectionOption{{Key: "start", Label: surpriseLabel(pick, config)}}
+		options := []SelectionOption{{Key: "start", Label: surpriseLabel(pick, config), Icon: icons.Play}}
 		if len(planned) > 1 {
-			options = append(options, SelectionOption{Key: "reroll", Label: "Reroll"})
+			options = append(options, SelectionOption{Key: "reroll", Label: "Reroll", Icon: icons.Surprise})
 		}
 
 		// Order kept: the pick is the point of the menu and leads it.

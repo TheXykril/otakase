@@ -18,6 +18,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/rofitheme"
 	"github.com/thexykril/otakase/internal/theme"
 )
@@ -425,7 +426,9 @@ func (m Model) View() string {
 			// Cut rather than wrap. A row that wraps is two lines for one
 			// entry, which breaks both the count of what fits on screen and
 			// the alignment of everything beside it.
-			label := truncate(m.filteredKeys[i].Label, listWidth-4)
+			icon := optionIcon(m.filteredKeys[i]).String()
+			iconWidth := len([]rune(icon))
+			label := icon + truncate(m.filteredKeys[i].Label, listWidth-4-iconWidth)
 			if m.filteredKeys[i].HasNewEpisodes {
 				label = newEpisodeItemStyle.Render("[NEW]") + " " +
 					truncate(m.filteredKeys[i].Label, listWidth-11)
@@ -1312,20 +1315,37 @@ func rofiVersionThemeArgs() []string {
 		version)}
 }
 
+// optionIcon is the icon a row is drawn with: its own, or the one every menu's
+// Back, Quit and Add new rows share.
+func optionIcon(opt SelectionOption) icons.Icon {
+	if opt.Icon != 0 {
+		return opt.Icon
+	}
+	switch opt.Key {
+	case "-2":
+		return icons.Back
+	case "-1":
+		return icons.Quit
+	case "add_new":
+		return icons.Add
+	}
+	return 0
+}
+
 func buildRofiOptionsString(options []SelectionOption, isHomeMenu bool) string {
 	optionsList := make([]string, 0, len(options)+2)
 	for _, opt := range options {
-		row := rofiRowMarkup(opt.Label)
+		row := optionIcon(opt).String() + rofiRowMarkup(opt.Label)
 		if opt.HasNewEpisodes {
-			row = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s", rofiNewEpisodeColor, row)
+			row = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s", rofiNewEpisodeColor, rofiRowMarkup(opt.Label))
 		}
 		optionsList = append(optionsList, row)
 	}
 
 	if !isHomeMenu {
-		optionsList = append(optionsList, "Back")
+		optionsList = append(optionsList, icons.Label(icons.Back, "Back"))
 	}
-	optionsList = append(optionsList, "Quit")
+	optionsList = append(optionsList, icons.Label(icons.Quit, "Quit"))
 
 	return strings.Join(optionsList, "\n")
 }
@@ -1347,7 +1367,7 @@ func parseRofiSelection(err error, rawSelection string, options []SelectionOptio
 		ansiStrip.ReplaceAllString(selected, ""), "",
 	)))
 	selected = strings.TrimPrefix(selected, "[NEW] ")
-	selected = strings.TrimSpace(selected)
+	selected = strings.TrimSpace(icons.Strip(selected))
 	switch {
 	case selected == "":
 		if isHomeMenu {

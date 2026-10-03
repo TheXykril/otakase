@@ -1,6 +1,10 @@
 package internal
 
-import "time"
+import (
+	"time"
+
+	"github.com/thexykril/otakase/internal/icons"
+)
 
 type AnimeTitle struct {
 	Romaji   string `json:"title_romanji"`
@@ -225,8 +229,12 @@ type SelectionOptionImage struct {
 
 // SelectionOption holds the label and the internal key
 type SelectionOption struct {
-	Title          string
-	Label          string
+	Title string
+	Label string
+	// Icon is drawn before the label when icons are on (see internal/icons).
+	// It is not part of the label, so matching, filtering and sorting by
+	// label are the same with icons on or off.
+	Icon           icons.Icon
 	Key            string
 	Thumbnail      string
 	ExtraData      interface{}

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/providers"
 )
 
@@ -356,7 +357,7 @@ func resetMPVHLSBitrate(send mpvCommandSender, ipcSocketPath string, bitrate int
 // "setting" stands for the empty value, which clears the override: selection
 // menus read an empty key as nothing picked.
 var qualityChoices = []SelectionOption{
-	{Key: "setting", Label: "Use the Quality setting"},
+	{Key: "setting", Label: "Use the Quality setting", Icon: icons.Quality},
 	{Key: "best", Label: "Best available"},
 	{Key: "1080", Label: "1080p"},
 	{Key: "720", Label: "720p"},

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/providers"
 )
 
@@ -683,8 +684,8 @@ func GetEpisodeURLForPlayback(config Config, id string, epNo int) ([]string, str
 	if !config.AutoAudioFallback {
 		Out(audioFallbackPrompt(preferredMode, fallbackMode))
 		selected, selectErr := promptSelect([]SelectionOption{
-			{Key: "play", Label: "Play " + fallbackMode},
-			{Key: "cancel", Label: "Cancel"},
+			{Key: "play", Label: "Play " + fallbackMode, Icon: icons.Audio},
+			{Key: "cancel", Label: "Cancel", Icon: icons.No},
 		})
 		if selectErr != nil {
 			return nil, preferredMode, selectErr
@@ -897,8 +898,8 @@ func resolveEpisodeURLAlternateMode(config Config, anime *Anime, epNo int, exclu
 	if ask {
 		Out(audioFallbackPrompt(preferredMode, fallbackMode))
 		selected, selectErr := promptSelect([]SelectionOption{
-			{Key: "play", Label: "Play " + fallbackMode},
-			{Key: "cancel", Label: "Cancel"},
+			{Key: "play", Label: "Play " + fallbackMode, Icon: icons.Audio},
+			{Key: "cancel", Label: "Cancel", Icon: icons.No},
 		})
 		if selectErr != nil {
 			return ProviderEpisodeResult{}, selectErr
@@ -956,8 +957,8 @@ func configForProviderUpdate(config Config) *Config {
 func promptAnimepaheEpisodeFallbackConsent(mode string, epNo int) (bool, bool, error) {
 	Out(fmt.Sprintf("No %s stream was found on AllAnime for episode %d. Animepahe may require downloading a Chromium browser for DDoS-Guard verification (~500 MB). Use Animepahe fallback?", normalizeTranslationType(mode), epNo))
 	selected, err := promptSelect([]SelectionOption{
-		{Key: "use", Label: "Use Animepahe fallback"},
-		{Key: "never", Label: "Do not use Animepahe"},
+		{Key: "use", Label: "Use Animepahe fallback", Icon: icons.Yes},
+		{Key: "never", Label: "Do not use Animepahe", Icon: icons.No},
 	})
 	if err != nil {
 		return false, false, err

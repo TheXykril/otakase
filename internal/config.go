@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/pkg/browser"
+
+	"github.com/thexykril/otakase/internal/icons"
 )
 
 const (
@@ -905,6 +907,45 @@ func normalizeTrackingConfig(config *Config) {
 	config.TrackingLocal = true
 }
 
+// categoryIcon is the icon for a main menu entry or a list category.
+func categoryIcon(key string) icons.Icon {
+	switch key {
+	case "CURRENT":
+		return icons.Watching
+	case "ALL":
+		return icons.AllShows
+	case "UNTRACKED":
+		return icons.Search
+	case "UPDATE":
+		return icons.Edit
+	case "REMAP_PROVIDER":
+		return icons.Remap
+	case "CONTINUE_LAST":
+		return icons.History
+	case "SURPRISE":
+		return icons.Surprise
+	case "PLANNING":
+		return icons.Planning
+	case "COMPLETED":
+		return icons.Completed
+	case "PAUSED":
+		return icons.Paused
+	case "DROPPED":
+		return icons.Dropped
+	case "REWATCHING", "REPEATING":
+		return icons.Rewatching
+	case "TRACKER":
+		return icons.Tracker
+	case "PROVIDER":
+		return icons.Provider
+	case "CAST":
+		return icons.Cast
+	case "STATS":
+		return icons.Stats
+	}
+	return 0
+}
+
 func getOrderedCategories(userConfig *Config) []SelectionOption {
 	// Define the default categories and all available labels
 	defaultOrder := []string{"CURRENT", "ALL", "UNTRACKED", "UPDATE", "REMAP_PROVIDER", "CONTINUE_LAST", "TRACKER", "PROVIDER", "STATS"}
@@ -964,6 +1005,7 @@ func getOrderedCategories(userConfig *Config) []SelectionOption {
 		orderedCategories = append(orderedCategories, SelectionOption{
 			Key:   key,
 			Label: availableLabels[key],
+			Icon:  categoryIcon(key),
 		})
 	}
 

@@ -34,22 +34,22 @@ const (
 // updateActionOptions are the choices, in order: Update now is first.
 func updateActionOptions(state updatePendingState) []SelectionOption {
 	latest := normalizeReleaseVersion(state.LatestVersion)
-	update := icons.Label(icons.Download, "Update now")
+	update := "Update now"
 	if latest != "" {
 		update += " · " + latest
 	}
 	options := []SelectionOption{
-		{Key: "update", Label: update},
-		{Key: "changelog", Label: icons.Label(icons.Changelog, "Read the changelog")},
+		{Key: "update", Label: update, Icon: icons.Download},
+		{Key: "changelog", Label: "Read the changelog", Icon: icons.Changelog},
 	}
 	if strings.TrimSpace(state.HTMLURL) != "" {
-		options = append(options, SelectionOption{Key: "release", Label: icons.Label(icons.OpenLink, "Open the release page")})
+		options = append(options, SelectionOption{Key: "release", Label: "Open the release page", Icon: icons.OpenLink})
 	}
 	return append(options,
-		SelectionOption{Key: "later", Label: icons.Label(icons.Clock, "Remind me later") + " · tomorrow"},
-		SelectionOption{Key: "skip", Label: icons.Label(icons.Skip, "Skip this version")},
-		SelectionOption{Key: "disable", Label: icons.Label(icons.BellOff, "Stop checking for updates")},
-		SelectionOption{Key: "continue", Label: icons.Label(icons.Play, "Continue without updating")},
+		SelectionOption{Key: "later", Label: "Remind me later · tomorrow", Icon: icons.Clock},
+		SelectionOption{Key: "skip", Label: "Skip this version", Icon: icons.Skip},
+		SelectionOption{Key: "disable", Label: "Stop checking for updates", Icon: icons.BellOff},
+		SelectionOption{Key: "continue", Label: "Continue without updating", Icon: icons.Play},
 	)
 }
 
@@ -469,7 +469,7 @@ func (m updatePromptModel) View() string {
 		top.WriteString("\n")
 		for i, option := range m.options {
 			label, meta := splitRofiLabel(option.Label)
-			row := truncate(label, width-4)
+			row := option.Icon.String() + truncate(label, width-7)
 			if meta != "" {
 				row += " " + paneMetaStyle.Render(meta)
 			}

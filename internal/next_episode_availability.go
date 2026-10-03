@@ -3,6 +3,8 @@ package internal
 import (
 	"fmt"
 	"strconv"
+
+	"github.com/thexykril/otakase/internal/icons"
 )
 
 // Offering "start episode 11" for an episode that has not been broadcast yet
@@ -86,8 +88,8 @@ func confirmUnairedEpisode(config *Config, number int, availability nextEpisodeA
 	Log(fmt.Sprintf("Episode availability: %s", notice))
 
 	options := []SelectionOption{
-		{Key: "wait", Label: "Done"},
-		{Key: "try", Label: fmt.Sprintf("Look for episode %d anyway", number)},
+		{Key: "wait", Label: "Done", Icon: icons.Yes},
+		{Key: "try", Label: fmt.Sprintf("Look for episode %d anyway", number), Icon: icons.Search},
 	}
 
 	if config != nil && config.RofiSelection {
