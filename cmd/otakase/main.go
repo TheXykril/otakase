@@ -316,6 +316,9 @@ func main() {
 	// need -- the episode was already resolved by the process that spawned it.
 	if *castSessionFlag != "" {
 		internal.RestoreScreen()
+		// Only rofi hands a cast to a window, and with the window gone nothing
+		// of otakase is left running.
+		internal.ArmCloseNotice()
 		if err := internal.RunCastSession(&userConfig, *castSessionFlag); err != nil {
 			internal.Out("Casting failed: " + err.Error())
 			internal.Log(fmt.Sprintf("cast: %v", err))
@@ -329,6 +332,10 @@ func main() {
 		internal.Exit(nil)
 		return
 	}
+
+	// Said before anything slow: the update check below can hold the first
+	// menu back, and a keybind launch otherwise shows nothing until then.
+	internal.AnnounceLaunch(&userConfig)
 
 	// Look for a newer release now, alongside the tracker sign-in below; the
 	// result is offered before the first menu of this same run.

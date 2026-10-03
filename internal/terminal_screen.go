@@ -101,6 +101,10 @@ func exitWithRestore(code int) {
 		// that whole window makes Ctrl+C look like it did nothing.
 		RestoreScreen()
 		runExitCleanups()
+		// After the cleanups, so "closed" is not shown while a cast is still
+		// being torn down. Signals land here too: closing the cast window
+		// sends SIGHUP and never reaches Exit().
+		announceClose()
 		// The log handle is held open for the process lifetime; release it so the
 		// final lines are flushed to disk before the process goes away. Closed
 		// last so anything a cleanup logs is still captured.
