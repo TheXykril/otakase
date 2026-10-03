@@ -143,10 +143,10 @@ func continueWatchingRows(config *Config, list *AnimeList) []SelectionOption {
 	return rows
 }
 
-// continueWatchingLabel names a row: "▶ Frieren · ep 13 at 12:34". A position
+// continueWatchingLabel names a row: "Frieren · ep 13 at 12:34". A position
 // too early to be worth resuming is left out, as the list rows do.
 func continueWatchingLabel(title string, episode, playbackSeconds int) string {
-	label := "▶ " + title
+	label := title
 	if episode <= 0 {
 		return label
 	}

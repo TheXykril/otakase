@@ -39,10 +39,10 @@ func TestContinueWatchingLabel(t *testing.T) {
 		episode, seconds int
 		want             string
 	}{
-		{13, 754, "▶ Frieren · ep 13 at 12:34"},
-		{13, 20, "▶ Frieren · ep 13"},
-		{2, 3725, "▶ Frieren · ep 2 at 1:02:05"},
-		{0, 0, "▶ Frieren"},
+		{13, 754, "Frieren · ep 13 at 12:34"},
+		{13, 20, "Frieren · ep 13"},
+		{2, 3725, "Frieren · ep 2 at 1:02:05"},
+		{0, 0, "Frieren"},
 	}
 	for _, tc := range cases {
 		if got := continueWatchingLabel("Frieren", tc.episode, tc.seconds); got != tc.want {
