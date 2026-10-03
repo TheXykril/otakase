@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 )
 
 func TestIsUpdateNewer(t *testing.T) {
