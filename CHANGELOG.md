@@ -1,5 +1,46 @@
 # Changelog
 
+## 26.6.0 — 2026-10-03
+
+### Added
+
+- **A toolbar in rofi.** The list and the poster grid have a row of buttons
+  above them: Lists, then your actions (Untracked, Update, Cast, Surprise,
+  Stats, Tracker, Provider) and Quit. Each button shows its key, `Update ^e`,
+  and is pressed by a click or that key. Tab moves to the next list, Lists
+  picks one with its count, and escape quits.
+- **`MenuActions` setting.** `MenuOrder` now names the lists
+  (`CURRENT,PLANNING,ALL` by default) and `MenuActions` the things to do, in
+  the order the bottom bar and the toolbar show them. `CONTINUE_LAST` in it
+  puts the shows to continue at the top of Watching.
+- **Launch and close notifications.** Started from rofi, otakase says it is
+  starting right away and says when it closes. A cast in its own window
+  sends the closing notice when that window ends.
+
+### Changed
+
+- **otakase opens on Watching.** The menu in front of the lists is gone; the
+  shows you were watching lead the list, with the other lists a Tab away.
+  Your settings carry over: an unchanged menu gets the new default, and one
+  you set up keeps every entry and its order, its actions moved to
+  `MenuActions`.
+- **Colours with a meaning in rofi.** Shows to continue take the theme's
+  accent, where a show stopped takes its yellow, titles stay plain, and the
+  rest is dimmed but kept readable. Quit, counts and the search hint no
+  longer fade into the background on darker themes. The selected row
+  brightens instead of turning accent.
+- **Cast shows its state.** The cast entry drops its checkbox: the icon is
+  crossed out while casting is off and the words say `Cast: Off`,
+  `Cast: On` or `Cast: On | device`. The terminal's list tabs get icons.
+- **`CurrentCategory` and `-current` are gone.** otakase always opens on
+  Watching (or the first list `MenuOrder` names), so they had nothing left
+  to do.
+
+### Fixed
+
+- **One play icon on continue rows.** Continue Watching and Surprise Me rows
+  showed two.
+
 ## 26.5.0 — 2026-10-03
 
 ### Added
