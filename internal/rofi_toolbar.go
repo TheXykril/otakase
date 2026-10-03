@@ -127,10 +127,27 @@ func (bar rofiToolbar) args(children []string) []string {
 		writeRofiButton(&theme, names[i], button.Label, button.Hint, fmt.Sprintf("kb-custom-%d", i+1), button.On, false)
 	}
 	writeRofiButton(&theme, "button-quit", toolbarQuitLabel(), "Esc", "kb-cancel", false, true)
-	// Wide enough for the default bar with its keys and a cast device name;
-	// the cards are sized for their lists, not for a row of buttons.
-	theme.WriteString("window {\n  width: 1200px;\n}\n")
+	// The cards are sized for their lists, not for a row of buttons, so the
+	// window is widened to the bar: every list and action switched on, with a
+	// cast device named, is wider than the default bar.
+	fmt.Fprintf(&theme, "window {\n  width: %dpx;\n}\n", bar.width())
 	return append(args, "-theme-str", theme.String())
+}
+
+// rofiToolbarMinWidth is the window width the default bar is drawn at.
+const rofiToolbarMinWidth = 1200
+
+// width is how wide the window must be for the whole bar. The menus are set in
+// a monospace face, so a button's width follows from its characters: about
+// 8.5px each at the menu's size, plus the button's padding and the gap.
+func (bar rofiToolbar) width() int {
+	const cell, button, frame = 8.5, 15, 48
+	cells := 0
+	for _, b := range append(bar.buttons, rofiButton{Label: toolbarQuitLabel(), Hint: "Esc"}) {
+		cells += len([]rune(b.Label)) + 1 + len([]rune(b.Hint))
+	}
+	width := int(float64(cells)*cell) + (len(bar.buttons)+1)*button + frame
+	return max(width, rofiToolbarMinWidth)
 }
 
 func toolbarQuitLabel() string {

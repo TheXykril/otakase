@@ -127,3 +127,19 @@ func TestRofiThemeStringEscapes(t *testing.T) {
 		t.Errorf("escaped = %s", got)
 	}
 }
+
+// The window keeps its usual width for a short bar and widens for a long one,
+// so Quit is not pushed off the edge.
+func TestToolbarWidthFitsBar(t *testing.T) {
+	short := rofiToolbar{buttons: []rofiButton{{Label: "Lists", Hint: "Tab"}}}
+	if got := short.width(); got != rofiToolbarMinWidth {
+		t.Errorf("short bar width = %d, want %d", got, rofiToolbarMinWidth)
+	}
+	var long rofiToolbar
+	for range 12 {
+		long.buttons = append(long.buttons, rofiButton{Label: "Cast: On | Living Room TV", Hint: "^k"})
+	}
+	if got := long.width(); got <= rofiToolbarMinWidth {
+		t.Errorf("long bar width = %d, want wider than %d", got, rofiToolbarMinWidth)
+	}
+}
