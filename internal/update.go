@@ -23,16 +23,19 @@ import (
 
 const (
 	// DefaultUpdateRepo is the fork every update path pulls from: the
-	// background check, the next-launch prompt, and `otakase -u` alike.
-	DefaultUpdateRepo          = "TheXykril/otakase"
-	updatePendingFileName      = "update_pending.json"
-	backgroundUpdateIdleDelay  = 4 * time.Second
+	// launch check, the update prompt, and `otakase -u` alike.
+	DefaultUpdateRepo     = "TheXykril/otakase"
+	updatePendingFileName = "update_pending.json"
+	// launchUpdateWait bounds how long the launch waits for its own update
+	// check before moving on. The check runs alongside the tracker sign-in, so
+	// it is normally done well before this; a slow network only costs this much.
+	launchUpdateWait           = 2 * time.Second
 	defaultRemindLaterDuration = 24 * time.Hour
 	maxReleaseNotesRunes       = 1200
 )
 
-// updatePendingState is persisted under StoragePath so startup never blocks on
-// network — a previous idle check stores availability for the next launch.
+// updatePendingState is persisted under StoragePath: the launch check writes it,
+// and a check too slow to finish in time still leaves it for the next launch.
 type updatePendingState struct {
 	Available      bool   `json:"available"`
 	LatestVersion  string `json:"latest_version"`
@@ -57,7 +60,13 @@ type githubReleaseAPI struct {
 	} `json:"assets"`
 }
 
-var backgroundUpdateOnce sync.Once
+var (
+	backgroundUpdateOnce sync.Once
+	// launchUpdateDone is closed when this run's update check has finished.
+	launchUpdateDone chan struct{}
+	// launchUpdatePromptOnce keeps the prompt to one showing per run.
+	launchUpdatePromptOnce sync.Once
+)
 
 func updatePendingPath(storagePath string) string {
 	if strings.TrimSpace(storagePath) == "" {
@@ -189,20 +198,38 @@ func isUpdateNewer(latest, current string) bool {
 	return compareUpdateVersions(current, latest) < 0
 }
 
-// StartBackgroundUpdateCheck runs after a short idle delay so startup is not blocked.
-// Results are written to StoragePath/update_pending.json for the next launch.
+// StartBackgroundUpdateCheck looks for a newer release at launch, without
+// blocking it. HandleLaunchUpdatePrompt picks the result up in the same run;
+// it is also written to StoragePath/update_pending.json for the next launch.
 func StartBackgroundUpdateCheck(config *Config, currentVersion string) {
 	if config == nil || !config.CheckUpdates {
 		return
 	}
 	backgroundUpdateOnce.Do(func() {
+		done := make(chan struct{})
+		launchUpdateDone = done
 		go func() {
-			time.Sleep(backgroundUpdateIdleDelay)
+			defer close(done)
 			if err := checkForUpdateInBackground(config, currentVersion); err != nil {
 				Log(fmt.Sprintf("Background update check failed: %v", err))
 			}
 		}()
 	})
+}
+
+// waitForLaunchUpdateCheck reports whether this run's check finished within wait.
+func waitForLaunchUpdateCheck(wait time.Duration) bool {
+	done := launchUpdateDone
+	if done == nil {
+		return false
+	}
+	select {
+	case <-done:
+		return true
+	case <-time.After(wait):
+		Log("Update check still running; its result is kept for the next launch")
+		return false
+	}
 }
 
 func checkForUpdateInBackground(config *Config, currentVersion string) error {
@@ -552,26 +579,53 @@ func updateUserMessage(config *Config, msg string) {
 	fmt.Println(msg)
 }
 
-// HandlePendingUpdatePrompt shows a previously detected update (from idle check).
-// Returns true if the caller should exit (user updated or chose to quit the session).
-func HandlePendingUpdatePrompt(config *Config, currentVersion string) bool {
+// HandleLaunchUpdatePrompt offers an update found by this launch's check,
+// waiting briefly for it; if the check is slower than that, it falls back to
+// what a previous launch found. It shows at most once per run.
+// prompted reports whether the prompt was on screen; exit whether the caller
+// should exit (user updated or chose to quit the session).
+func HandleLaunchUpdatePrompt(config *Config, currentVersion string) (prompted, exit bool) {
+	launchUpdatePromptOnce.Do(func() {
+		if config == nil || !config.CheckUpdates {
+			return
+		}
+		if launchUpdateDone != nil {
+			select {
+			case <-launchUpdateDone:
+			default:
+				StartupStage("Checking for updates")
+			}
+		}
+		fresh := waitForLaunchUpdateCheck(launchUpdateWait)
+		prompted, exit = handlePendingUpdatePrompt(config, currentVersion, !fresh)
+	})
+	return prompted, exit
+}
+
+// handlePendingUpdatePrompt shows the stored update, if there is one to offer.
+// refresh re-reads the release from GitHub first, for a result an earlier
+// launch stored; this launch's own check is already current.
+func handlePendingUpdatePrompt(config *Config, currentVersion string, refresh bool) (prompted, exit bool) {
 	if config == nil || !config.CheckUpdates {
-		return false
+		return false, false
 	}
 	state := loadUpdatePendingState(config.StoragePath)
 	if !pendingUpdateShouldPrompt(config, currentVersion, state) {
-		return false
+		return false, false
 	}
 
-	// Pull live release markdown from GitHub so notes match the release page.
-	refreshUpdateStateFromGitHub(&state, config.DevBuilds)
-	if !pendingUpdateShouldPrompt(config, currentVersion, state) {
-		// e.g. already up to date after refresh
-		state.Available = false
+	if refresh {
+		// Pull live release markdown from GitHub so notes match the release page.
+		refreshUpdateStateFromGitHub(&state, config.DevBuilds)
+		if !pendingUpdateShouldPrompt(config, currentVersion, state) {
+			// e.g. already up to date after refresh
+			state.Available = false
+			_ = saveUpdatePendingState(config.StoragePath, state)
+			return false, false
+		}
 		_ = saveUpdatePendingState(config.StoragePath, state)
-		return false
 	}
-	_ = saveUpdatePendingState(config.StoragePath, state)
+	prompted = true
 
 	// Fixed order (Update now first). Emoji labels; preserveOrder for CLI.
 	options := updateActionOptions()
@@ -590,17 +644,17 @@ func HandlePendingUpdatePrompt(config *Config, currentVersion string) bool {
 		selected, err = promptSelectOrdered(options)
 	}
 	if err != nil {
-		return false
+		return true, false
 	}
 	selected = NormalizeSelectionKey(selected)
 	// Quit from the pinned menu must exit the whole program (not fall through to otakase).
 	if SelectionMeansQuit(selected) {
 		Exit(nil)
-		return true
+		return true, true
 	}
 	// Back / empty = dismiss update prompt and continue the session.
 	if SelectionMeansBack(selected) || selected.Key == "continue" || selected.Key == "" {
-		return false
+		return true, false
 	}
 
 	switch selected.Key {
@@ -609,27 +663,27 @@ func HandlePendingUpdatePrompt(config *Config, currentVersion string) bool {
 		if err := SelfUpdate(DefaultUpdateRepo, state.LatestTag); err != nil {
 			updateUserMessage(config, fmt.Sprintf("Update failed: %v", err))
 			Log(fmt.Sprintf("Update failed: %v", err))
-			return false
+			return true, false
 		}
 		state.Available = false
 		state.RemindAfter = ""
 		_ = saveUpdatePendingState(config.StoragePath, state)
 		updateUserMessage(config, fmt.Sprintf("Updated to %s. Please restart otakase.", state.LatestVersion))
-		return true
+		return true, true
 	case "later":
 		until := time.Now().Add(defaultRemindLaterDuration)
 		state.RemindAfter = until.UTC().Format(time.RFC3339)
 		state.Available = true
 		_ = saveUpdatePendingState(config.StoragePath, state)
 		updateUserMessage(config, fmt.Sprintf("Will remind again after %s.", formatLocalTime(until)))
-		return false
+		return true, false
 	case "skip":
 		state.SkippedVersion = state.LatestVersion
 		state.Available = false
 		state.RemindAfter = ""
 		_ = saveUpdatePendingState(config.StoragePath, state)
 		updateUserMessage(config, fmt.Sprintf("Skipping version %s.", state.LatestVersion))
-		return false
+		return true, false
 	case "disable":
 		if err := setConfigBoolOption(GlobalConfigPath, "CheckUpdates", false); err != nil {
 			updateUserMessage(config, fmt.Sprintf("Could not write config: %v", err))
@@ -640,9 +694,9 @@ func HandlePendingUpdatePrompt(config *Config, currentVersion string) bool {
 		}
 		state.Available = false
 		_ = saveUpdatePendingState(config.StoragePath, state)
-		return false
+		return true, false
 	default:
-		return false
+		return true, false
 	}
 }
 

@@ -31,7 +31,7 @@ Every flag works with `otakase` or `otk`. A flag always wins over the same setti
 | `-current` | Jump straight to what you are currently watching | |
 | `-show-new-episodes` | Mark shows with an unwatched episode in the list | `true` |
 | `-vim-keys` | `j`/`k`/`h`/`l` to move and `/` to search in menus | |
-| `-check-updates` | Look for a newer release while idle | `true` |
+| `-check-updates` | Look for a newer release at launch | `true` |
 | `-discord-client-id` | Discord application id for Rich Presence | |
 | `-install-keybind` | Bind Super+Shift+A to the rofi menu in your Hyprland config | |
 | `-remove-keybind` | Undo `-install-keybind` | |
