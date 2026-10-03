@@ -51,6 +51,7 @@ type Config struct {
 	AnimeNameLanguage        string   `config:"AnimeNameLanguage"`
 	Theme                    string   `config:"Theme"`
 	ThemeOverrides           string   `config:"ThemeOverrides"`
+	Icons                    string   `config:"Icons"`
 	DownloadDir              string   `config:"DownloadDir"`
 	DownloadFormat           string   `config:"DownloadFormat"`
 	MenuOrder                string   `config:"MenuOrder"`
@@ -230,6 +231,7 @@ func defaultConfigMap() map[string]string {
 		"ShowNewEpisodes":            "true",
 		"Theme":                      "auto",
 		"ThemeOverrides":             "",
+		"Icons":                      "auto",
 		"DownloadDir":                "$HOME/Downloads/" + AppName,
 		"DownloadFormat":             "mkv",
 		"CastDevice":                 "",

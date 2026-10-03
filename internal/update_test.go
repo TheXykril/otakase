@@ -7,12 +7,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/thexykril/otakase/internal/theme"
 )
 
 func TestIsUpdateNewer(t *testing.T) {
@@ -235,105 +233,8 @@ func TestReplaceExecutableHandlesCrossDevice(t *testing.T) {
 	}
 }
 
-func TestBuildUpdatePromptMessage(t *testing.T) {
-	prompt, msg := buildUpdatePromptMessage("2.0.1", updatePendingState{
-		LatestVersion: "2.0.2",
-		ReleaseName:   "otakase v2.0.2",
-		HTMLURL:       "https://example.com",
-		ReleaseNotes:  "## Direct Commits\n- **fixed** stuff",
-	})
-	if !strings.Contains(prompt, "2.0.1") || !strings.Contains(prompt, "2.0.2") {
-		t.Fatalf("prompt=%q", prompt)
-	}
-	if !strings.Contains(msg, "fixed") || !strings.Contains(msg, "https://example.com") {
-		t.Fatalf("message=%q", msg)
-	}
-}
-
-// A viewer who has skipped several releases gets every intervening release's
-// notes concatenated, which can run well past the truncation limit. Cutting
-// the already-built pango markup at an arbitrary rune offset can land
-// mid-tag -- an unclosed <span> that pango's markup parser rejects outright,
-// which rofi then renders unstyled (a plain white box) instead of erroring
-// visibly. The fix truncates the plain markdown before conversion, so every
-// <span> markdownToPango emits is complete.
-func TestBuildUpdatePromptMessageProducesBalancedMarkupWhenNotesAreLong(t *testing.T) {
-	var notes strings.Builder
-	for i := 0; i < 40; i++ {
-		notes.WriteString("## Release notes section\n- **fixed** something with `code` and a [link](https://example.com/x)\n\n")
-	}
-
-	_, msg := buildUpdatePromptMessageMode("2.0.1", updatePendingState{
-		LatestVersion: "2.5.0",
-		ReleaseName:   "otakase v2.5.0",
-		HTMLURL:       "https://example.com",
-		ReleaseNotes:  notes.String(),
-	}, true)
-
-	opens := strings.Count(msg, "<span")
-	closes := strings.Count(msg, "</span>")
-	if opens != closes {
-		t.Fatalf("unbalanced markup: %d <span> vs %d </span> in:\n%s", opens, closes, msg)
-	}
-}
-
-func TestMarkdownToPangoColorsHeadingsAndBullets(t *testing.T) {
-	md := "## Direct Commits\n- fix: something\n**Full Changelog**: https://example.com/compare"
-	got := markdownToPango(md)
-	if !strings.Contains(got, "foreground=") {
-		t.Fatalf("expected pango colors, got %q", got)
-	}
-	if !strings.Contains(got, "Direct Commits") || !strings.Contains(got, "•") {
-		t.Fatalf("expected heading/bullet conversion, got %q", got)
-	}
-}
-
-// The notes used fixed pastels (#FFD166, #E6E6FA, ...) picked for a dark
-// background. On a light palette they were near-invisible, so every colour in
-// the rofi message must come from the active palette.
-func TestUpdatePromptMessageUsesThePaletteColours(t *testing.T) {
-	_, msg := buildUpdatePromptMessageMode("2.0.1", updatePendingState{
-		LatestVersion: "2.0.2",
-		ReleaseName:   "otakase v2.0.2",
-		HTMLURL:       "https://example.com",
-		ReleaseNotes:  "## Fixed\n- **subs** no longer stale\n- `code` and [link](https://example.com)",
-	}, true)
-
-	p := theme.Active()
-	allowed := map[string]bool{}
-	for _, c := range []string{p.Foreground, p.Muted, p.Accent, p.Red, p.Green, p.Yellow, p.Blue, p.Magenta} {
-		allowed[strings.ToLower(c)] = true
-	}
-	for _, m := range regexp.MustCompile(`foreground="([^"]+)"`).FindAllStringSubmatch(msg, -1) {
-		if !allowed[strings.ToLower(m[1])] {
-			t.Errorf("colour %s is not from the active palette", m[1])
-		}
-	}
-}
-
-// The terminal prompt said "truncated" but printed every note anyway, which
-// can scroll the prompt itself off screen after a few skipped releases.
-func TestTerminalUpdateNotesAreActuallyTruncated(t *testing.T) {
-	var notes strings.Builder
-	for i := 0; i < 200; i++ {
-		notes.WriteString("- fixed something that was broken\n")
-	}
-	_, msg := buildUpdatePromptMessageMode("2.0.1", updatePendingState{
-		LatestVersion: "2.5.0",
-		ReleaseNotes:  notes.String(),
-	}, false)
-
-	plain := ansiStrip.ReplaceAllString(msg, "")
-	if !strings.Contains(plain, "truncated") {
-		t.Fatal("expected the truncation marker")
-	}
-	if n := len([]rune(plain)); n > maxReleaseNotesRunes+400 {
-		t.Fatalf("terminal message is %d runes; notes were not cut to %d", n, maxReleaseNotesRunes)
-	}
-}
-
 func TestUpdateActionOptionsOrder(t *testing.T) {
-	opts := updateActionOptions()
+	opts := updateActionOptions(updatePendingState{LatestVersion: "26.5.0", HTMLURL: "https://example.com"})
 	if len(opts) < 1 || opts[0].Key != "update" {
 		t.Fatalf("Update now must be first, got %#v", opts)
 	}

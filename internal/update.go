@@ -15,9 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
-
-	"github.com/thexykril/otakase/internal/theme"
 	"golang.org/x/term"
 )
 
@@ -37,16 +34,19 @@ const (
 // updatePendingState is persisted under StoragePath: the launch check writes it,
 // and a check too slow to finish in time still leaves it for the next launch.
 type updatePendingState struct {
-	Available      bool   `json:"available"`
-	LatestVersion  string `json:"latest_version"`
-	LatestTag      string `json:"latest_tag"`
-	ReleaseName    string `json:"release_name"`
-	ReleaseNotes   string `json:"release_notes"`
-	HTMLURL        string `json:"html_url"`
-	AssetName      string `json:"asset_name"`
-	CheckedAt      string `json:"checked_at"`
-	SkippedVersion string `json:"skipped_version,omitempty"`
-	RemindAfter    string `json:"remind_after,omitempty"`
+	Available     bool   `json:"available"`
+	LatestVersion string `json:"latest_version"`
+	LatestTag     string `json:"latest_tag"`
+	ReleaseName   string `json:"release_name"`
+	ReleaseNotes  string `json:"release_notes"`
+	HTMLURL       string `json:"html_url"`
+	AssetName     string `json:"asset_name"`
+	CheckedAt     string `json:"checked_at"`
+	// Changelog is what changed between the running version and this one,
+	// newest first (see updateChangelog).
+	Changelog      []changelogRelease `json:"changelog,omitempty"`
+	SkippedVersion string             `json:"skipped_version,omitempty"`
+	RemindAfter    string             `json:"remind_after,omitempty"`
 }
 
 type githubReleaseAPI struct {
@@ -273,6 +273,7 @@ func checkForUpdateInBackground(config *Config, currentVersion string) error {
 	}
 
 	state.Available = true
+	state.Changelog = updateChangelog(DefaultUpdateRepo, release, latest, currentVersion)
 	// Clear remind-later once a check found something actionable after the window.
 	if state.RemindAfter != "" {
 		if until, err := time.Parse(time.RFC3339, state.RemindAfter); err == nil && !time.Now().Before(until) {
@@ -308,6 +309,13 @@ func formatLocalTime(t time.Time) string {
 	return t.In(time.Local).Format("Mon Jan 2 2006, 3:04 PM MST")
 }
 
+// ansiStrip and pangoStrip remove terminal colour codes and pango tags, for
+// matching a rofi selection back to its option.
+var (
+	ansiStrip  = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	pangoStrip = regexp.MustCompile(`<[^>]*>`)
+)
+
 func escapePango(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")
 	s = strings.ReplaceAll(s, "<", "&lt;")
@@ -315,225 +323,9 @@ func escapePango(s string) string {
 	return s
 }
 
-var (
-	mdBoldRe   = regexp.MustCompile(`\*\*(.+?)\*\*`)
-	mdCodeRe   = regexp.MustCompile("`([^`]+)`")
-	mdLinkRe   = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
-	mdURLRe    = regexp.MustCompile(`https?://[^\s<>\]]+`)
-	ansiStrip  = regexp.MustCompile(`\x1b\[[0-9;]*m`)
-	pangoStrip = regexp.MustCompile(`<[^>]*>`)
-)
-
-// markdownToPango turns common GitHub release markdown into Rofi-friendly Pango.
-func markdownToPango(md string) string {
-	p := theme.Active()
-	lines := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
-	out := make([]string, 0, len(lines))
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		switch {
-		case trimmed == "":
-			out = append(out, "")
-			continue
-		case strings.HasPrefix(trimmed, "### "):
-			text := escapePango(strings.TrimPrefix(trimmed, "### "))
-			out = append(out, `<span foreground="`+p.Yellow+`"><b>`+text+`</b></span>`)
-		case strings.HasPrefix(trimmed, "## "):
-			text := escapePango(strings.TrimPrefix(trimmed, "## "))
-			out = append(out, `<span foreground="`+p.Accent+`" size="large"><b>`+text+`</b></span>`)
-		case strings.HasPrefix(trimmed, "# "):
-			text := escapePango(strings.TrimPrefix(trimmed, "# "))
-			out = append(out, `<span foreground="`+p.Green+`" size="large"><b>`+text+`</b></span>`)
-		case strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* "):
-			body := strings.TrimPrefix(strings.TrimPrefix(trimmed, "- "), "* ")
-			out = append(out, `<span foreground="`+p.Green+`">•</span> `+inlineMarkdownToPango(body))
-		case strings.HasPrefix(trimmed, "**Full Changelog**") || strings.HasPrefix(strings.ToLower(trimmed), "**full changelog**"):
-			out = append(out, `<span foreground="`+p.Muted+`">`+inlineMarkdownToPango(trimmed)+`</span>`)
-		default:
-			out = append(out, inlineMarkdownToPango(trimmed))
-		}
-	}
-	return strings.Join(out, "\n")
-}
-
-func inlineMarkdownToPango(s string) string {
-	p := theme.Active()
-	// Links first (before escaping full string piece by piece)
-	s = mdLinkRe.ReplaceAllStringFunc(s, func(m string) string {
-		parts := mdLinkRe.FindStringSubmatch(m)
-		if len(parts) != 3 {
-			return escapePango(m)
-		}
-		return `<span foreground="` + p.Blue + `" underline="single">` + escapePango(parts[1]) + `</span>`
-	})
-	// Escape remaining raw text while preserving spans we inserted — do a simple pass:
-	// split on existing span tags is hard; re-process from original for bold/code on non-link text.
-	// Safer path: escape whole line then re-apply patterns on escaped text where ** still present.
-	if !strings.Contains(s, "<span") {
-		s = escapePango(s)
-		s = mdBoldRe.ReplaceAllString(s, `<span foreground="`+p.Foreground+`"><b>$1</b></span>`)
-		s = mdCodeRe.ReplaceAllString(s, `<span foreground="`+p.Magenta+`" face="monospace">$1</span>`)
-		s = mdURLRe.ReplaceAllStringFunc(s, func(u string) string {
-			return `<span foreground="` + p.Blue + `" underline="single">` + u + `</span>`
-		})
-		return s
-	}
-	// Already has link spans — only lightly touch remaining ** if any outside tags
-	s = mdBoldRe.ReplaceAllString(s, `<b>$1</b>`)
-	return s
-}
-
-// markdownToTerminal colors release notes for CLI (lipgloss), easy on the eyes.
-func markdownToTerminal(md string) string {
-	palette := theme.Active()
-	heading := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Accent)).Bold(true)
-	subhead := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Yellow)).Bold(true)
-	bullet := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Green))
-	body := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Foreground))
-	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Muted))
-	link := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Cyan)).Underline(true)
-
-	lines := strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n")
-	out := make([]string, 0, len(lines))
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		switch {
-		case trimmed == "":
-			out = append(out, "")
-		case strings.HasPrefix(trimmed, "### "):
-			out = append(out, subhead.Render(strings.TrimPrefix(trimmed, "### ")))
-		case strings.HasPrefix(trimmed, "## "):
-			out = append(out, heading.Render(strings.TrimPrefix(trimmed, "## ")))
-		case strings.HasPrefix(trimmed, "# "):
-			out = append(out, heading.Render(strings.TrimPrefix(trimmed, "# ")))
-		case strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* "):
-			item := strings.TrimPrefix(strings.TrimPrefix(trimmed, "- "), "* ")
-			item = mdBoldRe.ReplaceAllString(item, "$1")
-			item = mdLinkRe.ReplaceAllString(item, "$1")
-			out = append(out, bullet.Render("• ")+body.Render(item))
-		case strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://"):
-			out = append(out, link.Render(trimmed))
-		case strings.Contains(strings.ToLower(trimmed), "full changelog"):
-			out = append(out, muted.Render(mdLinkRe.ReplaceAllString(trimmed, "$1 ($2)")))
-		default:
-			t := mdBoldRe.ReplaceAllString(trimmed, "$1")
-			t = mdLinkRe.ReplaceAllString(t, "$1")
-			out = append(out, body.Render(t))
-		}
-	}
-	return strings.Join(out, "\n")
-}
-
-func buildUpdatePromptMessage(currentVersion string, state updatePendingState) (prompt, message string) {
-	return buildUpdatePromptMessageMode(currentVersion, state, false)
-}
-
-// buildUpdatePromptMessageMode formats the update banner.
-// forRofi=true emits Pango markup for Rofi -mesg; false emits lipgloss ANSI for the terminal.
-func buildUpdatePromptMessageMode(currentVersion string, state updatePendingState, forRofi bool) (prompt, message string) {
-	from := normalizeReleaseVersion(currentVersion)
-	to := normalizeReleaseVersion(state.LatestVersion)
-	prompt = fmt.Sprintf("✨ Update %s → %s", from, to)
-
-	notes := strings.TrimSpace(state.ReleaseNotes)
-	if notes == "" {
-		notes = "(No release notes on GitHub for this release.)"
-	}
-
-	if forRofi {
-		// Colours come from the active palette, like the terminal notes and
-		// the menu around them: fixed pastels were unreadable on a light theme.
-		p := theme.Active()
-		var b strings.Builder
-		title := state.ReleaseName
-		if title == "" {
-			title = DisplayName + " " + to
-		}
-		b.WriteString(`<span foreground="` + p.Green + `" size="large"><b>🚀 ` + escapePango(title) + `</b></span>` + "\n")
-		b.WriteString(`<span foreground="` + p.Muted + `">Current </span>`)
-		b.WriteString(`<span foreground="` + p.Red + `"><b>` + escapePango(from) + `</b></span>`)
-		b.WriteString(`<span foreground="` + p.Muted + `">  →  Latest </span>`)
-		b.WriteString(`<span foreground="` + p.Green + `"><b>` + escapePango(to) + `</b></span>` + "\n")
-		if state.HTMLURL != "" {
-			b.WriteString(`<span foreground="` + p.Blue + `" underline="single">` + escapePango(state.HTMLURL) + `</span>` + "\n")
-		}
-		b.WriteString("\n")
-		// Truncated before conversion, not after: notes here can be several
-		// releases' worth concatenated (a viewer who skipped a few updates
-		// sees all of them), and cutting the already-built markup at an
-		// arbitrary rune offset can land mid-tag -- an unclosed <span> that
-		// pango's markup parser rejects outright, which is what left the
-		// dialog rendering unstyled (a plain white box) instead of showing
-		// the error. Truncating the plain text first means markdownToPango
-		// only ever sees, and only ever emits, complete tags.
-		b.WriteString(markdownToPango(truncateReleaseNotes(notes)))
-		message = strings.TrimSpace(b.String())
-		// Pango is verbose; soft-cap markup length. Cut at a line break: every
-		// line closes its own tags, so a cut there cannot leave one open the way
-		// a cut at a rune offset could -- and pango rejects the whole message
-		// over one unclosed tag.
-		if len([]rune(message)) > maxReleaseNotesRunes*3 {
-			r := []rune(message)
-			cut := string(r[:maxReleaseNotesRunes*3])
-			if i := strings.LastIndex(cut, "\n"); i > 0 {
-				cut = cut[:i]
-			}
-			message = cut + "\n<span foreground=\"" + p.Muted + "\">… (truncated — full notes on GitHub)</span>"
-		}
-		return prompt, message
-	}
-
-	// CLI / terminal
-	palette := theme.Active()
-	title := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Green)).Bold(true)
-	label := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Foreground))
-	oldV := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Red)).Bold(true)
-	newV := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Green)).Bold(true)
-	link := lipgloss.NewStyle().Foreground(lipgloss.Color(palette.Cyan)).Underline(true)
-
-	var b strings.Builder
-	name := state.ReleaseName
-	if name == "" {
-		name = DisplayName + " " + to
-	}
-	b.WriteString(title.Render("🚀 "+name) + "\n")
-	b.WriteString(label.Render("Current ") + oldV.Render(from) + label.Render("  →  Latest ") + newV.Render(to) + "\n")
-	if state.HTMLURL != "" {
-		b.WriteString(link.Render(state.HTMLURL) + "\n")
-	}
-	b.WriteString("\n")
-	// Cut the notes themselves, on a line break, before styling them. Only
-	// appending the marker printed every note anyway, under a "truncated" line.
-	truncated := false
-	if r := []rune(notes); len(r) > maxReleaseNotesRunes {
-		cut := string(r[:maxReleaseNotesRunes])
-		if i := strings.LastIndex(cut, "\n"); i > 0 {
-			cut = cut[:i]
-		}
-		notes, truncated = strings.TrimSpace(cut), true
-	}
-	b.WriteString(markdownToTerminal(notes))
-	message = strings.TrimSpace(b.String())
-	if truncated {
-		message = message + "\n" + label.Render("… (truncated — full notes on GitHub)")
-	}
-	return prompt, message
-}
-
-func updateActionOptions() []SelectionOption {
-	// Emoji prefixes: lively, ordered, no numeric indices; preserveOrder keeps this order.
-	return []SelectionOption{
-		{Key: "update", Label: "🚀  Update now"},
-		{Key: "later", Label: "⏰  Remind me later"},
-		{Key: "skip", Label: "⏭️  Skip this version"},
-		{Key: "disable", Label: "🔕  Turn off automatic update checks"},
-		{Key: "continue", Label: "▶️  Continue without updating"},
-	}
-}
-
 // refreshUpdateStateFromGitHub reloads tag/name/body/url from the live release API
 // so the prompt shows real markdown notes instead of a stale/test seed.
-func refreshUpdateStateFromGitHub(state *updatePendingState, devBuilds bool) {
+func refreshUpdateStateFromGitHub(state *updatePendingState, devBuilds bool, currentVersion string) {
 	if state == nil {
 		return
 	}
@@ -556,6 +348,7 @@ func refreshUpdateStateFromGitHub(state *updatePendingState, devBuilds bool) {
 	// Do not seed/test stubs here — always prefer live API content when online.
 	state.ReleaseNotes = strings.TrimSpace(release.Body)
 	state.HTMLURL = release.HTMLURL
+	state.Changelog = updateChangelog(DefaultUpdateRepo, release, latest, currentVersion)
 	state.CheckedAt = time.Now().UTC().Format(time.RFC3339)
 	if asset, assetErr := releaseBinaryName(); assetErr == nil {
 		state.AssetName = asset
@@ -616,7 +409,7 @@ func handlePendingUpdatePrompt(config *Config, currentVersion string, refresh bo
 
 	if refresh {
 		// Pull live release markdown from GitHub so notes match the release page.
-		refreshUpdateStateFromGitHub(&state, config.DevBuilds)
+		refreshUpdateStateFromGitHub(&state, config.DevBuilds, currentVersion)
 		if !pendingUpdateShouldPrompt(config, currentVersion, state) {
 			// e.g. already up to date after refresh
 			state.Available = false
@@ -627,21 +420,14 @@ func handlePendingUpdatePrompt(config *Config, currentVersion string, refresh bo
 	}
 	prompted = true
 
-	// Fixed order (Update now first). Emoji labels; preserveOrder for CLI.
-	options := updateActionOptions()
-	prompt, message := buildUpdatePromptMessageMode(currentVersion, state, config.RofiSelection)
-
+	// The summary and the choices, with the changelog and the release page
+	// a row away; those return here rather than ending the prompt.
 	var selected SelectionOption
 	var err error
 	if config.RofiSelection {
-		// Pango-colored notes in -mesg; one Rofi UI, no notify spam.
-		selected, err = RofiSelectWithMessage(options, false, prompt, message)
+		selected, err = chooseUpdateActionRofi(currentVersion, state)
 	} else {
-		header := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Active().Yellow)).Bold(true)
-		fmt.Println(header.Render(prompt))
-		fmt.Println(message)
-		fmt.Println()
-		selected, err = promptSelectOrdered(options)
+		selected, err = promptUpdateTerminal(currentVersion, state)
 	}
 	if err != nil {
 		return true, false

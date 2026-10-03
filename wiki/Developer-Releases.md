@@ -32,6 +32,13 @@ Releases are cut only when the maintainer asks. A release is one commit on
 3. adds a `## YY.DROP.HOTFIX — YYYY-MM-DD` section at the top of
    `CHANGELOG.md`.
 
+The update prompt shows these `CHANGELOG.md` sections to people updating, read
+from the new release's tag: every section between their version and the new
+one, with the bold opening sentence of each entry as its headline. Write
+entries for users, opening with a bold sentence that stands on its own. A
+`## Unreleased` section at the top, if there is one, is what a dev build
+offers.
+
 CI keys off the `release:` prefix: it builds every platform, tags
 `vYY.DROP.HOTFIX`, publishes the GitHub release and builds the Windows
 installer with that version.

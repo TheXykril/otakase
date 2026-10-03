@@ -34,6 +34,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
 | `Theme` | Enum | `auto`, `omarchy`, `builtin` | Which colour palette to use. `auto` follows the desktop on Omarchy. |
 | `ThemeOverrides` | String | `name:#hex` pairs | Replaces named colours on top of the palette in use. See [Theming](#theming) below. |
+| `Icons` | Enum | `auto`, `true`, `false` | Small line icons in front of menu rows, in rofi and the terminal. `auto` (the default) shows them on Linux when a font for them is found; otakase installs a tiny one to `~/.local/share/fonts/otakase/` for this, so no setup is needed. It leaves them off over SSH, in WSL, on the Linux console, and on macOS and Windows. Set `true` to force them on if your terminal font has Nerd Font icons, `false` for plain text. |
 | `ContributeSkipTimes` | Boolean | `true`, `false` | Bind the player keys for marking, submitting and voting on skip times — see [Fixing the times yourself](Skip-Times#fixing-the-times-yourself). |
 | `IntroDBSkipTimes` | Boolean | `true`, `false` | Ask theintrodb for openings and endings the other sources do not know. Downloads a public id mapping in the background the first time it is needed. |
 | `AnimeSkipClientID` | String | `auto`, or an Anime-Skip client id | Adds Anime-Skip as a source of skip timings — see [Adding Anime-Skip](Skip-Times#adding-anime-skip). `auto` uses the public shared id. Empty by default. |
