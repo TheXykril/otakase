@@ -87,20 +87,21 @@ func TestCastMenuLabelReadsInBothUIs(t *testing.T) {
 	}
 }
 
-// CAST has to survive a MenuOrder that names it, or the entry never appears.
-func TestCastAppearsInTheOrderedCategories(t *testing.T) {
-	config := &Config{MenuOrder: "CURRENT,TRACKER,CAST"}
+// CAST has to survive a menu that names it, or the button never appears.
+func TestCastAppearsInTheToolbar(t *testing.T) {
+	config := &Config{MenuOrder: "CURRENT", MenuActions: "TRACKER,CAST"}
+	tabs, actions := mainMenuLayout(config, AnimeList{})
 
 	found := false
-	for _, option := range getOrderedCategories(config) {
-		if option.Key == "CAST" {
+	for _, button := range mainRofiToolbar(config, tabs, actions).buttons {
+		if button.Key == "CAST" {
 			found = true
-			if !strings.Contains(option.Label, "Cast") {
-				t.Errorf("the CAST entry is labelled %q", option.Label)
+			if !strings.Contains(button.Label, "Cast: Off") {
+				t.Errorf("the CAST button is labelled %q", button.Label)
 			}
 		}
 	}
 	if !found {
-		t.Error("CAST was named in MenuOrder but produced no menu entry")
+		t.Error("CAST was named in MenuActions but produced no button")
 	}
 }

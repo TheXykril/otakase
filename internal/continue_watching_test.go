@@ -102,62 +102,6 @@ func TestContinueWatchingRows(t *testing.T) {
 	}
 }
 
-func TestSortHomeMenuOptionsPutsResumeRowsAtContinueLast(t *testing.T) {
-	previous := GetGlobalConfig()
-	t.Cleanup(func() { SetGlobalConfig(previous) })
-
-	for _, tc := range []struct {
-		config Config
-		want   string
-	}{
-		{Config{MenuOrder: "CURRENT,ALL", MenuActions: "CONTINUE_LAST"}, "CURRENT,ALL,RESUME:1,RESUME:2"},
-		{Config{MenuOrder: "CURRENT,ALL", MenuActions: "UPDATE,CONTINUE_LAST"}, "CURRENT,ALL,RESUME:1,RESUME:2"},
-		{Config{MenuOrder: "CONTINUE_LAST,CURRENT,ALL"}, "RESUME:1,RESUME:2,CURRENT,ALL"},
-	} {
-		config := tc.config
-		SetGlobalConfig(&config)
-		sorted := sortHomeMenuOptions([]SelectionOption{
-			{Key: "ALL"}, {Key: "CURRENT"}, {Key: "RESUME:1"}, {Key: "RESUME:2"},
-		})
-		keys := []string{}
-		for _, opt := range sorted {
-			keys = append(keys, opt.Key)
-		}
-		if got := strings.Join(keys, ","); got != tc.want {
-			t.Errorf("%+v: order = %s, want %s", tc.config, got, tc.want)
-		}
-	}
-}
-
-func TestPlaceContinueRows(t *testing.T) {
-	entries := []SelectionOption{{Key: "CURRENT"}, {Key: "CONTINUE_LAST"}, {Key: "ALL"}}
-	rows := []SelectionOption{{Key: "RESUME:1"}, {Key: "RESUME:2"}}
-	keys := func(options []SelectionOption) string {
-		out := []string{}
-		for _, opt := range options {
-			out = append(out, opt.Key)
-		}
-		return strings.Join(out, ",")
-	}
-
-	on := &Config{ContinueWatchingRows: 5}
-	if got := keys(placeContinueRows(entries, rows, on)); got != "CURRENT,RESUME:1,RESUME:2,ALL" {
-		t.Errorf("rows on: %s", got)
-	}
-	// Nothing to resume: the entry would have nothing to continue either.
-	if got := keys(placeContinueRows(entries, nil, on)); got != "CURRENT,ALL" {
-		t.Errorf("nothing to resume: %s", got)
-	}
-	// Rows off: the single entry is the way back to the last show.
-	if got := keys(placeContinueRows(entries, nil, &Config{})); got != "CURRENT,CONTINUE_LAST,ALL" {
-		t.Errorf("rows off: %s", got)
-	}
-	// Not in the menu: no rows.
-	if got := keys(placeContinueRows([]SelectionOption{{Key: "CURRENT"}}, rows, on)); got != "CURRENT" {
-		t.Errorf("no CONTINUE_LAST: %s", got)
-	}
-}
-
 // 18+ shows get a continue-watching row only with both AdultContent and
 // ContinueWatchingAdult on, whether the recent list or the tracker marks them.
 func TestContinueWatchingAdultShows(t *testing.T) {

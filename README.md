@@ -115,25 +115,30 @@ Run `otakase` (or the shorter `otk`) to pick from your list. The first time,
 it asks how you want to track: **local**, **AniList**, **MyAnimeList**, or
 both. AniList and MyAnimeList sign in through your browser.
 
-In the terminal list, **← and →** (or Tab and Shift+Tab) move between your
-categories: watching, planning, completed and the rest. The shows you played
-last are at the top; pick one to resume where you stopped. **Add new anime**,
-at the end of a list, searches AniList and adds a show.
+Otakase opens on your Watching list. The shows you played last are at the
+top; pick one to resume where you stopped. In the terminal, **← and →** (or Tab
+and Shift+Tab) move between your lists: watching, planning, all and the rest.
+Under rofi, Tab does the same and the **Lists** button picks one. **Add new
+anime**, at the end of a list, searches AniList and adds a show.
 
-Along the bottom are the actions, each on a key you can press from anywhere in
-the list (`^u` means Ctrl+U). Under rofi they are menu entries.
+The actions sit beside the list, each on a key you can press from anywhere in
+it (`^u` means Ctrl+U): along the bottom in the terminal, as buttons above the
+list under rofi. Escape quits.
 
-| Key | Menu entry | What it does |
+| Key | Action | What it does |
 |---|---|---|
-| `^u` | Untracked Watching | Search any show and watch it without touching your list, history or tracker |
-| `^e` | Update (Episode, Status, Score) | Change a show's progress, status or score by hand |
-| `^r` | Remap Provider | Fix a show that plays the wrong anime, by picking the right match |
-| `^l` | Continue Last Session | Resume the show you watched last |
-| `^g` | Surprise Me | A random show from Plan to Watch, with Reroll; starting it offers to move it to Watching |
-| `^t` | Change Tracker | Switch between local, AniList, MyAnimeList or both |
-| `^o` | Change Provider | Pick which sources are searched, and in what order |
+| `^u` | Untracked | Search any show and watch it without touching your list, history or tracker |
+| `^e` | Update | Change a show's progress, status or score by hand |
 | `^k` | Cast | Turn casting on or off for this run |
+| `^g` | Surprise | A random show from Plan to Watch, with Reroll; starting it offers to move it to Watching |
 | `^s` | Stats | Your watch totals and recent history ([more](https://github.com/TheXykril/otakase/wiki/Stats)) |
+| `^t` | Tracker | Switch between local, AniList, MyAnimeList or both |
+| `^o` | Provider | Pick which sources are searched, and in what order |
+| `^r` | Remap | Fix a show that plays the wrong anime, by picking the right match (add `REMAP_PROVIDER` to `MenuActions`) |
+| `^l` | Continue | Pick up a show you played recently (terminal) |
+
+`MenuOrder` picks your lists and `MenuActions` your actions, both in the
+config (`otakase -e`).
 
 Common commands:
 

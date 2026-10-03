@@ -146,7 +146,6 @@ func configOptionsIntroducedInVersion() map[string]string {
 		// 2.0.5 — MPV episode playlist + alternate audio entries
 		"MpvEpisodePlaylist": "2.0.5",
 		// 1.1.0 — straight into the watching list, AnimeSkip client, theme tweaks
-		"CurrentCategory":   "1.1.0",
 		"AnimeSkipClientID": "1.1.0",
 		"ThemeOverrides":    "1.1.0",
 		// 1.3.0 — skip-time sources

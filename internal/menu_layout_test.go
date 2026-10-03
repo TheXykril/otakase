@@ -644,9 +644,9 @@ func TestKeyHintsOnlyOfferKeysThatWork(t *testing.T) {
 	if got := keys(plain); strings.Contains(got, "←/→") {
 		t.Errorf("a menu with no categories offered a category key: %q", got)
 	}
-	// The home menu quits; anything else goes back.
-	if got := keys(plain); !strings.Contains(got, "ctrl+c") {
-		t.Errorf("the home menu should offer quit: %q", got)
+	// The main list quits with escape; anything else goes back with it.
+	if got := plain.keyHints(); got[len(got)-1].Label != "quit" {
+		t.Errorf("the main list should offer quit: %+v", got)
 	}
 	if got := keys(Model{}); !strings.Contains(got, "esc") {
 		t.Errorf("a submenu should offer back: %q", got)
@@ -953,71 +953,18 @@ func TestActionHandlersAreNotNestedInsideThePrompt(t *testing.T) {
 	}
 }
 
-// With the menu skipped there is nothing behind the list, so escape leaves the
-// program. Offering "back" there promises a screen that does not exist.
+// Nothing is behind the main list, so escape leaves the program there and goes
+// back everywhere else. Offering "back" on the main list promises a screen that
+// does not exist.
 func TestEscapeHintMatchesWhatEscapeDoes(t *testing.T) {
-	previous := GetGlobalConfig()
-	t.Cleanup(func() { SetGlobalConfig(previous) })
-
 	lastHint := func(m Model) keyHint {
 		hints := m.keyHints()
 		return hints[len(hints)-1]
 	}
-
-	SetGlobalConfig(&Config{CurrentCategory: false})
 	if got := lastHint(Model{}); got.Label != "back" {
-		t.Errorf("with a menu behind it, escape goes back, got %q", got.Label)
+		t.Errorf("a menu opened from the list goes back, got %q", got.Label)
 	}
-
-	SetGlobalConfig(&Config{CurrentCategory: true})
-	if got := lastHint(Model{}); got.Label != "quit" {
-		t.Errorf("with the menu skipped, escape quits, got %q", got.Label)
-	}
-
-	// The home menu always quits, whatever the setting.
-	if got := lastHint(Model{isHomeMenu: true}); got.Label != "quit" {
-		t.Errorf("the home menu should offer quit, got %q", got.Label)
-	}
-}
-
-// Skipping the menu is a terminal setting. It became reasonable there because
-// the tabs reach every list and the bottom bar every action; rofi has neither,
-// so its menu is still the only route to both and must keep appearing.
-func TestSkippingTheMenuIsATerminalSetting(t *testing.T) {
-	previous := GetGlobalConfig()
-	t.Cleanup(func() { SetGlobalConfig(previous) })
-	SetGlobalConfig(nil)
-
-	cases := []struct {
-		name   string
-		config *Config
-		want   bool
-	}{
-		{"terminal, setting on", &Config{CurrentCategory: true}, true},
-		{"terminal, setting off", &Config{}, false},
-		{"rofi, setting on", &Config{CurrentCategory: true, RofiSelection: true}, false},
-		{"rofi, setting off", &Config{RofiSelection: true}, false},
-		// -current asks for this run, whatever is drawing the list.
-		{"rofi, -current given", &Config{CurrentCategory: true, CurrentCategoryFlag: true, RofiSelection: true}, true},
-		{"no config at all", nil, false},
-	}
-
-	for _, test := range cases {
-		if got := SkipCategoryMenu(test.config); got != test.want {
-			t.Errorf("%s: SkipCategoryMenu() = %v, want %v", test.name, got, test.want)
-		}
-	}
-}
-
-// The setting is not written into a rofi user's config differently, so the
-// escape hint has to follow the same rule the navigation does.
-func TestEscapeHintFollowsRofiToo(t *testing.T) {
-	previous := GetGlobalConfig()
-	t.Cleanup(func() { SetGlobalConfig(previous) })
-
-	SetGlobalConfig(&Config{CurrentCategory: true, RofiSelection: true})
-	hints := Model{}.keyHints()
-	if got := hints[len(hints)-1]; got.Label != "back" {
-		t.Errorf("under rofi the menu is still behind the list, got %q", got.Label)
+	if got := lastHint(Model{isHomeMenu: true}); got.Key != "esc" || got.Label != "quit" {
+		t.Errorf("the main list should offer esc quit, got %+v", got)
 	}
 }

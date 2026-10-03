@@ -29,13 +29,17 @@ func TestDefaultMenuSplitsListsFromActions(t *testing.T) {
 	}
 }
 
-func TestOrderedCategoriesFollowsBothSettings(t *testing.T) {
-	config := &Config{MenuOrder: "ALL", MenuActions: "CAST,CONTINUE_LAST"}
+func TestMainMenuFollowsBothSettings(t *testing.T) {
+	config := &Config{MenuOrder: "ALL,CURRENT", MenuActions: "CAST,CONTINUE_LAST"}
+	tabs, actions := mainMenuLayout(config, AnimeList{})
 	keys := []string{}
-	for _, option := range getOrderedCategories(config) {
-		keys = append(keys, option.Key)
+	for _, tab := range tabs {
+		keys = append(keys, tab.Key)
 	}
-	if got := strings.Join(keys, ","); got != "ALL,CAST,CONTINUE_LAST,TRACKER" {
+	for _, action := range actions {
+		keys = append(keys, action.Key)
+	}
+	if got := strings.Join(keys, ","); got != "ALL,CURRENT,CAST,CONTINUE_LAST,TRACKER" {
 		t.Fatalf("menu = %s", got)
 	}
 }

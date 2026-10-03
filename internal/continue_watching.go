@@ -12,8 +12,8 @@ import (
 	"github.com/thexykril/otakase/internal/icons"
 )
 
-// Continue watching: the shows played most recently, as rows of the home menu
-// where CONTINUE_LAST stands, so picking one up again is one choice rather than a category and
+// Continue watching: the shows played most recently, as the first rows of the
+// Watching list when MenuActions names CONTINUE_LAST, so picking one up again is one choice rather than a category and
 // a search. "Continue Last Session" only ever reached the single last show.
 //
 // The watch history already holds each show's episode and position, but not
@@ -127,41 +127,23 @@ func continueWatchingRows(config *Config, list *AnimeList) []SelectionOption {
 		if entry == nil {
 			continue
 		}
+		cover := ""
 		if list != nil && UsesRemoteTracking(config) {
 			listed, err := FindAnimeByAnilistID(*list, strconv.Itoa(show.AnilistID))
 			// The list's flag also covers shows recorded before Adult was.
 			if err != nil || (listed.Media.IsAdult && !showAdult) {
 				continue
 			}
+			cover = listed.CoverImage
 		}
 		rows = append(rows, SelectionOption{
-			Key:   resumeRowPrefix + strconv.Itoa(show.AnilistID),
-			Label: continueWatchingLabel(GetAnimeName(*entry), entry.Ep.Number, entry.Ep.Player.PlaybackTime),
-			Icon:  icons.Play,
+			Key:       resumeRowPrefix + strconv.Itoa(show.AnilistID),
+			Label:     continueWatchingLabel(GetAnimeName(*entry), entry.Ep.Number, entry.Ep.Player.PlaybackTime),
+			Icon:      icons.Play,
+			Thumbnail: cover,
 		})
 	}
 	return rows
-}
-
-// placeContinueRows puts the continue-watching rows where CONTINUE_LAST sits
-// in the home menu, so the menu config decides whether they show and where.
-// With the rows switched off the entry stays, as the one way left to pick the
-// last show up again; with the rows on but nothing to resume it goes, since
-// "Continue Last Session" would have nothing to continue either.
-func placeContinueRows(entries, rows []SelectionOption, config *Config) []SelectionOption {
-	out := make([]SelectionOption, 0, len(entries)+len(rows))
-	for _, entry := range entries {
-		if entry.Key != "CONTINUE_LAST" {
-			out = append(out, entry)
-			continue
-		}
-		if config != nil && config.ContinueWatchingRows <= 0 {
-			out = append(out, entry)
-			continue
-		}
-		out = append(out, rows...)
-	}
-	return out
 }
 
 // continueWatchingLabel names a row: "Frieren · ep 13 at 12:34". A position

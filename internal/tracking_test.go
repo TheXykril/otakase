@@ -72,21 +72,22 @@ func TestNormalizeTrackingConfigMarksInvalidRemoteForPrompt(t *testing.T) {
 	}
 }
 
-func TestGetOrderedCategoriesHidesRemoteOnlyEntriesForLocalTracking(t *testing.T) {
+func TestMainMenuHidesRemoteOnlyEntriesForLocalTracking(t *testing.T) {
 	t.Parallel()
 
 	config := &Config{
-		MenuOrder:      "CURRENT,UPDATE,PLANNING,ALL,PROVIDER",
+		MenuOrder:      "CURRENT,PLANNING,ALL",
+		MenuActions:    "UPDATE,PROVIDER",
 		TrackingLocal:  true,
 		TrackingRemote: TrackingRemoteNone,
 	}
 
-	categories := getOrderedCategories(config)
-	if len(categories) != 4 {
-		t.Fatalf("expected 4 visible categories, got %d", len(categories))
+	tabs, actions := mainMenuLayout(config, AnimeList{})
+	if len(tabs) != 2 || tabs[0].Key != "CURRENT" || tabs[1].Key != "ALL" {
+		t.Fatalf("unexpected lists for local-only tracking: %+v", tabs)
 	}
-	if categories[0].Key != "CURRENT" || categories[1].Key != "ALL" || categories[2].Key != "PROVIDER" || categories[3].Key != "TRACKER" {
-		t.Fatalf("unexpected categories for local-only tracking: %+v", categories)
+	if len(actions) != 2 || actions[0].Key != "PROVIDER" || actions[1].Key != "TRACKER" {
+		t.Fatalf("unexpected actions for local-only tracking: %+v", actions)
 	}
 }
 

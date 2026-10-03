@@ -28,7 +28,7 @@ Every flag works with `otakase` or `otk`. A flag always wins over the same setti
 | `-download-format` | Container for downloads, `mkv` or `mp4` | `mkv` |
 | `-cast` | Play on a Chromecast, DLNA TV or Kodi on this network instead of locally | |
 | `-cast-setup` | Let casting through your firewall: fixes the cast ports, shows the rules and runs them with sudo if you say yes, then lists the devices it finds | |
-| `-current` | Jump straight to what you are currently watching | |
+| `-current` | Ignored; otakase always opens on your Watching list | |
 | `-show-new-episodes` | Mark shows with an unwatched episode in the list | `true` |
 | `-vim-keys` | `j`/`k`/`h`/`l` to move and `/` to search in menus | |
 | `-check-updates` | Look for a newer release at launch | `true` |

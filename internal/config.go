@@ -68,11 +68,6 @@ type Config struct {
 	ImagePreview             bool     `config:"ImagePreview"`
 	SkipRecap                bool     `config:"SkipRecap"`
 	RofiSelection            bool     `config:"RofiSelection"`
-	CurrentCategory          bool     `config:"CurrentCategory"`
-	// CurrentCategoryFlag records that -current was given for this run, which
-	// asks for the menu to be skipped whatever the interface. It is not a
-	// setting, so it carries no config tag and is never written to a file.
-	CurrentCategoryFlag bool `config:"-"`
 	// SubOrDubFlag records that -sub or -dub was given for this run, which
 	// outranks the audio remembered for a show. Not a setting either.
 	SubOrDubFlag               bool   `config:"-"`
@@ -189,7 +184,6 @@ func defaultConfigMap() map[string]string {
 		"StoragePath":             StoragePathDefault,
 		"AnimeNameLanguage":       "english",
 		"SubsLanguage":            "english",
-		"CurrentCategory":         "false",
 		// The lists, then the things to do. Kept short on purpose: every entry
 		// is a row in the rofi menu, and the lists left out are still a tab or
 		// a filter away in "Show All".
@@ -255,27 +249,6 @@ func defaultConfigMap() map[string]string {
 }
 
 // VimKeysEnabled reports whether selection menus should use vim-style motions.
-// SkipCategoryMenu reports whether to open straight into the watching list
-// rather than showing the category menu first.
-//
-// The setting is a terminal one. Skipping the menu became reasonable there
-// because the tabs now reach every list and the bottom bar every action, so
-// little is lost by landing inside one -- and rofi has neither of those, where
-// the menu is still its only route to the other lists and to the actions.
-// Passing -current asks for this run specifically, and is honoured either way.
-func SkipCategoryMenu(config *Config) bool {
-	if config == nil {
-		config = globalConfig
-	}
-	if config == nil {
-		return false
-	}
-	if config.CurrentCategoryFlag {
-		return true
-	}
-	return config.CurrentCategory && !config.RofiSelection
-}
-
 func VimKeysEnabled(config *Config) bool {
 	if config != nil {
 		return config.VimKeys
@@ -976,72 +949,4 @@ func menuKeys(config *Config) []string {
 func defaultMenuKeys() []string {
 	defaults := defaultConfigMap()
 	return menuKeys(&Config{MenuOrder: defaults["MenuOrder"], MenuActions: defaults["MenuActions"]})
-}
-
-func getOrderedCategories(userConfig *Config) []SelectionOption {
-	// Define the default categories and all available labels
-	defaultOrder := defaultMenuKeys()
-	availableLabels := map[string]string{
-		"CURRENT":        "Currently Watching",
-		"ALL":            "Show All",
-		"UNTRACKED":      "Untracked Watching",
-		"UPDATE":         "Update (Episode, Status, Score)",
-		"REMAP_PROVIDER": "Remap Provider",
-		"CONTINUE_LAST":  "Continue Last Session",
-		"SURPRISE":       "Surprise Me",
-		"PLANNING":       "Plan to Watch",
-		"COMPLETED":      "Completed",
-		"PAUSED":         "Paused",
-		"DROPPED":        "Dropped",
-		"REWATCHING":     "Rewatching",
-		"TRACKER":        "Change Tracker",
-		"PROVIDER":       "Change Provider",
-		// CAST's label is replaced below with its live state: it is a toggle,
-		// and one whose entry does not say which way it is set is a toggle the
-		// viewer has to guess at. This is the one menu both UIs build from, so
-		// doing it here covers rofi and the terminal alike.
-		"CAST": "Cast",
-		// Read from the tracker each time it opens; see watch_stats.go.
-		"STATS": "Stats",
-	}
-	availableLabels["CAST"] = castMenuLabel(userConfig)
-
-	// Create ordered list to store final result
-	finalOrder := make([]string, 0)
-	seen := make(map[string]bool)
-
-	// Only show items explicitly specified by user, or the defaults when
-	// neither setting names anything.
-	menuItems := menuKeys(userConfig)
-	if len(menuItems) == 0 {
-		menuItems = defaultOrder
-	}
-	for _, key := range menuItems {
-		if _, exists := availableLabels[key]; exists && !seen[key] {
-			finalOrder = append(finalOrder, key)
-			seen[key] = true
-		}
-	}
-
-	// Create the final ordered slice of SelectionOptions
-	if !seen["TRACKER"] {
-		finalOrder = append(finalOrder, "TRACKER")
-	}
-	orderedCategories := make([]SelectionOption, 0, len(finalOrder))
-	for _, key := range finalOrder {
-		if !trackingCategoryEnabled(userConfig, key) {
-			continue
-		}
-		icon := categoryIcon(key)
-		if key == "CAST" {
-			icon = castMenuIcon(userConfig)
-		}
-		orderedCategories = append(orderedCategories, SelectionOption{
-			Key:   key,
-			Label: availableLabels[key],
-			Icon:  icon,
-		})
-	}
-
-	return orderedCategories
 }

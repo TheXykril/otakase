@@ -664,7 +664,6 @@ func trackerEpisodeDuration(current int, media Media) int {
 }
 
 func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime) {
-	var err error
 	var startingRewatch bool
 
 	// Filter anime list based on selected category
@@ -729,52 +728,20 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 			// dropped it and showed the menu instead.
 			var pendingAction SelectionOption
 
+			// The list on screen. There is no menu in front of the lists: otakase
+			// opens on Watching, and an action returns to whichever list it was
+			// started from rather than to the first one.
+			activeList := launchList(userConfig)
+
 			// Navigation loop for category and anime selection
 		categorySelectionLoop:
 			for {
-				// Skip category selection if Current flag is set
 				var categorySelection SelectionOption
 				if pendingAction.Key != "" {
 					categorySelection = pendingAction
 					pendingAction = SelectionOption{}
-				} else if SkipCategoryMenu(userConfig) {
-					categorySelection = SelectionOption{
-						Key:   "CURRENT",
-						Label: "Currently Watching",
-					}
 				} else {
-					// Create category selection map
-					// Get ordered categories
-					orderedCategories := getOrderedCategories(userConfig)
-					// The shows played last stand where CONTINUE_LAST does, so
-					// picking one up again is a single choice.
-					if user.ListSync != nil {
-						user.AnimeList = user.ListSync.Current()
-					}
-					orderedCategories = placeContinueRows(orderedCategories, continueWatchingRows(userConfig, &user.AnimeList), userConfig)
-
-					// Use DynamicSelect with ordered categories directly
-					categorySelection, err = DynamicSelect(orderedCategories)
-
-					if err != nil {
-						Log(fmt.Sprintf("Failed to select category: %v", err))
-						Exit(fmt.Errorf("Failed to select category"))
-					}
-
-					categorySelection = NormalizeSelectionKey(categorySelection)
-					if SelectionMeansQuit(categorySelection) {
-						Exit(nil)
-					}
-
-					if SelectionMeansBack(categorySelection) {
-						continue
-					}
-					if categorySelection.Key == "" {
-						// Empty/cancelled selection — re-show category menu.
-						continue
-					}
-
-					ClearScreen()
+					categorySelection = SelectionOption{Key: activeList}
 				}
 
 				// Handled here rather than beside the prompt above: an action can
@@ -782,7 +749,21 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 				// prompt's branch it was skipped entirely -- every action key fell
 				// through to being looked up as a category, which has no entries
 				// and shows an empty list.
-				if categorySelection.Key == "PROVIDER" {
+				if categorySelection.Key == listsMenuKey {
+					// rofi has no tabs, so its toolbar opens the lists instead.
+					if user.ListSync != nil {
+						user.AnimeList = user.ListSync.Current()
+					}
+					ClearScreen()
+					if key, ok := pickList(userConfig, user.AnimeList, activeList); ok {
+						activeList = key
+					}
+					ClearScreen()
+					continue categorySelectionLoop
+				} else if categorySelection.Key == nextListKey {
+					activeList = nextList(userConfig, activeList)
+					continue categorySelectionLoop
+				} else if categorySelection.Key == "PROVIDER" {
 					ClearScreen()
 					ChangeProvider(userConfig)
 					ClearScreen()
@@ -824,10 +805,9 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					ClearScreen()
 					continue categorySelectionLoop
 				} else if categorySelection.Key == "CONTINUE_LAST" {
-					// Reached from a list's ^l, or from the menu with the rows
-					// switched off. Where there are several recent shows they are
-					// offered, as the rows would, since opening straight into a
-					// list (CurrentCategory) never shows the rows at all.
+					// Reached from the terminal's ^l, or rofi's Continue button
+					// with the rows switched off. Where there are several recent
+					// shows they are offered, since the rows lead Watching only.
 					if user.ListSync != nil {
 						user.AnimeList = user.ListSync.Current()
 					}
@@ -883,12 +863,16 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 				if user.ListSync != nil {
 					user.AnimeList = user.ListSync.Current()
 				}
+				if menuCategoryLabels[canonicalCategoryKey(categorySelection.Key)] != "" {
+					activeList = canonicalCategoryKey(categorySelection.Key)
+				}
 
 				if userConfig.RofiSelection && userConfig.ImagePreview {
-					animeListMapPreview = buildCategoryPreviewOptions(user.AnimeList, categorySelection.Key)
+					animeListMapPreview = buildMainPreviewOptions(userConfig, user.AnimeList, activeList)
 				} else {
-					animeListOptions = buildCategorySelectionOptions(user.AnimeList, categorySelection.Key)
+					animeListOptions = buildMainListOptions(userConfig, user.AnimeList, activeList)
 				}
+				categoryTabs, categoryActions := mainMenuLayout(userConfig, user.AnimeList)
 
 				// Anime selection loop (for back navigation)
 			animeSelectionLoop:
@@ -919,8 +903,12 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 						anilistSelectedOption, err = DynamicSelectPreviewWithRefresh(animeListMapPreview, true, &PreviewSelectionRefreshConfig{
 							Updates: user.ListSync.Updates(),
 							BuildOptions: func(list AnimeList) map[string]RofiSelectPreview {
-								return buildCategoryPreviewOptions(list, categorySelection.Key)
+								return buildMainPreviewOptions(userConfig, list, activeList)
 							},
+							Main:       true,
+							Prompt:     menuCategoryLabels[activeList],
+							Categories: categoryTabs,
+							Actions:    categoryActions,
 						})
 					} else {
 						// Add "Add new anime" option to the slice
@@ -934,28 +922,23 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 
 						// Tab moves between categories without leaving the list.
 						// The whole list is already in memory, so switching one
-						// is a filter rather than a fetch. activeCategory follows
+						// is a filter rather than a fetch. activeList follows
 						// the tab so a background refresh rebuilds what is on
-						// screen rather than the category first opened.
-						categoryTabs, categoryActions := SplitMenuOrder(strings.Join(menuKeys(userConfig), ","))
-						// Counting is a filter over a list already in memory, so
-						// every tab can say how much is behind it.
-						for i := range categoryTabs {
-							categoryTabs[i].Count = len(visibleEntriesByCategory(user.AnimeList, categoryTabs[i].Key, userConfig))
-						}
-						activeCategory := categorySelection.Key
-
+						// screen rather than the category first opened, and an
+						// action returns to it.
 						anilistSelectedOption, err = DynamicSelectWithRefresh(tempOptions, &SelectionRefreshConfig{
 							Updates: user.ListSync.Updates(),
 							BuildOptions: func(list AnimeList) []SelectionOption {
-								return buildCategorySelectionOptions(list, activeCategory)
+								return buildMainListOptions(userConfig, list, activeList)
 							},
+							Main:           true,
+							Prompt:         menuCategoryLabels[activeList],
 							Categories:     categoryTabs,
-							ActiveCategory: activeCategory,
+							ActiveCategory: activeList,
 							Actions:        categoryActions,
 							LoadCategory: func(key string) []SelectionOption {
-								activeCategory = key
-								return buildCategorySelectionOptions(user.AnimeList, key)
+								activeList = key
+								return buildMainListOptions(userConfig, user.AnimeList, key)
 							},
 						})
 					}
@@ -971,21 +954,15 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 						Exit(nil)
 					}
 
-					// Handle back navigation - go back to category selection
+					// Nothing is shown before this list, so there is nothing
+					// behind it to go back to.
 					if SelectionMeansBack(anilistSelectedOption) {
-						if SkipCategoryMenu(userConfig) {
-							// Nothing was shown before this list, so there is
-							// nothing behind it to go back to.
-							Exit(nil)
-						}
-						ClearScreen()
-						continue categorySelectionLoop
+						Exit(nil)
 					}
-					// An action chosen by its key from the list is the same
-					// request as choosing it from the menu, so it is answered by
-					// the same code: hand the key back to the category loop
-					// rather than duplicating the dispatch here.
-					if isMenuActionKey(anilistSelectedOption.Key) {
+					// An action chosen from the list -- a toolbar button, a key,
+					// a continue-watching row -- is answered by the dispatch at
+					// the top of the category loop rather than duplicated here.
+					if isMainMenuKey(anilistSelectedOption.Key) {
 						pendingAction = anilistSelectedOption
 						ClearScreen()
 						continue categorySelectionLoop

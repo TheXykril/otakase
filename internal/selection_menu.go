@@ -64,11 +64,25 @@ type SelectionRefreshConfig struct {
 	// Actions appear along the bottom and end the menu with that action as the
 	// result when their key is pressed.
 	Actions []FooterAction
+
+	// Main marks the main list, the first thing otakase shows. Nothing is
+	// behind it, so escape quits rather than going back, and in rofi it gets
+	// the toolbar that stands in for the terminal's tabs and bottom bar.
+	Main bool
+	// Prompt names the list in rofi's prompt.
+	Prompt string
 }
 
 type PreviewSelectionRefreshConfig struct {
 	Updates      <-chan AnimeList
 	BuildOptions func(AnimeList) map[string]RofiSelectPreview
+
+	// Main, Prompt, Categories and Actions are as in SelectionRefreshConfig:
+	// the poster grid is the main list in rofi when posters are on.
+	Main       bool
+	Prompt     string
+	Categories []Tab
+	Actions    []FooterAction
 }
 
 // Menu styles are derived from the active palette rather than fixed, so otakase
@@ -571,13 +585,9 @@ func (m Model) keyHints() []keyHint {
 		}
 		hints = append(hints, keyHint{Key: shortKeyLabel(action.Hint), Label: action.Label})
 	}
+	// Nothing is behind the main list, so escape leaves the program. Saying
+	// "back" there would promise a screen that does not exist.
 	if m.isHomeMenu {
-		return append(hints, keyHint{Key: "ctrl+c", Label: "quit"})
-	}
-	// With the menu skipped there is nothing behind this list, so escape leaves
-	// the program. Saying "back" there would promise a screen that does not
-	// exist.
-	if SkipCategoryMenu(nil) {
 		return append(hints, keyHint{Key: "esc", Label: "quit"})
 	}
 	return append(hints, keyHint{Key: "esc", Label: "back"})
@@ -675,6 +685,13 @@ func (m *Model) filterOptions() {
 			return m.filteredKeys[i].Label < m.filteredKeys[j].Label
 		})
 	}
+	// Continue-watching rows lead the list whatever its order: they are the
+	// shows most likely wanted.
+	sort.SliceStable(m.filteredKeys, func(i, j int) bool {
+		_, iRow := resumeRowAnilistID(m.filteredKeys[i].Key)
+		_, jRow := resumeRowAnilistID(m.filteredKeys[j].Key)
+		return iRow && !jRow
+	})
 
 	// Pin Back / Add new / Quit only when the filter is empty or matches their labels.
 	// Previously Quit/Back were always forced visible, so "/quit" still showed Back first
@@ -707,15 +724,6 @@ func (m *Model) filterOptions() {
 	if pinMatches("Quit") {
 		m.filteredKeys = append(m.filteredKeys, SelectionOption{Label: "Quit", Key: "-1"})
 	}
-}
-
-func detectHomeMenu(options []SelectionOption) bool {
-	for _, opt := range options {
-		if opt.Key == "ALL" || opt.Key == "CURRENT" {
-			return true
-		}
-	}
-	return false
 }
 
 // SelectionMeansQuit reports whether the user chose Quit (by key or label).
@@ -773,46 +781,6 @@ func findSelectionIndex(options []SelectionOption, previousKey string, previousL
 	}
 
 	return min(fallbackIndex, len(options)-1)
-}
-
-func sortHomeMenuOptions(options []SelectionOption) []SelectionOption {
-	config := GetGlobalConfig()
-	menuOrder := menuKeys(config)
-	if len(menuOrder) == 0 {
-		return options
-	}
-
-	optMap := make(map[string]SelectionOption)
-	for _, opt := range options {
-		optMap[opt.Key] = opt
-	}
-
-	sorted := make([]SelectionOption, 0, len(options))
-	for _, key := range menuOrder {
-		// Continue-watching rows stand in for CONTINUE_LAST: no setting names
-		// them one by one.
-		if key == "CONTINUE_LAST" {
-			for _, opt := range options {
-				if _, isRow := resumeRowAnilistID(opt.Key); isRow {
-					sorted = append(sorted, opt)
-					delete(optMap, opt.Key)
-				}
-			}
-		}
-		if opt, exists := optMap[key]; exists {
-			sorted = append(sorted, opt)
-			delete(optMap, key)
-		}
-	}
-
-	for _, opt := range options {
-		if _, exists := optMap[opt.Key]; exists {
-			sorted = append(sorted, opt)
-			delete(optMap, opt.Key)
-		}
-	}
-
-	return sorted
 }
 
 func previewOptionsToSortedSelection(options map[string]RofiSelectPreview) []SelectionOption {
@@ -884,12 +852,17 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 			rofiInput.WriteString("Add new anime\n")
 			rows = append(rows, SelectionOption{Key: "add_new", Label: "Add new anime"})
 		}
-		rofiInput.WriteString("Back\n")
-		rofiInput.WriteString("Quit\n")
-		rows = append(rows,
-			SelectionOption{Key: "-2", Label: "Back"},
-			SelectionOption{Key: "-1", Label: "Quit"},
-		)
+		main := refreshConfig != nil && refreshConfig.Main
+		// The main grid has no Back or Quit tiles: nothing is behind it, and
+		// its toolbar ends in Quit.
+		if !main {
+			rofiInput.WriteString("Back\n")
+			rofiInput.WriteString("Quit\n")
+			rows = append(rows,
+				SelectionOption{Key: "-2", Label: "Back"},
+				SelectionOption{Key: "-1", Label: "Quit"},
+			)
+		}
 
 		// A menu on screen is proof otakase started; anything still showing is stale.
 		EndStartupProgress()
@@ -900,7 +873,14 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 		// the grid clips it to the column width, so what comes back for a long
 		// title is not the string the option carries.
 		args := []string{"-dmenu", "-theme", configPath, "-show-icons", "-markup-rows", "-p", "Select Anime", "-i", "-no-custom", "-format", "i"}
-		cmd := exec.Command("rofi", append(args, rofiVersionThemeArgs()...)...)
+		args = append(args, rofiVersionThemeArgs()...)
+		var toolbar rofiToolbar
+		if main {
+			toolbar = mainRofiToolbar(GetGlobalConfig(), refreshConfig.Categories, refreshConfig.Actions)
+			args = append(args, toolbar.args([]string{"inputbar", "box-toolbar", "listview"})...)
+			args = append(args, rofiPlaceholder(refreshConfig.Prompt)...)
+		}
+		cmd := exec.Command("rofi", args...)
 		cmd.Stdin = strings.NewReader(rofiInput.String())
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
@@ -908,6 +888,9 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 
 		if refreshConfig == nil || refreshConfig.Updates == nil {
 			if err := cmd.Run(); err != nil {
+				if pressed, ok := toolbar.pressed(err); ok {
+					return pressed, nil
+				}
 				Log(fmt.Sprintf("Rofi stderr: %s", stderr.String()))
 				Log(fmt.Sprintf("Rofi stdout: %s", stdout.String()))
 				return SelectionOption{Key: "-2", Label: "Back"}, nil
@@ -930,6 +913,9 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 			select {
 			case err := <-waitCh:
 				if err != nil {
+					if pressed, ok := toolbar.pressed(err); ok {
+						return pressed, nil
+					}
 					Log(fmt.Sprintf("Rofi stderr: %s", stderr.String()))
 					Log(fmt.Sprintf("Rofi stdout: %s", stdout.String()))
 					return SelectionOption{Key: "-2", Label: "Back"}, nil
@@ -982,7 +968,11 @@ func writePreviewRows(w *strings.Builder, options []SelectionOption, cache func(
 	for _, opt := range options {
 		cachePath, ok := cache(opt)
 		if !ok {
-			continue
+			// A continue row comes from the watch history, which has no
+			// cover with local tracking; it is still the show to pick up.
+			if _, isRow := resumeRowAnilistID(opt.Key); !isRow {
+				continue
+			}
 		}
 		// Every row goes through the markup builder, not just the ones with new
 		// episodes: it is what escapes pango and dims the counts, and skipping
@@ -991,7 +981,11 @@ func writePreviewRows(w *strings.Builder, options []SelectionOption, cache func(
 		if opt.HasNewEpisodes {
 			label = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s", rofiNewEpisodeColor, label)
 		}
-		w.WriteString(fmt.Sprintf("%s\x00icon\x1f%s\n", label, cachePath))
+		if cachePath == "" {
+			w.WriteString(label + "\n")
+		} else {
+			w.WriteString(fmt.Sprintf("%s\x00icon\x1f%s\n", label, cachePath))
+		}
 		rows = append(rows, opt)
 	}
 	return rows
@@ -1108,6 +1102,15 @@ func rofiSelectInternal(options []SelectionOption, isHomeMenu bool, refreshConfi
 		configPath := filepath.Join(GetStoragePath(), "selectanime.rasi")
 		args := []string{"-dmenu", "-theme", configPath, "-i", "-markup", "-markup-rows", "-p", prompt}
 		args = append(args, rofiVersionThemeArgs()...)
+		var toolbar rofiToolbar
+		if refreshConfig != nil && refreshConfig.Main {
+			toolbar = mainRofiToolbar(GetGlobalConfig(), refreshConfig.Categories, refreshConfig.Actions)
+			args = append(args, toolbar.args([]string{"inputbar", "box-toolbar", "message", "listview"})...)
+			// The list's card is sized for a column of titles; the toolbar
+			// needs a row of buttons to fit across it.
+			args = append(args, "-theme-str", "window {\n  width: 1000px;\n}")
+			args = append(args, rofiPlaceholder(refreshConfig.Prompt)...)
+		}
 		if msg := strings.TrimSpace(message); msg != "" {
 			args = append(args, "-mesg", msg)
 		}
@@ -1119,6 +1122,9 @@ func rofiSelectInternal(options []SelectionOption, isHomeMenu bool, refreshConfi
 
 		if refreshConfig == nil || refreshConfig.Updates == nil {
 			err := cmd.Run()
+			if pressed, ok := toolbar.pressed(err); ok {
+				return pressed, nil
+			}
 			return parseRofiSelection(err, stdout.String(), currentOptions, isHomeMenu)
 		}
 
@@ -1136,6 +1142,9 @@ func rofiSelectInternal(options []SelectionOption, isHomeMenu bool, refreshConfi
 		for !restartMenu {
 			select {
 			case err := <-waitCh:
+				if pressed, ok := toolbar.pressed(err); ok {
+					return pressed, nil
+				}
 				if err != nil {
 					Log(fmt.Sprintf("Rofi stderr: %s", stderr.String()))
 				}
@@ -1209,11 +1218,8 @@ func dynamicSelectInternal(options []SelectionOption, refreshConfig *SelectionRe
 	// A menu on screen answers "is it still working" by itself.
 	defer suspendBusy()()
 
-	isHomeMenu := detectHomeMenu(options)
-
-	if isHomeMenu {
-		options = sortHomeMenuOptions(options)
-	}
+	// The main list has nothing behind it: escape quits rather than going back.
+	isHomeMenu := refreshConfig != nil && refreshConfig.Main
 
 	// Before the rofi branch, because a spawned cast forces RofiSelection off
 	// and would otherwise fall through to a Bubble Tea program competing with
@@ -1344,10 +1350,12 @@ func buildRofiOptionsString(options []SelectionOption, isHomeMenu bool) string {
 		optionsList = append(optionsList, row)
 	}
 
+	// The main list has neither: nothing is behind it, and its toolbar ends
+	// in Quit.
 	if !isHomeMenu {
 		optionsList = append(optionsList, icons.Label(icons.Back, "Back"))
+		optionsList = append(optionsList, icons.Label(icons.Quit, "Quit"))
 	}
-	optionsList = append(optionsList, icons.Label(icons.Quit, "Quit"))
 
 	return strings.Join(optionsList, "\n")
 }

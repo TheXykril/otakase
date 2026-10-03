@@ -79,17 +79,14 @@ func TestTerminalTabsHaveIcons(t *testing.T) {
 	}
 }
 
-// With icons on, the cast entry's state shows in its icon, not a checkbox.
-func TestCastEntryIconFollowsItsState(t *testing.T) {
+// With icons on, the cast button's state shows in its icon, not a checkbox.
+func TestCastButtonIconFollowsItsState(t *testing.T) {
+	icons.Resolve(true)
 	for _, on := range []bool{false, true} {
-		config := &Config{MenuOrder: "CURRENT,CAST", CastToDevice: on}
-		for _, option := range getOrderedCategories(config) {
-			if option.Key != "CAST" {
-				continue
-			}
-			if want := castMenuIcon(config); option.Icon != want {
-				t.Errorf("cast on=%v: icon %U, want %U", on, rune(option.Icon), rune(want))
-			}
+		config := &Config{CastToDevice: on}
+		want := string(rune(castMenuIcon(config)))
+		if label := toolbarButtonLabel("CAST", config); !strings.HasPrefix(label, want) {
+			t.Errorf("cast on=%v: button %q does not start with %U", on, label, rune(castMenuIcon(config)))
 		}
 	}
 }
