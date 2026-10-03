@@ -343,3 +343,36 @@ func TestUpdateActionOptionsOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestWaitForLaunchUpdateCheck(t *testing.T) {
+	saved := launchUpdateDone
+	t.Cleanup(func() { launchUpdateDone = saved })
+
+	launchUpdateDone = nil
+	if waitForLaunchUpdateCheck(time.Millisecond) {
+		t.Fatal("no check started should not count as finished")
+	}
+
+	done := make(chan struct{})
+	launchUpdateDone = done
+	if waitForLaunchUpdateCheck(10 * time.Millisecond) {
+		t.Fatal("a running check should not count as finished")
+	}
+
+	close(done)
+	if !waitForLaunchUpdateCheck(time.Second) {
+		t.Fatal("a finished check should be picked up in the same run")
+	}
+}
+
+func TestHandlePendingUpdatePromptSkipsWhenNothingToOffer(t *testing.T) {
+	storage := t.TempDir()
+	cfg := &Config{CheckUpdates: true, StoragePath: storage}
+	state := updatePendingState{Available: false, LatestVersion: "9.9.9"}
+	if err := saveUpdatePendingState(storage, state); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if prompted, exit := handlePendingUpdatePrompt(cfg, "2.0.4", false); prompted || exit {
+		t.Fatalf("nothing available: prompted=%t exit=%t", prompted, exit)
+	}
+}

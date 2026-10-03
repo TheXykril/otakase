@@ -102,7 +102,7 @@ func main() {
 	flag.BoolVar(&userConfig.DiscordPresence, "discord-presence", userConfig.DiscordPresence, "Enable Discord presence (true/false)")
 	flag.StringVar(&userConfig.DiscordClientId, "discord-client-id", userConfig.DiscordClientId, "Discord client ID for Rich Presence")
 	flag.BoolVar(&userConfig.VimKeys, "vim-keys", userConfig.VimKeys, "Enable vim motions in selection menus (j/k/h/l, / search) (true/false)")
-	flag.BoolVar(&userConfig.CheckUpdates, "check-updates", userConfig.CheckUpdates, "Check for updates in the background when idle (true/false)")
+	flag.BoolVar(&userConfig.CheckUpdates, "check-updates", userConfig.CheckUpdates, "Check for updates in the background at launch (true/false)")
 	flag.BoolVar(&userConfig.ShowNewEpisodes, "show-new-episodes", userConfig.ShowNewEpisodes, "Show new episode indicators in currently watching list (true/false)")
 	continueLast := flag.Bool("c", false, "Continue last episode")
 	addNewAnime := flag.Bool("new", false, "Add new anime")
@@ -327,12 +327,8 @@ func main() {
 		return
 	}
 
-	// Show update found by a previous idle check (no network on the hot path).
-	if internal.HandlePendingUpdatePrompt(&userConfig, resolvedVersion()) {
-		return
-	}
-
-	// Idle background check — does not block startup; stores result for next launch.
+	// Look for a newer release now, alongside the tracker sign-in below; the
+	// result is offered before the first menu of this same run.
 	internal.StartBackgroundUpdateCheck(&userConfig, resolvedVersion())
 
 	// From here on the launch can block on the network, with no terminal to show
@@ -355,6 +351,15 @@ func main() {
 	if *addNewAnime {
 		internal.AddNewAnime(&userConfig, &anime, &user, &databaseAnimes)
 		// internal.Exit(fmt.Errorf("Added new anime!"))
+	}
+
+	if prompted, exit := internal.HandleLaunchUpdatePrompt(&userConfig, resolvedVersion()); exit {
+		internal.Exit(nil)
+		return
+	} else if prompted {
+		// The prompt was a menu, which ends the startup progress; the list
+		// load ahead can still be slow.
+		internal.BeginStartupProgress(&userConfig, "Otakase is starting")
 	}
 
 	internal.StartupStage("Loading your anime list")
