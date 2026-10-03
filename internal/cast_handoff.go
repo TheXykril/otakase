@@ -350,6 +350,10 @@ func handOffCastToTerminal(config *Config, anime *Anime) error {
 		return fmt.Errorf("cast: could not open a terminal: %w", err)
 	}
 
+	// The window announces the close when the cast ends; this process exiting
+	// now is not otakase closing.
+	disarmCloseNotice()
+
 	// Not waited on: this process is done, and the cast belongs to the window
 	// now. Release ties off the child so it is not left a zombie.
 	if err := command.Process.Release(); err != nil {
