@@ -76,8 +76,8 @@ func TestCastMenuLabelReadsInBothUIs(t *testing.T) {
 	if off != "Cast: Off" {
 		t.Errorf("the off entry reads %q, want %q", off, "Cast: Off")
 	}
-	if on != "Cast: Office TV" {
-		t.Errorf("the on entry reads %q, want %q", on, "Cast: Office TV")
+	if on != "Cast: On | Office TV" {
+		t.Errorf("the on entry reads %q, want %q", on, "Cast: On | Office TV")
 	}
 	if strings.Contains(off+on, "[") {
 		t.Errorf("the entries still carry a checkbox: %q, %q", off, on)

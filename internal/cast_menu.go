@@ -65,7 +65,7 @@ func toggleCastToDevice(config *Config) {
 func castMenuLabel(config *Config) string {
 	if config != nil && config.CastToDevice {
 		if device := config.CastDevice; device != "" {
-			return "Cast: " + device
+			return "Cast: On | " + device
 		}
 		return "Cast: On"
 	}
