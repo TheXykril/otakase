@@ -212,3 +212,36 @@ func TestGridRowMarkupHandlesMultibyteTitles(t *testing.T) {
 		t.Fatalf("produced invalid utf-8: %q", plain)
 	}
 }
+
+// Where a show stopped takes the resume colour; the counts around it stay dim.
+func TestRofiRowMarkupColoursResumePoint(t *testing.T) {
+	defer func(meta, resume string) { rofiMetaColor, rofiResumeColor = meta, resume }(rofiMetaColor, rofiResumeColor)
+	rofiMetaColor, rofiResumeColor = "#777777", "#eeaa00"
+
+	row := rofiRowMarkup("Frieren · 7/28 · resume 12:34")
+	if !strings.Contains(row, `<span foreground="#eeaa00">resume 12:34</span>`) {
+		t.Fatalf("resume point not coloured: %q", row)
+	}
+	if strings.Contains(row, `#eeaa00">7/28`) {
+		t.Fatalf("count took the resume colour: %q", row)
+	}
+	row = rofiRowMarkup("Frieren · ep 13 at 12:34")
+	if !strings.Contains(row, `<span foreground="#eeaa00">ep 13 at 12:34</span>`) {
+		t.Fatalf("continue point not coloured: %q", row)
+	}
+	if got := rofiRowMarkup("One Piece · 1171 eps"); strings.Contains(got, "#eeaa00") {
+		t.Fatalf("episode count taken for a resume point: %q", got)
+	}
+}
+
+// A continue row is drawn in the continue colour; a list row is not.
+func TestContinueRowMarkup(t *testing.T) {
+	defer func(c string) { rofiContinueColor = c }(rofiContinueColor)
+	rofiContinueColor = "#3366ff"
+	if got := continueRowMarkup(SelectionOption{Key: resumeRowPrefix + "1"}, "Frieren"); got != `<span foreground="#3366ff">Frieren</span>` {
+		t.Fatalf("continue row = %q", got)
+	}
+	if got := continueRowMarkup(SelectionOption{Key: "1"}, "Frieren"); got != "Frieren" {
+		t.Fatalf("list row = %q", got)
+	}
+}

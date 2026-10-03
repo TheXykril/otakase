@@ -70,8 +70,11 @@ type templateData struct {
 	SelectionBand       string
 	SelectionBackground string
 	SelectionForeground string
-	Red                 string
-	Green               string
+	// SelectedText is the cursor row's text. It was the accent, which now
+	// marks the shows to continue, so a selected one would not change at all.
+	SelectedText string
+	Red          string
+	Green        string
 }
 
 // alpha renders a palette colour at the given opacity as #rrggbbaa.
@@ -113,8 +116,10 @@ func newTemplateData(palette theme.Palette) templateData {
 		Border:           palette.Border(),
 		Foreground:       palette.Foreground,
 		BrightForeground: palette.BrightForeground,
-		Muted:            palette.Muted,
-		Accent:           accent,
+		// The theme's muted grey, held readable: on some themes it is all but
+		// the background colour.
+		Muted:  palette.MetaText(),
+		Accent: accent,
 		// The prompt pill is filled with the accent, so its text has to be chosen
 		// by contrast or it disappears on light accents.
 		OnAccent: theme.ReadableOn(accent, palette.Background, palette.BrightForeground, palette.Foreground),
@@ -127,6 +132,7 @@ func newTemplateData(palette theme.Palette) templateData {
 		SelectionBand:       palette.SelectionBand(),
 		SelectionBackground: palette.SelectionBackground(),
 		SelectionForeground: palette.SelectionForeground(),
+		SelectedText:        palette.SelectedText(),
 		Red:                 palette.Red,
 		Green:               palette.Green,
 	}

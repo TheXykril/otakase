@@ -100,6 +100,8 @@ var (
 
 	rofiNewEpisodeColor string
 	rofiMetaColor       string
+	rofiResumeColor     string
+	rofiContinueColor   string
 )
 
 func init() {
@@ -154,7 +156,9 @@ func ApplyTheme(palette theme.Palette) {
 		Foreground(color(palette.Green))
 
 	rofiNewEpisodeColor = palette.Green
-	rofiMetaColor = palette.Muted
+	rofiMetaColor = palette.MetaText()
+	rofiResumeColor = palette.ResumeText()
+	rofiContinueColor = palette.ContinueText()
 
 	applyLayoutTheme(palette)
 }
@@ -977,7 +981,7 @@ func writePreviewRows(w *strings.Builder, options []SelectionOption, cache func(
 		// Every row goes through the markup builder, not just the ones with new
 		// episodes: it is what escapes pango and dims the counts, and skipping
 		// it left ordinary rows unescaped.
-		label := GridRowMarkup(opt.Label, rofitheme.GridLabelCapacity)
+		label := continueRowMarkup(opt, GridRowMarkup(opt.Label, rofitheme.GridLabelCapacity))
 		if opt.HasNewEpisodes {
 			label = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s", rofiNewEpisodeColor, label)
 		}
@@ -1340,7 +1344,7 @@ func optionIcon(opt SelectionOption) icons.Icon {
 func buildRofiOptionsString(options []SelectionOption, isHomeMenu bool) string {
 	optionsList := make([]string, 0, len(options)+2)
 	for _, opt := range options {
-		row := optionIcon(opt).String() + rofiRowMarkup(opt.Label)
+		row := continueRowMarkup(opt, optionIcon(opt).String()+rofiRowMarkup(opt.Label))
 		if opt.HasNewEpisodes {
 			row = fmt.Sprintf("<span foreground=\"%s\">[NEW]</span> %s", rofiNewEpisodeColor, rofiRowMarkup(opt.Label))
 		}

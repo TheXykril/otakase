@@ -147,13 +147,18 @@ func toolbarIconPrefix(icon icons.Icon) string {
 }
 
 // rofiButtonMarkup is a button's label with its key after it, dimmed: the
-// label says what it does, the key is the shortcut to it.
-func rofiButtonMarkup(label, hint string) string {
+// label says what it does, the key is the shortcut to it. On a button that is
+// on, filled with the accent, the theme's dim colour may not show, so the key
+// is faded from the button's own text instead.
+func rofiButtonMarkup(label, hint string, on bool) string {
 	markup := escapePango(label)
-	if hint != "" {
-		markup += ` <span alpha="55%">` + escapePango(hint) + `</span>`
+	if hint == "" {
+		return markup
 	}
-	return markup
+	if on || rofiMetaColor == "" {
+		return markup + ` <span alpha="55%">` + escapePango(hint) + `</span>`
+	}
+	return markup + fmt.Sprintf(` <span foreground='%s'>`, rofiMetaColor) + escapePango(hint) + `</span>`
 }
 
 func writeRofiButton(w *strings.Builder, name, label, hint, action string, on, muted bool) {
@@ -165,7 +170,7 @@ func writeRofiButton(w *strings.Builder, name, label, hint, action string, on, m
 		background, text = "transparent", "@muted"
 	}
 	fmt.Fprintf(w, "%s {\n", name)
-	fmt.Fprintf(w, "  content: \"%s\";\n", rofiThemeString(rofiButtonMarkup(label, hint)))
+	fmt.Fprintf(w, "  content: \"%s\";\n", rofiThemeString(rofiButtonMarkup(label, hint, on)))
 	fmt.Fprintf(w, "  markup: true;\n")
 	fmt.Fprintf(w, "  action: \"%s\";\n", action)
 	fmt.Fprintf(w, "  expand: false;\n  padding: 3px 6px;\n  border-radius: 12px;\n  cursor: pointer;\n")
