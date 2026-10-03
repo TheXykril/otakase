@@ -33,8 +33,15 @@ including ffmpeg's own output during casts and downloads.
 ## Menu icons
 
 Menu rows can start with a Nerd Font icon (`internal/icons`). Each icon is a
-constant there; use `icons.Label(icons.X, "Text")`, which drops the icon when
-`Icons` resolves to off, so every label still reads as plain text.
+constant there. Give an option one with `SelectionOption{..., Icon: icons.X}`:
+both menus draw it in front of the label, and leave it out when `Icons`
+resolves to off. It is not part of `Label`, so matching a rofi selection,
+filtering and sorting work on the label alone. Back, Quit and Add new get
+theirs from their keys. Text that is not a menu row can use
+`icons.Label(icons.X, "Text")`.
+
+Icons go on actions and categories, not on rows that are values (an anime
+title, a quality, a tracker name): a column of the same icon says nothing.
 
 otakase embeds `internal/icons/font/OtakaseSymbols.ttf`, Symbols Nerd Font Mono
 cut down to only the glyphs in use, and installs it to the user's font

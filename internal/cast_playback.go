@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/thexykril/otakase/internal/cast"
+	"github.com/thexykril/otakase/internal/icons"
 )
 
 // castPollInterval is how often the device is asked where it is. A second is
@@ -1301,7 +1302,7 @@ func castPickDevice(config *Config) (device cast.Device, rescan bool, err error)
 	// still waking up.
 	options := make([]SelectionOption, 0, len(devices)+1)
 	for _, device := range devices {
-		options = append(options, SelectionOption{Key: device.UUID, Label: device.String()})
+		options = append(options, SelectionOption{Key: device.UUID, Label: device.String(), Icon: icons.TV})
 	}
 	options = append(options, castRescanOption)
 	selected, err := DynamicSelectPreserveOrder(options)

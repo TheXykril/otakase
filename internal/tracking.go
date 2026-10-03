@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/thexykril/otakase/internal/icons"
 )
 
 const (
@@ -365,8 +367,8 @@ func confirmRemoteSync(preview remoteSyncPreview) (bool, error) {
 	}
 
 	selected, err := promptSelect([]SelectionOption{
-		{Key: "continue", Label: "Continue"},
-		{Key: "cancel", Label: "Cancel"},
+		{Key: "continue", Label: "Continue", Icon: icons.Next},
+		{Key: "cancel", Label: "Cancel", Icon: icons.No},
 	})
 	if err != nil {
 		return false, err
@@ -1335,8 +1337,8 @@ func maybeImportAniListToMyAnimeList(config *Config, user *User) error {
 	}
 
 	options := []SelectionOption{
-		{Key: "yes", Label: "Import your existing AniList progress into MyAnimeList"},
-		{Key: "no", Label: "Start with MyAnimeList as-is"},
+		{Key: "yes", Label: "Import your existing AniList progress into MyAnimeList", Icon: icons.Import},
+		{Key: "no", Label: "Start with MyAnimeList as-is", Icon: icons.Next},
 	}
 
 	Out("AniList tracking data was found.")
@@ -1705,10 +1707,10 @@ func ChangeTracker(config *Config, user *User) {
 
 	if trackersCanCrossSync(config) {
 		syncOptions := []SelectionOption{
-			{Key: "skip", Label: "Keep current lists"},
-			{Key: "merge", Label: "Merge both lists and update both"},
-			{Key: "anilist_to_mal", Label: "Replace MyAnimeList with AniList"},
-			{Key: "mal_to_anilist", Label: "Replace AniList with MyAnimeList"},
+			{Key: "skip", Label: "Keep current lists", Icon: icons.Yes},
+			{Key: "merge", Label: "Merge both lists and update both", Icon: icons.Merge},
+			{Key: "anilist_to_mal", Label: "Replace MyAnimeList with AniList", Icon: icons.Remap},
+			{Key: "mal_to_anilist", Label: "Replace AniList with MyAnimeList", Icon: icons.Remap},
 		}
 		Out("Optional tracker sync action:")
 		syncSelection, syncErr := DynamicSelect(syncOptions)

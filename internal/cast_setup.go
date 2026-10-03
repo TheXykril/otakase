@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/thexykril/otakase/internal/cast"
+	"github.com/thexykril/otakase/internal/icons"
 )
 
 // Ports -cast-setup fixes when the config leaves them random. 8010 is what the
@@ -196,7 +197,7 @@ func castSetupRun(rules [][]string, password string, command func(string, ...str
 const castRescanKey = "rescan"
 
 // castRescanOption is that entry, kept last so the devices come first.
-var castRescanOption = SelectionOption{Key: castRescanKey, Label: "↻ Rescan for devices"}
+var castRescanOption = SelectionOption{Key: castRescanKey, Label: "Rescan for devices", Icon: icons.Refresh}
 
 // castNoDevicesMenu asks, from the menu the search was started from, what to
 // do about an empty search: look again (a TV just turned on), fix the
@@ -211,9 +212,9 @@ func castNoDevicesMenu(config *Config, firewall string) bool {
 	}
 	options := []SelectionOption{castRescanOption}
 	if firewall != "" {
-		options = append(options, SelectionOption{Key: "fix", Label: "Fix the firewall now (" + firewall + " may be blocking devices)"})
+		options = append(options, SelectionOption{Key: "fix", Label: "Fix the firewall now (" + firewall + " may be blocking devices)", Icon: icons.Firewall})
 	}
-	options = append(options, SelectionOption{Key: "cancel", Label: "Cancel"})
+	options = append(options, SelectionOption{Key: "cancel", Label: "Cancel", Icon: icons.No})
 	Out("No cast devices found.")
 	selected, err := DynamicSelectPreserveOrder(options)
 	if err != nil {

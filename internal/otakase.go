@@ -18,6 +18,7 @@ import (
 	"github.com/gen2brain/beeep"
 	"github.com/pkg/browser"
 
+	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/torrentstream"
 )
 
@@ -246,10 +247,10 @@ func UpdateAnimeEntry(userConfig *Config, user *User) {
 
 	// Create update options
 	updateOptions := []SelectionOption{
-		{Key: "CATEGORY", Label: "Change Anime Category"},
-		{Key: "PROGRESS", Label: "Change Progress"},
-		{Key: "SCORE", Label: "Add/Change Score"},
-		{Key: "QUALITY", Label: "Quality for this show"},
+		{Key: "CATEGORY", Label: "Change Anime Category", Icon: icons.Folder},
+		{Key: "PROGRESS", Label: "Change Progress", Icon: icons.Counter},
+		{Key: "SCORE", Label: "Add/Change Score", Icon: icons.Star},
+		{Key: "QUALITY", Label: "Quality for this show", Icon: icons.Quality},
 	}
 
 	// Navigation loop for update option selection
@@ -343,12 +344,12 @@ updateOptionLoop:
 				switch updateSelection.Key {
 				case "CATEGORY":
 					categories := []SelectionOption{
-						{Key: "CURRENT", Label: "Currently Watching"},
-						{Key: "COMPLETED", Label: "Completed"},
-						{Key: "PAUSED", Label: "On Hold"},
-						{Key: "DROPPED", Label: "Dropped"},
-						{Key: "PLANNING", Label: "Plan to Watch"},
-						{Key: "REPEATING", Label: "Rewatching"}, // Anilist uses REPEATING for rewatching
+						{Key: "CURRENT", Label: "Currently Watching", Icon: icons.Watching},
+						{Key: "COMPLETED", Label: "Completed", Icon: icons.Completed},
+						{Key: "PAUSED", Label: "On Hold", Icon: icons.Paused},
+						{Key: "DROPPED", Label: "Dropped", Icon: icons.Dropped},
+						{Key: "PLANNING", Label: "Plan to Watch", Icon: icons.Planning},
+						{Key: "REPEATING", Label: "Rewatching", Icon: icons.Rewatching}, // Anilist uses REPEATING for rewatching
 					}
 
 					currentStatus := "None"
@@ -598,13 +599,13 @@ func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[
 
 	// Add category selection before adding to list
 	categories := []SelectionOption{
-		{Key: "CURRENT", Label: "Currently Watching"},
-		{Key: "COMPLETED", Label: "Completed"},
-		{Key: "PAUSED", Label: "On Hold"},
-		{Key: "DROPPED", Label: "Dropped"},
-		{Key: "PLANNING", Label: "Plan to Watch"},
-		{Key: "REPEATING", Label: "Rewatching"}, // Anilist uses REPEATING for rewatching
-		{Key: watchedElsewhereKey, Label: "Already watched some elsewhere"},
+		{Key: "CURRENT", Label: "Currently Watching", Icon: icons.Watching},
+		{Key: "COMPLETED", Label: "Completed", Icon: icons.Completed},
+		{Key: "PAUSED", Label: "On Hold", Icon: icons.Paused},
+		{Key: "DROPPED", Label: "Dropped", Icon: icons.Dropped},
+		{Key: "PLANNING", Label: "Plan to Watch", Icon: icons.Planning},
+		{Key: "REPEATING", Label: "Rewatching", Icon: icons.Rewatching}, // Anilist uses REPEATING for rewatching
+		{Key: watchedElsewhereKey, Label: "Already watched some elsewhere", Icon: icons.Counter},
 	}
 
 	ClearScreen()
@@ -1060,9 +1061,9 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 		if selectedAnilistAnime.Status == "COMPLETED" {
 			Out("This anime is completed. Start rewatch from episode 1? Continue without updating tracker? Open details?")
 			selectedOption, err := promptSelect([]SelectionOption{
-				{Key: "rewatch", Label: "Start rewatch from episode 1"},
-				{Key: "continue", Label: "Continue without updating tracker"},
-				{Key: "details", Label: "Open details"},
+				{Key: "rewatch", Label: "Start rewatch from episode 1", Icon: icons.Rewatching},
+				{Key: "continue", Label: "Continue without updating tracker", Icon: icons.Play},
+				{Key: "details", Label: "Open details", Icon: icons.Info},
 			})
 			if err != nil {
 				Log(fmt.Sprintf("Error in completed anime prompt: %v", err))
@@ -1271,8 +1272,8 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 		if ShouldWriteRemoteTracking(userConfig, anime) && !isInWatchingList {
 			// Create options for the prompt
 			options := []SelectionOption{
-				{Key: "yes", Label: "Add to watching list"},
-				{Key: "no", Label: "Continue without adding"},
+				{Key: "yes", Label: "Add to watching list", Icon: icons.Add},
+				{Key: "no", Label: "Continue without adding", Icon: icons.Play},
 			}
 
 			var selectedOption SelectionOption
@@ -1459,11 +1460,11 @@ func handleUnreleasedAnime(userConfig *Config, user *User, anime *Anime, entry E
 	Out(fmt.Sprintf("%s is not released yet.", title))
 	options := []SelectionOption{}
 	if UsesRemoteTracking(userConfig) {
-		options = append(options, SelectionOption{Key: "planning", Label: "Add to Plan to Watch"})
+		options = append(options, SelectionOption{Key: "planning", Label: "Add to Plan to Watch", Icon: icons.Planning})
 	}
 	options = append(options,
-		SelectionOption{Key: "details", Label: "Open AniList details"},
-		SelectionOption{Key: "back", Label: "Back to list"},
+		SelectionOption{Key: "details", Label: "Open AniList details", Icon: icons.Info},
+		SelectionOption{Key: "back", Label: "Back to list", Icon: icons.Back},
 	)
 
 	selected, err := promptSelect(options)
@@ -1721,7 +1722,7 @@ func NextEpisodePromptCLI(userConfig *Config) bool {
 		label = "Yes, finish series"
 	}
 	options := []SelectionOption{
-		{Key: "yes", Label: label},
+		{Key: "yes", Label: label, Icon: icons.Play},
 	}
 
 	// Use DynamicSelect for CLI mode
@@ -1769,7 +1770,7 @@ func NextEpisodePromptContinuous(userConfig *Config, databaseFile string, userTo
 			label = "Yes, finish series"
 		}
 		options := []SelectionOption{
-			{Key: "yes", Label: label},
+			{Key: "yes", Label: label, Icon: icons.Play},
 		}
 
 		// Use DynamicSelect for CLI mode
@@ -1857,7 +1858,7 @@ func NextEpisodePromptRofi(userConfig *Config) bool {
 		label = "Yes, finish series"
 	}
 	options := []SelectionOption{
-		{Key: "yes", Label: label},
+		{Key: "yes", Label: label, Icon: icons.Play},
 	}
 
 	// Use DynamicSelect for Rofi mode
@@ -1995,8 +1996,8 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 			}
 		} else {
 			scoreOptions := []SelectionOption{
-				{Key: "yes", Label: "Yes, rate this anime"},
-				{Key: "no", Label: "No, skip rating"},
+				{Key: "yes", Label: "Yes, rate this anime", Icon: icons.Star},
+				{Key: "no", Label: "No, skip rating", Icon: icons.No},
 			}
 
 			selectedOption, err := DynamicSelect(scoreOptions)
@@ -2124,7 +2125,7 @@ func selectSequel(userConfig *Config, sequels []SequelInfo) (*SequelInfo, bool) 
 			Label: fmt.Sprintf("%s (%s)", title, status),
 		})
 	}
-	options = append(options, SelectionOption{Key: "skip", Label: "Skip"})
+	options = append(options, SelectionOption{Key: "skip", Label: "Skip", Icon: icons.Skip})
 
 	selected, err := promptSelect(options)
 	if err != nil {
@@ -2181,15 +2182,15 @@ func promptSequelAction(userConfig *Config, sequel *SequelInfo, userToken string
 	options := []SelectionOption{}
 	if sequel.Status != "NOT_YET_RELEASED" {
 		if !isInList || sequelStatus == "PLANNING" || sequelStatus == "PAUSED" || sequelStatus == "DROPPED" {
-			options = append(options, SelectionOption{Key: "watching", Label: "Add to Watching"})
+			options = append(options, SelectionOption{Key: "watching", Label: "Add to Watching", Icon: icons.Watching})
 		}
 	}
 	if !isInList || sequelStatus != "PLANNING" {
-		options = append(options, SelectionOption{Key: "planning", Label: "Add to Plan to Watch"})
+		options = append(options, SelectionOption{Key: "planning", Label: "Add to Plan to Watch", Icon: icons.Planning})
 	}
 	options = append(options,
-		SelectionOption{Key: "details", Label: "Open AniList details"},
-		SelectionOption{Key: "skip", Label: "Skip"},
+		SelectionOption{Key: "details", Label: "Open AniList details", Icon: icons.Info},
+		SelectionOption{Key: "skip", Label: "Skip", Icon: icons.Skip},
 	)
 
 	selected, err := promptSelect(options)

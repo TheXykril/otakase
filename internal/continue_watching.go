@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/thexykril/otakase/internal/icons"
 )
 
 // Continue watching: the shows played most recently, as the first rows of the
@@ -135,6 +137,7 @@ func continueWatchingRows(config *Config, list *AnimeList) []SelectionOption {
 		rows = append(rows, SelectionOption{
 			Key:   resumeRowPrefix + strconv.Itoa(show.AnilistID),
 			Label: continueWatchingLabel(GetAnimeName(*entry), entry.Ep.Number, entry.Ep.Player.PlaybackTime),
+			Icon:  icons.Play,
 		})
 	}
 	return rows
