@@ -59,9 +59,9 @@ func TestInjectMenuKeysSince(t *testing.T) {
 	if strings.Join(added, ",") != "STATS,SURPRISE" {
 		t.Fatalf("added %v", added)
 	}
-	// Placed where the default order has it: Surprise Me after Continue Last
-	// Session; Stats, whose neighbour Cast is missing, at the end.
-	if m["MenuOrder"] != "CURRENT,ALL,CONTINUE_LAST,SURPRISE,TRACKER,STATS" {
+	// Placed where the default menu has it: after Cast and after Surprise Me,
+	// both missing here, so at the end.
+	if m["MenuOrder"] != "CURRENT,ALL,CONTINUE_LAST,TRACKER,STATS,SURPRISE" {
 		t.Fatalf("MenuOrder = %q", m["MenuOrder"])
 	}
 	if again := injectMenuKeysSince(m, "2.2.2", "26.1.0"); len(again) != 0 {

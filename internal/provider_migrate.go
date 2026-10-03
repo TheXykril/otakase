@@ -177,6 +177,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"CastDiscoveryPort": "26.1.3",
 		// 26.5.0 — line icons in the menus
 		"Icons": "26.5.0",
+		// 26.6.0 — the menu's actions get their own setting
+		"MenuActions": "26.6.0",
 	}
 }
 
@@ -266,7 +268,7 @@ func injectMenuKeysSince(configMap map[string]string, fromVersion, toVersion str
 		order = append(order, key)
 		present[strings.ToUpper(key)] = true
 	}
-	defaults := strings.Split(defaultConfigMap()["MenuOrder"], ",")
+	defaults := defaultMenuKeys()
 
 	introduced := menuKeysIntroducedInVersion()
 	keys := make([]string, 0, len(introduced))
@@ -300,6 +302,78 @@ func injectMenuKeysSince(configMap map[string]string, fromVersion, toVersion str
 		configMap["MenuOrder"] = strings.Join(order, ",")
 	}
 	return added
+}
+
+// pastDefaultMenuOrders are the MenuOrder values earlier releases wrote, less
+// SURPRISE and STATS: an upgrade adds those to a saved MenuOrder, and where it
+// puts them depends on the release, so they are left out of the comparison.
+// A config still holding one never chose its menu, so it gets the new one.
+var pastDefaultMenuOrders = []string{
+	"CURRENT,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER",
+	"CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER,CAST",
+}
+
+// isPastDefaultMenuOrder reports whether a saved MenuOrder is one a release
+// wrote rather than one the user chose.
+func isPastDefaultMenuOrder(menuOrder string) bool {
+	kept := []string{}
+	for _, key := range menuKeys(&Config{MenuOrder: menuOrder}) {
+		if key != "SURPRISE" && key != "STATS" {
+			kept = append(kept, key)
+		}
+	}
+	saved := strings.Join(kept, ",")
+	for _, past := range pastDefaultMenuOrders {
+		if saved == past {
+			return true
+		}
+	}
+	return false
+}
+
+// splitMenuActions gives a config written before MenuActions existed the new
+// setting, and reports whether it changed anything.
+//
+// A MenuOrder that is a past default is replaced by the new, shorter menu. One
+// the user wrote keeps every entry and its order: the lists stay in MenuOrder
+// and the actions move to MenuActions. Moving them rather than leaving them is
+// what keeps the default MenuActions from being added on top of a menu someone
+// trimmed on purpose.
+func splitMenuActions(configMap map[string]string) bool {
+	if configMap == nil {
+		return false
+	}
+	if _, exists := configMap["MenuActions"]; exists {
+		return false
+	}
+	current, exists := configMap["MenuOrder"]
+	if !exists || strings.TrimSpace(current) == "" {
+		// Nothing chosen: the defaults of both settings apply.
+		return false
+	}
+	if isPastDefaultMenuOrder(current) {
+		defaults := defaultConfigMap()
+		configMap["MenuOrder"] = defaults["MenuOrder"]
+		configMap["MenuActions"] = defaults["MenuActions"]
+		return true
+	}
+
+	lists, actions := []string{}, []string{}
+	for _, key := range menuKeys(&Config{MenuOrder: current}) {
+		if isMenuActionKey(key) {
+			actions = append(actions, key)
+		} else {
+			lists = append(lists, key)
+		}
+	}
+	if len(actions) == 0 {
+		// An empty value reads as the default, which would add every action
+		// to a menu that had none. TRACKER is always shown anyway.
+		actions = []string{"TRACKER"}
+	}
+	configMap["MenuOrder"] = strings.Join(lists, ",")
+	configMap["MenuActions"] = strings.Join(actions, ",")
+	return true
 }
 
 // appendConfigKeys appends only the given keys to the config file so existing
@@ -368,17 +442,6 @@ func MigrateOnVersionUpgrade(configPath string, config *Config, appVersion strin
 		}
 
 		if addMissing {
-			if added := injectMissingConfigOptions(configMap); len(added) > 0 {
-				if err := appendConfigKeys(configPath, configMap, added); err != nil {
-					return false, fmt.Errorf("append new config options: %w", err)
-				}
-				configUpdated = true
-				Log(fmt.Sprintf("Injected config options for upgrade %s → %s: %s",
-					storedVersion, appVersion, strings.Join(added, ", ")))
-			}
-		}
-
-		if addMissing {
 			if added := injectMenuKeysSince(configMap, storedVersion, appVersion); len(added) > 0 {
 				// MenuOrder is already in the file; rewrite it with the entries.
 				if err := SaveConfigToFile(configPath, configMap); err != nil {
@@ -386,6 +449,28 @@ func MigrateOnVersionUpgrade(configPath string, config *Config, appVersion strin
 				}
 				configUpdated = true
 				Log(fmt.Sprintf("Added menu entries for upgrade %s → %s: %s",
+					storedVersion, appVersion, strings.Join(added, ", ")))
+			}
+		}
+
+		if addMissing && splitMenuActions(configMap) {
+			// Both settings are rewritten in place, before the new options are
+			// appended, or MenuActions would arrive as its default.
+			if err := SaveConfigToFile(configPath, configMap); err != nil {
+				return configUpdated, fmt.Errorf("split menu actions: %w", err)
+			}
+			configUpdated = true
+			Log(fmt.Sprintf("Menu for upgrade %s → %s: MenuOrder=%s MenuActions=%s",
+				storedVersion, appVersion, configMap["MenuOrder"], configMap["MenuActions"]))
+		}
+
+		if addMissing {
+			if added := injectMissingConfigOptions(configMap); len(added) > 0 {
+				if err := appendConfigKeys(configPath, configMap, added); err != nil {
+					return false, fmt.Errorf("append new config options: %w", err)
+				}
+				configUpdated = true
+				Log(fmt.Sprintf("Injected config options for upgrade %s → %s: %s",
 					storedVersion, appVersion, strings.Join(added, ", ")))
 			}
 		}

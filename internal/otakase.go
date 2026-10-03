@@ -746,12 +746,12 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					// Create category selection map
 					// Get ordered categories
 					orderedCategories := getOrderedCategories(userConfig)
-					// The shows played last come first, so picking one up
-					// again is a single choice.
+					// The shows played last stand where CONTINUE_LAST does, so
+					// picking one up again is a single choice.
 					if user.ListSync != nil {
 						user.AnimeList = user.ListSync.Current()
 					}
-					orderedCategories = append(continueWatchingRows(userConfig, &user.AnimeList), orderedCategories...)
+					orderedCategories = placeContinueRows(orderedCategories, continueWatchingRows(userConfig, &user.AnimeList), userConfig)
 
 					// Use DynamicSelect with ordered categories directly
 					categorySelection, err = DynamicSelect(orderedCategories)
@@ -824,6 +824,40 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					ClearScreen()
 					continue categorySelectionLoop
 				} else if categorySelection.Key == "CONTINUE_LAST" {
+					// Reached from a list's ^l, or from the menu with the rows
+					// switched off. Where there are several recent shows they are
+					// offered, as the rows would, since opening straight into a
+					// list (CurrentCategory) never shows the rows at all.
+					if user.ListSync != nil {
+						user.AnimeList = user.ListSync.Current()
+					}
+					rows := continueWatchingRows(userConfig, &user.AnimeList)
+					if len(rows) > 1 {
+						ClearScreen()
+						picked, err := DynamicSelect(rows)
+						if err != nil {
+							Log(fmt.Sprintf("Failed to select a show to continue: %v", err))
+							Exit(fmt.Errorf("Failed to select a show to continue"))
+						}
+						picked = NormalizeSelectionKey(picked)
+						if SelectionMeansQuit(picked) {
+							Exit(nil)
+						}
+						ClearScreen()
+						id, ok := resumeRowAnilistID(picked.Key)
+						if !ok {
+							continue categorySelectionLoop
+						}
+						anime.AnilistId = id
+						anilistSelectedOption = SelectionOption{Key: strconv.Itoa(id)}
+						break categorySelectionLoop
+					}
+					if len(rows) == 1 {
+						id, _ := resumeRowAnilistID(rows[0].Key)
+						anime.AnilistId = id
+						anilistSelectedOption = SelectionOption{Key: strconv.Itoa(id)}
+						break categorySelectionLoop
+					}
 					anime.Ep.ContinueLast = true
 				} else if categorySelection.Key == "SURPRISE" {
 					ClearScreen()
@@ -903,7 +937,7 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 						// is a filter rather than a fetch. activeCategory follows
 						// the tab so a background refresh rebuilds what is on
 						// screen rather than the category first opened.
-						categoryTabs, categoryActions := SplitMenuOrder(userConfig.MenuOrder)
+						categoryTabs, categoryActions := SplitMenuOrder(strings.Join(menuKeys(userConfig), ","))
 						// Counting is a filter over a list already in memory, so
 						// every tab can say how much is behind it.
 						for i := range categoryTabs {

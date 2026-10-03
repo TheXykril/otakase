@@ -777,26 +777,28 @@ func findSelectionIndex(options []SelectionOption, previousKey string, previousL
 
 func sortHomeMenuOptions(options []SelectionOption) []SelectionOption {
 	config := GetGlobalConfig()
-	if config == nil || strings.TrimSpace(config.MenuOrder) == "" {
+	menuOrder := menuKeys(config)
+	if len(menuOrder) == 0 {
 		return options
 	}
 
-	menuOrder := strings.Split(config.MenuOrder, ",")
 	optMap := make(map[string]SelectionOption)
 	for _, opt := range options {
 		optMap[opt.Key] = opt
 	}
 
 	sorted := make([]SelectionOption, 0, len(options))
-	// Continue-watching rows lead: they are the shows most likely wanted, and
-	// no MenuOrder names them.
-	for _, opt := range options {
-		if _, isRow := resumeRowAnilistID(opt.Key); isRow {
-			sorted = append(sorted, opt)
-			delete(optMap, opt.Key)
-		}
-	}
 	for _, key := range menuOrder {
+		// Continue-watching rows stand in for CONTINUE_LAST: no setting names
+		// them one by one.
+		if key == "CONTINUE_LAST" {
+			for _, opt := range options {
+				if _, isRow := resumeRowAnilistID(opt.Key); isRow {
+					sorted = append(sorted, opt)
+					delete(optMap, opt.Key)
+				}
+			}
+		}
 		if opt, exists := optMap[key]; exists {
 			sorted = append(sorted, opt)
 			delete(optMap, key)
