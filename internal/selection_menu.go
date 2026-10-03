@@ -1106,9 +1106,6 @@ func rofiSelectInternal(options []SelectionOption, isHomeMenu bool, refreshConfi
 		if refreshConfig != nil && refreshConfig.Main {
 			toolbar = mainRofiToolbar(GetGlobalConfig(), refreshConfig.Categories, refreshConfig.Actions)
 			args = append(args, toolbar.args([]string{"inputbar", "box-toolbar", "message", "listview"})...)
-			// The list's card is sized for a column of titles; the toolbar
-			// needs a row of buttons to fit across it.
-			args = append(args, "-theme-str", "window {\n  width: 1000px;\n}")
 			args = append(args, rofiPlaceholder(refreshConfig.Prompt)...)
 		}
 		if msg := strings.TrimSpace(message); msg != "" {

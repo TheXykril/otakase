@@ -23,6 +23,9 @@ type rofiButton struct {
 	Label string
 	// Binding is the rofi key that presses the button, empty for click only.
 	Binding string
+	// Hint is the key as the button shows it, ^k, so the keys are learnt by
+	// looking rather than from the README.
+	Hint string
 	// On marks a toggle that is switched on, drawn in the accent colour.
 	On bool
 }
@@ -47,7 +50,9 @@ func rofiKeyName(hint string) string {
 func mainRofiToolbar(config *Config, tabs []Tab, actions []FooterAction) rofiToolbar {
 	var bar rofiToolbar
 	if len(tabs) > 1 {
-		bar.buttons = append(bar.buttons, rofiButton{Key: listsMenuKey, Label: toolbarButtonLabel(listsMenuKey, config)})
+		// Tab moves to the next list without the menu; the button is where
+		// the lists are, so it is where that key is shown.
+		bar.buttons = append(bar.buttons, rofiButton{Key: listsMenuKey, Label: toolbarButtonLabel(listsMenuKey, config), Hint: "Tab"})
 	}
 	for _, action := range actions {
 		// The continue rows lead the Watching list, so a button for them
@@ -60,6 +65,7 @@ func mainRofiToolbar(config *Config, tabs []Tab, actions []FooterAction) rofiToo
 			Key:     action.Key,
 			Label:   toolbarButtonLabel(action.Key, config),
 			Binding: rofiKeyName(action.Hint),
+			Hint:    shortKeyLabel(action.Hint),
 			On:      action.Key == "CAST" && config != nil && config.CastToDevice,
 		})
 	}
@@ -77,7 +83,7 @@ func toolbarButtonLabel(key string, config *Config) string {
 	if key == "CAST" {
 		// The device name is the one part of the bar whose length nobody
 		// chose; a long one would push the last buttons off the edge.
-		label = truncate(castMenuLabel(config), 28)
+		label = truncate(castMenuLabel(config), 24)
 	}
 	return toolbarIconPrefix(toolbarButtonIcon(key, config)) + label
 }
@@ -116,11 +122,14 @@ func (bar rofiToolbar) args(children []string) []string {
 		names = append(names, fmt.Sprintf("button-%d", i+1))
 	}
 	names = append(names, "button-quit")
-	theme.WriteString("box-toolbar {\n  orientation: horizontal;\n  expand: false;\n  spacing: 4px;\n  background-color: transparent;\n  children: [ " + strings.Join(names, ", ") + " ];\n}\n")
+	theme.WriteString("box-toolbar {\n  orientation: horizontal;\n  expand: false;\n  spacing: 3px;\n  background-color: transparent;\n  children: [ " + strings.Join(names, ", ") + " ];\n}\n")
 	for i, button := range bar.buttons {
-		writeRofiButton(&theme, names[i], button.Label, fmt.Sprintf("kb-custom-%d", i+1), button.On, false)
+		writeRofiButton(&theme, names[i], button.Label, button.Hint, fmt.Sprintf("kb-custom-%d", i+1), button.On, false)
 	}
-	writeRofiButton(&theme, "button-quit", toolbarQuitLabel(), "kb-cancel", false, true)
+	writeRofiButton(&theme, "button-quit", toolbarQuitLabel(), "Esc", "kb-cancel", false, true)
+	// Wide enough for the default bar with its keys and a cast device name;
+	// the cards are sized for their lists, not for a row of buttons.
+	theme.WriteString("window {\n  width: 1200px;\n}\n")
 	return append(args, "-theme-str", theme.String())
 }
 
@@ -137,7 +146,17 @@ func toolbarIconPrefix(icon icons.Icon) string {
 	return ""
 }
 
-func writeRofiButton(w *strings.Builder, name, label, action string, on, muted bool) {
+// rofiButtonMarkup is a button's label with its key after it, dimmed: the
+// label says what it does, the key is the shortcut to it.
+func rofiButtonMarkup(label, hint string) string {
+	markup := escapePango(label)
+	if hint != "" {
+		markup += ` <span alpha="55%">` + escapePango(hint) + `</span>`
+	}
+	return markup
+}
+
+func writeRofiButton(w *strings.Builder, name, label, hint, action string, on, muted bool) {
 	background, text := "@sel-fill", "@text"
 	if on {
 		background, text = "@accent", "@base"
@@ -146,9 +165,10 @@ func writeRofiButton(w *strings.Builder, name, label, action string, on, muted b
 		background, text = "transparent", "@muted"
 	}
 	fmt.Fprintf(w, "%s {\n", name)
-	fmt.Fprintf(w, "  content: \"%s\";\n", rofiThemeString(label))
+	fmt.Fprintf(w, "  content: \"%s\";\n", rofiThemeString(rofiButtonMarkup(label, hint)))
+	fmt.Fprintf(w, "  markup: true;\n")
 	fmt.Fprintf(w, "  action: \"%s\";\n", action)
-	fmt.Fprintf(w, "  expand: false;\n  padding: 3px 8px;\n  border-radius: 12px;\n  cursor: pointer;\n")
+	fmt.Fprintf(w, "  expand: false;\n  padding: 3px 6px;\n  border-radius: 12px;\n  cursor: pointer;\n")
 	fmt.Fprintf(w, "  background-color: %s;\n  text-color: %s;\n}\n", background, text)
 }
 
