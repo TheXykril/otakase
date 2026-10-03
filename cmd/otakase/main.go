@@ -115,9 +115,6 @@ func main() {
 	noImagePreview := flag.Bool("no-image-preview", false, "No image preview")
 	changeToken := flag.Bool("change-token", false, "Change token")
 	setupAnimeSkip := flag.Bool("setup-anime-skip", false, "Create a personal Anime-Skip client id and save it")
-	// -current used to skip a menu in front of the lists. otakase now always
-	// opens on Watching, so it is accepted and ignored, for scripts that pass it.
-	_ = flag.Bool("current", false, "Ignored: otakase always opens on your Watching list")
 	updateScript := flag.Bool("u", false, "Update the script")
 	editConfig := flag.Bool("e", false, "Edit config")
 	subFlag := flag.Bool("sub", false, "Watch sub version")
