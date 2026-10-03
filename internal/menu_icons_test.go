@@ -56,3 +56,40 @@ func TestIconsOffLeaveRowsPlain(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+// The terminal's category tabs carry the same icons as the main menu entries.
+func TestTerminalTabsHaveIcons(t *testing.T) {
+	tabs, _ := SplitMenuOrder("CURRENT,PLANNING,COMPLETED")
+	for _, tab := range tabs {
+		if tab.Icon != categoryIcon(tab.Key) || tab.Icon == 0 {
+			t.Errorf("tab %s has icon %U", tab.Key, rune(tab.Icon))
+		}
+	}
+
+	icons.Resolve(true)
+	t.Cleanup(func() { icons.Resolve(false) })
+	bar := renderTabBar(menuLayout{tabs: tabs}, 80)
+	if !strings.Contains(bar, string(rune(icons.Planning))) {
+		t.Errorf("the tab bar has no icons:\n%s", bar)
+	}
+
+	icons.Resolve(false)
+	if bar := renderTabBar(menuLayout{tabs: tabs}, 80); strings.Contains(bar, string(rune(icons.Planning))) {
+		t.Errorf("icons off, but the tab bar still has them:\n%s", bar)
+	}
+}
+
+// With icons on, the cast entry's state shows in its icon, not a checkbox.
+func TestCastEntryIconFollowsItsState(t *testing.T) {
+	for _, on := range []bool{false, true} {
+		config := &Config{MenuOrder: "CURRENT,CAST", CastToDevice: on}
+		for _, option := range getOrderedCategories(config) {
+			if option.Key != "CAST" {
+				continue
+			}
+			if want := castMenuIcon(config); option.Icon != want {
+				t.Errorf("cast on=%v: icon %U, want %U", on, rune(option.Icon), rune(want))
+			}
+		}
+	}
+}

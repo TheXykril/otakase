@@ -3,6 +3,8 @@ package internal
 import (
 	"strings"
 	"testing"
+
+	"github.com/thexykril/otakase/internal/icons"
 )
 
 // The entry has to say whether casting is on, because it is the only place
@@ -64,21 +66,24 @@ func TestToggleCastRestoresTheSubtitlePreference(t *testing.T) {
 	}
 }
 
-// The category menu is the one menu rofi and the terminal share, so the toggle
-// has to be legible in both: rofi renders plain text with no styling to lean
-// on, which is why the state is a tick rather than a colour.
+// The category menu is the one menu rofi and the terminal share. The state is
+// in the words, so it reads with icons off, and in the icon, which is crossed
+// out while casting is off. No checkbox: next to the icon it read as clutter.
 func TestCastMenuLabelReadsInBothUIs(t *testing.T) {
 	off := castMenuLabel(&Config{})
 	on := castMenuLabel(&Config{CastToDevice: true, CastDevice: "Office TV"})
 
-	if !strings.HasPrefix(off, "[ ]") {
-		t.Errorf("the off entry is not an empty checkbox: %q", off)
+	if off != "Cast: Off" {
+		t.Errorf("the off entry reads %q, want %q", off, "Cast: Off")
 	}
-	if !strings.HasPrefix(on, "[x]") {
-		t.Errorf("the on entry is not a ticked checkbox: %q", on)
+	if on != "Cast: Office TV" {
+		t.Errorf("the on entry reads %q, want %q", on, "Cast: Office TV")
 	}
-	if !strings.Contains(on, "Office TV") {
-		t.Errorf("the on entry does not name the device: %q", on)
+	if strings.Contains(off+on, "[") {
+		t.Errorf("the entries still carry a checkbox: %q, %q", off, on)
+	}
+	if castMenuIcon(&Config{}) != icons.CastOff || castMenuIcon(&Config{CastToDevice: true}) != icons.Cast {
+		t.Error("the cast icon does not follow the state")
 	}
 }
 

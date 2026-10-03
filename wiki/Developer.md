@@ -42,6 +42,9 @@ theirs from their keys. Text that is not a menu row can use
 
 Icons go on actions and categories, not on rows that are values (an anime
 title, a quality, a tracker name): a column of the same icon says nothing.
+The terminal's category tabs take the same icon as the category's main menu
+entry (`categoryIcon`). A toggle shows its state in its icon and its words, not
+a checkbox: the cast entry uses `CastOff` while casting is off.
 
 otakase embeds `internal/icons/font/OtakaseSymbols.ttf`, Symbols Nerd Font Mono
 cut down to only the glyphs in use, and installs it to the user's font

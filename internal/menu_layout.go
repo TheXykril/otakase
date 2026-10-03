@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/theme"
 )
 
@@ -19,6 +20,9 @@ type Tab struct {
 	// because a bare word reads as decoration while a number reads as a view
 	// of something that exists.
 	Count int
+	// Icon goes before the label, the same one the category has in the main
+	// menu, so a tab reads as the list it opens.
+	Icon icons.Icon
 }
 
 // FooterAction is one entry in the bar along the bottom: the things you do to
@@ -229,7 +233,7 @@ func renderTabBar(layout menuLayout, width int) string {
 	}
 	parts := make([]string, 0, len(layout.tabs))
 	for i, tab := range layout.tabs {
-		label := tab.Label
+		label := icons.Label(tab.Icon, tab.Label)
 		if tab.Count > 0 {
 			label += "  " + strconv.Itoa(tab.Count)
 		}
@@ -436,7 +440,7 @@ func SplitMenuOrder(menuOrder string) ([]Tab, []FooterAction) {
 		if label, ok := menuCategoryLabels[key]; ok {
 			if !seenTab[key] {
 				seenTab[key] = true
-				tabs = append(tabs, Tab{Key: key, Label: label})
+				tabs = append(tabs, Tab{Key: key, Label: label, Icon: categoryIcon(key)})
 			}
 			continue
 		}

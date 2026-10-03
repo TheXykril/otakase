@@ -1,6 +1,10 @@
 package internal
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/thexykril/otakase/internal/icons"
+)
 
 // castSubStyleBeforeCast remembers the subtitle preference casting overrode,
 // so turning casting back off restores it rather than leaving local playback
@@ -55,15 +59,23 @@ func toggleCastToDevice(config *Config) {
 
 // castMenuLabel is the category menu's entry for the cast toggle.
 //
-// The terminal menu and rofi share this menu, so both get the same words. A
-// tick reads faster than a sentence and survives rofi's plain-text rendering,
-// which has no styling to lean on.
+// The terminal menu and rofi share this menu, so both get the same words. The
+// words carry the state on their own, so the entry still reads right with
+// icons off; with them on, castMenuIcon shows it as well.
 func castMenuLabel(config *Config) string {
 	if config != nil && config.CastToDevice {
 		if device := config.CastDevice; device != "" {
-			return "[x] Cast: " + device
+			return "Cast: " + device
 		}
-		return "[x] Cast: On"
+		return "Cast: On"
 	}
-	return "[ ] Cast: Off"
+	return "Cast: Off"
+}
+
+// castMenuIcon is the cast entry's icon, crossed out while casting is off.
+func castMenuIcon(config *Config) icons.Icon {
+	if config != nil && config.CastToDevice {
+		return icons.Cast
+	}
+	return icons.CastOff
 }
