@@ -37,7 +37,7 @@ func TestSurprisePickAvoidsTheLastPick(t *testing.T) {
 
 func TestSurpriseLabel(t *testing.T) {
 	entry := Entry{Media: Media{Title: AnimeTitle{Romaji: "Sousou no Frieren"}, Format: "TV", Episodes: 28}}
-	if got := surpriseLabel(entry, &Config{}); got != "▶ Start Sousou no Frieren (TV, 28 episodes)" {
+	if got := surpriseLabel(entry, &Config{}); got != "Start Sousou no Frieren (TV, 28 episodes)" {
 		t.Fatalf("label = %q", got)
 	}
 	film := Entry{Media: Media{Title: AnimeTitle{Romaji: "Kimi no Na wa."}, Format: "MOVIE", Episodes: 1}}
@@ -45,7 +45,7 @@ func TestSurpriseLabel(t *testing.T) {
 		t.Fatalf("label = %q", got)
 	}
 	unknown := Entry{Media: Media{Title: AnimeTitle{Romaji: "X"}, Format: "TV_SHORT"}}
-	if got := surpriseLabel(unknown, &Config{}); got != "▶ Start X (TV SHORT)" {
+	if got := surpriseLabel(unknown, &Config{}); got != "Start X (TV SHORT)" {
 		t.Fatalf("label = %q", got)
 	}
 }

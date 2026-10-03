@@ -42,7 +42,7 @@ func surpriseLabel(entry Entry, config *Config) string {
 	} else if episodes > 1 {
 		details = append(details, fmt.Sprintf("%d episodes", episodes))
 	}
-	label := "▶ Start " + mediaDisplayTitle(entry.Media, config)
+	label := "Start " + mediaDisplayTitle(entry.Media, config)
 	if len(details) > 0 {
 		label += " (" + strings.Join(details, ", ") + ")"
 	}
