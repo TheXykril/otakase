@@ -254,6 +254,9 @@ func main() {
 	// the desktop theme; elsewhere it is otakase's own palette.
 	internal.ApplyThemeFromConfig(&userConfig)
 
+	// Line icons in the menus, where the font for them can be relied on.
+	internal.SetupIcons(&userConfig)
+
 	if userConfig.RofiSelection {
 		// Themes are rendered from the palette on every run, so a desktop theme
 		// change is picked up without the user clearing anything. This also means

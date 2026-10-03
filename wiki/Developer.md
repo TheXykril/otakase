@@ -30,6 +30,18 @@ Everything otakase does that can fail is logged to
 including ffmpeg's own output during casts and downloads.
 `otakase -provider-status` probes each provider and reports which respond.
 
+## Menu icons
+
+Menu rows can start with a Nerd Font icon (`internal/icons`). Each icon is a
+constant there; use `icons.Label(icons.X, "Text")`, which drops the icon when
+`Icons` resolves to off, so every label still reads as plain text.
+
+otakase embeds `internal/icons/font/OtakaseSymbols.ttf`, Symbols Nerd Font Mono
+cut down to only the glyphs in use, and installs it to the user's font
+directory so rofi and terminals find it through fontconfig. After adding an
+icon, regenerate the font with `Build/icon-font.py` (instructions at the top of
+the script); `TestBundledFontCoversEveryIcon` fails until you do.
+
 ## Pull requests and releases
 
 Open pull requests against `main` with a conventional title and fill in the

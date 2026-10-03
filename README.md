@@ -198,6 +198,7 @@ people change:
 | `TrackingRemote` | `none`, `anilist`, `myanimelist` or `anilist+myanimelist` |
 | `CastDevice` | Cast to this device without asking |
 | `Theme` | `auto` follows your desktop on Omarchy; `builtin` uses otakase's own colours |
+| `Icons` | Icons in the menus: `auto` (default), `true` or `false` for plain text |
 
 Every setting is explained on the
 [Configuration](https://github.com/TheXykril/otakase/wiki/Configuration) wiki

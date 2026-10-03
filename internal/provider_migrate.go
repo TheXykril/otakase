@@ -175,6 +175,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"ContinueWatchingAdult": "26.1.2",
 		// 26.1.3 — fixed discovery port, so a firewall can let answers in
 		"CastDiscoveryPort": "26.1.3",
+		// 26.5.0 — line icons in the menus
+		"Icons": "26.5.0",
 	}
 }
 
