@@ -101,7 +101,9 @@ Either run the
 [installer](https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-installer.exe),
 or download the standalone
 [otakase-windows-x86_64.exe](https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-x86_64.exe).
-The rofi interface is Linux-only; Windows uses the terminal menus.
+The installer comes with mpv and adds `otakase` and `otk` to your PATH, so you
+can type either in any new terminal. The standalone file needs mpv installed
+separately. The rofi interface is Linux-only; Windows uses the terminal menus.
 
 ## Coming from curd
 

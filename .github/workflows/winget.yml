@@ -1,0 +1,99 @@
+name: Winget
+
+# Submits a release's Windows installer to winget (microsoft/winget-pkgs), so
+# `winget install TheXykril.Otakase` and `winget upgrade` pick it up.
+#
+# ci-cd.yml calls this after it publishes a release. Run it by hand from the
+# Actions tab to submit a release again, or the first one.
+#
+# It needs a WINGET_TOKEN secret: a classic personal access token of the repo
+# owner with the `public_repo` scope. komac uses it to fork winget-pkgs and
+# open the pull request there. Without the secret this does nothing.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version, without the leading v
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, without the leading v (empty for the latest release)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  PACKAGE_ID: TheXykril.Otakase
+  KOMAC_VERSION: 2.16.0
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    if: github.repository == 'TheXykril/otakase'
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+    steps:
+      - name: Check for token
+        id: token
+        run: |
+          if [ -z "$WINGET_TOKEN" ]; then
+            echo "::notice::WINGET_TOKEN is not set, so this release was not submitted to winget."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout code
+        if: steps.token.outputs.ok == 'true'
+        uses: actions/checkout@v7
+
+      - name: Pick version
+        if: steps.token.outputs.ok == 'true'
+        id: version
+        run: |
+          version="${INPUT_VERSION#v}"
+          if [ -z "$version" ]; then
+            version="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+            version="${version#v}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "url=https://github.com/$GITHUB_REPOSITORY/releases/download/v$version/otakase-windows-installer.exe" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Install komac
+        if: steps.token.outputs.ok == 'true'
+        run: |
+          curl -fsSL "https://github.com/russellbanks/Komac/releases/download/v${KOMAC_VERSION}/komac-${KOMAC_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar -xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      # komac update copies the last accepted manifest and only swaps the
+      # version, URL and hash, so it can't add a package winget has never seen.
+      # The first submission uses the manifests in Build/winget instead.
+      - name: Submit
+        if: steps.token.outputs.ok == 'true'
+        run: |
+          id_path="manifests/$(echo "${PACKAGE_ID:0:1}" | tr '[:upper:]' '[:lower:]')/${PACKAGE_ID//./\/}"
+          if gh api "repos/microsoft/winget-pkgs/contents/$id_path" --silent 2>/dev/null; then
+            komac update "$PACKAGE_ID" --version "$VERSION" --urls "$URL" --submit
+          else
+            echo "$PACKAGE_ID is not in winget yet, submitting it as a new package."
+            sha256="$(curl -fsSL "$URL" | sha256sum | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')"
+            out="$RUNNER_TEMP/manifests"
+            mkdir -p "$out"
+            for f in Build/winget/*.yaml; do
+              sed -e "s/__VERSION__/$VERSION/g" -e "s/__SHA256__/$sha256/g" "$f" > "$out/$(basename "$f")"
+            done
+            komac submit "$out" --yes
+          fi
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          URL: ${{ steps.version.outputs.url }}
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
