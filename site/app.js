@@ -22,8 +22,22 @@
       next.focus();
     });
   });
-  if (/Mac/i.test(navigator.platform)) select(tabs[2]);
-  else if (/Win/i.test(navigator.platform)) select(tabs[3]);
+  // Open on the visitor's own system; picking a system here also switches
+  // the menu shots to it.
+  const tabFor = { linux: 't-linux', arch: 't-arch', macos: 't-macos', windows: 't-windows' };
+  tabs.forEach((t) => t.addEventListener('click', () => {
+    const os = Object.keys(tabFor).find((k) => tabFor[k] === t.id);
+    document.dispatchEvent(new CustomEvent('otakase-os', { detail: os === 'arch' ? 'linux' : os }));
+  }));
+  document.addEventListener('otakase-shot', (e) => {
+    const os = e.detail === 'rofi' ? 'linux' : e.detail;
+    const current = tabs.find((t) => t.getAttribute('aria-selected') === 'true');
+    // Arch is Linux too: leave it open when Linux is picked.
+    if (os === 'linux' && current && current.id === tabFor.arch) return;
+    select(document.getElementById(tabFor[os]));
+  });
+  const own = document.getElementById(tabFor[visitorOS()]);
+  if (own) select(own);
 
   // ---- latest version
   fetch('https://api.github.com/repos/TheXykril/otakase/releases/latest')
@@ -115,6 +129,16 @@
     .catch(() => run(FALLBACK));
 })();
 
+// visitorOS guesses the visitor's system: windows, macos or linux. Phones get
+// the desktop they are most likely to install on: an iPhone a Mac, Android Linux.
+function visitorOS() {
+  const ua = navigator.userAgent || '';
+  const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+  if (/Win/i.test(platform) || /Windows/i.test(ua)) return 'windows';
+  if (/Mac|iPhone|iPad|iPod/i.test(platform) || /Macintosh|iPhone|iPad/i.test(ua)) return 'macos';
+  return 'linux';
+}
+
 // ---- menu shots: one system at a time
 (() => {
   const buttons = [...document.querySelectorAll('.os-pick button')];
@@ -123,7 +147,10 @@
     buttons.forEach((b) => b.setAttribute('aria-pressed', b.dataset.shot === name));
     shots.forEach((s) => { s.hidden = s.dataset.shot !== name; });
   };
-  buttons.forEach((b) => b.addEventListener('click', () => show(b.dataset.shot)));
-  if (/Win/i.test(navigator.platform)) show('windows');
-  else if (/Linux/i.test(navigator.platform) && !/Android/i.test(navigator.userAgent)) show('linux');
+  buttons.forEach((b) => b.addEventListener('click', () => {
+    show(b.dataset.shot);
+    document.dispatchEvent(new CustomEvent('otakase-shot', { detail: b.dataset.shot }));
+  }));
+  document.addEventListener('otakase-os', (e) => show(e.detail));
+  show(visitorOS());
 })();
