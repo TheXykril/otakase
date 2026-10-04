@@ -514,6 +514,9 @@ func castMovie(config *Config, anime *Anime) bool {
 // played.
 func playMovieInMPV(config *Config, store *movies.Store, movie movies.Movie, title string, stream movies.Stream, anime *Anime, start int) bool {
 	args := []string{}
+	if stream.AudioLanguage != "" {
+		args = append(args, "--alang="+stream.AudioLanguage)
+	}
 	if start > 0 {
 		// A few seconds back, so the line it stopped on is heard again.
 		args = append(args, fmt.Sprintf("--start=%d", max(start-5, 0)))

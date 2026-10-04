@@ -25,10 +25,12 @@ const (
 	FilmaiName = "8filmai"
 	// VidsrcName is vidsrc, in English.
 	VidsrcName = "vidsrc"
+	// FilmukasName is filmukas.com, family films in Lithuanian.
+	FilmukasName = "filmukas"
 )
 
 // ProviderNames lists the providers, the default first.
-var ProviderNames = []string{VidsrcName, FilmaiName}
+var ProviderNames = []string{VidsrcName, FilmaiName, FilmukasName}
 
 // NewProvider returns the named provider. site is 8Filmai's, which is built
 // by the caller because it remembers its address between runs.
@@ -38,6 +40,8 @@ func NewProvider(name string, site *Site) (Provider, error) {
 		return NewVidsrc(), nil
 	case FilmaiName:
 		return filmai{site: site}, nil
+	case FilmukasName:
+		return NewFilmukas(), nil
 	}
 	return nil, fmt.Errorf("no movie provider called %q (have %s)", name, strings.Join(ProviderNames, ", "))
 }

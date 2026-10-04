@@ -233,3 +233,28 @@ func TestDropAdvertCues(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+// Cut from filmukas.com's search results.
+func TestFilmukasListing(t *testing.T) {
+	body := `<li id="li_3">
+		<a href="/pilnametraziai/lape-ir-suo-703"><i class="far fa-play-circle play_button"></i>
+		<div class="sound_bars_wrap"><span class="sound_bar" title="Garso takelis: LT"><i class="fa fa-headphones"></i> LT</span></div>
+			<img class="leading2 lazyload_" data-src="/inc/i02/media/u/1779455995838.jpg" src="/media/elem/default-image.png" alt="Lapė ir šuo" title="Lapė ir šuo" />
+			<span>Lapė ir šuo </span>
+		</a>
+		</li>
+		<li id="li_1">
+		<a href="/pilnametraziai/didele-bloga-lape-ir-kitos-istorijos-the-big-bad-fox-and-other-tales-2017-649"><img data-src="/inc/x.jpg" alt="Didelė bloga lapė" /></a>
+		</li>
+		<li id="li_2"><a href="/serialai/kas-nors-12"><img data-src="/inc/y.jpg" alt="Serialas" /></a></li>`
+	got := NewFilmukas().parseListing(body)
+	if len(got) != 2 {
+		t.Fatalf("got %+v", got)
+	}
+	if got[0].Title != "Lapė ir šuo" || got[0].Poster != "https://www.filmukas.com/inc/i02/media/u/1779455995838.jpg" || got[0].Key() != "filmukas:/pilnametraziai/lape-ir-suo-703" {
+		t.Errorf("first = %+v", got[0])
+	}
+	if got[1].Year != "2017" {
+		t.Errorf("year = %q", got[1].Year)
+	}
+}

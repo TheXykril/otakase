@@ -32,3 +32,24 @@ func TestVidsrcLive(t *testing.T) {
 	}
 	t.Fatal("nothing resolved")
 }
+
+func TestFilmukasLive(t *testing.T) {
+	if os.Getenv("OTAKASE_LIVE_MOVIES") == "" {
+		t.Skip("set OTAKASE_LIVE_MOVIES=1 to reach filmukas.com")
+	}
+	f := NewFilmukas()
+	found, err := f.Search("lapė")
+	if err != nil || len(found) == 0 {
+		t.Fatalf("search: %v %v", found, err)
+	}
+	t.Logf("first: %+v", found[0])
+	movie, sources, err := f.Open(found[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := sources[0].Resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%s: %.100s", movie.Label(), stream.URL)
+}

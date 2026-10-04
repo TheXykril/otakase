@@ -23,6 +23,9 @@ type Stream struct {
 	Server string
 	// HLS says URL is a playlist rather than one whole file.
 	HLS bool
+	// AudioLanguage is the audio track to pick, as a language code, when the
+	// stream has several.
+	AudioLanguage string
 	// Subtitles are the subtitle files the host offers beside the video.
 	Subtitles []Subtitle
 }

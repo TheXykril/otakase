@@ -9,6 +9,7 @@ knows about them.
 |---|---|
 | Provider interface, 8Filmai adapter | `internal/movies/provider.go` |
 | vidsrc (English) and OpenSubtitles | `internal/movies/vidsrc.go` |
+| Filmukas (Lithuanian, family) | `internal/movies/filmukas.go` |
 | 8Filmai site client, search, movie pages | `internal/movies/site.go` |
 | Video hosts (Streamtape, Doodstream, imgsto.re) | `internal/movies/hosts.go` |
 | History file (`movies.json`) | `internal/movies/store.go` |
@@ -41,6 +42,17 @@ from. A provider implements `movies.Provider`: `Search` returns movies, and
   `X-User-Agent: trailers.to-UA`), preferring the file named like the API's
   `file_name`. It comes gzipped; it is unpacked to the temp folder with the
   site's advert cues taken out.
+
+### Filmukas (Lithuanian, family films)
+
+- Search: `https://www.filmukas.com/visi?q=<query>`, matching Lithuanian
+  titles. Results are `<li id="li_N">` items; `/serialai/` links are left out.
+- A film page has `loadScript('/@videojs-v5.js?id=…&z=…')`. That script,
+  fetched with the page as referrer, holds `videoSrc = '…/master.m3u8?d=<token>'`
+  on the site's own CDN. The token is short-lived, so it is fetched only when
+  the source is tried. The playlist needs the site as referrer; the dubs are
+  audio tracks, and `--alang=lt` picks the Lithuanian one. `videoSrc` can also
+  be a YouTube link, which mpv plays through yt-dlp.
 
 ### 8Filmai (Lithuanian)
 
@@ -102,7 +114,7 @@ the player closes. Nothing is sent anywhere.
 
 `go test ./internal/movies/` runs offline against markup cut from the site.
 `OTAKASE_LIVE_MOVIES=1 go test ./internal/movies/ -run Live` searches the real
-site and resolves a stream, and does the same on vidsrc. Streams are tied to
+site and resolves a stream, and does the same on vidsrc and Filmukas. Streams are tied to
 the address that resolved them, so run it on the machine that plays.
 
 ## Cast and download
