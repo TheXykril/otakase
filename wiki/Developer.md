@@ -9,6 +9,7 @@ or use it; that is all in the [README](https://github.com/TheXykril/otakase#read
 - **[Casting Verification](Developer-Casting-Verification)** — checking casting against a real Chromecast, DLNA TV or Kodi
 - **[Versions and releases](Developer-Releases)** — the `YY.DROP.HOTFIX` numbering and how a release is cut
 - **[Cast Window Prompts](Developer-Cast-Window-Prompts)** — what prompts do in a terminal opened by a rofi cast, where nobody is watching
+- **[Theming](Developer-Theming)** — where the menu colours come from and how each desktop's theme is read
 
 ## Building and testing
 

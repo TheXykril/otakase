@@ -32,7 +32,8 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `NextEpisodePrompt` | Boolean | `true`, `false` | In mpv, ask before playing the next episode; `false` plays it straight away. Casting has `CastNextEpisode` instead. |
 | `ScoreOnCompletion` | Boolean | `true`, `false` | Prompt to rate a show when you finish it. |
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
-| `Theme` | Enum | `auto`, `omarchy`, `builtin` | Which colour palette to use. `auto` follows the desktop on Omarchy. |
+| `Theme` | Enum | `auto`, `omarchy`, `wal`, `base16`, `kde`, `gnome`, `macos`, `windows`, `builtin` | Which colour palette to use. `auto` follows the first desktop theme it finds. See [Theming](#theming) below. |
+| `ThemeFile` | String | file path | A palette file to use instead of auto-detecting: pywal `colors.json`, a base16 scheme, or a `colors.toml`. See [Theming](#theming) below. |
 | `ThemeOverrides` | String | `name:#hex` pairs | Replaces named colours on top of the palette in use. See [Theming](#theming) below. |
 | `Icons` | Enum | `auto`, `true`, `false` | Small line icons in front of menu rows, in rofi and the terminal. `auto` (the default) shows them on Linux when a font for them is found; otakase installs a tiny one to `~/.local/share/fonts/otakase/` for this, so no setup is needed. It leaves them off over SSH, in WSL, on the Linux console, and on macOS and Windows. Set `true` to force them on if your terminal font has Nerd Font icons, `false` for plain text. |
 | `ContributeSkipTimes` | Boolean | `true`, `false` | Bind the player keys for marking, submitting and voting on skip times — see [Fixing the times yourself](Skip-Times#fixing-the-times-yourself). |
@@ -63,10 +64,48 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 
 ## Theming
 
-The menus — both rofi and terminal — follow a colour palette. On [Omarchy](https://omarchy.org) that palette follows the current
-desktop theme, so changing your theme changes the menus with no extra step.
-Elsewhere Otakase uses its own palette. `Theme` picks between them: `auto` (the
-default), `omarchy`, or `builtin`.
+The menus — both rofi and terminal — follow a colour palette. With `Theme=auto`
+(the default) Otakase follows your desktop's colours, so changing your theme
+changes the menus with no extra step. It uses the first of these it finds:
+
+| `Theme` value | Follows | What it takes |
+|---|---|---|
+| `omarchy` | The current [Omarchy](https://omarchy.org) theme | Every colour |
+| `wal` | pywal, or wallust / matugen with their pywal template (`~/.cache/wal/colors.json`) | Every colour |
+| `base16` | The current tinty scheme, or stylix's palette | Every colour |
+| `kde` | The KDE Plasma colour scheme (only auto-detected on Plasma) | Every colour |
+| `gnome` | GNOME's dark style and accent colour (only auto-detected on GNOME) | Dark/light and accent |
+| `macos` | macOS appearance and accent colour | Dark/light and accent |
+| `windows` | Windows app mode and accent colour | Dark/light and accent |
+| `builtin` | Nothing, Otakase's own colours | |
+
+Where only dark/light and an accent are given, the rest comes from Otakase's
+own dark or light palette. Set `Theme` to one of the values above to use that
+source and skip the others, for example if an old pywal cache is being picked
+up over your Plasma theme.
+
+### Using a palette file
+
+Anything not listed above can still be followed through a file. `ThemeFile`
+names a palette file, used instead of auto-detection:
+
+```
+ThemeFile=~/.config/mytheme/colors.json
+```
+
+It can be a pywal `colors.json`, a base16 scheme (YAML or JSON), or a
+`colors.toml` like Omarchy's. The format is told from the content. Most theming
+tools can export one of these, and a `colors.toml` is easy to write by hand:
+
+```
+background = "#1a1b26"
+foreground = "#c0caf5"
+accent = "#7aa2f7"
+red = "#f7768e"
+```
+
+Colours a file leaves out keep Otakase's own. `Theme=builtin` ignores
+`ThemeFile`.
 
 ### Changing individual colours
 

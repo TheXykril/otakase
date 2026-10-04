@@ -178,7 +178,7 @@ func TestParseMode(t *testing.T) {
 		"auto":     ModeAuto,
 		"AUTO":     ModeAuto,
 		"omarchy":  ModeOmarchy,
-		"system":   ModeOmarchy,
+		"system":   ModeAuto,
 		"builtin":  ModeBuiltin,
 		"off":      ModeBuiltin,
 		"curd":     ModeBuiltin,
@@ -191,7 +191,7 @@ func TestParseMode(t *testing.T) {
 }
 
 func TestResolveBuiltinNeverTouchesOmarchy(t *testing.T) {
-	palette, err := Resolve(ModeBuiltin)
+	palette, err := Resolve(ModeBuiltin, "")
 	if err != nil {
 		t.Fatalf("resolve builtin: %v", err)
 	}
