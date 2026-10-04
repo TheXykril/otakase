@@ -79,14 +79,17 @@ func TestSourcesOrder(t *testing.T) {
 // A Streamtape embed page has several lines writing a link, most of them
 // decoys; the robotlink one is assembled from two pieces.
 func TestStreamtapeLink(t *testing.T) {
-	body := `<div id="ideoolink" style="display:none;">/streamtape.com/get_video?id=jvVlA0BJdqczRGx&expires=1&ip=x&token=bad</div>
-<script>document.getElementById('ideoolink').innerHTML = "/streamtape.com/get_video?id=jvVlA0BJdqczRGx&expires=1&ip=x&token=" + ''+ ('xcdbadtoken').substring(1);
-document.getElementById('robotlink').innerHTML = '//streamtape.com/get_video?id=jvVlA0BJdqczRGx&expires=1759600000&ip=FRuWKRSOKxSHDN&token=Ab' + ('xcdcD-goodtoken').substring(2).substring(1);</script>`
+	// The script lines as streamtape.com served them for a real movie: the
+	// link is split mid-word, one line has an empty string in the middle,
+	// and only robotlink's assembles to the right token.
+	body := `<script>document.getElementById('ideoolink').innerHTML = "/streamtape.com/get_vi" + ''+ ('xcdbdeo?id=jvVlA0BJdqczRGx&expires=1791200717&ip=F0MOKREAKxSHDN&token=sHWHjT4mBGvQ').substring(1).substring(2);
+document.getElementById('botlink').innerHTML = '//streamtape.com/get_v'+ ('xyzaideo?id=jvVlA0BJdqczRGx&expires=1791200717&ip=F0MOKREAKxSHDN&token=sHWHjT4mBGvX').substring(4);
+document.getElementById('robotlink').innerHTML = '//streamtape.com/get_v'+ ('xcdideo?id=jvVlA0BJdqczRGx&expires=1791200717&ip=F0MOKREAKxSHDN&token=sHWHjT4mBGvQ').substring(2).substring(1);</script>`
 	got, err := streamtapeLink(body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "https://streamtape.com/get_video?id=jvVlA0BJdqczRGx&expires=1759600000&ip=FRuWKRSOKxSHDN&token=AbcD-goodtoken&stream=1"
+	want := "https://streamtape.com/get_video?id=jvVlA0BJdqczRGx&expires=1791200717&ip=F0MOKREAKxSHDN&token=sHWHjT4mBGvQ&stream=1"
 	if got != want {
 		t.Errorf("link = %q\nwant   %q", got, want)
 	}

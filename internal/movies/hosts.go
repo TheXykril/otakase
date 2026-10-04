@@ -162,7 +162,7 @@ func fetchFinal(client *http.Client, rawURL, referrer string) (string, *url.URL,
 // literal start, and a string with a few characters cut off its front by
 // substring calls. Several such lines are on the page, most of them decoys;
 // the one for robotlink is the one its player reads.
-var streamtapeLinkPattern = regexp.MustCompile(`getElementById\(\s*'(\w+)'\s*\)\.innerHTML\s*=\s*["']([^"']+)["']\s*\+\s*\(?\s*["']([^"']+)["']\s*\)?((?:\.substring\(\d+\))*)`)
+var streamtapeLinkPattern = regexp.MustCompile(`getElementById\(\s*'(\w+)'\s*\)\.innerHTML\s*=\s*["']([^"']+)["']\s*\+\s*(?:''\s*\+\s*)?\(?\s*["']([^"']+)["']\s*\)?((?:\.substring\(\d+\))*)`)
 
 var substringPattern = regexp.MustCompile(`\.substring\((\d+)\)`)
 
@@ -180,28 +180,30 @@ func resolveStreamtape(embed string) (Stream, error) {
 
 // streamtapeLink assembles the file link from an embed page.
 func streamtapeLink(body string) (string, error) {
-	var chosen []string
+	// The start is cut short too ('//streamtape.com/get_v' + 'ideo?id=...'),
+	// so whether a line builds a video link shows only once it is assembled.
+	link := ""
 	for _, match := range streamtapeLinkPattern.FindAllStringSubmatch(body, -1) {
-		if !strings.Contains(match[2], "get_video") {
+		tail := match[3]
+		for _, cut := range substringPattern.FindAllStringSubmatch(match[4], -1) {
+			n, _ := strconv.Atoi(cut[1])
+			if n > len(tail) {
+				n = len(tail)
+			}
+			tail = tail[n:]
+		}
+		assembled := match[2] + tail
+		if !strings.Contains(assembled, "get_video?") {
 			continue
 		}
-		chosen = match
+		link = assembled
 		if match[1] == "robotlink" {
 			break
 		}
 	}
-	if chosen == nil {
+	if link == "" {
 		return "", fmt.Errorf("streamtape: no video link on the page (removed, or the page changed)")
 	}
-	tail := chosen[3]
-	for _, cut := range substringPattern.FindAllStringSubmatch(chosen[4], -1) {
-		n, _ := strconv.Atoi(cut[1])
-		if n > len(tail) {
-			n = len(tail)
-		}
-		tail = tail[n:]
-	}
-	link := chosen[2] + tail
 	if strings.HasPrefix(link, "//") {
 		link = "https:" + link
 	}
@@ -223,6 +225,10 @@ func resolveDood(embed string) (Stream, error) {
 		return Stream{}, err
 	}
 	pass := doodPassPattern.FindString(body)
+	if pass == "" && strings.Contains(body, "<title>Just a moment") {
+		// Cloudflare's browser check, which only a real browser passes.
+		return Stream{}, fmt.Errorf("doodstream: %s asks for a browser check", final.Host)
+	}
 	if pass == "" {
 		return Stream{}, fmt.Errorf("doodstream: no pass_md5 on the page (removed, or the page changed)")
 	}
