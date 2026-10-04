@@ -176,3 +176,16 @@ func TestStoreProgress(t *testing.T) {
 func storeDir(store *Store) string {
 	return filepath.Dir(store.path)
 }
+
+// The call as a Doodstream embed page made it, fetched from a home
+// connection: the path ends in the token the link needs.
+func TestDoodPassPath(t *testing.T) {
+	body := `dsplayer.addClass("vjs-waiting"); $.get('/pass_md5/281281071-158-129-1791131115-9053d321a814cdbbc198d82c916fb47b/16e9jd3d6cmp6c6v5a9qohic', function(data) { if (data === "RELOAD"){location.reload();}`
+	pass := doodPassPattern.FindString(body)
+	if pass != "/pass_md5/281281071-158-129-1791131115-9053d321a814cdbbc198d82c916fb47b/16e9jd3d6cmp6c6v5a9qohic" {
+		t.Fatalf("pass path = %q", pass)
+	}
+	if got := doodLink("https://a.cdn/x~", pass, time.UnixMilli(1)); !strings.HasSuffix(got, "?token=16e9jd3d6cmp6c6v5a9qohic&expiry=1") {
+		t.Errorf("link = %q", got)
+	}
+}
