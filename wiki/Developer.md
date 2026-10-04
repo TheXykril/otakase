@@ -11,6 +11,7 @@ or use it; that is all in the [README](https://github.com/TheXykril/otakase#read
 - **[Cast Window Prompts](Developer-Cast-Window-Prompts)** — what prompts do in a terminal opened by a rofi cast, where nobody is watching
 - **[Player Look](Developer-Player-Look)** — how otakase's own mpv controls are shipped, themed and loaded
 - **[Theming](Developer-Theming)** — where the menu colours come from and how each desktop's theme is read
+- **[Website](Developer-Website)** — the GitHub Pages site in `site/`, its cover art and icon
 
 ## Building and testing
 
