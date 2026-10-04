@@ -78,7 +78,13 @@ func (s *Site) Sources(page Page) []Source {
 				if err != nil {
 					return Stream{}, err
 				}
-				return ResolveEmbed(embed)
+				stream, err := ResolveEmbed(embed)
+				if err != nil {
+					// The embed page's address is what a missing extractor
+					// is written from, so it goes in the log with the reason.
+					return Stream{}, fmt.Errorf("%s: %w", embed, err)
+				}
+				return stream, nil
 			},
 		})
 	}
