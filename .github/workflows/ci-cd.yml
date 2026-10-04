@@ -391,18 +391,17 @@ jobs:
             $body += ""
           }
 
+          # A release made only of pull requests is fully covered by GitHub's
+          # generated notes (with their own Full Changelog link), so leave the
+          # extra block out instead of printing empty sections.
           if ($feats.Count -eq 0 -and $fixes.Count -eq 0 -and $chores.Count -eq 0 -and $others.Count -eq 0) {
-            $body += "- No direct commits in this release range."
-            $body += ""
+            Set-Content -Path $notesPath -Value "" -Encoding utf8
+            return
           }
 
           $body += "## 🤝 Contributors"
           $contributors = @($contributorSet.Keys | Sort-Object)
-          if ($contributors.Count -eq 0) {
-            $body += "- None"
-          } else {
-            $body += "- " + ($contributors -join ", ")
-          }
+          $body += "- " + ($contributors -join ", ")
 
           if ($previousTag) {
             $body += ""
