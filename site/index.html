@@ -120,7 +120,7 @@
   </section>
 
   <section class="inst" id="install" aria-labelledby="inst-h">
-    <h2 id="inst-h">Begin.</h2>
+    <h2 id="inst-h">Install in a minute.</h2>
     <div class="inst-body">
       <div class="tabs mono" role="tablist" aria-label="Operating system">
         <button role="tab" id="t-linux" aria-controls="p-linux" aria-selected="true">LINUX</button>
@@ -130,9 +130,11 @@
       </div>
       <div role="tabpanel" id="p-linux" aria-labelledby="t-linux">
 <pre><code>sudo apt install mpv curl
-curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-x86_64
+curl -Lo otakase \
+  https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-x86_64
 chmod +x otakase
-sudo install -Dm755 otakase /usr/bin/otakase</code></pre>
+sudo install -Dm755 otakase /usr/bin/otakase
+sudo ln -sf otakase /usr/bin/otk</code></pre>
         <p class="hint">For ARM64, download <code>otakase-linux-arm64</code> instead. <code>rofi</code>, <code>libnotify</code> and <code>ffmpeg</code> are optional extras.</p>
       </div>
       <div role="tabpanel" id="p-arch" aria-labelledby="t-arch" hidden>
@@ -143,15 +145,31 @@ makepkg -si</code></pre>
         <p class="hint">Builds with the bundled PKGBUILD so pacman tracks it.</p>
       </div>
       <div role="tabpanel" id="p-macos" aria-labelledby="t-macos" hidden>
-<pre><code>brew install mpv curl
-curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/otakase-macos-universal
+<pre><code>brew install mpv
+curl -Lo otakase \
+  https://github.com/TheXykril/otakase/releases/latest/download/otakase-macos-universal
 chmod +x otakase
-sudo mv otakase /usr/local/bin/</code></pre>
-        <p class="hint">Works on Apple Silicon and Intel.</p>
+sudo mv otakase /usr/local/bin/
+sudo ln -sf otakase /usr/local/bin/otk</code></pre>
+        <p class="hint">Paste into Terminal. The universal build runs on Apple Silicon and Intel; <code>otakase-macos-arm64</code> and <code>otakase-macos-x86_64</code> are smaller.</p>
       </div>
       <div role="tabpanel" id="p-windows" aria-labelledby="t-windows" hidden>
-        <p class="win"><a class="dl" href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-installer.exe">DOWNLOAD THE INSTALLER →</a></p>
-        <p class="hint">Or the standalone <a href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-x86_64.exe">otakase-windows-x86_64.exe</a>. Windows uses the terminal menus.</p>
+<pre><code>winget install TheXykril.Otakase</code></pre>
+        <p class="hint">Paste into PowerShell or Windows Terminal. It comes with mpv and adds <code>otakase</code> and <code>otk</code> to your PATH; open a new terminal afterwards.</p>
+        <p class="hint">No winget? Get the <a href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-installer.exe">installer</a>, or the standalone <a href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-x86_64.exe">otakase-windows-x86_64.exe</a> with your own mpv.</p>
+      </div>
+      <div class="run">
+        <p class="mono tag">Then, in your terminal</p>
+<dl class="cmds">
+          <dt><code>otakase</code></dt><dd>your list; otk works too</dd>
+          <dt><code>otakase -c</code></dt><dd>continue where you left off</dd>
+          <dt><code>otakase -dub</code></dt><dd>dub instead of sub, this run</dd>
+          <dt><code>otakase -cast</code></dt><dd>play on a TV on your network</dd>
+          <dt><code>otakase -download -episodes 1-12</code></dt><dd>save episodes instead (needs ffmpeg)</dd>
+          <dt><code>otakase -e</code></dt><dd>edit your settings</dd>
+          <dt><code>otakase -u</code></dt><dd>update to the latest release</dd>
+        </dl>
+        <p class="hint">The same commands on Linux, macOS and Windows. On Linux, <code>otakase -rofi -image-preview</code> opens the poster menu.</p>
       </div>
       <p class="hint">Coming from curd? Your settings, sign-ins and history move over on first launch.</p>
     </div>

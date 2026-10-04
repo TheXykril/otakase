@@ -140,3 +140,12 @@ code { font: 0.85em var(--mono); color: var(--fg); }
   .steps { gap: 28px; }
   .swatches { grid-template-columns: repeat(2, 1fr); }
 }
+
+.run { margin-top: 18px; display: grid; gap: 12px; }
+.cmds { display: grid; align-items: baseline; grid-template-columns: max-content 1fr; gap: 6px 28px; border-left: 2px solid var(--accent); padding-left: 18px; }
+.cmds dt code { font: 14px/1.9 var(--mono); color: var(--fg); }
+.cmds dd { font: 13px/2.05 var(--mono); color: var(--muted); }
+@media (max-width: 760px) {
+  .cmds { grid-template-columns: 1fr; gap: 0; }
+  .cmds dd { line-height: 1.5; margin-bottom: 10px; }
+}
