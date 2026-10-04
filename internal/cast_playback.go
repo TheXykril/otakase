@@ -746,6 +746,10 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	animeProvider := CurrentAnimeProviderName(anime)
 	anilistID, providerID, episodeNumber := anime.AnilistId, anime.ProviderId, anime.Ep.Number
 	untracked := anime.Untracked
+	var movieProgress func(float64, int, bool)
+	if anime.Movie != nil {
+		movieProgress = anime.Movie.Progress
+	}
 	syncsResume := ShouldWriteRemoteTracking(config, anime)
 
 	writePartial := func() {
@@ -753,7 +757,14 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 		position, duration, alreadyMarked := savedPosition, savedDuration, savedMarked
 		savedMu.Unlock()
 
-		if alreadyMarked || position < 1 || untracked {
+		if alreadyMarked || position < 1 {
+			return
+		}
+		if movieProgress != nil {
+			movieProgress(position, duration, false)
+			return
+		}
+		if untracked {
 			return
 		}
 		LocalUpdateAnime(
@@ -793,6 +804,11 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	markWatched := func(position, duration float64) {
 		marked = true
 		recordPosition(position)
+		if movieProgress != nil {
+			movieProgress(position, int(duration), true)
+			castOut(commands != nil, "Marked as watched.")
+			return
+		}
 		if untracked {
 			return
 		}

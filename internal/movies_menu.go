@@ -1,11 +1,15 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/movies"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // Movies is an experimental section of its own, reached from the main menu's
@@ -27,6 +31,7 @@ const (
 	movieListOnKey    = "MOVIE:LIST_ON"
 	movieListOffKey   = "MOVIE:LIST_OFF"
 	movieForgetKey    = "MOVIE:FORGET"
+	movieDownloadKey  = "MOVIE:DOWNLOAD"
 	movieBackKey      = "back"
 	moviePathPrefix   = "MOVIE_PATH:"
 )
@@ -199,6 +204,7 @@ func openMovie(config *Config, store *movies.Store, site *movies.Site, movie mov
 		} else {
 			options = append(options, SelectionOption{Key: moviePlayKey, Label: "Play", Icon: icons.Play})
 		}
+		options = append(options, SelectionOption{Key: movieDownloadKey, Label: "Download", Icon: icons.Download})
 		if entry.Watchlist {
 			options = append(options, SelectionOption{Key: movieListOffKey, Label: "Remove from watchlist", Icon: icons.No})
 		} else if !entry.Watched {
@@ -222,6 +228,8 @@ func openMovie(config *Config, store *movies.Store, site *movies.Site, movie mov
 		case movieRestartKey:
 			playMovie(config, store, site, movie, 0)
 			return
+		case movieDownloadKey:
+			downloadMovie(config, site, movie)
 		case movieListOnKey, movieListOffKey:
 			if err := store.SetWatchlist(movie, picked.Key == movieListOnKey); err != nil {
 				Log(fmt.Sprintf("movies: could not save the watchlist: %v", err))
@@ -235,8 +243,9 @@ func openMovie(config *Config, store *movies.Store, site *movies.Site, movie mov
 	}
 }
 
-// playMovie plays a movie in mpv from start seconds, trying its servers in
-// turn until one plays, and records where it stopped.
+// playMovie plays a movie from start seconds, in mpv or on the cast device
+// when casting is on, trying its servers in turn until one plays, and records
+// where it stopped.
 func playMovie(config *Config, store *movies.Store, site *movies.Site, movie movies.Movie, start int) {
 	page, err := site.Page(movie.Path)
 	if err != nil {
@@ -248,7 +257,6 @@ func playMovie(config *Config, store *movies.Store, site *movies.Site, movie mov
 	title := page.Label()
 	Out(fmt.Sprintf("Loading %s…", title))
 
-	var anime Anime
 	for _, source := range site.Sources(page) {
 		stream, err := source.Resolve()
 		if err != nil {
@@ -256,36 +264,183 @@ func playMovie(config *Config, store *movies.Store, site *movies.Site, movie mov
 			continue
 		}
 		Log(fmt.Sprintf("movies: %s: playing from %s", page.Path, stream.Server))
-		anime.Ep.StreamReferrer = stream.Referrer
-		args := []string{}
-		if start > 0 {
-			// A few seconds back, so the line it stopped on is heard again.
-			args = append(args, fmt.Sprintf("--start=%d", max(start-5, 0)))
-		}
-		socket, err := StartVideo(stream.URL, args, title, &anime)
-		if err != nil {
-			Log(fmt.Sprintf("movies: %s: could not start the player: %v", stream.Server, err))
+		anime := movieAnime(config, store, page.Movie, title, stream, start)
+		if config.CastToDevice {
+			if castMovie(config, &anime) {
+				return
+			}
 			continue
 		}
-		anime.Ep.Player.SocketPath = socket
-		if socket == "android-intent" {
-			Out("Opened the movie in mpv. Press Enter when you have finished watching...")
-			AwaitEnter()
+		if playMovieInMPV(config, store, page.Movie, title, stream, &anime, start) {
 			return
 		}
-		if !WaitForMPVPlaybackStart(socket, MpvPlaybackStartTimeoutDuration(config)) {
-			Log(fmt.Sprintf("movies: %s did not start playing", stream.Server))
-			if IsMPVRunning(socket) {
-				ExitMPV(socket)
-			}
-			anime.Ep.Player.SocketPath = ""
-			continue
-		}
-		watchMoviePlayback(config, store, page.Movie, socket)
-		return
 	}
 	Out(fmt.Sprintf("None of the servers for %s could be played. The movie may have been taken down; try again later.", title))
 	awaitEnterNotice()
+}
+
+// movieAnime dresses a movie stream as the one-episode, untracked show the
+// player and the cast code know how to play.
+func movieAnime(config *Config, store *movies.Store, movie movies.Movie, title string, stream movies.Stream, start int) Anime {
+	anime := Anime{
+		Title:         AnimeTitle{English: title, Romaji: title},
+		CoverImage:    movie.Poster,
+		TotalEpisodes: 1,
+		Untracked:     true,
+		// Nothing about a movie goes to AniList or MyAnimeList.
+		SkipRemoteSync: true,
+	}
+	anime.Ep.Number = 1
+	anime.Ep.Links = []string{stream.URL}
+	anime.Ep.StreamReferrer = stream.Referrer
+	for _, subtitle := range stream.Subtitles {
+		anime.Ep.SubtitleTracks = append(anime.Ep.SubtitleTracks, SubtitleTrack{URL: subtitle.URL, Language: subtitle.Language, Label: subtitle.Language})
+	}
+	if len(anime.Ep.SubtitleTracks) > 0 {
+		anime.Ep.SubtitleURL = providers.PickSubtitle(anime.Ep.SubtitleTracks, subtitleLanguageFor(config, nil), anime.Ep.SubtitleTracks[0].URL)
+	}
+	anime.Movie = &MoviePlayback{
+		Start: float64(start),
+		Progress: func(position float64, duration int, watched bool) {
+			if err := store.SetProgress(movie, int(position), duration, watched); err != nil {
+				Log(fmt.Sprintf("movies: could not save progress: %v", err))
+			}
+		},
+	}
+	return anime
+}
+
+// castMovie casts a movie, reporting whether the server it came from is done
+// with: it played, or the viewer stopped it. A stream the device or ffmpeg
+// could not play leaves the next server to try.
+func castMovie(config *Config, anime *Anime) bool {
+	RestoreScreen()
+	// Cast here rather than handing it to a terminal window as an episode is
+	// under rofi: the window rebuilds the show from a file, and a movie's
+	// progress would be lost on the way.
+	err := CastEpisode(config, anime)
+	switch {
+	case err == nil, errors.Is(err, ErrCastStopped):
+		return true
+	}
+	Log(fmt.Sprintf("movies: cast: %v", err))
+	Out("Casting failed: " + err.Error())
+	return false
+}
+
+// playMovieInMPV plays one server's stream in mpv, reporting whether it
+// played.
+func playMovieInMPV(config *Config, store *movies.Store, movie movies.Movie, title string, stream movies.Stream, anime *Anime, start int) bool {
+	args := []string{}
+	if start > 0 {
+		// A few seconds back, so the line it stopped on is heard again.
+		args = append(args, fmt.Sprintf("--start=%d", max(start-5, 0)))
+	}
+	socket, err := StartVideo(stream.URL, args, title, anime)
+	if err != nil {
+		Log(fmt.Sprintf("movies: %s: could not start the player: %v", stream.Server, err))
+		return false
+	}
+	anime.Ep.Player.SocketPath = socket
+	if socket == "android-intent" {
+		Out("Opened the movie in mpv. Press Enter when you have finished watching...")
+		AwaitEnter()
+		return true
+	}
+	if !WaitForMPVPlaybackStart(socket, MpvPlaybackStartTimeoutDuration(config)) {
+		Log(fmt.Sprintf("movies: %s did not start playing", stream.Server))
+		if IsMPVRunning(socket) {
+			ExitMPV(socket)
+		}
+		anime.Ep.Player.SocketPath = ""
+		return false
+	}
+	addAlternateSubtitles(MPVSendCommand, socket, anime.Ep.SubtitleURL, anime.Ep.SubtitleTracks)
+	watchMoviePlayback(config, store, movie, socket)
+	return true
+}
+
+// downloadMovie saves a movie to the download folder from the first server
+// that hands over a file.
+func downloadMovie(config *Config, site *movies.Site, movie movies.Movie) {
+	binary, err := ffmpegPath()
+	if err != nil {
+		Out("Downloading needs ffmpeg, which was not found.")
+		awaitEnterNotice()
+		return
+	}
+	page, err := site.Page(movie.Path)
+	if err != nil {
+		Log(fmt.Sprintf("movies: %s: %v", movie.Path, err))
+		Out(fmt.Sprintf("Could not open %s: %v", movie.Label(), err))
+		awaitEnterNotice()
+		return
+	}
+	dir := ResolveDownloadDir(config)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		Out(fmt.Sprintf("Could not create %s: %v", dir, err))
+		awaitEnterNotice()
+		return
+	}
+	output := movieDownloadPath(dir, page.Movie, DownloadFormat(config))
+	if info, err := os.Stat(output); err == nil && info.Size() > 0 {
+		Out("Already downloaded: " + output)
+		awaitEnterNotice()
+		return
+	}
+
+	for _, source := range site.Sources(page) {
+		stream, err := source.Resolve()
+		if err != nil {
+			Log(fmt.Sprintf("movies: %s: %s: %v", page.Path, source.Server, err))
+			continue
+		}
+		anime := movieAnime(config, nil, page.Movie, page.Label(), stream, 0)
+		job := ffmpegJob{
+			Stream:   stream.URL,
+			Referrer: stream.Referrer,
+			Subtitle: anime.Ep.SubtitleURL,
+			Output:   output,
+			File:     !stream.HLS,
+		}
+		Out(fmt.Sprintf("Downloading %s from %s…", page.Label(), stream.Server))
+		lastReport := time.Now()
+		onProgress := func(elapsed time.Duration) {
+			if time.Since(lastReport) < 5*time.Second {
+				return
+			}
+			lastReport = time.Now()
+			Out(fmt.Sprintf("  %s downloaded", elapsed.Round(time.Second)))
+		}
+		err = runFFmpeg(binary, job.args(), onProgress)
+		if err != nil && job.Subtitle != "" {
+			Log(fmt.Sprintf("movies: download with subtitles failed (%v); retrying without them", err))
+			job.Subtitle = ""
+			err = runFFmpeg(binary, job.args(), onProgress)
+		}
+		if err != nil {
+			os.Remove(output)
+			Log(fmt.Sprintf("movies: %s: download from %s failed: %v", page.Path, stream.Server, err))
+			continue
+		}
+		Out("Saved " + output)
+		awaitEnterNotice()
+		return
+	}
+	Out(fmt.Sprintf("None of the servers for %s could be downloaded.", page.Label()))
+	awaitEnterNotice()
+}
+
+// movieDownloadPath names a downloaded movie "Title (Year).mkv".
+func movieDownloadPath(dir string, movie movies.Movie, format string) string {
+	name := movie.Title
+	if movie.Year != "" {
+		name += " (" + movie.Year + ")"
+	}
+	if format != DownloadFormatMP4 {
+		format = DownloadFormatMKV
+	}
+	return filepath.Join(dir, SanitizeFilename(name)+"."+format)
 }
 
 // watchMoviePlayback follows playback until the player closes or the movie

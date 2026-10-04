@@ -35,9 +35,22 @@ type Anime struct {
 	// Untracked is an episode from Untracked Watching: played, never written
 	// to the history file or a tracker. A cast reads it to skip every write.
 	Untracked bool `json:"-"`
+	// Movie is set when this is a movie from the Movies section, which is
+	// Untracked too: a cast starts it where the movie history says and
+	// reports where it got to there instead of to the anime history.
+	Movie *MoviePlayback `json:"-"`
 	// syncedResume is the position another device left in the tracker entry,
 	// kept so a cast started after the lookup can still use it.
 	syncedResume syncedResume
+}
+
+// MoviePlayback is what a cast needs to know about a movie.
+type MoviePlayback struct {
+	// Start is the position to start from, in seconds.
+	Start float64
+	// Progress is told the position and duration, in seconds, when the cast
+	// stops, and whether the movie counts as watched.
+	Progress func(position float64, duration int, watched bool)
 }
 
 type FuzzyDate struct {

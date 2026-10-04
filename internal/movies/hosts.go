@@ -21,6 +21,17 @@ type Stream struct {
 	Referrer string
 	// Server names where it came from, for the log and the player title.
 	Server string
+	// HLS says URL is a playlist rather than one whole file.
+	HLS bool
+	// Subtitles are the subtitle files the host offers beside the video.
+	Subtitles []Subtitle
+}
+
+// Subtitle is one subtitle file.
+type Subtitle struct {
+	URL string
+	// Language is how the host names it, such as "English".
+	Language string
 }
 
 // Source is one of a movie's servers, resolved only when it is tried: each
