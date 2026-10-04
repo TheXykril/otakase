@@ -165,6 +165,11 @@ type Config struct {
 	// MovieProvider is where movies are searched: vidsrc (English) or
 	// 8filmai (Lithuanian). Changed from the Movies menu.
 	MovieProvider string `config:"MovieProvider"`
+	// TraktClientID and TraktClientSecret are a Trakt app's credentials,
+	// which movies are synced to Trakt through once signed in from the
+	// Movies menu.
+	TraktClientID     string `config:"TraktClientID"`
+	TraktClientSecret string `config:"TraktClientSecret"`
 }
 
 const (
@@ -232,6 +237,8 @@ func defaultConfigMap() map[string]string {
 		"ExperimentalMovies":         "false",
 		"MovieSite":                  "https://8filmai.eu",
 		"MovieProvider":              "vidsrc",
+		"TraktClientID":              "",
+		"TraktClientSecret":          "",
 		"AdultContent":               "false",
 		"ContinueWatchingAdult":      "false",
 		"MpvEpisodePlaylist":         "true",

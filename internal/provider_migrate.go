@@ -186,6 +186,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"ExperimentalMovies": "26.7.0",
 		"MovieSite":          "26.7.0",
 		"MovieProvider":      "26.7.0",
+		"TraktClientID":      "26.7.0",
+		"TraktClientSecret":  "26.7.0",
 	}
 }
 

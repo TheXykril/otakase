@@ -39,6 +39,7 @@ const (
 	movieUnwatchedKey = "MOVIE:UNWATCHED"
 	movieRateKey      = "MOVIE:RATE"
 	movieProviderKey  = "MOVIE:PROVIDER"
+	movieTraktKey     = "MOVIE:TRAKT"
 	movieBackKey      = "back"
 	moviePathPrefix   = "MOVIE_PATH:"
 )
@@ -69,7 +70,8 @@ func WatchMovies(config *Config) {
 			Log(fmt.Sprintf("movies: could not remember the site address: %v", err))
 		}
 	})
-	lib := &movieLibrary{site: site, providers: map[string]movies.Provider{}}
+	lib := &movieLibrary{site: site, providers: map[string]movies.Provider{}, trakt: newMovieTrakt(config)}
+	store.OnChange = func(before, after movies.Entry) { syncMovieToTrakt(lib.trakt, before, after) }
 
 	active := ""
 	for {
@@ -90,6 +92,8 @@ func WatchMovies(config *Config) {
 			toggleCastToDevice(config)
 		case movieProviderKey:
 			pickMovieProvider(config, lib)
+		case movieTraktKey:
+			manageMovieTrakt(config, lib.trakt)
 		case movieContinueKey:
 			pickFromMovieList(config, store, lib, store.Continue)
 		case movieWatchlistKey:
@@ -130,6 +134,7 @@ func movieActions(config *Config, lib *movieLibrary) []FooterAction {
 		{Key: movieSearchKey, Label: "search", Hint: "ctrl+f"},
 		{Key: movieProviderKey, Label: "provider: " + lib.current(config).Name(), Hint: "ctrl+o"},
 		{Key: movieCastKey, Label: castActionCheckbox(config), Hint: "ctrl+k"},
+		{Key: movieTraktKey, Label: traktActionLabel(lib.trakt), Hint: "ctrl+t"},
 	}
 }
 
@@ -203,6 +208,7 @@ func movieHubOptions(config *Config, store *movies.Store, lib *movieLibrary) []S
 	options = append(options,
 		SelectionOption{Key: movieProviderKey, Label: "Provider: " + lib.current(config).Label(), Icon: icons.Provider},
 		SelectionOption{Key: movieCastKey, Label: castActionLabel(config), Icon: castIcon},
+		SelectionOption{Key: movieTraktKey, Label: "Trakt: " + strings.TrimPrefix(traktActionLabel(lib.trakt), "trakt: "), Icon: icons.Tracker},
 		SelectionOption{Key: movieBackKey, Label: "Back to menu", Icon: icons.Back})
 	return options
 }
@@ -449,11 +455,13 @@ func playMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		anime := movieAnime(config, store, movie, title, stream, start)
 		if config.CastToDevice {
 			if castMovie(config, &anime) {
+				traktPaused(lib.trakt, store, movie)
 				return
 			}
 			continue
 		}
 		if playMovieInMPV(config, store, movie, title, stream, &anime, start) {
+			traktPaused(lib.trakt, store, movie)
 			return
 		}
 	}

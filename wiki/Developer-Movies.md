@@ -15,6 +15,8 @@ knows about them.
 | History file (`movies.json`) | `internal/movies/store.go` |
 | Menus, mpv loop, cast and download | `internal/movies_menu.go` |
 | Provider choice (`MovieProvider`) | `internal/movies_providers.go` |
+| Trakt client (device sign-in, sync) | `internal/movies/trakt.go` |
+| Trakt menu and sync hooks | `internal/movies_trakt.go` |
 | Main menu entry (`MOVIES`, `^x`) | `menuActions` in `internal/menu_layout.go`, added by `mainMenuLayout` when the option is on |
 
 ## Providers
@@ -106,7 +108,20 @@ the extractor in `hosts.go` is the first place to look. The log
 `movies.json` in the storage directory, keyed by `provider:path` (entries
 from before providers existed are 8Filmai's and are rekeyed when read). It
 keeps the position, duration, watched and watchlist flags, and a rating out
-of 10. A movie counts as watched at
+of 10.
+
+### Trakt
+
+With `TraktClientID`/`TraktClientSecret` set and a sign-in from the Movies
+menu (`^t`, Trakt's device flow: a code entered at trakt.tv/activate), the
+store's `OnChange` hook sends Trakt each change to watched, watchlist and
+rating (`/sync/history`, `/sync/watchlist`, `/sync/ratings` and their
+`/remove`). When playback stops part way the position goes to
+`/scrobble/pause` as a percentage. Movies are matched by IMDb id, so one
+without an id (an 8Filmai movie never opened) is skipped and logged. The
+token is `trakt_token.json` in the storage directory, renewed with its
+refresh token when it runs out. Local history stays the source of truth;
+Trakt failures are only logged. A movie counts as watched at
 `PercentageToMarkComplete`. The position is saved every 15 seconds and when
 the player closes. Nothing is sent anywhere.
 

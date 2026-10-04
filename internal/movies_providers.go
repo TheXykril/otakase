@@ -14,6 +14,8 @@ import (
 type movieLibrary struct {
 	site      *movies.Site
 	providers map[string]movies.Provider
+	// trakt is nil when no Trakt app is configured.
+	trakt *movies.Trakt
 }
 
 // provider returns the named provider, made once.

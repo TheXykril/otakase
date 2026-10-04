@@ -1,6 +1,7 @@
 package movies
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -256,5 +257,54 @@ func TestFilmukasListing(t *testing.T) {
 	}
 	if got[1].Year != "2017" {
 		t.Errorf("year = %q", got[1].Year)
+	}
+}
+
+// Trakt hears about a movie by its IMDb id, through the sync endpoints, and
+// signs in with the device flow.
+func TestTraktSync(t *testing.T) {
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := make([]byte, 512)
+		n, _ := r.Body.Read(body)
+		calls = append(calls, r.URL.Path+" "+r.Header.Get("Authorization")+" "+string(body[:n]))
+		switch r.URL.Path {
+		case "/oauth/device/code":
+			w.Write([]byte(`{"device_code":"dev","user_code":"ABC123","verification_url":"https://trakt.tv/activate","expires_in":600,"interval":0}`))
+		case "/oauth/device/token":
+			w.Write([]byte(`{"access_token":"tok","refresh_token":"ref","expires_in":86400,"created_at":` + fmt.Sprint(time.Now().Unix()) + `}`))
+		default:
+			w.WriteHeader(http.StatusCreated)
+		}
+	}))
+	defer server.Close()
+
+	dir := t.TempDir()
+	trakt := NewTrakt("id", "secret", dir)
+	trakt.API = server.URL
+	if trakt.SignedIn() {
+		t.Fatal("signed in before signing in")
+	}
+	code, err := trakt.StartSignIn()
+	if err != nil || code.UserCode != "ABC123" {
+		t.Fatalf("code %+v, %v", code, err)
+	}
+	code.Interval = -5 // poll at once in the test
+	if err := trakt.finishSignIn(code, 0); err != nil {
+		t.Fatal(err)
+	}
+	if !NewTrakt("id", "secret", dir).SignedIn() {
+		t.Fatal("token not kept")
+	}
+	movie := Movie{Title: "Interstellar", IMDb: "tt0816692"}
+	if err := trakt.Watchlist(movie, true); err != nil {
+		t.Fatal(err)
+	}
+	last := calls[len(calls)-1]
+	if !strings.HasPrefix(last, "/sync/watchlist Bearer tok") || !strings.Contains(last, `"imdb":"tt0816692"`) {
+		t.Errorf("call = %q", last)
+	}
+	if err := trakt.Rate(Movie{Title: "No id"}, 8); err == nil {
+		t.Error("a movie without an IMDb id was sent")
 	}
 }

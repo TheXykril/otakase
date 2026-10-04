@@ -110,7 +110,7 @@ func TestMovieTabsOpenOnAFilledList(t *testing.T) {
 	if !ok || active != movieWatchlistKey || picked.Key != moviePathPrefix+"8filmai:/filmas/a/" {
 		t.Fatalf("picked %+v ok=%v active=%q", picked, ok, active)
 	}
-	if shown[0].Key != movieSearchKey || len(seen.Categories) != 3 || len(seen.Actions) != 3 {
+	if shown[0].Key != movieSearchKey || len(seen.Categories) != 3 || len(seen.Actions) != 4 {
 		t.Errorf("rows %+v, tabs %d, actions %d", shown, len(seen.Categories), len(seen.Actions))
 	}
 }

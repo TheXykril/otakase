@@ -36,6 +36,11 @@ type Store struct {
 
 	mu   sync.Mutex
 	data storeData
+
+	// OnChange, when set, is told about every saved change to an entry,
+	// after the save, with the entry as it was and as it is. It is how Trakt
+	// hears about changes.
+	OnChange func(before, after Entry)
 }
 
 type storeData struct {
@@ -120,6 +125,14 @@ func (s *Store) Get(key string) (Entry, bool) {
 // update changes a movie's entry, creating it from movie when missing, and
 // saves.
 func (s *Store) update(movie Movie, change func(*Entry)) error {
+	before, after, err := s.change(movie, change)
+	if err == nil && s.OnChange != nil {
+		s.OnChange(before, after)
+	}
+	return err
+}
+
+func (s *Store) change(movie Movie, change func(*Entry)) (Entry, Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if movie.Provider == "" {
@@ -145,10 +158,11 @@ func (s *Store) update(movie Movie, change func(*Entry)) error {
 			*field.dst = field.src
 		}
 	}
+	before := *entry
 	entry.Movie = merged
 	change(entry)
 	entry.Updated = time.Now()
-	return s.save()
+	return before, *entry, s.save()
 }
 
 // SetProgress records where playback stopped. A movie watched to the end is
