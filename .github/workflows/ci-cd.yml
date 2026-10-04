@@ -157,6 +157,8 @@ jobs:
     permissions:
       contents: write
       actions: read
+    outputs:
+      version: ${{ steps.organize.outputs.version }}
     if: |
       github.ref == 'refs/heads/main' && 
       github.event_name == 'push' && 
@@ -209,9 +211,11 @@ jobs:
           path: Build
 
       - name: Organize Release Files
+        id: organize
         run: |
           $version = Get-Content VERSION.txt
           echo "OTAKASE_VERSION=$version" >> $env:GITHUB_ENV
+          echo "version=$version" >> $env:GITHUB_OUTPUT
           $release_dir = "releases/otakase-$version"
 
           # Create directory structure
@@ -429,6 +433,18 @@ jobs:
             Build/Output/otakase-windows-installer.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Submits the new installer to winget. A release published with
+  # GITHUB_TOKEN starts no other workflow, so it is called from here rather
+  # than on a `release: published` trigger.
+  winget:
+    needs: release
+    permissions:
+      contents: read
+    uses: ./.github/workflows/winget.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+    secrets: inherit
 
   # Merges a Dependabot PR once the build above passes. It lives in this
   # workflow rather than its own so `needs: build` does the waiting: no repo

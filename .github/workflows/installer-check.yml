@@ -1,0 +1,76 @@
+name: Windows installer check
+
+# The installer is otherwise only built by a release, so a broken change to it
+# would surface after the tag is cut. This builds it from stand-in binaries,
+# installs it silently the way winget does, checks that otakase and otk run
+# from PATH, then uninstalls it and checks PATH is clean again.
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Build/otakase-windows-build.iss
+      - Build/otk.cmd
+      - .github/workflows/installer-check.yml
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # whoami.exe stands in for both programs: it is small, 64-bit and prints
+      # something, which is all the PATH check needs.
+      - name: Stand-in binaries
+        run: |
+          $version = "0.0.0"
+          $dir = "releases/otakase-$version/windows"
+          New-Item -ItemType Directory -Force -Path $dir, "Build/mpv" | Out-Null
+          Copy-Item "$env:SystemRoot\System32\whoami.exe" "$dir/otakase-windows-x86_64.exe"
+          Copy-Item "$env:SystemRoot\System32\whoami.exe" "Build/mpv/mpv.exe"
+          $iss = "Build/otakase-windows-build.iss"
+          (Get-Content $iss) -replace '^AppVersion=.*', "AppVersion=$version" | Set-Content $iss
+        shell: pwsh
+
+      - name: Build installer
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "Build\otakase-windows-build.iss"'
+        shell: pwsh
+
+      - name: Install, run from PATH, uninstall
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function UserPath { [Environment]::GetEnvironmentVariable('Path', 'User') }
+          $app = Join-Path $env:APPDATA 'Otakase'
+          $before = UserPath
+
+          $p = Start-Process 'Build\Output\otakase-windows-installer.exe' -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installer exited $($p.ExitCode)" }
+          if (-not (Test-Path "$app\bin\mpv.exe")) { throw "mpv.exe not installed" }
+          if ((UserPath) -split ';' -notcontains $app) { throw "PATH lacks $app : $(UserPath)" }
+
+          # A fresh shell with the PATH a new terminal would get.
+          $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + (UserPath)
+          cmd /c "otakase >nul && otk >nul"
+          if ($LASTEXITCODE -ne 0) { throw "otakase or otk did not run from PATH" }
+
+          # A second install (an upgrade) must not add the folder twice.
+          $p = Start-Process 'Build\Output\otakase-windows-installer.exe' -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "reinstall exited $($p.ExitCode)" }
+          $count = ((UserPath) -split ';' | Where-Object { $_ -eq $app }).Count
+          if ($count -ne 1) { throw "PATH has $count copies of $app" }
+
+          $p = Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "uninstaller exited $($p.ExitCode)" }
+          # The uninstaller hands off to a copy of itself and returns early.
+          for ($i = 0; $i -lt 30 -and ((UserPath) -split ';' -contains $app); $i++) { Start-Sleep 1 }
+          if ((UserPath) -split ';' -contains $app) { throw "PATH still has $app : $(UserPath)" }
+          if ("$before".TrimEnd(';') -ne "$(UserPath)".TrimEnd(';')) { throw "PATH changed: was '$before', now '$(UserPath)'" }
+          Write-Host "Installer adds and removes PATH cleanly."
+        shell: pwsh
