@@ -60,6 +60,17 @@ func OpenStore(dir string) (*Store, error) {
 	if store.data.Movies == nil {
 		store.data.Movies = map[string]*Entry{}
 	}
+	// History from before there was a choice of provider is keyed by path
+	// alone, and all of it is 8Filmai's.
+	for key, entry := range store.data.Movies {
+		if entry.Provider == "" {
+			entry.Provider = FilmaiName
+		}
+		if entry.Key() != key {
+			delete(store.data.Movies, key)
+			store.data.Movies[entry.Key()] = entry
+		}
+	}
 	return store, nil
 }
 
@@ -95,11 +106,11 @@ func (s *Store) SetSite(address string) error {
 	return s.save()
 }
 
-// Get returns the entry for a movie, if there is one.
-func (s *Store) Get(path string) (Entry, bool) {
+// Get returns the entry for a movie, by its Key, if there is one.
+func (s *Store) Get(key string) (Entry, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	entry, ok := s.data.Movies[path]
+	entry, ok := s.data.Movies[key]
 	if !ok {
 		return Entry{}, false
 	}
@@ -111,13 +122,17 @@ func (s *Store) Get(path string) (Entry, bool) {
 func (s *Store) update(movie Movie, change func(*Entry)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	entry, ok := s.data.Movies[movie.Path]
+	if movie.Provider == "" {
+		movie.Provider = FilmaiName
+	}
+	entry, ok := s.data.Movies[movie.Key()]
 	if !ok {
 		entry = &Entry{}
-		s.data.Movies[movie.Path] = entry
+		s.data.Movies[movie.Key()] = entry
 	}
 	// The page knows more than a search result; keep what is known.
 	merged := entry.Movie
+	merged.Provider = movie.Provider
 	merged.Path = movie.Path
 	for _, field := range []struct {
 		dst *string
@@ -178,11 +193,11 @@ func (s *Store) SetWatchlist(movie Movie, on bool) error {
 	return s.update(movie, func(entry *Entry) { entry.Watchlist = on })
 }
 
-// Remove forgets a movie.
-func (s *Store) Remove(path string) error {
+// Remove forgets a movie, by its Key.
+func (s *Store) Remove(key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.data.Movies, path)
+	delete(s.data.Movies, key)
 	return s.save()
 }
 

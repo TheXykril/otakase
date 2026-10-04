@@ -36,6 +36,8 @@ const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, li
 
 // Movie is one search result or movie page.
 type Movie struct {
+	// Provider names where the movie is from; see ProviderNames.
+	Provider string
 	// Path is the page's path on the site, /filmas/<slug>/. It is the movie's
 	// key: the address in front of it changes, the path does not.
 	Path  string
@@ -45,6 +47,15 @@ type Movie struct {
 	Year     string
 	Poster   string
 	IMDb     string
+}
+
+// Key identifies the movie in the history: its provider and its path there.
+func (m Movie) Key() string {
+	provider := m.Provider
+	if provider == "" {
+		provider = FilmaiName
+	}
+	return provider + ":" + m.Path
 }
 
 // Label is how a movie reads in a menu.

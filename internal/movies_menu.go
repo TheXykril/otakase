@@ -38,6 +38,7 @@ const (
 	movieWatchedKey   = "MOVIE:WATCHED"
 	movieUnwatchedKey = "MOVIE:UNWATCHED"
 	movieRateKey      = "MOVIE:RATE"
+	movieProviderKey  = "MOVIE:PROVIDER"
 	movieBackKey      = "back"
 	moviePathPrefix   = "MOVIE_PATH:"
 )
@@ -68,34 +69,37 @@ func WatchMovies(config *Config) {
 			Log(fmt.Sprintf("movies: could not remember the site address: %v", err))
 		}
 	})
+	lib := &movieLibrary{site: site, providers: map[string]movies.Provider{}}
 
 	active := ""
 	for {
 		var picked SelectionOption
 		var ok bool
 		if config.RofiSelection {
-			picked, ok = pickMovieOption(movieHubOptions(config, store))
+			picked, ok = pickMovieOption(movieHubOptions(config, store, lib))
 		} else {
-			picked, ok, active = pickFromMovieTabs(config, store, active)
+			picked, ok, active = pickFromMovieTabs(config, store, lib, active)
 		}
 		if !ok {
 			return
 		}
 		switch picked.Key {
 		case movieSearchKey:
-			searchMovies(config, store, site)
+			searchMovies(config, store, lib)
 		case movieCastKey:
 			toggleCastToDevice(config)
+		case movieProviderKey:
+			pickMovieProvider(config, lib)
 		case movieContinueKey:
-			pickFromMovieList(config, store, site, store.Continue)
+			pickFromMovieList(config, store, lib, store.Continue)
 		case movieWatchlistKey:
-			pickFromMovieList(config, store, site, store.Watchlist)
+			pickFromMovieList(config, store, lib, store.Watchlist)
 		case movieHistoryKey:
-			pickFromMovieList(config, store, site, store.History)
+			pickFromMovieList(config, store, lib, store.History)
 		default:
 			if path, found := strings.CutPrefix(picked.Key, moviePathPrefix); found {
 				if entry, known := store.Get(path); known {
-					openMovie(config, store, site, entry.Movie)
+					openMovie(config, store, lib, entry.Movie)
 				}
 				break
 			}
@@ -121,17 +125,18 @@ func movieLists(store *movies.Store) []struct {
 }
 
 // movieActions are the footer's keys in the terminal menu.
-func movieActions(config *Config) []FooterAction {
-	return applyDynamicActionLabels([]FooterAction{
+func movieActions(config *Config, lib *movieLibrary) []FooterAction {
+	return []FooterAction{
 		{Key: movieSearchKey, Label: "search", Hint: "ctrl+f"},
-		{Key: movieCastKey, Label: "cast", Hint: "ctrl+k"},
-	}, config, true)
+		{Key: movieProviderKey, Label: "provider: " + lib.current(config).Name(), Hint: "ctrl+o"},
+		{Key: movieCastKey, Label: castActionCheckbox(config), Hint: "ctrl+k"},
+	}
 }
 
 // pickFromMovieTabs is the terminal's Movies menu: the remembered lists as
 // tabs, as the anime lists are, with search and the cast switch in the
 // footer. It reports the tab it was left on, so coming back opens it again.
-func pickFromMovieTabs(config *Config, store *movies.Store, active string) (SelectionOption, bool, string) {
+func pickFromMovieTabs(config *Config, store *movies.Store, lib *movieLibrary, active string) (SelectionOption, bool, string) {
 	lists := movieLists(store)
 	tabs := make([]Tab, 0, len(lists))
 	for _, list := range lists {
@@ -164,7 +169,7 @@ func pickFromMovieTabs(config *Config, store *movies.Store, active string) (Sele
 		Prompt:         moviesSection,
 		Categories:     tabs,
 		ActiveCategory: active,
-		Actions:        movieActions(config),
+		Actions:        movieActions(config, lib),
 		LoadCategory:   load,
 	})
 	if err != nil {
@@ -183,7 +188,7 @@ func pickFromMovieTabs(config *Config, store *movies.Store, active string) (Sele
 
 // movieHubOptions is the Movies menu under rofi, which has no tabs: the lists
 // are rows, as is the cast switch.
-func movieHubOptions(config *Config, store *movies.Store) []SelectionOption {
+func movieHubOptions(config *Config, store *movies.Store, lib *movieLibrary) []SelectionOption {
 	options := []SelectionOption{{Key: movieSearchKey, Label: "Search movies", Icon: icons.Search}}
 	labels := map[string]string{movieContinueKey: "Continue watching", movieWatchlistKey: "Watchlist", movieHistoryKey: "History"}
 	for _, list := range movieLists(store) {
@@ -196,6 +201,7 @@ func movieHubOptions(config *Config, store *movies.Store) []SelectionOption {
 		castIcon = icons.Cast
 	}
 	options = append(options,
+		SelectionOption{Key: movieProviderKey, Label: "Provider: " + lib.current(config).Label(), Icon: icons.Provider},
 		SelectionOption{Key: movieCastKey, Label: castActionLabel(config), Icon: castIcon},
 		SelectionOption{Key: movieBackKey, Label: "Back to menu", Icon: icons.Back})
 	return options
@@ -221,16 +227,17 @@ func pickMovieOption(options []SelectionOption) (SelectionOption, bool) {
 
 // searchMovies asks for a title and offers what the site finds, until the
 // viewer backs out of the question.
-func searchMovies(config *Config, store *movies.Store, site *movies.Site) {
+func searchMovies(config *Config, store *movies.Store, lib *movieLibrary) {
 	for {
 		query, cancelled, err := promptCancelable(config, moviesSection,
 			"Search for a movie", "enter to search · esc to go back")
 		if err != nil || cancelled {
 			return
 		}
-		found, err := site.Search(query)
+		provider := lib.current(config)
+		found, err := provider.Search(query)
 		if err != nil {
-			Log(fmt.Sprintf("movies: search for %q failed: %v", query, err))
+			Log(fmt.Sprintf("movies: %s: search for %q failed: %v", provider.Name(), query, err))
 			Out(fmt.Sprintf("Could not search for %q: %v", query, err))
 			continue
 		}
@@ -241,7 +248,7 @@ func searchMovies(config *Config, store *movies.Store, site *movies.Site) {
 		options := make([]SelectionOption, 0, len(found)+1)
 		byKey := map[string]movies.Movie{}
 		for _, movie := range found {
-			key := moviePathPrefix + movie.Path
+			key := moviePathPrefix + movie.Key()
 			byKey[key] = movie
 			options = append(options, movieRow(movie, store))
 		}
@@ -251,7 +258,7 @@ func searchMovies(config *Config, store *movies.Store, site *movies.Site) {
 			continue
 		}
 		if movie, ok := byKey[picked.Key]; ok {
-			openMovie(config, store, site, movie)
+			openMovie(config, store, lib, movie)
 			return
 		}
 	}
@@ -261,7 +268,7 @@ func searchMovies(config *Config, store *movies.Store, site *movies.Site) {
 func movieRow(movie movies.Movie, store *movies.Store) SelectionOption {
 	label := movie.Label()
 	icon := icons.TV
-	if entry, ok := store.Get(movie.Path); ok {
+	if entry, ok := store.Get(movie.Key()); ok {
 		switch {
 		case entry.Started():
 			label += " · stopped at " + formatClock(entry.Position)
@@ -274,7 +281,7 @@ func movieRow(movie movies.Movie, store *movies.Store) SelectionOption {
 			label += fmt.Sprintf(" · %d/10", entry.Rating)
 		}
 	}
-	return SelectionOption{Key: moviePathPrefix + movie.Path, Label: label, Title: movie.Title, Thumbnail: movie.Poster, Icon: icon}
+	return SelectionOption{Key: moviePathPrefix + movie.Key(), Label: label, Title: movie.Title, Thumbnail: movie.Poster, Icon: icon}
 }
 
 // pickMovieRows shows a list of movies, with their posters in rofi when
@@ -321,7 +328,7 @@ func pickMovieRating(current int) (int, bool) {
 }
 
 // pickFromMovieList offers one of the remembered lists.
-func pickFromMovieList(config *Config, store *movies.Store, site *movies.Site, list func() []movies.Entry) {
+func pickFromMovieList(config *Config, store *movies.Store, lib *movieLibrary, list func() []movies.Entry) {
 	for {
 		entries := list()
 		if len(entries) == 0 {
@@ -340,7 +347,7 @@ func pickFromMovieList(config *Config, store *movies.Store, site *movies.Site, l
 			return
 		}
 		if movie, ok := byKey[picked.Key]; ok {
-			openMovie(config, store, site, movie)
+			openMovie(config, store, lib, movie)
 		}
 		ClearScreen()
 	}
@@ -348,9 +355,9 @@ func pickFromMovieList(config *Config, store *movies.Store, site *movies.Site, l
 
 // openMovie offers what can be done with one movie: play it (or carry on
 // where it stopped), keep it for later, or forget it.
-func openMovie(config *Config, store *movies.Store, site *movies.Site, movie movies.Movie) {
+func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie movies.Movie) {
 	for {
-		entry, known := store.Get(movie.Path)
+		entry, known := store.Get(movie.Key())
 		options := []SelectionOption{}
 		if entry.Started() {
 			options = append(options,
@@ -389,13 +396,13 @@ func openMovie(config *Config, store *movies.Store, site *movies.Site, movie mov
 		}
 		switch picked.Key {
 		case moviePlayKey:
-			playMovie(config, store, site, movie, entry.Position)
+			playMovie(config, store, lib, movie, entry.Position)
 			return
 		case movieRestartKey:
-			playMovie(config, store, site, movie, 0)
+			playMovie(config, store, lib, movie, 0)
 			return
 		case movieDownloadKey:
-			downloadMovie(config, site, movie)
+			downloadMovie(config, lib, movie)
 		case movieWatchedKey, movieUnwatchedKey:
 			if err := store.SetWatched(movie, picked.Key == movieWatchedKey); err != nil {
 				Log(fmt.Sprintf("movies: could not save: %v", err))
@@ -411,8 +418,8 @@ func openMovie(config *Config, store *movies.Store, site *movies.Site, movie mov
 				Log(fmt.Sprintf("movies: could not save the watchlist: %v", err))
 			}
 		case movieForgetKey:
-			if err := store.Remove(movie.Path); err != nil {
-				Log(fmt.Sprintf("movies: could not forget %s: %v", movie.Path, err))
+			if err := store.Remove(movie.Key()); err != nil {
+				Log(fmt.Sprintf("movies: could not forget %s: %v", movie.Key(), err))
 			}
 			return
 		}
@@ -422,32 +429,31 @@ func openMovie(config *Config, store *movies.Store, site *movies.Site, movie mov
 // playMovie plays a movie from start seconds, in mpv or on the cast device
 // when casting is on, trying its servers in turn until one plays, and records
 // where it stopped.
-func playMovie(config *Config, store *movies.Store, site *movies.Site, movie movies.Movie, start int) {
-	page, err := site.Page(movie.Path)
+func playMovie(config *Config, store *movies.Store, lib *movieLibrary, movie movies.Movie, start int) {
+	movie, sources, err := lib.open(config, movie)
 	if err != nil {
-		Log(fmt.Sprintf("movies: %s: %v", movie.Path, err))
 		Out(fmt.Sprintf("Could not open %s: %v", movie.Label(), err))
 		awaitEnterNotice()
 		return
 	}
-	title := page.Label()
+	title := movie.Label()
 	Out(fmt.Sprintf("Loading %s…", title))
 
-	for _, source := range site.Sources(page) {
+	for _, source := range sources {
 		stream, err := source.Resolve()
 		if err != nil {
-			Log(fmt.Sprintf("movies: %s: %s: %v", page.Path, source.Server, err))
+			Log(fmt.Sprintf("movies: %s: %s: %v", movie.Key(), source.Server, err))
 			continue
 		}
-		Log(fmt.Sprintf("movies: %s: playing from %s", page.Path, stream.Server))
-		anime := movieAnime(config, store, page.Movie, title, stream, start)
+		Log(fmt.Sprintf("movies: %s: playing from %s", movie.Key(), stream.Server))
+		anime := movieAnime(config, store, movie, title, stream, start)
 		if config.CastToDevice {
 			if castMovie(config, &anime) {
 				return
 			}
 			continue
 		}
-		if playMovieInMPV(config, store, page.Movie, title, stream, &anime, start) {
+		if playMovieInMPV(config, store, movie, title, stream, &anime, start) {
 			return
 		}
 	}
@@ -538,16 +544,15 @@ func playMovieInMPV(config *Config, store *movies.Store, movie movies.Movie, tit
 
 // downloadMovie saves a movie to the download folder from the first server
 // that hands over a file.
-func downloadMovie(config *Config, site *movies.Site, movie movies.Movie) {
+func downloadMovie(config *Config, lib *movieLibrary, movie movies.Movie) {
 	binary, err := ffmpegPath()
 	if err != nil {
 		Out("Downloading needs ffmpeg, which was not found.")
 		awaitEnterNotice()
 		return
 	}
-	page, err := site.Page(movie.Path)
+	movie, sources, err := lib.open(config, movie)
 	if err != nil {
-		Log(fmt.Sprintf("movies: %s: %v", movie.Path, err))
 		Out(fmt.Sprintf("Could not open %s: %v", movie.Label(), err))
 		awaitEnterNotice()
 		return
@@ -558,20 +563,20 @@ func downloadMovie(config *Config, site *movies.Site, movie movies.Movie) {
 		awaitEnterNotice()
 		return
 	}
-	output := movieDownloadPath(dir, page.Movie, DownloadFormat(config))
+	output := movieDownloadPath(dir, movie, DownloadFormat(config))
 	if info, err := os.Stat(output); err == nil && info.Size() > 0 {
 		Out("Already downloaded: " + output)
 		awaitEnterNotice()
 		return
 	}
 
-	for _, source := range site.Sources(page) {
+	for _, source := range sources {
 		stream, err := source.Resolve()
 		if err != nil {
-			Log(fmt.Sprintf("movies: %s: %s: %v", page.Path, source.Server, err))
+			Log(fmt.Sprintf("movies: %s: %s: %v", movie.Key(), source.Server, err))
 			continue
 		}
-		anime := movieAnime(config, nil, page.Movie, page.Label(), stream, 0)
+		anime := movieAnime(config, nil, movie, movie.Label(), stream, 0)
 		job := ffmpegJob{
 			Stream:   stream.URL,
 			Referrer: stream.Referrer,
@@ -579,7 +584,7 @@ func downloadMovie(config *Config, site *movies.Site, movie movies.Movie) {
 			Output:   output,
 			File:     !stream.HLS,
 		}
-		Out(fmt.Sprintf("Downloading %s from %s…", page.Label(), stream.Server))
+		Out(fmt.Sprintf("Downloading %s from %s…", movie.Label(), stream.Server))
 		lastReport := time.Now()
 		onProgress := func(elapsed time.Duration) {
 			if time.Since(lastReport) < 5*time.Second {
@@ -596,14 +601,14 @@ func downloadMovie(config *Config, site *movies.Site, movie movies.Movie) {
 		}
 		if err != nil {
 			os.Remove(output)
-			Log(fmt.Sprintf("movies: %s: download from %s failed: %v", page.Path, stream.Server, err))
+			Log(fmt.Sprintf("movies: %s: download from %s failed: %v", movie.Key(), stream.Server, err))
 			continue
 		}
 		Out("Saved " + output)
 		awaitEnterNotice()
 		return
 	}
-	Out(fmt.Sprintf("None of the servers for %s could be downloaded.", page.Label()))
+	Out(fmt.Sprintf("None of the servers for %s could be downloaded.", movie.Label()))
 	awaitEnterNotice()
 }
 

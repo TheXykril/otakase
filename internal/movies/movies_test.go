@@ -156,7 +156,7 @@ func TestStoreProgress(t *testing.T) {
 	if err := store.SetProgress(Movie{Path: movie.Path}, 5500, 5580, true); err != nil {
 		t.Fatal(err)
 	}
-	entry, _ := store.Get(movie.Path)
+	entry, _ := store.Get(movie.Key())
 	if !entry.Watched || entry.Position != 0 || entry.Watchlist || entry.Title != "Alkis" {
 		t.Errorf("after finishing: %+v", entry)
 	}
@@ -168,7 +168,7 @@ func TestStoreProgress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, ok := reopened.Get(movie.Path); !ok || !got.Watched {
+	if got, ok := reopened.Get(movie.Key()); !ok || !got.Watched {
 		t.Errorf("not kept on disk: %+v", got)
 	}
 }
@@ -216,12 +216,20 @@ func TestStoreWatchedAndRating(t *testing.T) {
 	if err := store.SetRating(movie, 12); err != nil {
 		t.Fatal(err)
 	}
-	entry, _ := store.Get(movie.Path)
+	entry, _ := store.Get(movie.Key())
 	if !entry.Watched || entry.Position != 0 || entry.Watchlist || entry.Rating != 10 {
 		t.Errorf("entry = %+v", entry)
 	}
 	store.SetWatched(movie, false)
-	if entry, _ := store.Get(movie.Path); entry.Watched {
+	if entry, _ := store.Get(movie.Key()); entry.Watched {
 		t.Errorf("still watched: %+v", entry)
+	}
+}
+
+func TestDropAdvertCues(t *testing.T) {
+	srt := "1\r\n00:00:06,000 --> 00:00:12,074\r\nWatch Online Movies and Series for FREE\r\nwww.osdb.link/lm\r\n\r\n2\r\n00:01:14,908 --> 00:01:17,094\r\nWell, my dad was a farmer.\r\n"
+	got := dropAdvertCues(srt)
+	if strings.Contains(got, "osdb") || !strings.Contains(got, "farmer") {
+		t.Errorf("got %q", got)
 	}
 }

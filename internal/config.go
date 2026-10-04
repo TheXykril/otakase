@@ -162,6 +162,9 @@ type Config struct {
 	// MovieSite is the address that redirects to wherever the movie site is
 	// now. The site itself moves between bare IP addresses.
 	MovieSite string `config:"MovieSite"`
+	// MovieProvider is where movies are searched: vidsrc (English) or
+	// 8filmai (Lithuanian). Changed from the Movies menu.
+	MovieProvider string `config:"MovieProvider"`
 }
 
 const (
@@ -228,6 +231,7 @@ func defaultConfigMap() map[string]string {
 		"DevBuilds":                  "false",
 		"ExperimentalMovies":         "false",
 		"MovieSite":                  "https://8filmai.eu",
+		"MovieProvider":              "vidsrc",
 		"AdultContent":               "false",
 		"ContinueWatchingAdult":      "false",
 		"MpvEpisodePlaylist":         "true",

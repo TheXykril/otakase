@@ -7,13 +7,42 @@ knows about them.
 
 | Piece | Where |
 |---|---|
-| Site client, search, movie pages | `internal/movies/site.go` |
-| Video hosts (Streamtape, Doodstream) | `internal/movies/hosts.go` |
+| Provider interface, 8Filmai adapter | `internal/movies/provider.go` |
+| vidsrc (English) and OpenSubtitles | `internal/movies/vidsrc.go` |
+| 8Filmai site client, search, movie pages | `internal/movies/site.go` |
+| Video hosts (Streamtape, Doodstream, imgsto.re) | `internal/movies/hosts.go` |
 | History file (`movies.json`) | `internal/movies/store.go` |
-| Menus and the mpv loop | `internal/movies_menu.go` |
+| Menus, mpv loop, cast and download | `internal/movies_menu.go` |
+| Provider choice (`MovieProvider`) | `internal/movies_providers.go` |
 | Main menu entry (`MOVIES`, `^x`) | `menuActions` in `internal/menu_layout.go`, added by `mainMenuLayout` when the option is on |
 
-## The site
+## Providers
+
+`MovieProvider` picks where searches go; `^o` in the Movies menu changes it
+and saves it. A movie in the history is always opened on the provider it came
+from. A provider implements `movies.Provider`: `Search` returns movies, and
+`Open` fills in details and lists `Source`s, each resolved only when tried.
+
+### vidsrc (English, default)
+
+- Search: IMDb's keyless suggestion list,
+  `https://v3.sg.media-imdb.com/suggestion/x/<query>.json`; only `movie` and
+  `tvMovie` items are kept. The IMDb id is the movie's path.
+- Streams: `https://data.vidsrc.sh/api.php?type=movie&imdb=<tt…>&stream_urls`
+  (the API behind vidsrc.to's player). `data.stream_urls` is base64 of
+  nonce + ciphertext; `vs.wasm_url` is a WebAssembly module with the key, which
+  changes every five minutes. The module imports nothing and is run with
+  wazero: `alloc(len)`, write the bytes, `decrypt(ptr, len)` returns the plain
+  length, and the text starts 12 bytes in, one HLS link per line.
+- Each link needs `?token=` from `<link origin>/generate.php`, a JWT tied to
+  the caller's IP, so resolve on the machine that plays.
+- Subtitles: OpenSubtitles' keyless REST search
+  (`rest.opensubtitles.org/search/imdbid-<7 digits>/sublanguageid-eng`, header
+  `X-User-Agent: trailers.to-UA`), preferring the file named like the API's
+  `file_name`. It comes gzipped; it is unpacked to the temp folder with the
+  site's advert cues taken out.
+
+### 8Filmai (Lithuanian)
 
 The source is a Lithuanian WordPress site on the DooPlay theme. It has no fixed
 address: it moves between bare IP addresses. `MovieSite` (default
@@ -51,14 +80,21 @@ before the next is tried.
   `?token=<last path part>&expiry=<ms>`. The file needs the embed host as
   referrer.
 
-Both hosts change their pages every few months; when a server stops working,
+- **imgsto.re** (server 0): `/files/<id>` is a player page; the `.mp4` link is
+  a base64 string of the URL-escaped link inside its script.
+- Server 1 (`player.eltitbus.xyz`) is a Netu/HQQ clone behind a captcha and is
+  not supported.
+
+The hosts change their pages every few months; when a server stops working,
 the extractor in `hosts.go` is the first place to look. The log
 (`otakase-debug.log`) has a `movies:` line for every server tried.
 
 ## Tracking
 
-`movies.json` in the storage directory, keyed by the page path. It keeps the
-position, duration, watched and watchlist flags. A movie counts as watched at
+`movies.json` in the storage directory, keyed by `provider:path` (entries
+from before providers existed are 8Filmai's and are rekeyed when read). It
+keeps the position, duration, watched and watchlist flags, and a rating out
+of 10. A movie counts as watched at
 `PercentageToMarkComplete`. The position is saved every 15 seconds and when
 the player closes. Nothing is sent anywhere.
 
@@ -66,5 +102,14 @@ the player closes. Nothing is sent anywhere.
 
 `go test ./internal/movies/` runs offline against markup cut from the site.
 `OTAKASE_LIVE_MOVIES=1 go test ./internal/movies/ -run Live` searches the real
-site and resolves a stream. The cloud CI cannot reach the site, so run it
-locally.
+site and resolves a stream, and does the same on vidsrc. Streams are tied to
+the address that resolved them, so run it on the machine that plays.
+
+## Cast and download
+
+Casting goes through `CastEpisode` with the movie dressed as an untracked
+one-episode show; `Anime.Movie` carries the start position and a callback that
+saves progress to `movies.json`. Under rofi it casts in-process rather than
+handing off to a terminal, which would lose that callback. Downloads use the
+anime download's ffmpeg job with `File` set for hosts whose links have no
+extension, and are named `Title (Year).mkv` in `DownloadDir`.
