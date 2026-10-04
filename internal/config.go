@@ -155,6 +155,13 @@ type Config struct {
 	// same descriptor, and a menu nobody is at blocks the season outright.
 	// See wiki/Developer-Cast-Window-Prompts.md.
 	CastNonInteractive bool `config:"-"`
+	// ExperimentalMovies turns on the Movies menu: non-anime movies from a
+	// site outside AniList and MyAnimeList, tracked locally only. Off by
+	// default while it is experimental.
+	ExperimentalMovies bool `config:"ExperimentalMovies"`
+	// MovieSite is the address that redirects to wherever the movie site is
+	// now. The site itself moves between bare IP addresses.
+	MovieSite string `config:"MovieSite"`
 }
 
 const (
@@ -219,6 +226,8 @@ func defaultConfigMap() map[string]string {
 		"IntroDBSkipTimes":           "true",
 		"CheckUpdates":               "true",
 		"DevBuilds":                  "false",
+		"ExperimentalMovies":         "false",
+		"MovieSite":                  "https://8filmai.eu",
 		"AdultContent":               "false",
 		"ContinueWatchingAdult":      "false",
 		"MpvEpisodePlaylist":         "true",
@@ -924,6 +933,8 @@ func categoryIcon(key string) icons.Icon {
 		return icons.Cast
 	case "STATS":
 		return icons.Stats
+	case "MOVIES":
+		return icons.TV
 	}
 	return 0
 }

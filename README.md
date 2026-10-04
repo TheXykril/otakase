@@ -208,6 +208,7 @@ people change:
 | `Theme` | `auto` follows your desktop colours; `builtin` uses otakase's own |
 | `ThemeFile` | Path to a colour palette file to use instead (pywal, base16 or `colors.toml`) |
 | `Icons` | Icons in the menus: `auto` (default), `true` or `false` for plain text |
+| `ExperimentalMovies` | `true` adds Movies to the menu, for movies that aren't anime. Experimental, off by default |
 | `MpvSkin` | otakase's look in mpv: `auto` (default, unless you already use your own mpv skin), `true`, or `false` for mpv's usual look |
 
 Every setting is explained on the
