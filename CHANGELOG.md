@@ -1,5 +1,40 @@
 # Changelog
 
+## 26.7.0 — 2026-10-04
+
+### Added
+
+- **otakase's own look in mpv.** The player gets a top bar with a back
+  button, the show's title, the episode's name and tracker and source chips,
+  a thin seek bar with openings and endings marked, a round play button,
+  volume, episode, audio and subtitle menus, quality and fullscreen. A Skip
+  Opening/Ending button (or Undo after an automatic skip) and an Up next
+  card during the ending. Colours follow your palette. Your own mpv.conf,
+  input.conf and scripts still load.
+- **`MpvSkin` setting.** `auto` (the default) uses the new look unless you
+  already run an mpv skin of your own or set `osc=no`; `true` always uses
+  it, `false` keeps mpv's usual look. It is left out for mpv older than
+  0.37, IINA and mpv-android.
+- **Menus follow your desktop theme.** Besides Omarchy, otakase now picks up
+  pywal, wallust and matugen, tinty or stylix base16 schemes, the KDE Plasma
+  colour scheme, GNOME's accent and dark style, and the macOS or Windows
+  accent and light/dark mode. `Theme` can force any one of them.
+- **`ThemeFile` setting.** Points at a palette file (pywal `colors.json`, a
+  base16 scheme or a `colors.toml`) for any other theme. A light palette
+  backs light desktops.
+- **winget.** Each release is sent to winget, so once the package is
+  accepted there `winget install TheXykril.Otakase` installs otakase on
+  Windows and `winget upgrade` keeps it current.
+
+### Changed
+
+- **Shu colours by default.** The builtin palette moves from sky blue on
+  black to warm near-black, cream text and a vermilion accent, matching the
+  new website and icon.
+- **The Windows installer adds otakase to PATH.** `otakase` and `otk` run
+  from any new terminal, and uninstalling removes it again. It installs as
+  64-bit.
+
 ## 26.6.0 — 2026-10-03
 
 ### Added
