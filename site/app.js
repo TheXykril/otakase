@@ -114,3 +114,16 @@
     .then((ok) => ok || run(FALLBACK))
     .catch(() => run(FALLBACK));
 })();
+
+// ---- menu shots: one system at a time
+(() => {
+  const buttons = [...document.querySelectorAll('.os-pick button')];
+  const shots = [...document.querySelectorAll('.os-shot')];
+  const show = (name) => {
+    buttons.forEach((b) => b.setAttribute('aria-pressed', b.dataset.shot === name));
+    shots.forEach((s) => { s.hidden = s.dataset.shot !== name; });
+  };
+  buttons.forEach((b) => b.addEventListener('click', () => show(b.dataset.shot)));
+  if (/Win/i.test(navigator.platform)) show('windows');
+  else if (/Linux/i.test(navigator.platform) && !/Android/i.test(navigator.userAgent)) show('linux');
+})();

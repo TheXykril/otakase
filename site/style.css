@@ -149,3 +149,19 @@ code { font: 0.85em var(--mono); color: var(--fg); }
   .cmds { grid-template-columns: 1fr; gap: 0; }
   .cmds dd { line-height: 1.5; margin-bottom: 10px; }
 }
+
+.os-pick { display: flex; gap: 26px; flex-wrap: wrap; margin-bottom: 22px; }
+.os-pick button { font: inherit; letter-spacing: inherit; color: var(--muted); background: none; border: 0; border-bottom: 1px solid transparent; padding-bottom: 4px; cursor: pointer; }
+.os-pick button[aria-pressed="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.os-shot img { border: 0; }
+.menus .hint { margin-top: 14px; }
+
+/* Install, kept short */
+.inst pre code { line-height: 1.6; }
+.inst-body { gap: 12px; }
+.run { margin-top: 8px; gap: 10px; }
+.more summary { cursor: pointer; color: var(--muted); list-style: none; }
+.more summary::-webkit-details-marker { display: none; }
+.more summary::before { content: "+ "; color: var(--accent); }
+.more[open] summary::before { content: "− "; }
+.more .cmds { margin-top: 10px; }

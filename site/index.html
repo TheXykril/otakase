@@ -73,11 +73,18 @@
 
   <section class="sec menus" aria-labelledby="menus-h">
     <p class="mono tag">The menus</p>
-    <h2 id="menus-h">In the terminal, or on the desktop.</h2>
-    <div class="pair">
-      <figure class="shot"><img src="img/menu-terminal.jpg" alt="otakase's terminal menu: the Watching list with tabs, the shows to continue at the top and a details pane" width="1180" height="620" loading="lazy"><figcaption class="mono">Terminal menus on every system. Tab through your lists, type to filter.</figcaption></figure>
-      <figure class="shot"><img src="img/menu-grid.jpg" alt="otakase's rofi menu: a grid of posters with a toolbar of actions" width="1202" height="748" loading="lazy"><figcaption class="mono">On Linux, rofi menus with posters. Bind it to a key and skip the terminal.</figcaption></figure>
+    <h2 id="menus-h">Same otakase on every system.</h2>
+    <div class="os-pick mono" role="group" aria-label="Show the menu on">
+      <button type="button" data-shot="macos" aria-pressed="true">MACOS</button>
+      <button type="button" data-shot="windows" aria-pressed="false">WINDOWS</button>
+      <button type="button" data-shot="linux" aria-pressed="false">LINUX</button>
+      <button type="button" data-shot="rofi" aria-pressed="false">ROFI</button>
     </div>
+    <figure class="shot os-shot" data-shot="macos"><img src="img/os-macos.jpg" alt="otakase's menu in the macOS Terminal: the Watching list with the shows to continue at the top" width="1200" height="550" loading="lazy"><figcaption class="mono">macOS Terminal. Tab through your lists, type to filter.</figcaption></figure>
+    <figure class="shot os-shot" data-shot="windows" hidden><img src="img/os-windows.jpg" alt="otakase's menu in Windows Terminal running PowerShell" width="1200" height="558" loading="lazy"><figcaption class="mono">Windows Terminal or PowerShell. The installer puts otakase on your PATH.</figcaption></figure>
+    <figure class="shot os-shot" data-shot="linux" hidden><img src="img/menu-terminal.jpg" alt="otakase's terminal menu on Linux: the Watching list with tabs and a details pane" width="1180" height="620" loading="lazy"><figcaption class="mono">Any Linux terminal.</figcaption></figure>
+    <figure class="shot os-shot" data-shot="rofi" hidden><img src="img/menu-grid.jpg" alt="otakase's rofi menu: a grid of posters with a toolbar of actions" width="1202" height="748" loading="lazy"><figcaption class="mono">On Linux, rofi menus with posters. Bind it to a key and skip the terminal.</figcaption></figure>
+    <p class="hint">The player above looks the same on all three: it is mpv with otakase's skin.</p>
   </section>
 
   <section class="sec cast" aria-labelledby="cast-h">
@@ -159,17 +166,20 @@ sudo ln -sf otakase /usr/local/bin/otk</code></pre>
         <p class="hint">No winget? Get the <a href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-installer.exe">installer</a>, or the standalone <a href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-x86_64.exe">otakase-windows-x86_64.exe</a> with your own mpv.</p>
       </div>
       <div class="run">
-        <p class="mono tag">Then, in your terminal</p>
+        <p class="mono tag">Then, on any system</p>
 <dl class="cmds">
           <dt><code>otakase</code></dt><dd>your list; otk works too</dd>
           <dt><code>otakase -c</code></dt><dd>continue where you left off</dd>
-          <dt><code>otakase -dub</code></dt><dd>dub instead of sub, this run</dd>
           <dt><code>otakase -cast</code></dt><dd>play on a TV on your network</dd>
+        </dl>
+        <details class="more"><summary class="mono">More commands</summary>
+        <dl class="cmds">
+          <dt><code>otakase -dub</code></dt><dd>dub instead of sub, this run</dd>
           <dt><code>otakase -download -episodes 1-12</code></dt><dd>save episodes instead (needs ffmpeg)</dd>
           <dt><code>otakase -e</code></dt><dd>edit your settings</dd>
           <dt><code>otakase -u</code></dt><dd>update to the latest release</dd>
         </dl>
-        <p class="hint">The same commands on Linux, macOS and Windows. On Linux, <code>otakase -rofi -image-preview</code> opens the poster menu.</p>
+        </details>
       </div>
       <p class="hint">Coming from curd? Your settings, sign-ins and history move over on first launch.</p>
     </div>
