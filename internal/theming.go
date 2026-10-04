@@ -12,11 +12,13 @@ import (
 // back to its own palette and logs why.
 func ApplyThemeFromConfig(config *Config) theme.Palette {
 	mode := theme.ModeAuto
+	themeFile := ""
 	if config != nil {
 		mode = theme.ParseMode(config.Theme)
+		themeFile = config.ThemeFile
 	}
 
-	palette, err := theme.Resolve(mode)
+	palette, err := theme.Resolve(mode, themeFile)
 	if err != nil {
 		Log(fmt.Sprintf("Falling back to the builtin palette: %v", err))
 	}

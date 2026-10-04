@@ -23,7 +23,7 @@ theme.
 - Skips openings, endings, filler episodes and recaps
 - Resumes where you left off, even on another device
 - Discord Rich Presence
-- rofi menus with poster previews, themed from your desktop colours on Omarchy
+- rofi menus with poster previews, themed from your desktop colours (Omarchy, pywal, base16, KDE, GNOME, macOS, Windows)
 - Its own look in mpv, in the same colours, with a skip button and the next episode a click away
 
 ## Install
@@ -203,7 +203,8 @@ people change:
 | `RofiSelection` | Use rofi menus instead of the terminal |
 | `TrackingRemote` | `none`, `anilist`, `myanimelist` or `anilist+myanimelist` |
 | `CastDevice` | Cast to this device without asking |
-| `Theme` | `auto` follows your desktop on Omarchy; `builtin` uses otakase's own colours |
+| `Theme` | `auto` follows your desktop colours; `builtin` uses otakase's own |
+| `ThemeFile` | Path to a colour palette file to use instead (pywal, base16 or `colors.toml`) |
 | `Icons` | Icons in the menus: `auto` (default), `true` or `false` for plain text |
 | `MpvSkin` | otakase's look in mpv: `auto` (default, unless you already use your own mpv skin), `true`, or `false` for mpv's usual look |
 

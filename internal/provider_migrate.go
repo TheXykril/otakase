@@ -180,6 +180,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"MenuActions": "26.6.0",
 		// 26.7.0 — otakase's own look in mpv
 		"MpvSkin": "26.7.0",
+		// 26.7.0 — menus follow more desktop themes, or a palette file
+		"ThemeFile": "26.7.0",
 	}
 }
 
