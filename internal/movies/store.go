@@ -14,11 +14,13 @@ import (
 type Entry struct {
 	Movie
 	// Position is where playback stopped, in seconds.
-	Position  int       `json:"position"`
-	Duration  int       `json:"duration"`
-	Watched   bool      `json:"watched"`
-	Watchlist bool      `json:"watchlist"`
-	Updated   time.Time `json:"updated"`
+	Position  int  `json:"position"`
+	Duration  int  `json:"duration"`
+	Watched   bool `json:"watched"`
+	Watchlist bool `json:"watchlist"`
+	// Rating is the viewer's score out of 10, 0 for none.
+	Rating  int       `json:"rating,omitempty"`
+	Updated time.Time `json:"updated"`
 }
 
 // Started reports whether the movie was stopped part way through.
@@ -153,6 +155,22 @@ func (s *Store) SetProgress(movie Movie, position, duration int, watched bool) e
 			entry.Watched = false
 		}
 	})
+}
+
+// SetWatched marks a movie watched, or not watched and to be started over.
+func (s *Store) SetWatched(movie Movie, watched bool) error {
+	return s.update(movie, func(entry *Entry) {
+		entry.Watched = watched
+		entry.Position = 0
+		if watched {
+			entry.Watchlist = false
+		}
+	})
+}
+
+// SetRating records the viewer's score out of 10; 0 clears it.
+func (s *Store) SetRating(movie Movie, rating int) error {
+	return s.update(movie, func(entry *Entry) { entry.Rating = min(max(rating, 0), 10) })
 }
 
 // SetWatchlist adds a movie to the watchlist or takes it off.

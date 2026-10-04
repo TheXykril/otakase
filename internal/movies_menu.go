@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/thexykril/otakase/internal/icons"
@@ -32,12 +34,22 @@ const (
 	movieListOffKey   = "MOVIE:LIST_OFF"
 	movieForgetKey    = "MOVIE:FORGET"
 	movieDownloadKey  = "MOVIE:DOWNLOAD"
+	movieCastKey      = "MOVIE:CAST"
+	movieWatchedKey   = "MOVIE:WATCHED"
+	movieUnwatchedKey = "MOVIE:UNWATCHED"
+	movieRateKey      = "MOVIE:RATE"
 	movieBackKey      = "back"
 	moviePathPrefix   = "MOVIE_PATH:"
 )
 
 // movieSelect is the menu the Movies section draws with; tests replace it.
 var movieSelect = DynamicSelectPreserveOrder
+
+// movieSelectPreview draws the poster grid in rofi; tests replace it.
+var movieSelectPreview = DynamicSelectPreview
+
+// movieSelectWithTabs draws the terminal menu with tabs; tests replace it.
+var movieSelectWithTabs = DynamicSelectWithRefresh
 
 // WatchMovies runs the Movies section until the viewer backs out of it.
 func WatchMovies(config *Config) {
@@ -57,28 +69,23 @@ func WatchMovies(config *Config) {
 		}
 	})
 
+	active := ""
 	for {
-		options := []SelectionOption{
-			{Key: movieSearchKey, Label: "Search movies", Icon: icons.Search},
+		var picked SelectionOption
+		var ok bool
+		if config.RofiSelection {
+			picked, ok = pickMovieOption(movieHubOptions(config, store))
+		} else {
+			picked, ok, active = pickFromMovieTabs(config, store, active)
 		}
-		if n := len(store.Continue()); n > 0 {
-			options = append(options, SelectionOption{Key: movieContinueKey, Label: fmt.Sprintf("Continue watching (%d)", n), Icon: icons.Play})
-		}
-		if n := len(store.Watchlist()); n > 0 {
-			options = append(options, SelectionOption{Key: movieWatchlistKey, Label: fmt.Sprintf("Watchlist (%d)", n), Icon: icons.Planning})
-		}
-		if n := len(store.History()); n > 0 {
-			options = append(options, SelectionOption{Key: movieHistoryKey, Label: fmt.Sprintf("History (%d)", n), Icon: icons.History})
-		}
-		options = append(options, SelectionOption{Key: movieBackKey, Label: "Back to menu", Icon: icons.Back})
-
-		picked, ok := pickMovieOption(options)
 		if !ok {
 			return
 		}
 		switch picked.Key {
 		case movieSearchKey:
 			searchMovies(config, store, site)
+		case movieCastKey:
+			toggleCastToDevice(config)
 		case movieContinueKey:
 			pickFromMovieList(config, store, site, store.Continue)
 		case movieWatchlistKey:
@@ -86,10 +93,112 @@ func WatchMovies(config *Config) {
 		case movieHistoryKey:
 			pickFromMovieList(config, store, site, store.History)
 		default:
+			if path, found := strings.CutPrefix(picked.Key, moviePathPrefix); found {
+				if entry, known := store.Get(path); known {
+					openMovie(config, store, site, entry.Movie)
+				}
+				break
+			}
 			return
 		}
 		ClearScreen()
 	}
+}
+
+// movieLists are the remembered lists, in tab order.
+func movieLists(store *movies.Store) []struct {
+	tab  Tab
+	list func() []movies.Entry
+} {
+	return []struct {
+		tab  Tab
+		list func() []movies.Entry
+	}{
+		{Tab{Key: movieContinueKey, Label: "Continue", Icon: icons.Play, Count: len(store.Continue())}, store.Continue},
+		{Tab{Key: movieWatchlistKey, Label: "Watchlist", Icon: icons.Planning, Count: len(store.Watchlist())}, store.Watchlist},
+		{Tab{Key: movieHistoryKey, Label: "History", Icon: icons.History, Count: len(store.History())}, store.History},
+	}
+}
+
+// movieActions are the footer's keys in the terminal menu.
+func movieActions(config *Config) []FooterAction {
+	return applyDynamicActionLabels([]FooterAction{
+		{Key: movieSearchKey, Label: "search", Hint: "ctrl+f"},
+		{Key: movieCastKey, Label: "cast", Hint: "ctrl+k"},
+	}, config, true)
+}
+
+// pickFromMovieTabs is the terminal's Movies menu: the remembered lists as
+// tabs, as the anime lists are, with search and the cast switch in the
+// footer. It reports the tab it was left on, so coming back opens it again.
+func pickFromMovieTabs(config *Config, store *movies.Store, active string) (SelectionOption, bool, string) {
+	lists := movieLists(store)
+	tabs := make([]Tab, 0, len(lists))
+	for _, list := range lists {
+		tabs = append(tabs, list.tab)
+	}
+	if active == "" {
+		// The first list with something in it.
+		active = movieContinueKey
+		for _, list := range lists {
+			if list.tab.Count > 0 {
+				active = list.tab.Key
+				break
+			}
+		}
+	}
+	load := func(key string) []SelectionOption {
+		active = key
+		options := []SelectionOption{{Key: movieSearchKey, Label: "Search movies", Icon: icons.Search}}
+		for _, list := range lists {
+			if list.tab.Key != key {
+				continue
+			}
+			for _, entry := range list.list() {
+				options = append(options, movieRow(entry.Movie, store))
+			}
+		}
+		return options
+	}
+	picked, err := movieSelectWithTabs(load(active), &SelectionRefreshConfig{
+		Prompt:         moviesSection,
+		Categories:     tabs,
+		ActiveCategory: active,
+		Actions:        movieActions(config),
+		LoadCategory:   load,
+	})
+	if err != nil {
+		Log(fmt.Sprintf("movies: menu failed: %v", err))
+		return SelectionOption{}, false, active
+	}
+	picked = NormalizeSelectionKey(picked)
+	if SelectionMeansQuit(picked) {
+		Exit(nil)
+	}
+	if picked.Key == "-2" || picked.Key == movieBackKey || picked.Key == "" {
+		return SelectionOption{}, false, active
+	}
+	return picked, true, active
+}
+
+// movieHubOptions is the Movies menu under rofi, which has no tabs: the lists
+// are rows, as is the cast switch.
+func movieHubOptions(config *Config, store *movies.Store) []SelectionOption {
+	options := []SelectionOption{{Key: movieSearchKey, Label: "Search movies", Icon: icons.Search}}
+	labels := map[string]string{movieContinueKey: "Continue watching", movieWatchlistKey: "Watchlist", movieHistoryKey: "History"}
+	for _, list := range movieLists(store) {
+		if list.tab.Count > 0 {
+			options = append(options, SelectionOption{Key: list.tab.Key, Label: fmt.Sprintf("%s (%d)", labels[list.tab.Key], list.tab.Count), Icon: list.tab.Icon})
+		}
+	}
+	castIcon := icons.CastOff
+	if config.CastToDevice {
+		castIcon = icons.Cast
+	}
+	options = append(options,
+		SelectionOption{Key: movieCastKey, Label: castActionLabel(config), Icon: castIcon},
+		SelectionOption{Key: movieBackKey, Label: "Back to menu", Icon: icons.Back})
+	return options
 }
 
 // pickMovieOption shows a menu and reports false when the viewer backs out.
@@ -137,7 +246,7 @@ func searchMovies(config *Config, store *movies.Store, site *movies.Site) {
 			options = append(options, movieRow(movie, store))
 		}
 		options = append(options, SelectionOption{Key: movieBackKey, Label: "Back", Icon: icons.Back})
-		picked, ok := pickMovieOption(options)
+		picked, ok := pickMovieRows(config, options)
 		if !ok {
 			continue
 		}
@@ -161,8 +270,54 @@ func movieRow(movie movies.Movie, store *movies.Store) SelectionOption {
 			label += " · watched"
 			icon = icons.Completed
 		}
+		if entry.Rating > 0 {
+			label += fmt.Sprintf(" · %d/10", entry.Rating)
+		}
 	}
 	return SelectionOption{Key: moviePathPrefix + movie.Path, Label: label, Title: movie.Title, Thumbnail: movie.Poster, Icon: icon}
+}
+
+// pickMovieRows shows a list of movies, with their posters in rofi when
+// ImagePreview is on, as the anime lists have.
+func pickMovieRows(config *Config, options []SelectionOption) (SelectionOption, bool) {
+	if !config.RofiSelection || !config.ImagePreview {
+		return pickMovieOption(options)
+	}
+	previews := map[string]RofiSelectPreview{}
+	for i, option := range options {
+		previews[option.Key] = RofiSelectPreview{Title: option.Label, CoverImage: option.Thumbnail, Rank: i}
+	}
+	picked, err := movieSelectPreview(previews, false)
+	if err != nil {
+		Log(fmt.Sprintf("movies: menu failed: %v", err))
+		return SelectionOption{}, false
+	}
+	picked = NormalizeSelectionKey(picked)
+	if SelectionMeansQuit(picked) {
+		Exit(nil)
+	}
+	if picked.Key == "-2" || picked.Key == movieBackKey || picked.Key == "" {
+		return SelectionOption{}, false
+	}
+	return picked, true
+}
+
+// pickMovieRating asks for a score out of 10, or 0 to clear the one given.
+func pickMovieRating(current int) (int, bool) {
+	options := []SelectionOption{}
+	for score := 10; score >= 1; score-- {
+		options = append(options, SelectionOption{Key: strconv.Itoa(score), Label: fmt.Sprintf("%d/10", score), Icon: icons.Star})
+	}
+	if current > 0 {
+		options = append(options, SelectionOption{Key: "0", Label: "Clear rating", Icon: icons.No})
+	}
+	options = append(options, SelectionOption{Key: movieBackKey, Label: "Back", Icon: icons.Back})
+	picked, ok := pickMovieOption(options)
+	if !ok {
+		return 0, false
+	}
+	score, err := strconv.Atoi(picked.Key)
+	return score, err == nil
 }
 
 // pickFromMovieList offers one of the remembered lists.
@@ -180,7 +335,7 @@ func pickFromMovieList(config *Config, store *movies.Store, site *movies.Site, l
 			options = append(options, row)
 		}
 		options = append(options, SelectionOption{Key: movieBackKey, Label: "Back", Icon: icons.Back})
-		picked, ok := pickMovieOption(options)
+		picked, ok := pickMovieRows(config, options)
 		if !ok {
 			return
 		}
@@ -204,7 +359,18 @@ func openMovie(config *Config, store *movies.Store, site *movies.Site, movie mov
 		} else {
 			options = append(options, SelectionOption{Key: moviePlayKey, Label: "Play", Icon: icons.Play})
 		}
-		options = append(options, SelectionOption{Key: movieDownloadKey, Label: "Download", Icon: icons.Download})
+		if entry.Watched {
+			options = append(options, SelectionOption{Key: movieUnwatchedKey, Label: "Mark as not watched", Icon: icons.Undo})
+		} else {
+			options = append(options, SelectionOption{Key: movieWatchedKey, Label: "Mark as watched", Icon: icons.Completed})
+		}
+		rateLabel := "Rate"
+		if entry.Rating > 0 {
+			rateLabel = fmt.Sprintf("Rating: %d/10", entry.Rating)
+		}
+		options = append(options,
+			SelectionOption{Key: movieRateKey, Label: rateLabel, Icon: icons.Star},
+			SelectionOption{Key: movieDownloadKey, Label: "Download", Icon: icons.Download})
 		if entry.Watchlist {
 			options = append(options, SelectionOption{Key: movieListOffKey, Label: "Remove from watchlist", Icon: icons.No})
 		} else if !entry.Watched {
@@ -230,6 +396,16 @@ func openMovie(config *Config, store *movies.Store, site *movies.Site, movie mov
 			return
 		case movieDownloadKey:
 			downloadMovie(config, site, movie)
+		case movieWatchedKey, movieUnwatchedKey:
+			if err := store.SetWatched(movie, picked.Key == movieWatchedKey); err != nil {
+				Log(fmt.Sprintf("movies: could not save: %v", err))
+			}
+		case movieRateKey:
+			if rating, ok := pickMovieRating(entry.Rating); ok {
+				if err := store.SetRating(movie, rating); err != nil {
+					Log(fmt.Sprintf("movies: could not save the rating: %v", err))
+				}
+			}
 		case movieListOnKey, movieListOffKey:
 			if err := store.SetWatchlist(movie, picked.Key == movieListOnKey); err != nil {
 				Log(fmt.Sprintf("movies: could not save the watchlist: %v", err))

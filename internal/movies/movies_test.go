@@ -201,3 +201,27 @@ func TestImgstoreLink(t *testing.T) {
 		t.Errorf("link = %q\nwant   %q", got, want)
 	}
 }
+
+func TestStoreWatchedAndRating(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	movie := Movie{Path: "/filmas/a/", Title: "A"}
+	store.SetWatchlist(movie, true)
+	store.SetProgress(movie, 300, 5000, false)
+	if err := store.SetWatched(movie, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetRating(movie, 12); err != nil {
+		t.Fatal(err)
+	}
+	entry, _ := store.Get(movie.Path)
+	if !entry.Watched || entry.Position != 0 || entry.Watchlist || entry.Rating != 10 {
+		t.Errorf("entry = %+v", entry)
+	}
+	store.SetWatched(movie, false)
+	if entry, _ := store.Get(movie.Path); entry.Watched {
+		t.Errorf("still watched: %+v", entry)
+	}
+}

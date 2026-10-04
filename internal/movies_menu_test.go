@@ -86,3 +86,31 @@ func TestCastResumesAMovie(t *testing.T) {
 		t.Errorf("resume at %v", got)
 	}
 }
+
+// The terminal menu opens on the first list holding something, with search
+// always the first row and the footer's keys offered.
+func TestMovieTabsOpenOnAFilledList(t *testing.T) {
+	store, err := movies.OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetWatchlist(movies.Movie{Path: "/filmas/a/", Title: "A"}, true); err != nil {
+		t.Fatal(err)
+	}
+	var shown []SelectionOption
+	var seen *SelectionRefreshConfig
+	old := movieSelectWithTabs
+	movieSelectWithTabs = func(options []SelectionOption, refresh *SelectionRefreshConfig) (SelectionOption, error) {
+		shown, seen = options, refresh
+		return options[1], nil
+	}
+	defer func() { movieSelectWithTabs = old }()
+
+	picked, ok, active := pickFromMovieTabs(&Config{}, store, "")
+	if !ok || active != movieWatchlistKey || picked.Key != moviePathPrefix+"/filmas/a/" {
+		t.Fatalf("picked %+v ok=%v active=%q", picked, ok, active)
+	}
+	if shown[0].Key != movieSearchKey || len(seen.Categories) != 3 || len(seen.Actions) != 2 {
+		t.Errorf("rows %+v, tabs %d, actions %d", shown, len(seen.Categories), len(seen.Actions))
+	}
+}
