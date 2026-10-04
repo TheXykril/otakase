@@ -112,8 +112,11 @@ of 10.
 
 ### Trakt
 
-With `TraktClientID`/`TraktClientSecret` set and a sign-in from the Movies
-menu (`^t`, Trakt's device flow: a code entered at trakt.tv/activate), the
+otakase has its own Trakt app (`movies.TraktClientID`, a PKCE app with no
+secret; redirect URI `https://thexykril.github.io/otakase/`, never visited).
+`TraktClientID`/`TraktClientSecret` in the config swap in another app. After a
+sign-in from the Movies menu (`^t`, Trakt's device flow: a code entered at
+trakt.tv/activate, with the Client ID alone), the
 store's `OnChange` hook sends Trakt each change to watched, watchlist and
 rating (`/sync/history`, `/sync/watchlist`, `/sync/ratings` and their
 `/remove`). When playback stops part way the position goes to

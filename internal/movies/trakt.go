@@ -33,6 +33,14 @@ type Trakt struct {
 	token *TraktToken
 }
 
+// TraktClientID is otakase's own Trakt app. Its id is public by design: the
+// app has no secret, so the id alone cannot be turned into anyone's session.
+const TraktClientID = "zbSBzFuTMKrNfuZyM5LawZUh-9BiKXsTyQWbbRTT9SA"
+
+// TraktRedirectURI is the redirect URI the app is registered with. The device
+// sign-in never visits it, but renewing a session names it.
+const TraktRedirectURI = "https://thexykril.github.io/otakase/"
+
 // TraktToken is a signed-in session, kept in trakt_token.json.
 type TraktToken struct {
 	AccessToken  string `json:"access_token"`
@@ -64,9 +72,21 @@ func NewTrakt(clientID, clientSecret, storage string) *Trakt {
 	return t
 }
 
-// Configured reports whether there are app credentials to sign in with.
+// Configured reports whether there is an app to sign in with. A secret is
+// optional: otakase's own app has none (Trakt calls it a PKCE app), and its
+// device sign-in works with the Client ID alone.
 func (t *Trakt) Configured() bool {
-	return t != nil && t.ClientID != "" && t.ClientSecret != ""
+	return t != nil && t.ClientID != ""
+}
+
+// credentials adds the app's id, and its secret when it has one, to a
+// sign-in request.
+func (t *Trakt) credentials(body map[string]string) map[string]string {
+	body["client_id"] = t.ClientID
+	if t.ClientSecret != "" {
+		body["client_secret"] = t.ClientSecret
+	}
+	return body
 }
 
 // SignedIn reports whether there is a session to sync with.
@@ -158,7 +178,7 @@ type TraktDeviceCode struct {
 func (t *Trakt) StartSignIn() (TraktDeviceCode, error) {
 	var code TraktDeviceCode
 	if !t.Configured() {
-		return code, fmt.Errorf("TraktClientID and TraktClientSecret are not set")
+		return code, fmt.Errorf("TraktClientID is not set")
 	}
 	_, err := t.call(http.MethodPost, "/oauth/device/code", "", map[string]string{"client_id": t.ClientID}, &code)
 	return code, err
@@ -176,9 +196,9 @@ func (t *Trakt) finishSignIn(code TraktDeviceCode, least time.Duration) error {
 	for time.Now().Before(deadline) {
 		time.Sleep(interval)
 		var token TraktToken
-		status, err := t.call(http.MethodPost, "/oauth/device/token", "", map[string]string{
-			"code": code.DeviceCode, "client_id": t.ClientID, "client_secret": t.ClientSecret,
-		}, &token)
+		status, err := t.call(http.MethodPost, "/oauth/device/token", "", t.credentials(map[string]string{
+			"code": code.DeviceCode,
+		}), &token)
 		switch {
 		case err == nil && token.AccessToken != "":
 			t.mu.Lock()
@@ -212,10 +232,10 @@ func (t *Trakt) bearer() (string, error) {
 		return t.token.AccessToken, nil
 	}
 	var token TraktToken
-	_, err := t.call(http.MethodPost, "/oauth/token", "", map[string]string{
-		"refresh_token": t.token.RefreshToken, "client_id": t.ClientID, "client_secret": t.ClientSecret,
-		"redirect_uri": "https://thexykril.github.io/otakase/", "grant_type": "refresh_token",
-	}, &token)
+	_, err := t.call(http.MethodPost, "/oauth/token", "", t.credentials(map[string]string{
+		"refresh_token": t.token.RefreshToken,
+		"redirect_uri":  TraktRedirectURI, "grant_type": "refresh_token",
+	}), &token)
 	if err != nil {
 		return "", fmt.Errorf("renewing the Trakt session: %w", err)
 	}

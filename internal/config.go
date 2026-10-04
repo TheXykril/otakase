@@ -165,9 +165,8 @@ type Config struct {
 	// MovieProvider is where movies are searched: vidsrc (English) or
 	// 8filmai (Lithuanian). Changed from the Movies menu.
 	MovieProvider string `config:"MovieProvider"`
-	// TraktClientID and TraktClientSecret are a Trakt app's credentials,
-	// which movies are synced to Trakt through once signed in from the
-	// Movies menu.
+	// TraktClientID and TraktClientSecret name another Trakt app to sync
+	// movies through than otakase's own, which is used when they are empty.
 	TraktClientID     string `config:"TraktClientID"`
 	TraktClientSecret string `config:"TraktClientSecret"`
 }

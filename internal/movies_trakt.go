@@ -8,14 +8,18 @@ import (
 	"github.com/thexykril/otakase/internal/movies"
 )
 
-// Trakt for movies: anime go to AniList or MyAnimeList, movies to Trakt. It
-// needs a Trakt app's credentials in TraktClientID and TraktClientSecret and
-// a sign-in from the Movies menu; until then nothing is synced.
+// Trakt for movies: anime go to AniList or MyAnimeList, movies to Trakt.
+// Nothing is synced until the viewer signs in from the Movies menu. otakase's
+// own Trakt app is used unless TraktClientID names another.
 
 // newMovieTrakt returns Trakt for the configured app, or nil when there is
 // none.
 func newMovieTrakt(config *Config) *movies.Trakt {
-	trakt := movies.NewTrakt(config.TraktClientID, config.TraktClientSecret, GetStoragePath())
+	clientID := config.TraktClientID
+	if clientID == "" {
+		clientID = movies.TraktClientID
+	}
+	trakt := movies.NewTrakt(clientID, config.TraktClientSecret, GetStoragePath())
 	if !trakt.Configured() {
 		return nil
 	}
@@ -74,7 +78,7 @@ func traktActionLabel(trakt *movies.Trakt) string {
 // manageMovieTrakt signs in to Trakt, or out.
 func manageMovieTrakt(config *Config, trakt *movies.Trakt) {
 	if trakt == nil {
-		Out("Trakt needs an app: create one at https://trakt.tv/oauth/applications/new with the redirect URI https://thexykril.github.io/otakase/, then set TraktClientID and TraktClientSecret in the config.")
+		Out("Trakt is not set up: TraktClientID is empty.")
 		awaitEnterNotice()
 		return
 	}
