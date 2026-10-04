@@ -189,3 +189,15 @@ func TestDoodPassPath(t *testing.T) {
 		t.Errorf("link = %q", got)
 	}
 }
+
+// Cut from an imgsto.re player page fetched from a home connection.
+func TestImgstoreLink(t *testing.T) {
+	body := `function _0x40b1(){var _0x5bfc1f=['553dPhsbd','953418DmLPex','2290ZPZZKj','aHR0cHMlM0ElMkYlMkZpbWdzdG8ucmUlMkZhcGklMkYxJTJGdCUyRjAxJTJGTGtYV2RuT21DdkNrQTFXdWd6QTRnUSUyRjM0NDk0MDc2JTJGMTc5MTE0OTY5Mi5tcDQ=','8814kmeeTP'];`
+	got, err := imgstoreLink(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "https://imgsto.re/api/1/t/01/LkXWdnOmCvCkA1WugzA4gQ/34494076/1791149692.mp4"; got != want {
+		t.Errorf("link = %q\nwant   %q", got, want)
+	}
+}

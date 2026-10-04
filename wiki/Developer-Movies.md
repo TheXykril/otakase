@@ -36,8 +36,8 @@ in `movies.json`, and goes there directly until a request fails; then it asks
 |---|---|---|
 | s3 | `/p2.php?str=<id>` | Streamtape (`streamtape.com/e/<id>`) |
 | s2 | `/p2.php?d=<id>` | Doodstream (`dood.pm/e/<id>`, domain changes) |
-| s1 | `/p2.php?n=<id>` | not seen yet; resolved only if its iframe is a known host |
-| s0 | `https://imgsto.re/files/<id>` | played as is; the site shows it only without an ad blocker |
+| s1 | `/p2.php?n=<id>` | `player.eltitbus.xyz/f/<id>`, a Netu/HQQ clone behind a captcha; not supported |
+| s0 | `https://imgsto.re/files/<id>` | a player page; the `.mp4` link is a base64 string (of the URL-escaped link) in its script |
 
 `p2.php` is a page holding one iframe to the host. Servers are tried in the
 order above, each started in mpv and given `MpvPlaybackStartTimeout` to begin

@@ -2,6 +2,7 @@ package movies
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"math/big"
@@ -31,8 +32,7 @@ type Source struct {
 
 // The page's player turns server n's id into a link: servers 1 to 3 go
 // through p2.php on the site, which is a page holding one iframe to a video
-// host; server 0 is a file on imgsto.re, offered by the site only to viewers
-// who do not block its ads.
+// host; server 0 is a player page on imgsto.re (see resolveImgstore).
 var p2Params = map[int]string{1: "n", 2: "d", 3: "str"}
 
 // knownEmbeds are where p2.php is known to send each parameter, used when the
@@ -64,7 +64,11 @@ func (s *Site) Sources(page Page) []Source {
 					if err != nil {
 						return Stream{}, err
 					}
-					return Stream{URL: "https://imgsto.re/files/" + id, Referrer: base + "/", Server: "imgsto.re"}, nil
+					stream, err := resolveImgstore("https://imgsto.re/files/"+id, base+"/")
+					if err != nil {
+						return Stream{}, fmt.Errorf("https://imgsto.re/files/%s: %w", id, err)
+					}
+					return stream, nil
 				},
 			})
 			continue
@@ -268,4 +272,39 @@ func randomString(n int) string {
 		out[i] = letters[index.Int64()]
 	}
 	return string(out)
+}
+
+// imgsto.re answers /files/<id> with a player page, not the file: the file's
+// address is in the page's obfuscated script as a base64 string of the
+// URL-escaped link (https://imgsto.re/api/1/.../<expiry>.mp4).
+var base64StringPattern = regexp.MustCompile(`'([A-Za-z0-9+/]{40,}={0,2})'`)
+
+func resolveImgstore(page, referrer string) (Stream, error) {
+	body, err := fetchPage(hostClient, page, referrer)
+	if err != nil {
+		return Stream{}, err
+	}
+	link, err := imgstoreLink(body)
+	if err != nil {
+		return Stream{}, err
+	}
+	return Stream{URL: link, Referrer: page, Server: "imgsto.re"}, nil
+}
+
+// imgstoreLink finds the file link among the page's base64 strings.
+func imgstoreLink(body string) (string, error) {
+	for _, match := range base64StringPattern.FindAllStringSubmatch(body, -1) {
+		decoded, err := base64.StdEncoding.DecodeString(match[1])
+		if err != nil {
+			continue
+		}
+		link, err := url.QueryUnescape(string(decoded))
+		if err != nil {
+			link = string(decoded)
+		}
+		if strings.HasPrefix(link, "http") && strings.Contains(link, ".mp4") {
+			return link, nil
+		}
+	}
+	return "", fmt.Errorf("imgsto.re: no video link on the page (removed, or the page changed)")
 }
