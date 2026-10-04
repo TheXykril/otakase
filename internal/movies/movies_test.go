@@ -247,7 +247,8 @@ func TestFilmukasListing(t *testing.T) {
 		<li id="li_1">
 		<a href="/pilnametraziai/didele-bloga-lape-ir-kitos-istorijos-the-big-bad-fox-and-other-tales-2017-649"><img data-src="/inc/x.jpg" alt="Didelė bloga lapė" /></a>
 		</li>
-		<li id="li_2"><a href="/serialai/kas-nors-12"><img data-src="/inc/y.jpg" alt="Serialas" /></a></li>`
+		<li id="li_2"><a href="/serialai/kas-nors-12"><img data-src="/inc/y.jpg" alt="Serialas" /></a></li>
+		<li id="li_4"><a href="/pilnametraziai/wonka-736"><img data-src="/inc/z.jpg" alt="Vonka" /><span>Vonka <i class="fas fa-lock thumb_lock"></i></span></a></li>`
 	got := NewFilmukas().parseListing(body)
 	if len(got) != 2 {
 		t.Fatalf("got %+v", got)

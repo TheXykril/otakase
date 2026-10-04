@@ -140,3 +140,17 @@ func TestTraktCodeNotificationStays(t *testing.T) {
 		t.Errorf("result does not replace it: %s", second)
 	}
 }
+
+// A movie's HLS segments are named like web pages; mpv is told to accept
+// them, and the anime audio preference does not apply.
+func TestMovieMPVArgs(t *testing.T) {
+	args := strings.Join(movieMPVArgs(movies.Stream{URL: "https://h/master.m3u8", HLS: true, Referrer: "https://h/"}), " ")
+	for _, want := range []string{"--alang=en,eng", "extension_picky=0", "allowed_extensions=ALL"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("%q missing from %s", want, args)
+		}
+	}
+	if args := strings.Join(movieMPVArgs(movies.Stream{URL: "https://h/v.mp4", AudioLanguage: "lt"}), " "); args != "--alang=lt --referrer=" {
+		t.Errorf("file args = %s", args)
+	}
+}

@@ -61,7 +61,8 @@ func (f *Filmukas) parseListing(body string) []Movie {
 	seen := map[string]bool{}
 	for _, match := range filmukasItemPattern.FindAllStringSubmatch(body, -1) {
 		path := match[1]
-		if strings.HasPrefix(path, "/serialai/") || seen[path] {
+		// A lock is a film only viewers who bought a code can play.
+		if strings.HasPrefix(path, "/serialai/") || seen[path] || strings.Contains(match[0], "thumb_lock") {
 			continue
 		}
 		seen[path] = true
@@ -99,6 +100,9 @@ func (f *Filmukas) Open(movie Movie) (Movie, []Source, error) {
 	}
 	if poster := firstGroup(body, filmukasPosterPattern); poster != "" {
 		movie.Poster = poster
+	}
+	if strings.Contains(body, "id='locked'") || strings.Contains(body, `id="locked"`) {
+		return movie, nil, fmt.Errorf("filmukas locks this film: it plays only with a code bought on the site")
 	}
 	player := filmukasPlayerPattern.FindStringSubmatch(body)
 	if player == nil {

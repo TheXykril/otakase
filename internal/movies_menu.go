@@ -521,14 +521,12 @@ func castMovie(config *Config, anime *Anime) bool {
 // playMovieInMPV plays one server's stream in mpv, reporting whether it
 // played.
 func playMovieInMPV(config *Config, store *movies.Store, movie movies.Movie, title string, stream movies.Stream, anime *Anime, start int) bool {
-	args := []string{}
-	if stream.AudioLanguage != "" {
-		args = append(args, "--alang="+stream.AudioLanguage)
-	}
+	args := movieMPVArgs(stream)
 	if start > 0 {
 		// A few seconds back, so the line it stopped on is heard again.
 		args = append(args, fmt.Sprintf("--start=%d", max(start-5, 0)))
 	}
+	Log(fmt.Sprintf("movies: %s: mpv %v %s (referrer %q)", stream.Server, args, stream.URL, stream.Referrer))
 	socket, err := StartVideo(stream.URL, args, title, anime)
 	if err != nil {
 		Log(fmt.Sprintf("movies: %s: could not start the player: %v", stream.Server, err))
@@ -551,6 +549,31 @@ func playMovieInMPV(config *Config, store *movies.Store, movie movies.Movie, tit
 	addAlternateSubtitles(MPVSendCommand, socket, anime.Ep.SubtitleURL, anime.Ep.SubtitleTracks)
 	watchMoviePlayback(config, store, movie, socket)
 	return true
+}
+
+// movieMPVArgs are the player options a movie stream needs.
+func movieMPVArgs(stream movies.Stream) []string {
+	// Always set: without it the anime's audio preference (Japanese) applies,
+	// which would pick a Japanese dub on a stream that has one.
+	language := stream.AudioLanguage
+	if language == "" {
+		language = "en,eng"
+	}
+	args := []string{"--alang=" + language}
+	if stream.HLS {
+		// Movie hosts name their HLS segments as web pages (page-1.html) and
+		// images. FFmpeg 7.1 and later refuse segments whose extension is not
+		// a media one unless extension_picky is off; an older FFmpeg does not
+		// know the option, and mpv only warns about it there.
+		args = append(args,
+			"--demuxer-lavf-o-add=allowed_extensions=ALL",
+			"--demuxer-lavf-o-add=extension_picky=0")
+	}
+	if stream.Referrer == "" {
+		// Otherwise the anime provider's referrer would be sent.
+		args = append(args, "--referrer=")
+	}
+	return args
 }
 
 // downloadMovie saves a movie to the download folder from the first server

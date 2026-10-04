@@ -241,7 +241,9 @@ func (v *Vidsrc) withToken(link string) (Stream, error) {
 	default:
 		link += "?token=" + jwt
 	}
-	return Stream{URL: link, HLS: true}, nil
+	// No referrer: the host answers any segment asked for with one, even its
+	// own address, with 403.
+	return Stream{URL: link, HLS: true, AudioLanguage: "en,eng"}, nil
 }
 
 // openSubtitles fetches English subtitles from OpenSubtitles' keyless API,
