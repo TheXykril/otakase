@@ -92,3 +92,35 @@ func sendLinuxNotificationFor(tag, icon, message string, expire time.Duration) e
 	_, err := notifySendRun(append(base, DisplayName, message))
 	return err
 }
+
+// notifyTagTrakt is the Trakt sign-in code, which stays up until the sign-in
+// ends and is then replaced by how it ended.
+const notifyTagTrakt = "otakase-trakt"
+
+// sendLinuxStickyNotification shows message under tag until something else
+// replaces it under the same tag: no expiry, and critical urgency, which is
+// what daemons that ignore the expiry (dunst, GNOME) keep on screen.
+func sendLinuxStickyNotification(tag, message string) error {
+	notifyMu.Lock()
+	defer notifyMu.Unlock()
+	args := []string{
+		"-a", DisplayName,
+		"-u", "critical",
+		"-t", "0",
+		"-h", "string:x-canonical-private-synchronous:" + tag,
+		"-h", "string:x-dunst-stack-tag:" + tag,
+	}
+	if !notifyNoPrintID {
+		args = append(args, "-p")
+		if id := notifyReplaceIDs[tag]; id != "" {
+			args = append(args, "-r", id)
+		}
+	}
+	out, err := notifySendRun(append(args, DisplayName, message))
+	if err == nil {
+		if id := strings.TrimSpace(out); id != "" && !notifyNoPrintID {
+			notifyReplaceIDs[tag] = id
+		}
+	}
+	return err
+}

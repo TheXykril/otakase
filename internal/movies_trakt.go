@@ -2,7 +2,10 @@ package internal
 
 import (
 	"fmt"
+	"runtime"
 	"time"
+
+	"github.com/pkg/browser"
 
 	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/movies"
@@ -101,12 +104,35 @@ func manageMovieTrakt(config *Config, trakt *movies.Trakt) {
 		return
 	}
 	RestoreScreen()
-	Out(fmt.Sprintf("Go to %s and enter the code %s. Waiting for Trakt…", code.VerificationURL, code.UserCode))
+	traktNotice(config, fmt.Sprintf("Trakt sign-in: go to %s and enter the code %s. Waiting for Trakt…", code.VerificationURL, code.UserCode), true)
+	if err := browser.OpenURL(code.VerificationURL); err != nil {
+		Log(fmt.Sprintf("movies: trakt: could not open %s: %v", code.VerificationURL, err))
+	}
 	if err := trakt.FinishSignIn(code); err != nil {
-		Out("Trakt sign-in failed: " + err.Error())
+		traktNotice(config, "Trakt sign-in failed: "+err.Error(), false)
 		awaitEnterNotice()
 		return
 	}
-	Out("Signed in to Trakt. Watched movies, the watchlist and ratings are synced from now on.")
+	traktNotice(config, "Signed in to Trakt. Watched movies, the watchlist and ratings are synced from now on.", false)
 	awaitEnterNotice()
+}
+
+// traktNotice tells the viewer how the sign-in is going. Under rofi it is a
+// notification, all of them under one tag so each replaces the last; the code
+// stays up (sticky) until the sign-in ends, since the viewer has to read it
+// off while typing it into Trakt.
+func traktNotice(config *Config, message string, sticky bool) {
+	if !config.RofiSelection || runtime.GOOS != "linux" {
+		Out(message)
+		return
+	}
+	Log(message)
+	send := func() error { return sendLinuxNotification(notifyTagTrakt, "", message) }
+	if sticky {
+		send = func() error { return sendLinuxStickyNotification(notifyTagTrakt, message) }
+	}
+	if err := send(); err != nil {
+		Log(fmt.Sprintf("Failed to send notification: %v", err))
+		Out(message)
+	}
 }

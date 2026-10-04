@@ -114,3 +114,29 @@ func TestMovieTabsOpenOnAFilledList(t *testing.T) {
 		t.Errorf("rows %+v, tabs %d, actions %d", shown, len(seen.Categories), len(seen.Actions))
 	}
 }
+
+// The Trakt code stays on screen until something replaces it under the same
+// tag: no expiry, critical urgency.
+func TestTraktCodeNotificationStays(t *testing.T) {
+	var sent [][]string
+	old := notifySendRun
+	notifySendRun = func(args []string) (string, error) {
+		sent = append(sent, args)
+		return "42\n", nil
+	}
+	defer func() { notifySendRun = old }()
+
+	if err := sendLinuxStickyNotification(notifyTagTrakt, "enter ABC"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sendLinuxNotification(notifyTagTrakt, "", "signed in"); err != nil {
+		t.Fatal(err)
+	}
+	first, second := strings.Join(sent[0], " "), strings.Join(sent[1], " ")
+	if !strings.Contains(first, "-t 0") || !strings.Contains(first, "-u critical") {
+		t.Errorf("code notification expires: %s", first)
+	}
+	if !strings.Contains(second, "-r 42") || strings.Contains(second, "critical") {
+		t.Errorf("result does not replace it: %s", second)
+	}
+}
