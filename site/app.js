@@ -39,7 +39,7 @@
   const CACHE_KEY = 'otakase-covers';
   const CACHE_FOR = 6 * 60 * 60 * 1000;
   // Shown when AniList can't be reached: otakase's own player, so the letters are never empty.
-  const FALLBACK = ['img/sky-1.jpg', 'img/sky-2.jpg'].map((img) => ({ img, title: '' }));
+  const FALLBACK = ['img/scene-1.jpg', 'img/scene-2.jpg'].map((img) => ({ img, title: '' }));
 
   const QUERY = `query($n:Int){Page(perPage:$n){media(type:ANIME,sort:TRENDING_DESC,isAdult:false){
     title{english romaji} coverImage{extraLarge} siteUrl}}}`;
