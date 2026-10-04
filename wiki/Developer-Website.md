@@ -26,8 +26,8 @@ same drawn sunset the player screenshots use.
 
 The `player-*.jpg` and `menu-*.jpg` images are real otakase in the default
 Shu colours: mpv with otakase's skin playing a still drawing (no show's
-footage), the terminal menu in kitty and the rofi poster grid with drawn
-placeholder posters. Retake them when the player or menus change look, and
+footage), the terminal menu in kitty and the rofi poster grid with real AniList
+covers. Retake them when the player or menus change look, and
 keep source names out of the frame.
 
 ## Icon
