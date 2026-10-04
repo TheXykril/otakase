@@ -214,7 +214,7 @@ func (t *Trakt) bearer() (string, error) {
 	var token TraktToken
 	_, err := t.call(http.MethodPost, "/oauth/token", "", map[string]string{
 		"refresh_token": t.token.RefreshToken, "client_id": t.ClientID, "client_secret": t.ClientSecret,
-		"redirect_uri": "urn:ietf:wg:oauth:2.0:oob", "grant_type": "refresh_token",
+		"redirect_uri": "https://thexykril.github.io/otakase/", "grant_type": "refresh_token",
 	}, &token)
 	if err != nil {
 		return "", fmt.Errorf("renewing the Trakt session: %w", err)

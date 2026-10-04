@@ -74,7 +74,7 @@ func traktActionLabel(trakt *movies.Trakt) string {
 // manageMovieTrakt signs in to Trakt, or out.
 func manageMovieTrakt(config *Config, trakt *movies.Trakt) {
 	if trakt == nil {
-		Out("Trakt needs an app: create one at https://trakt.tv/oauth/applications/new with the redirect URI urn:ietf:wg:oauth:2.0:oob, then set TraktClientID and TraktClientSecret in the config.")
+		Out("Trakt needs an app: create one at https://trakt.tv/oauth/applications/new with the redirect URI https://thexykril.github.io/otakase/, then set TraktClientID and TraktClientSecret in the config.")
 		awaitEnterNotice()
 		return
 	}
