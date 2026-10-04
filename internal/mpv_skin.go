@@ -127,15 +127,35 @@ func mpvSkinChips(config *Config, anime *Anime) []mpvSkinChip {
 	return chips
 }
 
+// mpvSkinEpisodeTitle is the episode's own name for the top bar, from Jikan:
+// English when it has one, else romaji.
+func mpvSkinEpisodeTitle(anime *Anime) string {
+	if anime == nil {
+		return ""
+	}
+	if title := strings.TrimSpace(anime.Ep.Title.English); title != "" {
+		return title
+	}
+	return strings.TrimSpace(anime.Ep.Title.Romaji)
+}
+
 // SendMPVSkinState tells the skin in the player at socket what it shows that
-// only otakase knows. Players without the skin are skipped.
-func SendMPVSkinState(config *Config, anime *Anime, socket string) {
+// only otakase knows. Players without the skin are skipped. withTitle sends
+// the episode title too; leave it off when anime.Ep may still describe the
+// previous episode, so the skin keeps what it has rather than show a stale one.
+func SendMPVSkinState(config *Config, anime *Anime, socket string, withTitle bool) {
 	if socket == "" || !mpvSkinActive(socket) {
 		return
 	}
-	payload, err := json.Marshal(struct {
-		Chips []mpvSkinChip `json:"chips"`
-	}{mpvSkinChips(config, anime)})
+	state := struct {
+		Chips        []mpvSkinChip `json:"chips"`
+		EpisodeTitle *string       `json:"episode_title,omitempty"`
+	}{Chips: mpvSkinChips(config, anime)}
+	if withTitle {
+		title := mpvSkinEpisodeTitle(anime)
+		state.EpisodeTitle = &title
+	}
+	payload, err := json.Marshal(state)
 	if err != nil {
 		return
 	}

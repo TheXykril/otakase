@@ -742,7 +742,7 @@ func main() {
 		// so a show AniSkip does not cover started unskipped and then began
 		// skipping an episode later.
 		go func() {
-			internal.SendMPVSkinState(&userConfig, &anime, anime.Ep.Player.SocketPath)
+			internal.SendMPVSkinState(&userConfig, &anime, anime.Ep.Player.SocketPath, true)
 			resolution := internal.ApplySkipTimes(&anime, anime.Ep.Number, &userConfig, internal.GetProvider())
 			internal.Log(anime.Ep.SkipTimes)
 			internal.StartSkipMarker(&userConfig, &anime, anime.Ep.Player.SocketPath, resolution.IDs, skipLoopDone)

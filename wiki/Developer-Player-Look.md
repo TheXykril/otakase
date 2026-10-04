@@ -84,9 +84,13 @@ otakase skips by seeking from the first two seconds of a span to its end
 ## State from otakase
 
 `SendMPVSkinState` sends `script-message-to otakase_skin otakase-state
-{"chips":[{"icon":"sync","text":"AniList"},...]}` when an episode starts and
-when the playlist moves on (the source can change after a fallback). It
-retries for a few seconds, because right after launch the script may not
+{"chips":[{"icon":"sync","text":"AniList"},...],"episode_title":"..."}` when
+an episode starts and when the playlist moves on (the source can change after
+a fallback). `episode_title` is the episode's name from Jikan (English, else
+romaji), shown after the title in the top bar; it is sent only once Jikan has
+been asked for that episode (`finalizePlaylistEpisodeChange`), left out
+otherwise so a stale one never shows, and the script clears it whenever the
+playlist position changes. It retries for a few seconds, because right after launch the script may not
 have registered yet. Only sockets started with the skin are sent to.
 
 ## Clicks and keys

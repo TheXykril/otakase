@@ -117,3 +117,21 @@ func TestMPVSkinChips(t *testing.T) {
 		}
 	}
 }
+
+func TestMPVSkinEpisodeTitle(t *testing.T) {
+	anime := &Anime{}
+	if got := mpvSkinEpisodeTitle(anime); got != "" {
+		t.Errorf("no title known = %q, want empty", got)
+	}
+	anime.Ep.Title = AnimeTitle{Romaji: "Doukyou no Kyoudai", English: " Aversion Between Same-Sex Siblings "}
+	if got := mpvSkinEpisodeTitle(anime); got != "Aversion Between Same-Sex Siblings" {
+		t.Errorf("English title = %q", got)
+	}
+	anime.Ep.Title.English = ""
+	if got := mpvSkinEpisodeTitle(anime); got != "Doukyou no Kyoudai" {
+		t.Errorf("romaji fallback = %q", got)
+	}
+	if got := mpvSkinEpisodeTitle(nil); got != "" {
+		t.Errorf("nil anime = %q", got)
+	}
+}

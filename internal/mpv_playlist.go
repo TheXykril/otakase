@@ -1199,6 +1199,8 @@ func (c *MPVPlaylistController) finalizePlaylistEpisodeChange(fromEp, toEp int, 
 	title := fmt.Sprintf("%s - Episode %d", GetAnimeName(*anime), toEp)
 	_, _ = MPVSendCommand(c.socket, []interface{}{"set_property", "force-media-title", title})
 	_, _ = MPVSendCommand(c.socket, []interface{}{"set_property", "title", title})
+	// The skin's top bar names the episode, now that Jikan has been asked.
+	go SendMPVSkinState(c.config, anime, c.socket, true)
 }
 
 func localHistoryPath(storagePath string) string {
@@ -1485,8 +1487,9 @@ func (c *MPVPlaylistController) playSlot(slot playlistSlot) error {
 	// source is consulted, not only AniSkip: a show tracked on AniList alone
 	// has no MyAnimeList id, and used to get no skipping at all as a result.
 	go func(ep int) {
-		// The source can change between episodes after a fallback.
-		SendMPVSkinState(GetGlobalConfig(), c.anime, c.socket)
+		// The source can change between episodes after a fallback. The
+		// episode title follows once finalizePlaylistEpisodeChange has it.
+		SendMPVSkinState(GetGlobalConfig(), c.anime, c.socket, false)
 		resolution := ApplySkipTimes(c.anime, ep, GetGlobalConfig(), GetProvider())
 		// The marker follows the playlist: marks belong to the episode they
 		// were made against, and the entry a vote refers to changes with it.

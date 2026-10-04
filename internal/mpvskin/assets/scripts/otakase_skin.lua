@@ -91,6 +91,7 @@ local state = {
 	notice = nil,              -- {label, until_time, undo_to}
 	next_up_hidden_for = nil,  -- playlist position the card was dismissed on
 	chips = {},
+	episode_title = '',         -- the episode's own name, from otakase
 	menu = nil,                -- {kind, items, scroll, anchor_x, anchor_y}
 	dragging = false,
 }
@@ -554,10 +555,21 @@ local function draw_controls(ass, w, h, s)
 	main = fit(main, size, true, room)
 	local line = string.format('{\\pos(%.1f,%.1f)\\an4\\bord0\\shad0\\blur0\\fn%s\\fs%.1f\\b1\\1c&H%s&\\1a&H00&}%s',
 		tx, ty, text_font(), size, C.bright, escape(main))
+	local sep = ' · '
+	room = room - text_width(main, size, true)
 	if rest then
-		rest = fit(rest, size, false, room - text_width(main, size, true) - text_width(' · ', size))
+		rest = fit(rest, size, false, room - text_width(sep, size))
 		if rest ~= '' then
-			line = line .. string.format('{\\b0\\1c&H%s&} · {\\1c&H%s&}%s', C.dim, C.fg, escape(rest))
+			line = line .. string.format('{\\b0\\1c&H%s&}%s{\\1c&H%s&}%s', C.dim, sep, C.fg, escape(rest))
+			room = room - text_width(sep .. rest, size)
+		end
+	end
+	local episode = state.episode_title
+	if episode ~= '' and (not rest or rest ~= '') then
+		-- The episode's name goes last and is the first to be cut.
+		episode = fit(episode, size, false, room - text_width(sep, size))
+		if episode ~= '' then
+			line = line .. string.format('{\\b0\\1c&H%s&}%s{\\1c&H%s&\\1a&H%s&}%s', C.dim, sep, C.fg, ass_alpha(0.75), escape(episode))
 		end
 	end
 	ass[#ass + 1] = line
@@ -965,6 +977,8 @@ mp.observe_property('playlist', 'native', function(_, value) state.playlist = va
 mp.observe_property('playlist-pos', 'number', function(_, value)
 	state.playlist_pos = value or -1
 	state.notice = nil
+	-- otakase sends the new episode's name once it knows it.
+	state.episode_title = ''
 	request_render()
 end)
 mp.observe_property('osd-dimensions', 'native', function() request_render() end)
@@ -988,7 +1002,8 @@ end)
 -- Hiding and the notice timing out happen with nothing else changing.
 mp.add_periodic_timer(0.25, request_render)
 
--- otakase sends {"chips": [{"icon": "sync", "text": "AniList"}, ...]}.
+-- otakase sends {"chips": [{"icon": "sync", "text": "AniList"}, ...],
+-- "episode_title": "..."}.
 mp.register_script_message('otakase-state', function(json)
 	local data = utils.parse_json(json or '')
 	if type(data) ~= 'table' then return end
@@ -1001,5 +1016,7 @@ mp.register_script_message('otakase-state', function(json)
 		end
 	end
 	state.chips = chips
+	-- Absent means unchanged; an empty string clears it.
+	if type(data.episode_title) == 'string' then state.episode_title = data.episode_title end
 	request_render()
 end)
