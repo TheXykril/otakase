@@ -108,6 +108,10 @@ red = "#f7768e"
 Colours a file leaves out keep Otakase's own. `Theme=builtin` ignores
 `ThemeFile`.
 
+Otakase's own palette is Shu: a warm near-black background (`#0e0d0c`),
+cream text (`#ece4d6`) and a vermilion accent (`#d2492f`), with a matching light
+version for light desktops.
+
 ### Changing individual colours
 
 `ThemeOverrides` replaces named colours with your own, on top of whichever

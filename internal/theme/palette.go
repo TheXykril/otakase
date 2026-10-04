@@ -68,31 +68,31 @@ type Palette struct {
 	Cyan    string
 }
 
-// Builtin is otakase's original palette, kept as the fallback so behaviour off
-// Omarchy is unchanged.
+// Builtin is otakase's own palette, Shu: warm near-black, cream text and a
+// vermilion accent. It is the fallback whenever no desktop theme is found.
 func Builtin() Palette {
 	return Palette{
 		Name:   "otakase",
 		Source: SourceBuiltin,
 		Dark:   true,
 
-		Background:        "#000000",
-		DarkBackground:    "#000000",
-		LighterBackground: "#333333",
-		Foreground:        "#E6E6FA",
-		DarkForeground:    "#9A9A9A",
-		BrightForeground:  "#FFFFFF",
+		Background:        "#0e0d0c",
+		DarkBackground:    "#080707",
+		LighterBackground: "#2a2724",
+		Foreground:        "#ece4d6",
+		DarkForeground:    "#8a8276",
+		BrightForeground:  "#fff8ec",
 
-		Accent:    "#7CB9E8",
-		Selection: "#4A90E2",
-		Muted:     "#9A9A9A",
+		Accent:    "#d2492f",
+		Selection: "#a83a22",
+		Muted:     "#8a8276",
 
-		Red:     "#FF6B6B",
-		Green:   "#98FB98",
-		Yellow:  "#FFD700",
-		Blue:    "#7CB9E8",
-		Magenta: "#FF69B4",
-		Cyan:    "#6EC6FF",
+		Red:     "#e0604a",
+		Green:   "#9bb67a",
+		Yellow:  "#e3b45a",
+		Blue:    "#7fa2c4",
+		Magenta: "#c47e9c",
+		Cyan:    "#72b5a9",
 	}
 }
 
@@ -104,28 +104,28 @@ func BuiltinLight() Palette {
 		Source: SourceBuiltin,
 		Dark:   false,
 
-		Background:        "#fafafa",
-		DarkBackground:    "#eeeeee",
-		LighterBackground: "#e2e2e2",
-		Foreground:        "#2b2b3a",
-		DarkForeground:    "#6b6b6b",
+		Background:        "#f6f1e7",
+		DarkBackground:    "#ebe4d6",
+		LighterBackground: "#ddd4c3",
+		Foreground:        "#2a2420",
+		DarkForeground:    "#6e665b",
 		BrightForeground:  "#000000",
 
-		Accent:    "#1f6fd1",
-		Selection: "#1f6fd1",
-		Muted:     "#6b6b6b",
+		Accent:    "#b33a22",
+		Selection: "#b33a22",
+		Muted:     "#6e665b",
 
-		Red:     "#c4302b",
-		Green:   "#2e7d32",
-		Yellow:  "#9a6700",
-		Blue:    "#1f6fd1",
-		Magenta: "#b0358f",
-		Cyan:    "#0f7a94",
+		Red:     "#b8321e",
+		Green:   "#3d7a2e",
+		Yellow:  "#8f6400",
+		Blue:    "#2f63a3",
+		Magenta: "#a03a78",
+		Cyan:    "#1d7a70",
 	}
 }
 
 // withAccent is the builtin palette for a brightness with the desktop's accent
-// colour in place of otakase's blue. Desktops that only expose an accent and a
+// colour in place of otakase's vermilion. Desktops that only expose an accent and a
 // dark/light switch (GNOME, macOS, Windows) resolve through it.
 func withAccent(dark bool, accent, name string, source Source) Palette {
 	palette := Builtin()
