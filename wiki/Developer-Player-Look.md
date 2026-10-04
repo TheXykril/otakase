@@ -5,18 +5,18 @@ that works; what users see is on [Configuration](Configuration).
 
 ## Pieces
 
-- **uosc** (`internal/mpvskin/assets/scripts/uosc`, LGPL-2.1, version in
-  `mpvskin.UOSCVersion`) draws the timeline, control bar, top bar and menus.
-  It is a release copy without its `bin/` helper (18 MB), which only the
-  updater and clipboard copy/paste use. The updater is turned
-  off with `disable_elements=updater`.
-- **otakase_skin.lua** (same folder) draws what is otakase's own: the
-  *Skip Opening/Ending* button, the *Skipped Opening · Undo* notice, the
-  *Up next* card and the tracker/source chips under the top bar. It uses
-  uosc's icon font (Material Icons Round, by ligature name: `skip_next`,
-  `undo`, `play_arrow`), so both look alike.
-- **Fonts** (`assets/fonts`) are uosc's icon and texture fonts, loaded with
-  `--osd-fonts-dir` so nothing is installed and Windows works the same.
+- **otakase_skin.lua** (`internal/mpvskin/assets/scripts`) is the whole
+  on-screen controller, drawn with ASS into one `osd-overlay`: the top bar
+  (back button, title, tracker/source chips), the seek bar with openings and
+  endings marked, the control row (previous, play, next, time, volume,
+  episodes, audio, subtitles, quality, fullscreen) and its menus, the
+  *Skip Opening/Ending* button, the *Skipped Opening · Undo* notice and the
+  *Up next* card. mpv's own OSC is turned off with `--osc=no`.
+- **MaterialIconsRound.otf** (`assets/fonts`, Apache-2.0, licence in
+  `assets/LICENSE.MaterialIcons`) draws the icons by ligature name
+  (`play_arrow`, `skip_next`, `subtitles`, …). It is loaded with
+  `--osd-fonts-dir`, so nothing is installed and Windows works the same.
+  Keep only fonts in that folder: libass tries to open every file in it.
 
 ## Launch
 
@@ -39,26 +39,37 @@ when:
   0.37+, and mpv refuses to start on a flag it does not know.
 
 The flags go first on the command line, so the user's `MpvArgs` after them
-still win: `--osc=no`, two `--script=`, `--osd-fonts-dir`, `--osd-font` (the
+still win: `--osc=no`, `--script=`, `--osd-fonts-dir`, `--osd-font` (the
 monospace font from `theme.MonospaceFont`, unless `mpv.conf` or `MpvArgs`
-set one), and one `--script-opts-append` per option. The `-append` form takes
-the whole value as one option; `--script-opts=` would split uosc's
-comma-separated lists. Command-line script options also beat the user's own
-`script-opts/uosc.conf`, for this process only.
+set one), and one `--script-opts-append=otakase_skin-<key>=<value>` per
+option. Command-line script options beat the user's own
+`script-opts/otakase_skin.conf`, for this process only.
 
 ## Colours
 
-`mpvSkinColors` maps the active palette: accent → uosc `foreground` (timeline
-fill, active buttons), background → bar background, foreground → text,
-`ResumeText` (yellow) → the opening/ending ranges, `MetaText` → dim text in
-otakase_skin.lua. uosc takes colours as `rrggbb` without `#`; ASS wants
-`bbggrr`, which the Lua script converts.
+`mpvSkinColors` maps the active palette: `background` (bar fades, cards),
+`surface` (menus, chips, hovered buttons), `foreground`, `bright` (title,
+current time), `dim` (`MetaText`), `accent` (play button, seek fill),
+`accent_text` (readable on the accent) and `highlight` (`ResumeText`, the
+opening/ending marks). They are passed as `rrggbb`; ASS wants `bbggrr`,
+which the script converts.
+
+## Drawing notes
+
+- Text is measured by libass itself: a hidden overlay with
+  `compute_bounds` returns the box a string was drawn in (cached per
+  string and size).
+- ASS has no gradients; the bar fades are bands 3 px tall that meet
+  exactly. Overlapping bands double their alpha into visible stripes.
+- Sizes scale with the window height (`h / 720`, clamped).
+- While the controls are up, `sub-pos` is raised so subtitles sit above
+  them, and put back when they hide. `sub-margin-y` would not move them
+  while paused.
 
 ## Openings, endings, undo
 
 The skin reads openings and endings from the chapter list otakase already
-writes (`SendSkipTimesToMPV`: chapters titled `Opening` and `Ending`). uosc
-shades them on the timeline by matching those titles.
+writes (`SendSkipTimesToMPV`: chapters titled `Opening` and `Ending`).
 
 otakase skips by seeking from the first two seconds of a span to its end
 (`SkipSeekTarget`, polled once a second). The script, told by
@@ -80,25 +91,19 @@ have registered yet. Only sockets started with the skin are sent to.
 
 ## Clicks and keys
 
-The script binds `MBTN_LEFT` only while the pointer is over one of its
-buttons, so uosc gets every other click, and `ENTER` only while the corner
-offers something (skip, undo, play next).
-
-## Updating uosc
-
-1. Download `uosc.zip` from the uosc releases page.
-2. Replace `internal/mpvskin/assets/scripts/uosc` with its `scripts/uosc`,
-   without `bin/`; keep `LICENSE`. Replace `assets/fonts` with its `fonts`.
-3. Bump `UOSCVersion`, then check the option names `mpvskin.Args` passes
-   still exist in uosc's `main.lua` (`defaults`).
-4. `go test ./internal/mpvskin/` and try it in mpv.
+The script binds `MBTN_LEFT` and the wheel only while the pointer is over
+one of its buttons or bars, so every other click still reaches the user's
+`input.conf`. `ENTER` is bound only while the corner offers something
+(skip, undo, play next), `ESC` only while a menu is open.
 
 ## Trying it without a show
 
-Under X11 (or Xvfb with `--vo=x11 --override-display-fps=30`, since uosc
-waits on display refresh), start mpv with the output of `mpvskin.Args` and
-two local files, then set chapters over IPC:
+Under X11 (or Xvfb with `--vo=x11`), start mpv with the output of
+`mpvskin.Args` and two local files, then set chapters and chips over IPC:
 
 ```json
 {"command":["set_property","chapter-list",[{"title":"Opening","time":90},{"title":"Main","time":180},{"title":"Ending","time":1330},{"title":"Post-Credits","time":1420}]]}
+{"command":["script-message-to","otakase_skin","otakase-state","{\"chips\":[{\"icon\":\"sync\",\"text\":\"AniList\"}]}"]}
 ```
+
+IPC `mouse x y` moves the pointer and `mouse x y 0 single` clicks.

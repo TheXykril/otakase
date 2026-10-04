@@ -233,8 +233,8 @@ contributors. [ani-cli](https://github.com/pystardust/ani-cli) and
 both. Lists and metadata come from [AniList](https://anilist.co) and
 [MyAnimeList](https://myanimelist.net), skip times from
 [AniSkip](https://api.aniskip.com/api-docs) and others, and filler episode
-numbers from [Jikan](https://jikan.moe/). The player look is built on
-[uosc](https://github.com/tomasklaen/uosc).
+numbers from [Jikan](https://jikan.moe/). The player's icons are Google's
+[Material Icons](https://github.com/google/material-design-icons).
 
 ## Contributing
 

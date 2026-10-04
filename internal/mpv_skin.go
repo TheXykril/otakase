@@ -69,13 +69,13 @@ func mpvSkinArgs(config *Config, binary string) []string {
 func mpvSkinColors(p theme.Palette) mpvskin.Colors {
 	return mpvskin.Colors{
 		Background: p.Background,
+		Surface:    p.Surface(),
 		Foreground: p.Foreground,
+		Bright:     p.BrightForeground,
 		Dim:        p.MetaText(),
 		Accent:     p.Accent,
 		AccentText: theme.ReadableOn(p.Accent, p.Background, p.BrightForeground, "#000000", "#ffffff"),
 		Highlight:  p.ResumeText(),
-		Success:    p.Green,
-		Error:      p.Red,
 	}
 }
 
@@ -107,7 +107,7 @@ type mpvSkinChip struct {
 }
 
 // mpvSkinChips are the chips under the player's top bar: where progress is
-// tracked and which source is playing. Icon names are uosc's Material Icons.
+// tracked and which source is playing. Icon names are Material Icons ligatures.
 func mpvSkinChips(config *Config, anime *Anime) []mpvSkinChip {
 	var chips []mpvSkinChip
 	switch {

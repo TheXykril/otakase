@@ -154,19 +154,14 @@ func TestInstallWritesReusesAndCleans(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, rel := range []string{
-		"scripts/uosc/main.lua",
-		"scripts/uosc/LICENSE",
 		"scripts/otakase_skin.lua",
-		"fonts/uosc_icons.otf",
-		"fonts/uosc_textures.ttf",
+		"fonts/MaterialIconsRound.otf",
+		"LICENSE.MaterialIcons",
 		".complete",
 	} {
 		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(rel))); err != nil {
 			t.Errorf("%s missing: %v", rel, err)
 		}
-	}
-	if _, err := os.Stat(filepath.Join(dir, "scripts", "uosc", "bin")); err == nil {
-		t.Error("uosc's helper binaries are not shipped")
 	}
 	if _, err := os.Stat(stale); err == nil {
 		t.Error("an older copy should be removed")
@@ -186,8 +181,8 @@ func TestArgs(t *testing.T) {
 	args := Args(Options{
 		Dir: "/store/mpv-skin/abc",
 		Colors: Colors{
-			Background: "#1a1b26", Foreground: "#a9b1d6", Dim: "#787c99", Accent: "#7aa2f7",
-			AccentText: "#1a1b26", Highlight: "#e0af68", Success: "#9ece6a", Error: "#f7768e",
+			Background: "#1a1b26", Surface: "#24283b", Foreground: "#a9b1d6", Bright: "#c0caf5",
+			Dim: "#787c99", Accent: "#7aa2f7", AccentText: "#1a1b26", Highlight: "#e0af68",
 		},
 		Font:   "JetBrainsMono Nerd Font",
 		SkipOp: true,
@@ -195,12 +190,13 @@ func TestArgs(t *testing.T) {
 	joined := strings.Join(args, "\n")
 	for _, want := range []string{
 		"--osc=no",
-		"--script=" + filepath.Join("/store/mpv-skin/abc", "scripts", "uosc"),
 		"--script=" + filepath.Join("/store/mpv-skin/abc", "scripts", "otakase_skin.lua"),
 		"--osd-fonts-dir=" + filepath.Join("/store/mpv-skin/abc", "fonts"),
 		"--osd-font=JetBrainsMono Nerd Font",
-		"--script-opts-append=uosc-color=foreground=7aa2f7,foreground_text=1a1b26,background=1a1b26,",
-		"--script-opts-append=uosc-chapter_ranges=openings:e0af68bb,endings:e0af68bb,",
+		"--script-opts-append=otakase_skin-background=1a1b26",
+		"--script-opts-append=otakase_skin-surface=24283b",
+		"--script-opts-append=otakase_skin-accent=7aa2f7",
+		"--script-opts-append=otakase_skin-highlight=e0af68",
 		"--script-opts-append=otakase_skin-skip_op=yes",
 		"--script-opts-append=otakase_skin-skip_ed=no",
 	} {
@@ -210,14 +206,21 @@ func TestArgs(t *testing.T) {
 	}
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "--script-opts=") {
-			t.Errorf("%q would split the commas in uosc's lists", arg)
+			t.Errorf("%q: options go in --script-opts-append", arg)
 		}
 		if strings.Contains(arg, "#") {
-			t.Errorf("%q: uosc wants colours without #", arg)
+			t.Errorf("%q: the script wants colours without #", arg)
+		}
+		if strings.Contains(arg, "uosc") {
+			t.Errorf("%q: uosc is not shipped", arg)
 		}
 	}
 
-	if got := strings.Join(Args(Options{Dir: "/x"}), "\n"); strings.Contains(got, "--osd-font=") {
+	got := strings.Join(Args(Options{Dir: "/x"}), "\n")
+	if strings.Contains(got, "--osd-font=") {
 		t.Error("no font given should keep mpv's own OSD font")
+	}
+	if strings.Contains(got, "-background=") {
+		t.Error("an empty colour should keep the script's default")
 	}
 }

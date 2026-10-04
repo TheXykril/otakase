@@ -1,11 +1,12 @@
 // Package mpvskin gives mpv otakase's own look while otakase plays in it.
 //
-// The look is uosc (https://github.com/tomasklaen/uosc, LGPL-2.1), coloured
-// from the active palette, plus otakase_skin.lua for what is otakase's own: a
-// skip button for openings and endings, the undo notice after an automatic
-// skip, the next-episode card and the chips under the top bar.
+// The look is otakase_skin.lua, an on-screen controller drawn in the active
+// palette: a top bar with the title and chips, a seek bar with openings and
+// endings marked, the control row with track and episode menus, a skip button
+// for openings and endings, the undo notice after an automatic skip and the
+// next-episode card. Its icons are Material Icons Round (Apache-2.0).
 //
-// Nothing is installed into the user's mpv. The scripts and fonts are embedded
+// Nothing is installed into the user's mpv. The script and font are embedded
 // in the binary, written to otakase's storage directory, and handed to the one
 // mpv process otakase starts with --script and --osd-fonts-dir. Their mpv.conf,
 // input.conf and scripts still load as always. Someone who already runs a skin
@@ -24,9 +25,6 @@ import (
 	"strings"
 	"sync"
 )
-
-// UOSCVersion is the uosc release embedded under assets/scripts/uosc.
-const UOSCVersion = "5.13.0"
 
 // ScriptName is the name mpv gives otakase_skin.lua, which script-message-to
 // addresses it by.
@@ -62,15 +60,14 @@ func ParseMode(raw string) Mode {
 // Colors are the palette roles the skin draws with, each "#rrggbb".
 type Colors struct {
 	Background string
+	Surface    string // menus and cards, a step up from Background
 	Foreground string
+	Bright     string // the title, hovered buttons
 	Dim        string
 	Accent     string
-	// AccentText is readable on Accent: the play button's icon, a hovered
-	// button's label.
+	// AccentText is readable on Accent: the play button's icon.
 	AccentText string
-	Highlight  string // openings and endings on the timeline
-	Success    string
-	Error      string
+	Highlight  string // openings and endings on the seek bar
 }
 
 // Options is everything Args needs to know about this launch.
@@ -92,7 +89,7 @@ var (
 )
 
 // assetDigest names the installed copy after its contents, so an otakase
-// update with a different uosc or otakase_skin.lua never runs against files a
+// update with a different otakase_skin.lua never runs against files a
 // previous version left behind.
 func assetDigest() string {
 	digestOnce.Do(func() {
@@ -144,7 +141,7 @@ func Install(storage string) (string, error) {
 		if err := writeAssets(tmp); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(filepath.Join(tmp, ".complete"), []byte(UOSCVersion+"\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(tmp, ".complete"), []byte(assetDigest()+"\n"), 0o644); err != nil {
 			return "", err
 		}
 		// A copy without its marker is one an older otakase left half written.
@@ -190,67 +187,41 @@ func writeAssets(target string) error {
 	})
 }
 
-// uoscControls is uosc's default control bar without the controls an anime
-// episode has no use for (shuffle, loop, speed).
-const uoscControls = "menu,gap,<video,audio>subtitles,<has_many_audio>audio,<has_many_video>video," +
-	"<has_many_edition>editions,<stream>stream-quality,gap,space,prev,items,next,gap,fullscreen"
-
 // Args are the mpv flags that load the skin.
 //
-// Script options go in one --script-opts-append each: that form takes the
-// whole value as one option, so the commas inside uosc's lists survive.
-// Passed on the command line, they override the user's script-opts/uosc.conf
-// for this process only.
+// Script options go in one --script-opts-append each, which takes the whole
+// value as one option. Passed on the command line, they override the user's
+// script-opts/otakase_skin.conf for this process only.
 func Args(opts Options) []string {
 	c := opts.Colors
 	hex := func(color string) string { return strings.TrimPrefix(strings.TrimSpace(color), "#") }
 
-	uosc := [][2]string{
-		{"top_bar", "always"},
-		{"timeline_style", "bar"},
-		{"controls", uoscControls},
-		{"border_radius", "6"},
-		// The updater and the clipboard need uosc's helper binary, which is
-		// not shipped: it is 18 MB for features otakase does not use.
-		{"disable_elements", "updater"},
-		{"color", strings.Join([]string{
-			"foreground=" + hex(c.Accent),
-			"foreground_text=" + hex(c.AccentText),
-			"background=" + hex(c.Background),
-			"background_text=" + hex(c.Foreground),
-			"curtain=" + hex(c.Background),
-			"success=" + hex(c.Success),
-			"error=" + hex(c.Error),
-			"match=" + hex(c.Accent),
-			"heatmap=" + hex(c.Accent),
-		}, ",")},
-		{"chapter_ranges", fmt.Sprintf("openings:%sbb,endings:%sbb,ads:%s80", hex(c.Highlight), hex(c.Highlight), hex(c.Error))},
-	}
 	skin := [][2]string{
 		{"background", hex(c.Background)},
+		{"surface", hex(c.Surface)},
 		{"foreground", hex(c.Foreground)},
+		{"bright", hex(c.Bright)},
 		{"dim", hex(c.Dim)},
 		{"accent", hex(c.Accent)},
 		{"accent_text", hex(c.AccentText)},
+		{"highlight", hex(c.Highlight)},
 		{"skip_op", yesNo(opts.SkipOp)},
 		{"skip_ed", yesNo(opts.SkipEd)},
 	}
 
-	scripts := filepath.Join(opts.Dir, "scripts")
 	args := []string{
 		"--osc=no",
-		"--script=" + filepath.Join(scripts, "uosc"),
-		"--script=" + filepath.Join(scripts, ScriptName+".lua"),
+		"--script=" + filepath.Join(opts.Dir, "scripts", ScriptName+".lua"),
 		"--osd-fonts-dir=" + filepath.Join(opts.Dir, "fonts"),
 	}
 	if font := strings.TrimSpace(opts.Font); font != "" {
-		// uosc draws with mpv's OSD font, so this is how its text is set too.
+		// The skin draws its text in mpv's OSD font.
 		args = append(args, "--osd-font="+font)
 	}
-	for _, kv := range uosc {
-		args = append(args, "--script-opts-append=uosc-"+kv[0]+"="+kv[1])
-	}
 	for _, kv := range skin {
+		if kv[1] == "" {
+			continue
+		}
 		args = append(args, "--script-opts-append="+ScriptName+"-"+kv[0]+"="+kv[1])
 	}
 	return args
