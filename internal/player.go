@@ -556,6 +556,10 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 	if isIINAPlayer(effectivePlayerName, resolvedPlayerBinary) {
 		playerArgs = translateMPVArgsForIINA(mpvArgs)
 		playerArgs = append(playerArgs, "--no-stdin")
+	} else if skinArgs := mpvSkinArgs(userConfig, resolvedPlayerBinary); len(skinArgs) > 0 {
+		// First, so the user's MpvArgs after them still have the last word.
+		playerArgs = append(skinArgs, mpvArgs...)
+		markMPVSkinSocket(mpvSocketPath)
 	}
 
 	command = exec.Command(resolvedPlayerBinary, playerArgs...)

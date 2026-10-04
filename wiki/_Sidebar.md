@@ -19,4 +19,5 @@
 - [Providers](Developer-Providers)
 - [Casting Verification](Developer-Casting-Verification)
 - [Cast Window Prompts](Developer-Cast-Window-Prompts)
+- [Player Look](Developer-Player-Look)
 - [Theming](Developer-Theming)
