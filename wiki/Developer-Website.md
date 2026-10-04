@@ -19,8 +19,16 @@ local web server (`python3 -m http.server -d site`) to preview it.
 
 `app.js` asks AniList for the 15 trending anime (`isAdult: false`) and fades
 from cover to cover every 5 seconds. The list is cached in `localStorage` for
-6 hours. If AniList can't be reached, the letters show `img/sky-*.jpg`, crops
-of otakase's own player.
+6 hours. If AniList can't be reached, the letters show `img/scene-*.jpg`, the
+same drawn sunset the player screenshots use.
+
+## Screenshots
+
+The `player-*.jpg` and `menu-*.jpg` images are real otakase in the default
+Shu colours: mpv with otakase's skin playing a still drawing (no show's
+footage), the terminal menu in kitty and the rofi poster grid with real AniList
+covers. Retake them when the player or menus change look, and
+keep source names out of the frame.
 
 ## Icon
 

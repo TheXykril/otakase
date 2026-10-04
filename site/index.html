@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Cormorant+Garamond:wght@500&family=JetBrains+Mono:wght@400;600&display=swap">
 <!-- only the kanji the page uses, so the Japanese font stays a few kilobytes -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700;900&text=%E4%BB%BB%E3%81%8A%E3%81%9B%E5%86%8D%E9%A3%9B%E5%90%8C%E6%98%A0%E7%B6%9A%E5%BD%A9&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700;900&text=%E4%BB%BB%E3%81%8A%E3%81%9B%E5%86%8D%E9%A3%9B%E5%90%8C%E6%98%A0%E7%B6%9A%E5%BD%A9%E4%B8%80%E4%BA%8C%E4%B8%89%E7%94%BB%E7%AE%B1&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -25,6 +25,7 @@
     <a class="brand" href="./"><img src="img/favicon.svg" alt="" width="22" height="22">OTAKASE</a>
     <span class="sp"></span>
     <a href="#features">WAY</a>
+    <a href="#tour-h">PLAYER</a>
     <a href="#install">INSTALL</a>
     <a href="https://github.com/TheXykril/otakase/wiki">WIKI</a>
     <a href="https://github.com/TheXykril/otakase">GITHUB</a>
@@ -50,9 +51,72 @@
     <div class="it"><span class="kj" aria-hidden="true">彩</span><div><h3>Follows your theme</h3><p>Menus and player take your desktop's colours, from pywal and base16 to KDE, GNOME, macOS and Windows.</p></div></div>
   </section>
 
-  <section class="film" aria-label="Screenshots">
-    <figure><img src="img/skipped.jpg" alt="The player after skipping an opening, with an Undo button" width="1280" height="624" loading="lazy"><figcaption class="mono">The opening, skipped. One key to undo.</figcaption></figure>
-    <figure><img src="img/episodes.jpg" alt="The player's episode menu" width="1280" height="624" loading="lazy"><figcaption class="mono">Every episode, one menu away.</figcaption></figure>
+  <section class="sec how" aria-labelledby="how-h">
+    <p class="mono tag">How it works</p>
+    <h2 id="how-h">Three steps, then the episode.</h2>
+    <ol class="steps">
+      <li><span class="n">一</span><h3>Pick</h3><p>Your list opens first, with the show you stopped halfway at the top. Or type to search any title.</p></li>
+      <li><span class="n">二</span><h3>Play</h3><p>otakase finds a working source, picks sub or dub, and opens the episode in mpv where you left it.</p></li>
+      <li><span class="n">三</span><h3>Done</h3><p>When the credits roll your list is updated, and the next episode is one click away.</p></li>
+    </ol>
+  </section>
+
+  <section class="sec tour" aria-labelledby="tour-h">
+    <p class="mono tag">The player</p>
+    <h2 id="tour-h">mpv, dressed for anime.</h2>
+    <figure class="shot big-shot"><img src="img/player-skip.jpg" alt="The player during the opening, with a Skip Opening button and the opening and ending marked on the timeline" width="1280" height="720" loading="lazy"><figcaption class="mono">Openings and endings marked on the timeline. Skip with Enter, or let otakase do it.</figcaption></figure>
+    <div class="pair">
+      <figure class="shot"><img src="img/player-episodes.jpg" alt="The player's episode menu open over the video" width="1280" height="720" loading="lazy"><figcaption class="mono">Every episode, one menu away.</figcaption></figure>
+      <figure class="shot"><img src="img/player-subs.jpg" alt="The player's subtitle menu with English and Japanese tracks" width="1280" height="720" loading="lazy"><figcaption class="mono">Subtitles and audio without digging.</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="sec menus" aria-labelledby="menus-h">
+    <p class="mono tag">The menus</p>
+    <h2 id="menus-h">In the terminal, or on the desktop.</h2>
+    <div class="pair">
+      <figure class="shot"><img src="img/menu-terminal.jpg" alt="otakase's terminal menu: the Watching list with tabs, the shows to continue at the top and a details pane" width="1180" height="620" loading="lazy"><figcaption class="mono">Terminal menus on every system. Tab through your lists, type to filter.</figcaption></figure>
+      <figure class="shot"><img src="img/menu-grid.jpg" alt="otakase's rofi menu: a grid of posters with a toolbar of actions" width="1202" height="748" loading="lazy"><figcaption class="mono">On Linux, rofi menus with posters. Bind it to a key and skip the terminal.</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="sec cast" aria-labelledby="cast-h">
+    <div>
+      <p class="mono tag">Casting</p>
+      <h2 id="cast-h">Send it to the big screen.</h2>
+      <p class="lede">Run <code>otakase -cast</code> and pick the TV. Skips, resume and the next episode keep working, and the terminal becomes the remote.</p>
+    </div>
+    <ul class="devices">
+      <li><span class="kj" aria-hidden="true">映</span><b>Chromecast</b><span class="mono">and Google TV</span></li>
+      <li><span class="kj" aria-hidden="true">画</span><b>Smart TVs</b><span class="mono">over DLNA</span></li>
+      <li><span class="kj" aria-hidden="true">箱</span><b>Kodi</b><span class="mono">on any box</span></li>
+    </ul>
+  </section>
+
+  <section class="sec themes" aria-labelledby="themes-h">
+    <p class="mono tag">Colours</p>
+    <h2 id="themes-h">Shu by default. Yours if you have one.</h2>
+    <p class="lede">otakase ships in Shu, the vermilion of a torii gate. If your desktop has a theme, the menus and the player take its colours instead.</p>
+    <div class="swatches">
+      <div class="sw" style="--b:#0e0d0c;--f:#ece4d6;--a:#d2492f"><i></i><span>Shu · default</span></div>
+      <div class="sw" style="--b:#1a1b26;--f:#c0caf5;--a:#7aa2f7"><i></i><span>Tokyo Night</span></div>
+      <div class="sw" style="--b:#1e1e2e;--f:#cdd6f4;--a:#cba6f7"><i></i><span>Catppuccin</span></div>
+      <div class="sw" style="--b:#282828;--f:#ebdbb2;--a:#fabd2f"><i></i><span>Gruvbox</span></div>
+      <div class="sw" style="--b:#2e3440;--f:#eceff4;--a:#88c0d0"><i></i><span>Nord</span></div>
+      <div class="sw" style="--b:#fafafa;--f:#2b2b3a;--a:#1f6fd1"><i></i><span>Your accent</span></div>
+    </div>
+    <p class="hint">Read from pywal, base16, KDE, GNOME, macOS, Windows or Omarchy, or a colours file of your own.</p>
+  </section>
+
+  <section class="sec faq" aria-labelledby="faq-h">
+    <p class="mono tag">Questions</p>
+    <h2 id="faq-h">Before you ask.</h2>
+    <details><summary>Is it free?</summary><p>Yes. otakase is open source under the GPL-3.0, with no ads, no accounts of its own and nothing to pay for.</p></details>
+    <details><summary>Does otakase host any video?</summary><p>No. It is a player front end: it finds episodes that are already public on the web and hands them to mpv. Nothing is uploaded or stored by the project.</p></details>
+    <details><summary>Do I need an AniList or MyAnimeList account?</summary><p>No. Pick local tracking on first launch and your progress stays on your computer. You can sign in to AniList, MyAnimeList or both later.</p></details>
+    <details><summary>What else do I need?</summary><p>mpv, which the install commands above bring along. The Windows installer carries its own copy. rofi is optional on Linux.</p></details>
+    <details><summary>Can I keep watching on another computer?</summary><p>Yes. With AniList or MyAnimeList, otakase keeps the minute you stopped at with your list, so another computer picks up mid-episode.</p></details>
+    <details><summary>I used curd. Do I lose anything?</summary><p>No. otakase continues curd, and your settings, sign-ins and history move over on first launch.</p></details>
   </section>
 
   <section class="inst" id="install" aria-labelledby="inst-h">
