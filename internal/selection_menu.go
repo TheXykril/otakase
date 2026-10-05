@@ -1313,15 +1313,20 @@ func dynamicSelectInternal(options []SelectionOption, refreshConfig *SelectionRe
 }
 
 // rofiVersionThemeArgs puts the running version at the right end of the
-// search bar, in the theme's dimmed colour. The generated themes give the
-// input bar only an entry, so this adds a second widget beside it rather than
-// changing anything the theme files draw.
+// search bar, in the theme's dimmed colour. Naming the input bar's children
+// replaces the theme's list, so the app icon the theme puts in front of the
+// entry is named here again, when it was written beside the themes.
 func rofiVersionThemeArgs() []string {
 	version := strings.NewReplacer(`"`, "", `\`, "").Replace(DisplayVersion())
+	children := "entry, textbox-version"
+	icon := filepath.Join(GetStoragePath(), rofitheme.IconFile)
+	if info, err := os.Stat(icon); err == nil && !info.IsDir() && !strings.ContainsAny(icon, `"\`) {
+		children = "icon-app, " + children
+	}
 	return []string{"-theme-str", fmt.Sprintf(
-		`inputbar { children: [ entry, textbox-version ]; } `+
+		`inputbar { children: [ %s ]; } `+
 			`textbox-version { expand: false; content: "%s"; background-color: transparent; text-color: @muted; vertical-align: 0.5; markup: false; }`,
-		version)}
+		children, version)}
 }
 
 // optionIcon is the icon a row is drawn with: its own, or the one every menu's
