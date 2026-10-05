@@ -481,6 +481,21 @@ func TestCategoriesFirst(t *testing.T) {
 	}
 }
 
+func TestTitleLabel(t *testing.T) {
+	m := titleMatch{ID: 1, Format: "TV_SHORT", SeasonYear: 2024}
+	m.Title.English, m.Title.Romaji = "Frieren", "Sousou no Frieren"
+	if got := titleLabel(m); got != "Frieren (Sousou no Frieren) · TV SHORT, 2024" {
+		t.Errorf("%q", got)
+	}
+	m.Title.English, m.Title.Romaji = "", strings.Repeat("a", 200)
+	if got := titleLabel(m); len([]rune(got)) > 100 {
+		t.Errorf("too long: %d", len([]rune(got)))
+	}
+	if !pickedShowRe.MatchString("anilist:154587") || pickedShowRe.MatchString("frieren") {
+		t.Error("picked value")
+	}
+}
+
 func snowflakeAt(t time.Time) string {
 	return strconv.FormatInt((t.UnixMilli()-1420070400000)<<22, 10)
 }

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,8 +21,8 @@ import (
 // /watchparty creates a server event in a voice channel for watching a show
 // together, with the show's AniList banner as the event image.
 
-const watchpartyQuery = `query ($q: String) {
-  Media(search: $q, type: ANIME, isAdult: false) {
+const watchpartyQuery = `query ($q: String, $id: Int) {
+  Media(id: $id, search: $q, type: ANIME, isAdult: false) {
     siteUrl bannerImage coverImage { extraLarge }
     title { romaji english }
   }
@@ -33,8 +34,16 @@ type partyShow struct {
 	Image string
 }
 
+// pickedShowRe matches the value of a title picked from the suggestions.
+var pickedShowRe = regexp.MustCompile(`^anilist:(\d+)$`)
+
 func findPartyShow(q string) (partyShow, error) {
-	body, _ := json.Marshal(map[string]any{"query": watchpartyQuery, "variables": map[string]string{"q": q}})
+	vars := map[string]any{"q": q}
+	if m := pickedShowRe.FindStringSubmatch(q); m != nil {
+		id, _ := strconv.Atoi(m[1])
+		vars = map[string]any{"id": id}
+	}
+	body, _ := json.Marshal(map[string]any{"query": watchpartyQuery, "variables": vars})
 	req, _ := http.NewRequest("POST", "https://graphql.anilist.co", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	var r struct {
@@ -54,6 +63,9 @@ func findPartyShow(q string) (partyShow, error) {
 	}
 	m := r.Data.Media
 	if m == nil {
+		if pickedShowRe.MatchString(q) {
+			return partyShow{}, fmt.Errorf("no show %s", q)
+		}
 		return partyShow{Title: q}, nil
 	}
 	p := partyShow{Title: m.Title.English, URL: m.SiteURL, Image: m.BannerImage}
@@ -64,6 +76,93 @@ func findPartyShow(q string) (partyShow, error) {
 		p.Image = m.CoverImage.ExtraLarge
 	}
 	return p, nil
+}
+
+const titleSuggestQuery = `query ($q: String) {
+  Page(perPage: 10) {
+    media(search: $q, type: ANIME, isAdult: false, sort: SEARCH_MATCH) {
+      id format seasonYear title { romaji english }
+    }
+  }
+}`
+
+// suggestClient is quick to give up: Discord drops suggestions after three
+// seconds.
+var suggestClient = &http.Client{Timeout: 2500 * time.Millisecond}
+
+// suggestTitles answers typing in /watchparty's anime option with the
+// matching AniList titles, so the host picks the exact show.
+func (b *bot) suggestTitles(i *discordgo.InteractionCreate) {
+	var q string
+	for _, o := range i.ApplicationCommandData().Options {
+		if o.Name == "anime" && o.Focused {
+			q = strings.TrimSpace(o.StringValue())
+		}
+	}
+	choices := []*discordgo.ApplicationCommandOptionChoice{}
+	if len(q) >= 2 && !pickedShowRe.MatchString(q) {
+		choices = titleChoices(q)
+	}
+	if err := b.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
+		Data: &discordgo.InteractionResponseData{Choices: choices},
+	}); err != nil {
+		log.Printf("title suggestions: %v", err)
+	}
+}
+
+type titleMatch struct {
+	ID         int    `json:"id"`
+	Format     string `json:"format"`
+	SeasonYear int    `json:"seasonYear"`
+	Title      struct{ Romaji, English string }
+}
+
+func titleChoices(q string) []*discordgo.ApplicationCommandOptionChoice {
+	body, _ := json.Marshal(map[string]any{"query": titleSuggestQuery, "variables": map[string]string{"q": q}})
+	req, _ := http.NewRequest("POST", "https://graphql.anilist.co", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "otakase-bot (https://github.com/TheXykril/otakase)")
+	choices := []*discordgo.ApplicationCommandOptionChoice{}
+	resp, err := suggestClient.Do(req)
+	if err != nil {
+		return choices
+	}
+	defer resp.Body.Close()
+	var r struct {
+		Data struct {
+			Page struct{ Media []titleMatch } `json:"Page"`
+		} `json:"data"`
+	}
+	if resp.StatusCode != 200 || json.NewDecoder(resp.Body).Decode(&r) != nil {
+		return choices
+	}
+	for _, m := range r.Data.Page.Media {
+		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{Name: titleLabel(m), Value: fmt.Sprintf("anilist:%d", m.ID)})
+	}
+	return choices
+}
+
+// titleLabel is how a suggestion reads: the title, with the romaji one,
+// format and year to tell apart shows of the same name.
+func titleLabel(m titleMatch) string {
+	name := m.Title.English
+	if name == "" {
+		name = m.Title.Romaji
+	} else if m.Title.Romaji != "" && !strings.EqualFold(m.Title.Romaji, name) {
+		name += " (" + m.Title.Romaji + ")"
+	}
+	var info []string
+	if m.Format != "" {
+		info = append(info, strings.ReplaceAll(m.Format, "_", " "))
+	}
+	if m.SeasonYear > 0 {
+		info = append(info, strconv.Itoa(m.SeasonYear))
+	}
+	if len(info) > 0 {
+		return clip(name, 100-len(strings.Join(info, ", "))-3) + " · " + strings.Join(info, ", ")
+	}
+	return clip(name, 100)
 }
 
 // imageDataURI downloads an image for the event cover. Failures just leave
@@ -135,6 +234,9 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 	b.deferThen(i, false, func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 		show, err := findPartyShow(title)
 		if err != nil {
+			if pickedShowRe.MatchString(title) {
+				return errorEmbed("Couldn't look up that show on AniList. Try again."), nil
+			}
 			show = partyShow{Title: title}
 		}
 		start := time.Now().Add(time.Duration(minutes) * time.Minute)

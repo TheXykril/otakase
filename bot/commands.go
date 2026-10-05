@@ -36,7 +36,7 @@ func (b *bot) registerCommands() error {
 		{Name: "provider-status", Description: "Which anime sources work right now"},
 		{Name: "bug", Description: "Turn this support post into a GitHub issue"},
 		{Name: "watchparty", Description: "Plan a watch party in a voice channel", Options: []*discordgo.ApplicationCommandOption{
-			{Type: discordgo.ApplicationCommandOptionString, Name: "anime", Description: "What you'll watch", Required: true},
+			{Type: discordgo.ApplicationCommandOptionString, Name: "anime", Description: "What you'll watch (pick from the suggestions)", Required: true, Autocomplete: true},
 			{Type: discordgo.ApplicationCommandOptionInteger, Name: "starts_in", Description: "Minutes from now (default 15)", MinValue: &zero, MaxValue: 10080},
 			{Type: discordgo.ApplicationCommandOptionInteger, Name: "limit", Description: "Max people in the voice channel (0 = no limit)", MinValue: &zero, MaxValue: 99},
 			{Type: discordgo.ApplicationCommandOptionString, Name: "voice", Description: "Who can talk and screen share (default: everyone talks, host shares)", Choices: []*discordgo.ApplicationCommandOptionChoice{
@@ -114,6 +114,10 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			b.suggestForm(i)
 		case "suggestion-status":
 			b.setSuggestionStatus(i)
+		}
+	case discordgo.InteractionApplicationCommandAutocomplete:
+		if i.ApplicationCommandData().Name == "watchparty" {
+			b.suggestTitles(i)
 		}
 	case discordgo.InteractionModalSubmit:
 		if i.ModalSubmitData().CustomID == "suggest-form" {
