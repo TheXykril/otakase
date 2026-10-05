@@ -197,7 +197,7 @@ func defaultConfigMap() map[string]string {
 	return map[string]string{
 		"Player":                  "mpv",
 		"MpvArgs":                 "[]",
-		"MpvSkin":                 "auto",
+		"MpvSkin":                 "true",
 		"MpvPlaybackStartTimeout": "20",
 		"StoragePath":             StoragePathDefault,
 		"AnimeNameLanguage":       "english",
