@@ -104,15 +104,18 @@ func (b *bot) ownedRoom(userID string) string {
 	return id
 }
 
-func (b *bot) createRoom(m *discordgo.Member, name string, private bool, limit int, extra ...*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
+// createRoom makes a voice room in parent, or when that's empty in the
+// category of the Create room channel (else the lounge's).
+func (b *bot) createRoom(m *discordgo.Member, name string, private bool, limit int, parent string, extra ...*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
 	if name == "" {
 		name = displayName(m) + "'s room"
 	}
-	parent := ""
-	if c, err := b.s.State.Channel(b.cfg.CreateRoom); err == nil {
-		parent = c.ParentID
-	} else if c, err := b.s.State.Channel(b.cfg.LoungeChannel); err == nil {
-		parent = c.ParentID
+	if parent == "" {
+		if c, err := b.s.State.Channel(b.cfg.CreateRoom); err == nil {
+			parent = c.ParentID
+		} else if c, err := b.s.State.Channel(b.cfg.LoungeChannel); err == nil {
+			parent = c.ParentID
+		}
 	}
 	ch, err := b.s.GuildChannelCreateComplex(b.cfg.GuildID, discordgo.GuildChannelCreateData{
 		Name: name, Type: discordgo.ChannelTypeGuildVoice, ParentID: parent, UserLimit: limit,
@@ -165,7 +168,7 @@ func (b *bot) onVoiceState(s *discordgo.Session, v *discordgo.VoiceStateUpdate) 
 	}
 	ch := b.ownedRoom(v.UserID)
 	if ch == "" {
-		c, err := b.createRoom(v.Member, "", false, 0)
+		c, err := b.createRoom(v.Member, "", false, 0, "")
 		if err != nil {
 			log.Printf("create room: %v", err)
 			return
@@ -204,13 +207,17 @@ func (b *bot) sweepRoom(channelID string, force bool) {
 		}
 	}
 	b.empty.clear(channelID)
-	if _, err := b.s.ChannelDelete(channelID, discordgo.WithAuditLogReason("Voice room empty")); err != nil {
+	ch, err := b.s.ChannelDelete(channelID, discordgo.WithAuditLogReason("Voice room empty"))
+	if err != nil {
 		if rest, isRest := err.(*discordgo.RESTError); !isRest || rest.Response == nil || rest.Response.StatusCode != 404 {
 			log.Printf("delete room: %v", err)
 			return
 		}
 	}
 	b.store.update(func(d *storeData) { delete(d.Rooms, channelID) })
+	if ch != nil && ch.ParentID != "" {
+		b.dropPartyCategory(ch.ParentID)
+	}
 }
 
 // markRoomUsed notes that someone joined a room, so it goes as soon as it's
@@ -306,7 +313,7 @@ func (b *bot) roomCommand(i *discordgo.InteractionCreate) {
 		b.respond(i, true, &discordgo.MessageEmbed{Color: shu, Description: fmt.Sprintf("Updated <#%s>.", ch)})
 		return
 	}
-	c, err := b.createRoom(i.Member, name, privacy == "private", max(limit, 0))
+	c, err := b.createRoom(i.Member, name, privacy == "private", max(limit, 0), "")
 	if err != nil {
 		log.Printf("create room: %v", err)
 		b.respond(i, true, errorEmbed("Couldn't make the room. The bot needs **Manage Channels** and **Move Members**."))

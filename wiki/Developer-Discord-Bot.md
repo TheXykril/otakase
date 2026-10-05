@@ -56,8 +56,10 @@ server and stays connected to Discord.
   it with the show's AniList banner, starting in the given minutes. Options
   set a member limit and who can talk and screen share: everyone talks and
   only the host shares (default), everyone talks and shares, or only the host
-  does both. The party's channel stays until half an hour after the start,
-  then goes like any voice room (a minute after the last person leaves).
+  does both. Party channels go in a **WatchParty** category, made with the
+  first party and deleted when the last party channel goes. The party's
+  channel stays until half an hour after the start, then goes like any voice
+  room (a minute after the last person leaves).
   Any member can start one, one at a time; the post's **Cancel** button
   deletes the event and works for the host and for anyone who can manage
   events.

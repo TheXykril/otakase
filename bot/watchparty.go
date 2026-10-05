@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -139,7 +140,16 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 		if minutes < 1 {
 			start = time.Now().Add(time.Minute) // events must start in the future
 		}
-		c, err := b.createRoom(i.Member, clip("🎬 "+show.Title, 90), false, limit, partyOverwrites(b.cfg.GuildID, host.ID, mode)...)
+		cat, err := b.partyCategory()
+		if err != nil {
+			log.Printf("watchparty category: %v", err) // the room goes with the other rooms
+		}
+		name, perms := clip("🎬 "+show.Title, 90), partyOverwrites(b.cfg.GuildID, host.ID, mode)
+		c, err := b.createRoom(i.Member, name, false, limit, cat, perms...)
+		if err != nil && cat != "" {
+			// The category may have just gone with the last party; use the rooms one.
+			c, err = b.createRoom(i.Member, name, false, limit, "", perms...)
+		}
 		if err != nil {
 			log.Printf("watchparty channel: %v", err)
 			return errorEmbed("Couldn't make a voice channel. The bot needs **Manage Channels**."), nil
@@ -184,6 +194,67 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 			discordgo.Button{Label: "Cancel", Style: discordgo.DangerButton, CustomID: "party-cancel:" + ev.ID},
 		}}}
 	})
+}
+
+// Watch party channels go in their own category, made with the first party
+// and deleted once the last party's channel is gone.
+const partyCategoryName = "WatchParty"
+
+var partyCategoryMu sync.Mutex
+
+func isPartyCategory(c *discordgo.Channel) bool {
+	if c.Type != discordgo.ChannelTypeGuildCategory {
+		return false
+	}
+	n := strings.NewReplacer(" ", "", "-", "", "_", "").Replace(strings.ToLower(channelBase(c.Name)))
+	return n == "watchparty" || n == "watchparties"
+}
+
+// partyCategory returns the watch party category, making it if needed.
+func (b *bot) partyCategory() (string, error) {
+	partyCategoryMu.Lock()
+	defer partyCategoryMu.Unlock()
+	chans, err := b.s.GuildChannels(b.cfg.GuildID)
+	if err != nil {
+		return "", err
+	}
+	for _, c := range chans {
+		if isPartyCategory(c) {
+			return c.ID, nil
+		}
+	}
+	c, err := b.s.GuildChannelCreateComplex(b.cfg.GuildID, discordgo.GuildChannelCreateData{
+		Name: partyCategoryName, Type: discordgo.ChannelTypeGuildCategory,
+	}, discordgo.WithAuditLogReason("Watch party"))
+	if err != nil {
+		return "", err
+	}
+	return c.ID, nil
+}
+
+// dropPartyCategory deletes the watch party category once nothing is in it.
+func (b *bot) dropPartyCategory(id string) {
+	partyCategoryMu.Lock()
+	defer partyCategoryMu.Unlock()
+	chans, err := b.s.GuildChannels(b.cfg.GuildID)
+	if err != nil {
+		return
+	}
+	var cat *discordgo.Channel
+	for _, c := range chans {
+		if c.ParentID == id {
+			return
+		}
+		if c.ID == id {
+			cat = c
+		}
+	}
+	if cat == nil || !isPartyCategory(cat) {
+		return
+	}
+	if _, err := b.s.ChannelDelete(id, discordgo.WithAuditLogReason("No watch parties left")); err != nil {
+		log.Printf("delete party category: %v", err)
+	}
 }
 
 func eventLink(ev *discordgo.GuildScheduledEvent) string {

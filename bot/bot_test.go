@@ -446,6 +446,24 @@ func TestPartyOverwrites(t *testing.T) {
 	}
 }
 
+func TestIsPartyCategory(t *testing.T) {
+	cat, voice := discordgo.ChannelTypeGuildCategory, discordgo.ChannelTypeGuildVoice
+	for _, tc := range []struct {
+		c    discordgo.Channel
+		want bool
+	}{
+		{discordgo.Channel{Name: "WatchParty", Type: cat}, true},
+		{discordgo.Channel{Name: "映・watch-party", Type: cat}, true},
+		{discordgo.Channel{Name: "Watch Parties", Type: cat}, true},
+		{discordgo.Channel{Name: "voice", Type: cat}, false},
+		{discordgo.Channel{Name: "WatchParty", Type: voice}, false},
+	} {
+		if isPartyCategory(&tc.c) != tc.want {
+			t.Errorf("%q %v", tc.c.Name, tc.c.Type)
+		}
+	}
+}
+
 func snowflakeAt(t time.Time) string {
 	return strconv.FormatInt((t.UnixMilli()-1420070400000)<<22, 10)
 }
