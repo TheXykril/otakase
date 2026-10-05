@@ -11,9 +11,9 @@
   Opening/Ending button (or Undo after an automatic skip) and an Up next
   card during the ending. Colours follow your palette. Your own mpv.conf,
   input.conf and scripts still load.
-- **`MpvSkin` setting.** `auto` (the default) uses the new look unless you
-  already run an mpv skin of your own or set `osc=no`; `true` always uses
-  it, `false` keeps mpv's usual look. It is left out for mpv older than
+- **`MpvSkin` setting.** `true` (the default) always uses the new look;
+  `auto` uses it only when you don't run an mpv skin of your own or set
+  `osc=no`; `false` keeps mpv's usual look. It is left out for mpv older than
   0.37, IINA and mpv-android.
 - **Menus follow your desktop theme.** Besides Omarchy, otakase now picks up
   pywal, wallust and matugen, tinty or stylix base16 schemes, the KDE Plasma
