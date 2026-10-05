@@ -88,7 +88,6 @@ func manageMovieTrakt(config *Config, trakt *movies.Trakt) {
 	if trakt.SignedIn() {
 		picked, ok := pickMovieOption([]SelectionOption{
 			{Key: "SIGN_OUT", Label: "Sign out of Trakt", Icon: icons.No},
-			{Key: movieBackKey, Label: "Back", Icon: icons.Back},
 		})
 		if ok && picked.Key == "SIGN_OUT" {
 			if err := trakt.SignOut(); err != nil {

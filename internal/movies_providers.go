@@ -83,7 +83,6 @@ func pickMovieProvider(config *Config, lib *movieLibrary) {
 		}
 		options = append(options, SelectionOption{Key: name, Label: provider.Label(), Icon: icon})
 	}
-	options = append(options, SelectionOption{Key: movieBackKey, Label: "Back", Icon: icons.Back})
 	picked, ok := pickMovieOption(options)
 	if !ok || picked.Key == current {
 		return

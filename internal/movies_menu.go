@@ -209,8 +209,7 @@ func movieHubOptions(config *Config, store *movies.Store, lib *movieLibrary) []S
 	options = append(options,
 		SelectionOption{Key: movieProviderKey, Label: "Provider: " + lib.current(config).Label(), Icon: icons.Provider},
 		SelectionOption{Key: movieCastKey, Label: castActionLabel(config), Icon: castIcon},
-		SelectionOption{Key: movieTraktKey, Label: "Trakt: " + strings.TrimPrefix(traktActionLabel(lib.trakt), "trakt: "), Icon: icons.Tracker},
-		SelectionOption{Key: movieBackKey, Label: "Back to menu", Icon: icons.Back})
+		SelectionOption{Key: movieTraktKey, Label: "Trakt: " + strings.TrimPrefix(traktActionLabel(lib.trakt), "trakt: "), Icon: icons.Tracker})
 	return options
 }
 
@@ -259,7 +258,6 @@ func searchMovies(config *Config, store *movies.Store, lib *movieLibrary) {
 			byKey[key] = movie
 			options = append(options, movieRow(movie, store))
 		}
-		options = append(options, SelectionOption{Key: movieBackKey, Label: "Back", Icon: icons.Back})
 		picked, ok := pickMovieRows(config, options)
 		if !ok {
 			continue
@@ -343,7 +341,6 @@ func pickMovieRating(current int) (int, bool) {
 	if current > 0 {
 		options = append(options, SelectionOption{Key: "0", Label: "Clear rating", Icon: icons.No})
 	}
-	options = append(options, SelectionOption{Key: movieBackKey, Label: "Back", Icon: icons.Back})
 	picked, ok := pickMovieOption(options)
 	if !ok {
 		return 0, false
@@ -366,7 +363,6 @@ func pickFromMovieList(config *Config, store *movies.Store, lib *movieLibrary, l
 			byKey[row.Key] = entry.Movie
 			options = append(options, row)
 		}
-		options = append(options, SelectionOption{Key: movieBackKey, Label: "Back", Icon: icons.Back})
 		picked, ok := pickMovieRows(config, options)
 		if !ok {
 			return
@@ -411,7 +407,6 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		if known {
 			options = append(options, SelectionOption{Key: movieForgetKey, Label: "Remove from history", Icon: icons.Dropped})
 		}
-		options = append(options, SelectionOption{Key: movieBackKey, Label: "Back", Icon: icons.Back})
 
 		ClearScreen()
 		Out(movie.Label())
