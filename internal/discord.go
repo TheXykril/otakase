@@ -14,10 +14,26 @@ var lastAnimeTitle string
 var lastUpdateTime time.Time
 var lastForceUpdateTime time.Time
 
+// OtakaseDiscordAppID is Otakase's own Discord application, so profiles show
+// "Watching Otakase". legacyDiscordAppID is the one configs inherited from
+// before the rename; it is swapped for Otakase's when the presence starts.
+const (
+	OtakaseDiscordAppID = "1556589176164589578"
+	legacyDiscordAppID  = "1287457464148820089"
+)
+
+func discordAppID(clientId string) string {
+	if clientId == "" || clientId == legacyDiscordAppID {
+		return OtakaseDiscordAppID
+	}
+	return clientId
+}
+
 func LoginClient(clientId string) error {
 	if discordClient != nil && isLoggedIn {
 		return nil // Already logged in
 	}
+	clientId = discordAppID(clientId)
 
 	discordClient = client.NewClient(clientId)
 
@@ -64,8 +80,8 @@ func DiscordPresenceWithForce(anime Anime, IsPaused bool, currentPosition int, t
 	}
 
 	var timestamps *client.Timestamps
-	var SmallImage = "pause-button"
-	var SmallText = "pause-button"
+	var SmallImage = discordPauseImage
+	var SmallText = "Paused"
 
 	startTime := now.Add(-time.Duration(currentPosition) * time.Second)
 
@@ -74,7 +90,7 @@ func DiscordPresenceWithForce(anime Anime, IsPaused bool, currentPosition int, t
 			Start: &startTime,
 			End:   nil, // No end time when paused
 		}
-		SmallImage = "pause-button"
+		SmallImage = discordPauseImage
 		SmallText = "Paused"
 	} else {
 		if totalDuration > 60 && totalDuration > currentPosition {
@@ -165,6 +181,7 @@ func ConvertSecondsToMinutes(seconds int) int {
 // The app icon, served by the website, for Discord to show. Discord fetches
 // the images itself, so they have to be public URLs.
 const (
-	discordIconImage = "https://thexykril.github.io/otakase/img/icon-512.png"
-	discordMarkImage = "https://thexykril.github.io/otakase/img/mark-256.png"
+	discordIconImage  = "https://otakase.xyverion.com/img/icon-512.png"
+	discordMarkImage  = "https://otakase.xyverion.com/img/mark-256.png"
+	discordPauseImage = "https://otakase.xyverion.com/img/pause-256.png"
 )
