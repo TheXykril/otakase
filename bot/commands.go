@@ -88,7 +88,12 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			b.watchparty(i)
 		}
 	case discordgo.InteractionMessageComponent:
-		switch i.MessageComponentData().CustomID {
+		id := i.MessageComponentData().CustomID
+		if eventID, ok := strings.CutPrefix(id, "party-cancel:"); ok {
+			b.cancelParty(i, eventID)
+			return
+		}
+		switch id {
 		case "solved":
 			b.markSolved(i)
 		case "bug":

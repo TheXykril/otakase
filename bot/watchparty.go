@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -98,6 +100,11 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 		b.respond(i, true, errorEmbed("Pick a voice channel for the watch party."))
 		return
 	}
+	host := i.Member.User
+	if ev := b.hostedParty(host.ID); ev != nil {
+		b.respond(i, true, errorEmbed("You already have a watch party planned: %s\nCancel it first with the **Cancel** button on its post.", eventLink(ev)))
+		return
+	}
 	b.deferThen(i, false, func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 		show, err := findPartyShow(title)
 		if err != nil {
@@ -107,11 +114,7 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 		if minutes < 1 {
 			start = time.Now().Add(time.Minute) // events must start in the future
 		}
-		host := i.Member.User
-		desc := fmt.Sprintf("Watch party hosted by %s. Join the voice channel and watch along with otakase.", host.GlobalName)
-		if host.GlobalName == "" {
-			desc = fmt.Sprintf("Watch party hosted by %s. Join the voice channel and watch along with otakase.", host.Username)
-		}
+		desc := fmt.Sprintf("Watch party hosted by <@%s>. Join the voice channel and watch along with otakase.", host.ID)
 		if show.URL != "" {
 			desc += "\n" + show.URL
 		}
@@ -128,7 +131,7 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 			log.Printf("watchparty: %v", err)
 			return errorEmbed("Couldn't create the event. The bot needs the **Create Events** permission."), nil
 		}
-		link := fmt.Sprintf("https://discord.com/events/%s/%s", b.cfg.GuildID, ev.ID)
+		link := eventLink(ev)
 		e := &discordgo.MessageEmbed{
 			Title:       "Watch party: " + show.Title,
 			URL:         link,
@@ -138,6 +141,67 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 		if show.Image != "" {
 			e.Image = &discordgo.MessageEmbedImage{URL: show.Image}
 		}
-		return e, linkButtons("Open event", link)
+		return e, []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+			discordgo.Button{Label: "Open event", Style: discordgo.LinkButton, URL: link},
+			discordgo.Button{Label: "Cancel", Style: discordgo.DangerButton, CustomID: "party-cancel:" + ev.ID},
+		}}}
 	})
+}
+
+func eventLink(ev *discordgo.GuildScheduledEvent) string {
+	return fmt.Sprintf("https://discord.com/events/%s/%s", ev.GuildID, ev.ID)
+}
+
+var partyHostRe = regexp.MustCompile(`hosted by <@(\d+)>`)
+
+// partyHost returns the member who started a watch party event.
+func partyHost(ev *discordgo.GuildScheduledEvent) string {
+	if m := partyHostRe.FindStringSubmatch(ev.Description); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// hostedParty returns the upcoming or running watch party a member started,
+// so each member has at most one at a time.
+func (b *bot) hostedParty(userID string) *discordgo.GuildScheduledEvent {
+	events, err := b.s.GuildScheduledEvents(b.cfg.GuildID, false)
+	if err != nil {
+		return nil
+	}
+	for _, ev := range events {
+		if ev.CreatorID == b.s.State.User.ID && partyHost(ev) == userID &&
+			(ev.Status == discordgo.GuildScheduledEventStatusScheduled || ev.Status == discordgo.GuildScheduledEventStatusActive) {
+			return ev
+		}
+	}
+	return nil
+}
+
+// cancelParty handles the Cancel button: the host or anyone who can manage
+// events deletes the event, and the post says it was cancelled.
+func (b *bot) cancelParty(i *discordgo.InteractionCreate, eventID string) {
+	ev, err := b.s.GuildScheduledEvent(b.cfg.GuildID, eventID, false)
+	if err != nil {
+		b.respond(i, true, errorEmbed("This watch party is already over or cancelled."))
+		return
+	}
+	user := i.Member.User.ID
+	if user != partyHost(ev) && i.Member.Permissions&discordgo.PermissionManageEvents == 0 {
+		b.respond(i, true, errorEmbed("Only the host or a moderator can cancel this watch party."))
+		return
+	}
+	if err := b.s.GuildScheduledEventDelete(b.cfg.GuildID, eventID); err != nil {
+		log.Printf("cancel party: %v", err)
+		b.respond(i, true, errorEmbed("Couldn't cancel the event."))
+		return
+	}
+	e := &discordgo.MessageEmbed{Title: "Cancelled: " + strings.TrimPrefix(ev.Name, "Watch party: "), Color: 0x8A8276,
+		Description: fmt.Sprintf("Watch party cancelled by <@%s>.", user)}
+	if err := b.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{e}, Components: []discordgo.MessageComponent{}},
+	}); err != nil {
+		log.Printf("cancel party update: %v", err)
+	}
 }

@@ -289,3 +289,13 @@ func TestSemanticWithOllama(t *testing.T) {
 		t.Error("plain chat should not be matched")
 	}
 }
+
+func TestPartyHost(t *testing.T) {
+	ev := &discordgo.GuildScheduledEvent{Description: "Watch party hosted by <@123456789>. Join the voice channel.\nhttps://anilist.co/anime/1"}
+	if got := partyHost(ev); got != "123456789" {
+		t.Errorf("partyHost = %q", got)
+	}
+	if partyHost(&discordgo.GuildScheduledEvent{Description: "some other event"}) != "" {
+		t.Error("an event the bot didn't make has no host")
+	}
+}

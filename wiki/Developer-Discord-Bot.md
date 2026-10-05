@@ -54,6 +54,9 @@ server and stays connected to Discord.
   with no reply three days later it is closed. Solved posts are skipped.
 - **/watchparty:** creates a server event in a voice channel (the lounge by
   default) with the show's AniList banner, starting in the given minutes.
+  Any member can start one, one at a time; the post's **Cancel** button
+  deletes the event and works for the host and for anyone who can manage
+  events.
 - **Status:** Do Not Disturb, cycling every two minutes through "Watching
   anime · /help", "Playing Otakase <latest release>", the website and
   "Listening to your terminal" (`presence.go`). Bots can't show rich presence
