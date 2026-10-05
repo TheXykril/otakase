@@ -8,12 +8,15 @@ import (
 
 	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/movies"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // movieLibrary holds the movie providers for one visit to the Movies
 // section. A remembered movie is opened on the provider it came from, which
 // is not always the one searched with now.
 type movieLibrary struct {
+	config    *Config
+	store     *movies.Store
 	site      *movies.Site
 	providers map[string]movies.Provider
 	// trakt is nil when no Trakt app is configured.
@@ -60,8 +63,40 @@ func (l *movieLibrary) provider(name string) (movies.Provider, error) {
 	if err != nil {
 		return nil, err
 	}
+	if vidsrc, ok := provider.(*movies.Vidsrc); ok {
+		vidsrc.Subtitles = l.subtitleLanguage
+	}
 	l.providers[name] = provider
 	return provider, nil
+}
+
+// movieSubtitleLanguage is the subtitle language for a movie, as a canonical
+// name: the one picked for it, else SubsLanguage.
+func movieSubtitleLanguage(config *Config, store *movies.Store, movie movies.Movie) string {
+	if store != nil {
+		if entry, ok := store.Get(movie.Key()); ok && entry.SubtitleLanguage != "" {
+			return providers.CanonicalLanguage(entry.SubtitleLanguage)
+		}
+	}
+	return subtitleLanguageFor(config, nil)
+}
+
+// subtitleLanguage is the language vidsrc fetches a movie's subtitles in.
+func (l *movieLibrary) subtitleLanguage(movie movies.Movie) movies.SubtitleLanguage {
+	name := movieSubtitleLanguage(l.config, l.store, movie)
+	code := providers.ThreeLetterCode(name)
+	if code == "" {
+		return movies.English
+	}
+	return movies.SubtitleLanguage{Code: code, Name: titleCase(name)}
+}
+
+// titleCase capitalises a language name: "lithuanian" reads "Lithuanian".
+func titleCase(name string) string {
+	if name == "" {
+		return ""
+	}
+	return strings.ToUpper(name[:1]) + name[1:]
 }
 
 // allProviders is MovieProvider's value for searching every provider at once.

@@ -233,6 +233,19 @@ func TestDropAdvertCues(t *testing.T) {
 	if strings.Contains(got, "osdb") || !strings.Contains(got, "farmer") {
 		t.Errorf("got %q", got)
 	}
+	lt := "1\n00:00:30,000 --> 00:00:40,000\nwww.subtitrai.net\n\n2\n00:01:00,000 --> 00:01:02,000\nSee www.example.com for more\n"
+	if got := dropAdvertCues(lt); strings.Contains(got, "subtitrai") || !strings.Contains(got, "example") {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestOpenSubtitlesQuery(t *testing.T) {
+	if got := openSubtitlesQuery("tt0816692", Episode{}); got != "imdbid-0816692" {
+		t.Errorf("film = %q", got)
+	}
+	if got := openSubtitlesQuery("tt0903747", Episode{Season: 2, Number: 5}); got != "episode-5/imdbid-0903747/season-2" {
+		t.Errorf("episode = %q", got)
+	}
 }
 
 // Cut from filmukas.com's search results.

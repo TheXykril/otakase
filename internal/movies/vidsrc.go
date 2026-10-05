@@ -34,6 +34,8 @@ type Vidsrc struct {
 	API       string
 	SearchURL string
 	Client    *http.Client
+	// Subtitles picks the subtitle language for a movie; nil is English.
+	Subtitles func(Movie) SubtitleLanguage
 }
 
 // NewVidsrc returns vidsrc at its usual addresses.
@@ -151,7 +153,9 @@ func (v *Vidsrc) Open(movie Movie) (Movie, []Source, error) {
 	var subtitlesOnce sync.Once
 	var found []Subtitle
 	subtitles := func() []Subtitle {
-		subtitlesOnce.Do(func() { found = openSubtitles(v.Client, movie.IMDb, answer.Data.FileName) })
+		subtitlesOnce.Do(func() {
+			found = openSubtitles(v.Client, openSubtitlesQuery(movie.IMDb, Episode{}), movie.IMDb, answer.Data.FileName, v.subtitleLanguage(movie))
+		})
 		return found
 	}
 	sources := []Source{}
@@ -169,6 +173,13 @@ func (v *Vidsrc) Open(movie Movie) (Movie, []Source, error) {
 		}})
 	}
 	return movie, sources, nil
+}
+
+func (v *Vidsrc) subtitleLanguage(movie Movie) SubtitleLanguage {
+	if v.Subtitles == nil {
+		return English
+	}
+	return v.Subtitles(movie)
 }
 
 // decrypt runs the key module over the encrypted links: alloc room for them,
@@ -249,27 +260,92 @@ func (v *Vidsrc) withToken(link string) (Stream, error) {
 	return Stream{URL: link, HLS: true, AudioLanguage: "en,eng"}, nil
 }
 
-// openSubtitles fetches English subtitles from OpenSubtitles' keyless API,
-// the one vidsrc's own player uses. Subtitles are timed to one release of a
-// film, so the ones made for the release vidsrc streams (its file name, such
-// as Interstellar.2014.1080p.BluRay.x264.YIFY.mp4) come first; a few others
+// SubtitleLanguage is a language to fetch subtitles in.
+type SubtitleLanguage struct {
+	// Code is the ISO 639-2 code OpenSubtitles names it by, such as "lit".
+	Code string
+	// Name is how it reads, such as "Lithuanian".
+	Name string
+}
+
+// English is the language subtitles fall back to.
+var English = SubtitleLanguage{Code: "eng", Name: "English"}
+
+// openSubtitles fetches subtitles from OpenSubtitles' keyless API, the one
+// vidsrc's own player uses: up to three in the language asked for, then two
+// in English when that is another language, as a language with few
+// subtitles may have none for the film. English alone gets four. query names the film
+// (imdbid-0816692) or the episode (episode-1/imdbid-0903747/season-1).
+//
+// Subtitles are timed to one release of a film, so the ones made for the
+// release vidsrc streams (its file name, such as
+// Interstellar.2014.1080p.BluRay.x264.YIFY.mp4) come first; a few others
 // follow, for the viewer to switch to in the player when the first is out of
 // time. They come gzipped and are unpacked into the temporary folder.
-func openSubtitles(client *http.Client, imdb, release string) []Subtitle {
-	// The id as IMDb writes it, zeros and all: without them the API
-	// redirects to a broken address.
+func openSubtitles(client *http.Client, query, name, release string, language SubtitleLanguage) []Subtitle {
+	languages := []SubtitleLanguage{language}
+	if language.Code == "" {
+		languages = []SubtitleLanguage{English}
+	} else if language.Code != English.Code {
+		languages = append(languages, English)
+	}
+	subtitles := []Subtitle{}
+	seen := map[string]bool{}
+	for i, language := range languages {
+		limit := maxSubtitles
+		switch {
+		case len(languages) > 1 && i == 0:
+			limit = 3
+		case i > 0:
+			limit = len(subtitles) + 2
+		}
+		for _, result := range searchOpenSubtitles(client, query+"/sublanguageid-"+language.Code, release) {
+			if len(subtitles) >= limit {
+				break
+			}
+			key := strings.ToLower(result.FileName)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			file, err := saveGzipped(client, result.Link, fmt.Sprintf("%s-%s-%d.%s", name, language.Code, len(subtitles)+1, strings.ToLower(result.Format)))
+			if err != nil {
+				logf("subtitles for %s: %v", name, err)
+				continue
+			}
+			subtitles = append(subtitles, Subtitle{URL: file, Language: language.Name, Label: strings.TrimSuffix(result.FileName, filepath.Ext(result.FileName))})
+		}
+	}
+	return subtitles
+}
+
+// openSubtitlesQuery names a film to OpenSubtitles by its IMDb id, as IMDb
+// writes it, zeros and all: without them the API redirects to a broken
+// address. An episode is named by its show's id, season and number.
+func openSubtitlesQuery(imdb string, episode Episode) string {
 	id := strings.TrimPrefix(imdb, "tt")
 	if id == "" {
+		return ""
+	}
+	if episode.Number > 0 {
+		return fmt.Sprintf("episode-%d/imdbid-%s/season-%d", episode.Number, id, episode.Season)
+	}
+	return "imdbid-" + id
+}
+
+// searchOpenSubtitles runs one search and ranks what it finds.
+func searchOpenSubtitles(client *http.Client, query, release string) []openSubtitle {
+	if strings.HasPrefix(query, "/") {
 		return nil
 	}
-	req, err := http.NewRequest(http.MethodGet, "https://rest.opensubtitles.org/search/imdbid-"+id+"/sublanguageid-eng", nil)
+	req, err := http.NewRequest(http.MethodGet, "https://rest.opensubtitles.org/search/"+query, nil)
 	if err != nil {
 		return nil
 	}
 	req.Header.Set("X-User-Agent", "trailers.to-UA")
 	resp, err := client.Do(req)
 	if err != nil {
-		logf("subtitles for %s: %v", imdb, err)
+		logf("subtitles %s: %v", query, err)
 		return nil
 	}
 	defer resp.Body.Close()
@@ -277,26 +353,7 @@ func openSubtitles(client *http.Client, imdb, release string) []Subtitle {
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&results); err != nil || len(results) == 0 {
 		return nil
 	}
-	ranked := rankSubtitles(results, release)
-	subtitles := []Subtitle{}
-	seen := map[string]bool{}
-	for _, result := range ranked {
-		if len(subtitles) == maxSubtitles {
-			break
-		}
-		name := strings.ToLower(result.FileName)
-		if seen[name] {
-			continue
-		}
-		seen[name] = true
-		file, err := saveGzipped(client, result.Link, fmt.Sprintf("%s-%d.%s", imdb, len(subtitles)+1, strings.ToLower(result.Format)))
-		if err != nil {
-			logf("subtitles for %s: %v", imdb, err)
-			continue
-		}
-		subtitles = append(subtitles, Subtitle{URL: file, Language: "English", Label: strings.TrimSuffix(result.FileName, filepath.Ext(result.FileName))})
-	}
-	return subtitles
+	return rankSubtitles(results, release)
 }
 
 // maxSubtitles is how many subtitle files are offered for one movie.
@@ -410,6 +467,41 @@ func saveGzipped(client *http.Client, rawURL, name string) (string, error) {
 	return path, out.Close()
 }
 
+// linkLinePattern is a subtitle line that is only a web address.
+var linkLinePattern = regexp.MustCompile(`(?i)^(?:https?://|www\.)\S+$`)
+
+// bareLinkCue reports whether a cue's text is only a web address, as the
+// credit a subtitle site adds for itself (www.subtitrai.net).
+func bareLinkCue(cue string) bool {
+	lines := strings.Split(strings.TrimSpace(cue), "\n")
+	text := []string{}
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.Contains(line, "-->") || isDigits(line) {
+			continue
+		}
+		text = append(text, line)
+	}
+	if len(text) == 0 {
+		return false
+	}
+	for _, line := range text {
+		if !linkLinePattern.MatchString(line) {
+			return false
+		}
+	}
+	return true
+}
+
+func isDigits(text string) bool {
+	for _, r := range text {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return text != ""
+}
+
 // dropAdvertCues takes out the cues OpenSubtitles adds to its files to
 // advertise itself, such as "Watch Online Movies and Series for FREE".
 func dropAdvertCues(srt string) string {
@@ -418,7 +510,7 @@ func dropAdvertCues(srt string) string {
 	kept := cues[:0]
 	for _, cue := range cues {
 		lower := strings.ToLower(cue)
-		if strings.Contains(lower, "osdb.link") || strings.Contains(lower, "opensubtitles") {
+		if strings.Contains(lower, "osdb.link") || strings.Contains(lower, "opensubtitles") || bareLinkCue(cue) {
 			continue
 		}
 		kept = append(kept, cue)

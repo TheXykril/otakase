@@ -41,6 +41,7 @@ const (
 	movieRateKey      = "MOVIE:RATE"
 	movieProviderKey  = "MOVIE:PROVIDER"
 	movieTraktKey     = "MOVIE:TRAKT"
+	movieSubsKey      = "MOVIE:SUBTITLES"
 	movieBackKey      = "back"
 	moviePathPrefix   = "MOVIE_PATH:"
 )
@@ -71,7 +72,7 @@ func WatchMovies(config *Config) {
 			Log(fmt.Sprintf("movies: could not remember the site address: %v", err))
 		}
 	})
-	lib := &movieLibrary{site: site, providers: map[string]movies.Provider{}, trakt: newMovieTrakt(config)}
+	lib := &movieLibrary{config: config, store: store, site: site, providers: map[string]movies.Provider{}, trakt: newMovieTrakt(config)}
 	store.OnChange = func(before, after movies.Entry) { syncMovieToTrakt(lib, store, before, after) }
 
 	active := ""
@@ -363,6 +364,24 @@ func pickMovieRating(current int) (int, bool) {
 	return score, err == nil
 }
 
+// pickMovieSubtitleLanguage asks which language a movie's subtitles should be
+// in. "" follows SubsLanguage.
+func pickMovieSubtitleLanguage(config *Config, current string) (string, bool) {
+	options := []SelectionOption{{Key: "", Label: "Same as SubsLanguage (" + titleCase(subtitleLanguageFor(config, nil)) + ")", Icon: icons.Undo}}
+	for _, name := range providers.SubtitleLanguageNames() {
+		icon := icons.Audio
+		if name == providers.CanonicalLanguage(current) {
+			icon = icons.Yes
+		}
+		options = append(options, SelectionOption{Key: "LANG:" + name, Label: titleCase(name), Icon: icon})
+	}
+	picked, ok := pickMovieOption(options)
+	if !ok {
+		return "", false
+	}
+	return strings.TrimPrefix(picked.Key, "LANG:"), true
+}
+
 // pickFromMovieList offers one of the remembered lists.
 func pickFromMovieList(config *Config, store *movies.Store, lib *movieLibrary, list func() []movies.Entry) {
 	for {
@@ -413,6 +432,11 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		options = append(options,
 			SelectionOption{Key: movieRateKey, Label: rateLabel, Icon: icons.Star},
 			SelectionOption{Key: movieDownloadKey, Label: "Download", Icon: icons.Download})
+		if movie.Provider == movies.VidsrcName {
+			// vidsrc's subtitles are fetched in any language; the others
+			// carry their own.
+			options = append(options, SelectionOption{Key: movieSubsKey, Label: "Subtitles: " + titleCase(movieSubtitleLanguage(config, store, movie)), Icon: icons.Audio})
+		}
 		if entry.Watchlist {
 			options = append(options, SelectionOption{Key: movieListOffKey, Label: "Remove from watchlist", Icon: icons.No})
 		} else if !entry.Watched {
@@ -448,6 +472,12 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 			if rating, ok := pickMovieRating(entry.Rating); ok {
 				if err := store.SetRating(movie, rating); err != nil {
 					Log(fmt.Sprintf("movies: could not save the rating: %v", err))
+				}
+			}
+		case movieSubsKey:
+			if language, ok := pickMovieSubtitleLanguage(config, entry.SubtitleLanguage); ok {
+				if err := store.SetSubtitleLanguage(movie, language); err != nil {
+					Log(fmt.Sprintf("movies: could not save the subtitle language: %v", err))
 				}
 			}
 		case movieListOnKey, movieListOffKey:
@@ -557,7 +587,7 @@ func movieAnime(config *Config, store *movies.Store, movie movies.Movie, title s
 	}
 	if len(anime.Ep.SubtitleTracks) > 0 {
 		// The provider lists the best match first.
-		anime.Ep.SubtitleURL = providers.PickSubtitle(anime.Ep.SubtitleTracks, subtitleLanguageFor(config, nil), anime.Ep.SubtitleTracks[0].URL)
+		anime.Ep.SubtitleURL = providers.PickSubtitle(anime.Ep.SubtitleTracks, movieSubtitleLanguage(config, store, movie), anime.Ep.SubtitleTracks[0].URL)
 	}
 	anime.Movie = &MoviePlayback{
 		Start: float64(start),
@@ -680,7 +710,7 @@ func downloadMovie(config *Config, lib *movieLibrary, movie movies.Movie) {
 			Log(fmt.Sprintf("movies: %s: %s: %v", movie.Key(), source.Server, err))
 			continue
 		}
-		anime := movieAnime(config, nil, movie, movie.Label(), stream, 0)
+		anime := movieAnime(config, lib.store, movie, movie.Label(), stream, 0)
 		job := ffmpegJob{
 			Stream:   stream.URL,
 			Referrer: stream.Referrer,

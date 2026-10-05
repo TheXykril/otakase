@@ -51,6 +51,22 @@ type Movie struct {
 	Series bool `json:",omitempty"`
 }
 
+// Episode is one episode of a series.
+type Episode struct {
+	Season int
+	Number int
+	Title  string
+}
+
+// Label is how an episode reads in a menu: "S1E3 · Title".
+func (e Episode) Label() string {
+	label := fmt.Sprintf("S%dE%d", e.Season, e.Number)
+	if e.Title != "" {
+		label += " · " + e.Title
+	}
+	return label
+}
+
 // Key identifies the movie in the history: its provider and its path there.
 func (m Movie) Key() string {
 	provider := m.Provider

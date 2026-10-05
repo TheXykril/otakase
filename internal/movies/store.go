@@ -23,8 +23,11 @@ type Entry struct {
 	Rating int `json:"rating,omitempty"`
 	// Server is the provider's server the movie last played from, tried
 	// first the next time.
-	Server  string    `json:"server,omitempty"`
-	Updated time.Time `json:"updated"`
+	Server string `json:"server,omitempty"`
+	// SubtitleLanguage is the subtitle language picked for this movie,
+	// empty to follow SubsLanguage.
+	SubtitleLanguage string    `json:"subtitleLanguage,omitempty"`
+	Updated          time.Time `json:"updated"`
 }
 
 // Started reports whether the movie was stopped part way through.
@@ -252,6 +255,11 @@ func (s *Store) SetIMDb(movie Movie) error {
 // SetServer records the server a movie played from.
 func (s *Store) SetServer(movie Movie, server string) error {
 	return s.update(movie, func(entry *Entry) { entry.Server = server })
+}
+
+// SetSubtitleLanguage keeps the subtitle language picked for a movie.
+func (s *Store) SetSubtitleLanguage(movie Movie, language string) error {
+	return s.update(movie, func(entry *Entry) { entry.SubtitleLanguage = language })
 }
 
 // SetWatchlist adds a movie to the watchlist or takes it off.

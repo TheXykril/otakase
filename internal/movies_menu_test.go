@@ -226,3 +226,21 @@ func TestMovieDetailsText(t *testing.T) {
 		t.Errorf("no details should give no lines: %q", got)
 	}
 }
+
+// A movie's own subtitle language wins over SubsLanguage, and vidsrc is
+// asked for it by its three-letter code.
+func TestMovieSubtitleLanguage(t *testing.T) {
+	store, _ := movies.OpenStore(t.TempDir())
+	movie := movies.Movie{Provider: movies.VidsrcName, Path: "tt0816692", IMDb: "tt0816692"}
+	config := &Config{SubsLanguage: "english"}
+	lib := &movieLibrary{config: config, store: store, providers: map[string]movies.Provider{}}
+	if got := lib.subtitleLanguage(movie); got != movies.English {
+		t.Errorf("default = %+v", got)
+	}
+	if err := store.SetSubtitleLanguage(movie, "lithuanian"); err != nil {
+		t.Fatal(err)
+	}
+	if got := lib.subtitleLanguage(movie); got.Code != "lit" || got.Name != "Lithuanian" {
+		t.Errorf("picked = %+v", got)
+	}
+}

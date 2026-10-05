@@ -1,6 +1,9 @@
 package providers
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // subtitleLanguages maps every spelling hosts use for a language onto one
 // canonical name. The first entry of each list is what mpv's --slang wants.
@@ -23,6 +26,7 @@ var subtitleLanguages = map[string][]string{
 	"chinese":    {"zh", "chi", "zho", "chinese"},
 	"korean":     {"ko", "kor", "korean"},
 	"hindi":      {"hi", "hin", "hindi"},
+	"lithuanian": {"lt", "lit", "lithuanian", "lietuvių", "lietuviu"},
 }
 
 // CanonicalLanguage turns a code or name ("eng", "English", "pt-BR",
@@ -71,6 +75,27 @@ func MPVLanguageCodes(language string) string {
 		}
 	}
 	return strings.Join(codes, ",")
+}
+
+// SubtitleLanguageNames lists the languages known by name, sorted.
+func SubtitleLanguageNames() []string {
+	names := make([]string, 0, len(subtitleLanguages))
+	for name := range subtitleLanguages {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// ThreeLetterCode is a language's ISO 639-2 code, as OpenSubtitles names
+// languages: "eng", "lit". An unknown language gives "".
+func ThreeLetterCode(language string) string {
+	for _, spelling := range subtitleLanguages[CanonicalLanguage(language)] {
+		if len(spelling) == 3 {
+			return spelling
+		}
+	}
+	return ""
 }
 
 // TrackLanguage is the canonical language of a track, read from its language
