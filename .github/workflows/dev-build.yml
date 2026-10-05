@@ -109,8 +109,9 @@ jobs:
       - name: Post to Discord
         if: env.DISCORD_BOT_TOKEN != ''
         env:
-          # The test-builds channel, and the "Tester" role each post pings
-          # (empty for no ping).
-          DISCORD_DEV_CHANNEL: "1556589796397416508"
+          # The test-builds channel (found by name in the server), and the
+          # "Tester" role each post pings (empty for no ping).
+          DISCORD_GUILD: "1556588123561922560"
+          DISCORD_DEV_CHANNEL: "test-builds"
           DISCORD_DEV_ROLE: "1556589751077699664"
         run: python3 .github/discord/post_release.py post-dev "$DEV_VERSION" "$RUNNER_TEMP/header.png"
