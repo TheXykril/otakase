@@ -121,8 +121,13 @@ trakt.tv/activate, with the Client ID alone), the
 store's `OnChange` hook sends Trakt each change to watched, watchlist and
 rating (`/sync/history`, `/sync/watchlist`, `/sync/ratings` and their
 `/remove`). When playback stops part way the position goes to
-`/scrobble/pause` as a percentage. Movies are matched by IMDb id, so one
-without an id (an 8Filmai movie never opened) is skipped and logged. The
+`/scrobble/pause` as a percentage. Movies are matched by IMDb id. One without an id is identified first and the
+id kept: an 8Filmai page has it (`var imid`); otherwise (Filmukas, which
+gives the English title and year in its description and JSON-LD) Trakt's
+`/search/movie` is asked with `fields=title,translations,aliases`, so a
+Lithuanian title matches too. Trakt ignores its `years` filter there, so the
+year is checked in otakase (same year, or one off); no match is skipped and
+logged rather than syncing a namesake. The
 token is `trakt_token.json` in the storage directory, renewed with its
 refresh token when it runs out. Local history stays the source of truth;
 Trakt failures are only logged. A movie counts as watched at

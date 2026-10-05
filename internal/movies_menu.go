@@ -72,7 +72,7 @@ func WatchMovies(config *Config) {
 		}
 	})
 	lib := &movieLibrary{site: site, providers: map[string]movies.Provider{}, trakt: newMovieTrakt(config)}
-	store.OnChange = func(before, after movies.Entry) { syncMovieToTrakt(lib.trakt, before, after) }
+	store.OnChange = func(before, after movies.Entry) { syncMovieToTrakt(lib, store, before, after) }
 
 	active := ""
 	for {
@@ -465,7 +465,7 @@ func playMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		if err := store.SetServer(movie, server); err != nil {
 			Log(fmt.Sprintf("movies: could not save the server: %v", err))
 		}
-		traktPaused(lib.trakt, store, movie)
+		traktPaused(lib, store, movie)
 	}
 
 	for _, source := range sources {

@@ -37,6 +37,9 @@ var (
 	filmukasPosterPattern = regexp.MustCompile(`property="og:image" content="([^"]+)"`)
 	filmukasPlayerPattern = regexp.MustCompile(`loadScript\('(/@videojs[^']+)'\)`)
 	filmukasVideoPattern  = regexp.MustCompile(`videoSrc\s*=\s*'([^']+)'`)
+	// The description opens with both titles: „Vonka“ („Wonka“) yra ...
+	filmukasOriginalPattern  = regexp.MustCompile(`name="description" content="„[^“]*“ \(„([^“]+)“\)`)
+	filmukasPublishedPattern = regexp.MustCompile(`"datePublished":"((?:19|20)\d\d)`)
 )
 
 func (f *Filmukas) fetch(path, referrer string) (string, error) {
@@ -100,6 +103,12 @@ func (f *Filmukas) Open(movie Movie) (Movie, []Source, error) {
 	}
 	if poster := firstGroup(body, filmukasPosterPattern); poster != "" {
 		movie.Poster = poster
+	}
+	if original := firstGroup(body, filmukasOriginalPattern); original != "" {
+		movie.Original = original
+	}
+	if year := firstGroup(body, filmukasPublishedPattern); year != "" && movie.Year == "" {
+		movie.Year = year
 	}
 	if strings.Contains(body, "id='locked'") || strings.Contains(body, `id="locked"`) {
 		return movie, nil, fmt.Errorf("filmukas locks this film: it plays only with a code bought on the site")

@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -311,4 +313,74 @@ func (t *Trakt) Paused(movie Movie, position, duration int) error {
 	}
 	progress := min(float64(position)*100/float64(duration), 99)
 	return t.send("/scrobble/pause", map[string]any{"movie": item, "progress": progress})
+}
+
+// FindIMDb looks a movie up on Trakt by its titles and year and returns its
+// IMDb id, or "" when nothing matches. Trakt's search reads titles in other
+// languages too (its translations and aliases), so a Lithuanian title finds
+// the film. Its year filter is not applied to this search, so the year is
+// checked here: a result from another year is a remake or a namesake, and
+// syncing the wrong film is worse than syncing none.
+func (t *Trakt) FindIMDb(titles []string, year string) string {
+	for _, title := range titles {
+		title = strings.TrimSpace(title)
+		if title == "" {
+			continue
+		}
+		query := url.Values{"query": {title}, "fields": {"title,translations,aliases"}}
+		var found []struct {
+			Movie struct {
+				Title string `json:"title"`
+				Year  int    `json:"year"`
+				IDs   struct {
+					IMDb string `json:"imdb"`
+				} `json:"ids"`
+			} `json:"movie"`
+		}
+		if _, err := t.call(http.MethodGet, "/search/movie?"+query.Encode(), "", nil, &found); err != nil {
+			logf("trakt: looking up %q: %v", title, err)
+			continue
+		}
+		best, bestScore := "", 0
+		for _, result := range found {
+			movie := result.Movie
+			if !strings.HasPrefix(movie.IDs.IMDb, "tt") {
+				continue
+			}
+			score := 1
+			if year != "" {
+				switch gap := abs(movie.Year - atoi(year)); {
+				case gap == 0:
+					score += 4
+				case gap == 1:
+					// A release date in another country can be a year off.
+					score += 2
+				default:
+					continue
+				}
+			}
+			if strings.EqualFold(movie.Title, title) {
+				score += 2
+			}
+			if score > bestScore {
+				best, bestScore = movie.IDs.IMDb, score
+			}
+		}
+		if best != "" {
+			return best
+		}
+	}
+	return ""
+}
+
+func atoi(text string) int {
+	n, _ := strconv.Atoi(strings.TrimSpace(text))
+	return n
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }

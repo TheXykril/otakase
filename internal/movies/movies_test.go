@@ -352,3 +352,35 @@ func TestStoreKeepsTheServer(t *testing.T) {
 		t.Errorf("entry = %+v", entry)
 	}
 }
+
+// A Lithuanian title is looked up on Trakt with its year, and the first
+// result's IMDb id taken.
+func TestTraktFindIMDb(t *testing.T) {
+	var query string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		w.Write([]byte(`[{"type":"movie","movie":{"title":"Willy Wonka & the Chocolate Factory","year":1971,"ids":{"imdb":"tt0067992"}}},{"type":"movie","movie":{"title":"Wonka","year":2023,"ids":{"imdb":"tt6166392"}}}]`))
+	}))
+	defer server.Close()
+	trakt := NewTrakt("id", "", t.TempDir())
+	trakt.API = server.URL
+	if got := trakt.FindIMDb([]string{"", "Vonka"}, "2023"); got != "tt6166392" {
+		t.Errorf("imdb = %q", got)
+	}
+	if got := trakt.FindIMDb([]string{"Vonka"}, "1990"); got != "" {
+		t.Errorf("a film from another year was taken: %q", got)
+	}
+	if !strings.Contains(query, "query=Vonka") || !strings.Contains(query, "aliases") {
+		t.Errorf("query = %q", query)
+	}
+}
+
+func TestFilmukasPageTitles(t *testing.T) {
+	body := `<meta name="description" content="„Vonka“ („Wonka“) yra nuotykių ir fantazijos filmas" />{"datePublished":"2023","description":"x"}`
+	if got := firstGroup(body, filmukasOriginalPattern); got != "Wonka" {
+		t.Errorf("original = %q", got)
+	}
+	if got := firstGroup(body, filmukasPublishedPattern); got != "2023" {
+		t.Errorf("year = %q", got)
+	}
+}

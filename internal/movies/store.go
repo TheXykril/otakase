@@ -205,6 +205,15 @@ func (s *Store) SetRating(movie Movie, rating int) error {
 	return s.update(movie, func(entry *Entry) { entry.Rating = min(max(rating, 0), 10) })
 }
 
+// SetIMDb keeps what was learned about a movie, its IMDb id above all,
+// without changing anything else about its entry.
+func (s *Store) SetIMDb(movie Movie) error {
+	if _, ok := s.Get(movie.Key()); !ok {
+		return nil
+	}
+	return s.update(movie, func(*Entry) {})
+}
+
 // SetServer records the server a movie played from.
 func (s *Store) SetServer(movie Movie, server string) error {
 	return s.update(movie, func(entry *Entry) { entry.Server = server })

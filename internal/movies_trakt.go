@@ -1,8 +1,10 @@
 package internal
 
 import (
+	"cmp"
 	"fmt"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/pkg/browser"
@@ -32,37 +34,73 @@ func newMovieTrakt(config *Config) *movies.Trakt {
 // syncMovieToTrakt is the store's OnChange: it tells Trakt what changed.
 // Positions are not sent from here, since they are saved every few seconds;
 // traktPaused sends the last one when playback stops.
-func syncMovieToTrakt(trakt *movies.Trakt, before, after movies.Entry) {
+func syncMovieToTrakt(lib *movieLibrary, store *movies.Store, before, after movies.Entry) {
+	trakt := lib.trakt
 	if trakt == nil || !trakt.SignedIn() {
 		return
 	}
+	changed := before.Watched != after.Watched || before.Watchlist != after.Watchlist || before.Rating != after.Rating
+	if !changed {
+		return
+	}
+	movie := identifyMovie(lib, store, after.Movie)
 	report := func(what string, err error) {
 		if err != nil {
 			Log(fmt.Sprintf("movies: trakt: %s %s: %v", what, after.Key(), err))
 		}
 	}
 	if before.Watched != after.Watched {
-		report("history", trakt.Watched(after.Movie, after.Watched, time.Now()))
+		report("history", trakt.Watched(movie, after.Watched, time.Now()))
 	}
 	if before.Watchlist != after.Watchlist {
-		report("watchlist", trakt.Watchlist(after.Movie, after.Watchlist))
+		report("watchlist", trakt.Watchlist(movie, after.Watchlist))
 	}
 	if before.Rating != after.Rating {
-		report("rating", trakt.Rate(after.Movie, after.Rating))
+		report("rating", trakt.Rate(movie, after.Rating))
 	}
+}
+
+// identifyMovie finds the IMDb id Trakt matches movies by, for a movie that
+// has none yet: an 8Filmai movie only learns it from its page, and Filmukas
+// gives none at all, so it is looked up on Trakt by its titles and year. What
+// is found is kept, so it is looked up once.
+func identifyMovie(lib *movieLibrary, store *movies.Store, movie movies.Movie) movies.Movie {
+	if strings.HasPrefix(movie.IMDb, "tt") {
+		return movie
+	}
+	if movie.Provider == "" || movie.Provider == movies.FilmaiName || movie.Provider == movies.FilmukasName {
+		// The page knows the original title and year, and 8Filmai's the id.
+		if provider, err := lib.provider(cmp.Or(movie.Provider, movies.FilmaiName)); err == nil {
+			if opened, _, err := provider.Open(movie); err == nil {
+				movie = opened
+			}
+		}
+	}
+	if !strings.HasPrefix(movie.IMDb, "tt") {
+		movie.IMDb = lib.trakt.FindIMDb([]string{movie.Original, movie.Title}, movie.Year)
+	}
+	if movie.IMDb == "" {
+		Log(fmt.Sprintf("movies: trakt: could not find %s on Trakt", movie.Label()))
+		return movie
+	}
+	if err := store.SetIMDb(movie); err != nil {
+		Log(fmt.Sprintf("movies: could not save the IMDb id: %v", err))
+	}
+	return movie
 }
 
 // traktPaused tells Trakt where a movie was stopped, when it was stopped
 // part way.
-func traktPaused(trakt *movies.Trakt, store *movies.Store, movie movies.Movie) {
-	if trakt == nil || !trakt.SignedIn() {
+func traktPaused(lib *movieLibrary, store *movies.Store, movie movies.Movie) {
+	if lib.trakt == nil || !lib.trakt.SignedIn() {
 		return
 	}
 	entry, ok := store.Get(movie.Key())
 	if !ok || !entry.Started() {
 		return
 	}
-	if err := trakt.Paused(entry.Movie, entry.Position, entry.Duration); err != nil {
+	identified := identifyMovie(lib, store, entry.Movie)
+	if err := lib.trakt.Paused(identified, entry.Position, entry.Duration); err != nil {
 		Log(fmt.Sprintf("movies: trakt: progress %s: %v", movie.Key(), err))
 	}
 }
