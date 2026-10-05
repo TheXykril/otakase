@@ -6,9 +6,12 @@
 // spam and welcomes new members by DM.
 //
 // Configuration is read from the environment; see deploy/otakase-bot.env.
+// On hosts without a way to set environment variables, the same lines can go
+// in a .env or otakase-bot.env file next to the binary.
 package main
 
 import (
+	"bufio"
 	"log"
 	"os"
 	"os/signal"
@@ -32,7 +35,34 @@ type config struct {
 	WelcomeDM       bool
 }
 
+// loadEnvFile sets variables from a KEY=value file, keeping any that are
+// already set. A missing file is fine.
+func loadEnvFile(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		k, v = strings.TrimSpace(k), strings.Trim(strings.TrimSpace(v), `"'`)
+		if _, set := os.LookupEnv(k); !set {
+			os.Setenv(k, v)
+		}
+	}
+}
+
 func loadConfig() config {
+	loadEnvFile(".env")
+	loadEnvFile("otakase-bot.env")
 	c := config{
 		Token:           strings.TrimSpace(os.Getenv("DISCORD_BOT_TOKEN")),
 		GuildID:         os.Getenv("OTAKASE_GUILD_ID"),

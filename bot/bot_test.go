@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestAutoRules(t *testing.T) {
 	cases := map[string]string{
@@ -44,5 +48,20 @@ func TestRulesPointAtFAQ(t *testing.T) {
 		if installGuides[k].Body == "" {
 			t.Errorf("no install guide for %s", k)
 		}
+	}
+}
+
+func TestLoadEnvFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	os.WriteFile(path, []byte("# comment\nOTK_A=\"one\"\nOTK_B = two\nbad line\n"), 0o600)
+	t.Setenv("OTK_B", "kept")
+	t.Setenv("OTK_A", "")
+	os.Unsetenv("OTK_A")
+	loadEnvFile(path)
+	if got := os.Getenv("OTK_A"); got != "one" {
+		t.Errorf("OTK_A = %q", got)
+	}
+	if got := os.Getenv("OTK_B"); got != "kept" {
+		t.Errorf("OTK_B = %q, want existing value kept", got)
 	}
 }
