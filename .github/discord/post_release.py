@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Post a release or dev build announcement to Discord.
 
+Posts are sent by the Otakase bot (DISCORD_BOT_TOKEN), so they carry its
+profile.
+
 A release card reads the version's section from CHANGELOG.md: a header image,
 the bold lead of each changelog entry and buttons to the release. It goes to
-DISCORD_RELEASE_WEBHOOK, pinging DISCORD_RELEASE_ROLE if set.
+the DISCORD_RELEASE_CHANNEL channel, pinging DISCORD_RELEASE_ROLE if set, and
+is published to servers following that channel when it is an announcement
+channel.
 
 A dev build card lists the feat/fix commits on main since the last release
-commit, with buttons to the dev pre-release. It goes to DISCORD_DEV_WEBHOOK,
+commit, with buttons to the dev pre-release. It goes to DISCORD_DEV_CHANNEL,
 pinging DISCORD_DEV_ROLE if set.
 
     post_release.py render VERSION OUT.html       # header page to screenshot
@@ -21,13 +26,14 @@ import os
 import re
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 import uuid
 
 REPO = "https://github.com/TheXykril/otakase"
 SITE = "https://otakase.xyverion.com/"
 SHU = 0xD2492F
-AVATAR = "https://raw.githubusercontent.com/TheXykril/otakase/main/.github/discord/avatar.png"
+API = "https://discord.com/api/v10"
 MAX_ITEMS = 6
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -109,7 +115,7 @@ def message(card, buttons, role, has_image):
         comps.append({"type": 12, "items": [{"media": {"url": "attachment://header.png"}}]})
     comps.append({"type": 17, "accent_color": SHU, "components": card})
     comps.append({"type": 1, "components": [{"type": 2, "style": 5, "label": l, "url": u} for l, u in buttons]})
-    body = {"flags": 1 << 15, "components": comps, "username": "Otakase", "avatar_url": AVATAR,
+    body = {"flags": 1 << 15, "components": comps,
             "allowed_mentions": {"roles": [role] if role else []}}
     if has_image:
         body["attachments"] = [{"id": 0, "filename": "header.png"}]
@@ -163,13 +169,25 @@ def payload(version, date, groups, role, has_image):
                           ("Website", SITE)], role, has_image)
 
 
+def request(method, path, token, data=None, content_type=None):
+    headers = {"Authorization": f"Bot {token}",
+               "User-Agent": "otakase-release (https://github.com/TheXykril/otakase, 1.0)"}
+    if content_type:
+        headers["Content-Type"] = content_type
+    req = urllib.request.Request(API + path, data=data, method=method, headers=headers)
+    with urllib.request.urlopen(req) as r:
+        return json.load(r)
+
+
 def post(version, header, dev=False):
-    prefix = "DISCORD_DEV" if dev else "DISCORD_RELEASE"
-    hook = os.environ.get(f"{prefix}_WEBHOOK", "").strip()
-    if not hook:
-        print(f"{prefix}_WEBHOOK is not set; nothing to post.")
+    token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
+    if not token:
+        print("DISCORD_BOT_TOKEN is not set; nothing to post.")
         return
-    hook = re.sub(r"/github/?$", "", hook)
+    prefix = "DISCORD_DEV" if dev else "DISCORD_RELEASE"
+    channel = os.environ.get(f"{prefix}_CHANNEL", "").strip()
+    if not channel:
+        sys.exit(f"{prefix}_CHANNEL is not set")
     role = os.environ.get(f"{prefix}_ROLE", "").strip()
     has_image = bool(header) and os.path.exists(header)
     if dev:
@@ -187,12 +205,15 @@ def post(version, header, dev=False):
                      f"Content-Type: image/png\r\n\r\n".encode() + open(header, "rb").read() + b"\r\n")
     data = b"".join(parts) + f"--{boundary}--\r\n".encode()
 
-    req = urllib.request.Request(f"{hook}?wait=true&with_components=true", data=data, method="POST", headers={
-        "Content-Type": f"multipart/form-data; boundary={boundary}",
-        "User-Agent": "otakase-release (https://github.com/TheXykril/otakase, 1.0)",
-    })
-    with urllib.request.urlopen(req) as r:
-        print("Posted:", json.load(r)["id"])
+    msg = request("POST", f"/channels/{channel}/messages", token, data,
+                  f"multipart/form-data; boundary={boundary}")
+    print("Posted:", msg["id"])
+    if request("GET", f"/channels/{channel}", token).get("type") == 5:
+        try:
+            request("POST", f"/channels/{channel}/messages/{msg['id']}/crosspost", token)
+            print("Published to following servers.")
+        except urllib.error.HTTPError as e:
+            print(f"Could not publish: {e}")
 
 
 if __name__ == "__main__":

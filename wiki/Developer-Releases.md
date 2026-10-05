@@ -80,22 +80,23 @@ runner's Chrome), the bold opening sentence of each `CHANGELOG.md` entry for
 that version, a ping for the Release pings role, and buttons to the release,
 the changelog and the website.
 
-- It needs a `DISCORD_RELEASE_WEBHOOK` repository secret: the announcements
-  channel's webhook URL. Without it the workflow does nothing.
-- The pinged role is `DISCORD_RELEASE_ROLE` in the workflow; empty it for no
-  ping.
+- The Otakase bot sends the post, so it carries the bot's profile. It needs a
+  `DISCORD_BOT_TOKEN` repository secret, the bot's token from the Discord
+  developer portal; without it the workflow does nothing. The bot needs to
+  view, send messages, attach files and mention roles in both channels.
+- The channel and pinged role are `DISCORD_RELEASE_CHANNEL` and
+  `DISCORD_RELEASE_ROLE` in the workflow; empty the role for no ping. In an
+  announcement channel the post is also published to following servers.
 - To post a release again, run the `Discord release` workflow from the
   Actions tab with its version.
 - Each dev build (the `Dev Build` workflow) posts a card to the
   test-builds channel too: its version, the `feat`/`fix` commits on `main`
   since the last release commit, a ping for the Tester role and a link to the
-  `dev` pre-release. It needs a `DISCORD_DEV_WEBHOOK` secret (that channel's
-  webhook URL); the role is `DISCORD_DEV_ROLE` in `dev-build.yml`.
-- Posts go out as "Otakase" with `.github/discord/avatar.png`, whatever the
-  webhook itself is named.
+  `dev` pre-release. The channel and role are `DISCORD_DEV_CHANNEL` and
+  `DISCORD_DEV_ROLE` in `dev-build.yml`.
 - To preview a post, run `python3 .github/discord/post_release.py post
-  VERSION header.png` with `DISCORD_RELEASE_WEBHOOK` set to a test channel's
-  webhook.
+  VERSION header.png` with `DISCORD_BOT_TOKEN` set and
+  `DISCORD_RELEASE_CHANNEL` pointing at a test channel.
 
 ## Where users see the version
 

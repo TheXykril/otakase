@@ -29,7 +29,7 @@ jobs:
     permissions:
       contents: write
     env:
-      DISCORD_DEV_WEBHOOK: ${{ secrets.DISCORD_DEV_WEBHOOK }}
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -95,11 +95,11 @@ jobs:
             --prerelease \
             --latest=false
 
-      # Announces the build in the Discord server's test-builds channel. Needs a
-      # DISCORD_DEV_WEBHOOK secret (that channel's webhook URL); without it this
-      # does nothing. A header that fails to render leaves the post without one.
+      # Announces the build in the Discord server's test-builds channel, sent by
+      # the Otakase bot. Needs a DISCORD_BOT_TOKEN secret; without it this does
+      # nothing. A header that fails to render leaves the post without one.
       - name: Render the Discord header
-        if: env.DISCORD_DEV_WEBHOOK != ''
+        if: env.DISCORD_BOT_TOKEN != ''
         continue-on-error: true
         run: |
           python3 .github/discord/post_release.py render-dev "$DEV_VERSION" "$RUNNER_TEMP/header.html"
@@ -107,8 +107,10 @@ jobs:
             --wait-for-timeout 3000 "file://$RUNNER_TEMP/header.html" "$RUNNER_TEMP/header.png"
 
       - name: Post to Discord
-        if: env.DISCORD_DEV_WEBHOOK != ''
+        if: env.DISCORD_BOT_TOKEN != ''
         env:
-          # The "Tester" role, pinged by each post. Empty for no ping.
+          # The test-builds channel, and the "Tester" role each post pings
+          # (empty for no ping).
+          DISCORD_DEV_CHANNEL: "1556589796397416508"
           DISCORD_DEV_ROLE: "1556589751077699664"
         run: python3 .github/discord/post_release.py post-dev "$DEV_VERSION" "$RUNNER_TEMP/header.png"

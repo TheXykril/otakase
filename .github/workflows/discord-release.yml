@@ -7,9 +7,9 @@ name: Discord release
 # ci-cd.yml calls this after it publishes a release. Run it by hand from the
 # Actions tab to post a release again.
 #
-# It needs a DISCORD_RELEASE_WEBHOOK secret: the announcements channel's
-# webhook URL (Server Settings → Integrations → Webhooks → Copy Webhook URL).
-# Without the secret this does nothing.
+# The Otakase bot sends the post, so it needs a DISCORD_BOT_TOKEN secret (the
+# bot's token from the Discord developer portal). Without the secret this
+# does nothing.
 
 on:
   workflow_call:
@@ -29,7 +29,9 @@ permissions:
   contents: read
 
 env:
-  # The "Release pings" role, pinged by each post. Empty for no ping.
+  # The announcements channel, and the "Release pings" role each post pings
+  # (empty for no ping).
+  DISCORD_RELEASE_CHANNEL: "1556589777287913492"
   DISCORD_RELEASE_ROLE: "1556589754022236220"
 
 jobs:
@@ -37,14 +39,14 @@ jobs:
     runs-on: ubuntu-latest
     if: github.repository == 'TheXykril/otakase'
     env:
-      DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
       VERSION: ${{ inputs.version }}
     steps:
-      - name: Check for the webhook
+      - name: Check for the bot token
         id: hook
         run: |
-          if [ -z "$DISCORD_RELEASE_WEBHOOK" ]; then
-            echo "DISCORD_RELEASE_WEBHOOK is not set; skipping."
+          if [ -z "$DISCORD_BOT_TOKEN" ]; then
+            echo "DISCORD_BOT_TOKEN is not set; skipping."
             echo "set=false" >> "$GITHUB_OUTPUT"
           else
             echo "set=true" >> "$GITHUB_OUTPUT"
