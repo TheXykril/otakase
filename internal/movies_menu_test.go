@@ -194,3 +194,19 @@ func TestAfterMoviePlay(t *testing.T) {
 		}
 	}
 }
+
+// Searching all providers is the default, and an unknown name falls back to it.
+func TestMovieSearchesAllByDefault(t *testing.T) {
+	lib := &movieLibrary{providers: map[string]movies.Provider{}}
+	for _, value := range []string{"", "all", "nonsense"} {
+		if !lib.searchesAll(&Config{MovieProvider: value}) {
+			t.Errorf("MovieProvider %q should search all", value)
+		}
+	}
+	if lib.searchesAll(&Config{MovieProvider: "vidsrc"}) {
+		t.Error("vidsrc should search vidsrc only")
+	}
+	if config := PopulateConfig(map[string]string{}); config.MovieProvider != "all" {
+		t.Errorf("default MovieProvider = %q", config.MovieProvider)
+	}
+}

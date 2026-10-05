@@ -22,11 +22,13 @@ knows about them.
 ## Providers
 
 `MovieProvider` picks where searches go; `^o` in the Movies menu changes it
-and saves it. A movie in the history is always opened on the provider it came
+and saves it. The default, `all`, asks every provider at once
+(`movieLibrary.search`) and lists the results grouped by provider, each row
+tagged with it; a provider that fails is logged and left out. A movie in the history is always opened on the provider it came
 from. A provider implements `movies.Provider`: `Search` returns movies, and
 `Open` fills in details and lists `Source`s, each resolved only when tried.
 
-### vidsrc (English, default)
+### vidsrc (English)
 
 - Search: IMDb's keyless suggestion list,
   `https://v3.sg.media-imdb.com/suggestion/x/<query>.json`; only `movie` and

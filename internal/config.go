@@ -162,8 +162,9 @@ type Config struct {
 	// MovieSite is the address that redirects to wherever the movie site is
 	// now. The site itself moves between bare IP addresses.
 	MovieSite string `config:"MovieSite"`
-	// MovieProvider is where movies are searched: vidsrc (English) or
-	// 8filmai (Lithuanian). Changed from the Movies menu.
+	// MovieProvider is where movies are searched: all (every provider at
+	// once), vidsrc (English), 8filmai or filmukas (Lithuanian). Changed from
+	// the Movies menu.
 	MovieProvider string `config:"MovieProvider"`
 	// TraktClientID and TraktClientSecret name another Trakt app to sync
 	// movies through than otakase's own, which is used when they are empty.
@@ -235,7 +236,7 @@ func defaultConfigMap() map[string]string {
 		"DevBuilds":                  "false",
 		"ExperimentalMovies":         "false",
 		"MovieSite":                  "https://8filmai.eu",
-		"MovieProvider":              "vidsrc",
+		"MovieProvider":              "all",
 		"TraktClientID":              "",
 		"TraktClientSecret":          "",
 		"AdultContent":               "false",

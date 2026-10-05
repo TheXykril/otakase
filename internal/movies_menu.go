@@ -131,9 +131,10 @@ func movieLists(store *movies.Store) []struct {
 
 // movieActions are the footer's keys in the terminal menu.
 func movieActions(config *Config, lib *movieLibrary) []FooterAction {
+	searching, _ := lib.searching(config)
 	return []FooterAction{
 		{Key: movieSearchKey, Label: "search", Hint: "ctrl+f"},
-		{Key: movieProviderKey, Label: "provider: " + lib.current(config).Name(), Hint: "ctrl+o"},
+		{Key: movieProviderKey, Label: "provider: " + searching, Hint: "ctrl+o"},
 		{Key: movieCastKey, Label: castActionCheckbox(config), Hint: "ctrl+k"},
 		{Key: movieTraktKey, Label: traktActionLabel(lib.trakt), Hint: "ctrl+t"},
 	}
@@ -202,12 +203,13 @@ func movieHubOptions(config *Config, store *movies.Store, lib *movieLibrary) []S
 			options = append(options, SelectionOption{Key: list.tab.Key, Label: fmt.Sprintf("%s (%d)", labels[list.tab.Key], list.tab.Count), Icon: list.tab.Icon})
 		}
 	}
+	_, searching := lib.searching(config)
 	castIcon := icons.CastOff
 	if config.CastToDevice {
 		castIcon = icons.Cast
 	}
 	options = append(options,
-		SelectionOption{Key: movieProviderKey, Label: "Provider: " + lib.current(config).Label(), Icon: icons.Provider},
+		SelectionOption{Key: movieProviderKey, Label: "Provider: " + searching, Icon: icons.Provider},
 		SelectionOption{Key: movieCastKey, Label: castActionLabel(config), Icon: castIcon},
 		SelectionOption{Key: movieTraktKey, Label: "Trakt: " + strings.TrimPrefix(traktActionLabel(lib.trakt), "trakt: "), Icon: icons.Tracker})
 	return options
@@ -240,10 +242,8 @@ func searchMovies(config *Config, store *movies.Store, lib *movieLibrary) {
 		if err != nil || cancelled {
 			return
 		}
-		provider := lib.current(config)
-		found, err := provider.Search(query)
+		found, err := lib.search(config, query)
 		if err != nil {
-			Log(fmt.Sprintf("movies: %s: search for %q failed: %v", provider.Name(), query, err))
 			Out(fmt.Sprintf("Could not search for %q: %v", query, err))
 			continue
 		}
@@ -285,12 +285,11 @@ func movieRow(movie movies.Movie, store *movies.Store) SelectionOption {
 		if entry.Rating > 0 {
 			label += fmt.Sprintf(" · %d/10", entry.Rating)
 		}
-		// Where it was watched, since the same film can be on several
-		// providers.
-		if where := movieSourceLabel(entry); where != "" {
-			label += " · " + where
-		}
 	}
+	// Where it is from, since the same film can be on several providers.
+	entry, _ := store.Get(movie.Key())
+	entry.Movie = movie
+	label += " · " + movieSourceLabel(entry)
 	return SelectionOption{Key: moviePathPrefix + movie.Key(), Label: label, Title: movie.Title, Thumbnail: movie.Poster, Icon: icon}
 }
 

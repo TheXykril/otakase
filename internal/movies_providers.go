@@ -1,8 +1,10 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/movies"
@@ -35,15 +37,71 @@ func (l *movieLibrary) provider(name string) (movies.Provider, error) {
 	return provider, nil
 }
 
-// current is the provider searches go to: MovieProvider, or the default when
-// that names none.
-func (l *movieLibrary) current(config *Config) movies.Provider {
-	provider, err := l.provider(config.MovieProvider)
-	if err != nil {
-		Log(fmt.Sprintf("movies: %v", err))
-		provider, _ = l.provider("")
+// allProviders is MovieProvider's value for searching every provider at once.
+const allProviders = "all"
+
+// searchesAll reports whether searches go to every provider: MovieProvider
+// is "all", or empty, or names no provider.
+func (l *movieLibrary) searchesAll(config *Config) bool {
+	name := strings.ToLower(strings.TrimSpace(config.MovieProvider))
+	if name == "" || name == allProviders {
+		return true
 	}
-	return provider
+	_, err := l.provider(name)
+	return err != nil
+}
+
+// searching names where searches go, for the menus: "all" or a provider.
+func (l *movieLibrary) searching(config *Config) (name, label string) {
+	if l.searchesAll(config) {
+		return allProviders, "All providers"
+	}
+	provider, _ := l.provider(config.MovieProvider)
+	return provider.Name(), provider.Label()
+}
+
+// search asks the chosen provider, or every provider at once, for a title.
+// Results come grouped by provider, in ProviderNames order; a provider that
+// fails is logged and left out, unless every one fails.
+func (l *movieLibrary) search(config *Config, query string) ([]movies.Movie, error) {
+	names := movies.ProviderNames
+	if !l.searchesAll(config) {
+		names = []string{strings.ToLower(strings.TrimSpace(config.MovieProvider))}
+	}
+	type answer struct {
+		found []movies.Movie
+		err   error
+	}
+	answers := make([]answer, len(names))
+	var wg sync.WaitGroup
+	for i, name := range names {
+		provider, err := l.provider(name)
+		if err != nil {
+			answers[i].err = err
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			found, err := provider.Search(query)
+			answers[i] = answer{found, err}
+		}()
+	}
+	wg.Wait()
+	found := []movies.Movie{}
+	var failed []error
+	for i, answer := range answers {
+		if answer.err != nil {
+			Log(fmt.Sprintf("movies: %s: search for %q failed: %v", names[i], query, answer.err))
+			failed = append(failed, fmt.Errorf("%s: %w", names[i], answer.err))
+			continue
+		}
+		found = append(found, answer.found...)
+	}
+	if len(found) == 0 && len(failed) == len(names) {
+		return nil, errors.Join(failed...)
+	}
+	return found, nil
 }
 
 // open asks a movie's own provider for its details and servers.
@@ -70,8 +128,11 @@ func (l *movieLibrary) open(config *Config, movie movies.Movie) (movies.Movie, [
 // pickMovieProvider lets the viewer choose where movies are searched, and
 // keeps the choice in the config.
 func pickMovieProvider(config *Config, lib *movieLibrary) {
-	current := lib.current(config).Name()
-	options := []SelectionOption{}
+	current, _ := lib.searching(config)
+	options := []SelectionOption{{Key: allProviders, Label: "All providers", Icon: icons.Provider}}
+	if current == allProviders {
+		options[0].Icon = icons.Yes
+	}
 	for _, name := range movies.ProviderNames {
 		provider, err := lib.provider(name)
 		if err != nil {
