@@ -510,14 +510,16 @@ func playMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		}
 		Log(fmt.Sprintf("movies: %s: playing from %s", movie.Key(), stream.Server))
 		anime := movieAnime(config, store, movie, title, stream, start)
+		started := func() { traktStarted(lib, store, movie, start) }
 		if config.CastToDevice {
+			started()
 			if castMovie(config, &anime) {
 				played(source.Server)
 				return
 			}
 			continue
 		}
-		if playMovieInMPV(config, store, movie, title, stream, &anime, start) {
+		if playMovieInMPV(config, store, movie, title, stream, &anime, start, started) {
 			played(source.Server)
 			return
 		}
@@ -587,8 +589,8 @@ func castMovie(config *Config, anime *Anime) bool {
 }
 
 // playMovieInMPV plays one server's stream in mpv, reporting whether it
-// played.
-func playMovieInMPV(config *Config, store *movies.Store, movie movies.Movie, title string, stream movies.Stream, anime *Anime, start int) bool {
+// played. started is called once the player is up.
+func playMovieInMPV(config *Config, store *movies.Store, movie movies.Movie, title string, stream movies.Stream, anime *Anime, start int, started func()) bool {
 	args := movieMPVArgs(stream)
 	if start > 0 {
 		// A few seconds back, so the line it stopped on is heard again.

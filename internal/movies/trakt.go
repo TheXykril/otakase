@@ -301,6 +301,31 @@ func (t *Trakt) Rate(movie Movie, rating int) error {
 	return t.syncMovies("/sync/ratings", movie, map[string]any{"rating": rating})
 }
 
+// Started tells Trakt the movie is playing from position, so it shows as
+// being watched now. Trakt clears that by itself after the runtime, or when
+// Paused is sent.
+func (t *Trakt) Started(movie Movie, position, duration int) error {
+	item, err := traktMovie(movie, nil)
+	if err != nil {
+		return err
+	}
+	progress := 0.0
+	if duration > 0 && position > 0 {
+		progress = min(float64(position)*100/float64(duration), 99)
+	}
+	return t.send("/scrobble/start", map[string]any{"movie": item, "progress": progress})
+}
+
+// Finished ends a play Started began, watched to the end: Trakt adds it to
+// the history itself, so Watched is not sent for it as well.
+func (t *Trakt) Finished(movie Movie) error {
+	item, err := traktMovie(movie, nil)
+	if err != nil {
+		return err
+	}
+	return t.send("/scrobble/stop", map[string]any{"movie": item, "progress": 100})
+}
+
 // Paused records where the movie was stopped, as a percentage, so Trakt and
 // the apps that read it can offer to carry on from there.
 func (t *Trakt) Paused(movie Movie, position, duration int) error {

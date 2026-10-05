@@ -308,6 +308,18 @@ func TestTraktSync(t *testing.T) {
 	if err := trakt.Rate(Movie{Title: "No id"}, 8); err == nil {
 		t.Error("a movie without an IMDb id was sent")
 	}
+	if err := trakt.Started(movie, 600, 6000); err != nil {
+		t.Fatal(err)
+	}
+	if last := calls[len(calls)-1]; !strings.HasPrefix(last, "/scrobble/start ") || !strings.Contains(last, `"progress":10`) {
+		t.Errorf("start call = %q", last)
+	}
+	if err := trakt.Finished(movie); err != nil {
+		t.Fatal(err)
+	}
+	if last := calls[len(calls)-1]; !strings.HasPrefix(last, "/scrobble/stop ") || !strings.Contains(last, `"progress":100`) {
+		t.Errorf("stop call = %q", last)
+	}
 }
 
 // Subtitles for the release vidsrc streams come before more downloaded ones

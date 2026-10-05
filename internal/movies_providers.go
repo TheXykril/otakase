@@ -21,6 +21,30 @@ type movieLibrary struct {
 	// details holds what Trakt said about each movie opened, nil for one it
 	// could not match, so each is looked up once.
 	details map[string]*movies.Details
+
+	mu sync.Mutex
+	// playing holds the movies Trakt was told are playing now, by key.
+	playing map[string]bool
+}
+
+// setPlaying records whether Trakt was told a movie is playing.
+func (l *movieLibrary) setPlaying(key string, on bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.playing == nil {
+		l.playing = map[string]bool{}
+	}
+	if on {
+		l.playing[key] = true
+	} else {
+		delete(l.playing, key)
+	}
+}
+
+func (l *movieLibrary) isPlaying(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.playing[key]
 }
 
 // provider returns the named provider, made once.

@@ -49,7 +49,14 @@ func syncMovieToTrakt(lib *movieLibrary, store *movies.Store, before, after movi
 			Log(fmt.Sprintf("movies: trakt: %s %s: %v", what, after.Key(), err))
 		}
 	}
-	if before.Watched != after.Watched {
+	switch {
+	case before.Watched == after.Watched:
+	case after.Watched && lib.isPlaying(after.Key()):
+		// Ending the play Trakt shows as watching now adds it to the
+		// history too.
+		lib.setPlaying(after.Key(), false)
+		report("history", trakt.Finished(movie))
+	default:
 		report("history", trakt.Watched(movie, after.Watched, time.Now()))
 	}
 	if before.Watchlist != after.Watchlist {
@@ -95,6 +102,7 @@ func traktPaused(lib *movieLibrary, store *movies.Store, movie movies.Movie) {
 	if lib.trakt == nil || !lib.trakt.SignedIn() {
 		return
 	}
+	lib.setPlaying(movie.Key(), false)
 	entry, ok := store.Get(movie.Key())
 	if !ok || !entry.Started() {
 		return
@@ -103,6 +111,22 @@ func traktPaused(lib *movieLibrary, store *movies.Store, movie movies.Movie) {
 	if err := lib.trakt.Paused(identified, entry.Position, entry.Duration); err != nil {
 		Log(fmt.Sprintf("movies: trakt: progress %s: %v", movie.Key(), err))
 	}
+}
+
+// traktStarted tells Trakt a movie is playing now, in the background so the
+// player is not kept waiting on it.
+func traktStarted(lib *movieLibrary, store *movies.Store, movie movies.Movie, start int) {
+	if lib.trakt == nil || !lib.trakt.SignedIn() {
+		return
+	}
+	entry, _ := store.Get(movie.Key())
+	lib.setPlaying(movie.Key(), true)
+	go func() {
+		identified := identifyMovie(lib, store, movie)
+		if err := lib.trakt.Started(identified, start, entry.Duration); err != nil {
+			Log(fmt.Sprintf("movies: trakt: watching %s: %v", movie.Key(), err))
+		}
+	}()
 }
 
 // traktActionLabel says whether Trakt is signed in.
