@@ -1,12 +1,20 @@
 name: CI/CD Pipeline
 
+# Pushes and PRs that only touch the website or the wiki have their own
+# workflows (site.yml, wiki-sync.yml) and skip the build here.
 on:
   push:
     branches:
       - main # Trigger on pushes to the main branch
+    paths-ignore:
+      - "site/**"
+      - "wiki/**"
   pull_request:
     branches:
       - main # Trigger on pull requests targeting the main branch
+    paths-ignore:
+      - "site/**"
+      - "wiki/**"
   workflow_dispatch:
     inputs:
       pr_number:
