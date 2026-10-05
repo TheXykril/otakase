@@ -11,6 +11,7 @@
 - [Hyprland Keybinding](Hyprland-Keybinding)
 - [Casting Problems](Casting-Problems)
 - [Troubleshooting](Troubleshooting)
+- [Discord server](https://otakase.xyverion.com/discord/)
 
 **Developer**
 
