@@ -38,7 +38,8 @@ dpi with its px sizes doubled) so it stays sharp on high-DPI screens.
 `site/img/icon.svg` is the app icon (任 with a dark red shadow over お任せ and
 OTAKASE) and `site/img/favicon.svg` the small version with 任 alone. The text
 is outlined to paths, so neither needs a font. The PNGs beside them are
-renders of those two files.
+renders of those two files. Everything else made from the icon, from the
+Windows .exe to the player's logo, is listed on [App Icon](Developer-App-Icon).
 
 ## Rules
 

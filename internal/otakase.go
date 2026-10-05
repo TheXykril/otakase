@@ -18,6 +18,7 @@ import (
 	"github.com/gen2brain/beeep"
 	"github.com/pkg/browser"
 
+	"github.com/thexykril/otakase/internal/appicon"
 	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/torrentstream"
 )
@@ -211,7 +212,7 @@ func Out(data interface{}) {
 			err := beeep.Notify(
 				DisplayName,
 				fmt.Sprintf("%v", data),
-				"",
+				appicon.Path(),
 			)
 
 			if err != nil {
@@ -2294,7 +2295,7 @@ func notifyDesktop(message string) {
 		}
 		return
 	}
-	if err := beeep.Notify(DisplayName, message, ""); err != nil {
+	if err := beeep.Notify(DisplayName, message, appicon.Path()); err != nil {
 		Log(fmt.Sprintf("Failed to send notification: %v", err))
 	}
 }

@@ -9,7 +9,8 @@ otakase's controls for mpv, replacing mpv's own (--osc=no).
   * a "Skip Opening" / "Skip Ending" button while one plays and otakase is
     not skipping it already, a "Skipped Opening · Undo" notice when it did,
   * an "Up next" card during the ending, while the playlist has a next episode,
-  * a thin progress line when the controls are hidden.
+  * a thin progress line when the controls are hidden,
+  * otakase's logo while there is no picture yet, as an episode loads.
 
 Openings and endings are the "Opening" and "Ending" chapters otakase writes
 into the chapter list. Colours arrive as script-opts at launch, the chips as
@@ -34,6 +35,7 @@ local opts = {
 	skip_op = false,
 	skip_ed = false,
 	hide_after = 2.0,
+	logo = '',
 }
 options.read_options(opts, 'otakase_skin')
 
@@ -94,6 +96,7 @@ local state = {
 	episode_title = '',         -- the episode's own name, from otakase
 	menu = nil,                -- {kind, items, scroll, anchor_x, anchor_y}
 	dragging = false,
+	has_video = false,         -- a frame is on screen
 }
 
 local hits = {}        -- interactive rectangles drawn this frame
@@ -780,6 +783,49 @@ local function draw_corner(ass, w, h, s, visible)
 	end
 end
 
+-- The logo -------------------------------------------------------------------
+
+-- otakase writes the logo as one shape per line: the palette role it takes,
+-- then an ASS drawing in 0-100 units. Read once, on first use.
+local logo_shapes = nil
+
+local function load_logo()
+	if logo_shapes then return logo_shapes end
+	logo_shapes = {}
+	local file = opts.logo ~= '' and io.open(opts.logo, 'r')
+	if not file then return logo_shapes end
+	for line in file:lines() do
+		local role, drawing = line:match('^(%a+) (m .+)$')
+		if role then
+			logo_shapes[#logo_shapes + 1] = {role = role, drawing = drawing}
+		end
+	end
+	file:close()
+	return logo_shapes
+end
+
+-- Drawn in the theme rather than the icon's own colours: the mark in the
+-- accent over a faint copy of itself, the kana and name in the text colours.
+local logo_colors = {
+	shadow = function() return C.accent, 0.35 end,
+	mark = function() return C.accent, 1 end,
+	kana = function() return C.fg, 1 end,
+	name = function() return C.dim, 1 end,
+}
+
+local function draw_logo(ass, w, h, s)
+	local size = math.min(220 * s, h * 0.45)
+	local x, y = (w - size) / 2, (h - size) / 2
+	for _, shape in ipairs(load_logo()) do
+		local pick = logo_colors[shape.role]
+		if pick then
+			local color, opacity = pick()
+			ass[#ass + 1] = string.format('{\\pos(%.1f,%.1f)\\an7\\bord0\\shad0\\blur0\\fscx%.1f\\fscy%.1f\\1c&H%s&\\1a&H%s&\\p1}%s{\\p0}',
+				x, y, size, size, color, ass_alpha(opacity), shape.drawing)
+		end
+	end
+end
+
 local update_bindings
 
 local function render()
@@ -790,6 +836,10 @@ local function render()
 	local ass = {}
 	hits = {}
 	seek_geometry = nil
+
+	if not state.has_video then
+		draw_logo(ass, w, h, s)
+	end
 
 	local visible = controls_visible(w, h, s)
 	lift_subtitles(visible, h, s)
@@ -979,6 +1029,10 @@ mp.observe_property('playlist-pos', 'number', function(_, value)
 	state.notice = nil
 	-- otakase sends the new episode's name once it knows it.
 	state.episode_title = ''
+	request_render()
+end)
+mp.observe_property('video-params', 'native', function(_, value)
+	state.has_video = value ~= nil
 	request_render()
 end)
 mp.observe_property('osd-dimensions', 'native', function() request_render() end)

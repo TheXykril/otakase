@@ -158,7 +158,9 @@ func castPanelTop(state castPanelState, width int) string {
 		budget = half
 	}
 
-	title := " " + state.Title
+	// The app's 任 leads, as in the menus' breadcrumb; a trim takes the
+	// title's end, so the mark stays.
+	title := " " + appMark + " " + state.Title
 	if budget < 1 {
 		budget = 1
 	}

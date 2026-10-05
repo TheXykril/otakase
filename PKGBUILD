@@ -44,4 +44,12 @@ package() {
   # otk is the short form, for something typed several times a day.
   ln -s otakase "$pkgdir/usr/bin/otk"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  # The app-menu entry and its icon. otakase installs its own copies under
+  # ~/.local/share only when these are missing.
+  install -Dm644 internal/appicon/otakase.desktop "$pkgdir/usr/share/applications/otakase.desktop"
+  install -Dm644 internal/appicon/otakase.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/otakase.svg"
+  for size in 16 24 32 48 64 128 256 512; do
+    install -Dm644 "Build/app-icon/png/otakase-$size.png" \
+      "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/otakase.png"
+  done
 }

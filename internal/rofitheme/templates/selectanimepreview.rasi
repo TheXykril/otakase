@@ -42,13 +42,23 @@ mainbox {
 }
 
 inputbar {
-    children:         [ entry ];
+    children:         [ {{ if .Icon }}icon-app, {{ end }}entry ];
     background-color: transparent;
     padding:          8px 12px;
+    spacing:          10px;
     border:           0px 0px 1px 0px;
     border-color:     @rule;
 }
-
+{{ if .Icon }}
+/* The app icon in front of what is typed. */
+icon-app {
+    expand:           false;
+    filename:         "{{ .Icon }}";
+    size:             56px;
+    vertical-align:   0.5;
+    background-color: transparent;
+}
+{{ end }}
 entry {
     background-color:  transparent;
     text-color:        @text;

@@ -258,6 +258,17 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "Build\otakase-windows-build.iss"
         shell: pwsh
 
+      # The app icon in every size and format, for anyone packaging or
+      # theming otakase.
+      - name: Pack icons
+        run: |
+          $pack = "Build/Output/otakase-icons"
+          New-Item -ItemType Directory -Force -Path "$pack/png" | Out-Null
+          Copy-Item "Build/app-icon/png/*.png" "$pack/png/"
+          Copy-Item "internal/appicon/otakase.svg", "Build/app-icon/otakase.ico", "Build/app-icon/otakase.icns" "$pack/"
+          Compress-Archive -Path "$pack/*" -DestinationPath "Build/Output/otakase-icons.zip" -Force
+        shell: pwsh
+
       - name: Build direct commit release notes
         run: |
           $ErrorActionPreference = 'Stop'
@@ -374,7 +385,13 @@ jobs:
 
           $notesPath = "Build/release-notes-extra.md"
 
+          # The banner heads every release. It is read from the tag, so an
+          # old release keeps the banner it shipped with.
+          $banner = "![Otakase](https://raw.githubusercontent.com/$repo/v$env:OTAKASE_VERSION/site/img/release-banner.png)"
+
           $body = @()
+          $body += $banner
+          $body += ""
           $body += "## 📝 Changelog"
           $body += ""
 
@@ -403,7 +420,7 @@ jobs:
           # generated notes (with their own Full Changelog link), so leave the
           # extra block out instead of printing empty sections.
           if ($feats.Count -eq 0 -and $fixes.Count -eq 0 -and $chores.Count -eq 0 -and $others.Count -eq 0) {
-            Set-Content -Path $notesPath -Value "" -Encoding utf8
+            Set-Content -Path $notesPath -Value $banner -Encoding utf8
             return
           }
 
@@ -438,6 +455,7 @@ jobs:
             releases/otakase-${{ env.OTAKASE_VERSION }}/macos/otakase-macos-universal
             releases/otakase-${{ env.OTAKASE_VERSION }}/windows/otakase-windows-x86_64.exe
             Build/Output/otakase-windows-installer.exe
+            Build/Output/otakase-icons.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

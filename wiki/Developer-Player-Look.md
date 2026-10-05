@@ -17,6 +17,11 @@ that works; what users see is on [Configuration](Configuration).
   (`play_arrow`, `skip_next`, `subtitles`, …). It is loaded with
   `--osd-fonts-dir`, so nothing is installed and Windows works the same.
   Keep only fonts in that folder: libass tries to open every file in it.
+- **logo/otakase.ass** is the app icon as ASS drawings, one shape per line
+  with the palette role it takes. The script reads it from the `logo`
+  script-opt and draws it in the middle of the window while there is no
+  picture (`video-params` unset), so a loading episode shows the logo rather
+  than black. It is generated; see [App Icon](Developer-App-Icon).
 
 ## Launch
 
