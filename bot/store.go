@@ -9,7 +9,8 @@ import (
 	"time"
 )
 
-// store keeps what has to survive a restart (warnings, voice rooms) in a
+// store keeps what has to survive a restart (warnings, voice rooms,
+// suggestions) in a
 // small JSON file in the data directory.
 type store struct {
 	mu   sync.Mutex
@@ -20,6 +21,8 @@ type store struct {
 type storeData struct {
 	Warnings map[string][]warning `json:"warnings"`
 	Rooms    map[string]room      `json:"rooms"` // voice channel id → room
+	// Suggestions by message id (also the id of its thread).
+	Suggestions map[string]suggestion `json:"suggestions"`
 }
 
 type warning struct {
@@ -62,6 +65,9 @@ func openStore(path string) *store {
 	}
 	if st.data.Rooms == nil {
 		st.data.Rooms = map[string]room{}
+	}
+	if st.data.Suggestions == nil {
+		st.data.Suggestions = map[string]suggestion{}
 	}
 	return st
 }

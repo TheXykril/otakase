@@ -68,6 +68,16 @@ server and stays connected to Discord.
   can rename it and move people. A room is deleted after it has been empty
   for a minute (a new room waits two minutes for its owner). `OTAKASE_CREATE_ROOM` sets the
   channel when the name doesn't match.
+- **Suggestions:** `/suggest` opens a form (idea and optional details) and
+  posts it in the suggestions channel (the text channel named
+  "suggestions", else "ideas"; `OTAKASE_SUGGESTIONS_CHANNEL` sets it) with
+  👍 and 👎 buttons showing the counts and a thread to talk about it. Each
+  member has one vote: pressing the same button again takes it back,
+  pressing the other moves it. One suggestion per member every five
+  minutes. Members who can manage messages run `/suggestion-status` inside a
+  suggestion's thread to mark it Planned, In progress, Done or Declined (or
+  Open again) with an optional note; Done and Declined close voting and
+  archive the thread. Votes are kept in `otakase-bot.json`.
 - **Report to mods:** right-click a message → **Apps → Report to mods**
   posts it in mod-chat with **Delete message**, **Timeout 1h** and
   **Dismiss** buttons. The reporter gets a private thanks.
@@ -107,7 +117,7 @@ events (`/watchparty`), manage channels (`/slowmode`, voice rooms) and move
 members (voice rooms). Manage Server is optional: it lets the raid guard pause
 invites.
 
-Warnings and the list of voice rooms are kept in `otakase-bot.json` in
+Warnings, suggestions and the list of voice rooms are kept in `otakase-bot.json` in
 `OTAKASE_DATA_DIR` (the add-on's `/data`, `/var/lib/otakase-bot` with the
 systemd unit, else the working directory).
 
