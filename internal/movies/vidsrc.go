@@ -11,6 +11,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -247,9 +250,11 @@ func (v *Vidsrc) withToken(link string) (Stream, error) {
 }
 
 // openSubtitles fetches English subtitles from OpenSubtitles' keyless API,
-// the one vidsrc's own player uses, preferring the file made for the same
-// release. They come gzipped, so they are unpacked into the temporary folder
-// for the player to read.
+// the one vidsrc's own player uses. Subtitles are timed to one release of a
+// film, so the ones made for the release vidsrc streams (its file name, such
+// as Interstellar.2014.1080p.BluRay.x264.YIFY.mp4) come first; a few others
+// follow, for the viewer to switch to in the player when the first is out of
+// time. They come gzipped and are unpacked into the temporary folder.
 func openSubtitles(client *http.Client, imdb, release string) []Subtitle {
 	// The id as IMDb writes it, zeros and all: without them the API
 	// redirects to a broken address.
@@ -268,30 +273,104 @@ func openSubtitles(client *http.Client, imdb, release string) []Subtitle {
 		return nil
 	}
 	defer resp.Body.Close()
-	var results []struct {
-		FileName string `json:"SubFileName"`
-		Link     string `json:"SubDownloadLink"`
-		Format   string `json:"SubFormat"`
-	}
+	var results []openSubtitle
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&results); err != nil || len(results) == 0 {
 		return nil
 	}
-	best := 0
-	release = strings.ToLower(strings.TrimSuffix(filepath.Base(release), filepath.Ext(release)))
-	for i, result := range results {
-		name := strings.ToLower(strings.TrimSuffix(result.FileName, filepath.Ext(result.FileName)))
-		if release != "" && name == release {
-			best = i
+	ranked := rankSubtitles(results, release)
+	subtitles := []Subtitle{}
+	seen := map[string]bool{}
+	for _, result := range ranked {
+		if len(subtitles) == maxSubtitles {
 			break
 		}
+		name := strings.ToLower(result.FileName)
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		file, err := saveGzipped(client, result.Link, fmt.Sprintf("%s-%d.%s", imdb, len(subtitles)+1, strings.ToLower(result.Format)))
+		if err != nil {
+			logf("subtitles for %s: %v", imdb, err)
+			continue
+		}
+		subtitles = append(subtitles, Subtitle{URL: file, Language: "English", Label: strings.TrimSuffix(result.FileName, filepath.Ext(result.FileName))})
 	}
-	chosen := results[best]
-	file, err := saveGzipped(client, chosen.Link, imdb+"."+strings.ToLower(chosen.Format))
-	if err != nil {
-		logf("subtitles for %s: %v", imdb, err)
-		return nil
+	return subtitles
+}
+
+// maxSubtitles is how many subtitle files are offered for one movie.
+const maxSubtitles = 4
+
+type openSubtitle struct {
+	FileName       string `json:"SubFileName"`
+	Release        string `json:"MovieReleaseName"`
+	Link           string `json:"SubDownloadLink"`
+	Format         string `json:"SubFormat"`
+	Downloads      string `json:"SubDownloadsCnt"`
+	HearingImpared string `json:"SubHearingImpaired"`
+}
+
+var releaseWordPattern = regexp.MustCompile(`[a-z0-9]+`)
+
+// releaseWords splits a release name into its lowercase words.
+func releaseWords(name string) []string {
+	// Only a file's extension: in a bare release name the last dotted part
+	// is the group (….x264.YIFY), which filepath.Ext would take.
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".srt", ".sub", ".ass", ".ssa", ".vtt", ".mp4", ".mkv", ".avi":
+		name = strings.TrimSuffix(name, filepath.Ext(name))
 	}
-	return []Subtitle{{URL: file, Language: "English"}}
+	return releaseWordPattern.FindAllString(strings.ToLower(name), -1)
+}
+
+// rankSubtitles orders subtitles by how well their release matches the
+// stream's: the release group (the last word, such as YIFY) matters most,
+// as it decides the cut and the frame timing, then the source and the
+// resolution. Ties go to the most downloaded, and subtitles for the hearing
+// impaired come after the plain ones.
+func rankSubtitles(results []openSubtitle, release string) []openSubtitle {
+	want := releaseWords(filepath.Base(release))
+	group := ""
+	if len(want) > 0 {
+		group = want[len(want)-1]
+	}
+	wanted := map[string]bool{}
+	for _, word := range want {
+		wanted[word] = true
+	}
+	score := func(result openSubtitle) int {
+		words := releaseWords(result.Release)
+		if len(words) == 0 {
+			words = releaseWords(result.FileName)
+		}
+		points := 0
+		for i, word := range words {
+			switch {
+			case word == group && group != "" && i == len(words)-1:
+				points += 100
+			case word == group && group != "":
+				points += 60
+			case wanted[word]:
+				points += 5
+			}
+		}
+		if result.HearingImpared == "1" {
+			points -= 3
+		}
+		return points
+	}
+	ranked := append([]openSubtitle(nil), results...)
+	sort.SliceStable(ranked, func(i, j int) bool {
+		si, sj := score(ranked[i]), score(ranked[j])
+		if si != sj {
+			return si > sj
+		}
+		di, _ := strconv.Atoi(ranked[i].Downloads)
+		dj, _ := strconv.Atoi(ranked[j].Downloads)
+		return di > dj
+	})
+	return ranked
 }
 
 func saveGzipped(client *http.Client, rawURL, name string) (string, error) {

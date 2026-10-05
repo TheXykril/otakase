@@ -309,3 +309,21 @@ func TestTraktSync(t *testing.T) {
 		t.Error("a movie without an IMDb id was sent")
 	}
 }
+
+// Subtitles for the release vidsrc streams come before more downloaded ones
+// for another release, and the hearing impaired ones after the plain.
+func TestRankSubtitles(t *testing.T) {
+	results := []openSubtitle{
+		{FileName: "Interstellar.2014.720p.BluRay.x264-DAA.srt", Release: "Interstellar.2014.720p.BluRay.x264-DAA", Downloads: "2294580"},
+		{FileName: "Interstellar.2014.1080p.BluRay.x264.YIFY-HI.srt", Release: "Interstellar.2014.1080p.BluRay.x264.YIFY", Downloads: "900000", HearingImpared: "1"},
+		{FileName: "Interstellar.2014.1080p.BluRay.x264.YIFY.srt", Release: "Interstellar.2014.1080p.BluRay.x264.YIFY", Downloads: "570122"},
+		{FileName: "Interstellar.2014.1080p.BluRay.x264.DTS-RARBG.eng.srt", Release: " Interstellar.2014.1080p.BluRay.x264.DTS-RARBG", Downloads: "274734"},
+	}
+	ranked := rankSubtitles(results, "Interstellar (2014) (2014) [1080p]/Interstellar.2014.2014.1080p.BluRay.x264.YIFY.mp4")
+	if ranked[0].FileName != "Interstellar.2014.1080p.BluRay.x264.YIFY.srt" || ranked[1].HearingImpared != "1" {
+		t.Errorf("ranked: %s, %s", ranked[0].FileName, ranked[1].FileName)
+	}
+	if ranked[3].Release != "Interstellar.2014.720p.BluRay.x264-DAA" {
+		t.Errorf("last = %s", ranked[3].FileName)
+	}
+}

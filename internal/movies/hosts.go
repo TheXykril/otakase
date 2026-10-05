@@ -35,6 +35,8 @@ type Subtitle struct {
 	URL string
 	// Language is how the host names it, such as "English".
 	Language string
+	// Label tells subtitles in the same language apart in the player.
+	Label string
 }
 
 // Source is one of a movie's servers, resolved only when it is tried: each

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
@@ -484,9 +485,10 @@ func movieAnime(config *Config, store *movies.Store, movie movies.Movie, title s
 	anime.Ep.Links = []string{stream.URL}
 	anime.Ep.StreamReferrer = stream.Referrer
 	for _, subtitle := range stream.Subtitles {
-		anime.Ep.SubtitleTracks = append(anime.Ep.SubtitleTracks, SubtitleTrack{URL: subtitle.URL, Language: subtitle.Language, Label: subtitle.Language})
+		anime.Ep.SubtitleTracks = append(anime.Ep.SubtitleTracks, SubtitleTrack{URL: subtitle.URL, Language: subtitle.Language, Label: cmp.Or(subtitle.Label, subtitle.Language)})
 	}
 	if len(anime.Ep.SubtitleTracks) > 0 {
+		// The provider lists the best match first.
 		anime.Ep.SubtitleURL = providers.PickSubtitle(anime.Ep.SubtitleTracks, subtitleLanguageFor(config, nil), anime.Ep.SubtitleTracks[0].URL)
 	}
 	anime.Movie = &MoviePlayback{
