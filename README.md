@@ -11,7 +11,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-c99a2e" alt="GPL-3.0"></a>
   <a href="https://otakase.xyverion.com/discord/"><img src="https://img.shields.io/badge/discord-join-d2492f?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/TheXykril/otakase/releases"><img src="https://img.shields.io/github/downloads/TheXykril/otakase/total?label=downloads&color=c99a2e" alt="Downloads"></a>
-  <a href="#install"><img src="https://img.shields.io/badge/platform-linux%20%C2%B7%20macOS%20%C2%B7%20windows-d2492f" alt="Linux, macOS, Windows"></a>
+  <a href="#install"><img src="https://img.shields.io/badge/platform-linux%20%C2%B7%20macOS%20%C2%B7%20windows-c99a2e" alt="Linux, macOS, Windows"></a>
   <a href="#features"><img src="https://img.shields.io/badge/sync-AniList%20%C2%B7%20MAL-c99a2e" alt="Syncs with AniList and MyAnimeList"></a>
   <a href="https://mpv.io/"><img src="https://img.shields.io/badge/plays%20in-mpv-d2492f?logo=mpv&logoColor=white" alt="Plays in mpv"></a>
 </p>
