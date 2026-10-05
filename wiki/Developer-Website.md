@@ -48,7 +48,7 @@ Windows .exe to the player's logo, is listed on [App Icon](Developer-App-Icon).
 wiki sidebar and the "new issue" page. It asks the server widget for a live
 invite and redirects to it, so a deleted or expired invite never breaks the
 link; if the widget doesn't answer it uses the permanent invite written in the
-page. The widget must stay on in Discord (**Server Settings → Widget → Enable
+page. The widget must stay on in Discord (**Server Settings → Engagement → Server Widget → Enable
 Server Widget**, invite channel 迎・welcome).
 
 ## Rules
