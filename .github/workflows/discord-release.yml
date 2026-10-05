@@ -1,0 +1,73 @@
+name: Discord release
+
+# Posts a release announcement card to the Discord server's announcements
+# channel: a header image with the version, the lead of each CHANGELOG.md
+# entry for it, and buttons to the release, changelog and website.
+#
+# ci-cd.yml calls this after it publishes a release. Run it by hand from the
+# Actions tab to post a release again.
+#
+# It needs a DISCORD_RELEASE_WEBHOOK secret: the announcements channel's
+# webhook URL (Server Settings → Integrations → Webhooks → Copy Webhook URL).
+# Without the secret this does nothing.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version, without the leading v
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, without the leading v
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  # The "Release pings" role, pinged by each post. Empty for no ping.
+  DISCORD_RELEASE_ROLE: "1556589754022236220"
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    if: github.repository == 'TheXykril/otakase'
+    env:
+      DISCORD_RELEASE_WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Check for the webhook
+        id: hook
+        run: |
+          if [ -z "$DISCORD_RELEASE_WEBHOOK" ]; then
+            echo "DISCORD_RELEASE_WEBHOOK is not set; skipping."
+            echo "set=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "set=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.hook.outputs.set == 'true'
+        with:
+          ref: v${{ inputs.version }}
+          sparse-checkout: |
+            CHANGELOG.md
+            .github/discord
+
+      - name: Render the header image
+        if: steps.hook.outputs.set == 'true'
+        # Uses the runner's own Chrome, so no browser download. A header that
+        # fails to render leaves the post without an image rather than failing.
+        continue-on-error: true
+        run: |
+          python3 .github/discord/post_release.py render "$VERSION" "$RUNNER_TEMP/header.html"
+          npx -y playwright@1.56.1 screenshot --channel chrome --viewport-size 1600,400 \
+            --wait-for-timeout 3000 "file://$RUNNER_TEMP/header.html" "$RUNNER_TEMP/header.png"
+
+      - name: Post to Discord
+        if: steps.hook.outputs.set == 'true'
+        run: python3 .github/discord/post_release.py post "$VERSION" "$RUNNER_TEMP/header.png"

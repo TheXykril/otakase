@@ -471,6 +471,16 @@ jobs:
       version: ${{ needs.release.outputs.version }}
     secrets: inherit
 
+  # Announces the release on Discord, called from here for the same reason.
+  discord:
+    needs: release
+    permissions:
+      contents: read
+    uses: ./.github/workflows/discord-release.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+    secrets: inherit
+
   # Merges a Dependabot PR once the build above passes. It lives in this
   # workflow rather than its own so `needs: build` does the waiting: no repo
   # auto-merge setting or required status check has to exist for a red build

@@ -70,6 +70,26 @@ install gets it too) and takes it out again on uninstall. The
 `Windows installer check` workflow builds, installs, runs and uninstalls it on
 any pull request that changes the installer script.
 
+## Discord
+
+After a release, CI posts an announcement card to the Discord server's
+announcements channel through the `Discord release` workflow
+(`.github/workflows/discord-release.yml`). The card has a header image with
+the version (`.github/discord/release-header.html`, screenshotted with the
+runner's Chrome), the bold opening sentence of each `CHANGELOG.md` entry for
+that version, a ping for the Release pings role, and buttons to the release,
+the changelog and the website.
+
+- It needs a `DISCORD_RELEASE_WEBHOOK` repository secret: the announcements
+  channel's webhook URL. Without it the workflow does nothing.
+- The pinged role is `DISCORD_RELEASE_ROLE` in the workflow; empty it for no
+  ping.
+- To post a release again, run the `Discord release` workflow from the
+  Actions tab with its version.
+- To preview a post, run `python3 .github/discord/post_release.py post
+  VERSION header.png` with `DISCORD_RELEASE_WEBHOOK` set to a test channel's
+  webhook.
+
 ## Where users see the version
 
 The running version is at the right of the menu header in the terminal and of
