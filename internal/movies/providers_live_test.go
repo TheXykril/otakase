@@ -58,17 +58,28 @@ func TestFilmukasLive(t *testing.T) {
 	t.Logf("%s: %.100s", movie.Label(), stream.URL)
 }
 
-// Asks imgsto.re for one of its files the ways a player might, and logs
-// what each answer was. OTAKASE_IMGSTO_ID is the id after /files/.
+// Asks imgsto.re for a movie's file the ways a player might, and logs what
+// each answer was. OTAKASE_MOVIE_PATH is the 8Filmai page, such as
+// /filmas/transporteris-2-online/.
 func TestImgstoreProbe(t *testing.T) {
-	id := os.Getenv("OTAKASE_IMGSTO_ID")
-	if id == "" {
-		t.Skip("set OTAKASE_IMGSTO_ID to an imgsto.re file id, such as 01/0388482")
+	path := os.Getenv("OTAKASE_MOVIE_PATH")
+	if path == "" {
+		t.Skip("set OTAKASE_MOVIE_PATH to an 8Filmai movie path")
 	}
-	page := "https://imgsto.re/files/" + id
+	site := NewSite(DefaultSiteURL, "", nil)
+	moviePage, err := site.Page(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, _ := site.Base()
+	t.Logf("site %s, servers %q", base, moviePage.Servers)
+	if moviePage.Servers[0] == "" {
+		t.Fatal("no imgsto.re server for this movie")
+	}
+	page := "https://imgsto.re/files/" + moviePage.Servers[0]
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar, Timeout: 25 * time.Second}
-	body, err := fetchPage(client, page, "https://8filmai.eu/")
+	body, err := fetchPage(client, page, base+"/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,6 +115,6 @@ func TestImgstoreProbe(t *testing.T) {
 		r.Header.Set("Referer", page)
 		r.AddCookie(&http.Cookie{Name: "_gad", Value: "1"})
 	})
-	try("site referrer", func(r *http.Request) { r.Header.Set("Referer", "https://8filmai.eu/") })
+	try("site referrer", func(r *http.Request) { r.Header.Set("Referer", base+"/") })
 	try("again, page referrer", func(r *http.Request) { r.Header.Set("Referer", page) })
 }
