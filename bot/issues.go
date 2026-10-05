@@ -54,12 +54,17 @@ type issueCooldown struct {
 }
 
 func (c *issueCooldown) allow(channel string, n int) bool {
+	return c.allowKey(fmt.Sprintf("%s/%d", channel, n))
+}
+
+// allowKey reports whether key wasn't seen in the last ten minutes, and
+// marks it seen.
+func (c *issueCooldown) allowKey(key string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.last == nil {
 		c.last = map[string]time.Time{}
 	}
-	key := fmt.Sprintf("%s/%d", channel, n)
 	if time.Since(c.last[key]) < 10*time.Minute {
 		return false
 	}

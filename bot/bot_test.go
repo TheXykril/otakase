@@ -1,7 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -199,5 +203,99 @@ func TestIsNudge(t *testing.T) {
 	m := &discordgo.Message{Author: &discordgo.User{ID: "bot"}, Embeds: []*discordgo.MessageEmbed{{Title: nudgeTitle}}}
 	if !isNudge(m, "bot") || isNudge(m, "someone") {
 		t.Error("isNudge wrong")
+	}
+}
+
+func TestDownRe(t *testing.T) {
+	for _, text := range []string{
+		"is otakase down?", "are the sources down rn", "is anikoto broken", "providers not working today",
+		"down for everyone or just me?", "anyone else getting no results?",
+	} {
+		if !downRe.MatchString(text) {
+			t.Errorf("%q should count as a down question", text)
+		}
+	}
+	for _, text := range []string{"I'm feeling down today", "scroll down to the bottom", "the episode was great"} {
+		if downRe.MatchString(text) {
+			t.Errorf("%q should not count", text)
+		}
+	}
+}
+
+func TestSemanticIntents(t *testing.T) {
+	for intent := range intentExamples {
+		if _, ok := faqByKey(intent); !ok && intent != "down" {
+			t.Errorf("intent %q has no FAQ entry", intent)
+		}
+	}
+	ex := []semanticExample{{"mpv", []float64{1, 0}}, {"down", []float64{0, 1}}}
+	if got, ok := bestIntent([]float64{0.9, 0.1}, ex, 0.6); !ok || got != "mpv" {
+		t.Errorf("bestIntent = %q %v", got, ok)
+	}
+	if _, ok := bestIntent([]float64{1, 1}, ex, 0.8); ok {
+		t.Error("a vector halfway between should stay under the threshold")
+	}
+	if math.Abs(cosine([]float64{1, 2}, []float64{2, 4})-1) > 1e-9 || cosine(nil, nil) != 0 {
+		t.Error("cosine wrong")
+	}
+	for text, want := range map[string]bool{
+		"my player won't open": true, "how do I cast?": true, "lol nice episode": false, "good morning everyone": false,
+	} {
+		if questionRe.MatchString(text) != want {
+			t.Errorf("questionRe(%q) = %v", text, !want)
+		}
+	}
+}
+
+// fakeOllama answers /api/pull and /api/embed, embedding texts that mention
+// "player" along one axis and everything else along the other.
+func fakeOllama(t *testing.T) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/pull":
+			w.Write([]byte(`{"status":"success"}`))
+		case "/api/embed":
+			var req struct {
+				Model string   `json:"model"`
+				Input []string `json:"input"`
+			}
+			json.NewDecoder(r.Body).Decode(&req)
+			var out [][]float64
+			for _, s := range req.Input {
+				if strings.Contains(s, "player") || strings.Contains(s, "mpv") {
+					out = append(out, []float64{1, 0})
+				} else {
+					out = append(out, []float64{0, 1})
+				}
+			}
+			json.NewEncoder(w).Encode(map[string]any{"embeddings": out})
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+	}))
+}
+
+func TestSemanticWithOllama(t *testing.T) {
+	srv := fakeOllama(t)
+	defer srv.Close()
+	sm := &semantic{url: srv.URL, model: "all-minilm", threshold: 0.9}
+	if err := sm.load(); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := sm.match("my player won't open, why?"); !ok || got != "mpv" {
+		t.Errorf("match = %q %v, want mpv", got, ok)
+	}
+	if _, ok := sm.match("good morning everyone"); ok {
+		t.Error("plain chat should not be matched")
+	}
+}
+
+func TestPartyHost(t *testing.T) {
+	ev := &discordgo.GuildScheduledEvent{Description: "Watch party hosted by <@123456789>. Join the voice channel.\nhttps://anilist.co/anime/1"}
+	if got := partyHost(ev); got != "123456789" {
+		t.Errorf("partyHost = %q", got)
+	}
+	if partyHost(&discordgo.GuildScheduledEvent{Description: "some other event"}) != "" {
+		t.Error("an event the bot didn't make has no host")
 	}
 }

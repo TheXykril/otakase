@@ -42,6 +42,9 @@ type config struct {
 	DailyAiring     bool
 	AiringHour      int    // UTC hour the airing post goes out
 	OtakaseCLI      string // otakase binary used by /provider-status
+	OllamaURL       string // Ollama for matching questions by meaning, empty = off
+	EmbedModel      string
+	AIThreshold     float64
 }
 
 // loadEnvFile sets variables from a KEY=value file, keeping any that are
@@ -78,6 +81,7 @@ var haOptions = map[string]string{
 	"welcome_dm":       "OTAKASE_WELCOME_DM",
 	"daily_airing":     "OTAKASE_DAILY_AIRING",
 	"airing_hour_utc":  "OTAKASE_AIRING_HOUR",
+	"ollama_url":       "OTAKASE_OLLAMA_URL",
 }
 
 // loadHAOptions sets variables from a Home Assistant add-on options file,
@@ -125,6 +129,15 @@ func loadConfig() config {
 	if h, err := strconv.Atoi(os.Getenv("OTAKASE_AIRING_HOUR")); err == nil && h >= 0 && h < 24 {
 		c.AiringHour = h
 	}
+	c.OllamaURL = os.Getenv("OTAKASE_OLLAMA_URL")
+	c.EmbedModel = os.Getenv("OTAKASE_EMBED_MODEL")
+	if c.EmbedModel == "" {
+		c.EmbedModel = "all-minilm"
+	}
+	c.AIThreshold = 0.6
+	if t, err := strconv.ParseFloat(os.Getenv("OTAKASE_AI_THRESHOLD"), 64); err == nil && t > 0 && t < 1 {
+		c.AIThreshold = t
+	}
 	if c.OtakaseCLI == "" {
 		c.OtakaseCLI = "otakase"
 	}
@@ -143,6 +156,7 @@ type bot struct {
 
 	issues    issueCooldown
 	providers providerCache
+	sem       *semantic
 }
 
 func main() {
@@ -156,7 +170,8 @@ func main() {
 		discordgo.IntentsGuildMembers |
 		discordgo.IntentsMessageContent
 
-	b := &bot{cfg: cfg, s: s, auto: newAutoReplier(), spam: newSpamGuard(), pres: &presence{}}
+	b := &bot{cfg: cfg, s: s, auto: newAutoReplier(), spam: newSpamGuard(), pres: &presence{},
+		sem: &semantic{url: cfg.OllamaURL, model: cfg.EmbedModel, threshold: cfg.AIThreshold}}
 	s.AddHandler(b.onReady)
 	s.AddHandler(b.onInteraction)
 	s.AddHandler(b.onThreadCreate)
@@ -173,6 +188,7 @@ func main() {
 	}
 	go b.pres.run(s, b.cfg.GitHubToken)
 	go b.airingLoop()
+	go b.sem.start()
 	go b.staleLoop()
 	log.Print("running")
 
