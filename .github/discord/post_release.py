@@ -14,6 +14,10 @@ A dev build card lists the feat/fix commits on main since the last release
 commit, with buttons to the dev pre-release. It goes to DISCORD_DEV_CHANNEL,
 pinging DISCORD_DEV_ROLE if set.
 
+A channel is an id, or a name looked up in the DISCORD_GUILD server: either
+the full name or the part after a "・" prefix, so "stable-builds" finds
+"版・stable-builds" and keeps working when the prefix changes.
+
     post_release.py render VERSION OUT.html       # header page to screenshot
     post_release.py post VERSION HEADER.png       # send the release post
     post_release.py render-dev VERSION OUT.html
@@ -179,6 +183,27 @@ def request(method, path, token, data=None, content_type=None):
         return json.load(r)
 
 
+def match_channel(channels, wanted):
+    """Returns the id of the text channel called wanted, with or without a
+    "・" prefix."""
+    for c in channels:
+        if c.get("type") in (0, 5) and wanted in (c["name"], c["name"].split("・")[-1]):
+            return c["id"]
+    return None
+
+
+def resolve_channel(channel, token):
+    if channel.isdigit():
+        return channel
+    guild = os.environ.get("DISCORD_GUILD", "").strip()
+    if not guild:
+        sys.exit(f"channel {channel!r} is a name, so DISCORD_GUILD must be set")
+    found = match_channel(request("GET", f"/guilds/{guild}/channels", token), channel)
+    if not found:
+        sys.exit(f"no text channel named {channel!r} in the server")
+    return found
+
+
 def post(version, header, dev=False):
     token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
     if not token:
@@ -188,6 +213,7 @@ def post(version, header, dev=False):
     channel = os.environ.get(f"{prefix}_CHANNEL", "").strip()
     if not channel:
         sys.exit(f"{prefix}_CHANNEL is not set")
+    channel = resolve_channel(channel, token)
     role = os.environ.get(f"{prefix}_ROLE", "").strip()
     has_image = bool(header) and os.path.exists(header)
     if dev:

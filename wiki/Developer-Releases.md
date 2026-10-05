@@ -73,7 +73,7 @@ any pull request that changes the installer script.
 ## Discord
 
 After a release, CI posts an announcement card to the Discord server's
-announcements channel through the `Discord release` workflow
+stable-builds channel through the `Discord release` workflow
 (`.github/workflows/discord-release.yml`). The card has a header image with
 the version (`.github/discord/release-header.html`, screenshotted with the
 runner's Chrome), the bold opening sentence of each `CHANGELOG.md` entry for
@@ -85,8 +85,10 @@ the changelog and the website.
   developer portal; without it the workflow does nothing. The bot needs to
   view, send messages, attach files and mention roles in both channels.
 - The channel and pinged role are `DISCORD_RELEASE_CHANNEL` and
-  `DISCORD_RELEASE_ROLE` in the workflow; empty the role for no ping. In an
-  announcement channel the post is also published to following servers.
+  `DISCORD_RELEASE_ROLE` in the workflow; empty the role for no ping. A
+  channel is an id or a name looked up in the `DISCORD_GUILD` server, with or
+  without its `版・` style prefix, so renaming the prefix doesn't break it. In
+  an announcement channel the post is also published to following servers.
 - To post a release again, run the `Discord release` workflow from the
   Actions tab with its version.
 - Each dev build (the `Dev Build` workflow) posts a card to the

@@ -29,9 +29,10 @@ permissions:
   contents: read
 
 env:
-  # The announcements channel, and the "Release pings" role each post pings
-  # (empty for no ping).
-  DISCORD_RELEASE_CHANNEL: "1556589777287913492"
+  # The stable-builds channel (found by name in the server), and the
+  # "Release pings" role each post pings (empty for no ping).
+  DISCORD_GUILD: "1556588123561922560"
+  DISCORD_RELEASE_CHANNEL: "stable-builds"
   DISCORD_RELEASE_ROLE: "1556589754022236220"
 
 jobs:
