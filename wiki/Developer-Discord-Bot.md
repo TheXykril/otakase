@@ -53,10 +53,13 @@ server and stays connected to Discord.
 - **Stale posts:** a support post quiet for a week gets a nudge to its poster;
   with no reply three days later it is closed. Solved posts are skipped.
 - **/watchparty:** makes a voice channel for the party and a server event in
-  it with the show's AniList banner, starting in the given minutes. Options
+  it with the show's AniList banner, starting in the given minutes. While
+  typing the anime, AniList's matching titles (with format and year) are
+  suggested so the host picks the exact show; typed text that isn't picked
+  uses AniList's best match. Options
   set a member limit and who can talk and screen share: everyone talks and
   only the host shares (default), everyone talks and shares, or only the host
-  does both. Party channels go in a **WatchParty** category, made with the
+  does both. Party channels go in a **WatchParty** category, made at the top with the
   first party and deleted when the last party channel goes. The party's
   channel stays until the start. After that the party ends a minute after
   the last person leaves (the minute lets someone whose connection dropped

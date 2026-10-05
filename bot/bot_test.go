@@ -464,6 +464,38 @@ func TestIsPartyCategory(t *testing.T) {
 	}
 }
 
+func TestCategoriesFirst(t *testing.T) {
+	cat := discordgo.ChannelTypeGuildCategory
+	o := categoriesFirst([]*discordgo.Channel{
+		{ID: "b", Type: cat, Position: 2}, {ID: "v", Type: discordgo.ChannelTypeGuildVoice}, {ID: "a", Type: cat, Position: 0},
+	}, "new")
+	var got []string
+	for n, c := range o {
+		if c.Position != n {
+			t.Errorf("%s at %d", c.ID, c.Position)
+		}
+		got = append(got, c.ID)
+	}
+	if strings.Join(got, ",") != "new,a,b" {
+		t.Errorf("order %v", got)
+	}
+}
+
+func TestTitleLabel(t *testing.T) {
+	m := titleMatch{ID: 1, Format: "TV_SHORT", SeasonYear: 2024}
+	m.Title.English, m.Title.Romaji = "Frieren", "Sousou no Frieren"
+	if got := titleLabel(m); got != "Frieren (Sousou no Frieren) · TV SHORT, 2024" {
+		t.Errorf("%q", got)
+	}
+	m.Title.English, m.Title.Romaji = "", strings.Repeat("a", 200)
+	if got := titleLabel(m); len([]rune(got)) > 100 {
+		t.Errorf("too long: %d", len([]rune(got)))
+	}
+	if !pickedShowRe.MatchString("anilist:154587") || pickedShowRe.MatchString("frieren") {
+		t.Error("picked value")
+	}
+}
+
 func snowflakeAt(t time.Time) string {
 	return strconv.FormatInt((t.UnixMilli()-1420070400000)<<22, 10)
 }
