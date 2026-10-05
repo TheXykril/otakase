@@ -32,6 +32,10 @@ type room struct {
 	Owner   string    `json:"owner"`
 	Created time.Time `json:"created"`
 	Used    bool      `json:"used"`
+	// Watch party rooms: the event they belong to, and kept until then
+	// even when empty.
+	Event     string    `json:"event,omitempty"`
+	KeepUntil time.Time `json:"keep_until,omitempty"`
 }
 
 // dataDir is OTAKASE_DATA_DIR, else /data (the Home Assistant add-on's

@@ -85,7 +85,7 @@ func imageDataURI(url string) string {
 
 func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 	d := i.ApplicationCommandData()
-	title, minutes, channel := "", int64(15), b.cfg.LoungeChannel
+	title, minutes, channel := "", int64(15), ""
 	for _, o := range d.Options {
 		switch o.Name {
 		case "anime":
@@ -95,10 +95,6 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 		case "voice":
 			channel = o.ChannelValue(nil).ID
 		}
-	}
-	if channel == "" {
-		b.respond(i, true, errorEmbed("Pick a voice channel for the watch party."))
-		return
 	}
 	host := i.Member.User
 	if ev := b.hostedParty(host.ID); ev != nil {
@@ -113,6 +109,15 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 		start := time.Now().Add(time.Duration(minutes) * time.Minute)
 		if minutes < 1 {
 			start = time.Now().Add(time.Minute) // events must start in the future
+		}
+		var made string
+		if channel == "" {
+			c, err := b.createRoom(i.Member, clip("🎬 "+show.Title, 90), false, 0)
+			if err != nil {
+				log.Printf("watchparty channel: %v", err)
+				return errorEmbed("Couldn't make a voice channel. The bot needs **Manage Channels**."), nil
+			}
+			channel, made = c.ID, c.ID
 		}
 		desc := fmt.Sprintf("Watch party hosted by <@%s>. Join the voice channel and watch along with otakase.", host.ID)
 		if show.URL != "" {
@@ -129,7 +134,18 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 		})
 		if err != nil {
 			log.Printf("watchparty: %v", err)
+			if made != "" {
+				b.sweepRoom(made, true)
+			}
 			return errorEmbed("Couldn't create the event. The bot needs the **Create Events** permission."), nil
+		}
+		if made != "" {
+			// Kept until half an hour after the start, then removed once empty.
+			b.store.update(func(d *storeData) {
+				r := d.Rooms[made]
+				r.Event, r.KeepUntil = ev.ID, start.Add(30*time.Minute)
+				d.Rooms[made] = r
+			})
 		}
 		link := eventLink(ev)
 		e := &discordgo.MessageEmbed{
@@ -196,6 +212,7 @@ func (b *bot) cancelParty(i *discordgo.InteractionCreate, eventID string) {
 		b.respond(i, true, errorEmbed("Couldn't cancel the event."))
 		return
 	}
+	b.dropPartyRoom(eventID)
 	e := &discordgo.MessageEmbed{Title: "Cancelled: " + strings.TrimPrefix(ev.Name, "Watch party: "), Color: 0x8A8276,
 		Description: fmt.Sprintf("Watch party cancelled by <@%s>.", user)}
 	if err := b.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -203,5 +220,23 @@ func (b *bot) cancelParty(i *discordgo.InteractionCreate, eventID string) {
 		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{e}, Components: []discordgo.MessageComponent{}},
 	}); err != nil {
 		log.Printf("cancel party update: %v", err)
+	}
+}
+
+// dropPartyRoom stops keeping a cancelled party's voice channel, which then
+// goes once nobody is in it.
+func (b *bot) dropPartyRoom(eventID string) {
+	var id string
+	b.store.update(func(d *storeData) {
+		for ch, r := range d.Rooms {
+			if r.Event == eventID {
+				r.KeepUntil, r.Used = time.Time{}, true
+				d.Rooms[ch] = r
+				id = ch
+			}
+		}
+	})
+	if id != "" {
+		b.sweepRoom(id, false)
 	}
 }

@@ -163,6 +163,7 @@ type bot struct {
 	sem       *semantic
 	store     *store
 	raid      raidGuard
+	empty     emptyRooms
 }
 
 func main() {

@@ -52,8 +52,10 @@ server and stays connected to Discord.
   title and question.
 - **Stale posts:** a support post quiet for a week gets a nudge to its poster;
   with no reply three days later it is closed. Solved posts are skipped.
-- **/watchparty:** creates a server event in a voice channel (the lounge by
-  default) with the show's AniList banner, starting in the given minutes.
+- **/watchparty:** makes a voice channel for the party (or uses the one
+  given) and a server event in it with the show's AniList banner, starting in
+  the given minutes. The party's channel stays until half an hour after the
+  start, then goes like any voice room.
   Any member can start one, one at a time; the post's **Cancel** button
   deletes the event and works for the host and for anyone who can manage
   events.
@@ -63,8 +65,8 @@ server and stays connected to Discord.
   or private, a name and a member limit, and changes the room when the member
   already has one. A private room is hidden from everyone but its owner, the
   people they add with `/room-invite`, the staff roles and the bot. The owner
-  can rename it and move people. A room is deleted once nobody is in it (a new
-  room waits two minutes for its owner). `OTAKASE_CREATE_ROOM` sets the
+  can rename it and move people. A room is deleted after it has been empty
+  for a minute (a new room waits two minutes for its owner). `OTAKASE_CREATE_ROOM` sets the
   channel when the name doesn't match.
 - **Report to mods:** right-click a message → **Apps → Report to mods**
   posts it in mod-chat with **Delete message**, **Timeout 1h** and
