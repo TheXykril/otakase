@@ -18,6 +18,7 @@ func (b *bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if b.spam.check(b, m) {
 		return
 	}
+	go b.linkIssues(m)
 	if f, ok := b.auto.match(m.ChannelID, m.Content); ok {
 		_, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 			Embeds:          []*discordgo.MessageEmbed{{Title: f.Question, Description: f.Answer, Color: shu}},

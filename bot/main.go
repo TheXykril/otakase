@@ -18,6 +18,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -36,6 +37,11 @@ type config struct {
 	GitHubClientID  string
 	GitHubToken     string
 	WelcomeDM       bool
+	AiringChannel   string // daily airing post, empty = the "anime" channel
+	LoungeChannel   string // default watch party voice channel
+	DailyAiring     bool
+	AiringHour      int    // UTC hour the airing post goes out
+	OtakaseCLI      string // otakase binary used by /provider-status
 }
 
 // loadEnvFile sets variables from a KEY=value file, keeping any that are
@@ -70,6 +76,8 @@ var haOptions = map[string]string{
 	"github_client_id": "OTAKASE_GITHUB_CLIENT_ID",
 	"github_token":     "GITHUB_TOKEN",
 	"welcome_dm":       "OTAKASE_WELCOME_DM",
+	"daily_airing":     "OTAKASE_DAILY_AIRING",
+	"airing_hour_utc":  "OTAKASE_AIRING_HOUR",
 }
 
 // loadHAOptions sets variables from a Home Assistant add-on options file,
@@ -108,6 +116,17 @@ func loadConfig() config {
 		GitHubClientID:  os.Getenv("OTAKASE_GITHUB_CLIENT_ID"),
 		GitHubToken:     os.Getenv("GITHUB_TOKEN"),
 		WelcomeDM:       os.Getenv("OTAKASE_WELCOME_DM") != "false",
+		AiringChannel:   os.Getenv("OTAKASE_AIRING_CHANNEL"),
+		LoungeChannel:   os.Getenv("OTAKASE_LOUNGE_CHANNEL"),
+		DailyAiring:     os.Getenv("OTAKASE_DAILY_AIRING") != "false",
+		AiringHour:      6,
+		OtakaseCLI:      os.Getenv("OTAKASE_CLI"),
+	}
+	if h, err := strconv.Atoi(os.Getenv("OTAKASE_AIRING_HOUR")); err == nil && h >= 0 && h < 24 {
+		c.AiringHour = h
+	}
+	if c.OtakaseCLI == "" {
+		c.OtakaseCLI = "otakase"
 	}
 	if c.Token == "" || c.GuildID == "" {
 		log.Fatal("DISCORD_BOT_TOKEN and OTAKASE_GUILD_ID must be set")
@@ -121,6 +140,9 @@ type bot struct {
 	auto *autoReplier
 	spam *spamGuard
 	pres *presence
+
+	issues    issueCooldown
+	providers providerCache
 }
 
 func main() {
@@ -150,6 +172,8 @@ func main() {
 		log.Fatalf("registering commands: %v", err)
 	}
 	go b.pres.run(s, b.cfg.GitHubToken)
+	go b.airingLoop()
+	go b.staleLoop()
 	log.Print("running")
 
 	stop := make(chan os.Signal, 1)
@@ -165,7 +189,7 @@ func (b *bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 // resolveIDs fills in channel and role ids left empty in the configuration
 // by finding them by name, so a fresh setup needs only the token and server.
 func (b *bot) resolveIDs() {
-	if b.cfg.SupportForum == "" || b.cfg.ModChannel == "" {
+	if b.cfg.SupportForum == "" || b.cfg.ModChannel == "" || b.cfg.AiringChannel == "" || b.cfg.LoungeChannel == "" {
 		chans, err := b.s.GuildChannels(b.cfg.GuildID)
 		if err != nil {
 			log.Printf("listing channels: %v", err)
@@ -177,6 +201,12 @@ func (b *bot) resolveIDs() {
 			}
 			if b.cfg.ModChannel == "" && name == "mod-chat" {
 				b.cfg.ModChannel = c.ID
+			}
+			if b.cfg.AiringChannel == "" && c.Type == discordgo.ChannelTypeGuildText && name == "anime" {
+				b.cfg.AiringChannel = c.ID
+			}
+			if b.cfg.LoungeChannel == "" && c.Type == discordgo.ChannelTypeGuildVoice && name == "lounge" {
+				b.cfg.LoungeChannel = c.ID
 			}
 		}
 	}
@@ -191,5 +221,6 @@ func (b *bot) resolveIDs() {
 			}
 		}
 	}
-	log.Printf("support forum %q, mod channel %q, contributor role %q", b.cfg.SupportForum, b.cfg.ModChannel, b.cfg.ContributorRole)
+	log.Printf("support forum %q, mod channel %q, contributor role %q, airing channel %q, lounge %q",
+		b.cfg.SupportForum, b.cfg.ModChannel, b.cfg.ContributorRole, b.cfg.AiringChannel, b.cfg.LoungeChannel)
 }

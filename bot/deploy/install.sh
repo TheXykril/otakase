@@ -34,6 +34,12 @@ fi
 
 (cd "$SRC/bot" && GOFLAGS=-trimpath /usr/local/go/bin/go build -o /usr/local/bin/otakase-bot .)
 
+# The latest otakase release, for /provider-status.
+case "$(dpkg --print-architecture)" in arm64) cli=arm64 ;; *) cli=x86_64 ;; esac
+install -d /usr/local/libexec
+curl -fsSL "https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-$cli" -o /usr/local/libexec/otakase
+chmod 755 /usr/local/libexec/otakase
+
 [ -f /etc/otakase-bot.env ] || install -m 600 "$SRC/bot/deploy/otakase-bot.env" /etc/otakase-bot.env
 install -m 644 "$SRC/bot/deploy/otakase-bot.service" /etc/systemd/system/otakase-bot.service
 systemctl daemon-reload
