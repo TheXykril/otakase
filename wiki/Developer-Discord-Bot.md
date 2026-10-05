@@ -34,6 +34,15 @@ server and stays connected to Discord.
   The same check is posted as a reply when someone asks in chat whether
   otakase or a source is down (`downRe` in `providers.go`), at most once per
   channel every ten minutes.
+- **Matching by meaning (optional):** with a local Ollama
+  (`OTAKASE_OLLAMA_URL`; the add-on defaults to the Ollama add-on's address),
+  questions the word patterns miss are compared with example phrasings
+  (`intentExamples` in `semantic.go`) using the small `all-minilm` embedding
+  model, and the closest FAQ answer or the source check is sent when the
+  similarity is at least `OTAKASE_AI_THRESHOLD` (0.6). Only messages that
+  look like questions are checked, and the bot still sends only its own fixed
+  answers. It downloads the model itself on start; without Ollama nothing
+  changes. To catch a new phrasing, add it to `intentExamples`.
 - **Airing today:** each day at `OTAKASE_AIRING_HOUR` (UTC, default 6) the
   anime channel gets the 20 most popular Japanese episodes airing in the next
   24 hours from AniList, never adult titles, with times shown in each
@@ -84,6 +93,15 @@ the add-on in `bot/`).
    the **Info** tab with **Start on boot** on. The **Log** tab shows its output.
 
 Updates show up in Home Assistant when `version` in `bot/config.yaml` goes up.
+
+### Ollama on Home Assistant (optional)
+
+For matching questions by meaning, add the repository
+`https://github.com/SirUli/homeassistant-ollama-addon` in the Add-on Store,
+install **Ollama** and start it. The bot's default `ollama_url`
+(`http://76e18fb5-ollama:11434`) points at it, and the bot pulls
+`all-minilm` (about 45 MB) on its own; the log says "semantic matching on"
+once it is ready.
 
 ### Linux server
 

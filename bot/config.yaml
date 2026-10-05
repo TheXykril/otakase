@@ -18,6 +18,7 @@ options:
   welcome_dm: true
   daily_airing: true
   airing_hour_utc: 6
+  ollama_url: "http://76e18fb5-ollama:11434"
 schema:
   token: password
   guild_id: str
@@ -26,3 +27,4 @@ schema:
   welcome_dm: bool
   daily_airing: bool
   airing_hour_utc: int(0,23)
+  ollama_url: str?

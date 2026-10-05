@@ -159,10 +159,10 @@ var downRe = regexp.MustCompile(`(?i)\b(is|are)\s+(it|otakase|the\s+\w+|any\s+\w
 	`|\banyone else\b.*\b(not working|broken|down|no results|nothing found)\b`)
 
 // downCheck answers a "is it down?" message with the source check, at most
-// once per channel every ten minutes. It reports whether it answered.
-func (b *bot) downCheck(m *discordgo.MessageCreate) bool {
-	if !downRe.MatchString(m.Content) || !b.issues.allowKey(m.ChannelID+"/down") {
-		return false
+// once per channel every ten minutes.
+func (b *bot) downCheck(m *discordgo.MessageCreate) {
+	if !b.issues.allowKey(m.ChannelID + "/down") {
+		return
 	}
 	go func() {
 		_ = b.s.ChannelTyping(m.ChannelID)
@@ -177,5 +177,4 @@ func (b *bot) downCheck(m *discordgo.MessageCreate) bool {
 			log.Printf("down check: %v", err)
 		}
 	}()
-	return true
 }

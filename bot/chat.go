@@ -19,18 +19,38 @@ func (b *bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 	go b.linkIssues(m)
-	if b.downCheck(m) {
+	if downRe.MatchString(m.Content) {
+		b.downCheck(m)
 		return
 	}
 	if f, ok := b.auto.match(m.ChannelID, m.Content); ok {
-		_, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-			Embeds:          []*discordgo.MessageEmbed{{Title: f.Question, Description: f.Answer, Color: shu}},
-			Reference:       m.Reference(),
-			AllowedMentions: &discordgo.MessageAllowedMentions{},
-		})
-		if err != nil {
-			log.Printf("auto reply: %v", err)
+		b.sendFAQ(m, f)
+		return
+	}
+	// Questions the patterns miss are matched by meaning, when Ollama is set up.
+	go func() {
+		intent, ok := b.sem.match(m.Content)
+		if !ok {
+			return
 		}
+		if intent == "down" {
+			b.downCheck(m)
+			return
+		}
+		if f, found := faqByKey(intent); found && b.auto.allow(m.ChannelID, intent) {
+			b.sendFAQ(m, f)
+		}
+	}()
+}
+
+func (b *bot) sendFAQ(m *discordgo.MessageCreate, f faqEntry) {
+	_, err := b.s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+		Embeds:          []*discordgo.MessageEmbed{{Title: f.Question, Description: f.Answer, Color: shu}},
+		Reference:       m.Reference(),
+		AllowedMentions: &discordgo.MessageAllowedMentions{},
+	})
+	if err != nil {
+		log.Printf("auto reply: %v", err)
 	}
 }
 
@@ -70,6 +90,19 @@ var autoRules = []autoRule{
 	{regexp.MustCompile(`(?i)\bhow (do i|to|can i)\b.*\b(install|update|upgrade)\b`), "install"},
 }
 
+// allow reports whether the topic wasn't answered in the channel lately,
+// and marks it answered.
+func (a *autoReplier) allow(channel, faq string) bool {
+	key := channel + "/" + faq
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if time.Since(a.last[key]) < 30*time.Minute {
+		return false
+	}
+	a.last[key] = time.Now()
+	return true
+}
+
 func newAutoReplier() *autoReplier { return &autoReplier{last: map[string]time.Time{}} }
 
 func (a *autoReplier) match(channel, text string) (faqEntry, bool) {
@@ -80,14 +113,7 @@ func (a *autoReplier) match(channel, text string) (faqEntry, bool) {
 		if !r.re.MatchString(text) {
 			continue
 		}
-		key := channel + "/" + r.faq
-		a.mu.Lock()
-		recent := time.Since(a.last[key]) < 30*time.Minute
-		if !recent {
-			a.last[key] = time.Now()
-		}
-		a.mu.Unlock()
-		if recent {
+		if !a.allow(channel, r.faq) {
 			return faqEntry{}, false
 		}
 		return faqByKey(r.faq)
