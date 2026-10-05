@@ -26,13 +26,25 @@ type Entry struct {
 	Server string `json:"server,omitempty"`
 	// SubtitleLanguage is the subtitle language picked for this movie,
 	// empty to follow SubsLanguage.
-	SubtitleLanguage string    `json:"subtitleLanguage,omitempty"`
-	Updated          time.Time `json:"updated"`
+	SubtitleLanguage string `json:"subtitleLanguage,omitempty"`
+	// Season and Episode are a series' episode last played; Position and
+	// Duration are that episode's. EpisodeDone is it played to the end, so
+	// the next one is up. Watched, for a series, is its last episode done.
+	Season      int       `json:"season,omitempty"`
+	Episode     int       `json:"episode,omitempty"`
+	EpisodeDone bool      `json:"episodeDone,omitempty"`
+	Updated     time.Time `json:"updated"`
 }
 
-// Started reports whether the movie was stopped part way through.
+// Started reports whether the movie was stopped part way through, or a
+// series has episodes played and more to go.
 func (e Entry) Started() bool {
-	return !e.Watched && e.Position > 0
+	return !e.Watched && (e.Position > 0 || (e.Series && e.Episode > 0))
+}
+
+// At is the episode a series was left at.
+func (e Entry) At() Episode {
+	return Episode{Season: e.Season, Number: e.Episode}
 }
 
 // Store is movies.json: the movie watch history, kept locally only. It lives
@@ -154,6 +166,7 @@ func (s *Store) change(movie Movie, change func(*Entry)) (Entry, Entry, error) {
 	merged := entry.Movie
 	merged.Provider = movie.Provider
 	merged.Path = movie.Path
+	merged.Series = merged.Series || movie.Series
 	for _, field := range []struct {
 		dst *string
 		src string
@@ -190,6 +203,9 @@ func (s *Store) clearCopies(watched Entry) {
 // SameMovie reports whether two providers' movies are the same film: the same
 // IMDb id when both know it, otherwise a title in common and the same year.
 func SameMovie(a, b Movie) bool {
+	if a.Series != b.Series {
+		return false
+	}
 	if a.IMDb != "" && b.IMDb != "" {
 		return a.IMDb == b.IMDb
 	}
@@ -227,6 +243,33 @@ func (s *Store) SetProgress(movie Movie, position, duration int, watched bool) e
 	})
 }
 
+// SetEpisodeProgress records where a series' episode stopped. An episode
+// watched to the end leaves the next one up, and the last one the series
+// watched.
+func (s *Store) SetEpisodeProgress(show Movie, episode Episode, position, duration int, watched, last bool) error {
+	show.Series = true
+	return s.update(show, func(entry *Entry) {
+		entry.Season, entry.Episode = episode.Season, episode.Number
+		if duration > 0 {
+			entry.Duration = duration
+		}
+		if watched {
+			entry.EpisodeDone = true
+			entry.Position = 0
+			if last {
+				entry.Watched = true
+				entry.Watchlist = false
+			}
+			return
+		}
+		entry.EpisodeDone = false
+		entry.Position = position
+		if position > 0 {
+			entry.Watched = false
+		}
+	})
+}
+
 // SetWatched marks a movie watched, or not watched and to be started over.
 func (s *Store) SetWatched(movie Movie, watched bool) error {
 	return s.update(movie, func(entry *Entry) {
@@ -234,6 +277,9 @@ func (s *Store) SetWatched(movie Movie, watched bool) error {
 		entry.Position = 0
 		if watched {
 			entry.Watchlist = false
+		} else if entry.Series {
+			// Not watched is started over, from the first episode.
+			entry.Season, entry.Episode, entry.EpisodeDone = 0, 0, false
 		}
 	})
 }
@@ -313,5 +359,5 @@ func (s *Store) Watchlist() []Entry {
 
 // History is every movie played, finished or not.
 func (s *Store) History() []Entry {
-	return s.List(func(e Entry) bool { return e.Watched || e.Position > 0 })
+	return s.List(func(e Entry) bool { return e.Watched || e.Started() })
 }

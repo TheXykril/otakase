@@ -39,8 +39,12 @@ func syncMovieToTrakt(lib *movieLibrary, store *movies.Store, before, after movi
 	if trakt == nil || !trakt.SignedIn() {
 		return
 	}
-	changed := before.Watched != after.Watched || before.Watchlist != after.Watchlist || before.Rating != after.Rating
-	if !changed {
+	// An episode of a series is in Trakt's history once it is played to
+	// the end; a series as a whole never is, or every episode would be.
+	episodeDone := after.Series && after.EpisodeDone && after.Episode > 0 &&
+		(!before.EpisodeDone || before.At() != after.At())
+	filmWatched := !after.Series && before.Watched != after.Watched
+	if !episodeDone && !filmWatched && before.Watchlist == after.Watchlist && before.Rating == after.Rating {
 		return
 	}
 	movie := identifyMovie(lib, store, after.Movie)
@@ -49,14 +53,16 @@ func syncMovieToTrakt(lib *movieLibrary, store *movies.Store, before, after movi
 			Log(fmt.Sprintf("movies: trakt: %s %s: %v", what, after.Key(), err))
 		}
 	}
+	playing := lib.isPlaying(after.Key())
 	switch {
-	case before.Watched == after.Watched:
-	case after.Watched && lib.isPlaying(after.Key()):
+	case (episodeDone || (filmWatched && after.Watched)) && playing:
 		// Ending the play Trakt shows as watching now adds it to the
 		// history too.
 		lib.setPlaying(after.Key(), false)
-		report("history", trakt.Finished(movie))
-	default:
+		report("history", trakt.Finished(movie, playingEpisode(after)))
+	case episodeDone:
+		report("history", trakt.EpisodeWatched(movie, after.At(), time.Now()))
+	case filmWatched:
 		report("history", trakt.Watched(movie, after.Watched, time.Now()))
 	}
 	if before.Watchlist != after.Watchlist {
@@ -65,6 +71,14 @@ func syncMovieToTrakt(lib *movieLibrary, store *movies.Store, before, after movi
 	if before.Rating != after.Rating {
 		report("rating", trakt.Rate(movie, after.Rating))
 	}
+}
+
+// playingEpisode is the episode an entry is at, zero for a film.
+func playingEpisode(entry movies.Entry) movies.Episode {
+	if !entry.Series {
+		return movies.Episode{}
+	}
+	return entry.At()
 }
 
 // identifyMovie finds the IMDb id Trakt matches movies by, for a movie that
@@ -84,7 +98,7 @@ func identifyMovie(lib *movieLibrary, store *movies.Store, movie movies.Movie) m
 		}
 	}
 	if !strings.HasPrefix(movie.IMDb, "tt") {
-		movie.IMDb = lib.trakt.FindIMDb([]string{movie.Original, movie.Title}, movie.Year)
+		movie.IMDb = lib.trakt.FindIMDb([]string{movie.Original, movie.Title}, movie.Year, movie.Series)
 	}
 	if movie.IMDb == "" {
 		Log(fmt.Sprintf("movies: trakt: could not find %s on Trakt", movie.Label()))
@@ -96,35 +110,40 @@ func identifyMovie(lib *movieLibrary, store *movies.Store, movie movies.Movie) m
 	return movie
 }
 
-// traktPaused tells Trakt where a movie was stopped, when it was stopped
-// part way.
+// traktPaused tells Trakt where a film or an episode was stopped, when it
+// was stopped part way.
 func traktPaused(lib *movieLibrary, store *movies.Store, movie movies.Movie) {
 	if lib.trakt == nil || !lib.trakt.SignedIn() {
 		return
 	}
 	lib.setPlaying(movie.Key(), false)
 	entry, ok := store.Get(movie.Key())
-	if !ok || !entry.Started() {
+	if !ok || !entry.Started() || entry.Position <= 0 {
 		return
 	}
 	identified := identifyMovie(lib, store, entry.Movie)
-	if err := lib.trakt.Paused(identified, entry.Position, entry.Duration); err != nil {
+	if err := lib.trakt.Paused(identified, playingEpisode(entry), entry.Position, entry.Duration); err != nil {
 		Log(fmt.Sprintf("movies: trakt: progress %s: %v", movie.Key(), err))
 	}
 }
 
-// traktStarted tells Trakt a movie is playing now, in the background so the
-// player is not kept waiting on it.
-func traktStarted(lib *movieLibrary, store *movies.Store, movie movies.Movie, start int) {
+// traktStarted tells Trakt a film or an episode is playing now, in the
+// background so the player is not kept waiting on it.
+func traktStarted(lib *movieLibrary, store *movies.Store, play moviePlay) {
 	if lib.trakt == nil || !lib.trakt.SignedIn() {
 		return
 	}
-	entry, _ := store.Get(movie.Key())
-	lib.setPlaying(movie.Key(), true)
+	entry, _ := store.Get(play.movie.Key())
+	duration := entry.Duration
+	if play.episode.Number > 0 && entry.At() != (movies.Episode{Season: play.episode.Season, Number: play.episode.Number}) {
+		// The duration kept is another episode's.
+		duration = 0
+	}
+	lib.setPlaying(play.movie.Key(), true)
 	go func() {
-		identified := identifyMovie(lib, store, movie)
-		if err := lib.trakt.Started(identified, start, entry.Duration); err != nil {
-			Log(fmt.Sprintf("movies: trakt: watching %s: %v", movie.Key(), err))
+		identified := identifyMovie(lib, store, play.movie)
+		if err := lib.trakt.Started(identified, play.episode, play.start, duration); err != nil {
+			Log(fmt.Sprintf("movies: trakt: watching %s: %v", play.movie.Key(), err))
 		}
 	}()
 }

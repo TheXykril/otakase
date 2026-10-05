@@ -3,7 +3,8 @@
 Movies are an experimental feature, off unless `ExperimentalMovies=true`. They
 live apart from the anime code on purpose: AniList and MyAnimeList do not list
 non-anime movies, so nothing in the anime search, provider stack or tracking
-knows about them.
+knows about them. Series are handled here too: a `movies.Movie` with `Series`
+set, played an episode at a time.
 
 | Piece | Where |
 |---|---|
@@ -13,7 +14,8 @@ knows about them.
 | 8Filmai site client, search, movie pages | `internal/movies/site.go` |
 | Video hosts (Streamtape, Doodstream, imgsto.re) | `internal/movies/hosts.go` |
 | History file (`movies.json`) | `internal/movies/store.go` |
-| Menus, mpv loop, cast and download | `internal/movies_menu.go` |
+| Menus | `internal/movies_menu.go`, series in `internal/movies_series.go` |
+| Playing (mpv, cast), next episode, download | `internal/movies_play.go` |
 | Provider choice (`MovieProvider`) | `internal/movies_providers.go` |
 | Trakt client (device sign-in, sync) | `internal/movies/trakt.go` |
 | Trakt menu and sync hooks | `internal/movies_trakt.go` |
@@ -24,17 +26,27 @@ knows about them.
 `MovieProvider` picks where searches go; `^o` in the Movies menu changes it
 and saves it. The default, `all`, asks every provider at once
 (`movieLibrary.search`) and lists the results grouped by provider, each row
-tagged with it; a provider that fails is logged and left out. A movie in the history is always opened on the provider it came
-from. A provider implements `movies.Provider`: `Search` returns movies, and
-`Open` fills in details and lists `Source`s, each resolved only when tried.
+tagged with it; a provider that fails is logged and left out. A movie in the
+history is always opened on the provider it came from. A provider implements
+`movies.Provider`: `Search` returns films and series, and `Open` fills in a
+film's details and lists `Source`s, each resolved only when tried. A provider
+with series also implements `movies.SeriesProvider`: `Episodes` lists them
+and `OpenEpisode` lists one episode's sources. vidsrc and 8Filmai have
+series; Filmukas lists each episode as a page of its own with no way to group
+them, so its series are left out.
 
 ### vidsrc (English)
 
 - Search: IMDb's keyless suggestion list,
-  `https://v3.sg.media-imdb.com/suggestion/x/<query>.json`; only `movie` and
-  `tvMovie` items are kept. The IMDb id is the movie's path.
+  `https://v3.sg.media-imdb.com/suggestion/x/<query>.json`; `movie` and
+  `tvMovie` items are films, `tvSeries` and `tvMiniSeries` series. The IMDb id
+  is the path.
+- Episodes: vidsrc has no list, so Trakt's is used
+  (`/shows/<imdb>/seasons?extended=full,episodes`, no sign-in), aired ones
+  only, specials left out.
 - Streams: `https://data.vidsrc.sh/api.php?type=movie&imdb=<tt…>&stream_urls`
-  (the API behind vidsrc.to's player). `data.stream_urls` is base64 of
+  (the API behind vidsrc.to's player); an episode is
+  `type=tv&imdb=<show>&season=<n>&episode=<n>`. `data.stream_urls` is base64 of
   nonce + ciphertext; `vs.wasm_url` is a WebAssembly module with the key, which
   changes every five minutes. The module imports nothing and is run with
   wazero: `alloc(len)`, write the bytes, `decrypt(ptr, len)` returns the plain
@@ -42,10 +54,15 @@ from. A provider implements `movies.Provider`: `Search` returns movies, and
 - Each link needs `?token=` from `<link origin>/generate.php`, a JWT tied to
   the caller's IP, so resolve on the machine that plays.
 - Subtitles: OpenSubtitles' keyless REST search
-  (`rest.opensubtitles.org/search/imdbid-<7 digits>/sublanguageid-eng`, header
+  (`rest.opensubtitles.org/search/imdbid-<7 digits>/sublanguageid-<code>`, an
+  episode `episode-<n>/imdbid-<show>/season-<n>/…`, header
   `X-User-Agent: trailers.to-UA`), preferring the file named like the API's
-  `file_name`. It comes gzipped; it is unpacked to the temp folder with the
-  site's advert cues taken out.
+  `file_name`. The language is the one picked in the movie's menu
+  (`Entry.SubtitleLanguage`), else `SubsLanguage`, as its ISO 639-2 code
+  (`providers.ThreeLetterCode`); up to three in it, then two English ones when
+  it is another language. Files come gzipped; they are unpacked to the temp
+  folder with advert cues (OpenSubtitles' own, and cues that are only a web
+  address) taken out.
 
 ### Filmukas (Lithuanian, family films)
 
@@ -67,13 +84,16 @@ keeping the path. The client asks it once, stores the address it was sent to
 in `movies.json`, and goes there directly until a request fails; then it asks
 `MovieSite` again and retries once.
 
-- Search: `/?s=<query>`. Results are `<article>` blocks; only links under
-  `/filmas/` are kept, so series (`/serialai/`) are left out.
+- Search: `/?s=<query>`. Results are `<article>` blocks linking under
+  `/filmas/` (films) or `/serialai/` (series). A series has a page per season,
+  `/serialai/<name>-<n>-sezonas-online/`, so each season is found and kept
+  as its own entry.
 - Movie page: `h1.h1e` is the title, the line under it the original title,
   `span.date` the year, and `var imid='tt…'` the IMDb id.
 - Streams: a plain `var data='s0|s1|s2|s3|subs'` line sits in front of the
-  page's obfuscated player script. Series pages use `1=…;2=…;` instead and are
-  rejected as not a movie.
+  page's obfuscated player script. A season page has
+  `var data='1=s0|s1|s2|s3|lang;2=…;'` instead: each episode's ids, read by
+  `parseSeriesData`.
 
 ## Servers
 
@@ -112,9 +132,20 @@ from before providers existed are 8Filmai's and are rekeyed when read). It
 keeps the position, duration, watched and watchlist flags, a rating out
 of 10, and the server it last played from, which is tried first next time
 (`movies.PreferServer`). List rows show the provider and server.
-After a play, `afterMoviePlay` puts a movie stopped part way on the
+A series' entry also keeps the episode last played (`Season`, `Episode`) and
+whether it was finished (`EpisodeDone`); the position is that episode's. It
+stays in Continue until its last episode is finished. Playing a series goes
+on to the next episode when one finishes, after asking when
+`NextEpisodePrompt` is on.
+After a play, `afterMoviePlay` puts a film or series stopped part way on the
 watchlist, and asks for a rating when one was just finished and
-`ScoreOnCompletion` is on.
+`ScoreOnCompletion` is on. Finishing a film from one provider takes the same
+film from the others off Continue and the watchlist (`movies.SameMovie`: the
+same IMDb id, else a shared title and year).
+
+The movie menu shows Trakt's details (`/movies/<imdb>?extended=full` or
+`/shows/…`, no sign-in): runtime, genres, age rating, Trakt rating and the
+plot, in rofi's message bar or above the terminal menu.
 
 ### Trakt
 
@@ -125,8 +156,11 @@ sign-in from the Movies menu (`^t`, Trakt's device flow: a code entered at
 trakt.tv/activate, with the Client ID alone), the
 store's `OnChange` hook sends Trakt each change to watched, watchlist and
 rating (`/sync/history`, `/sync/watchlist`, `/sync/ratings` and their
-`/remove`). When playback stops part way the position goes to
-`/scrobble/pause` as a percentage. Movies are matched by IMDb id. One without an id is identified first and the
+`/remove`); a series goes under `shows`, and its history is sent an episode
+at a time, never the whole series. When playback starts, `/scrobble/start`
+shows it as watching now; stopping part way sends the position to
+`/scrobble/pause`, and finishing sends `/scrobble/stop` at 100%, which adds the
+play to the history (so `/sync/history` is not sent for it as well). Movies are matched by IMDb id. One without an id is identified first and the
 id kept: an 8Filmai page has it (`var imid`); otherwise (Filmukas, which
 gives the English title and year in its description and JSON-LD) Trakt's
 `/search/movie` is asked with `fields=title,translations,aliases`, so a
@@ -153,4 +187,5 @@ one-episode show; `Anime.Movie` carries the start position and a callback that
 saves progress to `movies.json`. Under rofi it casts in-process rather than
 handing off to a terminal, which would lose that callback. Downloads use the
 anime download's ffmpeg job with `File` set for hosts whose links have no
-extension, and are named `Title (Year).mkv` in `DownloadDir`.
+extension, and are named `Title (Year).mkv`, or `Title - S01E03.mkv` for an
+episode, in `DownloadDir`.

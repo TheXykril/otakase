@@ -25,8 +25,11 @@ const pageHTML = `<link rel="canonical" href="https://176.97.124.32/filmas/alkis
 
 func TestParseListingKeepsMoviesOnce(t *testing.T) {
 	got := parseListing(listingHTML)
-	if len(got) != 2 {
-		t.Fatalf("want 2 movies (series and the repeat left out), got %d: %+v", len(got), got)
+	if len(got) != 3 {
+		t.Fatalf("want 3 (the repeat left out), got %d: %+v", len(got), got)
+	}
+	if !got[1].Series || got[1].Path != "/serialai/kaulai-11-sezonas-online/" || got[0].Series {
+		t.Errorf("series not told apart: %+v", got)
 	}
 	if got[0].Path != "/filmas/karo-masina-online/" || got[0].Title != "Karo Mašina" {
 		t.Errorf("first movie = %+v", got[0])
@@ -34,8 +37,8 @@ func TestParseListingKeepsMoviesOnce(t *testing.T) {
 	if got[0].Poster != "https://image.tmdb.org/t/p/w185/rFhKkXhk7ClU03jQ5rHIApJDwev.jpg" {
 		t.Errorf("poster = %q", got[0].Poster)
 	}
-	if got[1].Title != "Alkis" || got[1].Year != "2026" {
-		t.Errorf("search-result layout read as %+v", got[1])
+	if got[2].Title != "Alkis" || got[2].Year != "2026" {
+		t.Errorf("search-result layout read as %+v", got[2])
 	}
 }
 
@@ -57,11 +60,15 @@ func TestParsePage(t *testing.T) {
 	}
 }
 
-func TestParsePageRejectsSeries(t *testing.T) {
+func TestParsePageTellsSeriesApart(t *testing.T) {
 	series := strings.Replace(pageHTML, "var data='t/01/34494076||qubt61nlwkxx|jvVlA0BJdqczRGx|'",
 		"var data='1=2-a/1/31510819||zlimpqfjjx79|6p0wbRqd1WI93l2|lt;'", 1)
-	if _, err := parsePage(series); err == nil {
-		t.Fatal("a series page was read as a movie")
+	page, err := parsePage(series)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !page.Series || page.HasStreams() || len(page.Episodes) != 1 || page.EpisodeServers[1][2] != "zlimpqfjjx79" {
+		t.Fatalf("series page read as %+v", page)
 	}
 }
 
@@ -131,7 +138,7 @@ func TestSiteFollowsTheEntryRedirect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
+	if len(got) != 3 {
 		t.Fatalf("got %d movies", len(got))
 	}
 	if remembered != origin.URL {
@@ -321,17 +328,34 @@ func TestTraktSync(t *testing.T) {
 	if err := trakt.Rate(Movie{Title: "No id"}, 8); err == nil {
 		t.Error("a movie without an IMDb id was sent")
 	}
-	if err := trakt.Started(movie, 600, 6000); err != nil {
+	if err := trakt.Started(movie, Episode{}, 600, 6000); err != nil {
 		t.Fatal(err)
 	}
 	if last := calls[len(calls)-1]; !strings.HasPrefix(last, "/scrobble/start ") || !strings.Contains(last, `"progress":10`) {
 		t.Errorf("start call = %q", last)
 	}
-	if err := trakt.Finished(movie); err != nil {
+	if err := trakt.Finished(movie, Episode{}); err != nil {
 		t.Fatal(err)
 	}
 	if last := calls[len(calls)-1]; !strings.HasPrefix(last, "/scrobble/stop ") || !strings.Contains(last, `"progress":100`) {
 		t.Errorf("stop call = %q", last)
+	}
+	show := Movie{Title: "Breaking Bad", IMDb: "tt0903747", Series: true}
+	if err := trakt.EpisodeWatched(show, Episode{Season: 2, Number: 3}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if last := calls[len(calls)-1]; !strings.HasPrefix(last, "/sync/history ") || !strings.Contains(last, `"shows":[{"ids":{"imdb":"tt0903747"},"seasons":[{"episodes":[{"number":3`) {
+		t.Errorf("episode history call = %q", last)
+	}
+	if err := trakt.Started(show, Episode{Season: 2, Number: 3}, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if last := calls[len(calls)-1]; !strings.Contains(last, `"episode":{"number":3,"season":2}`) || !strings.Contains(last, `"show":{"ids"`) {
+		t.Errorf("episode start call = %q", last)
+	}
+	before := len(calls)
+	if err := trakt.Watched(show, true, time.Now()); err != nil || len(calls) != before {
+		t.Error("a whole series was sent to the history")
 	}
 }
 
@@ -389,10 +413,10 @@ func TestTraktFindIMDb(t *testing.T) {
 	defer server.Close()
 	trakt := NewTrakt("id", "", t.TempDir())
 	trakt.API = server.URL
-	if got := trakt.FindIMDb([]string{"", "Vonka"}, "2023"); got != "tt6166392" {
+	if got := trakt.FindIMDb([]string{"", "Vonka"}, "2023", false); got != "tt6166392" {
 		t.Errorf("imdb = %q", got)
 	}
-	if got := trakt.FindIMDb([]string{"Vonka"}, "1990"); got != "" {
+	if got := trakt.FindIMDb([]string{"Vonka"}, "1990", false); got != "" {
 		t.Errorf("a film from another year was taken: %q", got)
 	}
 	if !strings.Contains(query, "query=Vonka") || !strings.Contains(query, "aliases") {
@@ -444,5 +468,65 @@ func TestSameMovie(t *testing.T) {
 	}
 	if SameMovie(Movie{IMDb: "tt1", Title: "X", Year: "2000"}, Movie{IMDb: "tt2", Title: "X", Year: "2000"}) {
 		t.Error("different IMDb ids should not match")
+	}
+}
+
+// A season page's data line lists each episode's stream ids.
+func TestParseSeriesPage(t *testing.T) {
+	body := `<link rel="canonical" href="https://176.97.124.32/serialai/kaulai-11-sezonas-online/">
+<h1>Kaulai</h1><script>var imid='tt0460627';var data='1=t/01/a|n1|d1|s1|lt;2=|n2||s2|lt;3=||||;';</script>`
+	page, err := parsePage(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !page.Series || len(page.Episodes) != 2 || page.Episodes[1].Number != 2 {
+		t.Fatalf("episodes = %+v", page.Episodes)
+	}
+	if page.Episodes[0].Season != 11 {
+		t.Errorf("season = %d", page.Episodes[0].Season)
+	}
+	if got := page.EpisodeServers[2]; got[1] != "n2" || got[3] != "s2" || got[0] != "" {
+		t.Errorf("episode 2 servers = %q", got)
+	}
+	if seasonOf("/serialai/x-online/") != 1 {
+		t.Error("a page without a season number is season 1")
+	}
+}
+
+// A series is in Continue from its first episode played until its last is
+// finished, carrying on from the episode after the last finished.
+func TestStoreEpisodeProgress(t *testing.T) {
+	store, _ := OpenStore(t.TempDir())
+	show := Movie{Provider: VidsrcName, Path: "tt0903747", Title: "Breaking Bad", IMDb: "tt0903747", Series: true}
+	if err := store.SetEpisodeProgress(show, Episode{Season: 1, Number: 1}, 300, 3500, false, false); err != nil {
+		t.Fatal(err)
+	}
+	entry, _ := store.Get(show.Key())
+	if !entry.Started() || entry.Position != 300 || entry.At() != (Episode{Season: 1, Number: 1}) || entry.EpisodeDone {
+		t.Fatalf("after part of S1E1: %+v", entry)
+	}
+	_ = store.SetEpisodeProgress(show, Episode{Season: 1, Number: 1}, 0, 3500, true, false)
+	entry, _ = store.Get(show.Key())
+	if !entry.Started() || !entry.EpisodeDone || entry.Position != 0 || entry.Watched {
+		t.Fatalf("after S1E1 finished: %+v", entry)
+	}
+	if len(store.Continue()) != 1 {
+		t.Error("a series with episodes to go should be in Continue")
+	}
+	_ = store.SetEpisodeProgress(show, Episode{Season: 5, Number: 16}, 0, 3500, true, true)
+	entry, _ = store.Get(show.Key())
+	if !entry.Watched || entry.Started() || len(store.Continue()) != 0 || len(store.History()) != 1 {
+		t.Fatalf("after the last episode: %+v", entry)
+	}
+	_ = store.SetWatched(show, false)
+	entry, _ = store.Get(show.Key())
+	if entry.Watched || entry.Started() || entry.Episode != 0 {
+		t.Fatalf("started over: %+v", entry)
+	}
+}
+
+func TestSameMovieTellsSeriesFromFilms(t *testing.T) {
+	if SameMovie(Movie{Title: "Fargo", Year: "1996"}, Movie{Title: "Fargo", Year: "1996", Series: true}) {
+		t.Error("a film and a series of the same name matched")
 	}
 }

@@ -4,11 +4,8 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/movies"
@@ -266,7 +263,7 @@ func pickMovieOptionWithMessage(config *Config, options []SelectionOption, messa
 func searchMovies(config *Config, store *movies.Store, lib *movieLibrary) {
 	for {
 		query, cancelled, err := promptCancelable(config, moviesSection,
-			"Search for a movie", "enter to search · esc to go back")
+			"Search for a movie or series", "enter to search · esc to go back")
 		if err != nil || cancelled {
 			return
 		}
@@ -300,9 +297,22 @@ func searchMovies(config *Config, store *movies.Store, lib *movieLibrary) {
 // movieRow is a movie as a menu row, saying where it was left when it was.
 func movieRow(movie movies.Movie, store *movies.Store) SelectionOption {
 	label := movie.Label()
+	if movie.Series {
+		label += " · series"
+	}
 	icon := icons.TV
 	if entry, ok := store.Get(movie.Key()); ok {
 		switch {
+		case entry.Series && entry.Started():
+			switch {
+			case entry.EpisodeDone:
+				label += " · watched " + entry.At().Label()
+			case entry.Position > 0:
+				label += fmt.Sprintf(" · %s stopped at %s", entry.At().Label(), formatClock(entry.Position))
+			default:
+				label += " · at " + entry.At().Label()
+			}
+			icon = icons.Play
 		case entry.Started():
 			label += " · stopped at " + formatClock(entry.Position)
 			icon = icons.Play
@@ -410,6 +420,10 @@ func pickFromMovieList(config *Config, store *movies.Store, lib *movieLibrary, l
 // openMovie offers what can be done with one movie: play it (or carry on
 // where it stopped), keep it for later, or forget it.
 func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie movies.Movie) {
+	if movie.Series {
+		openSeries(config, store, lib, movie)
+		return
+	}
 	for {
 		entry, known := store.Get(movie.Key())
 		options := []SelectionOption{}
@@ -493,113 +507,6 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 	}
 }
 
-// playMovie plays a movie from start seconds, in mpv or on the cast device
-// when casting is on, trying its servers in turn until one plays, and records
-// where it stopped.
-func playMovie(config *Config, store *movies.Store, lib *movieLibrary, movie movies.Movie, start int) {
-	movie, sources, err := lib.open(config, movie)
-	if err != nil {
-		Out(fmt.Sprintf("Could not open %s: %v", movie.Label(), err))
-		awaitEnterNotice()
-		return
-	}
-	title := movie.Label()
-	Out(fmt.Sprintf("Loading %s…", title))
-	if entry, ok := store.Get(movie.Key()); ok {
-		sources = movies.PreferServer(sources, entry.Server)
-	}
-	before, _ := store.Get(movie.Key())
-	played := func(server string) {
-		if err := store.SetServer(movie, server); err != nil {
-			Log(fmt.Sprintf("movies: could not save the server: %v", err))
-		}
-		traktPaused(lib, store, movie)
-		after, _ := store.Get(movie.Key())
-		askRating, keep := afterMoviePlay(before, after, config.ScoreOnCompletion)
-		if keep {
-			if err := store.SetWatchlist(movie, true); err != nil {
-				Log(fmt.Sprintf("movies: could not save the watchlist: %v", err))
-			}
-		}
-		if askRating {
-			ClearScreen()
-			Out(fmt.Sprintf("You've finished %s! Would you like to rate it?", title))
-			if rating, ok := pickMovieRating(0); ok {
-				if err := store.SetRating(movie, rating); err != nil {
-					Log(fmt.Sprintf("movies: could not save the rating: %v", err))
-				}
-			}
-		}
-	}
-
-	for _, source := range sources {
-		stream, err := source.Resolve()
-		if err != nil {
-			Log(fmt.Sprintf("movies: %s: %s: %v", movie.Key(), source.Server, err))
-			continue
-		}
-		Log(fmt.Sprintf("movies: %s: playing from %s", movie.Key(), stream.Server))
-		anime := movieAnime(config, store, movie, title, stream, start)
-		started := func() { traktStarted(lib, store, movie, start) }
-		if config.CastToDevice {
-			started()
-			if castMovie(config, &anime) {
-				played(source.Server)
-				return
-			}
-			continue
-		}
-		if playMovieInMPV(config, store, movie, title, stream, &anime, start, started) {
-			played(source.Server)
-			return
-		}
-	}
-	Out(fmt.Sprintf("None of the servers for %s could be played. The movie may have been taken down; try again later.", title))
-	awaitEnterNotice()
-}
-
-// afterMoviePlay decides what follows a play: a movie finished just now and
-// not yet rated is offered a rating when ScoreOnCompletion is on, and one
-// started but not finished goes on the watchlist so it is not lost.
-func afterMoviePlay(before, after movies.Entry, scoreOnCompletion bool) (askRating, addToWatchlist bool) {
-	if after.Watched {
-		return scoreOnCompletion && !before.Watched && after.Rating == 0, false
-	}
-	return false, after.Started() && !after.Watchlist
-}
-
-// movieAnime dresses a movie stream as the one-episode, untracked show the
-// player and the cast code know how to play.
-func movieAnime(config *Config, store *movies.Store, movie movies.Movie, title string, stream movies.Stream, start int) Anime {
-	anime := Anime{
-		Title:         AnimeTitle{English: title, Romaji: title},
-		CoverImage:    movie.Poster,
-		TotalEpisodes: 1,
-		Untracked:     true,
-		// Nothing about a movie goes to AniList or MyAnimeList.
-		SkipRemoteSync: true,
-	}
-	anime.Ep.Number = 1
-	anime.Ep.Links = []string{stream.URL}
-	anime.Ep.StreamReferrer = stream.Referrer
-	for _, subtitle := range stream.Subtitles {
-		anime.Ep.SubtitleTracks = append(anime.Ep.SubtitleTracks, SubtitleTrack{URL: subtitle.URL, Language: subtitle.Language, Label: cmp.Or(subtitle.Label, subtitle.Language)})
-	}
-	if len(anime.Ep.SubtitleTracks) > 0 {
-		// The provider lists the best match first.
-		anime.Ep.SubtitleURL = providers.PickSubtitle(anime.Ep.SubtitleTracks, movieSubtitleLanguage(config, store, movie), anime.Ep.SubtitleTracks[0].URL)
-	}
-	anime.Movie = &MoviePlayback{
-		Start: float64(start),
-		Progress: func(position float64, duration int, watched bool) {
-			if err := store.SetProgress(movie, int(position), duration, watched); err != nil {
-				Log(fmt.Sprintf("movies: could not save progress: %v", err))
-			}
-		},
-	}
-	return anime
-}
-
 // castMovie casts a movie, reporting whether the server it came from is done
 // with: it played, or the viewer stopped it. A stream the device or ffmpeg
 // could not play leaves the next server to try.
@@ -616,39 +523,6 @@ func castMovie(config *Config, anime *Anime) bool {
 	Log(fmt.Sprintf("movies: cast: %v", err))
 	Out("Casting failed: " + err.Error())
 	return false
-}
-
-// playMovieInMPV plays one server's stream in mpv, reporting whether it
-// played. started is called once the player is up.
-func playMovieInMPV(config *Config, store *movies.Store, movie movies.Movie, title string, stream movies.Stream, anime *Anime, start int, started func()) bool {
-	args := movieMPVArgs(stream)
-	if start > 0 {
-		// A few seconds back, so the line it stopped on is heard again.
-		args = append(args, fmt.Sprintf("--start=%d", max(start-5, 0)))
-	}
-	Log(fmt.Sprintf("movies: %s: mpv %v %s (referrer %q)", stream.Server, args, stream.URL, stream.Referrer))
-	socket, err := StartVideo(stream.URL, args, title, anime)
-	if err != nil {
-		Log(fmt.Sprintf("movies: %s: could not start the player: %v", stream.Server, err))
-		return false
-	}
-	anime.Ep.Player.SocketPath = socket
-	if socket == "android-intent" {
-		Out("Opened the movie in mpv. Press Enter when you have finished watching...")
-		AwaitEnter()
-		return true
-	}
-	if !WaitForMPVPlaybackStart(socket, MpvPlaybackStartTimeoutDuration(config)) {
-		Log(fmt.Sprintf("movies: %s did not start playing", stream.Server))
-		if IsMPVRunning(socket) {
-			ExitMPV(socket)
-		}
-		anime.Ep.Player.SocketPath = ""
-		return false
-	}
-	addAlternateSubtitles(MPVSendCommand, socket, anime.Ep.SubtitleURL, anime.Ep.SubtitleTracks)
-	watchMoviePlayback(config, store, movie, socket)
-	return true
 }
 
 // movieMPVArgs are the player options a movie stream needs.
@@ -674,134 +548,6 @@ func movieMPVArgs(stream movies.Stream) []string {
 		args = append(args, "--referrer=")
 	}
 	return args
-}
-
-// downloadMovie saves a movie to the download folder from the first server
-// that hands over a file.
-func downloadMovie(config *Config, lib *movieLibrary, movie movies.Movie) {
-	binary, err := ffmpegPath()
-	if err != nil {
-		Out("Downloading needs ffmpeg, which was not found.")
-		awaitEnterNotice()
-		return
-	}
-	movie, sources, err := lib.open(config, movie)
-	if err != nil {
-		Out(fmt.Sprintf("Could not open %s: %v", movie.Label(), err))
-		awaitEnterNotice()
-		return
-	}
-	dir := ResolveDownloadDir(config)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		Out(fmt.Sprintf("Could not create %s: %v", dir, err))
-		awaitEnterNotice()
-		return
-	}
-	output := movieDownloadPath(dir, movie, DownloadFormat(config))
-	if info, err := os.Stat(output); err == nil && info.Size() > 0 {
-		Out("Already downloaded: " + output)
-		awaitEnterNotice()
-		return
-	}
-
-	for _, source := range sources {
-		stream, err := source.Resolve()
-		if err != nil {
-			Log(fmt.Sprintf("movies: %s: %s: %v", movie.Key(), source.Server, err))
-			continue
-		}
-		anime := movieAnime(config, lib.store, movie, movie.Label(), stream, 0)
-		job := ffmpegJob{
-			Stream:   stream.URL,
-			Referrer: stream.Referrer,
-			Subtitle: anime.Ep.SubtitleURL,
-			Output:   output,
-			File:     !stream.HLS,
-		}
-		Out(fmt.Sprintf("Downloading %s from %s…", movie.Label(), stream.Server))
-		lastReport := time.Now()
-		onProgress := func(elapsed time.Duration) {
-			if time.Since(lastReport) < 5*time.Second {
-				return
-			}
-			lastReport = time.Now()
-			Out(fmt.Sprintf("  %s downloaded", elapsed.Round(time.Second)))
-		}
-		err = runFFmpeg(binary, job.args(), onProgress)
-		if err != nil && job.Subtitle != "" {
-			Log(fmt.Sprintf("movies: download with subtitles failed (%v); retrying without them", err))
-			job.Subtitle = ""
-			err = runFFmpeg(binary, job.args(), onProgress)
-		}
-		if err != nil {
-			os.Remove(output)
-			Log(fmt.Sprintf("movies: %s: download from %s failed: %v", movie.Key(), stream.Server, err))
-			continue
-		}
-		Out("Saved " + output)
-		awaitEnterNotice()
-		return
-	}
-	Out(fmt.Sprintf("None of the servers for %s could be downloaded.", movie.Label()))
-	awaitEnterNotice()
-}
-
-// movieDownloadPath names a downloaded movie "Title (Year).mkv".
-func movieDownloadPath(dir string, movie movies.Movie, format string) string {
-	name := movie.Title
-	if movie.Year != "" {
-		name += " (" + movie.Year + ")"
-	}
-	if format != DownloadFormatMP4 {
-		format = DownloadFormatMKV
-	}
-	return filepath.Join(dir, SanitizeFilename(name)+"."+format)
-}
-
-// watchMoviePlayback follows playback until the player closes or the movie
-// ends, saving the position as it goes so a crash loses little.
-func watchMoviePlayback(config *Config, store *movies.Store, movie movies.Movie, socket string) {
-	position, duration := 0, 0
-	lastSaved := time.Now()
-	save := func() {
-		watched := PercentageWatched(position, duration) >= float64(config.PercentageToMarkComplete)
-		if err := store.SetProgress(movie, position, duration, watched); err != nil {
-			Log(fmt.Sprintf("movies: could not save progress: %v", err))
-		}
-	}
-	for {
-		value, err := MPVSendCommand(socket, []interface{}{"get_property", "time-pos"})
-		if err != nil {
-			if isMPVConnectionGoneError(err) {
-				save()
-				return
-			}
-		} else if seconds, ok := value.(float64); ok {
-			position = int(seconds + 0.5)
-		}
-		if duration == 0 {
-			if value, err := MPVSendCommand(socket, []interface{}{"get_property", "duration"}); err == nil {
-				if seconds, ok := value.(float64); ok {
-					duration = int(seconds + 0.5)
-				}
-			}
-		}
-		// The player stays open at the end (--idle), so the end is it going
-		// idle rather than it closing. Stopping without closing it idles it
-		// too, so how far it got still decides whether it was watched.
-		if idle, err := MPVSendCommand(socket, []interface{}{"get_property", "idle-active"}); err == nil {
-			if done, ok := idle.(bool); ok && done {
-				save()
-				ExitMPV(socket)
-				return
-			}
-		}
-		if time.Since(lastSaved) > 15*time.Second && position > 0 {
-			save()
-			lastSaved = time.Now()
-		}
-		time.Sleep(time.Second)
-	}
 }
 
 // awaitEnterNotice leaves a message on screen until the viewer has read it.

@@ -18,6 +18,16 @@ type Provider interface {
 	Open(movie Movie) (Movie, []Source, error)
 }
 
+// SeriesProvider is a provider with series as well as films. A series is a
+// Movie with Series set; it is played an episode at a time.
+type SeriesProvider interface {
+	Provider
+	// Episodes lists a series' episodes in order, aired ones only.
+	Episodes(show Movie) ([]Episode, error)
+	// OpenEpisode lists one episode's servers, in the order to try them.
+	OpenEpisode(show Movie, episode Episode) ([]Source, error)
+}
+
 // Provider names.
 const (
 	// FilmaiName is 8Filmai, in Lithuanian. History written before there
@@ -69,4 +79,27 @@ func (f filmai) Open(movie Movie) (Movie, []Source, error) {
 	}
 	page.Provider = FilmaiName
 	return page.Movie, f.site.Sources(page), nil
+}
+
+// Episodes lists the episodes of the season the page is for: 8Filmai has a
+// page per season.
+func (f filmai) Episodes(show Movie) ([]Episode, error) {
+	page, err := f.site.Page(show.Path)
+	if err != nil {
+		return nil, err
+	}
+	return page.Episodes, nil
+}
+
+func (f filmai) OpenEpisode(show Movie, episode Episode) ([]Source, error) {
+	page, err := f.site.Page(show.Path)
+	if err != nil {
+		return nil, err
+	}
+	servers, ok := page.EpisodeServers[episode.Number]
+	if !ok {
+		return nil, fmt.Errorf("8Filmai has no episode %d on %s", episode.Number, show.Path)
+	}
+	page.Servers = servers
+	return f.site.Sources(page), nil
 }

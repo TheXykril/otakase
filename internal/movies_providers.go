@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"strings"
@@ -26,6 +27,8 @@ type movieLibrary struct {
 	details map[string]*movies.Details
 
 	mu sync.Mutex
+	// episodeLists holds each series' episodes, by key.
+	episodeLists map[string][]movies.Episode
 	// playing holds the movies Trakt was told are playing now, by key.
 	playing map[string]bool
 }
@@ -65,6 +68,9 @@ func (l *movieLibrary) provider(name string) (movies.Provider, error) {
 	}
 	if vidsrc, ok := provider.(*movies.Vidsrc); ok {
 		vidsrc.Subtitles = l.subtitleLanguage
+		if l.trakt != nil {
+			vidsrc.ListEpisodes = l.trakt.Episodes
+		}
 	}
 	l.providers[name] = provider
 	return provider, nil
@@ -185,6 +191,64 @@ func (l *movieLibrary) open(config *Config, movie movies.Movie) (movies.Movie, [
 		return opened, nil, fmt.Errorf("%s lists no servers for it", provider.Label())
 	}
 	return opened, sources, nil
+}
+
+// seriesProvider is the provider a series is from, when it has series.
+func (l *movieLibrary) seriesProvider(show movies.Movie) (movies.SeriesProvider, error) {
+	provider, err := l.provider(cmp.Or(show.Provider, movies.FilmaiName))
+	if err != nil {
+		return nil, err
+	}
+	series, ok := provider.(movies.SeriesProvider)
+	if !ok {
+		return nil, fmt.Errorf("%s has no series", provider.Label())
+	}
+	return series, nil
+}
+
+// episodes lists a series' episodes, asked of its provider once per visit
+// to the Movies section.
+func (l *movieLibrary) episodes(show movies.Movie) ([]movies.Episode, error) {
+	l.mu.Lock()
+	cached, ok := l.episodeLists[show.Key()]
+	l.mu.Unlock()
+	if ok {
+		return cached, nil
+	}
+	provider, err := l.seriesProvider(show)
+	if err != nil {
+		return nil, err
+	}
+	episodes, err := provider.Episodes(show)
+	if err != nil {
+		return nil, err
+	}
+	if len(episodes) == 0 {
+		return nil, fmt.Errorf("%s lists no episodes", show.Label())
+	}
+	l.mu.Lock()
+	if l.episodeLists == nil {
+		l.episodeLists = map[string][]movies.Episode{}
+	}
+	l.episodeLists[show.Key()] = episodes
+	l.mu.Unlock()
+	return episodes, nil
+}
+
+// openEpisode lists one episode's servers.
+func (l *movieLibrary) openEpisode(show movies.Movie, episode movies.Episode) ([]movies.Source, error) {
+	provider, err := l.seriesProvider(show)
+	if err != nil {
+		return nil, err
+	}
+	sources, err := provider.OpenEpisode(show, episode)
+	if err != nil {
+		return nil, err
+	}
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("no servers for %s", episode.Label())
+	}
+	return sources, nil
 }
 
 // pickMovieProvider lets the viewer choose where movies are searched, and

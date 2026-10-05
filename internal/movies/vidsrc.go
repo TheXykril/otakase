@@ -1,6 +1,7 @@
 package movies
 
 import (
+	"cmp"
 	"compress/gzip"
 	"context"
 	"encoding/base64"
@@ -36,6 +37,9 @@ type Vidsrc struct {
 	Client    *http.Client
 	// Subtitles picks the subtitle language for a movie; nil is English.
 	Subtitles func(Movie) SubtitleLanguage
+	// ListEpisodes lists a series' episodes by its IMDb id. vidsrc has no
+	// list of its own; Trakt's is used.
+	ListEpisodes func(imdb string) ([]Episode, error)
 }
 
 // NewVidsrc returns vidsrc at its usual addresses.
@@ -87,7 +91,7 @@ func (v *Vidsrc) get(rawURL string, header map[string]string) ([]byte, error) {
 	return body, nil
 }
 
-// Search finds movies by title. Series are left out, as everywhere here.
+// Search finds films and series by title.
 func (v *Vidsrc) Search(query string) ([]Movie, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -103,10 +107,11 @@ func (v *Vidsrc) Search(query string) ([]Movie, error) {
 	}
 	movies := []Movie{}
 	for _, item := range found.D {
-		if !strings.HasPrefix(item.ID, "tt") || (item.Kind != "movie" && item.Kind != "tvMovie") {
+		series := item.Kind == "tvSeries" || item.Kind == "tvMiniSeries"
+		if !strings.HasPrefix(item.ID, "tt") || (item.Kind != "movie" && item.Kind != "tvMovie" && !series) {
 			continue
 		}
-		movie := Movie{Provider: VidsrcName, Path: item.ID, Title: item.Title, IMDb: item.ID, Poster: item.Image.URL}
+		movie := Movie{Provider: VidsrcName, Path: item.ID, Title: item.Title, IMDb: item.ID, Poster: item.Image.URL, Series: series}
 		if item.Year > 0 {
 			movie.Year = fmt.Sprint(item.Year)
 		}
@@ -115,7 +120,7 @@ func (v *Vidsrc) Search(query string) ([]Movie, error) {
 	return movies, nil
 }
 
-// vidsrcAnswer is the API's answer for one movie.
+// vidsrcAnswer is the API's answer for one film or episode.
 type vidsrcAnswer struct {
 	Data struct {
 		Title      string `json:"title"`
@@ -127,40 +132,68 @@ type vidsrcAnswer struct {
 	} `json:"vs"`
 }
 
-// Open lists the movie's streams. They are all resolved at once, by one
-// request and one decryption; each source then only fetches its token.
+// Open lists the film's streams.
 func (v *Vidsrc) Open(movie Movie) (Movie, []Source, error) {
 	movie.Provider = VidsrcName
 	if movie.IMDb == "" {
 		movie.IMDb = movie.Path
 	}
-	body, err := v.get(v.API+"/api.php?type=movie&imdb="+url.QueryEscape(movie.IMDb)+"&stream_urls", nil)
+	sources, err := v.streams(movie, Episode{})
+	return movie, sources, err
+}
+
+// Episodes lists a series' aired episodes.
+func (v *Vidsrc) Episodes(show Movie) ([]Episode, error) {
+	if v.ListEpisodes == nil {
+		return nil, fmt.Errorf("no episode list for vidsrc series")
+	}
+	return v.ListEpisodes(cmp.Or(show.IMDb, show.Path))
+}
+
+// OpenEpisode lists one episode's streams.
+func (v *Vidsrc) OpenEpisode(show Movie, episode Episode) ([]Source, error) {
+	if show.IMDb == "" {
+		show.IMDb = show.Path
+	}
+	return v.streams(show, episode)
+}
+
+// streams lists a film's or an episode's streams. They are all resolved at
+// once, by one request and one decryption; each source then only fetches its
+// token.
+func (v *Vidsrc) streams(movie Movie, episode Episode) ([]Source, error) {
+	query := "type=movie&imdb=" + url.QueryEscape(movie.IMDb)
+	name := movie.IMDb
+	if episode.Number > 0 {
+		query = fmt.Sprintf("type=tv&imdb=%s&season=%d&episode=%d", url.QueryEscape(movie.IMDb), episode.Season, episode.Number)
+		name = fmt.Sprintf("%s-s%de%d", movie.IMDb, episode.Season, episode.Number)
+	}
+	body, err := v.get(v.API+"/api.php?"+query+"&stream_urls", nil)
 	if err != nil {
-		return movie, nil, err
+		return nil, err
 	}
 	var answer vidsrcAnswer
 	if err := json.Unmarshal(body, &answer); err != nil {
-		return movie, nil, fmt.Errorf("vidsrc: %w", err)
+		return nil, fmt.Errorf("vidsrc: %w", err)
 	}
 	if answer.Data.StreamURLs == "" || answer.VS.WasmURL == "" {
-		return movie, nil, fmt.Errorf("vidsrc has no streams for %s", movie.IMDb)
+		return nil, fmt.Errorf("vidsrc has no streams for %s", name)
 	}
 	links, err := v.decrypt(answer.Data.StreamURLs, answer.VS.WasmURL)
 	if err != nil {
-		return movie, nil, fmt.Errorf("vidsrc: %w", err)
+		return nil, fmt.Errorf("vidsrc: %w", err)
 	}
 	// Fetched once, by the first source that resolves.
 	var subtitlesOnce sync.Once
 	var found []Subtitle
 	subtitles := func() []Subtitle {
 		subtitlesOnce.Do(func() {
-			found = openSubtitles(v.Client, openSubtitlesQuery(movie.IMDb, Episode{}), movie.IMDb, answer.Data.FileName, v.subtitleLanguage(movie))
+			found = openSubtitles(v.Client, openSubtitlesQuery(movie.IMDb, episode), name, answer.Data.FileName, v.subtitleLanguage(movie))
 		})
 		return found
 	}
 	sources := []Source{}
 	for i, link := range links {
-		link := link
 		server := fmt.Sprintf("vidsrc %d", i+1)
 		sources = append(sources, Source{Server: server, Resolve: func() (Stream, error) {
 			stream, err := v.withToken(link)
@@ -172,7 +205,7 @@ func (v *Vidsrc) Open(movie Movie) (Movie, []Source, error) {
 			return stream, nil
 		}})
 	}
-	return movie, sources, nil
+	return sources, nil
 }
 
 func (v *Vidsrc) subtitleLanguage(movie Movie) SubtitleLanguage {

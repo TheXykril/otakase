@@ -62,9 +62,13 @@ func TestExperimentalMoviesIsAddedToOldConfigs(t *testing.T) {
 }
 
 func TestMovieDownloadPath(t *testing.T) {
-	got := movieDownloadPath("/dl", movies.Movie{Title: "Alkis", Year: "2026"}, DownloadFormatMKV)
+	got := movieDownloadPath("/dl", moviePlay{movie: movies.Movie{Title: "Alkis", Year: "2026"}}, DownloadFormatMKV)
 	if got != filepath.Join("/dl", "Alkis (2026).mkv") {
 		t.Errorf("path = %q", got)
+	}
+	episode := moviePlay{movie: movies.Movie{Title: "Kaulai", Year: "2015", Series: true}, episode: movies.Episode{Season: 11, Number: 3}}
+	if got := movieDownloadPath("/dl", episode, DownloadFormatMP4); got != filepath.Join("/dl", "Kaulai - S11E03.mp4") {
+		t.Errorf("episode path = %q", got)
 	}
 }
 
@@ -242,5 +246,30 @@ func TestMovieSubtitleLanguage(t *testing.T) {
 	}
 	if got := lib.subtitleLanguage(movie); got.Code != "lit" || got.Name != "Lithuanian" {
 		t.Errorf("picked = %+v", got)
+	}
+}
+
+func TestNextEpisode(t *testing.T) {
+	episodes := []movies.Episode{{Season: 1, Number: 1}, {Season: 1, Number: 2}, {Season: 2, Number: 1}}
+	cases := []struct {
+		name         string
+		entry        movies.Entry
+		index, start int
+	}{
+		{"new", movies.Entry{}, 0, 0},
+		{"part way", movies.Entry{Season: 1, Episode: 2, Position: 90}, 1, 90},
+		{"finished one", movies.Entry{Season: 1, Episode: 2, EpisodeDone: true}, 2, 0},
+		{"all watched", movies.Entry{Season: 2, Episode: 1, EpisodeDone: true, Watched: true}, 0, 0},
+		{"episode gone", movies.Entry{Season: 9, Episode: 9}, 0, 0},
+	}
+	for _, c := range cases {
+		index, start := nextEpisode(c.entry, episodes)
+		if index != c.index || start != c.start {
+			t.Errorf("%s: got %d at %d, want %d at %d", c.name, index, start, c.index, c.start)
+		}
+	}
+	at := movies.Entry{Season: 1, Episode: 2, EpisodeDone: false}
+	if !episodeSeen(at, episodes[0]) || episodeSeen(at, episodes[1]) || episodeSeen(at, episodes[2]) {
+		t.Error("episodeSeen marks the wrong episodes")
 	}
 }

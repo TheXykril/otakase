@@ -2,6 +2,7 @@ package movies
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -256,88 +257,154 @@ func (t *Trakt) send(path string, body any) error {
 	return err
 }
 
-// traktMovie is how a movie is named to Trakt: by IMDb id.
-func traktMovie(movie Movie, extra map[string]any) (map[string]any, error) {
+// traktItem is how a film or a series is named to Trakt, by IMDb id, with
+// the key its lists are under: "movies" or "shows".
+func traktItem(movie Movie, extra map[string]any) (string, map[string]any, error) {
 	if !strings.HasPrefix(movie.IMDb, "tt") {
-		return nil, fmt.Errorf("%s has no IMDb id to match on Trakt", movie.Label())
+		return "", nil, fmt.Errorf("%s has no IMDb id to match on Trakt", movie.Label())
 	}
 	item := map[string]any{"ids": map[string]string{"imdb": movie.IMDb}}
 	for key, value := range extra {
 		item[key] = value
 	}
-	return item, nil
+	if movie.Series {
+		return "shows", item, nil
+	}
+	return "movies", item, nil
 }
 
-func (t *Trakt) syncMovies(path string, movie Movie, extra map[string]any) error {
-	item, err := traktMovie(movie, extra)
+func (t *Trakt) syncItem(path string, movie Movie, extra map[string]any) error {
+	kind, item, err := traktItem(movie, extra)
 	if err != nil {
 		return err
 	}
-	return t.send(path, map[string]any{"movies": []any{item}})
+	return t.send(path, map[string]any{kind: []any{item}})
 }
 
-// Watched adds a viewing to the Trakt history, or takes the movie's
-// viewings off it.
+// Watched adds a viewing of a film to the Trakt history, or takes its
+// viewings off it. A series' history is kept by episode (EpisodeWatched).
 func (t *Trakt) Watched(movie Movie, watched bool, at time.Time) error {
-	if watched {
-		return t.syncMovies("/sync/history", movie, map[string]any{"watched_at": at.UTC().Format(time.RFC3339)})
+	if movie.Series {
+		return nil
 	}
-	return t.syncMovies("/sync/history/remove", movie, nil)
+	if watched {
+		return t.syncItem("/sync/history", movie, map[string]any{"watched_at": at.UTC().Format(time.RFC3339)})
+	}
+	return t.syncItem("/sync/history/remove", movie, nil)
 }
 
-// Watchlist puts the movie on the Trakt watchlist or takes it off.
+// EpisodeWatched adds a viewing of one episode to the Trakt history.
+func (t *Trakt) EpisodeWatched(show Movie, episode Episode, at time.Time) error {
+	show.Series = true
+	return t.syncItem("/sync/history", show, map[string]any{"seasons": []any{map[string]any{
+		"number":   episode.Season,
+		"episodes": []any{map[string]any{"number": episode.Number, "watched_at": at.UTC().Format(time.RFC3339)}},
+	}}})
+}
+
+// Watchlist puts the film or series on the Trakt watchlist or takes it off.
 func (t *Trakt) Watchlist(movie Movie, on bool) error {
 	if on {
-		return t.syncMovies("/sync/watchlist", movie, nil)
+		return t.syncItem("/sync/watchlist", movie, nil)
 	}
-	return t.syncMovies("/sync/watchlist/remove", movie, nil)
+	return t.syncItem("/sync/watchlist/remove", movie, nil)
 }
 
-// Rate sets the movie's rating out of 10 on Trakt; 0 removes it.
+// Rate sets the rating out of 10 on Trakt; 0 removes it.
 func (t *Trakt) Rate(movie Movie, rating int) error {
 	if rating <= 0 {
-		return t.syncMovies("/sync/ratings/remove", movie, nil)
+		return t.syncItem("/sync/ratings/remove", movie, nil)
 	}
-	return t.syncMovies("/sync/ratings", movie, map[string]any{"rating": rating})
+	return t.syncItem("/sync/ratings", movie, map[string]any{"rating": rating})
 }
 
-// Started tells Trakt the movie is playing from position, so it shows as
-// being watched now. Trakt clears that by itself after the runtime, or when
-// Paused is sent.
-func (t *Trakt) Started(movie Movie, position, duration int) error {
-	item, err := traktMovie(movie, nil)
+// scrobble names what is playing to Trakt's scrobble calls: the film, or the
+// series and its episode.
+func scrobble(movie Movie, episode Episode, progress float64) (map[string]any, error) {
+	_, item, err := traktItem(movie, nil)
+	if err != nil {
+		return nil, err
+	}
+	if episode.Number > 0 {
+		return map[string]any{"show": item, "episode": map[string]int{"season": episode.Season, "number": episode.Number}, "progress": progress}, nil
+	}
+	return map[string]any{"movie": item, "progress": progress}, nil
+}
+
+func progressOf(position, duration int) float64 {
+	if duration <= 0 || position <= 0 {
+		return 0
+	}
+	return min(float64(position)*100/float64(duration), 99)
+}
+
+// Started tells Trakt a film or an episode is playing from position, so it
+// shows as being watched now. Trakt clears that by itself after the
+// runtime, or when Paused is sent.
+func (t *Trakt) Started(movie Movie, episode Episode, position, duration int) error {
+	body, err := scrobble(movie, episode, progressOf(position, duration))
 	if err != nil {
 		return err
 	}
-	progress := 0.0
-	if duration > 0 && position > 0 {
-		progress = min(float64(position)*100/float64(duration), 99)
-	}
-	return t.send("/scrobble/start", map[string]any{"movie": item, "progress": progress})
+	return t.send("/scrobble/start", body)
 }
 
 // Finished ends a play Started began, watched to the end: Trakt adds it to
 // the history itself, so Watched is not sent for it as well.
-func (t *Trakt) Finished(movie Movie) error {
-	item, err := traktMovie(movie, nil)
+func (t *Trakt) Finished(movie Movie, episode Episode) error {
+	body, err := scrobble(movie, episode, 100)
 	if err != nil {
 		return err
 	}
-	return t.send("/scrobble/stop", map[string]any{"movie": item, "progress": 100})
+	return t.send("/scrobble/stop", body)
 }
 
-// Paused records where the movie was stopped, as a percentage, so Trakt and
-// the apps that read it can offer to carry on from there.
-func (t *Trakt) Paused(movie Movie, position, duration int) error {
+// Paused records where a film or an episode was stopped, as a percentage,
+// so Trakt and the apps that read it can offer to carry on from there.
+func (t *Trakt) Paused(movie Movie, episode Episode, position, duration int) error {
 	if duration <= 0 || position <= 0 {
 		return nil
 	}
-	item, err := traktMovie(movie, nil)
+	body, err := scrobble(movie, episode, progressOf(position, duration))
 	if err != nil {
 		return err
 	}
-	progress := min(float64(position)*100/float64(duration), 99)
-	return t.send("/scrobble/pause", map[string]any{"movie": item, "progress": progress})
+	return t.send("/scrobble/pause", body)
+}
+
+// Episodes lists a series' aired episodes, specials left out, from Trakt.
+// It needs no sign-in.
+func (t *Trakt) Episodes(imdb string) ([]Episode, error) {
+	var seasons []struct {
+		Number   int `json:"number"`
+		Episodes []struct {
+			Season     int    `json:"season"`
+			Number     int    `json:"number"`
+			Title      string `json:"title"`
+			FirstAired string `json:"first_aired"`
+		} `json:"episodes"`
+	}
+	if _, err := t.call(http.MethodGet, "/shows/"+url.PathEscape(imdb)+"/seasons?extended=full,episodes", "", nil, &seasons); err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	episodes := []Episode{}
+	for _, season := range seasons {
+		if season.Number == 0 {
+			continue
+		}
+		for _, episode := range season.Episodes {
+			aired, err := time.Parse(time.RFC3339, episode.FirstAired)
+			if err != nil || aired.After(now) {
+				continue
+			}
+			episodes = append(episodes, Episode{Season: season.Number, Number: episode.Number, Title: episode.Title})
+		}
+	}
+	if len(episodes) == 0 {
+		return nil, fmt.Errorf("Trakt lists no aired episodes for %s", imdb)
+	}
+	return episodes, nil
 }
 
 // Details is what Trakt says about a film or a show, for the menu.
@@ -367,55 +434,64 @@ func (t *Trakt) Details(movie Movie) (Details, error) {
 	return details, err
 }
 
-// FindIMDb looks a movie up on Trakt by its titles and year and returns its
-// IMDb id, or "" when nothing matches. Trakt's search reads titles in other
+// FindIMDb looks a film, or a series when series is set, up on Trakt by its
+// titles and year and returns its IMDb id, or "" when nothing matches. Trakt's search reads titles in other
 // languages too (its translations and aliases), so a Lithuanian title finds
 // the film. Its year filter is not applied to this search, so the year is
 // checked here: a result from another year is a remake or a namesake, and
 // syncing the wrong film is worse than syncing none.
-func (t *Trakt) FindIMDb(titles []string, year string) string {
+func (t *Trakt) FindIMDb(titles []string, year string, series bool) string {
+	kind := "movie"
+	if series {
+		kind = "show"
+	}
+	type found struct {
+		Title string `json:"title"`
+		Year  int    `json:"year"`
+		IDs   struct {
+			IMDb string `json:"imdb"`
+		} `json:"ids"`
+	}
 	for _, title := range titles {
 		title = strings.TrimSpace(title)
 		if title == "" {
 			continue
 		}
 		query := url.Values{"query": {title}, "fields": {"title,translations,aliases"}}
-		var found []struct {
-			Movie struct {
-				Title string `json:"title"`
-				Year  int    `json:"year"`
-				IDs   struct {
-					IMDb string `json:"imdb"`
-				} `json:"ids"`
-			} `json:"movie"`
+		var results []struct {
+			Movie *found `json:"movie"`
+			Show  *found `json:"show"`
 		}
-		if _, err := t.call(http.MethodGet, "/search/movie?"+query.Encode(), "", nil, &found); err != nil {
+		if _, err := t.call(http.MethodGet, "/search/"+kind+"?"+query.Encode(), "", nil, &results); err != nil {
 			logf("trakt: looking up %q: %v", title, err)
 			continue
 		}
 		best, bestScore := "", 0
-		for _, result := range found {
-			movie := result.Movie
-			if !strings.HasPrefix(movie.IDs.IMDb, "tt") {
+		for _, result := range results {
+			item := cmp.Or(result.Movie, result.Show)
+			if item == nil || !strings.HasPrefix(item.IDs.IMDb, "tt") {
 				continue
 			}
 			score := 1
 			if year != "" {
-				switch gap := abs(movie.Year - atoi(year)); {
+				switch gap := abs(item.Year - atoi(year)); {
 				case gap == 0:
 					score += 4
 				case gap == 1:
 					// A release date in another country can be a year off.
 					score += 2
+				case series:
+					// A season's page carries that season's year, not the
+					// year the series began.
 				default:
 					continue
 				}
 			}
-			if strings.EqualFold(movie.Title, title) {
+			if strings.EqualFold(item.Title, title) {
 				score += 2
 			}
 			if score > bestScore {
-				best, bestScore = movie.IDs.IMDb, score
+				best, bestScore = item.IDs.IMDb, score
 			}
 		}
 		if best != "" {

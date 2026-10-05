@@ -20,6 +20,8 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -96,6 +98,10 @@ type Page struct {
 	Servers []string
 	// Subtitles is the data line's fifth field, empty for most movies.
 	Subtitles string
+	// Episodes are a series season's episodes, and EpisodeServers each
+	// one's stream ids by episode number, as Servers are a film's.
+	Episodes       []Episode
+	EpisodeServers map[int][]string
 }
 
 // Site is the 8Filmai site, reached through its redirecting domain.
@@ -237,8 +243,8 @@ func (s *Site) fetch(rawURL string) (string, error) {
 	return string(body), nil
 }
 
-// Search returns the movies the site finds for query. Series are left out:
-// only movies are supported for now.
+// Search returns the films and series the site finds for query. A series
+// is found a season at a time: each season has a page of its own.
 func (s *Site) Search(query string) ([]Movie, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -264,12 +270,16 @@ func (s *Site) Page(path string) (Page, error) {
 	if page.Path == "" {
 		page.Path = path
 	}
+	for i := range page.Episodes {
+		page.Episodes[i].Season = seasonOf(page.Path)
+	}
 	return page, nil
 }
 
 var (
 	articlePattern   = regexp.MustCompile(`(?s)<article\b.*?</article>`)
-	moviePathInHref  = regexp.MustCompile(`href="(?:https?://[^/"]+)?(/filmas/[^"#?]+)`)
+	moviePathInHref  = regexp.MustCompile(`href="(?:https?://[^/"]+)?(/(?:filmas|serialai)/[^"#?]+)`)
+	seasonInPath     = regexp.MustCompile(`-(\d+)-sezonas`)
 	pnamePattern     = regexp.MustCompile(`(?s)class="pname[^"]*"[^>]*>(.*?)</`)
 	titleLinkPattern = regexp.MustCompile(`(?s)class="title"[^>]*>\s*<a[^>]*>(.*?)</a>`)
 	altPattern       = regexp.MustCompile(`\balt="([^"]+)"`)
@@ -311,6 +321,7 @@ func parseListing(body string) []Movie {
 			Title:  title,
 			Year:   firstGroup(article, yearPattern),
 			Poster: firstGroup(article, posterPattern),
+			Series: strings.HasPrefix(path, "/serialai/"),
 		})
 	}
 	return movies
@@ -348,6 +359,19 @@ func parsePage(body string) (Page, error) {
 	if data == nil {
 		return page, errNoStreams
 	}
+	if isSeriesData(data[1]) {
+		page.Series = true
+		season := seasonOf(page.Path)
+		page.EpisodeServers = parseSeriesData(data[1])
+		for number := range page.EpisodeServers {
+			page.Episodes = append(page.Episodes, Episode{Season: season, Number: number})
+		}
+		sort.Slice(page.Episodes, func(i, j int) bool { return page.Episodes[i].Number < page.Episodes[j].Number })
+		if len(page.Episodes) == 0 {
+			return page, errNoStreams
+		}
+		return page, nil
+	}
 	page.Servers, page.Subtitles = parseData(data[1])
 	if !page.HasStreams() {
 		return page, errNoStreams
@@ -355,11 +379,48 @@ func parsePage(body string) (Page, error) {
 	return page, nil
 }
 
+// isSeriesData reports whether a data line is a series season's:
+// episode=fields;episode=fields;...
+func isSeriesData(data string) bool {
+	return strings.Contains(data, "=")
+}
+
+// parseSeriesData splits a season's data line into each episode's stream ids
+// by episode number. An episode's fields are as a film's: the ids of servers
+// 0 to 3, then its language.
+func parseSeriesData(data string) map[int][]string {
+	episodes := map[int][]string{}
+	for _, part := range strings.Split(data, ";") {
+		number, fields, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(number))
+		if err != nil || n <= 0 {
+			continue
+		}
+		servers, _ := parseData(fields)
+		if (Page{Servers: servers}).HasStreams() {
+			episodes[n] = servers
+		}
+	}
+	return episodes
+}
+
+// seasonOf reads the season number off a series page's path,
+// /serialai/<name>-2-sezonas-online/, taking 1 when it has none.
+func seasonOf(path string) int {
+	if n, err := strconv.Atoi(firstGroup(path, seasonInPath)); err == nil && n > 0 {
+		return n
+	}
+	return 1
+}
+
 // parseData splits a movie's data line. The fields are the stream ids of
 // servers 0 to 3, then a subtitle field. A series uses a different shape
-// (episode=fields;...), which is not a movie and gives no servers here.
+// (episode=fields;..., see parseSeriesData), which gives no servers here.
 func parseData(data string) ([]string, string) {
-	if strings.Contains(data, ";") || strings.Contains(data, "=") {
+	if isSeriesData(data) {
 		return nil, ""
 	}
 	fields := strings.Split(data, "|")
