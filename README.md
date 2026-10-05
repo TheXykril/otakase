@@ -9,12 +9,14 @@
 <p align="center">
   <a href="https://github.com/TheXykril/otakase/releases/latest"><img src="https://img.shields.io/github/v/release/TheXykril/otakase?label=release&color=d2492f" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-8a8276" alt="GPL-3.0"></a>
+  <a href="https://otakase.xyverion.com/discord/"><img src="https://img.shields.io/badge/discord-join-d2492f?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 <p align="center">
-  <a href="https://thexykril.github.io/otakase/">Website</a> ·
+  <a href="https://otakase.xyverion.com/">Website</a> ·
   <a href="#install">Install</a> ·
-  <a href="https://github.com/TheXykril/otakase/wiki">Wiki</a>
+  <a href="https://github.com/TheXykril/otakase/wiki">Wiki</a> ·
+  <a href="https://otakase.xyverion.com/discord/">Discord</a>
 </p>
 
 Otakase finds the episode, plays it in mpv, skips the opening, ending, filler
