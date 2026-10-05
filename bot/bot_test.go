@@ -444,3 +444,55 @@ func TestQuestionFilter(t *testing.T) {
 		t.Error("plain chat matched")
 	}
 }
+
+func TestSuggestionVote(t *testing.T) {
+	s := &suggestion{}
+	s.vote("a", true)
+	s.vote("b", false)
+	if len(s.Up) != 1 || len(s.Down) != 1 {
+		t.Fatalf("up %v down %v", s.Up, s.Down)
+	}
+	s.vote("a", true) // same button again takes the vote back
+	if len(s.Up) != 0 {
+		t.Errorf("vote not taken back: %v", s.Up)
+	}
+	s.vote("b", true) // other button moves it
+	if len(s.Up) != 1 || len(s.Down) != 0 {
+		t.Errorf("vote not moved: up %v down %v", s.Up, s.Down)
+	}
+	s.vote("b", true)
+	s.vote("b", true)
+	if len(s.Up) != 1 {
+		t.Errorf("double vote: %v", s.Up)
+	}
+}
+
+func TestSuggestionClosed(t *testing.T) {
+	s := &suggestion{Status: "done", Up: []string{"a", "b"}}
+	row := s.components()[0].(discordgo.ActionsRow)
+	up := row.Components[0].(discordgo.Button)
+	if !up.Disabled || up.Label != "2" {
+		t.Errorf("done suggestion button: %+v", up)
+	}
+	if s.embed().Color != statusByKey("done").Color {
+		t.Error("status colour not used")
+	}
+	if (&suggestion{}).components()[0].(discordgo.ActionsRow).Components[1].(discordgo.Button).Disabled {
+		t.Error("open suggestion closed")
+	}
+}
+
+func TestSuggestionWait(t *testing.T) {
+	b := &bot{store: openStore(filepath.Join(t.TempDir(), "s.json"))}
+	now := time.Now()
+	if b.suggestionWait("a", now) != 0 {
+		t.Error("wait with no suggestions")
+	}
+	b.store.update(func(d *storeData) { d.Suggestions["m"] = suggestion{Author: "a", Created: now.Add(-time.Minute)} })
+	if w := b.suggestionWait("a", now); w != 4*time.Minute {
+		t.Errorf("wait %v", w)
+	}
+	if b.suggestionWait("b", now) != 0 {
+		t.Error("other member waits")
+	}
+}

@@ -4,7 +4,7 @@
 // /help), greets new support posts with a checklist and a "Mark solved"
 // button, answers common questions it sees in chat, removes cross-channel
 // spam and scams, helps moderators, makes voice rooms and welcomes new
-// members by DM.
+// members by DM. Members post suggestions with /suggest and vote on them.
 //
 // Configuration is read from the environment; see deploy/otakase-bot.env.
 // On hosts without a way to set environment variables, the same lines can go
@@ -30,24 +30,25 @@ import (
 const shu = 0xD2492F
 
 type config struct {
-	Token           string
-	GuildID         string
-	SupportForum    string
-	ModChannel      string
-	ContributorRole string
-	GitHubClientID  string
-	GitHubToken     string
-	WelcomeDM       bool
-	AiringChannel   string // daily airing post, empty = the "anime" channel
-	LoungeChannel   string // default watch party voice channel
-	DailyAiring     bool
-	AiringHour      int    // UTC hour the airing post goes out
-	OtakaseCLI      string // otakase binary used by /provider-status
-	OllamaURL       string // Ollama for matching questions by meaning, empty = off
-	EmbedModel      string
-	AIThreshold     float64
-	CreateRoom      string   // join-to-create voice channel, found by name when empty
-	StaffRoles      []string // Moderator and Maintainer, pinged on raids
+	Token              string
+	GuildID            string
+	SupportForum       string
+	ModChannel         string
+	ContributorRole    string
+	GitHubClientID     string
+	GitHubToken        string
+	WelcomeDM          bool
+	AiringChannel      string // daily airing post, empty = the "anime" channel
+	LoungeChannel      string // default watch party voice channel
+	DailyAiring        bool
+	AiringHour         int    // UTC hour the airing post goes out
+	OtakaseCLI         string // otakase binary used by /provider-status
+	OllamaURL          string // Ollama for matching questions by meaning, empty = off
+	EmbedModel         string
+	AIThreshold        float64
+	CreateRoom         string   // join-to-create voice channel, found by name when empty
+	SuggestionsChannel string   // where /suggest posts, found by name when empty
+	StaffRoles         []string // Moderator and Maintainer, pinged on raids
 }
 
 // loadEnvFile sets variables from a KEY=value file, keeping any that are
@@ -115,20 +116,21 @@ func loadConfig() config {
 	loadEnvFile(".env")
 	loadEnvFile("otakase-bot.env")
 	c := config{
-		Token:           strings.TrimSpace(os.Getenv("DISCORD_BOT_TOKEN")),
-		GuildID:         os.Getenv("OTAKASE_GUILD_ID"),
-		SupportForum:    os.Getenv("OTAKASE_SUPPORT_FORUM"),
-		ModChannel:      os.Getenv("OTAKASE_MOD_CHANNEL"),
-		ContributorRole: os.Getenv("OTAKASE_CONTRIBUTOR_ROLE"),
-		GitHubClientID:  os.Getenv("OTAKASE_GITHUB_CLIENT_ID"),
-		GitHubToken:     os.Getenv("GITHUB_TOKEN"),
-		WelcomeDM:       os.Getenv("OTAKASE_WELCOME_DM") != "false",
-		AiringChannel:   os.Getenv("OTAKASE_AIRING_CHANNEL"),
-		LoungeChannel:   os.Getenv("OTAKASE_LOUNGE_CHANNEL"),
-		DailyAiring:     os.Getenv("OTAKASE_DAILY_AIRING") != "false",
-		AiringHour:      6,
-		OtakaseCLI:      os.Getenv("OTAKASE_CLI"),
-		CreateRoom:      os.Getenv("OTAKASE_CREATE_ROOM"),
+		Token:              strings.TrimSpace(os.Getenv("DISCORD_BOT_TOKEN")),
+		GuildID:            os.Getenv("OTAKASE_GUILD_ID"),
+		SupportForum:       os.Getenv("OTAKASE_SUPPORT_FORUM"),
+		ModChannel:         os.Getenv("OTAKASE_MOD_CHANNEL"),
+		ContributorRole:    os.Getenv("OTAKASE_CONTRIBUTOR_ROLE"),
+		GitHubClientID:     os.Getenv("OTAKASE_GITHUB_CLIENT_ID"),
+		GitHubToken:        os.Getenv("GITHUB_TOKEN"),
+		WelcomeDM:          os.Getenv("OTAKASE_WELCOME_DM") != "false",
+		AiringChannel:      os.Getenv("OTAKASE_AIRING_CHANNEL"),
+		LoungeChannel:      os.Getenv("OTAKASE_LOUNGE_CHANNEL"),
+		DailyAiring:        os.Getenv("OTAKASE_DAILY_AIRING") != "false",
+		AiringHour:         6,
+		OtakaseCLI:         os.Getenv("OTAKASE_CLI"),
+		CreateRoom:         os.Getenv("OTAKASE_CREATE_ROOM"),
+		SuggestionsChannel: os.Getenv("OTAKASE_SUGGESTIONS_CHANNEL"),
 	}
 	if h, err := strconv.Atoi(os.Getenv("OTAKASE_AIRING_HOUR")); err == nil && h >= 0 && h < 24 {
 		c.AiringHour = h
@@ -223,13 +225,21 @@ func channelBase(name string) string {
 // resolveIDs fills in channel and role ids left empty in the configuration
 // by finding them by name, so a fresh setup needs only the token and server.
 func (b *bot) resolveIDs() {
-	if b.cfg.SupportForum == "" || b.cfg.ModChannel == "" || b.cfg.AiringChannel == "" || b.cfg.LoungeChannel == "" || b.cfg.CreateRoom == "" {
+	if b.cfg.SupportForum == "" || b.cfg.ModChannel == "" || b.cfg.AiringChannel == "" || b.cfg.LoungeChannel == "" || b.cfg.CreateRoom == "" || b.cfg.SuggestionsChannel == "" {
 		chans, err := b.s.GuildChannels(b.cfg.GuildID)
 		if err != nil {
 			log.Printf("listing channels: %v", err)
 		}
+		var ideas string
 		for _, c := range chans {
 			name := channelBase(c.Name)
+			if b.cfg.SuggestionsChannel == "" && c.Type == discordgo.ChannelTypeGuildText {
+				if name == "suggestions" {
+					b.cfg.SuggestionsChannel = c.ID
+				} else if name == "ideas" {
+					ideas = c.ID
+				}
+			}
 			if b.cfg.SupportForum == "" && c.Type == discordgo.ChannelTypeGuildForum && name == "support" {
 				b.cfg.SupportForum = c.ID
 			}
@@ -246,6 +256,9 @@ func (b *bot) resolveIDs() {
 				b.cfg.CreateRoom = c.ID
 			}
 		}
+		if b.cfg.SuggestionsChannel == "" {
+			b.cfg.SuggestionsChannel = ideas
+		}
 	}
 	{
 		roles, err := b.s.GuildRoles(b.cfg.GuildID)
@@ -261,6 +274,6 @@ func (b *bot) resolveIDs() {
 			}
 		}
 	}
-	log.Printf("support forum %q, mod channel %q, contributor role %q, airing channel %q, lounge %q, create room %q",
-		b.cfg.SupportForum, b.cfg.ModChannel, b.cfg.ContributorRole, b.cfg.AiringChannel, b.cfg.LoungeChannel, b.cfg.CreateRoom)
+	log.Printf("support forum %q, mod channel %q, contributor role %q, airing channel %q, lounge %q, create room %q, suggestions %q",
+		b.cfg.SupportForum, b.cfg.ModChannel, b.cfg.ContributorRole, b.cfg.AiringChannel, b.cfg.LoungeChannel, b.cfg.CreateRoom, b.cfg.SuggestionsChannel)
 }

@@ -44,6 +44,7 @@ func (b *bot) registerCommands() error {
 	}
 	cmds = append(cmds, modCommands()...)
 	cmds = append(cmds, roomCommands()...)
+	cmds = append(cmds, suggestionCommands()...)
 	if b.cfg.GitHubClientID != "" && b.cfg.ContributorRole != "" {
 		cmds = append(cmds, &discordgo.ApplicationCommand{
 			Name: "link-github", Description: "Get the Contributor role for a merged pull request"})
@@ -105,6 +106,14 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			b.roomCommand(i)
 		case "room-invite":
 			b.roomInvite(i)
+		case "suggest":
+			b.suggestForm(i)
+		case "suggestion-status":
+			b.setSuggestionStatus(i)
+		}
+	case discordgo.InteractionModalSubmit:
+		if i.ModalSubmitData().CustomID == "suggest-form" {
+			b.postSuggestion(i)
 		}
 	case discordgo.InteractionMessageComponent:
 		id := i.MessageComponentData().CustomID
@@ -121,6 +130,8 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			b.markSolved(i)
 		case "bug":
 			b.reportBug(i)
+		case "sug-up", "sug-down":
+			b.voteSuggestion(i, id == "sug-up")
 		}
 	}
 }
@@ -134,6 +145,7 @@ func helpEmbed() *discordgo.MessageEmbed {
 		"`/provider-status` which anime sources work right now",
 		"`/watchparty` plan a watch party in a voice channel",
 		"`/room` your own voice channel, public or private (or join **Create room**)",
+		"`/suggest` suggest an idea; vote on ideas with 👍 and 👎",
 		"`/bug` turn a support post into a GitHub issue",
 		"Type `#123` to show a GitHub issue or pull request",
 		"`/link-github` Contributor role if you have a merged pull request",
