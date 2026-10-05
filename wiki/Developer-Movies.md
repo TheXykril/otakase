@@ -107,8 +107,9 @@ the extractor in `hosts.go` is the first place to look. The log
 
 `movies.json` in the storage directory, keyed by `provider:path` (entries
 from before providers existed are 8Filmai's and are rekeyed when read). It
-keeps the position, duration, watched and watchlist flags, and a rating out
-of 10.
+keeps the position, duration, watched and watchlist flags, a rating out
+of 10, and the server it last played from, which is tried first next time
+(`movies.PreferServer`). List rows show the provider and server.
 
 ### Trakt
 

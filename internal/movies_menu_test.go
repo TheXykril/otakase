@@ -154,3 +154,18 @@ func TestMovieMPVArgs(t *testing.T) {
 		t.Errorf("file args = %s", args)
 	}
 }
+
+func TestMovieSourceLabel(t *testing.T) {
+	for _, c := range []struct {
+		entry movies.Entry
+		want  string
+	}{
+		{movies.Entry{Movie: movies.Movie{Provider: "vidsrc"}, Server: "vidsrc 2"}, "vidsrc 2"},
+		{movies.Entry{Movie: movies.Movie{Provider: "8filmai"}, Server: "imgsto.re"}, "8filmai, imgsto.re"},
+		{movies.Entry{Movie: movies.Movie{Provider: "filmukas"}}, "filmukas"},
+	} {
+		if got := movieSourceLabel(c.entry); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.entry, got, c.want)
+		}
+	}
+}

@@ -327,3 +327,28 @@ func TestRankSubtitles(t *testing.T) {
 		t.Errorf("last = %s", ranked[3].FileName)
 	}
 }
+
+func TestPreferServer(t *testing.T) {
+	sources := []Source{{Server: "server 3"}, {Server: "server 2"}, {Server: "imgsto.re"}}
+	var names []string
+	for _, source := range PreferServer(sources, "imgsto.re") {
+		names = append(names, source.Server)
+	}
+	if strings.Join(names, ",") != "imgsto.re,server 3,server 2" {
+		t.Errorf("order = %v", names)
+	}
+	if got := PreferServer(sources, "gone"); len(got) != 3 || got[0].Server != "server 3" {
+		t.Errorf("unknown server reordered: %+v", got)
+	}
+}
+
+func TestStoreKeepsTheServer(t *testing.T) {
+	store, _ := OpenStore(t.TempDir())
+	movie := Movie{Provider: VidsrcName, Path: "tt0816692", Title: "Interstellar"}
+	if err := store.SetServer(movie, "vidsrc 2"); err != nil {
+		t.Fatal(err)
+	}
+	if entry, _ := store.Get(movie.Key()); entry.Server != "vidsrc 2" {
+		t.Errorf("entry = %+v", entry)
+	}
+}

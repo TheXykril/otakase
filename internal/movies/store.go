@@ -19,7 +19,10 @@ type Entry struct {
 	Watched   bool `json:"watched"`
 	Watchlist bool `json:"watchlist"`
 	// Rating is the viewer's score out of 10, 0 for none.
-	Rating  int       `json:"rating,omitempty"`
+	Rating int `json:"rating,omitempty"`
+	// Server is the provider's server the movie last played from, tried
+	// first the next time.
+	Server  string    `json:"server,omitempty"`
 	Updated time.Time `json:"updated"`
 }
 
@@ -200,6 +203,11 @@ func (s *Store) SetWatched(movie Movie, watched bool) error {
 // SetRating records the viewer's score out of 10; 0 clears it.
 func (s *Store) SetRating(movie Movie, rating int) error {
 	return s.update(movie, func(entry *Entry) { entry.Rating = min(max(rating, 0), 10) })
+}
+
+// SetServer records the server a movie played from.
+func (s *Store) SetServer(movie Movie, server string) error {
+	return s.update(movie, func(entry *Entry) { entry.Server = server })
 }
 
 // SetWatchlist adds a movie to the watchlist or takes it off.

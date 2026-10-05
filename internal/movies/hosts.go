@@ -111,6 +111,19 @@ func (s *Site) Sources(page Page) []Source {
 	return sources
 }
 
+// PreferServer moves the named server to the front, keeping the others in
+// their order: the server a movie played from last time is the likeliest to
+// play it again.
+func PreferServer(sources []Source, server string) []Source {
+	for i, source := range sources {
+		if source.Server == server && i > 0 {
+			out := append([]Source{source}, sources[:i]...)
+			return append(out, sources[i+1:]...)
+		}
+	}
+	return sources
+}
+
 var iframeSrcPattern = regexp.MustCompile(`<iframe[^>]+src="(https?://[^"]+)"`)
 
 // embedURL is the video host's embed page that p2.php wraps.

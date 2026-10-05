@@ -287,8 +287,26 @@ func movieRow(movie movies.Movie, store *movies.Store) SelectionOption {
 		if entry.Rating > 0 {
 			label += fmt.Sprintf(" · %d/10", entry.Rating)
 		}
+		// Where it was watched, since the same film can be on several
+		// providers.
+		if where := movieSourceLabel(entry); where != "" {
+			label += " · " + where
+		}
 	}
 	return SelectionOption{Key: moviePathPrefix + movie.Key(), Label: label, Title: movie.Title, Thumbnail: movie.Poster, Icon: icon}
+}
+
+// movieSourceLabel names a remembered movie's provider and, when it played,
+// the server: "vidsrc 2", "8filmai, imgsto.re".
+func movieSourceLabel(entry movies.Entry) string {
+	provider := cmp.Or(entry.Provider, movies.FilmaiName)
+	switch {
+	case entry.Server == "":
+		return provider
+	case strings.HasPrefix(strings.ToLower(entry.Server), provider):
+		return entry.Server
+	}
+	return provider + ", " + entry.Server
 }
 
 // pickMovieRows shows a list of movies, with their posters in rofi when
@@ -445,6 +463,15 @@ func playMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 	}
 	title := movie.Label()
 	Out(fmt.Sprintf("Loading %s…", title))
+	if entry, ok := store.Get(movie.Key()); ok {
+		sources = movies.PreferServer(sources, entry.Server)
+	}
+	played := func(server string) {
+		if err := store.SetServer(movie, server); err != nil {
+			Log(fmt.Sprintf("movies: could not save the server: %v", err))
+		}
+		traktPaused(lib.trakt, store, movie)
+	}
 
 	for _, source := range sources {
 		stream, err := source.Resolve()
@@ -456,13 +483,13 @@ func playMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		anime := movieAnime(config, store, movie, title, stream, start)
 		if config.CastToDevice {
 			if castMovie(config, &anime) {
-				traktPaused(lib.trakt, store, movie)
+				played(source.Server)
 				return
 			}
 			continue
 		}
 		if playMovieInMPV(config, store, movie, title, stream, &anime, start) {
-			traktPaused(lib.trakt, store, movie)
+			played(source.Server)
 			return
 		}
 	}
