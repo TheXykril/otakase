@@ -302,6 +302,12 @@ func resolveImgstore(page, referrer string) (Stream, error) {
 	if err != nil {
 		return Stream{}, err
 	}
+	// The page is served for a file that is gone; only the file link says so,
+	// with 410. Asking for its first bytes finds that out in a moment rather
+	// than after the player has waited the whole start timeout.
+	if status := firstBytesStatus(link, page); status == http.StatusGone || status == http.StatusNotFound {
+		return Stream{}, fmt.Errorf("imgsto.re: the file was removed (%d)", status)
+	}
 	return Stream{URL: link, Referrer: page, Server: "imgsto.re"}, nil
 }
 
@@ -321,4 +327,24 @@ func imgstoreLink(body string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("imgsto.re: no video link on the page (removed, or the page changed)")
+}
+
+// firstBytesStatus is the status a host answers a request for the first
+// bytes of a file with, or 0 when it cannot be asked.
+func firstBytesStatus(link, referrer string) int {
+	req, err := http.NewRequest(http.MethodGet, link, nil)
+	if err != nil {
+		return 0
+	}
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Range", "bytes=0-1023")
+	if referrer != "" {
+		req.Header.Set("Referer", referrer)
+	}
+	resp, err := hostClient.Do(req)
+	if err != nil {
+		return 0
+	}
+	resp.Body.Close()
+	return resp.StatusCode
 }
