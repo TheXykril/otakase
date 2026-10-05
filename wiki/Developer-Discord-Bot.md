@@ -31,6 +31,9 @@ server and stays connected to Discord.
 - **/provider-status:** runs `otakase -provider-status` with the latest
   release (bundled in the add-on, fetched by `install.sh`) and lists which
   sources answer, cached for five minutes. 18+ sources are never listed.
+  The same check is posted as a reply when someone asks in chat whether
+  otakase or a source is down (`downRe` in `providers.go`), at most once per
+  channel every ten minutes.
 - **Airing today:** each day at `OTAKASE_AIRING_HOUR` (UTC, default 6) the
   anime channel gets the 20 most popular Japanese episodes airing in the next
   24 hours from AniList, never adult titles, with times shown in each

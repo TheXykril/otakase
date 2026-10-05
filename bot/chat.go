@@ -19,6 +19,9 @@ func (b *bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 	go b.linkIssues(m)
+	if b.downCheck(m) {
+		return
+	}
 	if f, ok := b.auto.match(m.ChannelID, m.Content); ok {
 		_, err := s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 			Embeds:          []*discordgo.MessageEmbed{{Title: f.Question, Description: f.Answer, Color: shu}},

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"regexp"
@@ -148,4 +149,33 @@ func (b *bot) providerStatus() (*discordgo.MessageEmbed, []discordgo.MessageComp
 	}
 	c.embed, c.at = providerEmbed(list, version), time.Now()
 	return c.embed, nil
+}
+
+// downRe spots "is it down?" questions in chat, which get the source check
+// as a reply instead of the FAQ answer.
+var downRe = regexp.MustCompile(`(?i)\b(is|are)\s+(it|otakase|the\s+\w+|any\s+\w+|\w+)\s+(down|broken|dead|offline)\b` +
+	`|\b(sources?|providers?|sites?|servers?)\s+(are\s+|is\s+)?(down|broken|dead|offline|not working)\b` +
+	`|\bdown for (everyone|anyone|me)\b` +
+	`|\banyone else\b.*\b(not working|broken|down|no results|nothing found)\b`)
+
+// downCheck answers a "is it down?" message with the source check, at most
+// once per channel every ten minutes. It reports whether it answered.
+func (b *bot) downCheck(m *discordgo.MessageCreate) bool {
+	if !downRe.MatchString(m.Content) || !b.issues.allowKey(m.ChannelID+"/down") {
+		return false
+	}
+	go func() {
+		_ = b.s.ChannelTyping(m.ChannelID)
+		e, _ := b.providerStatus()
+		_, err := b.s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+			Content:         "Here's what works from the bot's side right now:",
+			Embeds:          []*discordgo.MessageEmbed{e},
+			Reference:       m.Reference(),
+			AllowedMentions: &discordgo.MessageAllowedMentions{},
+		})
+		if err != nil {
+			log.Printf("down check: %v", err)
+		}
+	}()
+	return true
 }

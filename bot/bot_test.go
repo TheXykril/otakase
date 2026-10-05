@@ -201,3 +201,19 @@ func TestIsNudge(t *testing.T) {
 		t.Error("isNudge wrong")
 	}
 }
+
+func TestDownRe(t *testing.T) {
+	for _, text := range []string{
+		"is otakase down?", "are the sources down rn", "is anikoto broken", "providers not working today",
+		"down for everyone or just me?", "anyone else getting no results?",
+	} {
+		if !downRe.MatchString(text) {
+			t.Errorf("%q should count as a down question", text)
+		}
+	}
+	for _, text := range []string{"I'm feeling down today", "scroll down to the bottom", "the episode was great"} {
+		if downRe.MatchString(text) {
+			t.Errorf("%q should not count", text)
+		}
+	}
+}
