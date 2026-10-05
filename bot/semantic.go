@@ -56,7 +56,7 @@ var intentExamples = map[string][]string{
 
 // questionRe keeps the model to messages that look like questions or
 // problem reports, so ordinary chat is never sent to it.
-var questionRe = regexp.MustCompile(`(?i)\?|^(how|why|what|where|can|does|do|is|are|anyone|help)\b|\b(not working|doesn'?t work|won'?t|can'?t|error|broken|fails?)\b`)
+var questionRe = regexp.MustCompile(`(?i)\?|^(how|why|what|where|can|does|do|is|are|anyone|help)\b|\b(not|never|doesn'?t|don'?t|didn'?t|isn'?t|won'?t|can'?t|error|broken|fails?|stuck)\b`)
 
 type semantic struct {
 	url, model string
