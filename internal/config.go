@@ -227,7 +227,7 @@ func defaultConfigMap() map[string]string {
 		"AddMissingOptions":          "true",
 		"AlternateScreen":            "true",
 		"DiscordPresence":            "true",
-		"DiscordClientId":            "1287457464148820089",
+		"DiscordClientId":            OtakaseDiscordAppID,
 		"VimKeys":                    "false",
 		"AnimeSkipClientID":          "",
 		"ContributeSkipTimes":        "true",
