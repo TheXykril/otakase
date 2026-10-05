@@ -24,10 +24,12 @@ var intentExamples = map[string][]string{
 	"mpv": {
 		"playback never starts", "the player doesn't open", "mpv not found",
 		"video won't play", "nothing happens when I pick an episode", "player closes right away",
+		"black screen when playing",
 	},
 	"nothing-found": {
 		"no results when I search", "it can't find the anime", "search shows nothing",
 		"no episodes found for this show", "the show I want isn't there",
+		"can't find one piece", "searching for a show gives nothing",
 	},
 	"icons": {
 		"menu icons show as boxes", "weird squares instead of icons", "icons look broken in the menu",
@@ -36,7 +38,8 @@ var intentExamples = map[string][]string{
 		"my anilist progress didn't update", "episodes aren't tracked on myanimelist",
 		"watch progress doesn't sync", "anilist login stopped working",
 		"my list didn't update after watching", "finished anime isn't marked completed on my list",
-		"watched episodes don't show on my list",
+		"watched episodes don't show on my list", "mal doesn't track my episodes",
+		"episodes I watch don't count",
 	},
 	"cast": {
 		"casting can't find my tv", "chromecast doesn't show up", "how do I cast to my tv",
@@ -44,10 +47,11 @@ var intentExamples = map[string][]string{
 	},
 	"install": {
 		"how do I install otakase", "how do I update to the new version", "how to install on windows",
-		"install on linux", "how do I upgrade",
+		"install on linux", "how do I upgrade", "how to get it on mac", "what's the install command",
 	},
 	"dev-builds": {
 		"can I try new features early", "where do I get test builds", "is there a beta version",
+		"can I test unreleased features",
 	},
 	"down": {
 		"is otakase down", "are the sources broken right now", "is it down for everyone",
@@ -58,7 +62,7 @@ var intentExamples = map[string][]string{
 
 // questionRe keeps the model to messages that look like questions or
 // problem reports, so ordinary chat is never sent to it.
-var questionRe = regexp.MustCompile(`(?i)\?|^(how|why|what|where|can|does|do|is|are|anyone|help)\b|\b(not|never|doesn'?t|don'?t|didn'?t|isn'?t|won'?t|can'?t|error|broken|fails?|stuck)\b`)
+var questionRe = regexp.MustCompile(`(?i)\?|^(how|why|what|where|can|does|do|is|are|anyone|help)\b|\b(not|never|doesn'?t|don'?t|didn'?t|isn'?t|won'?t|can'?t|error|broken|fails?|stuck|nothing|no|crash\w*|closes|stopped|instead|missing|weird|black screen|says|what'?s)\b`)
 
 type semantic struct {
 	url, model string
