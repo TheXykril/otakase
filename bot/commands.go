@@ -8,6 +8,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+var zero = 0.0
+
 func (b *bot) registerCommands() error {
 	osChoices := []*discordgo.ApplicationCommandOptionChoice{
 		{Name: "Debian / Ubuntu / other Linux", Value: "linux"},
@@ -30,6 +32,14 @@ func (b *bot) registerCommands() error {
 		{Name: "latest", Description: "The latest Otakase release"},
 		{Name: "anime", Description: "Look up an anime on AniList", Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionString, Name: "title", Description: "Anime title", Required: true},
+		}},
+		{Name: "provider-status", Description: "Which anime sources work right now"},
+		{Name: "bug", Description: "Turn this support post into a GitHub issue"},
+		{Name: "watchparty", Description: "Plan a watch party in a voice channel", Options: []*discordgo.ApplicationCommandOption{
+			{Type: discordgo.ApplicationCommandOptionString, Name: "anime", Description: "What you'll watch", Required: true},
+			{Type: discordgo.ApplicationCommandOptionInteger, Name: "starts_in", Description: "Minutes from now (default 15)", MinValue: &zero, MaxValue: 10080},
+			{Type: discordgo.ApplicationCommandOptionChannel, Name: "voice", Description: "Voice channel (default lounge)",
+				ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildVoice, discordgo.ChannelTypeGuildStageVoice}},
 		}},
 	}
 	if b.cfg.GitHubClientID != "" && b.cfg.ContributorRole != "" {
@@ -70,10 +80,19 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			b.deferThen(i, false, func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) { return searchAnime(opt("title")) })
 		case "link-github":
 			b.startGitHubLink(i)
+		case "provider-status":
+			b.deferThen(i, false, b.providerStatus)
+		case "bug":
+			b.reportBug(i)
+		case "watchparty":
+			b.watchparty(i)
 		}
 	case discordgo.InteractionMessageComponent:
-		if i.MessageComponentData().CustomID == "solved" {
+		switch i.MessageComponentData().CustomID {
+		case "solved":
 			b.markSolved(i)
+		case "bug":
+			b.reportBug(i)
 		}
 	}
 }
@@ -84,9 +103,14 @@ func helpEmbed() *discordgo.MessageEmbed {
 		"`/faq` answers to common questions",
 		"`/latest` the newest release",
 		"`/anime` look up a show on AniList",
+		"`/provider-status` which anime sources work right now",
+		"`/watchparty` plan a watch party in a voice channel",
+		"`/bug` turn a support post into a GitHub issue",
+		"Type `#123` to show a GitHub issue or pull request",
 		"`/link-github` Contributor role if you have a merged pull request",
 		"",
 		"In the support forum, press **Mark solved** when your problem is fixed.",
+		"Episodes airing today are posted in the anime channel each morning.",
 	}, "\n")}
 }
 

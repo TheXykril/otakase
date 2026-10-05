@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"net/url"
 	"strings"
 	"time"
 
@@ -21,6 +23,7 @@ func (b *bot) onThreadCreate(s *discordgo.Session, t *discordgo.ThreadCreate) {
 		Embeds: []*discordgo.MessageEmbed{{Description: supportChecklist, Color: shu}},
 		Components: []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 			discordgo.Button{Label: "Mark solved", Style: discordgo.SuccessButton, CustomID: "solved"},
+			discordgo.Button{Label: "Report on GitHub", Style: discordgo.SecondaryButton, CustomID: "bug"},
 			discordgo.Button{Label: "Troubleshooting", Style: discordgo.LinkButton, URL: wikiURL + "/Troubleshooting"},
 		}}},
 	})
@@ -70,4 +73,32 @@ func contains(xs []string, x string) bool {
 		}
 	}
 	return false
+}
+
+// bugReportURL opens a new GitHub issue filled in from a support post.
+func bugReportURL(title, question, postURL string) string {
+	body := "**Describe the bug**\n" + clip(strings.TrimSpace(question), 1500) +
+		"\n\n**Version and system**\n\n\n_From the Discord support post: " + postURL + "_"
+	q := url.Values{"title": {clip(title, 120)}, "body": {body}, "labels": {"bug"}}
+	return repoURL + "/issues/new?" + q.Encode()
+}
+
+// reportBug answers /bug or the "Report on GitHub" button inside a support
+// post with a link that opens a pre-filled GitHub issue.
+func (b *bot) reportBug(i *discordgo.InteractionCreate) {
+	s := b.s
+	th, err := s.Channel(i.ChannelID)
+	if err != nil || th.ParentID != b.cfg.SupportForum {
+		b.respond(i, true, errorEmbed("Use this inside a post in the support forum."))
+		return
+	}
+	question := ""
+	// A forum post's first message has the same id as the post.
+	if m, err := s.ChannelMessage(th.ID, th.ID); err == nil {
+		question = m.Content
+	}
+	post := fmt.Sprintf("https://discord.com/channels/%s/%s", b.cfg.GuildID, th.ID)
+	b.respond(i, true, &discordgo.MessageEmbed{Color: shu,
+		Description: "This opens a GitHub issue filled in from this post. Add your version (`otakase -v`) and system, then submit it."},
+		linkButtons("Open GitHub issue", bugReportURL(th.Name, question, post))...)
 }

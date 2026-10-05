@@ -25,6 +25,23 @@ server and stays connected to Discord.
 - **Contributor role:** `/link-github` uses GitHub's device flow (the member
   enters a code on github.com, so the bot needs no web address) and gives the
   Contributor role when that account has a merged pull request here.
+- **Issue links:** `#123` in a message gets a card for that GitHub issue or
+  pull request (title, open/merged/closed, labels), at most once per number
+  per channel every 10 minutes. Code spans and channel mentions are skipped.
+- **/provider-status:** runs `otakase -provider-status` with the latest
+  release (bundled in the add-on, fetched by `install.sh`) and lists which
+  sources answer, cached for five minutes. 18+ sources are never listed.
+- **Airing today:** each day at `OTAKASE_AIRING_HOUR` (UTC, default 6) the
+  anime channel gets the 20 most popular Japanese episodes airing in the next
+  24 hours from AniList, never adult titles, with times shown in each
+  reader's own time zone. `OTAKASE_DAILY_AIRING=false` turns it off.
+- **Report on GitHub:** the support checklist has a button, and `/bug` does the
+  same inside a post: it opens a new GitHub issue pre-filled with the post's
+  title and question.
+- **Stale posts:** a support post quiet for a week gets a nudge to its poster;
+  with no reply three days later it is closed. Solved posts are skipped.
+- **/watchparty:** creates a server event in a voice channel (the lounge by
+  default) with the show's AniList banner, starting in the given minutes.
 - **Status:** Do Not Disturb, cycling every two minutes through "Watching
   anime · /help", "Playing Otakase <latest release>", the website and
   "Listening to your terminal" (`presence.go`). Bots can't show rich presence
@@ -39,7 +56,8 @@ In the developer portal, under **Bot**, turn on **Server Members Intent** and
 **Message Content Intent**; the bot exits at login without them. It needs the
 Bot role in the server, with permission to send messages, manage messages
 (spam removal), manage threads (closing solved posts), moderate members
-(timeouts) and manage roles (Contributor, placed above that role).
+(timeouts), manage roles (Contributor, placed above that role) and create
+events (`/watchparty`).
 
 ## GitHub linking
 

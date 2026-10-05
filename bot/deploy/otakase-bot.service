@@ -4,6 +4,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
+Environment=OTAKASE_CLI=/usr/local/libexec/otakase
 EnvironmentFile=/etc/otakase-bot.env
 ExecStart=/usr/local/bin/otakase-bot
 Restart=always
