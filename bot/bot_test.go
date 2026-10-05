@@ -433,3 +433,14 @@ func TestChannelBase(t *testing.T) {
 		}
 	}
 }
+
+func TestQuestionFilter(t *testing.T) {
+	for _, s := range []string{"my list doesnt save what i watched", "anilist not updating after episodes", "player wont open"} {
+		if !questionRe.MatchString(s) {
+			t.Errorf("skipped %q", s)
+		}
+	}
+	if questionRe.MatchString("just finished frieren, so good") {
+		t.Error("plain chat matched")
+	}
+}
