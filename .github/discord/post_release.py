@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
-"""Post a release announcement to Discord.
+"""Post a release or dev build announcement to Discord.
 
-Reads the version's section from CHANGELOG.md and sends a card (header image,
-the bold lead of each changelog entry, buttons to the release) to the webhook
-in DISCORD_RELEASE_WEBHOOK, pinging DISCORD_RELEASE_ROLE if set.
+A release card reads the version's section from CHANGELOG.md: a header image,
+the bold lead of each changelog entry and buttons to the release. It goes to
+DISCORD_RELEASE_WEBHOOK, pinging DISCORD_RELEASE_ROLE if set.
 
-    post_release.py render VERSION OUT.html   # header page to screenshot
-    post_release.py post VERSION HEADER.png   # send the post
+A dev build card lists the feat/fix commits on main since the last release
+commit, with buttons to the dev pre-release. It goes to DISCORD_DEV_WEBHOOK,
+pinging DISCORD_DEV_ROLE if set.
+
+    post_release.py render VERSION OUT.html       # header page to screenshot
+    post_release.py post VERSION HEADER.png       # send the release post
+    post_release.py render-dev VERSION OUT.html
+    post_release.py post-dev VERSION HEADER.png   # run in a checkout with history
 """
 import datetime
 import html
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.request
 import uuid
@@ -20,6 +27,7 @@ import uuid
 REPO = "https://github.com/TheXykril/otakase"
 SITE = "https://otakase.xyverion.com/"
 SHU = 0xD2492F
+AVATAR = "https://raw.githubusercontent.com/TheXykril/otakase/main/.github/discord/avatar.png"
 MAX_ITEMS = 6
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -58,16 +66,79 @@ def subtitle(date):
     return f"released {d.strftime('%B')} {d.day}, {d.year}"
 
 
-def render(version, out):
-    date, _ = changelog_section(version)
+def render(version, out, dev=False):
+    if dev:
+        kana, sub = "試作", "test build · may be broken"
+    else:
+        kana, sub = "新版", subtitle(changelog_section(version)[0])
     page = open(os.path.join(HERE, "release-header.html"), encoding="utf-8").read()
-    page = page.replace("{{VERSION}}", html.escape(version)).replace("{{SUBTITLE}}", html.escape(subtitle(date)))
+    for k, v in (("{{KANA}}", kana), ("{{VERSION}}", version), ("{{SUBTITLE}}", sub)):
+        page = page.replace(k, html.escape(v))
     open(out, "w", encoding="utf-8").write(page)
 
 
+def dev_changes():
+    """feat/fix commit subjects on HEAD since the last release commit."""
+    try:
+        log = subprocess.run(["git", "log", "--no-merges", "--format=%h%x09%s", "-n", "200"],
+                             cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    out = []
+    for line in log.splitlines():
+        sha, _, subject = line.partition("\t")
+        if subject.startswith("release:"):
+            break
+        m = re.match(r"(feat|fix)(\([^)]*\))?!?:\s*(.+)", subject)
+        if m:
+            text = re.sub(r"\s*\(#\d+\)$", "", m.group(3))
+            out.append((m.group(1), text[:1].upper() + text[1:], sha))
+    return out
+
+
+def text(s):
+    return {"type": 10, "content": s}
+
+
+SEP = {"type": 14, "divider": True, "spacing": 1}
+
+
+def message(card, buttons, role, has_image):
+    comps = []
+    if has_image:
+        comps.append({"type": 12, "items": [{"media": {"url": "attachment://header.png"}}]})
+    comps.append({"type": 17, "accent_color": SHU, "components": card})
+    comps.append({"type": 1, "components": [{"type": 2, "style": 5, "label": l, "url": u} for l, u in buttons]})
+    body = {"flags": 1 << 15, "components": comps, "username": "Otakase", "avatar_url": AVATAR,
+            "allowed_mentions": {"roles": [role] if role else []}}
+    if has_image:
+        body["attachments"] = [{"id": 0, "filename": "header.png"}]
+    return body
+
+
+def dev_payload(version, changes, role, has_image):
+    head = f"## Test build {version}"
+    if role:
+        head += f"\n<@&{role}>"
+    card = [text(head), SEP]
+    groups = (("New", "feat"), ("Fixed", "fix"))
+    for title, kind in groups:
+        items = [c for c in changes if c[0] == kind]
+        if items:
+            lines = [f"- {t} ([`{h}`]({REPO}/commit/{h}))" for _, t, h in items[:8]]
+            if len(items) > 8:
+                lines.append(f"- *and {len(items) - 8} more*")
+            card.append(text(f"### {title}\n" + "\n".join(lines)))
+    if not changes:
+        card.append(text("Internal changes only."))
+    card += [SEP, text("-# Can be broken and is replaced by the next test build. "
+                       "Set `DevBuilds=true` in the config to get it with `otakase -u`. "
+                       "Report problems in the support forum.")]
+    return message(card, [("Download", f"{REPO}/releases/tag/dev"),
+                          ("Changes on main", f"{REPO}/commits/main")], role, has_image)
+
+
 def payload(version, date, groups, role, has_image):
-    text = lambda s: {"type": 10, "content": s}
-    sep = {"type": 14, "divider": True, "spacing": 1}
     head = f"## otakase {version} is out"
     meta = []
     if role:
@@ -77,7 +148,7 @@ def payload(version, date, groups, role, has_image):
         meta.append(f"<t:{ts}:D>")
     if meta:
         head += "\n" + "  ·  ".join(meta)
-    card = [text(head), sep]
+    card = [text(head), SEP]
     for title, entries in groups:
         if not entries:
             continue
@@ -85,34 +156,28 @@ def payload(version, date, groups, role, has_image):
         if len(entries) > MAX_ITEMS:
             lines.append(f"- *and {len(entries) - MAX_ITEMS} more*")
         card.append(text(f"### {title}\n" + "\n".join(lines)))
-    card += [sep, text("-# Update with `otakase -u`")]
+    card += [SEP, text("-# Update with `otakase -u`")]
     tag = f"v{version}"
-    comps = []
-    if has_image:
-        comps.append({"type": 12, "items": [{"media": {"url": "attachment://header.png"}}]})
-    comps.append({"type": 17, "accent_color": SHU, "components": card})
-    comps.append({"type": 1, "components": [
-        {"type": 2, "style": 5, "label": "Download", "url": f"{REPO}/releases/tag/{tag}"},
-        {"type": 2, "style": 5, "label": "Full changelog", "url": f"{REPO}/blob/{tag}/CHANGELOG.md"},
-        {"type": 2, "style": 5, "label": "Website", "url": SITE},
-    ]})
-    body = {"flags": 1 << 15, "components": comps,
-            "allowed_mentions": {"roles": [role] if role else []}}
-    if has_image:
-        body["attachments"] = [{"id": 0, "filename": "header.png"}]
-    return body
+    return message(card, [("Download", f"{REPO}/releases/tag/{tag}"),
+                          ("Full changelog", f"{REPO}/blob/{tag}/CHANGELOG.md"),
+                          ("Website", SITE)], role, has_image)
 
 
-def post(version, header):
-    hook = os.environ.get("DISCORD_RELEASE_WEBHOOK", "").strip()
+def post(version, header, dev=False):
+    prefix = "DISCORD_DEV" if dev else "DISCORD_RELEASE"
+    hook = os.environ.get(f"{prefix}_WEBHOOK", "").strip()
     if not hook:
-        print("DISCORD_RELEASE_WEBHOOK is not set; nothing to post.")
+        print(f"{prefix}_WEBHOOK is not set; nothing to post.")
         return
     hook = re.sub(r"/github/?$", "", hook)
-    role = os.environ.get("DISCORD_RELEASE_ROLE", "").strip()
-    date, groups = changelog_section(version)
+    role = os.environ.get(f"{prefix}_ROLE", "").strip()
     has_image = bool(header) and os.path.exists(header)
-    body = json.dumps(payload(version, date, groups, role, has_image)).encode()
+    if dev:
+        body = dev_payload(version, dev_changes(), role, has_image)
+    else:
+        date, groups = changelog_section(version)
+        body = payload(version, date, groups, role, has_image)
+    body = json.dumps(body).encode()
 
     boundary = uuid.uuid4().hex
     parts = [f"--{boundary}\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n"
@@ -131,7 +196,8 @@ def post(version, header):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4 or sys.argv[1] not in ("render", "post"):
+    modes = {"render": render, "post": post, "render-dev": render, "post-dev": post}
+    if len(sys.argv) != 4 or sys.argv[1] not in modes:
         sys.exit(__doc__)
     version = sys.argv[2].lstrip("v")
-    (render if sys.argv[1] == "render" else post)(version, sys.argv[3])
+    modes[sys.argv[1]](version, sys.argv[3], dev=sys.argv[1].endswith("-dev"))

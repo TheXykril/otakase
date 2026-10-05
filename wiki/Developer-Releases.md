@@ -86,6 +86,13 @@ the changelog and the website.
   ping.
 - To post a release again, run the `Discord release` workflow from the
   Actions tab with its version.
+- Each dev build (the `Dev Build` workflow) posts a card to the
+  test-builds channel too: its version, the `feat`/`fix` commits on `main`
+  since the last release commit, a ping for the Tester role and a link to the
+  `dev` pre-release. It needs a `DISCORD_DEV_WEBHOOK` secret (that channel's
+  webhook URL); the role is `DISCORD_DEV_ROLE` in `dev-build.yml`.
+- Posts go out as "Otakase" with `.github/discord/avatar.png`, whatever the
+  webhook itself is named.
 - To preview a post, run `python3 .github/discord/post_release.py post
   VERSION header.png` with `DISCORD_RELEASE_WEBHOOK` set to a test channel's
   webhook.
