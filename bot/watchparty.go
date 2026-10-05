@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -83,17 +84,46 @@ func imageDataURI(url string) string {
 	return "data:" + http.DetectContentType(data) + ";base64," + base64.StdEncoding.EncodeToString(data)
 }
 
+// Who can talk and screen share in a party's voice channel.
+const (
+	partyTalk     = "talk"  // everyone talks, only the host screen shares
+	partyShare    = "share" // everyone talks and screen shares
+	partyHostOnly = "host"  // only the host talks and screen shares
+)
+
+const partyVoice = int64(discordgo.PermissionVoiceSpeak | discordgo.PermissionVoiceStreamVideo)
+
+// partyOverwrites lets the host talk and screen share and sets what
+// everyone else may do, whatever the server's defaults are.
+func partyOverwrites(guildID, host, mode string) []*discordgo.PermissionOverwrite {
+	everyone := &discordgo.PermissionOverwrite{ID: guildID, Type: discordgo.PermissionOverwriteTypeRole}
+	switch mode {
+	case partyShare:
+		everyone.Allow = partyVoice
+	case partyHostOnly:
+		everyone.Deny = partyVoice
+	default:
+		everyone.Allow, everyone.Deny = discordgo.PermissionVoiceSpeak, discordgo.PermissionVoiceStreamVideo
+	}
+	return []*discordgo.PermissionOverwrite{
+		everyone,
+		{ID: host, Type: discordgo.PermissionOverwriteTypeMember, Allow: partyVoice},
+	}
+}
+
 func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 	d := i.ApplicationCommandData()
-	title, minutes, channel := "", int64(15), ""
+	title, minutes, limit, mode := "", int64(15), 0, partyTalk
 	for _, o := range d.Options {
 		switch o.Name {
 		case "anime":
 			title = o.StringValue()
 		case "starts_in":
 			minutes = o.IntValue()
+		case "limit":
+			limit = int(o.IntValue())
 		case "voice":
-			channel = o.ChannelValue(nil).ID
+			mode = o.StringValue()
 		}
 	}
 	host := i.Member.User
@@ -110,15 +140,21 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 		if minutes < 1 {
 			start = time.Now().Add(time.Minute) // events must start in the future
 		}
-		var made string
-		if channel == "" {
-			c, err := b.createRoom(i.Member, clip("🎬 "+show.Title, 90), false, 0)
-			if err != nil {
-				log.Printf("watchparty channel: %v", err)
-				return errorEmbed("Couldn't make a voice channel. The bot needs **Manage Channels**."), nil
-			}
-			channel, made = c.ID, c.ID
+		cat, err := b.partyCategory()
+		if err != nil {
+			log.Printf("watchparty category: %v", err) // the room goes with the other rooms
 		}
+		name, perms := clip("🎬 "+show.Title, 90), partyOverwrites(b.cfg.GuildID, host.ID, mode)
+		c, err := b.createRoom(i.Member, name, false, limit, cat, perms...)
+		if err != nil && cat != "" {
+			// The category may have just gone with the last party; use the rooms one.
+			c, err = b.createRoom(i.Member, name, false, limit, "", perms...)
+		}
+		if err != nil {
+			log.Printf("watchparty channel: %v", err)
+			return errorEmbed("Couldn't make a voice channel. The bot needs **Manage Channels**."), nil
+		}
+		channel := c.ID
 		desc := fmt.Sprintf("Watch party hosted by <@%s>. Join the voice channel and watch along with otakase.", host.ID)
 		if show.URL != "" {
 			desc += "\n" + show.URL
@@ -134,19 +170,16 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 		})
 		if err != nil {
 			log.Printf("watchparty: %v", err)
-			if made != "" {
-				b.sweepRoom(made, true)
-			}
+			b.sweepRoom(channel, true)
 			return errorEmbed("Couldn't create the event. The bot needs the **Create Events** permission."), nil
 		}
-		if made != "" {
-			// Kept until half an hour after the start, then removed once empty.
-			b.store.update(func(d *storeData) {
-				r := d.Rooms[made]
-				r.Event, r.KeepUntil = ev.ID, start.Add(30*time.Minute)
-				d.Rooms[made] = r
-			})
-		}
+		// Kept until the start; after that the party ends once everyone has
+		// left (or partyNoShowWait after the start if nobody came).
+		b.store.update(func(d *storeData) {
+			r := d.Rooms[channel]
+			r.Event, r.KeepUntil = ev.ID, start
+			d.Rooms[channel] = r
+		})
 		link := eventLink(ev)
 		e := &discordgo.MessageEmbed{
 			Title:       "Watch party: " + show.Title,
@@ -162,6 +195,70 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 			discordgo.Button{Label: "Cancel", Style: discordgo.DangerButton, CustomID: "party-cancel:" + ev.ID},
 		}}}
 	})
+}
+
+// Watch party channels go in their own category, made with the first party
+// and deleted once the last party's channel is gone.
+const partyCategoryName = "WatchParty"
+
+// partyNoShowWait is how long after the start a party nobody joined is kept.
+const partyNoShowWait = 15 * time.Minute
+
+var partyCategoryMu sync.Mutex
+
+func isPartyCategory(c *discordgo.Channel) bool {
+	if c.Type != discordgo.ChannelTypeGuildCategory {
+		return false
+	}
+	n := strings.NewReplacer(" ", "", "-", "", "_", "").Replace(strings.ToLower(channelBase(c.Name)))
+	return n == "watchparty" || n == "watchparties"
+}
+
+// partyCategory returns the watch party category, making it if needed.
+func (b *bot) partyCategory() (string, error) {
+	partyCategoryMu.Lock()
+	defer partyCategoryMu.Unlock()
+	chans, err := b.s.GuildChannels(b.cfg.GuildID)
+	if err != nil {
+		return "", err
+	}
+	for _, c := range chans {
+		if isPartyCategory(c) {
+			return c.ID, nil
+		}
+	}
+	c, err := b.s.GuildChannelCreateComplex(b.cfg.GuildID, discordgo.GuildChannelCreateData{
+		Name: partyCategoryName, Type: discordgo.ChannelTypeGuildCategory,
+	}, discordgo.WithAuditLogReason("Watch party"))
+	if err != nil {
+		return "", err
+	}
+	return c.ID, nil
+}
+
+// dropPartyCategory deletes the watch party category once nothing is in it.
+func (b *bot) dropPartyCategory(id string) {
+	partyCategoryMu.Lock()
+	defer partyCategoryMu.Unlock()
+	chans, err := b.s.GuildChannels(b.cfg.GuildID)
+	if err != nil {
+		return
+	}
+	var cat *discordgo.Channel
+	for _, c := range chans {
+		if c.ParentID == id {
+			return
+		}
+		if c.ID == id {
+			cat = c
+		}
+	}
+	if cat == nil || !isPartyCategory(cat) {
+		return
+	}
+	if _, err := b.s.ChannelDelete(id, discordgo.WithAuditLogReason("No watch parties left")); err != nil {
+		log.Printf("delete party category: %v", err)
+	}
 }
 
 func eventLink(ev *discordgo.GuildScheduledEvent) string {
@@ -223,20 +320,37 @@ func (b *bot) cancelParty(i *discordgo.InteractionCreate, eventID string) {
 	}
 }
 
-// dropPartyRoom stops keeping a cancelled party's voice channel, which then
-// goes once nobody is in it.
+// dropPartyRoom deletes a cancelled party's voice channel straight away.
 func (b *bot) dropPartyRoom(eventID string) {
 	var id string
-	b.store.update(func(d *storeData) {
-		for ch, r := range d.Rooms {
-			if r.Event == eventID {
-				r.KeepUntil, r.Used = time.Time{}, true
-				d.Rooms[ch] = r
-				id = ch
+	var r room
+	b.store.view(func(d *storeData) {
+		for ch, x := range d.Rooms {
+			if x.Event == eventID {
+				id, r = ch, x
 			}
 		}
 	})
 	if id != "" {
-		b.sweepRoom(id, false)
+		r.Event = "" // already deleted
+		b.deleteRoom(id, r, "Watch party cancelled")
+	}
+}
+
+// endParty finishes a party's event once its channel is gone: a running one
+// is marked completed, one that never started is deleted.
+func (b *bot) endParty(eventID string) {
+	ev, err := b.s.GuildScheduledEvent(b.cfg.GuildID, eventID, false)
+	if err != nil {
+		return // already over or deleted
+	}
+	switch ev.Status {
+	case discordgo.GuildScheduledEventStatusActive:
+		_, err = b.s.GuildScheduledEventEdit(b.cfg.GuildID, eventID, &discordgo.GuildScheduledEventParams{Status: discordgo.GuildScheduledEventStatusCompleted})
+	case discordgo.GuildScheduledEventStatusScheduled:
+		err = b.s.GuildScheduledEventDelete(b.cfg.GuildID, eventID)
+	}
+	if err != nil {
+		log.Printf("end party: %v", err)
 	}
 }

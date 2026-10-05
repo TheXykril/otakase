@@ -52,13 +52,19 @@ server and stays connected to Discord.
   title and question.
 - **Stale posts:** a support post quiet for a week gets a nudge to its poster;
   with no reply three days later it is closed. Solved posts are skipped.
-- **/watchparty:** makes a voice channel for the party (or uses the one
-  given) and a server event in it with the show's AniList banner, starting in
-  the given minutes. The party's channel stays until half an hour after the
-  start, then goes like any voice room.
+- **/watchparty:** makes a voice channel for the party and a server event in
+  it with the show's AniList banner, starting in the given minutes. Options
+  set a member limit and who can talk and screen share: everyone talks and
+  only the host shares (default), everyone talks and shares, or only the host
+  does both. Party channels go in a **WatchParty** category, made with the
+  first party and deleted when the last party channel goes. The party's
+  channel stays until the start. After that the party ends a minute after
+  the last person leaves (the minute lets someone whose connection dropped
+  rejoin), or 15 minutes after the start if nobody came: the channel is
+  deleted and the event is ended.
   Any member can start one, one at a time; the post's **Cancel** button
-  deletes the event and works for the host and for anyone who can manage
-  events.
+  deletes the event and the channel at once and works for the host and for
+  anyone who can manage events.
 - **Voice rooms:** joining the voice channel named **Create room** (or
   "join to create") makes a voice channel for that member, in the same
   category, and moves them in. `/room` does the same with a choice of public
