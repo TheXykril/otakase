@@ -464,6 +464,23 @@ func TestIsPartyCategory(t *testing.T) {
 	}
 }
 
+func TestCategoriesFirst(t *testing.T) {
+	cat := discordgo.ChannelTypeGuildCategory
+	o := categoriesFirst([]*discordgo.Channel{
+		{ID: "b", Type: cat, Position: 2}, {ID: "v", Type: discordgo.ChannelTypeGuildVoice}, {ID: "a", Type: cat, Position: 0},
+	}, "new")
+	var got []string
+	for n, c := range o {
+		if c.Position != n {
+			t.Errorf("%s at %d", c.ID, c.Position)
+		}
+		got = append(got, c.ID)
+	}
+	if strings.Join(got, ",") != "new,a,b" {
+		t.Errorf("order %v", got)
+	}
+}
+
 func snowflakeAt(t time.Time) string {
 	return strconv.FormatInt((t.UnixMilli()-1420070400000)<<22, 10)
 }

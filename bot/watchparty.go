@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -233,7 +234,27 @@ func (b *bot) partyCategory() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := b.s.GuildChannelsReorder(b.cfg.GuildID, categoriesFirst(chans, c.ID)); err != nil {
+		log.Printf("move watch party category: %v", err) // stays at the bottom
+	}
 	return c.ID, nil
+}
+
+// categoriesFirst orders the server's categories with first at the top and
+// the others after it in their current order.
+func categoriesFirst(chans []*discordgo.Channel, first string) []*discordgo.Channel {
+	var cats []*discordgo.Channel
+	for _, c := range chans {
+		if c.Type == discordgo.ChannelTypeGuildCategory && c.ID != first {
+			cats = append(cats, c)
+		}
+	}
+	sort.SliceStable(cats, func(i, j int) bool { return cats[i].Position < cats[j].Position })
+	order := []*discordgo.Channel{{ID: first, Position: 0}}
+	for n, c := range cats {
+		order = append(order, &discordgo.Channel{ID: c.ID, Position: n + 1})
+	}
+	return order
 }
 
 // dropPartyCategory deletes the watch party category once nothing is in it.
@@ -292,32 +313,43 @@ func (b *bot) hostedParty(userID string) *discordgo.GuildScheduledEvent {
 }
 
 // cancelParty handles the Cancel button: the host or anyone who can manage
-// events deletes the event, and the post says it was cancelled.
+// events deletes the event and its channel, and the post says it was
+// cancelled. It acknowledges first, since the deletes can take longer than
+// Discord's three seconds.
 func (b *bot) cancelParty(i *discordgo.InteractionCreate, eventID string) {
+	if err := b.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredMessageUpdate}); err != nil {
+		log.Printf("cancel party defer: %v", err)
+		return
+	}
+	fail := func(format string, a ...any) {
+		if _, err := b.s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{errorEmbed(format, a...)}, Flags: discordgo.MessageFlagsEphemeral}); err != nil {
+			log.Printf("cancel party reply: %v", err)
+		}
+	}
 	ev, err := b.s.GuildScheduledEvent(b.cfg.GuildID, eventID, false)
 	if err != nil {
-		b.respond(i, true, errorEmbed("This watch party is already over or cancelled."))
+		fail("This watch party is already over or cancelled.")
 		return
 	}
 	user := i.Member.User.ID
 	if user != partyHost(ev) && i.Member.Permissions&discordgo.PermissionManageEvents == 0 {
-		b.respond(i, true, errorEmbed("Only the host or a moderator can cancel this watch party."))
+		fail("Only the host or a moderator can cancel this watch party.")
 		return
 	}
 	if err := b.s.GuildScheduledEventDelete(b.cfg.GuildID, eventID); err != nil {
 		log.Printf("cancel party: %v", err)
-		b.respond(i, true, errorEmbed("Couldn't cancel the event."))
+		fail("Couldn't cancel the event.")
 		return
 	}
-	b.dropPartyRoom(eventID)
 	e := &discordgo.MessageEmbed{Title: "Cancelled: " + strings.TrimPrefix(ev.Name, "Watch party: "), Color: 0x8A8276,
 		Description: fmt.Sprintf("Watch party cancelled by <@%s>.", user)}
-	if err := b.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{Embeds: []*discordgo.MessageEmbed{e}, Components: []discordgo.MessageComponent{}},
-	}); err != nil {
+	if _, err := b.s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Embeds: &[]*discordgo.MessageEmbed{e}, Components: &[]discordgo.MessageComponent{}}); err != nil {
 		log.Printf("cancel party update: %v", err)
 	}
+	b.dropPartyRoom(eventID)
 }
 
 // dropPartyRoom deletes a cancelled party's voice channel straight away.
