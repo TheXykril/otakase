@@ -35,6 +35,8 @@ var intentExamples = map[string][]string{
 	"sync": {
 		"my anilist progress didn't update", "episodes aren't tracked on myanimelist",
 		"watch progress doesn't sync", "anilist login stopped working",
+		"my list didn't update after watching", "finished anime isn't marked completed on my list",
+		"watched episodes don't show on my list",
 	},
 	"cast": {
 		"casting can't find my tv", "chromecast doesn't show up", "how do I cast to my tv",
