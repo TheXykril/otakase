@@ -8,13 +8,12 @@
 
 <p align="center">
   <a href="https://github.com/TheXykril/otakase/releases/latest"><img src="https://img.shields.io/github/v/release/TheXykril/otakase?label=release&color=d2492f" alt="Latest release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-8a8276" alt="GPL-3.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-c99a2e" alt="GPL-3.0"></a>
   <a href="https://otakase.xyverion.com/discord/"><img src="https://img.shields.io/badge/discord-join-d2492f?logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://github.com/TheXykril/otakase/releases"><img src="https://img.shields.io/github/downloads/TheXykril/otakase/total?label=downloads&color=d2492f" alt="Downloads"></a>
-  <a href="#install"><img src="https://img.shields.io/badge/platform-linux%20%C2%B7%20macOS%20%C2%B7%20windows-8a8276" alt="Linux, macOS, Windows"></a>
-  <a href="https://github.com/TheXykril/otakase/actions/workflows/ci-cd.yml"><img src="https://img.shields.io/github/actions/workflow/status/TheXykril/otakase/ci-cd.yml?branch=main&label=build" alt="Build status"></a>
-  <a href="#features"><img src="https://img.shields.io/badge/sync-AniList%20%C2%B7%20MAL-d2492f" alt="Syncs with AniList and MyAnimeList"></a>
-  <a href="https://mpv.io/"><img src="https://img.shields.io/badge/plays%20in-mpv-8a8276?logo=mpv&logoColor=white" alt="Plays in mpv"></a>
+  <a href="https://github.com/TheXykril/otakase/releases"><img src="https://img.shields.io/github/downloads/TheXykril/otakase/total?label=downloads&color=c99a2e" alt="Downloads"></a>
+  <a href="#install"><img src="https://img.shields.io/badge/platform-linux%20%C2%B7%20macOS%20%C2%B7%20windows-c99a2e" alt="Linux, macOS, Windows"></a>
+  <a href="#features"><img src="https://img.shields.io/badge/sync-AniList%20%C2%B7%20MAL-c99a2e" alt="Syncs with AniList and MyAnimeList"></a>
+  <a href="https://mpv.io/"><img src="https://img.shields.io/badge/plays%20in-mpv-d2492f?logo=mpv&logoColor=white" alt="Plays in mpv"></a>
 </p>
 
 <p align="center">
