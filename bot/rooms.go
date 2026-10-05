@@ -12,7 +12,7 @@ import (
 // Voice rooms: joining the "Create room" voice channel, or /room, makes a
 // voice channel for the member. It's deleted once everyone has left.
 
-const roomGrace = 2 * time.Minute // an empty new room waits this long for its owner
+const roomGrace = 2 * time.Minute // a new room nobody has joined yet waits this long
 
 var (
 	roomOwnerAllow = int64(discordgo.PermissionViewChannel | discordgo.PermissionVoiceConnect |
@@ -39,7 +39,7 @@ func roomCommands() []*discordgo.ApplicationCommand {
 
 // isCreateChannel reports whether a voice channel is the join-to-create one.
 func isCreateChannel(name string) bool {
-	n := strings.ToLower(name[strings.LastIndex(name, "・")+1:])
+	n := strings.ToLower(channelBase(name))
 	return strings.Contains(n, "create room") || strings.Contains(n, "create-room") || strings.Contains(n, "join to create")
 }
 
@@ -113,6 +113,7 @@ func (b *bot) onVoiceState(s *discordgo.Session, v *discordgo.VoiceStateUpdate) 
 	if v.BeforeUpdate != nil && v.BeforeUpdate.ChannelID != v.ChannelID {
 		b.sweepRoom(v.BeforeUpdate.ChannelID, false)
 	}
+	b.markRoomUsed(v.ChannelID)
 	if v.ChannelID == "" || v.ChannelID != b.cfg.CreateRoom {
 		return
 	}
@@ -136,7 +137,7 @@ func (b *bot) sweepRoom(channelID string, force bool) {
 	var r room
 	var ok bool
 	b.store.view(func(d *storeData) { r, ok = d.Rooms[channelID] })
-	if !ok || b.voiceCount(channelID) > 0 || (!force && time.Since(r.Created) < roomGrace) {
+	if !ok || b.voiceCount(channelID) > 0 || (!force && !r.Used && time.Since(r.Created) < roomGrace) {
 		return
 	}
 	if _, err := b.s.ChannelDelete(channelID, discordgo.WithAuditLogReason("Voice room empty")); err != nil {
@@ -146,6 +147,21 @@ func (b *bot) sweepRoom(channelID string, force bool) {
 		}
 	}
 	b.store.update(func(d *storeData) { delete(d.Rooms, channelID) })
+}
+
+// markRoomUsed notes that someone joined a room, so it goes as soon as it's
+// empty again.
+func (b *bot) markRoomUsed(channelID string) {
+	var r room
+	var ok bool
+	b.store.view(func(d *storeData) { r, ok = d.Rooms[channelID] })
+	if !ok || r.Used {
+		return
+	}
+	b.store.update(func(d *storeData) {
+		r.Used = true
+		d.Rooms[channelID] = r
+	})
 }
 
 func (b *bot) voiceCount(channelID string) int {

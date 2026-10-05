@@ -31,6 +31,7 @@ type warning struct {
 type room struct {
 	Owner   string    `json:"owner"`
 	Created time.Time `json:"created"`
+	Used    bool      `json:"used"`
 }
 
 // dataDir is OTAKASE_DATA_DIR, else /data (the Home Assistant add-on's

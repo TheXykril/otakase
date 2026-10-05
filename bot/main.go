@@ -211,6 +211,14 @@ func (b *bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 	b.pres.show(s)
 }
 
+// channelBase strips a "助・" style prefix from a channel name.
+func channelBase(name string) string {
+	if i := strings.LastIndex(name, "・"); i >= 0 {
+		return name[i+len("・"):]
+	}
+	return name
+}
+
 // resolveIDs fills in channel and role ids left empty in the configuration
 // by finding them by name, so a fresh setup needs only the token and server.
 func (b *bot) resolveIDs() {
@@ -220,7 +228,7 @@ func (b *bot) resolveIDs() {
 			log.Printf("listing channels: %v", err)
 		}
 		for _, c := range chans {
-			name := c.Name[strings.LastIndex(c.Name, "・")+1:]
+			name := channelBase(c.Name)
 			if b.cfg.SupportForum == "" && c.Type == discordgo.ChannelTypeGuildForum && name == "support" {
 				b.cfg.SupportForum = c.ID
 			}

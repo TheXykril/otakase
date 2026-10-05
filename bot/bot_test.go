@@ -425,3 +425,11 @@ func TestRoomBits(t *testing.T) {
 func snowflakeAt(t time.Time) string {
 	return strconv.FormatInt((t.UnixMilli()-1420070400000)<<22, 10)
 }
+
+func TestChannelBase(t *testing.T) {
+	for in, want := range map[string]string{"助・support": "support", "守・mod-chat": "mod-chat", "lounge": "lounge"} {
+		if got := channelBase(in); got != want {
+			t.Errorf("%q: got %q", in, got)
+		}
+	}
+}
