@@ -74,7 +74,7 @@ func TestDesktopEntry(t *testing.T) {
 			t.Fatalf("desktop entry is missing %q", line)
 		}
 	}
-	if !bytes.HasPrefix(pngData, []byte("\x89PNG")) || !bytes.HasPrefix(smallData, []byte("\x89PNG")) {
+	if !bytes.HasPrefix(pngData, []byte("\x89PNG")) || !bytes.HasPrefix(menuData, []byte("\x89PNG")) {
 		t.Fatal("embedded icons are not PNGs")
 	}
 }

@@ -12,7 +12,7 @@
 //   - Build/app-icon/otakase.ico, the installer's icon
 //   - Build/app-icon/otakase.icns, kept ready for a macOS app bundle
 //   - cmd/otakase/rsrc_windows_*.syso, which gives otakase.exe its icon
-//   - internal/appicon/otakase.png, otakase-small.png and otakase.svg, embedded
+//   - internal/appicon/otakase.png, otakase-menu.png and otakase.svg, embedded
 //     in the binary
 //   - internal/mpvskin/assets/logo/otakase.ass, the player's loading logo
 //   - site/img/mark-256.png, the 任 Discord shows beside the cover
@@ -71,7 +71,9 @@ func main() {
 	write(filepath.Join(root, "Build/app-icon/otakase.ico"), buildICO(images, renders, []int{16, 24, 32, 48, 64, 128, 256}))
 	write(filepath.Join(root, "Build/app-icon/otakase.icns"), buildICNS(renders))
 	write(filepath.Join(root, "internal/appicon/otakase.png"), renders[256])
-	write(filepath.Join(root, "internal/appicon/otakase-small.png"), encodePNG(small.render(64)))
+	// rofi draws its icon at 56 px; this is that at 2x, so a scaled screen
+	// gets it pixel for pixel instead of shrunk and smoothed by rofi.
+	write(filepath.Join(root, "internal/appicon/otakase-menu.png"), encodePNG(full.render(112)))
 	write(filepath.Join(root, "site/img/mark-256.png"), encodePNG(small.render(256)))
 	copyFile(filepath.Join(root, "site/img/icon.svg"), filepath.Join(root, "internal/appicon/otakase.svg"))
 	write(filepath.Join(root, "internal/mpvskin/assets/logo/otakase.ass"), []byte(full.ass()))

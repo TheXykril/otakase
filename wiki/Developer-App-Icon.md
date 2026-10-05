@@ -22,7 +22,7 @@ otakase's `vendor/`. It writes:
 | `Build/app-icon/otakase.ico` | The Windows installer (`SetupIconFile`) |
 | `Build/app-icon/png/otakase-<size>.png` | The PKGBUILD's hicolor icons and the release icon pack |
 | `Build/app-icon/otakase.icns` | The macOS app bundle (below) |
-| `internal/appicon/otakase.png`, `otakase-small.png`, `otakase.svg` | Embedded in the binary |
+| `internal/appicon/otakase.png`, `otakase-menu.png`, `otakase.svg` | Embedded in the binary |
 | `internal/mpvskin/assets/logo/otakase.ass` | The player's loading logo |
 | `site/img/mark-256.png` | The 任 Discord shows in the corner of the cover |
 

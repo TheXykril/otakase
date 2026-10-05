@@ -260,8 +260,8 @@ func WriteAllWithBackups(dir string, palette theme.Palette) (backups []string, e
 
 // writeIcon puts the app icon at path, unless it is already there.
 func writeIcon(path string) error {
-	if current, err := os.ReadFile(path); err == nil && bytes.Equal(current, appicon.PNG()) {
+	if current, err := os.ReadFile(path); err == nil && bytes.Equal(current, appicon.MenuPNG()) {
 		return nil
 	}
-	return os.WriteFile(path, appicon.PNG(), 0644)
+	return os.WriteFile(path, appicon.MenuPNG(), 0644)
 }
