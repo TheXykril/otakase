@@ -24,3 +24,4 @@
 - [Theming](Developer-Theming)
 - [Website](Developer-Website)
 - [App Icon](Developer-App-Icon)
+- [Discord Bot](Developer-Discord-Bot)
