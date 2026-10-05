@@ -28,12 +28,16 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+          # History back to the last release commit, for the Discord post.
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -90,3 +94,23 @@ jobs:
             --notes-file notes.md \
             --prerelease \
             --latest=false
+
+      # Announces the build in the Discord server's test-builds channel, sent by
+      # the Otakase bot. Needs a DISCORD_BOT_TOKEN secret; without it this does
+      # nothing. A header that fails to render leaves the post without one.
+      - name: Render the Discord header
+        if: env.DISCORD_BOT_TOKEN != ''
+        continue-on-error: true
+        run: |
+          python3 .github/discord/post_release.py render-dev "$DEV_VERSION" "$RUNNER_TEMP/header.html"
+          npx -y playwright@1.56.1 screenshot --channel chrome --viewport-size 1600,400 \
+            --wait-for-timeout 3000 "file://$RUNNER_TEMP/header.html" "$RUNNER_TEMP/header.png"
+
+      - name: Post to Discord
+        if: env.DISCORD_BOT_TOKEN != ''
+        env:
+          # The test-builds channel, and the "Tester" role each post pings
+          # (empty for no ping).
+          DISCORD_DEV_CHANNEL: "1556589796397416508"
+          DISCORD_DEV_ROLE: "1556589751077699664"
+        run: python3 .github/discord/post_release.py post-dev "$DEV_VERSION" "$RUNNER_TEMP/header.png"
