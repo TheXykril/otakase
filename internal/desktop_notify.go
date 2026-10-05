@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/thexykril/otakase/internal/appicon"
 )
 
 // A message that updates -- a slow step counting its seconds, a download's
@@ -40,7 +42,7 @@ var (
 )
 
 // sendLinuxNotification shows message under tag, replacing the last one sent
-// under the same tag. icon may be empty.
+// under the same tag. An empty icon is the app icon.
 func sendLinuxNotification(tag, icon, message string) error {
 	return sendLinuxNotificationFor(tag, icon, message, 0)
 }
@@ -55,6 +57,9 @@ func sendLinuxNotificationFor(tag, icon, message string, expire time.Duration) e
 		"-a", DisplayName,
 		"-h", "string:x-canonical-private-synchronous:" + tag,
 		"-h", "string:x-dunst-stack-tag:" + tag,
+	}
+	if icon == "" {
+		icon = appicon.Path()
 	}
 	if icon != "" {
 		base = append(base, "-i", icon)

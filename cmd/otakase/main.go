@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/thexykril/otakase/internal"
+	"github.com/thexykril/otakase/internal/appicon"
 )
 
 var version string // Will be set by ldflags during build
@@ -250,6 +251,10 @@ func main() {
 
 	// Line icons in the menus, where the font for them can be relied on.
 	internal.SetupIcons(&userConfig)
+
+	// The app icon and, on Linux, the app-menu entry. Off the main path: it
+	// is a few small files at most, and nothing waits on them.
+	go appicon.Path()
 
 	if userConfig.RofiSelection {
 		// Themes are rendered from the palette on every run, so a desktop theme

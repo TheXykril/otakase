@@ -321,3 +321,40 @@ func TestAThemeWrittenBeforeTheRenameIsStillOurs(t *testing.T) {
 		t.Error("a theme carrying the old marker was taken for a hand-edited one")
 	}
 }
+
+// The app icon sits in front of the search box when there is one, and the
+// theme names no icon widget when there is not: rofi refuses a theme whose
+// children list a widget it cannot draw.
+func TestIconInInputbar(t *testing.T) {
+	for _, name := range Names {
+		with, err := render(name, theme.Builtin(), "/tmp/otakase/otakase-icon.png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(with, "[ icon-app, entry ]") || !strings.Contains(with, `filename:         "/tmp/otakase/otakase-icon.png";`) {
+			t.Fatalf("%s: icon missing from the inputbar:\n%s", name, with)
+		}
+		without, err := Render(name, theme.Builtin())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(without, "icon-app") {
+			t.Fatalf("%s: icon widget named with no icon", name)
+		}
+	}
+}
+
+func TestWriteAllWritesIcon(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteAll(dir, theme.Builtin()); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, IconFile))
+	if err != nil || len(data) == 0 {
+		t.Fatalf("icon not written: %v", err)
+	}
+	rendered, _ := os.ReadFile(filepath.Join(dir, "selectanime.rasi"))
+	if !strings.Contains(string(rendered), filepath.ToSlash(filepath.Join(dir, IconFile))) {
+		t.Fatal("theme does not point at the written icon")
+	}
+}

@@ -207,6 +207,7 @@ func Args(opts Options) []string {
 		{"highlight", hex(c.Highlight)},
 		{"skip_op", yesNo(opts.SkipOp)},
 		{"skip_ed", yesNo(opts.SkipEd)},
+		{"logo", filepath.Join(opts.Dir, "logo", "otakase.ass")},
 	}
 
 	args := []string{

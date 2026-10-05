@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/gen2brain/beeep"
+
+	"github.com/thexykril/otakase/internal/appicon"
 )
 
 // Launched from a keybind, otakase shows nothing until its first menu, and the
@@ -86,7 +88,7 @@ func sendLifecycleNotice(tag, message string) {
 		}
 		return
 	}
-	if err := beeep.Notify(DisplayName, message, ""); err != nil {
+	if err := beeep.Notify(DisplayName, message, appicon.Path()); err != nil {
 		Log(fmt.Sprintf("Failed to send notification: %v", err))
 	}
 }

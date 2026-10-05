@@ -9,6 +9,7 @@
 package rofitheme
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/thexykril/otakase/internal/appicon"
 	"github.com/thexykril/otakase/internal/theme"
 )
 
@@ -75,6 +77,9 @@ type templateData struct {
 	SelectedText string
 	Red          string
 	Green        string
+	// Icon is the app icon's path, drawn in front of the search box, or ""
+	// for none.
+	Icon string
 }
 
 // alpha renders a palette colour at the given opacity as #rrggbbaa.
@@ -138,8 +143,16 @@ func newTemplateData(palette theme.Palette) templateData {
 	}
 }
 
-// Render returns one rendered theme file.
+// IconFile is the app icon's name beside the themes, which point at it.
+const IconFile = "otakase-icon.png"
+
+// Render returns one rendered theme file, without the app icon.
 func Render(name string, palette theme.Palette) (string, error) {
+	return render(name, palette, "")
+}
+
+// render is Render with the app icon at icon, when that is not "".
+func render(name string, palette theme.Palette, icon string) (string, error) {
 	raw, err := templates.ReadFile("templates/" + name)
 	if err != nil {
 		return "", fmt.Errorf("unknown rofi theme %q: %w", name, err)
@@ -150,8 +163,14 @@ func Render(name string, palette theme.Palette) (string, error) {
 		return "", fmt.Errorf("parse rofi theme %q: %w", name, err)
 	}
 
+	data := newTemplateData(palette)
+	// rasi strings have no escapes, so a path with a quote in it is left out
+	// rather than breaking the theme.
+	if !strings.ContainsAny(icon, "\"\\") {
+		data.Icon = filepath.ToSlash(icon)
+	}
 	var out strings.Builder
-	if err := parsed.Execute(&out, newTemplateData(palette)); err != nil {
+	if err := parsed.Execute(&out, data); err != nil {
 		return "", fmt.Errorf("render rofi theme %q: %w", name, err)
 	}
 	return out.String(), nil
@@ -203,8 +222,14 @@ func WriteAllWithBackups(dir string, palette theme.Palette) (backups []string, e
 		return nil, fmt.Errorf("create rofi theme directory: %w", err)
 	}
 
+	// The icon is a nicety: without it the themes are drawn without one.
+	icon := filepath.Join(dir, IconFile)
+	if err := writeIcon(icon); err != nil {
+		icon = ""
+	}
+
 	for _, name := range Names {
-		rendered, err := Render(name, palette)
+		rendered, err := render(name, palette, icon)
 		if err != nil {
 			return backups, err
 		}
@@ -231,4 +256,12 @@ func WriteAllWithBackups(dir string, palette theme.Palette) (backups []string, e
 		}
 	}
 	return backups, nil
+}
+
+// writeIcon puts the app icon at path, unless it is already there.
+func writeIcon(path string) error {
+	if current, err := os.ReadFile(path); err == nil && bytes.Equal(current, appicon.SmallPNG()) {
+		return nil
+	}
+	return os.WriteFile(path, appicon.SmallPNG(), 0644)
 }

@@ -12,6 +12,7 @@ or use it; that is all in the [README](https://github.com/TheXykril/otakase#read
 - **[Player Look](Developer-Player-Look)** — how otakase's own mpv controls are shipped, themed and loaded
 - **[Theming](Developer-Theming)** — where the menu colours come from and how each desktop's theme is read
 - **[Website](Developer-Website)** — the GitHub Pages site in `site/`, its cover art and icon
+- **[App Icon](Developer-App-Icon)** — the icon's source, how its files are regenerated, and everywhere it shows
 
 ## Building and testing
 

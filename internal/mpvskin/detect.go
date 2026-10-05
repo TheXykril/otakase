@@ -209,3 +209,31 @@ func ArgsOverride(args []string) bool {
 	}
 	return false
 }
+
+var (
+	optionsMu    sync.Mutex
+	optionsCache = map[string]string{}
+)
+
+// HasOption reports whether the mpv at path knows --name. Options tied to a
+// platform, like --wayland-app-id, are missing from builds without it, and
+// mpv refuses to start on an option it does not know.
+func HasOption(path, name string) bool {
+	optionsMu.Lock()
+	defer optionsMu.Unlock()
+	list, ok := optionsCache[path]
+	if !ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		out, _ := exec.CommandContext(ctx, path, "--no-config", "--list-options").Output()
+		list = string(out)
+		optionsCache[path] = list
+	}
+	for _, line := range strings.Split(list, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 0 && fields[0] == "--"+name {
+			return true
+		}
+	}
+	return false
+}

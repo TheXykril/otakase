@@ -4,6 +4,10 @@ AppVersion=1.0.0
 DefaultDirName={userappdata}\Otakase
 PrivilegesRequired=lowest
 AllowNoIcons=yes
+; The app icon on the installer itself and in Apps & features. The shortcuts
+; take it from otakase.exe, which carries it.
+SetupIconFile=app-icon\otakase.ico
+UninstallDisplayIcon={app}\otakase.exe
 OutputBaseFilename=otakase-windows-installer
 UsePreviousAppDir=yes
 Compression=lzma2

@@ -561,6 +561,9 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 		playerArgs = append(skinArgs, mpvArgs...)
 		markMPVSkinSocket(mpvSocketPath)
 	}
+	if windowArgs := mpvWindowArgs(userConfig, resolvedPlayerBinary); len(windowArgs) > 0 {
+		playerArgs = append(windowArgs, playerArgs...)
+	}
 
 	command = exec.Command(resolvedPlayerBinary, playerArgs...)
 

@@ -1,6 +1,21 @@
-# Otakase
+<p align="center">
+  <img src="site/img/icon.svg" width="128" height="128" alt="">
+</p>
 
-Watch anime from the command line, with your list kept in sync.
+<h1 align="center">Otakase</h1>
+
+<p align="center">Watch anime from the command line, with your list kept in sync.</p>
+
+<p align="center">
+  <a href="https://github.com/TheXykril/otakase/releases/latest"><img src="https://img.shields.io/github/v/release/TheXykril/otakase?label=release&color=d2492f" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-8a8276" alt="GPL-3.0"></a>
+</p>
+
+<p align="center">
+  <a href="https://thexykril.github.io/otakase/">Website</a> ·
+  <a href="#install">Install</a> ·
+  <a href="https://github.com/TheXykril/otakase/wiki">Wiki</a>
+</p>
 
 Otakase finds the episode, plays it in mpv, skips the opening, ending, filler
 and recaps, and updates AniList or MyAnimeList when you are done. It works on

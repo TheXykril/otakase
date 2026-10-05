@@ -22,3 +22,4 @@
 - [Player Look](Developer-Player-Look)
 - [Theming](Developer-Theming)
 - [Website](Developer-Website)
+- [App Icon](Developer-App-Icon)
