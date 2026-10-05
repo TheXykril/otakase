@@ -38,7 +38,7 @@ func (b *bot) registerCommands() error {
 		{Name: "watchparty", Description: "Plan a watch party in a voice channel", Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionString, Name: "anime", Description: "What you'll watch", Required: true},
 			{Type: discordgo.ApplicationCommandOptionInteger, Name: "starts_in", Description: "Minutes from now (default 15)", MinValue: &zero, MaxValue: 10080},
-			{Type: discordgo.ApplicationCommandOptionChannel, Name: "voice", Description: "Voice channel (default lounge)",
+			{Type: discordgo.ApplicationCommandOptionChannel, Name: "voice", Description: "Use this voice channel (default: a new one for the party)",
 				ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildVoice, discordgo.ChannelTypeGuildStageVoice}},
 		}},
 	}

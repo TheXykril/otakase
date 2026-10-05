@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -12,7 +13,35 @@ import (
 // Voice rooms: joining the "Create room" voice channel, or /room, makes a
 // voice channel for the member. It's deleted once everyone has left.
 
-const roomGrace = 2 * time.Minute // an empty new room waits this long for its owner
+const (
+	roomGrace     = 2 * time.Minute // a new room nobody has joined yet waits this long
+	roomEmptyWait = time.Minute     // a used room is removed after being empty this long
+)
+
+// emptyRooms remembers since when each room has been empty.
+type emptyRooms struct {
+	mu    sync.Mutex
+	since map[string]time.Time
+}
+
+// mark records that a room is empty now and returns how long it has been.
+func (e *emptyRooms) mark(id string, now time.Time) time.Duration {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.since == nil {
+		e.since = map[string]time.Time{}
+	}
+	if _, ok := e.since[id]; !ok {
+		e.since[id] = now
+	}
+	return now.Sub(e.since[id])
+}
+
+func (e *emptyRooms) clear(id string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.since, id)
+}
 
 var (
 	roomOwnerAllow = int64(discordgo.PermissionViewChannel | discordgo.PermissionVoiceConnect |
@@ -39,7 +68,7 @@ func roomCommands() []*discordgo.ApplicationCommand {
 
 // isCreateChannel reports whether a voice channel is the join-to-create one.
 func isCreateChannel(name string) bool {
-	n := strings.ToLower(name[strings.LastIndex(name, "・")+1:])
+	n := strings.ToLower(channelBase(name))
 	return strings.Contains(n, "create room") || strings.Contains(n, "create-room") || strings.Contains(n, "join to create")
 }
 
@@ -67,7 +96,7 @@ func (b *bot) ownedRoom(userID string) string {
 	var id string
 	b.store.view(func(d *storeData) {
 		for ch, r := range d.Rooms {
-			if r.Owner == userID {
+			if r.Owner == userID && r.Event == "" {
 				id = ch
 			}
 		}
@@ -113,6 +142,8 @@ func (b *bot) onVoiceState(s *discordgo.Session, v *discordgo.VoiceStateUpdate) 
 	if v.BeforeUpdate != nil && v.BeforeUpdate.ChannelID != v.ChannelID {
 		b.sweepRoom(v.BeforeUpdate.ChannelID, false)
 	}
+	b.markRoomUsed(v.ChannelID)
+	b.empty.clear(v.ChannelID)
 	if v.ChannelID == "" || v.ChannelID != b.cfg.CreateRoom {
 		return
 	}
@@ -136,9 +167,27 @@ func (b *bot) sweepRoom(channelID string, force bool) {
 	var r room
 	var ok bool
 	b.store.view(func(d *storeData) { r, ok = d.Rooms[channelID] })
-	if !ok || b.voiceCount(channelID) > 0 || (!force && time.Since(r.Created) < roomGrace) {
+	if !ok {
 		return
 	}
+	if b.voiceCount(channelID) > 0 {
+		b.empty.clear(channelID)
+		return
+	}
+	if !force {
+		if time.Now().Before(r.KeepUntil) {
+			return
+		}
+		if !r.Used {
+			if time.Since(r.Created) < roomGrace {
+				return
+			}
+		} else if left := roomEmptyWait - b.empty.mark(channelID, time.Now()); left > 0 {
+			time.AfterFunc(left+time.Second, func() { b.sweepRoom(channelID, false) })
+			return
+		}
+	}
+	b.empty.clear(channelID)
 	if _, err := b.s.ChannelDelete(channelID, discordgo.WithAuditLogReason("Voice room empty")); err != nil {
 		if rest, isRest := err.(*discordgo.RESTError); !isRest || rest.Response == nil || rest.Response.StatusCode != 404 {
 			log.Printf("delete room: %v", err)
@@ -146,6 +195,21 @@ func (b *bot) sweepRoom(channelID string, force bool) {
 		}
 	}
 	b.store.update(func(d *storeData) { delete(d.Rooms, channelID) })
+}
+
+// markRoomUsed notes that someone joined a room, so it goes as soon as it's
+// empty again.
+func (b *bot) markRoomUsed(channelID string) {
+	var r room
+	var ok bool
+	b.store.view(func(d *storeData) { r, ok = d.Rooms[channelID] })
+	if !ok || r.Used {
+		return
+	}
+	b.store.update(func(d *storeData) {
+		r.Used = true
+		d.Rooms[channelID] = r
+	})
 }
 
 func (b *bot) voiceCount(channelID string) int {

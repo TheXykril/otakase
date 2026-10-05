@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -81,7 +82,8 @@ func (sm *semantic) post(path string, body, out any) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("ollama %s: %s", path, resp.Status)
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
+		return fmt.Errorf("ollama %s: %s %s", path, resp.Status, strings.TrimSpace(string(msg)))
 	}
 	if out == nil {
 		return nil
@@ -137,9 +139,15 @@ func (sm *semantic) load() error {
 			intents = append(intents, intent)
 		}
 	}
-	vecs, err := sm.embed(texts)
-	if err != nil {
-		return err
+	// One at a time: some Ollama builds fail batched input for BERT-style
+	// models like all-minilm.
+	var vecs [][]float64
+	for _, t := range texts {
+		v, err := sm.embed([]string{t})
+		if err != nil {
+			return err
+		}
+		vecs = append(vecs, v[0])
 	}
 	examples := make([]semanticExample, len(vecs))
 	for i, v := range vecs {
