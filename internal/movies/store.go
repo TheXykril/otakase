@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -165,7 +166,41 @@ func (s *Store) change(movie Movie, change func(*Entry)) (Entry, Entry, error) {
 	entry.Movie = merged
 	change(entry)
 	entry.Updated = time.Now()
+	if entry.Watched && !before.Watched {
+		s.clearCopies(*entry)
+	}
 	return before, *entry, s.save()
+}
+
+// clearCopies takes the same movie from other providers off Continue and the
+// watchlist once it is watched from one of them.
+func (s *Store) clearCopies(watched Entry) {
+	for key, other := range s.data.Movies {
+		if key == watched.Key() || !SameMovie(watched.Movie, other.Movie) {
+			continue
+		}
+		other.Position = 0
+		other.Watchlist = false
+	}
+}
+
+// SameMovie reports whether two providers' movies are the same film: the same
+// IMDb id when both know it, otherwise a title in common and the same year.
+func SameMovie(a, b Movie) bool {
+	if a.IMDb != "" && b.IMDb != "" {
+		return a.IMDb == b.IMDb
+	}
+	if a.Year == "" || a.Year != b.Year {
+		return false
+	}
+	for _, x := range []string{a.Title, a.Original} {
+		for _, y := range []string{b.Title, b.Original} {
+			if x != "" && strings.EqualFold(strings.TrimSpace(x), strings.TrimSpace(y)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // SetProgress records where playback stopped. A movie watched to the end is
@@ -246,8 +281,22 @@ func (s *Store) List(keep func(Entry) bool) []Entry {
 	return out
 }
 
-// Continue is the movies stopped part way through.
-func (s *Store) Continue() []Entry { return s.List(Entry.Started) }
+// Continue is the movies stopped part way through, less those since watched
+// from another provider.
+func (s *Store) Continue() []Entry {
+	watched := s.List(func(e Entry) bool { return e.Watched })
+	return s.List(func(e Entry) bool {
+		if !e.Started() {
+			return false
+		}
+		for _, w := range watched {
+			if w.Updated.After(e.Updated) && SameMovie(w.Movie, e.Movie) {
+				return false
+			}
+		}
+		return true
+	})
+}
 
 // Watchlist is the movies saved for later.
 func (s *Store) Watchlist() []Entry {

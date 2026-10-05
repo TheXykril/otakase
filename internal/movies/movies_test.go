@@ -384,3 +384,40 @@ func TestFilmukasPageTitles(t *testing.T) {
 		t.Errorf("year = %q", got)
 	}
 }
+
+// Finishing a movie from one provider takes its copies from the others off
+// Continue and the watchlist.
+func TestWatchedClearsCopiesFromOtherProviders(t *testing.T) {
+	store, _ := OpenStore(t.TempDir())
+	vidsrc := Movie{Provider: VidsrcName, Path: "tt0111161", Title: "The Shawshank Redemption", Year: "1994", IMDb: "tt0111161"}
+	filmai := Movie{Provider: FilmaiName, Path: "/filmas/x/", Title: "Pabėgimas iš Šoušenko", Original: "The Shawshank Redemption", Year: "1994"}
+	other := Movie{Provider: FilmaiName, Path: "/filmas/y/", Title: "Other", Year: "1994"}
+	for _, m := range []Movie{filmai, other} {
+		if err := store.SetProgress(m, 900, 8000, false); err != nil {
+			t.Fatal(err)
+		}
+		_ = store.SetWatchlist(m, true)
+	}
+	if err := store.SetProgress(vidsrc, 0, 8000, true); err != nil {
+		t.Fatal(err)
+	}
+	if e, _ := store.Get(filmai.Key()); e.Started() || e.Watchlist {
+		t.Errorf("copy still on Continue or watchlist: %+v", e)
+	}
+	if e, _ := store.Get(other.Key()); !e.Started() || !e.Watchlist {
+		t.Errorf("another movie was cleared: %+v", e)
+	}
+}
+
+func TestSameMovie(t *testing.T) {
+	a := Movie{Title: "Wonka", Year: "2023"}
+	if !SameMovie(a, Movie{Title: "wonka ", Year: "2023"}) {
+		t.Error("same title and year should match")
+	}
+	if SameMovie(a, Movie{Title: "Wonka", Year: "1971"}) {
+		t.Error("different year should not match")
+	}
+	if SameMovie(Movie{IMDb: "tt1", Title: "X", Year: "2000"}, Movie{IMDb: "tt2", Title: "X", Year: "2000"}) {
+		t.Error("different IMDb ids should not match")
+	}
+}
