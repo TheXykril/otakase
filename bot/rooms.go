@@ -104,7 +104,7 @@ func (b *bot) ownedRoom(userID string) string {
 	return id
 }
 
-func (b *bot) createRoom(m *discordgo.Member, name string, private bool, limit int) (*discordgo.Channel, error) {
+func (b *bot) createRoom(m *discordgo.Member, name string, private bool, limit int, extra ...*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
 	if name == "" {
 		name = displayName(m) + "'s room"
 	}
@@ -116,13 +116,29 @@ func (b *bot) createRoom(m *discordgo.Member, name string, private bool, limit i
 	}
 	ch, err := b.s.GuildChannelCreateComplex(b.cfg.GuildID, discordgo.GuildChannelCreateData{
 		Name: name, Type: discordgo.ChannelTypeGuildVoice, ParentID: parent, UserLimit: limit,
-		PermissionOverwrites: b.overwrites(m.User.ID, private),
+		PermissionOverwrites: mergeOverwrites(b.overwrites(m.User.ID, private), extra),
 	}, discordgo.WithAuditLogReason("Voice room for "+m.User.Username))
 	if err != nil {
 		return nil, err
 	}
 	b.store.update(func(d *storeData) { d.Rooms[ch.ID] = room{Owner: m.User.ID, Created: time.Now().UTC()} })
 	return ch, nil
+}
+
+// mergeOverwrites adds extra overwrites to o, combining ones for the same
+// role or member, since a channel takes one overwrite per target.
+func mergeOverwrites(o, extra []*discordgo.PermissionOverwrite) []*discordgo.PermissionOverwrite {
+outer:
+	for _, e := range extra {
+		for _, x := range o {
+			if x.ID == e.ID {
+				x.Allow, x.Deny = x.Allow|e.Allow, x.Deny|e.Deny
+				continue outer
+			}
+		}
+		o = append(o, e)
+	}
+	return o
 }
 
 func displayName(m *discordgo.Member) string {

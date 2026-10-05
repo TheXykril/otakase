@@ -38,8 +38,12 @@ func (b *bot) registerCommands() error {
 		{Name: "watchparty", Description: "Plan a watch party in a voice channel", Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionString, Name: "anime", Description: "What you'll watch", Required: true},
 			{Type: discordgo.ApplicationCommandOptionInteger, Name: "starts_in", Description: "Minutes from now (default 15)", MinValue: &zero, MaxValue: 10080},
-			{Type: discordgo.ApplicationCommandOptionChannel, Name: "voice", Description: "Use this voice channel (default: a new one for the party)",
-				ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildVoice, discordgo.ChannelTypeGuildStageVoice}},
+			{Type: discordgo.ApplicationCommandOptionInteger, Name: "limit", Description: "Max people in the voice channel (0 = no limit)", MinValue: &zero, MaxValue: 99},
+			{Type: discordgo.ApplicationCommandOptionString, Name: "voice", Description: "Who can talk and screen share (default: everyone talks, host shares)", Choices: []*discordgo.ApplicationCommandOptionChoice{
+				{Name: "Everyone talks, only the host screen shares", Value: partyTalk},
+				{Name: "Everyone talks and can screen share", Value: partyShare},
+				{Name: "Only the host talks and screen shares", Value: partyHostOnly},
+			}},
 		}},
 	}
 	cmds = append(cmds, modCommands()...)

@@ -422,6 +422,30 @@ func TestRoomBits(t *testing.T) {
 	}
 }
 
+func TestPartyOverwrites(t *testing.T) {
+	everyone := func(mode string) *discordgo.PermissionOverwrite {
+		for _, o := range mergeOverwrites(roomOverwrites("g", "bot", "u", nil, false), partyOverwrites("g", "u", mode)) {
+			if o.ID == "g" {
+				return o
+			}
+		}
+		return nil
+	}
+	if e := everyone(partyTalk); e.Allow != discordgo.PermissionVoiceSpeak || e.Deny != discordgo.PermissionVoiceStreamVideo {
+		t.Errorf("talk: %+v", e)
+	}
+	if e := everyone(partyShare); e.Allow != partyVoice || e.Deny != 0 {
+		t.Errorf("share: %+v", e)
+	}
+	if e := everyone(partyHostOnly); e.Allow != 0 || e.Deny != partyVoice {
+		t.Errorf("host: %+v", e)
+	}
+	o := mergeOverwrites(roomOverwrites("g", "bot", "u", nil, false), partyOverwrites("g", "u", partyHostOnly))
+	if len(o) != 2 || o[0].ID != "u" || o[0].Allow&partyVoice != partyVoice || o[0].Allow&discordgo.PermissionManageChannels == 0 {
+		t.Errorf("host overwrite: %+v", o)
+	}
+}
+
 func snowflakeAt(t time.Time) string {
 	return strconv.FormatInt((t.UnixMilli()-1420070400000)<<22, 10)
 }

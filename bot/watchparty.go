@@ -83,17 +83,46 @@ func imageDataURI(url string) string {
 	return "data:" + http.DetectContentType(data) + ";base64," + base64.StdEncoding.EncodeToString(data)
 }
 
+// Who can talk and screen share in a party's voice channel.
+const (
+	partyTalk     = "talk"  // everyone talks, only the host screen shares
+	partyShare    = "share" // everyone talks and screen shares
+	partyHostOnly = "host"  // only the host talks and screen shares
+)
+
+const partyVoice = int64(discordgo.PermissionVoiceSpeak | discordgo.PermissionVoiceStreamVideo)
+
+// partyOverwrites lets the host talk and screen share and sets what
+// everyone else may do, whatever the server's defaults are.
+func partyOverwrites(guildID, host, mode string) []*discordgo.PermissionOverwrite {
+	everyone := &discordgo.PermissionOverwrite{ID: guildID, Type: discordgo.PermissionOverwriteTypeRole}
+	switch mode {
+	case partyShare:
+		everyone.Allow = partyVoice
+	case partyHostOnly:
+		everyone.Deny = partyVoice
+	default:
+		everyone.Allow, everyone.Deny = discordgo.PermissionVoiceSpeak, discordgo.PermissionVoiceStreamVideo
+	}
+	return []*discordgo.PermissionOverwrite{
+		everyone,
+		{ID: host, Type: discordgo.PermissionOverwriteTypeMember, Allow: partyVoice},
+	}
+}
+
 func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 	d := i.ApplicationCommandData()
-	title, minutes, channel := "", int64(15), ""
+	title, minutes, limit, mode := "", int64(15), 0, partyTalk
 	for _, o := range d.Options {
 		switch o.Name {
 		case "anime":
 			title = o.StringValue()
 		case "starts_in":
 			minutes = o.IntValue()
+		case "limit":
+			limit = int(o.IntValue())
 		case "voice":
-			channel = o.ChannelValue(nil).ID
+			mode = o.StringValue()
 		}
 	}
 	host := i.Member.User
@@ -110,15 +139,12 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 		if minutes < 1 {
 			start = time.Now().Add(time.Minute) // events must start in the future
 		}
-		var made string
-		if channel == "" {
-			c, err := b.createRoom(i.Member, clip("🎬 "+show.Title, 90), false, 0)
-			if err != nil {
-				log.Printf("watchparty channel: %v", err)
-				return errorEmbed("Couldn't make a voice channel. The bot needs **Manage Channels**."), nil
-			}
-			channel, made = c.ID, c.ID
+		c, err := b.createRoom(i.Member, clip("🎬 "+show.Title, 90), false, limit, partyOverwrites(b.cfg.GuildID, host.ID, mode)...)
+		if err != nil {
+			log.Printf("watchparty channel: %v", err)
+			return errorEmbed("Couldn't make a voice channel. The bot needs **Manage Channels**."), nil
 		}
+		channel := c.ID
 		desc := fmt.Sprintf("Watch party hosted by <@%s>. Join the voice channel and watch along with otakase.", host.ID)
 		if show.URL != "" {
 			desc += "\n" + show.URL
@@ -134,19 +160,15 @@ func (b *bot) watchparty(i *discordgo.InteractionCreate) {
 		})
 		if err != nil {
 			log.Printf("watchparty: %v", err)
-			if made != "" {
-				b.sweepRoom(made, true)
-			}
+			b.sweepRoom(channel, true)
 			return errorEmbed("Couldn't create the event. The bot needs the **Create Events** permission."), nil
 		}
-		if made != "" {
-			// Kept until half an hour after the start, then removed once empty.
-			b.store.update(func(d *storeData) {
-				r := d.Rooms[made]
-				r.Event, r.KeepUntil = ev.ID, start.Add(30*time.Minute)
-				d.Rooms[made] = r
-			})
-		}
+		// Kept until half an hour after the start, then removed once empty.
+		b.store.update(func(d *storeData) {
+			r := d.Rooms[channel]
+			r.Event, r.KeepUntil = ev.ID, start.Add(30*time.Minute)
+			d.Rooms[channel] = r
+		})
 		link := eventLink(ev)
 		e := &discordgo.MessageEmbed{
 			Title:       "Watch party: " + show.Title,
