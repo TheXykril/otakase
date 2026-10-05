@@ -31,7 +31,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `AnimeNameLanguage` | Enum | `english`, `romaji` | Preferred title language. |
 | `PercentageToMarkComplete` | Integer | `0`–`100` | Watched percentage that counts as complete. |
 | `NextEpisodePrompt` | Boolean | `true`, `false` | In mpv, ask before playing the next episode; `false` plays it straight away. Casting has `CastNextEpisode` instead. |
-| `ScoreOnCompletion` | Boolean | `true`, `false` | Prompt to rate a show when you finish it. |
+| `ScoreOnCompletion` | Boolean | `true`, `false` | Prompt to rate a show or movie when you finish it. |
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
 | `Theme` | Enum | `auto`, `omarchy`, `wal`, `base16`, `kde`, `gnome`, `macos`, `windows`, `builtin` | Which colour palette to use. `auto` follows the first desktop theme it finds. See [Theming](#theming) below. |
 | `ThemeFile` | String | file path | A palette file to use instead of auto-detecting: pywal `colors.json`, a base16 scheme, or a `colors.toml`. See [Theming](#theming) below. |

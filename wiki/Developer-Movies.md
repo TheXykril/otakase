@@ -110,6 +110,9 @@ from before providers existed are 8Filmai's and are rekeyed when read). It
 keeps the position, duration, watched and watchlist flags, a rating out
 of 10, and the server it last played from, which is tried first next time
 (`movies.PreferServer`). List rows show the provider and server.
+After a play, `afterMoviePlay` puts a movie stopped part way on the
+watchlist, and asks for a rating when one was just finished and
+`ScoreOnCompletion` is on.
 
 ### Trakt
 

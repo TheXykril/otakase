@@ -169,3 +169,28 @@ func TestMovieSourceLabel(t *testing.T) {
 		}
 	}
 }
+
+// Finishing a movie asks for a rating once; stopping part way keeps it on
+// the watchlist.
+func TestAfterMoviePlay(t *testing.T) {
+	cases := []struct {
+		name            string
+		before, after   movies.Entry
+		score           bool
+		rate, watchlist bool
+	}{
+		{"finished", movies.Entry{}, movies.Entry{Watched: true}, true, true, false},
+		{"finished, rating off", movies.Entry{}, movies.Entry{Watched: true}, false, false, false},
+		{"finished, already rated", movies.Entry{}, movies.Entry{Watched: true, Rating: 7}, true, false, false},
+		{"rewatched", movies.Entry{Watched: true}, movies.Entry{Watched: true}, true, false, false},
+		{"stopped part way", movies.Entry{}, movies.Entry{Position: 600}, true, false, true},
+		{"already on the watchlist", movies.Entry{}, movies.Entry{Position: 600, Watchlist: true}, true, false, false},
+		{"closed at once", movies.Entry{}, movies.Entry{}, true, false, false},
+	}
+	for _, c := range cases {
+		rate, watchlist := afterMoviePlay(c.before, c.after, c.score)
+		if rate != c.rate || watchlist != c.watchlist {
+			t.Errorf("%s: got rate=%v watchlist=%v, want %v %v", c.name, rate, watchlist, c.rate, c.watchlist)
+		}
+	}
+}

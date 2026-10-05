@@ -461,11 +461,28 @@ func playMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 	if entry, ok := store.Get(movie.Key()); ok {
 		sources = movies.PreferServer(sources, entry.Server)
 	}
+	before, _ := store.Get(movie.Key())
 	played := func(server string) {
 		if err := store.SetServer(movie, server); err != nil {
 			Log(fmt.Sprintf("movies: could not save the server: %v", err))
 		}
 		traktPaused(lib, store, movie)
+		after, _ := store.Get(movie.Key())
+		askRating, keep := afterMoviePlay(before, after, config.ScoreOnCompletion)
+		if keep {
+			if err := store.SetWatchlist(movie, true); err != nil {
+				Log(fmt.Sprintf("movies: could not save the watchlist: %v", err))
+			}
+		}
+		if askRating {
+			ClearScreen()
+			Out(fmt.Sprintf("You've finished %s! Would you like to rate it?", title))
+			if rating, ok := pickMovieRating(0); ok {
+				if err := store.SetRating(movie, rating); err != nil {
+					Log(fmt.Sprintf("movies: could not save the rating: %v", err))
+				}
+			}
+		}
 	}
 
 	for _, source := range sources {
@@ -490,6 +507,16 @@ func playMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 	}
 	Out(fmt.Sprintf("None of the servers for %s could be played. The movie may have been taken down; try again later.", title))
 	awaitEnterNotice()
+}
+
+// afterMoviePlay decides what follows a play: a movie finished just now and
+// not yet rated is offered a rating when ScoreOnCompletion is on, and one
+// started but not finished goes on the watchlist so it is not lost.
+func afterMoviePlay(before, after movies.Entry, scoreOnCompletion bool) (askRating, addToWatchlist bool) {
+	if after.Watched {
+		return scoreOnCompletion && !before.Watched && after.Rating == 0, false
+	}
+	return false, after.Started() && !after.Watchlist
 }
 
 // movieAnime dresses a movie stream as the one-episode, untracked show the
