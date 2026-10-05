@@ -198,7 +198,7 @@ func (b *bot) sweepRoom(channelID string, force bool) {
 			return
 		}
 		if !r.Used {
-			if time.Since(r.Created) < roomGrace {
+			if time.Since(r.Created) < roomGrace || (r.Event != "" && time.Since(r.KeepUntil) < partyNoShowWait) {
 				return
 			}
 		} else if left := roomEmptyWait - b.empty.mark(channelID, time.Now()); left > 0 {
@@ -206,8 +206,14 @@ func (b *bot) sweepRoom(channelID string, force bool) {
 			return
 		}
 	}
+	b.deleteRoom(channelID, r, "Voice room empty")
+}
+
+// deleteRoom removes a room's channel, ends its watch party event, and
+// drops the watch party category when it's left empty.
+func (b *bot) deleteRoom(channelID string, r room, reason string) {
 	b.empty.clear(channelID)
-	ch, err := b.s.ChannelDelete(channelID, discordgo.WithAuditLogReason("Voice room empty"))
+	ch, err := b.s.ChannelDelete(channelID, discordgo.WithAuditLogReason(reason))
 	if err != nil {
 		if rest, isRest := err.(*discordgo.RESTError); !isRest || rest.Response == nil || rest.Response.StatusCode != 404 {
 			log.Printf("delete room: %v", err)
@@ -215,6 +221,9 @@ func (b *bot) sweepRoom(channelID string, force bool) {
 		}
 	}
 	b.store.update(func(d *storeData) { delete(d.Rooms, channelID) })
+	if r.Event != "" {
+		b.endParty(r.Event)
+	}
 	if ch != nil && ch.ParentID != "" {
 		b.dropPartyCategory(ch.ParentID)
 	}
