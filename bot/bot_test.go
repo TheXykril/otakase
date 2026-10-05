@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 func TestAutoRules(t *testing.T) {
@@ -81,5 +83,23 @@ func TestLoadHAOptions(t *testing.T) {
 	}
 	if _, set := os.LookupEnv("GITHUB_TOKEN"); set {
 		t.Error("GITHUB_TOKEN set although the option is missing")
+	}
+}
+
+func TestPresenceActivities(t *testing.T) {
+	p := &presence{}
+	without := len(p.activities())
+	p.version = "26.6.0"
+	list := p.activities()
+	if len(list) != without+1 {
+		t.Fatalf("version activity not added: %d vs %d", len(list), without)
+	}
+	for _, a := range list {
+		if a.Name == "" {
+			t.Error("activity without a name")
+		}
+		if a.Type == discordgo.ActivityTypeCustom && a.State == "" {
+			t.Error("custom status without text")
+		}
 	}
 }

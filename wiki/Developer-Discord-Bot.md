@@ -25,6 +25,10 @@ server and stays connected to Discord.
 - **Contributor role:** `/link-github` uses GitHub's device flow (the member
   enters a code on github.com, so the bot needs no web address) and gives the
   Contributor role when that account has a merged pull request here.
+- **Status:** Do Not Disturb, cycling every two minutes through "Watching
+  anime · /help", "Playing Otakase <latest release>", the website and
+  "Listening to your terminal" (`presence.go`). Bots can't show rich presence
+  images or buttons.
 
 The text it sends lives in `content.go`; keep it in step with the README and
 the FAQ channel.

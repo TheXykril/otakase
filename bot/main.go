@@ -120,6 +120,7 @@ type bot struct {
 	s    *discordgo.Session
 	auto *autoReplier
 	spam *spamGuard
+	pres *presence
 }
 
 func main() {
@@ -133,7 +134,7 @@ func main() {
 		discordgo.IntentsGuildMembers |
 		discordgo.IntentsMessageContent
 
-	b := &bot{cfg: cfg, s: s, auto: newAutoReplier(), spam: newSpamGuard()}
+	b := &bot{cfg: cfg, s: s, auto: newAutoReplier(), spam: newSpamGuard(), pres: &presence{}}
 	s.AddHandler(b.onReady)
 	s.AddHandler(b.onInteraction)
 	s.AddHandler(b.onThreadCreate)
@@ -148,6 +149,7 @@ func main() {
 	if err := b.registerCommands(); err != nil {
 		log.Fatalf("registering commands: %v", err)
 	}
+	go b.pres.run(s, b.cfg.GitHubToken)
 	log.Print("running")
 
 	stop := make(chan os.Signal, 1)
@@ -157,9 +159,7 @@ func main() {
 
 func (b *bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 	log.Printf("logged in as %s", r.User.Username)
-	_ = s.UpdateStatusComplex(discordgo.UpdateStatusData{
-		Activities: []*discordgo.Activity{{Name: "anime · /help", Type: discordgo.ActivityTypeWatching}},
-	})
+	b.pres.show(s)
 }
 
 // resolveIDs fills in channel and role ids left empty in the configuration
