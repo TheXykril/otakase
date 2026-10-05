@@ -3,7 +3,8 @@
 // It answers slash commands (/install, /faq, /latest, /anime, /link-github,
 // /help), greets new support posts with a checklist and a "Mark solved"
 // button, answers common questions it sees in chat, removes cross-channel
-// spam and welcomes new members by DM.
+// spam and scams, helps moderators, makes voice rooms and welcomes new
+// members by DM.
 //
 // Configuration is read from the environment; see deploy/otakase-bot.env.
 // On hosts without a way to set environment variables, the same lines can go
@@ -45,6 +46,8 @@ type config struct {
 	OllamaURL       string // Ollama for matching questions by meaning, empty = off
 	EmbedModel      string
 	AIThreshold     float64
+	CreateRoom      string   // join-to-create voice channel, found by name when empty
+	StaffRoles      []string // Moderator and Maintainer, pinged on raids
 }
 
 // loadEnvFile sets variables from a KEY=value file, keeping any that are
@@ -125,6 +128,7 @@ func loadConfig() config {
 		DailyAiring:     os.Getenv("OTAKASE_DAILY_AIRING") != "false",
 		AiringHour:      6,
 		OtakaseCLI:      os.Getenv("OTAKASE_CLI"),
+		CreateRoom:      os.Getenv("OTAKASE_CREATE_ROOM"),
 	}
 	if h, err := strconv.Atoi(os.Getenv("OTAKASE_AIRING_HOUR")); err == nil && h >= 0 && h < 24 {
 		c.AiringHour = h
@@ -157,6 +161,8 @@ type bot struct {
 	issues    issueCooldown
 	providers providerCache
 	sem       *semantic
+	store     *store
+	raid      raidGuard
 }
 
 func main() {
@@ -168,15 +174,17 @@ func main() {
 	s.Identify.Intents = discordgo.IntentsGuilds |
 		discordgo.IntentsGuildMessages |
 		discordgo.IntentsGuildMembers |
+		discordgo.IntentsGuildVoiceStates |
 		discordgo.IntentsMessageContent
 
 	b := &bot{cfg: cfg, s: s, auto: newAutoReplier(), spam: newSpamGuard(), pres: &presence{},
-		sem: &semantic{url: cfg.OllamaURL, model: cfg.EmbedModel, threshold: cfg.AIThreshold}}
+		sem: &semantic{url: cfg.OllamaURL, model: cfg.EmbedModel, threshold: cfg.AIThreshold}, store: openStore(storePath())}
 	s.AddHandler(b.onReady)
 	s.AddHandler(b.onInteraction)
 	s.AddHandler(b.onThreadCreate)
 	s.AddHandler(b.onMessage)
 	s.AddHandler(b.onMemberAdd)
+	s.AddHandler(b.onVoiceState)
 
 	if err := s.Open(); err != nil {
 		log.Fatal(err)
@@ -190,6 +198,7 @@ func main() {
 	go b.airingLoop()
 	go b.sem.start()
 	go b.staleLoop()
+	go b.roomLoop()
 	log.Print("running")
 
 	stop := make(chan os.Signal, 1)
@@ -205,7 +214,7 @@ func (b *bot) onReady(s *discordgo.Session, r *discordgo.Ready) {
 // resolveIDs fills in channel and role ids left empty in the configuration
 // by finding them by name, so a fresh setup needs only the token and server.
 func (b *bot) resolveIDs() {
-	if b.cfg.SupportForum == "" || b.cfg.ModChannel == "" || b.cfg.AiringChannel == "" || b.cfg.LoungeChannel == "" {
+	if b.cfg.SupportForum == "" || b.cfg.ModChannel == "" || b.cfg.AiringChannel == "" || b.cfg.LoungeChannel == "" || b.cfg.CreateRoom == "" {
 		chans, err := b.s.GuildChannels(b.cfg.GuildID)
 		if err != nil {
 			log.Printf("listing channels: %v", err)
@@ -224,19 +233,25 @@ func (b *bot) resolveIDs() {
 			if b.cfg.LoungeChannel == "" && c.Type == discordgo.ChannelTypeGuildVoice && name == "lounge" {
 				b.cfg.LoungeChannel = c.ID
 			}
+			if b.cfg.CreateRoom == "" && c.Type == discordgo.ChannelTypeGuildVoice && isCreateChannel(c.Name) {
+				b.cfg.CreateRoom = c.ID
+			}
 		}
 	}
-	if b.cfg.ContributorRole == "" {
+	{
 		roles, err := b.s.GuildRoles(b.cfg.GuildID)
 		if err != nil {
 			log.Printf("listing roles: %v", err)
 		}
 		for _, r := range roles {
-			if r.Name == "Contributor" {
+			if r.Name == "Contributor" && b.cfg.ContributorRole == "" {
 				b.cfg.ContributorRole = r.ID
+			}
+			if r.Name == "Moderator" || r.Name == "Maintainer" {
+				b.cfg.StaffRoles = append(b.cfg.StaffRoles, r.ID)
 			}
 		}
 	}
-	log.Printf("support forum %q, mod channel %q, contributor role %q, airing channel %q, lounge %q",
-		b.cfg.SupportForum, b.cfg.ModChannel, b.cfg.ContributorRole, b.cfg.AiringChannel, b.cfg.LoungeChannel)
+	log.Printf("support forum %q, mod channel %q, contributor role %q, airing channel %q, lounge %q, create room %q",
+		b.cfg.SupportForum, b.cfg.ModChannel, b.cfg.ContributorRole, b.cfg.AiringChannel, b.cfg.LoungeChannel, b.cfg.CreateRoom)
 }

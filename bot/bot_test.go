@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -298,4 +299,129 @@ func TestPartyHost(t *testing.T) {
 	if partyHost(&discordgo.GuildScheduledEvent{Description: "some other event"}) != "" {
 		t.Error("an event the bot didn't make has no host")
 	}
+}
+
+func TestScamReason(t *testing.T) {
+	scams := []string{
+		"FREE NITRO for everyone https://dlscord-gift.com/claim",
+		"free discord nitro 3 months https://example.xyz/n",
+		"I'm leaving cs2, giving away my skins https://stearncommunity.ru/trade",
+		"steam gift for you bro https://steam-gift.shop/abc",
+		"check this https://steamcommunlty.com/tradeoffer/new",
+		"@everyone new airdrop https://claim-now.top",
+		"https://discord-nitro.gift/xyz",
+	}
+	for _, s := range scams {
+		if scamReason(s) == "" {
+			t.Errorf("missed scam: %q", s)
+		}
+	}
+	fine := []string{
+		"join us at https://discord.gg/AfrDAeWbcW",
+		"my steam profile https://steamcommunity.com/id/someone",
+		"free nitro would be nice lol",
+		"discord.js docs https://discord.js.org/docs",
+		"is there a free version? https://otakase.xyverion.com",
+		"https://store.steampowered.com/app/123 is free this week",
+		"@everyone the release is out",
+	}
+	for _, s := range fine {
+		if r := scamReason(s); r != "" {
+			t.Errorf("false positive %q: %s", s, r)
+		}
+	}
+}
+
+func TestRaidGuard(t *testing.T) {
+	var g raidGuard
+	now := time.Now()
+	for n := 0; n < raidJoins-1; n++ {
+		if g.join(now.Add(time.Duration(n) * time.Second)) {
+			t.Fatal("alert too early")
+		}
+	}
+	if !g.join(now.Add(20 * time.Second)) {
+		t.Fatal("no alert at the limit")
+	}
+	if g.join(now.Add(21 * time.Second)) {
+		t.Fatal("alerted twice")
+	}
+	var slow raidGuard
+	for n := 0; n < 30; n++ {
+		if slow.join(now.Add(time.Duration(n) * 10 * time.Second)) {
+			t.Fatal("slow joins alerted")
+		}
+	}
+}
+
+func TestNewcomerLink(t *testing.T) {
+	now := time.Now()
+	fresh := snowflakeAt(now.Add(-2 * 24 * time.Hour))
+	old := snowflakeAt(now.Add(-400 * 24 * time.Hour))
+	msg := func(author string, joined time.Time, text string) *discordgo.MessageCreate {
+		return &discordgo.MessageCreate{Message: &discordgo.Message{Content: text, Author: &discordgo.User{ID: author},
+			Member: &discordgo.Member{JoinedAt: joined}}}
+	}
+	if !newcomerLink(msg(fresh, now.Add(-time.Hour), "look https://x.io"), now) {
+		t.Error("new account link not caught")
+	}
+	if newcomerLink(msg(fresh, now.Add(-time.Hour), "hello there"), now) {
+		t.Error("plain text caught")
+	}
+	if newcomerLink(msg(old, now.Add(-time.Hour), "look https://x.io"), now) {
+		t.Error("old account caught")
+	}
+	if newcomerLink(msg(fresh, now.Add(-30*time.Hour), "look https://x.io"), now) {
+		t.Error("caught after the first day")
+	}
+}
+
+func TestPurgeIDs(t *testing.T) {
+	now := time.Now()
+	msgs := []*discordgo.Message{
+		{ID: "1", Author: &discordgo.User{ID: "a"}, Timestamp: now},
+		{ID: "2", Author: &discordgo.User{ID: "b"}, Timestamp: now},
+		{ID: "3", Author: &discordgo.User{ID: "a"}, Timestamp: now.Add(-15 * 24 * time.Hour)},
+	}
+	if got := purgeIDs(msgs, "", now); len(got) != 2 {
+		t.Errorf("all: %v", got)
+	}
+	if got := purgeIDs(msgs, "a", now); len(got) != 1 || got[0] != "1" {
+		t.Errorf("only a: %v", got)
+	}
+}
+
+func TestStoreRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.json")
+	st := openStore(path)
+	st.update(func(d *storeData) {
+		d.Warnings["u"] = append(d.Warnings["u"], warning{Reason: "spam"})
+		d.Rooms["c"] = room{Owner: "u"}
+	})
+	again := openStore(path)
+	if len(again.data.Warnings["u"]) != 1 || again.data.Rooms["c"].Owner != "u" {
+		t.Errorf("reloaded: %+v", again.data)
+	}
+	if e := warningsEmbed("u", again.data.Warnings["u"]); !strings.Contains(e.Description, "spam") {
+		t.Errorf("embed: %s", e.Description)
+	}
+}
+
+func TestRoomBits(t *testing.T) {
+	for name, want := range map[string]bool{"➕ Create room": true, "声・create-room": true, "Join to Create": true, "lounge": false} {
+		if isCreateChannel(name) != want {
+			t.Errorf("%q", name)
+		}
+	}
+	if o := roomOverwrites("g", "bot", "u", []string{"mod"}, false); len(o) != 1 {
+		t.Errorf("public: %d overwrites", len(o))
+	}
+	o := roomOverwrites("g", "bot", "u", []string{"mod"}, true)
+	if len(o) != 4 || o[1].ID != "g" || o[1].Deny&discordgo.PermissionViewChannel == 0 {
+		t.Errorf("private: %+v", o)
+	}
+}
+
+func snowflakeAt(t time.Time) string {
+	return strconv.FormatInt((t.UnixMilli()-1420070400000)<<22, 10)
 }

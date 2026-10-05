@@ -5,6 +5,8 @@ Wants=network-online.target
 
 [Service]
 Environment=OTAKASE_CLI=/usr/local/libexec/otakase
+Environment=OTAKASE_DATA_DIR=/var/lib/otakase-bot
+StateDirectory=otakase-bot
 EnvironmentFile=/etc/otakase-bot.env
 ExecStart=/usr/local/bin/otakase-bot
 Restart=always

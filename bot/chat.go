@@ -15,7 +15,7 @@ func (b *bot) onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author == nil || m.Author.Bot || m.GuildID != b.cfg.GuildID {
 		return
 	}
-	if b.spam.check(b, m) {
+	if b.filterMessage(m) || b.spam.check(b, m) {
 		return
 	}
 	go b.linkIssues(m)
@@ -55,7 +55,11 @@ func (b *bot) sendFAQ(m *discordgo.MessageCreate, f faqEntry) {
 }
 
 func (b *bot) onMemberAdd(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
-	if !b.cfg.WelcomeDM || m.User.Bot {
+	if m.User.Bot {
+		return
+	}
+	b.checkJoin(m)
+	if !b.cfg.WelcomeDM {
 		return
 	}
 	ch, err := s.UserChannelCreate(m.User.ID)
@@ -147,7 +151,7 @@ func (g *spamGuard) check(b *bot, m *discordgo.MessageCreate) bool {
 	if len(text) < 10 && len(m.Attachments) == 0 {
 		return false
 	}
-	if m.Member != nil && m.Member.Permissions&discordgo.PermissionManageMessages != 0 {
+	if b.isStaff(m) {
 		return false
 	}
 	key := m.Author.ID + "\x00" + text

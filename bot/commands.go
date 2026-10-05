@@ -42,6 +42,8 @@ func (b *bot) registerCommands() error {
 				ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildVoice, discordgo.ChannelTypeGuildStageVoice}},
 		}},
 	}
+	cmds = append(cmds, modCommands()...)
+	cmds = append(cmds, roomCommands()...)
 	if b.cfg.GitHubClientID != "" && b.cfg.ContributorRole != "" {
 		cmds = append(cmds, &discordgo.ApplicationCommand{
 			Name: "link-github", Description: "Get the Contributor role for a merged pull request"})
@@ -51,6 +53,9 @@ func (b *bot) registerCommands() error {
 }
 
 func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Member == nil {
+		return // DMs
+	}
 	switch i.Type {
 	case discordgo.InteractionApplicationCommand:
 		d := i.ApplicationCommandData()
@@ -86,11 +91,29 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			b.reportBug(i)
 		case "watchparty":
 			b.watchparty(i)
+		case "Report to mods":
+			b.reportMessage(i)
+		case "warn":
+			b.warn(i)
+		case "warnings":
+			b.warnings(i)
+		case "purge":
+			b.purge(i)
+		case "slowmode":
+			b.slowmode(i)
+		case "room":
+			b.roomCommand(i)
+		case "room-invite":
+			b.roomInvite(i)
 		}
 	case discordgo.InteractionMessageComponent:
 		id := i.MessageComponentData().CustomID
 		if eventID, ok := strings.CutPrefix(id, "party-cancel:"); ok {
 			b.cancelParty(i, eventID)
+			return
+		}
+		if strings.HasPrefix(id, "mod-") {
+			b.modAction(i, id)
 			return
 		}
 		switch id {
@@ -110,9 +133,11 @@ func helpEmbed() *discordgo.MessageEmbed {
 		"`/anime` look up a show on AniList",
 		"`/provider-status` which anime sources work right now",
 		"`/watchparty` plan a watch party in a voice channel",
+		"`/room` your own voice channel, public or private (or join **Create room**)",
 		"`/bug` turn a support post into a GitHub issue",
 		"Type `#123` to show a GitHub issue or pull request",
 		"`/link-github` Contributor role if you have a merged pull request",
+		"Right-click a message → **Apps → Report to mods** to flag it",
 		"",
 		"In the support forum, press **Mark solved** when your problem is fixed.",
 		"Episodes airing today are posted in the anime channel each morning.",

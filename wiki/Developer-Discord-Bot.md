@@ -57,6 +57,35 @@ server and stays connected to Discord.
   Any member can start one, one at a time; the post's **Cancel** button
   deletes the event and works for the host and for anyone who can manage
   events.
+- **Voice rooms:** joining the voice channel named **Create room** (or
+  "join to create") makes a voice channel for that member, in the same
+  category, and moves them in. `/room` does the same with a choice of public
+  or private, a name and a member limit, and changes the room when the member
+  already has one. A private room is hidden from everyone but its owner, the
+  people they add with `/room-invite`, the staff roles and the bot. The owner
+  can rename it and move people. A room is deleted once nobody is in it (a new
+  room waits two minutes for its owner). `OTAKASE_CREATE_ROOM` sets the
+  channel when the name doesn't match.
+- **Report to mods:** right-click a message → **Apps → Report to mods**
+  posts it in mod-chat with **Delete message**, **Timeout 1h** and
+  **Dismiss** buttons. The reporter gets a private thanks.
+- **Warnings:** `/warn` (members who can time out) records a warning, DMs the
+  member and logs it in mod-chat; every third warning is a one hour timeout.
+  `/warnings` lists a member's warnings, or clears them with `clear`.
+- **Raid guard:** ten or more joins within a minute pings Moderator and
+  Maintainer in mod-chat and pauses invites for 30 minutes (needs **Manage
+  Server**; without it the alert says to pause them by hand).
+- **New accounts:** members whose account is under a week old are noted in
+  mod-chat when they join, and their links are removed during their first
+  day, with a short note that deletes itself.
+- **Scam filter:** free Nitro and Steam gift lures, lookalike Discord and
+  Steam domains (`dlscord`, `stearncommunity`) and `@everyone` with an
+  outside link are deleted, the author is timed out for an hour and mod-chat
+  is told. Members who can manage messages are skipped. The patterns are in
+  `moderation.go`.
+- **/purge** (manage messages) deletes up to 100 recent messages, optionally
+  one member's, skipping ones older than 14 days. **/slowmode** (manage
+  channels) sets a channel's slowmode.
 - **Status:** Do Not Disturb, cycling every two minutes through "Watching
   anime · /help", "Playing Otakase <latest release>", the website and
   "Listening to your terminal" (`presence.go`). Bots can't show rich presence
@@ -71,8 +100,14 @@ In the developer portal, under **Bot**, turn on **Server Members Intent** and
 **Message Content Intent**; the bot exits at login without them. It needs the
 Bot role in the server, with permission to send messages, manage messages
 (spam removal), manage threads (closing solved posts), moderate members
-(timeouts), manage roles (Contributor, placed above that role) and create
-events (`/watchparty`).
+(timeouts), manage roles (Contributor, placed above that role), create
+events (`/watchparty`), manage channels (`/slowmode`, voice rooms) and move
+members (voice rooms). Manage Server is optional: it lets the raid guard pause
+invites.
+
+Warnings and the list of voice rooms are kept in `otakase-bot.json` in
+`OTAKASE_DATA_DIR` (the add-on's `/data`, `/var/lib/otakase-bot` with the
+systemd unit, else the working directory).
 
 ## GitHub linking
 
