@@ -12,6 +12,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/gen2brain/beeep v0.11.2
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
+	github.com/tetratelabs/wazero v1.12.0
 	github.com/tr1xem/go-discordrpc v1.0.0
 	github.com/vishen/go-chromecast v0.3.4
 	golang.org/x/term v0.46.0

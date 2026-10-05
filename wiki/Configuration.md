@@ -31,7 +31,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `AnimeNameLanguage` | Enum | `english`, `romaji` | Preferred title language. |
 | `PercentageToMarkComplete` | Integer | `0`–`100` | Watched percentage that counts as complete. |
 | `NextEpisodePrompt` | Boolean | `true`, `false` | In mpv, ask before playing the next episode; `false` plays it straight away. Casting has `CastNextEpisode` instead. |
-| `ScoreOnCompletion` | Boolean | `true`, `false` | Prompt to rate a show when you finish it. |
+| `ScoreOnCompletion` | Boolean | `true`, `false` | Prompt to rate a show or movie when you finish it. |
 | `SkipOp` / `SkipEd` | Boolean | `true`, `false` | Skip openings and endings where timings exist. |
 | `Theme` | Enum | `auto`, `omarchy`, `wal`, `base16`, `kde`, `gnome`, `macos`, `windows`, `builtin` | Which colour palette to use. `auto` follows the first desktop theme it finds. See [Theming](#theming) below. |
 | `ThemeFile` | String | file path | A palette file to use instead of auto-detecting: pywal `colors.json`, a base16 scheme, or a `colors.toml`. See [Theming](#theming) below. |
@@ -59,6 +59,11 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `MyAnimeListClientSecret` | String | MAL OAuth secret | Optional; used for sign-in and token refresh. |
 | `CheckUpdates` | Boolean | `true`, `false` | Check for a newer release in the background at launch, and offer it before the first menu. Default `true`. |
 | `DevBuilds` | Boolean | `true`, `false` | Also offer dev builds (the `dev` pre-release on GitHub, built from unreleased work on `main`) when one is newer than the latest release, in the update check and in `-u`. They can be broken. Default `false`. |
+| `ExperimentalMovies` | Boolean | `true`, `false` | **Experimental.** Adds a Movies entry to the main menu (`^x`) for watching non-anime movies and series, which AniList and MyAnimeList do not list. They are searched on their own providers and tracked on this computer, and on Trakt once signed in from the Movies menu. It may break when the site or its video hosts change. Default `false`. |
+| `MovieSite` | String | URL | For `8filmai`: the address that points to wherever the site is now. Only change it if that address stops working. Default `https://8filmai.eu`. |
+| `MovieProvider` | String | `all`, `vidsrc`, `8filmai`, `filmukas` | Where the Movies menu searches: `all` (every provider at once, each result tagged with its provider), `vidsrc` (English), `8filmai` (Lithuanian) or `filmukas` (Lithuanian family and animated films). Also changed with `^o` in the Movies menu. Default `all`. |
+| `TraktClientID` | String | Client ID | **Experimental.** Another Trakt app to sync movies through. Leave empty to use otakase's own app; sign in from the Movies menu (`^t`). Default empty. |
+| `TraktClientSecret` | String | Client secret | That app's Client Secret, if it has one. Default empty. |
 | `AdultContent` | Boolean | `true`, `false` | Show 18+ titles (AniList "adult", MyAnimeList rated explicit) in your lists, Surprise Me and AniList search (continue-watching rows only with `ContinueWatchingAdult`). When `false` they are hidden but stay on your tracker and keep syncing. Provider search when watching untracked is not filtered. Default `false`. |
 | `ContinueWatchingAdult` | Boolean | `true`, `false` | Show 18+ titles in the continue-watching rows that open the menu. Needs `AdultContent=true`. Default `false`, so they stay off the first screen. |
 | `AddMissingOptions` | Boolean | `true`, `false` | On a version upgrade, append newly added options to your config file. Default `true`. |

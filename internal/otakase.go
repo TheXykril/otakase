@@ -804,6 +804,13 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					ShowWatchStats(userConfig)
 					ClearScreen()
 					continue categorySelectionLoop
+				} else if categorySelection.Key == "MOVIES" {
+					// Its own menus, history and player loop; leaving them
+					// returns to the list it was opened from.
+					ClearScreen()
+					WatchMovies(userConfig)
+					ClearScreen()
+					continue categorySelectionLoop
 				} else if categorySelection.Key == "CONTINUE_LAST" {
 					// Reached from the terminal's ^l, or rofi's Continue button
 					// with the rows switched off. Where there are several recent

@@ -155,6 +155,21 @@ type Config struct {
 	// same descriptor, and a menu nobody is at blocks the season outright.
 	// See wiki/Developer-Cast-Window-Prompts.md.
 	CastNonInteractive bool `config:"-"`
+	// ExperimentalMovies turns on the Movies menu: non-anime movies from a
+	// site outside AniList and MyAnimeList, tracked locally only. Off by
+	// default while it is experimental.
+	ExperimentalMovies bool `config:"ExperimentalMovies"`
+	// MovieSite is the address that redirects to wherever the movie site is
+	// now. The site itself moves between bare IP addresses.
+	MovieSite string `config:"MovieSite"`
+	// MovieProvider is where movies are searched: all (every provider at
+	// once), vidsrc (English), 8filmai or filmukas (Lithuanian). Changed from
+	// the Movies menu.
+	MovieProvider string `config:"MovieProvider"`
+	// TraktClientID and TraktClientSecret name another Trakt app to sync
+	// movies through than otakase's own, which is used when they are empty.
+	TraktClientID     string `config:"TraktClientID"`
+	TraktClientSecret string `config:"TraktClientSecret"`
 }
 
 const (
@@ -219,6 +234,11 @@ func defaultConfigMap() map[string]string {
 		"IntroDBSkipTimes":           "true",
 		"CheckUpdates":               "true",
 		"DevBuilds":                  "false",
+		"ExperimentalMovies":         "false",
+		"MovieSite":                  "https://8filmai.eu",
+		"MovieProvider":              "all",
+		"TraktClientID":              "",
+		"TraktClientSecret":          "",
 		"AdultContent":               "false",
 		"ContinueWatchingAdult":      "false",
 		"MpvEpisodePlaylist":         "true",
@@ -924,6 +944,8 @@ func categoryIcon(key string) icons.Icon {
 		return icons.Cast
 	case "STATS":
 		return icons.Stats
+	case "MOVIES":
+		return icons.TV
 	}
 	return 0
 }

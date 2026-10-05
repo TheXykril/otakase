@@ -17,6 +17,7 @@
 - [Overview](Developer)
 - [Versions and Releases](Developer-Releases)
 - [Providers](Developer-Providers)
+- [Movies](Developer-Movies)
 - [Casting Verification](Developer-Casting-Verification)
 - [Cast Window Prompts](Developer-Cast-Window-Prompts)
 - [Player Look](Developer-Player-Look)

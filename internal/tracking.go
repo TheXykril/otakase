@@ -83,6 +83,10 @@ func trackingCategoryEnabled(config *Config, key string) bool {
 		// learns that stats come from AniList or MyAnimeList, which a missing
 		// entry would never tell them.
 		return true
+	case "MOVIES":
+		// Movies are tracked locally whatever the tracker, so only the
+		// experimental switch decides.
+		return config != nil && config.ExperimentalMovies
 	case "UPDATE", "PLANNING", "COMPLETED", "PAUSED", "DROPPED", "REWATCHING", "SURPRISE":
 		return UsesRemoteTracking(config)
 	default:

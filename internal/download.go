@@ -138,6 +138,10 @@ type ffmpegJob struct {
 	Headers  map[string]string
 	Subtitle string
 	Output   string
+	// File says the stream is one whole file whatever its address looks
+	// like: movie hosts hand out links such as get_video?id=... with no
+	// extension, which would otherwise be read as HLS.
+	File bool
 }
 
 // wholeFile reports whether the stream is a single file rather than an HLS
@@ -145,6 +149,9 @@ type ffmpegJob struct {
 // and a direct link names its container. A playlist is always named as one:
 // anineko proxies its HLS through a local port too.
 func (job ffmpegJob) wholeFile() bool {
+	if job.File {
+		return true
+	}
 	parsed, err := url.Parse(strings.TrimSpace(job.Stream))
 	if err != nil {
 		return false

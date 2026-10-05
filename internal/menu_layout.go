@@ -376,6 +376,9 @@ var menuActions = map[string]FooterAction{
 	// ctrl+s is free here, and it reaches the menu as a key rather than
 	// freezing the terminal: raw mode switches off XON/XOFF flow control.
 	"STATS": {Key: "STATS", Label: "stats", Hint: "ctrl+s"},
+	// Offered only with ExperimentalMovies on. ctrl+x is bound to nothing in
+	// rofi's defaults, so the toolbar can take it without freeing it first.
+	"MOVIES": {Key: "MOVIES", Label: "movies (exp.)", Hint: "ctrl+x"},
 }
 
 // applyDynamicActionLabels replaces the labels of actions that report state

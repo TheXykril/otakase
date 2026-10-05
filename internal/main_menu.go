@@ -73,6 +73,7 @@ func mainMenuLayout(config *Config, list AnimeList) ([]Tab, []FooterAction) {
 	_, actions := SplitMenuOrder(strings.Join(menuKeys(config), ","))
 	out := make([]FooterAction, 0, len(actions)+1)
 	hasTracker := false
+	hasMovies := false
 	for _, action := range actions {
 		if !trackingCategoryEnabled(config, action.Key) {
 			continue
@@ -80,7 +81,16 @@ func mainMenuLayout(config *Config, list AnimeList) ([]Tab, []FooterAction) {
 		if action.Key == "TRACKER" {
 			hasTracker = true
 		}
+		if action.Key == "MOVIES" {
+			hasMovies = true
+		}
 		out = append(out, action)
+	}
+	// Switching the experiment on is the whole opt-in: it would be one step
+	// too many to also have to add MOVIES to MenuActions. Naming it there
+	// still decides where it goes.
+	if !hasMovies && trackingCategoryEnabled(config, "MOVIES") {
+		out = append(out, menuActions["MOVIES"])
 	}
 	// Changing tracker is the way out of a tracker that stopped working, so it
 	// is always offered, as it was in the old menu.
@@ -183,6 +193,7 @@ var toolbarButtonLabels = map[string]string{
 	"TRACKER":        "Tracker",
 	"PROVIDER":       "Provider",
 	"STATS":          "Stats",
+	"MOVIES":         "Movies (exp.)",
 }
 
 // toolbarButtonIcon is the icon a toolbar button wears: the action's own, or
