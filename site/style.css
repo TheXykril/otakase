@@ -154,7 +154,7 @@ code { font: 0.85em var(--mono); color: var(--fg); }
 .os-pick button { font: inherit; letter-spacing: inherit; color: var(--muted); background: none; border: 0; border-bottom: 1px solid transparent; padding-bottom: 4px; cursor: pointer; }
 .os-pick button[aria-pressed="true"] { color: var(--fg); border-bottom-color: var(--accent); }
 .os-shot img { border: 0; }
-.menus .hint { margin-top: 14px; }
+.tour .hint { margin-top: 14px; }
 
 /* Install, kept short */
 .inst pre code { line-height: 1.6; }
