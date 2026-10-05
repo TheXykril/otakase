@@ -107,6 +107,10 @@ server and stays connected to Discord.
 - **/purge** (manage messages) deletes up to 100 recent messages, optionally
   one member's, skipping ones older than 14 days. **/slowmode** (manage
   channels) sets a channel's slowmode.
+- **/post-welcome** (manage server) deletes the bot's posts in the welcome
+  channel and posts the welcome message again, linking channels found by
+  name, so renamed or new channels are right. The text is in `welcome.go`,
+  the header image in `assets/`.
 - **Status:** Do Not Disturb, cycling every two minutes through "Watching
   anime · /help", "Playing Otakase <latest release>", the website and
   "Listening to your terminal" (`presence.go`). Bots can't show rich presence

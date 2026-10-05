@@ -48,6 +48,7 @@ func (b *bot) registerCommands() error {
 	}
 	cmds = append(cmds, modCommands()...)
 	cmds = append(cmds, roomCommands()...)
+	cmds = append(cmds, welcomeCommand())
 	cmds = append(cmds, suggestionCommands()...)
 	if b.cfg.GitHubClientID != "" && b.cfg.ContributorRole != "" {
 		cmds = append(cmds, &discordgo.ApplicationCommand{
@@ -108,6 +109,8 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			b.slowmode(i)
 		case "room":
 			b.roomCommand(i)
+		case "post-welcome":
+			b.postWelcome(i)
 		case "room-invite":
 			b.roomInvite(i)
 		case "suggest":

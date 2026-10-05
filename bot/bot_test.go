@@ -570,3 +570,28 @@ func TestSuggestionWait(t *testing.T) {
 		t.Error("other member waits")
 	}
 }
+
+func TestWelcomePayload(t *testing.T) {
+	chans := []*discordgo.Channel{
+		{ID: "1", Name: "則・rules", Type: discordgo.ChannelTypeGuildText},
+		{ID: "2", Name: "案・suggestions", Type: discordgo.ChannelTypeGuildText},
+		{ID: "3", Name: "➕ Create room", Type: discordgo.ChannelTypeGuildVoice},
+		{ID: "4", Name: "General", Type: discordgo.ChannelTypeGuildCategory},
+	}
+	var buf strings.Builder
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.Encode(welcomePayload(chans))
+	s := buf.String()
+	for _, want := range []string{"<#1>  Read before posting", "<#2>  Suggest features", "<#3>  Join to get your own voice room", "attachment://welcome-header.png"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if strings.Contains(s, "<#4>") || strings.Contains(s, "faq") {
+		t.Error("linked a category or a missing channel")
+	}
+	if len(welcomeHeader) == 0 {
+		t.Error("header image not embedded")
+	}
+}
