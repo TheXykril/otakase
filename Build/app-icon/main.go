@@ -15,6 +15,7 @@
 //   - internal/appicon/otakase.png, otakase-small.png and otakase.svg, embedded
 //     in the binary
 //   - internal/mpvskin/assets/logo/otakase.ass, the player's loading logo
+//   - site/img/mark-256.png, the 任 Discord shows beside the cover
 //
 // Only the shapes the icon uses are understood: rect with rx, and paths made
 // of M, L, H, V, Q and Z with absolute coordinates.
@@ -71,6 +72,7 @@ func main() {
 	write(filepath.Join(root, "Build/app-icon/otakase.icns"), buildICNS(renders))
 	write(filepath.Join(root, "internal/appicon/otakase.png"), renders[256])
 	write(filepath.Join(root, "internal/appicon/otakase-small.png"), encodePNG(small.render(64)))
+	write(filepath.Join(root, "site/img/mark-256.png"), encodePNG(small.render(256)))
 	copyFile(filepath.Join(root, "site/img/icon.svg"), filepath.Join(root, "internal/appicon/otakase.svg"))
 	write(filepath.Join(root, "internal/mpvskin/assets/logo/otakase.ass"), []byte(full.ass()))
 

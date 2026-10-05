@@ -24,6 +24,7 @@ otakase's `vendor/`. It writes:
 | `Build/app-icon/otakase.icns` | The macOS app bundle (below) |
 | `internal/appicon/otakase.png`, `otakase-small.png`, `otakase.svg` | Embedded in the binary |
 | `internal/mpvskin/assets/logo/otakase.ass` | The player's loading logo |
+| `site/img/mark-256.png` | The 任 Discord shows in the corner of the cover |
 
 The social preview card and the release banner, `site/img/social-preview.png`
 and `site/img/release-banner.png`, are renders like the site's other PNGs.
@@ -50,7 +51,14 @@ and `site/img/release-banner.png`, are renders like the site's other PNGs.
 - **The player's loading screen**: until the first frame, the mpv skin draws
   the logo in the middle of the window, in the theme's accent and text
   colours.
-- **rofi**: the small icon sits in front of the search box. It is written
+- **Terminal menus and the cast panel**: 任 in the accent colour leads the
+  breadcrumb (`任 Otakase › Watching`) and the cast panel's top edge. It is
+  text, so every terminal draws it.
+- **Discord**: while an episode plays, 任 sits in the corner of the cover;
+  paused, the pause badge replaces it. A show without a cover gets the full
+  icon instead of AniList's logo. Discord fetches both from the website, so
+  they only appear once the site carries them.
+- **rofi**: the full icon, at 56 px, sits in front of the search box. It is written
   beside the rofi themes as `otakase-icon.png`.
 - **README, releases and link previews**: the README header, a banner at the
   top of each release's notes, `otakase-icons.zip` among the release files,

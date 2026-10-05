@@ -156,9 +156,13 @@ const (
 	minMenuHeight = 10
 )
 
-// renderBreadcrumb draws "Otakase › Watching".
+// appMark is the app icon's 任, set in front of the name as a text logo: it
+// draws in every terminal, where a picture would need image support.
+const appMark = "任"
+
+// renderBreadcrumb draws "任 Otakase › Watching".
 func renderBreadcrumb(section string) string {
-	crumb := crumbAppStyle.Render(DisplayName)
+	crumb := crumbAppStyle.Render(appMark + " " + DisplayName)
 	if section != "" {
 		crumb += crumbSepStyle.Render(" › ") + crumbViewStyle.Render(section)
 	}

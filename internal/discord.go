@@ -91,13 +91,14 @@ func DiscordPresenceWithForce(anime Anime, IsPaused bool, currentPosition int, t
 				End:   nil,
 			}
 		}
-		SmallImage = ""
-		SmallText = ""
+		// The app's 任 in the cover's corner while it plays.
+		SmallImage = discordMarkImage
+		SmallText = DisplayName
 	}
 
 	largeImage := anime.CoverImage
 	if largeImage == "" {
-		largeImage = "https://anilist.co/img/icons/icon.svg" // fallback image
+		largeImage = discordIconImage
 	}
 
 	err := discordClient.SetActivity(client.Activity{
@@ -160,3 +161,10 @@ func FormatTime(seconds int) string {
 func ConvertSecondsToMinutes(seconds int) int {
 	return seconds / 60
 }
+
+// The app icon, served by the website, for Discord to show. Discord fetches
+// the images itself, so they have to be public URLs.
+const (
+	discordIconImage = "https://thexykril.github.io/otakase/img/icon-512.png"
+	discordMarkImage = "https://thexykril.github.io/otakase/img/mark-256.png"
+)
