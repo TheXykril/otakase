@@ -1,0 +1,4 @@
+# Lets Home Assistant install the Discord bot (bot/) as an add-on.
+name: Otakase
+url: https://github.com/TheXykril/otakase
+maintainer: TheXykril

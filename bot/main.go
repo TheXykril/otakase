@@ -7,11 +7,14 @@
 //
 // Configuration is read from the environment; see deploy/otakase-bot.env.
 // On hosts without a way to set environment variables, the same lines can go
-// in a .env or otakase-bot.env file next to the binary.
+// in a .env or otakase-bot.env file next to the binary. As a Home Assistant
+// add-on it reads the add-on options from /data/options.json.
 package main
 
 import (
 	"bufio"
+	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -60,7 +63,40 @@ func loadEnvFile(path string) {
 	}
 }
 
+// haOptions maps Home Assistant add-on options to environment variables.
+var haOptions = map[string]string{
+	"token":            "DISCORD_BOT_TOKEN",
+	"guild_id":         "OTAKASE_GUILD_ID",
+	"github_client_id": "OTAKASE_GITHUB_CLIENT_ID",
+	"github_token":     "GITHUB_TOKEN",
+	"welcome_dm":       "OTAKASE_WELCOME_DM",
+}
+
+// loadHAOptions sets variables from a Home Assistant add-on options file,
+// keeping any that are already set. A missing file is fine.
+func loadHAOptions(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var opts map[string]any
+	if err := json.Unmarshal(data, &opts); err != nil {
+		log.Printf("%s: %v", path, err)
+		return
+	}
+	for key, env := range haOptions {
+		v, ok := opts[key]
+		if !ok || v == nil {
+			continue
+		}
+		if _, set := os.LookupEnv(env); !set {
+			os.Setenv(env, fmt.Sprint(v))
+		}
+	}
+}
+
 func loadConfig() config {
+	loadHAOptions("/data/options.json")
 	loadEnvFile(".env")
 	loadEnvFile("otakase-bot.env")
 	c := config{

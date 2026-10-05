@@ -46,8 +46,23 @@ can be the website; neither is used.
 
 ## Hosting
 
-It runs on a Google Cloud e2-micro VM (free tier: us-central1, us-west1 or
-us-east1, standard persistent disk), but any Linux machine works.
+### Home Assistant
+
+The repo is also a Home Assistant add-on repository (`repository.yaml`, with
+the add-on in `bot/`).
+
+1. In Home Assistant open **Settings → Add-ons → Add-on Store**, then
+   **⋮ → Repositories**, and add `https://github.com/TheXykril/otakase`.
+2. Install **Otakase Bot**. Home Assistant builds it on the device, which
+   takes a few minutes.
+3. On the **Configuration** tab paste the token, save, then **Start** it on
+   the **Info** tab with **Start on boot** on. The **Log** tab shows its output.
+
+Updates show up in Home Assistant when `version` in `bot/config.yaml` goes up.
+
+### Linux server
+
+Any Linux machine works:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/TheXykril/otakase/main/bot/deploy/install.sh | sudo bash
@@ -62,6 +77,12 @@ Run the same command again to update. `BRANCH=name` before `bash` builds
 another branch. Settings are in `/etc/otakase-bot.env`
 (`bot/deploy/otakase-bot.env` lists them); empty channel and role ids are
 found by name.
+
+### Panel hosts
+
+On hosts that only take files, upload a Linux build
+(`CGO_ENABLED=0 GOOS=linux go build -o otakase-bot ./bot`) together with an
+`otakase-bot.env` (or `.env`) file next to it, and start `./otakase-bot`.
 
 ## Developing
 

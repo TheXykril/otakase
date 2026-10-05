@@ -65,3 +65,21 @@ func TestLoadEnvFile(t *testing.T) {
 		t.Errorf("OTK_B = %q, want existing value kept", got)
 	}
 }
+
+func TestLoadHAOptions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "options.json")
+	os.WriteFile(path, []byte(`{"token":"abc","guild_id":"123","welcome_dm":false}`), 0o600)
+	for _, env := range haOptions {
+		t.Setenv(env, "")
+		os.Unsetenv(env)
+	}
+	loadHAOptions(path)
+	for env, want := range map[string]string{"DISCORD_BOT_TOKEN": "abc", "OTAKASE_GUILD_ID": "123", "OTAKASE_WELCOME_DM": "false"} {
+		if got := os.Getenv(env); got != want {
+			t.Errorf("%s = %q, want %q", env, got, want)
+		}
+	}
+	if _, set := os.LookupEnv("GITHUB_TOKEN"); set {
+		t.Error("GITHUB_TOKEN set although the option is missing")
+	}
+}
