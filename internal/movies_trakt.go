@@ -173,3 +173,77 @@ func traktNotice(config *Config, message string, sticky bool) {
 		Out(message)
 	}
 }
+
+// movieDetails is what Trakt says about a movie, looked up once per visit to
+// the Movies section. A movie Trakt cannot match has none.
+func movieDetails(lib *movieLibrary, store *movies.Store, movie movies.Movie) (movies.Details, bool) {
+	if lib.trakt == nil {
+		return movies.Details{}, false
+	}
+	if lib.details == nil {
+		lib.details = map[string]*movies.Details{}
+	}
+	if details, ok := lib.details[movie.Key()]; ok {
+		return derefDetails(details)
+	}
+	identified := identifyMovie(lib, store, movie)
+	var found *movies.Details
+	if strings.HasPrefix(identified.IMDb, "tt") {
+		details, err := lib.trakt.Details(identified)
+		if err != nil {
+			Log(fmt.Sprintf("movies: trakt: details %s: %v", movie.Key(), err))
+		} else {
+			found = &details
+		}
+	}
+	lib.details[movie.Key()] = found
+	return derefDetails(found)
+}
+
+func derefDetails(details *movies.Details) (movies.Details, bool) {
+	if details == nil {
+		return movies.Details{}, false
+	}
+	return *details, true
+}
+
+// movieDetailsText is a movie's details as a few lines for the top of its
+// menu: runtime, genres and rating on one line, then the plot.
+func movieDetailsText(details movies.Details) []string {
+	facts := []string{}
+	if details.Runtime > 0 {
+		if details.Runtime >= 60 {
+			facts = append(facts, fmt.Sprintf("%dh %02dm", details.Runtime/60, details.Runtime%60))
+		} else {
+			facts = append(facts, fmt.Sprintf("%dm", details.Runtime))
+		}
+	}
+	if details.Episodes > 0 {
+		facts = append(facts, fmt.Sprintf("%d episodes", details.Episodes))
+	}
+	if len(details.Genres) > 0 {
+		genres := make([]string, 0, len(details.Genres))
+		for _, genre := range details.Genres {
+			genre = strings.ReplaceAll(genre, "-", " ")
+			if genre != "" {
+				genre = strings.ToUpper(genre[:1]) + genre[1:]
+			}
+			genres = append(genres, genre)
+		}
+		facts = append(facts, strings.Join(genres, ", "))
+	}
+	if details.Certification != "" {
+		facts = append(facts, details.Certification)
+	}
+	if details.Rating > 0 {
+		facts = append(facts, fmt.Sprintf("%.1f/10 on Trakt", details.Rating))
+	}
+	lines := []string{}
+	if len(facts) > 0 {
+		lines = append(lines, strings.Join(facts, " · "))
+	}
+	if overview := strings.TrimSpace(details.Overview); overview != "" {
+		lines = append(lines, wrapWords(overview, 78)...)
+	}
+	return lines
+}

@@ -47,6 +47,8 @@ type Movie struct {
 	Year     string
 	Poster   string
 	IMDb     string
+	// Series is a show, played an episode at a time, rather than a film.
+	Series bool `json:",omitempty"`
 }
 
 // Key identifies the movie in the history: its provider and its path there.

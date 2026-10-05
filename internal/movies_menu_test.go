@@ -210,3 +210,19 @@ func TestMovieSearchesAllByDefault(t *testing.T) {
 		t.Errorf("default MovieProvider = %q", config.MovieProvider)
 	}
 }
+
+func TestMovieDetailsText(t *testing.T) {
+	lines := movieDetailsText(movies.Details{
+		Runtime: 169, Genres: []string{"science-fiction", "drama"}, Certification: "PG-13", Rating: 8.886,
+		Overview: strings.Repeat("word ", 30),
+	})
+	if lines[0] != "2h 49m · Science fiction, Drama · PG-13 · 8.9/10 on Trakt" {
+		t.Errorf("facts line = %q", lines[0])
+	}
+	if len(lines) != 3 {
+		t.Errorf("overview should wrap into two lines: %q", lines)
+	}
+	if got := movieDetailsText(movies.Details{}); len(got) != 0 {
+		t.Errorf("no details should give no lines: %q", got)
+	}
+}

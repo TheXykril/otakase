@@ -18,6 +18,9 @@ type movieLibrary struct {
 	providers map[string]movies.Provider
 	// trakt is nil when no Trakt app is configured.
 	trakt *movies.Trakt
+	// details holds what Trakt said about each movie opened, nil for one it
+	// could not match, so each is looked up once.
+	details map[string]*movies.Details
 }
 
 // provider returns the named provider, made once.

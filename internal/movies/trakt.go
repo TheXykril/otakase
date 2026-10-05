@@ -315,6 +315,33 @@ func (t *Trakt) Paused(movie Movie, position, duration int) error {
 	return t.send("/scrobble/pause", map[string]any{"movie": item, "progress": progress})
 }
 
+// Details is what Trakt says about a film or a show, for the menu.
+type Details struct {
+	Overview string   `json:"overview"`
+	Tagline  string   `json:"tagline"`
+	Runtime  int      `json:"runtime"`
+	Genres   []string `json:"genres"`
+	Rating   float64  `json:"rating"`
+	// Certification is the age rating, such as PG-13.
+	Certification string `json:"certification"`
+	Network       string `json:"network"`
+	Episodes      int    `json:"aired_episodes"`
+}
+
+// Details looks a movie or show up by its IMDb id. It needs no sign-in.
+func (t *Trakt) Details(movie Movie) (Details, error) {
+	if !strings.HasPrefix(movie.IMDb, "tt") {
+		return Details{}, fmt.Errorf("%s has no IMDb id to look up", movie.Label())
+	}
+	kind := "movies"
+	if movie.Series {
+		kind = "shows"
+	}
+	var details Details
+	_, err := t.call(http.MethodGet, "/"+kind+"/"+movie.IMDb+"?extended=full", "", nil, &details)
+	return details, err
+}
+
 // FindIMDb looks a movie up on Trakt by its titles and year and returns its
 // IMDb id, or "" when nothing matches. Trakt's search reads titles in other
 // languages too (its translations and aliases), so a Lithuanian title finds

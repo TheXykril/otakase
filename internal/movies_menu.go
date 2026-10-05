@@ -218,7 +218,12 @@ func movieHubOptions(config *Config, store *movies.Store, lib *movieLibrary) []S
 // pickMovieOption shows a menu and reports false when the viewer backs out.
 // Quit quits, as it does everywhere.
 func pickMovieOption(options []SelectionOption) (SelectionOption, bool) {
-	picked, err := movieSelect(options)
+	return movieChoice(movieSelect(options))
+}
+
+// movieChoice reads what was picked in a Movies menu, reporting false when
+// the viewer backed out. Quit quits, as it does everywhere.
+func movieChoice(picked SelectionOption, err error) (SelectionOption, bool) {
 	if err != nil {
 		Log(fmt.Sprintf("movies: menu failed: %v", err))
 		return SelectionOption{}, false
@@ -231,6 +236,28 @@ func pickMovieOption(options []SelectionOption) (SelectionOption, bool) {
 		return SelectionOption{}, false
 	}
 	return picked, true
+}
+
+// movieSelectMessage draws a menu under a few lines of text: rofi's message
+// bar, or the text printed above the terminal menu. Tests replace it.
+var movieSelectMessage = func(config *Config, options []SelectionOption, message string) (SelectionOption, error) {
+	if config.RofiSelection {
+		return RofiSelectWithMessage(options, false, moviesSection, rofiEscape(message))
+	}
+	for _, line := range strings.Split(message, "\n") {
+		Out(line)
+	}
+	return movieSelect(options)
+}
+
+// rofiEscape keeps text from being read as Pango markup by rofi.
+func rofiEscape(text string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(text)
+}
+
+// pickMovieOptionWithMessage is pickMovieOption with text above the menu.
+func pickMovieOptionWithMessage(config *Config, options []SelectionOption, message string) (SelectionOption, bool) {
+	return movieChoice(movieSelectMessage(config, options, message))
 }
 
 // searchMovies asks for a title and offers what the site finds, until the
@@ -316,19 +343,7 @@ func pickMovieRows(config *Config, options []SelectionOption) (SelectionOption, 
 	for i, option := range options {
 		previews[option.Key] = RofiSelectPreview{Title: option.Label, CoverImage: option.Thumbnail, Rank: i}
 	}
-	picked, err := movieSelectPreview(previews, false)
-	if err != nil {
-		Log(fmt.Sprintf("movies: menu failed: %v", err))
-		return SelectionOption{}, false
-	}
-	picked = NormalizeSelectionKey(picked)
-	if SelectionMeansQuit(picked) {
-		Exit(nil)
-	}
-	if picked.Key == "-2" || picked.Key == movieBackKey || picked.Key == "" {
-		return SelectionOption{}, false
-	}
-	return picked, true
+	return movieChoice(movieSelectPreview(previews, false))
 }
 
 // pickMovieRating asks for a score out of 10, or 0 to clear the one given.
@@ -408,8 +423,11 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		}
 
 		ClearScreen()
-		Out(movie.Label())
-		picked, ok := pickMovieOption(options)
+		message := []string{movie.Label()}
+		if details, found := movieDetails(lib, store, movie); found {
+			message = append(message, movieDetailsText(details)...)
+		}
+		picked, ok := pickMovieOptionWithMessage(config, options, strings.Join(message, "\n"))
 		if !ok {
 			return
 		}
