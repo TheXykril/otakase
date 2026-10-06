@@ -44,6 +44,9 @@ local opts = {
 	skips = true,
 	hide_after = 2.0,
 	logo = '',
+	-- Text is set in this sans font; numbers (the clock) keep mpv's OSD font,
+	-- the theme's monospace, so they do not jitter as they change.
+	ui_font = 'Inter',
 }
 options.read_options(opts, 'otakase_skin')
 
@@ -152,7 +155,7 @@ local function circle(x, y, r, color, opacity, border_color, border_width, borde
 	return tags .. '\\p1}' .. rounded_rect(x - r, y - r, x + r, y + r, r) .. '{\\p0}'
 end
 
--- A vertical fade from opacity `from` at y0 to `to` at y1. ASS has no
+-- A vertical fade from opacity `from` at y0 to `to` at y1, eased. ASS has no
 -- gradients, so it is drawn as bands a few pixels tall that meet exactly:
 -- overlapping bands would double their alpha into visible lines.
 local function fade(x0, y0, x1, y1, color, from, to)
@@ -161,7 +164,11 @@ local function fade(x0, y0, x1, y1, color, from, to)
 	local step = (y1 - y0) / bands
 	for i = 0, bands - 1 do
 		local t = (i + 0.5) / bands
-		local opacity = from + (to - from) * t
+		-- Eased: full strength over the outer 40%, where the controls sit,
+		-- then a soft S-curve to nothing, so there is no visible edge.
+		local peak = math.max(from, to)
+		local k = peak > 0 and math.min(1, (from + (to - from) * t) / peak / 0.6) or 0
+		local opacity = peak * k * k * (3 - 2 * k)
 		local ay = math.floor(y0 + step * i + 0.5)
 		local by = math.floor(y0 + step * (i + 1) + 0.5)
 		if by > ay and opacity > 0.004 then
@@ -180,8 +187,13 @@ local function escape(value)
 	return value
 end
 
+local function mono_font()
+	return mp.get_property('options/osd-font') or 'monospace'
+end
+
 local function text_font()
-	return mp.get_property('options/osd-font') or 'sans-serif'
+	if opts.ui_font ~= '' then return opts.ui_font end
+	return mono_font()
 end
 
 local function text(x, y, align, value, size, color, opacity, bold, font)
@@ -675,10 +687,12 @@ local function draw_controls(ass, w, h, s)
 	if dur and dur > 0 then
 		local function px(t) return ax + (bx - ax) * math.max(0, math.min(1, t / dur)) end
 		local hovering = hovered == 'seek'
-		local th = (hovering or state.dragging) and 6 * s or 4 * s
-		ass[#ass + 1] = box(ax, sy - th / 2, bx, sy + th / 2, th / 2, C.fg, 0.28)
+		local active = hovering or state.dragging
+		local th = active and 8 * s or 4 * s
+		ass[#ass + 1] = box(ax, sy - th / 2, bx, sy + th / 2, th / 2, C.fg, 0.2)
+		-- What is loaded ahead reads as its own lighter band.
 		if state.cache_end and state.pos and state.cache_end > state.pos then
-			ass[#ass + 1] = box(ax, sy - th / 2, px(state.cache_end), sy + th / 2, th / 2, C.fg, 0.33)
+			ass[#ass + 1] = box(ax, sy - th / 2, px(state.cache_end), sy + th / 2, th / 2, C.fg, 0.45)
 		end
 		local pos = state.pos or 0
 		if pos > 0 then
@@ -689,11 +703,11 @@ local function draw_controls(ass, w, h, s)
 			local start, stop = chapter_span(span[1])
 			if start then
 				local cx0, cx1 = px(start), px(stop)
-				ass[#ass + 1] = box(cx0, sy - th / 2 - 1 * s, cx1, sy + th / 2 + 1 * s, 3 * s, C.highlight, 1, C.bg, 0.5)
-				ass[#ass + 1] = text(cx0, sy - 12 * s, 1, span[2], 11 * s, C.highlight)
+				ass[#ass + 1] = box(cx0, sy - th / 2 - 2 * s, cx1, sy + th / 2 + 2 * s, (th + 4 * s) / 2, C.highlight, 1)
+				ass[#ass + 1] = text(cx0, sy - th / 2 - 6 * s, 1, span[2], 11 * s, C.highlight, 1, true)
 			end
 		end
-		ass[#ass + 1] = circle(px(pos), sy, 8 * s, C.bright, 1, C.accent, 4 * s, 0.35)
+		ass[#ass + 1] = circle(px(pos), sy, (active and 9 or 7) * s, C.bright, 1, C.accent, 4 * s, 0.35)
 		hit('seek', ax, sy - 12 * s, bx, sy + 12 * s, function() end, {seek = true})
 
 		if (hovering or state.dragging) and state.mouse.x >= ax then
@@ -701,10 +715,10 @@ local function draw_controls(ass, w, h, s)
 			local label = clock(t)
 			local chapter = chapter_at(t)
 			if chapter == 'Opening' then label = label .. ' · OP' elseif chapter == 'Ending' then label = label .. ' · ED' end
-			local lw = text_width(label, 12 * s) + 16 * s
+			local lw = text_width(label, 12 * s, false, mono_font()) + 16 * s
 			local lx = math.max(ax, math.min(bx - lw, state.mouse.x - lw / 2))
 			ass[#ass + 1] = box(lx, sy - 50 * s, lx + lw, sy - 26 * s, 6 * s, C.bg, 0.95)
-			ass[#ass + 1] = text(lx + lw / 2, sy - 38 * s, 5, label, 12 * s, C.bright)
+			ass[#ass + 1] = text(lx + lw / 2, sy - 38 * s, 5, label, 12 * s, C.bright, 1, false, mono_font())
 		end
 	end
 
@@ -721,8 +735,8 @@ local function draw_controls(ass, w, h, s)
 	local time_x = e + 12 * s
 	local now = clock(state.pos)
 	local total = dur and (' / ' .. clock(dur)) or ''
-	ass[#ass + 1] = text(time_x, ry, 4, now, 14 * s, C.bright) .. string.format('{\\1c&H%s&}%s', C.dim, total)
-	local vx = time_x + text_width(now .. total, 14 * s) + 24 * s
+	ass[#ass + 1] = text(time_x, ry, 4, now, 14 * s, C.bright, 1, false, mono_font()) .. string.format('{\\1c&H%s&}%s', C.dim, total)
+	local vx = time_x + text_width(now .. total, 14 * s, false, mono_font()) + 24 * s
 
 	-- Right group, laid out from the right edge.
 	local rx = w - 20 * s
