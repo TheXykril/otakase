@@ -21,7 +21,7 @@ that works; what users see is on [Configuration](Configuration).
 - **Keys panel and skip times menu**: two more menus in the control row. The
   keyboard button (or `?`, also a plain binding) lists the keys from the
   script's `KEYS` table under *Player*, then the skip-time keys under
-  *Skip times · AniSkip* when the `contribute` script-opt is on. The fast-forward button, shown only with `contribute`
+  *Skip times* when the `contribute` script-opt is on. The fast-forward button, shown only with `contribute`
   (`ContributeSkipTimes`), sends `script-message otakase-skip <action>`,
   exactly what otakase's own Alt bindings send (`skipMarkerBindings` in
   `internal/skip_marker.go`), so both paths stay one feature.

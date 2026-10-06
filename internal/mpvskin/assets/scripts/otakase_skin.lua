@@ -446,7 +446,7 @@ local function open_menu(kind, anchor_x, anchor_y)
 			items[#items + 1] = {label = entry[2], hint = entry[1], info = true}
 		end
 		if opts.contribute then
-			items[#items + 1] = {label = 'Skip times · AniSkip', header = true, info = true}
+			items[#items + 1] = {label = 'Skip times', header = true, info = true}
 			for _, entry in ipairs(SKIP_TIME_ACTIONS) do
 				items[#items + 1] = {label = entry[2], hint = entry[4], info = true}
 			end
