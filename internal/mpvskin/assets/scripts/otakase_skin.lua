@@ -68,9 +68,9 @@ local function ass_alpha(opacity)
 	return string.format('%02X', math.floor((1 - opacity) * 255 + 0.5))
 end
 
--- The bar fades are always near-black, whatever the palette: a light theme's
+-- The bar fades are always black, whatever the palette: a light theme's
 -- background would wash the picture grey rather than shade it.
-local SHADE = ass_color('0e0d0c')
+local SHADE = ass_color('000000')
 
 local C = {
 	bg = ass_color(opts.background),

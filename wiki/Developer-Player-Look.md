@@ -76,7 +76,7 @@ stay hidden for this process:
 
 ## Colours
 
-`mpvSkinColors` maps the active palette: `background` (cards; the bar fades are always near-black `0e0d0c`, so a light theme shades the picture rather than greying it),
+`mpvSkinColors` maps the active palette: `background` (cards; the bar fades are always pure black `000000`, so a light theme shades the picture rather than greying it, and they blend into letterbox bars),
 `surface` (menus, chips, hovered buttons), `foreground`, `bright` (title,
 current time), `dim` (`MetaText`), `accent` (play button, seek fill),
 `accent_text` (readable on the accent) and `highlight` (`ResumeText`, the
