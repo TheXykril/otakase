@@ -40,6 +40,8 @@ local opts = {
 	-- otakase answers the skip-time keys (ContributeSkipTimes), so the skip
 	-- times menu and its keys are offered.
 	contribute = false,
+	-- Off for films and series: no openings or endings, so no skip keys listed.
+	skips = true,
 	hide_after = 2.0,
 	logo = '',
 }
@@ -65,6 +67,10 @@ local function ass_alpha(opacity)
 	opacity = math.max(0, math.min(1, opacity or 1))
 	return string.format('%02X', math.floor((1 - opacity) * 255 + 0.5))
 end
+
+-- The bar fades are always near-black, whatever the palette: a light theme's
+-- background would wash the picture grey rather than shade it.
+local SHADE = ass_color('0e0d0c')
 
 local C = {
 	bg = ass_color(opts.background),
@@ -405,7 +411,7 @@ local KEYS = {
 	{'Space', 'Play / pause'},
 	{'Left / Right', 'Seek 5 seconds'},
 	{'Up / Down', 'Volume'},
-	{'Enter', 'Skip opening or ending / undo'},
+	{'Enter', 'Skip opening or ending / undo', skip = true},
 	{'m', 'Mute'},
 	{'f', 'Fullscreen'},
 	{'j', 'Next subtitle'},
@@ -443,7 +449,9 @@ local function open_menu(kind, anchor_x, anchor_y)
 		-- Two sections: mpv's keys, then the skip-time keys otakase adds.
 		items[#items + 1] = {label = 'Player', header = true, info = true}
 		for _, entry in ipairs(KEYS) do
-			items[#items + 1] = {label = entry[2], hint = entry[1], info = true}
+			if opts.skips or not entry.skip then
+				items[#items + 1] = {label = entry[2], hint = entry[1], info = true}
+			end
 		end
 		if opts.contribute then
 			items[#items + 1] = {label = 'Skip times', header = true, info = true}
@@ -608,7 +616,7 @@ end
 
 local function draw_controls(ass, w, h, s)
 	-- Top bar.
-	ass[#ass + 1] = fade(0, 0, w, 110 * s, C.bg, 0.92, 0)
+	ass[#ass + 1] = fade(0, 0, w, 80 * s, SHADE, 0.85, 0)
 	local title = state.title or ''
 	local main, rest = title:match('^(.-)%s+[-–·]%s+(.+)$')
 	if not main then main, rest = title, nil end
@@ -657,7 +665,7 @@ local function draw_controls(ass, w, h, s)
 	end
 
 	-- Bottom bar.
-	ass[#ass + 1] = fade(0, h - 150 * s, w, h, C.bg, 0, 0.95)
+	ass[#ass + 1] = fade(0, h - 120 * s, w, h, SHADE, 0, 0.9)
 
 	-- Seek bar.
 	local ax, bx = 20 * s, w - 20 * s

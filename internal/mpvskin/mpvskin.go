@@ -84,6 +84,9 @@ type Options struct {
 	// Contribute says otakase answers the skip-time keys, so the skin offers
 	// its skip times menu.
 	Contribute bool
+	// NoSkips is a film or series: no openings, endings or skip times, so the
+	// skin lists none of their keys.
+	NoSkips bool
 }
 
 // hideOthers are the script options that keep skins the user runs themselves
@@ -221,6 +224,7 @@ func Args(opts Options) []string {
 		{"skip_op", yesNo(opts.SkipOp)},
 		{"skip_ed", yesNo(opts.SkipEd)},
 		{"contribute", yesNo(opts.Contribute)},
+		{"skips", yesNo(!opts.NoSkips)},
 		{"logo", filepath.Join(opts.Dir, "logo", "otakase.ass")},
 	}
 

@@ -39,40 +39,40 @@ func TestMPVSkinArgsGates(t *testing.T) {
 	binary := fakeMPV(t, "0.38.0")
 	config := &Config{MpvSkin: "auto", StoragePath: t.TempDir()}
 
-	args := mpvSkinArgs(config, binary)
+	args := mpvSkinArgs(config, binary, true)
 	if len(args) == 0 || args[0] != "--osc=no" {
 		t.Fatalf("auto with no skin of the user's own should load ours, got %v", args)
 	}
 
 	off := *config
 	off.MpvSkin = "false"
-	if got := mpvSkinArgs(&off, binary); got != nil {
+	if got := mpvSkinArgs(&off, binary, true); got != nil {
 		t.Errorf("MpvSkin=false still added %v", got)
 	}
 
-	if got := mpvSkinArgs(config, filepath.Join(filepath.Dir(binary), "celluloid")); got != nil {
+	if got := mpvSkinArgs(config, filepath.Join(filepath.Dir(binary), "celluloid"), true); got != nil {
 		t.Errorf("a player that is not mpv got %v", got)
 	}
 
 	withArgs := *config
 	withArgs.MpvArgs = []string{"--osc=no"}
-	if got := mpvSkinArgs(&withArgs, binary); got != nil {
+	if got := mpvSkinArgs(&withArgs, binary, true); got != nil {
 		t.Errorf("MpvArgs deciding the controls still got %v", got)
 	}
 
-	if got := mpvSkinArgs(config, fakeMPV(t, "0.36.0")); got != nil {
+	if got := mpvSkinArgs(config, fakeMPV(t, "0.36.0"), true); got != nil {
 		t.Errorf("mpv 0.36 cannot take --osd-fonts-dir and must not get %v", got)
 	}
 
 	if err := os.MkdirAll(filepath.Join(mpvHome, "scripts", "uosc"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if got := mpvSkinArgs(config, binary); got != nil {
+	if got := mpvSkinArgs(config, binary, true); got != nil {
 		t.Errorf("auto with the user's own uosc should step aside, got %v", got)
 	}
 	forced := *config
 	forced.MpvSkin = "true"
-	if got := mpvSkinArgs(&forced, binary); len(got) == 0 {
+	if got := mpvSkinArgs(&forced, binary, true); len(got) == 0 {
 		t.Error("MpvSkin=true should load the skin even beside the user's own")
 	}
 }
@@ -83,7 +83,7 @@ func TestMPVSkinArgsLeaveTheUsersOSDFont(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(mpvHome, "mpv.conf"), []byte("osd-font=Inter\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	args := mpvSkinArgs(&Config{MpvSkin: "auto", StoragePath: t.TempDir()}, binary)
+	args := mpvSkinArgs(&Config{MpvSkin: "auto", StoragePath: t.TempDir()}, binary, true)
 	if len(args) == 0 {
 		t.Fatal("skin not loaded")
 	}
@@ -133,5 +133,26 @@ func TestMPVSkinEpisodeTitle(t *testing.T) {
 	}
 	if got := mpvSkinEpisodeTitle(nil); got != "" {
 		t.Errorf("nil anime = %q", got)
+	}
+}
+
+// Films and series have no skip times: the skin offers no skip times menu and
+// lists none of their keys, whatever ContributeSkipTimes says.
+func TestMPVSkinArgsWithoutSkipTimes(t *testing.T) {
+	isolateMPVConfig(t)
+	binary := fakeMPV(t, "0.38.0")
+	config := &Config{MpvSkin: "true", ContributeSkipTimes: true, StoragePath: t.TempDir()}
+
+	anime := strings.Join(mpvSkinArgs(config, binary, true), "\n")
+	for _, want := range []string{"otakase_skin-contribute=yes", "otakase_skin-skips=yes"} {
+		if !strings.Contains(anime, want) {
+			t.Errorf("anime: args missing %q:\n%s", want, anime)
+		}
+	}
+	film := strings.Join(mpvSkinArgs(config, binary, false), "\n")
+	for _, want := range []string{"otakase_skin-contribute=no", "otakase_skin-skips=no"} {
+		if !strings.Contains(film, want) {
+			t.Errorf("film: args missing %q:\n%s", want, film)
+		}
 	}
 }

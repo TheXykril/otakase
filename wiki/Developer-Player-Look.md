@@ -25,6 +25,11 @@ that works; what users see is on [Configuration](Configuration).
   (`ContributeSkipTimes`), sends `script-message otakase-skip <action>`,
   exactly what otakase's own Alt bindings send (`skipMarkerBindings` in
   `internal/skip_marker.go`), so both paths stay one feature.
+- **Films and series** (the Movies section) have no skip times:
+  `mpvSkinArgs` gets `skipTimes=false` (`anime.Movie != nil`), passing
+  `contribute=no` and `skips=no`, so the skip times button, the *Skip times*
+  keys and the Enter-to-skip line are left out. `StartSkipMarker` never binds
+  the Alt keys for them either.
 - **MaterialIconsRound.otf** (`assets/fonts`, Apache-2.0, licence in
   `assets/LICENSE.MaterialIcons`) draws the icons by ligature name
   (`play_arrow`, `skip_next`, `subtitles`, …). It is loaded with
@@ -71,7 +76,7 @@ stay hidden for this process:
 
 ## Colours
 
-`mpvSkinColors` maps the active palette: `background` (bar fades, cards),
+`mpvSkinColors` maps the active palette: `background` (cards; the bar fades are always near-black `0e0d0c`, so a light theme shades the picture rather than greying it),
 `surface` (menus, chips, hovered buttons), `foreground`, `bright` (title,
 current time), `dim` (`MetaText`), `accent` (play button, seek fill),
 `accent_text` (readable on the accent) and `highlight` (`ResumeText`, the
