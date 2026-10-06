@@ -67,7 +67,8 @@ var (
 // would leave both listening to the same socket, and every keypress would be
 // answered twice.
 func StartSkipMarker(config *Config, anime *Anime, socket string, applied SkipIDs, done <-chan struct{}) {
-	if config == nil || anime == nil || !config.ContributeSkipTimes {
+	// Films and series have no skip times to mark.
+	if config == nil || anime == nil || anime.Movie != nil || !config.ContributeSkipTimes {
 		return
 	}
 	if socket == "" || socket == "android-intent" {

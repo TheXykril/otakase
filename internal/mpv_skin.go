@@ -21,8 +21,9 @@ var (
 
 // mpvSkinArgs are the flags that give the mpv at binary otakase's look, or nil
 // when it keeps its own: MpvSkin is off, the player is not mpv or too old for
-// it, or the user already has a look of their own.
-func mpvSkinArgs(config *Config, binary string) []string {
+// it, or the user already has a look of their own. skipTimes is false for
+// films and series, which have no skip times: the skin then offers none.
+func mpvSkinArgs(config *Config, binary string, skipTimes bool) []string {
 	if config == nil {
 		return nil
 	}
@@ -58,8 +59,9 @@ func mpvSkinArgs(config *Config, binary string) []string {
 		SkipOp: config.SkipOp,
 		SkipEd: config.SkipEd,
 		// The skip times menu sends what the Alt keys send; nothing answers
-		// it unless the marker runs.
-		Contribute: config.ContributeSkipTimes,
+		// it unless the marker runs, and it never runs for a film.
+		Contribute: skipTimes && config.ContributeSkipTimes,
+		NoSkips:    !skipTimes,
 	}
 	if !user.SetsOSDFont && !hasMPVFlag(config.MpvArgs, "--osd-font") {
 		if font := theme.MonospaceFont(); font != "" && font != "monospace" {
