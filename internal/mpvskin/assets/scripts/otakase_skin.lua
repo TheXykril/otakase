@@ -440,10 +440,13 @@ local function open_menu(kind, anchor_x, anchor_y)
 				run = function() mp.commandv('script-message', 'otakase-skip', action) end}
 		end
 	elseif kind == 'keys' then
+		-- Two sections: mpv's keys, then the skip-time keys otakase adds.
+		items[#items + 1] = {label = 'Player', header = true, info = true}
 		for _, entry in ipairs(KEYS) do
 			items[#items + 1] = {label = entry[2], hint = entry[1], info = true}
 		end
 		if opts.contribute then
+			items[#items + 1] = {label = 'Skip times · AniSkip', header = true, info = true}
 			for _, entry in ipairs(SKIP_TIME_ACTIONS) do
 				items[#items + 1] = {label = entry[2], hint = entry[4], info = true}
 			end
@@ -519,8 +522,13 @@ local function draw_menu(ass, w, h, s)
 			ass[#ass + 1] = icon(ax + pad + 14 * s, iy + item_h / 2, mark, 18 * s, item.icon and not item.selected and C.dim or C.accent)
 		end
 		local label_x = item.info and (ax + pad + 14 * s) or (ax + pad + 36 * s)
-		ass[#ass + 1] = text(label_x, iy + item_h / 2, 4, shorten(item.label, 60), 14 * s,
-			(item.selected or active) and C.bright or C.fg)
+		if item.header then
+			-- Section titles sit low in their row, close to what they head.
+			ass[#ass + 1] = text(label_x, iy + item_h * 0.7, 4, item.label:upper(), 11 * s, C.accent, 1, true)
+		else
+			ass[#ass + 1] = text(label_x, iy + item_h / 2, 4, shorten(item.label, 60), 14 * s,
+				(item.selected or active) and C.bright or C.fg)
+		end
 		if item.hint then
 			ass[#ass + 1] = text(bx - pad - 14 * s, iy + item_h / 2, 6, item.hint, 12 * s, C.dim)
 		end
