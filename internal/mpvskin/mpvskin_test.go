@@ -190,6 +190,8 @@ func TestArgs(t *testing.T) {
 	joined := strings.Join(args, "\n")
 	for _, want := range []string{
 		"--osc=no",
+		"--osd-bar=no",
+		"--osd-on-seek=no",
 		"--script=" + filepath.Join("/store/mpv-skin/abc", "scripts", "otakase_skin.lua"),
 		"--osd-fonts-dir=" + filepath.Join("/store/mpv-skin/abc", "fonts"),
 		"--osd-font=JetBrainsMono Nerd Font",
@@ -222,5 +224,16 @@ func TestArgs(t *testing.T) {
 	}
 	if strings.Contains(got, "-background=") {
 		t.Error("an empty colour should keep the script's default")
+	}
+
+	beside := strings.Join(Args(Options{Dir: "/x", HideOthers: true}), "\n")
+	for _, want := range []string{
+		"--script-opts-append=uosc-disable_elements=timeline,controls,",
+		"--script-opts-append=modernz-visibility=never",
+		"--script-opts-append=modernx-visibility=never",
+	} {
+		if !strings.Contains(beside, want) {
+			t.Errorf("beside another skin, args missing %q:\n%s", want, beside)
+		}
 	}
 }

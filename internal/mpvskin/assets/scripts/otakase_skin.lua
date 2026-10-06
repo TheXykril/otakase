@@ -1018,8 +1018,22 @@ mp.observe_property('chapter-list', 'native', function(_, value)
 end)
 mp.observe_property('pause', 'bool', function(_, value) state.paused = value; request_render() end)
 mp.observe_property('fullscreen', 'bool', function(_, value) state.fullscreen = value; request_render() end)
-mp.observe_property('volume', 'number', function(_, value) state.volume = value or 100; request_render() end)
-mp.observe_property('mute', 'bool', function(_, value) state.muted = value; request_render() end)
+-- Volume changes flash the controls, as mpv's own bar (--osd-bar=no) would;
+-- the first value, read at start, does not.
+local function flash_volume(changed)
+	if changed then state.shown_until = mp.get_time() + 1.0 end
+	request_render()
+end
+mp.observe_property('volume', 'number', function(_, value)
+	local changed = state.volume_seen and value ~= state.volume
+	state.volume, state.volume_seen = value or 100, true
+	flash_volume(changed)
+end)
+mp.observe_property('mute', 'bool', function(_, value)
+	local changed = state.mute_seen and value ~= state.muted
+	state.muted, state.mute_seen = value, true
+	flash_volume(changed)
+end)
 mp.observe_property('media-title', 'string', function(_, value) state.title = value or ''; request_render() end)
 mp.observe_property('height', 'number', function(_, value) state.height = value and math.floor(value) or nil; request_render() end)
 mp.observe_property('track-list', 'native', function(_, value) state.tracks = value or {}; request_render() end)

@@ -11,7 +11,9 @@ that works; what users see is on [Configuration](Configuration).
   endings marked, the control row (previous, play, next, time, volume,
   episodes, audio, subtitles, quality, fullscreen) and its menus, the
   *Skip Opening/Ending* button, the *Skipped Opening · Undo* notice and the
-  *Up next* card. mpv's own OSC is turned off with `--osc=no`.
+  *Up next* card. mpv's own OSC is turned off with `--osc=no`, and its
+  seek/volume bar with `--osd-bar=no --osd-on-seek=no` (the skin's controls
+  flash up on seeks and volume changes instead).
 - **MaterialIconsRound.otf** (`assets/fonts`, Apache-2.0, licence in
   `assets/LICENSE.MaterialIcons`) draws the icons by ligature name
   (`play_arrow`, `skip_next`, `subtitles`, …). It is loaded with
@@ -49,6 +51,11 @@ monospace font from `theme.MonospaceFont`, unless `mpv.conf` or `MpvArgs`
 set one), and one `--script-opts-append=otakase_skin-<key>=<value>` per
 option. Command-line script options beat the user's own
 `script-opts/otakase_skin.conf`, for this process only.
+
+With `MpvSkin=true` and a skin of the user's own in `scripts/`, theirs still
+loads, so it is asked to stay hidden for this process:
+`uosc-disable_elements=timeline,controls,volume,top_bar,…`,
+`modernz-visibility=never`, `modernx-visibility=never`.
 
 ## Colours
 
