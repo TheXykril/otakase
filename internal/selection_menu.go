@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -52,6 +53,10 @@ type optionsRefreshedMsg struct {
 type SelectionRefreshConfig struct {
 	Updates      <-chan AnimeList
 	BuildOptions func(AnimeList) []SelectionOption
+	// Refreshed closes when the background list refresh has finished. Rofi
+	// cannot change a menu it is showing, so it waits a moment for this before
+	// opening rather than reopening once the fresh list lands.
+	Refreshed <-chan struct{}
 
 	// Categories, when set, draws a tab bar and lets Tab move between them
 	// without leaving the list. LoadCategory supplies the entries for one, and
@@ -76,6 +81,7 @@ type SelectionRefreshConfig struct {
 type PreviewSelectionRefreshConfig struct {
 	Updates      <-chan AnimeList
 	BuildOptions func(AnimeList) map[string]RofiSelectPreview
+	Refreshed    <-chan struct{}
 
 	// Main, Prompt, Categories and Actions are as in SelectionRefreshConfig:
 	// the poster grid is the main list in rofi when posters are on.
@@ -825,6 +831,39 @@ func previewOptionsToSortedSelection(options map[string]RofiSelectPreview) []Sel
 	return selectionOptions
 }
 
+// rofiRefreshWait is how long a rofi menu holds back for the background list
+// refresh. The menus open from the cached list, and rofi cannot change a menu
+// already on screen: reloading it meant killing rofi and starting it again,
+// which flashed the menu away and back at launch and dropped whatever had been
+// typed. Waiting this long catches the usual refresh; one that lands later is
+// shown the next time a menu opens.
+var rofiRefreshWait = 1500 * time.Millisecond
+
+// awaitRofiListRefresh waits briefly for the background refresh and returns the
+// newest list it published, if any arrived since the menu was last built.
+func awaitRofiListRefresh(updates <-chan AnimeList, refreshed <-chan struct{}) (AnimeList, bool) {
+	if refreshed != nil {
+		select {
+		case <-refreshed:
+		case <-time.After(rofiRefreshWait):
+			Log("Anime list refresh still running; opening the menu with the cached list")
+		}
+	}
+	var latest AnimeList
+	got := false
+	for {
+		select {
+		case list, ok := <-updates:
+			if !ok {
+				return latest, got
+			}
+			latest, got = list, true
+		default:
+			return latest, got
+		}
+	}
+}
+
 func DynamicSelectPreview(options map[string]RofiSelectPreview, addnewoption bool) (SelectionOption, error) {
 	return DynamicSelectPreviewWithRefresh(options, addnewoption, nil)
 }
@@ -833,119 +872,74 @@ func DynamicSelectPreviewWithRefresh(options map[string]RofiSelectPreview, addne
 	// A menu on screen answers "is it still working" by itself.
 	defer suspendBusy()()
 
-	go preDownloadImages(options, 14)
-
-	// Removed boilerplate check
-
 	currentOptions := options
-
-	for {
-		var rofiInput strings.Builder
-		selectionOptions := previewOptionsToSortedSelection(currentOptions)
-
-		rows := writePreviewRows(&rofiInput, selectionOptions, func(opt SelectionOption) (string, bool) {
-			cachePath, err := downloadToCache(currentOptions[opt.Key].CoverImage)
-			if err != nil {
-				Log(fmt.Sprintf("Error caching image: %v", err))
-				return "", false
-			}
-			return cachePath, true
-		})
-
-		if addnewoption {
-			rofiInput.WriteString("Add new anime\n")
-			rows = append(rows, SelectionOption{Key: "add_new", Label: "Add new anime"})
-		}
-		main := refreshConfig != nil && refreshConfig.Main
-		// The main grid has no Back or Quit tiles: nothing is behind it, and
-		// its toolbar ends in Quit.
-		if !main {
-			rofiInput.WriteString("Back\n")
-			rofiInput.WriteString("Quit\n")
-			rows = append(rows,
-				SelectionOption{Key: "-2", Label: "Back"},
-				SelectionOption{Key: "-1", Label: "Quit"},
-			)
-		}
-
-		// A menu on screen is proof otakase started; anything still showing is stale.
-		EndStartupProgress()
-
-		configPath := filepath.Join(GetStoragePath(), "selectanimepreview.rasi")
-		// NOTE: Need `-markup-rows` to enable pango
-		// -format i returns the index of the chosen row. The label cannot be used:
-		// the grid clips it to the column width, so what comes back for a long
-		// title is not the string the option carries.
-		args := []string{"-dmenu", "-theme", configPath, "-show-icons", "-markup-rows", "-p", "Select Anime", "-i", "-no-custom", "-format", "i"}
-		args = append(args, rofiVersionThemeArgs()...)
-		var toolbar rofiToolbar
-		if main {
-			toolbar = mainRofiToolbar(GetGlobalConfig(), refreshConfig.Categories, refreshConfig.Actions)
-			args = append(args, toolbar.args([]string{"inputbar", "box-toolbar", "listview"})...)
-			args = append(args, rofiPlaceholder(refreshConfig.Prompt)...)
-		}
-		cmd := exec.Command("rofi", args...)
-		cmd.Stdin = strings.NewReader(rofiInput.String())
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-
-		if refreshConfig == nil || refreshConfig.Updates == nil {
-			if err := cmd.Run(); err != nil {
-				if pressed, ok := toolbar.pressed(err); ok {
-					return pressed, nil
-				}
-				Log(fmt.Sprintf("Rofi stderr: %s", stderr.String()))
-				Log(fmt.Sprintf("Rofi stdout: %s", stdout.String()))
-				return SelectionOption{Key: "-2", Label: "Back"}, nil
-			}
-			return parsePreviewSelectionIndex(stdout.String(), rows)
-		}
-
-		if err := cmd.Start(); err != nil {
-			return SelectionOption{}, fmt.Errorf("failed to run Rofi preview menu: %w", err)
-		}
-
-		waitCh := make(chan error, 1)
-		go func() {
-			waitCh <- cmd.Wait()
-		}()
-
-		restartMenu := false
-
-		for !restartMenu {
-			select {
-			case err := <-waitCh:
-				if err != nil {
-					if pressed, ok := toolbar.pressed(err); ok {
-						return pressed, nil
-					}
-					Log(fmt.Sprintf("Rofi stderr: %s", stderr.String()))
-					Log(fmt.Sprintf("Rofi stdout: %s", stdout.String()))
-					return SelectionOption{Key: "-2", Label: "Back"}, nil
-				}
-				return parsePreviewSelectionIndex(stdout.String(), rows)
-			case updatedList, ok := <-refreshConfig.Updates:
-				if !ok {
-					refreshConfig = nil
-					continue
-				}
-
-				updatedOptions := refreshConfig.BuildOptions(updatedList)
-				if reflect.DeepEqual(currentOptions, updatedOptions) {
-					continue
-				}
-
-				currentOptions = updatedOptions
-				restartMenu = true
-
-				if cmd.Process != nil {
-					_ = cmd.Process.Kill()
-				}
-				<-waitCh
-			}
+	if refreshConfig != nil {
+		if list, ok := awaitRofiListRefresh(refreshConfig.Updates, refreshConfig.Refreshed); ok {
+			currentOptions = refreshConfig.BuildOptions(list)
 		}
 	}
+
+	go preDownloadImages(currentOptions, 14)
+
+	var rofiInput strings.Builder
+	selectionOptions := previewOptionsToSortedSelection(currentOptions)
+
+	rows := writePreviewRows(&rofiInput, selectionOptions, func(opt SelectionOption) (string, bool) {
+		cachePath, err := downloadToCache(currentOptions[opt.Key].CoverImage)
+		if err != nil {
+			Log(fmt.Sprintf("Error caching image: %v", err))
+			return "", false
+		}
+		return cachePath, true
+	})
+
+	if addnewoption {
+		rofiInput.WriteString("Add new anime\n")
+		rows = append(rows, SelectionOption{Key: "add_new", Label: "Add new anime"})
+	}
+	main := refreshConfig != nil && refreshConfig.Main
+	// The main grid has no Back or Quit tiles: nothing is behind it, and
+	// its toolbar ends in Quit.
+	if !main {
+		rofiInput.WriteString("Back\n")
+		rofiInput.WriteString("Quit\n")
+		rows = append(rows,
+			SelectionOption{Key: "-2", Label: "Back"},
+			SelectionOption{Key: "-1", Label: "Quit"},
+		)
+	}
+
+	// A menu on screen is proof otakase started; anything still showing is stale.
+	EndStartupProgress()
+
+	configPath := filepath.Join(GetStoragePath(), "selectanimepreview.rasi")
+	// NOTE: Need `-markup-rows` to enable pango
+	// -format i returns the index of the chosen row. The label cannot be used:
+	// the grid clips it to the column width, so what comes back for a long
+	// title is not the string the option carries.
+	args := []string{"-dmenu", "-theme", configPath, "-show-icons", "-markup-rows", "-p", "Select Anime", "-i", "-no-custom", "-format", "i"}
+	args = append(args, rofiVersionThemeArgs()...)
+	var toolbar rofiToolbar
+	if main {
+		toolbar = mainRofiToolbar(GetGlobalConfig(), refreshConfig.Categories, refreshConfig.Actions)
+		args = append(args, toolbar.args([]string{"inputbar", "box-toolbar", "listview"})...)
+		args = append(args, rofiPlaceholder(refreshConfig.Prompt)...)
+	}
+	cmd := exec.Command("rofi", args...)
+	cmd.Stdin = strings.NewReader(rofiInput.String())
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if pressed, ok := toolbar.pressed(err); ok {
+			return pressed, nil
+		}
+		Log(fmt.Sprintf("Rofi stderr: %s", stderr.String()))
+		Log(fmt.Sprintf("Rofi stdout: %s", stdout.String()))
+		return SelectionOption{Key: "-2", Label: "Back"}, nil
+	}
+	return parsePreviewSelectionIndex(stdout.String(), rows)
 }
 
 func preDownloadImages(options map[string]RofiSelectPreview, count int) {
@@ -1094,83 +1088,45 @@ func rofiSelectInternal(options []SelectionOption, isHomeMenu bool, refreshConfi
 	defer suspendBusy()()
 
 	currentOptions := options
+	if refreshConfig != nil {
+		if list, ok := awaitRofiListRefresh(refreshConfig.Updates, refreshConfig.Refreshed); ok {
+			currentOptions = refreshConfig.BuildOptions(list)
+		}
+	}
 	if strings.TrimSpace(prompt) == "" {
 		prompt = "Select"
 	}
 
-	for {
-		// A menu on screen is proof otakase started; anything still showing is stale.
-		EndStartupProgress()
+	// A menu on screen is proof otakase started; anything still showing is stale.
+	EndStartupProgress()
 
-		optionsString := buildRofiOptionsString(currentOptions, isHomeMenu)
-		configPath := filepath.Join(GetStoragePath(), "selectanime.rasi")
-		args := []string{"-dmenu", "-theme", configPath, "-i", "-markup", "-markup-rows", "-p", prompt}
-		args = append(args, rofiVersionThemeArgs()...)
-		var toolbar rofiToolbar
-		if refreshConfig != nil && refreshConfig.Main {
-			toolbar = mainRofiToolbar(GetGlobalConfig(), refreshConfig.Categories, refreshConfig.Actions)
-			args = append(args, toolbar.args([]string{"inputbar", "box-toolbar", "message", "listview"})...)
-			args = append(args, rofiPlaceholder(refreshConfig.Prompt)...)
-		}
-		if msg := strings.TrimSpace(message); msg != "" {
-			args = append(args, "-mesg", msg)
-		}
-		cmd := exec.Command("rofi", args...)
-		cmd.Stdin = strings.NewReader(optionsString)
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-
-		if refreshConfig == nil || refreshConfig.Updates == nil {
-			err := cmd.Run()
-			if pressed, ok := toolbar.pressed(err); ok {
-				return pressed, nil
-			}
-			return parseRofiSelection(err, stdout.String(), currentOptions, isHomeMenu)
-		}
-
-		if err := cmd.Start(); err != nil {
-			return SelectionOption{}, fmt.Errorf("failed to run Rofi: %w", err)
-		}
-
-		waitCh := make(chan error, 1)
-		go func() {
-			waitCh <- cmd.Wait()
-		}()
-
-		restartMenu := false
-
-		for !restartMenu {
-			select {
-			case err := <-waitCh:
-				if pressed, ok := toolbar.pressed(err); ok {
-					return pressed, nil
-				}
-				if err != nil {
-					Log(fmt.Sprintf("Rofi stderr: %s", stderr.String()))
-				}
-				return parseRofiSelection(err, stdout.String(), currentOptions, isHomeMenu)
-			case updatedList, ok := <-refreshConfig.Updates:
-				if !ok {
-					refreshConfig = nil
-					continue
-				}
-
-				updatedOptions := refreshConfig.BuildOptions(updatedList)
-				if reflect.DeepEqual(currentOptions, updatedOptions) {
-					continue
-				}
-
-				currentOptions = updatedOptions
-				restartMenu = true
-
-				if cmd.Process != nil {
-					_ = cmd.Process.Kill()
-				}
-				<-waitCh
-			}
-		}
+	optionsString := buildRofiOptionsString(currentOptions, isHomeMenu)
+	configPath := filepath.Join(GetStoragePath(), "selectanime.rasi")
+	args := []string{"-dmenu", "-theme", configPath, "-i", "-markup", "-markup-rows", "-p", prompt}
+	args = append(args, rofiVersionThemeArgs()...)
+	var toolbar rofiToolbar
+	if refreshConfig != nil && refreshConfig.Main {
+		toolbar = mainRofiToolbar(GetGlobalConfig(), refreshConfig.Categories, refreshConfig.Actions)
+		args = append(args, toolbar.args([]string{"inputbar", "box-toolbar", "message", "listview"})...)
+		args = append(args, rofiPlaceholder(refreshConfig.Prompt)...)
 	}
+	if msg := strings.TrimSpace(message); msg != "" {
+		args = append(args, "-mesg", msg)
+	}
+	cmd := exec.Command("rofi", args...)
+	cmd.Stdin = strings.NewReader(optionsString)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if pressed, ok := toolbar.pressed(err); ok {
+		return pressed, nil
+	}
+	if err != nil {
+		Log(fmt.Sprintf("Rofi stderr: %s", stderr.String()))
+	}
+	return parseRofiSelection(err, stdout.String(), currentOptions, isHomeMenu)
 }
 
 func DynamicSelectFromSlice(options []SelectionOption) (SelectionOption, error) {
