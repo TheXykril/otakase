@@ -294,14 +294,16 @@ updateOptionLoop:
 			var selectedAnime SelectionOption
 			if userConfig.RofiSelection && userConfig.ImagePreview {
 				selectedAnime, err = DynamicSelectPreviewWithRefresh(animeListMapPreview, false, &PreviewSelectionRefreshConfig{
-					Updates: user.ListSync.Updates(),
+					Updates:   user.ListSync.Updates(),
+					Refreshed: user.ListSync.RefreshDone(),
 					BuildOptions: func(list AnimeList) map[string]RofiSelectPreview {
 						return buildCategoryPreviewOptions(list, "ALL")
 					},
 				})
 			} else {
 				selectedAnime, err = DynamicSelectWithRefresh(animeListOptions, &SelectionRefreshConfig{
-					Updates: user.ListSync.Updates(),
+					Updates:   user.ListSync.Updates(),
+					Refreshed: user.ListSync.RefreshDone(),
 					BuildOptions: func(list AnimeList) []SelectionOption {
 						return buildCategorySelectionOptions(list, "ALL")
 					},
@@ -909,7 +911,8 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 					var err error
 					if userConfig.RofiSelection && userConfig.ImagePreview {
 						anilistSelectedOption, err = DynamicSelectPreviewWithRefresh(animeListMapPreview, true, &PreviewSelectionRefreshConfig{
-							Updates: user.ListSync.Updates(),
+							Updates:   user.ListSync.Updates(),
+							Refreshed: user.ListSync.RefreshDone(),
 							BuildOptions: func(list AnimeList) map[string]RofiSelectPreview {
 								return buildMainPreviewOptions(userConfig, list, activeList)
 							},
@@ -935,7 +938,8 @@ func Setup(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime
 						// screen rather than the category first opened, and an
 						// action returns to it.
 						anilistSelectedOption, err = DynamicSelectWithRefresh(tempOptions, &SelectionRefreshConfig{
-							Updates: user.ListSync.Updates(),
+							Updates:   user.ListSync.Updates(),
+							Refreshed: user.ListSync.RefreshDone(),
 							BuildOptions: func(list AnimeList) []SelectionOption {
 								return buildMainListOptions(userConfig, list, activeList)
 							},
