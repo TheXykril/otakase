@@ -184,8 +184,9 @@ func TestArgs(t *testing.T) {
 			Background: "#1a1b26", Surface: "#24283b", Foreground: "#a9b1d6", Bright: "#c0caf5",
 			Dim: "#787c99", Accent: "#7aa2f7", AccentText: "#1a1b26", Highlight: "#e0af68",
 		},
-		Font:   "JetBrainsMono Nerd Font",
-		SkipOp: true,
+		Font:       "JetBrainsMono Nerd Font",
+		SkipOp:     true,
+		Contribute: true,
 	})
 	joined := strings.Join(args, "\n")
 	for _, want := range []string{
@@ -201,6 +202,7 @@ func TestArgs(t *testing.T) {
 		"--script-opts-append=otakase_skin-highlight=e0af68",
 		"--script-opts-append=otakase_skin-skip_op=yes",
 		"--script-opts-append=otakase_skin-skip_ed=no",
+		"--script-opts-append=otakase_skin-contribute=yes",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("args missing %q:\n%s", want, joined)

@@ -1,6 +1,10 @@
 package internal
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -116,5 +120,29 @@ func TestBothHalvesKeepTheirOwnID(t *testing.T) {
 	}
 	if ids.Op != "op-id" || ids.Ed != "ed-id" {
 		t.Errorf("ids came out as %+v", ids)
+	}
+}
+
+// The player skin's skip times menu and keys panel repeat the marker's keys;
+// a key or action changed here must change there too.
+func TestSkinSkipTimeActionsMatchBindings(t *testing.T) {
+	script, err := os.ReadFile(filepath.Join("mpvskin", "assets", "scripts", "otakase_skin.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range skipMarkerBindings {
+		// "Alt+o" is shown as "Alt+O".
+		key := binding.Key[:len(binding.Key)-1] + strings.ToUpper(binding.Key[len(binding.Key)-1:])
+		want := fmt.Sprintf("{'%s', ", binding.Action)
+		line := ""
+		for _, l := range strings.Split(string(script), "\n") {
+			if strings.Contains(l, want) {
+				line = l
+				break
+			}
+		}
+		if line == "" || !strings.Contains(line, "'"+key+"'") {
+			t.Errorf("skin has no %q action on %s: %q", binding.Action, key, line)
+		}
 	}
 }

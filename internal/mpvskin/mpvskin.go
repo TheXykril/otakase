@@ -81,6 +81,9 @@ type Options struct {
 	// an undo rather than a skip button.
 	SkipOp bool
 	SkipEd bool
+	// Contribute says otakase answers the skip-time keys, so the skin offers
+	// its skip times menu.
+	Contribute bool
 }
 
 // hideOthers are the script options that keep skins the user runs themselves
@@ -217,6 +220,7 @@ func Args(opts Options) []string {
 		{"highlight", hex(c.Highlight)},
 		{"skip_op", yesNo(opts.SkipOp)},
 		{"skip_ed", yesNo(opts.SkipEd)},
+		{"contribute", yesNo(opts.Contribute)},
 		{"logo", filepath.Join(opts.Dir, "logo", "otakase.ass")},
 	}
 

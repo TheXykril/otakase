@@ -57,6 +57,9 @@ func mpvSkinArgs(config *Config, binary string) []string {
 		Colors: mpvSkinColors(theme.Active()),
 		SkipOp: config.SkipOp,
 		SkipEd: config.SkipEd,
+		// The skip times menu sends what the Alt keys send; nothing answers
+		// it unless the marker runs.
+		Contribute: config.ContributeSkipTimes,
 	}
 	if !user.SetsOSDFont && !hasMPVFlag(config.MpvArgs, "--osd-font") {
 		if font := theme.MonospaceFont(); font != "" && font != "monospace" {

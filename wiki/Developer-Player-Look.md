@@ -18,6 +18,13 @@ that works; what users see is on [Configuration](Configuration).
   `mp.add_key_binding` (mpv's default is a one-minute seek). Being plain
   bindings, the user's `input.conf` still overrides them; Left/Right keep
   mpv's 5-second seek.
+- **Keys panel and skip times menu**: two more menus in the control row. The
+  keyboard button (or `?`, also a plain binding) lists the keys from the
+  script's `KEYS` table, plus the skip-time keys when the `contribute`
+  script-opt is on. The fast-forward button, shown only with `contribute`
+  (`ContributeSkipTimes`), sends `script-message otakase-skip <action>`,
+  exactly what otakase's own Alt bindings send (`skipMarkerBindings` in
+  `internal/skip_marker.go`), so both paths stay one feature.
 - **MaterialIconsRound.otf** (`assets/fonts`, Apache-2.0, licence in
   `assets/LICENSE.MaterialIcons`) draws the icons by ligature name
   (`play_arrow`, `skip_next`, `subtitles`, …). It is loaded with
