@@ -63,10 +63,10 @@ func mpvSkinArgs(config *Config, binary string, skipTimes bool) []string {
 		Contribute: skipTimes && config.ContributeSkipTimes,
 		NoSkips:    !skipTimes,
 	}
-	if !user.SetsOSDFont && !hasMPVFlag(config.MpvArgs, "--osd-font") {
-		if font := theme.MonospaceFont(); font != "" && font != "monospace" {
-			opts.Font = font
-		}
+	if user.SetsOSDFont || hasMPVFlag(config.MpvArgs, "--osd-font") {
+		opts.OwnFont = true
+	} else if font := theme.MonospaceFont(); font != "" && font != "monospace" {
+		opts.Font = font
 	}
 	return mpvskin.Args(opts)
 }
