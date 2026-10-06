@@ -979,6 +979,14 @@ update_bindings = function()
 	end
 end
 
+-- Up and Down change the volume (mpv's default seeks a minute); Left and Right
+-- keep seeking. Plain bindings, so the user's own input.conf still wins.
+for key, step in pairs({UP = 5, DOWN = -5}) do
+	mp.add_key_binding(key, 'otakase-skin-volume-' .. key:lower(), function()
+		mp.commandv('no-osd', 'add', 'volume', tostring(step))
+	end, {repeatable = true})
+end
+
 -- otakase skips by seeking from the first seconds of a span to its end. Seeing
 -- that jump is how the undo notice knows a skip happened.
 local function on_seek_from(previous)

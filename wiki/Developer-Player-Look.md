@@ -14,6 +14,10 @@ that works; what users see is on [Configuration](Configuration).
   *Up next* card. mpv's own OSC is turned off with `--osc=no`, and its
   seek/volume bar with `--osd-bar=no --osd-on-seek=no` (the skin's controls
   flash up on seeks and volume changes instead).
+- **Keys**: Up/Down are bound to `no-osd add volume ±5` with
+  `mp.add_key_binding` (mpv's default is a one-minute seek). Being plain
+  bindings, the user's `input.conf` still overrides them; Left/Right keep
+  mpv's 5-second seek.
 - **MaterialIconsRound.otf** (`assets/fonts`, Apache-2.0, licence in
   `assets/LICENSE.MaterialIcons`) draws the icons by ligature name
   (`play_arrow`, `skip_next`, `subtitles`, …). It is loaded with
