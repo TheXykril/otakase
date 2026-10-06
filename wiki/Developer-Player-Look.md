@@ -11,7 +11,20 @@ that works; what users see is on [Configuration](Configuration).
   endings marked, the control row (previous, play, next, time, volume,
   episodes, audio, subtitles, quality, fullscreen) and its menus, the
   *Skip Opening/Ending* button, the *Skipped Opening · Undo* notice and the
-  *Up next* card. mpv's own OSC is turned off with `--osc=no`.
+  *Up next* card. mpv's own OSC is turned off with `--osc=no`, and its
+  seek/volume bar with `--osd-bar=no --osd-on-seek=no` (the skin's controls
+  flash up on seeks and volume changes instead).
+- **Keys**: Up/Down are bound to `no-osd add volume ±5` with
+  `mp.add_key_binding` (mpv's default is a one-minute seek). Being plain
+  bindings, the user's `input.conf` still overrides them; Left/Right keep
+  mpv's 5-second seek.
+- **Keys panel and skip times menu**: two more menus in the control row. The
+  keyboard button (or `?`, also a plain binding) lists the keys from the
+  script's `KEYS` table under *Player*, then the skip-time keys under
+  *Skip times* when the `contribute` script-opt is on. The fast-forward button, shown only with `contribute`
+  (`ContributeSkipTimes`), sends `script-message otakase-skip <action>`,
+  exactly what otakase's own Alt bindings send (`skipMarkerBindings` in
+  `internal/skip_marker.go`), so both paths stay one feature.
 - **MaterialIconsRound.otf** (`assets/fonts`, Apache-2.0, licence in
   `assets/LICENSE.MaterialIcons`) draws the icons by ligature name
   (`play_arrow`, `skip_next`, `subtitles`, …). It is loaded with
@@ -49,6 +62,12 @@ monospace font from `theme.MonospaceFont`, unless `mpv.conf` or `MpvArgs`
 set one), and one `--script-opts-append=otakase_skin-<key>=<value>` per
 option. Command-line script options beat the user's own
 `script-opts/otakase_skin.conf`, for this process only.
+
+A skin of the user's own (only reachable with `MpvSkin=true`, or one loaded
+from a folder otakase does not look in) still loads, so it is always asked to
+stay hidden for this process:
+`uosc-disable_elements=timeline,controls,volume,top_bar,…`,
+`modernz-visibility=never`, `modernx-visibility=never`.
 
 ## Colours
 

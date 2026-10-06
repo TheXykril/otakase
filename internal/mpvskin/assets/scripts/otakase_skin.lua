@@ -9,6 +9,9 @@ otakase's controls for mpv, replacing mpv's own (--osc=no).
   * a "Skip Opening" / "Skip Ending" button while one plays and otakase is
     not skipping it already, a "Skipped Opening · Undo" notice when it did,
   * an "Up next" card during the ending, while the playlist has a next episode,
+  * a keys panel (the keyboard button, or ?) listing the player's shortcuts,
+  * a skip times menu to mark, send and vote on openings and endings, when
+    otakase takes them (ContributeSkipTimes),
   * a thin progress line when the controls are hidden,
   * otakase's logo while there is no picture yet, as an episode loads.
 
@@ -34,6 +37,9 @@ local opts = {
 	highlight = 'e3b45a',
 	skip_op = false,
 	skip_ed = false,
+	-- otakase answers the skip-time keys (ContributeSkipTimes), so the skip
+	-- times menu and its keys are offered.
+	contribute = false,
 	hide_after = 2.0,
 	logo = '',
 }
@@ -383,6 +389,32 @@ end
 
 -- Menus ----------------------------------------------------------------------
 
+-- The skip time actions otakase answers as "otakase-skip <action>" messages,
+-- on the Alt keys it binds itself (skipMarkerBindings in skip_marker.go).
+local SKIP_TIME_ACTIONS = {
+	{'op', 'Mark opening (start, then end)', 'flag', 'Alt+O'},
+	{'ed', 'Mark ending (start, then end)', 'outlined_flag', 'Alt+E'},
+	{'submit', 'Send marks to AniSkip (twice)', 'send', 'Alt+S'},
+	{'reset', 'Forget marks', 'delete_outline', 'Alt+R'},
+	{'upvote', 'This skip is right', 'thumb_up', 'Alt+U'},
+	{'downvote', 'This skip is wrong', 'thumb_down', 'Alt+D'},
+}
+
+-- mpv's own keys, as otakase leaves them, plus Up/Down for the volume.
+local KEYS = {
+	{'Space', 'Play / pause'},
+	{'Left / Right', 'Seek 5 seconds'},
+	{'Up / Down', 'Volume'},
+	{'Enter', 'Skip opening or ending / undo'},
+	{'m', 'Mute'},
+	{'f', 'Fullscreen'},
+	{'j', 'Next subtitle'},
+	{'#', 'Next audio track'},
+	{'< / >', 'Previous / next episode'},
+	{'?', 'This list'},
+	{'q', 'Quit, back to otakase'},
+}
+
 local function open_menu(kind, anchor_x, anchor_y)
 	local items = {}
 	if kind == 'sub' or kind == 'audio' then
@@ -399,6 +431,24 @@ local function open_menu(kind, anchor_x, anchor_y)
 				local id = track.id
 				items[#items + 1] = {label = label, selected = track.selected,
 					run = function() mp.set_property_number(kind == 'sub' and 'sid' or 'aid', id) end}
+			end
+		end
+	elseif kind == 'skiptimes' then
+		for _, entry in ipairs(SKIP_TIME_ACTIONS) do
+			local action = entry[1]
+			items[#items + 1] = {label = entry[2], icon = entry[3], hint = entry[4],
+				run = function() mp.commandv('script-message', 'otakase-skip', action) end}
+		end
+	elseif kind == 'keys' then
+		-- Two sections: mpv's keys, then the skip-time keys otakase adds.
+		items[#items + 1] = {label = 'Player', header = true, info = true}
+		for _, entry in ipairs(KEYS) do
+			items[#items + 1] = {label = entry[2], hint = entry[1], info = true}
+		end
+		if opts.contribute then
+			items[#items + 1] = {label = 'Skip times', header = true, info = true}
+			for _, entry in ipairs(SKIP_TIME_ACTIONS) do
+				items[#items + 1] = {label = entry[2], hint = entry[4], info = true}
 			end
 		end
 	elseif kind == 'episodes' then
@@ -420,7 +470,10 @@ local function close_menu()
 	request_render()
 end
 
-local MENU_TITLES = {sub = {'Subtitles', 'subtitles'}, audio = {'Audio', 'record_voice_over'}, episodes = {'Episodes', 'playlist_play'}}
+local MENU_TITLES = {
+	sub = {'Subtitles', 'subtitles'}, audio = {'Audio', 'record_voice_over'}, episodes = {'Episodes', 'playlist_play'},
+	skiptimes = {'Skip times', 'fast_forward'}, keys = {'Keys', 'keyboard'},
+}
 
 local function draw_menu(ass, w, h, s)
 	local menu = state.menu
@@ -429,7 +482,8 @@ local function draw_menu(ass, w, h, s)
 	local head_h = 36 * s
 	local width = 330 * s
 	for _, item in ipairs(menu.items) do
-		width = math.max(width, text_width(item.label, 14 * s) + 90 * s)
+		local hint = item.hint and (text_width(item.hint, 12 * s) + 24 * s) or 0
+		width = math.max(width, text_width(item.label, 14 * s) + hint + 90 * s)
 	end
 	width = math.min(width, w - 40 * s)
 	local max_rows = math.max(3, math.floor((menu.anchor_y - 40 * s - head_h - 2 * pad) / item_h))
@@ -459,7 +513,7 @@ local function draw_menu(ass, w, h, s)
 		local item = menu.items[index]
 		local iy = ay + pad + head_h + (row - 1) * item_h
 		local id = 'menu-item-' .. index
-		local active = hovered == id
+		local active = hovered == id and not item.info
 		if item.selected or active then
 			ass[#ass + 1] = box(ax + pad, iy, bx - pad, iy + item_h, 8 * s, C.surface, active and 1 or 0.8)
 		end
@@ -467,12 +521,23 @@ local function draw_menu(ass, w, h, s)
 		if mark then
 			ass[#ass + 1] = icon(ax + pad + 14 * s, iy + item_h / 2, mark, 18 * s, item.icon and not item.selected and C.dim or C.accent)
 		end
-		ass[#ass + 1] = text(ax + pad + 36 * s, iy + item_h / 2, 4, shorten(item.label, 60), 14 * s,
-			(item.selected or active) and C.bright or C.fg)
-		hit(id, ax + pad, iy, bx - pad, iy + item_h, function()
-			item.run()
-			close_menu()
-		end)
+		local label_x = item.info and (ax + pad + 14 * s) or (ax + pad + 36 * s)
+		if item.header then
+			-- Section titles sit low in their row, close to what they head.
+			ass[#ass + 1] = text(label_x, iy + item_h * 0.7, 4, item.label:upper(), 11 * s, C.accent, 1, true)
+		else
+			ass[#ass + 1] = text(label_x, iy + item_h / 2, 4, shorten(item.label, 60), 14 * s,
+				(item.selected or active) and C.bright or C.fg)
+		end
+		if item.hint then
+			ass[#ass + 1] = text(bx - pad - 14 * s, iy + item_h / 2, 6, item.hint, 12 * s, C.dim)
+		end
+		if not item.info then
+			hit(id, ax + pad, iy, bx - pad, iy + item_h, function()
+				item.run()
+				close_menu()
+			end)
+		end
 	end
 	if #menu.items > rows then
 		local frac = menu.first / math.max(1, #menu.items - rows)
@@ -662,6 +727,16 @@ local function draw_controls(ass, w, h, s)
 	local narrow = w < 900 * s
 	if state.height and not narrow then
 		right('quality', 'tune', state.height .. 'p', nil)
+	end
+	local function menu_button(kind, icon_name, label)
+		local open = state.menu and state.menu.kind == kind
+		local a = right(kind, icon_name, label,
+			function() if open then close_menu() else open_menu(kind, rx, h - 72 * s) end end, open)
+		if open then state.menu.anchor_x = a + 40 * s end
+	end
+	menu_button('keys', 'keyboard', nil)
+	if opts.contribute then
+		menu_button('skiptimes', 'fast_forward', nil)
 	end
 	if count_tracks('sub') > 0 then
 		local label = narrow and nil or (track_label(current_track('sub')) or 'Off')
@@ -979,6 +1054,24 @@ update_bindings = function()
 	end
 end
 
+-- Up and Down change the volume (mpv's default seeks a minute); Left and Right
+-- keep seeking. Plain bindings, so the user's own input.conf still wins.
+for key, step in pairs({UP = 5, DOWN = -5}) do
+	mp.add_key_binding(key, 'otakase-skin-volume-' .. key:lower(), function()
+		mp.commandv('no-osd', 'add', 'volume', tostring(step))
+	end, {repeatable = true})
+end
+
+-- ? opens the keys panel (mpv's default shows the same in its stats page).
+mp.add_key_binding('?', 'otakase-skin-keys', function()
+	if state.menu and state.menu.kind == 'keys' then
+		close_menu()
+	else
+		local w, h = mp.get_osd_size()
+		open_menu('keys', (w or 0) - 60 * scale(h or 720), (h or 720) - 72 * scale(h or 720))
+	end
+end)
+
 -- otakase skips by seeking from the first seconds of a span to its end. Seeing
 -- that jump is how the undo notice knows a skip happened.
 local function on_seek_from(previous)
@@ -1018,8 +1111,22 @@ mp.observe_property('chapter-list', 'native', function(_, value)
 end)
 mp.observe_property('pause', 'bool', function(_, value) state.paused = value; request_render() end)
 mp.observe_property('fullscreen', 'bool', function(_, value) state.fullscreen = value; request_render() end)
-mp.observe_property('volume', 'number', function(_, value) state.volume = value or 100; request_render() end)
-mp.observe_property('mute', 'bool', function(_, value) state.muted = value; request_render() end)
+-- Volume changes flash the controls, as mpv's own bar (--osd-bar=no) would;
+-- the first value, read at start, does not.
+local function flash_volume(changed)
+	if changed then state.shown_until = mp.get_time() + 1.0 end
+	request_render()
+end
+mp.observe_property('volume', 'number', function(_, value)
+	local changed = state.volume_seen and value ~= state.volume
+	state.volume, state.volume_seen = value or 100, true
+	flash_volume(changed)
+end)
+mp.observe_property('mute', 'bool', function(_, value)
+	local changed = state.mute_seen and value ~= state.muted
+	state.muted, state.mute_seen = value, true
+	flash_volume(changed)
+end)
 mp.observe_property('media-title', 'string', function(_, value) state.title = value or ''; request_render() end)
 mp.observe_property('height', 'number', function(_, value) state.height = value and math.floor(value) or nil; request_render() end)
 mp.observe_property('track-list', 'native', function(_, value) state.tracks = value or {}; request_render() end)

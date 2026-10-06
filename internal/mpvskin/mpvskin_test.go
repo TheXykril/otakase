@@ -184,12 +184,15 @@ func TestArgs(t *testing.T) {
 			Background: "#1a1b26", Surface: "#24283b", Foreground: "#a9b1d6", Bright: "#c0caf5",
 			Dim: "#787c99", Accent: "#7aa2f7", AccentText: "#1a1b26", Highlight: "#e0af68",
 		},
-		Font:   "JetBrainsMono Nerd Font",
-		SkipOp: true,
+		Font:       "JetBrainsMono Nerd Font",
+		SkipOp:     true,
+		Contribute: true,
 	})
 	joined := strings.Join(args, "\n")
 	for _, want := range []string{
 		"--osc=no",
+		"--osd-bar=no",
+		"--osd-on-seek=no",
 		"--script=" + filepath.Join("/store/mpv-skin/abc", "scripts", "otakase_skin.lua"),
 		"--osd-fonts-dir=" + filepath.Join("/store/mpv-skin/abc", "fonts"),
 		"--osd-font=JetBrainsMono Nerd Font",
@@ -199,6 +202,7 @@ func TestArgs(t *testing.T) {
 		"--script-opts-append=otakase_skin-highlight=e0af68",
 		"--script-opts-append=otakase_skin-skip_op=yes",
 		"--script-opts-append=otakase_skin-skip_ed=no",
+		"--script-opts-append=otakase_skin-contribute=yes",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("args missing %q:\n%s", want, joined)
@@ -211,7 +215,7 @@ func TestArgs(t *testing.T) {
 		if strings.Contains(arg, "#") {
 			t.Errorf("%q: the script wants colours without #", arg)
 		}
-		if strings.Contains(arg, "uosc") {
+		if strings.HasPrefix(arg, "--script=") && strings.Contains(arg, "uosc") {
 			t.Errorf("%q: uosc is not shipped", arg)
 		}
 	}
@@ -222,5 +226,15 @@ func TestArgs(t *testing.T) {
 	}
 	if strings.Contains(got, "-background=") {
 		t.Error("an empty colour should keep the script's default")
+	}
+
+	for _, want := range []string{
+		"--script-opts-append=uosc-disable_elements=timeline,controls,",
+		"--script-opts-append=modernz-visibility=never",
+		"--script-opts-append=modernx-visibility=never",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("other skins not told to hide, args missing %q:\n%s", want, got)
+		}
 	}
 }

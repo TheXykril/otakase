@@ -81,6 +81,19 @@ type Options struct {
 	// an undo rather than a skip button.
 	SkipOp bool
 	SkipEd bool
+	// Contribute says otakase answers the skip-time keys, so the skin offers
+	// its skip times menu.
+	Contribute bool
+}
+
+// hideOthers are the script options that keep skins the user runs themselves
+// from drawing their controls under this one. They are always passed: such a
+// script can load from places otakase does not look (a system-wide scripts
+// folder, a package), and a script that is not loaded never reads them.
+var hideOthers = []string{
+	"uosc-disable_elements=timeline,controls,volume,top_bar,speed,idle_indicator,audio_indicator,buffering_indicator,pause_indicator",
+	"modernz-visibility=never",
+	"modernx-visibility=never",
 }
 
 var (
@@ -207,11 +220,16 @@ func Args(opts Options) []string {
 		{"highlight", hex(c.Highlight)},
 		{"skip_op", yesNo(opts.SkipOp)},
 		{"skip_ed", yesNo(opts.SkipEd)},
+		{"contribute", yesNo(opts.Contribute)},
 		{"logo", filepath.Join(opts.Dir, "logo", "otakase.ass")},
 	}
 
 	args := []string{
 		"--osc=no",
+		// mpv's own bar for seeks, volume and speed would show under the
+		// skin's controls, which flash up for those already.
+		"--osd-bar=no",
+		"--osd-on-seek=no",
 		"--script=" + filepath.Join(opts.Dir, "scripts", ScriptName+".lua"),
 		"--osd-fonts-dir=" + filepath.Join(opts.Dir, "fonts"),
 	}
@@ -224,6 +242,9 @@ func Args(opts Options) []string {
 			continue
 		}
 		args = append(args, "--script-opts-append="+ScriptName+"-"+kv[0]+"="+kv[1])
+	}
+	for _, kv := range hideOthers {
+		args = append(args, "--script-opts-append="+kv)
 	}
 	return args
 }

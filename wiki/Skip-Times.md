@@ -22,6 +22,10 @@ When a skip is wrong, or missing, you can say so from the player:
 | `Alt+u` | Agree with the skip you were given |
 | `Alt+d` | Report the skip you were given as wrong |
 
+With otakase's player look (`MpvSkin`), the same actions are in the skip
+times menu (the fast-forward button in the control row), and the keyboard
+button or `?` lists every key.
+
 Everything appears on the player's own screen, so you never leave the episode.
 Nothing is sent until you press `Alt+s` a second time, with the exact times on
 screen in between — these entries are public, and every player that reads
