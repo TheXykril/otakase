@@ -74,9 +74,12 @@ type Colors struct {
 type Options struct {
 	Dir    string // where Install wrote the files
 	Colors Colors
-	// Font is the family for the skin's text, set as mpv's OSD font; empty
-	// keeps the one mpv has.
+	// Font is set as mpv's OSD font, which the skin's numbers (the clock) use;
+	// empty keeps the one mpv has.
 	Font string
+	// OwnFont is true when the user picked an OSD font themselves (mpv.conf
+	// or MpvArgs): the skin then sets all its text in it rather than Inter.
+	OwnFont bool
 	// SkipOp and SkipEd say otakase skips these by itself, so the skin offers
 	// an undo rather than a skip button.
 	SkipOp bool
@@ -226,6 +229,9 @@ func Args(opts Options) []string {
 		{"contribute", yesNo(opts.Contribute)},
 		{"skips", yesNo(!opts.NoSkips)},
 		{"logo", filepath.Join(opts.Dir, "logo", "otakase.ass")},
+	}
+	if opts.OwnFont {
+		skin = append(skin, [2]string{"ui_font", "osd"})
 	}
 
 	args := []string{

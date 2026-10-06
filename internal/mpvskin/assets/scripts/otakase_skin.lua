@@ -44,8 +44,10 @@ local opts = {
 	skips = true,
 	hide_after = 2.0,
 	logo = '',
-	-- Text is set in this sans font; numbers (the clock) keep mpv's OSD font,
-	-- the theme's monospace, so they do not jitter as they change.
+	-- Text is set in this sans font (Inter, shipped in fonts/); numbers (the
+	-- clock) keep mpv's OSD font, the theme's monospace, so they do not jitter
+	-- as they change. 'osd' sets everything in the OSD font: otakase passes it
+	-- when the user picked an OSD font of their own.
 	ui_font = 'Inter',
 }
 options.read_options(opts, 'otakase_skin')
@@ -187,13 +189,13 @@ local function escape(value)
 	return value
 end
 
-local function mono_font()
+local function osd_font()
 	return mp.get_property('options/osd-font') or 'monospace'
 end
 
 local function text_font()
-	if opts.ui_font ~= '' then return opts.ui_font end
-	return mono_font()
+	if opts.ui_font == '' or opts.ui_font == 'osd' then return osd_font() end
+	return opts.ui_font
 end
 
 local function text(x, y, align, value, size, color, opacity, bold, font)
@@ -715,10 +717,10 @@ local function draw_controls(ass, w, h, s)
 			local label = clock(t)
 			local chapter = chapter_at(t)
 			if chapter == 'Opening' then label = label .. ' · OP' elseif chapter == 'Ending' then label = label .. ' · ED' end
-			local lw = text_width(label, 12 * s, false, mono_font()) + 16 * s
+			local lw = text_width(label, 12 * s, false, osd_font()) + 16 * s
 			local lx = math.max(ax, math.min(bx - lw, state.mouse.x - lw / 2))
 			ass[#ass + 1] = box(lx, sy - 50 * s, lx + lw, sy - 26 * s, 6 * s, C.bg, 0.95)
-			ass[#ass + 1] = text(lx + lw / 2, sy - 38 * s, 5, label, 12 * s, C.bright, 1, false, mono_font())
+			ass[#ass + 1] = text(lx + lw / 2, sy - 38 * s, 5, label, 12 * s, C.bright, 1, false, osd_font())
 		end
 	end
 
@@ -735,8 +737,8 @@ local function draw_controls(ass, w, h, s)
 	local time_x = e + 12 * s
 	local now = clock(state.pos)
 	local total = dur and (' / ' .. clock(dur)) or ''
-	ass[#ass + 1] = text(time_x, ry, 4, now, 14 * s, C.bright, 1, false, mono_font()) .. string.format('{\\1c&H%s&}%s', C.dim, total)
-	local vx = time_x + text_width(now .. total, 14 * s, false, mono_font()) + 24 * s
+	ass[#ass + 1] = text(time_x, ry, 4, now, 14 * s, C.bright, 1, false, osd_font()) .. string.format('{\\1c&H%s&}%s', C.dim, total)
+	local vx = time_x + text_width(now .. total, 14 * s, false, osd_font()) + 24 * s
 
 	-- Right group, laid out from the right edge.
 	local rx = w - 20 * s

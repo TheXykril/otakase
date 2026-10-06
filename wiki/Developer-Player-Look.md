@@ -35,6 +35,13 @@ that works; what users see is on [Configuration](Configuration).
   (`play_arrow`, `skip_next`, `subtitles`, …). It is loaded with
   `--osd-fonts-dir`, so nothing is installed and Windows works the same.
   Keep only fonts in that folder: libass tries to open every file in it.
+- **Inter-Regular.otf / Inter-Bold.otf** (`assets/fonts`, OFL-1.1, licence in
+  `assets/LICENSE.Inter`) set the skin's text (title, chips, menus) through
+  the `ui_font` script-opt. They are subset to Latin, Greek and Cyrillic
+  (`pyftsubset … --unicodes=U+0000-024F,U+0370-04FF,U+1E00-1EFF,…`), about
+  260 KB each; other scripts fall back to the system's fonts. Numbers that
+  change while playing (the clock, the seek tooltip) use the OSD font, the
+  theme's monospace, so they do not jitter.
 - **logo/otakase.ass** is the app icon as ASS drawings, one shape per line
   with the palette role it takes. The script reads it from the `logo`
   script-opt and draws it in the middle of the window while there is no
@@ -64,7 +71,7 @@ when:
 The flags go first on the command line, so the user's `MpvArgs` after them
 still win: `--osc=no`, `--script=`, `--osd-fonts-dir`, `--osd-font` (the
 monospace font from `theme.MonospaceFont`, unless `mpv.conf` or `MpvArgs`
-set one), and one `--script-opts-append=otakase_skin-<key>=<value>` per
+set one; then `ui_font=osd` sets all the skin's text in theirs), and one `--script-opts-append=otakase_skin-<key>=<value>` per
 option. Command-line script options beat the user's own
 `script-opts/otakase_skin.conf`, for this process only.
 
@@ -89,7 +96,12 @@ which the script converts.
   `compute_bounds` returns the box a string was drawn in (cached per
   string and size).
 - ASS has no gradients; the bar fades are bands 3 px tall that meet
-  exactly. Overlapping bands double their alpha into visible stripes.
+  exactly. Overlapping bands double their alpha into visible stripes. They
+  stay at full strength over the outer 40% (behind the controls), then ease
+  out with a smoothstep curve, so there is no visible edge.
+- The seek bar grows from 4 to 8 px under the pointer; the part loaded
+  ahead is a lighter band; openings and endings are rounded marks in
+  `highlight` with bold OP/ED labels.
 - Sizes scale with the window height (`h / 720`, clamped).
 - While the controls are up, `sub-pos` is raised so subtitles sit above
   them, and put back when they hide. `sub-margin-y` would not move them

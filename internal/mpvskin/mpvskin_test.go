@@ -157,6 +157,9 @@ func TestInstallWritesReusesAndCleans(t *testing.T) {
 		"scripts/otakase_skin.lua",
 		"fonts/MaterialIconsRound.otf",
 		"LICENSE.MaterialIcons",
+		"fonts/Inter-Regular.otf",
+		"fonts/Inter-Bold.otf",
+		"LICENSE.Inter",
 		".complete",
 	} {
 		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(rel))); err != nil {
@@ -218,6 +221,14 @@ func TestArgs(t *testing.T) {
 		if strings.HasPrefix(arg, "--script=") && strings.Contains(arg, "uosc") {
 			t.Errorf("%q: uosc is not shipped", arg)
 		}
+	}
+
+	if strings.Contains(joined, "-ui_font=") {
+		t.Error("without a font of the user's own, the skin keeps its Inter")
+	}
+	own := strings.Join(Args(Options{Dir: "/x", OwnFont: true}), "\n")
+	if !strings.Contains(own, "--script-opts-append=otakase_skin-ui_font=osd") {
+		t.Errorf("the user's own OSD font should set all the skin's text:\n%s", own)
 	}
 
 	got := strings.Join(Args(Options{Dir: "/x"}), "\n")
