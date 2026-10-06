@@ -81,13 +81,12 @@ type Options struct {
 	// an undo rather than a skip button.
 	SkipOp bool
 	SkipEd bool
-	// HideOthers asks the skins the user runs themselves (uosc, ModernZ,
-	// ModernX) to stay hidden, for MpvSkin=true beside one of them.
-	HideOthers bool
 }
 
-// hideOthers are the script options that keep other skins from drawing their
-// controls over this one. A script that is not loaded never reads them.
+// hideOthers are the script options that keep skins the user runs themselves
+// from drawing their controls under this one. They are always passed: such a
+// script can load from places otakase does not look (a system-wide scripts
+// folder, a package), and a script that is not loaded never reads them.
 var hideOthers = []string{
 	"uosc-disable_elements=timeline,controls,volume,top_bar,speed,idle_indicator,audio_indicator,buffering_indicator,pause_indicator",
 	"modernz-visibility=never",
@@ -240,10 +239,8 @@ func Args(opts Options) []string {
 		}
 		args = append(args, "--script-opts-append="+ScriptName+"-"+kv[0]+"="+kv[1])
 	}
-	if opts.HideOthers {
-		for _, kv := range hideOthers {
-			args = append(args, "--script-opts-append="+kv)
-		}
+	for _, kv := range hideOthers {
+		args = append(args, "--script-opts-append="+kv)
 	}
 	return args
 }

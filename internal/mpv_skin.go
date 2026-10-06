@@ -57,9 +57,6 @@ func mpvSkinArgs(config *Config, binary string) []string {
 		Colors: mpvSkinColors(theme.Active()),
 		SkipOp: config.SkipOp,
 		SkipEd: config.SkipEd,
-		// MpvSkin=true beside the user's own skin: theirs stays loaded, so
-		// it is asked to hide rather than draw under this one.
-		HideOthers: user.OwnSkin != "",
 	}
 	if !user.SetsOSDFont && !hasMPVFlag(config.MpvArgs, "--osd-font") {
 		if font := theme.MonospaceFont(); font != "" && font != "monospace" {

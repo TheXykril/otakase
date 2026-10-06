@@ -52,8 +52,9 @@ set one), and one `--script-opts-append=otakase_skin-<key>=<value>` per
 option. Command-line script options beat the user's own
 `script-opts/otakase_skin.conf`, for this process only.
 
-With `MpvSkin=true` and a skin of the user's own in `scripts/`, theirs still
-loads, so it is asked to stay hidden for this process:
+A skin of the user's own (only reachable with `MpvSkin=true`, or one loaded
+from a folder otakase does not look in) still loads, so it is always asked to
+stay hidden for this process:
 `uosc-disable_elements=timeline,controls,volume,top_bar,…`,
 `modernz-visibility=never`, `modernx-visibility=never`.
 
