@@ -28,8 +28,8 @@ and recaps, and updates AniList or MyAnimeList when you are done. It works on
 Linux, macOS and Windows, with optional rofi menus that follow your desktop
 theme.
 
-> The name is *omakase* (「お任せ」, "I'll leave it to you") with the otaku
-> syllable swapped in. You pick the show; it picks the rest.
+> *Omakase* (「お任せ」) means "I'll leave it to you". Add a little *otaku*
+> and you get *otakase*: pick a show and leave the rest to it.
 
 ---
 
