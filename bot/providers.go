@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -141,6 +142,9 @@ func (b *bot) checkProviders() (*discordgo.MessageEmbed, []discordgo.MessageComp
 	out, err := run("-provider-status")
 	list := parseProviderStatus(out)
 	if len(list) == 0 {
+		if errors.Is(err, exec.ErrNotFound) {
+			return errorEmbed("The source check isn't available on this bot right now. Run `otakase -provider-status` yourself instead."), nil
+		}
 		if err != nil {
 			return errorEmbed("Couldn't run the source check here (%v). Run `otakase -provider-status` yourself instead.", err), nil
 		}
@@ -166,6 +170,10 @@ var downRe = regexp.MustCompile(`(?i)\b(is|are)\s+(it|otakase|the\s+\w+|any\s+\w
 // downCheck answers a "is it down?" message with the source check, at most
 // once per channel every ten minutes.
 func (b *bot) downCheck(m *discordgo.MessageCreate) {
+	// Without the CLI there's nothing useful to answer with.
+	if _, err := exec.LookPath(b.cfg.OtakaseCLI); err != nil {
+		return
+	}
 	if !b.issues.allowKey(m.ChannelID + "/down") {
 		return
 	}
