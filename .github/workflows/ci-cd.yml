@@ -251,27 +251,3 @@ jobs:
     with:
       version: ${{ needs.release.outputs.version }}
     secrets: inherit
-
-  # Squash-merges a Dependabot PR once build passes. Major Go module bumps
-  # wait for a human; major Actions bumps go in since they only touch CI.
-  # Merging doesn't release anything.
-  dependabot-merge:
-    needs: build
-    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'TheXykril/otakase'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Dependabot metadata
-        id: meta
-        uses: dependabot/fetch-metadata@v3
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Merge
-        if: steps.meta.outputs.update-type != 'version-update:semver-major' || steps.meta.outputs.package-ecosystem == 'github_actions'
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr merge "$PR_URL" --squash --delete-branch
