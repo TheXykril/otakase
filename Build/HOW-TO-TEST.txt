@@ -1,0 +1,28 @@
+Trying this build
+=================
+
+These are test builds of otakase, made by a Build and release run. Nothing
+needs installing: run the file for your system from a terminal. It uses your
+normal config, history and sign-ins, so it behaves like the real app.
+mpv has to be installed and on your PATH (the Windows installer normally
+brings its own, this plain .exe doesn't).
+
+Linux (x86_64; use otakase-linux-arm64 on ARM)
+  cd linux
+  chmod +x otakase-linux-x86_64
+  ./otakase-linux-x86_64
+
+macOS (otakase-macos-universal runs on Intel and Apple Silicon)
+  cd macos
+  chmod +x otakase-macos-universal
+  xattr -d com.apple.quarantine otakase-macos-universal
+  ./otakase-macos-universal
+  The xattr line stops macOS blocking it as a downloaded, unsigned program.
+
+Windows (PowerShell or Command Prompt)
+  cd windows
+  .\otakase-windows-x86_64.exe
+  If SmartScreen warns about it, choose More info, then Run anyway.
+
+Flags work as usual, e.g. -v for the version or -diag for a support report.
+When you're done, delete the folder; your installed otakase is untouched.

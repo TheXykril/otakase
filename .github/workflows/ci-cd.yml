@@ -92,6 +92,7 @@ jobs:
           ./Build/buildwindows
           mkdir -p release/windows
           mv otakase-windows-x86_64.exe release/windows/
+          cp Build/HOW-TO-TEST.txt release/
 
       # The release job uses this, and it is the download for trying a
       # build: the run's page lists it under Artifacts.
@@ -103,6 +104,7 @@ jobs:
             release/linux/otakase-linux-arm64
             release/macos/otakase-macos-*
             release/windows/otakase-windows-x86_64.exe
+            release/HOW-TO-TEST.txt
           retention-days: 7
           if-no-files-found: error
 
