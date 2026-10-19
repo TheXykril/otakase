@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# The Windows build that ships. x86_64 only: the npipe dependency (Discord
+# RPC) doesn't compile for windows/arm64, and the installer's mpv.exe is
+# 64-bit x86 anyway.
+set -e
+"$(dirname "$0")/buildwindows-x86_64"

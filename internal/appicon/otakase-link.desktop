@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Otakase
+Comment=Open otakase:// links in the rofi menus
+Exec=otakase -rofi %u
+Icon=otakase
+Terminal=false
+NoDisplay=true
+MimeType=x-scheme-handler/otakase;
+StartupWMClass=otakase

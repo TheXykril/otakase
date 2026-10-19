@@ -1,0 +1,78 @@
+# Set up the Super+Shift+A keybinding for the user who ran the install.
+#
+# An install script runs as root, so $HOME is /root -- the keybinding has to be
+# written as the invoking user or it lands in the wrong config and is owned by
+# the wrong account. SUDO_USER names that person when pacman was reached through
+# sudo; pkexec sets PKEXEC_UID instead, which is what a graphical installer or a
+# caller with no terminal to type a password into will use. When neither is set
+# -- a chroot, an image build, pacman as root directly -- there is no user to
+# act for, so this quietly does nothing and prints the command instead.
+#
+# Set OTAKASE_NO_KEYBIND=1 to skip it.
+
+_otakase_as_user() {
+  local user home entry
+  # sudo names the caller; pkexec, used by graphical installers and by agents
+  # with no terminal to type a password into, gives their uid instead.
+  if [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ]; then
+    user="$SUDO_USER"
+  elif [ -n "${PKEXEC_UID:-}" ] && [ "${PKEXEC_UID}" != "0" ]; then
+    user=$(getent passwd "$PKEXEC_UID" | cut -d: -f1) || return 1
+  else
+    return 1
+  fi
+  [ -n "$user" ] || return 1
+  entry=$(getent passwd "$user") || return 1
+  home=$(printf '%s' "$entry" | cut -d: -f6)
+  [ -n "$home" ] && [ -d "$home" ] || return 1
+  # Runs as them, with their HOME, so the file is written and owned correctly.
+  runuser -u "$user" -- env HOME="$home" XDG_CONFIG_HOME="${home}/.config" \
+    /usr/bin/otakase "$@" 2>&1 | sed 's/^/  /'
+}
+
+post_install() {
+  cat <<'MSG'
+
+  Otakase installed.  otk is a shorter alias for the same program.
+
+MSG
+  if [ -n "${OTAKASE_NO_KEYBIND:-}" ]; then
+    echo "  Keybinding skipped (OTAKASE_NO_KEYBIND is set)."
+    echo
+    return
+  fi
+  echo "  Setting up Super+Shift+A to open the rofi menu:"
+  if ! _otakase_as_user -install-keybind; then
+    cat <<'MSG'
+  Could not tell which user to set it up for, so nothing was changed.
+  Run this yourself:
+
+      otakase -install-keybind
+
+MSG
+    return
+  fi
+  echo
+}
+
+post_upgrade() {
+  # pacman runs this for a reinstall as well as an upgrade, so it has to handle
+  # the case where no binding exists yet -- someone coming from a version that
+  # never had one. -refresh-keybind installs when there is nothing, updates its
+  # own block when there is, and stays out of the way once the user has removed
+  # it. Printed rather than silenced: a package that edits your config should
+  # say so every time, not only the first time.
+  [ -n "${OTAKASE_NO_KEYBIND:-}" ] && return 0
+  echo
+  echo "  Super+Shift+A keybinding:"
+  if ! _otakase_as_user -refresh-keybind; then
+    echo "  (skipped: could not tell which user to set it up for)"
+  fi
+  echo
+}
+
+pre_remove() {
+  # Take the keybinding out while the binary it points at still exists;
+  # otherwise uninstalling leaves a key bound to a program that is gone.
+  _otakase_as_user -remove-keybind >/dev/null 2>&1 || true
+}

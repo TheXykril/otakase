@@ -1,0 +1,277 @@
+name: Build and release
+
+# Every push and PR to main is vetted, tested and built for Linux. A push to
+# main whose commit message contains "release:" also builds macOS and Windows
+# and publishes v<VERSION.txt> as a GitHub release.
+#
+# site/ and wiki/ changes have their own workflows.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["site/**", "wiki/**"]
+  pull_request:
+    branches: [main]
+    paths-ignore: ["site/**", "wiki/**"]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR number to build instead of the pushed commit
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # This job can run a PR's code (pull_request, or a dispatch with
+    # pr_number), so it gets no token at all. The repo is public; checkout
+    # works anonymously.
+    permissions: {}
+    env:
+      # Same condition as the release job's `if`. The Build/ scripts upx the
+      # binaries when COMPRESS is true.
+      RELEASE_BUILD: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:') }}
+      COMPRESS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:') }}
+
+    steps:
+      - name: Check pr_number
+        if: github.event.inputs.pr_number != ''
+        env:
+          PR_NUMBER: ${{ github.event.inputs.pr_number }}
+        run: |
+          [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] && exit 0
+          echo "::error::pr_number must be a positive integer, got: $PR_NUMBER"
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          # Module cache keyed on go.sum. Not for a dispatched PR build: that
+          # runs untrusted code under main's cache scope, and whatever it saved
+          # would be restored by later runs on main. A pull_request run gets
+          # its own scope, so it can't poison main's.
+          cache: ${{ github.event_name != 'workflow_dispatch' }}
+
+      - name: Download modules
+        run: go mod tidy
+
+      - name: Vet
+        run: go vet ./...
+
+      # -short skips the live provider tests; those hit real hosts and run
+      # in provider-canary.yml instead.
+      - name: Test
+        run: go test -short -race ./...
+
+      - name: Build Linux
+        run: |
+          ./Build/buildlinux
+          mkdir -p release/linux
+          mv otakase-linux-x86_64 otakase-linux-arm64 release/linux/
+
+      # macOS and Windows are only needed for a release. Both are plain Go
+      # cross-compiles on this runner.
+      - name: Build macOS
+        if: env.RELEASE_BUILD == 'true'
+        run: |
+          ./Build/buildmac-x86_64
+          ./Build/buildmac-arm64
+          sudo apt-get update
+          sudo apt-get install -y llvm
+          lipo=$(find /usr/bin -name 'llvm-lipo*' | head -n 1)
+          echo "using $lipo"
+          "$lipo" -create otakase-macos-x86_64 otakase-macos-arm64 -output otakase-macos-universal
+          mkdir -p release/macos
+          mv otakase-macos-x86_64 otakase-macos-arm64 otakase-macos-universal release/macos/
+
+      - name: Build Windows
+        if: env.RELEASE_BUILD == 'true'
+        run: |
+          ./Build/buildwindows
+          mkdir -p release/windows
+          mv otakase-windows-x86_64.exe release/windows/
+
+      # Only linux/ exists outside a release build, which is fine: nothing
+      # downloads this artifact then.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: otakase-binaries
+          path: |
+            release/linux/otakase-linux-x86_64
+            release/linux/otakase-linux-arm64
+            release/macos/otakase-macos-*
+            release/windows/otakase-windows-x86_64.exe
+          retention-days: 1
+          if-no-files-found: warn
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      actions: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      # Pinned to the release commit. Without a ref this checks out whatever
+      # main is at by the time build finishes, and a push in between ends up
+      # tagged instead (that's what happened to v2.0.1).
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $version = Get-Content VERSION.txt
+          "OTAKASE_VERSION=$version" >> $env:GITHUB_ENV
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      # mpv.exe for the installer lives on its own branch to keep it out of
+      # main's history.
+      - name: Fetch mpv
+        uses: actions/checkout@v7
+        with:
+          ref: mpv-binaries
+          path: mpv-temp
+          sparse-checkout: |
+            Build/mpv.exe.gz
+            Build/mpv.zip
+
+      - name: Unpack mpv
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path Build\mpv | Out-Null
+          $gz = "Build\mpv\mpv.exe.gz"
+          if (Test-Path "mpv-temp/Build/mpv.exe.gz") {
+            Copy-Item "mpv-temp/Build/mpv.exe.gz" $gz
+          } else {
+            Write-Host "Warning: no mpv.exe.gz on the mpv-binaries branch, trying main"
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/$env:GITHUB_REPOSITORY/main/Build/mpv.exe.gz" -OutFile $gz
+          }
+          7z x $gz -o"Build\mpv"
+          Remove-Item $gz
+          Remove-Item -Recurse -Force mpv-temp -ErrorAction SilentlyContinue
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: otakase-binaries
+          path: Build
+
+      # The installer script reads the exe from releases/otakase-<version>/windows.
+      - name: Lay out release files
+        shell: pwsh
+        run: |
+          $dir = "releases/otakase-$env:OTAKASE_VERSION"
+          foreach ($os in "windows", "macos", "linux") {
+            New-Item -ItemType Directory -Force -Path "$dir/$os" | Out-Null
+          }
+          Get-ChildItem -Path Build -Recurse | Select-Object -ExpandProperty FullName
+          Move-Item "Build/windows/otakase-windows-x86_64.exe" "$dir/windows/"
+          Move-Item "Build/macos/otakase-macos-universal" "$dir/macos/"
+          Move-Item "Build/macos/otakase-macos-x86_64" "$dir/macos/"
+          Move-Item "Build/macos/otakase-macos-arm64" "$dir/macos/"
+          Move-Item "Build/linux/otakase-linux-x86_64" "$dir/linux/"
+          Move-Item "Build/linux/otakase-linux-arm64" "$dir/linux/"
+          Copy-Item "Build/mpv/mpv.exe" "$dir/windows/"
+
+      - name: Windows installer
+        shell: pwsh
+        run: |
+          $iss = "Build/otakase-windows-build.iss"
+          (Get-Content $iss) -replace '^AppVersion=.*', "AppVersion=$env:OTAKASE_VERSION" | Set-Content $iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "Build\otakase-windows-build.iss"
+
+      # Every size and format of the app icon, for packagers and themers.
+      - name: Icon pack
+        shell: pwsh
+        run: |
+          $pack = "Build/Output/otakase-icons"
+          New-Item -ItemType Directory -Force -Path "$pack/png" | Out-Null
+          Copy-Item "Build/app-icon/png/*.png" "$pack/png/"
+          Copy-Item "internal/appicon/otakase.svg", "Build/app-icon/otakase.ico", "Build/app-icon/otakase.icns" "$pack/"
+          Compress-Archive -Path "$pack/*" -DestinationPath "Build/Output/otakase-icons.zip" -Force
+
+      # Commits pushed straight to main, which GitHub's generated notes
+      # (pull requests only) leave out.
+      - name: Release notes
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/release_notes.py Build/release-notes-extra.md
+
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: "v${{ env.OTAKASE_VERSION }}"
+          name: "Otakase v${{ env.OTAKASE_VERSION }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body_path: Build/release-notes-extra.md
+          # Asset names are what the in-app updater downloads; see
+          # releaseAssetName in internal/update_release.go.
+          files: |
+            releases/otakase-${{ env.OTAKASE_VERSION }}/linux/otakase-linux-x86_64
+            releases/otakase-${{ env.OTAKASE_VERSION }}/linux/otakase-linux-arm64
+            releases/otakase-${{ env.OTAKASE_VERSION }}/macos/otakase-macos-x86_64
+            releases/otakase-${{ env.OTAKASE_VERSION }}/macos/otakase-macos-arm64
+            releases/otakase-${{ env.OTAKASE_VERSION }}/macos/otakase-macos-universal
+            releases/otakase-${{ env.OTAKASE_VERSION }}/windows/otakase-windows-x86_64.exe
+            Build/Output/otakase-windows-installer.exe
+            Build/Output/otakase-icons.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # A release published with GITHUB_TOKEN doesn't trigger other workflows, so
+  # winget and Discord are called from here.
+  winget:
+    needs: release
+    permissions:
+      contents: read
+    uses: ./.github/workflows/winget.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+    secrets: inherit
+
+  discord:
+    needs: release
+    permissions:
+      contents: read
+    uses: ./.github/workflows/discord-release.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+    secrets: inherit
+
+  # Squash-merges a Dependabot PR once build passes. Major Go module bumps
+  # wait for a human; major Actions bumps go in since they only touch CI.
+  # Merging doesn't release anything.
+  dependabot-merge:
+    needs: build
+    if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'TheXykril/otakase'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Merge
+        if: steps.meta.outputs.update-type != 'version-update:semver-major' || steps.meta.outputs.package-ecosystem == 'github_actions'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge "$PR_URL" --squash --delete-branch

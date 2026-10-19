@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Both Linux builds: otakase-linux-arm64 and otakase-linux-x86_64.
+set -e
+here=$(dirname "$0")
+"$here/buildlinux-arm64"
+"$here/buildlinux-x86_64"

@@ -1,0 +1,117 @@
+name: Dev Build
+
+# Publishes what is on main as the "dev" pre-release, for trying unreleased
+# work before a real release is cut. Run it by hand from the Actions tab.
+# The app reads the version from the release title, so keep it
+# "Otakase <version>".
+#
+# The release is marked pre-release and never "latest", so the in-app update
+# check ignores it unless DevBuilds=true. Each run
+# replaces the previous dev release and moves the "dev" tag; the tag does not
+# start with "v", so the release job's changelog range skips it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version the dev build is heading to (shown as <version>-dev.<run number>)"
+        required: true
+        default: "26.1.0"
+        type: string
+
+concurrency:
+  group: dev-build
+  cancel-in-progress: true
+
+jobs:
+  dev-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          # History back to the last release commit, for the Discord post.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -short ./...
+
+      - name: Set dev version
+        env:
+          BASE_VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "version must look like 26.1.0, got '$BASE_VERSION'" >&2
+            exit 1
+          fi
+          # The Build/ scripts read VERSION.txt; this change stays in the runner.
+          # The run number only goes up, so the update check (DevBuilds=true)
+          # can tell a newer dev build from an older one.
+          dev_version="${BASE_VERSION}-dev.${GITHUB_RUN_NUMBER}"
+          echo "$dev_version" > VERSION.txt
+          echo "DEV_VERSION=$dev_version" >> "$GITHUB_ENV"
+
+      - name: Build binaries
+        run: |
+          ./Build/buildlinux
+          ./Build/buildmac-x86_64
+          ./Build/buildmac-arm64
+          ./Build/buildwindows-x86_64
+          mkdir -p dist
+          mv otakase-linux-x86_64 otakase-linux-arm64 otakase-macos-x86_64 otakase-macos-arm64 otakase-windows-x86_64.exe dist/
+
+      - name: Replace the dev release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete dev --cleanup-tag --yes || true
+          cat > notes.md <<EOF
+          Development build of \`main\` at ${GITHUB_SHA::7}, version \`$DEV_VERSION\`.
+
+          Not a release: it can be broken, and it is replaced by the next dev build. The app offers it only with \`DevBuilds=true\` in the config.
+
+          Windows: this is the bare \`.exe\` without the installer, so it needs \`mpv\` on your PATH.
+          EOF
+          gh release create dev dist/* \
+            --target "$GITHUB_SHA" \
+            --title "Otakase $DEV_VERSION" \
+            --notes-file notes.md \
+            --prerelease \
+            --latest=false
+
+      # Announces the build in the Discord server's test-builds channel, sent by
+      # the Otakase bot. Needs a DISCORD_BOT_TOKEN secret; without it this does
+      # nothing. A header that fails to render leaves the post without one.
+      - name: Render the Discord header
+        if: env.DISCORD_BOT_TOKEN != ''
+        continue-on-error: true
+        run: |
+          python3 .github/discord/post_release.py render-dev "$DEV_VERSION" "$RUNNER_TEMP/header.html"
+          npx -y playwright@1.56.1 screenshot --channel chrome --viewport-size 1600,400 \
+            --wait-for-timeout 3000 "file://$RUNNER_TEMP/header.html" "$RUNNER_TEMP/header.png"
+
+      - name: Post to Discord
+        if: env.DISCORD_BOT_TOKEN != ''
+        env:
+          # The test-builds channel (found by name in the server), and the
+          # "Tester" role each post pings (empty for no ping).
+          DISCORD_GUILD: "1556588123561922560"
+          DISCORD_DEV_CHANNEL: "test-builds"
+          DISCORD_DEV_ROLE: "1556589751077699664"
+        run: python3 .github/discord/post_release.py post-dev "$DEV_VERSION" "$RUNNER_TEMP/header.png"

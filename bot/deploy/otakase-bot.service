@@ -1,0 +1,21 @@
+[Unit]
+Description=Otakase Discord bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment=OTAKASE_CLI=/usr/local/libexec/otakase
+Environment=OTAKASE_DATA_DIR=/var/lib/otakase-bot
+StateDirectory=otakase-bot
+EnvironmentFile=/etc/otakase-bot.env
+ExecStart=/usr/local/bin/otakase-bot
+Restart=always
+RestartSec=10
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

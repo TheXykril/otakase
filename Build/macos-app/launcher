@@ -1,0 +1,5 @@
+#!/bin/sh
+# What Otakase.app runs when it is opened from Finder or the Dock: a Terminal
+# window with otakase in it, since otakase is a terminal program.
+here="$(cd "$(dirname "$0")" && pwd)"
+exec open -a Terminal "$here/otakase"

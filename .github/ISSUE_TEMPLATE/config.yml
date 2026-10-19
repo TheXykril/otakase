@@ -1,0 +1,7 @@
+contact_links:
+  - name: Ask on Discord
+    url: https://otakase.xyverion.com/discord/
+    about: Questions and help with setup. Bugs with clear steps belong here as issues.
+  - name: Troubleshooting
+    url: https://github.com/TheXykril/otakase/wiki/Troubleshooting
+    about: Fixes for the most common problems.

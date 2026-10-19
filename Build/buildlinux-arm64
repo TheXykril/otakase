@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+source "$(dirname "$0")/target.sh"
+build_target linux arm64 otakase-linux-arm64 "-s -w" && compress_target otakase-linux-arm64

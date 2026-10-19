@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Otakase
+GenericName=Anime Player
+Comment=Watch anime, with your list kept in sync
+Exec=otakase
+Icon=otakase
+Terminal=true
+Categories=AudioVideo;Video;Player;
+Keywords=anime;anilist;myanimelist;mpv;
+StartupWMClass=otakase
+Actions=Rofi;
+
+[Desktop Action Rofi]
+Name=Open in rofi
+Exec=otakase -rofi -image-preview

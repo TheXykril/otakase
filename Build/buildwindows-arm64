@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Doesn't build yet, see buildwindows.
+source "$(dirname "$0")/target.sh"
+build_target windows arm64 otakase-windows-arm64.exe && compress_target otakase-windows-arm64.exe

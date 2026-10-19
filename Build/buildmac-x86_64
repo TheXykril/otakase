@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Never upx-packed: packed binaries don't run on current macOS.
+source "$(dirname "$0")/target.sh"
+build_target darwin amd64 otakase-macos-x86_64

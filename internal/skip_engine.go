@@ -1,0 +1,179 @@
+package internal
+
+import (
+	"fmt"
+	"strings"
+)
+
+// SkipRef is everything known about an episode that a skip service might key
+// on. Each service identifies shows differently -- AniSkip by MyAnimeList id,
+// Anime-Skip by its own id found from an AniList id, a provider by whatever it
+// calls the show -- so the reference carries all of them rather than each
+// source having to reach back for what it needs.
+type SkipRef struct {
+	MalID      int
+	AniListID  int
+	Episode    int
+	Mode       string
+	Provider   string
+	ProviderID string
+	// EpisodeLength is how long the file being played is, in seconds, or zero
+	// when that is not known yet. AniSkip files each entry with the length of
+	// the release it was timed against, and an entry for a different cut of the
+	// episode skips the wrong stretch of this one.
+	EpisodeLength float64
+}
+
+// SkipSource is one place intro and outro timings can come from.
+//
+// Returning found=false is the ordinary case, not a failure: most services know
+// nothing about most episodes. An error means the service was asked and could
+// not answer, which is worth logging but is equally not fatal.
+type SkipSource interface {
+	Name() string
+	Lookup(ref SkipRef) (times SkipTimes, found bool, err error)
+}
+
+// SkipResolution records what was found and where each half came from, so a log
+// can say "opening from anikoto, ending from aniskip" rather than leaving the
+// user to guess why only half an episode skipped.
+type SkipResolution struct {
+	Times       SkipTimes
+	OpSource    string
+	EdSource    string
+	RecapSource string
+	IDs         SkipIDs
+	Attempted   []string
+	Errors      []error
+}
+
+// SkipIDs names the entries a resolution came from, where the source has names
+// for them. Only AniSkip does, and only so that an entry that sent the player
+// to the wrong place can be voted down by the person who noticed.
+type SkipIDs struct {
+	Op string
+	Ed string
+}
+
+// identifiedSkipSource is a source whose entries can be referred to afterwards.
+//
+// It is a second method rather than a change to SkipSource because it is true
+// of exactly one source, and every other one would have to grow a return value
+// it has nothing to put in.
+type identifiedSkipSource interface {
+	SkipSource
+	LookupIdentified(ref SkipRef) (SkipTimes, SkipIDs, bool, error)
+}
+
+func lookupSkipSource(source SkipSource, ref SkipRef) (SkipTimes, SkipIDs, bool, error) {
+	if identified, ok := source.(identifiedSkipSource); ok {
+		return identified.LookupIdentified(ref)
+	}
+	times, found, err := source.Lookup(ref)
+	return times, SkipIDs{}, found, err
+}
+
+// Found reports whether anything usable was resolved at all.
+func (r SkipResolution) Found() bool {
+	return usableSpan(r.Times.Op) || usableSpan(r.Times.Ed) || usableSpan(r.Times.Recap)
+}
+
+// Describe summarises the outcome for a log line.
+func (r SkipResolution) Describe() string {
+	if !r.Found() {
+		return fmt.Sprintf("no skip times from %s", strings.Join(r.Attempted, ", "))
+	}
+	parts := []string{}
+	if r.OpSource != "" {
+		parts = append(parts, fmt.Sprintf("opening %d-%ds from %s", r.Times.Op.Start, r.Times.Op.End, r.OpSource))
+	}
+	if r.EdSource != "" {
+		parts = append(parts, fmt.Sprintf("ending %d-%ds from %s", r.Times.Ed.Start, r.Times.Ed.End, r.EdSource))
+	}
+	if r.RecapSource != "" {
+		parts = append(parts, fmt.Sprintf("recap %d-%ds from %s", r.Times.Recap.Start, r.Times.Recap.End, r.RecapSource))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// ResolveSkipTimes asks each source in turn and takes the opening from the
+// first that has one and the ending from the first that has one.
+//
+// They need not be the same source. AniSkip frequently knows an opening and not
+// an ending, and a provider that ships timings with the stream often knows
+// both; taking each half independently means a half-answer from one service is
+// completed by the next rather than discarded. Asking stops once both halves
+// are filled, so the cheapest source being first actually saves the requests.
+func ResolveSkipTimes(ref SkipRef, sources ...SkipSource) SkipResolution {
+	resolution := SkipResolution{}
+
+	for _, source := range sources {
+		if source == nil {
+			continue
+		}
+		if resolution.OpSource != "" && resolution.EdSource != "" {
+			break
+		}
+		resolution.Attempted = append(resolution.Attempted, source.Name())
+
+		times, ids, found, err := lookupSkipSource(source, ref)
+		if err != nil {
+			resolution.Errors = append(resolution.Errors, fmt.Errorf("%s: %w", source.Name(), err))
+			continue
+		}
+		if !found {
+			continue
+		}
+		if resolution.OpSource == "" && usableSpan(times.Op) {
+			resolution.Times.Op = times.Op
+			resolution.OpSource = source.Name()
+			resolution.IDs.Op = ids.Op
+		}
+		if resolution.EdSource == "" && usableSpan(times.Ed) {
+			resolution.Times.Ed = times.Ed
+			resolution.EdSource = source.Name()
+			resolution.IDs.Ed = ids.Ed
+		}
+		// A recap is taken where it turns up, but not waited for: few
+		// episodes have one, and asking every source for it would cost the
+		// requests the order above is there to save.
+		if resolution.RecapSource == "" && usableSpan(times.Recap) {
+			resolution.Times.Recap = times.Recap
+			resolution.RecapSource = source.Name()
+		}
+	}
+	return resolution
+}
+
+// usableSpan rejects a span that would send the player somewhere wrong. A zero
+// span means "not known"; a reversed or negative one means the service answered
+// with something broken, and skipping to it is worse than not skipping.
+// SkipSeekTarget says where to jump from position, if anywhere: the end of the
+// opening, ending or recap the viewer has just entered, among those the config
+// asks to skip. Only the first two seconds of a span count, so seeking back
+// into one to watch it is left alone.
+func SkipSeekTarget(times SkipTimes, position int, config *Config) (int, bool) {
+	if config == nil {
+		return 0, false
+	}
+	for _, candidate := range []struct {
+		span    Skip
+		enabled bool
+	}{
+		{times.Op, config.SkipOp},
+		{times.Ed, config.SkipEd},
+		{times.Recap, config.SkipRecap},
+	} {
+		if !candidate.enabled || !usableSpan(candidate.span) {
+			continue
+		}
+		if position > candidate.span.Start && position < candidate.span.Start+2 {
+			return candidate.span.End, true
+		}
+	}
+	return 0, false
+}
+
+func usableSpan(span Skip) bool {
+	return span.End > span.Start && span.End > 0 && span.Start >= 0
+}

@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- Header image for the Discord release post. post_release.py fills in
+     {{KANA}}, {{VERSION}} and {{SUBTITLE}}; the workflow screenshots it at 1600x400. -->
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Cormorant+Garamond:ital,wght@1,500&family=Noto+Serif+JP:wght@700;900&text=%E6%96%B0%E7%89%88%E8%A9%A6%E4%BD%9C%E4%BB%BB&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Cormorant+Garamond:ital,wght@1,500&display=block">
+<style>
+html,body{margin:0;background:#0e0d0c}
+.b{width:1600px;height:400px;position:relative;overflow:hidden;background:
+ radial-gradient(ellipse 55% 80% at 50% 45%,rgba(210,73,47,.18),transparent 70%),linear-gradient(180deg,#161412,#0e0d0c)}
+.grid{position:absolute;inset:0;background-image:radial-gradient(rgba(236,228,214,.06) 1.5px,transparent 1.5px);background-size:30px 30px}
+.kanji{position:absolute;left:50%;top:50%;transform:translate(-50%,-52%);font:900 640px/1 'Noto Serif JP';color:#d2492f;opacity:.09}
+.c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.jp{font:700 44px/1 'Noto Serif JP';color:#d2492f;letter-spacing:12px;margin-bottom:22px}
+.word{font:400 120px/1 'Archivo Black';color:#ece4d6;letter-spacing:-2px}
+.tag{margin-top:26px;font:500 40px/1 'Cormorant Garamond';font-style:italic;color:#8a8276}
+.line{position:absolute;left:0;right:0;bottom:0;height:8px;background:#d2492f}
+</style></head><body><div class="b"><div class="grid"></div><div class="kanji">任</div>
+<div class="c"><div class="jp">{{KANA}}</div><div class="word">{{VERSION}}</div><div class="tag">{{SUBTITLE}}</div></div><div class="line"></div></div></body></html>

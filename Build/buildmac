@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Both macOS builds. The universal binary is lipo'd from these afterwards.
+set -e
+here=$(dirname "$0")
+"$here/buildmac-arm64"
+"$here/buildmac-x86_64"

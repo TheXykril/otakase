@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+source "$(dirname "$0")/target.sh"
+build_target windows amd64 otakase-windows-x86_64.exe && compress_target otakase-windows-x86_64.exe

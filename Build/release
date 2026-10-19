@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+#
+# Builds a full release by hand, the way CI does it, into releases/otakase-<version>/.
+# Needs llvm-lipo for the macOS universal binary, and wine with Inno Setup 6
+# plus Build/mpv.exe.gz for the Windows installer.
+#
+#   Build/release [version]     asks for the version when not given
+
+cd "$(dirname "$0")/.." || exit 1
+
+version=${1:-}
+[[ -n "$version" ]] || read -rp "Version: " version
+[[ -n "$version" ]] || { echo "no version given" >&2; exit 1; }
+
+out="releases/otakase-$version"
+iss="Build/otakase-windows-build.iss"
+
+die() { echo "$*" >&2; exit 1; }
+
+# collect DIR FILE... -- moves each freshly built FILE into DIR.
+collect() {
+    local dir=$1; shift
+    mkdir -p "$dir"
+    for f in "$@"; do
+        [[ -f "$f" ]] || die "$f was not built"
+        mv "$f" "$dir/"
+    done
+}
+
+echo "== linux"
+Build/buildlinux || die "linux build failed"
+collect "$out/linux" otakase-linux-x86_64 otakase-linux-arm64
+
+echo "== macos"
+Build/buildmac || die "macos build failed"
+collect "$out/macos" otakase-macos-x86_64 otakase-macos-arm64
+llvm-lipo -create "$out/macos/otakase-macos-x86_64" "$out/macos/otakase-macos-arm64" \
+    -output "$out/macos/otakase-macos-universal"
+[[ -f "$out/macos/otakase-macos-universal" ]] || die "lipo did not produce the universal binary"
+
+echo "== windows"
+Build/buildwindows || die "windows build failed"
+collect "$out/windows" otakase-windows-x86_64.exe
+
+sed -i "s/^AppVersion=.*/AppVersion=$version/" "$iss"
+mkdir -p Build/mpv
+gunzip -c Build/mpv.exe.gz > Build/mpv/mpv.exe || die "Build/mpv.exe.gz is missing"
+trap 'rm -f Build/mpv/mpv.exe' EXIT
+
+echo "== installer"
+wine "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "$iss"
+if [[ -f Build/Output/otakase-windows-installer.exe ]]; then
+    mv Build/Output/otakase-windows-installer.exe "$out/windows/"
+else
+    echo "installer was not built, check the Inno Setup output above" >&2
+fi
+
+echo "done: $out"

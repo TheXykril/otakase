@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>otakase · Play</title>
+<meta name="description" content="Open this show in otakase.">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https://s4.anilist.co; connect-src https://graphql.anilist.co; base-uri 'none'; form-action 'none'">
+<meta name="theme-color" content="#0e0d0c">
+<meta property="og:title" content="Play in otakase">
+<meta property="og:description" content="Open this show straight in otakase.">
+<meta property="og:image" content="https://otakase.xyverion.com/img/social-preview.png">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../img/favicon-32.png" sizes="32x32">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root { --bg: #0e0d0c; --fg: #ece4d6; --accent: #d2492f; --muted: #8a8276; --line: #2a2724; color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--fg); min-height: 100vh; display: grid; place-items: center; padding: 32px 16px;
+         font: 12px/1.7 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; letter-spacing: 3px; text-transform: uppercase; }
+  main { width: 100%; max-width: 420px; text-align: center; display: grid; gap: 20px; justify-items: center; }
+  .mark { width: 40px; height: 40px; }
+  .cover { width: 180px; aspect-ratio: 2 / 3; object-fit: cover; background: var(--line); border: 1px solid var(--line); }
+  .cover[hidden] { display: none; }
+  h1 { font: 26px/1.15 'Archivo Black', 'Arial Black', Impact, sans-serif; letter-spacing: .5px; text-transform: none; overflow-wrap: anywhere; }
+  .ep { color: var(--accent); font-weight: 600; }
+  p { color: var(--muted); }
+  a.go { display: block; width: 100%; color: var(--bg); background: var(--accent); padding: 18px 26px; text-decoration: none; font-weight: 600; font-size: 14px; }
+  a.go:hover { filter: brightness(1.1); }
+  a.go[hidden] { display: none; }
+  .phone { border: 1px solid var(--line); padding: 14px 16px; color: var(--fg); text-transform: none; letter-spacing: .5px; font-size: 13px; }
+  .phone[hidden] { display: none; }
+  .links { display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; }
+  .links a { color: var(--muted); }
+  .links a:hover { color: var(--fg); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+</style>
+</head>
+<body>
+<main>
+  <img class="mark" src="../img/favicon.svg" alt="">
+  <img class="cover" id="cover" alt="" hidden>
+  <h1 id="title">Play in otakase</h1>
+  <p class="ep" id="ep" hidden></p>
+  <p id="msg">Opening otakase…</p>
+  <a class="go" id="go" href="../" hidden>OPEN IN OTAKASE</a>
+  <p class="phone" id="phone" hidden>Otakase runs on your computer. Open this page there to start watching.</p>
+  <div class="links">
+    <a href="../#install">Don't have otakase? Download</a>
+    <a href="../">otakase.xyverion.com</a>
+  </div>
+</main>
+<script>
+(function () {
+  function tryLink(link) {
+    // A phone cannot run otakase, and trying the link there only gets an
+    // error from the browser.
+    var phone = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+      (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+    if (phone) {
+      document.getElementById("phone").hidden = false;
+      msg.textContent = "";
+    } else {
+      msg.textContent = "If nothing opened, press the button. Your browser may ask first.";
+      setTimeout(function () { location.href = link; }, 150);
+    }
+  }
+
+  function openParty(party) {
+    var link = "otakase://party/" + party;
+    document.getElementById("title").textContent = "Join the watch party";
+    var go = document.getElementById("go");
+    go.href = link;
+    go.textContent = "JOIN IN OTAKASE";
+    go.hidden = false;
+    var line = document.getElementById("ep");
+    line.textContent = "Everyone watches in their own otakase, synced to the host";
+    line.hidden = false;
+    tryLink(link);
+  }
+
+  // Only plain numbers are passed on: both end up in a link the app is
+  // started with, so nothing else from the address is used.
+  var params = new URLSearchParams(location.search);
+  var id = params.get("anilist") || "";
+  var ep = params.get("ep") || "";
+  var party = params.get("party") || "";
+  var msg = document.getElementById("msg");
+  // A synced watch party (a Discord event id) joins the host instead.
+  if (/^[1-9][0-9]{16,19}$/.test(party)) {
+    openParty(party);
+    return;
+  }
+  if (!/^[1-9][0-9]{0,8}$/.test(id)) {
+    document.getElementById("title").textContent = "This link is broken";
+    msg.textContent = "It does not name a show. Ask for a new one.";
+    return;
+  }
+  if (!/^[1-9][0-9]{0,4}$/.test(ep)) ep = "";
+
+  var link = "otakase://play/anilist/" + id + (ep ? "?ep=" + ep : "");
+  var go = document.getElementById("go");
+  go.href = link;
+  go.hidden = false;
+  if (ep) {
+    var epLine = document.getElementById("ep");
+    epLine.textContent = "Episode " + ep;
+    epLine.hidden = false;
+  }
+
+  tryLink(link);
+
+  fetch("https://graphql.anilist.co", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({
+      query: "query ($id: Int) { Media(id: $id, type: ANIME) { title { romaji english } coverImage { extraLarge } } }",
+      variables: { id: Number(id) }
+    })
+  })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (r) {
+      var m = r && r.data && r.data.Media;
+      if (!m) return;
+      var title = (m.title && (m.title.english || m.title.romaji)) || "";
+      if (title) {
+        document.getElementById("title").textContent = title;
+        document.title = "otakase · " + title;
+      }
+      var src = m.coverImage && m.coverImage.extraLarge;
+      if (typeof src === "string" && src.indexOf("https://s4.anilist.co/") === 0) {
+        var cover = document.getElementById("cover");
+        cover.src = src;
+        cover.alt = title ? "Cover of " + title : "";
+        cover.hidden = false;
+      }
+    })
+    .catch(function () {});
+})();
+</script>
+</body>
+</html>
