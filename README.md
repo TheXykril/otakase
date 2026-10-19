@@ -257,8 +257,9 @@ numbers from [Jikan](https://jikan.moe/). The player's icons are Google's
 
 ## Contributing
 
-Building, testing and how releases work are in the
-[Developer section of the wiki](https://github.com/TheXykril/otakase/wiki/Developer).
+Pull requests are open to the project's collaborators only. Bug reports are
+welcome as issues, and ideas on [Discord](https://otakase.xyverion.com/discord/).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
