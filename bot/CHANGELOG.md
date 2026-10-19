@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.27.1
+
+- Fixed the add-on failing to build while Otakase has no release to download.
+  The image now builds the Otakase CLI from source for `/provider-status`
+  when there's no release, and still builds if that fails too (the command
+  then says the check isn't available).
+
 ## 1.27.0
 
 - **`/github`** (server admins only) starts a GitHub workflow from Discord:
