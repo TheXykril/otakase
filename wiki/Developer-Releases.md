@@ -39,9 +39,11 @@ entries for users, opening with a bold sentence that stands on its own. A
 `## Unreleased` section at the top, if there is one, is what a dev build
 offers.
 
-CI keys off the `release:` prefix: it builds every platform, tags
-`vYY.DROP.HOTFIX`, publishes the GitHub release and builds the Windows
-installer with that version.
+Push that commit, then start the **Build and release** workflow with
+*release* ticked (Actions tab, or `/github workflow:build release:true` in
+Discord). It builds every platform from `main`, tags `vYY.DROP.HOTFIX`,
+publishes the GitHub release and builds the Windows installer with that
+version, then submits it to winget and posts it in Discord. Workflows never run on a push or pull request by themselves.
 
 ## winget
 
@@ -67,8 +69,8 @@ new version.
 The installer adds its folder to the user's PATH (a task in
 `Build/otakase-windows-build.iss`, checked by default, so a silent winget
 install gets it too) and takes it out again on uninstall. The
-`Windows installer check` workflow builds, installs, runs and uninstalls it on
-any pull request that changes the installer script.
+`Windows installer check` builds, installs, runs and uninstalls it in every
+Build and release run, and a release only publishes once it passes.
 
 ## Discord
 

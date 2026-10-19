@@ -1,37 +1,35 @@
 name: Build and release
 
-# Every push and PR to main is vetted, tested and built for Linux. A push to
-# main whose commit message contains "release:" also builds macOS and Windows
-# and publishes v<VERSION.txt> as a GitHub release.
-#
-# site/ and wiki/ changes have their own workflows.
+# Runs only when started by hand: the Actions tab ("Run workflow") or the
+# Discord bot's /github command. Each run vets, tests and builds for Linux
+# and tests the Windows installer.
+# With "release" ticked it also builds macOS and Windows and publishes
+# v<VERSION.txt> from main as a GitHub release.
 
 on:
-  push:
-    branches: [main]
-    paths-ignore: ["site/**", "wiki/**"]
-  pull_request:
-    branches: [main]
-    paths-ignore: ["site/**", "wiki/**"]
   workflow_dispatch:
     inputs:
       pr_number:
-        description: PR number to build instead of the pushed commit
+        description: PR number to build instead of main
         required: false
         type: string
+      release:
+        description: Publish a release of main
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    # This job can run a PR's code (pull_request, or a dispatch with
-    # pr_number), so it gets no token at all. The repo is public; checkout
-    # works anonymously.
-    permissions: {}
+    # This job can run a PR's code (a dispatch with pr_number), so its token
+    # can only read. The repo is private, so checkout needs that much.
+    permissions:
+      contents: read
     env:
       # Same condition as the release job's `if`. The Build/ scripts upx the
       # binaries when COMPRESS is true.
-      RELEASE_BUILD: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:') }}
-      COMPRESS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:') }}
+      COMPRESS: ${{ inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main' }}
 
     steps:
       - name: Check pr_number
@@ -46,7 +44,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
+          ref: ${{ (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
           persist-credentials: false
 
       - uses: actions/setup-go@v7
@@ -56,7 +54,7 @@ jobs:
           # runs untrusted code under main's cache scope, and whatever it saved
           # would be restored by later runs on main. A pull_request run gets
           # its own scope, so it can't poison main's.
-          cache: ${{ github.event_name != 'workflow_dispatch' }}
+          cache: ${{ inputs.pr_number == '' }}
 
       - name: Download modules
         run: go mod tidy
@@ -75,10 +73,9 @@ jobs:
           mkdir -p release/linux
           mv otakase-linux-x86_64 otakase-linux-arm64 release/linux/
 
-      # macOS and Windows are only needed for a release. Both are plain Go
-      # cross-compiles on this runner.
+      # Every run builds all platforms (plain Go cross-compiles on this
+      # runner), so a pull request's build can be downloaded and tried.
       - name: Build macOS
-        if: env.RELEASE_BUILD == 'true'
         run: |
           ./Build/buildmac-x86_64
           ./Build/buildmac-arm64
@@ -91,14 +88,14 @@ jobs:
           mv otakase-macos-x86_64 otakase-macos-arm64 otakase-macos-universal release/macos/
 
       - name: Build Windows
-        if: env.RELEASE_BUILD == 'true'
         run: |
           ./Build/buildwindows
           mkdir -p release/windows
           mv otakase-windows-x86_64.exe release/windows/
+          cp Build/HOW-TO-TEST.txt release/
 
-      # Only linux/ exists outside a release build, which is fine: nothing
-      # downloads this artifact then.
+      # The release job uses this, and it is the download for trying a
+      # build: the run's page lists it under Artifacts.
       - uses: actions/upload-artifact@v7
         with:
           name: otakase-binaries
@@ -107,12 +104,22 @@ jobs:
             release/linux/otakase-linux-arm64
             release/macos/otakase-macos-*
             release/windows/otakase-windows-x86_64.exe
-          retention-days: 1
-          if-no-files-found: warn
+            release/HOW-TO-TEST.txt
+          retention-days: 7
+          if-no-files-found: error
+
+  # Installs and uninstalls the Windows installer (built from stand-in
+  # binaries) and checks PATH, so a broken installer never gets released.
+  installer:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/installer-check.yml
+    with:
+      ref: ${{ (inputs.pr_number && format('refs/pull/{0}/head', inputs.pr_number)) || github.sha }}
 
   release:
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:')
+    needs: [build, installer]
+    if: inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
     permissions:
       contents: write

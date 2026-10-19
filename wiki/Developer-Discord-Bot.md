@@ -188,7 +188,10 @@ server and stays connected to Discord.
   the post link in the issue body). `/support-queue` for staff.
 - **Releases:** `/changelog [version] [since]`, `/suggestion-issue` (needs a
   `github_token` that can write issues; closing the issue settles the
-  suggestion), and a "Bot updated" note in the bot log from the embedded
+  suggestion), `/github` for server admins to start a repository workflow
+  (build, release, dev build, site, wiki, provider check; every build tests
+  the Windows installer and a release also runs winget and the Discord post;
+  `githubworkflows.go`), and a "Bot updated" note in the bot log from the embedded
   `CHANGELOG.md` (`botupdate.go`).
 - **AniList social:** season preview on the first day of each season
   (`season_preview`, `/season-preview`), `/server-top`, `/compare`,
@@ -272,7 +275,7 @@ Optional, everything missing is skipped or created by the bot:
 - **Support forum tags:** Linux, Windows, macOS (for `/support` and app
   reports). Unpin any other post so Known issues can be pinned.
 - **GitHub:** a `known-issue` label; `github_token` with Issues read and
-  write for `/suggestion-issue`.
+  write for `/suggestion-issue`, and Actions read and write for `/github`.
 - **App link roles (exact names):** Tester (for `/beta`), and for watch
   badges 3-Day Streak, 7-Day Streak, 30-Day Streak, Binge Watcher, Season
   Finisher, Season Collector. Missing ones are skipped, never created.

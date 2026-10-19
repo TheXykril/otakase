@@ -3,16 +3,13 @@
 #   build_target GOOS GOARCH OUT [extra ldflags]
 #
 # Builds ./cmd/otakase into OUT at the repo root, stamped with VERSION.txt.
-# compress_target packs OUT with upx, but only for a release build: COMPRESS
-# set to true, or a push to main whose commit message has "release:" in it.
+# compress_target packs OUT with upx, but only for a release build (COMPRESS
+# set to true by the workflow).
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 is_release_build() {
-    [[ "${COMPRESS:-}" == "true" ]] && return 0
-    [[ "${GITHUB_EVENT_NAME:-}" == "push" &&
-       "${GITHUB_REF:-}" == "refs/heads/main" &&
-       "${GITHUB_EVENT_HEAD_COMMIT_MESSAGE:-}" == *"release:"* ]]
+    [[ "${COMPRESS:-}" == "true" ]]
 }
 
 build_target() {
