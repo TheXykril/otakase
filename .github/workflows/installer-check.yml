@@ -5,10 +5,14 @@ name: Windows installer check
 # installs it silently the way winget does, checks that otakase and otk run
 # from PATH, then uninstalls it and checks PATH is clean again.
 
-# Run it by hand (Actions tab or the bot's /github command) after changing
-# Build/otakase-windows-build.iss or Build/otk.cmd.
+# Every Build and release run calls it, and a release waits for it to pass.
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit or ref to test
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -20,6 +24,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
 
       # whoami.exe stands in for both programs: it is small, 64-bit and prints

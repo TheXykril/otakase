@@ -4,8 +4,8 @@
 
 - **`/github`** (server admins only) starts a GitHub workflow from Discord:
   a build, a release (`release:true`, which also submits to winget and posts
-  the release in Discord), a dev build, the site, the wiki sync, the
-  installer check or the provider check. The bot's `github_token` needs Actions: Read and write.
+  the release in Discord), a dev build, the site, the wiki sync or the
+  provider check. Every build also tests the Windows installer. The bot's `github_token` needs Actions: Read and write.
 
 ## 1.26.0
 

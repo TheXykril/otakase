@@ -69,8 +69,8 @@ new version.
 The installer adds its folder to the user's PATH (a task in
 `Build/otakase-windows-build.iss`, checked by default, so a silent winget
 install gets it too) and takes it out again on uninstall. The
-`Windows installer check` workflow builds, installs, runs and uninstalls it on
-any pull request that changes the installer script.
+`Windows installer check` builds, installs, runs and uninstalls it in every
+Build and release run, and a release only publishes once it passes.
 
 ## Discord
 

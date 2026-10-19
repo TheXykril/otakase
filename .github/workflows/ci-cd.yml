@@ -1,7 +1,8 @@
 name: Build and release
 
 # Runs only when started by hand: the Actions tab ("Run workflow") or the
-# Discord bot's /github command. Each run vets, tests and builds for Linux.
+# Discord bot's /github command. Each run vets, tests and builds for Linux
+# and tests the Windows installer.
 # With "release" ticked it also builds macOS and Windows and publishes
 # v<VERSION.txt> from main as a GitHub release.
 
@@ -108,8 +109,17 @@ jobs:
           retention-days: 1
           if-no-files-found: warn
 
+  # Installs and uninstalls the Windows installer (built from stand-in
+  # binaries) and checks PATH, so a broken installer never gets released.
+  installer:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/installer-check.yml
+    with:
+      ref: ${{ (inputs.pr_number && format('refs/pull/{0}/head', inputs.pr_number)) || github.sha }}
+
   release:
-    needs: build
+    needs: [build, installer]
     if: inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
     permissions:

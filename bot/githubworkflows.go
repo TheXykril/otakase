@@ -16,7 +16,8 @@ import (
 // The repository's workflows only run when started by hand. /github starts
 // one from Discord, so builds, releases, the site and the wiki can be kicked
 // off from a phone. Only server admins can use it: a release is public.
-// Winget and the Discord release post aren't listed: a release runs both.
+// Winget, the Discord release post and the installer check aren't listed:
+// every build tests the installer and a release runs the other two.
 
 // workflowsURL is a variable so tests can point it at a fake server.
 var workflowsURL = "https://api.github.com/repos/TheXykril/otakase/actions/workflows"
@@ -33,7 +34,6 @@ var ghWorkflows = []ghWorkflow{
 	{key: "dev", file: "dev-build.yml", label: "Dev build", needsVersion: true, takesVersion: true},
 	{key: "site", file: "site.yml", label: "Site"},
 	{key: "wiki", file: "wiki-sync.yml", label: "Wiki sync"},
-	{key: "installer", file: "installer-check.yml", label: "Windows installer check"},
 	{key: "providers", file: "provider-canary.yml", label: "Provider check"},
 }
 
