@@ -14,8 +14,9 @@ You can still help:
 ## For collaborators
 
 Open pull requests against `main` with a conventional title (`fix(scope): …`,
-`feat(scope): …`, `chore: …`) and fill in the template. CI runs `go vet`,
-`go test -short -race ./...` and a Linux build on every pull request.
+`feat(scope): …`, `chore: …`) and fill in the template. CI (`go vet`,
+`go test -short -race ./...` and a Linux build) runs only when started by
+hand, so run the checks locally before asking for a merge.
 
 Version numbering and how a release is cut are on the wiki's
 [Versions and releases](https://github.com/TheXykril/otakase/wiki/Developer-Releases)

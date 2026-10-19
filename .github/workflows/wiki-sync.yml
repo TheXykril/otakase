@@ -3,10 +3,8 @@ name: Wiki sync
 # Copies wiki/ to the GitHub wiki, so wiki pages are edited and reviewed in
 # this repository like any other file. The wiki is replaced wholesale: pages
 # edited or added on the wiki directly are overwritten or removed.
+# Runs only when started by hand (Actions tab or the bot's /github command).
 on:
-  push:
-    branches: [main]
-    paths: ["wiki/**", ".github/workflows/wiki-sync.yml"]
   workflow_dispatch:
 
 permissions:

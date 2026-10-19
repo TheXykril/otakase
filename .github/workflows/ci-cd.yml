@@ -1,37 +1,35 @@
 name: Build and release
 
-# Every push and PR to main is vetted, tested and built for Linux. A push to
-# main whose commit message contains "release:" also builds macOS and Windows
-# and publishes v<VERSION.txt> as a GitHub release.
-#
-# site/ and wiki/ changes have their own workflows.
+# Runs only when started by hand: the Actions tab ("Run workflow") or the
+# Discord bot's /github command. Each run vets, tests and builds for Linux.
+# With "release" ticked it also builds macOS and Windows and publishes
+# v<VERSION.txt> from main as a GitHub release.
 
 on:
-  push:
-    branches: [main]
-    paths-ignore: ["site/**", "wiki/**"]
-  pull_request:
-    branches: [main]
-    paths-ignore: ["site/**", "wiki/**"]
   workflow_dispatch:
     inputs:
       pr_number:
-        description: PR number to build instead of the pushed commit
+        description: PR number to build instead of main
         required: false
         type: string
+      release:
+        description: Publish a release of main
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    # This job can run a PR's code (pull_request, or a dispatch with
-    # pr_number), so it gets no token at all. The repo is public; checkout
-    # works anonymously.
-    permissions: {}
+    # This job can run a PR's code (a dispatch with pr_number), so its token
+    # can only read. The repo is private, so checkout needs that much.
+    permissions:
+      contents: read
     env:
       # Same condition as the release job's `if`. The Build/ scripts upx the
       # binaries when COMPRESS is true.
-      RELEASE_BUILD: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:') }}
-      COMPRESS: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:') }}
+      RELEASE_BUILD: ${{ inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main' }}
+      COMPRESS: ${{ inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main' }}
 
     steps:
       - name: Check pr_number
@@ -46,7 +44,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
+          ref: ${{ (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
           persist-credentials: false
 
       - uses: actions/setup-go@v7
@@ -56,7 +54,7 @@ jobs:
           # runs untrusted code under main's cache scope, and whatever it saved
           # would be restored by later runs on main. A pull_request run gets
           # its own scope, so it can't poison main's.
-          cache: ${{ github.event_name != 'workflow_dispatch' }}
+          cache: ${{ inputs.pr_number == '' }}
 
       - name: Download modules
         run: go mod tidy
@@ -112,7 +110,7 @@ jobs:
 
   release:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'release:')
+    if: inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
     permissions:
       contents: write

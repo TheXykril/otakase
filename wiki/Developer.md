@@ -24,7 +24,7 @@ go vet ./...
 go test -short -race ./...
 ```
 
-CI runs the same `go vet` and tests plus a Linux build on every pull request.
+CI runs the same `go vet` and tests plus a Linux build when started by hand (Actions tab, or `/github` in Discord); it never runs on a push or pull request by itself.
 The first build downloads the Go modules listed in `go.sum`.
 `Build/ci-local` runs the same checks locally.
 
@@ -80,7 +80,7 @@ template. Version numbering and how a release is cut are on
 ## Editing this wiki
 
 The wiki is kept in the [`wiki/`](https://github.com/TheXykril/otakase/tree/main/wiki)
-folder of the main repository. A workflow copies it here on every push to
-`main`, so edit the files there; edits made on the wiki directly are
-overwritten by the next sync. Pages for users go at the top level; developer
+folder of the main repository. The Wiki sync workflow copies it here when
+started (Actions tab, or `/github workflow:wiki` in Discord), so edit the files
+there; edits made on the wiki directly are overwritten by the next sync. Pages for users go at the top level; developer
 pages are named `Developer-*.md` and listed in the sidebar's Developer section.

@@ -5,17 +5,13 @@ name: Windows installer check
 # installs it silently the way winget does, checks that otakase and otk run
 # from PATH, then uninstalls it and checks PATH is clean again.
 
+# Run it by hand (Actions tab or the bot's /github command) after changing
+# Build/otakase-windows-build.iss or Build/otk.cmd.
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - Build/otakase-windows-build.iss
-      - Build/otk.cmd
-      - .github/workflows/installer-check.yml
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   installer:

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.27.0
+
+- **`/github`** (server admins only) starts a GitHub workflow from Discord:
+  a build, a release (`release:true`), a dev build, the site, the wiki sync,
+  the installer check, winget, the Discord release post or the provider
+  check. The bot's `github_token` needs Actions: Read and write.
+
 ## 1.26.0
 
 ### Otakase app link

@@ -39,9 +39,11 @@ entries for users, opening with a bold sentence that stands on its own. A
 `## Unreleased` section at the top, if there is one, is what a dev build
 offers.
 
-CI keys off the `release:` prefix: it builds every platform, tags
-`vYY.DROP.HOTFIX`, publishes the GitHub release and builds the Windows
-installer with that version.
+Push that commit, then start the **Build and release** workflow with
+*release* ticked (Actions tab, or `/github workflow:build release:true` in
+Discord). It builds every platform from `main`, tags `vYY.DROP.HOTFIX`,
+publishes the GitHub release and builds the Windows installer with that
+version. Workflows never run on a push or pull request by themselves.
 
 ## winget
 

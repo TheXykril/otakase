@@ -2,10 +2,8 @@ name: Site
 
 # Publishes site/ to GitHub Pages. Pages must be set to deploy from
 # "GitHub Actions" in the repository settings.
+# Runs only when started by hand (Actions tab or the bot's /github command).
 on:
-  push:
-    branches: [main]
-    paths: ["site/**", ".github/workflows/site.yml"]
   workflow_dispatch:
 
 permissions:
