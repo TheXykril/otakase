@@ -24,7 +24,10 @@ go vet ./...
 go test -short -race ./...
 ```
 
-CI runs the same `go vet` and tests plus a Linux build when started by hand (Actions tab, or `/github` in Discord); it never runs on a push or pull request by itself.
+CI runs the same `go vet` and tests plus a Linux build when started by hand (Actions tab, or `/github` in Discord); it never runs on a push or pull request by itself. To try a pull request,
+start it with that PR's number (`/github workflow:build pr:12`); when it
+finishes, the run's page has an `otakase-binaries` download under Artifacts
+with Linux, macOS and Windows builds, kept for 7 days.
 The first build downloads the Go modules listed in `go.sum`.
 `Build/ci-local` runs the same checks locally.
 

@@ -29,7 +29,6 @@ jobs:
     env:
       # Same condition as the release job's `if`. The Build/ scripts upx the
       # binaries when COMPRESS is true.
-      RELEASE_BUILD: ${{ inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main' }}
       COMPRESS: ${{ inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main' }}
 
     steps:
@@ -74,10 +73,9 @@ jobs:
           mkdir -p release/linux
           mv otakase-linux-x86_64 otakase-linux-arm64 release/linux/
 
-      # macOS and Windows are only needed for a release. Both are plain Go
-      # cross-compiles on this runner.
+      # Every run builds all platforms (plain Go cross-compiles on this
+      # runner), so a pull request's build can be downloaded and tried.
       - name: Build macOS
-        if: env.RELEASE_BUILD == 'true'
         run: |
           ./Build/buildmac-x86_64
           ./Build/buildmac-arm64
@@ -90,14 +88,13 @@ jobs:
           mv otakase-macos-x86_64 otakase-macos-arm64 otakase-macos-universal release/macos/
 
       - name: Build Windows
-        if: env.RELEASE_BUILD == 'true'
         run: |
           ./Build/buildwindows
           mkdir -p release/windows
           mv otakase-windows-x86_64.exe release/windows/
 
-      # Only linux/ exists outside a release build, which is fine: nothing
-      # downloads this artifact then.
+      # The release job uses this, and it is the download for trying a
+      # build: the run's page lists it under Artifacts.
       - uses: actions/upload-artifact@v7
         with:
           name: otakase-binaries
@@ -106,8 +103,8 @@ jobs:
             release/linux/otakase-linux-arm64
             release/macos/otakase-macos-*
             release/windows/otakase-windows-x86_64.exe
-          retention-days: 1
-          if-no-files-found: warn
+          retention-days: 7
+          if-no-files-found: error
 
   # Installs and uninstalls the Windows installer (built from stand-in
   # binaries) and checks PATH, so a broken installer never gets released.

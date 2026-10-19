@@ -169,8 +169,11 @@ func (b *bot) githubCommand(i *discordgo.InteractionCreate) {
 		if inputs["release"] == "true" {
 			what = "Release build"
 		}
-		return &discordgo.MessageEmbed{Title: what + " started", Color: shu,
-				Description: "It shows up in the Actions tab within a few seconds."},
+		desc := "It shows up in the Actions tab within a few seconds."
+		if w.key == "build" {
+			desc += " When it's done, the run's page has the builds to download under **Artifacts**."
+		}
+		return &discordgo.MessageEmbed{Title: what + " started", Color: shu, Description: desc},
 			linkButtons("Open runs", repoURL+"/actions/workflows/"+w.file)
 	})
 }
