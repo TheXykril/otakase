@@ -16,6 +16,7 @@ import (
 // The repository's workflows only run when started by hand. /github starts
 // one from Discord, so builds, releases, the site and the wiki can be kicked
 // off from a phone. Only server admins can use it: a release is public.
+// Winget and the Discord release post aren't listed: a release runs both.
 
 // workflowsURL is a variable so tests can point it at a fake server.
 var workflowsURL = "https://api.github.com/repos/TheXykril/otakase/actions/workflows"
@@ -33,8 +34,6 @@ var ghWorkflows = []ghWorkflow{
 	{key: "site", file: "site.yml", label: "Site"},
 	{key: "wiki", file: "wiki-sync.yml", label: "Wiki sync"},
 	{key: "installer", file: "installer-check.yml", label: "Windows installer check"},
-	{key: "winget", file: "winget.yml", label: "Winget", takesVersion: true},
-	{key: "discord-post", file: "discord-release.yml", label: "Discord release post", needsVersion: true, takesVersion: true},
 	{key: "providers", file: "provider-canary.yml", label: "Provider check"},
 }
 
@@ -58,7 +57,7 @@ func init() {
 			{Type: discordgo.ApplicationCommandOptionString, Name: "workflow", Description: "Which workflow to start", Required: true, Choices: choices},
 			{Type: discordgo.ApplicationCommandOptionBoolean, Name: "release", Description: "Build and release: also publish a release of main (default off)"},
 			{Type: discordgo.ApplicationCommandOptionInteger, Name: "pr", Description: "Build and release: build this pull request instead of main", MinValue: ptr(1.0)},
-			{Type: discordgo.ApplicationCommandOptionString, Name: "version", Description: "Dev build, Winget, Discord post: the version, e.g. 26.8.0"},
+			{Type: discordgo.ApplicationCommandOptionString, Name: "version", Description: "Dev build: the version it is heading to, e.g. 26.8.0"},
 		}}, (*bot).githubCommand)
 }
 

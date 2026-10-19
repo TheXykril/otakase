@@ -43,7 +43,7 @@ Push that commit, then start the **Build and release** workflow with
 *release* ticked (Actions tab, or `/github workflow:build release:true` in
 Discord). It builds every platform from `main`, tags `vYY.DROP.HOTFIX`,
 publishes the GitHub release and builds the Windows installer with that
-version. Workflows never run on a push or pull request by themselves.
+version, then submits it to winget and posts it in Discord. Workflows never run on a push or pull request by themselves.
 
 ## winget
 
