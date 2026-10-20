@@ -697,10 +697,6 @@ func TestCastSessionDropsLinksOnlyThisProcessServes(t *testing.T) {
 	remote := "https://example.test/master.m3u8"
 	anime.Ep.Links = []string{local, remote}
 
-	restore := isProcessLocalLink
-	isProcessLocalLink = func(link string) bool { return link == local }
-	defer func() { isProcessLocalLink = restore }()
-
 	path, err := writeCastSession(config, anime, "Office TV")
 	if err != nil {
 		t.Fatalf("writeCastSession: %v", err)

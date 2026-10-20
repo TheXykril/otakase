@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/thexykril/otakase/internal/torrentstream"
 )
 
 // castSessionVersion is the schema of the handoff file. A child reading a
@@ -171,10 +170,21 @@ func writeCastSession(config *Config, anime *Anime, device string) (string, erro
 }
 
 // isProcessLocalLink reports a link only this process can serve. A torrent is
-// streamed from a server inside otakase, and that server closes when this
-// process exits -- which, on a handoff, is straight after spawning the window.
-// A variable so tests need no torrent client.
-var isProcessLocalLink = torrentstream.IsStreamURL
+// streamed from a server inside otakase, and anineko's streams go through a
+// local proxy; both close when this process exits -- which, on a handoff, is
+// straight after spawning the window. Any loopback link is one of those, since
+// no provider hands out a link to the viewer's own machine.
+func isProcessLocalLink(link string) bool {
+	parsed, err := url.Parse(link)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Hostname()) {
+	case "127.0.0.1", "localhost", "::1":
+		return true
+	}
+	return false
+}
 
 // handOffLinks is the links the spawned window can still open. Without the
 // ones served from this process it has none, and resolves the episode itself
