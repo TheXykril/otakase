@@ -685,3 +685,31 @@ func TestUntrackedTitleKeyIgnoresPunctuationOnly(t *testing.T) {
 		t.Error("a sequel matched the original")
 	}
 }
+
+// A torrent episode was handed to the cast window as a link to the torrent
+// server in the process that picked it. That process exits once the window is
+// open, so ffmpeg in the window was refused the connection. The window has to
+// resolve the episode itself instead.
+func TestCastSessionDropsLinksOnlyThisProcessServes(t *testing.T) {
+	config := testCastConfig(t)
+	anime := testCastAnime()
+	local := "http://127.0.0.1:43767/6e000c0e37cbfc988d5d45e3a16a2af85b2a47b7"
+	remote := "https://example.test/master.m3u8"
+	anime.Ep.Links = []string{local, remote}
+
+	restore := isProcessLocalLink
+	isProcessLocalLink = func(link string) bool { return link == local }
+	defer func() { isProcessLocalLink = restore }()
+
+	path, err := writeCastSession(config, anime, "Office TV")
+	if err != nil {
+		t.Fatalf("writeCastSession: %v", err)
+	}
+	session, err := readCastSession(path)
+	if err != nil {
+		t.Fatalf("readCastSession: %v", err)
+	}
+	if len(session.Links) != 1 || session.Links[0] != remote {
+		t.Errorf("links = %v, want only %q", session.Links, remote)
+	}
+}
