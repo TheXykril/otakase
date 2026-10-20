@@ -181,7 +181,7 @@ func (p *Provider) GetEpisodeURL(config providers.PlaybackConfig, id string, epN
 }
 
 func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id string, epNo int, mode string) ([]string, error) {
-	releases, err := fetchReleases(p.feed, id)
+	releases, err := p.releasesForEpisode(id, epNo)
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +222,42 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 		return nil, fmt.Errorf("no dub release indexed for episode %d", epNo)
 	}
 	return nil, fmt.Errorf("no release indexed for episode %d", epNo)
+}
+
+// releasesForEpisode returns the show's releases, including epNo's when the
+// index has any.
+//
+// The feed holds only the newest 75 releases. A finished show that several
+// groups released fills that with its last few episodes, so the first ones are
+// missing from it even though the index has them; those are asked for by
+// number.
+func (p *Provider) releasesForEpisode(id string, epNo int) ([]Release, error) {
+	releases, err := fetchReleases(p.feed, id)
+	if err != nil || hasEpisode(releases, epNo) {
+		return releases, err
+	}
+	more, err := fetchReleases(p.feed, episodeQuery(id, epNo))
+	if err != nil {
+		providerhost.Log(fmt.Sprintf("%s: episode %d search failed: %v", p.name, epNo, err))
+		return releases, nil
+	}
+	return append(releases, more...), nil
+}
+
+// hasEpisode reports whether any playable release carries episode epNo.
+func hasEpisode(releases []Release, epNo int) bool {
+	for _, release := range playableReleases(releases) {
+		if release.Episode == epNo {
+			return true
+		}
+	}
+	return false
+}
+
+// episodeQuery searches for one episode of a show, numbered the way release
+// groups write it ("Show - 01").
+func episodeQuery(id string, epNo int) string {
+	return fmt.Sprintf("%s %02d", id, epNo)
 }
 
 // ResolveProviderID lets otakase recover when a stored id no longer matches how

@@ -137,7 +137,9 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 		return nil, nil, err
 	}
 	if len(detail.Servers) == 0 {
-		return nil, nil, fmt.Errorf("no servers offered for episode %d", epNo)
+		// The host lists some shows with every episode and no player at all,
+		// so finding the show says nothing about whether it plays.
+		return nil, nil, fmt.Errorf("listed, but no video offered for episode %d", epNo)
 	}
 
 	// Servers are tried in the order given; one being down is ordinary.
