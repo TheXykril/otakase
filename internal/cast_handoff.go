@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -119,7 +120,7 @@ func writeCastSession(config *Config, anime *Anime, device string) (string, erro
 		Title:          GetAnimeName(*anime),
 		EpisodeNumber:  anime.Ep.Number,
 		Duration:       anime.Ep.Duration,
-		Links:          anime.Ep.Links,
+		Links:          handOffLinks(anime.Ep.Links),
 		StreamReferrer: anime.Ep.StreamReferrer,
 		StreamHeaders:  anime.Ep.StreamHeaders,
 		SubtitleURL:    anime.Ep.SubtitleURL,
@@ -166,6 +167,36 @@ func writeCastSession(config *Config, anime *Anime, device string) (string, erro
 		return "", fmt.Errorf("cast: could not close the session file: %w", err)
 	}
 	return path, nil
+}
+
+// isProcessLocalLink reports a link only this process can serve. A torrent is
+// streamed from a server inside otakase, and anineko's streams go through a
+// local proxy; both close when this process exits -- which, on a handoff, is
+// straight after spawning the window. Any loopback link is one of those, since
+// no provider hands out a link to the viewer's own machine.
+func isProcessLocalLink(link string) bool {
+	parsed, err := url.Parse(link)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(parsed.Hostname()) {
+	case "127.0.0.1", "localhost", "::1":
+		return true
+	}
+	return false
+}
+
+// handOffLinks is the links the spawned window can still open. Without the
+// ones served from this process it has none, and resolves the episode itself
+// the way it does every episode after the first.
+func handOffLinks(links []string) []string {
+	kept := make([]string, 0, len(links))
+	for _, link := range links {
+		if !isProcessLocalLink(link) {
+			kept = append(kept, link)
+		}
+	}
+	return kept
 }
 
 // readCastSession loads a handoff file and deletes it.

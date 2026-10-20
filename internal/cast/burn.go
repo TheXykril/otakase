@@ -63,7 +63,7 @@ func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Enc
 
 	// Providers routinely disguise HLS segments as images, and ffmpeg's HLS
 	// demuxer rejects an extension it does not recognise.
-	args = append(args, HLSInputArgs()...)
+	args = append(args, InputArgs(streamURL)...)
 
 	// -headers is a per-input option: it applies only to the next -i.
 	args = append(args, inputHeaderArgs(referrer, headers)...)
