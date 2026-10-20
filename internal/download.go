@@ -3,10 +3,8 @@ package internal
 import (
 	"bufio"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -144,28 +142,9 @@ type ffmpegJob struct {
 }
 
 // wholeFile reports whether the stream is a single file rather than an HLS
-// playlist. The torrent provider serves the release itself from a local port,
-// and a direct link names its container. A playlist is always named as one:
-// anineko proxies its HLS through a local port too.
+// playlist; see cast.IsWholeFile.
 func (job ffmpegJob) wholeFile() bool {
-	if job.File {
-		return true
-	}
-	parsed, err := url.Parse(strings.TrimSpace(job.Stream))
-	if err != nil {
-		return false
-	}
-	switch strings.ToLower(path.Ext(parsed.Path)) {
-	case ".m3u8", ".m3u":
-		return false
-	case ".mkv", ".mp4", ".webm", ".avi", ".m4v":
-		return true
-	}
-	switch strings.ToLower(parsed.Hostname()) {
-	case "127.0.0.1", "localhost", "::1":
-		return true
-	}
-	return false
+	return job.File || cast.IsWholeFile(job.Stream)
 }
 
 // mp4 reports whether the output is MP4 rather than Matroska.
