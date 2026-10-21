@@ -48,19 +48,24 @@ func dubOnly(release Release) bool {
 // but it cannot undo playing the wrong audio.
 func matchesMode(release Release, mode string) bool {
 	if providers.NormalizeTranslationType(mode) == "dub" {
-		return dubMarkers.MatchString(release.Title)
+		return dubMarkers.MatchString(release.Title) && !foreignDub.MatchString(release.Title)
 	}
 	return true
 }
 
-// playableReleases drops batches and anything with no peers. A release nobody
+// foreignDub marks a dual-audio release whose second track is not English:
+// rips from Shahid, an Arabic service, carry its Arabic dub.
+var foreignDub = regexp.MustCompile(`(?i)\bshahid\b`)
+
+// playableReleases drops batches, anything with no peers and anything with
+// neither English audio nor English subtitles. A release nobody
 // is seeding cannot be played, so offering it would only produce a menu entry
 // that stalls, and a batch cannot answer "play episode 10" without fetching a
 // whole season.
 func playableReleases(releases []Release) []Release {
 	usable := make([]Release, 0, len(releases))
 	for _, release := range releases {
-		if release.Episode <= 0 || release.Seeders <= 0 {
+		if release.Episode <= 0 || release.Seeders <= 0 || notEnglish(release) {
 			continue
 		}
 		usable = append(usable, release)
@@ -87,12 +92,14 @@ func usableReleases(releases []Release, mode string) []Release {
 }
 
 func (p *Provider) SearchAnime(query, mode string) ([]providers.SelectionOption, error) {
-	releases, err := fetchReleases(p.feed, query)
+	releases, err := p.searchShow(query)
 	if err != nil {
 		return nil, err
 	}
 
-	// One series has many releases; the picker wants one row per show.
+	// One series has many releases; the picker wants one row per show and
+	// season. Seasons are told apart here because a search for the show finds
+	// them all, and the key is what later picks a season's episodes.
 	type series struct {
 		title    string
 		episodes map[int]struct{}
@@ -101,15 +108,19 @@ func (p *Provider) SearchAnime(query, mode string) ([]providers.SelectionOption,
 	// Deliberately mode-agnostic: a show exists whether or not it has the audio
 	// currently configured, and saying otherwise hides it completely.
 	grouped := map[string]*series{}
+	var order []string
 	for _, release := range playableReleases(releases) {
-		key := seriesKey(release.Title)
-		if key == "" {
+		base, _ := splitSeason(seriesKey(release.Title))
+		if base == "" {
 			continue
 		}
-		entry, ok := grouped[key]
+		title := seasonName(base, releaseSeason(release.Title))
+		group := normalizeName(title)
+		entry, ok := grouped[group]
 		if !ok {
-			entry = &series{title: key, episodes: map[int]struct{}{}}
-			grouped[key] = entry
+			entry = &series{title: title, episodes: map[int]struct{}{}}
+			grouped[group] = entry
+			order = append(order, group)
 		}
 		entry.episodes[release.Episode] = struct{}{}
 		if release.Seeders > entry.seeders {
@@ -122,9 +133,10 @@ func (p *Provider) SearchAnime(query, mode string) ([]providers.SelectionOption,
 	}
 
 	options := make([]providers.SelectionOption, 0, len(grouped))
-	for key, entry := range grouped {
+	for _, group := range order {
+		entry := grouped[group]
 		options = append(options, providers.SelectionOption{
-			Key:   key,
+			Key:   entry.title,
 			Title: entry.title,
 			Label: fmt.Sprintf("%s · %d episodes", entry.title, len(entry.episodes)),
 		})
@@ -132,23 +144,141 @@ func (p *Provider) SearchAnime(query, mode string) ([]providers.SelectionOption,
 	// Most-seeded first: the healthiest swarm is the likeliest correct match for
 	// what the user typed.
 	sort.SliceStable(options, func(i, j int) bool {
-		return grouped[options[i].Key].seeders > grouped[options[j].Key].seeders
+		return grouped[normalizeName(options[i].Key)].seeders > grouped[normalizeName(options[j].Key)].seeders
 	})
 	return options, nil
 }
 
+// searchShow searches for a show by name, and by its name without the season
+// as well when it names one: groups write a season as "S2", "Season 2" or
+// "2nd Season", and the index only matches the words given, so searching
+// "Dandadan 2nd Season" alone misses every "Dandadan - S02E05".
+func (p *Provider) searchShow(name string) ([]Release, error) {
+	releases, err := fetchReleases(p.feed, searchName(name))
+	base, _ := splitSeason(name)
+	if sameShowName(base, name) {
+		return releases, err
+	}
+	more, moreErr := fetchReleases(p.feed, searchName(base))
+	if err != nil {
+		return more, moreErr
+	}
+	if moreErr != nil {
+		providerhost.Log(fmt.Sprintf("%s: search for %q failed: %v", p.name, base, moreErr))
+	}
+	return mergeReleases(releases, more), nil
+}
+
+// mergeReleases joins two searches, each torrent once, best first.
+func mergeReleases(a, b []Release) []Release {
+	seen := make(map[string]struct{}, len(a)+len(b))
+	merged := make([]Release, 0, len(a)+len(b))
+	for _, release := range append(append([]Release{}, a...), b...) {
+		key := strings.ToLower(release.InfoHash) + release.Title
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, release)
+	}
+	sortReleasesByPreference(merged)
+	return merged
+}
+
+// showReleases narrows a search to the releases of the show id names, in its
+// own season.
+//
+// The index matches loosely -- it searches descriptions too, and does not need
+// every word -- so a search for a show also returns its other seasons, its
+// spin-offs, and now and then something else entirely. Groups also title one
+// show several ways ("Dandadan", "DAN DA DAN"), so a release is kept when its
+// name is the show's or one of the names the show goes by: a name that a
+// release mentioning the show by id is filed under, or gives as the show's
+// other name ("DAN DA DAN S02E09 ... (Dandadan)"). A name that only extends
+// one of those ("Kaijuu 8-gou - Narumi no Heijitsu" next to "Kaijuu 8-gou")
+// is a spin-off, not the show.
+func showReleases(id string, releases []Release) []Release {
+	base, season := splitSeason(id)
+	names := map[string]struct{}{normalizeName(base): {}}
+	for _, release := range releases {
+		// A spin-off mentions the show too, and its other names are the
+		// spin-off's.
+		if !containsName(release.Title, base) || extendsName(releaseName(release), base) {
+			continue
+		}
+		for _, name := range append([]string{releaseName(release)}, alternateNames(release.Title)...) {
+			if name != "" {
+				names[name] = struct{}{}
+			}
+		}
+	}
+	show := normalizeName(base)
+	for name := range names {
+		for other := range names {
+			if name != show && extendsName(name, other) {
+				delete(names, name)
+				break
+			}
+		}
+	}
+
+	kept := make([]Release, 0, len(releases))
+	for _, release := range releases {
+		if !inSeason(release, season) || !ofShow(release, names) {
+			continue
+		}
+		kept = append(kept, release)
+	}
+	return kept
+}
+
+// ofShow reports whether a release is filed under one of names, or mentions
+// one and is not a spin-off of any.
+func ofShow(release Release, names map[string]struct{}) bool {
+	name := releaseName(release)
+	if _, ok := names[name]; ok {
+		return true
+	}
+	mentioned := false
+	for known := range names {
+		if extendsName(name, known) {
+			return false
+		}
+		if containsName(release.Title, known) {
+			mentioned = true
+		}
+	}
+	return mentioned
+}
+
+// releaseName is the normalised show name a release is filed under, its season
+// taken out.
+func releaseName(release Release) string {
+	name, _ := splitSeason(seriesKey(release.Title))
+	return normalizeName(name)
+}
+
+// releasesOfShow is every release the index has for id's show and season.
+func (p *Provider) releasesOfShow(id string) ([]Release, error) {
+	releases, err := p.searchShow(id)
+	if err != nil {
+		return nil, err
+	}
+	return showReleases(id, releases), nil
+}
+
 func (p *Provider) EpisodesList(showID, mode string) ([]string, error) {
-	releases, err := fetchReleases(p.feed, showID)
+	releases, err := p.releasesOfShow(showID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Every release here already came back from a search for showID, so they are
-	// all releases of that show. Insisting the derived series key match exactly
-	// would drop most of them: groups title the same show differently -- one
-	// publishes "Saijo no Osewa", another "Rich Girl Caretaker", a third the full
-	// English name -- and the episodes then split across those spellings, so each
-	// looked like a separate show carrying a third of the season.
+	// Every release here is of showID's show and season. Insisting the derived
+	// series key match exactly would drop most of them: groups title the same
+	// show differently -- one publishes "Saijo no Osewa", another "Rich Girl
+	// Caretaker", a third the full English name -- and the episodes then split
+	// across those spellings, so each looked like a separate show carrying a
+	// third of the season.
 	seen := map[int]struct{}{}
 	for _, release := range usableReleases(releases, mode) {
 		seen[release.Episode] = struct{}{}
@@ -181,31 +311,12 @@ func (p *Provider) GetEpisodeURL(config providers.PlaybackConfig, id string, epN
 }
 
 func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id string, epNo int, mode string) ([]string, error) {
-	releases, err := p.releasesForEpisode(id, epNo)
+	candidates, err := p.episodeCandidates(id, epNo, mode)
 	if err != nil {
 		return nil, err
 	}
 
-	// Prefer releases titled the way the stored id spells the show, but do not
-	// require it: the same show is published under several spellings, and
-	// demanding an exact match makes episodes that exist look missing.
-	candidates := usableReleases(releases, mode)
-	wantSub := providers.NormalizeTranslationType(mode) != "dub"
-	sort.SliceStable(candidates, func(i, j int) bool {
-		if wantSub {
-			if a, b := dubOnly(candidates[i]), dubOnly(candidates[j]); a != b {
-				return b
-			}
-		}
-		return seriesKey(candidates[i].Title) == id && seriesKey(candidates[j].Title) != id
-	})
-
-	// fetchReleases already ordered by resolution then swarm health, so within
-	// each group the first match for this episode is the best one available.
 	for _, release := range candidates {
-		if release.Episode != epNo {
-			continue
-		}
 		providerhost.Log(fmt.Sprintf("%s: episode %d -> %q (%d seeders, %s)",
 			p.name, epNo, release.Title, release.Seeders, release.Size))
 
@@ -218,10 +329,52 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 		return []string{streamURL}, nil
 	}
 
-	if providers.NormalizeTranslationType(mode) == "dub" {
+	if len(candidates) == 0 && providers.NormalizeTranslationType(mode) == "dub" {
 		return nil, fmt.Errorf("no dub release indexed for episode %d", epNo)
 	}
-	return nil, fmt.Errorf("no release indexed for episode %d", epNo)
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("no release indexed for episode %d", epNo)
+	}
+	return nil, fmt.Errorf("no release of episode %d would start", epNo)
+}
+
+// episodeCandidates is every release of episode epNo in mode, best first.
+func (p *Provider) episodeCandidates(id string, epNo int, mode string) ([]Release, error) {
+	releases, err := p.releasesForEpisode(id, epNo, mode)
+	if err != nil {
+		return nil, err
+	}
+
+	// Prefer releases titled the way the stored id spells the show, but do not
+	// require it: the same show is published under several spellings, and
+	// demanding an exact match makes episodes that exist look missing.
+	var candidates []Release
+	for _, release := range usableReleases(releases, mode) {
+		if release.Episode == epNo {
+			candidates = append(candidates, release)
+		}
+	}
+	wantSub := providers.NormalizeTranslationType(mode) != "dub"
+	base, _ := splitSeason(id)
+	spelledAsID := func(release Release) bool {
+		name, _ := splitSeason(seriesKey(release.Title))
+		return sameShowName(name, base)
+	}
+	// fetchReleases already ordered by resolution then swarm health, so within
+	// each group the first is the best one available.
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if wantSub {
+			if a, b := dubOnly(candidates[i]), dubOnly(candidates[j]); a != b {
+				return b
+			}
+		}
+		// A swarm that can carry playback beats the preferred spelling.
+		if a, b := candidates[i].Seeders >= healthySeeders, candidates[j].Seeders >= healthySeeders; a != b {
+			return a
+		}
+		return spelledAsID(candidates[i]) && !spelledAsID(candidates[j])
+	})
+	return candidates, nil
 }
 
 // releasesForEpisode returns the show's releases, including epNo's when the
@@ -230,34 +383,58 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 // The feed holds only the newest 75 releases. A finished show that several
 // groups released fills that with its last few episodes, so the first ones are
 // missing from it even though the index has them; those are asked for by
-// number.
-func (p *Provider) releasesForEpisode(id string, epNo int) ([]Release, error) {
-	releases, err := fetchReleases(p.feed, id)
-	if err != nil || hasEpisode(releases, epNo) {
-		return releases, err
-	}
-	more, err := fetchReleases(p.feed, episodeQuery(id, epNo))
+// number, both ways groups write it: "Show 05" and "Show S02E05", since the
+// index matches whole words and "05" alone does not find "S02E05". The same
+// goes for an episode the feed carries only in a copy nobody seeds well, or
+// not in the audio asked for: the index often has better.
+func (p *Provider) releasesForEpisode(id string, epNo int, mode string) ([]Release, error) {
+	found, err := p.searchShow(id)
 	if err != nil {
-		providerhost.Log(fmt.Sprintf("%s: episode %d search failed: %v", p.name, epNo, err))
+		return nil, err
+	}
+	if releases := showReleases(id, found); hasHealthyEpisode(releases, epNo, mode) {
 		return releases, nil
 	}
-	return append(releases, more...), nil
+	for _, query := range episodeQueries(id, epNo) {
+		more, err := fetchReleases(p.feed, query)
+		if err != nil {
+			providerhost.Log(fmt.Sprintf("%s: episode %d search failed: %v", p.name, epNo, err))
+			continue
+		}
+		found = mergeReleases(found, more)
+	}
+	return showReleases(id, found), nil
 }
 
-// hasEpisode reports whether any playable release carries episode epNo.
-func hasEpisode(releases []Release, epNo int) bool {
-	for _, release := range playableReleases(releases) {
-		if release.Episode == epNo {
+// healthySeeders is a swarm big enough that searching on for a better copy of
+// an episode is not worth the wait.
+const healthySeeders = 10
+
+// hasHealthyEpisode reports whether a well-seeded release carries episode epNo
+// in mode. Asked for sub, a dub with no Japanese audio does not count: it is
+// only the last resort.
+func hasHealthyEpisode(releases []Release, epNo int, mode string) bool {
+	wantSub := providers.NormalizeTranslationType(mode) != "dub"
+	for _, release := range usableReleases(releases, mode) {
+		if wantSub && dubOnly(release) {
+			continue
+		}
+		if release.Episode == epNo && release.Seeders >= healthySeeders {
 			return true
 		}
 	}
 	return false
 }
 
-// episodeQuery searches for one episode of a show, numbered the way release
-// groups write it ("Show - 01").
-func episodeQuery(id string, epNo int) string {
-	return fmt.Sprintf("%s %02d", id, epNo)
+// episodeQueries search for one episode of a show, numbered the ways release
+// groups write it: "Show - 01" and "Show S01E01".
+func episodeQueries(id string, epNo int) []string {
+	base, season := splitSeason(id)
+	base = searchName(base)
+	return []string{
+		fmt.Sprintf("%s %02d", base, epNo),
+		fmt.Sprintf("%s S%02dE%02d", base, season, epNo),
+	}
 }
 
 // ResolveProviderID lets otakase recover when a stored id no longer matches how

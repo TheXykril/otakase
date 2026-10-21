@@ -43,7 +43,8 @@ var (
 	dashEpisode = regexp.MustCompile(`\s-\s(\d{1,4})(?:v\d)?\s*(?:[\[(]|$)`)
 	// batchMarkers identify a whole-season torrent. Those cannot answer "give me
 	// episode 10" without downloading the entire season, so they are skipped.
-	batchMarkers = regexp.MustCompile(`(?i)\b(batch|complete|season\s*\d+\s*(complete)?|\d{1,3}\s*[-~]\s*\d{1,3})\b`)
+	// "Season 2" alone is not one: weekly releases name their season too.
+	batchMarkers = regexp.MustCompile(`(?i)\b(batch|complete|\d{1,3}\s*[-~]\s*\d{1,3})\b`)
 )
 
 // parseRelease reads what can be known from a release title.
@@ -96,8 +97,10 @@ func stripQualityHints(title string) string {
 // releases of one show together: group prefix, episode number and all the
 // bracketed technical tags removed.
 var (
-	bracketed    = regexp.MustCompile(`[\[(][^\])]*[\])]`)
-	episodeTail  = regexp.MustCompile(`(?i)\s-\s\d{1,4}(v\d)?(\s+-\s.*)?\s*$|\s(?i:S\d{1,2}E\d{1,4}).*$`)
+	bracketed = regexp.MustCompile(`[\[(][^\])]*[\])]`)
+	// Everything after the episode number is the episode title or technical
+	// tags left outside brackets ("Show S2 - 11 x265 10bit"), never the show.
+	episodeTail  = regexp.MustCompile(`(?i)\s-\s\d{1,4}(v\d)?\b.*$|\s(?i:S\d{1,2}E\d{1,4}).*$`)
 	multiSpaceRE = regexp.MustCompile(`\s+`)
 )
 
@@ -112,4 +115,156 @@ func seriesKey(title string) string {
 	s = episodeTail.ReplaceAllString(s, "")
 	s = multiSpaceRE.ReplaceAllString(s, " ")
 	return strings.TrimSpace(strings.Trim(strings.TrimSpace(s), "-~:"))
+}
+
+// seasonMarker matches the ways a title names its season: "S2", "S02E05",
+// "Season 2", "2nd Season", and the roman "II" to "IV" that sequels use (upper
+// case only: lower-case "ii" is too often part of a word).
+var seasonMarker = regexp.MustCompile(`(?i)\bS(\d{1,2})(?:E\d{1,4})?\b|\bseason\s*(\d{1,2})\b|\b(\d{1,2})(?:st|nd|rd|th)\s+season\b|(?-i:\b(II|III|IV)\b)`)
+
+var romanSeasons = map[string]int{"II": 2, "III": 3, "IV": 4}
+
+// releaseSeason is the season a title names, or 0 when it names none. Groups
+// that number a sequel on from the first season ("Show - 24") name none, so 0
+// means "unknown", not "first".
+func releaseSeason(title string) int {
+	m := seasonMarker.FindStringSubmatch(title)
+	if m == nil {
+		return 0
+	}
+	if m[4] != "" {
+		return romanSeasons[m[4]]
+	}
+	for _, digits := range m[1:4] {
+		if digits != "" {
+			n, _ := strconv.Atoi(digits)
+			return n
+		}
+	}
+	return 0
+}
+
+// splitSeason takes the season out of a show name: "Dandadan 2nd Season" is
+// "Dandadan" and 2. A name with no season is season 1.
+func splitSeason(name string) (string, int) {
+	season := releaseSeason(name)
+	base := seasonMarker.ReplaceAllString(name, " ")
+	base = multiSpaceRE.ReplaceAllString(base, " ")
+	base = strings.TrimSpace(strings.Trim(strings.TrimSpace(base), "-~:|"))
+	if base == "" {
+		return strings.TrimSpace(name), 1
+	}
+	if season < 1 {
+		season = 1
+	}
+	return base, season
+}
+
+// seasonName is how a show's key names a season: the first season is the
+// bare name, any later one gets " S2".
+func seasonName(base string, season int) string {
+	if season <= 1 {
+		return base
+	}
+	return base + " S" + strconv.Itoa(season)
+}
+
+// inSeason reports whether a release can belong to season. A release naming
+// no season counts as the first: a sequel numbered on from it ("Show - 24")
+// cannot be told apart from the first season without knowing its length, and
+// asking for episode 5 of the second season must never play the first's.
+func inSeason(release Release, season int) bool {
+	got := releaseSeason(release.Title)
+	if season <= 1 {
+		return got <= 1
+	}
+	return got == season
+}
+
+var (
+	// foreignMarkers name a language other than English for the audio or the
+	// subtitles. sukebei indexes every language under one category, so its
+	// best-seeded copy of an episode is often a Latin American dub or carries
+	// Spanish subtitles only.
+	foreignMarkers = regexp.MustCompile(`(?i)\b(latino|lat|esp|español|espanol|spanish|castellano|doblaje|pt[\s-]?br|portugu[eê]s|dublado|legendado|vostfr|french|fran[cç]ais|gersub|german|deutsch|italian|italiano|russian|arabic|chinese|mandarin|cantonese|indonesian|vietnamese|thai|big5|chs|cht)\b|简体|繁体|简繁|繁中|简中|内封|内嵌`)
+	// englishMarkers say English is there after all.
+	englishMarkers = regexp.MustCompile(`(?i)\b(eng|english)\b`)
+	// rawMarker is an untranslated release: Japanese audio, no subtitles.
+	rawMarker = regexp.MustCompile(`(?i)\braw\b`)
+)
+
+// notEnglish reports a release that carries neither English audio nor English
+// subtitles: of no use to anyone otakase plays for.
+func notEnglish(release Release) bool {
+	if rawMarker.MatchString(release.Title) {
+		return true
+	}
+	return foreignMarkers.MatchString(release.Title) && !englishMarkers.MatchString(release.Title)
+}
+
+// sameShowName compares two show names the way groups vary them: case,
+// punctuation and spacing aside.
+func sameShowName(a, b string) bool {
+	return normalizeName(a) == normalizeName(b)
+}
+
+var nameNoise = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+
+func normalizeName(name string) string {
+	return strings.TrimSpace(nameNoise.ReplaceAllString(strings.ToLower(name), " "))
+}
+
+// containsName reports whether a title mentions a show name, as whole words.
+func containsName(title, name string) bool {
+	name = normalizeName(name)
+	return name != "" && strings.Contains(" "+normalizeName(title)+" ", " "+name+" ")
+}
+
+// extendsName reports a normalised name that is another one with more words
+// after it: "sousou no frieren marumaru no mahou" extends "sousou no frieren".
+func extendsName(name, of string) bool {
+	of = normalizeName(of)
+	return of != "" && name != of && strings.HasPrefix(name, of+" ")
+}
+
+// strayDash is a dash standing apart from a word, as in "Frieren- Beyond" or
+// "Show - Subtitle".
+var strayDash = regexp.MustCompile(`\s+-+\s*|\s*-+\s+|-+$`)
+
+// searchName is a show name as the index can search for it. The index matches
+// words as written, so "Journey's" must stay as it is, but a dash standing on
+// its own reads as "without the next word" and finds nothing.
+func searchName(name string) string {
+	return strings.TrimSpace(multiSpaceRE.ReplaceAllString(strayDash.ReplaceAllString(name, " "), " "))
+}
+
+var (
+	// alternateName is a name a release gives its show besides the one it is
+	// filed under: in parentheses, or after a "|".
+	alternateName = regexp.MustCompile(`\(([^)]*)\)|\|([^|\[(]*)`)
+	// technicalTag is a parenthesised tag that is not a name at all.
+	technicalTag = regexp.MustCompile(`(?i)\b(subs?|dub(bed)?|audio|web|web-?dl|webrip|bd|bdrip|hevc|avc|x26[45]|h\s?26[45]|aac|flac|opus|\d{3,4}p|batch|weekly|multi|dual|uncensored|ova|eng|english)\b`)
+	letters      = regexp.MustCompile(`\p{L}`)
+)
+
+// alternateNames are the other names a release title gives its show,
+// normalised, season taken out: "(Kaijuu 8-gou, Dual-Audio)" names
+// "kaijuu 8 gou".
+func alternateNames(title string) []string {
+	var names []string
+	for _, m := range alternateName.FindAllStringSubmatch(title, -1) {
+		for _, part := range []string{m[1], m[2]} {
+			part, _, _ = strings.Cut(part, ",")
+			part, _, _ = strings.Cut(part, "|")
+			part = strings.TrimSpace(part)
+			if part == "" || technicalTag.MatchString(part) || len(letters.FindAllString(part, -1)) < 5 {
+				continue
+			}
+			name, _ := splitSeason(part)
+			if name = normalizeName(name); name != "" {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
 }

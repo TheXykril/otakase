@@ -1,6 +1,7 @@
 package nyaa
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -32,8 +33,9 @@ func TestEpisodeMissingFromFeedIsSearchedByNumber(t *testing.T) {
 	seedFeed(t, p.feed, show+" 01", []Release{
 		parseSeeded("[SubsPlease] Rokudou no Onna-tachi - 01 (1080p) [B01742B8].mkv", 4),
 	})
+	seedFeed(t, p.feed, show+" S01E01", nil)
 
-	releases, err := p.releasesForEpisode(show, 1)
+	releases, err := p.releasesForEpisode(show, 1, "sub")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +50,7 @@ func TestEpisodeInFeedIsNotSearchedAgain(t *testing.T) {
 	p := New()
 	seedFeed(t, p.feed, show, subOnlySeason())
 
-	releases, err := p.releasesForEpisode(show, 10)
+	releases, err := p.releasesForEpisode(show, 10, "sub")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,11 +59,27 @@ func TestEpisodeInFeedIsNotSearchedAgain(t *testing.T) {
 	}
 }
 
-func TestEpisodeQueryPadsLikeReleaseGroups(t *testing.T) {
-	cases := map[int]string{1: "Show 01", 12: "Show 12", 101: "Show 101"}
-	for episode, want := range cases {
-		if got := episodeQuery("Show", episode); got != want {
-			t.Errorf("episodeQuery(%d) = %q, want %q", episode, got, want)
+func TestEpisodeQueriesNumberLikeReleaseGroups(t *testing.T) {
+	cases := map[string][]string{
+		"Show":            {"Show 01", "Show S01E01"},
+		"Show S2":         {"Show 01", "Show S02E01"},
+		"Show 2nd Season": {"Show 01", "Show S02E01"},
+	}
+	for id, want := range cases {
+		if got := episodeQueries(id, 1); !slices.Equal(got, want) {
+			t.Errorf("episodeQueries(%q, 1) = %q, want %q", id, got, want)
 		}
 	}
+	if got := episodeQueries("Show", 101)[0]; got != "Show 101" {
+		t.Errorf("episode 101 searched as %q", got)
+	}
+}
+
+func hasEpisode(releases []Release, epNo int) bool {
+	for _, release := range playableReleases(releases) {
+		if release.Episode == epNo {
+			return true
+		}
+	}
+	return false
 }
