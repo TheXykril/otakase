@@ -102,8 +102,9 @@ func openSeries(config *Config, store *movies.Store, lib *movieLibrary, show mov
 		} else if !entry.Watched {
 			options = append(options, SelectionOption{Key: movieListOnKey, Label: "Add to watchlist", Icon: icons.Add})
 		}
+		options = append(options, SelectionOption{Key: movieElsewhereKey, Label: "Watch on another site", Icon: icons.Provider})
 		if known {
-			options = append(options, SelectionOption{Key: movieForgetKey, Label: "Remove from history", Icon: icons.Dropped})
+			options = append(options, SelectionOption{Key: movieForgetKey, Label: "Remove from your lists", Icon: icons.Dropped})
 		}
 
 		EnterAppScreen()
@@ -125,6 +126,10 @@ func openSeries(config *Config, store *movies.Store, lib *movieLibrary, show mov
 					start = entry.Position
 				}
 				playEpisodes(config, store, lib, show, episodes, index, start)
+			}
+		case movieElsewhereKey:
+			if moved, ok := watchElsewhere(config, store, lib, show); ok {
+				show = moved
 			}
 		case movieCastKey:
 			toggleCastToDevice(config)

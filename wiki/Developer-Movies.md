@@ -192,7 +192,11 @@ runtime, unless played here later or watched since. A film new to the
 history is added as vidsrc's (keyed by IMDb id), matched first against other
 providers' entries with `SameMovie`, and its poster is looked up from IMDb's
 suggestions in the background. If any list cannot be read, nothing is
-changed. Trakt failures are only logged. A movie counts as watched at
+changed. "Watch on another site" in a movie's or series' menu
+(`internal/movies_elsewhere.go`) searches the other providers by its title and
+original title, the same film first, and `Store.Move` hands its entry (lists,
+rating, where it was left, IMDb id) to the one picked, so later Trakt reads
+match it there. Trakt failures are only logged. A movie counts as watched at
 `PercentageToMarkComplete`. The position is saved every 15 seconds and when
 the player closes. Nothing is sent anywhere.
 

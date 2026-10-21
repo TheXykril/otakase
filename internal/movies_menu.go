@@ -538,8 +538,9 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		} else if !entry.Watched {
 			options = append(options, SelectionOption{Key: movieListOnKey, Label: "Add to watchlist", Icon: icons.Add})
 		}
+		options = append(options, SelectionOption{Key: movieElsewhereKey, Label: "Watch on another site", Icon: icons.Provider})
 		if known {
-			options = append(options, SelectionOption{Key: movieForgetKey, Label: "Remove from history", Icon: icons.Dropped})
+			options = append(options, SelectionOption{Key: movieForgetKey, Label: "Remove from your lists", Icon: icons.Dropped})
 		}
 
 		EnterAppScreen()
@@ -558,6 +559,10 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		case movieRestartKey:
 			playMovie(config, store, lib, movie, 0)
 			return
+		case movieElsewhereKey:
+			if moved, ok := watchElsewhere(config, store, lib, movie); ok {
+				movie = moved
+			}
 		case movieCastKey:
 			toggleCastToDevice(config)
 		case movieDownloadKey:

@@ -178,3 +178,40 @@ func (s *Store) SetPoster(key, poster string) error {
 	entry.Poster = poster
 	return s.save()
 }
+
+// Move hands what is remembered about a movie over to the same movie on
+// another provider: the lists it is on, its rating and where it was left.
+// Nothing changes for Trakt, so OnChange is not told.
+func (s *Store) Move(from, to Movie) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	old, ok := s.data.Movies[from.Key()]
+	if !ok || from.Key() == to.Key() {
+		return nil
+	}
+	moved := *old
+	if existing, ok := s.data.Movies[to.Key()]; ok {
+		// Keep what the other provider's entry knew of itself.
+		moved.Server, moved.SubtitleLanguage = existing.Server, existing.SubtitleLanguage
+	} else {
+		moved.Server, moved.SubtitleLanguage = "", ""
+	}
+	moved.Provider, moved.Path = to.Provider, to.Path
+	for _, field := range []struct {
+		dst *string
+		src string
+	}{
+		{&moved.Title, to.Title}, {&moved.Original, to.Original},
+		{&moved.Year, to.Year}, {&moved.Poster, to.Poster},
+	} {
+		if field.src != "" {
+			*field.dst = field.src
+		}
+	}
+	if moved.IMDb == "" {
+		moved.IMDb = to.IMDb
+	}
+	delete(s.data.Movies, from.Key())
+	s.data.Movies[to.Key()] = &moved
+	return s.save()
+}
