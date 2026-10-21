@@ -103,6 +103,11 @@ type Config struct {
 	// seconds and the stream is rebuilt a few times early on as more of them
 	// are read.
 	CastWaitForSubtitles bool `config:"CastWaitForSubtitles"`
+	// CastSubtitleSize is the size of dialogue in burned ASS subtitles, as a
+	// percentage of what the release wrote: they are sized for a screen up
+	// close, and a TV is watched from across the room. Signs and typesetting
+	// keep their size.
+	CastSubtitleSize int `config:"CastSubtitleSize"`
 	// CastEncoder forces the encoder used for that: "vaapi", "software", or
 	// empty to detect what this machine can actually do.
 	CastEncoder string `config:"CastEncoder"`

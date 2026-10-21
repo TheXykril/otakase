@@ -61,6 +61,9 @@ type castStreamSource struct {
 	// encoder re-encodes the video, whenever it is drawn on or restarted at an
 	// offset. Left empty, chooseEncoder picks it the first time it is needed,
 	// so a cast that is never re-encoded never pays for the hardware probe.
+	// subtitleSize is CastSubtitleSize: how much larger ASS dialogue is drawn,
+	// as a percentage.
+	subtitleSize  int
 	encoder       cast.Encoder
 	chooseEncoder func() cast.Encoder
 	// maps names the video and audio to play, from cast.SelectTracks; nil
@@ -130,6 +133,10 @@ func (s *castStreamSource) start(startAt float64) (stream, error) {
 			// move at all.
 			Log(fmt.Sprintf("cast: %v", err))
 			shifted = subtitlePath
+		} else if err := cast.ScaleDialogueStyles(shifted, s.subtitleSize); err != nil {
+			// Resized in this generation's copy only, never the original, so
+			// every generation grows them once.
+			Log(fmt.Sprintf("cast: %v", err))
 		}
 		args = cast.BuildBurnArgsWithFonts(s.streamURL, s.referrer, shifted, fontsDir, dir, s.reencoder(), startAt, s.maps, s.headers)
 	}

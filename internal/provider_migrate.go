@@ -161,6 +161,7 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"LinkMenus": "26.8.0",
 		// 26.9.0 — wait for a torrent's own subtitles before casting
 		"CastWaitForSubtitles": "26.9.0",
+		"CastSubtitleSize":     "26.9.0",
 	}
 }
 

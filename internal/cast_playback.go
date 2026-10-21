@@ -508,12 +508,13 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 	// vendored library cannot reach. Burning costs a re-encode, so it happens
 	// only when there is something to burn.
 	source := &castStreamSource{
-		ffmpeg:    ffmpeg,
-		streamURL: streamURL,
-		referrer:  referrer,
-		headers:   anime.Ep.StreamHeaders,
-		rootDir:   streamDir,
-		maps:      tracks.Maps,
+		ffmpeg:       ffmpeg,
+		streamURL:    streamURL,
+		referrer:     referrer,
+		headers:      anime.Ep.StreamHeaders,
+		rootDir:      streamDir,
+		subtitleSize: config.CastSubtitleSize,
+		maps:         tracks.Maps,
 		chooseEncoder: func() cast.Encoder {
 			return castBurnEncoder(config, ffmpeg)
 		},

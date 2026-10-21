@@ -90,6 +90,7 @@ func defaultConfigMap() map[string]string {
 		"CastDiscoveryPort":    "8011",
 		"CastBurnSubtitles":    "true",
 		"CastWaitForSubtitles": "false",
+		"CastSubtitleSize":     "120",
 		"CastEncoder":          "",
 		"CastNextEpisode":      CastNextEpisodeCountdown,
 		"KodiHost":             "",
