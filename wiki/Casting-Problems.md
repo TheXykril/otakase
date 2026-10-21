@@ -102,6 +102,9 @@ directly), since `ufw allow` writes the config *and* loads it.
 - If burning is on and subtitles still don't show, the provider likely
   supplied no subtitle track for that episode/mode combination. Check
   `otakase-debug.log` for a line saying why burning was skipped.
+- On a torrent, subtitles appear only once the whole file has downloaded:
+  they are stored inside it. A slow swarm means a long wait. Only English or
+  unlabelled text subtitles are drawn; picture subtitles (PGS) are not.
 - A Chromecast can only ever show subtitles that are burned into the video.
   It has no support for reading a separate subtitle track from the stream.
 

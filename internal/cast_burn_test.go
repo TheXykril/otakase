@@ -37,3 +37,18 @@ func TestCastShouldBurnSubtitles(t *testing.T) {
 		})
 	}
 }
+
+// A release with its subtitles inside the file has no URL, and is decided by
+// the same rule: drawn over Japanese, not over English.
+func TestCastWantsSubtitlesWithoutAURL(t *testing.T) {
+	on := &Config{CastBurnSubtitles: true, SubOrDub: "sub"}
+	if !castWantsSubtitles(on, &Anime{}, "ja") {
+		t.Error("Japanese audio with no subtitle URL was refused subtitles")
+	}
+	if castWantsSubtitles(on, &Anime{}, "en") {
+		t.Error("English audio was given subtitles")
+	}
+	if castWantsSubtitles(&Config{CastBurnSubtitles: false}, &Anime{}, "ja") {
+		t.Error("subtitles were drawn with CastBurnSubtitles off")
+	}
+}

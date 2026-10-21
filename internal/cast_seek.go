@@ -47,6 +47,9 @@ type castStreamSource struct {
 	// every shift is taken from it, so offsets stay absolute rather than
 	// compounding with each seek.
 	subtitlePath string
+	// fontsDir holds the fonts a release ships for its subtitles, when they
+	// were read out of the file; empty otherwise.
+	fontsDir string
 	// encoder re-encodes the video, whenever it is drawn on or restarted at an
 	// offset. Left empty, chooseEncoder picks it the first time it is needed,
 	// so a cast that is never re-encoded never pays for the hardware probe.
@@ -102,7 +105,7 @@ func (s *castStreamSource) start(startAt float64) (stream, error) {
 			Log(fmt.Sprintf("cast: %v", err))
 			shifted = s.subtitlePath
 		}
-		args = cast.BuildBurnArgsFrom(s.streamURL, s.referrer, shifted, dir, s.encoder, startAt, s.maps, s.headers)
+		args = cast.BuildBurnArgsWithFonts(s.streamURL, s.referrer, shifted, s.fontsDir, dir, s.encoder, startAt, s.maps, s.headers)
 	}
 
 	launch := s.launch
@@ -220,6 +223,30 @@ type castSeekingSession struct {
 
 	// restart rebuilds the stream at a target and hands it to the device.
 	restart func(target float64) error
+
+	// subtitles delivers subtitles that were still being read out of the file
+	// when playback began, and useSubtitles has every stream built after it
+	// arrives draw them. Both nil when there is nothing on the way.
+	subtitles    <-chan castSubtitleResult
+	useSubtitles func(path string)
+}
+
+// castSubtitleResult is the end of reading a release's own subtitles out of
+// it: the file to burn, or why there is none.
+type castSubtitleResult struct {
+	path string
+	err  error
+}
+
+// castLateSubtitles is a session whose subtitles may arrive after playback
+// has begun. The watch loop asks for it rather than taking it as an argument,
+// so every session without any stays exactly as it was.
+type castLateSubtitles interface {
+	lateSubtitles() (<-chan castSubtitleResult, func(path string))
+}
+
+func (s *castSeekingSession) lateSubtitles() (<-chan castSubtitleResult, func(path string)) {
+	return s.subtitles, s.useSubtitles
 }
 
 func (s *castSeekingSession) Progress() (cast.Progress, error) {

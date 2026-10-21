@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -28,11 +29,27 @@ type VideoTrack struct {
 	Width, Height int
 }
 
+// SubtitleTrack is one subtitle stream inside the source, as a release from
+// a torrent carries them: in the file, rather than at a URL of their own.
+type SubtitleTrack struct {
+	Index    int
+	Codec    string // ffprobe's codec_name: "ass", "subrip", "hdmv_pgs_subtitle"...
+	Language string // normalised, as for AudioTrack
+	Title    string
+	Default  bool
+	Forced   bool
+}
+
 // StreamInfo is what one ffprobe of the source reports.
 type StreamInfo struct {
-	Duration float64
-	Audio    []AudioTrack
-	Video    []VideoTrack
+	Duration  float64
+	Audio     []AudioTrack
+	Video     []VideoTrack
+	Subtitles []SubtitleTrack
+	// Fonts are the indexes of font attachments. Fansub releases carry the
+	// fonts their ASS styles name; without them libass falls back to whatever
+	// the system has, and signs and typesetting come out in the wrong face.
+	Fonts []int
 }
 
 // TrackSelection is the video and audio a cast plays.
@@ -71,7 +88,7 @@ func ProbeStreamArgs(streamURL, referrer string, headers map[string]string) []st
 	args = append(args, inputHeaderArgs(referrer, headers)...)
 
 	args = append(args,
-		"-show_entries", "format=duration:stream=index,codec_type,width,height:stream_disposition=default:stream_tags=language",
+		"-show_entries", "format=duration:stream=index,codec_type,codec_name,width,height:stream_disposition=default,forced:stream_tags=language,title,mimetype,filename",
 		"-of", "json",
 	)
 	return append(args, "-i", streamURL)
@@ -85,13 +102,18 @@ func ParseProbedStream(output []byte) (StreamInfo, error) {
 		Streams []struct {
 			Index       int    `json:"index"`
 			CodecType   string `json:"codec_type"`
+			CodecName   string `json:"codec_name"`
 			Width       int    `json:"width"`
 			Height      int    `json:"height"`
 			Disposition struct {
 				Default int `json:"default"`
+				Forced  int `json:"forced"`
 			} `json:"disposition"`
 			Tags struct {
 				Language string `json:"language"`
+				Title    string `json:"title"`
+				MimeType string `json:"mimetype"`
+				Filename string `json:"filename"`
 			} `json:"tags"`
 		} `json:"streams"`
 		Format struct {
@@ -114,6 +136,19 @@ func ParseProbedStream(output []byte) (StreamInfo, error) {
 			})
 		case "video":
 			info.Video = append(info.Video, VideoTrack{Index: s.Index, Width: s.Width, Height: s.Height})
+		case "subtitle":
+			info.Subtitles = append(info.Subtitles, SubtitleTrack{
+				Index:    s.Index,
+				Codec:    s.CodecName,
+				Language: NormaliseLanguage(s.Tags.Language),
+				Title:    s.Tags.Title,
+				Default:  s.Disposition.Default == 1,
+				Forced:   s.Disposition.Forced == 1,
+			})
+		case "attachment":
+			if isFontAttachment(s.CodecName, s.Tags.MimeType, s.Tags.Filename) {
+				info.Fonts = append(info.Fonts, s.Index)
+			}
 		}
 	}
 	return info, nil
@@ -170,4 +205,68 @@ func SelectTracks(info StreamInfo, wantLanguage string) TrackSelection {
 		Maps:          []string{"-map", "0:" + strconv.Itoa(video.Index), "-map", "0:" + strconv.Itoa(audio.Index)},
 		AudioLanguage: audio.Language,
 	}
+}
+
+// isFontAttachment reports whether an attachment is a font. Muxers disagree on
+// how to say so -- some set a codec, some only a MIME type, some only a file
+// name -- so any of the three is enough.
+func isFontAttachment(codec, mimeType, filename string) bool {
+	switch strings.ToLower(codec) {
+	case "ttf", "otf":
+		return true
+	}
+	mimeType = strings.ToLower(mimeType)
+	if strings.Contains(mimeType, "font") {
+		return true
+	}
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".ttf", ".otf", ".ttc":
+		return true
+	}
+	return false
+}
+
+// textSubtitleCodecs are the subtitle formats ffmpeg can turn into ASS, which
+// is what the subtitles filter draws. Picture-based ones (PGS, VobSub) are not
+// text at all and would need overlaying instead.
+var textSubtitleCodecs = map[string]bool{
+	"ass": true, "ssa": true, "subrip": true, "srt": true,
+	"webvtt": true, "mov_text": true, "text": true,
+}
+
+// SelectSubtitle picks the embedded subtitle track to draw: English when the
+// release labels one, else one with no language at all, which on a fansub
+// release is English in practice. A "signs & songs" or forced track only
+// translates on-screen text, so a full one is preferred whenever there is one,
+// and among equals the track the release marks default wins.
+//
+// Only text tracks are considered. ok is false when there is nothing to draw,
+// including when every track is in some other language.
+func SelectSubtitle(info StreamInfo) (track SubtitleTrack, ok bool) {
+	best := -1
+	for _, candidate := range info.Subtitles {
+		if !textSubtitleCodecs[strings.ToLower(candidate.Codec)] {
+			continue
+		}
+		score := 0
+		switch candidate.Language {
+		case "en":
+			score += 100
+		case "", "und":
+			score += 50
+		default:
+			continue
+		}
+		title := strings.ToLower(candidate.Title)
+		if !candidate.Forced && !strings.Contains(title, "sign") && !strings.Contains(title, "song") {
+			score += 20
+		}
+		if candidate.Default {
+			score += 5
+		}
+		if score > best {
+			best, track, ok = score, candidate, true
+		}
+	}
+	return track, ok
 }

@@ -1319,3 +1319,67 @@ func TestWatchCastNoFirewallHintOnceFetched(t *testing.T) {
 		t.Errorf("hinted at a firewall for a device that fetched the stream:\n%s", out)
 	}
 }
+
+// lateSubtitleSession is a fakeSession whose subtitles arrive mid-episode, as
+// a torrent's own do once the file has downloaded.
+type lateSubtitleSession struct {
+	*fakeSession
+	results chan castSubtitleResult
+	used    chan string
+}
+
+func (s *lateSubtitleSession) lateSubtitles() (<-chan castSubtitleResult, func(path string)) {
+	return s.results, func(path string) { s.used <- path }
+}
+
+// Subtitles read out of the file after playback began are drawn in by
+// rebuilding the stream where the device is -- once, and at the position the
+// device reported rather than at zero.
+func TestWatchCastRebuildsTheStreamWhenSubtitlesArrive(t *testing.T) {
+	withFastCastTimings(t)
+
+	session := &lateSubtitleSession{
+		fakeSession: &fakeSession{steps: []fakeStep{
+			{progress: cast.Progress{Position: 100, Duration: 1440}},
+			{progress: cast.Progress{Position: 101, Duration: 1440}},
+		}},
+		results: make(chan castSubtitleResult, 1),
+		used:    make(chan string, 1),
+	}
+	commands := make(chan castCommand, 1)
+	session.results <- castSubtitleResult{path: "/tmp/subtitles.ass"}
+
+	done := make(chan error, 1)
+	captureStdout(t, func() {
+		go func() {
+			done <- watchCastWithControls(testCastConfig(t), testCastAnime(), session, &fakeServer{}, newFakeRemux(), cast.Device{Name: "Living Room"}, commands, false)
+		}()
+		select {
+		case path := <-session.used:
+			if path != "/tmp/subtitles.ass" {
+				t.Errorf("the source was given %q", path)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("the subtitles that arrived were never handed to the source")
+		}
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			session.mu.Lock()
+			n := len(session.seeks)
+			session.mu.Unlock()
+			if n > 0 {
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		time.Sleep(30 * time.Millisecond) // room for a second rebuild, if there were one
+		commands <- castCmdStop
+		<-done
+	})
+
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if len(session.seeks) != 1 || (session.seeks[0] != 100 && session.seeks[0] != 101) {
+		t.Errorf("rebuilds %v, want exactly one at the device's position", session.seeks)
+	}
+}

@@ -103,10 +103,18 @@ func castBurnEncoder(config *Config, ffmpeg string) cast.Encoder {
 // a dub. Burning regardless put the host's full English dialogue track over
 // English audio on every real dub.
 func castShouldBurnSubtitles(config *Config, anime *Anime, audioLanguage string) bool {
-	if config == nil || anime == nil || !config.CastBurnSubtitles {
+	if anime == nil || strings.TrimSpace(anime.Ep.SubtitleURL) == "" {
 		return false
 	}
-	if strings.TrimSpace(anime.Ep.SubtitleURL) == "" {
+	return castWantsSubtitles(config, anime, audioLanguage)
+}
+
+// castWantsSubtitles is castShouldBurnSubtitles without asking where the
+// subtitles come from: whether this cast should draw any, if it has them.
+// A release carrying its own inside the file is decided by the same rule as a
+// provider's subtitle URL.
+func castWantsSubtitles(config *Config, anime *Anime, audioLanguage string) bool {
+	if config == nil || anime == nil || !config.CastBurnSubtitles {
 		return false
 	}
 	switch audioLanguage {

@@ -38,6 +38,10 @@ plays its English audio track and gets no subtitles. `CastBurnSubtitles=false`
 turns burning off; `CastEncoder` forces `vaapi` or
 `software` if detection picks wrong.
 
+A torrent release keeps its subtitles inside the file, so they can only be read
+once the file has downloaded. The episode starts without them, and they appear
+a few seconds after the download finishes, with the release's own fonts.
+
 **Seeking** takes a couple of seconds to restart the stream, so a press moves
 30 seconds and a held key waits until you let go. A seek or a resume
 re-encodes the stream even when there are no subtitles to burn, so the sound

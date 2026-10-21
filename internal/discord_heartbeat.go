@@ -183,7 +183,7 @@ func startDiscordWatch(config *Config, anime *Anime) *discordWatchSession {
 		loopDone: make(chan struct{}),
 	}
 	// Quitting otakase does not unwind the playback loops, so the closing
-	// heartbeat is also sent from the exit cleanups (bounded at two seconds).
+	// heartbeat is also sent from the exit cleanups (bounded by exitCleanupBudget).
 	session.cancelExit = RegisterExitCleanup(session.finish)
 	go session.run()
 	return session

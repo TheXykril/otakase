@@ -53,6 +53,13 @@ func BuildBurnArgs(streamURL, referrer, subtitlePath, outDir string, enc Encoder
 // stream with no subtitles to burn is restarted at an offset: see
 // BuildRemuxArgsFrom for why copying cannot start it there in sync.
 func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Encoder, startAt float64, maps []string, headers map[string]string) []string {
+	return BuildBurnArgsWithFonts(streamURL, referrer, subtitlePath, "", outDir, enc, startAt, maps, headers)
+}
+
+// BuildBurnArgsWithFonts is BuildBurnArgsFrom drawing with the fonts in
+// fontsDir as well as the system's: the ones a release ships for its ASS
+// styles. An empty fontsDir is BuildBurnArgsFrom exactly.
+func BuildBurnArgsWithFonts(streamURL, referrer, subtitlePath, fontsDir, outDir string, enc Encoder, startAt float64, maps []string, headers map[string]string) []string {
 	args := []string{"-hide_banner"}
 
 	// Named before the input, because it sets up the device the filter chain
@@ -86,12 +93,21 @@ func BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir string, enc Enc
 	// doing its job this holds nothing.
 	filters = append(filters, "fps=source_fps:start_time=0")
 	if subtitlePath != "" {
-		filters = append(filters, "subtitles="+escapeFilterPath(subtitlePath))
+		filter := "subtitles=" + escapeFilterPath(subtitlePath)
+		if fontsDir != "" {
+			filter += ":fontsdir=" + escapeFilterPath(fontsDir)
+		}
+		filters = append(filters, filter)
 	}
 	if enc.Hardware() {
 		// The subtitles are drawn on the CPU, then the frames go to the GPU in
 		// the pixel format the encoder takes.
 		filters = append(filters, "format=nv12,hwupload")
+	} else {
+		// 8-bit 4:2:0, the only kind the High profile below allows. A release
+		// from a torrent is often 10-bit, and libx264 then refuses to open
+		// rather than convert it on its own.
+		filters = append(filters, "format=yuv420p")
 	}
 	args = append(args, "-vf", strings.Join(filters, ","))
 
