@@ -101,6 +101,11 @@ func NewServerOnPort(dir string, port int) (*Server, error) {
 				w.Header().Set("Content-Type", ctype)
 			}
 
+			// A jump within a stream already written: see jump.go.
+			if serveJump(w, r, dir, files) {
+				return
+			}
+
 			// A DLNA renderer is given one continuous transport stream,
 			// assembled from the playlist's segments as they are written.
 			if strings.HasSuffix(r.URL.Path, "/"+ProgressiveName) {

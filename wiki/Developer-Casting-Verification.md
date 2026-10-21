@@ -54,6 +54,15 @@ stream for <device>...` → the episode starts within ~30s → `Playing on
       seconds, not ten: each press acts on where the last one left it.
 - [ ] **Pause, then seek.** The device resumes on any seek, so the status line
       must go back to PLAYING rather than staying PAUSED.
+- [ ] **Seek back a minute, then forward again.** Both are jumps within the
+      stream already written (debug log: `cast: jumping to`), take only the
+      device's reload, and the panel shows the episode time the picture is at.
+      The first jump more than 30s into its stream also logs how the device
+      counts a jump (`counts a jump from ...`); a panel that is off by the
+      jump's distance after it means that reading was wrong.
+- [ ] **Right after any seek the panel does not flash the old position.** A
+      reading from the stream before is logged as `ignoring a reading` and
+      held at the seek's target.
 - [ ] **Lips match the voice after every restart**, on a dub and on a sub:
       from the start, after a resume, and after seeking both ways. A restart
       re-encodes even with nothing to burn, so on a dub the debug log shows a
@@ -335,9 +344,12 @@ cases only a real device and a real room can settle.
 
 Not bugs; these are deliberate, and documented in the README.
 
-- Seeking and resuming both rebuild the stream from the target, because the
-  receiver ignores SEEK on a playlist with no EXT-X-ENDLIST. Each one costs a
-  few seconds of rebuffering. Worth checking on hardware: that burned subtitles
+- Seeking and resuming rebuild the stream from the target, because the
+  receiver ignores SEEK on a playlist with no EXT-X-ENDLIST, unless the target
+  is in the stream already written: then the device is handed that stream from
+  the nearest segment (`cast.JumpPath`), which lands up to half a segment from
+  the target. A rebuild costs a few seconds of rebuffering, and is given up
+  after 30s (torrents: 90s). Worth checking on hardware: that burned subtitles
   are still in sync after a seek, and that the panel reports episode time rather
   than the rebuilt stream's own clock.
 - Soft subtitles cannot be cast; the Default Media Receiver renders WebVTT

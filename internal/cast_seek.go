@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/thexykril/otakase/internal/cast"
 )
@@ -59,8 +60,9 @@ type castStreamSource struct {
 	// episode, for a seek the current read does not reach.
 	readSubsFrom func(from float64) (castSubtitleSource, error)
 	// encoder re-encodes the video, whenever it is drawn on or restarted at an
-	// offset. Left empty, chooseEncoder picks it the first time it is needed,
-	// so a cast that is never re-encoded never pays for the hardware probe.
+	// offset. Left empty, chooseEncoder picks it the first time it is needed;
+	// the cast starts that choice in the background, so the first seek does
+	// not wait on the hardware probe.
 	// subtitleSize is CastSubtitleSize: how much larger ASS dialogue is drawn,
 	// as a percentage.
 	subtitleSize  int
@@ -72,6 +74,17 @@ type castStreamSource struct {
 	maps []string
 
 	generation int
+
+	// jumps counts the jumps made within a stream already written, so each
+	// is handed to the device under a URL of its own. See cast.JumpPath.
+	jumps int
+
+	// waiting is told how long a rebuilt stream has kept the viewer waiting,
+	// once a second, so a slow one says so rather than looking frozen.
+	waiting func(elapsed time.Duration)
+	// startTimeout is how long a rebuilt stream may take to write its first
+	// segment; zero is castSeekTimeout.
+	startTimeout time.Duration
 
 	// launch starts the process. It is a field so a test can stand in for ffmpeg
 	// and exercise the generation bookkeeping, which is where a wrong answer is
@@ -95,6 +108,8 @@ type stream struct {
 	remux *cast.Remux
 	path  string
 	dir   string
+	// start is where in the episode the stream begins.
+	start float64
 }
 
 // start begins a generation of the stream at startAt seconds into the episode.
@@ -102,6 +117,20 @@ func (s *castStreamSource) start(startAt float64) (stream, error) {
 	dir := filepath.Join(s.rootDir, "g"+strconv.Itoa(s.generation))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return stream{}, fmt.Errorf("cast: could not create the stream directory: %w", err)
+	}
+	// The first stream gets the long wait: a TV waking up, a burn's first
+	// segment, a torrent finding its peers. A rebuild happens while the
+	// episode is already playing, and the viewer is better told it did not
+	// work than left watching the old stream for a minute and a half.
+	timeout, waiting := castStartTimeout, func(time.Duration) {}
+	if s.generation > 0 {
+		timeout = s.startTimeout
+		if timeout <= 0 {
+			timeout = castSeekTimeout
+		}
+		if s.waiting != nil {
+			waiting = s.waiting
+		}
 	}
 	s.generation++
 
@@ -149,14 +178,20 @@ func (s *castStreamSource) start(startAt float64) (stream, error) {
 	if err != nil {
 		return stream{}, err
 	}
-	if err := awaitPlaylist(remux, dir); err != nil {
+	if err := awaitPlaylist(remux, dir, timeout, waiting); err != nil {
 		remux.Stop()
+		if s.generation > 1 {
+			// Nothing will ever fetch from it: the device is still on the
+			// stream this one was meant to replace.
+			_ = os.RemoveAll(dir)
+		}
 		return stream{}, err
 	}
 
 	return stream{
 		remux: remux,
 		dir:   dir,
+		start: startAt,
 		// Forward slashes, not filepath: this is a URL path, and the device is
 		// not necessarily on the same kind of machine as the one serving it.
 		path: "g" + strconv.Itoa(s.generation-1) + "/" + cast.PlaylistName,
@@ -234,6 +269,52 @@ func (s *castStreamSource) subtitlesBehind(position float64) bool {
 	}
 	covered := s.liveSubs.Covered()
 	return math.IsInf(covered, 1) || covered >= math.Max(s.coveredUntil, position)+castSubtitleMinGain
+}
+
+// castJumpLead is how much of the stream has to be written beyond a jump's
+// landing point for the jump to be worth it: the device buffers a few seconds
+// before it plays, and a jump to the very edge would leave it waiting on
+// ffmpeg, which is the wait a jump exists to avoid.
+const castJumpLead = 12.0
+
+// jumpPoint finds where in gen a seek to target can land without a new
+// stream: the segment boundary nearest the target, in what ffmpeg has already
+// written. It reports the segment, and how far into the stream it starts.
+//
+// minOffset rules out a landing that starts less than that far into the
+// stream, other than its very start. See castSeekingSession.clock.
+func (s *castStreamSource) jumpPoint(gen stream, target, minOffset float64) (segment int, offset float64, ok bool) {
+	if gen.dir == "" || target < gen.start {
+		return 0, 0, false
+	}
+	// Burned subtitles end where the read had reached when the stream was
+	// built. Landing past that edge would play on without them until the
+	// next rebuild; a rebuild at the target burns what has been read since.
+	if s.liveSubs != nil && !math.IsInf(s.coveredUntil, 1) && target >= s.coveredUntil-castSubtitleMargin {
+		return 0, 0, false
+	}
+	segments, finished := cast.ReadPlaylist(filepath.Join(gen.dir, cast.PlaylistName))
+	if len(segments) == 0 {
+		return 0, 0, false
+	}
+	want := target - gen.start
+	best, bestStart, at := -1, 0.0, 0.0
+	for i, seg := range segments {
+		if best < 0 || math.Abs(at-want) < math.Abs(bestStart-want) {
+			best, bestStart = i, at
+		}
+		at += seg.Duration
+	}
+	written := at
+	// The nearest boundary may still be a whole segment away from a target
+	// past the last one written: that is a seek ffmpeg has not reached.
+	if want > written || (!finished && bestStart+castJumpLead > written) {
+		return 0, 0, false
+	}
+	if bestStart > 0 && bestStart < minOffset {
+		return 0, 0, false
+	}
+	return best, bestStart, true
 }
 
 // reencoder is the encoder for a re-encoded generation, chosen once.
@@ -333,6 +414,124 @@ type castSeekingSession struct {
 	// behind reports whether the stream should be rebuilt where it is to burn
 	// subtitles read since it was built; nil when none are being read.
 	behind func(position float64) bool
+
+	// jump moves the device within the stream already written, if the target
+	// is in it, landing on the segment boundary nearest the target. It
+	// reports where in the episode the device now starts and how far into
+	// its generation that is. nil, or ok false, leaves the seek to restart.
+	jump func(target, minOffset float64) (landed, offset float64, ok bool, err error)
+
+	// streamStart is where in the episode the stream the device was last
+	// handed begins, which is not always base: see clock.
+	streamStart float64
+
+	// clock is how this device counts the position of a jump. A jump hands
+	// it a stream that starts partway into a generation, and a receiver
+	// may count from where that stream starts or from where the generation
+	// does -- from the segment's own timestamps. Which one is learnt from the
+	// first jump that can tell them apart, and kept for the cast.
+	clock castJumpClock
+
+	// settling is set for the first moments after the device is handed a
+	// stream: until a reading belongs to the new stream, the position is
+	// held at where it starts. See settle.
+	settling     bool
+	settleSince  time.Time
+	settleOffset float64
+}
+
+// castJumpClock is how a device counts the position of a jump.
+type castJumpClock int
+
+const (
+	castClockUnknown castJumpClock = iota
+	// castClockFromLoad counts from the start of the stream it was handed.
+	castClockFromLoad
+	// castClockFromGeneration counts from the start of the generation.
+	castClockFromGeneration
+)
+
+// castJumpLearnOffset is the least a jump must land into its generation
+// while the device's clock is not yet known. Below it the two ways of
+// counting are too close to tell apart from a reading or two -- a device
+// still buffering one counts as little as one playing the other -- so such a
+// jump is left to a rebuild, whose position means the same either way.
+const castJumpLearnOffset = 30.0
+
+// castSettleSlack is how far a first reading may run ahead of the time since
+// the load and still be the new stream's: the receiver's own clock, a
+// muxer's start offset and a poll's latency between them.
+const castSettleSlack = 6.0
+
+// castSettleEarly is how far below a generation-counted jump's own offset a
+// reading may sit: the segment's timestamps start a moment off its boundary.
+const castSettleEarly = 3.0
+
+// castSettleNow is the clock the settling reads, so a test can move it on
+// rather than wait.
+var castSettleNow = time.Now
+
+// castSettleLimit is how long the position is held waiting for a reading
+// from the new stream before whatever the device says is believed again.
+const castSettleLimit = 20 * time.Second
+
+// beginSettle starts holding the position for a newly loaded stream that
+// begins offset seconds into its generation. Called with mu held.
+func (s *castSeekingSession) beginSettle(offset float64) {
+	s.settling = true
+	s.settleSince = castSettleNow()
+	s.settleOffset = offset
+}
+
+// settle decides what a reading taken just after a load means, adjusting it
+// to count from base. Called with mu held.
+//
+// A reading still describing the stream before -- the receiver answers for
+// a moment or two about what it was told to leave -- would put the panel,
+// the skips and the progress written to the trackers wherever that stream
+// had got to. So until a reading fits the new stream, the position is held at
+// where it starts.
+func (s *castSeekingSession) settle(progress *cast.Progress) {
+	if progress.Settling {
+		// The device says itself that this is the old stream.
+		progress.Position, progress.Idle = s.streamStart-s.base, false
+		return
+	}
+	if !s.settling || progress.Idle {
+		return
+	}
+	elapsed := castSettleNow().Sub(s.settleSince).Seconds()
+	if elapsed > castSettleLimit.Seconds() {
+		Log(fmt.Sprintf("cast: no reading fit the new stream in %s, believing the device again", castSettleLimit))
+		s.settling = false
+		return
+	}
+	reading, offset := progress.Position, s.settleOffset
+	fromLoad := reading >= 0 && reading <= elapsed+castSettleSlack
+	fromGeneration := offset > 0 && reading >= offset-castSettleEarly && reading <= offset+elapsed+castSettleSlack
+
+	hold := func() { progress.Position = s.streamStart - s.base }
+	switch {
+	case reading < 0.5:
+		// Nothing played yet: buffering, where either clock reads zero.
+		hold()
+		return
+	case offset == 0 && fromLoad:
+		// A stream from the start of its generation: both clocks agree.
+	case s.clock == castClockFromLoad && fromLoad, s.clock == castClockFromGeneration && fromGeneration:
+	case s.clock == castClockUnknown && offset >= castJumpLearnOffset && fromGeneration:
+		s.clock = castClockFromGeneration
+		s.base = s.streamStart - offset
+		Log(fmt.Sprintf("cast: the device counts a jump from the start of its stream's generation (read %.1f, %.1f in)", reading, offset))
+	case s.clock == castClockUnknown && offset >= castJumpLearnOffset && fromLoad:
+		s.clock = castClockFromLoad
+		Log(fmt.Sprintf("cast: the device counts a jump from where it was handed the stream (read %.1f, %.1f in)", reading, offset))
+	default:
+		Log(fmt.Sprintf("cast: ignoring a reading of %.1f, %.1fs after the load: still the stream before", reading, elapsed))
+		hold()
+		return
+	}
+	s.settling = false
 }
 
 // castRollingSubtitles is a session whose subtitles are still being read out
@@ -350,19 +549,40 @@ func (s *castSeekingSession) Progress() (cast.Progress, error) {
 	progress, err := s.inner.Progress()
 
 	s.mu.Lock()
-	base, duration := s.base, s.duration
+	if err == nil {
+		s.settle(&progress)
+	}
+	base, duration, streamStart := s.base, s.duration, s.streamStart
 	s.mu.Unlock()
 
 	progress.Position += base
 	if duration > 0 {
 		progress.Duration = duration
+	} else if progress.Duration > 0 {
+		// The device's length is the stream's, which starts partway in.
+		progress.Duration += streamStart
 	}
+	progress.Settling = false
 	return progress, err
 }
 
 // SeekToTime rebuilds the stream at seconds instead of asking the device, which
 // would accept the request and ignore it.
 func (s *castSeekingSession) SeekToTime(seconds float64) error {
+	seconds = s.reachable(seconds)
+	if err := s.restart(seconds); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.base, s.streamStart = seconds, seconds
+	s.beginSettle(0)
+	s.mu.Unlock()
+	return nil
+}
+
+// reachable limits a seek target to where a stream can start.
+func (s *castSeekingSession) reachable(seconds float64) float64 {
 	if seconds < 0 {
 		seconds = 0
 	}
@@ -381,21 +601,57 @@ func (s *castSeekingSession) SeekToTime(seconds float64) error {
 			seconds = 0
 		}
 	}
+	return seconds
+}
 
-	if err := s.restart(seconds); err != nil {
-		return err
+// seekNear moves the episode to about seconds, reporting where it landed: a
+// jump within the stream already written when the target is in it, which
+// lands on the nearest segment boundary -- a few seconds either side -- and
+// takes only the device's own reload; otherwise a rebuild at the target
+// itself, as SeekToTime.
+//
+// Only for a viewer's seek. A skip has to land at or past the end of what it
+// skips, or the next poll reads the position as still inside it, and a
+// rebuild for more subtitles needs a new stream to burn them into.
+func (s *castSeekingSession) seekNear(seconds float64) (float64, error) {
+	seconds = s.reachable(seconds)
+	if s.jump != nil {
+		s.mu.Lock()
+		clock := s.clock
+		s.mu.Unlock()
+		minOffset := 0.0
+		if clock == castClockUnknown {
+			minOffset = castJumpLearnOffset
+		}
+
+		landed, offset, ok, err := s.jump(seconds, minOffset)
+		if err != nil {
+			return 0, err
+		}
+		if ok {
+			s.mu.Lock()
+			s.streamStart, s.base = landed, landed
+			if s.clock == castClockFromGeneration {
+				s.base = landed - offset
+			}
+			s.beginSettle(offset)
+			s.mu.Unlock()
+			return landed, nil
+		}
 	}
-
-	s.mu.Lock()
-	s.base = seconds
-	s.mu.Unlock()
-	return nil
+	return seconds, s.SeekToTime(seconds)
 }
 
 func (s *castSeekingSession) Pause() error              { return s.inner.Pause() }
 func (s *castSeekingSession) Unpause() error            { return s.inner.Unpause() }
 func (s *castSeekingSession) SetVolume(l float64) error { return s.inner.SetVolume(l) }
 func (s *castSeekingSession) Volume() float64           { return s.inner.Volume() }
+
+// castSeekTimeout is how long a rebuild at a seek target may take to write its
+// first segment before the seek is given up, and the episode left playing
+// where it was. Well past the few seconds a healthy rebuild takes, burn
+// included; short of castStartTimeout, which allows for a TV waking up.
+const castSeekTimeout = 30 * time.Second
 
 // castSeekTailGuard is how much of the end a seek will not land in.
 //
@@ -411,28 +667,40 @@ const castSeekTailGuard = 5.0
 // finish before the wait notices exits without complaint -- and because a remux
 // that failed has a reason worth reporting, where the wait only knows that no
 // playlist appeared.
-func awaitPlaylist(remux *cast.Remux, dir string) error {
+//
+// waiting is told every second how long the wait has lasted, so a slow one can
+// be shown as slow rather than frozen.
+func awaitPlaylist(remux *cast.Remux, dir string, timeout time.Duration, waiting func(time.Duration)) error {
 	written := make(chan error, 1)
 	go func() {
-		written <- cast.WaitForPlaylist(dir, castStartTimeout)
+		written <- cast.WaitForPlaylist(dir, timeout)
 	}()
 
-	select {
-	case err := <-written:
-		if err != nil {
+	began := time.Now()
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case err := <-written:
+			if err != nil {
+				if remuxErr := remux.Err(); remuxErr != nil {
+					return remuxErr
+				}
+				return err
+			}
+			return nil
+		case <-remux.Done():
 			if remuxErr := remux.Err(); remuxErr != nil {
 				return remuxErr
 			}
-			return err
+			// ffmpeg exited without complaint. The playlist was written either
+			// way, so the wait's own answer is the one that counts.
+			return <-written
+		case <-tick.C:
+			if waiting != nil {
+				waiting(time.Since(began))
+			}
 		}
-		return nil
-	case <-remux.Done():
-		if remuxErr := remux.Err(); remuxErr != nil {
-			return remuxErr
-		}
-		// ffmpeg exited without complaint. The playlist was written either way,
-		// so the wait's own answer is the one that counts.
-		return <-written
 	}
 }
 

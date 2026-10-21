@@ -46,10 +46,14 @@ restarts where you are a few times early on to add more, until the download
 is done. `CastWaitForSubtitles=true` waits for the whole download instead, so
 there are no restarts.
 
-**Seeking** takes a couple of seconds to restart the stream, so a press moves
-30 seconds and a held key waits until you let go. A seek or a resume
-re-encodes the stream even when there are no subtitles to burn, so the sound
-and the picture start together.
+**Seeking** moves 30 seconds per press, and a held key waits until you let
+go. A seek to a part otakase has already prepared (usually anything behind
+you, and a little ahead) is quick, but lands a few seconds either side of the
+exact spot. A seek further ahead takes a couple of seconds to restart the
+stream; that restart re-encodes the stream even when there are no subtitles to
+burn, so the sound and the picture start together. If a restart takes more
+than 30 seconds, otakase gives up on it and keeps playing where you were; on a
+torrent it waits longer and shows how much has downloaded.
 
 While casting, the terminal shows a control panel: position, device, and
 keys (space pauses, arrows seek/adjust volume, `a` switches between sub and dub

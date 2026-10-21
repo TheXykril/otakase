@@ -23,6 +23,10 @@ type Progress struct {
 	// Idle reports that the device has stopped playing -- the episode ended,
 	// or something else took the device over.
 	Idle bool
+	// Settling reports that the device is still answering about the stream
+	// it played before the last load: its position belongs to that one, and
+	// means nothing for the stream it is about to play.
+	Settling bool
 }
 
 // ShouldMarkComplete reports whether enough of the episode has played to count
@@ -57,7 +61,19 @@ type Session struct {
 	// lastStatus is the last device state logged, so polling once a second
 	// does not fill the log with the same line.
 	lastStatus string
+
+	// loaded is the URL last handed to the device, and loadedAt when. A status
+	// naming another URL soon after is the device still describing the stream
+	// it was told to leave.
+	loaded   string
+	loadedAt time.Time
 }
+
+// staleStatusWindow is how long after a load a status naming another stream
+// is taken as the old one still reporting. Bounded, so a receiver that
+// reports the URL in some other form is believed again after a moment rather
+// than held in place until the stall bound gives up on it.
+const staleStatusWindow = 15 * time.Second
 
 // connectChromecast opens a connection to a Chromecast and takes over its media
 // receiver.
@@ -105,9 +121,13 @@ var launchRetryInterval = 2 * time.Second
 // same way every time, so retrying that would turn a clear failure into a long
 // one.
 func (s *Session) PlayWithin(url string, within time.Duration) error {
-	return playWithin(func(u string) error {
+	err := playWithin(func(u string) error {
 		return s.app.Load(u, 0, "application/x-mpegURL", false, true, false)
 	}, url, within)
+	if err == nil {
+		s.loaded, s.loadedAt = url, time.Now()
+	}
+	return err
 }
 
 // playWithin holds the retry rule, separated from the device so it can be
@@ -150,11 +170,26 @@ func (s *Session) Progress() (Progress, error) {
 	if media == nil {
 		return Progress{Idle: true}, nil
 	}
+	// Answered before the idle check: the stream a load replaces goes idle
+	// (INTERRUPTED), and read as the episode's end that would finish a cast
+	// the viewer only moved through.
+	if staleStatus(media.Media.ContentId, s.loaded, time.Since(s.loadedAt)) {
+		return Progress{Settling: true}, nil
+	}
 	return Progress{
 		Position: float64(media.CurrentTime),
 		Duration: float64(media.Media.Duration),
 		Idle:     media.PlayerState == "IDLE",
 	}, nil
+}
+
+// staleStatus reports whether a status for contentID, read since after the
+// device was handed loaded, describes the stream it was playing before.
+func staleStatus(contentID, loaded string, since time.Duration) bool {
+	if contentID == "" || loaded == "" || since > staleStatusWindow {
+		return false
+	}
+	return contentID != loaded
 }
 
 // SeekToTime jumps to a position, which is how a skip happens on a device with

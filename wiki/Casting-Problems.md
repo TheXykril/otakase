@@ -121,11 +121,17 @@ Set `CastTerminal` in your config to the terminal emulator you want used.
 ## Seeking does nothing, or is slow
 
 Chromecast can't seek a stream mid-episode on its own, so otakase works around
-this by rebuilding the stream at the position you asked for and handing the
+it. A seek into a part that is already prepared hands the device that part
+again from the nearest chunk, which only costs the TV's own reload. A seek
+further ahead rebuilds the stream at the position you asked for and hands the
 device a fresh one, which takes a couple of seconds. That's why a single
 press moves 30 seconds instead of 10, and why holding the key waits until you
-stop pressing before it jumps: each seek costs a few seconds of rebuffering,
-so it batches your presses instead of restarting the stream on every one.
+stop pressing before it jumps: it batches your presses instead of restarting
+the stream on every one.
+
+If a seek can't be done in 30 seconds you get a "Could not seek there"
+message and the episode keeps playing where it was. On a torrent the part you
+seek to has to download first; the panel shows how far along the file is.
 
 ## Casting fails partway through, or subtitles seem to drift out of sync after a seek
 
