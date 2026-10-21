@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -22,43 +23,102 @@ func animeSearchTitle(anime *Anime) string {
 
 var searchTitlePunctuation = strings.NewReplacer(
 	":", "", "'", "", "\"", "", "!", "", "?", "",
-	"-", " ", "_", " ", ".", " ", "(", " ", ")", " ",
+	"-", " ", "_", " ", ".", " ", "(", " ", ")", " ", "×", " x ",
+)
+
+var (
+	// Seasons are written "2nd Season", "Season 2", "S2", "S02" or, for a
+	// sequel, "II"; all of them normalise to "s2", and the first season to
+	// nothing, so "Dandadan 2nd Season" and "Dandadan S2" compare equal.
+	romanSeasonRE   = regexp.MustCompile(`\b(II|III|IV)\b`)
+	ordinalSeasonRE = regexp.MustCompile(`\b(\d{1,2})(?:st|nd|rd|th) season\b`)
+	seasonWordRE    = regexp.MustCompile(`\bseason (\d{1,2})\b`)
+	shortSeasonRE   = regexp.MustCompile(`\bs0*(\d{1,2})\b`)
+	firstSeasonRE   = regexp.MustCompile(`\bs1\b`)
+	romanSeasons    = strings.NewReplacer("III", "s3", "II", "s2", "IV", "s4")
 )
 
 // normalizeSearchTitle reduces a title to lower-case words, so hosts that
-// punctuate a title differently still compare equal.
+// punctuate a title differently, or write its season another way, still
+// compare equal.
 func normalizeSearchTitle(title string) string {
-	title = searchTitlePunctuation.Replace(strings.ToLower(strings.TrimSpace(title)))
+	title = romanSeasonRE.ReplaceAllStringFunc(strings.TrimSpace(title), romanSeasons.Replace)
+	title = searchTitlePunctuation.Replace(strings.ToLower(title))
+	title = strings.Join(strings.Fields(title), " ")
+	title = ordinalSeasonRE.ReplaceAllString(title, "s$1")
+	title = seasonWordRE.ReplaceAllString(title, "s$1")
+	title = shortSeasonRE.ReplaceAllString(title, "s$1")
+	title = firstSeasonRE.ReplaceAllString(title, "")
 	return strings.Join(strings.Fields(title), " ")
+}
+
+// titleSeason is the season a normalised title names, or 0 when it names none.
+func titleSeason(normalized string) int {
+	if m := shortSeasonRE.FindStringSubmatch(normalized); m != nil {
+		n, _ := strconv.Atoi(m[1])
+		return n
+	}
+	return 0
+}
+
+// animeSeason is the season the anime's own titles name; 1 when they name none.
+func animeSeason(anime *Anime) int {
+	for _, title := range []string{anime.Title.Romaji, anime.Title.English} {
+		if n := titleSeason(normalizeSearchTitle(title)); n > 0 {
+			return n
+		}
+	}
+	return 1
 }
 
 // scoreProviderSearchOption rates how likely a search result is to be the
 // anime. The host's own ranking is the tie-breaker; a cover image carrying
 // the AniList id is the strongest sign, then an exact title.
 func scoreProviderSearchOption(option SelectionOption, anime *Anime, query string, index, total int) int {
-	title := normalizeSearchTitle(option.Title)
-	if title == "" {
-		title = normalizeSearchTitle(option.Label)
-	}
-
-	score := total - index
-	for _, target := range []string{query, anime.Title.English, anime.Title.Romaji, anime.Title.Japanese} {
-		target = normalizeSearchTitle(target)
-		switch {
-		case target == "":
-		case title == target:
-			score += 100
-		case strings.Contains(title, target) || strings.Contains(target, title):
-			score += 35
-		}
-	}
+	title := optionTitle(option)
+	score := total - index + titleScore(title, anime, query)
 	if anime.AnilistId != 0 && strings.Contains(option.Thumbnail, strconv.Itoa(anime.AnilistId)) {
 		score += 120
 	}
 	if anime.TotalEpisodes > 0 && strings.Contains(option.Label, fmt.Sprintf("(%d episodes)", anime.TotalEpisodes)) {
 		score += 20
 	}
+	// A search for a sequel finds the first season too, and the first season
+	// matches the broader title variants exactly. A result that names another
+	// season is not this anime, however well its name matches; one that names
+	// this anime's later season is the likeliest.
+	switch want, got := animeSeason(anime), titleSeason(title); {
+	case got != 0 && got != want:
+		score -= 150
+	case got != 0 && got == want:
+		score += 40
+	}
 	return score
+}
+
+// titleScore rates how well a normalised result name matches the anime's
+// titles: 100 for each exact match, 35 for each that contains the other.
+func titleScore(title string, anime *Anime, query string) int {
+	score := 0
+	for _, target := range []string{query, anime.Title.English, anime.Title.Romaji, anime.Title.Japanese} {
+		target = normalizeSearchTitle(target)
+		switch {
+		case target == "", title == "":
+		case title == target:
+			score += 100
+		case strings.Contains(title, target) || strings.Contains(target, title):
+			score += 35
+		}
+	}
+	return score
+}
+
+// optionTitle is the name a result is compared by.
+func optionTitle(option SelectionOption) string {
+	if title := normalizeSearchTitle(option.Title); title != "" {
+		return title
+	}
+	return normalizeSearchTitle(option.Label)
 }
 
 // rankProviderSearchOptions returns the index and score of the best result,
@@ -129,24 +189,37 @@ func searchProviderIDForAnime(provider Provider, config *Config, anime *Anime, m
 	}
 
 	var lastErr error
+	var weak SelectionOption
+	weakVariant := ""
 	for _, variant := range buildSearchQueryVariants(config, anime.Title, query) {
 		options, err := provider.SearchAnime(variant, mode)
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		option, ok := selectBestProviderSearchResult(options, anime, variant)
-		if !ok {
+		if len(options) == 0 {
 			continue
 		}
+		best, _, _ := rankProviderSearchOptions(options, anime, variant)
+		option := options[best]
 
-		if variant != query {
-			Log(fmt.Sprintf("Mapped %q to provider %s id %s for %s fallback via title variant %q",
-				query, provider.Name(), option.Key, mode, variant))
-		} else {
-			Log(fmt.Sprintf("Mapped %q to provider %s id %s for %s fallback", query, provider.Name(), option.Key, mode))
+		// A host that matches loosely answers a title it does not carry with
+		// whatever shares a word: nyaa answers "DAN DA DAN Season 2" with
+		// "Juuou Mujin Dandivine". A result whose name matches none of the
+		// anime's titles is kept only until a later variant finds one that does.
+		coverMatch := anime.AnilistId != 0 && strings.Contains(option.Thumbnail, strconv.Itoa(anime.AnilistId))
+		if titleScore(optionTitle(option), anime, variant) == 0 && !coverMatch {
+			if weakVariant == "" {
+				weak, weakVariant = option, variant
+			}
+			continue
 		}
+		logProviderMapping(query, provider.Name(), option.Key, mode, variant)
 		return option.Key, nil
+	}
+	if weakVariant != "" {
+		logProviderMapping(query, provider.Name(), weak.Key, mode, weakVariant)
+		return weak.Key, nil
 	}
 
 	// Report the title the user recognises, not whichever variant happened to be
@@ -155,6 +228,15 @@ func searchProviderIDForAnime(provider Provider, config *Config, anime *Anime, m
 		return "", fmt.Errorf("no %s search results for %q: %w", provider.Name(), query, lastErr)
 	}
 	return "", fmt.Errorf("no %s search results for %q", provider.Name(), query)
+}
+
+func logProviderMapping(query, provider, key, mode, variant string) {
+	if variant != query {
+		Log(fmt.Sprintf("Mapped %q to provider %s id %s for %s fallback via title variant %q",
+			query, provider, key, mode, variant))
+		return
+	}
+	Log(fmt.Sprintf("Mapped %q to provider %s id %s for %s fallback", query, provider, key, mode))
 }
 
 // storedProviderIDMatches reports whether providerID is the id already recorded
