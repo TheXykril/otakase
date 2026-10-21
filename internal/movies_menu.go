@@ -64,7 +64,7 @@ func WatchMovies(config *Config) {
 		// saved.
 		Log(fmt.Sprintf("movies: could not read the movie history: %v", err))
 	}
-	site := movies.NewSite(config.MovieSite, store.Site(), func(address string) {
+	site := movies.NewSite(movies.DefaultSiteURL, store.Site(), func(address string) {
 		if err := store.SetSite(address); err != nil {
 			Log(fmt.Sprintf("movies: could not remember the site address: %v", err))
 		}
@@ -240,12 +240,52 @@ func movieChoice(picked SelectionOption, err error) (SelectionOption, bool) {
 // bar, or the text printed above the terminal menu. Tests replace it.
 var movieSelectMessage = func(config *Config, options []SelectionOption, message string) (SelectionOption, error) {
 	if config.RofiSelection {
-		return RofiSelectWithMessage(options, false, moviesSection, rofiEscape(message))
+		lines := []string{}
+		for _, line := range strings.Split(message, "\n") {
+			lines = append(lines, wrapWords(line, 78)...)
+		}
+		return RofiSelectWithMessage(options, false, moviesSection, rofiEscape(strings.Join(lines, "\n")))
 	}
-	for _, line := range strings.Split(message, "\n") {
-		Out(line)
+	// The movie's details go in the pane beside the menu, where the anime
+	// lists show theirs; printed above it they were drawn over.
+	title, details, _ := strings.Cut(message, "\n")
+	rows := make([]SelectionOption, len(options))
+	for i, option := range options {
+		option.Title = title
+		if details != "" {
+			option.Details = strings.Split(details, "\n")
+		}
+		rows[i] = option
 	}
-	return movieSelect(options)
+	return movieSelectActions(rows, movieCastActions(config))
+}
+
+// movieSelectActions draws a terminal menu, in the order given, with keys in
+// its footer. Tests replace it.
+var movieSelectActions = func(options []SelectionOption, actions []FooterAction) (SelectionOption, error) {
+	return dynamicSelectInternal(options, &SelectionRefreshConfig{Prompt: moviesSection, Actions: actions}, true)
+}
+
+// movieCastActions is the cast switch in the footer of a movie's menu and of
+// a list of movies, on ctrl+k as in every other menu.
+func movieCastActions(config *Config) []FooterAction {
+	return []FooterAction{{Key: movieCastKey, Label: castActionCheckbox(config), Hint: "ctrl+k"}}
+}
+
+// movieCastRow is the cast switch as a row, for rofi, which has no footer.
+func movieCastRow(config *Config) SelectionOption {
+	if config.CastToDevice {
+		return SelectionOption{Key: movieCastKey, Label: "Cast: " + strings.TrimPrefix(castActionLabel(config), "cast: "), Icon: icons.Cast}
+	}
+	return SelectionOption{Key: movieCastKey, Label: "Cast: off", Icon: icons.CastOff}
+}
+
+// moviePlayIcon is the play row's icon: the cast one when it will be cast.
+func moviePlayIcon(config *Config) icons.Icon {
+	if config.CastToDevice {
+		return icons.Cast
+	}
+	return icons.Play
 }
 
 // rofiEscape keeps text from being read as Pango markup by rofi.
@@ -347,7 +387,17 @@ func movieSourceLabel(entry movies.Entry) string {
 // pickMovieRows shows a list of movies, with their posters in rofi when
 // ImagePreview is on, as the anime lists have.
 func pickMovieRows(config *Config, options []SelectionOption) (SelectionOption, bool) {
-	if !config.RofiSelection || !config.ImagePreview {
+	if !config.RofiSelection {
+		for {
+			picked, ok := movieChoice(movieSelectActions(options, movieCastActions(config)))
+			if ok && picked.Key == movieCastKey {
+				toggleCastToDevice(config)
+				continue
+			}
+			return picked, ok
+		}
+	}
+	if !config.ImagePreview {
 		return pickMovieOption(options)
 	}
 	previews := map[string]RofiSelectPreview{}
@@ -429,10 +479,10 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		options := []SelectionOption{}
 		if entry.Started() {
 			options = append(options,
-				SelectionOption{Key: moviePlayKey, Label: "Continue from " + formatClock(entry.Position), Icon: icons.Play},
+				SelectionOption{Key: moviePlayKey, Label: "Continue from " + formatClock(entry.Position), Icon: moviePlayIcon(config)},
 				SelectionOption{Key: movieRestartKey, Label: "Play from the start", Icon: icons.Refresh})
 		} else {
-			options = append(options, SelectionOption{Key: moviePlayKey, Label: "Play", Icon: icons.Play})
+			options = append(options, SelectionOption{Key: moviePlayKey, Label: "Play", Icon: moviePlayIcon(config)})
 		}
 		if entry.Watched {
 			options = append(options, SelectionOption{Key: movieUnwatchedKey, Label: "Mark as not watched", Icon: icons.Undo})
@@ -459,6 +509,9 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		if known {
 			options = append(options, SelectionOption{Key: movieForgetKey, Label: "Remove from history", Icon: icons.Dropped})
 		}
+		if config.RofiSelection {
+			options = append(options, movieCastRow(config))
+		}
 
 		EnterAppScreen()
 		message := []string{movie.Label()}
@@ -476,6 +529,8 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		case movieRestartKey:
 			playMovie(config, store, lib, movie, 0)
 			return
+		case movieCastKey:
+			toggleCastToDevice(config)
 		case movieDownloadKey:
 			downloadMovie(config, lib, movie)
 		case movieWatchedKey, movieUnwatchedKey:
@@ -512,10 +567,21 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 // could not play leaves the next server to try.
 func castMovie(config *Config, anime *Anime) bool {
 	LeaveAppScreen()
-	// Cast here rather than handing it to a terminal window as an episode is
-	// under rofi: the window rebuilds the show from a file, and a movie's
-	// progress would be lost on the way.
-	err := CastEpisode(config, anime)
+	// Under rofi there is no terminal for the control panel, so the movie is
+	// cast from a window of its own, as an anime episode is.
+	if config.RofiSelection {
+		done, err := castMovieInWindow(config, anime)
+		switch {
+		case err == nil:
+			return done
+		case errors.Is(err, ErrCastStopped):
+			// The device menu was escaped.
+			return true
+		}
+		Log(fmt.Sprintf("movies: cast window: %v", err))
+		Out("Casting here instead of in a terminal: " + err.Error())
+	}
+	err := castMovieHere(config, anime)
 	switch {
 	case err == nil, errors.Is(err, ErrCastStopped):
 		return true
@@ -524,6 +590,9 @@ func castMovie(config *Config, anime *Anime) bool {
 	Out("Casting failed: " + err.Error())
 	return false
 }
+
+// castMovieHere casts in this process; tests replace it.
+var castMovieHere = CastEpisode
 
 // movieMPVArgs are the player options a movie stream needs.
 func movieMPVArgs(stream movies.Stream) []string {

@@ -80,7 +80,7 @@ func openSeries(config *Config, store *movies.Store, lib *movieLibrary, show mov
 				label = "Play next: " + episodes[index].Label()
 			}
 			options = append(options,
-				SelectionOption{Key: moviePlayKey, Label: label, Icon: icons.Play},
+				SelectionOption{Key: moviePlayKey, Label: label, Icon: moviePlayIcon(config)},
 				SelectionOption{Key: movieEpisodesKey, Label: fmt.Sprintf("Episodes (%d)", len(episodes)), Icon: icons.TV})
 		}
 		if entry.Started() || entry.Watched {
@@ -105,6 +105,9 @@ func openSeries(config *Config, store *movies.Store, lib *movieLibrary, show mov
 		if known {
 			options = append(options, SelectionOption{Key: movieForgetKey, Label: "Remove from history", Icon: icons.Dropped})
 		}
+		if config.RofiSelection {
+			options = append(options, movieCastRow(config))
+		}
 
 		EnterAppScreen()
 		if details, found := movieDetails(lib, store, show); found {
@@ -126,6 +129,8 @@ func openSeries(config *Config, store *movies.Store, lib *movieLibrary, show mov
 				}
 				playEpisodes(config, store, lib, show, episodes, index, start)
 			}
+		case movieCastKey:
+			toggleCastToDevice(config)
 		case movieDownloadKey:
 			if index, ok := pickEpisode(config, entry, episodes); ok {
 				downloadEpisode(config, lib, show, episodes[index])

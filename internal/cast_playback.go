@@ -362,7 +362,8 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 
 	castStatus := func(message string) {
 		if panel != nil {
-			fmt.Print(panel.status(GetAnimeName(*anime), anime.Ep.Number, device.Name, message, castPanelPlaybackKeys))
+			episode, keys := castPanelLabels(anime)
+			fmt.Print(panel.status(GetAnimeName(*anime), episode, device.Name, message, keys))
 			return
 		}
 		Out(message)
@@ -828,6 +829,8 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	animeName := GetAnimeName(*anime)
 	animeProvider := CurrentAnimeProviderName(anime)
 	anilistID, providerID, episodeNumber := anime.AnilistId, anime.ProviderId, anime.Ep.Number
+	panelEpisode, panelKeys := castPanelLabels(anime)
+	isMovie := anime.Movie != nil
 	untracked := anime.Untracked
 	var movieProgress func(float64, int, bool)
 	if anime.Movie != nil {
@@ -985,6 +988,10 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 		case <-pollTimer.C:
 			pollTimer.Reset(castPollInterval)
 		case command := <-commands:
+			// A movie has no other language to switch to.
+			if isMovie && command == castCmdSwitchAudio {
+				continue
+			}
 			wasPaused := paused
 
 			var (
@@ -1007,7 +1014,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 					// screen before it starts.
 					message := fmt.Sprintf("Seeking to %s…", castClock(target))
 					if panel != nil {
-						fmt.Print(panel.status(animeName, episodeNumber, device.Name, message, castPanelPlaybackKeys))
+						fmt.Print(panel.status(animeName, panelEpisode, device.Name, message, panelKeys))
 						return
 					}
 					castOut(commands != nil, message)
@@ -1056,6 +1063,9 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			// Whatever arrived during the burst that was not a seek. A stop in
 			// here ends the episode exactly as one arriving on its own does.
 			for _, queued := range pending {
+				if isMovie && queued == castCmdSwitchAudio {
+					continue
+				}
 				wasPaused := paused
 				stop, moved, err := applyCastCommand(queued, session, &paused, spans, lastPosition)
 				Log(fmt.Sprintf("cast: queued command %d at pos=%.1f -> pos=%.1f err=%v", queued, lastPosition, moved, err))
@@ -1136,7 +1146,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			hint := castWaitingFirewallHint(config, castServerHost(server.URL("")), castDetectFirewall(), device.Name)
 			Log("cast: " + strings.ReplaceAll(hint, "\n", " "))
 			if panel != nil {
-				fmt.Print(panel.status(animeName, episodeNumber, device.Name, hint, castPanelPlaybackKeys))
+				fmt.Print(panel.status(animeName, panelEpisode, device.Name, hint, panelKeys))
 			} else {
 				castOut(commands != nil, hint)
 			}
@@ -1220,7 +1230,8 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			}
 			fmt.Print(panel.frame(castPanelState{
 				Title:     animeName,
-				Episode:   episodeNumber,
+				Episode:   panelEpisode,
+				Keys:      panelKeys,
 				Device:    device.Name,
 				Position:  progress.Position,
 				Duration:  total,
@@ -1265,7 +1276,7 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 		if rolling != nil && started && !paused && rolling.subtitlesBehind(progress.Position) {
 			message := "Adding more subtitles…"
 			if panel != nil {
-				fmt.Print(panel.status(animeName, episodeNumber, device.Name, message, castPanelPlaybackKeys))
+				fmt.Print(panel.status(animeName, panelEpisode, device.Name, message, panelKeys))
 			} else {
 				castOut(commands != nil, message)
 			}

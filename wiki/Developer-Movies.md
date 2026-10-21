@@ -51,6 +51,13 @@ them, so its series are left out.
   changes every five minutes. The module imports nothing and is run with
   wazero: `alloc(len)`, write the bytes, `decrypt(ptr, len)` returns the plain
   length, and the text starts 12 bytes in, one HLS link per line.
+- `&stream_urls` is refused ("invalid api token") without `&api_token=`, a
+  single-use token tied to the caller's IP. It is read the way the player
+  reads it: `https://vidsrc.sh/vs_src.php?type=movie&id=<tt…>` (or
+  `type=tv&id=<show>&season=<n>&episode=<n>`) answers `{"src": …}`, a player
+  host that changes; that page's `window.CFG.playerUrl` is fetched with it as
+  the referrer, and its `window.CONFIG.apiToken` is the token. The API call
+  sends that host as `Referer` and `Origin`.
 - Each link needs `?token=` from `<link origin>/generate.php`, a JWT tied to
   the caller's IP, so resolve on the machine that plays.
 - Subtitles: OpenSubtitles' keyless REST search
@@ -78,11 +85,11 @@ them, so its series are left out.
 ### 8Filmai (Lithuanian)
 
 The source is a Lithuanian WordPress site on the DooPlay theme. It has no fixed
-address: it moves between bare IP addresses. `MovieSite` (default
-`https://8filmai.eu`) answers every request with a 301 to the current address,
+address: it moves between bare IP addresses. `https://8filmai.eu`
+(`movies.DefaultSiteURL`) answers every request with a 301 to the current address,
 keeping the path. The client asks it once, stores the address it was sent to
 in `movies.json`, and goes there directly until a request fails; then it asks
-`MovieSite` again and retries once.
+`8filmai.eu` again and retries once.
 
 - Search: `/?s=<query>`. Results are `<article>` blocks linking under
   `/filmas/` (films) or `/serialai/` (series). A series has a page per season,
@@ -184,8 +191,15 @@ the address that resolved them, so run it on the machine that plays.
 
 Casting goes through `CastEpisode` with the movie dressed as an untracked
 one-episode show; `Anime.Movie` carries the start position and a callback that
-saves progress to `movies.json`. Under rofi it casts in-process rather than
-handing off to a terminal, which would lose that callback. Downloads use the
+saves progress to `movies.json`. Under rofi it is handed to a terminal window
+like an episode (`-cast-session`, with `movie` set in the handoff file), so it
+gets the same control panel; the panel drops the episode number and the audio
+key for a movie. Unlike an episode, the process that opened the window stays
+and waits: the window writes where it got to into a report file beside the
+handoff file and touches it every two seconds, and the opener saves that to
+`movies.json` when the report says done or stops being touched
+(`internal/movies_cast.go`). A series plays one episode per window; the opener
+starts the next. Downloads use the
 anime download's ffmpeg job with `File` set for hosts whose links have no
 extension, and are named `Title (Year).mkv`, or `Title - S01E03.mkv` for an
 episode, in `DownloadDir`.

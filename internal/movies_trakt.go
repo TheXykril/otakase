@@ -286,7 +286,8 @@ func movieDetailsText(details movies.Details) []string {
 		lines = append(lines, strings.Join(facts, " · "))
 	}
 	if overview := strings.TrimSpace(details.Overview); overview != "" {
-		lines = append(lines, wrapWords(overview, 78)...)
+		// One line: the menu wraps it to the room it has.
+		lines = append(lines, strings.Join(strings.Fields(overview), " "))
 	}
 	return lines
 }

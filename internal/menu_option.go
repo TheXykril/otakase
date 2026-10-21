@@ -21,6 +21,9 @@ type SelectionOption struct {
 	// as a provider's search hit.
 	ExtraData      any
 	HasNewEpisodes bool
+	// Details, when set, is what the terminal's detail pane shows under the
+	// title instead of what it would make of the label.
+	Details []string
 }
 
 // RofiSelectPreview is one tile of the rofi cover grid.

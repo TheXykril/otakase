@@ -31,13 +31,14 @@ func LoadConfig(configPath string) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("reading the config file: %w", err)
 	}
-	WarnAboutUnknownConfigKeys(onDisk)
-
+	// Upgraded first, so a retired setting is dropped rather than reported
+	// as unknown.
 	if upgradeStoredValues(onDisk) && configBool(onDisk, "AddMissingOptions", true) {
 		if err := SaveConfigToFile(configPath, onDisk); err != nil {
 			return Config{}, fmt.Errorf("saving the config file: %w", err)
 		}
 	}
+	WarnAboutUnknownConfigKeys(onDisk)
 
 	values := defaultConfigMap()
 	for key, value := range onDisk {
@@ -53,11 +54,25 @@ func LoadConfig(configPath string) (Config, error) {
 // value is swapped for the default and the user signs in again.
 const retiredMyAnimeListClientID = "f76d4c827152327b60654285d221222c"
 
+// retiredConfigKeys are settings otakase no longer has. They are removed
+// from the file rather than reported as unknown on every run.
+var retiredConfigKeys = []string{
+	// The 8Filmai address now lives in the code: the site is found through
+	// it and then remembered in movies.json, so there was nothing to set.
+	"MovieSite",
+}
+
 // upgradeStoredValues rewrites settings saved in an old form: a provider
-// under an old spelling and the retired MyAnimeList client. It reports
-// whether anything changed.
+// under an old spelling, the retired MyAnimeList client and settings that
+// are gone. It reports whether anything changed.
 func upgradeStoredValues(onDisk map[string]string) bool {
 	changed := false
+	for _, key := range retiredConfigKeys {
+		if _, ok := onDisk[key]; ok {
+			delete(onDisk, key)
+			changed = true
+		}
+	}
 	if value, ok := onDisk["Provider"]; ok {
 		if canonical := canonicalProviderConfigValue(value); canonical != value {
 			onDisk["Provider"] = canonical
