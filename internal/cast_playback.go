@@ -31,7 +31,7 @@ const castSubtitleLead = 60.0
 
 // castSubtitleStartWait bounds that wait. A slow swarm should cost the viewer
 // subtitles for a while, not the start of the episode.
-var castSubtitleStartWait = 20 * time.Second
+var castSubtitleStartWait = 30 * time.Second
 
 // castSubtitlePoll is how often the wait checks the reader.
 var castSubtitlePoll = 250 * time.Millisecond

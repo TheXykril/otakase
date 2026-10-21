@@ -180,9 +180,11 @@ const castSubtitleMargin = 30.0
 
 // castSubtitleMinGain is the least a rebuild has to add. Every rebuild is a
 // few seconds of buffering on the TV, so one that adds a few lines is not
-// worth it; on a download only just faster than playback this keeps them a
-// couple of minutes apart.
-const castSubtitleMinGain = 120.0
+// worth it. A minute keeps a stretch without subtitles short -- after a
+// resume the first stream may hold only seconds of them -- while a healthy
+// download, reading several minutes for every one played, still needs only a
+// handful of rebuilds before it has them all.
+const castSubtitleMinGain = 60.0
 
 // subtitlesBehind reports whether playback at position is about to run past
 // the subtitles burned into the stream, and enough more have been read to be
