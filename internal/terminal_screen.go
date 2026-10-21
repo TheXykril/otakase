@@ -66,9 +66,13 @@ func runExitCleanups() {
 	}()
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(exitCleanupBudget):
 	}
 }
+
+// exitCleanupBudget is how long the cleanups get, all of them together. It
+// has to leave room for castStopTimeout and the local steps after it.
+const exitCleanupBudget = 4 * time.Second
 
 // interruptSignals are the signals that must restore the terminal and run the
 // exit cleanups before the process goes away.
@@ -106,8 +110,8 @@ func exitOnSignals(signals <-chan os.Signal) {
 // back and running the exit cleanups.
 func restoreAndExit(status int) {
 	exitOnce.Do(func() {
-		// The terminal comes back first: cleanups can take up to two seconds
-		// (runExitCleanups' budget), and leaving the alternate screen up for
+		// The terminal comes back first: cleanups can take up to four seconds
+		// (exitCleanupBudget), and leaving the alternate screen up for
 		// that whole window makes Ctrl+C look like it did nothing.
 		LeaveAppScreen()
 		runExitCleanups()

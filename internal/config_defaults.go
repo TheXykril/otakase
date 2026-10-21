@@ -84,16 +84,18 @@ func defaultConfigMap() map[string]string {
 		"DiscordShareRatings":  "ask",
 
 		// Casting
-		"CastDevice":        "",
-		"CastTerminal":      "",
-		"CastPort":          "0",
-		"CastDiscoveryPort": "8011",
-		"CastBurnSubtitles": "true",
-		"CastEncoder":       "",
-		"CastNextEpisode":   CastNextEpisodeCountdown,
-		"KodiHost":          "",
-		"KodiUser":          "",
-		"KodiPassword":      "",
+		"CastDevice":           "",
+		"CastTerminal":         "",
+		"CastPort":             "0",
+		"CastDiscoveryPort":    "8011",
+		"CastBurnSubtitles":    "true",
+		"CastWaitForSubtitles": "false",
+		"CastSubtitleSize":     "120",
+		"CastEncoder":          "",
+		"CastNextEpisode":      CastNextEpisodeCountdown,
+		"KodiHost":             "",
+		"KodiUser":             "",
+		"KodiPassword":         "",
 
 		// Movies
 		"ExperimentalMovies": "false",

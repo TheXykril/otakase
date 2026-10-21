@@ -159,6 +159,9 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"DiscordShareRatings":  "26.8.0",
 		// 26.8.0 — where links opened from the browser show their menus
 		"LinkMenus": "26.8.0",
+		// 26.9.0 — wait for a torrent's own subtitles before casting
+		"CastWaitForSubtitles": "26.9.0",
+		"CastSubtitleSize":     "26.9.0",
 	}
 }
 

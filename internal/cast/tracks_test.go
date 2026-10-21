@@ -1,8 +1,12 @@
 package cast
 
 import (
+	"errors"
+	"net"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Trimmed from what ffprobe reports for a real anizone episode: one video per
@@ -101,5 +105,108 @@ func TestTheMapsReachFFmpegAfterTheInput(t *testing.T) {
 		if input < 0 || mapped < input {
 			t.Errorf("%s: the maps are missing or precede the input:\n%s", name, joined)
 		}
+	}
+}
+
+// Trimmed from what ffprobe reports for a fansub release from nyaa: the
+// subtitles and the fonts their styles name travel inside the Matroska file.
+const releaseProbe = `{
+  "streams": [
+    {"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080},
+    {"index": 1, "codec_type": "audio", "codec_name": "aac", "disposition": {"default": 1}, "tags": {"language": "jpn"}},
+    {"index": 2, "codec_type": "subtitle", "codec_name": "ass", "disposition": {"default": 0, "forced": 0}, "tags": {"language": "eng", "title": "Signs & Songs"}},
+    {"index": 3, "codec_type": "subtitle", "codec_name": "ass", "disposition": {"default": 1, "forced": 0}, "tags": {"language": "eng", "title": "Full Subtitles"}},
+    {"index": 4, "codec_type": "subtitle", "codec_name": "subrip", "disposition": {"default": 0}, "tags": {"language": "spa"}},
+    {"index": 5, "codec_type": "attachment", "codec_name": "ttf", "tags": {"filename": "Roboto.ttf", "mimetype": "application/x-truetype-font"}},
+    {"index": 6, "codec_type": "attachment", "tags": {"filename": "Gandhi.otf"}},
+    {"index": 7, "codec_type": "attachment", "tags": {"filename": "cover.jpg", "mimetype": "image/jpeg"}}
+  ],
+  "format": {"duration": "1420.000000"}
+}`
+
+func TestParseProbedStreamReadsEmbeddedSubtitlesAndFonts(t *testing.T) {
+	info, err := ParseProbedStream([]byte(releaseProbe))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(info.Subtitles) != 3 {
+		t.Fatalf("got %d subtitle tracks, want 3: %+v", len(info.Subtitles), info.Subtitles)
+	}
+	if got := info.Subtitles[1]; got.Index != 3 || got.Codec != "ass" || got.Language != "en" || !got.Default || got.Title != "Full Subtitles" {
+		t.Errorf("the full English track was not read: %+v", got)
+	}
+	if len(info.Fonts) != 2 || info.Fonts[0] != 5 || info.Fonts[1] != 6 {
+		t.Errorf("fonts %v, want [5 6]: the cover image is not a font", info.Fonts)
+	}
+}
+
+func TestTheProbeAsksForWhatTheSubtitleChoiceNeeds(t *testing.T) {
+	args := strings.Join(ProbeStreamArgs("http://127.0.0.1:4000/abc", "", nil), " ")
+	for _, want := range []string{"codec_name", "forced", "title", "mimetype", "filename"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("probe args %q do not ask for %s", args, want)
+		}
+	}
+}
+
+// The full track, not signs and songs, which only translates on-screen text.
+func TestSelectSubtitlePrefersTheFullEnglishTrack(t *testing.T) {
+	info, _ := ParseProbedStream([]byte(releaseProbe))
+	track, ok := SelectSubtitle(info)
+	if !ok || track.Index != 3 {
+		t.Fatalf("picked %+v (ok=%t), want the full English track at 3", track, ok)
+	}
+}
+
+func TestSelectSubtitleTakesAnUnlabelledTrack(t *testing.T) {
+	info := StreamInfo{Subtitles: []SubtitleTrack{{Index: 2, Codec: "ass"}}}
+	if track, ok := SelectSubtitle(info); !ok || track.Index != 2 {
+		t.Errorf("an unlabelled track was not picked: %+v (ok=%t)", track, ok)
+	}
+}
+
+func TestSelectSubtitleSkipsOtherLanguagesAndPictures(t *testing.T) {
+	info := StreamInfo{Subtitles: []SubtitleTrack{
+		{Index: 2, Codec: "subrip", Language: "es"},
+		{Index: 3, Codec: "hdmv_pgs_subtitle", Language: "en"},
+	}}
+	if track, ok := SelectSubtitle(info); ok {
+		t.Errorf("picked %+v; neither a Spanish nor a picture track can be drawn as English text", track)
+	}
+}
+
+// A stream that never sends a byte -- a torrent nobody seeds -- ends the
+// probe at its bound instead of holding the cast forever.
+func TestProbeStreamGivesUpOnASilentStream(t *testing.T) {
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("no ffprobe")
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			defer conn.Close() // accepted, never answered
+		}
+	}()
+
+	previous := ProbeTimeout
+	ProbeTimeout = 300 * time.Millisecond
+	defer func() { ProbeTimeout = previous }()
+
+	start := time.Now()
+	_, err = ProbeStream(ffprobe, "http://"+listener.Addr().String()+"/abc", "", nil)
+	if !errors.Is(err, ErrProbeTimeout) {
+		t.Fatalf("got %v, want ErrProbeTimeout", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("the probe took %s to give up", elapsed)
 	}
 }

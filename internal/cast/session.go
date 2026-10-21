@@ -217,8 +217,26 @@ func (s *Session) Volume() float64 {
 
 // Stop ends playback and disconnects, leaving the device on its home screen
 // rather than holding a stream that is about to stop being served.
+//
+// Closing the connection alone does not do that, whatever its stopMedia flag
+// says: the library sends CLOSE on the virtual connections, which a receiver
+// reads as this sender leaving, not as the media ending. A playing TV went on
+// playing out what it had buffered, and a paused one sat on the paused frame
+// indefinitely. So the media is stopped, then the receiver app, and only then
+// is the connection closed. The sends are queued on the one connection in
+// that order, so the device reads both stops before it sees it close.
 func (s *Session) Stop() error {
-	return s.app.Close(true)
+	if err := s.app.StopMedia(); err != nil && !errors.Is(err, application.ErrNoMediaStop) {
+		Log(fmt.Sprintf("cast: could not stop the media: %v", err))
+	}
+	stopErr := s.app.Stop()
+	if stopErr != nil {
+		Log(fmt.Sprintf("cast: could not close the receiver: %v", stopErr))
+	}
+	if err := s.app.Close(true); err != nil {
+		return err
+	}
+	return stopErr
 }
 
 // logStatus records what the device says about itself whenever that changes.

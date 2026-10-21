@@ -1,7 +1,9 @@
 package internal
 
 import (
+	"bytes"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -47,9 +49,21 @@ type castStreamSource struct {
 	// every shift is taken from it, so offsets stay absolute rather than
 	// compounding with each seek.
 	subtitlePath string
+	// liveSubs reads a release's own subtitles out of the file while the cast
+	// plays. Each generation burns what it has read by then, and coveredUntil
+	// is how far into the episode that reaches: +Inf when the generation has
+	// all of them, or none are coming.
+	liveSubs     castSubtitleSource
+	coveredUntil float64
+	// readSubsFrom starts a new read of the subtitles at a point in the
+	// episode, for a seek the current read does not reach.
+	readSubsFrom func(from float64) (castSubtitleSource, error)
 	// encoder re-encodes the video, whenever it is drawn on or restarted at an
 	// offset. Left empty, chooseEncoder picks it the first time it is needed,
 	// so a cast that is never re-encoded never pays for the hardware probe.
+	// subtitleSize is CastSubtitleSize: how much larger ASS dialogue is drawn,
+	// as a percentage.
+	subtitleSize  int
 	encoder       cast.Encoder
 	chooseEncoder func() cast.Encoder
 	// maps names the video and audio to play, from cast.SelectTracks; nil
@@ -63,6 +77,16 @@ type castStreamSource struct {
 	// and exercise the generation bookkeeping, which is where a wrong answer is
 	// silent: a reused URL leaves the device playing from its own cache.
 	launch func(ffmpeg string, args []string, outDir string) (*cast.Remux, error)
+}
+
+// castSubtitleSource is what a cast needs of cast.SubtitleReader, so the
+// rebuild rule can be tested without ffmpeg.
+type castSubtitleSource interface {
+	Covered() float64
+	From() float64
+	Snapshot(dst string) (float64, error)
+	FontsDir() string
+	Stop()
 }
 
 // stream is one generation of the stream: a running ffmpeg, the path the device
@@ -81,28 +105,40 @@ func (s *castStreamSource) start(startAt float64) (stream, error) {
 	}
 	s.generation++
 
+	subtitlePath, fontsDir := s.subtitlePath, ""
+	s.coveredUntil = math.Inf(1)
+	s.rereadSubtitles(startAt)
+	if s.liveSubs != nil {
+		subtitlePath, s.coveredUntil = s.subtitlesSoFar(dir)
+		fontsDir = s.liveSubs.FontsDir()
+	}
+
 	args := cast.BuildRemuxArgsFrom(s.streamURL, s.referrer, dir, startAt, s.maps, s.headers)
-	if s.subtitlePath == "" && startAt > 0 {
+	if subtitlePath == "" && startAt > 0 {
 		// Copying starts each track on its own packet boundary, seconds apart
 		// on a host that serves audio and video separately, so a stream that
 		// starts anywhere but zero is re-encoded to start both at the target.
 		// See cast.BuildRemuxArgsFrom.
 		args = cast.BuildBurnArgsFrom(s.streamURL, s.referrer, "", dir, s.reencoder(), startAt, s.maps, s.headers)
 	}
-	if s.subtitlePath != "" {
+	if subtitlePath != "" {
 		// Shifted into this generation's own directory, from the original, so a
 		// second seek does not shift an already-shifted file. The original's
 		// extension is kept: it names the format, and an ASS file written out
 		// as subtitles.vtt says the wrong one.
-		shifted := filepath.Join(dir, "subtitles"+filepath.Ext(s.subtitlePath))
-		if err := cast.ShiftSubtitles(s.subtitlePath, shifted, startAt); err != nil {
+		shifted := filepath.Join(dir, "subtitles"+filepath.Ext(subtitlePath))
+		if err := cast.ShiftSubtitles(subtitlePath, shifted, startAt); err != nil {
 			// Subtitles that cannot be shifted are worth less than the seek:
 			// burn the original and let them run late rather than refusing to
 			// move at all.
 			Log(fmt.Sprintf("cast: %v", err))
-			shifted = s.subtitlePath
+			shifted = subtitlePath
+		} else if err := cast.ScaleDialogueStyles(shifted, s.subtitleSize); err != nil {
+			// Resized in this generation's copy only, never the original, so
+			// every generation grows them once.
+			Log(fmt.Sprintf("cast: %v", err))
 		}
-		args = cast.BuildBurnArgsFrom(s.streamURL, s.referrer, shifted, dir, s.encoder, startAt, s.maps, s.headers)
+		args = cast.BuildBurnArgsWithFonts(s.streamURL, s.referrer, shifted, fontsDir, dir, s.reencoder(), startAt, s.maps, s.headers)
 	}
 
 	launch := s.launch
@@ -125,6 +161,79 @@ func (s *castStreamSource) start(startAt float64) (stream, error) {
 		// not necessarily on the same kind of machine as the one serving it.
 		path: "g" + strconv.Itoa(s.generation-1) + "/" + cast.PlaylistName,
 	}, nil
+}
+
+// subtitlesSoFar copies what the subtitle reader has read into dir for one
+// generation, and says how far into the episode it reaches. A copy holding no
+// events yet -- the reader has only just started -- is no file at all: the
+// filter would draw nothing from it, and an empty one stops it opening.
+func (s *castStreamSource) subtitlesSoFar(dir string) (string, float64) {
+	path := filepath.Join(dir, "subtitles-read.ass")
+	covered, err := s.liveSubs.Snapshot(path)
+	if err != nil {
+		Log(fmt.Sprintf("cast: %v", err))
+		return "", 0
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil || !bytes.Contains(raw, []byte("[Events]")) {
+		return "", 0
+	}
+	if math.IsInf(covered, 1) {
+		Log("cast: burning all of the file's subtitles")
+	} else {
+		Log(fmt.Sprintf("cast: burning the file's subtitles up to %.0fs", covered))
+	}
+	return path, covered
+}
+
+// rereadSubtitles starts the subtitle read over at startAt when the current
+// one cannot serve it: it began after startAt, so the lines there were never
+// read, or it is so far behind startAt that catching up would leave the
+// viewer without them for minutes.
+func (s *castStreamSource) rereadSubtitles(startAt float64) {
+	if s.liveSubs == nil || s.readSubsFrom == nil {
+		return
+	}
+	before := startAt < s.liveSubs.From()-1
+	behind := startAt > s.liveSubs.Covered()+castSubtitleMinGain*2
+	if !before && !behind {
+		return
+	}
+	next, err := s.readSubsFrom(startAt)
+	if err != nil {
+		Log(fmt.Sprintf("cast: could not read the subtitles again from %.0fs: %v", startAt, err))
+		return
+	}
+	Log(fmt.Sprintf("cast: reading the subtitles again from %.0fs", startAt))
+	s.liveSubs.Stop()
+	s.liveSubs = next
+}
+
+// castSubtitleMargin is how close playback gets to the end of the subtitles
+// burned into the stream before it is rebuilt with more. A rebuild takes a
+// few seconds, and the line at the edge should not be the one it costs.
+const castSubtitleMargin = 30.0
+
+// castSubtitleMinGain is the least a rebuild has to add. Every rebuild is a
+// few seconds of buffering on the TV, so one that adds a few lines is not
+// worth it. A minute keeps a stretch without subtitles short -- after a
+// resume the first stream may hold only seconds of them -- while a healthy
+// download, reading several minutes for every one played, still needs only a
+// handful of rebuilds before it has them all.
+const castSubtitleMinGain = 60.0
+
+// subtitlesBehind reports whether playback at position is about to run past
+// the subtitles burned into the stream, and enough more have been read to be
+// worth rebuilding it for.
+func (s *castStreamSource) subtitlesBehind(position float64) bool {
+	if s.liveSubs == nil || math.IsInf(s.coveredUntil, 1) {
+		return false
+	}
+	if position < s.coveredUntil-castSubtitleMargin {
+		return false
+	}
+	covered := s.liveSubs.Covered()
+	return math.IsInf(covered, 1) || covered >= math.Max(s.coveredUntil, position)+castSubtitleMinGain
 }
 
 // reencoder is the encoder for a re-encoded generation, chosen once.
@@ -220,6 +329,21 @@ type castSeekingSession struct {
 
 	// restart rebuilds the stream at a target and hands it to the device.
 	restart func(target float64) error
+
+	// behind reports whether the stream should be rebuilt where it is to burn
+	// subtitles read since it was built; nil when none are being read.
+	behind func(position float64) bool
+}
+
+// castRollingSubtitles is a session whose subtitles are still being read out
+// of the file. The watch loop asks for it rather than taking it as an
+// argument, so every session without any stays exactly as it was.
+type castRollingSubtitles interface {
+	subtitlesBehind(position float64) bool
+}
+
+func (s *castSeekingSession) subtitlesBehind(position float64) bool {
+	return s.behind != nil && s.behind(position)
 }
 
 func (s *castSeekingSession) Progress() (cast.Progress, error) {
