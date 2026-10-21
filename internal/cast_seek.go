@@ -55,6 +55,9 @@ type castStreamSource struct {
 	// all of them, or none are coming.
 	liveSubs     castSubtitleSource
 	coveredUntil float64
+	// readSubsFrom starts a new read of the subtitles at a point in the
+	// episode, for a seek the current read does not reach.
+	readSubsFrom func(from float64) (castSubtitleSource, error)
 	// encoder re-encodes the video, whenever it is drawn on or restarted at an
 	// offset. Left empty, chooseEncoder picks it the first time it is needed,
 	// so a cast that is never re-encoded never pays for the hardware probe.
@@ -77,8 +80,10 @@ type castStreamSource struct {
 // rebuild rule can be tested without ffmpeg.
 type castSubtitleSource interface {
 	Covered() float64
+	From() float64
 	Snapshot(dst string) (float64, error)
 	FontsDir() string
+	Stop()
 }
 
 // stream is one generation of the stream: a running ffmpeg, the path the device
@@ -99,6 +104,7 @@ func (s *castStreamSource) start(startAt float64) (stream, error) {
 
 	subtitlePath, fontsDir := s.subtitlePath, ""
 	s.coveredUntil = math.Inf(1)
+	s.rereadSubtitles(startAt)
 	if s.liveSubs != nil {
 		subtitlePath, s.coveredUntil = s.subtitlesSoFar(dir)
 		fontsDir = s.liveSubs.FontsDir()
@@ -171,6 +177,29 @@ func (s *castStreamSource) subtitlesSoFar(dir string) (string, float64) {
 		Log(fmt.Sprintf("cast: burning the file's subtitles up to %.0fs", covered))
 	}
 	return path, covered
+}
+
+// rereadSubtitles starts the subtitle read over at startAt when the current
+// one cannot serve it: it began after startAt, so the lines there were never
+// read, or it is so far behind startAt that catching up would leave the
+// viewer without them for minutes.
+func (s *castStreamSource) rereadSubtitles(startAt float64) {
+	if s.liveSubs == nil || s.readSubsFrom == nil {
+		return
+	}
+	before := startAt < s.liveSubs.From()-1
+	behind := startAt > s.liveSubs.Covered()+castSubtitleMinGain*2
+	if !before && !behind {
+		return
+	}
+	next, err := s.readSubsFrom(startAt)
+	if err != nil {
+		Log(fmt.Sprintf("cast: could not read the subtitles again from %.0fs: %v", startAt, err))
+		return
+	}
+	Log(fmt.Sprintf("cast: reading the subtitles again from %.0fs", startAt))
+	s.liveSubs.Stop()
+	s.liveSubs = next
 }
 
 // castSubtitleMargin is how close playback gets to the end of the subtitles

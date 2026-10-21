@@ -11,7 +11,7 @@ import (
 )
 
 func TestSubtitleExtractWritesTheChosenTrackAsASS(t *testing.T) {
-	args := BuildSubtitleExtractArgs("http://127.0.0.1:4000/abc", "", nil, SubtitleTrack{Index: 3}, nil, "", "/tmp/out/subtitles.part")
+	args := BuildSubtitleExtractArgs("http://127.0.0.1:4000/abc", "", nil, SubtitleTrack{Index: 3}, nil, "", "/tmp/out/subtitles.part", 0)
 	joined := strings.Join(args, " ")
 	for _, want := range []string{"-map 0:3", "-c:s ass", "-f ass", "/tmp/out/subtitles.part"} {
 		if !strings.Contains(joined, want) {
@@ -26,7 +26,7 @@ func TestSubtitleExtractWritesTheChosenTrackAsASS(t *testing.T) {
 // Fonts are named here, never by the attachment's own filename tag, which
 // comes from the file and could point anywhere.
 func TestSubtitleExtractDumpsFontsUnderItsOwnNamesBeforeTheInput(t *testing.T) {
-	args := BuildSubtitleExtractArgs("http://127.0.0.1:4000/abc", "", nil, SubtitleTrack{Index: 3}, []int{5, 6}, "/tmp/out/fonts", "/tmp/out/subtitles.part")
+	args := BuildSubtitleExtractArgs("http://127.0.0.1:4000/abc", "", nil, SubtitleTrack{Index: 3}, []int{5, 6}, "/tmp/out/fonts", "/tmp/out/subtitles.part", 0)
 
 	input := -1
 	var dumps []string
@@ -64,8 +64,8 @@ func TestBurningWithFontsPointsTheFilterAtThem(t *testing.T) {
 // Subtitles are sparse, so how far the read has got is told by an audio copy
 // sent nowhere, reported on stdout.
 func TestSubtitleExtractReportsHowFarItHasRead(t *testing.T) {
-	joined := strings.Join(BuildSubtitleExtractArgs("http://127.0.0.1:4000/abc", "", nil, SubtitleTrack{Index: 3}, nil, "", "/tmp/out/subtitles.ass"), " ")
-	for _, want := range []string{"-progress pipe:1", "-flush_packets 1", "-map 0:a:0? -c:a copy -f null -"} {
+	joined := strings.Join(BuildSubtitleExtractArgs("http://127.0.0.1:4000/abc", "", nil, SubtitleTrack{Index: 3}, nil, "", "/tmp/out/subtitles.ass", 0), " ")
+	for _, want := range []string{"-progress pipe:1", "-flush_packets 1", "-ignore_readorder 1", "-map 0:a:0? -c:a copy -f null -"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("extract args %q are missing %q", joined, want)
 		}
@@ -137,7 +137,7 @@ func TestSubtitleReaderReadsARealFile(t *testing.T) {
 		t.Skipf("could not build a test file: %v %s", err, out)
 	}
 
-	reader, err := StartSubtitleReader(context.Background(), ffmpeg, mkv, "", nil, SubtitleTrack{Index: 2}, []int{3}, filepath.Join(dir, "out"))
+	reader, err := StartSubtitleReader(context.Background(), ffmpeg, mkv, "", nil, SubtitleTrack{Index: 2}, []int{3}, filepath.Join(dir, "out"), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,5 +158,18 @@ func TestSubtitleReaderReadsARealFile(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(reader.FontsDir(), "font-3")); err != nil {
 		t.Errorf("the font was not dumped: %v", err)
+	}
+}
+
+// A read for a resume seeks to it, keeping the file's own timestamps so each
+// line still says where in the episode it belongs.
+func TestSubtitleExtractSeeksToWhereTheCastStarts(t *testing.T) {
+	args := BuildSubtitleExtractArgs("http://127.0.0.1:4000/abc", "", nil, SubtitleTrack{Index: 3}, nil, "", "/tmp/out/subtitles.ass", 720)
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "-ss 720.000 -copyts -i ") {
+		t.Errorf("extract args %q do not seek the input to 720s", joined)
+	}
+	if fromZero := strings.Join(BuildSubtitleExtractArgs("http://127.0.0.1:4000/abc", "", nil, SubtitleTrack{Index: 3}, nil, "", "/tmp/out/subtitles.ass", 0), " "); strings.Contains(fromZero, "-ss") {
+		t.Errorf("a read from the start seeks: %q", fromZero)
 	}
 }

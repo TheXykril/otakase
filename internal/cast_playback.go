@@ -546,12 +546,14 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 			}
 		} else {
 			Log(fmt.Sprintf("cast: reading subtitle stream %d (%s, %q, %q) out of the file, with %d fonts", track.Index, track.Codec, track.Language, track.Title, len(probed.Fonts)))
-			reader, readErr := cast.StartSubtitleReader(subsCtx, ffmpeg, streamURL, referrer, anime.Ep.StreamHeaders, track, probed.Fonts, streamDir)
-			if readErr != nil {
-				Log(fmt.Sprintf("cast: %v", readErr))
-				Out("Could not read the subtitles out of the file, casting without them.")
-			} else {
-				source.liveSubs = reader
+			reads := 0
+			source.readSubsFrom = func(from float64) (castSubtitleSource, error) {
+				reads++
+				reader, err := cast.StartSubtitleReader(subsCtx, ffmpeg, streamURL, referrer, anime.Ep.StreamHeaders, track, probed.Fonts, filepath.Join(streamDir, fmt.Sprintf("subs%d", reads)), from)
+				if err != nil {
+					return nil, err
+				}
+				return reader, nil
 			}
 		}
 	}
@@ -585,10 +587,22 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 		castStatus(fmt.Sprintf("Resuming at %s…", castClock(resumeAt)))
 		Log(fmt.Sprintf("cast: resuming at %.1f", resumeAt))
 	}
-	if reader, ok := source.liveSubs.(*cast.SubtitleReader); ok {
-		if !castAwaitSubtitles(reader, resumeAt, config.CastWaitForSubtitles, float64(anime.Ep.Duration), castStatus) {
+	// Read from where the episode starts playing, not from the top of the
+	// file: a resume would otherwise wait on everything before it.
+	if source.readSubsFrom != nil {
+		subs, readErr := source.readSubsFrom(resumeAt)
+		if readErr == nil {
+			reader := subs.(*cast.SubtitleReader)
+			if castAwaitSubtitles(reader, resumeAt, config.CastWaitForSubtitles, float64(anime.Ep.Duration), castStatus) {
+				source.liveSubs = reader
+			} else {
+				readErr = reader.Err()
+			}
+		}
+		if readErr != nil {
+			Log(fmt.Sprintf("cast: %v", readErr))
 			Out("Could not read the subtitles out of the file, casting without them.")
-			source.liveSubs = nil
+			source.readSubsFrom = nil
 		}
 	}
 

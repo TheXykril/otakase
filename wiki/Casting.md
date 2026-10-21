@@ -39,8 +39,9 @@ turns burning off; `CastEncoder` forces `vaapi` or
 `software` if detection picks wrong.
 
 A torrent release keeps its subtitles inside the file, spread through it, so
-they are read as the file downloads. The cast starts once about a minute of
-them is in (30 seconds at most), with the release's own fonts, and the stream
+they are read as the file downloads, starting from where the episode starts
+playing (a resume, or a seek). The cast starts once about a minute of them is
+in (30 seconds at most), with the release's own fonts, and the stream
 restarts where you are a few times early on to add more, until the download
 is done. `CastWaitForSubtitles=true` waits for the whole download instead, so
 there are no restarts.

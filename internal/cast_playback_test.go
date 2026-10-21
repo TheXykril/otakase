@@ -1393,9 +1393,55 @@ func TestCastSubtitlesBehind(t *testing.T) {
 	}
 }
 
-// fakeSubtitleSource is a subtitle read that has got this far.
+// fakeSubtitleSource is a subtitle read that has got this far, from 0.
 type fakeSubtitleSource float64
 
 func (f fakeSubtitleSource) Covered() float64                 { return float64(f) }
+func (f fakeSubtitleSource) From() float64                    { return 0 }
 func (f fakeSubtitleSource) Snapshot(string) (float64, error) { return float64(f), nil }
 func (f fakeSubtitleSource) FontsDir() string                 { return "" }
+func (f fakeSubtitleSource) Stop()                            {}
+
+// fakeSubtitleRead is a read that began somewhere and has got somewhere.
+type fakeSubtitleRead struct {
+	from, covered float64
+	stopped       bool
+}
+
+func (f *fakeSubtitleRead) Covered() float64                 { return f.covered }
+func (f *fakeSubtitleRead) From() float64                    { return f.from }
+func (f *fakeSubtitleRead) Snapshot(string) (float64, error) { return f.covered, nil }
+func (f *fakeSubtitleRead) FontsDir() string                 { return "" }
+func (f *fakeSubtitleRead) Stop()                            { f.stopped = true }
+
+// A seek the read cannot serve starts it over at the target: back before it
+// began, or so far ahead that catching up would take minutes. One it can
+// serve keeps it.
+func TestCastSubtitlesAreReadAgainForASeekTheReadCannotServe(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		target float64
+		again  bool
+	}{
+		{"inside what was read", 400, false},
+		{"just ahead of what was read", 700, false},
+		{"back before the read began", 100, true},
+		{"far ahead of what was read", 1200, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			current := &fakeSubtitleRead{from: 300, covered: 600}
+			var startedAt float64 = -1
+			source := &castStreamSource{liveSubs: current, readSubsFrom: func(from float64) (castSubtitleSource, error) {
+				startedAt = from
+				return &fakeSubtitleRead{from: from, covered: from}, nil
+			}}
+			source.rereadSubtitles(tc.target)
+			if again := startedAt >= 0; again != tc.again {
+				t.Fatalf("read again = %v, want %v", again, tc.again)
+			}
+			if tc.again && (startedAt != tc.target || !current.stopped || source.liveSubs.From() != tc.target) {
+				t.Errorf("read again from %v (stopped old: %v, now from %v), want from %v", startedAt, current.stopped, source.liveSubs.From(), tc.target)
+			}
+		})
+	}
+}

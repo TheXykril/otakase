@@ -40,10 +40,20 @@ import (
 // Fonts are dumped under names of this program's choosing, never the
 // attachment's own filename tag, which comes from the file and could name a
 // path outside fontsDir.
-func BuildSubtitleExtractArgs(streamURL, referrer string, headers map[string]string, track SubtitleTrack, fonts []int, fontsDir, outPath string) []string {
+//
+// A read that starts at from seeks there first: a resume twelve minutes in
+// would otherwise wait on twelve minutes of download before its first line.
+// The timestamps are kept as they are in the file (-copyts), so the lines say
+// where in the episode they belong, and the muxer writes each one as it comes
+// (-ignore_readorder): it otherwise holds every line back until it has seen
+// the ones before the seek, which never arrive.
+func BuildSubtitleExtractArgs(streamURL, referrer string, headers map[string]string, track SubtitleTrack, fonts []int, fontsDir, outPath string, from float64) []string {
 	args := []string{"-hide_banner", "-v", "error", "-nostdin", "-nostats", "-progress", "pipe:1"}
 	args = append(args, InputArgs(streamURL)...)
 	args = append(args, inputHeaderArgs(referrer, headers)...)
+	if from > 0 {
+		args = append(args, "-ss", seconds(from), "-copyts")
+	}
 	if fontsDir != "" {
 		for _, index := range fonts {
 			args = append(args, "-dump_attachment:"+strconv.Itoa(index), filepath.Join(fontsDir, "font-"+strconv.Itoa(index)))
@@ -53,6 +63,7 @@ func BuildSubtitleExtractArgs(streamURL, referrer string, headers map[string]str
 		"-map", "0:"+strconv.Itoa(track.Index),
 		"-c:s", "ass",
 		"-flush_packets", "1",
+		"-ignore_readorder", "1",
 		"-f", "ass",
 		"-y", outPath,
 		"-map", "0:a:0?",
@@ -68,35 +79,57 @@ type SubtitleReader struct {
 	path     string
 	fontsDir string
 	done     chan struct{}
+	from     float64
+	// base is the earliest the read can really have started. A seek lands
+	// on the keyframe before from, and -progress counts from there, so the
+	// reach is counted from the earliest that keyframe can be: it may say a
+	// little less than has been read, never more.
+	base   float64
+	cancel context.CancelFunc
 
 	mu      sync.Mutex
 	covered float64
 	err     error
 }
 
-// StartSubtitleReader starts reading track out of the source into
-// dir/subtitles.ass, with the release's fonts in dir/fonts. Cancelling ctx
-// stops it.
-func StartSubtitleReader(ctx context.Context, ffmpegPath, streamURL, referrer string, headers map[string]string, track SubtitleTrack, fonts []int, dir string) (*SubtitleReader, error) {
-	r := &SubtitleReader{path: filepath.Join(dir, "subtitles.ass"), done: make(chan struct{})}
+// StartSubtitleReader starts reading track out of the source from from
+// seconds in, into dir/subtitles.ass, with the release's fonts in dir/fonts.
+// Cancelling ctx, or Stop, ends it.
+func StartSubtitleReader(ctx context.Context, ffmpegPath, streamURL, referrer string, headers map[string]string, track SubtitleTrack, fonts []int, dir string, from float64) (*SubtitleReader, error) {
+	if from < 0 {
+		from = 0
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	r := &SubtitleReader{
+		path:   filepath.Join(dir, "subtitles.ass"),
+		done:   make(chan struct{}),
+		from:   from,
+		base:   math.Max(0, from-castSeekPreroll),
+		cancel: cancel,
+	}
+	r.covered = r.base
 	if err := os.MkdirAll(dir, 0o755); err != nil {
+		cancel()
 		return nil, fmt.Errorf("cast: could not create the subtitles directory: %w", err)
 	}
 	if len(fonts) > 0 {
 		r.fontsDir = filepath.Join(dir, "fonts")
 		if err := os.MkdirAll(r.fontsDir, 0o755); err != nil {
+			cancel()
 			return nil, fmt.Errorf("cast: could not create the fonts directory: %w", err)
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, ffmpegPath, BuildSubtitleExtractArgs(streamURL, referrer, headers, track, fonts, r.fontsDir, r.path)...)
+	cmd := exec.CommandContext(ctx, ffmpegPath, BuildSubtitleExtractArgs(streamURL, referrer, headers, track, fonts, r.fontsDir, r.path, from)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	progress, err := cmd.StdoutPipe()
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("cast: could not read the subtitles: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
+		cancel()
 		return nil, fmt.Errorf("cast: could not start reading the subtitles: %w", err)
 	}
 
@@ -125,8 +158,8 @@ func (r *SubtitleReader) follow(progress io.Reader) {
 	for scanner.Scan() {
 		if seconds, ok := parseProgressTime(scanner.Text()); ok {
 			r.mu.Lock()
-			if seconds > r.covered {
-				r.covered = seconds
+			if reach := r.base + seconds; reach > r.covered {
+				r.covered = reach
 			}
 			r.mu.Unlock()
 		}
@@ -155,6 +188,12 @@ func (r *SubtitleReader) Covered() float64 {
 	defer r.mu.Unlock()
 	return r.covered
 }
+
+// From is where in the episode the read began: there are no lines before it.
+func (r *SubtitleReader) From() float64 { return r.from }
+
+// Stop ends the read; Done is closed once it has.
+func (r *SubtitleReader) Stop() { r.cancel() }
 
 // Done is closed when the reader has stopped, finished or not.
 func (r *SubtitleReader) Done() <-chan struct{} { return r.done }
