@@ -46,9 +46,6 @@ const (
 // movieSelect is the menu the Movies section draws with; tests replace it.
 var movieSelect = DynamicSelectPreserveOrder
 
-// movieSelectPreview draws the poster grid in rofi; tests replace it.
-var movieSelectPreview = DynamicSelectPreview
-
 // movieSelectWithTabs draws the terminal menu with tabs; tests replace it.
 var movieSelectWithTabs = DynamicSelectWithRefresh
 
@@ -76,11 +73,7 @@ func WatchMovies(config *Config) {
 	for {
 		var picked SelectionOption
 		var ok bool
-		if config.RofiSelection {
-			picked, ok = pickMovieOption(movieHubOptions(config, store, lib))
-		} else {
-			picked, ok, active = pickFromMovieTabs(config, store, lib, active)
-		}
+		picked, ok, active = pickFromMovieTabs(config, store, lib, active)
 		if !ok {
 			return
 		}
@@ -127,7 +120,8 @@ func movieLists(store *movies.Store) []struct {
 	}
 }
 
-// movieActions are the footer's keys in the terminal menu.
+// movieActions are the Movies menu's keys: the terminal's footer, rofi's
+// toolbar.
 func movieActions(config *Config, lib *movieLibrary) []FooterAction {
 	searching, _ := lib.searching(config)
 	return []FooterAction{
@@ -138,14 +132,17 @@ func movieActions(config *Config, lib *movieLibrary) []FooterAction {
 	}
 }
 
-// pickFromMovieTabs is the terminal's Movies menu: the remembered lists as
-// tabs, as the anime lists are, with search and the cast switch in the
-// footer. It reports the tab it was left on, so coming back opens it again.
+// pickFromMovieTabs is the Movies menu, laid out as the anime lists are: the
+// remembered lists as tabs, with search, provider, cast and Trakt in the
+// terminal's footer or rofi's toolbar on the same keys. It reports the list
+// it was left on, so coming back opens it again.
 func pickFromMovieTabs(config *Config, store *movies.Store, lib *movieLibrary, active string) (SelectionOption, bool, string) {
 	lists := movieLists(store)
 	tabs := make([]Tab, 0, len(lists))
+	labels := map[string]string{}
 	for _, list := range lists {
 		tabs = append(tabs, list.tab)
+		labels[list.tab.Key] = list.tab.Label
 	}
 	if active == "" {
 		// The first list with something in it.
@@ -159,7 +156,12 @@ func pickFromMovieTabs(config *Config, store *movies.Store, lib *movieLibrary, a
 	}
 	load := func(key string) []SelectionOption {
 		active = key
-		options := []SelectionOption{{Key: movieSearchKey, Label: "Search movies", Icon: icons.Search}}
+		options := []SelectionOption{}
+		if !config.RofiSelection || !config.ImagePreview {
+			// The poster grid has no room for a row without a poster;
+			// there, search is the toolbar's.
+			options = append(options, SelectionOption{Key: movieSearchKey, Label: "Search movies", Icon: icons.Search})
+		}
 		for _, list := range lists {
 			if list.tab.Key != key {
 				continue
@@ -170,47 +172,78 @@ func pickFromMovieTabs(config *Config, store *movies.Store, lib *movieLibrary, a
 		}
 		return options
 	}
-	picked, err := movieSelectWithTabs(load(active), &SelectionRefreshConfig{
-		Prompt:         moviesSection,
-		Categories:     tabs,
-		ActiveCategory: active,
-		Actions:        movieActions(config, lib),
-		LoadCategory:   load,
-	})
-	if err != nil {
-		Log(fmt.Sprintf("movies: menu failed: %v", err))
-		return SelectionOption{}, false, active
+	for {
+		options := load(active)
+		prompt := moviesSection
+		if config.RofiSelection {
+			// rofi names the list in its search box, as it does the anime
+			// lists.
+			prompt = "Movies · " + labels[active]
+		}
+		var picked SelectionOption
+		var err error
+		if config.RofiSelection && config.ImagePreview {
+			picked, err = movieSelectPreviewToolbar(moviePreviews(options), false, &PreviewSelectionRefreshConfig{
+				Toolbar:    true,
+				Prompt:     prompt,
+				Categories: tabs,
+				Actions:    movieActions(config, lib),
+			})
+		} else {
+			picked, err = movieSelectWithTabs(options, &SelectionRefreshConfig{
+				Toolbar:        true,
+				Prompt:         prompt,
+				Categories:     tabs,
+				ActiveCategory: active,
+				Actions:        movieActions(config, lib),
+				LoadCategory:   load,
+			})
+		}
+		if err != nil {
+			Log(fmt.Sprintf("movies: menu failed: %v", err))
+			return SelectionOption{}, false, active
+		}
+		picked = NormalizeSelectionKey(picked)
+		if SelectionMeansQuit(picked) {
+			Exit(nil)
+		}
+		switch picked.Key {
+		case "-2", movieBackKey, "":
+			return SelectionOption{}, false, active
+		case nextListKey:
+			// Tab, in rofi, which has no tabs to click.
+			for i, tab := range tabs {
+				if tab.Key == active {
+					active = tabs[(i+1)%len(tabs)].Key
+					break
+				}
+			}
+			continue
+		case listsMenuKey:
+			options := make([]SelectionOption, 0, len(tabs))
+			for _, tab := range tabs {
+				options = append(options, SelectionOption{Key: listChoicePrefix + tab.Key, Label: fmt.Sprintf("%s (%d)", tab.Label, tab.Count), Icon: tab.Icon})
+			}
+			if chosen, ok := pickMovieOption(options); ok {
+				active = strings.TrimPrefix(chosen.Key, listChoicePrefix)
+			}
+			continue
+		}
+		return picked, true, active
 	}
-	picked = NormalizeSelectionKey(picked)
-	if SelectionMeansQuit(picked) {
-		Exit(nil)
-	}
-	if picked.Key == "-2" || picked.Key == movieBackKey || picked.Key == "" {
-		return SelectionOption{}, false, active
-	}
-	return picked, true, active
 }
 
-// movieHubOptions is the Movies menu under rofi, which has no tabs: the lists
-// are rows, as is the cast switch.
-func movieHubOptions(config *Config, store *movies.Store, lib *movieLibrary) []SelectionOption {
-	options := []SelectionOption{{Key: movieSearchKey, Label: "Search movies", Icon: icons.Search}}
-	labels := map[string]string{movieContinueKey: "Continue watching", movieWatchlistKey: "Watchlist", movieHistoryKey: "History"}
-	for _, list := range movieLists(store) {
-		if list.tab.Count > 0 {
-			options = append(options, SelectionOption{Key: list.tab.Key, Label: fmt.Sprintf("%s (%d)", labels[list.tab.Key], list.tab.Count), Icon: list.tab.Icon})
-		}
+// movieSelectPreviewToolbar draws the poster grid with rofi's toolbar; tests
+// replace it.
+var movieSelectPreviewToolbar = DynamicSelectPreviewWithRefresh
+
+// moviePreviews are rows as poster grid tiles, in the rows' order.
+func moviePreviews(options []SelectionOption) map[string]RofiSelectPreview {
+	previews := map[string]RofiSelectPreview{}
+	for i, option := range options {
+		previews[option.Key] = RofiSelectPreview{Title: option.Label, CoverImage: option.Thumbnail, Rank: i}
 	}
-	_, searching := lib.searching(config)
-	castIcon := icons.CastOff
-	if config.CastToDevice {
-		castIcon = icons.Cast
-	}
-	options = append(options,
-		SelectionOption{Key: movieProviderKey, Label: "Provider: " + searching, Icon: icons.Provider},
-		SelectionOption{Key: movieCastKey, Label: castActionLabel(config), Icon: castIcon},
-		SelectionOption{Key: movieTraktKey, Label: "Trakt: " + strings.TrimPrefix(traktActionLabel(lib.trakt), "trakt: "), Icon: icons.Tracker})
-	return options
+	return previews
 }
 
 // pickMovieOption shows a menu and reports false when the viewer backs out.
@@ -244,7 +277,7 @@ var movieSelectMessage = func(config *Config, options []SelectionOption, message
 		for _, line := range strings.Split(message, "\n") {
 			lines = append(lines, wrapWords(line, 78)...)
 		}
-		return RofiSelectWithMessage(options, false, moviesSection, rofiEscape(strings.Join(lines, "\n")))
+		return movieSelectRofiToolbar(options, movieCastActions(config), rofiEscape(strings.Join(lines, "\n")))
 	}
 	// The movie's details go in the pane beside the menu, where the anime
 	// lists show theirs; printed above it they were drawn over.
@@ -270,14 +303,6 @@ var movieSelectActions = func(options []SelectionOption, actions []FooterAction)
 // a list of movies, on ctrl+k as in every other menu.
 func movieCastActions(config *Config) []FooterAction {
 	return []FooterAction{{Key: movieCastKey, Label: castActionCheckbox(config), Hint: "ctrl+k"}}
-}
-
-// movieCastRow is the cast switch as a row, for rofi, which has no footer.
-func movieCastRow(config *Config) SelectionOption {
-	if config.CastToDevice {
-		return SelectionOption{Key: movieCastKey, Label: "Cast: " + strings.TrimPrefix(castActionLabel(config), "cast: "), Icon: icons.Cast}
-	}
-	return SelectionOption{Key: movieCastKey, Label: "Cast: off", Icon: icons.CastOff}
 }
 
 // moviePlayIcon is the play row's icon: the cast one when it will be cast.
@@ -385,26 +410,36 @@ func movieSourceLabel(entry movies.Entry) string {
 }
 
 // pickMovieRows shows a list of movies, with their posters in rofi when
-// ImagePreview is on, as the anime lists have.
+// ImagePreview is on, as the anime lists have, and the cast switch on ctrl+k.
 func pickMovieRows(config *Config, options []SelectionOption) (SelectionOption, bool) {
-	if !config.RofiSelection {
-		for {
-			picked, ok := movieChoice(movieSelectActions(options, movieCastActions(config)))
-			if ok && picked.Key == movieCastKey {
-				toggleCastToDevice(config)
-				continue
-			}
-			return picked, ok
+	for {
+		var picked SelectionOption
+		var err error
+		switch {
+		case !config.RofiSelection:
+			picked, err = movieSelectActions(options, movieCastActions(config))
+		case config.ImagePreview:
+			picked, err = movieSelectPreviewToolbar(moviePreviews(options), false, &PreviewSelectionRefreshConfig{
+				Toolbar: true,
+				Prompt:  moviesSection,
+				Actions: movieCastActions(config),
+			})
+		default:
+			picked, err = movieSelectRofiToolbar(options, movieCastActions(config), "")
 		}
+		picked, ok := movieChoice(picked, err)
+		if ok && picked.Key == movieCastKey {
+			toggleCastToDevice(config)
+			continue
+		}
+		return picked, ok
 	}
-	if !config.ImagePreview {
-		return pickMovieOption(options)
-	}
-	previews := map[string]RofiSelectPreview{}
-	for i, option := range options {
-		previews[option.Key] = RofiSelectPreview{Title: option.Label, CoverImage: option.Thumbnail, Rank: i}
-	}
-	return movieChoice(movieSelectPreview(previews, false))
+}
+
+// movieSelectRofiToolbar draws a rofi menu with the toolbar holding actions,
+// and message above the rows when there is one. Tests replace it.
+var movieSelectRofiToolbar = func(options []SelectionOption, actions []FooterAction, message string) (SelectionOption, error) {
+	return rofiSelectInternal(options, false, &SelectionRefreshConfig{Toolbar: true, Prompt: moviesSection, Actions: actions}, moviesSection, message)
 }
 
 // pickMovieRating asks for a score out of 10, or 0 to clear the one given.
@@ -508,9 +543,6 @@ func openMovie(config *Config, store *movies.Store, lib *movieLibrary, movie mov
 		}
 		if known {
 			options = append(options, SelectionOption{Key: movieForgetKey, Label: "Remove from history", Icon: icons.Dropped})
-		}
-		if config.RofiSelection {
-			options = append(options, movieCastRow(config))
 		}
 
 		EnterAppScreen()

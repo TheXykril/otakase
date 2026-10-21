@@ -160,3 +160,37 @@ func TestRetiredMovieSiteIsDropped(t *testing.T) {
 		t.Errorf("unknown keys left: %v", UnknownConfigKeys(onDisk))
 	}
 }
+
+// rofi's Movies menu has the anime list's toolbar: the same buttons on the
+// same keys, the cast one lit when casting is on, and Back where the main
+// list has Quit.
+func TestMoviesRofiToolbar(t *testing.T) {
+	config := &Config{CastToDevice: true, MovieProvider: "all"}
+	lib := &movieLibrary{config: config}
+	bar := mainRofiToolbar(config, []Tab{{Key: movieContinueKey}, {Key: movieWatchlistKey}}, movieActions(config, lib))
+	bar.back = true
+	want := map[string]string{movieSearchKey: "Control+f", movieProviderKey: "Control+o", movieCastKey: "Control+k", movieTraktKey: "Control+t"}
+	for _, button := range bar.buttons {
+		if binding, ok := want[button.Key]; ok {
+			if button.Binding != binding {
+				t.Errorf("%s bound to %q, want %q", button.Key, button.Binding, binding)
+			}
+			if button.On != (button.Key == movieCastKey) {
+				t.Errorf("%s on = %v", button.Key, button.On)
+			}
+			if strings.TrimSpace(button.Label) == "" {
+				t.Errorf("%s has no label", button.Key)
+			}
+			delete(want, button.Key)
+		}
+	}
+	if len(want) != 0 {
+		t.Errorf("no button for %v", want)
+	}
+	if !strings.Contains(bar.lastLabel(), "Back") {
+		t.Errorf("last button = %q", bar.lastLabel())
+	}
+	if args := strings.Join(bar.args([]string{"inputbar", "box-toolbar", "listview"}), " "); !strings.Contains(args, "-kb-move-char-forward Right") {
+		t.Error("ctrl+f is left bound to rofi's cursor move, so rofi would refuse to start")
+	}
+}

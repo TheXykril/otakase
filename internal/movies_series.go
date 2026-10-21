@@ -105,9 +105,6 @@ func openSeries(config *Config, store *movies.Store, lib *movieLibrary, show mov
 		if known {
 			options = append(options, SelectionOption{Key: movieForgetKey, Label: "Remove from history", Icon: icons.Dropped})
 		}
-		if config.RofiSelection {
-			options = append(options, movieCastRow(config))
-		}
 
 		EnterAppScreen()
 		if details, found := movieDetails(lib, store, show); found {
