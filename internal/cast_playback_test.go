@@ -2,8 +2,10 @@ package internal
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1320,59 +1322,40 @@ func TestWatchCastNoFirewallHintOnceFetched(t *testing.T) {
 	}
 }
 
-// lateSubtitleSession is a fakeSession whose subtitles arrive mid-episode, as
-// a torrent's own do once the file has downloaded.
-type lateSubtitleSession struct {
+// rollingSubtitleSession is a fakeSession whose subtitles are still being
+// read: behind answers as the source would.
+type rollingSubtitleSession struct {
 	*fakeSession
-	results chan castSubtitleResult
-	used    chan string
+	behind func(position float64) bool
 }
 
-func (s *lateSubtitleSession) lateSubtitles() (<-chan castSubtitleResult, func(path string)) {
-	return s.results, func(path string) { s.used <- path }
-}
+func (s *rollingSubtitleSession) subtitlesBehind(position float64) bool { return s.behind(position) }
 
-// Subtitles read out of the file after playback began are drawn in by
-// rebuilding the stream where the device is -- once, and at the position the
-// device reported rather than at zero.
-func TestWatchCastRebuildsTheStreamWhenSubtitlesArrive(t *testing.T) {
+// Playback nearing the end of the subtitles burned in rebuilds the stream
+// where the device is, with more -- at the reported position, not at zero.
+func TestWatchCastRebuildsTheStreamForMoreSubtitles(t *testing.T) {
 	withFastCastTimings(t)
 
-	session := &lateSubtitleSession{
+	var asked atomic.Int32
+	session := &rollingSubtitleSession{
 		fakeSession: &fakeSession{steps: []fakeStep{
 			{progress: cast.Progress{Position: 100, Duration: 1440}},
 			{progress: cast.Progress{Position: 101, Duration: 1440}},
 		}},
-		results: make(chan castSubtitleResult, 1),
-		used:    make(chan string, 1),
+		// Behind once, as a source is until the rebuild moves its edge on.
+		behind: func(float64) bool { return asked.Add(1) == 2 },
 	}
 	commands := make(chan castCommand, 1)
-	session.results <- castSubtitleResult{path: "/tmp/subtitles.ass"}
 
 	done := make(chan error, 1)
 	captureStdout(t, func() {
 		go func() {
 			done <- watchCastWithControls(testCastConfig(t), testCastAnime(), session, &fakeServer{}, newFakeRemux(), cast.Device{Name: "Living Room"}, commands, false)
 		}()
-		select {
-		case path := <-session.used:
-			if path != "/tmp/subtitles.ass" {
-				t.Errorf("the source was given %q", path)
-			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("the subtitles that arrived were never handed to the source")
-		}
 		deadline := time.Now().Add(2 * time.Second)
-		for time.Now().Before(deadline) {
-			session.mu.Lock()
-			n := len(session.seeks)
-			session.mu.Unlock()
-			if n > 0 {
-				break
-			}
+		for time.Now().Before(deadline) && asked.Load() < 4 {
 			time.Sleep(5 * time.Millisecond)
 		}
-		time.Sleep(30 * time.Millisecond) // room for a second rebuild, if there were one
 		commands <- castCmdStop
 		<-done
 	})
@@ -1383,3 +1366,36 @@ func TestWatchCastRebuildsTheStreamWhenSubtitlesArrive(t *testing.T) {
 		t.Errorf("rebuilds %v, want exactly one at the device's position", session.seeks)
 	}
 }
+
+// The edge of the burned subtitles, and whether more have been read than a
+// rebuild is worth.
+func TestCastSubtitlesBehind(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		edge, read float64
+		position   float64
+		want       bool
+	}{
+		{"far from the edge", 300, 900, 100, false},
+		{"near the edge with plenty more read", 300, 900, 280, true},
+		{"near the edge with too little more", 300, 350, 280, false},
+		{"everything read", 300, math.Inf(1), 280, true},
+		{"already holding everything", math.Inf(1), math.Inf(1), 280, false},
+		{"past the edge, read only just past playback", 300, 400, 350, false},
+		{"past the edge, read well past playback", 300, 500, 350, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := &castStreamSource{liveSubs: fakeSubtitleSource(tc.read), coveredUntil: tc.edge}
+			if got := source.subtitlesBehind(tc.position); got != tc.want {
+				t.Errorf("subtitlesBehind(%v) = %v, want %v", tc.position, got, tc.want)
+			}
+		})
+	}
+}
+
+// fakeSubtitleSource is a subtitle read that has got this far.
+type fakeSubtitleSource float64
+
+func (f fakeSubtitleSource) Covered() float64                 { return float64(f) }
+func (f fakeSubtitleSource) Snapshot(string) (float64, error) { return float64(f), nil }
+func (f fakeSubtitleSource) FontsDir() string                 { return "" }

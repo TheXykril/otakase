@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -22,10 +23,17 @@ import (
 // A var, not a const: see castStartupGrace below for why.
 var castPollInterval = time.Second
 
-// castEmbeddedSubtitleWait is how long a cast waits for a release's own
-// subtitles before starting without them. Long enough for a file already on
-// disk, short enough that waiting on a download is never noticed.
-const castEmbeddedSubtitleWait = 3 * time.Second
+// castSubtitleLead is how much of the episode's subtitles a cast waits to
+// have read before it starts: enough that the first rebuild comes a while in,
+// by when a healthy download has read far more.
+const castSubtitleLead = 60.0
+
+// castSubtitleStartWait bounds that wait. A slow swarm should cost the viewer
+// subtitles for a while, not the start of the episode.
+var castSubtitleStartWait = 20 * time.Second
+
+// castSubtitlePoll is how often the wait checks the reader.
+var castSubtitlePoll = 250 * time.Millisecond
 
 // castStopTimeout bounds the one teardown step that talks to the device. The
 // interrupt path gives every cleanup exitCleanupBudget between them, so a
@@ -521,10 +529,7 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 	}
 	// A release from a torrent carries its subtitles inside the file, with no
 	// URL to fetch them from, and mpv shows them where a cast showed nothing.
-	// They are read out of the file in the background: a Matroska file
-	// interleaves them with the video, so that takes the whole download, and
-	// the episode starts without them rather than waiting on it.
-	var lateSubtitles <-chan castSubtitleResult
+	// They are read out of the file as it downloads: see cast.SubtitleReader.
 	if !burn && strings.TrimSpace(anime.Ep.SubtitleURL) == "" && castWantsSubtitles(config, anime, tracks.AudioLanguage) {
 		if track, ok := cast.SelectSubtitle(probed); !ok {
 			if len(probed.Subtitles) > 0 {
@@ -532,29 +537,12 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 			}
 		} else {
 			Log(fmt.Sprintf("cast: reading subtitle stream %d (%s, %q, %q) out of the file, with %d fonts", track.Index, track.Codec, track.Language, track.Title, len(probed.Fonts)))
-			castStatus("Reading the subtitles…")
-			results := make(chan castSubtitleResult, 1)
-			go func() {
-				path, err := cast.ExtractSubtitles(subsCtx, ffmpeg, streamURL, referrer, anime.Ep.StreamHeaders, track, probed.Fonts, streamDir)
-				results <- castSubtitleResult{path: path, err: err}
-			}()
-			// A file already on disk -- a torrent seen before, a direct link
-			// on a fast host -- is read in moments, and is then burned from
-			// the first frame instead of arriving as a restart.
-			select {
-			case result := <-results:
-				if result.err != nil {
-					Log(fmt.Sprintf("cast: %v", result.err))
-					Out("Could not read the subtitles out of the file, casting without them.")
-				} else {
-					source.subtitlePath = result.path
-					source.fontsDir = cast.SubtitleFontsDir(result.path)
-					source.encoder = castBurnEncoder(config, ffmpeg)
-					Log(fmt.Sprintf("cast: burning the file's own subtitles with %s (hardware=%t)", source.encoder.Name, source.encoder.Hardware()))
-				}
-			case <-time.After(castEmbeddedSubtitleWait):
-				lateSubtitles = results
-				Out("Subtitles are still being read from the file; they will appear once it has downloaded.")
+			reader, readErr := cast.StartSubtitleReader(subsCtx, ffmpeg, streamURL, referrer, anime.Ep.StreamHeaders, track, probed.Fonts, streamDir)
+			if readErr != nil {
+				Log(fmt.Sprintf("cast: %v", readErr))
+				Out("Could not read the subtitles out of the file, casting without them.")
+			} else {
+				source.liveSubs = reader
 			}
 		}
 	}
@@ -587,6 +575,12 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 	if resumeAt > 0 {
 		castStatus(fmt.Sprintf("Resuming at %s…", castClock(resumeAt)))
 		Log(fmt.Sprintf("cast: resuming at %.1f", resumeAt))
+	}
+	if reader, ok := source.liveSubs.(*cast.SubtitleReader); ok {
+		if !castAwaitSubtitles(reader, resumeAt, config.CastWaitForSubtitles, float64(anime.Ep.Duration), castStatus) {
+			Out("Could not read the subtitles out of the file, casting without them.")
+			source.liveSubs = nil
+		}
 	}
 
 	first, err := source.start(resumeAt)
@@ -641,11 +635,7 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 	// currently playing. See cast_seek.go.
 	// The generation currently playing, so the one it replaces can be cleared.
 	playing := first
-	seeking := &castSeekingSession{inner: s, base: resumeAt, subtitles: lateSubtitles, useSubtitles: func(path string) {
-		source.subtitlePath = path
-		source.fontsDir = cast.SubtitleFontsDir(path)
-		source.encoder = source.reencoder()
-	}, restart: func(target float64) error {
+	seeking := &castSeekingSession{inner: s, base: resumeAt, behind: source.subtitlesBehind, restart: func(target float64) error {
 		// No status here: the watch loop shows the destination as the presses
 		// arrive, before this runs, which is the only moment a viewer can still
 		// be told anything -- rebuilding the stream blocks that loop.
@@ -961,17 +951,8 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	pollTimer := time.NewTimer(castPollInterval)
 	defer pollTimer.Stop()
 
-	// Subtitles still being read out of the file when playback began. Like the
-	// command channel, nil blocks forever, so a cast without any never sees
-	// this case at all.
-	var (
-		lateSubs         <-chan castSubtitleResult
-		useSubs          func(path string)
-		subtitlesWaiting bool
-	)
-	if late, ok := session.(castLateSubtitles); ok {
-		lateSubs, useSubs = late.lateSubtitles()
-	}
+	// Subtitles still being read out of the file while the episode plays.
+	rolling, _ := session.(castRollingSubtitles)
 
 	for {
 		// A nil command channel blocks forever, so with no controls this
@@ -979,20 +960,6 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 		select {
 		case <-pollTimer.C:
 			pollTimer.Reset(castPollInterval)
-		case result := <-lateSubs:
-			lateSubs = nil
-			if result.err != nil {
-				Log(fmt.Sprintf("cast: %v", result.err))
-				castOut(commands != nil, "Could not read the subtitles out of the file, carrying on without them.")
-				continue
-			}
-			// Only noted here. The stream is rebuilt on a poll, once there is
-			// a position to rebuild it at that came from the device rather
-			// than from before playback began.
-			Log("cast: the subtitles are out of the file: " + result.path)
-			useSubs(result.path)
-			subtitlesWaiting = true
-			continue
 		case command := <-commands:
 			wasPaused := paused
 
@@ -1266,20 +1233,21 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			anime.Ep.Duration = int(progress.Duration)
 		}
 
-		// Drawn in by rebuilding the stream where it is, as a seek does. Not
-		// while paused: a rebuilt stream starts playing, and a viewer who
-		// paused should not have the episode carry on without them.
-		if subtitlesWaiting && started && !paused {
-			subtitlesWaiting = false
-			message := "Subtitles are ready, adding them…"
+		// More of the file's own subtitles have been read than the stream was
+		// built with, and playback is nearing the end of what it has: rebuilt
+		// where it is, as a seek does. Not while paused: a rebuilt stream
+		// starts playing, and a viewer who paused should not have the episode
+		// carry on without them.
+		if rolling != nil && started && !paused && rolling.subtitlesBehind(progress.Position) {
+			message := "Adding more subtitles…"
 			if panel != nil {
 				fmt.Print(panel.status(animeName, episodeNumber, device.Name, message, castPanelPlaybackKeys))
 			} else {
 				castOut(commands != nil, message)
 			}
+			Log(fmt.Sprintf("cast: rebuilding at %.1f for more subtitles", progress.Position))
 			if err := session.SeekToTime(progress.Position); err != nil {
-				// The next seek draws them anyway: the source already has them.
-				Log(fmt.Sprintf("cast: could not add the subtitles: %v", err))
+				Log(fmt.Sprintf("cast: could not add more subtitles: %v", err))
 			}
 			continue
 		}
@@ -1454,4 +1422,48 @@ func castPickDevice(config *Config) (device cast.Device, rescan bool, err error)
 		}
 	}
 	return cast.Device{}, false, fmt.Errorf("cast: no device chosen")
+}
+
+// castAwaitSubtitles holds the cast until enough of the file's own subtitles
+// have been read to start with: castSubtitleLead past from, within
+// castSubtitleStartWait -- or, with waitAll (CastWaitForSubtitles), every one
+// of them, however long the download takes. It reports false when the reader
+// failed, and the cast should go on without it.
+func castAwaitSubtitles(reader *cast.SubtitleReader, from float64, waitAll bool, duration float64, status func(string)) bool {
+	deadline := time.Now().Add(castSubtitleStartWait)
+	shown := ""
+	for {
+		covered := reader.Covered()
+		select {
+		case <-reader.Done():
+			if err := reader.Err(); err != nil {
+				Log(fmt.Sprintf("cast: %v", err))
+				return false
+			}
+			return true
+		default:
+		}
+		if !waitAll && (covered >= from+castSubtitleLead || !time.Now().Before(deadline)) {
+			Log(fmt.Sprintf("cast: starting with subtitles read up to %.0fs", covered))
+			return true
+		}
+
+		// Coarse on purpose: without a panel every new message is a line of
+		// its own, or a notification.
+		message := "Reading the subtitles…"
+		if waitAll {
+			message = fmt.Sprintf("Waiting for the download, for the subtitles… %s read", castClock(math.Floor(covered/60)*60))
+			if duration > 0 {
+				message = fmt.Sprintf("Waiting for the download, for the subtitles… %d%%", int(math.Min(covered/duration, 1)*20)*5)
+			}
+		}
+		if message != shown {
+			status(message)
+			shown = message
+		}
+		select {
+		case <-reader.Done():
+		case <-time.After(castSubtitlePoll):
+		}
+	}
 }

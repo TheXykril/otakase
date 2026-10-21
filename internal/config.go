@@ -97,6 +97,12 @@ type Config struct {
 	// stream -- at the cost of re-encoding the video, which the copy path
 	// never does.
 	CastBurnSubtitles bool `config:"CastBurnSubtitles"`
+	// CastWaitForSubtitles holds a cast whose subtitles are inside the file (a
+	// torrent release) until the whole file has downloaded, so they are drawn
+	// from the first frame with no rebuilds. Off, the cast starts within
+	// seconds and the stream is rebuilt a few times early on as more of them
+	// are read.
+	CastWaitForSubtitles bool `config:"CastWaitForSubtitles"`
 	// CastEncoder forces the encoder used for that: "vaapi", "software", or
 	// empty to detect what this machine can actually do.
 	CastEncoder string `config:"CastEncoder"`
