@@ -25,7 +25,6 @@ const (
 	movieSearchKey    = "MOVIE:SEARCH"
 	movieContinueKey  = "MOVIE:CONTINUE"
 	movieWatchlistKey = "MOVIE:WATCHLIST"
-	movieHistoryKey   = "MOVIE:HISTORY"
 	moviePlayKey      = "MOVIE:PLAY"
 	movieRestartKey   = "MOVIE:RESTART"
 	movieListOnKey    = "MOVIE:LIST_ON"
@@ -68,6 +67,7 @@ func WatchMovies(config *Config) {
 	})
 	lib := &movieLibrary{config: config, store: store, site: site, providers: map[string]movies.Provider{}, trakt: newMovieTrakt(config)}
 	store.OnChange = func(before, after movies.Entry) { syncMovieToTrakt(lib, store, before, after) }
+	waitForTraktPull(pullFromTrakt(lib), traktPullWait)
 
 	active := ""
 	for {
@@ -85,13 +85,11 @@ func WatchMovies(config *Config) {
 		case movieProviderKey:
 			pickMovieProvider(config, lib)
 		case movieTraktKey:
-			manageMovieTrakt(config, lib.trakt)
+			manageMovieTrakt(config, lib)
 		case movieContinueKey:
 			pickFromMovieList(config, store, lib, store.Continue)
 		case movieWatchlistKey:
 			pickFromMovieList(config, store, lib, store.Watchlist)
-		case movieHistoryKey:
-			pickFromMovieList(config, store, lib, store.History)
 		default:
 			if path, found := strings.CutPrefix(picked.Key, moviePathPrefix); found {
 				if entry, known := store.Get(path); known {
@@ -116,7 +114,6 @@ func movieLists(store *movies.Store) []struct {
 	}{
 		{Tab{Key: movieContinueKey, Label: "Continue", Icon: icons.Play, Count: len(store.Continue())}, store.Continue},
 		{Tab{Key: movieWatchlistKey, Label: "Watchlist", Icon: icons.Planning, Count: len(store.Watchlist())}, store.Watchlist},
-		{Tab{Key: movieHistoryKey, Label: "History", Icon: icons.History, Count: len(store.History())}, store.History},
 	}
 }
 

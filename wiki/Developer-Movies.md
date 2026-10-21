@@ -175,8 +175,24 @@ Lithuanian title matches too. Trakt ignores its `years` filter there, so the
 year is checked in otakase (same year, or one off); no match is skipped and
 logged rather than syncing a namesake. The
 token is `trakt_token.json` in the storage directory, renewed with its
-refresh token when it runs out. Local history stays the source of truth;
-Trakt failures are only logged. A movie counts as watched at
+refresh token when it runs out.
+
+Trakt is read back as AniList is for anime: each time the Movies menu opens,
+and right after sign-in, `Trakt.Library` (`internal/movies/trakt_pull.go`)
+reads `/sync/watchlist`, `/sync/watched/movies`, `/sync/watched/shows`,
+`/sync/ratings` and `/sync/playback?extended=full`, and `Store.ApplyTrakt`
+(`internal/movies/store_trakt.go`) brings `movies.json` in line without
+calling `OnChange`, so nothing echoes back. The menu waits up to 8 seconds,
+then opens with what it has. Trakt wins: a film or series off Trakt's
+watchlist or unrated there loses it here too, but only one with an IMDb id
+(one without never reached Trakt). Watched films are marked watched unless
+started again here since; a series moves up to its furthest watched episode
+(specials skipped); a stopped play sets the position from Trakt's percent and
+runtime, unless played here later or watched since. A film new to the
+history is added as vidsrc's (keyed by IMDb id), matched first against other
+providers' entries with `SameMovie`, and its poster is looked up from IMDb's
+suggestions in the background. If any list cannot be read, nothing is
+changed. Trakt failures are only logged. A movie counts as watched at
 `PercentageToMarkComplete`. The position is saved every 15 seconds and when
 the player closes. Nothing is sent anywhere.
 
