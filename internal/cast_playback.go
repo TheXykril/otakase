@@ -14,6 +14,7 @@ import (
 
 	"github.com/thexykril/otakase/internal/cast"
 	"github.com/thexykril/otakase/internal/icons"
+	"github.com/thexykril/otakase/internal/torrentstream"
 )
 
 // castPollInterval is how often the device is asked where it is. A second is
@@ -475,6 +476,14 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 		Log(fmt.Sprintf("cast: no ffprobe to read the stream with: %v", probeErr))
 	} else if info, probeErr := cast.ProbeStream(ffprobe, streamURL, referrer, anime.Ep.StreamHeaders); probeErr != nil {
 		Log(fmt.Sprintf("cast: %v", probeErr))
+		// Nothing arrived at all, so the remux would get nothing either and
+		// only fail the same way after another wait.
+		if errors.Is(probeErr, cast.ErrProbeTimeout) {
+			if torrentstream.IsStreamURL(streamURL) {
+				return fmt.Errorf("cast: the torrent sent no data in %s -- it may have nobody seeding it right now; try another release", cast.ProbeTimeout)
+			}
+			return fmt.Errorf("cast: the stream sent no data in %s", cast.ProbeTimeout)
+		}
 	} else {
 		probed = info
 		if info.Duration > 0 {

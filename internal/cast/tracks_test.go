@@ -1,8 +1,12 @@
 package cast
 
 import (
+	"errors"
+	"net"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Trimmed from what ffprobe reports for a real anizone episode: one video per
@@ -168,5 +172,41 @@ func TestSelectSubtitleSkipsOtherLanguagesAndPictures(t *testing.T) {
 	}}
 	if track, ok := SelectSubtitle(info); ok {
 		t.Errorf("picked %+v; neither a Spanish nor a picture track can be drawn as English text", track)
+	}
+}
+
+// A stream that never sends a byte -- a torrent nobody seeds -- ends the
+// probe at its bound instead of holding the cast forever.
+func TestProbeStreamGivesUpOnASilentStream(t *testing.T) {
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("no ffprobe")
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			defer conn.Close() // accepted, never answered
+		}
+	}()
+
+	previous := ProbeTimeout
+	ProbeTimeout = 300 * time.Millisecond
+	defer func() { ProbeTimeout = previous }()
+
+	start := time.Now()
+	_, err = ProbeStream(ffprobe, "http://"+listener.Addr().String()+"/abc", "", nil)
+	if !errors.Is(err, ErrProbeTimeout) {
+		t.Fatalf("got %v, want ErrProbeTimeout", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("the probe took %s to give up", elapsed)
 	}
 }

@@ -1,12 +1,15 @@
 package cast
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Several providers serve one HLS stream carrying every dub the host has --
@@ -156,13 +159,29 @@ func ParseProbedStream(output []byte) (StreamInfo, error) {
 
 // ProbeStream asks ffprobe for a stream's length and tracks. Only playlists
 // and the first segment of each track are fetched, not the episode.
+//
+// It is bounded by ProbeTimeout. A torrent with nobody to download from never
+// sends a byte, and ffprobe waits for one forever: the cast sat on "Preparing
+// the stream" with nothing to say why.
 func ProbeStream(ffprobePath, streamURL, referrer string, headers map[string]string) (StreamInfo, error) {
-	out, err := exec.Command(ffprobePath, ProbeStreamArgs(streamURL, referrer, headers)...).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), ProbeTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, ffprobePath, ProbeStreamArgs(streamURL, referrer, headers)...).Output()
+	if ctx.Err() != nil {
+		return StreamInfo{}, fmt.Errorf("cast: the stream sent nothing to read in %s: %w", ProbeTimeout, ErrProbeTimeout)
+	}
 	if err != nil {
 		return StreamInfo{}, fmt.Errorf("cast: could not probe the stream: %w", err)
 	}
 	return ParseProbedStream(out)
 }
+
+// ProbeTimeout bounds ProbeStream. A torrent needs peers before its first
+// byte, and a slow swarm can take a minute to find them.
+var ProbeTimeout = 90 * time.Second
+
+// ErrProbeTimeout is a probe that got nothing from the stream in time.
+var ErrProbeTimeout = errors.New("cast: timed out reading the stream")
 
 // SelectTracks picks the audio in the wanted language, else the one the host
 // marks default, else the first, and the video with the most pixels.
