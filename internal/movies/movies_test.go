@@ -530,3 +530,46 @@ func TestSameMovieTellsSeriesFromFilms(t *testing.T) {
 		t.Error("a film and a series of the same name matched")
 	}
 }
+
+// The stream links are asked for with the token the player page carries,
+// found the way the player finds it: the embed page names a player host,
+// whose page holds the token.
+func TestVidsrcAPIToken(t *testing.T) {
+	var player *httptest.Server
+	player = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/embed/tv/tt1":
+			w.Write([]byte(`<script>window.CFG = {"playerUrl":"\/embed\/player\/tv\/tt1?vs=abc&x=1"};</script>`))
+		case "/embed/player/tv/tt1":
+			if r.URL.Query().Get("vs") != "abc" || r.Referer() == "" {
+				http.Error(w, "gate", http.StatusForbidden)
+				return
+			}
+			w.Write([]byte(`<script>window.CONFIG = {"apiToken":"tok.en","apiTokenRefresh":true};</script>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer player.Close()
+	embed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if r.URL.Path != "/vs_src.php" || q.Get("type") != "tv" || q.Get("id") != "tt1" || q.Get("season") != "2" || q.Get("episode") != "3" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte(`{"src":"` + player.URL + `/embed/tv/tt1?vs=gate"}`))
+	}))
+	defer embed.Close()
+
+	v := NewVidsrc()
+	v.Embed = embed.URL
+	token, origin, err := v.apiToken("tt1", Episode{Season: 2, Number: 3})
+	if err != nil || token != "tok.en" || origin != player.URL {
+		t.Fatalf("token = %q, origin = %q, err = %v", token, origin, err)
+	}
+
+	v.Embed = ""
+	if token, _, err := v.apiToken("tt1", Episode{}); token != "" || err != nil {
+		t.Errorf("no embed site should mean no token: %q %v", token, err)
+	}
+}

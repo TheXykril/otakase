@@ -487,6 +487,9 @@ func attachDetailPane(model *selectionModel) {
 // already carries the counts and the airing note, so the pane repeats neither;
 // it shows the parts a truncated row cannot.
 func paneDetails(option SelectionOption) []string {
+	if len(option.Details) > 0 {
+		return option.Details
+	}
 	details := []string{}
 	if option.HasNewEpisodes {
 		details = append(details, "new episode")

@@ -96,6 +96,18 @@ type castSessionFile struct {
 	Untracked bool `json:"untracked"`
 
 	Device string `json:"device"`
+
+	// Movie is set for a film or series episode from the Movies section. The
+	// window casts it the way an inline cast does, from Start, and writes
+	// where it got to into the report file for the process that opened it,
+	// which keeps the movie history and is still waiting.
+	Movie *castSessionMovie `json:"movie,omitempty"`
+}
+
+// castSessionMovie is what a cast window needs to play a movie.
+type castSessionMovie struct {
+	Start  float64 `json:"start"`
+	Report string  `json:"report"`
 }
 
 // castSessionDir is where handoff files live, under the storage path.
@@ -106,12 +118,12 @@ func castSessionDir(config *Config) string {
 // writeCastSession records a resolved episode for another process to cast, and
 // returns the file's path.
 func writeCastSession(config *Config, anime *Anime, device string) (string, error) {
-	dir := castSessionDir(config)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", fmt.Errorf("cast: could not create the session directory: %w", err)
-	}
+	return writeCastSessionFile(config, castSessionFor(anime, device))
+}
 
-	session := castSessionFile{
+// castSessionFor is the handoff record of a resolved episode.
+func castSessionFor(anime *Anime, device string) castSessionFile {
+	return castSessionFile{
 		Version:        castSessionVersion,
 		AnilistID:      anime.AnilistId,
 		MalID:          anime.MalId,
@@ -137,6 +149,14 @@ func writeCastSession(config *Config, anime *Anime, device string) (string, erro
 		SkipRemoteSync: anime.SkipRemoteSync,
 		Untracked:      anime.Untracked,
 		Device:         device,
+	}
+}
+
+// writeCastSessionFile writes a handoff record and returns the file's path.
+func writeCastSessionFile(config *Config, session castSessionFile) (string, error) {
+	dir := castSessionDir(config)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("cast: could not create the session directory: %w", err)
 	}
 
 	encoded, err := json.Marshal(session)
@@ -273,6 +293,15 @@ func castSessionToAnime(session *castSessionFile) *Anime {
 	anime.IsAiring = session.IsAiring
 	anime.SkipRemoteSync = session.SkipRemoteSync
 	anime.Untracked = session.Untracked
+	if session.Movie != nil {
+		anime.Untracked = true
+		anime.SkipRemoteSync = true
+		// RunCastSession points Progress at the report file.
+		anime.Movie = &MoviePlayback{
+			Start:    session.Movie.Start,
+			Progress: func(float64, int, bool) {},
+		}
+	}
 	return anime
 }
 
@@ -344,41 +373,18 @@ func resolveCastTerminal(config *Config, lookPath func(string) (string, error)) 
 func handOffCastToTerminal(config *Config, anime *Anime) error {
 	sweepCastSessions(config, time.Hour)
 
-	terminal, err := resolveCastTerminal(config, exec.LookPath)
+	device, err := castHandOffDevice(config)
 	if err != nil {
 		return err
-	}
-
-	self, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("cast: could not find this program on disk: %w", err)
-	}
-
-	// The device is resolved here, in the process that still has a viewer at the
-	// keyboard, rather than in the window that does not. The spawned session runs
-	// with CastNonInteractive set, so with two or more devices on the network and
-	// no CastDevice configured its own picker refuses, CastEpisode returns the
-	// refusal, and the window closes on "interactive menu unavailable" without
-	// naming what to set. Asking now turns that dead end into one menu.
-	device := config.CastDevice
-	if device == "" {
-		chosen, err := chooseCastDevice(config)
-		if err != nil {
-			return fmt.Errorf("cast: no device to cast to -- set CastDevice in the config to skip this: %w", err)
-		}
-		device = chosen.Name
 	}
 
 	path, err := writeCastSession(config, anime, device)
 	if err != nil {
 		return err
 	}
-
-	args := append(terminal[1:], "-e", self, "-cast-session", path)
-	command := exec.Command(terminal[0], args...)
-	if err := command.Start(); err != nil {
-		os.Remove(path)
-		return fmt.Errorf("cast: could not open a terminal: %w", err)
+	command, err := openCastWindow(config, path)
+	if err != nil {
+		return err
 	}
 
 	// The window announces the close when the cast ends; this process exiting
@@ -391,6 +397,48 @@ func handOffCastToTerminal(config *Config, anime *Anime) error {
 		Log(fmt.Sprintf("cast: could not release the terminal process: %v", err))
 	}
 	return nil
+}
+
+// castHandOffDevice is the device a cast window should use.
+func castHandOffDevice(config *Config) (string, error) {
+	// The device is resolved here, in the process that still has a viewer at the
+	// keyboard, rather than in the window that does not. The spawned session runs
+	// with CastNonInteractive set, so with two or more devices on the network and
+	// no CastDevice configured its own picker refuses, CastEpisode returns the
+	// refusal, and the window closes on "interactive menu unavailable" without
+	// naming what to set. Asking now turns that dead end into one menu.
+	if device := config.CastDevice; device != "" {
+		return device, nil
+	}
+	chosen, err := chooseCastDevice(config)
+	if err != nil {
+		return "", fmt.Errorf("cast: no device to cast to -- set CastDevice in the config to skip this: %w", err)
+	}
+	return chosen.Name, nil
+}
+
+// openCastWindow starts a terminal that casts the handoff file at path. The
+// file is removed when no terminal could be started.
+var openCastWindow = func(config *Config, path string) (*exec.Cmd, error) {
+	terminal, err := resolveCastTerminal(config, exec.LookPath)
+	if err != nil {
+		os.Remove(path)
+		return nil, err
+	}
+
+	self, err := os.Executable()
+	if err != nil {
+		os.Remove(path)
+		return nil, fmt.Errorf("cast: could not find this program on disk: %w", err)
+	}
+
+	args := append(terminal[1:], "-e", self, "-cast-session", path)
+	command := exec.Command(terminal[0], args...)
+	if err := command.Start(); err != nil {
+		os.Remove(path)
+		return nil, fmt.Errorf("cast: could not open a terminal: %w", err)
+	}
+	return command, nil
 }
 
 // prepareCastSessionUser gives the spawned session the user every later step
@@ -452,7 +500,11 @@ func prepareCastSession(config *Config, session *castSessionFile) (*Anime, strin
 
 	anime := castSessionToAnime(session)
 
-	prepareCastSessionUser(config)
+	// A movie touches no tracker: the process that opened the window keeps
+	// its history.
+	if anime.Movie == nil {
+		prepareCastSessionUser(config)
+	}
 
 	// The terminal is taken once for the whole cast rather than per episode, so
 	// the panel does not blink between episodes and the season-end prompts have
@@ -476,6 +528,16 @@ func RunCastSession(config *Config, path string) error {
 	}
 
 	anime, databaseFile := prepareCastSession(config, session)
+	var report *movieCastReporter
+	if session.Movie != nil {
+		// otakase is still open behind this window: the process that opened
+		// it is waiting for the movie to end.
+		disarmCloseNotice()
+		report = newMovieCastReporter(session.Movie.Report)
+		anime.Movie.Progress = report.progress
+		stopBeat := report.heartbeat()
+		defer stopBeat()
+	}
 
 	// The terminal is taken once for the whole cast rather than per episode, so
 	// the panel does not blink between episodes and the season-end prompts have
@@ -493,6 +555,11 @@ func RunCastSession(config *Config, path string) error {
 			return lastErr
 		},
 		func() bool {
+			// A movie is one video; a series' next episode is the opening
+			// process's to play.
+			if anime.Movie != nil {
+				return false
+			}
 			// The countdown in CastEpisode already asked, and the loop only
 			// reaches here when it said advance: asking again would put an
 			// interactive menu in front of a viewer across the room.
@@ -513,6 +580,12 @@ func RunCastSession(config *Config, path string) error {
 	}
 
 	if errors.Is(lastErr, ErrCastStopped) {
+		lastErr = nil
+	}
+	if report != nil {
+		// The opening process says what went wrong and tries the movie's
+		// next server, so this window closes rather than wait for a key.
+		report.finish(lastErr)
 		return nil
 	}
 	return lastErr

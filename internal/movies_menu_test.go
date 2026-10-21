@@ -15,9 +15,6 @@ func TestMoviesActionFollowsTheExperimentSwitch(t *testing.T) {
 	if config.ExperimentalMovies {
 		t.Fatal("ExperimentalMovies should be off by default")
 	}
-	if config.MovieSite != "https://8filmai.eu" {
-		t.Errorf("MovieSite default = %q", config.MovieSite)
-	}
 
 	hasMovies := func() bool {
 		_, actions := mainMenuLayout(&config, AnimeList{})
@@ -56,8 +53,8 @@ func TestExperimentalMoviesIsAddedToOldConfigs(t *testing.T) {
 	if !found["ExperimentalMovies"] || config["ExperimentalMovies"] != "false" {
 		t.Errorf("ExperimentalMovies not added as false: %v", added)
 	}
-	if !found["MovieSite"] {
-		t.Errorf("MovieSite not added: %v", added)
+	if found["MovieSite"] {
+		t.Errorf("MovieSite is retired but was added: %v", added)
 	}
 }
 
@@ -114,7 +111,7 @@ func TestMovieTabsOpenOnAFilledList(t *testing.T) {
 	if !ok || active != movieWatchlistKey || picked.Key != moviePathPrefix+"8filmai:/filmas/a/" {
 		t.Fatalf("picked %+v ok=%v active=%q", picked, ok, active)
 	}
-	if shown[0].Key != movieSearchKey || len(seen.Categories) != 3 || len(seen.Actions) != 4 {
+	if shown[0].Key != movieSearchKey || len(seen.Categories) != 2 || len(seen.Actions) != 4 {
 		t.Errorf("rows %+v, tabs %d, actions %d", shown, len(seen.Categories), len(seen.Actions))
 	}
 }
@@ -223,8 +220,9 @@ func TestMovieDetailsText(t *testing.T) {
 	if lines[0] != "2h 49m · Science fiction, Drama · PG-13 · 8.9/10 on Trakt" {
 		t.Errorf("facts line = %q", lines[0])
 	}
-	if len(lines) != 3 {
-		t.Errorf("overview should wrap into two lines: %q", lines)
+	// Left whole: the menu wraps it to the room it has.
+	if len(lines) != 2 || lines[1] != strings.TrimSpace(strings.Repeat("word ", 30)) {
+		t.Errorf("overview should be one line: %q", lines)
 	}
 	if got := movieDetailsText(movies.Details{}); len(got) != 0 {
 		t.Errorf("no details should give no lines: %q", got)

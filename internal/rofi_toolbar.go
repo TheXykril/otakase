@@ -35,6 +35,9 @@ type rofiToolbar struct {
 	// keys are the custom bindings in kb-custom order: every button's, then
 	// the ones with no button of their own, like Tab for the next list.
 	keys []rofiButton
+	// back is a menu with something behind it, where Esc goes back: its last
+	// button says Back rather than Quit.
+	back bool
 }
 
 // rofiKeyName turns a footer hint, ctrl+k, into rofi's spelling, Control+k.
@@ -66,7 +69,7 @@ func mainRofiToolbar(config *Config, tabs []Tab, actions []FooterAction) rofiToo
 			Label:   toolbarButtonLabel(action.Key, config),
 			Binding: rofiKeyName(action.Hint),
 			Hint:    shortKeyLabel(action.Hint),
-			On:      action.Key == "CAST" && config != nil && config.CastToDevice,
+			On:      isCastToggleKey(action.Key) && config != nil && config.CastToDevice,
 		})
 	}
 	bar.keys = append(bar.keys, bar.buttons...)
@@ -80,7 +83,7 @@ func mainRofiToolbar(config *Config, tabs []Tab, actions []FooterAction) rofiToo
 // the state it is in.
 func toolbarButtonLabel(key string, config *Config) string {
 	label := toolbarButtonLabels[key]
-	if key == "CAST" {
+	if isCastToggleKey(key) {
 		// The device name is the one part of the bar whose length nobody
 		// chose; a long one would push the last buttons off the edge.
 		label = truncate(castMenuLabel(config), 24)
@@ -98,6 +101,7 @@ var rofiDefaultsTakenByToolbar = []string{
 	"-kb-mode-complete", "", // Control+l
 	"-kb-cancel", "Escape,Control+bracketleft", // was also Control+g
 	"-kb-element-next", "", // Tab
+	"-kb-move-char-forward", "Right", // was also Control+f, the Movies search
 }
 
 // args are the rofi arguments that draw the toolbar and bind its keys.
@@ -126,7 +130,7 @@ func (bar rofiToolbar) args(children []string) []string {
 	for i, button := range bar.buttons {
 		writeRofiButton(&theme, names[i], button.Label, button.Hint, fmt.Sprintf("kb-custom-%d", i+1), button.On, false)
 	}
-	writeRofiButton(&theme, "button-quit", toolbarQuitLabel(), "Esc", "kb-cancel", false, true)
+	writeRofiButton(&theme, "button-quit", bar.lastLabel(), "Esc", "kb-cancel", false, true)
 	// The cards are sized for their lists, not for a row of buttons, so the
 	// window is widened to the bar: every list and action switched on, with a
 	// cast device named, is wider than the default bar.
@@ -143,11 +147,25 @@ const rofiToolbarMinWidth = 1200
 func (bar rofiToolbar) width() int {
 	const cell, button, frame = 8.5, 15, 48
 	cells := 0
-	for _, b := range append(bar.buttons, rofiButton{Label: toolbarQuitLabel(), Hint: "Esc"}) {
+	for _, b := range append(bar.buttons, rofiButton{Label: bar.lastLabel(), Hint: "Esc"}) {
 		cells += len([]rune(b.Label)) + 1 + len([]rune(b.Hint))
 	}
 	width := int(float64(cells)*cell) + (len(bar.buttons)+1)*button + frame
 	return max(width, rofiToolbarMinWidth)
+}
+
+// lastLabel is the Esc button's text.
+func (bar rofiToolbar) lastLabel() string {
+	if bar.back {
+		return toolbarIconPrefix(optionIcon(backSelection)) + "Back"
+	}
+	return toolbarQuitLabel()
+}
+
+// isCastToggleKey reports whether an action is the cast switch: the main
+// list's, or the Movies menus'.
+func isCastToggleKey(key string) bool {
+	return key == "CAST" || key == movieCastKey
 }
 
 func toolbarQuitLabel() string {

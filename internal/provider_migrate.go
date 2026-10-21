@@ -148,7 +148,6 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"ThemeFile": "26.7.0",
 		// 26.7.0 — movies, experimental and off by default
 		"ExperimentalMovies": "26.7.0",
-		"MovieSite":          "26.7.0",
 		"MovieProvider":      "26.7.0",
 		"TraktClientID":      "26.7.0",
 		"TraktClientSecret":  "26.7.0",

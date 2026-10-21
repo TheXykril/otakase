@@ -101,6 +101,9 @@ type (
 		// behind it, so escape quits rather than going back, and in rofi it gets
 		// the toolbar that stands in for the terminal's tabs and bottom bar.
 		Main bool
+		// Toolbar gives a menu that is not the main list rofi's toolbar too,
+		// with Esc going back rather than quitting.
+		Toolbar bool
 		// Prompt names the list in rofi's prompt.
 		Prompt string
 	}
@@ -114,6 +117,7 @@ type (
 		// Main, Prompt, Categories and Actions are as in SelectionRefreshConfig:
 		// the poster grid is the main list in rofi when posters are on.
 		Main       bool
+		Toolbar    bool
 		Prompt     string
 		Categories []Tab
 		Actions    []FooterAction
@@ -875,8 +879,8 @@ func DynamicSelectPreviewWithRefresh(previews map[string]RofiSelectPreview, addN
 	}
 	main := refreshConfig != nil && refreshConfig.Main
 	// The main grid has no Back or Quit tiles: nothing is behind it, and
-	// its toolbar ends in Quit.
-	if !main {
+	// its toolbar ends in Quit. A grid with a toolbar has its Back there.
+	if !main && (refreshConfig == nil || !refreshConfig.Toolbar) {
 		rofiInput.WriteString("Back\n")
 		rofiInput.WriteString("Quit\n")
 		rows = append(rows, backSelection, quitSelection)
@@ -893,8 +897,9 @@ func DynamicSelectPreviewWithRefresh(previews map[string]RofiSelectPreview, addN
 	args := []string{"-dmenu", "-theme", configPath, "-show-icons", "-markup-rows", "-p", "Select Anime", "-i", "-no-custom", "-format", "i"}
 	args = append(args, rofiVersionThemeArgs()...)
 	var toolbar rofiToolbar
-	if main {
+	if main || (refreshConfig != nil && refreshConfig.Toolbar) {
 		toolbar = mainRofiToolbar(GetGlobalConfig(), refreshConfig.Categories, refreshConfig.Actions)
+		toolbar.back = !main
 		args = append(args, toolbar.args([]string{"inputbar", "box-toolbar", "listview"})...)
 		args = append(args, rofiPlaceholder(refreshConfig.Prompt)...)
 	}
@@ -1059,13 +1064,16 @@ func rofiSelectInternal(choices []SelectionOption, isHomeMenu bool, refreshConfi
 	// A menu on screen is proof otakase started; anything still showing is stale.
 	EndStartupProgress()
 
-	optionsString := buildRofiOptionsString(choices, isHomeMenu)
+	// A menu with the toolbar has Back or Quit on it rather than as rows.
+	withToolbar := refreshConfig != nil && (refreshConfig.Main || refreshConfig.Toolbar)
+	optionsString := buildRofiOptionsString(choices, isHomeMenu || withToolbar)
 	configPath := filepath.Join(GetStoragePath(), "selectanime.rasi")
 	args := []string{"-dmenu", "-theme", configPath, "-i", "-markup", "-markup-rows", "-p", prompt}
 	args = append(args, rofiVersionThemeArgs()...)
 	var toolbar rofiToolbar
-	if refreshConfig != nil && refreshConfig.Main {
+	if withToolbar {
 		toolbar = mainRofiToolbar(GetGlobalConfig(), refreshConfig.Categories, refreshConfig.Actions)
+		toolbar.back = !refreshConfig.Main
 		args = append(args, toolbar.args([]string{"inputbar", "box-toolbar", "message", "listview"})...)
 		args = append(args, rofiPlaceholder(refreshConfig.Prompt)...)
 	}

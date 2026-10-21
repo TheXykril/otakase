@@ -204,6 +204,9 @@ var toolbarButtonLabels = map[string]string{
 	"STATS":          "Stats",
 	"MOVIES":         "Movies (exp.)",
 	"COMMUNITY":      "Community",
+	movieSearchKey:   "Search",
+	movieProviderKey: "Provider",
+	movieTraktKey:    "Trakt",
 }
 
 // toolbarButtonIcon is the icon a toolbar button wears: the action's own, or
@@ -212,8 +215,14 @@ func toolbarButtonIcon(key string, config *Config) icons.Icon {
 	switch key {
 	case listsMenuKey:
 		return icons.AllShows
-	case "CAST":
+	case "CAST", movieCastKey:
 		return castMenuIcon(config)
+	case movieSearchKey:
+		return icons.Search
+	case movieProviderKey:
+		return icons.Provider
+	case movieTraktKey:
+		return icons.Tracker
 	}
 	return categoryIcon(key)
 }

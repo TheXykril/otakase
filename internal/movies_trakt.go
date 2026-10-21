@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/browser"
@@ -160,7 +161,8 @@ func traktActionLabel(trakt *movies.Trakt) string {
 }
 
 // manageMovieTrakt signs in to Trakt, or out.
-func manageMovieTrakt(config *Config, trakt *movies.Trakt) {
+func manageMovieTrakt(config *Config, lib *movieLibrary) {
+	trakt := lib.trakt
 	if trakt == nil {
 		Out("Trakt is not set up: TraktClientID is empty.")
 		awaitEnterNotice()
@@ -193,8 +195,87 @@ func manageMovieTrakt(config *Config, trakt *movies.Trakt) {
 		awaitEnterNotice()
 		return
 	}
-	traktNotice(config, "Signed in to Trakt. Watched movies, the watchlist and ratings are synced from now on.", false)
+	traktNotice(config, "Signed in to Trakt. Reading your lists…", false)
+	waitForTraktPull(pullFromTrakt(lib), traktPullWait)
+	traktNotice(config, "Signed in to Trakt. Your watchlist, watched movies and series, ratings and where you stopped now come from Trakt, and changes go back to it.", false)
 	awaitEnterNotice()
+}
+
+// traktPullWait is how long the Movies menu waits on Trakt's lists before it
+// opens with what it has; the rest shows up when the lists come.
+var traktPullWait = 8 * time.Second
+
+// pullFromTrakt reads the viewer's lists from Trakt in the background and
+// brings the history in line with them, as the anime lists are read from
+// AniList each time they open. The channel is closed once the lists are in;
+// posters for movies new to the history are looked up after.
+func pullFromTrakt(lib *movieLibrary) <-chan struct{} {
+	done := make(chan struct{})
+	if lib.trakt == nil || !lib.trakt.SignedIn() || lib.store == nil {
+		close(done)
+		return done
+	}
+	go func() {
+		library, err := lib.trakt.Library()
+		if err != nil {
+			Log(fmt.Sprintf("movies: trakt: reading the lists: %v", err))
+			close(done)
+			return
+		}
+		added := lib.store.ApplyTrakt(library)
+		close(done)
+		findMoviePosters(lib, added)
+	}()
+	return done
+}
+
+// waitForTraktPull waits for the lists, up to wait.
+func waitForTraktPull(done <-chan struct{}, wait time.Duration) {
+	select {
+	case <-done:
+	case <-time.After(wait):
+	}
+}
+
+// findMoviePosters looks up posters, by IMDb id, for movies Trakt added to
+// the history, a few at a time.
+func findMoviePosters(lib *movieLibrary, entries []movies.Entry) {
+	if len(entries) == 0 {
+		return
+	}
+	provider, err := movies.NewProvider(movies.VidsrcName, lib.site)
+	if err != nil {
+		return
+	}
+	work := make(chan movies.Entry)
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for entry := range work {
+				found, err := provider.Search(entry.IMDb)
+				if err != nil {
+					continue
+				}
+				for _, movie := range found {
+					if movie.IMDb == entry.IMDb && movie.Poster != "" {
+						if err := lib.store.SetPoster(entry.Key(), movie.Poster); err != nil {
+							Log(fmt.Sprintf("movies: could not save a poster: %v", err))
+						}
+						break
+					}
+				}
+			}
+		}()
+	}
+	for _, entry := range entries {
+		if entry.Poster == "" && strings.HasPrefix(entry.IMDb, "tt") {
+			work <- entry
+		}
+	}
+	close(work)
+	wg.Wait()
 }
 
 // traktNotice tells the viewer how the sign-in is going. Under rofi it is a
@@ -286,7 +367,8 @@ func movieDetailsText(details movies.Details) []string {
 		lines = append(lines, strings.Join(facts, " · "))
 	}
 	if overview := strings.TrimSpace(details.Overview); overview != "" {
-		lines = append(lines, wrapWords(overview, 78)...)
+		// One line: the menu wraps it to the room it has.
+		lines = append(lines, strings.Join(strings.Fields(overview), " "))
 	}
 	return lines
 }

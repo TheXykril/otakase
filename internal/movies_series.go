@@ -80,7 +80,7 @@ func openSeries(config *Config, store *movies.Store, lib *movieLibrary, show mov
 				label = "Play next: " + episodes[index].Label()
 			}
 			options = append(options,
-				SelectionOption{Key: moviePlayKey, Label: label, Icon: icons.Play},
+				SelectionOption{Key: moviePlayKey, Label: label, Icon: moviePlayIcon(config)},
 				SelectionOption{Key: movieEpisodesKey, Label: fmt.Sprintf("Episodes (%d)", len(episodes)), Icon: icons.TV})
 		}
 		if entry.Started() || entry.Watched {
@@ -102,8 +102,9 @@ func openSeries(config *Config, store *movies.Store, lib *movieLibrary, show mov
 		} else if !entry.Watched {
 			options = append(options, SelectionOption{Key: movieListOnKey, Label: "Add to watchlist", Icon: icons.Add})
 		}
+		options = append(options, SelectionOption{Key: movieElsewhereKey, Label: "Watch on another site", Icon: icons.Provider})
 		if known {
-			options = append(options, SelectionOption{Key: movieForgetKey, Label: "Remove from history", Icon: icons.Dropped})
+			options = append(options, SelectionOption{Key: movieForgetKey, Label: "Remove from your lists", Icon: icons.Dropped})
 		}
 
 		EnterAppScreen()
@@ -126,6 +127,12 @@ func openSeries(config *Config, store *movies.Store, lib *movieLibrary, show mov
 				}
 				playEpisodes(config, store, lib, show, episodes, index, start)
 			}
+		case movieElsewhereKey:
+			if moved, ok := watchElsewhere(config, store, lib, show); ok {
+				show = moved
+			}
+		case movieCastKey:
+			toggleCastToDevice(config)
 		case movieDownloadKey:
 			if index, ok := pickEpisode(config, entry, episodes); ok {
 				downloadEpisode(config, lib, show, episodes[index])

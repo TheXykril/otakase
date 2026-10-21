@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 
@@ -27,6 +28,8 @@ type castPanelState struct {
 	// Skips are the opening and ending otakase will seek past, marked on the
 	// bar so a viewer can see where they are before the jump happens.
 	Skips []cast.Span
+	// Keys is the footer; empty means castPanelPlaybackKeys.
+	Keys string
 }
 
 // castPanelTotal formats the total for the clock, marking an estimate with a
@@ -98,13 +101,30 @@ func castPanelLines(state castPanelState, width int) []string {
 			{strings.Repeat(" ", max(1, inner-lipgloss.Width(status)-lipgloss.Width(volume))), lipgloss.NewStyle()},
 			{volume, castPanelDimStyle},
 		}, inner),
-		castPanelBottom(width, castPanelPlaybackKeys),
+		castPanelBottom(width, cmp.Or(state.Keys, castPanelPlaybackKeys)),
 	}
 }
 
 // castPanelPlaybackKeys is what the footer says while an episode plays. A prompt
 // drawn in the same frame passes its own.
 const castPanelPlaybackKeys = " space · ←→ · ↑↓ · a audio · q stop "
+
+// castPanelMovieKeys is the footer while a movie plays: the same keys, less
+// the audio switch a movie has nothing for.
+const castPanelMovieKeys = " space · ←→ · ↑↓ · q stop "
+
+// castPanelLabels is the episode number the header shows and the keys the
+// footer shows for what is playing. A movie's title already says which
+// episode it is when it is one, so its header carries no number.
+func castPanelLabels(anime *Anime) (int, string) {
+	if anime != nil && anime.Movie != nil {
+		return 0, castPanelMovieKeys
+	}
+	if anime == nil {
+		return 0, castPanelPlaybackKeys
+	}
+	return anime.Ep.Number, castPanelPlaybackKeys
+}
 
 // castPanelDoneKeys is the footer for a frame drawn after the season is over.
 // The playback keys are wrong there: nothing is playing, so space, the arrows
@@ -147,7 +167,10 @@ func castPanelTop(state castPanelState, width int) string {
 	// the episode number off first -- it sits at the end, which is where a
 	// trim starts eating -- so a long title left the header saying nothing
 	// about which episode was playing.
-	episode := fmt.Sprintf(" · Ep %d ", state.Episode)
+	episode := " "
+	if state.Episode > 0 {
+		episode = fmt.Sprintf(" · Ep %d ", state.Episode)
+	}
 
 	// The title is what gives when there is not enough room: the episode
 	// number and the device are short and both matter, and a full light-novel

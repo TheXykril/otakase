@@ -99,7 +99,6 @@ func defaultConfigMap() map[string]string {
 
 		// Movies
 		"ExperimentalMovies": "false",
-		"MovieSite":          "https://8filmai.eu",
 		"MovieProvider":      "all",
 		"TraktClientID":      "",
 		"TraktClientSecret":  "",

@@ -32,7 +32,11 @@ import (
 // it: the module imports nothing. A link then needs a token from its own
 // host, tied to the address that asked for it.
 type Vidsrc struct {
-	API       string
+	API string
+	// Embed is vidsrc's player site. The API answers stream links only with
+	// a single-use token that the player page is rendered with; it is read
+	// from there. Empty skips the token.
+	Embed     string
 	SearchURL string
 	Client    *http.Client
 	// Subtitles picks the subtitle language for a movie; nil is English.
@@ -46,6 +50,7 @@ type Vidsrc struct {
 func NewVidsrc() *Vidsrc {
 	return &Vidsrc{
 		API:       "https://data.vidsrc.sh",
+		Embed:     "https://vidsrc.sh",
 		SearchURL: "https://v3.sg.media-imdb.com/suggestion/x/",
 		Client:    &http.Client{Timeout: 25 * time.Second},
 	}
@@ -158,6 +163,70 @@ func (v *Vidsrc) OpenEpisode(show Movie, episode Episode) ([]Source, error) {
 	return v.streams(show, episode)
 }
 
+var (
+	vidsrcPlayerURL = regexp.MustCompile(`"playerUrl":("(?:[^"\\]|\\.)*")`)
+	vidsrcAPIToken  = regexp.MustCompile(`"apiToken":("(?:[^"\\]|\\.)*")`)
+)
+
+// apiToken fetches the single-use token the API wants with &stream_urls, the
+// way vidsrc's player gets it: the embed page names a player host, whose
+// page is rendered with the token. The token is tied to the address that
+// asked, so it is fetched for each request.
+func (v *Vidsrc) apiToken(imdb string, episode Episode) (token, origin string, err error) {
+	if v.Embed == "" {
+		return "", "", nil
+	}
+	query := "type=movie&id=" + url.QueryEscape(imdb)
+	if episode.Number > 0 {
+		query = fmt.Sprintf("type=tv&id=%s&season=%d&episode=%d", url.QueryEscape(imdb), episode.Season, episode.Number)
+	}
+	body, err := v.get(v.Embed+"/vs_src.php?"+query, map[string]string{"Referer": v.Embed + "/"})
+	if err != nil {
+		return "", "", err
+	}
+	var frame struct {
+		Src string `json:"src"`
+	}
+	if err := json.Unmarshal(body, &frame); err != nil || frame.Src == "" {
+		return "", "", fmt.Errorf("no player address in %.100q", body)
+	}
+	frameURL, err := url.Parse(frame.Src)
+	if err != nil {
+		return "", "", err
+	}
+	page, err := v.get(frame.Src, map[string]string{"Referer": v.Embed + "/"})
+	if err != nil {
+		return "", "", err
+	}
+	playerPath, err := vidsrcConfigString(vidsrcPlayerURL, page)
+	if err != nil {
+		return "", "", fmt.Errorf("player page: %w", err)
+	}
+	player, err := frameURL.Parse(playerPath)
+	if err != nil {
+		return "", "", err
+	}
+	page, err = v.get(player.String(), map[string]string{"Referer": frame.Src})
+	if err != nil {
+		return "", "", err
+	}
+	token, err = vidsrcConfigString(vidsrcAPIToken, page)
+	return token, player.Scheme + "://" + player.Host, err
+}
+
+// vidsrcConfigString reads one JSON string from a page's inline config.
+func vidsrcConfigString(pattern *regexp.Regexp, page []byte) (string, error) {
+	match := pattern.FindSubmatch(page)
+	if match == nil {
+		return "", fmt.Errorf("not found")
+	}
+	var value string
+	if err := json.Unmarshal(match[1], &value); err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
 // streams lists a film's or an episode's streams. They are all resolved at
 // once, by one request and one decryption; each source then only fetches its
 // token.
@@ -168,7 +237,16 @@ func (v *Vidsrc) streams(movie Movie, episode Episode) ([]Source, error) {
 		query = fmt.Sprintf("type=tv&imdb=%s&season=%d&episode=%d", url.QueryEscape(movie.IMDb), episode.Season, episode.Number)
 		name = fmt.Sprintf("%s-s%de%d", movie.IMDb, episode.Season, episode.Number)
 	}
-	body, err := v.get(v.API+"/api.php?"+query+"&stream_urls", nil)
+	api := v.API + "/api.php?" + query + "&stream_urls"
+	var header map[string]string
+	if token, origin, err := v.apiToken(movie.IMDb, episode); err != nil {
+		logf("vidsrc: no API token for %s: %v", name, err)
+	} else if token != "" {
+		// Asked as the player asks it.
+		api += "&api_token=" + url.QueryEscape(token)
+		header = map[string]string{"Referer": origin + "/", "Origin": origin}
+	}
+	body, err := v.get(api, header)
 	if err != nil {
 		return nil, err
 	}
