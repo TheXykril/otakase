@@ -88,14 +88,6 @@ func otakaseMovieOption() SelectionOption {
 	}
 }
 
-// creditLine is one row of the roll: a role and its name side by side, or a
-// section heading on its own when Heading is set.
-type creditLine struct {
-	Heading string
-	Role    string
-	Name    string
-}
-
 // assColor writes "#rrggbb" the way ASS wants it: &HBBGGRR&.
 func assColor(hex string) string {
 	hex = strings.TrimPrefix(hex, "#")
@@ -134,26 +126,33 @@ func movieCoverX(i, n int) int {
 	return (movieWidth-width)/2 + i*(movieCoverWidth+movieCoverGap)
 }
 
+// moviePicture is one image the film shows, placed and timed by the script:
+// the box it fills on the canvas and when it fades in and out.
+type moviePicture struct {
+	X, Y, Width, Height int
+	In, Out             float64
+}
+
 // movieFilterGraph is the lavfi graph the picture is built on: background in
-// on the first video label, one cover per later label, the finished frame out
-// on output. The background gets a faint grain and a vignette; each cover is
-// cut to the wall's shape and fades in and out on its own beat.
-func movieFilterGraph(background string, covers []string, output string, timeline movieTimeline) string {
+// on the first video label, one image per later label, the finished frame
+// out on output. The background gets a faint grain and a vignette; each
+// image is cut to its box and fades in and out on its own beat.
+func movieFilterGraph(background string, images []string, output string, pictures []moviePicture) string {
 	var graph strings.Builder
 	fmt.Fprintf(&graph, "%snoise=alls=7:allf=t,vignette=PI/4[base0]", background)
-	for i, cover := range covers {
-		in := timeline.WallStart + 0.6 + float64(i)*0.35
-		out := timeline.WallEnd - 0.7
-		fmt.Fprintf(&graph, ";%sscale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuva420p,loop=loop=-1:size=1,setpts=N/30/TB,trim=duration=%.2f,fade=t=in:st=%.2f:d=0.5:alpha=1,fade=t=out:st=%.2f:d=0.7:alpha=1[cover%d]",
-			cover, movieCoverWidth, movieCoverHeight, movieCoverWidth, movieCoverHeight, timeline.WallEnd+0.5, in, out, i)
+	images = images[:min(len(images), len(pictures))]
+	for i, image := range images {
+		picture := pictures[i]
+		fmt.Fprintf(&graph, ";%sscale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuva420p,loop=loop=-1:size=1,setpts=N/30/TB,trim=duration=%.2f,fade=t=in:st=%.2f:d=0.4:alpha=1,fade=t=out:st=%.2f:d=0.6:alpha=1[image%d]",
+			image, picture.Width, picture.Height, picture.Width, picture.Height, picture.Out+0.5, picture.In, picture.Out-0.6, i)
 		next := fmt.Sprintf("[base%d]", i+1)
-		if i == len(covers)-1 {
+		if i == len(images)-1 {
 			next = output
 		}
-		fmt.Fprintf(&graph, ";[base%d][cover%d]overlay=x=%d:y=%d:eof_action=pass:enable='between(t,%.2f,%.2f)'%s",
-			i, i, movieCoverX(i, len(covers)), movieCoverTop, in, timeline.WallEnd, next)
+		fmt.Fprintf(&graph, ";[base%d][image%d]overlay=x=%d:y=%d:eof_action=pass:enable='between(t,%.2f,%.2f)'%s",
+			i, i, picture.X, picture.Y, picture.In, picture.Out, next)
 	}
-	if len(covers) == 0 {
+	if len(images) == 0 {
 		fmt.Fprintf(&graph, ";[base0]null%s", output)
 	}
 	return graph.String()
@@ -247,13 +246,21 @@ func playMovieFilm(facts movieFacts, tagline string, wall []movieFavourite, pale
 		"--sub-file=" + scriptPath, "--audio-file=" + musicPath,
 		"--title=" + otakaseMovieTitle, "--force-media-title=" + otakaseMovieTitle,
 	}
-	covers := make([]string, 0, len(wall))
-	for i, favourite := range wall {
-		args = append(args, "--external-file="+favourite.Path)
-		covers = append(covers, fmt.Sprintf("[vid%d]", i+2))
+	// The images go in the order the script placed them: the wall's
+	// covers, then the characters.
+	var paths, images []string
+	for _, favourite := range wall {
+		paths = append(paths, favourite.Path)
+	}
+	for _, character := range facts.Extras.Characters {
+		paths = append(paths, character.Path)
+	}
+	for i, path := range paths {
+		args = append(args, "--external-file="+path)
+		images = append(images, fmt.Sprintf("[vid%d]", i+2))
 	}
 	args = append(args,
-		"--lavfi-complex="+movieFilterGraph("[vid1]", covers, "[vo]", timeline)+";[aid1]anull[ao]",
+		"--lavfi-complex="+movieFilterGraph("[vid1]", images, "[vo]", timeline.Pictures)+";[aid1]anull[ao]",
 		movieBackground(palette, timeline.End),
 	)
 	return exec.Command(binary, args...).Run()
@@ -290,14 +297,12 @@ func printMovieStory(facts movieFacts, rng *rand.Rand) {
 		fmt.Println(indent + line.Text)
 	}
 	fmt.Println()
-	for _, credit := range movieCrew(facts, rng) {
-		if credit.Role != "" {
-			fmt.Printf("  %s: %s\n", credit.Role, credit.Name)
-		} else {
-			fmt.Printf("  %s\n", credit.Name)
-		}
+	for _, badge := range movieAchievements(facts, rng) {
+		fmt.Printf("  * %s: %s\n", badge.Name, badge.Detail)
 	}
 	fmt.Println()
+	title, episode, teaser := movieNextTime(facts, rng)
+	fmt.Printf("  Next time: %s, %s. %s\n\n", title, episode, teaser)
 }
 
 // hexRGB splits "#rrggbb" into its channels, white when it is not one.

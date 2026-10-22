@@ -14,15 +14,18 @@ import (
 // books the sound effects that go with it, so the soundtrack lands on the
 // picture's beats:
 //
-//	presents · logo · I the numbers · II the conversation · III favourites ·
-//	IV the crew · the seal
+//	presents · logo · I the numbers · II the voices (the conversation) ·
+//	III favourites · IV character select · V achievements · next time ·
+//	the seal
 
 // movieTimeline is when the film's parts happen and what the soundtrack has
 // to play under them.
 type movieTimeline struct {
-	WallStart, WallEnd float64
-	End                float64
-	Score              movieScore
+	// Pictures are where and when each image shows: the wall's covers
+	// first, then the characters.
+	Pictures []moviePicture
+	End      float64
+	Score    movieScore
 }
 
 // filmWriter writes the events and keeps the clock and the cues.
@@ -32,6 +35,7 @@ type filmWriter struct {
 	rng     *rand.Rand
 	cues    []movieCue
 	drums   [][2]float64
+	images  []moviePicture
 
 	accent, text, muted, second, dark string
 }
@@ -207,42 +211,162 @@ func (w *filmWriter) poem(at float64, lines []poemLine) float64 {
 // wall is the favourites: the covers come from lavfi (movieFilterGraph);
 // this draws the heading, a frame that springs out round each cover as it
 // pops in, and its title.
-func (w *filmWriter) wall(at float64, wall []movieFavourite) (float64, float64) {
+func (w *filmWriter) wall(at float64, wall []movieFavourite) float64 {
 	end := at + movieWallSeconds
 	w.event(2, at, end, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs30\fsp14\c%s\fad(600,700)}%s`, filmCentreX, movieCoverTop-62, w.accent, assText("YOUR FAVOURITES")))
 	for i, favourite := range wall {
 		x := movieCoverX(i, len(wall))
 		in := at + 0.6 + float64(i)*0.35
+		w.images = append(w.images, moviePicture{X: x, Y: movieCoverTop, Width: movieCoverWidth, Height: movieCoverHeight, In: in, Out: end - 0.1})
 		w.cue(in, cuePop, 0)
 		w.event(3, in, end, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\1a&HFF&\bord2\3c%s\fscx86\fscy86\t(0,220,\fscx104\fscy104)\t(220,380,\fscx100\fscy100)\fad(200,700)\p1}m 0 0 l %d 0 %d %d 0 %d{\p0}`,
 			x+movieCoverWidth/2, movieCoverTop+movieCoverHeight/2, w.accent, movieCoverWidth, movieCoverWidth, movieCoverHeight, movieCoverHeight))
 		w.event(2, in+0.2, end, "Text", fmt.Sprintf(`{\an8\pos(%d,%d)\fs22\c%s\fad(500,700)}%s`,
 			x+movieCoverWidth/2, movieCoverTop+movieCoverHeight+24, w.text, assText(ellipsize(favourite.Title, 21))))
 	}
-	return at, end
+	return end
 }
 
-// crew rolls the closing credits: roles right-aligned against the centre,
-// names left-aligned after it, rising at a steady speed.
-func (w *filmWriter) crew(at float64, credits []creditLine) float64 {
+// characterSelect is the viewer's favourite characters as a fighting game's
+// select screen: the roster slides up portrait by portrait, a cursor hops
+// along it showing each name and their series, and lands back on the first,
+// stamped SELECTED.
+func (w *filmWriter) characterSelect(at float64, characters []movieCharacter) float64 {
 	const (
-		rowHeight = 74
-		gutter    = 36
-		speed     = 130
+		width  = 220
+		height = 310
+		gap    = 26
+		top    = 520
+		hop    = 0.7
 	)
-	height := len(credits) * rowHeight
-	end := at + float64(movieHeight+height+80)/speed
-	rise := movieHeight + height + 200
-	y := movieHeight + 60
-	for _, credit := range credits {
-		if credit.Role != "" {
-			w.event(2, at, end, "Text", fmt.Sprintf(`{\an6\move(%d,%d,%d,%d)\fs30\c%s}%s`,
-				filmCentreX-gutter, y, filmCentreX-gutter, y-rise, w.muted, assText(ellipsize(credit.Role, movieValueRunes))))
-		}
-		w.event(2, at, end, "Text", fmt.Sprintf(`{\an4\move(%d,%d,%d,%d)\fs44\c%s}%s`,
-			filmCentreX+gutter, y, filmCentreX+gutter, y-rise, w.text, assText(ellipsize(credit.Name, movieValueRunes))))
-		y += rowHeight
+	n := len(characters)
+	rosterWidth := n*width + (n-1)*gap
+	left := (movieWidth - rosterWidth) / 2
+	xOf := func(i int) int { return left + i*(width+gap) }
+	settled := at + 0.6 + float64(n)*0.18
+	chosen := settled + 0.4 + float64(n)*hop
+	end := chosen + 3.4
+	gold := assColor(w.palette.Yellow)
+
+	w.event(2, at, end, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs30\fsp14\c%s\fad(500,700)}%s`, filmCentreX, movieBars+70, w.muted, assText("CHOOSE YOUR CHARACTER")))
+	for i := range characters {
+		in := at + 0.6 + float64(i)*0.18
+		x := xOf(i)
+		w.images = append(w.images, moviePicture{X: x, Y: top, Width: width, Height: height, In: in, Out: end - 0.1})
+		w.cue(in, cueTick, 0)
+		w.event(3, in, end, "Draw", fmt.Sprintf(`{\an7\move(%d,%d,%d,%d,0,250)\1a&HFF&\bord2\3c%s\fad(200,600)\p1}m 0 0 l %d 0 %d %d 0 %d{\p0}`,
+			x, top+40, x, top, w.muted, width, width, height, height))
+		w.event(3, in, end, "Text", fmt.Sprintf(`{\an1\pos(%d,%d)\fs22\c%s\fad(200,600)}%s`, x+8, top+height+34, w.muted, assText(fmt.Sprintf("%02d", i+1))))
 	}
+	// The cursor hops along the roster and back to the first.
+	order := make([]int, 0, n+1)
+	for i := 0; i < n; i++ {
+		order = append(order, i)
+	}
+	order = append(order, 0)
+	for step, i := range order {
+		start := settled + 0.4 + float64(step)*hop
+		stop := start + hop
+		final := step == len(order)-1
+		if final {
+			stop = end
+		}
+		colour, fadeOut, fade := w.accent, 0, `\fad(80,0)`
+		if final {
+			colour, fadeOut, fade = gold, 600, `\fad(80,600)`
+		}
+		w.cue(start, cuePop, 0)
+		x := xOf(i)
+		w.event(5, start, stop, "Draw", fmt.Sprintf(`{\an7\pos(%d,%d)\1a&HFF&\bord6\3c%s\blur1\fscx106\fscy106\t(0,120,\fscx100\fscy100)\fad(0,%d)\p1}m 0 0 l %d 0 %d %d 0 %d{\p0}`,
+			x-6, top-6, colour, fadeOut, width+12, width+12, height+12, height+12))
+		w.event(5, start, stop, "Text", fmt.Sprintf(`{\an2\pos(%d,%d)\fs26\b1\c%s\fad(0,%d)}P1`, x+width/2, top-18, colour, fadeOut))
+		character := characters[i]
+		w.event(4, start, stop, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs76\b1\c%s%s}%s`, filmCentreX, 330, w.text, fade, assText(ellipsize(character.Name, 30))))
+		if character.Series != "" {
+			w.event(4, start, stop, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs30\c%s%s}%s`, filmCentreX, 410, w.muted, fade, assText(ellipsize(character.Series, 48))))
+		}
+	}
+	w.cue(chosen, cueImpact, 0)
+	w.cue(chosen+0.05, cueBell, 0)
+	w.event(6, chosen, end, "Text", fmt.Sprintf(`{\an5\pos(%d,%d)\fs54\b1\fsp10\frz-8\c%s\bord4\3c%s\fscx240\fscy240\alpha&HFF&\t(0,60,\alpha&H00&)\t(0,170,\fscx100\fscy100)\fad(0,600)}%s`,
+		xOf(0)+width/2, top+height/2, w.dark, gold, assText("SELECTED")))
+	return end
+}
+
+// achievements pops the viewer's badges into a grid, two columns, one at a
+// time: a card sliding in with a bounce, a medal with the badge's initial,
+// its name and what earned it. Rare badges are gold and ring a bell.
+func (w *filmWriter) achievements(at float64, badges []achievement) float64 {
+	const (
+		cardWidth  = 780
+		cardHeight = 124
+		columnGap  = 40
+		rowGap     = 26
+		medal      = 44
+	)
+	rows := (len(badges) + 1) / 2
+	gridTop := filmCentreY + 40 - (rows*cardHeight+(rows-1)*rowGap)/2
+	end := at + 1.6 + float64(len(badges))*0.75 + 3.4
+	gold := assColor(w.palette.Yellow)
+
+	w.event(2, at, end, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs30\fsp14\c%s\fad(500,700)}%s`, filmCentreX, gridTop-70, w.muted, assText("ACHIEVEMENTS UNLOCKED")))
+	for i, badge := range badges {
+		in := at + 0.8 + float64(i)*0.75
+		column, row := i%2, i/2
+		x := filmCentreX - columnGap/2 - cardWidth/2
+		if column == 1 {
+			x = filmCentreX + columnGap/2 + cardWidth/2
+		}
+		if len(badges)%2 == 1 && i == len(badges)-1 {
+			x = filmCentreX
+		}
+		y := gridTop + row*(cardHeight+rowGap) + cardHeight/2
+		colour, ring := w.muted, w.accent
+		if badge.Rare {
+			colour, ring = gold, gold
+			w.cue(in+0.05, cueBell, 0)
+			w.cue(in, cueShimmer, 0.8)
+		}
+		w.cue(in, cuePop, 0)
+		slide := fmt.Sprintf(`\move(%d,%d,%d,%d,0,260)\alpha&HFF&\t(0,200,\alpha&H00&)\fad(0,600)`, x+60, y, x, y)
+		card := fmt.Sprintf(`m 0 0 l %d 0 %d %d 0 %d`, cardWidth, cardWidth, cardHeight, cardHeight)
+		w.event(2, in, end, "Draw", fmt.Sprintf(`{\an5%s\c%s\1a&HD8&\bord2\3c%s\p1}%s{\p0}`, slide, w.dark, colour, card))
+		if badge.Rare {
+			// A gold sheen sweeping across the card once.
+			w.event(3, in+0.4, in+1.4, "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\c%s\alpha&HC0&\blur12\frz-20\clip(%d,%d,%d,%d)\p1}m 0 0 l 40 0 40 %d 0 %d{\p0}`,
+				x-cardWidth/2, y, x+cardWidth/2, y, gold, x-cardWidth/2, y-cardHeight/2, x+cardWidth/2, y+cardHeight/2, cardHeight*2, cardHeight*2))
+		}
+		medalX := x - cardWidth/2 + 30 + medal
+		bounce := `\fscx40\fscy40\t(120,300,\fscx112\fscy112)\t(300,420,\fscx100\fscy100)\fad(0,600)`
+		w.event(3, in, end, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\c%s\1a&H30&\bord3\3c%s%s\p1}%s{\p0}`, medalX, y, w.dark, ring, bounce, circleShape(medal)))
+		initial := string([]rune(badge.Name)[0])
+		w.event(4, in, end, "Text", fmt.Sprintf(`{\an5\pos(%d,%d)\fs44\b1\c%s%s}%s`, medalX, y, ring, bounce, assText(initial)))
+		textX := medalX + medal + 30
+		w.event(3, in+0.1, end, "Text", fmt.Sprintf(`{\an1\pos(%d,%d)\fs40\c%s\fad(250,600)}%s`, textX, y+2, w.text, assText(badge.Name)))
+		w.event(3, in+0.2, end, "Text", fmt.Sprintf(`{\an7\pos(%d,%d)\fs26\c%s\fad(250,600)}%s`, textX, y+10, colour, assText(ellipsize(badge.Detail, 40))))
+	}
+	return end
+}
+
+// nextTime is the "next episode" preview anime close on: a slanted band
+// slams in, NEXT TIME and the show the viewer is in the middle of on it, the
+// episode beneath, and a teaser typed under it all.
+func (w *filmWriter) nextTime(at float64, title, episode, teaser string) float64 {
+	end := at + 7
+	land := at + 0.35
+	w.cue(at, cueWhoosh, 0.5)
+	w.cue(land, cueImpact, 0)
+	w.cue(land+0.1, cueShimmer, 1)
+	y := filmCentreY - 40
+	band := fmt.Sprintf(`m 0 0 l %d 0 %d 260 -120 260`, movieWidth+240, movieWidth+120)
+	w.event(2, at, end, "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d,0,350)\frz3\c%s\fad(0,600)\p1}%s{\p0}`,
+		-movieWidth, y, filmCentreX, y, w.accent, band))
+	// 次回予告, "next time", ghosted large behind the title.
+	w.event(3, land, end, "Seal", fmt.Sprintf(`{\an5\pos(%d,%d)\fs170\frz3\c%s\alpha&HD8&\fad(300,600)}次回予告`, filmCentreX+520, y+20, w.dark))
+	w.event(4, land, end, "Text", fmt.Sprintf(`{\an4\pos(%d,%d)\fs30\fsp20\frz3\c%s\fad(200,600)}%s`, 262, y-66, w.dark, assText("NEXT TIME")))
+	w.event(4, land+0.15, end, "Text", fmt.Sprintf(`{\an4\pos(%d,%d)\fs72\b1\frz3\c%s\fscx120\t(0,250,\fscx100)\fad(200,600)}%s`, 250, y, w.dark, assText(ellipsize(title, 34))))
+	w.event(4, land+0.5, end, "Text", fmt.Sprintf(`{\an4\pos(%d,%d)\fs38\frz3\c%s\fad(300,600)}%s`, 256, y+76, w.dark, assText(episode)))
+	w.typed(3, land+1.3, end, filmCentreX, y+230, 36, w.text, teaser, true)
 	return end
 }
 
@@ -269,19 +393,85 @@ func (w *filmWriter) seal(at float64, farewell string) float64 {
 	return end
 }
 
-// petals drift down through the whole film, behind everything.
-func (w *filmWriter) petals(end float64) {
-	petals := rand.New(rand.NewPCG(4, 12))
-	for i := 0; i < int(end/2.4); i++ {
-		start := petals.Float64() * (end - 4)
-		life := 11 + petals.Float64()*8
-		x := petals.IntN(movieWidth)
-		drift := petals.IntN(500) - 150
-		scale := 60 + petals.IntN(80)
-		spin := petals.IntN(720) - 360
-		w.event(0, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\fscx%d\fscy%d\frz%d\t(\frz%d)\c%s\alpha&H%02X&\blur1.5\fad(800,800)\p1}m 0 0 b 10 -14 26 -10 30 0 b 26 10 10 14 0 0{\p0}`,
-			x, movieBars-40, x+drift, movieHeight-movieBars+40, scale, scale, petals.IntN(360), spin, w.accent, 0x70+petals.IntN(0x50)))
+// ambience is the life behind everything, for the whole film, in depth: a
+// slow glow of colour wandering behind it all, dust and soft out-of-focus
+// lights rising, petals falling in three layers (small and dim far away,
+// tumbling in the middle, a few big blurred ones passing close in front),
+// and now and then a streak of light across the dark. It uses its own
+// random source so a film's background is the same however its story
+// varies.
+func (w *filmWriter) ambience(end float64) {
+	r := rand.New(rand.NewPCG(4, 12))
+	petal := `m 0 0 b 10 -14 26 -10 30 0 b 26 10 10 14 0 0`
+	colours := []string{w.accent, w.second, w.text}
+
+	// Glow: three huge, very soft clouds of colour drifting the whole film.
+	for i, colour := range []string{w.accent, w.second, w.accent} {
+		x0, y0 := r.IntN(movieWidth), movieBars+r.IntN(movieHeight-2*movieBars)
+		x1, y1 := r.IntN(movieWidth), movieBars+r.IntN(movieHeight-2*movieBars)
+		w.event(0, 0, end, "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\c%s\alpha&HF0&\blur90\fad(3000,3000)\p1}%s{\p0}`,
+			x0, y0, x1, y1, colour, circleShape(260+i*60)))
 	}
+	// Dust: tiny specks rising and swaying.
+	for i := 0; i < int(end/0.7); i++ {
+		start := r.Float64() * (end - 3)
+		life := 8 + r.Float64()*8
+		x, y := r.IntN(movieWidth), movieBars+r.IntN(movieHeight-2*movieBars)
+		w.event(0, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\c%s\alpha&H%02X&\blur1\fad(1500,1500)\p1}%s{\p0}`,
+			x, y, x+r.IntN(160)-80, y-60-r.IntN(200), w.text, 0x90+r.IntN(0x40), circleShape(2+r.IntN(3))))
+	}
+	// Bokeh: soft discs of light, breathing as they float up.
+	for i := 0; i < int(end/2.2); i++ {
+		start := r.Float64() * (end - 4)
+		life := 10 + r.Float64()*8
+		x, y := r.IntN(movieWidth), movieBars+r.IntN(movieHeight-2*movieBars)
+		alpha := 0xC8 + r.IntN(0x20)
+		w.event(1, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\c%s\alpha&H%02X&\blur%d\t(0,%d,\alpha&H%02X&)\t(%d,%d,\alpha&H%02X&)\fad(2000,2000)\p1}%s{\p0}`,
+			x, y, x+r.IntN(200)-100, y-80-r.IntN(160), colours[r.IntN(len(colours))], alpha, 8+r.IntN(14),
+			int(life*500), max(alpha-0x18, 0x90), int(life*500), int(life*1000), alpha, circleShape(14+r.IntN(40))))
+	}
+	// Far petals: small, slow, dim, out of focus.
+	for i := 0; i < int(end/1.1); i++ {
+		start := r.Float64() * (end - 4)
+		life := 16 + r.Float64()*8
+		x := r.IntN(movieWidth)
+		scale := 25 + r.IntN(30)
+		w.event(0, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\fscx%d\fscy%d\frz%d\t(\frz%d)\c%s\alpha&H%02X&\blur2.5\fad(800,800)\p1}%s{\p0}`,
+			x, movieBars-30, x+r.IntN(300)-80, movieHeight-movieBars+30, scale, scale, r.IntN(360), r.IntN(400)-200, w.accent, 0xB0+r.IntN(0x30), petal))
+	}
+	// Middle petals: tumbling as they fall, turning edge-on and back.
+	for i := 0; i < int(end/2.4); i++ {
+		start := r.Float64() * (end - 4)
+		life := 11 + r.Float64()*8
+		x := r.IntN(movieWidth)
+		scale := 60 + r.IntN(80)
+		w.event(1, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\fscx%d\fscy%d\frz%d\t(\frz%d\frx%d\fry%d)\c%s\alpha&H%02X&\blur1.5\fad(800,800)\p1}%s{\p0}`,
+			x, movieBars-40, x+r.IntN(500)-150, movieHeight-movieBars+40, scale, scale, r.IntN(360), r.IntN(720)-360, 360*(1+r.IntN(3)), 180*r.IntN(3), w.accent, 0x70+r.IntN(0x50), petal))
+	}
+	// Near petals: big, fast and blurred, passing in front of everything
+	// but the letterbox.
+	for i := 0; i < int(end/9); i++ {
+		start := 3 + r.Float64()*(end-10)
+		life := 4 + r.Float64()*3
+		x := r.IntN(movieWidth)
+		scale := 260 + r.IntN(200)
+		w.event(8, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\fscx%d\fscy%d\frz%d\t(\frz%d\frx%d)\c%s\alpha&H%02X&\blur9\fad(400,400)\p1}%s{\p0}`,
+			x, movieBars-160, x+r.IntN(700)-200, movieHeight-movieBars+160, scale, scale, r.IntN(360), r.IntN(360)-180, 360, w.accent, 0xA0+r.IntN(0x20), petal))
+	}
+	// Light streaks: a thin line of light crossing the dark, every so often.
+	for at := 12 + r.Float64()*8; at < end-4; at += 14 + r.Float64()*12 {
+		x, y := r.IntN(movieWidth), movieBars+r.IntN(movieHeight/3)
+		w.event(0, at, at+1.4, "Draw", fmt.Sprintf(`{\an4\move(%d,%d,%d,%d)\frz-18\c%s\alpha&HB0&\blur2\fscx30\t(0,500,\fscx100)\fad(150,700)\p1}m 0 0 l 260 -2 260 2{\p0}`,
+			x, y, x+700, y+230, w.text))
+	}
+}
+
+// circleShape draws a circle of radius r inside the box from the origin to
+// (2r, 2r), which libass centres on \pos under \an5.
+func circleShape(r int) string {
+	k := int(math.Round(float64(r) * 0.5523))
+	return fmt.Sprintf("m %d 0 b %d 0 %d %d %d %d b %d %d %d %d %d %d b %d %d 0 %d 0 %d b 0 %d %d 0 %d 0",
+		r, r+k, 2*r, r-k, 2*r, r, 2*r, r+k, r+k, 2*r, r, 2*r, r-k, 2*r, r+k, r, r-k, r-k, r)
 }
 
 // movieScript writes the whole film's picture, less the covers themselves,
@@ -304,7 +494,7 @@ func movieScript(facts movieFacts, tagline string, wall []movieFavourite, palett
 	at := w.presents(facts.Viewer)
 	at = w.logo(at+0.2, tagline)
 
-	numerals := []string{"I", "II", "III", "IV"}
+	numerals := []string{"I", "II", "III", "IV", "V", "VI"}
 	chapter := 0
 	next := func() string { chapter++; return numerals[chapter-1] }
 
@@ -313,25 +503,33 @@ func movieScript(facts movieFacts, tagline string, wall []movieFavourite, palett
 		at = w.statCards(start, cards)
 		w.drums = append(w.drums, [2]float64{start - 0.4, at})
 	}
-	at = w.poem(w.chapter(at, next(), "The conversation"), moviePoem(facts, rng))
-	timeline.WallStart, timeline.WallEnd = at, at
+	at = w.poem(w.chapter(at, next(), "The Voices"), moviePoem(facts, rng))
 	if len(wall) > 0 {
 		start := w.chapter(at, next(), "Your favourites")
-		timeline.WallStart, timeline.WallEnd = w.wall(start, wall)
-		w.drums = append(w.drums, [2]float64{start - 0.4, timeline.WallEnd})
-		at = timeline.WallEnd + 0.4
+		at = w.wall(start, wall)
+		w.drums = append(w.drums, [2]float64{start - 0.4, at})
+		at += 0.4
 	}
-	start := w.chapter(at, next(), "The crew")
-	at = w.crew(start, movieCrew(facts, rng))
+	if characters := facts.Extras.Characters; len(characters) > 0 {
+		start := w.chapter(at, next(), "Character select")
+		at = w.characterSelect(start, characters)
+		w.drums = append(w.drums, [2]float64{start - 0.4, at})
+		at += 0.4
+	}
+	start := w.chapter(at, next(), "Achievements")
+	at = w.achievements(start, movieAchievements(facts, rng))
 	w.drums = append(w.drums, [2]float64{start - 0.4, at})
-	timeline.End = w.seal(at, movieFarewell(rng))
+	title, episode, teaser := movieNextTime(facts, rng)
+	at = w.nextTime(at+0.4, title, episode, teaser)
+	timeline.End = w.seal(at+0.2, movieFarewell(rng))
 
-	w.petals(timeline.End)
+	w.ambience(timeline.End)
 	// Letterbox bars, over everything.
 	bar := fmt.Sprintf(`m 0 0 l %d 0 %d %d 0 %d`, movieWidth, movieWidth, movieBars, movieBars)
 	w.event(9, 0, timeline.End, "Draw", `{\pos(0,0)\c&H000000&\p1}`+bar+`{\p0}`)
 	w.event(9, 0, timeline.End, "Draw", fmt.Sprintf(`{\pos(0,%d)\c&H000000&\p1}%s{\p0}`, movieHeight-movieBars, bar))
 
+	timeline.Pictures = w.images
 	timeline.Score = movieScore{Length: timeline.End, Drums: w.drums, Cues: w.cues}
 	return w.script.String(), timeline
 }

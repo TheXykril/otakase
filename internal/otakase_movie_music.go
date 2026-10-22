@@ -253,15 +253,15 @@ func (m *musicMix) noiseBurst(buffer []float64, at, length, vol, brightness floa
 	}
 }
 
-// whoosh is air rushing past: noise through a band that sweeps up and back
-// down, swelling and fading over length.
+// whoosh is a soft breath of air: noise through a low band that sweeps up
+// and back down, swelling and fading over length.
 func (m *musicMix) whoosh(at, length, vol float64) {
 	start := m.index(at)
 	n := samples(length)
 	var low, band float64
 	for i := 0; i < n; i++ {
 		p := float64(i) / float64(n)
-		cutoff := 300 + 4200*math.Sin(math.Pi*p)
+		cutoff := 200 + 1600*math.Sin(math.Pi*p)
 		a := 1 - math.Exp(-2*math.Pi*cutoff/movieSampleRate)
 		raw := m.noise.Float64()*2 - 1
 		low += a * (raw - low)
@@ -296,7 +296,7 @@ func (m *musicMix) impact(at, vol float64) {
 		phase += freq / movieSampleRate
 		write(m.fx, start+i, math.Sin(2*math.Pi*phase)*envelope(t, 0.004, 2.1, vol))
 	}
-	m.noiseBurst(m.fx, at, 0.25, vol*0.7, 0.7)
+	m.noiseBurst(m.fx, at, 0.25, vol*0.4, 0.5)
 	m.kick(m.fx, at, vol*0.8)
 }
 
@@ -414,22 +414,22 @@ func movieSoundtrack(score movieScore) []byte {
 	for _, cue := range score.Cues {
 		switch cue.Kind {
 		case cueWhoosh:
-			m.whoosh(cue.At, math.Max(cue.Length, 0.6), 0.5)
+			m.whoosh(cue.At, math.Max(cue.Length, 0.6), 0.16)
 		case cueRiser:
-			m.riser(cue.At, math.Max(cue.Length, 0.8), 0.22)
+			m.riser(cue.At, math.Max(cue.Length, 0.8), 0.12)
 		case cueImpact:
-			m.impact(cue.At, 0.85)
+			m.impact(cue.At, 0.5)
 		case cueShimmer:
 			m.shimmer(cue.At, math.Max(cue.Length, 0.8), 0.06)
 		case cueTick:
-			m.tick(cue.At, 0.09)
+			m.tick(cue.At, 0.06)
 		case cuePop:
-			m.pop(cue.At, 0.18)
+			m.pop(cue.At, 0.12)
 		case cueBell:
-			m.bell(cue.At, 0.22)
+			m.bell(cue.At, 0.18)
 		case cueThud:
-			m.kick(m.fx, cue.At, 1)
-			m.noiseBurst(m.fx, cue.At, 0.09, 0.6, 0.5)
+			m.kick(m.fx, cue.At, 0.6)
+			m.noiseBurst(m.fx, cue.At, 0.09, 0.25, 0.4)
 		}
 	}
 

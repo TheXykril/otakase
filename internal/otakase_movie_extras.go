@@ -18,7 +18,25 @@ type movieExtras struct {
 	// Favourites are the shows the wall shows, the viewer's own favourites
 	// first and their top scored after.
 	Favourites []movieFavourite
+	// Watching is the show the viewer last moved on, and NextEpisode the
+	// episode they are up to in it, for the "next time" card.
+	Watching    string
+	NextEpisode int
+	// Characters are the viewer's favourite characters, for the select
+	// screen, each with a portrait.
+	Characters []movieCharacter
 }
+
+type movieCharacter struct {
+	Name   string
+	Series string
+	Image  string
+	// Path is the portrait once downloaded, empty until then.
+	Path string
+}
+
+// movieRosterSize is how many characters the select screen holds.
+const movieRosterSize = 6
 
 type movieFavourite struct {
 	Title string
@@ -36,7 +54,10 @@ query {
 		id
 		name
 		createdAt
-		favourites { anime(perPage: 5) { nodes { title { romaji english } coverImage { extraLarge } } } }
+		favourites {
+			anime(perPage: 5) { nodes { title { romaji english } coverImage { extraLarge } } }
+			characters(perPage: 6) { nodes { name { full } image { large } media(perPage: 1) { nodes { title { romaji english } } } } }
+		}
 		statistics {
 			anime {
 				studios(limit: 3, sort: COUNT_DESC) { studio { name } }
@@ -48,11 +69,17 @@ query {
 	}
 }`
 
-const aniListMovieTopScoredQuery = `
+const aniListMovieListsQuery = `
 query ($userId: Int) {
-	Page(perPage: 5) {
+	top: Page(perPage: 5) {
 		mediaList(userId: $userId, type: ANIME, sort: [SCORE_DESC, PROGRESS_DESC]) {
 			media { title { romaji english } coverImage { extraLarge } }
+		}
+	}
+	current: Page(perPage: 1) {
+		mediaList(userId: $userId, type: ANIME, status: CURRENT, sort: UPDATED_TIME_DESC) {
+			progress
+			media { title { romaji english } coverImage { extraLarge } episodes }
 		}
 	}
 }`
@@ -93,6 +120,19 @@ func fetchMovieExtras(config *Config) (movieExtras, error) {
 					Anime struct {
 						Nodes []movieMediaNode `json:"nodes"`
 					} `json:"anime"`
+					Characters struct {
+						Nodes []struct {
+							Name struct {
+								Full string `json:"full"`
+							} `json:"name"`
+							Image struct {
+								Large string `json:"large"`
+							} `json:"image"`
+							Media struct {
+								Nodes []movieMediaNode `json:"nodes"`
+							} `json:"media"`
+						} `json:"nodes"`
+					} `json:"characters"`
 				} `json:"favourites"`
 				Statistics struct {
 					Anime struct {
@@ -156,25 +196,53 @@ func fetchMovieExtras(config *Config) (movieExtras, error) {
 	for _, node := range viewer.Favourites.Anime.Nodes {
 		add(node)
 	}
-	if len(extras.Favourites) < movieWallSize && viewer.ID != 0 {
-		var top struct {
+	if viewer.ID != 0 {
+		var lists struct {
 			Data struct {
-				Page struct {
+				Top struct {
 					MediaList []struct {
 						Media movieMediaNode `json:"media"`
 					} `json:"mediaList"`
-				} `json:"Page"`
+				} `json:"top"`
+				Current struct {
+					MediaList []struct {
+						Progress int `json:"progress"`
+						Media    struct {
+							movieMediaNode
+							Episodes int `json:"episodes"`
+						} `json:"media"`
+					} `json:"mediaList"`
+				} `json:"current"`
 			} `json:"data"`
 		}
-		if err := aniListStatsRequest(token, aniListMovieTopScoredQuery, map[string]interface{}{"userId": viewer.ID}, &top); err != nil {
-			Log(fmt.Sprintf("Otakase movie: top scored: %v", err))
+		if err := aniListStatsRequest(token, aniListMovieListsQuery, map[string]interface{}{"userId": viewer.ID}, &lists); err != nil {
+			Log(fmt.Sprintf("Otakase movie: lists: %v", err))
 		}
-		for _, entry := range top.Data.Page.MediaList {
+		for _, entry := range lists.Data.Top.MediaList {
 			add(entry.Media)
+		}
+		if current := lists.Data.Current.MediaList; len(current) > 0 {
+			entry := current[0]
+			if episodes := entry.Media.Episodes; episodes == 0 || entry.Progress < episodes {
+				extras.Watching = entry.Media.favourite(config).Title
+				extras.NextEpisode = entry.Progress + 1
+			}
 		}
 	}
 
-	// A cover that will not download leaves the wall, rather than a hole in it.
+	for _, node := range viewer.Favourites.Characters.Nodes {
+		if node.Image.Large == "" || len(extras.Characters) == movieRosterSize {
+			continue
+		}
+		character := movieCharacter{Name: node.Name.Full, Image: node.Image.Large}
+		if len(node.Media.Nodes) > 0 {
+			character.Series = node.Media.Nodes[0].favourite(config).Title
+		}
+		extras.Characters = append(extras.Characters, character)
+	}
+
+	// A picture that will not download leaves the film, rather than a hole
+	// in it.
 	kept := extras.Favourites[:0]
 	for _, favourite := range extras.Favourites {
 		path, err := downloadToCache(favourite.Cover)
@@ -186,5 +254,16 @@ func fetchMovieExtras(config *Config) (movieExtras, error) {
 		kept = append(kept, favourite)
 	}
 	extras.Favourites = kept
+	roster := extras.Characters[:0]
+	for _, character := range extras.Characters {
+		path, err := downloadToCache(character.Image)
+		if err != nil {
+			Log(fmt.Sprintf("Otakase movie: portrait: %v", err))
+			continue
+		}
+		character.Path = path
+		roster = append(roster, character)
+	}
+	extras.Characters = roster
 	return extras, nil
 }

@@ -66,19 +66,25 @@ func TestThePoemIsTheirsAndVaries(t *testing.T) {
 		return strings.Join(lines, "\n")
 	}
 	first := join(1)
-	for _, want := range []string{"Xy", "1,500", "Kana Hanazawa"} {
+	for _, want := range []string{"Xy", "1,500"} {
 		if !strings.Contains(first, want) {
 			t.Errorf("poem misses %q:\n%s", want, first)
 		}
 	}
-	varied := false
-	for seed := uint64(2); seed < 10; seed++ {
-		if join(seed) != first {
-			varied = true
-		}
+	if lines := strings.Count(first, "\n") + 1; lines < 25 {
+		t.Errorf("only %d lines of talk", lines)
+	}
+	varied, voiced := false, false
+	for seed := uint64(2); seed < 20; seed++ {
+		words := join(seed)
+		varied = varied || words != first
+		voiced = voiced || strings.Contains(words, "Kana Hanazawa")
 	}
 	if !varied {
 		t.Error("every viewing had the same words")
+	}
+	if !voiced {
+		t.Error("the voice actor never came up")
 	}
 }
 
@@ -92,7 +98,7 @@ func TestTheFilmNeedsNoTracker(t *testing.T) {
 		t.Fatalf("cards with no numbers: %+v", cards)
 	}
 	_, timeline := movieScript(facts, "The movie", nil, theme.Builtin(), "monospace", "sans-serif", rand.New(rand.NewPCG(1, 2)))
-	if timeline.End <= 0 || timeline.WallEnd != timeline.WallStart {
+	if timeline.End <= 0 || len(timeline.Pictures) != 0 {
 		t.Fatalf("timeline %+v", timeline)
 	}
 }
@@ -111,9 +117,16 @@ func TestTheScriptEscapesTitles(t *testing.T) {
 // Every sound effect lands inside the film, and the beat plays somewhere.
 func TestTheScoreFollowsThePicture(t *testing.T) {
 	wall := []movieFavourite{{Title: "A"}, {Title: "B"}}
-	_, timeline := movieScript(testFacts(), "1,000 episodes", wall, theme.Builtin(), "monospace", "sans-serif", rand.New(rand.NewPCG(1, 2)))
-	if timeline.WallEnd <= timeline.WallStart {
-		t.Fatalf("no wall in %+v", timeline)
+	facts := testFacts()
+	facts.Extras.Characters = []movieCharacter{{Name: "Frieren", Series: "Frieren"}, {Name: "Fern"}, {Name: "Stark"}}
+	_, timeline := movieScript(facts, "1,000 episodes", wall, theme.Builtin(), "monospace", "sans-serif", rand.New(rand.NewPCG(1, 2)))
+	if len(timeline.Pictures) != 5 {
+		t.Fatalf("%d pictures, want the 2 covers and 3 characters", len(timeline.Pictures))
+	}
+	for i, picture := range timeline.Pictures {
+		if picture.In <= 0 || picture.Out <= picture.In || picture.Out > timeline.End {
+			t.Errorf("picture %d shows %.1f to %.1f in a %.1fs film", i, picture.In, picture.Out, timeline.End)
+		}
 	}
 	kinds := map[string]bool{}
 	for _, cue := range timeline.Score.Cues {
@@ -160,16 +173,16 @@ func TestTheSoundtrackIsAWav(t *testing.T) {
 	}
 }
 
-// Each cover gets its own place in the graph, and the last one is the output.
-func TestTheGraphLaysOutEveryCover(t *testing.T) {
-	timeline := movieTimeline{WallStart: 40, WallEnd: 48, End: 56}
-	graph := movieFilterGraph("[vid1]", []string{"[vid2]", "[vid3]"}, "[vo]", timeline)
-	for _, want := range []string{"[vid2]scale", "[vid3]scale", "[base1][cover1]overlay", "[vo]"} {
+// Each image gets its own place in the graph, and the last one is the output.
+func TestTheGraphLaysOutEveryImage(t *testing.T) {
+	pictures := []moviePicture{{X: 10, Y: 20, Width: 250, Height: 354, In: 40, Out: 48}, {X: 300, Y: 20, Width: 220, Height: 310, In: 50, Out: 56}}
+	graph := movieFilterGraph("[vid1]", []string{"[vid2]", "[vid3]"}, "[vo]", pictures)
+	for _, want := range []string{"[vid2]scale=250:354", "[vid3]scale=220:310", "[base1][image1]overlay=x=300", "[vo]"} {
 		if !strings.Contains(graph, want) {
 			t.Errorf("graph misses %q:\n%s", want, graph)
 		}
 	}
-	if !strings.HasSuffix(movieFilterGraph("[vid1]", nil, "[vo]", timeline), "null[vo]") {
+	if !strings.HasSuffix(movieFilterGraph("[vid1]", nil, "[vo]", nil), "null[vo]") {
 		t.Error("no covers left the graph without an output")
 	}
 }
