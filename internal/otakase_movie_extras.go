@@ -22,21 +22,7 @@ type movieExtras struct {
 	// episode they are up to in it, for the "next time" card.
 	Watching    string
 	NextEpisode int
-	// Characters are the viewer's favourite characters, for the select
-	// screen, each with a portrait.
-	Characters []movieCharacter
 }
-
-type movieCharacter struct {
-	Name   string
-	Series string
-	Image  string
-	// Path is the portrait once downloaded, empty until then.
-	Path string
-}
-
-// movieRosterSize is how many characters the select screen holds.
-const movieRosterSize = 6
 
 type movieFavourite struct {
 	Title string
@@ -54,10 +40,7 @@ query {
 		id
 		name
 		createdAt
-		favourites {
-			anime(perPage: 5) { nodes { title { romaji english } coverImage { extraLarge } } }
-			characters(perPage: 6) { nodes { name { full } image { large } media(perPage: 1) { nodes { title { romaji english } } } } }
-		}
+		favourites { anime(perPage: 5) { nodes { title { romaji english } coverImage { extraLarge } } } }
 		statistics {
 			anime {
 				studios(limit: 3, sort: COUNT_DESC) { studio { name } }
@@ -120,19 +103,6 @@ func fetchMovieExtras(config *Config) (movieExtras, error) {
 					Anime struct {
 						Nodes []movieMediaNode `json:"nodes"`
 					} `json:"anime"`
-					Characters struct {
-						Nodes []struct {
-							Name struct {
-								Full string `json:"full"`
-							} `json:"name"`
-							Image struct {
-								Large string `json:"large"`
-							} `json:"image"`
-							Media struct {
-								Nodes []movieMediaNode `json:"nodes"`
-							} `json:"media"`
-						} `json:"nodes"`
-					} `json:"characters"`
 				} `json:"favourites"`
 				Statistics struct {
 					Anime struct {
@@ -230,19 +200,7 @@ func fetchMovieExtras(config *Config) (movieExtras, error) {
 		}
 	}
 
-	for _, node := range viewer.Favourites.Characters.Nodes {
-		if node.Image.Large == "" || len(extras.Characters) == movieRosterSize {
-			continue
-		}
-		character := movieCharacter{Name: node.Name.Full, Image: node.Image.Large}
-		if len(node.Media.Nodes) > 0 {
-			character.Series = node.Media.Nodes[0].favourite(config).Title
-		}
-		extras.Characters = append(extras.Characters, character)
-	}
-
-	// A picture that will not download leaves the film, rather than a hole
-	// in it.
+	// A cover that will not download leaves the wall, rather than a hole in it.
 	kept := extras.Favourites[:0]
 	for _, favourite := range extras.Favourites {
 		path, err := downloadToCache(favourite.Cover)
@@ -254,16 +212,5 @@ func fetchMovieExtras(config *Config) (movieExtras, error) {
 		kept = append(kept, favourite)
 	}
 	extras.Favourites = kept
-	roster := extras.Characters[:0]
-	for _, character := range extras.Characters {
-		path, err := downloadToCache(character.Image)
-		if err != nil {
-			Log(fmt.Sprintf("Otakase movie: portrait: %v", err))
-			continue
-		}
-		character.Path = path
-		roster = append(roster, character)
-	}
-	extras.Characters = roster
 	return extras, nil
 }

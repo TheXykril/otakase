@@ -246,17 +246,9 @@ func playMovieFilm(facts movieFacts, tagline string, wall []movieFavourite, pale
 		"--sub-file=" + scriptPath, "--audio-file=" + musicPath,
 		"--title=" + otakaseMovieTitle, "--force-media-title=" + otakaseMovieTitle,
 	}
-	// The images go in the order the script placed them: the wall's
-	// covers, then the characters.
-	var paths, images []string
-	for _, favourite := range wall {
-		paths = append(paths, favourite.Path)
-	}
-	for _, character := range facts.Extras.Characters {
-		paths = append(paths, character.Path)
-	}
-	for i, path := range paths {
-		args = append(args, "--external-file="+path)
+	var images []string
+	for i, favourite := range wall {
+		args = append(args, "--external-file="+favourite.Path)
 		images = append(images, fmt.Sprintf("[vid%d]", i+2))
 	}
 	args = append(args,

@@ -117,11 +117,9 @@ func TestTheScriptEscapesTitles(t *testing.T) {
 // Every sound effect lands inside the film, and the beat plays somewhere.
 func TestTheScoreFollowsThePicture(t *testing.T) {
 	wall := []movieFavourite{{Title: "A"}, {Title: "B"}}
-	facts := testFacts()
-	facts.Extras.Characters = []movieCharacter{{Name: "Frieren", Series: "Frieren"}, {Name: "Fern"}, {Name: "Stark"}}
-	_, timeline := movieScript(facts, "1,000 episodes", wall, theme.Builtin(), "monospace", "sans-serif", rand.New(rand.NewPCG(1, 2)))
-	if len(timeline.Pictures) != 5 {
-		t.Fatalf("%d pictures, want the 2 covers and 3 characters", len(timeline.Pictures))
+	_, timeline := movieScript(testFacts(), "1,000 episodes", wall, theme.Builtin(), "monospace", "sans-serif", rand.New(rand.NewPCG(1, 2)))
+	if len(timeline.Pictures) != 2 {
+		t.Fatalf("%d pictures, want the 2 covers", len(timeline.Pictures))
 	}
 	for i, picture := range timeline.Pictures {
 		if picture.In <= 0 || picture.Out <= picture.In || picture.Out > timeline.End {

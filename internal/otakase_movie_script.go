@@ -14,15 +14,15 @@ import (
 // books the sound effects that go with it, so the soundtrack lands on the
 // picture's beats:
 //
-//	presents · logo · I the numbers · II the voices (the conversation) ·
-//	III favourites · IV character select · V achievements · next time ·
-//	the seal
+//	presents · logo · I counting the stars (the numbers) · II the voices
+//	(the conversation) · III memories that never fade (favourites) ·
+//	IV legendary conquests (achievements) · the journey continues (next
+//	time) · the seal
 
 // movieTimeline is when the film's parts happen and what the soundtrack has
 // to play under them.
 type movieTimeline struct {
-	// Pictures are where and when each image shows: the wall's covers
-	// first, then the characters.
+	// Pictures are where and when each of the wall's covers shows.
 	Pictures []moviePicture
 	End      float64
 	Score    movieScore
@@ -161,6 +161,9 @@ func (w *filmWriter) statCards(at float64, cards []statCard) float64 {
 				// The final value lands with a little punch.
 				pop = `\fscx112\fscy112\t(0,160,\fscx100\fscy100)\fad(0,400)`
 				w.cue(start, cueThud, 0)
+				// The landing sends a ring out behind the number.
+				w.event(1, start, start+1.6, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\1a&HFF&\bord3\3c%s\3a&H60&\fscx30\fscy30\t(0,1600,\fscx260\fscy260\bord1\3a&HFF&)\p1}%s{\p0}`,
+					filmCentreX, filmCentreY-40, w.accent, circleShape(160)))
 			} else if i%2 == 0 {
 				w.cue(start, cueTick, 0)
 			}
@@ -177,35 +180,141 @@ func (w *filmWriter) statCards(at float64, cards []statCard) float64 {
 	return at
 }
 
-// poem plays the conversation a few lines at a time, each line typed in the
-// colour of its voice, the page fading before the next.
+// poem plays the conversation under a night sky. The two voices are two
+// lights, one either side, that brighten while they speak; each line writes
+// itself on word by word in its voice's colour with a soft glow, and the
+// lines before it rise and dim, so the talk scrolls like a conversation
+// rather than turning pages. It returns when the last line has faded.
 func (w *filmWriter) poem(at float64, lines []poemLine) float64 {
 	const (
-		perPage = 4
-		size    = 38
-		gap     = 86
+		bottom  = filmCentreY + 150
+		gap     = 92
+		visible = 4
 	)
-	for first := 0; first < len(lines); first += perPage {
-		page := lines[first:min(first+perPage, len(lines))]
-		top := filmCentreY - (len(page)-1)*gap/2
-		// Lay the page out first, to know when it has all been typed.
-		t := at
-		starts := make([]float64, len(page))
-		for i, line := range page {
-			starts[i] = t
-			t += math.Max(0.4, float64(len([]rune(line.Text)))/34) + 0.9
-		}
-		end := t + 1.4
-		for i, line := range page {
-			colour := w.accent
-			if line.Voice == 1 {
-				colour = w.second
-			}
-			w.typed(2, starts[i], end, filmCentreX, top+i*gap, size, colour, line.Text, true)
-		}
-		at = end + 0.5
+	// When each line arrives: after the one before has been written and
+	// had time to be read.
+	arrive := make([]float64, len(lines)+1)
+	writing := make([]float64, len(lines))
+	t := at + 0.6
+	for i, line := range lines {
+		arrive[i] = t
+		runes := float64(len([]rune(line.Text)))
+		writing[i] = math.Max(0.6, runes/26)
+		t += writing[i] + 1.0 + runes/55
 	}
-	return at
+	arrive[len(lines)] = t
+	end := t + 1.2
+
+	w.nightSky(at, end)
+	colours := []string{w.text, w.second}
+	glows := []string{w.accent, w.second}
+	voiceX := []int{filmCentreX - 760, filmCentreX + 760}
+	for voice := range 2 {
+		// Each voice's light, breathing softly the whole time.
+		w.event(1, at, end, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\c%s\alpha&HD8&\blur40\fad(1500,1500)\p1}%s{\p0}`,
+			voiceX[voice], filmCentreY, glows[voice], circleShape(90)))
+		w.event(1, at, end, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\c%s\alpha&H70&\blur5\fad(1500,1500)\p1}%s{\p0}`,
+			voiceX[voice], filmCentreY, colours[voice], circleShape(9)))
+	}
+
+	alphas := []int{0x00, 0x60, 0xA0, 0xD0}
+	for i, line := range lines {
+		voice := line.Voice % 2
+		runes := len([]rune(line.Text))
+		size := 50
+		if runes > 58 {
+			size = max(36, 50*58/runes)
+		}
+		// The speaker's light swells and sends a ripple out while it talks.
+		speak := arrive[i]
+		// Rings of fainter light stand in for a gradient, which one blurred
+		// disc this big cannot give.
+		for ring, glow := range []struct{ radius, alpha int }{{20, 0xA8}, {44, 0xD0}, {72, 0xE8}} {
+			w.event(2, speak, speak+writing[i]+0.6, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\c%s\alpha&HFF&\blur%d\t(0,400,\alpha&H%02X&)\t(%d,%d,\alpha&HFF&)\p1}%s{\p0}`,
+				voiceX[voice], filmCentreY, glows[voice], 12+ring*12, glow.alpha, int(writing[i]*1000), int(writing[i]*1000+600), circleShape(glow.radius)))
+		}
+		w.event(2, speak, speak+2, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\1a&HFF&\bord2\3c%s\3a&H80&\fscx20\fscy20\t(0,2000,\fscx180\fscy180\3a&HFF&)\p1}%s{\p0}`,
+			voiceX[voice], filmCentreY, colours[voice], circleShape(80)))
+
+		// The line itself: written on word by word, then rising and dimming
+		// a step each time a new line arrives, gone after four.
+		karaoke := writeOn(line.Text, writing[i])
+		for step := 0; step < visible; step++ {
+			k := i + step
+			if k >= len(lines) && step > 0 {
+				break
+			}
+			start := arrive[k]
+			stop := arrive[min(k+1, len(lines))]
+			fade := ""
+			last := k >= len(lines)-1 || step == visible-1
+			if last {
+				stop = math.Max(stop, start+0.6)
+				if k == len(lines)-1 {
+					stop = end
+				}
+				fade = `\fad(0,600)`
+			}
+			y := bottom - step*gap
+			from, fromAlpha := y+24, 0xFF
+			if step > 0 {
+				from, fromAlpha = y+gap, alphas[step-1]
+			}
+			// moving rises the line into place while its alpha settles; the
+			// glow behind follows at a fainter alpha.
+			moving := func(alpha func(int) int) string {
+				return fmt.Sprintf(`\an5\move(%d,%d,%d,%d,0,600)\fs%d\alpha&H%02X&\t(0,600,\alpha&H%02X&)%s`,
+					filmCentreX, from, filmCentreX, y, size, alpha(fromAlpha), alpha(alphas[step]), fade)
+			}
+			solid := func(a int) int { return a }
+			faint := func(a int) int { return min(0xFF, 0xA0+a/2) }
+			if step == 0 {
+				// Written on: the fill sweeps each word in turn (the unfilled
+				// part is the transparent secondary colour), the glow fading
+				// up behind it.
+				rise := fmt.Sprintf(`\an5\move(%d,%d,%d,%d,0,600)\fs%d%s`, filmCentreX, from, filmCentreX, y, size, fade)
+				w.event(4, start, stop, "Voice", fmt.Sprintf(`{%s\c%s\2a&HFF&\blur0.6}`, rise, colours[voice])+karaoke)
+				w.event(3, start, stop, "Voice", fmt.Sprintf(`{%s\c%s\blur10\alpha&HFF&\t(%d,%d,\alpha&HA0&)}`, rise, glows[voice], int(writing[i]*1000), int(writing[i]*1000)+700)+assText(line.Text))
+				continue
+			}
+			w.event(4, start, stop, "Voice", fmt.Sprintf(`{%s\c%s\blur0.6}`, moving(solid), colours[voice])+assText(line.Text))
+			w.event(3, start, stop, "Voice", fmt.Sprintf(`{%s\c%s\blur10}`, moving(faint), glows[voice])+assText(line.Text))
+		}
+	}
+	return end
+}
+
+// writeOn is text that fills in word by word over seconds, ASS karaoke,
+// for an event whose secondary colour is transparent.
+func writeOn(text string, seconds float64) string {
+	runes := len([]rune(text))
+	var out strings.Builder
+	for j, word := range strings.Fields(text) {
+		if j > 0 {
+			word = " " + word
+		}
+		share := seconds * float64(len([]rune(word))) / float64(max(runes, 1))
+		fmt.Fprintf(&out, `{\kf%d}%s`, int(math.Round(share*100)), assText(word))
+	}
+	return out.String()
+}
+
+// nightSky is the backdrop the voices talk under: a slow field of stars
+// twinkling and drifting a little.
+func (w *filmWriter) nightSky(start, end float64) {
+	r := rand.New(rand.NewPCG(9, 9))
+	drift := int((end - start) * 6)
+	for range 150 {
+		x, y := r.IntN(movieWidth), movieBars+r.IntN(movieHeight-2*movieBars)
+		bright := 0x50 + r.IntN(0x70)
+		period := 1500 + r.IntN(3000)
+		var twinkle strings.Builder
+		for t := r.IntN(period); t < int((end-start)*1000); t += period {
+			fmt.Fprintf(&twinkle, `\t(%d,%d,\alpha&HE0&)\t(%d,%d,\alpha&H%02X&)`, t, t+period/2, t+period/2, t+period, bright)
+		}
+		w.event(0, start+r.Float64()*1.5, end, "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\c%s\alpha&H%02X&\blur0.8%s\fad(1500,1500)\p1}%s{\p0}`,
+			x, y, x-drift, y, w.text, bright, twinkle.String(), circleShape(1+r.IntN(3))))
+	}
 }
 
 // wall is the favourites: the covers come from lavfi (movieFilterGraph);
@@ -224,72 +333,6 @@ func (w *filmWriter) wall(at float64, wall []movieFavourite) float64 {
 		w.event(2, in+0.2, end, "Text", fmt.Sprintf(`{\an8\pos(%d,%d)\fs22\c%s\fad(500,700)}%s`,
 			x+movieCoverWidth/2, movieCoverTop+movieCoverHeight+24, w.text, assText(ellipsize(favourite.Title, 21))))
 	}
-	return end
-}
-
-// characterSelect is the viewer's favourite characters as a fighting game's
-// select screen: the roster slides up portrait by portrait, a cursor hops
-// along it showing each name and their series, and lands back on the first,
-// stamped SELECTED.
-func (w *filmWriter) characterSelect(at float64, characters []movieCharacter) float64 {
-	const (
-		width  = 220
-		height = 310
-		gap    = 26
-		top    = 520
-		hop    = 0.7
-	)
-	n := len(characters)
-	rosterWidth := n*width + (n-1)*gap
-	left := (movieWidth - rosterWidth) / 2
-	xOf := func(i int) int { return left + i*(width+gap) }
-	settled := at + 0.6 + float64(n)*0.18
-	chosen := settled + 0.4 + float64(n)*hop
-	end := chosen + 3.4
-	gold := assColor(w.palette.Yellow)
-
-	w.event(2, at, end, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs30\fsp14\c%s\fad(500,700)}%s`, filmCentreX, movieBars+70, w.muted, assText("CHOOSE YOUR CHARACTER")))
-	for i := range characters {
-		in := at + 0.6 + float64(i)*0.18
-		x := xOf(i)
-		w.images = append(w.images, moviePicture{X: x, Y: top, Width: width, Height: height, In: in, Out: end - 0.1})
-		w.cue(in, cueTick, 0)
-		w.event(3, in, end, "Draw", fmt.Sprintf(`{\an7\move(%d,%d,%d,%d,0,250)\1a&HFF&\bord2\3c%s\fad(200,600)\p1}m 0 0 l %d 0 %d %d 0 %d{\p0}`,
-			x, top+40, x, top, w.muted, width, width, height, height))
-		w.event(3, in, end, "Text", fmt.Sprintf(`{\an1\pos(%d,%d)\fs22\c%s\fad(200,600)}%s`, x+8, top+height+34, w.muted, assText(fmt.Sprintf("%02d", i+1))))
-	}
-	// The cursor hops along the roster and back to the first.
-	order := make([]int, 0, n+1)
-	for i := 0; i < n; i++ {
-		order = append(order, i)
-	}
-	order = append(order, 0)
-	for step, i := range order {
-		start := settled + 0.4 + float64(step)*hop
-		stop := start + hop
-		final := step == len(order)-1
-		if final {
-			stop = end
-		}
-		colour, fadeOut, fade := w.accent, 0, `\fad(80,0)`
-		if final {
-			colour, fadeOut, fade = gold, 600, `\fad(80,600)`
-		}
-		w.cue(start, cuePop, 0)
-		x := xOf(i)
-		w.event(5, start, stop, "Draw", fmt.Sprintf(`{\an7\pos(%d,%d)\1a&HFF&\bord6\3c%s\blur1\fscx106\fscy106\t(0,120,\fscx100\fscy100)\fad(0,%d)\p1}m 0 0 l %d 0 %d %d 0 %d{\p0}`,
-			x-6, top-6, colour, fadeOut, width+12, width+12, height+12, height+12))
-		w.event(5, start, stop, "Text", fmt.Sprintf(`{\an2\pos(%d,%d)\fs26\b1\c%s\fad(0,%d)}P1`, x+width/2, top-18, colour, fadeOut))
-		character := characters[i]
-		w.event(4, start, stop, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs76\b1\c%s%s}%s`, filmCentreX, 330, w.text, fade, assText(ellipsize(character.Name, 30))))
-		if character.Series != "" {
-			w.event(4, start, stop, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs30\c%s%s}%s`, filmCentreX, 410, w.muted, fade, assText(ellipsize(character.Series, 48))))
-		}
-	}
-	w.cue(chosen, cueImpact, 0)
-	w.cue(chosen+0.05, cueBell, 0)
-	w.event(6, chosen, end, "Text", fmt.Sprintf(`{\an5\pos(%d,%d)\fs54\b1\fsp10\frz-8\c%s\bord4\3c%s\fscx240\fscy240\alpha&HFF&\t(0,60,\alpha&H00&)\t(0,170,\fscx100\fscy100)\fad(0,600)}%s`,
-		xOf(0)+width/2, top+height/2, w.dark, gold, assText("SELECTED")))
 	return end
 }
 
@@ -348,25 +391,58 @@ func (w *filmWriter) achievements(at float64, badges []achievement) float64 {
 	return end
 }
 
-// nextTime is the "next episode" preview anime close on: a slanted band
-// slams in, NEXT TIME and the show the viewer is in the middle of on it, the
-// episode beneath, and a teaser typed under it all.
+// nextTime is the "next episode" preview anime close on, framed like a
+// viewfinder: corner marks closing in, the show the viewer is in the middle
+// of written on large with a rule sweeping under it, the episode they are up
+// to, and a teaser in the voices' hand, with 次回予告 ("next time") standing
+// down the right side.
 func (w *filmWriter) nextTime(at float64, title, episode, teaser string) float64 {
-	end := at + 7
-	land := at + 0.35
-	w.cue(at, cueWhoosh, 0.5)
-	w.cue(land, cueImpact, 0)
-	w.cue(land+0.1, cueShimmer, 1)
-	y := filmCentreY - 40
-	band := fmt.Sprintf(`m 0 0 l %d 0 %d 260 -120 260`, movieWidth+240, movieWidth+120)
-	w.event(2, at, end, "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d,0,350)\frz3\c%s\fad(0,600)\p1}%s{\p0}`,
-		-movieWidth, y, filmCentreX, y, w.accent, band))
-	// 次回予告, "next time", ghosted large behind the title.
-	w.event(3, land, end, "Seal", fmt.Sprintf(`{\an5\pos(%d,%d)\fs170\frz3\c%s\alpha&HD8&\fad(300,600)}次回予告`, filmCentreX+520, y+20, w.dark))
-	w.event(4, land, end, "Text", fmt.Sprintf(`{\an4\pos(%d,%d)\fs30\fsp20\frz3\c%s\fad(200,600)}%s`, 262, y-66, w.dark, assText("NEXT TIME")))
-	w.event(4, land+0.15, end, "Text", fmt.Sprintf(`{\an4\pos(%d,%d)\fs72\b1\frz3\c%s\fscx120\t(0,250,\fscx100)\fad(200,600)}%s`, 250, y, w.dark, assText(ellipsize(title, 34))))
-	w.event(4, land+0.5, end, "Text", fmt.Sprintf(`{\an4\pos(%d,%d)\fs38\frz3\c%s\fad(300,600)}%s`, 256, y+76, w.dark, assText(episode)))
-	w.typed(3, land+1.3, end, filmCentreX, y+230, 36, w.text, teaser, true)
+	const (
+		frameWidth  = 1240
+		frameHeight = 560
+		arm         = 70
+	)
+	end := at + 8
+	w.cue(at, cueWhoosh, 0.8)
+	w.cue(at+0.9, cueShimmer, 1.2)
+	w.cue(at+2.1, cuePop, 0)
+
+	// The corner marks, closing in from a little wider. Each is an L drawn
+	// in its own box, the box's top left at (left, top).
+	for _, corner := range [][2]int{{-1, -1}, {1, -1}, {-1, 1}, {1, 1}} {
+		left := filmCentreX + corner[0]*frameWidth/2
+		top := filmCentreY + corner[1]*frameHeight/2
+		barY, barX := 0, 0
+		if corner[0] == 1 {
+			left -= arm
+			barX = arm - 3
+		}
+		if corner[1] == 1 {
+			top -= arm
+			barY = arm - 3
+		}
+		mark := fmt.Sprintf(`m 0 %d l %d %d %d %d 0 %d m %d 0 l %d 0 %d %d %d %d`,
+			barY, arm, barY, arm, barY+3, barY+3, barX, barX+3, barX+3, arm, barX, arm)
+		w.event(2, at, end, "Draw", fmt.Sprintf(`{\an7\move(%d,%d,%d,%d,0,700)\c%s\fad(400,700)\p1}%s{\p0}`,
+			left+corner[0]*40, top+corner[1]*40, left, top, w.muted, mark))
+	}
+	w.event(2, at+0.3, end, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs28\fsp18\c%s\t(0,1600,\fsp10)\fad(600,700)}%s`,
+		filmCentreX, filmCentreY-170, w.accent, assText("THE JOURNEY CONTINUES")))
+	for i, kanji := range []rune("次回予告") {
+		w.event(2, at+0.5+float64(i)*0.12, end, "Seal", fmt.Sprintf(`{\an5\pos(%d,%d)\fs52\b0\c%s\alpha&HB0&\fad(400,700)}%c`,
+			filmCentreX+frameWidth/2-60, filmCentreY-150+i*68, w.muted, kanji))
+	}
+	// The title, written on, with its glow.
+	write := math.Max(0.8, float64(len([]rune(title)))/22)
+	name := ellipsize(title, 30)
+	w.event(4, at+0.9, end, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs78\b1\c%s\2a&HFF&\fad(0,700)}`, filmCentreX, filmCentreY-60, w.text)+writeOn(name, write))
+	w.event(3, at+0.9, end, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs78\b1\c%s\blur14\alpha&HFF&\t(%d,%d,\alpha&HA8&)\fad(0,700)}%s`,
+		filmCentreX, filmCentreY-60, w.accent, int(write*500), int(write*1000)+400, assText(name)))
+	w.event(2, at+1.2, end, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\c%s\fscx0\t(0,900,\fscx100)\fad(0,700)\p1}m 0 0 l 640 0 640 3 0 3{\p0}`,
+		filmCentreX, filmCentreY+10, w.accent))
+	w.event(2, at+2.1, end, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs34\fsp22\c%s\fscx80\fscy80\t(0,200,\fscx100\fscy100)\fad(300,700)}%s`,
+		filmCentreX, filmCentreY+62, w.text, assText(strings.ToUpper(episode))))
+	w.event(2, at+2.8, end, "Voice", fmt.Sprintf(`{\pos(%d,%d)\fs40\c%s\2a&HFF&\fad(0,700)}`, filmCentreX, filmCentreY+160, w.second)+writeOn(teaser, math.Max(0.8, float64(len([]rune(teaser)))/26)))
 	return end
 }
 
@@ -393,76 +469,52 @@ func (w *filmWriter) seal(at float64, farewell string) float64 {
 	return end
 }
 
-// ambience is the life behind everything, for the whole film, in depth: a
-// slow glow of colour wandering behind it all, dust and soft out-of-focus
-// lights rising, petals falling in three layers (small and dim far away,
-// tumbling in the middle, a few big blurred ones passing close in front),
-// and now and then a streak of light across the dark. It uses its own
-// random source so a film's background is the same however its story
-// varies.
-func (w *filmWriter) ambience(end float64) {
+// petals drift through the film on one gentle wind from the left, at two
+// depths: small, dim and slow far away, larger and tumbling nearer. None
+// start while the night sky is up, so the voices talk under stars only. It
+// uses its own random source so the film's backdrop is the same however its
+// story varies.
+func (w *filmWriter) petals(end float64, skip [2]float64) {
 	r := rand.New(rand.NewPCG(4, 12))
 	petal := `m 0 0 b 10 -14 26 -10 30 0 b 26 10 10 14 0 0`
-	colours := []string{w.accent, w.second, w.text}
+	layers := []struct {
+		every, life, blur float64
+		scale, spread     int
+		alpha             int
+	}{
+		{every: 1.6, life: 18, blur: 2.5, scale: 30, spread: 25, alpha: 0xC0},
+		{every: 3.0, life: 12, blur: 1.2, scale: 70, spread: 60, alpha: 0x70},
+	}
+	for depth, layer := range layers {
+		for i := 0; i < int(end/layer.every); i++ {
+			start := r.Float64() * (end - 4)
+			life := layer.life * (0.85 + r.Float64()*0.3)
+			if start+life > skip[0]-1 && start < skip[1] {
+				continue
+			}
+			x := r.IntN(movieWidth+400) - 400
+			scale := layer.scale + r.IntN(layer.spread)
+			// Wind from the left: every petal drifts right as it falls.
+			wind := 260 + depth*200 + r.IntN(120)
+			w.event(1, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\fscx%d\fscy%d\frz%d\t(\frz%d\frx%d)\c%s\alpha&H%02X&\blur%.1f\fad(1000,1000)\p1}%s{\p0}`,
+				x, movieBars-40, x+wind, movieHeight-movieBars+40, scale, scale, r.IntN(360), r.IntN(240)-300, 360*(depth+1), w.accent, layer.alpha+r.IntN(0x20), layer.blur, petal))
+		}
+	}
+}
 
-	// Glow: three huge, very soft clouds of colour drifting the whole film.
-	for i, colour := range []string{w.accent, w.second, w.accent} {
-		x0, y0 := r.IntN(movieWidth), movieBars+r.IntN(movieHeight-2*movieBars)
-		x1, y1 := r.IntN(movieWidth), movieBars+r.IntN(movieHeight-2*movieBars)
-		w.event(0, 0, end, "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\c%s\alpha&HF0&\blur90\fad(3000,3000)\p1}%s{\p0}`,
-			x0, y0, x1, y1, colour, circleShape(260+i*60)))
-	}
-	// Dust: tiny specks rising and swaying.
-	for i := 0; i < int(end/0.7); i++ {
-		start := r.Float64() * (end - 3)
-		life := 8 + r.Float64()*8
-		x, y := r.IntN(movieWidth), movieBars+r.IntN(movieHeight-2*movieBars)
-		w.event(0, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\c%s\alpha&H%02X&\blur1\fad(1500,1500)\p1}%s{\p0}`,
-			x, y, x+r.IntN(160)-80, y-60-r.IntN(200), w.text, 0x90+r.IntN(0x40), circleShape(2+r.IntN(3))))
-	}
-	// Bokeh: soft discs of light, breathing as they float up.
-	for i := 0; i < int(end/2.2); i++ {
-		start := r.Float64() * (end - 4)
-		life := 10 + r.Float64()*8
-		x, y := r.IntN(movieWidth), movieBars+r.IntN(movieHeight-2*movieBars)
-		alpha := 0xC8 + r.IntN(0x20)
-		w.event(1, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\c%s\alpha&H%02X&\blur%d\t(0,%d,\alpha&H%02X&)\t(%d,%d,\alpha&H%02X&)\fad(2000,2000)\p1}%s{\p0}`,
-			x, y, x+r.IntN(200)-100, y-80-r.IntN(160), colours[r.IntN(len(colours))], alpha, 8+r.IntN(14),
-			int(life*500), max(alpha-0x18, 0x90), int(life*500), int(life*1000), alpha, circleShape(14+r.IntN(40))))
-	}
-	// Far petals: small, slow, dim, out of focus.
-	for i := 0; i < int(end/1.1); i++ {
-		start := r.Float64() * (end - 4)
-		life := 16 + r.Float64()*8
-		x := r.IntN(movieWidth)
-		scale := 25 + r.IntN(30)
-		w.event(0, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\fscx%d\fscy%d\frz%d\t(\frz%d)\c%s\alpha&H%02X&\blur2.5\fad(800,800)\p1}%s{\p0}`,
-			x, movieBars-30, x+r.IntN(300)-80, movieHeight-movieBars+30, scale, scale, r.IntN(360), r.IntN(400)-200, w.accent, 0xB0+r.IntN(0x30), petal))
-	}
-	// Middle petals: tumbling as they fall, turning edge-on and back.
-	for i := 0; i < int(end/2.4); i++ {
-		start := r.Float64() * (end - 4)
-		life := 11 + r.Float64()*8
-		x := r.IntN(movieWidth)
-		scale := 60 + r.IntN(80)
-		w.event(1, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\fscx%d\fscy%d\frz%d\t(\frz%d\frx%d\fry%d)\c%s\alpha&H%02X&\blur1.5\fad(800,800)\p1}%s{\p0}`,
-			x, movieBars-40, x+r.IntN(500)-150, movieHeight-movieBars+40, scale, scale, r.IntN(360), r.IntN(720)-360, 360*(1+r.IntN(3)), 180*r.IntN(3), w.accent, 0x70+r.IntN(0x50), petal))
-	}
-	// Near petals: big, fast and blurred, passing in front of everything
-	// but the letterbox.
-	for i := 0; i < int(end/9); i++ {
-		start := 3 + r.Float64()*(end-10)
-		life := 4 + r.Float64()*3
-		x := r.IntN(movieWidth)
-		scale := 260 + r.IntN(200)
-		w.event(8, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\fscx%d\fscy%d\frz%d\t(\frz%d\frx%d)\c%s\alpha&H%02X&\blur9\fad(400,400)\p1}%s{\p0}`,
-			x, movieBars-160, x+r.IntN(700)-200, movieHeight-movieBars+160, scale, scale, r.IntN(360), r.IntN(360)-180, 360, w.accent, 0xA0+r.IntN(0x20), petal))
-	}
-	// Light streaks: a thin line of light crossing the dark, every so often.
-	for at := 12 + r.Float64()*8; at < end-4; at += 14 + r.Float64()*12 {
-		x, y := r.IntN(movieWidth), movieBars+r.IntN(movieHeight/3)
-		w.event(0, at, at+1.4, "Draw", fmt.Sprintf(`{\an4\move(%d,%d,%d,%d)\frz-18\c%s\alpha&HB0&\blur2\fscx30\t(0,500,\fscx100)\fad(150,700)\p1}m 0 0 l 260 -2 260 2{\p0}`,
-			x, y, x+700, y+230, w.text))
+// spotlight is a soft cone of light from above, behind the favourites wall.
+func (w *filmWriter) spotlight(start, end float64) {
+	w.event(0, start, end, "Draw", fmt.Sprintf(`{\an8\pos(%d,%d)\c%s\alpha&HF4&\blur60\fad(900,900)\p1}m 380 0 l 620 0 1000 820 0 820{\p0}`,
+		filmCentreX, movieBars-40, w.text))
+}
+
+// rays are slow beams of gold light turning behind the achievements.
+func (w *filmWriter) rays(start, end float64) {
+	gold := assColor(w.palette.Yellow)
+	for i := range 8 {
+		angle := i * 45
+		w.event(0, start, end, "Draw", fmt.Sprintf(`{\an7\org(%d,%d)\pos(%d,%d)\frz%d\t(\frz%d)\c%s\alpha&HF2&\blur24\fad(1200,1200)\p1}m 0 0 l 1400 -90 1400 90{\p0}`,
+			filmCentreX, filmCentreY+40, filmCentreX, filmCentreY+40, angle, angle+40, gold))
 	}
 }
 
@@ -486,6 +538,7 @@ func movieScript(facts movieFacts, tagline string, wall []movieFavourite, palett
 	w.script.WriteString("[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n")
 	fmt.Fprintf(&w.script, "Style: Logo,%s,34,%s,%s,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n", logoFont, w.accent, w.accent)
 	fmt.Fprintf(&w.script, "Style: Text,%s,44,%s,%s,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n", textFont, w.text, w.text)
+	fmt.Fprintf(&w.script, "Style: Voice,serif,50,%s,%s,&H00000000,&H00000000,0,1,0,0,100,100,1,0,1,0,0,5,0,0,0,1\n", w.text, w.text)
 	fmt.Fprintf(&w.script, "Style: Seal,serif,250,%s,%s,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n", w.accent, w.accent)
 	w.script.WriteString("Style: Draw,Arial,20,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n\n")
 	w.script.WriteString("[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
@@ -494,36 +547,34 @@ func movieScript(facts movieFacts, tagline string, wall []movieFavourite, palett
 	at := w.presents(facts.Viewer)
 	at = w.logo(at+0.2, tagline)
 
-	numerals := []string{"I", "II", "III", "IV", "V", "VI"}
+	numerals := []string{"I", "II", "III", "IV"}
 	chapter := 0
 	next := func() string { chapter++; return numerals[chapter-1] }
 
 	if cards := movieStatCards(facts, rng); len(cards) > 0 {
-		start := w.chapter(at, next(), "The numbers")
+		start := w.chapter(at, next(), "Counting the Stars")
 		at = w.statCards(start, cards)
 		w.drums = append(w.drums, [2]float64{start - 0.4, at})
 	}
-	at = w.poem(w.chapter(at, next(), "The Voices"), moviePoem(facts, rng))
+	voicesStart := w.chapter(at, next(), "The Voices")
+	at = w.poem(voicesStart, moviePoem(facts, rng))
+	sky := [2]float64{voicesStart, at}
 	if len(wall) > 0 {
-		start := w.chapter(at, next(), "Your favourites")
+		start := w.chapter(at, next(), "Memories That Never Fade")
 		at = w.wall(start, wall)
+		w.spotlight(start, at)
 		w.drums = append(w.drums, [2]float64{start - 0.4, at})
 		at += 0.4
 	}
-	if characters := facts.Extras.Characters; len(characters) > 0 {
-		start := w.chapter(at, next(), "Character select")
-		at = w.characterSelect(start, characters)
-		w.drums = append(w.drums, [2]float64{start - 0.4, at})
-		at += 0.4
-	}
-	start := w.chapter(at, next(), "Achievements")
+	start := w.chapter(at, next(), "Legendary Conquests")
 	at = w.achievements(start, movieAchievements(facts, rng))
+	w.rays(start, at)
 	w.drums = append(w.drums, [2]float64{start - 0.4, at})
 	title, episode, teaser := movieNextTime(facts, rng)
 	at = w.nextTime(at+0.4, title, episode, teaser)
 	timeline.End = w.seal(at+0.2, movieFarewell(rng))
 
-	w.ambience(timeline.End)
+	w.petals(timeline.End, sky)
 	// Letterbox bars, over everything.
 	bar := fmt.Sprintf(`m 0 0 l %d 0 %d %d 0 %d`, movieWidth, movieWidth, movieBars, movieBars)
 	w.event(9, 0, timeline.End, "Draw", `{\pos(0,0)\c&H000000&\p1}`+bar+`{\p0}`)
