@@ -38,12 +38,12 @@ func TestTheCreditsCarryTheStats(t *testing.T) {
 		Count: 120, EpisodesWatched: 1500, MinutesWatched: 36000,
 		Genres: []statCount{{"Action", 50}, {"Comedy", 40}, {"Drama", 30}, {"Horror", 1}},
 	}}
-	credits := movieCredits(stats, "Xy", 1000, time.Now())
+	credits := movieCredits(stats, movieExtras{Studios: []string{"MAPPA"}}, "Xy", 1000, time.Now())
 	text := ""
 	for _, credit := range credits {
 		text += credit.Role + "=" + credit.Name + "\n"
 	}
-	for _, want := range []string{"Starring=Xy", "Episodes watched=1,500", "Top genres=Action · Comedy · Drama", "Achievement=1,000 episodes"} {
+	for _, want := range []string{"Starring=Xy", "Episodes watched=1,500", "Top genres=Action · Comedy · Drama", "Achievement=1,000 episodes", "Animation by=MAPPA", "As a full-time job=15 work weeks"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("credits miss %q:\n%s", want, text)
 		}
@@ -55,7 +55,7 @@ func TestTheCreditsCarryTheStats(t *testing.T) {
 
 // No tracker still makes a film: it just has less in it.
 func TestTheCreditsNeedNoTracker(t *testing.T) {
-	credits := movieCredits(watchStats{}, "", 0, time.Now())
+	credits := movieCredits(watchStats{}, movieExtras{}, "", 0, time.Now())
 	if credits[1].Name != "You" {
 		t.Fatalf("nameless viewer starred as %q", credits[1].Name)
 	}
@@ -69,12 +69,12 @@ func TestTheCreditsNeedNoTracker(t *testing.T) {
 // A brace in a show title would open an ASS override block and swallow the
 // rest of the line.
 func TestTheScriptEscapesTitles(t *testing.T) {
-	script, seconds := movieScript([]creditLine{{Role: "Most binged lately", Name: `Re:{Zero} \N`}}, movieOpening{Presenter: "Xy", Tagline: "The movie"}, theme.Builtin(), "monospace", "sans-serif")
+	script, timeline := movieScript([]creditLine{{Role: "Most binged lately", Name: `Re:{Zero} \N`}}, movieOpening{Presenter: "Xy", Tagline: "The movie"}, nil, theme.Builtin(), "monospace", "sans-serif")
 	if strings.Contains(script, "{Zero}") || !strings.Contains(script, `\\N`) {
 		t.Fatalf("title not escaped:\n%s", script)
 	}
-	if seconds < movieTitleSeconds+movieEndCardSeconds {
-		t.Fatalf("film too short: %.1fs", seconds)
+	if timeline.End < movieTitleSeconds+movieEndCardSeconds || timeline.WallEnd != timeline.WallStart {
+		t.Fatalf("timeline without a wall: %+v", timeline)
 	}
 }
 
@@ -103,5 +103,28 @@ func TestTheSoundtrackIsAWav(t *testing.T) {
 	}
 	if want := 44 + 2*2*movieSampleRate; len(wav) != want {
 		t.Fatalf("%d bytes, want %d", len(wav), want)
+	}
+}
+
+// Each cover gets its own place in the graph, and the last one is the output.
+func TestTheGraphLaysOutEveryCover(t *testing.T) {
+	timeline := movieTimeline{WallStart: 40, WallEnd: 48, Stamp: 49, End: 56}
+	graph := movieFilterGraph("[vid1]", []string{"[vid2]", "[vid3]"}, "[vo]", timeline)
+	for _, want := range []string{"[vid2]scale", "[vid3]scale", "[base1][cover1]overlay", "[vo]"} {
+		if !strings.Contains(graph, want) {
+			t.Errorf("graph misses %q:\n%s", want, graph)
+		}
+	}
+	if !strings.HasSuffix(movieFilterGraph("[vid1]", nil, "[vo]", timeline), "null[vo]") {
+		t.Error("no covers left the graph without an output")
+	}
+}
+
+// The covers sit centred, side by side.
+func TestTheWallIsCentred(t *testing.T) {
+	left := movieCoverX(0, 3)
+	right := movieCoverX(2, 3) + movieCoverWidth
+	if left != movieWidth-right {
+		t.Fatalf("wall runs %d to %d", left, right)
 	}
 }
