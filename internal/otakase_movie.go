@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thexykril/otakase/internal/mpvskin"
 	"github.com/thexykril/otakase/internal/theme"
 )
 
@@ -238,12 +239,17 @@ func playMovieFilm(facts movieFacts, tagline string, wall []movieFavourite, pale
 		return err
 	}
 
+	chaptersPath := filepath.Join(dir, "chapters.txt")
+	if err := os.WriteFile(chaptersPath, []byte(movieChaptersFile(timeline)), 0o600); err != nil {
+		return err
+	}
+
 	// mpv numbers tracks from 1: the background is vid1, each cover after it.
 	args := []string{
 		"--no-terminal", "--force-window=yes", "--keep-open=no",
 		"--no-resume-playback", "--save-position-on-quit=no",
 		"--osd-level=0", "--sub-ass-override=no", "--sub-visibility=yes",
-		"--sub-file=" + scriptPath, "--audio-file=" + musicPath,
+		"--sub-file=" + scriptPath, "--audio-file=" + musicPath, "--chapters-file=" + chaptersPath,
 		"--title=" + otakaseMovieTitle, "--force-media-title=" + otakaseMovieTitle,
 	}
 	var images []string
@@ -253,9 +259,47 @@ func playMovieFilm(facts movieFacts, tagline string, wall []movieFavourite, pale
 	}
 	args = append(args,
 		"--lavfi-complex="+movieFilterGraph("[vid1]", images, "[vo]", timeline.Pictures)+";[aid1]anull[ao]",
-		movieBackground(palette, timeline.End),
 	)
+	// The player is set up the way the user set it for episodes: their
+	// window name, the skin in its film mode, and their MpvArgs last, so
+	// fullscreen and the like carry over.
+	config := GetGlobalConfig()
+	if skin := movieSkinArgs(config, binary); len(skin) > 0 {
+		args = append(skin, args...)
+	}
+	args = append(mpvWindowArgs(config, binary), args...)
+	if config != nil {
+		args = append(args, config.MpvArgs...)
+	}
+	args = append(args, movieBackground(palette, timeline.End))
 	return exec.Command(binary, args...).Run()
+}
+
+// movieSkinArgs are the skin's flags in its film mode, where the seek bar
+// shows the film's parts and nothing moves the picture, which is a
+// subtitle; nil when the player keeps its own look.
+func movieSkinArgs(config *Config, binary string) []string {
+	skin := mpvSkinArgs(config, binary, false)
+	if len(skin) == 0 {
+		return nil
+	}
+	return append(skin, "--script-opts-append="+mpvskin.ScriptName+"-film=yes")
+}
+
+// movieChaptersFile lists the film's parts in the ffmetadata form mpv reads
+// with --chapters-file.
+func movieChaptersFile(timeline movieTimeline) string {
+	var out strings.Builder
+	out.WriteString(";FFMETADATA1\n")
+	for i, chapter := range timeline.Chapters {
+		end := timeline.End
+		if i+1 < len(timeline.Chapters) {
+			end = timeline.Chapters[i+1].At
+		}
+		fmt.Fprintf(&out, "[CHAPTER]\nTIMEBASE=1/1000\nSTART=%d\nEND=%d\ntitle=%s\n",
+			int(chapter.At*1000), int(end*1000), strings.NewReplacer("=", "\\=", ";", "\\;", "#", "\\#", "\\", "\\\\").Replace(chapter.Title))
+	}
+	return out.String()
 }
 
 // movieBackground is the lavfi source mpv plays under everything: the

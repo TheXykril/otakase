@@ -193,3 +193,23 @@ func TestTheWallIsCentred(t *testing.T) {
 		t.Fatalf("wall runs %d to %d", left, right)
 	}
 }
+
+// The film's parts reach the player as chapters, in order, the first at the
+// start and each ending where the next begins.
+func TestThePartsAreChapters(t *testing.T) {
+	_, timeline := movieScript(testFacts(), "The movie", nil, theme.Builtin(), "monospace", "sans-serif", rand.New(rand.NewPCG(1, 2)))
+	if len(timeline.Chapters) < 4 || timeline.Chapters[0].At != 0 {
+		t.Fatalf("chapters %+v", timeline.Chapters)
+	}
+	for i := 1; i < len(timeline.Chapters); i++ {
+		if timeline.Chapters[i].At <= timeline.Chapters[i-1].At {
+			t.Fatalf("chapter %d starts before the one before it: %+v", i, timeline.Chapters)
+		}
+	}
+	file := movieChaptersFile(movieTimeline{End: 10, Chapters: []movieChapter{{0, "Opening"}, {4, "Chapter I: A=B"}}})
+	for _, want := range []string{";FFMETADATA1\n", "START=0\nEND=4000\ntitle=Opening\n", "START=4000\nEND=10000\ntitle=Chapter I: A\\=B\n"} {
+		if !strings.Contains(file, want) {
+			t.Errorf("chapters file misses %q:\n%s", want, file)
+		}
+	}
+}

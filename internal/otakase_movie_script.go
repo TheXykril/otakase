@@ -23,6 +23,8 @@ import (
 // movieTimeline is when the film's parts happen and what the soundtrack has
 // to play under them.
 type movieTimeline struct {
+	// Chapters are the film's parts, for the player's seek bar.
+	Chapters []movieChapter
 	// Pictures are where and when each of the wall's covers shows.
 	Pictures []moviePicture
 	End      float64
@@ -36,6 +38,7 @@ type filmWriter struct {
 	rng     *rand.Rand
 	cues    []movieCue
 	drums   [][2]float64
+	parts   []movieChapter
 	images  []moviePicture
 
 	accent, text, muted, second, dark string
@@ -76,6 +79,7 @@ func (w *filmWriter) typed(layer int, start, end float64, x, y, size int, colour
 // sweeping under them. It returns when the next part may start.
 func (w *filmWriter) chapter(at float64, numeral, name string) float64 {
 	end := at + 2.6
+	w.part(at-0.3, "Chapter "+numeral+": "+name)
 	w.cue(at-0.15, cueWhoosh, 0.9)
 	w.event(2, at, end, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs26\fsp22\c%s\alpha&HFF&\t(0,300,\alpha&H00&)\fad(0,500)}%s`,
 		filmCentreX, filmCentreY-50, w.accent, assText("CHAPTER "+numeral)))
@@ -84,6 +88,17 @@ func (w *filmWriter) chapter(at float64, numeral, name string) float64 {
 	w.event(2, at+0.4, end, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\c%s\fscx0\t(0,700,\fscx100)\fad(0,500)\p1}m 0 0 l 520 0 520 3 0 3{\p0}`,
 		filmCentreX, filmCentreY+80, w.accent))
 	return end + 0.2
+}
+
+// movieChapter is one part of the film, as the player lists it.
+type movieChapter struct {
+	At    float64
+	Title string
+}
+
+// part marks a new part of the film starting at at.
+func (w *filmWriter) part(at float64, title string) {
+	w.parts = append(w.parts, movieChapter{At: math.Max(0, at), Title: title})
 }
 
 // presents is the opening line, under a shimmer.
@@ -615,6 +630,7 @@ func movieScript(facts movieFacts, tagline string, wall []movieFavourite, palett
 	w.script.WriteString("[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
 
 	var timeline movieTimeline
+	w.part(0, "Opening")
 	at := w.presents(facts.Viewer)
 	at = w.logo(at+0.2, tagline)
 
@@ -644,7 +660,9 @@ func movieScript(facts movieFacts, tagline string, wall []movieFavourite, palett
 	w.rays(start, at)
 	w.drums = append(w.drums, [2]float64{start - 0.4, at})
 	title, episode, teaser := movieNextTime(facts, rng)
+	w.part(at, "The Journey Continues")
 	at = w.nextTime(at+0.4, title, episode, teaser)
+	w.part(at, "The End")
 	timeline.End = w.seal(at+0.2, movieFarewell(rng))
 
 	w.petals(timeline.End, sky, wallSpan)
@@ -654,6 +672,7 @@ func movieScript(facts movieFacts, tagline string, wall []movieFavourite, palett
 	w.event(9, 0, timeline.End, "Draw", fmt.Sprintf(`{\pos(0,%d)\c&H000000&\p1}%s{\p0}`, movieHeight-movieBars, bar))
 
 	timeline.Pictures = w.images
+	timeline.Chapters = w.parts
 	timeline.Score = movieScore{Length: timeline.End, Drums: w.drums, Cues: w.cues}
 	return w.script.String(), timeline
 }
