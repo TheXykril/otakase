@@ -80,7 +80,9 @@ burn, so the sound and the picture start together. If a restart takes more
 than 30 seconds, otakase gives up on it and keeps playing where you were; on a
 torrent it waits longer and shows how much has downloaded.
 
-While casting, the terminal shows a control panel: position, device, and
+While casting, the terminal shows a control panel: position, device, whether
+it is playing, paused or buffering (Chromecast, DLNA TVs that report it, and
+the browser player, which also shows a spinner), and
 keys (space pauses, arrows seek/adjust volume, `a` switches between sub and dub
 from where you are, `q` stops; on a browser cast `l` shows the link and QR
 code again). Anything else

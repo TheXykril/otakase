@@ -1345,6 +1345,8 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			state := "PLAYING"
 			if paused {
 				state = "PAUSED"
+			} else if progress.Buffering {
+				state = "BUFFERING"
 			}
 			// The device reports dur=-1 for the whole episode: ffmpeg writes no
 			// EXT-X-ENDLIST until the remux finishes, so the receiver treats the

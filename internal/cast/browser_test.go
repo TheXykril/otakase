@@ -286,3 +286,14 @@ func TestBrowserStatusReachesThePage(t *testing.T) {
 		t.Errorf("a late page got %q", got)
 	}
 }
+
+func TestBrowserPlayerReportsBuffering(t *testing.T) {
+	hub := startTestHub(t)
+	viewer := openTestViewer(t, hub)
+	player := &BrowserPlayer{hub: hub}
+	_ = player.PlayFrom("http://host:1/g0/"+PlaylistName, 0)
+	viewer.report(browserReport{Load: 1, Position: 3, Buffering: true})
+	if progress, _ := player.Progress(); !progress.Buffering {
+		t.Errorf("a waiting page is not buffering: %+v", progress)
+	}
+}

@@ -187,6 +187,7 @@ type browserReport struct {
 	Position  float64 `json:"pos"`
 	Paused    bool    `json:"paused"`
 	Ended     bool    `json:"ended"`
+	Buffering bool    `json:"buffering"`
 	Volume    float64 `json:"vol"`
 	Error     string  `json:"error"`
 	PlayerUse string  `json:"player"`
@@ -568,8 +569,9 @@ func (p *BrowserPlayer) Progress() (Progress, error) {
 		return Progress{Settling: true}, nil
 	}
 	return Progress{
-		Position: client.report.Position - h.seekBase,
-		Idle:     client.report.Ended,
+		Position:  client.report.Position - h.seekBase,
+		Idle:      client.report.Ended,
+		Buffering: client.report.Buffering,
 	}, nil
 }
 

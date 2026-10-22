@@ -50,6 +50,10 @@
   #banner { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); max-width: 86%;
     background: rgba(8, 7, 7, .82); border-left: 3px solid #d2492f; padding: 10px 16px; border-radius: 8px;
     font-size: 17px; white-space: pre-line; display: none; text-align: left; }
+  #spinner { position: absolute; top: 50%; left: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
+    border: 4px solid rgba(236, 228, 214, .25); border-top-color: #d2492f; border-radius: 50%;
+    animation: spin .9s linear infinite; display: none; pointer-events: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   #toast { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(8, 7, 7, .8);
     padding: 12px 20px; border-radius: 12px; font-size: 18px; display: none; }
   #cuesize { display: none; }
@@ -74,6 +78,7 @@
   </div>
   <div id="tap" class="layer"><div><svg viewBox="0 0 24 24" width="48" height="48" fill="#fff8ec"><path d="M8 5v14l11-7z"/></svg></div><p>Tap to play</p></div>
   <div id="waiting" class="layer"><h1>otakase<span>.</span></h1><p id="waittext">Connecting…</p><p id="fullhint">Tap anywhere for full screen</p></div>
+  <div id="spinner"></div>
   <div id="banner"></div>
   <div id="toast"></div>
 </div>
@@ -129,11 +134,19 @@
     if (!client) { return; }
     post("state", {
       client: client, load: load, seek: seek,
-      pos: video.currentTime || 0, paused: video.paused, ended: video.ended,
+      pos: video.currentTime || 0, paused: video.paused, ended: video.ended, buffering: buffering(),
       vol: video.volume, error: lastError, player: player
     });
   }
   setInterval(report, 1000);
+
+  // buffering is a video meant to be playing that has run out of what it can
+  // play: the spinner shows, and otakase's panel says so too.
+  function buffering() {
+    return load > 0 && !wantPaused && !video.ended && (video.seeking || video.readyState < 3);
+  }
+  var spinner = document.getElementById("spinner");
+  setInterval(function () { spinner.style.display = buffering() ? "block" : "none"; }, 250);
 
   function clockText(seconds) {
     seconds = Math.max(0, Math.floor(seconds));

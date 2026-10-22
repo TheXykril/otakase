@@ -299,6 +299,8 @@ func castPanelStateMark(state string) string {
 		return "▶"
 	case "PAUSED":
 		return "⏸"
+	case "BUFFERING":
+		return "◌"
 	default:
 		return "•"
 	}
