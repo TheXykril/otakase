@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"slices"
 	"strings"
 
 	"github.com/thexykril/otakase/internal/theme"
@@ -206,36 +207,32 @@ func (w *filmWriter) poem(at float64, lines []poemLine) float64 {
 	end := t + 1.2
 
 	w.nightSky(at, end)
-	colours := []string{w.text, w.second}
-	glows := []string{w.accent, w.second}
-	voiceX := []int{filmCentreX - 760, filmCentreX + 760}
+	// Each voice's words are the colour of its light: a warm rose for the
+	// first, cyan for the second.
+	colours := []string{assColor(mixColor(w.palette.Accent, w.palette.BrightForeground, 0.35)), w.second}
+	voiceX := []int{filmCentreX - 800, filmCentreX + 800}
+	speaking := [2][][3]float64{}
+	for i, line := range lines {
+		speaking[line.Voice%2] = append(speaking[line.Voice%2], [3]float64{arrive[i], arrive[i] + writing[i], float64(i)})
+	}
 	for voice := range 2 {
-		// Each voice's light, breathing softly the whole time.
-		w.event(1, at, end, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\c%s\alpha&HD8&\blur40\fad(1500,1500)\p1}%s{\p0}`,
-			voiceX[voice], filmCentreY, glows[voice], circleShape(90)))
-		w.event(1, at, end, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\c%s\alpha&H70&\blur5\fad(1500,1500)\p1}%s{\p0}`,
-			voiceX[voice], filmCentreY, colours[voice], circleShape(9)))
+		var words []float64
+		for _, span := range speaking[voice] {
+			words = append(words, wordStarts(lines[int(span[2])].Text, span[0], writing[int(span[2])])...)
+		}
+		w.voiceLight(voiceX[voice], filmCentreY, colours[voice], 1-2*voice, at, end, speaking[voice], words)
 	}
 
 	alphas := []int{0x00, 0x60, 0xA0, 0xD0}
 	for i, line := range lines {
 		voice := line.Voice % 2
+		glow := colours[voice]
 		runes := len([]rune(line.Text))
 		size := 50
-		if runes > 58 {
-			size = max(36, 50*58/runes)
+		// Long lines shrink to keep clear of the lights.
+		if runes > 50 {
+			size = max(34, 50*50/runes)
 		}
-		// The speaker's light swells and sends a ripple out while it talks.
-		speak := arrive[i]
-		// Rings of fainter light stand in for a gradient, which one blurred
-		// disc this big cannot give.
-		for ring, glow := range []struct{ radius, alpha int }{{20, 0xA8}, {44, 0xD0}, {72, 0xE8}} {
-			w.event(2, speak, speak+writing[i]+0.6, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\c%s\alpha&HFF&\blur%d\t(0,400,\alpha&H%02X&)\t(%d,%d,\alpha&HFF&)\p1}%s{\p0}`,
-				voiceX[voice], filmCentreY, glows[voice], 12+ring*12, glow.alpha, int(writing[i]*1000), int(writing[i]*1000+600), circleShape(glow.radius)))
-		}
-		w.event(2, speak, speak+2, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\1a&HFF&\bord2\3c%s\3a&H80&\fscx20\fscy20\t(0,2000,\fscx180\fscy180\3a&HFF&)\p1}%s{\p0}`,
-			voiceX[voice], filmCentreY, colours[voice], circleShape(80)))
-
 		// The line itself: written on word by word, then rising and dimming
 		// a step each time a new line arrives, gone after four.
 		karaoke := writeOn(line.Text, writing[i])
@@ -274,14 +271,70 @@ func (w *filmWriter) poem(at float64, lines []poemLine) float64 {
 				// up behind it.
 				rise := fmt.Sprintf(`\an5\move(%d,%d,%d,%d,0,600)\fs%d%s`, filmCentreX, from, filmCentreX, y, size, fade)
 				w.event(4, start, stop, "Voice", fmt.Sprintf(`{%s\c%s\2a&HFF&\blur0.6}`, rise, colours[voice])+karaoke)
-				w.event(3, start, stop, "Voice", fmt.Sprintf(`{%s\c%s\blur10\alpha&HFF&\t(%d,%d,\alpha&HA0&)}`, rise, glows[voice], int(writing[i]*1000), int(writing[i]*1000)+700)+assText(line.Text))
+				w.event(3, start, stop, "Voice", fmt.Sprintf(`{%s\c%s\blur10\alpha&HFF&\t(%d,%d,\alpha&HA0&)}`, rise, glow, int(writing[i]*1000), int(writing[i]*1000)+700)+assText(line.Text))
 				continue
 			}
 			w.event(4, start, stop, "Voice", fmt.Sprintf(`{%s\c%s\blur0.6}`, moving(solid), colours[voice])+assText(line.Text))
-			w.event(3, start, stop, "Voice", fmt.Sprintf(`{%s\c%s\blur10}`, moving(faint), glows[voice])+assText(line.Text))
+			w.event(3, start, stop, "Voice", fmt.Sprintf(`{%s\c%s\blur10}`, moving(faint), glow)+assText(line.Text))
 		}
 	}
 	return end
+}
+
+// voiceLight is one voice of the conversation: a small bright core in a
+// soft halo, a ring of motes slowly circling it, all breathing quietly the
+// whole time. While the voice speaks the core swells and the halo
+// brightens, and every word it says sends a ripple out. spin is 1 or -1,
+// so the two voices turn opposite ways; speaking holds [start, end, line]
+// for each of its lines, words when each of its words starts.
+func (w *filmWriter) voiceLight(x, y int, colour string, spin int, start, end float64, speaking [][3]float64, words []float64) {
+	const motes, orbit = 14, 92
+	span := int((end - start) * 1000)
+	fade := `\fad(1500,1500)`
+	at := func(layer int, from, to float64, tags, shape string) {
+		w.event(layer, from, to, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\c%s%s\p1}%s{\p0}`, x, y, colour, tags, shape))
+	}
+	// The halo: rings of fainter light standing in for a gradient.
+	for ring, halo := range []struct{ radius, alpha int }{{22, 0xC0}, {48, 0xDC}, {80, 0xEE}} {
+		at(1, start, end, fmt.Sprintf(`\alpha&H%02X&\blur%d%s`, halo.alpha, 12+ring*10, fade), circleShape(halo.radius))
+	}
+	at(2, start, end, `\alpha&H10&\blur2.5`+fade, circleShape(8))
+	// The motes, circling.
+	var ring strings.Builder
+	for i := range motes {
+		angle := 2 * math.Pi * float64(i) / motes
+		size := 2 + i%2
+		fmt.Fprintf(&ring, "%s ", circleAt(orbit+3+int(math.Round(orbit*math.Cos(angle))), orbit+3+int(math.Round(orbit*math.Sin(angle))), size))
+	}
+	w.event(2, start, end, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\org(%d,%d)\c%s\alpha&H80&\blur1\t(0,%d,\frz%d)%s\p1}%s{\p0}`,
+		x, y, x, y, colour, span, spin*int(float64(span)/1000*14), fade, ring.String()))
+	at(1, start, end, `\1a&HFF&\bord1\3a&HD8&\blur1`+fade, circleShape(orbit))
+
+	for _, talk := range speaking {
+		talking := int((talk[1]-talk[0])*1000) + 400
+		at(2, talk[0], talk[1]+1, fmt.Sprintf(`\alpha&HFF&\blur32\t(0,300,\alpha&HC0&)\t(%d,%d,\alpha&HFF&)`, talking, talking+600), circleShape(60))
+		at(3, talk[0], talk[1]+1, fmt.Sprintf(`\alpha&HFF&\blur3\t(0,250,\alpha&H00&)\t(%d,%d,\alpha&HFF&)`, talking, talking+600), circleShape(14))
+	}
+	for _, word := range words {
+		at(1, word, word+1.2, `\1a&HFF&\bord2\3a&H70&\blur1\fscx100\fscy100\t(0,1200,\fscx300\fscy300\3a&HFF&)`, circleShape(40))
+	}
+}
+
+// wordStarts is when each word of text begins, written on over seconds
+// from start the way writeOn spreads it.
+func wordStarts(text string, start, seconds float64) []float64 {
+	runes := float64(max(len([]rune(text)), 1))
+	var starts []float64
+	t := start
+	for j, word := range strings.Fields(text) {
+		starts = append(starts, t)
+		width := len([]rune(word))
+		if j > 0 {
+			width++
+		}
+		t += seconds * float64(width) / runes
+	}
+	return starts
 }
 
 // writeOn is text that fills in word by word over seconds, ASS karaoke,
@@ -471,10 +524,12 @@ func (w *filmWriter) seal(at float64, farewell string) float64 {
 
 // petals drift through the film on one gentle wind from the left, at two
 // depths: small, dim and slow far away, larger and tumbling nearer. None
-// start while the night sky is up, so the voices talk under stars only. It
+// fall through a skipped span: the night sky, so the voices talk under
+// stars only, and the wall, since the covers sit under the subtitle and a
+// petal there would cross in front of them. It
 // uses its own random source so the film's backdrop is the same however its
 // story varies.
-func (w *filmWriter) petals(end float64, skip [2]float64) {
+func (w *filmWriter) petals(end float64, skip ...[2]float64) {
 	r := rand.New(rand.NewPCG(4, 12))
 	petal := `m 0 0 b 10 -14 26 -10 30 0 b 26 10 10 14 0 0`
 	layers := []struct {
@@ -489,7 +544,7 @@ func (w *filmWriter) petals(end float64, skip [2]float64) {
 		for i := 0; i < int(end/layer.every); i++ {
 			start := r.Float64() * (end - 4)
 			life := layer.life * (0.85 + r.Float64()*0.3)
-			if start+life > skip[0]-1 && start < skip[1] {
+			if slices.ContainsFunc(skip, func(span [2]float64) bool { return start+life > span[0]-1 && start < span[1] }) {
 				continue
 			}
 			x := r.IntN(movieWidth+400) - 400
@@ -516,6 +571,14 @@ func (w *filmWriter) rays(start, end float64) {
 		w.event(0, start, end, "Draw", fmt.Sprintf(`{\an7\org(%d,%d)\pos(%d,%d)\frz%d\t(\frz%d)\c%s\alpha&HF2&\blur24\fad(1200,1200)\p1}m 0 0 l 1400 -90 1400 90{\p0}`,
 			filmCentreX, filmCentreY+40, filmCentreX, filmCentreY+40, angle, angle+40, gold))
 	}
+}
+
+// circleAt draws a circle of radius r centred on (cx, cy), all in positive
+// coordinates.
+func circleAt(cx, cy, r int) string {
+	k := int(math.Round(float64(r) * 0.5523))
+	return fmt.Sprintf("m %d %d b %d %d %d %d %d %d b %d %d %d %d %d %d b %d %d %d %d %d %d b %d %d %d %d %d %d",
+		cx, cy-r, cx+k, cy-r, cx+r, cy-k, cx+r, cy, cx+r, cy+k, cx+k, cy+r, cx, cy+r, cx-k, cy+r, cx-r, cy+k, cx-r, cy, cx-r, cy-k, cx-k, cy-r, cx, cy-r)
 }
 
 // circleShape draws a circle of radius r inside the box from the origin to
@@ -559,10 +622,12 @@ func movieScript(facts movieFacts, tagline string, wall []movieFavourite, palett
 	voicesStart := w.chapter(at, next(), "The Voices")
 	at = w.poem(voicesStart, moviePoem(facts, rng))
 	sky := [2]float64{voicesStart, at}
+	var wallSpan [2]float64
 	if len(wall) > 0 {
 		start := w.chapter(at, next(), "Memories That Never Fade")
 		at = w.wall(start, wall)
 		w.spotlight(start, at)
+		wallSpan = [2]float64{start, at}
 		w.drums = append(w.drums, [2]float64{start - 0.4, at})
 		at += 0.4
 	}
@@ -574,7 +639,7 @@ func movieScript(facts movieFacts, tagline string, wall []movieFavourite, palett
 	at = w.nextTime(at+0.4, title, episode, teaser)
 	timeline.End = w.seal(at+0.2, movieFarewell(rng))
 
-	w.petals(timeline.End, sky)
+	w.petals(timeline.End, sky, wallSpan)
 	// Letterbox bars, over everything.
 	bar := fmt.Sprintf(`m 0 0 l %d 0 %d %d 0 %d`, movieWidth, movieWidth, movieBars, movieBars)
 	w.event(9, 0, timeline.End, "Draw", `{\pos(0,0)\c&H000000&\p1}`+bar+`{\p0}`)

@@ -297,6 +297,14 @@ func printMovieStory(facts movieFacts, rng *rand.Rand) {
 	fmt.Printf("  Next time: %s, %s. %s\n\n", title, episode, teaser)
 }
 
+// mixColor is "#rrggbb" a part of the way from a to b.
+func mixColor(a, b string, part float64) string {
+	ar, ag, ab := hexRGB(a)
+	br, bg, bb := hexRGB(b)
+	mix := func(x, y int) int { return int(math.Round(float64(x) + (float64(y)-float64(x))*part)) }
+	return fmt.Sprintf("#%02x%02x%02x", mix(ar, br), mix(ag, bg), mix(ab, bb))
+}
+
 // hexRGB splits "#rrggbb" into its channels, white when it is not one.
 func hexRGB(hex string) (int, int, int) {
 	hex = strings.TrimPrefix(hex, "#")
