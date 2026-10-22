@@ -56,7 +56,9 @@ type watchBadge struct {
 	Emoji  string
 	How    string
 	Points int
-	Has    func(st watchStats) bool
+	// Has earns the badge from heartbeats. Hidden badges have none: they
+	// come some other way, and /badges keeps quiet about them until earned.
+	Has func(st watchStats) bool
 }
 
 var watchBadges = []watchBadge{
@@ -158,7 +160,7 @@ func addHeartbeat(st *watchStats, show *appShow, secs int, now time.Time) []stri
 	}
 	var earned []string
 	for _, bd := range watchBadges {
-		if _, had := st.Badges[bd.Key]; !had && bd.Has(*st) {
+		if _, had := st.Badges[bd.Key]; !had && bd.Has != nil && bd.Has(*st) {
 			if st.Badges == nil {
 				st.Badges = map[string]time.Time{}
 			}
@@ -267,7 +269,7 @@ func badgesView(user string, self bool, st watchStats, now time.Time) *discordgo
 	for _, bd := range watchBadges {
 		if at, ok := st.Badges[bd.Key]; ok {
 			have = append(have, fmt.Sprintf("%s **%s** · <t:%d:d>", bd.Emoji, bd.Name, at.Unix()))
-		} else {
+		} else if bd.Has != nil {
 			todo = append(todo, fmt.Sprintf("%s %s: %s", bd.Emoji, bd.Name, bd.How))
 		}
 	}

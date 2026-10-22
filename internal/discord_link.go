@@ -280,6 +280,7 @@ func waitForDiscordLink(ctx context.Context, config *Config, start discordLinkSt
 				if err := sendDiscordHeartbeat(config, nil, 0); err != nil {
 					Log(fmt.Sprintf("Discord: heartbeat after linking failed: %v", err))
 				}
+				claimPendingTouchGrass(config)
 			}()
 			return link, nil
 		}

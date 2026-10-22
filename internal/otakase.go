@@ -130,7 +130,11 @@ func Exit(err error) {
 	// exactly that notification whenever RofiSelection is set, so it is
 	// skipped there rather than shown and immediately regretted.
 	if exitGreetingWanted(GetGlobalConfig()) {
-		Out(exitGreeting(rand.IntN))
+		line, rare := exitGreeting(rand.IntN)
+		Out(line)
+		if rare {
+			dropTouchGrassBadge(GetGlobalConfig(), rand.IntN)
+		}
 	}
 
 	if !exitErrorWorthShowing(err, socketPath) {
@@ -195,13 +199,14 @@ var rareExitGreetings = []string{
 
 const rareExitGreetingOdds = 100
 
-// exitGreeting picks the goodbye line. roll is rand.IntN, taken as an
-// argument so tests can choose the outcome.
-func exitGreeting(roll func(int) int) string {
+// exitGreeting picks the goodbye line and says whether it is one of the rare
+// ones. roll is rand.IntN, taken as an argument so tests can choose the
+// outcome.
+func exitGreeting(roll func(int) int) (string, bool) {
 	if roll(rareExitGreetingOdds) == 0 {
-		return rareExitGreetings[roll(len(rareExitGreetings))]
+		return rareExitGreetings[roll(len(rareExitGreetings))], true
 	}
-	return exitGreetings[roll(len(exitGreetings))]
+	return exitGreetings[roll(len(exitGreetings))], false
 }
 
 func Out(data interface{}) {
