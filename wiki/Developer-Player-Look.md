@@ -47,6 +47,13 @@ that works; what users see is on [Configuration](Configuration).
   script-opt and draws it in the middle of the window while there is no
   picture (`video-params` unset), so a loading episode shows the logo rather
   than black. It is generated; see [App Icon](Developer-App-Icon).
+- **Buffering spinner**: a ring of dots in the middle of the window, with
+  *Buffering 43%* (`cache-buffering-state`) and the download speed
+  (`cache-speed`) under it, while `paused-for-cache` is set or a seek has
+  kept `seeking` on for 0.35 s (shorter seeks would only flash it). Before
+  the first picture it shows *Loading* under the logo. It steps on its own
+  timer while shown, and is off between episodes (`start-file` to
+  `end-file`).
 
 ## Launch
 
