@@ -167,3 +167,17 @@ type recordingPlayer struct {
 }
 
 func (r *recordingPlayer) Play(url string) error { r.played = url; return nil }
+
+// l brings the browser link back, and is nothing to the playback itself.
+func TestCastShowLinkKey(t *testing.T) {
+	for _, key := range []string{"l", "L"} {
+		if command, n := decodeCastKey([]byte(key)); command != castCmdShowLink || n != 1 {
+			t.Errorf("%q decoded as %d (%d bytes)", key, command, n)
+		}
+	}
+	paused := false
+	stop, moved, err := applyCastCommand(castCmdShowLink, nil, &paused, nil, 42)
+	if stop || moved != 42 || err != nil || paused {
+		t.Errorf("l changed playback: stop %t, moved %v, err %v, paused %t", stop, moved, err, paused)
+	}
+}

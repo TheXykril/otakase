@@ -32,6 +32,9 @@ const (
 	// castCmdSwitchAudio is a: play the episode in the other language from
 	// where it is.
 	castCmdSwitchAudio
+	// castCmdShowLink is l: show or hide the browser player's link and code,
+	// for someone else who wants to watch along. Nothing for other devices.
+	castCmdShowLink
 )
 
 // castSeekStep is how far one arrow press moves the position.
@@ -92,6 +95,8 @@ func decodeCastKey(buf []byte) (castCommand, int) {
 		return castCmdStop, 1
 	case 'a', 'A':
 		return castCmdSwitchAudio, 1
+	case 'l', 'L':
+		return castCmdShowLink, 1
 	}
 	return castCmdNone, 1
 }

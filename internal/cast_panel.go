@@ -435,7 +435,11 @@ func castPanelCentre(lines []string, width, height int) []string {
 func (c *castPanelWriter) status(title string, episode int, device, message string, keys string) string {
 	// Every message the panel shows passes here, so this is where the browser
 	// player hears them too.
-	castBrowserStatus(message)
+	// The link and code are the one message the page has no use for: it is
+	// already open.
+	if !strings.Contains(message, "█") {
+		castBrowserStatus(message)
+	}
 	var out strings.Builder
 	out.WriteString(c.erase())
 

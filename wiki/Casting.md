@@ -82,7 +82,8 @@ torrent it waits longer and shows how much has downloaded.
 
 While casting, the terminal shows a control panel: position, device, and
 keys (space pauses, arrows seek/adjust volume, `a` switches between sub and dub
-from where you are, `q` stops). Anything else
+from where you are, `q` stops; on a browser cast `l` shows the link and QR
+code again). Anything else
 otakase needs to tell you arrives as a desktop notification instead of
 interrupting the panel. Next episode, filler skip, and tracker updates all
 work the same as local playback.

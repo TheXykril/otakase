@@ -1079,6 +1079,19 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	// Subtitles still being read out of the file while the episode plays.
 	rolling, _ := session.(castRollingSubtitles)
 
+	// A browser cast can bring its link and code back on the panel with l,
+	// since they leave it once the first page is open.
+	browserLink, showLink := "", false
+	if castIsBrowser(device) {
+		browserLink, _ = cast.BrowserLink()
+		if browserLink != "" {
+			panelKeys = strings.TrimSuffix(panelKeys, " ") + " · l link "
+		}
+	}
+	linkMessage := func() string {
+		return castBrowserLinkMessage(browserLink, true) + "\nPress l to go back."
+	}
+
 	for {
 		// A nil command channel blocks forever, so with no controls this
 		// select degrades to exactly the sleep it replaced.
@@ -1088,6 +1101,15 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 		case command := <-commands:
 			// A movie has no other language to switch to.
 			if isMovie && command == castCmdSwitchAudio {
+				continue
+			}
+			if command == castCmdShowLink {
+				if browserLink != "" && panel != nil {
+					showLink = !showLink
+					if showLink {
+						fmt.Print(panel.status(animeName, panelEpisode, device.Name, linkMessage(), panelKeys))
+					}
+				}
 				continue
 			}
 			wasPaused := paused
@@ -1336,18 +1358,22 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 				total = float64(anime.Ep.Duration)
 				estimated = durationEstimated
 			}
-			fmt.Print(panel.frame(castPanelState{
-				Title:     animeName,
-				Episode:   panelEpisode,
-				Keys:      panelKeys,
-				Device:    device.Name,
-				Position:  progress.Position,
-				Duration:  total,
-				Estimated: estimated,
-				State:     state,
-				Volume:    session.Volume(),
-				Skips:     spans,
-			}))
+			if showLink {
+				fmt.Print(panel.status(animeName, panelEpisode, device.Name, linkMessage(), panelKeys))
+			} else {
+				fmt.Print(panel.frame(castPanelState{
+					Title:     animeName,
+					Episode:   panelEpisode,
+					Keys:      panelKeys,
+					Device:    device.Name,
+					Position:  progress.Position,
+					Duration:  total,
+					Estimated: estimated,
+					State:     state,
+					Volume:    session.Volume(),
+					Skips:     spans,
+				}))
+			}
 		}
 		// Finished a moment early, on the last poll before the end. Receivers
 		// stop answering status checks as the last segment plays out (seen on
