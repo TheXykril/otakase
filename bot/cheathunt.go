@@ -43,10 +43,14 @@ type cheatHunt struct {
 	Lost    time.Time  `json:"lost,omitzero"` // too many wrong answers
 }
 
-// cheatCode is a minted code, by the code itself.
+// cheatCode is a minted code, by the code itself. Codes staff made with
+// /codes (codes.go) have no Finder but MintedBy and Note, and stay out of
+// the hall of fame.
 type cheatCode struct {
 	Finder     string    `json:"finder"` // Discord user id
 	Found      time.Time `json:"found"`
+	MintedBy   string    `json:"minted_by,omitempty"`
+	Note       string    `json:"note,omitempty"` // what staff made it for, like a giveaway
 	Kind       string    `json:"kind"`
 	RedeemedBy string    `json:"redeemed_by,omitempty"`
 	Redeemed   time.Time `json:"redeemed,omitzero"`
@@ -298,12 +302,19 @@ func (b *bot) redeemCheat(user, input string, now time.Time) (cheatCode, error) 
 		case x.RedeemedBy != "":
 			err = errLinkNotFound
 		default:
-			n := 1
-			for _, c := range d.CheatCodes {
-				n = max(n, c.Number+1)
+			x.RedeemedBy, x.Redeemed = user, now
+			if x.Finder != "" {
+				n := 1
+				for _, c := range d.CheatCodes {
+					n = max(n, c.Number+1)
+				}
+				x.Number = n
 			}
-			x.RedeemedBy, x.Redeemed, x.Number = user, now, n
 			d.CheatCodes[code] = x
+			if d.WatchTickets == nil {
+				d.WatchTickets = map[string]int{}
+			}
+			d.WatchTickets[user]++
 		}
 	})
 	if err == errLinkWrong {
@@ -423,12 +434,18 @@ func (b *bot) redeemCommand(i *discordgo.InteractionCreate) {
 		b.respond(i, true, errorEmbed("That code doesn't exist."))
 		return
 	}
+	if x.Finder == "" {
+		b.respondQuiet(i, true, &discordgo.MessageEmbed{Title: "Code accepted", Color: shu,
+			Description: "You got a **watch ticket**: one watch session hosted by the bot in Discord, once the watch room opens. " + watchTicketLine(b, user)})
+		return
+	}
 	who := fmt.Sprintf("found by <@%s>", x.Finder)
 	if x.Finder == user {
 		who = "found and redeemed by you"
 	}
 	b.respondQuiet(i, true, &discordgo.MessageEmbed{Title: fmt.Sprintf("Cheater #%d", x.Number), Color: shu,
-		Description: fmt.Sprintf("Code accepted, %s. You're in the hall of fame (`/cheaters`) and the %s role is yours.", who, cheatRole)})
+		Description: fmt.Sprintf("Code accepted, %s. You're in the hall of fame (`/cheaters`), the %s role is yours, and so is a **watch ticket** for the watch room once it opens. %s",
+			who, cheatRole, watchTicketLine(b, user))})
 	go b.cheatReward(x)
 }
 

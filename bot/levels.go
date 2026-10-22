@@ -106,6 +106,7 @@ func (b *bot) gainXP(m *discordgo.MessageCreate) {
 		}
 		d.XP[m.Author.ID] += gain
 		total = d.XP[m.Author.ID]
+		earnHanko(d, m.Author.ID, 1)
 	})
 	b.xp.mu.Lock()
 	b.xp.dirty = true

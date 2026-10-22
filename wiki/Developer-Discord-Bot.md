@@ -228,6 +228,22 @@ server and stays connected to Discord.
   bot when missing) and a post in the games channel (else general, chat or
   lounge). Every game except bingo and riddles draws from one pool of the
   500 most popular shows, refreshed weekly.
+- **Hanko (判子):** the server's currency (`hanko.go`), no earning limit:
+  1 per game point (`addGamePoints`), 1 per chat message that earns XP, and
+  5 per 20 minutes watched in a linked app (heartbeats). `/hanko` shows a
+  member's balance and the richest; staff change it with `/hanko-give`.
+- **Shinigami Notebook giveaway** (`giveaway.go`): staff `/giveaway start
+  [prize] [join_minutes] [page_minutes]` posts it with a thread for the
+  pages, `/giveaway next` closes joining or writes a page early,
+  `/giveaway end` calls it off. Every page writes out a third of the
+  survivors at random, sometimes with a twist (filler, double page, revival
+  arc, plot armor, free Shinigami Eyes); the last name wins. The Shop sells
+  six items for hanko, two per member per giveaway, each costing more than
+  the last. Without a prize the winner gets a minted code from Claim prize.
+- **Staff codes:** `/codes mint|list|revoke` (`codes.go`) make one-use
+  `/redeem` codes for giveaways and events. Every redeemed code adds a
+  watch ticket (`WatchTickets` in the data file) for the Activity watch
+  room once it exists.
 - **Moderation:** deleted and edited messages go to `mod-log` (else
   mod-chat); `/verification off|on|auto` (an Unverified role and a verify
   channel, see the comment at the top of `verification.go`); warnings expire
