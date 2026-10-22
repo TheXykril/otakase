@@ -13,7 +13,9 @@ otakase's controls for mpv, replacing mpv's own (--osc=no).
   * a skip times menu to mark, send and vote on openings and endings, when
     otakase takes them (ContributeSkipTimes),
   * a thin progress line when the controls are hidden,
-  * otakase's logo while there is no picture yet, as an episode loads.
+  * otakase's logo while there is no picture yet, as an episode loads,
+  * a spinner while the stream catches up (waiting for the cache, or a seek
+    taking its time), with how full the cache is and how fast it fills.
 
 Openings and endings are the "Opening" and "Ending" chapters otakase writes
 into the chapter list. Colours arrive as script-opts at launch, the chips as
@@ -118,6 +120,11 @@ local state = {
 	menu = nil,                -- {kind, items, scroll, anchor_x, anchor_y}
 	dragging = false,
 	has_video = false,         -- a frame is on screen
+	waiting = false,           -- paused-for-cache: playback waits for the stream
+	buffer_percent = nil,      -- cache-buffering-state, 0-100 while waiting
+	cache_speed = nil,         -- bytes a second coming into the cache
+	seeking_since = nil,       -- mp.get_time() when the current seek began
+	in_file = false,           -- an episode is opening or open (not between)
 }
 
 local hits = {}        -- interactive rectangles drawn this frame
@@ -948,6 +955,89 @@ local function draw_logo(ass, w, h, s)
 	end
 end
 
+-- Buffering -----------------------------------------------------------------
+
+-- A seek inside what is already downloaded lands at once; only one that keeps
+-- the player waiting this long gets the spinner, so short ones do not flash it.
+local SEEK_SPINNER_AFTER = 0.35
+local SPINNER_DOTS = 10
+local SPINNER_STEP = 0.08
+
+-- 'waiting' when playback has stopped for the cache, 'seeking' for a slow seek,
+-- 'loading' before an episode's first picture; nil while playing.
+local function buffering_kind()
+	if not state.in_file then return nil end
+	if not state.has_video then return 'loading' end
+	if state.waiting then return 'waiting' end
+	if state.seeking_since and mp.get_time() - state.seeking_since >= SEEK_SPINNER_AFTER then
+		return 'seeking'
+	end
+	return nil
+end
+
+local function speed_label(bytes)
+	if not bytes or bytes < 1024 then return nil end
+	if bytes >= 1024 * 1024 then
+		return string.format('%.1f MB/s', bytes / (1024 * 1024))
+	end
+	return string.format('%d KB/s', math.floor(bytes / 1024 + 0.5))
+end
+
+-- A ring of dots, the lit one stepping round with the clock and the ones
+-- behind it trailing off. Drawn centred, or under the logo while it shows.
+local function draw_buffering(ass, w, h, s, kind)
+	local r = 20 * s
+	local cx, cy = w / 2, h / 2
+	if kind == 'loading' then
+		local logo = math.min(220 * s, h * 0.45)
+		cy = (h + logo) / 2 + 26 * s + r
+	end
+
+	local label = kind == 'loading' and 'Loading' or 'Buffering'
+	if kind == 'waiting' and state.buffer_percent then
+		label = string.format('Buffering %d%%', math.floor(state.buffer_percent + 0.5))
+	end
+	local speed = speed_label(state.cache_speed)
+	local size = 14 * s
+	local small = 12 * s
+
+	if kind ~= 'loading' then
+		-- A dark plate keeps it readable over a bright frame.
+		local bw = math.max(2 * r + 36 * s, text_width(label, size, true) + 32 * s,
+			speed and text_width(speed, small) + 32 * s or 0)
+		local top = cy - r - 18 * s
+		local bottom = cy + r + 18 * s + 24 * s + (speed and 18 * s or 0)
+		ass[#ass + 1] = box(cx - bw / 2, top, cx + bw / 2, bottom, 16 * s, C.bg, 0.82)
+	end
+
+	local lit = math.floor(mp.get_time() / SPINNER_STEP) % SPINNER_DOTS
+	for i = 0, SPINNER_DOTS - 1 do
+		local a = (i / SPINNER_DOTS) * 2 * math.pi - math.pi / 2
+		local behind = (lit - i) % SPINNER_DOTS
+		local fade_out = math.max(0, 1 - behind / (SPINNER_DOTS * 0.7))
+		local dot = (2.4 + 1.8 * fade_out) * s
+		ass[#ass + 1] = circle(cx + math.cos(a) * r, cy + math.sin(a) * r, dot,
+			behind == 0 and C.accent or C.fg, 0.2 + 0.8 * fade_out)
+	end
+
+	local ty = cy + r + 22 * s
+	ass[#ass + 1] = text(cx, ty, 5, label, size, C.bright, 1, true)
+	if speed then
+		ass[#ass + 1] = text(cx, ty + 18 * s, 5, speed, small, C.fg, 0.7)
+	end
+end
+
+-- The spinner moves with the clock, so it is redrawn on a timer while shown.
+local spinner_timer = nil
+local function update_spinner_timer(spinning)
+	if spinning and not spinner_timer then
+		spinner_timer = mp.add_periodic_timer(SPINNER_STEP, function() request_render() end)
+	elseif not spinning and spinner_timer then
+		spinner_timer:kill()
+		spinner_timer = nil
+	end
+end
+
 local update_bindings
 
 local function render()
@@ -962,6 +1052,9 @@ local function render()
 	if not state.has_video then
 		draw_logo(ass, w, h, s)
 	end
+	local buffering = buffering_kind()
+	if buffering then draw_buffering(ass, w, h, s, buffering) end
+	update_spinner_timer(buffering ~= nil)
 
 	local visible = controls_visible(w, h, s)
 	lift_subtitles(visible, h, s)
@@ -1190,6 +1283,23 @@ mp.observe_property('video-params', 'native', function(_, value)
 	request_render()
 end)
 mp.observe_property('osd-dimensions', 'native', function() request_render() end)
+mp.observe_property('paused-for-cache', 'bool', function(_, value) state.waiting = value; request_render() end)
+mp.observe_property('cache-buffering-state', 'number', function(_, value) state.buffer_percent = value; request_render() end)
+mp.observe_property('cache-speed', 'number', function(_, value) state.cache_speed = value end)
+mp.observe_property('seeking', 'bool', function(_, value)
+	if value then
+		state.seeking_since = state.seeking_since or mp.get_time()
+	else
+		state.seeking_since = nil
+	end
+	request_render()
+end)
+mp.register_event('start-file', function() state.in_file = true; request_render() end)
+mp.register_event('end-file', function()
+	state.in_file = false
+	state.seeking_since = nil
+	request_render()
+end)
 mp.observe_property('mouse-pos', 'native', function(_, value)
 	if not value then return end
 	local moved = value.x ~= state.mouse.x or value.y ~= state.mouse.y
