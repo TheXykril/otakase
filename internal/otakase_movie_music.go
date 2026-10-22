@@ -7,21 +7,25 @@ import (
 	"math/rand/v2"
 )
 
-// The film's soundtrack is the games Activity's dark lo-fi loop ("Abyss", in
-// bot/assets/activity/app.js), rendered offline instead of through Web Audio:
-// 58 BPM in D Phrygian, warbly electric piano chords over a low drone, a deep
-// bass, soft swung drums with brushes and a rim click, a koto-like melody
-// after four bars, vinyl crackle, an echo and a dark room. On top of it the
-// closing stamp lands with a thud. Nothing is shipped; it takes a moment and
-// a temporary file.
+// The film's soundtrack is written for it: a dark lo-fi piece in the games
+// Activity's style (soft electric piano, a low drone, a round bass, brushed
+// half-time drums, vinyl, a dark room) but its own tune, in E minor at 66 BPM.
+// It follows the film: the drums only play through the busy chapters and drop
+// out for the conversation, and the picture's moments get their own sound
+// effects (movieCue): whooshes between scenes, an impact as the logo lands,
+// ticks as numbers count and words type, pops as covers appear, a bell and a
+// thud for the closing seal.
+//
+// Nothing is shipped. The whole thing is rendered offline in a moment, into a
+// temporary WAV that mpv plays beside the picture.
 
 const (
 	movieSampleRate = 32000
 
-	musicBeat   = 60.0 / 58
+	musicBeat   = 60.0 / 66
 	musicEighth = musicBeat / 2
 	// musicSwing pushes the off-beats late, as a share of a beat.
-	musicSwing = 0.13
+	musicSwing = 0.11
 )
 
 type musicChord struct {
@@ -29,36 +33,98 @@ type musicChord struct {
 	keys [4]int
 }
 
+// musicChords is Em9, Cmaj7(#11), G6, D/F#.
 var musicChords = []musicChord{
-	{38, [4]int{50, 53, 57, 62}}, // Dm
-	{39, [4]int{51, 55, 58, 62}}, // Ebmaj7
-	{38, [4]int{50, 53, 57, 64}}, // Dm(add9)
-	{37, [4]int{49, 52, 55, 58}}, // C#dim7
+	{40, [4]int{55, 59, 62, 66}},
+	{36, [4]int{52, 55, 59, 66}},
+	{43, [4]int{55, 59, 62, 64}},
+	{42, [4]int{54, 57, 62, 64}},
 }
 
-// musicMelody is, per bar, the eighth a note starts on and the note.
+// musicMelody is, per bar of the four, the eighth a note starts on and the
+// note: a slow line up and down the E minor pentatonic.
 var musicMelody = [][][2]int{
-	{{0, 69}, {3, 70}, {4, 69}},
-	{{1, 63}, {2, 62}, {4, 63}},
-	{{0, 65}, {2, 63}, {4, 62}, {7, 61}},
-	{{0, 62}},
+	{{0, 71}, {2, 74}, {4, 76}, {6, 74}},
+	{{1, 71}, {4, 67}, {5, 69}},
+	{{0, 72}, {3, 71}, {4, 69}, {6, 67}},
+	{{0, 66}, {4, 69}, {6, 71}},
 }
 
+// Half-time: the kick on one and the and-of-two, a rim on three.
 var (
-	musicKick  = [8]bool{true, false, false, false, false, true, false, false}
-	musicSnare = [8]bool{false, false, true, false, false, false, true, false}
+	musicKick = [8]bool{true, false, false, true, false, false, false, false}
+	musicRim  = [8]bool{false, false, false, false, true, false, false, false}
 )
+
+// movieCue is a sound effect at a moment of the picture.
+type movieCue struct {
+	At     float64
+	Kind   string
+	Length float64
+}
+
+const (
+	cueWhoosh  = "whoosh"
+	cueImpact  = "impact"
+	cueRiser   = "riser"
+	cueShimmer = "shimmer"
+	cueTick    = "tick"
+	cuePop     = "pop"
+	cueBell    = "bell"
+	cueThud    = "thud"
+)
+
+// movieScore is what the soundtrack needs to know about the film.
+type movieScore struct {
+	Length float64
+	// Drums are the stretches the beat plays through.
+	Drums [][2]float64
+	Cues  []movieCue
+}
 
 func midiHz(note int) float64 { return 440 * math.Pow(2, float64(note-69)/12) }
 
-// musicMix is the buffers notes are written into: the dry bus and the echo's
-// send.
+// musicMix is the buffers sound is written into: the music bus, the echo's
+// send, and the effects, which skip the music's low-pass so they stay crisp.
 type musicMix struct {
-	bus, echo []float64
-	noise     *rand.Rand
+	bus, echo, fx []float64
+	noise         *rand.Rand
+	// curves keeps each envelope shape once worked out: thousands of notes
+	// share a handful of shapes, and math.Pow per sample was most of the time
+	// the score took to render.
+	curves map[[3]float64][]float64
+}
+
+// curve is envelope(t, attack, length, peak) for every sample of length.
+func (m *musicMix) curve(attack, length, peak float64) []float64 {
+	key := [3]float64{attack, length, peak}
+	if c, ok := m.curves[key]; ok {
+		return c
+	}
+	c := make([]float64, samples(length)+1)
+	for i := range c {
+		c[i] = envelope(float64(i)/movieSampleRate, attack, length, peak)
+	}
+	m.curves[key] = c
+	return c
+}
+
+// curveAt reads a curve at sample i, silence past its end.
+func curveAt(curve []float64, i int) float64 {
+	if i < len(curve) {
+		return curve[i]
+	}
+	return 0
 }
 
 func (m *musicMix) index(at float64) int { return int(at * movieSampleRate) }
+
+// write adds v to buffer at sample i, ignoring anything past either end.
+func write(buffer []float64, i int, v float64) {
+	if i >= 0 && i < len(buffer) {
+		buffer[i] += v
+	}
+}
 
 // envelope is the Web Audio shape the loop uses: an exponential rise from
 // silence to peak over attack, then a fall back to silence by length.
@@ -86,123 +152,226 @@ func sawtooth(phase float64) float64 {
 
 func cents(value float64) float64 { return math.Pow(2, value/1200) }
 
-// keys is one electric piano note: two soft sines and a faint bell.
-func (m *musicMix) keys(freq, at, length, vol float64) {
-	start := m.index(at)
-	for i := 0; i < int((length+0.05)*movieSampleRate); i++ {
-		if start+i >= len(m.bus) {
-			return
+func samples(seconds float64) int { return int(seconds * movieSampleRate) }
+
+// keys is one electric piano note: two soft sines, the second detuned for the
+// warble, and a faint bell an octave and a fifth up.
+func (m *musicMix) keys(freq, at0, length, vol float64) {
+	key := [3]float64{-1, length, vol}
+	shape, ok := m.curves[key]
+	if !ok {
+		shape = make([]float64, samples(length+0.05))
+		for i := range shape {
+			t := float64(i) / movieSampleRate
+			switch {
+			case t > length:
+			case t < 0.02:
+				shape[i] = envelope(t, 0.02, 1, vol)
+			case t < 0.6:
+				shape[i] = vol * math.Pow(0.4, (t-0.02)/0.58)
+			default:
+				shape[i] = vol * 0.4 * math.Pow(0.0001/(vol*0.4), (t-0.6)/(length-0.6))
+			}
 		}
+		m.curves[key] = shape
+	}
+	start := m.index(at0)
+	detuned := freq * cents(14)
+	for i, g := range shape {
 		t := float64(i) / movieSampleRate
-		var g float64
-		switch {
-		case t < 0.02:
-			g = envelope(t, 0.02, 1, vol)
-		case t < 0.5:
-			g = vol * math.Pow(0.35, (t-0.02)/0.48)
-		default:
-			g = vol * 0.35 * math.Pow(0.0001/(vol*0.35), (t-0.5)/(length-0.5))
-		}
-		if t > length {
-			g = 0
-		}
-		v := math.Sin(2*math.Pi*freq*t) + 0.6*math.Sin(2*math.Pi*freq*cents(18)*t) + 0.08*math.Sin(2*math.Pi*freq*4*t)
-		m.bus[start+i] += v * g
+		wobble := 1 + 0.002*math.Sin(2*math.Pi*0.7*t)
+		v := math.Sin(2*math.Pi*freq*wobble*t) + 0.5*math.Sin(2*math.Pi*detuned*t) + 0.06*math.Sin(2*math.Pi*freq*3*t)
+		write(m.bus, start+i, v*g)
 	}
 }
 
-// pluck is the melody's voice: a triangle with a little saw, its brightness
-// closing as it rings, sent to the echo as well.
-func (m *musicMix) pluck(freq, at, vol float64) {
-	start := m.index(at)
+// pluck is the melody's voice, a muted koto: a triangle with a little saw,
+// its brightness closing as it rings, sent to the echo as well.
+func (m *musicMix) pluck(freq, at0, vol float64) {
+	start := m.index(at0)
+	shape := m.curve(0.005, 1.8, vol)
+	detuned := freq * cents(4)
 	var low float64
-	for i := 0; i < int(1.7*movieSampleRate); i++ {
-		if start+i >= len(m.bus) {
-			return
-		}
+	for i := 0; i < samples(1.9); i++ {
 		t := float64(i) / movieSampleRate
-		raw := triangle(freq*t) + 0.25*sawtooth(freq*cents(4)*t)
-		cutoff := freq * 8 * math.Pow(1.4/8, math.Min(t, 0.7)/0.7)
+		raw := triangle(freq*t) + 0.25*sawtooth(detuned*t)
+		cutoff := freq * 7 * math.Pow(1.5/7, math.Min(t, 0.8)/0.8)
 		low += (1 - math.Exp(-2*math.Pi*cutoff/movieSampleRate)) * (raw - low)
-		v := low * envelope(t, 0.006, 1.6, vol)
-		m.bus[start+i] += v
-		m.echo[start+i] += v
+		v := low * curveAt(shape, i)
+		write(m.bus, start+i, v)
+		write(m.echo, start+i, v)
 	}
 }
 
-func (m *musicMix) bass(freq, at, length float64) {
-	start := m.index(at)
+func (m *musicMix) bass(freq, at0, length float64) {
+	start := m.index(at0)
+	shape := m.curve(0.02, length, 0.42)
 	var low float64
-	smooth := 1 - math.Exp(-2*math.Pi*300/movieSampleRate)
-	for i := 0; i < int((length+0.05)*movieSampleRate); i++ {
-		if start+i >= len(m.bus) {
-			return
-		}
+	smooth := 1 - math.Exp(-2*math.Pi*260/movieSampleRate)
+	for i := 0; i < samples(length+0.05); i++ {
 		t := float64(i) / movieSampleRate
 		low += smooth * (triangle(freq*t) - low)
-		m.bus[start+i] += low * envelope(t, 0.02, length, 0.4)
+		write(m.bus, start+i, low*curveAt(shape, i))
 	}
 }
 
-func (m *musicMix) kick(at, vol float64) {
+// kick is a sine falling from 110 Hz to 42 Hz, into buffer.
+func (m *musicMix) kick(buffer []float64, at, vol float64) {
 	start := m.index(at)
 	phase := 0.0
-	for i := 0; i < int(0.4*movieSampleRate); i++ {
-		if start+i >= len(m.bus) {
-			return
-		}
+	for i := 0; i < samples(0.4); i++ {
 		t := float64(i) / movieSampleRate
 		freq := 110 * math.Pow(42.0/110, math.Min(t, 0.12)/0.12)
 		phase += freq / movieSampleRate
-		g := vol * math.Pow(0.0001/vol, t/0.35)
-		if t > 0.35 {
-			g = 0
+		if t <= 0.35 {
+			write(buffer, start+i, math.Sin(2*math.Pi*phase)*vol*math.Pow(0.0001/vol, t/0.35))
 		}
-		m.bus[start+i] += math.Sin(2*math.Pi*phase) * g
 	}
 }
 
 func (m *musicMix) rim(at float64) {
-	for _, part := range [][2]float64{{1700, 0.08}, {520, 0.13}} {
+	for _, part := range [][2]float64{{1600, 0.08}, {480, 0.12}} {
 		start := m.index(at)
-		for i := 0; i < int(0.06*movieSampleRate); i++ {
-			if start+i >= len(m.bus) {
-				break
-			}
+		for i := 0; i < samples(0.06); i++ {
 			t := float64(i) / movieSampleRate
-			m.bus[start+i] += triangle(part[0]*t) * envelope(t, 0.001, 0.05, part[1])
+			write(m.bus, start+i, triangle(part[0]*t)*envelope(t, 0.001, 0.05, part[1]))
 		}
 	}
 }
 
-// brush is a short burst of band-passed noise.
-func (m *musicMix) brush(at, length, vol float64) {
+// noiseBurst is a short burst of filtered noise, fading out: a brush, a hat.
+// brightness, 0 to 1, is how much of the top end gets through.
+func (m *musicMix) noiseBurst(buffer []float64, at, length, vol, brightness float64) {
 	start := m.index(at)
-	n := int(length * movieSampleRate)
+	n := samples(length)
 	var low, high float64
-	for i := 0; i < n && start+i < len(m.bus); i++ {
+	for i := 0; i < n; i++ {
 		raw := (m.noise.Float64()*2 - 1) * math.Pow(1-float64(i)/float64(n), 3)
-		// A band around 3.5 kHz: high-pass then low-pass.
 		high += 0.5 * (raw - high)
-		low += 0.6 * ((raw - high) - low)
-		m.bus[start+i] += low * vol
+		low += brightness * ((raw - high) - low)
+		write(buffer, start+i, low*vol)
 	}
 }
 
-// thud is the stamp landing: a low knock and a dry slap.
-func (m *musicMix) thud(at float64) {
-	m.kick(at, 0.9)
-	m.brush(at, 0.08, 0.5)
+// whoosh is air rushing past: noise through a band that sweeps up and back
+// down, swelling and fading over length.
+func (m *musicMix) whoosh(at, length, vol float64) {
+	start := m.index(at)
+	n := samples(length)
+	var low, band float64
+	for i := 0; i < n; i++ {
+		p := float64(i) / float64(n)
+		cutoff := 300 + 4200*math.Sin(math.Pi*p)
+		a := 1 - math.Exp(-2*math.Pi*cutoff/movieSampleRate)
+		raw := m.noise.Float64()*2 - 1
+		low += a * (raw - low)
+		band += 0.3 * (low - band)
+		write(m.fx, start+i, (low-band)*vol*math.Pow(math.Sin(math.Pi*p), 2))
+	}
 }
 
-// movieSoundtrack is seconds of music as a mono 16-bit WAV, with the stamp's
-// thud at stampAt.
-func movieSoundtrack(seconds, stampAt float64) []byte {
-	total := int(seconds * movieSampleRate)
-	m := &musicMix{bus: make([]float64, total), echo: make([]float64, total), noise: rand.New(rand.NewPCG(58, 1))}
+// riser climbs into a moment: a sine gliding up an octave and a half, and
+// noise thickening under it.
+func (m *musicMix) riser(at, length, vol float64) {
+	start := m.index(at)
+	n := samples(length)
+	phase := 0.0
+	var low float64
+	for i := 0; i < n; i++ {
+		p := float64(i) / float64(n)
+		phase += 220 * math.Pow(2, 1.5*p) / movieSampleRate
+		low += 0.08 * (m.noise.Float64()*2 - 1 - low)
+		swell := math.Pow(p, 2.2)
+		write(m.fx, start+i, (0.5*math.Sin(2*math.Pi*phase)+1.4*low)*vol*swell)
+	}
+}
 
-	for step, at := 0, 0.1; at < seconds; step, at = step+1, at+musicEighth {
-		bar := step / 8 % 16
+// impact is a landing: a long low boom under a short crack.
+func (m *musicMix) impact(at, vol float64) {
+	start := m.index(at)
+	phase := 0.0
+	for i := 0; i < samples(2.2); i++ {
+		t := float64(i) / movieSampleRate
+		freq := 30 + 40*math.Exp(-t*6)
+		phase += freq / movieSampleRate
+		write(m.fx, start+i, math.Sin(2*math.Pi*phase)*envelope(t, 0.004, 2.1, vol))
+	}
+	m.noiseBurst(m.fx, at, 0.25, vol*0.7, 0.7)
+	m.kick(m.fx, at, vol*0.8)
+}
+
+// shimmer is a quick glittering run up the chord, three octaves high.
+func (m *musicMix) shimmer(at, length, vol float64) {
+	chord := musicChords[0].keys
+	step := 0.045
+	for k := 0; float64(k)*step < length; k++ {
+		note := chord[k%4] + 24 + 12*(k/8%2)
+		freq := midiHz(note)
+		start := m.index(at + float64(k)*step)
+		fade := 1 - float64(k)*step/length
+		for i := 0; i < samples(0.5); i++ {
+			t := float64(i) / movieSampleRate
+			write(m.fx, start+i, math.Sin(2*math.Pi*freq*t)*envelope(t, 0.003, 0.45, vol*fade))
+		}
+	}
+}
+
+// tick is the faint click of a counter or a key.
+func (m *musicMix) tick(at, vol float64) {
+	start := m.index(at)
+	pitch := 2200 + m.noise.Float64()*500
+	for i := 0; i < samples(0.02); i++ {
+		t := float64(i) / movieSampleRate
+		write(m.fx, start+i, triangle(pitch*t)*envelope(t, 0.0005, 0.018, vol))
+	}
+}
+
+// pop is a soft round blip, rising.
+func (m *musicMix) pop(at, vol float64) {
+	start := m.index(at)
+	phase := 0.0
+	for i := 0; i < samples(0.12); i++ {
+		t := float64(i) / movieSampleRate
+		phase += (520 + 900*t/0.12) / movieSampleRate
+		write(m.fx, start+i, math.Sin(2*math.Pi*phase)*envelope(t, 0.003, 0.11, vol))
+	}
+}
+
+// bell is a temple bell: inharmonic partials ringing out slowly.
+func (m *musicMix) bell(at, vol float64) {
+	start := m.index(at)
+	partials := [][3]float64{{1, 1, 4.5}, {2.76, 0.5, 2.8}, {5.4, 0.28, 1.6}, {8.93, 0.15, 0.9}}
+	base := midiHz(52)
+	for i := 0; i < samples(4.6); i++ {
+		t := float64(i) / movieSampleRate
+		var v float64
+		for _, p := range partials {
+			v += p[1] * math.Sin(2*math.Pi*base*p[0]*t) * envelope(t, 0.002, p[2], 1)
+		}
+		write(m.fx, start+i, v*vol)
+	}
+}
+
+func inRanges(t float64, ranges [][2]float64) bool {
+	for _, r := range ranges {
+		if t >= r[0] && t < r[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// movieSoundtrack renders the score as a mono 16-bit WAV.
+func movieSoundtrack(score movieScore) []byte {
+	total := samples(score.Length)
+	m := &musicMix{
+		bus: make([]float64, total), echo: make([]float64, total), fx: make([]float64, total),
+		noise:  rand.New(rand.NewPCG(66, 4)),
+		curves: map[[3]float64][]float64{},
+	}
+
+	for step, at := 0, 0.2; at < score.Length; step, at = step+1, at+musicEighth {
+		bar := step / 8
 		e := step % 8
 		when := at
 		if e%2 == 1 {
@@ -211,98 +380,122 @@ func movieSoundtrack(seconds, stampAt float64) []byte {
 		chord := musicChords[bar%4]
 		if e == 0 {
 			for k, note := range chord.keys {
-				m.keys(midiHz(note), when+float64(k)*0.03, musicEighth*8, 0.07)
+				m.keys(midiHz(note), when+float64(k)*0.035, musicEighth*8, 0.065)
 			}
-			m.bass(midiHz(chord.bass-12), when, musicEighth*3)
+			m.bass(midiHz(chord.bass-12), when, musicEighth*3.5)
 		}
-		if e == 5 {
-			m.bass(midiHz(chord.bass-12), when, musicEighth*2)
+		if e == 3 {
+			m.bass(midiHz(chord.bass-12+7), when, musicEighth*1.5)
 		}
-		if musicKick[e] && bar != 15 {
-			m.kick(when, 0.55)
+		if inRanges(when, score.Drums) {
+			if musicKick[e] {
+				m.kick(m.bus, when, 0.5)
+			}
+			if musicRim[e] {
+				m.rim(when)
+			}
+			hat := 0.035
+			if e%2 == 0 {
+				hat = 0.06
+			}
+			m.noiseBurst(m.bus, when, 0.09, hat, 0.6)
 		}
-		if musicSnare[e] {
-			m.rim(when)
-		}
-		brush := 0.09
-		if e%2 == 1 {
-			brush = 0.05
-		}
-		m.brush(when, 0.12, brush)
-		switch {
-		case bar >= 4 && bar < 12:
+		// The melody comes in after the opening and rests every fourth
+		// cycle, so it never wears out.
+		if bar >= 3 && bar/4%4 != 3 {
 			for _, note := range musicMelody[bar%4] {
 				if note[0] == e {
-					m.pluck(midiHz(note[1]), when+(m.noise.Float64()-0.5)*0.015, 0.11)
+					m.pluck(midiHz(note[1]), when+(m.noise.Float64()-0.5)*0.012, 0.1)
 				}
 			}
-		case bar >= 12 && e%3 == 0 && m.noise.Float64() < 0.3:
-			m.pluck(midiHz(chord.keys[m.noise.IntN(4)]+12), when, 0.06)
 		}
 	}
-	if stampAt > 0 && stampAt < seconds {
-		m.thud(stampAt)
+
+	for _, cue := range score.Cues {
+		switch cue.Kind {
+		case cueWhoosh:
+			m.whoosh(cue.At, math.Max(cue.Length, 0.6), 0.5)
+		case cueRiser:
+			m.riser(cue.At, math.Max(cue.Length, 0.8), 0.22)
+		case cueImpact:
+			m.impact(cue.At, 0.85)
+		case cueShimmer:
+			m.shimmer(cue.At, math.Max(cue.Length, 0.8), 0.06)
+		case cueTick:
+			m.tick(cue.At, 0.09)
+		case cuePop:
+			m.pop(cue.At, 0.18)
+		case cueBell:
+			m.bell(cue.At, 0.22)
+		case cueThud:
+			m.kick(m.fx, cue.At, 1)
+			m.noiseBurst(m.fx, cue.At, 0.09, 0.6, 0.5)
+		}
 	}
 
-	// The drone: detuned saws on D, filtered dark.
+	// The drone: detuned saws on E, filtered dark. The echo: a feedback delay
+	// of two thirds of a beat. Then the vinyl.
+	var droneFreqs []float64
+	for _, note := range []int{28, 40, 47} {
+		for _, detune := range []float64{-7, 7} {
+			droneFreqs = append(droneFreqs, midiHz(note)*cents(detune))
+		}
+	}
 	var droneLow float64
-	droneSmooth := 1 - math.Exp(-2*math.Pi*220/movieSampleRate)
-	// The echo: a feedback delay of two thirds of a beat.
-	delay := int(math.Round(musicBeat * 0.68 * movieSampleRate))
+	droneSmooth := 1 - math.Exp(-2*math.Pi*200/movieSampleRate)
+	delay := int(math.Round(musicBeat * 0.66 * movieSampleRate))
 	echoLine := make([]float64, total)
 	for i := range m.bus {
 		t := float64(i) / movieSampleRate
 		var drone float64
-		for _, note := range []int{26, 38, 45} {
-			for _, detune := range []float64{-8, 8} {
-				drone += sawtooth(midiHz(note) * cents(detune) * t)
-			}
+		for _, freq := range droneFreqs {
+			drone += sawtooth(freq * t)
 		}
 		droneLow += droneSmooth * (drone - droneLow)
-		m.bus[i] += droneLow * 0.05
+		m.bus[i] += droneLow * 0.045
 
 		fed := m.echo[i]
 		if i >= delay {
-			fed += 0.3 * echoLine[i-delay]
-		}
-		echoLine[i] = fed
-		if i >= delay {
+			fed += 0.32 * echoLine[i-delay]
 			m.bus[i] += 0.3 * echoLine[i-delay]
 		}
+		echoLine[i] = fed
 
-		// Vinyl: a hiss and the odd crackle.
 		crackle := (m.noise.Float64()*2 - 1) * 0.02
-		if m.noise.Float64() < 0.0004*44100/movieSampleRate {
+		if m.noise.Float64() < 0.0005*44100/movieSampleRate {
 			crackle += (m.noise.Float64() - 0.5) * 0.9
 		}
-		m.bus[i] += crackle * 0.18
+		m.bus[i] += crackle * 0.16
 	}
 
-	out := musicRoom(m.bus)
+	music := musicRoom(m.bus, 0.35)
+	effects := musicRoom(m.fx, 0.25)
 
-	// Warm low-pass at 1.9 kHz, a soft limiter, and fades at both ends.
+	// The music gets the warm low-pass; the effects go on top of it; a soft
+	// limiter holds both, with fades at either end.
 	var low, peak float64
 	smooth := 1 - math.Exp(-2*math.Pi*1900/movieSampleRate)
-	for i, sample := range out {
-		low += smooth * (sample - low)
+	out := make([]float64, total)
+	for i := range out {
+		low += smooth * (music[i] - low)
 		t := float64(i) / movieSampleRate
-		out[i] = math.Tanh(low*1.6) * math.Min(1, t/2) * math.Min(1, (seconds-t)/3)
+		out[i] = math.Tanh((low*1.5+effects[i])*1.2) * math.Min(1, t/1.5) * math.Min(1, (score.Length-t)/3)
 		peak = math.Max(peak, math.Abs(out[i]))
 	}
 	gain := 1.0
 	if peak > 0 {
-		gain = 0.85 / peak
+		gain = 0.88 / peak
 	}
 	return encodeWAV(out, gain)
 }
 
-// musicRoom adds a long dark room: a handful of feedback combs into allpass
-// filters, the classic cheap reverb, mixed in at about a third.
-func musicRoom(dry []float64) []float64 {
+// musicRoom adds a room: a handful of damped feedback combs into allpass
+// filters, the classic cheap reverb, mixed in at amount.
+func musicRoom(dry []float64, amount float64) []float64 {
 	combs := []float64{0.0297, 0.0371, 0.0411, 0.0437}
 	wet := make([]float64, len(dry))
 	for _, seconds := range combs {
-		size := int(seconds * movieSampleRate)
+		size := samples(seconds)
 		line := make([]float64, size)
 		var damp float64
 		for i, sample := range dry {
@@ -314,19 +507,18 @@ func musicRoom(dry []float64) []float64 {
 		}
 	}
 	for _, seconds := range []float64{0.005, 0.0017} {
-		size := int(seconds * movieSampleRate)
+		size := samples(seconds)
 		line := make([]float64, size)
 		for i, sample := range wet {
 			j := i % size
 			buffered := line[j]
-			out := -sample + buffered
 			line[j] = sample + buffered*0.5
-			wet[i] = out
+			wet[i] = buffered - sample
 		}
 	}
 	mixed := make([]float64, len(dry))
 	for i := range dry {
-		mixed[i] = dry[i] + 0.35*wet[i]/float64(len(combs))
+		mixed[i] = dry[i] + amount*wet[i]/float64(len(combs))
 	}
 	return mixed
 }

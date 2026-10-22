@@ -10,14 +10,15 @@ import (
 	"time"
 )
 
-// Passing 100, 500 or 1000 episodes rolls the credits (otakase_movie.go) once,
-// as the viewer quits after the episode that got them there.
+// Passing a milestone (50, 100, 250 episodes and on up to 10,000) rolls the
+// credits (otakase_movie.go) once, as the viewer quits after the episode that
+// got them there.
 //
 // The count is the tracker's own all-time total, read once on the way out and
 // only when this run wrote progress -- every other exit costs nothing. The
 // highest milestone celebrated is kept in a small file, so each plays once.
 
-var episodeMilestones = []int{100, 500, 1000}
+var episodeMilestones = []int{50, 100, 250, 500, 1000, 2500, 5000, 10000}
 
 const milestoneFileName = "milestone"
 

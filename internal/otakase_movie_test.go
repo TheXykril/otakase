@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"
@@ -32,49 +33,102 @@ func TestOnlyOtakaseFindsTheMovie(t *testing.T) {
 	}
 }
 
-// The credits star the viewer and carry their real numbers.
-func TestTheCreditsCarryTheStats(t *testing.T) {
+func testFacts() movieFacts {
 	stats := watchStats{AniList: &aniListStatsTotals{
-		Count: 120, EpisodesWatched: 1500, MinutesWatched: 36000,
-		Genres: []statCount{{"Action", 50}, {"Comedy", 40}, {"Drama", 30}, {"Horror", 1}},
+		Count: 120, EpisodesWatched: 1500, MinutesWatched: 36000, MeanScore: 82,
+		Genres:   []statCount{{"Action", 50}, {"Comedy", 40}, {"Drama", 30}, {"Horror", 1}},
+		Statuses: []statCount{{"COMPLETED", 90}},
 	}}
-	credits := movieCredits(stats, movieExtras{Studios: []string{"MAPPA"}}, "Xy", 1000, time.Now())
-	text := ""
-	for _, credit := range credits {
-		text += credit.Role + "=" + credit.Name + "\n"
+	extras := movieExtras{Studios: []string{"MAPPA"}, VoiceActor: "Kana Hanazawa", MemberSince: time.Date(2019, 3, 1, 0, 0, 0, 0, time.UTC)}
+	return gatherMovieFacts(stats, extras, "Xy", 1000, time.Now())
+}
+
+// The numbers are the viewer's own, at most four cards of them.
+func TestTheCardsCarryTheStats(t *testing.T) {
+	cards := movieStatCards(testFacts(), rand.New(rand.NewPCG(1, 2)))
+	if len(cards) == 0 || len(cards) > 4 {
+		t.Fatalf("%d cards", len(cards))
 	}
-	for _, want := range []string{"Starring=Xy", "Episodes watched=1,500", "Top genres=Action · Comedy · Drama", "Achievement=1,000 episodes", "Animation by=MAPPA", "As a full-time job=15 work weeks"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("credits miss %q:\n%s", want, text)
+	if cards[0].Value != 1500 || cards[1].Value != 600 || cards[2].Value != 90 {
+		t.Fatalf("cards %+v", cards)
+	}
+}
+
+// The conversation uses the viewer's name and numbers, and is not word for
+// word the same every time.
+func TestThePoemIsTheirsAndVaries(t *testing.T) {
+	facts := testFacts()
+	join := func(seed uint64) string {
+		var lines []string
+		for _, line := range moviePoem(facts, rand.New(rand.NewPCG(seed, 9))) {
+			lines = append(lines, line.Text)
+		}
+		return strings.Join(lines, "\n")
+	}
+	first := join(1)
+	for _, want := range []string{"Xy", "1,500", "Kana Hanazawa"} {
+		if !strings.Contains(first, want) {
+			t.Errorf("poem misses %q:\n%s", want, first)
 		}
 	}
-	if strings.Contains(text, "Horror") {
-		t.Error("more than three genres listed")
+	varied := false
+	for seed := uint64(2); seed < 10; seed++ {
+		if join(seed) != first {
+			varied = true
+		}
+	}
+	if !varied {
+		t.Error("every viewing had the same words")
 	}
 }
 
 // No tracker still makes a film: it just has less in it.
-func TestTheCreditsNeedNoTracker(t *testing.T) {
-	credits := movieCredits(watchStats{}, movieExtras{}, "", 0, time.Now())
-	if credits[1].Name != "You" {
-		t.Fatalf("nameless viewer starred as %q", credits[1].Name)
+func TestTheFilmNeedsNoTracker(t *testing.T) {
+	facts := gatherMovieFacts(watchStats{}, movieExtras{}, "", 0, time.Now())
+	if facts.Viewer != "You" {
+		t.Fatalf("nameless viewer is %q", facts.Viewer)
 	}
-	for _, credit := range credits {
-		if credit.Heading == "The numbers" {
-			t.Fatal("a numbers section with no numbers in it")
-		}
+	if cards := movieStatCards(facts, rand.New(rand.NewPCG(1, 2))); len(cards) != 0 {
+		t.Fatalf("cards with no numbers: %+v", cards)
+	}
+	_, timeline := movieScript(facts, "The movie", nil, theme.Builtin(), "monospace", "sans-serif", rand.New(rand.NewPCG(1, 2)))
+	if timeline.End <= 0 || timeline.WallEnd != timeline.WallStart {
+		t.Fatalf("timeline %+v", timeline)
 	}
 }
 
 // A brace in a show title would open an ASS override block and swallow the
 // rest of the line.
 func TestTheScriptEscapesTitles(t *testing.T) {
-	script, timeline := movieScript([]creditLine{{Role: "Most binged lately", Name: `Re:{Zero} \N`}}, movieOpening{Presenter: "Xy", Tagline: "The movie"}, nil, theme.Builtin(), "monospace", "sans-serif")
+	facts := testFacts()
+	facts.Binged, facts.BingedCount = `Re:{Zero} \N`, 12
+	script, _ := movieScript(facts, "The movie", nil, theme.Builtin(), "monospace", "sans-serif", rand.New(rand.NewPCG(1, 2)))
 	if strings.Contains(script, "{Zero}") || !strings.Contains(script, `\\N`) {
-		t.Fatalf("title not escaped:\n%s", script)
+		t.Fatal("title not escaped")
 	}
-	if timeline.End < movieTitleSeconds+movieEndCardSeconds || timeline.WallEnd != timeline.WallStart {
-		t.Fatalf("timeline without a wall: %+v", timeline)
+}
+
+// Every sound effect lands inside the film, and the beat plays somewhere.
+func TestTheScoreFollowsThePicture(t *testing.T) {
+	wall := []movieFavourite{{Title: "A"}, {Title: "B"}}
+	_, timeline := movieScript(testFacts(), "1,000 episodes", wall, theme.Builtin(), "monospace", "sans-serif", rand.New(rand.NewPCG(1, 2)))
+	if timeline.WallEnd <= timeline.WallStart {
+		t.Fatalf("no wall in %+v", timeline)
+	}
+	kinds := map[string]bool{}
+	for _, cue := range timeline.Score.Cues {
+		if cue.At < 0 || cue.At > timeline.End {
+			t.Errorf("%s at %.1fs, film is %.1fs", cue.Kind, cue.At, timeline.End)
+		}
+		kinds[cue.Kind] = true
+	}
+	for _, kind := range []string{cueImpact, cueTick, cuePop, cueBell, cueWhoosh} {
+		if !kinds[kind] {
+			t.Errorf("no %s", kind)
+		}
+	}
+	if len(timeline.Score.Drums) == 0 {
+		t.Error("the beat never plays")
 	}
 }
 
@@ -97,7 +151,7 @@ func TestLongTitlesAreClipped(t *testing.T) {
 
 // The soundtrack is a valid WAV of the asked length.
 func TestTheSoundtrackIsAWav(t *testing.T) {
-	wav := movieSoundtrack(2, 1)
+	wav := movieSoundtrack(movieScore{Length: 2, Cues: []movieCue{{At: 0.5, Kind: cueBell}, {At: 1, Kind: cueWhoosh, Length: 0.6}}})
 	if string(wav[:4]) != "RIFF" || string(wav[8:12]) != "WAVE" {
 		t.Fatal("not a WAV header")
 	}
@@ -108,7 +162,7 @@ func TestTheSoundtrackIsAWav(t *testing.T) {
 
 // Each cover gets its own place in the graph, and the last one is the output.
 func TestTheGraphLaysOutEveryCover(t *testing.T) {
-	timeline := movieTimeline{WallStart: 40, WallEnd: 48, Stamp: 49, End: 56}
+	timeline := movieTimeline{WallStart: 40, WallEnd: 48, End: 56}
 	graph := movieFilterGraph("[vid1]", []string{"[vid2]", "[vid3]"}, "[vo]", timeline)
 	for _, want := range []string{"[vid2]scale", "[vid3]scale", "[base1][cover1]overlay", "[vo]"} {
 		if !strings.Contains(graph, want) {
