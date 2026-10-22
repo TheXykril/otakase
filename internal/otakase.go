@@ -124,7 +124,7 @@ func Exit(err error) {
 	// exactly that notification whenever RofiSelection is set, so it is
 	// skipped there rather than shown and immediately regretted.
 	if exitGreetingWanted(GetGlobalConfig()) {
-		Out("Have a great day!")
+		Out("See you next episode!")
 	}
 
 	if !exitErrorWorthShowing(err, socketPath) {
@@ -157,7 +157,7 @@ func exitErrorWorthShowing(err error, socketPath string) bool {
 	return socketPath == "" || !strings.Contains(err.Error(), "dial unix "+socketPath+": connect: connection refused")
 }
 
-// exitGreetingWanted answers whether "Have a great day!" is worth showing on
+// exitGreetingWanted answers whether the goodbye line is worth showing on
 // this exit.
 //
 // A real terminal keeps it -- one harmless line at the end of an interactive

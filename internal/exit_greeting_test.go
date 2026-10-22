@@ -6,7 +6,7 @@ import "testing"
 // menu, handing off a cast, adding a show -- and every one of them reaches
 // Exit(). Showing the farewell there turned each of those into a desktop
 // notification, so a viewer doing something as small as picking a show got
-// told to have a great day, over and over, long before they were done.
+// a goodbye, over and over, long before they were done.
 func TestTheGreetingIsDroppedInRofiMode(t *testing.T) {
 	if exitGreetingWanted(&Config{RofiSelection: true}) {
 		t.Fatal("the greeting was wanted in rofi mode")
