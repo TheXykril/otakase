@@ -31,16 +31,21 @@ func TestTheGreetingSurvivesWithNoConfigYet(t *testing.T) {
 	}
 }
 
-// The rare line only shows on the one roll out of rareExitGreetingOdds;
+// rolls answers each call with the next of the given numbers.
+func rolls(n ...int) func(int) int {
+	return func(int) int { r := n[0]; n = n[1:]; return r }
+}
+
+// The rare lines only show on the one roll out of rareExitGreetingOdds;
 // every other exit gets one of the usual goodbyes.
-func TestTheRareGreetingNeedsTheLuckyRoll(t *testing.T) {
-	if got := exitGreeting(func(int) int { return 0 }); got != rareExitGreeting {
-		t.Fatalf("lucky roll gave %q", got)
+func TestTheRareGreetingsNeedTheLuckyRoll(t *testing.T) {
+	for i := range rareExitGreetings {
+		if got := exitGreeting(rolls(0, i)); got != rareExitGreetings[i] {
+			t.Fatalf("lucky roll %d gave %q, want %q", i, got, rareExitGreetings[i])
+		}
 	}
 	for i := range exitGreetings {
-		rolls := []int{1, i}
-		got := exitGreeting(func(int) int { r := rolls[0]; rolls = rolls[1:]; return r })
-		if got != exitGreetings[i] {
+		if got := exitGreeting(rolls(1, i)); got != exitGreetings[i] {
 			t.Fatalf("roll %d gave %q, want %q", i, got, exitGreetings[i])
 		}
 	}

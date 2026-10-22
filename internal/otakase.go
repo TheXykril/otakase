@@ -180,17 +180,21 @@ var exitGreetings = []string{
 	"Otsukare! Rest those eyes.",
 }
 
-// rareExitGreeting turns up roughly once in rareExitGreetingOdds exits.
-const (
-	rareExitGreeting     = "Otakase out. Go touch grass."
-	rareExitGreetingOdds = 100
-)
+// rareExitGreetings replace the usual ones roughly once in
+// rareExitGreetingOdds exits.
+var rareExitGreetings = []string{
+	"Achievement unlocked: touch grass.",
+	"Side quest unlocked: touch grass.",
+	"Plot twist: you go touch grass now.",
+}
+
+const rareExitGreetingOdds = 100
 
 // exitGreeting picks the goodbye line. roll is rand.IntN, taken as an
 // argument so tests can choose the outcome.
 func exitGreeting(roll func(int) int) string {
 	if roll(rareExitGreetingOdds) == 0 {
-		return rareExitGreeting
+		return rareExitGreetings[roll(len(rareExitGreetings))]
 	}
 	return exitGreetings[roll(len(exitGreetings))]
 }
