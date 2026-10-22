@@ -34,8 +34,9 @@ too, and like local untracked playback it records nothing.
 link and a QR code: open the link (or scan the code) on anything on the same
 network with a web browser, such as a phone, tablet, smart TV, games console
 or another computer. The page plays the episode and has its own buttons (back
-30s, pause, forward 30s, subtitles, full screen). A double tap on the video
-also goes full screen, and a phone turns sideways there. The page also shows
+30s, pause, forward 30s, subtitles, full screen). The first tap or key on the
+page goes full screen (browsers allow it no sooner), and a double tap on the
+video also goes full screen, and a phone turns sideways there. The page also shows
 what the terminal panel says (preparing the stream, seeking, the next-episode
 countdown). A TV remote's arrows, OK and
 play/pause keys work too. The terminal keys still work, and the page follows

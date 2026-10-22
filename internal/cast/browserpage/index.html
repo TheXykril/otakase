@@ -17,6 +17,7 @@
   #waiting h1 { margin: 0 0 12px; font-size: 44px; font-weight: 600; letter-spacing: .02em; }
   #waiting h1 span { color: #d2492f; }
   #waiting p { margin: 0; color: #8a8276; font-size: 18px; max-width: 32em; }
+  #waiting #fullhint { margin-top: 28px; font-size: 15px; color: #d2492f; }
   #tap { background: rgba(8, 7, 7, .72); cursor: pointer; display: none; }
   #tap div { width: 96px; height: 96px; border-radius: 50%; background: #d2492f; display: flex;
     align-items: center; justify-content: center; margin-bottom: 16px; }
@@ -72,7 +73,7 @@
     </div>
   </div>
   <div id="tap" class="layer"><div><svg viewBox="0 0 24 24" width="48" height="48" fill="#fff8ec"><path d="M8 5v14l11-7z"/></svg></div><p>Tap to play</p></div>
-  <div id="waiting" class="layer"><h1>otakase<span>.</span></h1><p id="waittext">Connecting…</p></div>
+  <div id="waiting" class="layer"><h1>otakase<span>.</span></h1><p id="waittext">Connecting…</p><p id="fullhint">Tap anywhere for full screen</p></div>
   <div id="banner"></div>
   <div id="toast"></div>
 </div>
@@ -438,7 +439,9 @@
   // A double tap or double click anywhere on the video goes full screen, as
   // most players do.
   var lastTap = 0;
-  document.getElementById("stage").addEventListener("click", function () {
+  document.getElementById("stage").addEventListener("click", function (e) {
+    // The press that went full screen is not half of a double tap out again.
+    if (e.otakaseFirst) { showControls(); return; }
     var now = Date.now();
     if (now - lastTap < 350) {
       lastTap = 0;
@@ -466,6 +469,25 @@
     e.preventDefault();
     if (name) { command(name); }
   });
+
+  // A browser lets a page go full screen only from a tap, click or key, so
+  // the first one anywhere does it. Not where the page cannot do it itself
+  // (an iPhone, before there is a video to enlarge), and not when that first
+  // press is the full screen button, which would undo it straight away.
+  var fullHint = document.getElementById("fullhint");
+  var doc = document;
+  if (!(doc.fullscreenEnabled || doc.webkitFullscreenEnabled)) { fullHint.style.display = "none"; }
+  function firstPress(e) {
+    e.otakaseFirst = true;
+    document.removeEventListener("click", firstPress, true);
+    document.removeEventListener("keydown", firstPress, true);
+    fullHint.style.display = "none";
+    var onButton = e.target && e.target.closest && e.target.closest("#full");
+    var already = doc.fullscreenElement || doc.webkitFullscreenElement;
+    if (!onButton && !already && (doc.fullscreenEnabled || doc.webkitFullscreenEnabled)) { fullScreen(); }
+  }
+  document.addEventListener("click", firstPress, true);
+  document.addEventListener("keydown", firstPress, true);
 
   connect();
 })();
