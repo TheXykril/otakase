@@ -433,6 +433,9 @@ func castPanelCentre(lines []string, width, height int) []string {
 // frame from the moment a device is chosen, and every message that would have
 // been printed becomes a notification.
 func (c *castPanelWriter) status(title string, episode int, device, message string, keys string) string {
+	// Every message the panel shows passes here, so this is where the browser
+	// player hears them too.
+	castBrowserStatus(message)
 	var out strings.Builder
 	out.WriteString(c.erase())
 

@@ -262,3 +262,27 @@ func TestBrowserPlayerWaitsLongerForAPausedPage(t *testing.T) {
 		t.Errorf("a paused page, quiet for a moment, is lost: %v", err)
 	}
 }
+
+func TestBrowserStatusReachesThePage(t *testing.T) {
+	hub := startTestHub(t)
+	browserMu.Lock()
+	was := browserRunning
+	browserRunning = hub
+	browserMu.Unlock()
+	defer func() {
+		browserMu.Lock()
+		browserRunning = was
+		browserMu.Unlock()
+	}()
+
+	viewer := openTestViewer(t, hub)
+	BrowserStatus("Preparing the stream…\n\n█▀▄ █\n▄▄█ ▀")
+	if got := viewer.next("status")["text"]; got != "Preparing the stream…" {
+		t.Errorf("status sent as %q, want the text without the code", got)
+	}
+	// A page opened while nothing plays is told the latest at once.
+	late := openTestViewer(t, hub)
+	if got := late.next("status")["text"]; got != "Preparing the stream…" {
+		t.Errorf("a late page got %q", got)
+	}
+}

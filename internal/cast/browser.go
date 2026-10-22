@@ -132,6 +132,29 @@ func BrowserViewers() int {
 	return hub.viewers()
 }
 
+// BrowserStatus shows a line of what otakase is doing on every open page: the
+// same messages the terminal panel shows, so a viewer away from the terminal
+// knows why nothing is playing yet. Nothing is sent when no page is served.
+func BrowserStatus(text string) {
+	browserMu.Lock()
+	hub := browserRunning
+	browserMu.Unlock()
+	if hub == nil {
+		return
+	}
+	lines := []string{}
+	for _, line := range strings.Split(text, "\n") {
+		if !IsQRLine(line) {
+			lines = append(lines, line)
+		}
+	}
+	text = strings.TrimSpace(strings.Join(lines, "\n"))
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+	hub.status = text
+	hub.broadcast(map[string]any{"cmd": "status", "text": text})
+}
+
 // browserHubRunning returns the page server, starting it the first time. It is
 // kept for the life of the process, so the page stays connected between
 // episodes.
@@ -199,6 +222,9 @@ type browserHub struct {
 	volume    float64
 	contactAt time.Time
 	lastError string
+	// status is the last thing otakase said it was doing, for a page that
+	// opens while nothing is playing.
+	status string
 }
 
 func startBrowserHub(settings BrowserSettings) (*browserHub, error) {
@@ -302,6 +328,9 @@ func (h *browserHub) serveEvents(w http.ResponseWriter, r *http.Request) {
 	h.contactAt = time.Now()
 	hello := map[string]any{"cmd": "hello", "client": client.id}
 	current := h.current
+	if current == nil && h.status != "" {
+		current = map[string]any{"cmd": "status", "text": h.status}
+	}
 	h.mu.Unlock()
 	Log(fmt.Sprintf("cast: browser %s opened the player (viewer %d)", r.RemoteAddr, client.id))
 

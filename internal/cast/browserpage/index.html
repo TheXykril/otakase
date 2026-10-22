@@ -46,6 +46,9 @@
     button.big svg { width: 34px; height: 34px; }
     #clock { font-size: 13px; margin-left: 4px; }
   }
+  #banner { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); max-width: 86%;
+    background: rgba(8, 7, 7, .82); border-left: 3px solid #d2492f; padding: 10px 16px; border-radius: 8px;
+    font-size: 17px; white-space: pre-line; display: none; text-align: left; }
   #toast { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(8, 7, 7, .8);
     padding: 12px 20px; border-radius: 12px; font-size: 18px; display: none; }
   #cuesize { display: none; }
@@ -70,6 +73,7 @@
   </div>
   <div id="tap" class="layer"><div><svg viewBox="0 0 24 24" width="48" height="48" fill="#fff8ec"><path d="M8 5v14l11-7z"/></svg></div><p>Tap to play</p></div>
   <div id="waiting" class="layer"><h1>otakase<span>.</span></h1><p id="waittext">Connecting…</p></div>
+  <div id="banner"></div>
   <div id="toast"></div>
 </div>
 <script src="hls.js"></script>
@@ -87,6 +91,8 @@
   var toggleIcon = document.getElementById("toggleicon");
   var ccButton = document.getElementById("cc");
   var toast = document.getElementById("toast");
+  var banner = document.getElementById("banner");
+  var bannerTimer = null;
 
   var client = 0;
   var load = 0;
@@ -160,6 +166,19 @@
     toast.style.display = "block";
     if (toastTimer) { clearTimeout(toastTimer); }
     toastTimer = setTimeout(function () { toast.style.display = "none"; }, 1500);
+  }
+
+  // status shows what otakase's panel says: on the waiting screen while
+  // nothing plays, over the video for a few seconds while something does.
+  function status(text) {
+    if (!load) {
+      setWaiting(text || "Waiting for otakase to start an episode…");
+      return;
+    }
+    banner.textContent = text;
+    banner.style.display = text ? "block" : "none";
+    if (bannerTimer) { clearTimeout(bannerTimer); }
+    bannerTimer = setTimeout(function () { banner.style.display = "none"; }, 5000);
   }
 
   function setWaiting(text) {
@@ -354,6 +373,9 @@
         case "play":
           wantPaused = false;
           play();
+          break;
+        case "status":
+          status(msg.text);
           break;
         case "volume":
           try { video.volume = msg.volume; } catch (err) {}

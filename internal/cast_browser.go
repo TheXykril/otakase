@@ -49,6 +49,14 @@ func castBrowserFirewallPort(config *Config) int {
 	return cast.DefaultBrowserPort
 }
 
+// castBrowserStatus passes a panel message on to the browser player while a
+// browser cast is on, so the page says what the terminal says.
+func castBrowserStatus(message string) {
+	if castRemoteControls.Load() {
+		cast.BrowserStatus(message)
+	}
+}
+
 // castBrowserNamed reports whether a device name picks the browser entry.
 func castBrowserNamed(name string) bool {
 	return strings.EqualFold(strings.TrimSpace(name), cast.BrowserDeviceName)

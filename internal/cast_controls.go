@@ -201,6 +201,7 @@ var castPanelForControls *castPanelWriter
 // In raw mode a bare \n does not return the cursor, so the message is written
 // with \r\n line endings rather than through Out, which uses fmt.Println.
 func castOut(haveControls bool, message string) {
+	castBrowserStatus(message)
 	// When the panel owns the screen there is nowhere to print: Out turns the
 	// message into a notification, which is the whole point of the takeover.
 	if !haveControls || castPanelForControls == nil || castPanelOwnsScreen() {

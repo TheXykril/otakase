@@ -35,7 +35,9 @@ link and a QR code: open the link (or scan the code) on anything on the same
 network with a web browser, such as a phone, tablet, smart TV, games console
 or another computer. The page plays the episode and has its own buttons (back
 30s, pause, forward 30s, subtitles, full screen). A double tap on the video
-also goes full screen, and a phone turns sideways there. A TV remote's arrows, OK and
+also goes full screen, and a phone turns sideways there. The page also shows
+what the terminal panel says (preparing the stream, seeking, the next-episode
+countdown). A TV remote's arrows, OK and
 play/pause keys work too. The terminal keys still work, and the page follows
 them. The link stays the same between episodes and runs, so a TV can keep the
 page open or bookmark it, and the next episode starts there by itself. More

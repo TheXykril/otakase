@@ -366,6 +366,7 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 			fmt.Print(panel.status(GetAnimeName(*anime), episode, device.Name, message, keys))
 			return
 		}
+		castBrowserStatus(message)
 		Out(message)
 	}
 
