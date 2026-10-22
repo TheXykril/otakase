@@ -125,6 +125,21 @@ All need the token unless said.
 - `GET /v1/club` (no token, 30 per minute per IP) →
   `{"club":{"anilist_id","title","episode","deadline","caught_up","joined","url"}}`
   or `{"club":null}`; cached by the app for 3 h for its Community row.
+- Time capsule (`capsule.go`, app side `time_capsule.go`), opened on
+  Otakase's birthday, April 12: `POST /v1/capsule {"text"}` →
+  `{"opens","replaced"}` (one message per member per birthday, ≤300
+  characters, 5 tries an hour, a week in the server first; 422 with the
+  reason when the filter turns it down), `GET /v1/capsule/mine`, `DELETE
+  /v1/capsule`, `POST /v1/capsule/report {"id"}` → `{"hidden"}`, and `GET
+  /v1/capsule` (no token, 30 per hour per IP) → `{"id","text","written","year"}`
+  while it's April 12 anywhere, else 404. The writer's id is never sent.
+  The filter (`capsulefilter.go`) blocks personal data, a swear list that
+  sees through l33t and spacing, and, with Ollama, messages closer in
+  meaning to the bad examples than the good ones (`/settings
+  capsule_threshold`). Messages Ollama couldn't check yet are never shown
+  and are checked again every 20 minutes. 3 reports hide a message. The
+  app's own letter to next year stays in `time_capsule.json` with a stats
+  snapshot; `OTAKASE_CAPSULE_DATE=2027-04-12` pretends it's that day.
 - `GET /v1/linked-role` and `/v1/linked-role/callback` are browser pages for
   the linked role sign-in (`linkedrole.go`).
 

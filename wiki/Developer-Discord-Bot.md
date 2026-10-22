@@ -284,6 +284,10 @@ Optional, everything missing is skipped or created by the bot:
   `anime-club`, `watch-club`) for the club board, `top` (or `watch-top`) for
   the Monday most-watched post, and one ending in `reviews` (or `review`,
   `ratings`) for scores shared from the app; without it, sharing fails.
+- **Time capsule:** the birthday post goes in `general` (or `chat`,
+  `lounge`, `off-topic`, else announcements) at 09:00 UTC on April 12. Each
+  sealed message gets a line in `mod-log` with a Remove button;
+  `/capsule-remove` does the same by id.
 - **Linked role:** Developer Portal → General Information → **Linked Roles
   Verification URL** `https://bot.xyverion.com/v1/linked-role`; OAuth2 →
   Redirects: add `https://bot.xyverion.com/v1/linked-role/callback`;

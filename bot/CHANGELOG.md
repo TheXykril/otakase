@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.28.0
+
+- **Time capsule** for Otakase's birthday, April 12. `/capsule message:`
+  seals a message for the next birthday (one per member, replaced when you
+  seal another; `/capsule` alone shows yours or takes it out). Linked apps
+  can seal one too. On April 12 the server gets a post with one message
+  picked at random, with Open another and Report buttons, and every app
+  shows one as it starts.
+- Messages are checked automatically, nobody has to approve them: no
+  links, emails, phone or long numbers, mentions, invites or addresses, a
+  swear filter that sees through l33t and spaced-out spellings, and with
+  Ollama a meaning check against insults and creepy messages
+  (`/settings capsule_threshold`). 3 reports hide a message. Staff can
+  still take any out with the Remove button on its line in mod chat, or
+  `/capsule-remove`. Members need a week in the server first.
+
 ## 1.27.1
 
 - Fixed the add-on failing to build while Otakase has no release to download.
