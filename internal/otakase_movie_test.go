@@ -43,7 +43,7 @@ func TestTheCreditsCarryTheStats(t *testing.T) {
 	for _, credit := range credits {
 		text += credit.Role + "=" + credit.Name + "\n"
 	}
-	for _, want := range []string{"Starring=Xy", "Episodes watched=1,500", "Top genres=Action · Comedy · Drama", "Achievement=1,000 episodes watched"} {
+	for _, want := range []string{"Starring=Xy", "Episodes watched=1,500", "Top genres=Action · Comedy · Drama", "Achievement=1,000 episodes"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("credits miss %q:\n%s", want, text)
 		}
@@ -56,19 +56,24 @@ func TestTheCreditsCarryTheStats(t *testing.T) {
 // No tracker still makes a film: it just has less in it.
 func TestTheCreditsNeedNoTracker(t *testing.T) {
 	credits := movieCredits(watchStats{}, "", 0, time.Now())
-	if credits[0].Name != "You" {
-		t.Fatalf("nameless viewer starred as %q", credits[0].Name)
+	if credits[1].Name != "You" {
+		t.Fatalf("nameless viewer starred as %q", credits[1].Name)
+	}
+	for _, credit := range credits {
+		if credit.Heading == "The numbers" {
+			t.Fatal("a numbers section with no numbers in it")
+		}
 	}
 }
 
 // A brace in a show title would open an ASS override block and swallow the
 // rest of the line.
 func TestTheScriptEscapesTitles(t *testing.T) {
-	script, seconds := movieScript([]creditLine{{"Most binged lately", `Re:{Zero} \N`}}, "presents", theme.Builtin(), "monospace")
+	script, seconds := movieScript([]creditLine{{Role: "Most binged lately", Name: `Re:{Zero} \N`}}, movieOpening{Presenter: "Xy", Tagline: "The movie"}, theme.Builtin(), "monospace", "sans-serif")
 	if strings.Contains(script, "{Zero}") || !strings.Contains(script, `\\N`) {
 		t.Fatalf("title not escaped:\n%s", script)
 	}
-	if seconds < movieLogoSeconds+movieEndCardSeconds {
+	if seconds < movieTitleSeconds+movieEndCardSeconds {
 		t.Fatalf("film too short: %.1fs", seconds)
 	}
 }
@@ -76,5 +81,27 @@ func TestTheScriptEscapesTitles(t *testing.T) {
 func TestAssColorIsBlueGreenRed(t *testing.T) {
 	if got := assColor("#d2492f"); got != "&H2F49D2&" {
 		t.Fatalf("got %s", got)
+	}
+}
+
+// A title longer than its half of the screen is cut, not run off the edge.
+func TestLongTitlesAreClipped(t *testing.T) {
+	long := strings.Repeat("x", 80)
+	if got := []rune(ellipsize(long, movieValueRunes)); len(got) != movieValueRunes || got[len(got)-1] != '…' {
+		t.Fatalf("clipped to %q", string(got))
+	}
+	if ellipsize("Frieren", movieValueRunes) != "Frieren" {
+		t.Fatal("a short title was changed")
+	}
+}
+
+// The soundtrack is a valid WAV of the asked length.
+func TestTheSoundtrackIsAWav(t *testing.T) {
+	wav := movieSoundtrack(2, 1)
+	if string(wav[:4]) != "RIFF" || string(wav[8:12]) != "WAVE" {
+		t.Fatal("not a WAV header")
+	}
+	if want := 44 + 2*2*movieSampleRate; len(wav) != want {
+		t.Fatalf("%d bytes, want %d", len(wav), want)
 	}
 }

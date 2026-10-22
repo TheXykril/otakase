@@ -3,6 +3,7 @@ package internal
 import (
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,14 +14,16 @@ import (
 	"github.com/thexykril/otakase/internal/theme"
 )
 
-// "Otakase: The Movie" is a short credits roll over a plain background: the
-// logo, then the viewer's own stats scrolling past like the end of a film.
-// It is found by searching for "otakase" when adding a show, and plays on its
-// own when the viewer passes an episode milestone (milestones.go).
+// "Otakase: The Movie" is a short film made of the viewer's own stats: a
+// title card, credits that roll like the end of a film, and a "to be
+// continued" to close. It is found by searching for "otakase" when adding a
+// show, and plays on its own when the viewer passes an episode milestone
+// (milestones.go).
 //
-// There is no video file. mpv draws a solid colour through lavfi and the
-// credits are an ASS subtitle written for the occasion, so nothing ships with
-// the binary and the text always fits whatever mpv window it lands in.
+// There is no video file. mpv draws the background through lavfi, the picture
+// is an ASS subtitle written for the occasion, and the music is synthesised
+// (otakase_movie_music.go), so nothing ships with the binary and the text
+// always fits whatever window it lands in.
 
 const (
 	otakaseMovieKey   = "otakase-movie"
@@ -29,13 +32,18 @@ const (
 	// The subtitle is laid out on a 1080p canvas; mpv scales it to the window.
 	movieWidth  = 1920
 	movieHeight = 1080
+	// movieBars is the height of each letterbox bar.
+	movieBars = 120
 
-	// movieLogoSeconds is how long the logo holds the screen before the roll.
-	movieLogoSeconds = 6
+	// movieTitleSeconds is when the credits start, after the title card.
+	movieTitleSeconds = 11
 	// movieScrollSpeed is how fast the credits rise, in canvas pixels a second.
-	movieScrollSpeed = 85
+	movieScrollSpeed = 80
 	// movieEndCardSeconds is the closing card after the roll has gone.
-	movieEndCardSeconds = 5
+	movieEndCardSeconds = 7
+
+	// movieValueRunes keeps a long show title on its half of the screen.
+	movieValueRunes = 34
 )
 
 // otakaseLogoGlyphs are the letters of the logo, six rows each.
@@ -74,10 +82,12 @@ func otakaseMovieOption() SelectionOption {
 	}
 }
 
-// creditLine is one entry of the roll: a small role above a large name.
+// creditLine is one row of the roll: a role and its name side by side, or a
+// section heading on its own when Heading is set.
 type creditLine struct {
-	Role string
-	Name string
+	Heading string
+	Role    string
+	Name    string
 }
 
 // movieCredits turns the viewer's stats into the roll. milestone is the
@@ -86,19 +96,20 @@ func movieCredits(stats watchStats, viewer string, milestone int, now time.Time)
 	if strings.TrimSpace(viewer) == "" {
 		viewer = "You"
 	}
-	credits := []creditLine{{Role: "Starring", Name: viewer}}
+	credits := []creditLine{{Heading: "The cast"}, {Role: "Starring", Name: viewer}}
 	if milestone > 0 {
-		credits = append(credits, creditLine{Role: "Achievement", Name: formatStatsCount(milestone) + " episodes watched"})
+		credits = append(credits, creditLine{Role: "Achievement", Name: formatStatsCount(milestone) + " episodes"})
 	}
 
+	numbers := []creditLine{}
 	if totals := stats.AniList; totals != nil {
-		credits = append(credits,
-			creditLine{"Episodes watched", formatStatsCount(totals.EpisodesWatched)},
-			creditLine{"Time watched", formatWatchMinutes(totals.MinutesWatched)},
-			creditLine{"Anime on your list", formatStatsCount(totals.Count)},
+		numbers = append(numbers,
+			creditLine{Role: "Episodes watched", Name: formatStatsCount(totals.EpisodesWatched)},
+			creditLine{Role: "Time watched", Name: formatWatchMinutes(totals.MinutesWatched)},
+			creditLine{Role: "Anime on your list", Name: formatStatsCount(totals.Count)},
 		)
 		if totals.MeanScore > 0 {
-			credits = append(credits, creditLine{"Mean score", strconv.FormatFloat(totals.MeanScore, 'f', 1, 64)})
+			numbers = append(numbers, creditLine{Role: "Mean score", Name: strconv.FormatFloat(totals.MeanScore, 'f', 1, 64)})
 		}
 		if len(totals.Genres) > 0 {
 			names := make([]string, 0, 3)
@@ -108,35 +119,44 @@ func movieCredits(stats watchStats, viewer string, milestone int, now time.Time)
 				}
 				names = append(names, genre.Name)
 			}
-			credits = append(credits, creditLine{"Top genres", strings.Join(names, " · ")})
+			numbers = append(numbers, creditLine{Role: "Top genres", Name: strings.Join(names, " · ")})
 		}
 		if title, episodes := statsMostBinged(stats.Activities); title != "" {
-			credits = append(credits, creditLine{"Most binged lately", fmt.Sprintf("%s (%s)", title, formatStatsEpisodes(episodes))})
+			numbers = append(numbers,
+				creditLine{Role: "Most binged lately", Name: title},
+				creditLine{Role: "", Name: formatStatsEpisodes(episodes)},
+			)
 		}
 		if _, longest := statsStreaks(stats.Activities, now); longest > 1 {
-			credits = append(credits, creditLine{"Longest streak", formatStatsDays(longest)})
+			numbers = append(numbers, creditLine{Role: "Longest streak", Name: formatStatsDays(longest)})
 		}
 	}
 	if totals := stats.MyAnimeList; totals != nil {
-		credits = append(credits,
-			creditLine{"Episodes watched", formatStatsCount(totals.Episodes)},
-			creditLine{"Time watched", formatWatchMinutes(int(math.Round(totals.DaysWatched * 24 * 60)))},
-			creditLine{"Anime on your list", formatStatsCount(totals.Items)},
-			creditLine{"Completed", formatStatsCount(totals.Completed)},
+		numbers = append(numbers,
+			creditLine{Role: "Episodes watched", Name: formatStatsCount(totals.Episodes)},
+			creditLine{Role: "Time watched", Name: formatWatchMinutes(int(math.Round(totals.DaysWatched * 24 * 60)))},
+			creditLine{Role: "Anime on your list", Name: formatStatsCount(totals.Items)},
+			creditLine{Role: "Completed", Name: formatStatsCount(totals.Completed)},
 		)
 		if totals.MeanScore > 0 {
-			credits = append(credits, creditLine{"Mean score", strconv.FormatFloat(totals.MeanScore, 'f', 2, 64)})
+			numbers = append(numbers, creditLine{Role: "Mean score", Name: strconv.FormatFloat(totals.MeanScore, 'f', 2, 64)})
 		}
 		if totals.Rewatched > 0 {
-			credits = append(credits, creditLine{"Rewatches", formatStatsCount(totals.Rewatched)})
+			numbers = append(numbers, creditLine{Role: "Rewatches", Name: formatStatsCount(totals.Rewatched)})
 		}
+	}
+	if len(numbers) > 0 {
+		credits = append(credits, creditLine{Heading: "The numbers"})
+		credits = append(credits, numbers...)
 	}
 
 	return append(credits,
-		creditLine{"Filmed on location", "Your couch"},
-		creditLine{"Catering", "Whatever was in the fridge"},
-		creditLine{"Skipped openings", "Too many to count"},
-		creditLine{"", "Thanks for watching."},
+		creditLine{Heading: "The crew"},
+		creditLine{Role: "Filmed on location", Name: "Your couch"},
+		creditLine{Role: "Catering", Name: "Whatever was in the fridge"},
+		creditLine{Role: "Openings skipped", Name: "Too many to count"},
+		creditLine{Role: "Sleep schedule", Name: "Lost in production"},
+		creditLine{Role: "Special thanks", Name: "Every fansubber, ever"},
 	)
 }
 
@@ -163,27 +183,49 @@ func assTime(seconds float64) string {
 	return fmt.Sprintf("%d:%02d:%02d.%02d", centis/360000, centis/6000%60, centis/100%60, centis%100)
 }
 
-// movieScript is the whole credits roll as an ASS file, and how long the
-// video must run to show all of it.
-func movieScript(credits []creditLine, subtitle string, palette theme.Palette, font string) (string, float64) {
+// ellipsize shortens text to at most n runes, ending in an ellipsis.
+func ellipsize(text string, n int) string {
+	runes := []rune(text)
+	if len(runes) <= n {
+		return text
+	}
+	return strings.TrimSpace(string(runes[:n-1])) + "…"
+}
+
+// movieOpening is what the title card says.
+type movieOpening struct {
+	// Presenter is the name on the "presents" line.
+	Presenter string
+	// Tagline sits under the logo: "THE MOVIE", or the milestone.
+	Tagline string
+}
+
+// movieScript is the whole film as an ASS file, and how long the video must
+// run to show all of it.
+func movieScript(credits []creditLine, opening movieOpening, palette theme.Palette, logoFont, textFont string) (string, float64) {
 	const (
-		logoSize = 34
-		roleSize = 34
-		nameSize = 58
-		// lineGap is the space under each name, as a share of its size.
-		lineGap = 1.9
+		roleSize    = 30
+		nameSize    = 44
+		headingSize = 30
+		rowHeight   = 74
+		// A heading takes the room of two rows: space above, then itself.
+		headingHeight = 2 * rowHeight
+		// The gutter either side of the centre line.
+		gutter = 36
 	)
 	accent, text, muted := assColor(palette.Accent), assColor(palette.BrightForeground), assColor(palette.Muted)
+	centreX, centreY := movieWidth/2, movieHeight/2
 
 	var script strings.Builder
 	fmt.Fprintf(&script, "[Script Info]\nScriptType: v4.00+\nPlayResX: %d\nPlayResY: %d\nWrapStyle: 2\nScaledBorderAndShadow: yes\n\n", movieWidth, movieHeight)
 	script.WriteString("[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n")
-	fmt.Fprintf(&script, "Style: Logo,%s,%d,%s,%s,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n", font, logoSize, accent, accent)
-	fmt.Fprintf(&script, "Style: Credit,%s,%d,%s,%s,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,8,0,0,0,1\n\n", font, nameSize, text, text)
+	fmt.Fprintf(&script, "Style: Logo,%s,34,%s,%s,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n", logoFont, accent, accent)
+	fmt.Fprintf(&script, "Style: Text,%s,%d,%s,%s,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n", textFont, nameSize, text, text)
+	script.WriteString("Style: Draw,Arial,20,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n\n")
 	script.WriteString("[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
 
-	event := func(start, end float64, style, text string) {
-		fmt.Fprintf(&script, "Dialogue: 0,%s,%s,%s,,0,0,0,,%s\n", assTime(start), assTime(end), style, text)
+	event := func(layer int, start, end float64, style, body string) {
+		fmt.Fprintf(&script, "Dialogue: %d,%s,%s,%s,,0,0,0,,%s\n", layer, assTime(start), assTime(end), style, body)
 	}
 
 	logo := make([]string, 0, 6)
@@ -192,37 +234,89 @@ func movieScript(credits []creditLine, subtitle string, palette theme.Palette, f
 	}
 	logoBlock := strings.Join(logo, `\N`)
 
-	// The opening: the logo, with the subtitle beneath it.
-	event(0, movieLogoSeconds, "Logo", `{\fad(1200,800)}`+logoBlock)
-	event(1.2, movieLogoSeconds, "Credit", fmt.Sprintf(`{\an5\pos(%d,%d)\fs%d\c%s\fad(800,800)}%s`, movieWidth/2, movieHeight/2+170, roleSize, muted, assText(subtitle)))
-
-	// The roll: one block rising from below the frame until it has left the
-	// top. Its height is estimated from the font sizes, which is all libass
-	// needs to know for \move to carry it fully off screen.
-	var roll strings.Builder
-	height := 0.0
-	for i, credit := range credits {
-		if i > 0 {
-			roll.WriteString(`\N`)
+	// The roll's length decides the film's.
+	rollHeight := 0
+	for _, credit := range credits {
+		if credit.Heading != "" {
+			rollHeight += headingHeight
+		} else {
+			rollHeight += rowHeight
 		}
-		if credit.Role != "" {
-			fmt.Fprintf(&roll, `{\fs%d\c%s}%s\N`, roleSize, muted, assText(credit.Role))
-			height += roleSize * 1.25
-		}
-		fmt.Fprintf(&roll, `{\fs%d\c%s}%s\N`, nameSize, text, assText(credit.Name))
-		height += nameSize * lineGap
 	}
-	travel := float64(movieHeight) + height + 80
-	rollSeconds := travel / movieScrollSpeed
-	rollStart := float64(movieLogoSeconds)
+	rollStart := float64(movieTitleSeconds)
+	rollSeconds := float64(movieHeight+rollHeight+100) / movieScrollSpeed
 	rollEnd := rollStart + rollSeconds
-	event(rollStart, rollEnd, "Credit", fmt.Sprintf(`{\move(%d,%d,%d,%d)}%s`,
-		movieWidth/2, movieHeight+40, movieWidth/2, -int(height)-40, roll.String()))
-
-	// The closing card: the logo once more, smaller, and a goodbye.
 	end := rollEnd + movieEndCardSeconds
-	event(rollEnd, end, "Logo", fmt.Sprintf(`{\fs22\pos(%d,%d)\fad(800,1000)}%s`, movieWidth/2, movieHeight/2-40, logoBlock))
-	event(rollEnd+0.6, end, "Credit", fmt.Sprintf(`{\an5\pos(%d,%d)\fs%d\c%s\fad(800,1000)}%s`, movieWidth/2, movieHeight/2+120, roleSize+6, text, assText("See you next episode.")))
+
+	// Title card: who presents, then the logo with a soft glow behind it, an
+	// accent rule drawn out beneath, and the tagline spaced wide.
+	presenter := strings.ToUpper(opening.Presenter)
+	if presenter == "" {
+		presenter = "YOU"
+	}
+	event(2, 0.8, 4.2, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs%d\fsp6\c%s\fad(700,600)}%s`, centreX, centreY, roleSize, muted, assText(presenter+"  presents")))
+	event(1, 4.6, movieTitleSeconds-0.4, "Logo", fmt.Sprintf(`{\pos(%d,%d)\blur14\alpha&H70&\fad(1400,700)}%s`, centreX, centreY-40, logoBlock))
+	event(2, 4.6, movieTitleSeconds-0.4, "Logo", fmt.Sprintf(`{\pos(%d,%d)\fad(1400,700)}%s`, centreX, centreY-40, logoBlock))
+	event(2, 5.8, movieTitleSeconds-0.4, "Draw", fmt.Sprintf(`{\an5\pos(%d,%d)\c%s\fscx0\t(0,900,\fscx100)\fad(0,700)\p1}m 0 0 l 1000 0 1000 4 0 4{\p0}`, centreX, centreY+95, accent))
+	event(2, 6.4, movieTitleSeconds-0.4, "Text", fmt.Sprintf(`{\pos(%d,%d)\fs%d\fsp18\c%s\fad(800,700)}%s`, centreX, centreY+150, headingSize+4, text, assText(strings.ToUpper(opening.Tagline))))
+
+	// The roll: each row is its own event moving at the same speed, so roles
+	// right-align against the centre line and names left-align after it, the
+	// way film credits sit.
+	y := movieHeight + 60
+	for _, credit := range credits {
+		if credit.Heading != "" {
+			y += rowHeight
+			heading := strings.ToUpper(credit.Heading)
+			event(2, rollStart, rollEnd, "Text", fmt.Sprintf(`{\move(%d,%d,%d,%d)\fs%d\fsp14\c%s}%s`,
+				centreX, y, centreX, y-movieHeight-rollHeight-200, headingSize, accent, assText(heading)))
+			// A short rule either side of the heading.
+			half := len([]rune(heading))*(headingSize*6/10+14)/2 + 40
+			for _, side := range []int{-1, 1} {
+				x := centreX + side*(half+60)
+				event(2, rollStart, rollEnd, "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\c%s\alpha&H60&\p1}m 0 0 l 120 0 120 2 0 2{\p0}`,
+					x, y, x, y-movieHeight-rollHeight-200, accent))
+			}
+			y += rowHeight
+			continue
+		}
+		top := y - movieHeight - rollHeight - 200
+		if credit.Role != "" {
+			event(2, rollStart, rollEnd, "Text", fmt.Sprintf(`{\an6\move(%d,%d,%d,%d)\fs%d\c%s}%s`,
+				centreX-gutter, y, centreX-gutter, top, roleSize, muted, assText(ellipsize(credit.Role, movieValueRunes))))
+		}
+		event(2, rollStart, rollEnd, "Text", fmt.Sprintf(`{\an4\move(%d,%d,%d,%d)\fs%d\c%s}%s`,
+			centreX+gutter, y, centreX+gutter, top, nameSize, text, assText(ellipsize(credit.Name, movieValueRunes))))
+		y += rowHeight
+	}
+
+	// Closing card: the logo once more, small, and a "to be continued" arrow
+	// sliding in from the left.
+	event(1, rollEnd, end, "Logo", fmt.Sprintf(`{\pos(%d,%d)\fs20\blur10\alpha&H80&\fad(900,900)}%s`, centreX, centreY-60, logoBlock))
+	event(2, rollEnd, end, "Logo", fmt.Sprintf(`{\pos(%d,%d)\fs20\fad(900,900)}%s`, centreX, centreY-60, logoBlock))
+	arrowY := movieHeight - movieBars - 90
+	event(3, rollEnd+1.4, end, "Draw", fmt.Sprintf(`{\an7\move(%d,%d,%d,%d,0,500)\c%s\fad(0,900)\p1}m 0 0 l 520 0 600 40 520 80 0 80 40 40{\p0}`,
+		-640, arrowY-40, 90, arrowY-40, accent))
+	event(4, rollEnd+1.4, end, "Text", fmt.Sprintf(`{\an4\move(%d,%d,%d,%d,0,500)\fs%d\b1\fsp4\c%s\fad(0,900)}%s`,
+		-560, arrowY, 170, arrowY, headingSize, assColor(palette.DarkBackground), assText("TO BE CONTINUED")))
+
+	// Petals drifting down through the whole film, behind everything.
+	petals := rand.New(rand.NewPCG(4, 12))
+	for i := 0; i < 26; i++ {
+		start := petals.Float64() * (end - 4)
+		life := 11 + petals.Float64()*8
+		x := petals.IntN(movieWidth)
+		drift := petals.IntN(500) - 150
+		scale := 60 + petals.IntN(80)
+		spin := petals.IntN(720) - 360
+		event(0, start, math.Min(end, start+life), "Draw", fmt.Sprintf(`{\an5\move(%d,%d,%d,%d)\fscx%d\fscy%d\frz%d\t(\frz%d)\c%s\alpha&H%02X&\blur1.5\fad(800,800)\p1}m 0 0 b 10 -14 26 -10 30 0 b 26 10 10 14 0 0{\p0}`,
+			x, movieBars-40, x+drift, movieHeight-movieBars+40, scale, scale, petals.IntN(360), spin, accent, 0x70+petals.IntN(0x50)))
+	}
+
+	// Letterbox bars, over everything, and a fade from black at the very start.
+	bar := fmt.Sprintf(`m 0 0 l %d 0 %d %d 0 %d`, movieWidth, movieWidth, movieBars, movieBars)
+	event(9, 0, end, "Draw", `{\pos(0,0)\c&H000000&\p1}`+bar+`{\p0}`)
+	event(9, 0, end, "Draw", fmt.Sprintf(`{\pos(0,%d)\c&H000000&\p1}%s{\p0}`, movieHeight-movieBars, bar))
 	return script.String(), end
 }
 
@@ -240,8 +334,8 @@ func movieViewerName(user *User) string {
 	return ""
 }
 
-// PlayOtakaseMovie plays the credits roll and returns once it is closed.
-// milestone is the episode count being celebrated, or 0.
+// PlayOtakaseMovie plays the film and returns once it is closed. milestone is
+// the episode count being celebrated, or 0.
 func PlayOtakaseMovie(config *Config, user *User, milestone int) {
 	palette := theme.Builtin()
 	if config == nil || !config.RofiSelection {
@@ -258,12 +352,13 @@ func PlayOtakaseMovie(config *Config, user *User, milestone int) {
 		}
 	}
 
-	subtitle := "presents"
+	viewer := movieViewerName(user)
+	opening := movieOpening{Presenter: viewer, Tagline: "The movie"}
 	if milestone > 0 {
-		subtitle = formatStatsCount(milestone) + " episodes. Roll the credits."
+		opening.Tagline = formatStatsCount(milestone) + " episodes"
 	}
-	credits := movieCredits(stats, movieViewerName(user), milestone, time.Now())
-	if err := playCreditsInMPV(credits, subtitle, palette); err != nil {
+	credits := movieCredits(stats, viewer, milestone, time.Now())
+	if err := playMovieFilm(credits, opening, palette); err != nil {
 		Log(fmt.Sprintf("Otakase movie: %v", err))
 		if config == nil || !config.RofiSelection {
 			printMovieCredits(credits)
@@ -271,9 +366,9 @@ func PlayOtakaseMovie(config *Config, user *User, milestone int) {
 	}
 }
 
-// playCreditsInMPV writes the script and plays it over a plain background,
-// waiting for the window to close.
-func playCreditsInMPV(credits []creditLine, subtitle string, palette theme.Palette) error {
+// playMovieFilm writes the picture and the music and plays them, waiting for
+// the window to close.
+func playMovieFilm(credits []creditLine, opening movieOpening, palette theme.Palette) error {
 	binary, err := findMPV()
 	if err != nil {
 		return fmt.Errorf("mpv not found: %w", err)
@@ -284,23 +379,33 @@ func playCreditsInMPV(credits []creditLine, subtitle string, palette theme.Palet
 	}
 	defer os.RemoveAll(dir)
 
-	script, seconds := movieScript(credits, subtitle, palette, theme.MonospaceFont())
+	script, seconds := movieScript(credits, opening, palette, theme.MonospaceFont(), "sans-serif")
 	scriptPath := filepath.Join(dir, "credits.ass")
 	if err := os.WriteFile(scriptPath, []byte(script), 0o600); err != nil {
 		return err
 	}
+	musicPath := filepath.Join(dir, "music.wav")
+	if err := os.WriteFile(musicPath, movieSoundtrack(seconds, movieTitleSeconds), 0o600); err != nil {
+		return err
+	}
 
-	background := strings.TrimPrefix(palette.Background, "#")
-	source := fmt.Sprintf("av://lavfi:color=c=0x%s:s=%dx%d:r=30:d=%.1f", background, movieWidth, movieHeight, seconds+0.5)
 	args := []string{
 		"--no-terminal", "--force-window=yes", "--keep-open=no",
 		"--no-resume-playback", "--save-position-on-quit=no",
 		"--osd-level=0", "--sub-ass-override=no", "--sub-visibility=yes",
-		"--sub-file=" + scriptPath,
+		"--sub-file=" + scriptPath, "--audio-file=" + musicPath,
 		"--title=" + otakaseMovieTitle, "--force-media-title=" + otakaseMovieTitle,
-		source,
+		movieBackground(palette, seconds),
 	}
 	return exec.Command(binary, args...).Run()
+}
+
+// movieBackground is the lavfi source mpv plays: the palette's background with
+// a faint film grain and a vignette, for seconds.
+func movieBackground(palette theme.Palette, seconds float64) string {
+	background := strings.TrimPrefix(palette.Background, "#")
+	return fmt.Sprintf("av://lavfi:color=c=0x%s:s=%dx%d:r=30:d=%.1f,noise=alls=7:allf=t,vignette=PI/4",
+		background, movieWidth, movieHeight, seconds+0.5)
 }
 
 // printOtakaseLogo prints the logo in the terminal, in the accent colour.
@@ -316,9 +421,12 @@ func printOtakaseLogo(palette theme.Palette) {
 // printMovieCredits is the roll for a terminal without mpv to show it in.
 func printMovieCredits(credits []creditLine) {
 	for _, credit := range credits {
-		if credit.Role != "" {
+		switch {
+		case credit.Heading != "":
+			fmt.Printf("\n  %s\n", strings.ToUpper(credit.Heading))
+		case credit.Role != "":
 			fmt.Printf("  %s: %s\n", credit.Role, credit.Name)
-		} else {
+		default:
 			fmt.Printf("  %s\n", credit.Name)
 		}
 	}
