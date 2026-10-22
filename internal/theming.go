@@ -31,6 +31,8 @@ func ApplyThemeFromConfig(config *Config) theme.Palette {
 		for _, problem := range problems {
 			Log(fmt.Sprintf("ThemeOverrides: %v", problem))
 		}
+		// Late at night the menus are turned down a little.
+		palette = dimForLateNight(palette)
 		// Whatever reads the active palette later -- the rofi themes are
 		// written from it -- must see the same colours the menus use.
 		theme.SetActive(palette)

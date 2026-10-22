@@ -75,6 +75,7 @@ const (
 	Merge    Icon = 0xF0F5C // nf-md-merge
 	Import   Icon = 0xF02FA // nf-md-import
 	Calendar Icon = 0xF00F0 // nf-md-calendar_clock
+	Sleep    Icon = 0xF04B2 // nf-md-sleep
 )
 
 // All is every icon in use. The bundled font is cut down to exactly these, and
@@ -85,7 +86,7 @@ var All = []Icon{
 	Watching, AllShows, Search, Edit, Remap, History, Surprise, Planning,
 	Completed, Paused, Dropped, Rewatching, Tracker, Provider, Cast, CastOff, Stats,
 	Folder, Counter, Star, Quality, Info, Yes, No, Next, Refresh, Firewall,
-	Number, Audio, Pin, Undo, TV, Merge, Import, Calendar,
+	Number, Audio, Pin, Undo, TV, Merge, Import, Calendar, Sleep,
 }
 
 // gap separates an icon from its label. The glyphs are one cell wide, and a

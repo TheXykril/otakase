@@ -207,7 +207,7 @@ func NextEpisodePromptCLI(userConfig *Config) bool {
 	}
 
 	// The menu brings its own quit and back.
-	answer, err := DynamicSelect([]SelectionOption{
+	answer, err := askNextEpisode([]SelectionOption{
 		{Key: "yes", Label: nextEpisodeLabel(anime, fmt.Sprintf("Yes, continue to episode %d", next)), Icon: icons.Play},
 	})
 	if err != nil {
@@ -215,6 +215,10 @@ func NextEpisodePromptCLI(userConfig *Config) bool {
 		return false
 	}
 	Log(fmt.Sprintf("CLI User Selected Key: '%s', Label: '%s'", answer.Key, answer.Label))
+	if answer.Key == sleepKey {
+		chooseSleep()
+		return false
+	}
 	if answer.Key == "-1" || answer.Key == "-2" {
 		Out("Exiting")
 		return false
@@ -238,7 +242,7 @@ func NextEpisodePromptContinuous(userConfig *Config, databaseFile string, userTo
 		} else {
 			Out(fmt.Sprintf("Continue to next episode (%d) or quit?", anime.Ep.Number+1))
 		}
-		answer, err := DynamicSelect([]SelectionOption{
+		answer, err := askNextEpisode([]SelectionOption{
 			{Key: "yes", Label: nextEpisodeLabel(anime, "Yes, start next episode now"), Icon: icons.Play},
 		})
 		if err != nil {
@@ -248,6 +252,10 @@ func NextEpisodePromptContinuous(userConfig *Config, databaseFile string, userTo
 		Log(fmt.Sprintf("CLI Continuous User Selected Key: '%s', Label: '%s'", answer.Key, answer.Label))
 
 		switch answer.Key {
+		case sleepKey:
+			chooseSleep()
+			quitDuringEpisode(userConfig, anime, databaseFile, userToken)
+			return
 		case "-1", "-2":
 			quitDuringEpisode(userConfig, anime, databaseFile, userToken)
 			return
@@ -309,7 +317,7 @@ func NextEpisodePromptRofi(userConfig *Config) bool {
 		}
 	}
 
-	answer, err := DynamicSelect([]SelectionOption{
+	answer, err := askNextEpisode([]SelectionOption{
 		{Key: "yes", Label: nextEpisodeLabel(anime, fmt.Sprintf("Yes, start episode %d", next)), Icon: icons.Play},
 	})
 	if err != nil {
@@ -317,6 +325,9 @@ func NextEpisodePromptRofi(userConfig *Config) bool {
 		return false
 	}
 	Log(fmt.Sprintf("Rofi User Selected Key: '%s', Label: '%s'", answer.Key, answer.Label))
+	if answer.Key == sleepKey {
+		chooseSleep()
+	}
 	return answer.Key == "yes"
 }
 
