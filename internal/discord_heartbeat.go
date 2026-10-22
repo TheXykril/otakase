@@ -304,8 +304,9 @@ func StartDiscordMPVWatch(config *Config, anime *Anime, socketPath string, done 
 }
 
 // StartDiscordBackground is the launch's share of the Discord features: one
-// heartbeat if linked, and the news refreshed when the cached copy is old.
-// Both run in the background and never hold the launch up.
+// heartbeat if linked (then a Touch Grass badge still waiting handed over),
+// and the news refreshed when the cached copy is old. All of it runs in the
+// background and never holds the launch up.
 func StartDiscordBackground(config *Config) {
 	if !discordEnabled(config) {
 		return
@@ -314,6 +315,7 @@ func StartDiscordBackground(config *Config) {
 		if err := sendDiscordHeartbeat(config, nil, 0); err != nil {
 			Log(fmt.Sprintf("Discord: launch heartbeat failed: %v", err))
 		}
+		claimPendingTouchGrass(config)
 	}()
 	go refreshDiscordNewsIfStale(config)
 	StartDiscordInbox(config)

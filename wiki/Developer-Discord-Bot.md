@@ -278,7 +278,8 @@ Optional, everything missing is skipped or created by the bot:
   write for `/suggestion-issue`, and Actions read and write for `/github`.
 - **App link roles (exact names):** Tester (for `/beta`), and for watch
   badges 3-Day Streak, 7-Day Streak, 30-Day Streak, Binge Watcher, Season
-  Finisher, Season Collector. Missing ones are skipped, never created.
+  Finisher, Season Collector, and Touch Grass (the hidden one). Missing
+  ones are skipped, never created.
 - **App link channels (by name, else the anime channel):** `club` (or
   `anime-club`, `watch-club`) for the club board, `top` (or `watch-top`) for
   the Monday most-watched post, and one ending in `reviews` (or `review`,

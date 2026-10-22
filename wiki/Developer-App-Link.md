@@ -110,6 +110,14 @@ All need the token unless said.
   buttons in the reviews channel; 403 adult, 409 already shared today, 503 no
   reviews channel. The app offers it after scoring the last episode
   (`DiscordShareRatings`).
+- `POST /v1/badge/touch-grass` → `{"new","finders"}`. The hidden Touch
+  Grass watch badge (`touchgrass.go`, `internal/touch_grass_badge.go`): one
+  in ten of the rare touch-grass goodbyes drops it, so about one terminal
+  exit in a thousand, once per install. The app sends it right away when
+  linked, else keeps `touch_grass` = `pending` in its storage directory and
+  sends it on the next launch after linking. `new` is false when the member
+  already had it; `finders` counts members who have it. `/badges` lists it
+  only once earned.
 - Crash reports and "where to watch X?" posts go through `/v1/report`. The
   app notes a run that didn't end cleanly (a marker per process in
   `crash/`, fatal panics written there by `debug.SetCrashOutput`) and asks
