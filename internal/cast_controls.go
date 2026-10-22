@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/term"
@@ -31,6 +32,9 @@ const (
 	// castCmdSwitchAudio is a: play the episode in the other language from
 	// where it is.
 	castCmdSwitchAudio
+	// castCmdShowLink is l: show or hide the browser player's link and code,
+	// for someone else who wants to watch along. Nothing for other devices.
+	castCmdShowLink
 )
 
 // castSeekStep is how far one arrow press moves the position.
@@ -91,6 +95,8 @@ func decodeCastKey(buf []byte) (castCommand, int) {
 		return castCmdStop, 1
 	case 'a', 'A':
 		return castCmdSwitchAudio, 1
+	case 'l', 'L':
+		return castCmdShowLink, 1
 	}
 	return castCmdNone, 1
 }
@@ -200,6 +206,7 @@ var castPanelForControls *castPanelWriter
 // In raw mode a bare \n does not return the cursor, so the message is written
 // with \r\n line endings rather than through Out, which uses fmt.Println.
 func castOut(haveControls bool, message string) {
+	castBrowserStatus(message)
 	// When the panel owns the screen there is nowhere to print: Out turns the
 	// message into a notification, which is the whole point of the takeover.
 	if !haveControls || castPanelForControls == nil || castPanelOwnsScreen() {
@@ -268,7 +275,7 @@ func startCastControls(config *Config) (commands <-chan castCommand, release fun
 		castControls.begun = true
 		castControls.usable = castControlsBegin(config)
 	}
-	if !castControls.usable {
+	if !castControls.usable && !castRemoteControls.Load() {
 		return nil, func() {}, false
 	}
 
@@ -288,6 +295,11 @@ func startCastControls(config *Config) (commands <-chan castCommand, release fun
 		})
 	}, true
 }
+
+// castRemoteControls says commands arrive from somewhere besides the
+// terminal -- a browser's player page -- so an episode subscribes to them even
+// with no terminal to read keys from.
+var castRemoteControls atomic.Bool
 
 // castDeliverCommand hands one decoded command to the episode playing now.
 //

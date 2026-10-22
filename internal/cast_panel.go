@@ -299,6 +299,8 @@ func castPanelStateMark(state string) string {
 		return "▶"
 	case "PAUSED":
 		return "⏸"
+	case "BUFFERING":
+		return "◌"
 	default:
 		return "•"
 	}
@@ -433,6 +435,13 @@ func castPanelCentre(lines []string, width, height int) []string {
 // frame from the moment a device is chosen, and every message that would have
 // been printed becomes a notification.
 func (c *castPanelWriter) status(title string, episode int, device, message string, keys string) string {
+	// Every message the panel shows passes here, so this is where the browser
+	// player hears them too.
+	// The link and code are the one message the page has no use for: it is
+	// already open.
+	if !strings.Contains(message, "█") {
+		castBrowserStatus(message)
+	}
 	var out strings.Builder
 	out.WriteString(c.erase())
 
@@ -475,7 +484,12 @@ func castPanelStatusLines(title string, episode int, device, message string, wid
 	// first on its own line.
 	lines := []string{castPanelTop(state, width)}
 	for _, line := range strings.Split(message, "\n") {
-		lines = append(lines, castPanelRow([]castPanelSegment{{line, castPanelDimStyle}}, inner))
+		style := castPanelDimStyle
+		if cast.IsQRLine(line) {
+			// A code to scan needs every bit of contrast the terminal has.
+			style = lipgloss.NewStyle()
+		}
+		lines = append(lines, castPanelRow([]castPanelSegment{{line, style}}, inner))
 	}
 	return append(lines, castPanelBottom(width, keys))
 }

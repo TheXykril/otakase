@@ -86,7 +86,7 @@ func TestCastShellCommandQuotes(t *testing.T) {
 
 // A rofi cast's own terminal has no menu to ask in, so it is never offered.
 func TestCastNoDevicesMenuSkipsNonInteractive(t *testing.T) {
-	if castNoDevicesMenu(&Config{CastNonInteractive: true}, "ufw") {
+	if castNoDevicesMenu(&Config{CastNonInteractive: true}, "ufw", true) != "" {
 		t.Error("asked with no menu to ask in")
 	}
 }
@@ -102,5 +102,34 @@ func TestCastSetupPasswordPromptListsCommands(t *testing.T) {
 	}
 	if !strings.HasSuffix(got, "(sudo): ") {
 		t.Errorf("prompt does not end on the ask:\n%s", got)
+	}
+}
+
+// With the browser entry on, its page's port is let in too.
+func TestCastFirewallRulesAllowTheBrowserPage(t *testing.T) {
+	has := func(rules [][]string, port string) bool {
+		for _, rule := range rules {
+			if strings.Contains(castShellCommand([][]string{rule}), "port "+port+" proto tcp") ||
+				strings.Contains(castShellCommand([][]string{rule}), "--add-port="+port+"/tcp") {
+				return true
+			}
+		}
+		return false
+	}
+	base := Config{CastPort: 8010, CastDiscoveryPort: 8011}
+	on := base
+	on.CastBrowser = true
+	for _, firewall := range []string{"ufw", "firewalld"} {
+		rules, _ := castDiscoveryFirewallRules(&on, "192.168.0.0/24", firewall)
+		if !has(rules, "8012") {
+			t.Errorf("%s: no rule for the default browser port: %v", firewall, rules)
+		}
+	}
+	on.CastBrowserPort = 9000
+	if rules, _ := castDiscoveryFirewallRules(&on, "192.168.0.0/24", "ufw"); !has(rules, "9000") {
+		t.Errorf("no rule for CastBrowserPort: %v", rules)
+	}
+	if rules, _ := castDiscoveryFirewallRules(&base, "192.168.0.0/24", "ufw"); has(rules, "8012") {
+		t.Errorf("a browser rule with the browser entry off: %v", rules)
 	}
 }

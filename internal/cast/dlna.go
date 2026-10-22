@@ -565,6 +565,8 @@ func (p *dlnaPlayer) Progress() (Progress, error) {
 	progress := Progress{
 		Position: parseUPnPTime(position["RelTime"]),
 		Duration: parseUPnPTime(position["TrackDuration"]),
+		// UPnP's word for a renderer filling its buffer.
+		Buffering: state == "TRANSITIONING",
 	}
 
 	p.mu.Lock()

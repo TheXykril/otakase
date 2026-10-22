@@ -24,6 +24,9 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `CastBurnSubtitles` | Boolean | `true`, `false` | Burn subtitles into the picture when casting. Costs a re-encode. Default `true`. |
 | `CastWaitForSubtitles` | Boolean | `true`, `false` | For a torrent, wait until the whole file has downloaded before casting, so its subtitles show from the start without the stream restarting. Default `false`: casting starts in seconds and the stream restarts a few times early on as more subtitles come in. |
 | `CastSubtitleSize` | Number | percent, e.g. `100`, `120`, `150` | Size of dialogue in burned ASS subtitles, as a percent of what the release set. Signs and typesetting keep their size. Default `120`. |
+| `CastBrowser` | Boolean | `true`, `false` | List **Browser** among the cast devices: a link (and QR code) any phone, TV or console on the network opens to play the episode. Default `true`. |
+| `CastBrowserPort` | Integer | `0`–`65535` | Port the browser player page is served on (default `8012`). Fixed so the link stays the same; allow it through a firewall. |
+| `CastBrowserSubtitles` | Enum | `soft`, `burn` | How a browser shows subtitles: `soft` (the default) sends the subtitle file, which the page can turn on and off, as plain text without styling; `burn` draws them into the picture, styled, at the cost of a re-encode. |
 | `CastEncoder` | Enum | empty, `vaapi`, `software` | Encoder for burned subtitles. Empty detects what this machine can do. |
 | `CastNextEpisode` | Enum | `countdown`, `stop` | When a cast episode ends: `countdown` (the default) counts down 10 seconds on the panel and plays the next one, any key stops it; `stop` ends the cast with the video. |
 | `SubOrDub` | Enum | `sub`, `dub` | Preferred audio. Switching a show to the other audio (the player's `(DUB)`/`(SUB)` playlist row, or `a` while casting) is remembered for that show; `-sub` and `-dub` still win for a run. |

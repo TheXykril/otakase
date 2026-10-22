@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0d0c">
+<link rel="icon" href="data:,">
+<title>otakase</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #080707; color: #ece4d6; overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+  #stage { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: #000; }
+  video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; }
+  .layer { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center;
+    justify-content: center; flex-direction: column; text-align: center; padding: 24px; box-sizing: border-box; }
+  #waiting { background: #0e0d0c; }
+  #waiting h1 { margin: 0 0 12px; font-size: 44px; font-weight: 600; letter-spacing: .02em; }
+  #waiting h1 span { color: #d2492f; }
+  #waiting p { margin: 0; color: #8a8276; font-size: 18px; max-width: 32em; }
+  #waiting #fullhint { margin-top: 28px; font-size: 15px; color: #d2492f; }
+  #tap { background: rgba(8, 7, 7, .72); cursor: pointer; display: none; }
+  #tap div { width: 96px; height: 96px; border-radius: 50%; background: #d2492f; display: flex;
+    align-items: center; justify-content: center; margin-bottom: 16px; }
+  #tap p { margin: 0; font-size: 20px; }
+  #controls { position: absolute; left: 0; right: 0; bottom: 0; padding: 48px 20px 20px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(8, 7, 7, .9));
+    transition: opacity .3s; }
+  #top { position: absolute; left: 0; right: 0; top: 0; padding: 18px 20px 48px; padding-top: calc(18px + env(safe-area-inset-top));
+    background: linear-gradient(rgba(8, 7, 7, .85), transparent); transition: opacity .3s; font-size: 18px; }
+  #top small { display: block; color: #8a8276; font-size: 13px; margin-top: 4px; }
+  .hidden { opacity: 0; pointer-events: none; }
+  #bar { height: 4px; background: #2a2724; border-radius: 2px; overflow: hidden; margin-bottom: 14px; }
+  #fill { height: 100%; width: 0; background: #d2492f; }
+  #row { display: flex; align-items: center; }
+  #row .spacer { flex: 1; }
+  #clock { color: #ece4d6; font-variant-numeric: tabular-nums; font-size: 15px; margin-left: 8px; white-space: nowrap; }
+  button { background: none; border: 0; color: #ece4d6; padding: 8px; margin: 0 2px; border-radius: 10px; cursor: pointer;
+    display: flex; align-items: center; }
+  button:focus { outline: 2px solid #d2492f; }
+  button.off { color: #8a8276; }
+  button svg { width: 30px; height: 30px; fill: currentColor; }
+  button.big svg { width: 40px; height: 40px; }
+  @media (max-width: 480px) {
+    #controls { padding-left: 10px; padding-right: 10px; }
+    button { padding: 6px; margin: 0; }
+    button svg { width: 26px; height: 26px; }
+    button.big svg { width: 34px; height: 34px; }
+    #clock { font-size: 13px; margin-left: 4px; }
+  }
+  #banner { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); max-width: 86%;
+    background: rgba(8, 7, 7, .82); border-left: 3px solid #d2492f; padding: 10px 16px; border-radius: 8px;
+    font-size: 17px; white-space: pre-line; display: none; text-align: left; }
+  #spinner { position: absolute; top: 50%; left: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
+    border: 4px solid rgba(236, 228, 214, .25); border-top-color: #d2492f; border-radius: 50%;
+    animation: spin .9s linear infinite; display: none; pointer-events: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #toast { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(8, 7, 7, .8);
+    padding: 12px 20px; border-radius: 12px; font-size: 18px; display: none; }
+  #cuesize { display: none; }
+</style>
+<style id="cuestyle">video::cue { font-size: 100%; }</style>
+</head>
+<body>
+<div id="stage">
+  <video id="video" playsinline webkit-playsinline preload="auto"></video>
+  <div id="top" class="hidden"><span id="title"></span><small id="note"></small></div>
+  <div id="controls" class="hidden">
+    <div id="bar"><div id="fill"></div></div>
+    <div id="row">
+      <button id="back" title="Back 30s (←)"><svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.3 0 6 2.7 6 6s-2.7 6-6 6-6-2.7-6-6H4c0 4.4 3.6 8 8 8s8-3.6 8-8-3.6-8-8-8z"/></svg></button>
+      <button id="toggle" class="big" title="Play / pause (space)"><svg viewBox="0 0 24 24"><path id="toggleicon" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg></button>
+      <button id="forward" title="Forward 30s (→)"><svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6h2c0 4.4-3.6 8-8 8s-8-3.6-8-8 3.6-8 8-8z"/></svg></button>
+      <span id="clock">0:00</span>
+      <span class="spacer"></span>
+      <button id="cc" title="Subtitles (c)"><svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1z"/></svg></button>
+      <button id="full" title="Full screen (f)"><svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg></button>
+    </div>
+  </div>
+  <div id="tap" class="layer"><div><svg viewBox="0 0 24 24" width="48" height="48" fill="#fff8ec"><path d="M8 5v14l11-7z"/></svg></div><p>Tap to play</p></div>
+  <div id="waiting" class="layer"><h1>otakase<span>.</span></h1><p id="waittext">Connecting…</p><p id="fullhint">Tap anywhere for full screen</p></div>
+  <div id="spinner"></div>
+  <div id="banner"></div>
+  <div id="toast"></div>
+</div>
+<script src="hls.js"></script>
+<script>
+(function () {
+  "use strict";
+  var video = document.getElementById("video");
+  var waiting = document.getElementById("waiting");
+  var waitText = document.getElementById("waittext");
+  var tap = document.getElementById("tap");
+  var controls = document.getElementById("controls");
+  var top = document.getElementById("top");
+  var fill = document.getElementById("fill");
+  var clock = document.getElementById("clock");
+  var toggleIcon = document.getElementById("toggleicon");
+  var ccButton = document.getElementById("cc");
+  var toast = document.getElementById("toast");
+  var banner = document.getElementById("banner");
+  var bannerTimer = null;
+
+  var client = 0;
+  var load = 0;
+  var seek = 0;
+  var start = 0;
+  var duration = 0;
+  var wantPaused = false;
+  var hls = null;
+  var track = null;
+  var trackURL = null;
+  var subsOn = true;
+  var lastError = "";
+  var player = "";
+  var hideTimer = null;
+  var toastTimer = null;
+
+  var PAUSE_ICON = "M6 19h4V5H6v14zm8-14v14h4V5h-4z";
+  var PLAY_ICON = "M8 5v14l11-7z";
+
+  function post(path, body) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", path, true);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.send(JSON.stringify(body));
+  }
+
+  function command(name) {
+    post("command", { cmd: name });
+    showControls();
+  }
+
+  function report() {
+    if (!client) { return; }
+    post("state", {
+      client: client, load: load, seek: seek,
+      pos: video.currentTime || 0, paused: video.paused, ended: video.ended, buffering: buffering(),
+      vol: video.volume, error: lastError, player: player
+    });
+  }
+  setInterval(report, 1000);
+
+  // buffering is a video meant to be playing that has run out of what it can
+  // play: the spinner shows, and otakase's panel says so too.
+  function buffering() {
+    return load > 0 && !wantPaused && !video.ended && (video.seeking || video.readyState < 3);
+  }
+  var spinner = document.getElementById("spinner");
+  setInterval(function () { spinner.style.display = buffering() ? "block" : "none"; }, 250);
+
+  function clockText(seconds) {
+    seconds = Math.max(0, Math.floor(seconds));
+    var h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60, s = seconds % 60;
+    var mm = (h > 0 && m < 10 ? "0" : "") + m;
+    return (h > 0 ? h + ":" : "") + mm + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function redraw() {
+    var at = start + (video.currentTime || 0);
+    clock.textContent = clockText(at) + (duration > 0 ? " / " + clockText(duration) : "");
+    fill.style.width = duration > 0 ? Math.min(100, at / duration * 100) + "%" : "0";
+    toggleIcon.setAttribute("d", video.paused ? PLAY_ICON : PAUSE_ICON);
+  }
+  setInterval(redraw, 500);
+
+  function showControls() {
+    controls.className = "";
+    top.className = "";
+    if (hideTimer) { clearTimeout(hideTimer); }
+    hideTimer = setTimeout(function () {
+      if (!video.paused) {
+        controls.className = "hidden";
+        top.className = "hidden";
+      }
+    }, 3500);
+  }
+
+  function say(text) {
+    toast.textContent = text;
+    toast.style.display = "block";
+    if (toastTimer) { clearTimeout(toastTimer); }
+    toastTimer = setTimeout(function () { toast.style.display = "none"; }, 1500);
+  }
+
+  // status shows what otakase's panel says: on the waiting screen while
+  // nothing plays, over the video for a few seconds while something does.
+  function status(text) {
+    if (!load) {
+      setWaiting(text || "Waiting for otakase to start an episode…");
+      return;
+    }
+    banner.textContent = text;
+    banner.style.display = text ? "block" : "none";
+    if (bannerTimer) { clearTimeout(bannerTimer); }
+    bannerTimer = setTimeout(function () { banner.style.display = "none"; }, 5000);
+  }
+
+  function setWaiting(text) {
+    waitText.textContent = text;
+    waiting.style.display = text ? "flex" : "none";
+  }
+
+  // play asks the browser to start, and says so when it wants a tap first:
+  // phones refuse sound that no touch asked for.
+  function play() {
+    var started = video.play();
+    if (started && started["catch"]) {
+      started["catch"](function (err) {
+        if (err && err.name === "NotAllowedError") {
+          tap.style.display = "flex";
+        }
+      });
+    }
+  }
+
+  function clearTrack() {
+    if (track && track.parentNode) { track.parentNode.removeChild(track); }
+    if (trackURL && window.URL && URL.revokeObjectURL) { URL.revokeObjectURL(trackURL); }
+    track = null;
+    trackURL = null;
+  }
+
+  function teardown() {
+    if (hls) { hls.destroy(); hls = null; }
+    clearTrack();
+    video.removeAttribute("src");
+    try { video.load(); } catch (e) {}
+  }
+
+  // vttTime and shiftVTT move every cue by the stream's start, since the file
+  // is in the episode's time and the stream may begin partway in.
+  function vttTime(text) {
+    var parts = text.split(":"), seconds = 0;
+    for (var i = 0; i < parts.length; i++) { seconds = seconds * 60 + parseFloat(parts[i]); }
+    return seconds;
+  }
+  function vttStamp(seconds) {
+    if (seconds < 0) { seconds = 0; }
+    var ms = Math.round(seconds * 1000);
+    var h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60, f = ms % 1000;
+    function pad(n, w) { n = String(n); while (n.length < w) { n = "0" + n; } return n; }
+    return pad(h, 2) + ":" + pad(m, 2) + ":" + pad(s, 2) + "." + pad(f, 3);
+  }
+  function shiftVTT(body, by) {
+    return body.replace(/((?:\d+:)?\d{1,2}:\d{2}\.\d{3}) --> ((?:\d+:)?\d{1,2}:\d{2}\.\d{3})/g, function (all, a, b) {
+      return vttStamp(vttTime(a) - by) + " --> " + vttStamp(vttTime(b) - by);
+    });
+  }
+
+  function addSubtitles(url, by, forLoad) {
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.onload = function () {
+      if (forLoad !== load || xhr.status !== 200) { return; }
+      clearTrack();
+      track = document.createElement("track");
+      track.kind = "subtitles";
+      track.label = "Subtitles";
+      track.srclang = "en";
+      track["default"] = true;
+      trackURL = URL.createObjectURL(new Blob([shiftVTT(xhr.responseText, by)], { type: "text/vtt" }));
+      track.src = trackURL;
+      video.appendChild(track);
+      setTimeout(applySubs, 50);
+      ccButton.style.display = "";
+    };
+    xhr.send();
+  }
+
+  function applySubs() {
+    for (var i = 0; i < video.textTracks.length; i++) {
+      video.textTracks[i].mode = subsOn ? "showing" : "hidden";
+    }
+    ccButton.className = subsOn ? "" : "off";
+  }
+
+  function fail(text) {
+    lastError = text;
+  }
+
+  function loadStream(msg) {
+    // Cleared first: tearing down a playing video fires a pause that is not
+    // the viewer's.
+    load = 0;
+    teardown();
+    load = msg.load;
+    seek = msg.seek || 0;
+    start = msg.start || 0;
+    duration = msg.duration || 0;
+    wantPaused = !!msg.paused;
+    lastError = "";
+    document.getElementById("title").textContent = msg.title || "";
+    document.title = msg.title ? msg.title + " · otakase" : "otakase";
+    document.getElementById("cuestyle").textContent = "video::cue { font-size: " + (msg.subSize || 100) + "%; }";
+    ccButton.style.display = "none";
+    if (typeof msg.volume === "number") { try { video.volume = msg.volume; } catch (e) {} }
+    setWaiting("");
+    var at = msg.at || 0;
+
+    if (window.Hls && Hls.isSupported()) {
+      player = "hls.js";
+      hls = new Hls({ startPosition: at, maxBufferLength: 60, backBufferLength: 90, enableWorker: true });
+      hls.on(Hls.Events.ERROR, function (event, data) {
+        if (!data.fatal) { return; }
+        fail(data.type + ": " + data.details);
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          setTimeout(function () { if (hls) { hls.startLoad(); } }, 1000);
+        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+        }
+      });
+      hls.loadSource(msg.url);
+      hls.attachMedia(video);
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      player = "native";
+      video.src = msg.url;
+      if (at > 0) {
+        video.addEventListener("loadedmetadata", function once() {
+          video.removeEventListener("loadedmetadata", once);
+          video.currentTime = at;
+        });
+      }
+    } else {
+      // Neither: an old TV browser. Some play a plain transport stream.
+      player = "ts";
+      video.src = msg.ts;
+    }
+    if (msg.subs) { addSubtitles(msg.subs, start, load); }
+    if (!wantPaused) { play(); }
+    showControls();
+  }
+
+  video.addEventListener("error", function () {
+    var err = video.error;
+    fail("video error " + (err ? err.code : "?"));
+    if (player === "native" || player === "ts") {
+      setWaiting("This browser cannot play the stream. Try another browser, or Chrome on the device.");
+    }
+  });
+
+  // A pause or play otakase did not ask for -- the browser's own controls in
+  // full screen, a headset button -- is passed on, so otakase does not take a
+  // paused page for a stalled one.
+  video.addEventListener("pause", function () {
+    if (load && !wantPaused && !video.ended) { wantPaused = true; post("command", { cmd: "toggle" }); }
+    redraw();
+    showControls();
+  });
+  video.addEventListener("play", function () {
+    tap.style.display = "none";
+    if (load && wantPaused) { wantPaused = false; post("command", { cmd: "toggle" }); }
+    redraw();
+  });
+  video.addEventListener("ended", report);
+
+  function connect() {
+    var events = new EventSource("events");
+    events.onopen = function () {
+      if (!load) { setWaiting("Waiting for otakase to start an episode…"); }
+    };
+    events.onerror = function () {
+      if (!load) { setWaiting("Waiting for otakase… (keep this page open)"); }
+    };
+    events.onmessage = function (e) {
+      var msg;
+      try { msg = JSON.parse(e.data); } catch (err) { return; }
+      switch (msg.cmd) {
+        case "hello":
+          client = msg.client;
+          if (!load) { setWaiting("Waiting for otakase to start an episode…"); }
+          break;
+        case "load":
+          if (msg.load !== load) { loadStream(msg); }
+          break;
+        case "seek":
+          if (msg.load === load) {
+            seek = msg.seek;
+            wantPaused = false;
+            video.currentTime = msg.at;
+            if (video.paused) { play(); }
+          }
+          break;
+        case "pause":
+          wantPaused = true;
+          video.pause();
+          break;
+        case "play":
+          wantPaused = false;
+          play();
+          break;
+        case "status":
+          status(msg.text);
+          break;
+        case "volume":
+          try { video.volume = msg.volume; } catch (err) {}
+          say("Volume " + Math.round(msg.volume * 100) + "%");
+          break;
+        case "stop":
+          load = 0;
+          teardown();
+          setWaiting("Waiting for otakase to start an episode…");
+          document.title = "otakase";
+          break;
+      }
+    };
+  }
+
+  function toggleSubs() {
+    subsOn = !subsOn;
+    applySubs();
+    say(subsOn ? "Subtitles on" : "Subtitles off");
+  }
+
+  function fullScreen() {
+    var stage = document.getElementById("stage");
+    var doc = document;
+    if (doc.fullscreenElement || doc.webkitFullscreenElement) {
+      (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc);
+    } else if (!(doc.fullscreenEnabled || doc.webkitFullscreenEnabled) && video.webkitEnterFullscreen) {
+      // An iPhone only lets the video itself go full screen, with its own
+      // controls; a pause made there is passed back like any other.
+      video.webkitEnterFullscreen();
+    } else if (stage.requestFullscreen) {
+      var entered = stage.requestFullscreen();
+      // A phone held upright shows a letterboxed strip; full screen turns it
+      // sideways where the browser lets a page do that.
+      if (entered && entered.then && screen.orientation && screen.orientation.lock) {
+        entered.then(function () {
+          var turned = screen.orientation.lock("landscape");
+          if (turned && turned["catch"]) { turned["catch"](function () {}); }
+        });
+      }
+    } else if (stage.webkitRequestFullscreen) {
+      stage.webkitRequestFullscreen();
+    } else if (video.webkitEnterFullscreen) {
+      video.webkitEnterFullscreen();
+    }
+  }
+
+  function on(id, handler) {
+    document.getElementById(id).addEventListener("click", function (e) {
+      e.stopPropagation();
+      handler();
+    });
+  }
+  on("back", function () { command("back"); });
+  on("forward", function () { command("forward"); });
+  on("toggle", function () { command("toggle"); });
+  on("cc", toggleSubs);
+  on("full", fullScreen);
+  tap.addEventListener("click", function () { tap.style.display = "none"; play(); });
+  // A double tap or double click anywhere on the video goes full screen, as
+  // most players do.
+  var lastTap = 0;
+  document.getElementById("stage").addEventListener("click", function (e) {
+    // The press that went full screen is not half of a double tap out again.
+    if (e.otakaseFirst) { showControls(); return; }
+    var now = Date.now();
+    if (now - lastTap < 350) {
+      lastTap = 0;
+      fullScreen();
+      return;
+    }
+    lastTap = now;
+    showControls();
+  });
+  document.addEventListener("mousemove", showControls);
+
+  // The same keys as the terminal, and the media keys TV remotes send.
+  document.addEventListener("keydown", function (e) {
+    var key = e.keyCode;
+    var focused = document.activeElement && document.activeElement.tagName === "BUTTON";
+    var name = null;
+    if (key === 32 || key === 179 || key === 415 || key === 19 || key === 10252 || (key === 13 && !focused)) { name = "toggle"; }
+    else if (key === 37 || key === 412) { name = "back"; }
+    else if (key === 39 || key === 417) { name = "forward"; }
+    else if (key === 38) { name = "volup"; }
+    else if (key === 40) { name = "voldown"; }
+    else if (key === 70) { fullScreen(); }
+    else if (key === 67) { toggleSubs(); }
+    else { showControls(); return; }
+    e.preventDefault();
+    if (name) { command(name); }
+  });
+
+  // A browser lets a page go full screen only from a tap, click or key, so
+  // the first one anywhere does it. Not where the page cannot do it itself
+  // (an iPhone, before there is a video to enlarge), and not when that first
+  // press is the full screen button, which would undo it straight away.
+  var fullHint = document.getElementById("fullhint");
+  var doc = document;
+  if (!(doc.fullscreenEnabled || doc.webkitFullscreenEnabled)) { fullHint.style.display = "none"; }
+  function firstPress(e) {
+    e.otakaseFirst = true;
+    document.removeEventListener("click", firstPress, true);
+    document.removeEventListener("keydown", firstPress, true);
+    fullHint.style.display = "none";
+    var onButton = e.target && e.target.closest && e.target.closest("#full");
+    var already = doc.fullscreenElement || doc.webkitFullscreenElement;
+    if (!onButton && !already && (doc.fullscreenEnabled || doc.webkitFullscreenEnabled)) { fullScreen(); }
+  }
+  document.addEventListener("click", firstPress, true);
+  document.addEventListener("keydown", firstPress, true);
+
+  connect();
+})();
+</script>
+</body>
+</html>

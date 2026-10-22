@@ -30,11 +30,36 @@ the question. The device list ends with **Rescan for devices**, for a TV that
 was still waking up, and the same entry is offered when nothing was found. Casting works from **Untracked Watching**
 too, and like local untracked playback it records nothing.
 
+**Browser** is always last in the device list. Pick it and otakase shows a
+link and a QR code: open the link (or scan the code) on anything on the same
+network with a web browser, such as a phone, tablet, smart TV, games console
+or another computer. The page plays the episode and has its own buttons (back
+30s, pause, forward 30s, subtitles, full screen). The first tap or key on the
+page goes full screen (browsers allow it no sooner), and a double tap on the
+video also goes full screen, and a phone turns sideways there. The page also shows
+what the terminal panel says (preparing the stream, seeking, the next-episode
+countdown). A TV remote's arrows, OK and
+play/pause keys work too. The terminal keys still work, and the page follows
+them. The link stays the same between episodes and runs, so a TV can keep the
+page open or bookmark it, and the next episode starts there by itself. More
+than one device can open the link at once. The link has a short secret code
+in it so others on the network can't find the page; the terminal panel's
+header keeps showing it during the episode. The page is served on
+`CastBrowserPort` (default `8012`); `otakase -cast-setup` allows it through
+the firewall along with the other cast ports.
+`CastDevice=Browser` skips the device list. `CastBrowser=false` removes the
+entry. The browser needs to play H.264 video (Chrome, Edge, Safari, Firefox
+and most TV browsers do).
+
 Casting needs `ffmpeg`, same as `-download`. The stream is served from this
 computer, so keep otakase running while you watch.
 
 **Subtitles** are burned into the picture, using your GPU when it can. A dub
-plays its English audio track and gets no subtitles. `CastBurnSubtitles=false`
+plays its English audio track and gets no subtitles. A browser gets the
+subtitle file instead, as plain text it can turn on and off (`CC`) with no
+re-encode, but without the release's fonts and styling;
+`CastBrowserSubtitles=burn` burns them in for the browser too. A torrent's own
+subtitles are always burned in. `CastBurnSubtitles=false`
 turns burning off; `CastEncoder` forces `vaapi` or
 `software` if detection picks wrong.
 
@@ -55,9 +80,12 @@ burn, so the sound and the picture start together. If a restart takes more
 than 30 seconds, otakase gives up on it and keeps playing where you were; on a
 torrent it waits longer and shows how much has downloaded.
 
-While casting, the terminal shows a control panel: position, device, and
+While casting, the terminal shows a control panel: position, device, whether
+it is playing, paused or buffering (Chromecast, DLNA TVs that report it, and
+the browser player, which also shows a spinner), and
 keys (space pauses, arrows seek/adjust volume, `a` switches between sub and dub
-from where you are, `q` stops). Anything else
+from where you are, `q` stops; on a browser cast `l` shows the link and QR
+code again). Anything else
 otakase needs to tell you arrives as a desktop notification instead of
 interrupting the panel. Next episode, filler skip, and tracker updates all
 work the same as local playback.

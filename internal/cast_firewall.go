@@ -152,8 +152,9 @@ func castWaitingFirewallHint(config *Config, serverAddr, firewall, device string
 // firewall, each as its argv, and the config keys left random that no rule
 // can cover.
 //
-// The rules are the three ports a cast uses: the SSDP answers (DLNA), mDNS
-// (Chromecast, Kodi), and the stream server the device fetches from. Each is
+// The rules are the ports a cast uses: the SSDP answers (DLNA), mDNS
+// (Chromecast, Kodi), the stream server the device fetches from, and the
+// browser player's page when the browser entry is on. Each is
 // limited to the LAN and, on ufw, tagged so it is easy to find and delete. A
 // port left random is named in unset instead, since it cannot be allowed.
 func castDiscoveryFirewallRules(config *Config, subnet, firewall string) (rules [][]string, unset []string) {
@@ -178,6 +179,9 @@ func castDiscoveryFirewallRules(config *Config, subnet, firewall string) (rules 
 		add(castPort, "tcp")
 	} else {
 		unset = append(unset, "CastPort")
+	}
+	if port := castBrowserFirewallPort(config); port > 0 {
+		add(port, "tcp")
 	}
 	if firewall == "firewalld" {
 		rules = append(rules, []string{"sudo", "firewall-cmd", "--reload"})

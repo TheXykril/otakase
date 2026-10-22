@@ -366,7 +366,28 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 			fmt.Print(panel.status(GetAnimeName(*anime), episode, device.Name, message, keys))
 			return
 		}
+		castBrowserStatus(message)
 		Out(message)
+	}
+
+	// A browser plays nothing until someone opens the page, so the link comes
+	// first, before any stream is made. The page's buttons drive the cast as
+	// the keyboard does, terminal or not.
+	browser := castIsBrowser(device)
+	if browser {
+		castBrowserSetup(config)
+		link, linkErr := cast.BrowserLink()
+		if linkErr != nil {
+			return linkErr
+		}
+		// The header carries the link for the whole episode, for anyone else
+		// who wants to watch along.
+		device.Name = cast.BrowserDeviceName + " · " + strings.TrimPrefix(link, "http://")
+		if err := castAwaitBrowserViewer(link, panel != nil, castStatus); err != nil {
+			return err
+		}
+		castRemoteControls.Store(true)
+		defer castRemoteControls.Store(false)
 	}
 
 	// The stream is remuxed into a directory per cast and thrown away after:
@@ -585,6 +606,20 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 			}
 		}
 	}
+	// A browser draws subtitles itself, from a WebVTT file served beside the
+	// stream, so nothing needs burning in.
+	browserSubs := ""
+	if burn && browser && castBrowserSoftSubtitles(config) {
+		burn = false
+		castStatus("Fetching subtitles…")
+		name, subErr := castBrowserSubtitleFile(ffmpeg, anime.Ep.SubtitleURL, referrer, streamDir)
+		if subErr != nil {
+			Out("Subtitles could not be fetched, casting without them: " + subErr.Error())
+			Log(fmt.Sprintf("cast: %v", subErr))
+		} else {
+			browserSubs = name
+		}
+	}
 	if burn {
 		castStatus("Fetching subtitles…")
 		subtitlePath, subErr := fetchCastSubtitle(anime.Ep.SubtitleURL, referrer, streamDir)
@@ -659,7 +694,18 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 	session = s
 	resourceMu.Unlock()
 
-	if anime.Ep.SubtitleURL != "" {
+	if page, ok := s.(*cast.BrowserPlayer); ok {
+		media := cast.BrowserMedia{Title: castBrowserTitle(anime), SubtitleSize: config.CastSubtitleSize}
+		if browserSubs != "" {
+			media.Subtitles = srv.URL(browserSubs)
+		}
+		if !durationEstimated {
+			media.Duration = float64(anime.Ep.Duration)
+		}
+		page.Describe(media)
+	}
+
+	if anime.Ep.SubtitleURL != "" && !browser {
 		// The Default Media Receiver renders WebVTT only, and Load carries no
 		// subtitle track. Say so rather than letting the episode arrive silently
 		// without the subtitles the viewer was expecting.
@@ -675,7 +721,7 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 		castStatus(fmt.Sprintf("%s may be asking to allow this device -- accept it on the TV. Waiting...", name))
 	})
 	defer cast.SetApprovalNotice(nil)
-	if err := s.Play(srv.URL(first.path)); err != nil {
+	if err := castPlay(s, srv.URL(first.path), first.start); err != nil {
 		return err
 	}
 
@@ -703,7 +749,7 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 		remux = next.remux
 		resourceMu.Unlock()
 
-		if err := s.Play(srv.URL(next.path)); err != nil {
+		if err := castPlay(s, srv.URL(next.path), next.start); err != nil {
 			return err
 		}
 
@@ -726,9 +772,17 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 		if !ok {
 			return 0, 0, false, nil
 		}
+		landed := playing.start + offset
+		// A browser seeks within the stream it has by itself.
+		if page, ok := s.(*cast.BrowserPlayer); ok {
+			Log(fmt.Sprintf("cast: seeking the browser to %.1f for %.1f, within the stream already written", landed, target))
+			if err := page.SeekWithin(offset); err != nil {
+				return 0, 0, false, err
+			}
+			return landed, offset, true, nil
+		}
 		source.jumps++
 		path := cast.JumpPath(playing.path, source.jumps, segment)
-		landed := playing.start + offset
 		Log(fmt.Sprintf("cast: jumping to %.1f for %.1f, within the stream already written (%s)", landed, target, path))
 		if err := s.Play(srv.URL(path)); err != nil {
 			return 0, 0, false, err
@@ -1025,6 +1079,19 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 	// Subtitles still being read out of the file while the episode plays.
 	rolling, _ := session.(castRollingSubtitles)
 
+	// A browser cast can bring its link and code back on the panel with l,
+	// since they leave it once the first page is open.
+	browserLink, showLink := "", false
+	if castIsBrowser(device) {
+		browserLink, _ = cast.BrowserLink()
+		if browserLink != "" {
+			panelKeys = strings.TrimSuffix(panelKeys, " ") + " · l link "
+		}
+	}
+	linkMessage := func() string {
+		return castBrowserLinkMessage(browserLink, true) + "\nPress l to go back."
+	}
+
 	for {
 		// A nil command channel blocks forever, so with no controls this
 		// select degrades to exactly the sleep it replaced.
@@ -1034,6 +1101,15 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 		case command := <-commands:
 			// A movie has no other language to switch to.
 			if isMovie && command == castCmdSwitchAudio {
+				continue
+			}
+			if command == castCmdShowLink {
+				if browserLink != "" && panel != nil {
+					showLink = !showLink
+					if showLink {
+						fmt.Print(panel.status(animeName, panelEpisode, device.Name, linkMessage(), panelKeys))
+					}
+				}
 				continue
 			}
 			wasPaused := paused
@@ -1269,6 +1345,8 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			state := "PLAYING"
 			if paused {
 				state = "PAUSED"
+			} else if progress.Buffering {
+				state = "BUFFERING"
 			}
 			// The device reports dur=-1 for the whole episode: ffmpeg writes no
 			// EXT-X-ENDLIST until the remux finishes, so the receiver treats the
@@ -1282,18 +1360,22 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 				total = float64(anime.Ep.Duration)
 				estimated = durationEstimated
 			}
-			fmt.Print(panel.frame(castPanelState{
-				Title:     animeName,
-				Episode:   panelEpisode,
-				Keys:      panelKeys,
-				Device:    device.Name,
-				Position:  progress.Position,
-				Duration:  total,
-				Estimated: estimated,
-				State:     state,
-				Volume:    session.Volume(),
-				Skips:     spans,
-			}))
+			if showLink {
+				fmt.Print(panel.status(animeName, panelEpisode, device.Name, linkMessage(), panelKeys))
+			} else {
+				fmt.Print(panel.frame(castPanelState{
+					Title:     animeName,
+					Episode:   panelEpisode,
+					Keys:      panelKeys,
+					Device:    device.Name,
+					Position:  progress.Position,
+					Duration:  total,
+					Estimated: estimated,
+					State:     state,
+					Volume:    session.Volume(),
+					Skips:     spans,
+				}))
+			}
 		}
 		// Finished a moment early, on the last poll before the end. Receivers
 		// stop answering status checks as the last segment plays out (seen on
@@ -1438,12 +1520,25 @@ func chooseCastDevice(config *Config) (cast.Device, error) {
 // asked to search again, from the picker or from the menu an empty search
 // shows.
 func castPickDevice(config *Config) (device cast.Device, rescan bool, err error) {
+	// The browser entry is not on the network to be found, so asking for it
+	// by name skips the search altogether.
+	if config.CastBrowser {
+		castBrowserSetup(config)
+		if castBrowserNamed(config.CastDevice) || (config.CastDevice == "" && castBrowserNamed(castSessionDevice)) {
+			castSessionDevice = cast.BrowserDeviceName
+			return cast.BrowserDevice(), false, nil
+		}
+	}
 	cast.SetDiscoveryPort(config.CastDiscoveryPort)
 	endBusy := BeginBusy(config, "Looking for cast devices")
 	devices, err := cast.Discover(context.Background(), cast.DefaultDiscoveryTimeout)
 	endBusy()
-	if err != nil {
+	if err != nil && !config.CastBrowser {
 		return cast.Device{}, false, err
+	}
+	if err != nil {
+		// The browser does not need discovery to work.
+		Log(fmt.Sprintf("cast: %v", err))
 	}
 	if len(devices) == 0 {
 		const none = "cast: no devices found on this network"
@@ -1451,8 +1546,12 @@ func castPickDevice(config *Config) (device cast.Device, rescan bool, err error)
 		if runtime.GOOS == "linux" {
 			firewall = castDetectFirewall()
 		}
-		if castNoDevicesMenu(config, firewall) {
+		switch castNoDevicesMenu(config, firewall, config.CastBrowser) {
+		case castRescanKey:
 			return cast.Device{}, true, nil
+		case castBrowserOption.Key:
+			castSessionDevice = cast.BrowserDeviceName
+			return cast.BrowserDevice(), false, nil
 		}
 		if hint, command := castDiscoveryFirewallHint(config, cast.LocalAddress(), firewall); hint != "" {
 			return cast.Device{}, false, errors.New(none + "\n" + castCopyFirewallCommand(command, hint))
@@ -1486,9 +1585,18 @@ func castPickDevice(config *Config) (device cast.Device, rescan bool, err error)
 	// is what skips the question, and a device picked earlier this run is
 	// not asked about again. Rescan sits under the devices for a TV that is
 	// still waking up.
+	// The browser comes last of the devices: it always works, but a device
+	// that was found is usually the one meant.
+	if config.CastBrowser {
+		devices = append(devices, cast.BrowserDevice())
+	}
 	options := make([]SelectionOption, 0, len(devices)+1)
 	for _, device := range devices {
-		options = append(options, SelectionOption{Key: device.UUID, Label: device.String(), Icon: icons.TV})
+		icon := icons.TV
+		if castIsBrowser(device) {
+			icon = icons.OpenLink
+		}
+		options = append(options, SelectionOption{Key: device.UUID, Label: device.String(), Icon: icon})
 	}
 	options = append(options, castRescanOption)
 	selected, err := DynamicSelectPreserveOrder(options)

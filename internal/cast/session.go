@@ -27,6 +27,9 @@ type Progress struct {
 	// it played before the last load: its position belongs to that one, and
 	// means nothing for the stream it is about to play.
 	Settling bool
+	// Buffering reports that the device is waiting for more of the stream
+	// rather than playing it.
+	Buffering bool
 }
 
 // ShouldMarkComplete reports whether enough of the episode has played to count
@@ -177,9 +180,10 @@ func (s *Session) Progress() (Progress, error) {
 		return Progress{Settling: true}, nil
 	}
 	return Progress{
-		Position: float64(media.CurrentTime),
-		Duration: float64(media.Media.Duration),
-		Idle:     media.PlayerState == "IDLE",
+		Position:  float64(media.CurrentTime),
+		Duration:  float64(media.Media.Duration),
+		Idle:      media.PlayerState == "IDLE",
+		Buffering: media.PlayerState == "BUFFERING",
 	}, nil
 }
 

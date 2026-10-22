@@ -36,8 +36,13 @@ func CastSetup(config *Config) error {
 	if err := castSetupFixPorts(os.Stdout, config, ConfigFilePath); err != nil {
 		return err
 	}
-	fmt.Printf("Casting uses UDP %d (TV answers), UDP 5353 (mDNS) and TCP %d (the stream).\n",
-		config.CastDiscoveryPort, config.CastPort)
+	if port := castBrowserFirewallPort(config); port > 0 {
+		fmt.Printf("Casting uses UDP %d (TV answers), UDP 5353 (mDNS), TCP %d (the stream) and TCP %d (the browser player).\n",
+			config.CastDiscoveryPort, config.CastPort, port)
+	} else {
+		fmt.Printf("Casting uses UDP %d (TV answers), UDP 5353 (mDNS) and TCP %d (the stream).\n",
+			config.CastDiscoveryPort, config.CastPort)
+	}
 
 	firewall := ""
 	if runtime.GOOS == "linux" {
@@ -200,17 +205,22 @@ const castRescanKey = "rescan"
 var castRescanOption = SelectionOption{Key: castRescanKey, Label: "Rescan for devices", Icon: icons.Refresh}
 
 // castNoDevicesMenu asks, from the menu the search was started from, what to
-// do about an empty search: look again (a TV just turned on), fix the
-// firewall when one is on, or give up. It reports whether a second search is
-// worth it.
+// do about an empty search: cast to a browser instead, look again (a TV just
+// turned on), fix the firewall when one is on, or give up. It returns the key
+// of what was picked -- castRescanKey or castBrowserOption.Key -- or "" to give
+// up.
 //
 // A rofi cast's own terminal cannot show a menu, so it is not asked there;
 // the error still carries the rules and the pointer to -cast-setup.
-func castNoDevicesMenu(config *Config, firewall string) bool {
+func castNoDevicesMenu(config *Config, firewall string, browser bool) string {
 	if config == nil || config.CastNonInteractive {
-		return false
+		return ""
 	}
-	options := []SelectionOption{castRescanOption}
+	options := []SelectionOption{}
+	if browser {
+		options = append(options, castBrowserOption)
+	}
+	options = append(options, castRescanOption)
 	if firewall != "" {
 		options = append(options, SelectionOption{Key: "fix", Label: "Fix the firewall now (" + firewall + " may be blocking devices)", Icon: icons.Firewall})
 	}
@@ -218,15 +228,17 @@ func castNoDevicesMenu(config *Config, firewall string) bool {
 	Out("No cast devices found.")
 	selected, err := DynamicSelectPreserveOrder(options)
 	if err != nil {
-		return false
+		return ""
 	}
 	switch selected.Key {
-	case castRescanKey:
-		return true
+	case castRescanKey, castBrowserOption.Key:
+		return selected.Key
 	case "fix":
-		return castFixFirewallNow(config, firewall)
+		if castFixFirewallNow(config, firewall) {
+			return castRescanKey
+		}
 	}
-	return false
+	return ""
 }
 
 // castFixFirewallNow fixes the cast ports and allows them through the

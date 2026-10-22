@@ -108,6 +108,18 @@ type Config struct {
 	// close, and a TV is watched from across the room. Signs and typesetting
 	// keep their size.
 	CastSubtitleSize int `config:"CastSubtitleSize"`
+	// CastBrowser lists "Browser" among the cast devices: otakase serves a
+	// player page on the LAN, and any phone, TV or console with a browser
+	// plays the episode by opening its link.
+	CastBrowser bool `config:"CastBrowser"`
+	// CastBrowserPort is the port that page is served on. Fixed so the link
+	// stays the same between episodes and runs, and a firewall needs one rule.
+	CastBrowserPort int `config:"CastBrowserPort"`
+	// CastBrowserSubtitles is how a browser shows a provider's subtitles:
+	// "soft" hands it the subtitle file to draw and switch on or off, plain
+	// text without the release's styling; "burn" draws them into the picture,
+	// styled, at the cost of re-encoding the video.
+	CastBrowserSubtitles string `config:"CastBrowserSubtitles"`
 	// CastEncoder forces the encoder used for that: "vaapi", "software", or
 	// empty to detect what this machine can actually do.
 	CastEncoder string `config:"CastEncoder"`

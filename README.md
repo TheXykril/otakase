@@ -174,8 +174,9 @@ wiki page.
 ## Casting
 
 `otakase -cast` plays on a Chromecast, a smart TV (DLNA) or Kodi on the same
-network. Keep otakase running while you watch; the terminal shows the
-controls. If your TV does not show up, run `otakase -cast-setup` once to let
+network. Or pick **Browser** and open the link it shows (or scan the code) on
+any phone, TV or console with a web browser. Keep otakase running while you
+watch; the terminal shows the controls. If your TV does not show up, run `otakase -cast-setup` once to let
 casting through your firewall.
 
 More in [Casting](https://github.com/TheXykril/otakase/wiki/Casting) and
@@ -219,7 +220,7 @@ people change:
 | `DiscordShareRatings` | `ask` (default) offers to share the score you give a finished show in the Otakase Discord; `never` stops asking |
 | `LinkMenus` | Play in Otakase links from the browser: `rofi` (default, no terminal window) or `terminal` |
 | `TrackingRemote` | `none`, `anilist`, `myanimelist` or `anilist+myanimelist` |
-| `CastDevice` | Cast to this device without asking |
+| `CastDevice` | Cast to this device without asking (`Browser` for the browser link) |
 | `Theme` | `auto` follows your desktop colours; `builtin` uses otakase's own |
 | `ThemeFile` | Path to a colour palette file to use instead (pywal, base16 or `colors.toml`) |
 | `Icons` | Icons in the menus: `auto` (default), `true` or `false` for plain text |
