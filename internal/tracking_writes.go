@@ -82,6 +82,7 @@ func writeForCurrentShow(mediaID int, toAniList func() error, toMAL func(*Config
 }
 
 func UpdateAnimeProgress(token string, mediaID, progress int) error {
+	noteProgressWritten()
 	return writeForCurrentShow(mediaID,
 		func() error { return UpdateAniListAnimeProgress(token, mediaID, progress) },
 		func(cfg *Config, malID int) error { return updateMyAnimeListProgress(cfg, malID, progress) })
