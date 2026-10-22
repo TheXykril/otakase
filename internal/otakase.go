@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -129,7 +130,7 @@ func Exit(err error) {
 	// exactly that notification whenever RofiSelection is set, so it is
 	// skipped there rather than shown and immediately regretted.
 	if exitGreetingWanted(GetGlobalConfig()) {
-		Out("Have a great day!")
+		Out(exitGreeting(rand.IntN))
 	}
 
 	if !exitErrorWorthShowing(err, socketPath) {
@@ -162,7 +163,7 @@ func exitErrorWorthShowing(err error, socketPath string) bool {
 	return socketPath == "" || !strings.Contains(err.Error(), "dial unix "+socketPath+": connect: connection refused")
 }
 
-// exitGreetingWanted answers whether "Have a great day!" is worth showing on
+// exitGreetingWanted answers whether the goodbye line is worth showing on
 // this exit.
 //
 // A real terminal keeps it -- one harmless line at the end of an interactive
@@ -176,6 +177,31 @@ func exitErrorWorthShowing(err error, socketPath string) bool {
 // same way.
 func exitGreetingWanted(cfg *Config) bool {
 	return cfg == nil || !cfg.RofiSelection
+}
+
+// exitGreetings are the usual goodbyes, one picked at random per exit.
+var exitGreetings = []string{
+	"Mata ne!",
+	"Otsukare! Rest those eyes.",
+}
+
+// rareExitGreetings replace the usual ones roughly once in
+// rareExitGreetingOdds exits.
+var rareExitGreetings = []string{
+	"Achievement unlocked: touch grass.",
+	"Side quest unlocked: touch grass.",
+	"Plot twist: you go touch grass now.",
+}
+
+const rareExitGreetingOdds = 100
+
+// exitGreeting picks the goodbye line. roll is rand.IntN, taken as an
+// argument so tests can choose the outcome.
+func exitGreeting(roll func(int) int) string {
+	if roll(rareExitGreetingOdds) == 0 {
+		return rareExitGreetings[roll(len(rareExitGreetings))]
+	}
+	return exitGreetings[roll(len(exitGreetings))]
 }
 
 func Out(data interface{}) {

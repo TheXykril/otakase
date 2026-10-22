@@ -6,7 +6,7 @@ import "testing"
 // menu, handing off a cast, adding a show -- and every one of them reaches
 // Exit(). Showing the farewell there turned each of those into a desktop
 // notification, so a viewer doing something as small as picking a show got
-// told to have a great day, over and over, long before they were done.
+// a goodbye, over and over, long before they were done.
 func TestTheGreetingIsDroppedInRofiMode(t *testing.T) {
 	if exitGreetingWanted(&Config{RofiSelection: true}) {
 		t.Fatal("the greeting was wanted in rofi mode")
@@ -28,5 +28,25 @@ func TestTheGreetingSurvivesInTerminalMode(t *testing.T) {
 func TestTheGreetingSurvivesWithNoConfigYet(t *testing.T) {
 	if !exitGreetingWanted(nil) {
 		t.Fatal("the greeting was dropped with no config set")
+	}
+}
+
+// rolls answers each call with the next of the given numbers.
+func rolls(n ...int) func(int) int {
+	return func(int) int { r := n[0]; n = n[1:]; return r }
+}
+
+// The rare lines only show on the one roll out of rareExitGreetingOdds;
+// every other exit gets one of the usual goodbyes.
+func TestTheRareGreetingsNeedTheLuckyRoll(t *testing.T) {
+	for i := range rareExitGreetings {
+		if got := exitGreeting(rolls(0, i)); got != rareExitGreetings[i] {
+			t.Fatalf("lucky roll %d gave %q, want %q", i, got, rareExitGreetings[i])
+		}
+	}
+	for i := range exitGreetings {
+		if got := exitGreeting(rolls(1, i)); got != exitGreetings[i] {
+			t.Fatalf("roll %d gave %q, want %q", i, got, exitGreetings[i])
+		}
 	}
 }
