@@ -123,6 +123,10 @@ type storeData struct {
 	// cheathunt.go.
 	CheatHunts map[string]cheatHunt `json:"cheat_hunts,omitempty"`
 	CheatCodes map[string]cheatCode `json:"cheat_codes,omitempty"`
+	// Time capsule messages by id, and the last year the capsule was opened
+	// in the server, see capsule.go.
+	Capsules      map[string]capsuleNote `json:"capsules,omitempty"`
+	CapsuleOpened int                    `json:"capsule_opened,omitempty"`
 }
 
 type warning struct {

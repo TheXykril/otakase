@@ -40,6 +40,7 @@ var settings = []setting{
 	{Name: "airing_hour_utc", Type: settingInt, Min: 0, Max: 23, Desc: "UTC hour the airing board goes up (0-23)", Default: func(c config) string { return strconv.Itoa(c.AiringHour) }},
 	{Name: "welcome_dm", Type: settingBool, Desc: "DM new members a welcome", Default: func(c config) string { return strconv.FormatBool(c.WelcomeDM) }},
 	{Name: "score_sharing", Type: settingBool, Desc: "Members can share scores from the app in the reviews channel", Default: func(config) string { return "true" }},
+	{Name: "capsule_threshold", Type: settingFloat, Min: 0, Max: 1, Desc: "How close in meaning to a bad example a time capsule message must be to get blocked (0-1, lower is stricter)", Default: func(config) string { return "0.6" }},
 	{Name: "match_threshold", Type: settingFloat, Min: 0, Max: 1, Desc: "How close in meaning a chat question must be to get an answer (0-1, higher is stricter)", Default: func(c config) string { return formatFloat(c.AIThreshold) }},
 }
 

@@ -74,6 +74,11 @@ func (s *session) start(partyArg string, addNew bool) bool {
 		internal.BeginStartupProgress(s.cfg, "Otakase is starting")
 	}
 
+	// April 12: letters to open, a community message, next year's letter.
+	if internal.OfferBirthdayCapsule(s.cfg) {
+		internal.BeginStartupProgress(s.cfg, "Otakase is starting")
+	}
+
 	if prompted, exit := internal.HandleLaunchUpdatePrompt(s.cfg, buildVersion()); exit {
 		internal.Exit(nil)
 		return false

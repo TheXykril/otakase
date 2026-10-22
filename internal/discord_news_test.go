@@ -93,7 +93,7 @@ func TestCommunityOptions(t *testing.T) {
 	}
 
 	options := communityOptions(config, news, true)
-	if got := keys(options); got != "news,join,link,report" {
+	if got := keys(options); got != "news,join,link,capsule,report" {
 		t.Errorf("not linked: %s", got)
 	}
 	if !strings.Contains(options[1].Label, "4 online · 9 members") {
@@ -102,7 +102,7 @@ func TestCommunityOptions(t *testing.T) {
 
 	saveDiscordLink(config, discordLink{Token: "t", DiscordName: "Xykril"})
 	options = communityOptions(config, news, false)
-	if got := keys(options); got != "join,unlink,share,party,backup:save,backup:restore,parties,wwm,report" {
+	if got := keys(options); got != "join,unlink,share,party,backup:save,backup:restore,parties,capsule,wwm,report" {
 		t.Errorf("linked, no news: %s", got)
 	}
 	if !strings.Contains(options[1].Label, "Xykril") || !strings.Contains(options[2].Label, "Off") {
