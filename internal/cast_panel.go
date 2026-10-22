@@ -475,7 +475,12 @@ func castPanelStatusLines(title string, episode int, device, message string, wid
 	// first on its own line.
 	lines := []string{castPanelTop(state, width)}
 	for _, line := range strings.Split(message, "\n") {
-		lines = append(lines, castPanelRow([]castPanelSegment{{line, castPanelDimStyle}}, inner))
+		style := castPanelDimStyle
+		if cast.IsQRLine(line) {
+			// A code to scan needs every bit of contrast the terminal has.
+			style = lipgloss.NewStyle()
+		}
+		lines = append(lines, castPanelRow([]castPanelSegment{{line, style}}, inner))
 	}
 	return append(lines, castPanelBottom(width, keys))
 }

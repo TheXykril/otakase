@@ -95,6 +95,23 @@ An empty result means the rule exists in ufw's config but never made it into
 the kernel. Re-apply with `sudo ufw allow ...` (not by editing the rules file
 directly), since `ufw allow` writes the config *and* loads it.
 
+## The browser link doesn't open, or the page plays nothing
+
+- **The page never loads:** the phone or TV has to be on the same network
+  (not a guest Wi-Fi), and a firewall must let `CastBrowserPort` (default
+  `8012`) in, plus `CastPort` for the stream itself:
+  `sudo ufw allow from 192.168.0.0/24 to any port 8012 proto tcp`. Type the
+  link exactly, with `http://` and no `s`.
+- **The page loads but stays on "Waiting for otakase":** the episode starts
+  there by itself once otakase has the stream ready. If it says the browser
+  can't play the stream, try Chrome or Safari on that device; the browser
+  must play H.264 video.
+- **A phone shows "Tap to play":** phones don't start video with sound on
+  their own. Tap once; later episodes start by themselves.
+- **The cast ends with "no browser has had the player open":** every page
+  showing the link was closed (or the phone slept) for 30 seconds. Open the
+  link again and pick the episode again in otakase.
+
 ## No subtitles appear
 
 - If the episode has subtitles and you expected them burned into the picture,

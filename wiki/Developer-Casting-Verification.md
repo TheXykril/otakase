@@ -340,6 +340,41 @@ cases only a real device and a real room can settle.
       while the cast reader is still parked is exactly the sequence that would
       do that.
 
+## 8. The browser player
+
+The browser entry (`cast.KindBrowser`, `internal/cast/browser.go`) is not
+discovered. `castPickDevice` appends it, and `cast.Connect` starts a page
+server that lives for the whole process on `CastBrowserPort`, under a token
+kept in `cast-browser-token` in the storage folder. The page
+(`internal/cast/browserpage/`, embedded) gets orders over server-sent events
+(`load`, `seek`, `pause`, `play`, `volume`, `stop`), reports its position once
+a second (`POST state`), and sends its buttons and remote keys as
+`POST command`. Those become the same `castCommand`s the terminal keys
+produce. It plays the HLS stream from the episode's stream server with hls.js,
+natively where hls.js has no MSE (iOS Safari), and the raw `stream.ts` as a
+last resort. Seeks inside the written stream are `SeekWithin`: the page seeks
+by itself, with no jump playlist. Soft subtitles are served as
+`browser-subtitles.vtt` in episode time, and the page shifts the cues by the
+stream's start.
+
+- [ ] Pick **Browser**: the panel shows the link and a QR code that a phone
+      scans, and the header keeps the link while playing.
+- [ ] Open the link on a phone and on a TV browser at once: both play; the
+      panel follows the first one opened.
+- [ ] Pause from the page, from the terminal, and from the phone's own
+      full-screen controls (iOS): otakase's panel shows paused each time, and
+      a long pause does not end the cast.
+- [ ] Seek back and forward from the page and the terminal; subtitles stay in
+      sync after both kinds (within the stream and rebuilt).
+- [ ] The next episode starts on the open page by itself.
+- [ ] Close the tab mid-episode: after 30s the cast ends as lost, and the
+      resume point is saved.
+
+Checked in headless Chromium against a test stream (play, pause, seek,
+volume, subtitles, page buttons, an unasked-for pause passed back). That
+Chromium has no H.264, so the check used VP9 in fMP4. Real provider streams
+are H.264 in MPEG-TS and are still to be checked on real devices.
+
 ## Known limits
 
 Not bugs; these are deliberate, and documented in the README.

@@ -29,6 +29,9 @@ type Device struct {
 // the address to tell two rooms with the same name apart. A device that is not
 // a Chromecast also says what it is, since one TV can answer as both.
 func (d Device) String() string {
+	if d.kind() == KindBrowser {
+		return d.Name + " · any phone, TV or console on this network"
+	}
 	name := fmt.Sprintf("%s (%s:%d)", d.Name, d.Addr, d.Port)
 	if kind := d.kind(); kind != KindChromecast {
 		name += " · " + kind.Label()

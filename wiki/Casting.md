@@ -30,11 +30,31 @@ the question. The device list ends with **Rescan for devices**, for a TV that
 was still waking up, and the same entry is offered when nothing was found. Casting works from **Untracked Watching**
 too, and like local untracked playback it records nothing.
 
+**Browser** is always last in the device list. Pick it and otakase shows a
+link and a QR code: open the link (or scan the code) on anything on the same
+network with a web browser, such as a phone, tablet, smart TV, games console
+or another computer. The page plays the episode and has its own buttons (back
+30s, pause, forward 30s, subtitles, full screen). A TV remote's arrows, OK and
+play/pause keys work too. The terminal keys still work, and the page follows
+them. The link stays the same between episodes and runs, so a TV can keep the
+page open or bookmark it, and the next episode starts there by itself. More
+than one device can open the link at once. The link has a short secret code
+in it so others on the network can't find the page; the terminal panel's
+header keeps showing it during the episode. The page is served on
+`CastBrowserPort` (default `8012`), so allow that port too if a firewall is on.
+`CastDevice=Browser` skips the device list. `CastBrowser=false` removes the
+entry. The browser needs to play H.264 video (Chrome, Edge, Safari, Firefox
+and most TV browsers do).
+
 Casting needs `ffmpeg`, same as `-download`. The stream is served from this
 computer, so keep otakase running while you watch.
 
 **Subtitles** are burned into the picture, using your GPU when it can. A dub
-plays its English audio track and gets no subtitles. `CastBurnSubtitles=false`
+plays its English audio track and gets no subtitles. A browser gets the
+subtitle file instead, as plain text it can turn on and off (`CC`) with no
+re-encode, but without the release's fonts and styling;
+`CastBrowserSubtitles=burn` burns them in for the browser too. A torrent's own
+subtitles are always burned in. `CastBurnSubtitles=false`
 turns burning off; `CastEncoder` forces `vaapi` or
 `software` if detection picks wrong.
 

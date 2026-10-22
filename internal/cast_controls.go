@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/term"
@@ -268,7 +269,7 @@ func startCastControls(config *Config) (commands <-chan castCommand, release fun
 		castControls.begun = true
 		castControls.usable = castControlsBegin(config)
 	}
-	if !castControls.usable {
+	if !castControls.usable && !castRemoteControls.Load() {
 		return nil, func() {}, false
 	}
 
@@ -288,6 +289,11 @@ func startCastControls(config *Config) (commands <-chan castCommand, release fun
 		})
 	}, true
 }
+
+// castRemoteControls says commands arrive from somewhere besides the
+// terminal -- a browser's player page -- so an episode subscribes to them even
+// with no terminal to read keys from.
+var castRemoteControls atomic.Bool
 
 // castDeliverCommand hands one decoded command to the episode playing now.
 //

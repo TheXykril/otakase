@@ -86,7 +86,7 @@ func TestCastShellCommandQuotes(t *testing.T) {
 
 // A rofi cast's own terminal has no menu to ask in, so it is never offered.
 func TestCastNoDevicesMenuSkipsNonInteractive(t *testing.T) {
-	if castNoDevicesMenu(&Config{CastNonInteractive: true}, "ufw") {
+	if castNoDevicesMenu(&Config{CastNonInteractive: true}, "ufw", true) != "" {
 		t.Error("asked with no menu to ask in")
 	}
 }

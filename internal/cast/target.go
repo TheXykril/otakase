@@ -24,6 +24,8 @@ func (k Kind) Label() string {
 		return "DLNA"
 	case KindKodi:
 		return "Kodi"
+	case KindBrowser:
+		return "Browser"
 	default:
 		return strings.ToUpper(string(k))
 	}
@@ -144,6 +146,15 @@ func discoverAll(ctx context.Context, from []backend) ([]Device, error) {
 
 // Connect opens a connection to a device of any kind.
 func Connect(d Device) (Player, error) {
+	// Not one of backends: nothing is discovered for it, so discovery never
+	// asks it, and the device picker adds it itself.
+	if d.kind() == KindBrowser {
+		p, err := connectBrowser(d)
+		if err != nil {
+			return nil, err
+		}
+		return p, nil
+	}
 	for _, b := range backends {
 		if b.kind == d.kind() {
 			return b.connect(d)

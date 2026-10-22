@@ -161,6 +161,10 @@ func configOptionsIntroducedInVersion() map[string]string {
 		// 26.9.0 — wait for a torrent's own subtitles before casting
 		"CastWaitForSubtitles": "26.9.0",
 		"CastSubtitleSize":     "26.9.0",
+		// 26.9.0 — cast to any device with a browser
+		"CastBrowser":          "26.9.0",
+		"CastBrowserPort":      "26.9.0",
+		"CastBrowserSubtitles": "26.9.0",
 	}
 }
 
