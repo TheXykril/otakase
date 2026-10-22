@@ -30,3 +30,18 @@ func TestTheGreetingSurvivesWithNoConfigYet(t *testing.T) {
 		t.Fatal("the greeting was dropped with no config set")
 	}
 }
+
+// The rare line only shows on the one roll out of rareExitGreetingOdds;
+// every other exit gets one of the usual goodbyes.
+func TestTheRareGreetingNeedsTheLuckyRoll(t *testing.T) {
+	if got := exitGreeting(func(int) int { return 0 }); got != rareExitGreeting {
+		t.Fatalf("lucky roll gave %q", got)
+	}
+	for i := range exitGreetings {
+		rolls := []int{1, i}
+		got := exitGreeting(func(int) int { r := rolls[0]; rolls = rolls[1:]; return r })
+		if got != exitGreetings[i] {
+			t.Fatalf("roll %d gave %q, want %q", i, got, exitGreetings[i])
+		}
+	}
+}

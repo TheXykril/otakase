@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -124,7 +125,7 @@ func Exit(err error) {
 	// exactly that notification whenever RofiSelection is set, so it is
 	// skipped there rather than shown and immediately regretted.
 	if exitGreetingWanted(GetGlobalConfig()) {
-		Out("See you next episode!")
+		Out(exitGreeting(rand.IntN))
 	}
 
 	if !exitErrorWorthShowing(err, socketPath) {
@@ -171,6 +172,27 @@ func exitErrorWorthShowing(err error, socketPath string) bool {
 // same way.
 func exitGreetingWanted(cfg *Config) bool {
 	return cfg == nil || !cfg.RofiSelection
+}
+
+// exitGreetings are the usual goodbyes, one picked at random per exit.
+var exitGreetings = []string{
+	"Matta ne!",
+	"Otsukare! Rest those eyes.",
+}
+
+// rareExitGreeting turns up roughly once in rareExitGreetingOdds exits.
+const (
+	rareExitGreeting     = "Otakase out. Go touch grass."
+	rareExitGreetingOdds = 100
+)
+
+// exitGreeting picks the goodbye line. roll is rand.IntN, taken as an
+// argument so tests can choose the outcome.
+func exitGreeting(roll func(int) int) string {
+	if roll(rareExitGreetingOdds) == 0 {
+		return rareExitGreeting
+	}
+	return exitGreetings[roll(len(exitGreetings))]
 }
 
 func Out(data interface{}) {
