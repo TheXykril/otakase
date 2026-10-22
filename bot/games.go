@@ -107,6 +107,7 @@ func addGamePoints(d *storeData, user, game string, n int, week string) {
 	}
 	s.Games[game] += n
 	d.Games[user] = s
+	earnHanko(d, user, n)
 }
 
 // weekPoints is every member's points in a week, guess the anime included.

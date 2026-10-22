@@ -127,6 +127,13 @@ type storeData struct {
 	// in the server, see capsule.go.
 	Capsules      map[string]capsuleNote `json:"capsules,omitempty"`
 	CapsuleOpened int                    `json:"capsule_opened,omitempty"`
+	// Hanko by Discord user id, see hanko.go.
+	Hanko map[string]hankoWallet `json:"hanko,omitempty"`
+	// Notebook giveaways by their message id, see giveaway.go.
+	Giveaways map[string]*giveaway `json:"giveaways,omitempty"`
+	// Watch tickets from redeemed codes by Discord user id: one watch
+	// session each in the Activity player, once it opens.
+	WatchTickets map[string]int `json:"watch_tickets,omitempty"`
 }
 
 type warning struct {

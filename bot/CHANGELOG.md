@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.29.0
+
+- **Hanko (判子)**, the server's own currency. Earned with no limit from
+  game points in the Activity (one per point), chatting and watching in
+  Otakase with a linked app. `/hanko` shows yours and the richest members;
+  staff can give or take with `/hanko-give`.
+- **Shinigami Notebook giveaway.** Staff start one with `/giveaway start`.
+  Members press Join, then every few minutes a page of the notebook is
+  written and random names on it are out, with the odd twist (filler
+  episode, double page, revival arc…). Last name standing wins.
+- The giveaway **Shop** sells ways to survive for hanko: Plot Armor, Fake
+  Name, Shinigami Eyes, Apple for Ryuk, Revival Ticket and Decoy. Two per
+  member each giveaway, every one costs more than the last.
+- **`/codes`** lets staff mint one-use `/redeem` codes for giveaways and
+  events, list the unused ones and revoke them. Redeemed codes now give a
+  watch ticket for the upcoming watch room.
+
 ## 1.28.0
 
 - **Time capsule** for Otakase's birthday, April 12. `/capsule message:`
