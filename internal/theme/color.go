@@ -239,3 +239,19 @@ func isGrey(color string) bool {
 func (p Palette) SelectedText() string {
 	return ReadableOn(p.Background, p.BrightForeground, p.Foreground)
 }
+
+// Dimmed returns the palette with every colour pulled toward black by amount,
+// the way a screen turned down reads: the same theme, only quieter.
+func Dimmed(p Palette, amount float64) Palette {
+	for _, color := range []*string{
+		&p.Background, &p.DarkBackground, &p.LighterBackground,
+		&p.Foreground, &p.DarkForeground, &p.BrightForeground,
+		&p.Accent, &p.Selection, &p.Muted,
+		&p.Red, &p.Green, &p.Yellow, &p.Blue, &p.Magenta, &p.Cyan,
+	} {
+		if *color != "" {
+			*color = Mix(*color, "#000000", amount)
+		}
+	}
+	return p
+}

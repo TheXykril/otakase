@@ -129,7 +129,12 @@ func Exit(err error) {
 	// when someone is actually done with the tool. Out() would turn this into
 	// exactly that notification whenever RofiSelection is set, so it is
 	// skipped there rather than shown and immediately regretted.
-	if exitGreetingWanted(GetGlobalConfig()) {
+	//
+	// Picking sleep at the next-episode prompt is the exception: the viewer
+	// asked to stop, so even rofi gets the one line back.
+	if sleepChosen.Load() {
+		Out(sleepGoodbye(rand.IntN))
+	} else if exitGreetingWanted(GetGlobalConfig()) {
 		line, rare := exitGreeting(rand.IntN)
 		Out(line)
 		if rare {
