@@ -32,13 +32,20 @@
   #fill { height: 100%; width: 0; background: #d2492f; }
   #row { display: flex; align-items: center; }
   #row .spacer { flex: 1; }
-  #clock { color: #ece4d6; font-variant-numeric: tabular-nums; font-size: 15px; margin-left: 8px; }
+  #clock { color: #ece4d6; font-variant-numeric: tabular-nums; font-size: 15px; margin-left: 8px; white-space: nowrap; }
   button { background: none; border: 0; color: #ece4d6; padding: 8px; margin: 0 2px; border-radius: 10px; cursor: pointer;
     display: flex; align-items: center; }
   button:focus { outline: 2px solid #d2492f; }
   button.off { color: #8a8276; }
   button svg { width: 30px; height: 30px; fill: currentColor; }
   button.big svg { width: 40px; height: 40px; }
+  @media (max-width: 480px) {
+    #controls { padding-left: 10px; padding-right: 10px; }
+    button { padding: 6px; margin: 0; }
+    button svg { width: 26px; height: 26px; }
+    button.big svg { width: 34px; height: 34px; }
+    #clock { font-size: 13px; margin-left: 4px; }
+  }
   #toast { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(8, 7, 7, .8);
     padding: 12px 20px; border-radius: 12px; font-size: 18px; display: none; }
   #cuesize { display: none; }
@@ -373,6 +380,10 @@
     var doc = document;
     if (doc.fullscreenElement || doc.webkitFullscreenElement) {
       (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc);
+    } else if (!(doc.fullscreenEnabled || doc.webkitFullscreenEnabled) && video.webkitEnterFullscreen) {
+      // An iPhone only lets the video itself go full screen, with its own
+      // controls; a pause made there is passed back like any other.
+      video.webkitEnterFullscreen();
     } else if (stage.requestFullscreen) {
       var entered = stage.requestFullscreen();
       // A phone held upright shows a letterboxed strip; full screen turns it
