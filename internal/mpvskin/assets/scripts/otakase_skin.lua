@@ -42,6 +42,10 @@ local opts = {
 	contribute = false,
 	-- Off for films and series: no openings or endings, so no skip keys listed.
 	skips = true,
+	-- The Otakase movie: its picture is a subtitle, so nothing may move or
+	-- hide subtitles; its parts are chapters, shown on the seek bar and in
+	-- the top bar, and the skip buttons step between them.
+	film = false,
 	hide_after = 2.0,
 	logo = '',
 	-- Text is set in this sans font (Inter, shipped in fonts/); numbers (the
@@ -385,6 +389,7 @@ end
 -- (100 is the bottom); sub-margin-y would not move them while paused.
 local sub_lift = nil -- {base = sub-pos before, raised = what was set}
 local function lift_subtitles(on, h, s)
+	if opts.film then return end
 	if on == (sub_lift ~= nil) then return end
 	if on then
 		local base = mp.get_property_number('sub-pos', 100)
@@ -634,6 +639,10 @@ local function draw_controls(ass, w, h, s)
 	local title = state.title or ''
 	local main, rest = title:match('^(.-)%s+[-–·]%s+(.+)$')
 	if not main then main, rest = title, nil end
+	if opts.film then
+		-- The part playing now, after the film's title.
+		rest = chapter_at(state.pos or 0)
+	end
 	local _, back_bx = draw_button(ass, 'back', 20 * s, 36 * s, 'arrow_back', nil, s, function()
 		lift_subtitles(false)
 		mp.command('quit')
@@ -709,6 +718,15 @@ local function draw_controls(ass, w, h, s)
 				ass[#ass + 1] = text(cx0, sy - th / 2 - 6 * s, 1, span[2], 11 * s, C.highlight, 1, true)
 			end
 		end
+		if opts.film then
+			-- Where each part starts: a notch in the bar.
+			for i, chapter in ipairs(state.chapters) do
+				if i > 1 then
+					local cx = px(chapter.time)
+					ass[#ass + 1] = box(cx - 1.5 * s, sy - th / 2 - 3 * s, cx + 1.5 * s, sy + th / 2 + 3 * s, 1.5 * s, C.highlight, 0.9)
+				end
+			end
+		end
 		ass[#ass + 1] = circle(px(pos), sy, (active and 9 or 7) * s, C.bright, 1, C.accent, 4 * s, 0.35)
 		hit('seek', ax, sy - 12 * s, bx, sy + 12 * s, function() end, {seek = true})
 
@@ -716,7 +734,9 @@ local function draw_controls(ass, w, h, s)
 			local t = math.max(0, math.min(1, (state.mouse.x - ax) / (bx - ax))) * dur
 			local label = clock(t)
 			local chapter = chapter_at(t)
-			if chapter == 'Opening' then label = label .. ' · OP' elseif chapter == 'Ending' then label = label .. ' · ED' end
+			if opts.film and chapter then
+				label = label .. ' · ' .. chapter
+			elseif chapter == 'Opening' then label = label .. ' · OP' elseif chapter == 'Ending' then label = label .. ' · ED' end
 			local lw = text_width(label, 12 * s, false, osd_font()) + 16 * s
 			local lx = math.max(ax, math.min(bx - lw, state.mouse.x - lw / 2))
 			ass[#ass + 1] = box(lx, sy - 50 * s, lx + lw, sy - 26 * s, 6 * s, C.bg, 0.95)
@@ -727,13 +747,15 @@ local function draw_controls(ass, w, h, s)
 	-- Button row.
 	local ry = h - 40 * s
 	local x0 = 20 * s
-	local _, e = draw_button(ass, 'prev', x0, ry, 'skip_previous', nil, s, function() mp.command('playlist-prev') end)
+	-- In the film, the skip buttons step between its parts.
+	local step = opts.film and 'add chapter ' or nil
+	local _, e = draw_button(ass, 'prev', x0, ry, 'skip_previous', nil, s, function() mp.command(step and step .. '-1' or 'playlist-prev') end)
 	local pcx = e + 30 * s
 	local play_id = 'play'
 	ass[#ass + 1] = circle(pcx, ry, 24 * s, C.accent, hovered == play_id and 1 or 0.95)
 	ass[#ass + 1] = icon(pcx, ry, state.paused and 'play_arrow' or 'pause', 28 * s, C.accent_text)
 	hit(play_id, pcx - 24 * s, ry - 24 * s, pcx + 24 * s, ry + 24 * s, function() mp.command('cycle pause') end)
-	_, e = draw_button(ass, 'next', pcx + 30 * s, ry, 'skip_next', nil, s, function() mp.command('playlist-next') end)
+	_, e = draw_button(ass, 'next', pcx + 30 * s, ry, 'skip_next', nil, s, function() mp.command(step and step .. '1' or 'playlist-next') end)
 	local time_x = e + 12 * s
 	local now = clock(state.pos)
 	local total = dur and (' / ' .. clock(dur)) or ''
@@ -749,7 +771,7 @@ local function draw_controls(ass, w, h, s)
 	end
 	right('fullscreen', state.fullscreen and 'fullscreen_exit' or 'fullscreen', nil, function() mp.command('cycle fullscreen') end)
 	local narrow = w < 900 * s
-	if state.height and not narrow then
+	if state.height and not narrow and not opts.film then
 		right('quality', 'tune', state.height .. 'p', nil)
 	end
 	local function menu_button(kind, icon_name, label)
@@ -762,7 +784,8 @@ local function draw_controls(ass, w, h, s)
 	if opts.contribute then
 		menu_button('skiptimes', 'fast_forward', nil)
 	end
-	if count_tracks('sub') > 0 then
+	-- The film's only subtitle is its picture: not one to switch off.
+	if count_tracks('sub') > 0 and not opts.film then
 		local label = narrow and nil or (track_label(current_track('sub')) or 'Off')
 		local a = right('sub', current_track('sub') and 'subtitles' or 'subtitles_off', label and shorten(label, 14),
 			function() if state.menu and state.menu.kind == 'sub' then close_menu() else open_menu('sub', rx, h - 72 * s) end end,

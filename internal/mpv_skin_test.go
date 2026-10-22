@@ -155,4 +155,10 @@ func TestMPVSkinArgsWithoutSkipTimes(t *testing.T) {
 			t.Errorf("film: args missing %q:\n%s", want, film)
 		}
 	}
+	if strings.Contains(film, "otakase_skin-film=yes") {
+		t.Error("a film from a provider got the Otakase movie's skin mode")
+	}
+	if movie := strings.Join(movieSkinArgs(config, binary), "\n"); !strings.Contains(movie, "otakase_skin-film=yes") {
+		t.Errorf("the Otakase movie's skin is not in film mode:\n%s", movie)
+	}
 }

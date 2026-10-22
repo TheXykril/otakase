@@ -116,6 +116,11 @@ func Exit(err error) {
 		err = ExitMPV(socketPath)
 	}
 
+	// Credits roll after the player has gone, not over it.
+	if err == nil {
+		celebrateMilestoneOnExit(GetGlobalConfig())
+	}
+
 	// A real terminal gets a one-line goodbye; rofi does not. otakase launched
 	// from rofi is a fresh process per action -- opening the menu, handing off
 	// a cast, adding a show -- and each one reaches this same Exit(), so a

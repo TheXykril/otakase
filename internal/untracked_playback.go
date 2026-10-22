@@ -136,6 +136,20 @@ func pickUntrackedShow(userConfig *Config) (anime Anime, ok bool) {
 			return anime, false
 		}
 
+		// Searching for otakase itself finds the movie here too. There is
+		// nothing on the providers by that name worth listing beside it, so it
+		// is the one result.
+		if isOtakaseMovieQuery(query) {
+			show, selectErr := DynamicSelect([]SelectionOption{otakaseMovieOption()})
+			if selectErr != nil {
+				Log(fmt.Sprintf("Otakase movie: %v", selectErr))
+			}
+			if show.Key == otakaseMovieKey {
+				PlayOtakaseMovie(userConfig, nil, 0)
+			}
+			continue
+		}
+
 		providerID, providerName, picked, back, searchErr := ResolveUntrackedProviderSearch(userConfig, query)
 		if searchErr != nil {
 			Log(fmt.Sprintf("Failed to search anime: %v", searchErr))

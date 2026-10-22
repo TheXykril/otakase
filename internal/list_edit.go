@@ -278,7 +278,10 @@ func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[
 		return backOption
 	}
 
-	preview := userConfig.RofiSelection && userConfig.ImagePreview
+	// Searching for otakase itself finds one extra result, listed first. The
+	// image grid has no cover for it, so this search uses the plain list.
+	movie := isOtakaseMovieQuery(query)
+	preview := userConfig.RofiSelection && userConfig.ImagePreview && !movie
 	var options []SelectionOption
 	var previews map[string]RofiSelectPreview
 	endBusy := BeginBusy(userConfig, "Searching AniList")
@@ -288,10 +291,19 @@ func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[
 		options, err = SearchAnimeAnilist(query, user.Token)
 	}
 	endBusy()
+	if err != nil && movie {
+		// The movie needs no AniList to be found.
+		Log(fmt.Sprintf("Failed to search anime: %v", err))
+		options, err = nil, nil
+	}
 	if err != nil {
 		Log(fmt.Sprintf("Failed to search anime: %v", err))
 		Out(fmt.Sprintf("Could not search for %q: %v", query, err))
 		return backOption
+	}
+
+	if movie {
+		options = append([]SelectionOption{otakaseMovieOption()}, options...)
 	}
 
 	var show SelectionOption
@@ -308,6 +320,9 @@ func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[
 	case "-1":
 		Exit(nil)
 	case "-2":
+		return backOption
+	case otakaseMovieKey:
+		PlayOtakaseMovie(userConfig, user, 0)
 		return backOption
 	}
 
