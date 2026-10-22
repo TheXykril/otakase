@@ -39,6 +39,7 @@ const guessInfoClues = 3
 
 type guessShow struct {
 	ID       int
+	MalID    int // MyAnimeList id, 0 when AniList has none
 	URL      string
 	Name     string   // shown on reveal
 	Titles   []string // every title and synonym that counts
@@ -310,7 +311,7 @@ func guessClues(s guessShow, intn func(int) int) []string {
 const guessPoolQuery = `query ($page: Int) {
   Page(page: $page, perPage: 50) {
     media(type: ANIME, isAdult: false, sort: POPULARITY_DESC) {
-      id siteUrl synonyms title { romaji english native } coverImage { extraLarge large }
+      id idMal siteUrl synonyms title { romaji english native } coverImage { extraLarge large }
       format season seasonYear startDate { year } genres episodes source averageScore popularity description(asHtml: false)
       studios(isMain: true) { nodes { name } }
       tags { name rank isGeneralSpoiler isMediaSpoiler }
@@ -327,6 +328,7 @@ func fetchGuessPool() ([]guessShow, error) {
 				Page struct {
 					Media []struct {
 						ID       int      `json:"id"`
+						IDMal    int      `json:"idMal"`
 						SiteURL  string   `json:"siteUrl"`
 						Synonyms []string `json:"synonyms"`
 						Title    struct {
@@ -397,7 +399,7 @@ func fetchGuessPool() ([]guessShow, error) {
 					titles = append(titles, t)
 				}
 			}
-			show := guessShow{ID: m.ID, URL: m.SiteURL, Name: name, Titles: titles, Cover: cover,
+			show := guessShow{ID: m.ID, MalID: m.IDMal, URL: m.SiteURL, Name: name, Titles: titles, Cover: cover,
 				Format: m.Format, Season: m.Season, Year: m.SeasonYear, Genres: m.Genres, Episodes: m.Episodes,
 				Source: m.Source, Score: m.AverageScore, Rank: (page-1)*50 + k + 1, Popular: m.Popularity, Desc: m.Description}
 			for _, t := range m.Tags {

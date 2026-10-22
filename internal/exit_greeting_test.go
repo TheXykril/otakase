@@ -40,12 +40,12 @@ func rolls(n ...int) func(int) int {
 // every other exit gets one of the usual goodbyes.
 func TestTheRareGreetingsNeedTheLuckyRoll(t *testing.T) {
 	for i := range rareExitGreetings {
-		if got := exitGreeting(rolls(0, i)); got != rareExitGreetings[i] {
+		if got, rare := exitGreeting(rolls(0, i)); got != rareExitGreetings[i] || !rare {
 			t.Fatalf("lucky roll %d gave %q, want %q", i, got, rareExitGreetings[i])
 		}
 	}
 	for i := range exitGreetings {
-		if got := exitGreeting(rolls(1, i)); got != exitGreetings[i] {
+		if got, rare := exitGreeting(rolls(1, i)); got != exitGreetings[i] || rare {
 			t.Fatalf("roll %d gave %q, want %q", i, got, exitGreetings[i])
 		}
 	}

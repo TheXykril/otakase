@@ -119,6 +119,10 @@ type storeData struct {
 	FeaturedWatch map[string]featuredWatch `json:"featured_watch,omitempty"`
 	// Otakase settings backups by Discord user id, see appbackup.go.
 	AppBackups map[string]appBackup `json:"app_backups,omitempty"`
+	// Cheat code hunts by Discord user id, and the codes they found, see
+	// cheathunt.go.
+	CheatHunts map[string]cheatHunt `json:"cheat_hunts,omitempty"`
+	CheatCodes map[string]cheatCode `json:"cheat_codes,omitempty"`
 }
 
 type warning struct {
