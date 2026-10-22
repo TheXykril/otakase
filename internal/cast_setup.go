@@ -36,8 +36,13 @@ func CastSetup(config *Config) error {
 	if err := castSetupFixPorts(os.Stdout, config, ConfigFilePath); err != nil {
 		return err
 	}
-	fmt.Printf("Casting uses UDP %d (TV answers), UDP 5353 (mDNS) and TCP %d (the stream).\n",
-		config.CastDiscoveryPort, config.CastPort)
+	if port := castBrowserFirewallPort(config); port > 0 {
+		fmt.Printf("Casting uses UDP %d (TV answers), UDP 5353 (mDNS), TCP %d (the stream) and TCP %d (the browser player).\n",
+			config.CastDiscoveryPort, config.CastPort, port)
+	} else {
+		fmt.Printf("Casting uses UDP %d (TV answers), UDP 5353 (mDNS) and TCP %d (the stream).\n",
+			config.CastDiscoveryPort, config.CastPort)
+	}
 
 	firewall := ""
 	if runtime.GOOS == "linux" {

@@ -37,6 +37,18 @@ func castIsBrowser(device cast.Device) bool {
 	return device.Kind == cast.KindBrowser
 }
 
+// castBrowserFirewallPort is the port the browser player's page needs let in,
+// or 0 when the browser entry is off.
+func castBrowserFirewallPort(config *Config) int {
+	if config == nil || !config.CastBrowser {
+		return 0
+	}
+	if config.CastBrowserPort > 0 {
+		return config.CastBrowserPort
+	}
+	return cast.DefaultBrowserPort
+}
+
 // castBrowserNamed reports whether a device name picks the browser entry.
 func castBrowserNamed(name string) bool {
 	return strings.EqualFold(strings.TrimSpace(name), cast.BrowserDeviceName)

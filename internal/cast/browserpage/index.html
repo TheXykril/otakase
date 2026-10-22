@@ -374,7 +374,15 @@
     if (doc.fullscreenElement || doc.webkitFullscreenElement) {
       (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc);
     } else if (stage.requestFullscreen) {
-      stage.requestFullscreen();
+      var entered = stage.requestFullscreen();
+      // A phone held upright shows a letterboxed strip; full screen turns it
+      // sideways where the browser lets a page do that.
+      if (entered && entered.then && screen.orientation && screen.orientation.lock) {
+        entered.then(function () {
+          var turned = screen.orientation.lock("landscape");
+          if (turned && turned["catch"]) { turned["catch"](function () {}); }
+        });
+      }
     } else if (stage.webkitRequestFullscreen) {
       stage.webkitRequestFullscreen();
     } else if (video.webkitEnterFullscreen) {
@@ -394,7 +402,19 @@
   on("cc", toggleSubs);
   on("full", fullScreen);
   tap.addEventListener("click", function () { tap.style.display = "none"; play(); });
-  document.getElementById("stage").addEventListener("click", showControls);
+  // A double tap or double click anywhere on the video goes full screen, as
+  // most players do.
+  var lastTap = 0;
+  document.getElementById("stage").addEventListener("click", function () {
+    var now = Date.now();
+    if (now - lastTap < 350) {
+      lastTap = 0;
+      fullScreen();
+      return;
+    }
+    lastTap = now;
+    showControls();
+  });
   document.addEventListener("mousemove", showControls);
 
   // The same keys as the terminal, and the media keys TV remotes send.
