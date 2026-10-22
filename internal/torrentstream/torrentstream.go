@@ -231,6 +231,25 @@ func IsStreamURL(link string) bool {
 	return strings.HasPrefix(link, prefix)
 }
 
+// Stats reports how much of the file behind a link Stream returned has
+// downloaded, and from how many peers, for a viewer waiting on it.
+func Stats(link string) (completed, length int64, peers int, ok bool) {
+	mu.Lock()
+	defer mu.Unlock()
+	if listener == nil {
+		return 0, 0, 0, false
+	}
+	prefix := fmt.Sprintf("http://127.0.0.1:%d/", listener.Addr().(*net.TCPAddr).Port)
+	if !strings.HasPrefix(link, prefix) {
+		return 0, 0, 0, false
+	}
+	file, found := served[strings.Trim(strings.TrimPrefix(link, prefix), "/")]
+	if !found {
+		return 0, 0, 0, false
+	}
+	return file.BytesCompleted(), file.Length(), file.Torrent().Stats().ActivePeers, true
+}
+
 // Shutdown stops the client and deletes everything it downloaded.
 func Shutdown() {
 	mu.Lock()

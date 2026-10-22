@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thexykril/otakase/internal/cast"
 )
@@ -36,6 +37,15 @@ func (f *fakeInnerSession) Unpause() error            { f.paused = false; return
 func (f *fakeInnerSession) SetVolume(l float64) error { f.volume = l; return nil }
 func (f *fakeInnerSession) Volume() float64           { return f.volume }
 
+// settleIn moves the settling clock on by d from now, for the rest of the
+// test.
+func settleIn(t *testing.T, d time.Duration) {
+	t.Helper()
+	at := time.Now().Add(d)
+	castSettleNow = func() time.Time { return at }
+	t.Cleanup(func() { castSettleNow = time.Now })
+}
+
 func seekingSession(inner *fakeInnerSession, duration float64, restart func(float64) error) *castSeekingSession {
 	return &castSeekingSession{inner: inner, duration: duration, restart: restart}
 }
@@ -58,6 +68,8 @@ func TestThePositionIsReportedInEpisodeTimeAfterASeek(t *testing.T) {
 	if err := session.SeekToTime(720); err != nil {
 		t.Fatal(err)
 	}
+	// Thirty seconds of the new stream, thirty seconds after it was loaded.
+	settleIn(t, 30*time.Second)
 	inner.position = 30
 
 	progress, err := session.Progress()

@@ -154,7 +154,8 @@ func applyCastCommand(command castCommand, session castSession, paused *bool, sp
 			target = 0
 		}
 		*paused = false
-		return false, target, session.SeekToTime(target)
+		landed, err := castSeekNear(session, target)
+		return false, landed, err
 	}
 
 	switch command {
@@ -576,6 +577,12 @@ func castControlsPossible(config *Config) bool {
 // comfortable double press and far shorter than the restart it is saving.
 var castSeekDebounce = 450 * time.Millisecond
 
+// castCommandSeeks reports whether a command moves the episode.
+func castCommandSeeks(command castCommand) bool {
+	_, isSeek := seekStepFor(command)
+	return isSeek
+}
+
 // seekStepFor reports which way a press moves the episode, if it moves it at all.
 func seekStepFor(command castCommand) (int, bool) {
 	switch command {
@@ -665,5 +672,22 @@ func applyCastSeek(session castSession, paused *bool, target float64) (moved flo
 	// receiver resumes playback on any seek, and a panel left showing PAUSED
 	// would also hold the stall bound off for the rest of the episode.
 	*paused = false
+	return castSeekNear(session, target)
+}
+
+// castNearSeeker is a session that can land a viewer's seek near its target
+// rather than exactly on it, when that is much faster. See
+// castSeekingSession.seekNear.
+type castNearSeeker interface {
+	seekNear(seconds float64) (float64, error)
+}
+
+// castSeekNear moves the episode to about target for a viewer, reporting
+// where it landed. A failed seek leaves the episode where it was, so the
+// caller should keep the position it had.
+func castSeekNear(session castSession, target float64) (float64, error) {
+	if near, ok := session.(castNearSeeker); ok {
+		return near.seekNear(target)
+	}
 	return target, session.SeekToTime(target)
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -36,6 +37,13 @@ const dlnaContentFeatures = "DLNA.ORG_PN=MPEG_TS_HD_NA_ISO;DLNA.ORG_OP=00;DLNA.O
 // serveProgressive streams the segments of the playlist beside urlPath, from
 // the first, until the playlist says it is finished.
 func serveProgressive(w http.ResponseWriter, r *http.Request, root, urlPath string) {
+	serveProgressiveFrom(w, r, root, urlPath, 0)
+}
+
+// serveProgressiveFrom is serveProgressive starting at segment skip: a jump
+// within a stream already written, for a device that plays one continuous
+// stream rather than a playlist.
+func serveProgressiveFrom(w http.ResponseWriter, r *http.Request, root, urlPath string, skip int) {
 	// path.Clean keeps a "../" in the request from reaching outside root; the
 	// file server does the same for everything else it serves.
 	dir := filepath.Join(root, filepath.FromSlash(path.Dir(path.Clean("/"+urlPath))))
@@ -52,7 +60,7 @@ func serveProgressive(w http.ResponseWriter, r *http.Request, root, urlPath stri
 	w.WriteHeader(http.StatusOK)
 	flusher, _ := w.(http.Flusher)
 
-	sent := 0
+	sent := skip
 	lastGrowth := time.Now()
 	for {
 		select {
@@ -97,11 +105,30 @@ func copySegment(w io.Writer, name string) bool {
 // whether it is finished. ffmpeg adds a segment to the playlist only once the
 // segment is complete, so every name returned is safe to send whole.
 func readPlaylistSegments(name string) (segments []string, finished bool) {
+	listed, finished := ReadPlaylist(name)
+	for _, segment := range listed {
+		segments = append(segments, segment.Name)
+	}
+	return segments, finished
+}
+
+// Segment is one finished piece of a stream ffmpeg is writing.
+type Segment struct {
+	Name string
+	// Duration is the segment's length in seconds, as its #EXTINF says.
+	Duration float64
+}
+
+// ReadPlaylist lists the segments of an HLS playlist ffmpeg is writing, with
+// their lengths, and whether it is finished. Every segment listed is complete:
+// ffmpeg adds one to the playlist only once it has been written.
+func ReadPlaylist(name string) (segments []Segment, finished bool) {
 	f, err := os.Open(name)
 	if err != nil {
 		return nil, false
 	}
 	defer f.Close()
+	duration := 0.0
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -109,13 +136,17 @@ func readPlaylistSegments(name string) (segments []string, finished bool) {
 		case line == "":
 		case line == "#EXT-X-ENDLIST":
 			finished = true
+		case strings.HasPrefix(line, "#EXTINF:"):
+			value, _, _ := strings.Cut(strings.TrimPrefix(line, "#EXTINF:"), ",")
+			duration, _ = strconv.ParseFloat(strings.TrimSpace(value), 64)
 		case strings.HasPrefix(line, "#"):
 		default:
 			// Only names beside the playlist: an absolute or climbing URI is
 			// nothing ffmpeg writes, and nothing to open.
 			if !strings.Contains(line, "://") && !strings.Contains(line, "..") && !strings.HasPrefix(line, "/") {
-				segments = append(segments, line)
+				segments = append(segments, Segment{Name: line, Duration: duration})
 			}
+			duration = 0
 		}
 	}
 	return segments, finished

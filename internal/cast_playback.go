@@ -502,6 +502,16 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 			Out("This stream has no English audio, so the cast plays " + castLanguageName(tracks.AudioLanguage) + ".")
 		}
 	}
+	// The encoder is chosen in the background from here on, so the first
+	// re-encode -- a burn, or the first seek -- does not also wait for the
+	// hardware probe. Asked twice, it answers once.
+	pickEncoder := sync.OnceValue(func() cast.Encoder {
+		return castBurnEncoder(config, ffmpeg)
+	})
+	go pickEncoder()
+	// What a rebuild that keeps the viewer waiting is getting ready, for the
+	// status it shows meanwhile.
+	rebuildingAt := 0.0
 	// Subtitles are drawn into the picture when the stream has them, which is
 	// the only way a Chromecast shows them: it renders WebVTT alone, no
 	// provider here supplies WebVTT, and the receiver will not enable a
@@ -509,16 +519,32 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 	// vendored library cannot reach. Burning costs a re-encode, so it happens
 	// only when there is something to burn.
 	source := &castStreamSource{
-		ffmpeg:       ffmpeg,
-		streamURL:    streamURL,
-		referrer:     referrer,
-		headers:      anime.Ep.StreamHeaders,
-		rootDir:      streamDir,
-		subtitleSize: config.CastSubtitleSize,
-		maps:         tracks.Maps,
-		chooseEncoder: func() cast.Encoder {
-			return castBurnEncoder(config, ffmpeg)
+		ffmpeg:        ffmpeg,
+		streamURL:     streamURL,
+		referrer:      referrer,
+		headers:       anime.Ep.StreamHeaders,
+		rootDir:       streamDir,
+		subtitleSize:  config.CastSubtitleSize,
+		maps:          tracks.Maps,
+		chooseEncoder: pickEncoder,
+		waiting: func(elapsed time.Duration) {
+			// Only on the panel: without one each update would be a
+			// notification of its own, every second.
+			if elapsed < 2*time.Second || panel == nil {
+				return
+			}
+			message := fmt.Sprintf("Getting the stream ready at %s… %ds", castClock(rebuildingAt), int(elapsed.Seconds()))
+			if completed, length, peers, ok := torrentstream.Stats(streamURL); ok && length > 0 {
+				// A torrent's wait is that part of the file downloading.
+				message += fmt.Sprintf("\nWaiting for that part of the torrent: %d%% of the file downloaded, %d peers", completed*100/length, peers)
+			}
+			castStatus(message)
 		},
+	}
+	if torrentstream.IsStreamURL(streamURL) {
+		// A part of the file nobody has sent yet takes as long to arrive as
+		// the start did, and the wait now says what it is waiting on.
+		source.startTimeout = castStartTimeout
 	}
 	burn := castShouldBurnSubtitles(config, anime, tracks.AudioLanguage)
 	if !burn {
@@ -568,7 +594,7 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 			Log(fmt.Sprintf("cast: %v", subErr))
 		} else {
 			castStatus("Preparing the stream with subtitles…")
-			encoder := castBurnEncoder(config, ffmpeg)
+			encoder := pickEncoder()
 			Log(fmt.Sprintf("cast: burning subtitles with %s (hardware=%t)", encoder.Name, encoder.Hardware()))
 			source.subtitlePath = subtitlePath
 			source.encoder = encoder
@@ -660,11 +686,12 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 	// currently playing. See cast_seek.go.
 	// The generation currently playing, so the one it replaces can be cleared.
 	playing := first
-	seeking := &castSeekingSession{inner: s, base: resumeAt, behind: source.subtitlesBehind, restart: func(target float64) error {
-		// No status here: the watch loop shows the destination as the presses
-		// arrive, before this runs, which is the only moment a viewer can still
-		// be told anything -- rebuilding the stream blocks that loop.
+	seeking := &castSeekingSession{inner: s, base: resumeAt, streamStart: resumeAt, behind: source.subtitlesBehind, restart: func(target float64) error {
+		// The watch loop shows the destination as the presses arrive, before
+		// this runs; rebuilding the stream blocks that loop, so a slow rebuild
+		// is shown by source.waiting instead.
 		Log(fmt.Sprintf("cast: rebuilding the stream at %.1f", target))
+		rebuildingAt = target
 
 		next, startErr := source.start(target)
 		if startErr != nil {
@@ -691,6 +718,23 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 		playing = next
 		return nil
 	}}
+	// A seek to somewhere the current stream already reaches is a jump: the
+	// device is handed the same stream from a later or earlier segment, and
+	// ffmpeg goes on as it was. See cast.JumpPath.
+	seeking.jump = func(target, minOffset float64) (float64, float64, bool, error) {
+		segment, offset, ok := source.jumpPoint(playing, target, minOffset)
+		if !ok {
+			return 0, 0, false, nil
+		}
+		source.jumps++
+		path := cast.JumpPath(playing.path, source.jumps, segment)
+		landed := playing.start + offset
+		Log(fmt.Sprintf("cast: jumping to %.1f for %.1f, within the stream already written (%s)", landed, target, path))
+		if err := s.Play(srv.URL(path)); err != nil {
+			return 0, 0, false, err
+		}
+		return landed, offset, true, nil
+	}
 	if !durationEstimated && anime.Ep.Duration > 0 {
 		// Only a measured length: a seek guard built on the tracker's average
 		// would refuse the last minutes of an episode that runs longer than
@@ -1031,6 +1075,12 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 			Log(fmt.Sprintf("cast: command %d at pos=%.1f -> pos=%.1f err=%v", command, lastPosition, moved, err))
 			if err != nil {
 				Log(fmt.Sprintf("cast: %v", err))
+				// Nothing moved: a seek that failed leaves the device playing
+				// the stream it had, where it had got to.
+				moved = lastPosition
+				if castCommandSeeks(command) {
+					castOut(commands != nil, "Could not seek there -- still playing where it was.")
+				}
 			}
 			if stop && command == castCmdSwitchAudio {
 				castOut(commands != nil, "Switching audio…")
@@ -1071,6 +1121,10 @@ func watchCastWithControls(config *Config, anime *Anime, session castSession, se
 				Log(fmt.Sprintf("cast: queued command %d at pos=%.1f -> pos=%.1f err=%v", queued, lastPosition, moved, err))
 				if err != nil {
 					Log(fmt.Sprintf("cast: %v", err))
+					moved = lastPosition
+					if castCommandSeeks(queued) {
+						castOut(commands != nil, "Could not seek there -- still playing where it was.")
+					}
 				}
 				if stop && queued == castCmdSwitchAudio {
 					castOut(commands != nil, "Switching audio…")
