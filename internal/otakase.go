@@ -176,7 +176,7 @@ func exitGreetingWanted(cfg *Config) bool {
 
 // exitGreetings are the usual goodbyes, one picked at random per exit.
 var exitGreetings = []string{
-	"Matta ne!",
+	"Mata ne!",
 	"Otsukare! Rest those eyes.",
 }
 
