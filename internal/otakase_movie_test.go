@@ -133,7 +133,7 @@ func TestTheScoreFollowsThePicture(t *testing.T) {
 		}
 		kinds[cue.Kind] = true
 	}
-	for _, kind := range []string{cueImpact, cueTick, cuePop, cueBell, cueWhoosh} {
+	for _, kind := range []string{cueImpact, cueTick, cuePop, cueBell, cueWhoosh, cueVoiceLow, cueVoiceHigh} {
 		if !kinds[kind] {
 			t.Errorf("no %s", kind)
 		}

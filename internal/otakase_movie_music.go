@@ -72,6 +72,10 @@ const (
 	cuePop     = "pop"
 	cueBell    = "bell"
 	cueThud    = "thud"
+	// cueVoiceLow and cueVoiceHigh are a word spoken by each of the two
+	// voices.
+	cueVoiceLow  = "voice-low"
+	cueVoiceHigh = "voice-high"
 )
 
 // movieScore is what the soundtrack needs to know about the film.
@@ -338,6 +342,34 @@ func (m *musicMix) pop(at, vol float64) {
 }
 
 // bell is a temple bell: inharmonic partials ringing out slowly.
+// voiceBlip is one spoken word, the way games voice their text: a short
+// soft note on the E minor pentatonic, a different one each word so the
+// line has a melody of its own. The low voice is warm, a sine with its
+// octave; the high one glassy, a sine with a bell-like upper partial and a
+// little vibrato.
+func (m *musicMix) voiceBlip(at float64, high bool, vol float64) {
+	pentatonic := []int{0, 3, 5, 7, 10}
+	degree := pentatonic[m.noise.IntN(len(pentatonic))]
+	base, upper, upperLevel, length := 64, 2.0, 0.35, 0.09
+	if high {
+		base, upper, upperLevel, length = 76, 2.76, 0.2, 0.075
+	}
+	freq := midiHz(base + degree)
+	start := m.index(at)
+	phase, overtone := 0.0, 0.0
+	for i := 0; i < samples(length+0.06); i++ {
+		t := float64(i) / movieSampleRate
+		wobble := 1.0
+		if high {
+			wobble = 1 + 0.006*math.Sin(2*math.Pi*7*t)
+		}
+		phase += freq * wobble / movieSampleRate
+		overtone += freq * upper * wobble / movieSampleRate
+		v := math.Sin(2*math.Pi*phase) + upperLevel*math.Sin(2*math.Pi*overtone)
+		write(m.fx, start+i, v*envelope(t, 0.006, length, vol))
+	}
+}
+
 func (m *musicMix) bell(at, vol float64) {
 	start := m.index(at)
 	partials := [][3]float64{{1, 1, 4.5}, {2.76, 0.5, 2.8}, {5.4, 0.28, 1.6}, {8.93, 0.15, 0.9}}
@@ -427,6 +459,10 @@ func movieSoundtrack(score movieScore) []byte {
 			m.pop(cue.At, 0.12)
 		case cueBell:
 			m.bell(cue.At, 0.18)
+		case cueVoiceLow:
+			m.voiceBlip(cue.At, false, 0.05)
+		case cueVoiceHigh:
+			m.voiceBlip(cue.At, true, 0.04)
 		case cueThud:
 			m.kick(m.fx, cue.At, 0.6)
 			m.noiseBurst(m.fx, cue.At, 0.09, 0.25, 0.4)

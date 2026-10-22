@@ -220,6 +220,14 @@ func (w *filmWriter) poem(at float64, lines []poemLine) float64 {
 		for _, span := range speaking[voice] {
 			words = append(words, wordStarts(lines[int(span[2])].Text, span[0], writing[int(span[2])])...)
 		}
+		// Each word is voiced, low on the left, high on the right.
+		kind := cueVoiceLow
+		if voice == 1 {
+			kind = cueVoiceHigh
+		}
+		for _, word := range words {
+			w.cue(word, kind, 0)
+		}
 		w.voiceLight(voiceX[voice], filmCentreY, colours[voice], 1-2*voice, at, end, speaking[voice], words)
 	}
 
