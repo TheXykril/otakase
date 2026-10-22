@@ -155,7 +155,7 @@ func buildMainPreviewOptions(config *Config, list AnimeList, key string) map[str
 // isMainMenuKey reports whether a choice from the main list is answered by the
 // dispatch in front of it rather than by playing a show from the list.
 func isMainMenuKey(key string) bool {
-	if isMenuActionKey(key) || key == listsMenuKey || key == nextListKey {
+	if isMenuActionKey(key) || key == listsMenuKey || key == nextListKey || key == cheatCodeKey {
 		return true
 	}
 	_, isRow := resumeRowAnilistID(key)

@@ -60,6 +60,7 @@ type (
 
 		addNewOption  bool // pin an "Add new anime" row under the list
 		isHomeMenu    bool // escape quits instead of going back
+		konami        konamiTracker
 		preserveOrder bool // keep the caller's order (action menus lead with the main action)
 
 		// layout is the chrome around the list: tabs, an actions footer, a detail
@@ -274,6 +275,9 @@ func (m *selectionModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 func (m *selectionModel) handleKey(key string) tea.Cmd {
 	if key == "ctrl+c" {
 		return m.finish(quitSelection)
+	}
+	if m.isHomeMenu && m.konami.press(key) {
+		return m.finish(SelectionOption{Key: cheatCodeKey})
 	}
 
 	// Tab and the arrows move between categories, but only where categories
@@ -895,6 +899,11 @@ func DynamicSelectPreviewWithRefresh(previews map[string]RofiSelectPreview, addN
 	// the grid clips it to the column width, so what comes back for a long
 	// title is not the string the option carries.
 	args := []string{"-dmenu", "-theme", configPath, "-show-icons", "-markup-rows", "-p", "Select Anime", "-i", "-no-custom", "-format", "i"}
+	if main {
+		// The main grid takes typed text too, for the cheat code: rofi then
+		// answers -1 and what was typed.
+		args = []string{"-dmenu", "-theme", configPath, "-show-icons", "-markup-rows", "-p", "Select Anime", "-i", "-format", "i f"}
+	}
 	args = append(args, rofiVersionThemeArgs()...)
 	var toolbar rofiToolbar
 	if main || (refreshConfig != nil && refreshConfig.Toolbar) {
@@ -917,7 +926,24 @@ func DynamicSelectPreviewWithRefresh(previews map[string]RofiSelectPreview, addN
 		Log(fmt.Sprintf("Rofi stdout: %s", stdout.String()))
 		return backSelection, nil
 	}
+	if main {
+		return parseMainGridSelection(stdout.String(), rows)
+	}
 	return parsePreviewSelectionIndex(stdout.String(), rows)
+}
+
+// parseMainGridSelection reads the main grid's "index typed-text". Typed text
+// that matches no poster is the cheat code or nothing: an empty key, which
+// shows the grid again rather than quitting.
+func parseMainGridSelection(raw string, rows []SelectionOption) (SelectionOption, error) {
+	index, typed, _ := strings.Cut(strings.TrimSpace(raw), " ")
+	if index == "-1" {
+		if isKonamiText(typed) {
+			return SelectionOption{Key: cheatCodeKey}, nil
+		}
+		return SelectionOption{}, nil
+	}
+	return parsePreviewSelectionIndex(index, rows)
 }
 
 // preDownloadImages fetches up to count covers ahead of the grid, so fewer of
@@ -1306,6 +1332,8 @@ func parseRofiSelection(err error, rawSelection string, choices []SelectionOptio
 		return backSelection, nil
 	case SelectionMeansQuit(typed):
 		return quitSelection, nil
+	case home && isKonamiText(picked):
+		return SelectionOption{Key: cheatCodeKey}, nil
 	}
 
 	// Compare case-insensitively and with runs of spaces collapsed: an emoji
