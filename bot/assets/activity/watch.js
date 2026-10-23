@@ -308,6 +308,9 @@ function wEpisode(s) {
         <span class="pill">Audio in player settings</span></div>
       <div class="wepgrid">${Array.from({ length: end - start + 1 }, (_, i) => {
         const ep = start + i;
+        const preview = previews.get(ep);
+        const picture = preview && preview.thumbnail ? `<img loading="lazy" src="${esc(preview.thumbnail)}" alt="">` : `${icon("play")}`;
+        const caption = preview && preview.title ? esc(preview.title) : `Episode ${ep}`;
         return `<button class="wepcard${ep === selected ? " chosen" : ""}" data-ep="${ep}" aria-pressed="${ep === selected}">
           <span class="wepnumber">EP</span><strong>${String(ep).padStart(2, "0")}</strong>
           ${ep === selected ? `<span class="wepcheck">${icon("check")}</span>` : ""}
