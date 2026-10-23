@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/thexykril/otakase/internal/providers/nyaa"
 )
 
 // StreamInfo is one episode's streams, found without asking anything. The
@@ -59,6 +61,8 @@ func ParseStreamInfoArg(arg string) (anilistID, episode int, err error) {
 // audio first, then the other. Only http(s) links count: torrents need the
 // app's own streamer, which a server relaying the episode doesn't have.
 func ResolveStreamInfo(config Config, anilistID, episode int) (StreamInfo, error) {
+	nyaa.SetStreamInfoOnly(true)
+	defer nyaa.SetStreamInfoOnly(false)
 	anime, err := GetAnimeDataByID(anilistID, "")
 	if err != nil {
 		return StreamInfo{}, err
@@ -112,6 +116,20 @@ func torrentLinks(result ProviderEpisodeResult) []TorrentLink {
 	var out []TorrentLink
 	for _, link := range result.Links {
 		u, err := url.Parse(link)
+		if err == nil && u.Scheme == "magnet" {
+			for _, xt := range u.Query()["xt"] {
+				const prefix = "urn:btih:"
+				if !strings.HasPrefix(strings.ToLower(xt), prefix) {
+					continue
+				}
+				hash := strings.TrimPrefix(strings.ToLower(xt), prefix)
+				if len(hash) == 40 && strings.Trim(hash, "0123456789abcdef") == "" && !seen[hash] {
+					seen[hash] = true
+					out = append(out, TorrentLink{InfoHash: hash})
+				}
+			}
+			continue
+		}
 		if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" {
 			continue
 		}

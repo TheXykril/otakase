@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.3
+
+- Watch room: torrent episodes now resolve directly from indexed releases without waiting for peers during lookup. Source errors display their cause instead of always claiming the episode is missing.
+
 ## 1.30.2
 
 - Watch room: increase the default torrent episode limit to 4 GiB, with an 8 GiB temporary storage budget. Both limits are configurable in the add-on options.
