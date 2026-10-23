@@ -2,8 +2,11 @@
 
 ## Unreleased
 
-- Watch room (in development): remember personal audio and subtitle language preferences and select them in the player.
+## 1.30.11
+
+- Watch room: remember personal audio and subtitle language preferences and select them in the player.
 - Keep multiple audio renditions in supported HLS playlists and simplify episode selection to a single step.
+- Torrent playback: offer separate audio variants from one download and selectable subtitles when conversion is supported.
 
 ## 1.30.10
 
