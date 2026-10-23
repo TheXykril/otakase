@@ -20,7 +20,7 @@ import (
 // progress on.
 
 const (
-	watchResolveWait = 2 * time.Minute
+	watchResolveWait = 8 * time.Minute
 	watchInfoTTL     = 30 * time.Minute
 )
 
