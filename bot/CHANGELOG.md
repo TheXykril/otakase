@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.23
+
+- Activity: restore floating moderation and sound controls with mobile safe-area positioning.
+- Watch Together: remove the episode provider credit line from the picker.
+
 ## 1.30.22
 
 - Watch Together: remove TVmaze episode artwork provider and its credit.

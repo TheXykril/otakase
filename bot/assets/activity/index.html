@@ -796,18 +796,17 @@
   .sndtip { right:max(66px,calc(62px + var(--discord-safe-area-inset-right,0px))); bottom:max(120px,calc(32px + var(--discord-safe-area-inset-bottom,0px))); }
 }
 
-/* Dedicated controls row: never overlay cards or Discord's native chrome. */
+/* Floating controls, kept clear of Discord's mobile overlays. */
 #activitytools {
-  position:relative;
-  box-sizing:border-box;
-  max-width:880px;
-  margin:0 auto;
-  padding:12px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));
+  position:fixed;
+  z-index:40;
+  right:max(16px,env(safe-area-inset-right,0px));
+  bottom:max(18px,calc(12px + env(safe-area-inset-bottom,0px)));
   display:flex;
-  justify-content:flex-end;
+  flex-direction:row;
   align-items:center;
   gap:10px;
-  min-height:54px;
+  pointer-events:none;
 }
 #activitytools:empty { display:none; }
 #activitytools .adm, #activitytools .snd {
@@ -815,20 +814,26 @@
   top:auto; right:auto; bottom:auto;
   flex:0 0 40px;
   width:40px; height:40px;
-  box-shadow:none;
+  pointer-events:auto;
 }
 #activitytools .sndtip {
   position:absolute;
-  top:100%; right:16px; bottom:auto;
+  right:0;
+  bottom:calc(100% + 8px);
+  top:auto;
   white-space:nowrap;
 }
-#activitytools + main { padding-top:14px; }
 @media (pointer:coarse) and (orientation:portrait) {
-  #activitytools { padding-top:max(100px,calc(82px + var(--discord-safe-area-inset-top,0px))); }
+  #activitytools {
+    right:max(16px,calc(12px + var(--discord-safe-area-inset-right,0px)));
+    bottom:max(96px,calc(76px + var(--discord-safe-area-inset-bottom,0px)));
+  }
 }
 @media (pointer:coarse) and (orientation:landscape) {
-  #activitytools { max-width:none; padding-top:14px; padding-right:max(110px,calc(24px + var(--discord-safe-area-inset-right,0px))); }
-  #activitytools + main { padding-top:14px; }
+  #activitytools {
+    right:max(112px,calc(90px + var(--discord-safe-area-inset-right,0px)));
+    bottom:max(32px,calc(20px + var(--discord-safe-area-inset-bottom,0px)));
+  }
 }
 /* No still available: text-first layout instead of a blank video frame. */
 .wepcard.noimage { min-height:96px; justify-content:center; }
