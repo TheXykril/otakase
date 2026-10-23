@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.20
+
+- Watch Together: add Kitsu, TVmaze and optional TMDB episode artwork via AniMap ID matching.
+- Watch Together: use compact text cards when episode artwork cannot load, with source credits.
+
 ## 1.30.19
 
 - Watch Together: use Jikan for missing episode titles and display compact cards when episode artwork is unavailable.
