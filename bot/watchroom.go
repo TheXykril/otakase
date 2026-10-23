@@ -412,7 +412,11 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 				}
 			}
 			if err == nil {
-				info.Streams = []streamLink{{URL: link}}
+				media := streamLink{URL: link}
+				if parsed, parseErr := url.Parse(link); parseErr == nil && parsed.Query().Get("subtitles") == "en" {
+					media.Subtitles = []streamSubtitle{{URL: fmt.Sprintf("http://%s/subs/en.vtt", parsed.Host), Language: "en", Label: "English"}}
+				}
+				info.Streams = []streamLink{media}
 			}
 		}
 		b.watch.mu.Lock()
