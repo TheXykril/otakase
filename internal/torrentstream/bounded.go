@@ -15,33 +15,37 @@ import (
 )
 
 const (
- BotTorrentLimit int64 = 4 << 30
- BotTorrentStorageLimit int64 = 8 << 30
- maxBotTorrentGiB int64 = 16
+	BotTorrentLimit        int64 = 4 << 30
+	BotTorrentStorageLimit int64 = 8 << 30
+	maxBotTorrentGiB        int64 = 16
 )
 
 type botTorrentLimits struct {
- torrent int64
- storage int64
+	torrent int64
+	storage int64
 }
 
 // Limits are expressed in GiB. An invalid setting falls back to its default.
 func readBotTorrentLimits(getenv func(string) string) botTorrentLimits {
- parse := func(name string, fallback int64) int64 {
-  n, err := strconv.ParseInt(getenv(name), 10, 64)
-  if err != nil || n < 1 || n > maxBotTorrentGiB*2 { return fallback }
-  return n << 30
- }
- torrentLimit := parse("OTAKASE_WATCH_TORRENT_MAX_GIB", BotTorrentLimit)
- storageLimit := parse("OTAKASE_WATCH_TORRENT_STORAGE_GIB", BotTorrentStorageLimit)
- if torrentLimit > maxBotTorrentGiB { torrentLimit = BotTorrentLimit }
- return botTorrentLimits{torrent: torrentLimit, storage: storageLimit}
+	parse := func(name string, fallback int64) int64 {
+		n, err := strconv.ParseInt(getenv(name), 10, 64)
+		if err != nil || n < 1 || n > maxBotTorrentGiB*2 {
+			return fallback
+		}
+		return n << 30
+	}
+	torrentLimit := parse("OTAKASE_WATCH_TORRENT_MAX_GIB", BotTorrentLimit)
+	storageLimit := parse("OTAKASE_WATCH_TORRENT_STORAGE_GIB", BotTorrentStorageLimit)
+	if torrentLimit > maxBotTorrentGiB {
+		torrentLimit = BotTorrentLimit
+	}
+	return botTorrentLimits{torrent: torrentLimit, storage: storageLimit}
 }
 
 type boundedStorage struct {
 	storage.ClientImpl
 	rejected chan error
-	limit int64
+	limit    int64
 }
 
 func (s boundedStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, hash metainfo.Hash) (storage.TorrentImpl, error) {
@@ -69,11 +73,14 @@ func (s boundedStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, ha
 }
 
 // DownloadForBot buffers one bounded episode. Both the cache and output belong
-// to the caller's private directory; temporary payload storage is bounded by the configured total budget.
+// to the caller's private directory. The cache and extracted video together
+// cannot exceed the configured temporary payload budget.
 func DownloadForBot(ctx context.Context, hash, dir string) (string, error) {
 	limits := readBotTorrentLimits(os.Getenv)
- if limits.storage < 2*limits.torrent { return "", fmt.Errorf("torrent storage budget must be at least twice the torrent size limit") }
- cache := filepath.Join(dir, "pieces")
+	if limits.storage < 2*limits.torrent {
+		return "", fmt.Errorf("torrent storage budget must be at least twice the torrent size limit")
+	}
+	cache := filepath.Join(dir, "pieces")
 	defer os.RemoveAll(cache)
 	disk := storage.NewFile(cache)
 	defer disk.Close()
