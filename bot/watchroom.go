@@ -415,7 +415,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		if err != nil {
 			cancel()
 			log.Printf("watch room: %s episode %d: %v", show.Title, ep, err)
-			r.phase, r.errText = "error", fmt.Sprintf("Couldn't find episode %d of %s on any source.", ep, show.Title)
+			r.phase, r.errText = "error", fmt.Sprintf("Episode %d could not start: %s", ep, clip(err.Error(), 180))
 			r.changed()
 			return
 		}
