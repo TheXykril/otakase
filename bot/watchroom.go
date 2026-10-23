@@ -1017,7 +1017,7 @@ func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
          } `json:"data"`
          Pagination struct { HasNextPage bool `json:"has_next_page"` } `json:"pagination"`
        }
-       err = json.NewDecoder(http.MaxBytesReader(w, resp.Body, 2<<20)).Decode(&payload)
+       err = json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&payload)
        resp.Body.Close()
        if err != nil { break }
        for _, ep := range payload.Data {
