@@ -2,11 +2,11 @@ package nyaa
 
 import (
 	"fmt"
-	"sync/atomic"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers"
