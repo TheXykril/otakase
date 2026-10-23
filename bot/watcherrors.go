@@ -1,11 +1,11 @@
 package main
 
 import (
- "fmt"
- "strings"
- "log"
- "sync"
- "time"
+	"fmt"
+	"log"
+	"strings"
+	"sync"
+	"time"
 )
 
 type watchDiagnostic struct {
@@ -29,7 +29,7 @@ func recordWatchFailure(show string, episode int, stage string, err error) strin
  watchDiagnostics.Lock()
  defer watchDiagnostics.Unlock()
  watchDiagnostics.next++
- code := fmt.Sprintf("W-%06d", watchDiagnostics.next)
+ code := fmt.Sprintf("W-%d-%03d", time.Now().Unix(), watchDiagnostics.next%1000)
  entry := watchDiagnostic{Code: code, At: time.Now().UnixMilli(), Show: show, Episode: episode, Stage: stage, Detail: err.Error()}
  watchDiagnostics.entries = append(watchDiagnostics.entries, entry)
  if len(watchDiagnostics.entries) > 30 {
@@ -53,11 +53,11 @@ func publicWatchError(err error) string {
  msg := strings.ToLower(err.Error())
  switch {
  case strings.Contains(msg, "timed out"), strings.Contains(msg, "deadline exceeded"), strings.Contains(msg, "timeout"):
-  return "Source lookup or preparation timed out"
+  return "Episode preparation took too long"
  case strings.Contains(msg, "no release"), strings.Contains(msg, "not found"), strings.Contains(msg, "no episode"), strings.Contains(msg, "no playable"), strings.Contains(msg, "no source"), strings.Contains(msg, "no links"):
-  return "No playable episode source was found"
+  return "Episode is not available in the catalog"
  case strings.Contains(msg, "torrent"), strings.Contains(msg, "download"), strings.Contains(msg, "peer"), strings.Contains(msg, "probe"), strings.Contains(msg, "encode"), strings.Contains(msg, "audio"), strings.Contains(msg, "subtitle"):
-  return "Torrent or video preparation failed"
+  return "Playback relay could not prepare the episode"
  default:
   return "Episode could not start"
  }
