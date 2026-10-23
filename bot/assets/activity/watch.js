@@ -394,7 +394,7 @@ async function wLoad() {
     if (wv.is_host && wv.ep < wv.last_ep) wCtl("next");
   };
   vid.ontimeupdate = wTime;
-  if (wv.hls && !vid.canPlayType("application/vnd.apple.mpegurl")) {
+  if (/\.m3u8(?:$|\?)/i.test(wvMedia) && !vid.canPlayType("application/vnd.apple.mpegurl")) {
     try {
       await hlsReady();
     } catch (e) {
