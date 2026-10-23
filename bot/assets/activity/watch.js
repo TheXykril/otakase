@@ -319,7 +319,7 @@ function wEpisode(s) {
       ${last > 24 ? `<div class="wepnav"><button class="btn alt" id="wprev" ${page === 0 ? "disabled" : ""}>Previous</button>
         <span class="note">Episodes ${start}–${end} of ${last}</span>
         <button class="btn alt" id="wnext" ${end === last ? "disabled" : ""}>Next</button></div>` : ""}
-      <p class="note">Episode data: <a href="https://kitsu.io" target="_blank" rel="noopener noreferrer">Kitsu</a> · <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer">TVmaze</a></p>
+      <p class="note">Episode data: <a href="https://kitsu.io" target="_blank" rel="noopener noreferrer">Kitsu</a></p>
       <div class="wepfooter"><button class="btn alt" id="wback">Back to results</button>
         <button class="btn" id="wgo">${icon("play")} Play episode ${selected}</button></div>
     </div>`;

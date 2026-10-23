@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.22
+
+- Watch Together: remove TVmaze episode artwork provider and its credit.
+- Watch Together: fetch remaining episode metadata sources concurrently, limit request latency, and cache episode previews for 30 minutes.
+
 ## 1.30.21
 
 - Watch Together: remove TMDB episode artwork integration and API key setting; other sources remain available without credentials.

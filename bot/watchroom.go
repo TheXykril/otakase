@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -954,7 +955,18 @@ func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
  // watchEpisodes loads episode-specific metadata only when the picker opens.
  // Tenrai's Jikan-compatible data is indexed by MAL episode number; AniList
  // previews remain the fallback when the upstream has no cover.
- func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
+ var episodePreviewCache = struct {
+ sync.Mutex
+ entries map[int]struct {
+   until time.Time
+   previews map[int]watchEpisodePreview
+ }
+}{entries: make(map[int]struct {
+ until time.Time
+ previews map[int]watchEpisodePreview
+})}
+
+func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
    user := b.actUser(w, r)
    if user == "" { return }
    if !watchSearchLimit.allow(user, watchNow()) {
@@ -970,11 +982,26 @@ func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
      b.watch.mu.Unlock()
      if !allowed { apiError(w, http.StatusForbidden, "not available in this room"); return }
    }
-   result := make(map[int]watchEpisodePreview)
+   episodePreviewCache.Lock()
+   cached, found := episodePreviewCache.entries[id]
+   episodePreviewCache.Unlock()
+   if found && time.Now().Before(cached.until) {
+     writeJSON(w, http.StatusOK, cached.previews)
+     return
+   }
+   ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+   defer cancel()
+   tenrai := make(map[int]watchEpisodePreview)
+   jikan := make(map[int]watchEpisodePreview)
+   kitsu := make(map[int]watchEpisodePreview)
+   var wg sync.WaitGroup
+   wg.Add(3)
+   go func() {
+     defer wg.Done()
    if show.MalID > 0 {
      for page := 1; page <= 4; page++ {
        endpoint := fmt.Sprintf("https://api.tenrai.org/v1/anime/%d/episodes?page=%d", show.MalID, page)
-       req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
+       req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
        if err != nil { break }
        resp, err := activityClient.Do(req)
        if err != nil { break }
@@ -991,7 +1018,7 @@ func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
          } `json:"data"`
          Pagination struct { HasNextPage bool `json:"has_next_page"` } `json:"pagination"`
        }
-       err = json.NewDecoder(http.MaxBytesReader(w, resp.Body, 2<<20)).Decode(&payload)
+       err = json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&payload)
        resp.Body.Close()
        if err != nil { break }
        for _, ep := range payload.Data {
@@ -1005,17 +1032,20 @@ func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
            strings.HasPrefix(img, "https://s4.anilist.co/") {
            img = "api/watch/cover?u=" + url.QueryEscape(img)
          } else { img = "" }
-         result[ep.MalID] = watchEpisodePreview{Title: ep.Title, Thumbnail: img}
+         tenrai[ep.MalID] = watchEpisodePreview{Title: ep.Title, Thumbnail: img}
        }
        if !payload.Pagination.HasNextPage || len(payload.Data) == 0 { break }
      }
    }
+   }()
+   go func() {
+     defer wg.Done()
    // Jikan supplies episode titles for MAL entries absent from Tenrai.
    // Preserve Tenrai thumbnails and never replace a non-empty title.
    if show.MalID > 0 {
      for page := 1; page <= 4; page++ {
        endpoint := fmt.Sprintf("https://api.jikan.moe/v4/anime/%d/episodes?page=%d", show.MalID, page)
-       req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
+       req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
        if err != nil { break }
        resp, err := activityClient.Do(req)
        if err != nil { break }
@@ -1033,17 +1063,46 @@ func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
        if err != nil { break }
        for _, ep := range payload.Data {
          if ep.MalID < 1 || ep.MalID > show.lastEpisode() { continue }
-         current := result[ep.MalID]
+         current := jikan[ep.MalID]
          if current.Title == "" {
            current.Title = ep.Title
            if current.Title == "" { current.Title = ep.TitleJapanese }
-           result[ep.MalID] = current
+           jikan[ep.MalID] = current
          }
        }
        if !payload.Pagination.HasNextPage || len(payload.Data) == 0 { break }
      }
    }
-   extraEpisodePreviews(r.Context(), show, result)
+   }()
+   go func() {
+     defer wg.Done()
+     extraEpisodePreviews(ctx, show, kitsu)
+   }()
+   wg.Wait()
+   result := make(map[int]watchEpisodePreview)
+   for ep, v := range kitsu { result[ep] = v }
+   for ep, v := range jikan {
+     old := result[ep]
+     if v.Title != "" { old.Title = v.Title }
+     result[ep] = old
+   }
+   for ep, v := range tenrai {
+     old := result[ep]
+     if v.Title != "" { old.Title = v.Title }
+     if v.Thumbnail != "" { old.Thumbnail = v.Thumbnail }
+     result[ep] = old
+   }
+   if len(result) > 0 {
+   episodePreviewCache.Lock()
+   if len(episodePreviewCache.entries) >= 256 {
+     clear(episodePreviewCache.entries)
+   }
+   episodePreviewCache.entries[id] = struct {
+     until time.Time
+     previews map[int]watchEpisodePreview
+   }{until: time.Now().Add(30 * time.Minute), previews: result}
+   episodePreviewCache.Unlock()
+   }
    writeJSON(w, http.StatusOK, result)
  }
 
