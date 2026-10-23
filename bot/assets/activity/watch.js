@@ -319,7 +319,7 @@ function wEpisode(s) {
       ${last > 24 ? `<div class="wepnav"><button class="btn alt" id="wprev" ${page === 0 ? "disabled" : ""}>Previous</button>
         <span class="note">Episodes ${start}–${end} of ${last}</span>
         <button class="btn alt" id="wnext" ${end === last ? "disabled" : ""}>Next</button></div>` : ""}
-      <p class="note">Episode data: <a href="https://kitsu.io" target="_blank" rel="noopener noreferrer">Kitsu</a> · <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer">TVmaze</a> · <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer"><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg" alt="TMDB" width="18" height="18" style="vertical-align:middle"></a> <span>This product uses the TMDB API but is not endorsed or certified by TMDB.</span></p>
+      <p class="note">Episode data: <a href="https://kitsu.io" target="_blank" rel="noopener noreferrer">Kitsu</a> · <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer">TVmaze</a></p>
       <div class="wepfooter"><button class="btn alt" id="wback">Back to results</button>
         <button class="btn" id="wgo">${icon("play")} Play episode ${selected}</button></div>
     </div>`;
