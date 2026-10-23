@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Watch rooms can play torrent-only episodes after buffering, with bounded disk usage and encoding load.
+- Torrent playback selects the requested audio language, renders embedded English text subtitles, and supports seeking throughout the episode.
+- Room changes cancel pending downloads; helper crashes release temporary files. Playback synchronization now follows host buffering.
+
 ## 1.30.1
 
 - Watch room: the Activity's music stops while you're in the room.

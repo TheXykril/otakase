@@ -33,6 +33,9 @@ type streamInfo struct {
 	Provider  string       `json:"provider"`
 	Mode      string       `json:"mode"`
 	Streams   []streamLink `json:"streams"`
+	Torrents  []struct {
+		InfoHash string `json:"info_hash"`
+	} `json:"torrents,omitempty"`
 }
 
 // watchResolve runs the CLI, a variable for tests.
@@ -88,7 +91,7 @@ func parseStreamInfo(out string) (streamInfo, error) {
 		if err := json.Unmarshal([]byte(line), &info); err != nil {
 			return info, err
 		}
-		if len(info.Streams) == 0 {
+		if len(info.Streams) == 0 && len(info.Torrents) == 0 {
 			return info, errors.New("no playable link")
 		}
 		return info, nil

@@ -325,8 +325,9 @@ async function wLoad() {
     vid.appendChild(tr);
   }
   vid.onloadedmetadata = () => wSubs();
-  vid.onwaiting = () => (document.getElementById("wspin").hidden = false);
-  vid.onplaying = vid.oncanplay = () => (document.getElementById("wspin").hidden = true);
+  vid.onwaiting = () => { document.getElementById("wspin").hidden = false; if (wv.is_host) wBeatNow(); };
+  vid.onplaying = () => { document.getElementById("wspin").hidden = true; if (wv.is_host) wBeatNow(); };
+  vid.oncanplay = () => (document.getElementById("wspin").hidden = true);
   vid.onerror = () => wBroken();
   vid.onended = () => {
     if (wv.is_host && wv.ep < wv.last_ep) wCtl("next");
@@ -406,7 +407,7 @@ function wBeatNow() {
   fetch("api/watch/beat", {
     method: "POST",
     headers: { Authorization: "Bearer " + session, "Content-Type": "application/json" },
-    body: JSON.stringify({ room, pos: vid.currentTime, playing: !vid.paused && !vid.ended, dur: isFinite(vid.duration) ? vid.duration : 0 }),
+    body: JSON.stringify({ room, pos: vid.currentTime, playing: !vid.paused && !vid.ended && vid.readyState >= 3, dur: isFinite(vid.duration) ? vid.duration : 0 }),
   }).catch(() => {});
 }
 

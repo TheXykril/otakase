@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -13,13 +14,19 @@ import (
 // episode it plays in its watch room, so this never prompts: a show no
 // provider can be matched to on its own is an error, not a menu.
 type StreamInfo struct {
-	AnilistID int          `json:"anilist_id"`
-	Episode   int          `json:"episode"`
-	Title     string       `json:"title"`
-	Episodes  int          `json:"episodes,omitempty"`
-	Provider  string       `json:"provider"`
-	Mode      string       `json:"mode"`
-	Streams   []StreamLink `json:"streams"`
+	AnilistID int           `json:"anilist_id"`
+	Episode   int           `json:"episode"`
+	Title     string        `json:"title"`
+	Episodes  int           `json:"episodes,omitempty"`
+	Provider  string        `json:"provider"`
+	Mode      string        `json:"mode"`
+	Streams   []StreamLink  `json:"streams"`
+	Torrents  []TorrentLink `json:"torrents,omitempty"`
+}
+
+// TorrentLink identifies a torrent without exposing the CLI's temporary local server.
+type TorrentLink struct {
+	InfoHash string `json:"info_hash"`
 }
 
 // StreamLink is one playable link and what fetching it takes.
@@ -63,6 +70,7 @@ func ResolveStreamInfo(config Config, anilistID, episode int) (StreamInfo, error
 
 	preferred := normalizeTranslationType(config.SubOrDub)
 	var failures []string
+	var torrentFallback *StreamInfo
 	for _, mode := range []string{preferred, alternateTranslationType(preferred)} {
 		for _, name := range providerNamesForAnime(&config, &anime) {
 			show := anime
@@ -72,18 +80,52 @@ func ResolveStreamInfo(config Config, anilistID, episode int) (StreamInfo, error
 				continue
 			}
 			streams := streamLinks(result)
-			if len(streams) == 0 {
+			torrents := torrentLinks(result)
+			if len(streams) == 0 && len(torrents) == 0 {
 				failures = append(failures, fmt.Sprintf("%s %s: no web links", name, mode))
 				continue
 			}
-			info.Provider, info.Mode, info.Streams = result.ProviderName, mode, streams
-			return info, nil
+			info.Provider, info.Mode, info.Streams, info.Torrents = result.ProviderName, mode, streams, torrents
+			if len(streams) > 0 {
+				return info, nil
+			}
+			if torrentFallback == nil {
+				fallback := info
+				torrentFallback = &fallback
+			}
 		}
+	}
+	if torrentFallback != nil {
+		return *torrentFallback, nil
 	}
 	if len(failures) == 0 {
 		return info, errors.New("no provider is enabled")
 	}
 	return info, fmt.Errorf("episode %d not found: %s", episode, strings.Join(failures, "; "))
+}
+
+// torrentLinks preserves local torrentstream results as portable infohashes.
+// The bot starts its own torrent client rather than trying to contact a
+// loopback server belonging to the short-lived CLI process.
+func torrentLinks(result ProviderEpisodeResult) []TorrentLink {
+	seen := map[string]bool{}
+	var out []TorrentLink
+	for _, link := range result.Links {
+		u, err := url.Parse(link)
+		if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" {
+			continue
+		}
+		hash := strings.Trim(u.Path, "/")
+		if len(hash) != 40 || strings.Trim(hash, "0123456789abcdefABCDEF") != "" {
+			continue
+		}
+		hash = strings.ToLower(hash)
+		if !seen[hash] {
+			seen[hash] = true
+			out = append(out, TorrentLink{InfoHash: hash})
+		}
+	}
+	return out
 }
 
 // streamLinks keeps the web links of a result, best first.
@@ -92,6 +134,9 @@ func streamLinks(result ProviderEpisodeResult) []StreamLink {
 	best := BestLink(result.Links)
 	for _, link := range result.Links {
 		if !strings.HasPrefix(link, "http://") && !strings.HasPrefix(link, "https://") {
+			continue
+		}
+		if u, err := url.Parse(link); err == nil && u.Hostname() == "127.0.0.1" {
 			continue
 		}
 		s := StreamLink{URL: link}

@@ -428,7 +428,7 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	switch kind {
 	case "list":
-		data, _, err := cache.get(m.key+" "+u, func() ([]byte, string, error) {
+		load := func() ([]byte, string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), watchUpstreamWait)
 			defer cancel()
 			body, _, err := m.fetch(ctx, u, 4<<20)
@@ -437,7 +437,15 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 			}
 			base, _ := url.Parse(u)
 			return []byte(m.rewritePlaylist(string(body), base)), "application/vnd.apple.mpegurl", nil
-		})
+		}
+		var data []byte
+		var err error
+		if strings.HasPrefix(u, "http://127.0.0.1:") {
+			w.Header().Set("Cache-Control", "no-store")
+			data, _, err = load()
+		} else {
+			data, _, err = cache.get(m.key+" "+u, load)
+		}
 		m.write(w, r, data, "application/vnd.apple.mpegurl", err)
 	case "seg":
 		data, typ, err := m.segment(u, cache)
@@ -466,7 +474,11 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 }
 
 func (m *watchMedia) segment(u string, cache *segCache) ([]byte, string, error) {
-	return cache.get(u, func() ([]byte, string, error) {
+	key := u
+	if strings.HasPrefix(u, "http://127.0.0.1:") {
+		key = m.key + " " + u
+	}
+	return cache.get(key, func() ([]byte, string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), watchUpstreamWait)
 		defer cancel()
 		data, typ, err := m.fetch(ctx, u, watchCacheItem)
@@ -527,7 +539,9 @@ func (m *watchMedia) write(w http.ResponseWriter, r *http.Request, data []byte, 
 	}
 	w.Header().Set("Content-Type", typ)
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	w.Header().Set("Cache-Control", "private, max-age=3600")
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "private, max-age=3600")
+	}
 	if r.Method == http.MethodHead {
 		return
 	}

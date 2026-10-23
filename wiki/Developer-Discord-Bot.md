@@ -698,3 +698,41 @@ DISCORD_BOT_TOKEN=... OTAKASE_GUILD_ID=... go run .
 
 Slash commands are registered to the one server at startup, so changes show
 up at once.
+
+### Watch-room torrent playback
+
+The bot launches the CLI from the same checkout with `-torrent-serve HASH sub|dub`.
+Install ffmpeg, ffprobe and a font package on non-container hosts. Container builds
+accept `OTAKASE_CLI_REF` to pin the helper for branch validation; the add-on defaults
+to main. The build fails if the helper cannot be built.
+
+The helper buffers the selected video before announcing a complete VOD playlist.
+Torrents larger than 1 GiB or containing more than 256 files are rejected before
+opening storage. The download cache plus the completed source use at most 2 GiB
+of payload space, excluding filesystem metadata. Downloading stops after ten
+minutes. Downloads are limited to 8 MiB/s and 16 established peers; uploads are
+disabled. One helper, including startup, runs at a time per bot process.
+
+Segments are encoded on demand, so forward and backward seeks do not depend on
+a growing playlist. One encoder runs at a time with one decoding, filtering and
+encoding thread, at most 720p/24 fps, and a 30-second segment deadline. The helper
+retains at most 16 segments, each capped at 4 MiB, in memory. The existing relay
+cache is separately bounded. These are application limits, not an OS CPU quota.
+
+Sub mode requires labelled Japanese audio and English dialogue subtitles; dub
+mode requires labelled English audio and uses English signs/forced subtitles
+when available. Commentary tracks are excluded. Embedded ASS/SSA, SRT and WebVTT
+subtitles are burned into the video. Bitmap subtitles and unlabelled audio are
+rejected when needed, rather than silently selecting the wrong language. Burned
+subtitles cannot be toggled off.
+
+Closing a room or changing episodes cancels pending startup and terminates the
+helper. All temporary files live under its private directory. The bot kills
+leftover encoder processes on helper exit and removes the directory before
+releasing the helper slot. Inherited directory locks protect active helpers;
+the next startup reclaims unlocked directories left by abrupt termination.
+
+Local verification: run `go test ./...` in both the repository root and `bot/`,
+and `go test -race ./...` in `bot/`. The CLI integration test generates a local
+dual-audio MKV and checks subtitle rendering after out-of-order segment requests.
+It requires ffmpeg and ffprobe; otherwise that test is skipped.
