@@ -6,14 +6,14 @@ RUN go mod download
 COPY *.go config.yaml CHANGELOG.md ./
 COPY assets ./assets
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /otakase-bot .
-# The otakase CLI, for /provider-status: the latest release, or a build of
-# main while there is none. Never fails the image; without it the command
-# just says the check isn't available.
+# Build the CLI from main so watch-room features match the bot after merge.
+# Fall back to the released CLI if the source build is unavailable.
 RUN mkdir /cli && case "$(uname -m)" in aarch64) a=arm64 ;; *) a=x86_64 ;; esac && \
-    { wget -qO /cli/otakase "https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-$a" || \
-      { rm -f /cli/otakase && CGO_ENABLED=0 GOBIN=/cli go install -trimpath -ldflags="-s -w -X main.version=main" \
-          github.com/thexykril/otakase/cmd/otakase@main; } || \
-      { rm -f /cli/otakase; echo "otakase CLI unavailable, /provider-status disabled"; }; } && \
+    { CGO_ENABLED=0 GOBIN=/cli go install -trimpath -ldflags="-s -w -X main.version=main" \
+        github.com/thexykril/otakase/cmd/otakase@main || \
+      { rm -f /cli/otakase && wget -qO /cli/otakase \
+          "https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-$a"; } || \
+      { rm -f /cli/otakase; echo "otakase CLI unavailable"; }; } && \
     { [ ! -f /cli/otakase ] || chmod +x /cli/otakase; }
 
 FROM alpine:3.22
