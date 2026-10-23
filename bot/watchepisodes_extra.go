@@ -82,8 +82,8 @@ func extraEpisodePreviews(ctx context.Context, show watchShow, result map[int]wa
  // Only use TVmaze when its entire first-season episode count matches this
  // AniList entry. Franchise-wide IDs otherwise risk mixing split cours.
  if len(mapping.TVDBID) == 1 && mapping.TVDBID[0] > 0 && show.Episodes > 0 {
-   var tvshow struct { ID int `json:"id"` }
-   if episodeJSON(ctx, "https://api.tvmaze.com/lookup/shows?thetvdb="+strconv.Itoa(mapping.TVDBID[0]), &tvshow) && tvshow.ID > 0 {
+   var tvshow struct { ID int `json:"id"`; Premiered string `json:"premiered"` }
+   if episodeJSON(ctx, "https://api.tvmaze.com/lookup/shows?thetvdb="+strconv.Itoa(mapping.TVDBID[0]), &tvshow) && tvshow.ID > 0 && (show.Year == 0 || strings.HasPrefix(tvshow.Premiered, strconv.Itoa(show.Year)+"-")) {
      var episodes []struct {
        Season int `json:"season"`
        Number int `json:"number"`
@@ -106,13 +106,13 @@ func extraEpisodePreviews(ctx context.Context, show watchShow, result map[int]wa
  // Only use one mapped TV series and an exactly matching first season.
  key := os.Getenv("TMDB_API_KEY")
  if key != "" && len(mapping.TMDBID) == 1 && mapping.TMDBID[0].Type == "tv" && show.Episodes > 0 {
-   var season struct { Episodes []struct {
+   var season struct { AirDate string `json:"air_date"`; Episodes []struct {
      EpisodeNumber int `json:"episode_number"`
      Name string `json:"name"`
      StillPath string `json:"still_path"`
    } `json:"episodes"` }
    endpoint := fmt.Sprintf("https://api.themoviedb.org/3/tv/%d/season/1?api_key=%s",mapping.TMDBID[0].ID,url.QueryEscape(key))
-   if episodeJSON(ctx, endpoint, &season) && len(season.Episodes) == show.Episodes {
+   if episodeJSON(ctx, endpoint, &season) && len(season.Episodes) == show.Episodes && (show.Year == 0 || strings.HasPrefix(season.AirDate, strconv.Itoa(show.Year)+"-")) {
      for _, ep := range season.Episodes {
        if !strings.HasPrefix(ep.StillPath,"/") { continue }
        fillEpisode(result, ep.EpisodeNumber, max, ep.Name, "https://image.tmdb.org/t/p/w300"+ep.StillPath)
