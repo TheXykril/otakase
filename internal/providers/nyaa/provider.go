@@ -2,6 +2,7 @@ package nyaa
 
 import (
 	"fmt"
+	"sync/atomic"
 	"regexp"
 	"sort"
 	"strconv"
@@ -25,6 +26,12 @@ func New() *Provider { return &Provider{name: "nyaa", feed: feedURL} }
 func NewSukebei() *Provider { return &Provider{name: "sukebei", feed: sukebeiFeedURL} }
 
 func (p *Provider) Name() string { return p.name }
+
+// Stream-info only needs infohashes, not an active torrent connection.
+// It is set by the non-interactive stream-info CLI before looking up providers.
+var streamInfoOnly atomic.Bool
+
+func SetStreamInfoOnly(enabled bool) { streamInfoOnly.Store(enabled) }
 
 // dubMarkers identify a release that carries an English audio track. The index
 // is overwhelmingly subtitled, so dub is opt-in rather than assumed.
@@ -320,6 +327,9 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 		providerhost.Log(fmt.Sprintf("%s: episode %d -> %q (%d seeders, %s)",
 			p.name, epNo, release.Title, release.Seeders, release.Size))
 
+		if streamInfoOnly.Load() {
+			return []string{"magnet:?xt=urn:btih:" + release.InfoHash}, nil
+		}
 		streamURL, err := torrentstream.Stream(release.InfoHash)
 		if err != nil {
 			// Another release may have a healthier swarm.
