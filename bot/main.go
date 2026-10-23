@@ -108,6 +108,7 @@ var haOptions = map[string]string{
 	"discord_client_secret": "OTAKASE_DISCORD_CLIENT_SECRET",
 	"mal_client_id":         "OTAKASE_MAL_CLIENT_ID",
 	"mal_client_secret":     "OTAKASE_MAL_CLIENT_SECRET",
+	"tmdb_api_key":          "TMDB_API_KEY",
 }
 
 // loadHAOptions sets variables from a Home Assistant add-on options file,

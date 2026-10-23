@@ -1043,6 +1043,7 @@ func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
        if !payload.Pagination.HasNextPage || len(payload.Data) == 0 { break }
      }
    }
+   extraEpisodePreviews(r.Context(), show, result)
    writeJSON(w, http.StatusOK, result)
  }
 
