@@ -17,6 +17,7 @@ let wNeedTap = false;
 let wFails = 0;
 let wSubPick = "auto";
 let wSearch = [];
+let wFull = false; // the player fills the window
 let wChanging = false; // the host is picking another show while one plays
 
 const wFmt = (s) => {
@@ -33,6 +34,7 @@ const ASK_TEXT = { pause: "pause", play: "play", skip: "skip the opening", next:
 async function watchView() {
   page("Watch <span>room</span>", `<div id="wbox">${loading("Looking for the watch room…")}</div>`);
   where = "watch";
+  soundApply();
   const st = await api(`watch/status?room=${encodeURIComponent(room)}`);
   if (where !== "watch") return;
   if (st.busy && !st.here) {
@@ -115,9 +117,9 @@ function wDraw() {
   } else if (v.phase === "loading") {
     stage = `<p class="msg loading">Finding ${showLine || "the episode"} on the sources… this can take a minute.</p>`;
   } else {
-    stage = `<div class="wplayer" id="wplayer"><video id="wvid" playsinline preload="auto"></video>
+    stage = `<div class="wstage${wFull ? " full" : ""}" id="wstage"><div class="wplayer" id="wplayer"><video id="wvid" playsinline preload="auto"></video>
       <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div></div>
-      <div class="wbar" id="wbar"></div>`;
+      <div class="wbar" id="wbar"></div></div>`;
   }
   wBox(`<div class="whead"><span class="wshow">${showLine || "Nothing playing yet"}</span><span class="pill" id="wends"></span></div>
     ${stage}
@@ -460,15 +462,36 @@ function wBar() {
   const vol = document.getElementById("wvol");
   vol.value = vid.volume;
   vol.oninput = () => ((vid.volume = +vol.value), (vid.muted = +vol.value === 0));
-  document.getElementById("wfull").onclick = () => {
-    const p = document.getElementById("wplayer");
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    else if (p.requestFullscreen) p.requestFullscreen().catch(() => {});
-    else if (vid.webkitEnterFullscreen) vid.webkitEnterFullscreen();
-  };
+  document.getElementById("wfull").onclick = () => wFullscreen(!wFull);
   document.getElementById("wsub").onchange = (e) => ((wSubPick = e.target.value), wSubs());
   wSubs();
 }
+
+// wFullscreen fills the Activity's window with the player and its
+// controls. Discord's frame doesn't allow real full screen everywhere, so
+// that is only tried on top; Discord's own button makes the Activity
+// window itself bigger.
+function wFullscreen(on) {
+  wFull = on;
+  const st = document.getElementById("wstage");
+  if (!st) return;
+  st.classList.toggle("full", on);
+  document.body.classList.toggle("wfull", on);
+  const b = document.getElementById("wfull");
+  if (b) b.textContent = on ? "✕" : "⛶";
+  if (on && !document.fullscreenElement && st.requestFullscreen) st.requestFullscreen().catch(() => {});
+  if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && wFull) wFullscreen(false);
+});
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement && wFull && document.getElementById("wstage")) {
+    // Leaving real full screen (Esc) leaves the filled window too.
+    wFullscreen(false);
+  }
+});
 
 // wSubs fills the subtitle picker and shows the picked track: English by
 // default.
@@ -528,6 +551,9 @@ function watchLeave() {
     body: JSON.stringify({ room }),
   }).catch(() => {});
   wv = null;
+  wFull = false;
+  document.body.classList.remove("wfull");
+  setTimeout(soundApply);
 }
 
 addEventListener("pagehide", watchLeave);

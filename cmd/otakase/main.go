@@ -227,6 +227,9 @@ func runCommandAndExit(f *cliFlags, cfg *internal.Config) {
 	if f.streamInfo != "" {
 		anilistID, episode, err := internal.ParseStreamInfoArg(f.streamInfo)
 		if err == nil {
+			// The audio flags are applied after the one-job commands, so
+			// this one applies them itself.
+			applyAudioFlags(cfg, f)
 			cfg.AdultContent = f.streamAdult
 			var info internal.StreamInfo
 			info, err = internal.ResolveStreamInfo(*cfg, anilistID, episode)

@@ -2832,7 +2832,8 @@ function musicStop() {
 }
 
 function soundApply() {
-  if (soundMode === "music" && !document.hidden) musicStart();
+  // The watch room has its own sound: no music over the anime.
+  if (soundMode === "music" && !document.hidden && where !== "watch") musicStart();
   else musicStop();
   const b = document.getElementById("snd");
   if (b) {

@@ -389,6 +389,8 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 			return
 		}
 		r.streams = info.Streams
+		// Shown as it plays: a show without a dub plays subbed.
+		r.dub = info.Mode == "dub"
 		if !b.startStream(r, 0) {
 			return
 		}
@@ -419,7 +421,7 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	}
 	r.finishMedia()
 	r.link = k
-	m, entry, subIDs := newWatchMedia(r.streams[k])
+	m, entry, subIDs := newWatchMedia(r.streams[k], r.dub)
 	r.media, r.entry, r.subs = m, entry, nil
 	for n, s := range r.streams[k].Subtitles {
 		label := s.Label

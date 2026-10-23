@@ -60,6 +60,7 @@ type streamSubtitle struct {
 type watchMedia struct {
 	key  string
 	link streamLink
+	dub  bool // pick the English audio track
 
 	mu    sync.Mutex
 	ids   map[string]string // id → upstream address
@@ -73,8 +74,8 @@ type watchMedia struct {
 
 // newWatchMedia registers an episode's link. Entry is the id of the main
 // address and subs the ids of its subtitle tracks, in the link's order.
-func newWatchMedia(link streamLink) (m *watchMedia, entry string, subs []string) {
-	m = &watchMedia{key: newToken(16), link: link, ids: map[string]string{}, byURL: map[string]string{},
+func newWatchMedia(link streamLink, dub bool) (m *watchMedia, entry string, subs []string) {
+	m = &watchMedia{key: newToken(16), link: link, dub: dub, ids: map[string]string{}, byURL: map[string]string{},
 		kind: map[string]string{}, next: map[string][]string{}}
 	kind := "file"
 	if looksLikeHLS(link.URL) {
@@ -167,7 +168,7 @@ var hlsURIAttr = regexp.MustCompile(`URI="([^"]*)"`)
 // playlist is cut to one variant and one audio track first.
 func (m *watchMedia) rewritePlaylist(body string, base *url.URL) string {
 	if strings.Contains(body, "#EXT-X-STREAM-INF") {
-		body = trimMaster(body, watchMaxHeight)
+		body = trimMaster(body, watchMaxHeight, m.dub)
 	}
 	var out []string
 	var segs []string
@@ -237,9 +238,11 @@ var (
 
 // trimMaster keeps the best variant at or under maxHeight (the smallest
 // when every one is bigger, the leanest under 4 Mbps when none says its
-// size) and the audio track it plays with: the default one, Japanese when
-// none is marked. Subtitle groups stay; I-frame playlists go.
-func trimMaster(body string, maxHeight int) string {
+// size) and the audio track it plays with: English for a dub, Japanese
+// otherwise, else the default one. A master with every language would
+// otherwise play its default, Japanese, for a dub too. Subtitle groups
+// stay; I-frame playlists go.
+func trimMaster(body string, maxHeight int, dub bool) string {
 	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
 	var head []string
 	var vars []hlsVariant
@@ -280,7 +283,7 @@ func trimMaster(body string, maxHeight int) string {
 	}
 	v := pickVariant(vars, maxHeight)
 	out := head
-	if a := pickAudio(audio, v.audio); a != "" {
+	if a := pickAudio(audio, v.audio, dub); a != "" {
 		a = hlsDefault.ReplaceAllString(a, "DEFAULT=YES")
 		if !strings.Contains(a, "DEFAULT=") {
 			a += ",DEFAULT=YES"
@@ -313,7 +316,7 @@ func pickVariant(vars []hlsVariant, maxHeight int) hlsVariant {
 	return best
 }
 
-func pickAudio(audio []string, group string) string {
+func pickAudio(audio []string, group string, dub bool) string {
 	var inGroup []string
 	for _, a := range audio {
 		if m := hlsGroupID.FindStringSubmatch(a); group == "" || m != nil && m[1] == group {
@@ -323,13 +326,23 @@ func pickAudio(audio []string, group string) string {
 	if len(inGroup) == 0 {
 		return ""
 	}
-	for _, a := range inGroup {
-		if strings.Contains(a, "DEFAULT=YES") {
+	lang := func(prefix string) string {
+		for _, a := range inGroup {
+			if m := hlsLanguage.FindStringSubmatch(a); m != nil && strings.HasPrefix(strings.ToLower(m[1]), prefix) {
+				return a
+			}
+		}
+		return ""
+	}
+	if dub {
+		if a := lang("en"); a != "" {
 			return a
 		}
+	} else if a := lang("ja"); a != "" {
+		return a
 	}
 	for _, a := range inGroup {
-		if m := hlsLanguage.FindStringSubmatch(a); m != nil && strings.HasPrefix(strings.ToLower(m[1]), "ja") {
+		if strings.Contains(a, "DEFAULT=YES") {
 			return a
 		}
 	}

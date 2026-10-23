@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.30.1
+
+- Watch room: the Activity's music stops while you're in the room.
+- Watch room: picking dub now plays the dub, and shows with several audio
+  tracks play the English one for dub and the Japanese one otherwise.
+- Watch room: fullscreen fills the Activity window.
+
 ## 1.30.0
 
 - **Watch room** in the games Activity: the bot plays an anime for

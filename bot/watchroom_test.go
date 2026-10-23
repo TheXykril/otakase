@@ -289,13 +289,17 @@ func TestTrimMaster(t *testing.T) {
 720/p.m3u8
 #EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=100000,URI="iframe.m3u8"
 `
-	out := trimMaster(master, 720)
+	out := trimMaster(master, 720, false)
 	if !strings.Contains(out, "720/p.m3u8") || strings.Contains(out, "1080/") || strings.Contains(out, "360/") ||
 		!strings.Contains(out, `NAME="Japanese"`) || strings.Contains(out, "English") || strings.Contains(out, "iframe") {
 		t.Fatalf("trimmed:\n%s", out)
 	}
+	// A dub takes the English track.
+	if out := trimMaster(master, 720, true); !strings.Contains(out, `NAME="English",LANGUAGE="eng",URI="en/p.m3u8",DEFAULT=YES`) || strings.Contains(out, "Japanese") {
+		t.Fatalf("dub:\n%s", out)
+	}
 	// Every variant over the cap: the smallest stays.
-	out = trimMaster("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080\nhi.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x1080\nlo.m3u8\n", 720)
+	out = trimMaster("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080\nhi.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x1080\nlo.m3u8\n", 720, false)
 	if !strings.Contains(out, "lo.m3u8") || strings.Contains(out, "hi.m3u8") {
 		t.Fatalf("over the cap:\n%s", out)
 	}
