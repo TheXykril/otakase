@@ -361,7 +361,7 @@ function hlsReady() {
   return hlsLoading;
 }
 
-async function wEffectiveMedia() {
+function wEffectiveMedia() {
   if (!wv) return "";
   const variants = wv.audio_media || {};
   const mode = /^(en|eng)(-|$)/.test(wAudioPick) ? "dub" : /^(ja|jpn)(-|$)/.test(wAudioPick) ? "sub" : "";
