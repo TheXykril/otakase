@@ -33,6 +33,41 @@ var activityFiles embed.FS
 
 const activitySessionTTL = 12 * time.Hour
 
+// Launch intents expire quickly and are consumed only by the launching member.
+var activityLaunches = struct {
+  sync.Mutex
+  modes map[string]activityLaunchMode
+}{modes: make(map[string]activityLaunchMode)}
+
+type activityLaunchMode struct {
+  mode string
+  expires time.Time
+}
+
+func activityLaunchUser(i *discordgo.InteractionCreate) string {
+  if i.Member != nil && i.Member.User != nil { return i.Member.User.ID }
+  if i.User != nil { return i.User.ID }
+  return ""
+}
+
+func setActivityLaunchMode(user, mode string) {
+  if user == "" { return }
+  activityLaunches.Lock()
+  defer activityLaunches.Unlock()
+  if mode == "" { delete(activityLaunches.modes, user); return }
+  activityLaunches.modes[user] = activityLaunchMode{mode: mode, expires: time.Now().Add(45 * time.Second)}
+}
+
+func takeActivityLaunchMode(user string) string {
+  activityLaunches.Lock()
+  defer activityLaunches.Unlock()
+  hint, ok := activityLaunches.modes[user]
+  delete(activityLaunches.modes, user)
+  if ok && time.Now().Before(hint.expires) { return hint.mode }
+  return ""
+}
+
+
 type activitySession struct {
 	user    string
 	expires time.Time
@@ -96,7 +131,15 @@ func (b *bot) appID() string {
 // launchActivity answers an interaction by opening the Activity. False when
 // Discord refused (Activities not turned on for the app).
 func (b *bot) launchActivity(i *discordgo.InteractionCreate) bool {
+  return b.launchActivityMode(i, "")
+}
+
+// launchActivityMode launches the same Activity with a short-lived menu selection.
+func (b *bot) launchActivityMode(i *discordgo.InteractionCreate, mode string) bool {
+  user := activityLaunchUser(i)
+  setActivityLaunchMode(user, mode)
 	if err := b.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{Type: 12}); err != nil {
+		setActivityLaunchMode(user, "")
 		log.Printf("launch activity: %v", err)
 		if i.Type == discordgo.InteractionMessageComponent {
 			b.respond(i, true, errorEmbed("Couldn't open the Activity. Try again, or update Discord."))
@@ -215,7 +258,7 @@ func (b *bot) activityToken(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = u.Username
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"session": b.acts.add(u.ID), "name": name, "access_token": tok.AccessToken})
+	writeJSON(w, http.StatusOK, map[string]any{"session": b.acts.add(u.ID), "name": name, "access_token": tok.AccessToken, "mode": takeActivityLaunchMode(u.ID)})
 }
 
 // activityState is what the page shows.

@@ -170,6 +170,8 @@ func gameCommands() []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		{Name: "leaderboard", Description: "Game points leaderboard this week and all time, and a button to play"},
 		{Name: "activity", Description: "Open Otakase Activity to watch anime together or play games"},
+		{Name: "games", Description: "Open the games-only Activity"},
+		{Name: "watch", Description: "Open Watch Together directly"},
 		{Name: "game-ban", Description: "Give a member a break from games: no playing, no points (0 hours lifts it)", DefaultMemberPermissions: &permMod,
 			Options: []*discordgo.ApplicationCommandOption{
 				{Type: discordgo.ApplicationCommandOptionUser, Name: "member", Description: "Who", Required: true},
@@ -195,6 +197,10 @@ func (b *bot) gameCommand(i *discordgo.InteractionCreate, name string) bool {
 		b.gamesBoard(i)
 	case "activity":
 		b.dailyCommand(i)
+	case "games":
+		b.launchActivityMode(i, "games")
+	case "watch":
+		b.launchActivityMode(i, "watch")
 	case "riddle-add":
 		b.addRiddle(i)
 	case "game-ban":

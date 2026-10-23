@@ -19,6 +19,7 @@ let daily = null;
 let busy = false;
 let freshDaily = false;
 let where = ""; // "menu", "party" or "" for any other page
+let launchMode = ""; // empty for the full Activity, "games" or "watch" for shortcuts
 let gamesOff = []; // games staff turned off
 let pranks = new Set(); // prank switches an admin put on this screen
 
@@ -293,8 +294,9 @@ function page(title, body) {
   clearTimeout(pending);
   if (where === "watch") watchLeave();
   where = "";
-  app.innerHTML = `<button class="back" id="back">${icon("back")} Games</button><header><h1>${title}</h1><span class="pill" id="side" hidden></span></header>${body}`;
-  document.getElementById("back").onclick = menu;
+  app.innerHTML = `${launchMode === "watch" ? "" : `<button class="back" id="back">${icon("back")} Games</button>`}<header><h1>${title}</h1><span class="pill" id="side" hidden></span></header>${body}`;
+  const back = document.getElementById("back");
+  if (back) back.onclick = menu;
   enter();
 }
 
@@ -327,6 +329,7 @@ async function start() {
   });
   const tok = await api("token", { code });
   session = tok.session;
+  launchMode = ["games", "watch"].includes(tok.mode) ? tok.mode : "";
   me = tok.name || "";
   try {
     await sdk.commands.authenticate({ access_token: tok.access_token });
@@ -337,12 +340,17 @@ async function start() {
   room = String(sdk.instanceId || channel || "solo").replace(/[^A-Za-z0-9_.:-]/g, "").slice(0, 100) || "solo";
   [titles, daily] = await Promise.all([api("titles"), api("daily").catch(() => null)]);
   joinRoom();
-  menu();
+  if (launchMode === "watch") watchView().catch(showError);
+  else menu();
 }
 
 // ── Menu ──
 
 function menu() {
+  if (launchMode === "watch") {
+    if (where !== "watch") watchView().catch(showError);
+    return;
+  }
   clearTimeout(pending);
   if (where === "watch") watchLeave();
   where = "menu";
@@ -353,10 +361,10 @@ function menu() {
     return `<span class="tag live">#${daily.num} · ${daily.play.guesses.length}/${daily.tries} · today's puzzle</span>`;
   };
   app.innerHTML = `
-    <header class="hero"><div><h1>Otakase <span>Activity</span></h1><p class="sub">Watch anime together or pick a game to play.</p></div>${
+    <header class="hero"><div><h1>Otakase <span>Activity</span></h1><p class="sub">${launchMode === "games" ? "Pick a game to play." : "Watch anime together or pick a game to play."}</p></div>${
       me ? `<span class="pill">${esc(me)}</span>` : ""
     }</header>
-    <div class="menu">${GAMES.map(
+    <div class="menu">${GAMES.filter((g) => launchMode !== "games" || g.key !== "watch").map(
       (g, i) =>
         `<button class="card${g.big ? " big" : ""}${gamesOff.includes(g.key) ? " off" : ""}" data-game="${g.key}" style="--c:${g.color};--i:${i}"><span class="jp">${JP[g.key]}</span>${PREVIEWS[
           g.key
@@ -366,6 +374,7 @@ function menu() {
 }
 
 function open(game) {
+  if ((launchMode === "games" && game === "watch") || (launchMode === "watch" && game !== "watch")) return;
   const views = { watch: watchView, party: partyView, koikoi: kkOpen, daily: dailyView, guess: soloStart, riddle: soloStart, scramble: soloStart, hl: hlStart, bingo: bingoView, board: boardView };
   Promise.resolve((views[game] || pzOpen)(game)).catch(showError);
 }

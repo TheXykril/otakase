@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Otakase Activity</title>
 <style>
   @font-face { font-family: "Inter"; src: url("fonts/Inter-Medium.otf") format("opentype"); font-weight: 400 500; font-display: swap; }
@@ -35,7 +35,12 @@
   html.long .topline { background: rgba(210, 73, 47, .5); }
   html.long .topline i { width: var(--scrolled, 0%); }
   svg.i { width: 1.15em; height: 1.15em; vertical-align: -.2em; flex: none; }
-  main { max-width: 880px; margin: 0 auto; padding: 22px 16px 32px; }
+  main { max-width: 880px; margin: 0 auto; padding: calc(22px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(80px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+/* Discord overlays Activity controls at the edges, especially on mobile. */
+@media (pointer: coarse) and (max-width: 800px) {
+  main { padding-top: max(72px, calc(22px + env(safe-area-inset-top, 0px))); padding-bottom: max(112px, calc(72px + env(safe-area-inset-bottom, 0px))); }
+  button, select, input { scroll-margin: 90px; }
+}
   main.enter > * { animation: rise .3s var(--ease) both; }
   main.enter > *:nth-child(2) { animation-delay: .03s; } main.enter > *:nth-child(3) { animation-delay: .06s; }
   main.enter > *:nth-child(n+4) { animation-delay: .09s; }
@@ -676,12 +681,26 @@
   .wtap { position: absolute; inset: 0; margin: auto; width: max-content; height: max-content; padding: 14px 22px; border-radius: 10px; border: 0; background: var(--shu); color: #fff; font: inherit; font-weight: 700; font-size: 17px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
   .wtap[hidden], .wspin[hidden] { display: none; }
   .wspin { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .25); border-top-color: var(--shu); animation: spin .8s linear infinite; pointer-events: none; }
-  .wstage.full { position: fixed; inset: 0; width:100vw; height:100dvh; z-index: 9999; display: flex; flex-direction: column; background: #08090d; padding: 0 0 max(8px,env(safe-area-inset-bottom)); }
+  .wstage.full { position: fixed; inset: 0; width:100vw; height:100dvh; z-index: 9999; display: flex; flex-direction: column; background: #08090d; padding: 0; }
+.wstage.full .wbar, .wstage:fullscreen .wbar {
+  position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: max(80px, calc(20px + env(safe-area-inset-bottom, 0px)));
+  z-index: 2; max-height: min(65dvh, 420px); overflow-y: auto;
+  background: rgba(17,20,28,.94); backdrop-filter: blur(12px);
+  transition: opacity .2s ease, transform .2s ease;
+}
+.wstage.full.controls-hidden .wbar { opacity: 0; transform: translateY(12px); pointer-events: none; }
+.wstage.full .wplayer, .wstage:fullscreen .wplayer { width: 100%; height: 100%; }
+.wstage.full .wplayer video { object-fit: contain; }
+@media (pointer: coarse) {
+  .wstage.full .wbar, .wstage:fullscreen .wbar { bottom: max(100px, calc(30px + env(safe-area-inset-bottom, 0px))); }
+}
+
   .wstage:fullscreen { display:flex; flex-direction:column; width:100%; height:100%; background:#08090d; }
   .wstage:fullscreen .wplayer { flex:1; min-height:0; aspect-ratio:auto; }
   .wstage.full .wplayer { flex: 1; min-height: 0; aspect-ratio: auto; border-radius: 0; }
   .wstage.full .wplayer video { object-fit: contain; }
-  .wstage.full .wbar,.wstage:fullscreen .wbar { margin: 8px 12px 0; padding: 10px 12px; border-radius: 12px; background: #11141c; }
+  .wstage.full .wbar,.wstage:fullscreen .wbar { margin: 0; padding: 10px 12px; border-radius: 12px; }
   body.wfull { overflow: hidden; }
   body.wfull .snd, body.wfull .topline { display: none; }
   .wbar { margin: 10px 0 4px; padding: 12px; background: var(--tile); border: 1px solid var(--line); border-radius: 12px; }
