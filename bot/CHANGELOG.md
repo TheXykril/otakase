@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.30.12
+
+- Watch room: stop defaulting all episodes to Dub when no preference is selected.
+- Look for separate Sub and Dub playback editions when a stream contains only one audio track, and show newly discovered languages in the player.
+- Choose the playback format from the selected rendition when switching languages.
+
 ## 1.30.11
 
 - Watch room: remember personal audio and subtitle language preferences and select them in the player.

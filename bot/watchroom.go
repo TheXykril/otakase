@@ -116,6 +116,7 @@ type watchRoom struct {
 	old           *watchMedia // the episode before, still served for a moment
 	entry         string
 	audioEntries map[string]string
+	alternateMedia *watchMedia
 	subs          []watchSub
 
 	playing bool
@@ -369,6 +370,7 @@ func (r *watchRoom) finishMedia() {
 		r.bytesOut += r.media.out.Load()
 	}
 	r.old, r.media = r.media, nil
+	r.alternateMedia = nil
 }
 
 // ── Episodes ──
@@ -448,11 +450,49 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		}
 		r.torrent = torrent
 		r.torrentCancel = cancel
+        // Some providers expose Sub and Dub as separate releases rather than
+        // multiple audio tracks. Look up the other version without delaying
+        // the first viewer; only reuse directly playable links here.
+        if r.audioEntries == nil {
+            go b.findWatchAlternate(ctx, r, gen, cli, show.ID, ep, adult, !r.dub)
+        }
 		// The next episode is looked up ahead, so it starts at once.
 		if ep < show.lastEpisode() {
 			watchAhead(func() { b.watch.infos.get(context.Background(), cli, show.ID, ep+1, dub, adult) })
 		}
 	}()
+}
+
+
+// findWatchAlternate makes separately published audio versions selectable.
+// Torrent alternatives are intentionally not started here: starting another
+// download/encoder could overwhelm small add-on hosts.
+func (b *bot) findWatchAlternate(ctx context.Context, room *watchRoom, gen int, cli string, showID, ep int, adult, dub bool) {
+    info, err := b.watch.infos.get(ctx, cli, showID, ep, dub, adult)
+    if err != nil || len(info.Streams) == 0 || ctx.Err() != nil || info.Mode != map[bool]string{true: "dub", false: "sub"}[dub] {
+        return
+    }
+    mode := "sub"
+    if dub { mode = "dub" }
+    b.watch.mu.Lock()
+    defer b.watch.mu.Unlock()
+    if b.watch.cur != room || room.gen != gen || room.phase != "play" || room.media == nil {
+        return
+    }
+    // Do not publish a second label for the exact same source.
+    if info.Streams[0].URL == room.streams[room.link].URL {
+        return
+    }
+    media, entry, _ := newWatchMedia(info.Streams[0], dub)
+    room.alternateMedia = media
+    if room.audioEntries == nil {
+        room.audioEntries = map[string]string{}
+    }
+    current := "sub"
+    if room.dub { current = "dub" }
+    room.audioEntries[current] = watchMediaPath(room.media.key, room.entry)
+    room.audioEntries[mode] = watchMediaPath(media.key, entry)
+    room.changed()
 }
 
 // startStream plays link k of the episode. Hold the lock.
@@ -1205,7 +1245,7 @@ func (b *bot) watchMediaAPI(w http.ResponseWriter, r *http.Request) {
 	b.watch.mu.Lock()
 	var m *watchMedia
 	if cur := b.watch.cur; cur != nil {
-		for _, c := range []*watchMedia{cur.media, cur.old} {
+		for _, c := range []*watchMedia{cur.media, cur.old, cur.alternateMedia} {
 			if c != nil && c.key == key {
 				m = c
 			}

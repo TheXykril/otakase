@@ -85,6 +85,7 @@ async function watchJoin() {
 // wSet takes a new view of the room and redraws what changed.
 function wSet(v, fromHost) {
   if (!v || where !== "watch") return;
+  const oldAudioMedia = JSON.stringify((wv && wv.audio_media) || {});
   wv = v;
   wvAt = Date.now();
   if (v.languages && !wSettingsDirty) {
@@ -116,6 +117,7 @@ function wSet(v, fromHost) {
   wPeople();
   wAsks();
   wSyncLine();
+  if (oldAudioMedia !== JSON.stringify(v.audio_media || {})) wAudioTracks();
   if (v.media && wEffectiveMedia() !== wvMedia) wLoad();
   else if (fromHost) wApply(true);
 }
@@ -317,7 +319,7 @@ function wEpisode(s) {
       go.disabled = true;
       wChanging = false;
       wvKey = "";
-      api("watch/pick", { room, show: s.id, ep: selected, dub: true })
+      api("watch/pick", { room, show: s.id, ep: selected, dub: /^(en|eng)(-|$)/.test(wAudioPick) })
         .then((nv) => wSet(nv))
         .catch((err) => { go.disabled = false; showError(err); });
     };
@@ -392,7 +394,7 @@ async function wLoad() {
     if (wv.is_host && wv.ep < wv.last_ep) wCtl("next");
   };
   vid.ontimeupdate = wTime;
-  if (wv.hls && !vid.canPlayType("application/vnd.apple.mpegurl")) {
+  if (/\.m3u8(?:$|\?)/i.test(wvMedia) && !vid.canPlayType("application/vnd.apple.mpegurl")) {
     try {
       await hlsReady();
     } catch (e) {
@@ -581,7 +583,7 @@ function wAudioTracks() {
     select.innerHTML = `<option value="auto">Automatic</option>` +
       (variants.sub ? `<option value="ja">Japanese</option>` : "") +
       (variants.dub ? `<option value="en">English</option>` : "");
-    select.disabled = Object.keys(variants).length < 2;
+    select.disabled = false;
     select.value = /^(en|eng)(-|$)/.test(wAudioPick) && variants.dub ? "en" :
       /^(ja|jpn)(-|$)/.test(wAudioPick) && variants.sub ? "ja" : "auto";
     document.getElementById("wsettingshint").textContent =
