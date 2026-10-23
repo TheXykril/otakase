@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.16
+
+- Watch Together: load episode titles and supported thumbnails from Tenrai when opening the episode picker, with AniList fallback.
+
 ## 1.30.15
 
 - Activity: reposition floating moderation and sound controls in portrait and landscape to avoid Discord overlays.
