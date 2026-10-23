@@ -241,7 +241,9 @@ func (s *botSegments) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	raw := strings.TrimSuffix(strings.TrimPrefix(path, "/seg"), ".ts")
 	n, err := strconv.Atoi(raw)
-	if err != nil || path != fmt.Sprintf("/seg%d.ts", n) || n < 0 || float64(n*segmentSeconds) >= s.media.duration {
+	media := s.media
+	if selected, ok := s.variants[mode]; ok { media = selected }
+	if err != nil || path != fmt.Sprintf("/seg%d.ts", n) || n < 0 || float64(n*segmentSeconds) >= media.duration {
 		http.NotFound(w, r)
 		return
 	}
