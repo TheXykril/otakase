@@ -85,6 +85,7 @@ async function watchJoin() {
 // wSet takes a new view of the room and redraws what changed.
 function wSet(v, fromHost) {
   if (!v || where !== "watch") return;
+  const oldAudioMedia = JSON.stringify((wv && wv.audio_media) || {});
   wv = v;
   wvAt = Date.now();
   if (v.languages && !wSettingsDirty) {
@@ -116,6 +117,7 @@ function wSet(v, fromHost) {
   wPeople();
   wAsks();
   wSyncLine();
+  if (oldAudioMedia !== JSON.stringify(v.audio_media || {})) wAudioTracks();
   if (v.media && wEffectiveMedia() !== wvMedia) wLoad();
   else if (fromHost) wApply(true);
 }
