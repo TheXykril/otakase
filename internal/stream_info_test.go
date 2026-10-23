@@ -26,3 +26,21 @@ func TestStreamLinksKeepWebLinksBestFirst(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestTorrentLinksDoNotLeakLoopbackStreams(t *testing.T) {
+	hash := "0123456789abcdef0123456789abcdef01234567"
+	result := ProviderEpisodeResult{Links: []string{
+		"http://127.0.0.1:39211/" + hash,
+		"https://example.com/episode.mp4",
+		"http://127.0.0.1:39211/" + hash,
+		"http://127.0.0.1:39211/not-a-hash",
+	}}
+	torrents := torrentLinks(result)
+	if len(torrents) != 1 || torrents[0].InfoHash != hash {
+		t.Fatalf("torrent links: %+v", torrents)
+	}
+	streams := streamLinks(result)
+	if len(streams) != 1 || streams[0].URL != "https://example.com/episode.mp4" {
+		t.Fatalf("web links: %+v", streams)
+	}
+}
