@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Activity: retire the old `/games` command; open the Activity with `/otakase`.
+- Refresh the Activity cover with simpler, anime-inspired branding.
+
 - Activity: open Watch Together and games with `/otakase`; `/games` remains available as a shortcut.
 - Rename games-only Activity headings and prepare a unified Activity cover graphic.
 
