@@ -7,7 +7,6 @@ import (
  "io"
  "net/http"
  "net/url"
- "os"
  "strconv"
  "strings"
 )
@@ -32,7 +31,7 @@ func episodeImage(src string) string {
  u, err := url.Parse(src)
  if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" { return "" }
  switch u.Hostname() {
- case "media.kitsu.io", "static.tvmaze.com", "image.tmdb.org", "s4.anilist.co", "img1.ak.crunchyroll.com", "static.crunchyroll.com":
+ case "media.kitsu.io", "static.tvmaze.com", "s4.anilist.co", "img1.ak.crunchyroll.com", "static.crunchyroll.com":
    return "api/watch/cover?u=" + url.QueryEscape(src)
  }
  return ""
@@ -51,7 +50,6 @@ type episodeMapping struct {
  KitsuID []int `json:"kitsu_id"`
  TVDBID []int `json:"tvdb_id"`
  IMDBID []string `json:"imdb_id"`
- TMDBID []struct { ID int `json:"id"`; Type string `json:"type"` } `json:"tmdb_id"`
 }
 
 func extraEpisodePreviews(ctx context.Context, show watchShow, result map[int]watchEpisodePreview) {
@@ -102,21 +100,5 @@ func extraEpisodePreviews(ctx context.Context, show watchShow, result map[int]wa
      }
    }
  }
- // TMDB requires a free developer key. Without one, this provider is skipped.
- // Only use one mapped TV series and an exactly matching first season.
- key := os.Getenv("TMDB_API_KEY")
- if key != "" && len(mapping.TMDBID) == 1 && mapping.TMDBID[0].Type == "tv" && show.Episodes > 0 {
-   var season struct { AirDate string `json:"air_date"`; Episodes []struct {
-     EpisodeNumber int `json:"episode_number"`
-     Name string `json:"name"`
-     StillPath string `json:"still_path"`
-   } `json:"episodes"` }
-   endpoint := fmt.Sprintf("https://api.themoviedb.org/3/tv/%d/season/1?api_key=%s",mapping.TMDBID[0].ID,url.QueryEscape(key))
-   if episodeJSON(ctx, endpoint, &season) && len(season.Episodes) == show.Episodes && (show.Year == 0 || strings.HasPrefix(season.AirDate, strconv.Itoa(show.Year)+"-")) {
-     for _, ep := range season.Episodes {
-       if !strings.HasPrefix(ep.StillPath,"/") { continue }
-       fillEpisode(result, ep.EpisodeNumber, max, ep.Name, "https://image.tmdb.org/t/p/w300"+ep.StillPath)
-     }
-   }
- }
+
 }
