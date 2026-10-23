@@ -292,11 +292,11 @@ func TestTrimMaster(t *testing.T) {
 `
 	out := trimMaster(master, 720, false)
 	if !strings.Contains(out, "720/p.m3u8") || strings.Contains(out, "1080/") || strings.Contains(out, "360/") ||
-		!strings.Contains(out, `NAME="Japanese"`) || strings.Contains(out, "English") || strings.Contains(out, "iframe") {
+		!strings.Contains(out, `NAME="Japanese"`) || !strings.Contains(out, `NAME="English"`) || strings.Contains(out, "iframe") {
 		t.Fatalf("trimmed:\n%s", out)
 	}
-	// A dub takes the English track.
-	if out := trimMaster(master, 720, true); !strings.Contains(out, `NAME="English",LANGUAGE="eng",URI="en/p.m3u8",DEFAULT=YES`) || strings.Contains(out, "Japanese") {
+	// A dub prefers English while keeping Japanese available to other viewers.
+	if out := trimMaster(master, 720, true); !strings.Contains(out, `NAME="English",LANGUAGE="eng",URI="en/p.m3u8",DEFAULT=YES`) || !strings.Contains(out, "Japanese") {
 		t.Fatalf("dub:\n%s", out)
 	}
 	// Every variant over the cap: the smallest stays.
