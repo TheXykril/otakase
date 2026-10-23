@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.15
+
+- Activity: reposition floating moderation and sound controls in portrait and landscape to avoid Discord overlays.
+
 ## 1.30.14
 
 - Activity: keep menus and playback controls clear of Discord's landscape overlays and safe areas.
