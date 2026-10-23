@@ -17,6 +17,7 @@ RUN mkdir /cli && case "$(uname -m)" in aarch64) a=arm64 ;; *) a=x86_64 ;; esac 
     { [ ! -f /cli/otakase ] || chmod +x /cli/otakase; }
 
 FROM alpine:3.22
+RUN apk add --no-cache ffmpeg
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /otakase-bot /usr/local/bin/otakase-bot
 COPY --from=build /cli/ /usr/local/bin/
