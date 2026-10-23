@@ -344,6 +344,18 @@ function wEpisode(s) {
     };
   };
   draw();
+  fetch(`api/watch/episodes?id=${encodeURIComponent(s.id)}&room=${encodeURIComponent(room)}`, {
+    headers: { Authorization: "Bearer " + session },
+  }).then((r) => r.ok ? r.json() : null).then((episodes) => {
+    if (!episodes || document.getElementById("wres") !== res) return;
+    for (const [number, preview] of Object.entries(episodes)) {
+      const ep = Number(number);
+      if (!Number.isInteger(ep) || ep < 1 || ep > last) continue;
+      const old = previews.get(ep) || {};
+      previews.set(ep, { title: preview.title || old.title, thumbnail: preview.thumbnail || old.thumbnail });
+    }
+    if (res.querySelector(".wpickflow")) draw();
+  }).catch(() => {});
 }
 
 // ── The player ──
