@@ -107,6 +107,7 @@ type watchRoom struct {
 
 	streams []streamLink
 	link    int // index into streams
+	torrent *watchTorrent
 	media   *watchMedia
 	old     *watchMedia // the episode before, still served for a moment
 	entry   string
@@ -350,6 +351,10 @@ func (b *bot) closeWatchRoom(r *watchRoom, now time.Time) {
 // finishMedia adds the episode's traffic to the room's and drops it. Hold
 // the lock.
 func (r *watchRoom) finishMedia() {
+	if r.torrent != nil {
+		r.torrent.stop()
+		r.torrent = nil
+	}
 	if r.media != nil {
 		r.bytesIn += r.media.in.Load()
 		r.bytesOut += r.media.out.Load()
@@ -377,9 +382,18 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.changed()
 	go func() {
 		info, err := b.watch.infos.get(cli, show.ID, ep, dub, adult)
+		var torrent *watchTorrent
+		if err == nil && len(info.Streams) == 0 && len(info.Torrents) > 0 {
+			var link string
+			torrent, link, err = watchStartTorrent(cli, info.Torrents[0].InfoHash)
+			if err == nil {
+				info.Streams = []streamLink{{URL: link}}
+			}
+		}
 		b.watch.mu.Lock()
 		defer b.watch.mu.Unlock()
 		if b.watch.cur != r || r.gen != gen {
+			if torrent != nil { torrent.stop() }
 			return
 		}
 		if err != nil {
@@ -388,6 +402,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 			r.changed()
 			return
 		}
+		r.torrent = torrent
 		r.streams = info.Streams
 		// Shown as it plays: a show without a dub plays subbed.
 		r.dub = info.Mode == "dub"
