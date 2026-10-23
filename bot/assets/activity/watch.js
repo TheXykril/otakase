@@ -322,6 +322,12 @@ function wEpisode(s) {
       <div class="wepfooter"><button class="btn alt" id="wback">Back to results</button>
         <button class="btn" id="wgo">${icon("play")} Play episode ${selected}</button></div>
     </div>`;
+    res.querySelectorAll(".wepvisual img").forEach((img) => {
+      img.onerror = () => {
+        const card = img.closest(".wepcard");
+        if (card) card.classList.add("noimage");
+      };
+    });
     res.querySelectorAll("[data-ep]").forEach((button) => {
       button.onclick = () => {
         selected = Number(button.dataset.ep);
