@@ -710,6 +710,34 @@
   .wepick h3 { margin: 0 0 4px; }
   .wepick .row { margin-top: 10px; }
   .wepick input[type=number] { width: 80px; font: inherit; color: var(--text); background: var(--tile); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-left: 6px; }
+
+  .wpickflow { grid-column:1/-1; width:100%; max-width:760px; padding:18px; border:1px solid var(--line); border-radius:16px; background:var(--tile); }
+  .wpickhead { display:flex; gap:14px; align-items:center; padding-bottom:15px; border-bottom:1px solid var(--line); margin-bottom:18px; }
+  .wpickhead img { width:60px; height:84px; object-fit:cover; border-radius:10px; flex:none; }
+  .wpickhead h3 { margin:4px 0 0; font-size:19px; }
+  .wpickey { color:var(--muted); font-weight:700; font-size:11px; letter-spacing:.1em; }
+  .wpickflow h4 { margin:0 0 12px; font-size:16px; }
+  .waudiogrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+  .waudiocard { display:flex; flex-direction:column; gap:7px; text-align:left; padding:18px; min-height:162px; background:var(--tile2); color:var(--text); border:1px solid var(--line); border-radius:14px; cursor:pointer; font:inherit; transition:border-color .15s,transform .15s; }
+  .waudiocard:hover,.waudiocard:focus-visible { border-color:var(--accent); transform:translateY(-2px); }
+  .waudioicon { color:var(--accent); font-size:22px; }
+  .waudiocard b { font-size:16px; }
+  .waudiocard small { color:var(--muted); font-size:12px; }
+  .waudioaction { margin-top:auto; color:var(--accent); font-size:12px; font-weight:700; display:flex; gap:6px; align-items:center; }
+  .weptop,.wepfooter,.wepnav { display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+  .weptop { margin-bottom:15px; }
+  .weptop h4 { margin:0 0 3px; }
+  .weptop p { margin:0; }
+  .wepgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(77px,1fr)); gap:9px; }
+  .wepcard { position:relative; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:5px; min-height:76px; padding:13px; border-radius:11px; border:1px solid var(--line); background:var(--tile2); color:var(--text); cursor:pointer; font:inherit; transition:border-color .15s,background .15s; }
+  .wepcard:hover,.wepcard:focus-visible { border-color:var(--accent); }
+  .wepcard.chosen { border-color:var(--accent); background:var(--tile); box-shadow:inset 0 0 0 1px var(--accent); }
+  .wepnumber { color:var(--muted); font-size:10px; letter-spacing:.08em; font-weight:700; }
+  .wepcard strong { font-size:21px; font-variant-numeric:tabular-nums; }
+  .wepcheck { position:absolute; right:7px; top:7px; color:var(--accent); }
+  .wepnav { margin-top:15px; }
+  .wepfooter { margin-top:19px; padding-top:15px; border-top:1px solid var(--line); }
+  @media (max-width:460px) { .wpickflow { padding:12px; } .waudiogrid { gap:8px; } .waudiocard { padding:13px; } .wepgrid { grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:7px; } }
 </style>
 </head>
 <body>

@@ -260,40 +260,86 @@ function wPicker(changing) {
   if (c) c.onclick = () => ((wChanging = false), (wvKey = ""), (wvMedia = ""), wSet(wv));
 }
 
+function wPickerHeading(s, step) {
+  return `<div class="wpickhead">${s.cover ? `<img src="${esc(s.cover)}" alt="">` : ""}
+    <div><span class="wpickey">STEP ${step} OF 2</span><h3>${esc(s.title)}</h3></div></div>`;
+}
+
 function wLanguage(s) {
   const res = document.getElementById("wres");
   if (!res) return;
-  res.innerHTML = `<div class="wepick">${s.cover ? `<img src="${esc(s.cover)}" alt="">` : ""}<div>
-    <h3>${esc(s.title)}</h3>
-    <p class="note">Choose the audio you prefer.</p>
-    <div class="row"><button class="btn" id="wsub">Sub</button><button class="btn" id="wdubpick">Dub</button></div>
-    <p class="note">If a dub isn't available, the episode will play with subtitles.</p>
-    <button class="btn alt" id="wback">Back</button></div></div>`;
+  res.innerHTML = `<div class="wpickflow">
+    ${wPickerHeading(s, 1)}
+    <h4>How would you like to watch?</h4>
+    <div class="waudiogrid">
+      <button class="waudiocard" id="wsub">
+        <span class="waudioicon">${icon("captions")}</span><b>Subtitled</b>
+        <small>Original audio with subtitles</small>
+        <span class="waudioaction">Choose Sub ${icon("arrow-right")}</span>
+      </button>
+      <button class="waudiocard" id="wdubpick">
+        <span class="waudioicon">${icon("headphones")}</span><b>Dubbed</b>
+        <small>English audio when available</small>
+        <span class="waudioaction">Choose Dub ${icon("arrow-right")}</span>
+      </button>
+    </div>
+    <p class="note">If a dub is unavailable, playback automatically switches to subtitles.</p>
+    <button class="btn alt" id="wback">Back to results</button>
+  </div>`;
   document.getElementById("wsub").onclick = () => wEpisode(s, false);
   document.getElementById("wdubpick").onclick = () => wEpisode(s, true);
   document.getElementById("wback").onclick = () => document.getElementById("q").oninput();
 }
 
 function wEpisode(s, dub) {
-  const last = s.aired || s.episodes || 1;
+  const last = Math.max(1, s.aired || s.episodes || 1);
   const next = wv.show && wv.show.id === s.id ? Math.min(wv.ep + 1, last) : 1;
-  document.getElementById("wres").innerHTML = `<div class="wepick">${s.cover ? `<img src="${esc(s.cover)}" alt="">` : ""}<div>
-    <h3>${esc(s.title)}</h3><p class="note">${last} episode${last === 1 ? "" : "s"} to pick from</p>
-    <div class="row"><label>Episode <input type="number" id="wep" min="1" max="${last}" value="${next}"></label>
-    <span class="pill">${dub ? "Dub preferred" : "Sub preferred"}</span></div>
-    <div class="row"><button class="btn" id="wgo">${icon("play")} Play</button><button class="btn alt" id="wback">Change audio</button></div></div></div>`;
-  document.getElementById("wback").onclick = () => wLanguage(s);
-  const go = document.getElementById("wgo");
-  go.onclick = () => {
-    const ep = Math.round(+document.getElementById("wep").value);
-    if (!(ep >= 1 && ep <= last)) return showError(new Error(`Pick an episode from 1 to ${last}.`));
-    go.disabled = true;
-    wChanging = false;
-    wvKey = "";
-    api("watch/pick", { room, show: s.id, ep, dub })
-      .then((nv) => wSet(nv))
-      .catch((err) => ((go.disabled = false), showError(err)));
+  let selected = next;
+  let page = Math.floor((selected - 1) / 24);
+  const res = document.getElementById("wres");
+  if (!res) return;
+  const draw = () => {
+    const start = page * 24 + 1;
+    const end = Math.min(last, start + 23);
+    res.innerHTML = `<div class="wpickflow">
+      ${wPickerHeading(s, 2)}
+      <div class="weptop"><div><h4>Select an episode</h4><p class="note">${last} episode${last === 1 ? "" : "s"} available to select</p></div>
+        <span class="pill">${dub ? "Dub" : "Sub"} preferred</span></div>
+      <div class="wepgrid">${Array.from({ length: end - start + 1 }, (_, i) => {
+        const ep = start + i;
+        return `<button class="wepcard${ep === selected ? " chosen" : ""}" data-ep="${ep}" aria-pressed="${ep === selected}">
+          <span class="wepnumber">EP</span><strong>${String(ep).padStart(2, "0")}</strong>
+          ${ep === selected ? `<span class="wepcheck">${icon("check")}</span>` : ""}
+        </button>`;
+      }).join("")}</div>
+      ${last > 24 ? `<div class="wepnav"><button class="btn alt" id="wprev" ${page === 0 ? "disabled" : ""}>Previous</button>
+        <span class="note">Episodes ${start}–${end} of ${last}</span>
+        <button class="btn alt" id="wnext" ${end === last ? "disabled" : ""}>Next</button></div>` : ""}
+      <div class="wepfooter"><button class="btn alt" id="wback">Change audio</button>
+        <button class="btn" id="wgo">${icon("play")} Play episode ${selected}</button></div>
+    </div>`;
+    res.querySelectorAll("[data-ep]").forEach((button) => {
+      button.onclick = () => {
+        selected = Number(button.dataset.ep);
+        draw();
+      };
+    });
+    document.getElementById("wback").onclick = () => wLanguage(s);
+    if (last > 24) {
+      document.getElementById("wprev").onclick = () => { if (page > 0) { page--; draw(); } };
+      document.getElementById("wnext").onclick = () => { if ((page + 1) * 24 < last) { page++; draw(); } };
+    }
+    const go = document.getElementById("wgo");
+    go.onclick = () => {
+      go.disabled = true;
+      wChanging = false;
+      wvKey = "";
+      api("watch/pick", { room, show: s.id, ep: selected, dub })
+        .then((nv) => wSet(nv))
+        .catch((err) => { go.disabled = false; showError(err); });
+    };
   };
+  draw();
 }
 
 // ── The player ──
