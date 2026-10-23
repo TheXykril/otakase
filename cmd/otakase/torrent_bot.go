@@ -50,7 +50,7 @@ func serveTorrentForBot(hash string) error {
   case <-deadline.C: return fmt.Errorf("torrent video did not start in time")
   case <-tick.C:
    if stat, err := os.Stat(filepath.Join(dir, "playlist.m3u8")); err == nil && stat.Size() > 0 {
-    fmt.Printf("http://127.0.0.1:%d/playlist.m3u8\\n", listener.Addr().(*net.TCPAddr).Port)
+    fmt.Printf("http://127.0.0.1:%d/playlist.m3u8\n", listener.Addr().(*net.TCPAddr).Port)
     _, _ = io.Copy(io.Discard, os.Stdin)
     return nil
    }
