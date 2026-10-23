@@ -145,11 +145,25 @@ func probeBotMedia(ctx context.Context, source, mode string) (botMedia, error) {
 	return chooseBotMedia(p, mode)
 }
 
+// Convert the selected text track once so each viewer can switch subtitles
+// independently. Unsupported subtitle formats retain the original burn-in.
+func botSubtitleVTT(ctx context.Context, source string, ordinal int) []byte {
+ if ordinal < 0 { return nil }
+ run, cancel := context.WithTimeout(ctx, 40*time.Second)
+ defer cancel()
+ data, err := botCommandOutput(exec.CommandContext(run, "ffmpeg", "-hide_banner", "-loglevel", "error",
+  "-nostdin", "-i", source, "-map", fmt.Sprintf("0:s:%d", ordinal),
+  "-c:s", "webvtt", "-f", "webvtt", "pipe:1"), 4<<20)
+ if err != nil || !bytes.HasPrefix(data, []byte("WEBVTT")) { return nil }
+ return data
+}
+
 type botSegments struct {
 	ctx         context.Context
 	dir, source string
 	media       botMedia
 	primary     string
+	subtitles   []byte
 	variants    map[string]botMedia
 	gate        chan struct{}
 	mu          sync.Mutex
@@ -234,6 +248,12 @@ func (s *botSegments) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mode, path = parts[0], "/" + parts[1]
 		if _, ok := s.variants[mode]; !ok { http.NotFound(w, r); return }
 	}
+	if path == "/subs/en.vtt" && len(s.subtitles) != 0 {
+		w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+		w.Header().Set("Content-Length", strconv.Itoa(len(s.subtitles)))
+		if r.Method == "GET" { _, _ = w.Write(s.subtitles) }
+		return
+	}
 	if path == "/playlist.m3u8" {
 		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 		io.WriteString(w, s.playlist(mode))
@@ -291,7 +311,18 @@ func serveTorrentForBot(hash, mode string) error {
 	if alt, altErr := probeBotMedia(ctx, source, other); altErr == nil {
 		variants[other] = alt
 	}
-	segments := &botSegments{ctx: ctx, dir: dir, source: source, media: media, primary: mode, variants: variants, gate: make(chan struct{}, 1)}
+	var subtitles []byte
+ if sub, ok := variants["sub"]; ok {
+  subtitles = botSubtitleVTT(ctx, source, sub.subtitle)
+ }
+ if len(subtitles) > 0 {
+  for language, track := range variants {
+   track.subtitle = -1
+   variants[language] = track
+  }
+  media.subtitle = -1
+ }
+ segments := &botSegments{ctx: ctx, dir: dir, source: source, media: media, primary: mode, subtitles: subtitles, variants: variants, gate: make(chan struct{}, 1)}
 	if _, err = segments.segment(ctx, 0, mode); err != nil {
 		return err
 	}
@@ -304,8 +335,10 @@ func serveTorrentForBot(hash, mode string) error {
 	failed := make(chan error, 1)
 	go func() { failed <- server.Serve(listener) }()
 	languages := mode
-	if len(variants) > 1 { languages = "sub,dub" }
-	fmt.Printf("http://127.0.0.1:%d/playlist.m3u8?languages=%s\n", listener.Addr().(*net.TCPAddr).Port, languages)
+ if len(variants) > 1 { languages = "sub,dub" }
+ subquery := ""
+ if len(subtitles) > 0 { subquery = "&subtitles=en" }
+ fmt.Printf("http://127.0.0.1:%d/playlist.m3u8?languages=%s%s\n", listener.Addr().(*net.TCPAddr).Port, languages, subquery)
 	select {
 	case <-ctx.Done():
 		return nil
