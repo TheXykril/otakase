@@ -315,7 +315,7 @@ async function start() {
   const cfg = await api("config");
   gamesOff = cfg.off || [];
   if (!cfg.ready) return message("The Otakase Activity isn't set up yet. Play in chat: /leaderboard lists every game.");
-  if (!new URLSearchParams(location.search).get("frame_id")) return message("Open this inside Discord: /otakase on the Otakase server.");
+  if (!new URLSearchParams(location.search).get("frame_id")) return message("Open this inside Discord: /activity on the Otakase server.");
   sdk = new Discord.DiscordSDK(cfg.client_id);
   await sdk.ready();
   const { code } = await sdk.commands.authorize({
@@ -353,7 +353,7 @@ function menu() {
     return `<span class="tag live">#${daily.num} · ${daily.play.guesses.length}/${daily.tries} · today's puzzle</span>`;
   };
   app.innerHTML = `
-    <header class="hero"><div><h1>Otakase</h1><p class="sub">Watch together. Discover more.</p></div>${
+    <header class="hero"><div><h1>Otakase <span>Activity</span></h1><p class="sub">Watch anime together or pick a game to play.</p></div>${
       me ? `<span class="pill">${esc(me)}</span>` : ""
     }</header>
     <div class="menu">${GAMES.map(
