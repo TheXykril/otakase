@@ -1,4 +1,4 @@
-// The Otakase games Activity: a menu of games played alone (the daily
+// The Otakase games Activity: the watch room (watch.js), a menu of games played alone (the daily
 // puzzle, guess the anime, higher or lower, emoji riddles, title scramble,
 // the puzzles: zoomed cover, timeline, connections, redacted, anime grid,
 // hangman, wordle, quiz, two truths and a lie; watch bingo), games played
@@ -70,6 +70,8 @@ const ICONS = {
   pause: '<path d="M8 4v16M16 4v16"/>',
   skip: '<path d="M5 4v16l10-8zM19 4v16"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  ff: '<path d="M3 5v14l9-7zM12 5v14l9-7z"/>',
+  watch: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4M10 8.5v5l4-2.5z"/>',
 };
 const icon = (name) =>
   `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -84,6 +86,7 @@ const stamp = (ok) =>
 
 // preview draws a tiny picture of each game for its menu card.
 const PREVIEWS = {
+  watch: () => `<div class="pv watch"><i>${icon("play")}</i><b><u></u></b></div>`,
   party: () => `<div class="pv party" id="pvparty">${faces()}</div>`,
   daily: () => `<div class="pv daily">${["yes", "no", "near", "yes", "no", "yes", "near", "yes"].map((h) => `<i class="${h}"></i>`).join("")}</div>`,
   guess: () => `<div class="pv guess">${Array.from({ length: 24 }, (_, k) => `<i style="opacity:${[0.25, 0.45, 0.7, 1][(k * 7) % 4]}"></i>`).join("")}</div>`,
@@ -105,6 +108,7 @@ const PREVIEWS = {
     `<div class="pv wordle">${["no", "near", "yes", "no", "yes"].map((h, k) => `<i class="${h}">${"TITAN"[k]}</i>`).join("")}</div>`,
 };
 const JP = {
+  watch: "みる",
   party: "みんなで",
   koikoi: "はなふだ",
   daily: "デイリー",
@@ -126,6 +130,7 @@ const JP = {
 };
 
 const GAMES = [
+  { key: "watch", color: "#e8664b", big: true, name: "Watch room", text: "The bot plays an anime for everyone in this call, in step. Opening one takes a watch ticket." },
   { key: "party", color: "#d2492f", big: true, name: "Play together", text: "Everyone in this call, one game: quiz show, imposter, draw it, hot potato and more." },
   { key: "daily", color: "#ef6a4c", big: true, name: "Daily puzzle", text: "One show a day for everyone. 8 tries." },
   { key: "koikoi", color: "#c9a227", name: "Koi-Koi", text: "Hanafuda, the flower card game, with anime covers. Play bots or the whole call." },
@@ -286,6 +291,7 @@ function openLink(url) {
 
 function page(title, body) {
   clearTimeout(pending);
+  if (where === "watch") watchLeave();
   where = "";
   app.innerHTML = `<button class="back" id="back">${icon("back")} Games</button><header><h1>${title}</h1><span class="pill" id="side" hidden></span></header>${body}`;
   document.getElementById("back").onclick = menu;
@@ -338,6 +344,7 @@ async function start() {
 
 function menu() {
   clearTimeout(pending);
+  if (where === "watch") watchLeave();
   where = "menu";
   const tag = (g) => {
     if (g.key === "party") return `<span class="tag live" id="ptag">${partyTag()}</span>`;
@@ -359,7 +366,7 @@ function menu() {
 }
 
 function open(game) {
-  const views = { party: partyView, koikoi: kkOpen, daily: dailyView, guess: soloStart, riddle: soloStart, scramble: soloStart, hl: hlStart, bingo: bingoView, board: boardView };
+  const views = { watch: watchView, party: partyView, koikoi: kkOpen, daily: dailyView, guess: soloStart, riddle: soloStart, scramble: soloStart, hl: hlStart, bingo: bingoView, board: boardView };
   Promise.resolve((views[game] || pzOpen)(game)).catch(showError);
 }
 

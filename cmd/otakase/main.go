@@ -224,6 +224,21 @@ func runCommandAndExit(f *cliFlags, cfg *internal.Config) {
 		os.Exit(1)
 	}
 
+	if f.streamInfo != "" {
+		anilistID, episode, err := internal.ParseStreamInfoArg(f.streamInfo)
+		if err == nil {
+			cfg.AdultContent = f.streamAdult
+			var info internal.StreamInfo
+			info, err = internal.ResolveStreamInfo(*cfg, anilistID, episode)
+			if err == nil {
+				fmt.Println(internal.FormatStreamInfo(info))
+				os.Exit(0)
+			}
+		}
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
 	if f.discordLink || f.discordUnlink || f.report {
 		var err error
 		switch {

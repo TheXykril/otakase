@@ -664,6 +664,46 @@
   @keyframes wobble { 25% { transform: translate(-50%, -50%) rotate(-6deg); } 75% { transform: translate(-50%, -50%) rotate(6deg); } }
   @keyframes quake { 10%, 50%, 90% { transform: translate(-8px, 4px) rotate(-1deg); } 30%, 70% { transform: translate(8px, -4px) rotate(1deg); } }
   @media (prefers-reduced-motion: reduce) { body.quake #app { animation: none; } #app .dodged { transition: none; } }
+  /* Watch room */
+  .pv.watch { gap: 8px; }
+  .pv.watch > i { width: 74px; height: 44px; border-radius: 6px; border: 2px solid var(--c); display: grid; place-items: center; color: var(--c); }
+  .pv.watch > b { width: 60px; height: 4px; border-radius: 99px; background: var(--no); overflow: hidden; }
+  .pv.watch u { display: block; width: 45%; height: 100%; background: var(--c); }
+  .whead { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; color: var(--soft); }
+  .wplayer { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; }
+  .wplayer video { width: 100%; height: 100%; display: block; background: #000; }
+  .wplayer:fullscreen { border-radius: 0; aspect-ratio: auto; }
+  .wtap { position: absolute; inset: 0; margin: auto; width: max-content; height: max-content; padding: 14px 22px; border-radius: 10px; border: 0; background: var(--shu); color: #fff; font: inherit; font-weight: 700; font-size: 17px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
+  .wtap[hidden], .wspin[hidden] { display: none; }
+  .wspin { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .25); border-top-color: var(--shu); animation: spin .8s linear infinite; pointer-events: none; }
+  .wbar { margin: 10px 0 4px; }
+  .wbar .row { gap: 6px; }
+  .wbar .btn { display: inline-flex; gap: 6px; align-items: center; padding: 8px 12px; }
+  .wbar select, .wbar input[type=range] { font: inherit; font-size: 13px; color: var(--text); background: var(--tile); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; max-width: 160px; }
+  .wbar input[type=range] { padding: 0; accent-color: var(--shu); width: 90px; }
+  .wseek { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .wseek input[type=range] { flex: 1; width: auto; max-width: none; accent-color: var(--shu); }
+  .wprog { flex: 1; height: 4px; border-radius: 99px; background: var(--no); overflow: hidden; }
+  .wprog i { display: block; height: 100%; width: 0; background: var(--shu); }
+  @media (max-width: 520px) { .wbar .btn span { display: none; } }
+  .wasks { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+  .wask { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; background: rgba(217, 164, 65, .12); border: 1px solid var(--gold); }
+  .wask span { flex: 1; }
+  .wask.mine { background: var(--tile); border-color: var(--line); color: var(--muted); }
+  .wside { margin-top: 14px; }
+  .wpeople { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .wsw { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
+  .wsw input { accent-color: var(--shu); }
+  .wresults { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+  .wshowcard { display: flex; gap: 10px; align-items: center; text-align: left; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--tile); color: var(--text); font: inherit; cursor: pointer; }
+  .wshowcard:hover { border-color: var(--accent); background: var(--tile2); }
+  .wshowcard img, .wshowcard > i { width: 42px; height: 60px; object-fit: cover; border-radius: 4px; flex: none; background: var(--tile2); }
+  .wshowcard small { display: block; color: var(--muted); font-size: 12px; }
+  .wepick { display: flex; gap: 14px; align-items: flex-start; grid-column: 1 / -1; }
+  .wepick img { width: 96px; border-radius: 6px; }
+  .wepick h3 { margin: 0 0 4px; }
+  .wepick .row { margin-top: 10px; }
+  .wepick input[type=number] { width: 80px; font: inherit; color: var(--text); background: var(--tile); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-left: 6px; }
 </style>
 </head>
 <body>
@@ -672,5 +712,6 @@
 <main id="app"><p class="msg loading">Loading…</p></main>
 <script src="sdk.js"></script>
 <script src="app.js"></script>
+<script src="watch.js"></script>
 </body>
 </html>

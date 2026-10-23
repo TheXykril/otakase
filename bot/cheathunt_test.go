@@ -212,7 +212,7 @@ func TestCheatHuntFlow(t *testing.T) {
 
 	// Anyone can redeem it, once.
 	x, err := b.redeemCheat("u2", strings.ToLower(strings.ReplaceAll(code, "-", " ")), now)
-	if err != nil || x.Number != 1 || x.Finder != "u1" || x.RedeemedBy != "u2" {
+	if err != nil || x.Finder != "u1" || x.RedeemedBy != "u2" {
 		t.Fatalf("redeem: %+v %v", x, err)
 	}
 	if _, err := b.redeemCheat("u3", code, now); err != errLinkNotFound {
@@ -224,11 +224,11 @@ func TestCheatHuntFlow(t *testing.T) {
 	if m := decode(t, apiJSON(t, b, "/v1/cheat", `{}`, tok)); m["redeemed"] != true {
 		t.Fatalf("redeemed flag: %v", m)
 	}
-	var fame []cheatCode
-	b.store.view(func(d *storeData) { fame = hallOfFame(d) })
-	if len(fame) != 1 || !strings.Contains(cheatersEmbed(fame).Description, "redeemed by <@u2>") {
-		t.Fatalf("fame %+v", fame)
-	}
+	b.store.view(func(d *storeData) {
+		if d.WatchTickets["u2"] != 1 || d.WatchTickets["u1"] != 0 {
+			t.Fatalf("tickets %v", d.WatchTickets)
+		}
+	})
 
 	// Next week a new hunt opens.
 	now = nextWeek(now).Add(time.Hour)

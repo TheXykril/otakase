@@ -45,15 +45,15 @@ func TestMintedCodes(t *testing.T) {
 		t.Fatal(codes)
 	}
 	x, err := b.redeemCheat("u1", formatCheatCode(codes[0]), appNow())
-	if err != nil || x.Number != 0 || x.Note != "Oct giveaway" {
+	if err != nil || x.Note != "Oct giveaway" {
 		t.Fatalf("redeem %+v %v", x, err)
 	}
 	if _, err := b.redeemCheat("u2", codes[0], appNow()); err != errLinkNotFound {
 		t.Errorf("second redeem: %v", err)
 	}
 	b.store.view(func(d *storeData) {
-		if d.WatchTickets["u1"] != 1 || len(hallOfFame(d)) != 0 || len(unusedMinted(d)) != 2 {
-			t.Errorf("tickets %v fame %v unused %v", d.WatchTickets, hallOfFame(d), unusedMinted(d))
+		if d.WatchTickets["u1"] != 1 || len(unusedMinted(d)) != 2 {
+			t.Errorf("tickets %v unused %v", d.WatchTickets, unusedMinted(d))
 		}
 		if _, _, found := weekCode(d, "staff", appNow()); found {
 			t.Error("minting must not count as finding a code")

@@ -124,6 +124,8 @@ func init() {
 	apiHandle("GET /activity/{$}", static("index.html", "text/html; charset=utf-8"))
 	apiHandle("GET /activity/app.js", static("app.js", "text/javascript; charset=utf-8"))
 	apiHandle("GET /activity/sdk.js", static("sdk.js", "text/javascript; charset=utf-8"))
+	apiHandle("GET /activity/watch.js", static("watch.js", "text/javascript; charset=utf-8"))
+	apiHandle("GET /activity/hls.js", static("hls.js", "text/javascript; charset=utf-8"))
 	apiHandle("GET /activity/fonts/{name}", func(_ *bot, w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		if !strings.HasPrefix(name, "Inter-") || !strings.HasSuffix(name, ".otf") {

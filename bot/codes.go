@@ -2,7 +2,7 @@ package main
 
 // Codes staff make for giveaways and the like. They work with /redeem like
 // the cheat codes (cheathunt.go): one use, first /redeem wins, and each
-// gives a watch ticket. They stay out of the cheat hall of fame.
+// gives a watch ticket.
 //
 //	/codes mint count note   → the new codes, only shown to the one who made them
 //	/codes list              → codes staff made that nobody redeemed yet

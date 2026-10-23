@@ -58,6 +58,8 @@ type config struct {
 	SeasonPreview      bool     // post the season preview when a season starts
 	HelperPoints       int      // helper points for the Helper role
 	DiscordSecret      string   // the Discord app's client secret, for the daily puzzle Activity
+	MALClientID        string   // MyAnimeList API app for /link-mal, empty = off
+	MALSecret          string   // that app's client secret
 }
 
 // loadEnvFile sets variables from a KEY=value file, keeping any that are
@@ -102,6 +104,8 @@ var haOptions = map[string]string{
 	"season_preview":        "OTAKASE_SEASON_PREVIEW",
 	"helper_points":         "OTAKASE_HELPER_POINTS",
 	"discord_client_secret": "OTAKASE_DISCORD_CLIENT_SECRET",
+	"mal_client_id":         "OTAKASE_MAL_CLIENT_ID",
+	"mal_client_secret":     "OTAKASE_MAL_CLIENT_SECRET",
 }
 
 // loadHAOptions sets variables from a Home Assistant add-on options file,
@@ -154,6 +158,8 @@ func loadConfig() config {
 		WarningDays:        warningDays(os.Getenv("OTAKASE_WARNING_DAYS")),
 		SeasonPreview:      os.Getenv("OTAKASE_SEASON_PREVIEW") != "false",
 		DiscordSecret:      strings.TrimSpace(os.Getenv("OTAKASE_DISCORD_CLIENT_SECRET")),
+		MALClientID:        strings.TrimSpace(os.Getenv("OTAKASE_MAL_CLIENT_ID")),
+		MALSecret:          strings.TrimSpace(os.Getenv("OTAKASE_MAL_CLIENT_SECRET")),
 	}
 	if h, err := strconv.Atoi(os.Getenv("OTAKASE_AIRING_HOUR")); err == nil && h >= 0 && h < 24 {
 		c.AiringHour = h
@@ -204,6 +210,7 @@ type bot struct {
 	solo      soloRounds
 	pz        pzBoards
 	together  togetherRooms
+	watch     watchRooms
 	xp        xpTracker
 	msgs      *msgCache
 	verify    verifyRuntime

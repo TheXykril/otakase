@@ -38,6 +38,8 @@ Every flag works with `otakase` or `otk`. A flag always wins over the same setti
 | `-refresh-keybind` | Update an existing binding, adding nothing if absent | |
 | `-provider-status` | Probe each configured source and report which respond | |
 | `-provider-status-query` | Search term `-provider-status` probes with | `one piece` |
+| `-stream-info` | Print an episode's stream links as JSON without asking anything, as `<AniList id>:<episode>` (used by the Discord bot's watch room) | |
+| `-stream-adult` | Let `-stream-info` use the 18+ sources for 18+ titles | |
 | `-change-token` | Change your authentication token | |
 | `-setup-anime-skip` | Get a personal Anime-Skip client id and save it | |
 | `-diag` | Print app details and the last log lines to paste in a support post | |
