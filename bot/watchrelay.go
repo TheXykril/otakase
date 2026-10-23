@@ -474,7 +474,11 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 }
 
 func (m *watchMedia) segment(u string, cache *segCache) ([]byte, string, error) {
-	return cache.get(u, func() ([]byte, string, error) {
+	key := u
+	if strings.HasPrefix(u, "http://127.0.0.1:") {
+		key = m.key + " " + u
+	}
+	return cache.get(key, func() ([]byte, string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), watchUpstreamWait)
 		defer cancel()
 		data, typ, err := m.fetch(ctx, u, watchCacheItem)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -105,13 +106,14 @@ type watchRoom struct {
 	errText string
 	gen     int // bumps with every episode load, so a slow one can't land late
 
-	streams []streamLink
-	link    int // index into streams
-	torrent *watchTorrent
-	media   *watchMedia
-	old     *watchMedia // the episode before, still served for a moment
-	entry   string
-	subs    []watchSub
+	streams       []streamLink
+	link          int // index into streams
+	torrent       *watchTorrent
+	torrentCancel context.CancelFunc
+	media         *watchMedia
+	old           *watchMedia // the episode before, still served for a moment
+	entry         string
+	subs          []watchSub
 
 	playing bool
 	pos     float64
@@ -351,8 +353,12 @@ func (b *bot) closeWatchRoom(r *watchRoom, now time.Time) {
 // finishMedia adds the episode's traffic to the room's and drops it. Hold
 // the lock.
 func (r *watchRoom) finishMedia() {
+	if r.torrentCancel != nil {
+		r.torrentCancel()
+		r.torrentCancel = nil
+	}
 	if r.torrent != nil {
-		r.torrent.stop()
+		go r.torrent.stop()
 		r.torrent = nil
 	}
 	if r.media != nil {
@@ -380,12 +386,19 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.gen++
 	gen, adult, cli := r.gen, r.adult && show.Adult, b.cfg.OtakaseCLI
 	r.changed()
+	ctx, cancel := context.WithCancel(context.Background())
+	r.torrentCancel = cancel
 	go func() {
 		info, err := b.watch.infos.get(cli, show.ID, ep, dub, adult)
 		var torrent *watchTorrent
 		if err == nil && len(info.Streams) == 0 && len(info.Torrents) > 0 {
 			var link string
-			torrent, link, err = watchStartTorrent(cli, info.Torrents[0].InfoHash)
+			for _, candidate := range info.Torrents {
+				torrent, link, err = watchStartTorrent(ctx, cli, candidate.InfoHash, info.Mode)
+				if err == nil || ctx.Err() != nil {
+					break
+				}
+			}
 			if err == nil {
 				info.Streams = []streamLink{{URL: link}}
 			}
@@ -393,10 +406,14 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		b.watch.mu.Lock()
 		defer b.watch.mu.Unlock()
 		if b.watch.cur != r || r.gen != gen {
-			if torrent != nil { torrent.stop() }
+			cancel()
+			if torrent != nil {
+				go torrent.stop()
+			}
 			return
 		}
 		if err != nil {
+			cancel()
 			log.Printf("watch room: %s episode %d: %v", show.Title, ep, err)
 			r.phase, r.errText = "error", fmt.Sprintf("Couldn't find episode %d of %s on any source.", ep, show.Title)
 			r.changed()
@@ -405,11 +422,16 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		r.streams = info.Streams
 		// Shown as it plays: a show without a dub plays subbed.
 		r.dub = info.Mode == "dub"
+		r.torrentCancel = nil
 		if !b.startStream(r, 0) {
-			if torrent != nil { torrent.stop() }
+			cancel()
+			if torrent != nil {
+				go torrent.stop()
+			}
 			return
 		}
 		r.torrent = torrent
+		r.torrentCancel = cancel
 		// The next episode is looked up ahead, so it starts at once.
 		if ep < show.lastEpisode() {
 			watchAhead(func() { b.watch.infos.get(cli, show.ID, ep+1, dub, adult) })

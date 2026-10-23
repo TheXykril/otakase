@@ -27,8 +27,8 @@ func buildVersion() string {
 }
 
 func main() {
-	if len(os.Args) == 3 && os.Args[1] == "-torrent-serve" {
-		if err := serveTorrentForBot(os.Args[2]); err != nil {
+	if len(os.Args) == 4 && os.Args[1] == "-torrent-serve" {
+		if err := serveTorrentForBot(os.Args[2], os.Args[3]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}

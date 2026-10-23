@@ -33,7 +33,9 @@ type streamInfo struct {
 	Provider  string       `json:"provider"`
 	Mode      string       `json:"mode"`
 	Streams   []streamLink `json:"streams"`
-	Torrents  []struct { InfoHash string `json:"info_hash"` } `json:"torrents,omitempty"`
+	Torrents  []struct {
+		InfoHash string `json:"info_hash"`
+	} `json:"torrents,omitempty"`
 }
 
 // watchResolve runs the CLI, a variable for tests.

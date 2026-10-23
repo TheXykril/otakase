@@ -14,13 +14,13 @@ import (
 // episode it plays in its watch room, so this never prompts: a show no
 // provider can be matched to on its own is an error, not a menu.
 type StreamInfo struct {
-	AnilistID int          `json:"anilist_id"`
-	Episode   int          `json:"episode"`
-	Title     string       `json:"title"`
-	Episodes  int          `json:"episodes,omitempty"`
-	Provider  string       `json:"provider"`
-	Mode      string       `json:"mode"`
-	Streams   []StreamLink `json:"streams"`
+	AnilistID int           `json:"anilist_id"`
+	Episode   int           `json:"episode"`
+	Title     string        `json:"title"`
+	Episodes  int           `json:"episodes,omitempty"`
+	Provider  string        `json:"provider"`
+	Mode      string        `json:"mode"`
+	Streams   []StreamLink  `json:"streams"`
 	Torrents  []TorrentLink `json:"torrents,omitempty"`
 }
 

@@ -12,7 +12,7 @@ BRANCH=${BRANCH:-main}
 [ "$(id -u)" = 0 ] || { echo "run with sudo" >&2; exit 1; }
 
 apt-get update -qq
-apt-get install -y -qq git curl ca-certificates >/dev/null
+apt-get install -y -qq git curl ca-certificates ffmpeg fonts-dejavu-core >/dev/null
 
 # A 1 GB swap file keeps the build from running out of memory on small VMs.
 if ! swapon --show | grep -q /swapfile; then
@@ -34,11 +34,9 @@ fi
 
 (cd "$SRC/bot" && GOFLAGS=-trimpath /usr/local/go/bin/go build -o /usr/local/bin/otakase-bot .)
 
-# The latest otakase release, for /provider-status.
-case "$(dpkg --print-architecture)" in arm64) cli=arm64 ;; *) cli=x86_64 ;; esac
+# Build the helper from the same checkout as the bot.
 install -d /usr/local/libexec
-curl -fsSL "https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-$cli" -o /usr/local/libexec/otakase
-chmod 755 /usr/local/libexec/otakase
+(cd "$SRC" && CGO_ENABLED=0 GOFLAGS=-trimpath /usr/local/go/bin/go build -o /usr/local/libexec/otakase ./cmd/otakase)
 
 [ -f /etc/otakase-bot.env ] || install -m 600 "$SRC/bot/deploy/otakase-bot.env" /etc/otakase-bot.env
 install -m 644 "$SRC/bot/deploy/otakase-bot.service" /etc/systemd/system/otakase-bot.service

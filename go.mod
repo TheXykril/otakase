@@ -17,6 +17,7 @@ require (
 	github.com/tr1xem/go-discordrpc v1.0.0
 	github.com/vishen/go-chromecast v0.3.4
 	golang.org/x/term v0.46.0
+	golang.org/x/time v0.14.0
 )
 
 require (
@@ -137,7 +138,6 @@ require (
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.42.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
