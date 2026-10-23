@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-		"math"
+	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
