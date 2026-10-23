@@ -96,6 +96,9 @@ function wSet(v, fromHost) {
   }
   wChanging = false;
   if (key !== wvKey) {
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    wFull = false;
+    document.body.classList.remove("wfull");
     wvKey = key;
     wDraw();
   }
@@ -500,9 +503,9 @@ function wBar() {
   const bar = document.getElementById("wbar");
   const v = wv;
   const btn = (id, ic, label, alt = true) => `<button class="btn${alt ? " alt" : ""}" id="${id}" title="${esc(label)}">${icon(ic)}<span>${esc(label)}</span></button>`;
-  const common = `<select id="wsub" aria-label="Subtitles"></select>
-    <input type="range" id="wvol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
-    <button class="btn alt" id="wfull" title="Full screen">⛶</button>`;
+  const common = `<span class="wbarlabel">CC</span><select id="wsub" aria-label="Subtitles"></select>
+    <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
+    <button class="btn alt wfullscreen" id="wfull" title="Toggle theater mode" aria-label="Toggle theater mode" aria-pressed="${wFull}">${icon(wFull ? "minimize" : "maximize")}</button>`;
   if (v.is_host) {
     bar.innerHTML = `<div class="wseek"><span id="wcur">0:00</span><input type="range" id="wpos" min="0" max="1" step="0.1" value="0" aria-label="Position"><span id="wdur">0:00</span></div>
       <div class="row">${btn("wpp", "pause", "Pause", false)}${btn("wback10", "undo", "10s")}${btn("wskip", "ff", "Skip OP")}
@@ -537,20 +540,25 @@ function wBar() {
   wSubs();
 }
 
-// wFullscreen fills the Activity's window with the player and its
-// controls. Discord's frame doesn't allow real full screen everywhere, so
-// that is only tried on top; Discord's own button makes the Activity
-// window itself bigger.
+// Theater mode always works inside the embedded Activity; native fullscreen
+// is optional because Discord may block the browser fullscreen API.
 function wFullscreen(on) {
-  wFull = on;
   const st = document.getElementById("wstage");
   if (!st) return;
+  wFull = on;
   st.classList.toggle("full", on);
   document.body.classList.toggle("wfull", on);
   const b = document.getElementById("wfull");
-  if (b) b.textContent = on ? "✕" : "⛶";
-  if (on && !document.fullscreenElement && st.requestFullscreen) st.requestFullscreen().catch(() => {});
-  if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  if (b) {
+    b.innerHTML = icon(on ? "minimize" : "maximize");
+    b.setAttribute("aria-pressed", String(on));
+    b.title = on ? "Exit theater mode" : "Theater mode";
+  }
+  if (on && document.fullscreenEnabled && !document.fullscreenElement && st.requestFullscreen) {
+    st.requestFullscreen().catch(() => {});
+  } else if (!on && document.fullscreenElement && document.exitFullscreen) {
+    document.exitFullscreen().catch(() => {});
+  }
 }
 
 document.addEventListener("keydown", (e) => {
