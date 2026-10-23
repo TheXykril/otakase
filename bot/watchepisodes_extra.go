@@ -4,6 +4,7 @@ import (
  "context"
  "encoding/json"
  "fmt"
+ "io"
  "net/http"
  "net/url"
  "os"
@@ -16,12 +17,15 @@ func episodeJSON(ctx context.Context, endpoint string, out any) bool {
  req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
  if err != nil { return false }
  client := *activityClient
- client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+ client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
+   if strings.HasPrefix(endpoint, "https://api.tvmaze.com/lookup/") && next.URL.Scheme == "https" && next.URL.Hostname() == "api.tvmaze.com" { return nil }
+   return http.ErrUseLastResponse
+ }
  resp, err := client.Do(req)
  if err != nil { return false }
  defer resp.Body.Close()
  if resp.StatusCode != http.StatusOK { return false }
- return json.NewDecoder(http.MaxBytesReader(nil, resp.Body, 3<<20)).Decode(out) == nil
+ return json.NewDecoder(io.LimitReader(resp.Body, 3<<20)).Decode(out) == nil
 }
 
 func episodeImage(src string) string {
