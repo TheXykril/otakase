@@ -597,8 +597,11 @@ function wSubs() {
   const tracks = Array.from(vid.textTracks).filter((t) => t.kind === "subtitles" || t.kind === "captions");
   let pick = wSubPick;
   if (pick === "off") pick = "-1";
-  else if (pick !== "auto" && !/^\\d+$/.test(pick)) {
-    const match = tracks.findIndex((t) => (t.language || "").toLowerCase().startsWith(pick));
+  else if (pick !== "auto" && !/^[0-9]+$/.test(pick)) {
+    const match = tracks.findIndex((t) => {
+      const lang = (t.language || "").toLowerCase();
+      return lang === pick || lang.startsWith(pick + "-") || pick === "en" && lang === "eng" || pick === "ja" && lang === "jpn";
+    });
     pick = String(match >= 0 ? match : -1);
   }
   if (pick === "auto") {
