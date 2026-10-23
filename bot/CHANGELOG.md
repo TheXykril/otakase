@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.18
+
+- Activity: place moderation and sound controls in a dedicated toolbar instead of floating over game cards.
+
 ## 1.30.17
 
 - Watch Together: separate episode numbers and titles, and omit duplicate fallback titles.
