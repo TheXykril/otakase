@@ -795,11 +795,47 @@
   .adm { right:max(66px,calc(62px + var(--discord-safe-area-inset-right,0px))); bottom:max(112px,calc(24px + var(--discord-safe-area-inset-bottom,0px))); }
   .sndtip { right:max(66px,calc(62px + var(--discord-safe-area-inset-right,0px))); bottom:max(120px,calc(32px + var(--discord-safe-area-inset-bottom,0px))); }
 }
+
+/* Dedicated controls row: never overlay cards or Discord's native chrome. */
+#activitytools {
+  position:relative;
+  box-sizing:border-box;
+  max-width:880px;
+  margin:0 auto;
+  padding:12px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:10px;
+  min-height:54px;
+}
+#activitytools:empty { display:none; }
+#activitytools .adm, #activitytools .snd {
+  position:static;
+  top:auto; right:auto; bottom:auto;
+  flex:0 0 40px;
+  width:40px; height:40px;
+  box-shadow:none;
+}
+#activitytools .sndtip {
+  position:absolute;
+  top:100%; right:16px; bottom:auto;
+  white-space:nowrap;
+}
+#activitytools + main { padding-top:14px; }
+@media (pointer:coarse) and (orientation:portrait) {
+  #activitytools { padding-top:max(100px,calc(82px + var(--discord-safe-area-inset-top,0px))); }
+}
+@media (pointer:coarse) and (orientation:landscape) {
+  #activitytools { max-width:none; padding-top:14px; padding-right:max(110px,calc(24px + var(--discord-safe-area-inset-right,0px))); }
+  #activitytools + main { padding-top:14px; }
+}
 </style>
 </head>
 <body>
 <div class="topline" aria-hidden="true"><i></i></div>
 <div class="bgtext" id="bgtext" aria-hidden="true"></div>
+<div id="activitytools" role="group" aria-label="Activity controls"></div>
 <main id="app"><p class="msg loading">Loading…</p></main>
 <script src="sdk.js"></script>
 <script src="app.js"></script>

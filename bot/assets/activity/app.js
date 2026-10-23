@@ -2855,7 +2855,7 @@ function soundApply() {
   const b = document.createElement("button");
   b.id = "snd";
   b.className = "snd";
-  document.body.appendChild(b);
+  document.getElementById("activitytools").appendChild(b);
   b.onclick = (e) => {
     e.stopPropagation();
     soundMode = SOUND_MODES[(SOUND_MODES.indexOf(soundMode) + 1) % SOUND_MODES.length];
@@ -2867,7 +2867,7 @@ function soundApply() {
     const tip = document.createElement("span");
     tip.className = "sndtip";
     tip.textContent = SOUND_TEXT[soundMode];
-    document.body.appendChild(tip);
+    document.getElementById("activitytools").appendChild(tip);
     setTimeout(() => tip.remove(), 1400);
     sfx("tap");
   };
@@ -3171,7 +3171,7 @@ function fakeAdmin(on) {
         })
     );
   };
-  document.body.appendChild(b);
+  document.getElementById("activitytools").appendChild(b);
 }
 
 // The duck prank: every tap quacks.
@@ -3250,7 +3250,7 @@ function admButton(v) {
     e.stopPropagation();
     admOpen();
   };
-  document.body.appendChild(b);
+  document.getElementById("activitytools").appendChild(b);
 }
 
 function admDo(kind, target = "", text = "", n = 0) {
