@@ -317,7 +317,7 @@ function wEpisode(s) {
       go.disabled = true;
       wChanging = false;
       wvKey = "";
-      api("watch/pick", { room, show: s.id, ep: selected, dub: true })
+      api("watch/pick", { room, show: s.id, ep: selected, dub: /^(en|eng)(-|$)/.test(wAudioPick) })
         .then((nv) => wSet(nv))
         .catch((err) => { go.disabled = false; showError(err); });
     };
@@ -581,7 +581,7 @@ function wAudioTracks() {
     select.innerHTML = `<option value="auto">Automatic</option>` +
       (variants.sub ? `<option value="ja">Japanese</option>` : "") +
       (variants.dub ? `<option value="en">English</option>` : "");
-    select.disabled = Object.keys(variants).length < 2;
+    select.disabled = false;
     select.value = /^(en|eng)(-|$)/.test(wAudioPick) && variants.dub ? "en" :
       /^(ja|jpn)(-|$)/.test(wAudioPick) && variants.sub ? "ja" : "auto";
     document.getElementById("wsettingshint").textContent =
