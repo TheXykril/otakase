@@ -27,6 +27,13 @@ func buildVersion() string {
 }
 
 func main() {
+	if len(os.Args) == 3 && os.Args[1] == "-torrent-serve" {
+		if err := serveTorrentForBot(os.Args[2]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	anime, user := new(internal.Anime), new(internal.User)
 	internal.SetGlobalAnime(anime)
 	internal.SetGlobalUser(user)
