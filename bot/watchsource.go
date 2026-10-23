@@ -172,6 +172,7 @@ type watchShow struct {
 	Episodes int    `json:"episodes,omitempty"` // 0 while airing with no total
 	Aired    int    `json:"aired,omitempty"`    // episodes out so far, for airing shows
 	Cover    string `json:"cover,omitempty"`
+	Previews []watchEpisodePreview `json:"previews,omitempty"`
 	Year     int    `json:"year,omitempty"`
 	Format   string `json:"format,omitempty"`
 	Adult    bool   `json:"adult,omitempty"`
@@ -188,7 +189,12 @@ func (s watchShow) lastEpisode() int {
 	return 1
 }
 
-const watchMediaFields = `id idMal isAdult episodes format seasonYear title { romaji english } coverImage { large } nextAiringEpisode { episode }`
+type watchEpisodePreview struct {
+	Title string `json:"title"`
+	Thumbnail string `json:"thumbnail"`
+}
+
+const watchMediaFields = `id idMal isAdult episodes format seasonYear title { romaji english } coverImage { large } nextAiringEpisode { episode } streamingEpisodes { title thumbnail }`
 
 type watchMediaJSON struct {
 	ID       int    `json:"id"`
@@ -204,13 +210,14 @@ type watchMediaJSON struct {
 	Cover struct {
 		Large string `json:"large"`
 	} `json:"coverImage"`
+	Previews []watchEpisodePreview `json:"streamingEpisodes"`
 	Next *struct {
 		Episode int `json:"episode"`
 	} `json:"nextAiringEpisode"`
 }
 
 func (m watchMediaJSON) show() watchShow {
-	s := watchShow{ID: m.ID, MalID: m.IDMal, Title: m.Title.English, Episodes: m.Episodes, Cover: m.Cover.Large,
+	s := watchShow{ID: m.ID, MalID: m.IDMal, Title: m.Title.English, Episodes: m.Episodes, Cover: m.Cover.Large, Previews: m.Previews,
 		Year: m.Year, Format: m.Format, Adult: m.IsAdult}
 	if s.Title == "" {
 		s.Title = m.Title.Romaji
