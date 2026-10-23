@@ -441,6 +441,7 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 		var data []byte
 		var err error
 		if strings.HasPrefix(u, "http://127.0.0.1:") {
+			w.Header().Set("Cache-Control", "no-store")
 			data, _, err = load()
 		} else {
 			data, _, err = cache.get(m.key+" "+u, load)
@@ -534,7 +535,9 @@ func (m *watchMedia) write(w http.ResponseWriter, r *http.Request, data []byte, 
 	}
 	w.Header().Set("Content-Type", typ)
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	w.Header().Set("Cache-Control", "private, max-age=3600")
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "private, max-age=3600")
+	}
 	if r.Method == http.MethodHead {
 		return
 	}
