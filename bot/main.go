@@ -103,6 +103,8 @@ var haOptions = map[string]string{
 	"warning_days":          "OTAKASE_WARNING_DAYS",
 	"season_preview":        "OTAKASE_SEASON_PREVIEW",
 	"helper_points":         "OTAKASE_HELPER_POINTS",
+	"watch_torrent_max_gib": "OTAKASE_WATCH_TORRENT_MAX_GIB",
+	"watch_torrent_storage_gib": "OTAKASE_WATCH_TORRENT_STORAGE_GIB",
 	"discord_client_secret": "OTAKASE_DISCORD_CLIENT_SECRET",
 	"mal_client_id":         "OTAKASE_MAL_CLIENT_ID",
 	"mal_client_secret":     "OTAKASE_MAL_CLIENT_SECRET",
