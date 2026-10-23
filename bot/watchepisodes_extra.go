@@ -7,8 +7,8 @@ import (
  "io"
  "net/http"
  "net/url"
- "strconv"
  "strings"
+ "time"
 )
 
 // episodeJSON fetches bounded public metadata without following redirects.
@@ -16,10 +16,8 @@ func episodeJSON(ctx context.Context, endpoint string, out any) bool {
  req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
  if err != nil { return false }
  client := *activityClient
- client.CheckRedirect = func(next *http.Request, _ []*http.Request) error {
-   if strings.HasPrefix(endpoint, "https://api.tvmaze.com/lookup/") && next.URL.Scheme == "https" && next.URL.Hostname() == "api.tvmaze.com" { return nil }
-   return http.ErrUseLastResponse
- }
+ client.Timeout = 2500 * time.Millisecond
+ client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
  resp, err := client.Do(req)
  if err != nil { return false }
  defer resp.Body.Close()
@@ -31,7 +29,7 @@ func episodeImage(src string) string {
  u, err := url.Parse(src)
  if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" { return "" }
  switch u.Hostname() {
- case "media.kitsu.io", "static.tvmaze.com", "s4.anilist.co", "img1.ak.crunchyroll.com", "static.crunchyroll.com":
+ case "media.kitsu.io", "s4.anilist.co", "img1.ak.crunchyroll.com", "static.crunchyroll.com":
    return "api/watch/cover?u=" + url.QueryEscape(src)
  }
  return ""
@@ -48,8 +46,6 @@ func fillEpisode(result map[int]watchEpisodePreview, number, max int, title, pic
 // AniMap is an ID mapping service, not a source of episode stills.
 type episodeMapping struct {
  KitsuID []int `json:"kitsu_id"`
- TVDBID []int `json:"tvdb_id"`
- IMDBID []string `json:"imdb_id"`
 }
 
 func extraEpisodePreviews(ctx context.Context, show watchShow, result map[int]watchEpisodePreview) {
@@ -74,29 +70,6 @@ func extraEpisodePreviews(ctx context.Context, show watchShow, result map[int]wa
        title := ep.Title
        if title == "" { title = ep.CanonicalTitle }
        fillEpisode(result, ep.Number, max, title, ep.Thumbnail)
-     }
-   }
- }
- // Only use TVmaze when its entire first-season episode count matches this
- // AniList entry. Franchise-wide IDs otherwise risk mixing split cours.
- if len(mapping.TVDBID) == 1 && mapping.TVDBID[0] > 0 && show.Episodes > 0 {
-   var tvshow struct { ID int `json:"id"`; Premiered string `json:"premiered"` }
-   if episodeJSON(ctx, "https://api.tvmaze.com/lookup/shows?thetvdb="+strconv.Itoa(mapping.TVDBID[0]), &tvshow) && tvshow.ID > 0 && (show.Year == 0 || strings.HasPrefix(tvshow.Premiered, strconv.Itoa(show.Year)+"-")) {
-     var episodes []struct {
-       Season int `json:"season"`
-       Number int `json:"number"`
-       Name string `json:"name"`
-       Image *struct { Medium string `json:"medium"` } `json:"image"`
-     }
-     if episodeJSON(ctx, fmt.Sprintf("https://api.tvmaze.com/shows/%d/episodes", tvshow.ID), &episodes) {
-       season := make([]int,0)
-       for _, ep := range episodes { if ep.Season == 1 && ep.Number > 0 { season = append(season, ep.Number) } }
-       if len(season) == show.Episodes {
-         for _, ep := range episodes {
-           if ep.Season != 1 || ep.Image == nil { continue }
-           fillEpisode(result, ep.Number, max, ep.Name, ep.Image.Medium)
-         }
-       }
      }
    }
  }
