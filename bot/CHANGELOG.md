@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.30.6
+
+- Watch room: public playback failures now show a clear, discreet explanation and a report code instead of technical helper errors.
+- Home Assistant: new Watch room diagnostics card displays recent full error details, stages, episode names, and matching report codes for private troubleshooting.
+- Activity: use Catalog and Relay terminology in preparation messages.
+
 ## 1.30.5
 
 - Watch room: report the torrent helper's actual startup failure (such as unavailable peers, download timeout, or media probe error) instead of an invalid-address message.

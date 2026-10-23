@@ -377,7 +377,7 @@ func (r *watchRoom) finishMedia() {
 func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.show, r.ep, r.dub = &show, ep, dub
 	r.phase, r.errText = "loading", ""
-	r.loadStep, r.loadSince = "Searching sources, including torrent indexes", time.Now()
+	r.loadStep, r.loadSince = "Checking catalog for episode", time.Now()
 	r.finishMedia()
 	r.streams, r.link, r.subs, r.entry = nil, 0, nil, ""
 	r.setPos(0, false, watchNow())
@@ -396,7 +396,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		if err == nil && len(info.Streams) == 0 && len(info.Torrents) > 0 {
 			b.watch.mu.Lock()
 			if b.watch.cur == r && r.gen == gen {
-				r.loadStep = "Preparing torrent and buffering video"
+				r.loadStep = "Connecting to playback relay"
 				r.changed()
 			}
 			b.watch.mu.Unlock()
@@ -425,8 +425,8 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		}
 		if err != nil {
 			cancel()
-			log.Printf("watch room: %s episode %d: %v", show.Title, ep, err)
-			r.phase, r.errText = "error", fmt.Sprintf("Episode %d could not start: %s", ep, clip(err.Error(), 180))
+			code := recordWatchFailure(show.Title, ep, r.loadStep, err)
+			r.phase, r.errText = "error", fmt.Sprintf("Episode %d: %s. Report code %s to the moderators.", ep, publicWatchError(err), code)
 			r.changed()
 			return
 		}
