@@ -67,7 +67,7 @@ func TestBotSegmentsIntegration(t *testing.T) {
 		t.Fatalf("wrong tracks: %+v", m)
 	}
 	s := &botSegments{ctx: ctx, source: source, dir: dir, media: m, gate: make(chan struct{}, 1)}
-	if !strings.Contains(s.playlist("sub"), "#EXT-X-ENDLIST") || !strings.Contains(s.playlist(), "seg2.ts") {
+	if !strings.Contains(s.playlist("sub"), "#EXT-X-ENDLIST") || !strings.Contains(s.playlist("sub"), "seg2.ts") {
 		t.Fatal("incomplete VOD playlist")
 	}
 	// Request the final segment first, then seek backward.
