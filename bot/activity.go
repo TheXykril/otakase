@@ -389,7 +389,9 @@ func proxyAniList(w http.ResponseWriter, r *http.Request, src string) {
 		http.NotFound(w, r)
 		return
 	}
-	resp, err := activityClient.Get(src)
+	imageClient := *activityClient
+	imageClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := imageClient.Get(src)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		if err == nil {
 			resp.Body.Close()
