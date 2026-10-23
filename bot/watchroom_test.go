@@ -37,7 +37,7 @@ func watchBot(t *testing.T, streamURL string) (*bot, *time.Time) {
 		return nil
 	}
 	watchClock = func(*bot, *watchRoom) {}
-	watchResolve = func(_ string, id, ep int, dub, adult bool) (streamInfo, error) {
+	watchResolve = func(_ context.Context, _ string, id, ep int, dub, adult bool) (streamInfo, error) {
 		return streamInfo{AnilistID: id, Episode: ep, Streams: []streamLink{{URL: streamURL,
 			Subtitles: []streamSubtitle{{URL: streamURL + "/subs.srt", Language: "en", Label: "English"}}}}}, nil
 	}

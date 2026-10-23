@@ -39,8 +39,8 @@ type streamInfo struct {
 }
 
 // watchResolve runs the CLI, a variable for tests.
-var watchResolve = func(cli string, anilistID, episode int, dub, adult bool) (streamInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), watchResolveWait)
+var watchResolve = func(parent context.Context, cli string, anilistID, episode int, dub, adult bool) (streamInfo, error) {
+	ctx, cancel := context.WithTimeout(parent, watchResolveWait)
 	defer cancel()
 	home, _ := os.MkdirTemp("", "otakase-watch")
 	defer os.RemoveAll(home)
@@ -56,6 +56,9 @@ var watchResolve = func(cli string, anilistID, episode int, dub, adult bool) (st
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return streamInfo{}, ctx.Err()
+	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return streamInfo{}, fmt.Errorf("episode source lookup timed out after %s", watchResolveWait)
 	}
@@ -116,7 +119,7 @@ type watchInfoEntry struct {
 	ready chan struct{}
 }
 
-func (c *watchInfos) get(cli string, id, ep int, dub, adult bool) (streamInfo, error) {
+func (c *watchInfos) get(ctx context.Context, cli string, id, ep int, dub, adult bool) (streamInfo, error) {
 	key := fmt.Sprintf("%d:%d:%v:%v", id, ep, dub, adult)
 	c.mu.Lock()
 	if c.m == nil {
@@ -126,7 +129,11 @@ func (c *watchInfos) get(cli string, id, ep int, dub, adult bool) (streamInfo, e
 	if ok && (e.ready != nil || time.Since(e.at) < watchInfoTTL && e.err == nil) {
 		c.mu.Unlock()
 		if e.ready != nil {
-			<-e.ready
+			select {
+			case <-e.ready:
+			case <-ctx.Done():
+				return streamInfo{}, ctx.Err()
+			}
 			c.mu.Lock()
 			e = c.m[key]
 			c.mu.Unlock()
@@ -136,9 +143,15 @@ func (c *watchInfos) get(cli string, id, ep int, dub, adult bool) (streamInfo, e
 	ready := make(chan struct{})
 	c.m[key] = watchInfoEntry{ready: ready, at: time.Now()}
 	c.mu.Unlock()
-	info, err := watchResolve(cli, id, ep, dub, adult)
+	info, err := watchResolve(ctx, cli, id, ep, dub, adult)
 	c.mu.Lock()
-	c.m[key] = watchInfoEntry{info: info, err: err, at: time.Now()}
+	if current, exists := c.m[key]; exists && current.ready == ready {
+		if ctx.Err() != nil {
+			delete(c.m, key)
+		} else {
+			c.m[key] = watchInfoEntry{info: info, err: err, at: time.Now()}
+		}
+	}
 	for k, old := range c.m {
 		if old.ready == nil && time.Since(old.at) > watchInfoTTL {
 			delete(c.m, k)

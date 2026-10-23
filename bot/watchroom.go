@@ -392,7 +392,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	r.torrentCancel = cancel
 	go func() {
-		info, err := b.watch.infos.get(cli, show.ID, ep, dub, adult)
+		info, err := b.watch.infos.get(ctx, cli, show.ID, ep, dub, adult)
 		if err == nil && len(info.Streams) == 0 && len(info.Torrents) > 0 {
 			b.watch.mu.Lock()
 			if b.watch.cur == r && r.gen == gen {
@@ -445,7 +445,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		r.torrentCancel = cancel
 		// The next episode is looked up ahead, so it starts at once.
 		if ep < show.lastEpisode() {
-			watchAhead(func() { b.watch.infos.get(cli, show.ID, ep+1, dub, adult) })
+			watchAhead(func() { b.watch.infos.get(context.Background(), cli, show.ID, ep+1, dub, adult) })
 		}
 	}()
 }
@@ -945,6 +945,16 @@ func (b *bot) watchCtl(w http.ResponseWriter, r *http.Request) {
 func (b *bot) watchDo(r *watchRoom, act string, pos float64) string {
 	now := watchNow()
 	switch act {
+	case "cancel":
+		if r.phase != "loading" {
+			return "nothing is loading"
+		}
+		r.gen++
+		r.finishMedia()
+		r.phase, r.errText = "pick", ""
+		r.loadStep = ""
+		r.changed()
+		return ""
 	case "play", "pause", "seek":
 		if r.phase != "play" {
 			return "nothing is playing"

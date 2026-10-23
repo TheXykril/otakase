@@ -168,11 +168,13 @@ function wMore() {
   if (!el) return;
   const v = wv;
   let html = "";
+  if (v.is_host && v.phase === "loading") html += `<button class="btn alt" id="wcancel">${icon("x")} Cancel loading</button>`;
   if (v.is_host && v.show && v.phase !== "loading") html += `<button class="btn alt" id="wchange">${icon("shuffle")} Change show</button>`;
   if (v.staff && !v.is_host) html += `<button class="btn alt" id="wtake">${icon("shield")} Take control</button>`;
   if (v.is_host || v.staff) html += `<button class="btn alt" id="wend">${icon("x")} End room</button>`;
   el.innerHTML = html;
   const on = (id, fn) => document.getElementById(id) && (document.getElementById(id).onclick = fn);
+  on("wcancel", () => api("watch/ctl", { room, act: "cancel" }).then((nv) => ((wvKey = ""), wSet(nv))).catch(showError));
   on("wchange", () => {
     wChanging = true;
     wBox(`<div id="wpick"></div>`);
