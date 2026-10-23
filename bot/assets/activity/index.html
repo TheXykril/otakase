@@ -830,6 +830,12 @@
   #activitytools { max-width:none; padding-top:14px; padding-right:max(110px,calc(24px + var(--discord-safe-area-inset-right,0px))); }
   #activitytools + main { padding-top:14px; }
 }
+/* No still available: text-first layout instead of a blank video frame. */
+.wepcard.noimage { min-height:96px; justify-content:center; }
+.wepcard.noimage .wepvisual { display:none; }
+.wepcard.noimage .wepdetails { padding:16px; gap:8px; }
+.wepcard.noimage .wepnumber { font-size:12px; color:var(--accent); }
+.wepcard.noimage .wepdetails strong { font-size:14px; }
 </style>
 </head>
 <body>
