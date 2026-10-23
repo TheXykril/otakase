@@ -65,12 +65,12 @@ func TestBotSegmentsIntegration(t *testing.T) {
 		t.Fatalf("wrong tracks: %+v", m)
 	}
 	s := &botSegments{ctx: ctx, source: source, dir: dir, media: m, gate: make(chan struct{}, 1)}
-	if !strings.Contains(s.playlist(), "#EXT-X-ENDLIST") || !strings.Contains(s.playlist(), "seg2.ts") {
+	if !strings.Contains(s.playlist("sub"), "#EXT-X-ENDLIST") || !strings.Contains(s.playlist(), "seg2.ts") {
 		t.Fatal("incomplete VOD playlist")
 	}
 	// Request the final segment first, then seek backward.
 	for _, n := range []int{2, 0, 1, 2} {
-		data, err := s.segment(ctx, n)
+		data, err := s.segment(ctx, n, "sub")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -112,7 +112,17 @@ func TestBotSegmentsIntegration(t *testing.T) {
 			}
 		}
 	}
-	if _, err := s.segment(ctx, 100); err == nil {
+	dub, err := probeBotMedia(ctx, source, "dub")
+ if err != nil { t.Fatal(err) }
+ s.variants = map[string]botMedia{"sub": m, "dub": dub}
+ for _, mode := range []string{"sub", "dub"} {
+  data, err := s.segment(ctx, 0, mode)
+  if err != nil || len(data) == 0 { t.Fatalf("%s variant: %v", mode, err) }
+ }
+ if len(s.cache) != 4 { t.Fatalf("audio renditions were not cached separately: %d", len(s.cache)) }
+ vtt := botSubtitleVTT(ctx, source, m.subtitle)
+ if !strings.Contains(string(vtt), "Late subtitle") { t.Fatalf("subtitle conversion failed: %q", vtt) }
+ if _, err := s.segment(ctx, 100, "sub"); err == nil {
 		t.Fatal("out-of-range segment accepted")
 	}
 }
