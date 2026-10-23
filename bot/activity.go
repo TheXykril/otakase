@@ -20,7 +20,7 @@ import (
 )
 
 // The daily puzzle as a Discord Activity: a small web page that opens
-// inside Discord (from /otakase, /games, its button, or the App Launcher). It is
+// inside Discord (from /otakase, its button, or the App Launcher). It is
 // served by the public API under /activity/, reached through the
 // Cloudflare Tunnel, and Discord's proxy maps the Activity's root to it.
 // The page signs in with the Embedded App SDK: Discord gives it a code,
