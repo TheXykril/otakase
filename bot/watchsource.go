@@ -20,7 +20,7 @@ import (
 // progress on.
 
 const (
-	watchResolveWait = 2 * time.Minute
+	watchResolveWait = 8 * time.Minute
 	watchInfoTTL     = 30 * time.Minute
 )
 
@@ -56,6 +56,9 @@ var watchResolve = func(cli string, anilistID, episode int, dub, adult bool) (st
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return streamInfo{}, fmt.Errorf("episode source lookup timed out after %s", watchResolveWait)
+	}
 	if errors.Is(err, exec.ErrNotFound) {
 		return streamInfo{}, errors.New("the otakase CLI isn't in this bot's image")
 	}

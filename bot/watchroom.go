@@ -103,8 +103,10 @@ type watchRoom struct {
 	ep      int
 	dub     bool
 	phase   string // pick, loading, play, error, over
-	errText string
-	gen     int // bumps with every episode load, so a slow one can't land late
+	errText   string
+	loadStep  string // current episode preparation step
+	loadSince time.Time
+	gen       int // bumps with every episode load, so a slow one can't land late
 
 	streams       []streamLink
 	link          int // index into streams
@@ -375,6 +377,7 @@ func (r *watchRoom) finishMedia() {
 func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.show, r.ep, r.dub = &show, ep, dub
 	r.phase, r.errText = "loading", ""
+	r.loadStep, r.loadSince = "Searching sources, including torrent indexes", time.Now()
 	r.finishMedia()
 	r.streams, r.link, r.subs, r.entry = nil, 0, nil, ""
 	r.setPos(0, false, watchNow())
@@ -390,6 +393,14 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.torrentCancel = cancel
 	go func() {
 		info, err := b.watch.infos.get(cli, show.ID, ep, dub, adult)
+		if err == nil && len(info.Streams) == 0 && len(info.Torrents) > 0 {
+			b.watch.mu.Lock()
+			if b.watch.cur == r && r.gen == gen {
+				r.loadStep = "Preparing torrent and buffering video"
+				r.changed()
+			}
+			b.watch.mu.Unlock()
+		}
 		var torrent *watchTorrent
 		if err == nil && len(info.Streams) == 0 && len(info.Torrents) > 0 {
 			var link string
@@ -520,7 +531,9 @@ type watchView struct {
 	Host    string        `json:"host"`
 	IsHost  bool          `json:"is_host"`
 	Staff   bool          `json:"staff,omitempty"`
-	Phase   string        `json:"phase"`
+	Phase     string `json:"phase"`
+	LoadStep  string `json:"load_step,omitempty"`
+	LoadSince int64  `json:"load_since,omitempty"`
 	Err     string        `json:"err,omitempty"`
 	Adult   bool          `json:"adult,omitempty"`
 	Show    *watchShow    `json:"show,omitempty"`
@@ -547,6 +560,10 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 	v := watchView{Ver: r.ver, Room: r.id, Me: user, Host: r.host, IsHost: r.host == user, Staff: staff, Phase: r.phase,
 		Err: r.errText, Adult: r.adult, Show: r.show, Ep: r.ep, Dub: r.dub, Playing: r.playing, Pos: r.position(now),
 		Dur: r.dur, Members: []watchPerson{}, Asks: []watchAsk{}, Max: b.watchMax()}
+	if r.phase == "loading" {
+		v.LoadStep = r.loadStep
+		v.LoadSince = r.loadSince.UnixMilli()
+	}
 	if r.show != nil {
 		v.LastEp = r.show.lastEpisode()
 	}

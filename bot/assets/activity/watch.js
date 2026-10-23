@@ -89,7 +89,7 @@ function wSet(v, fromHost) {
     wStop();
     return wBox(`<p class="lead">The watch room is over.</p><p class="note">Thanks for watching. Open the games menu for more.</p>`);
   }
-  const key = [v.phase, v.is_host, v.show && v.show.id, v.ep, v.err, v.media].join("|");
+  const key = [v.phase, v.is_host, v.show && v.show.id, v.ep, v.err, v.media, v.load_step].join("|");
   if (wChanging && v.is_host) {
     wvKey = key;
     return;
@@ -98,6 +98,11 @@ function wSet(v, fromHost) {
   if (key !== wvKey) {
     wvKey = key;
     wDraw();
+  }
+  const elapsedEl = document.getElementById("wloadelapsed");
+  if (elapsedEl && v.load_since) {
+    const seconds = Math.max(0, Math.floor((Date.now() - v.load_since) / 1000));
+    elapsedEl.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
   }
   wPeople();
   wAsks();
@@ -115,7 +120,9 @@ function wDraw() {
       ? `${v.err ? `<p class="err">${esc(v.err)}</p>` : ""}<div id="wpick"></div>`
       : `<p class="msg">${v.err ? esc(v.err) : "The host is picking what to watch…"}</p>`;
   } else if (v.phase === "loading") {
-    stage = `<p class="msg loading">Finding ${showLine || "the episode"} on the sources… this can take a minute.</p>`;
+    const step = v.load_step || "Finding episode sources";
+    const elapsed = v.load_since ? Math.max(0, Math.floor((Date.now() - v.load_since) / 1000)) : 0;
+    stage = `<div class="msg loading"><p><b id="wloadstep">${esc(step)}</b></p><p class="note">Elapsed: <span id="wloadelapsed">${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}</span></p><p class="note">Torrent sources can take several minutes to resolve and buffer. The current step updates when lookup finishes; exact download percentage is not available yet.</p></div>`;
   } else {
     stage = `<div class="wstage${wFull ? " full" : ""}" id="wstage"><div class="wplayer" id="wplayer"><video id="wvid" playsinline preload="auto"></video>
       <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div></div>
