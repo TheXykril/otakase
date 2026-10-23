@@ -70,6 +70,7 @@ func ResolveStreamInfo(config Config, anilistID, episode int) (StreamInfo, error
 
 	preferred := normalizeTranslationType(config.SubOrDub)
 	var failures []string
+	var torrentFallback *StreamInfo
 	for _, mode := range []string{preferred, alternateTranslationType(preferred)} {
 		for _, name := range providerNamesForAnime(&config, &anime) {
 			show := anime
@@ -85,8 +86,17 @@ func ResolveStreamInfo(config Config, anilistID, episode int) (StreamInfo, error
 				continue
 			}
 			info.Provider, info.Mode, info.Streams, info.Torrents = result.ProviderName, mode, streams, torrents
-			return info, nil
+			if len(streams) > 0 {
+				return info, nil
+			}
+			if torrentFallback == nil {
+				fallback := info
+				torrentFallback = &fallback
+			}
 		}
+	}
+	if torrentFallback != nil {
+		return *torrentFallback, nil
 	}
 	if len(failures) == 0 {
 		return info, errors.New("no provider is enabled")
