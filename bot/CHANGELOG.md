@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.5
+
+- Watch room: report the torrent helper's actual startup failure (such as unavailable peers, download timeout, or media probe error) instead of an invalid-address message.
+
 ## 1.30.4
 
 - Watch room: display source lookup and torrent preparation stages with elapsed time in the Activity.

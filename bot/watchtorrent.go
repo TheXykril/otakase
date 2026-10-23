@@ -69,7 +69,8 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string) (*watchTorre
 	if err != nil {
 		return nil, "", err
 	}
-	cmd.Stderr = io.Discard
+	stderr := &botLimitedLog{limit: 8192}
+	cmd.Stderr = stderr
 	cleanWatchTorrentDirs()
 	home, err := os.MkdirTemp("", "otakase-room-torrent-")
 	if err != nil {
@@ -119,7 +120,11 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string) (*watchTorre
 		u, err := url.Parse(link)
 		if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.Port() == "" || u.Path != "/playlist.m3u8" {
 			t.stop()
-			return nil, "", fmt.Errorf("torrent helper returned invalid address")
+			if detail := strings.TrimSpace(stderr.String()); detail != "" {
+				lines := strings.Split(detail, "\n")
+				return nil, "", fmt.Errorf("torrent preparation failed: %s", strings.TrimSpace(lines[len(lines)-1]))
+			}
+			return nil, "", fmt.Errorf("torrent helper exited without a valid playback address")
 		}
 		go func() {
 			select {
@@ -153,4 +158,31 @@ func cleanWatchTorrentDirs() {
 		}
 		lock.Close()
 	}
+}
+
+type botLimitedLog struct {
+	mu sync.Mutex
+	data []byte
+	limit int
+}
+
+func (l *botLimitedLog) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(p) >= l.limit {
+		l.data = append(l.data[:0], p[len(p)-l.limit:]...)
+	} else {
+		excess := len(l.data) + len(p) - l.limit
+		if excess > 0 {
+			l.data = append(l.data[:0], l.data[excess:]...)
+		}
+		l.data = append(l.data, p...)
+	}
+	return len(p), nil
+}
+
+func (l *botLimitedLog) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return string(l.data)
 }
