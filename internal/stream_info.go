@@ -126,6 +126,9 @@ func streamLinks(result ProviderEpisodeResult) []StreamLink {
 		if !strings.HasPrefix(link, "http://") && !strings.HasPrefix(link, "https://") {
 			continue
 		}
+		if u, err := url.Parse(link); err == nil && u.Hostname() == "127.0.0.1" {
+			continue
+		}
 		s := StreamLink{URL: link}
 		if hint, ok := result.LinkHints[link]; ok {
 			s.Referrer, s.Headers = hint.Referrer, hint.Headers
