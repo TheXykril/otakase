@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.14
+
+- Activity: keep menus and playback controls clear of Discord's landscape overlays and safe areas.
+- Watch Together: show episode thumbnail and title cards when preview metadata is available, with numbered fallbacks otherwise.
+
 ## 1.30.13
 
 - Activity: add `/games` for games only and `/watch` to open Watch Together directly; `/activity` keeps the full menu.
