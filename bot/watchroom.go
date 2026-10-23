@@ -103,10 +103,10 @@ type watchRoom struct {
 	ep      int
 	dub     bool
 	phase   string // pick, loading, play, error, over
-	errText string
-	loadStep string // current episode preparation step
+	errText   string
+	loadStep  string // current episode preparation step
 	loadSince time.Time
-	gen     int // bumps with every episode load, so a slow one can't land late
+	gen       int // bumps with every episode load, so a slow one can't land late
 
 	streams       []streamLink
 	link          int // index into streams
@@ -377,7 +377,7 @@ func (r *watchRoom) finishMedia() {
 func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.show, r.ep, r.dub = &show, ep, dub
 	r.phase, r.errText = "loading", ""
-	r.loadStep, r.loadSince = "Finding episode sources", time.Now()
+	r.loadStep, r.loadSince = "Searching sources, including torrent indexes", time.Now()
 	r.finishMedia()
 	r.streams, r.link, r.subs, r.entry = nil, 0, nil, ""
 	r.setPos(0, false, watchNow())
@@ -531,9 +531,9 @@ type watchView struct {
 	Host    string        `json:"host"`
 	IsHost  bool          `json:"is_host"`
 	Staff   bool          `json:"staff,omitempty"`
-	Phase   string        `json:"phase"`
-	LoadStep string `json:"load_step,omitempty"`
-	LoadSince int64 `json:"load_since,omitempty"`
+	Phase     string `json:"phase"`
+	LoadStep  string `json:"load_step,omitempty"`
+	LoadSince int64  `json:"load_since,omitempty"`
 	Err     string        `json:"err,omitempty"`
 	Adult   bool          `json:"adult,omitempty"`
 	Show    *watchShow    `json:"show,omitempty"`
