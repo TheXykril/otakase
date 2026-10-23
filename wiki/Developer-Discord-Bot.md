@@ -209,7 +209,7 @@ server and stays connected to Discord.
   lounge, seasonal, discussion, manga or memes; staff channels mod, staff,
   admin or logs.
 - **Games:** played only in the [Games Activity](#games-activity); in chat
-  `/otakase` (legacy `/games` also works) and the button under `/leaderboard` open it, `/leaderboard` shows
+  `/otakase` and the button under `/leaderboard` open it, `/leaderboard` shows
   one points board for every game (`games.go`) and `/riddle-add` adds an
   emoji riddle (`chatgames.go`). The games: the daily puzzle (one show a day
   for everyone, 8 tries, each try shows how close its year, format,
@@ -427,7 +427,7 @@ grid, hangman, wordle, quiz, two truths and a lie), the bingo card and the leade
 together. It is served by the public API under `/activity/` (`activity.go`
 for sign-in and the daily puzzle, `activitygames.go` for guess, riddle,
 scramble, higher or lower, bingo and the board, page in
-`assets/activity`), and opens from the App Launcher, `/otakase` (legacy `/games` also works) or the button
+`assets/activity`), and opens from the App Launcher, `/otakase` or the button
 under `/leaderboard`. Answers stay on the bot until a round ends; Activity
 wins give at most 10 points a day.
 
@@ -478,7 +478,7 @@ nobody. The winners get the usual game point. Pages long poll `party/state` with
 the room's version, so every change reaches every screen at once; members
 who stop polling for 45 seconds drop out. `party/daily` shows the room's
 daily tries as colours only. Without the Activity set up there are no
-games to play; `/otakase` (legacy `/games` also works) then shows today's board. To turn it on:
+games to play; `/otakase` then shows today's board. To turn it on:
 
 1. Developer Portal → the bot's app → **OAuth2**: copy the **Client
    Secret** (Reset Secret if none is shown) into the add-on's
