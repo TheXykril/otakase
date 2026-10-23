@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -120,6 +122,13 @@ func TestBotSegmentsIntegration(t *testing.T) {
   if err != nil || len(data) == 0 { t.Fatalf("%s variant: %v", mode, err) }
  }
  if len(s.cache) != 4 { t.Fatalf("audio renditions were not cached separately: %d", len(s.cache)) }
+ for _, route := range []string{"/sub/playlist.m3u8", "/dub/playlist.m3u8"} {
+  res := httptest.NewRecorder()
+  s.ServeHTTP(res, httptest.NewRequest(http.MethodGet, route, nil))
+  if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), "seg0.ts") {
+   t.Fatalf("%s returned %d %q", route, res.Code, res.Body.String())
+  }
+ }
  vtt := botSubtitleVTT(ctx, source, m.subtitle)
  if !strings.Contains(string(vtt), "Late subtitle") { t.Fatalf("subtitle conversion failed: %q", vtt) }
  if _, err := s.segment(ctx, 100, "sub"); err == nil {
