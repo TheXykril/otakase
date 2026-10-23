@@ -16,6 +16,8 @@ let wHostAct = 0; // when the host last did something, so its own echo isn't fol
 let wNeedTap = false;
 let wFails = 0;
 let wSubPick = "auto";
+let wAudioPick = "auto";
+let wSettingsDirty = false;
 let wSearch = [];
 let wFull = false; // the player fills the window
 let wChanging = false; // the host is picking another show while one plays
@@ -85,6 +87,10 @@ function wSet(v, fromHost) {
   if (!v || where !== "watch") return;
   wv = v;
   wvAt = Date.now();
+  if (v.languages && !wSettingsDirty) {
+    wAudioPick = v.languages.audio || "auto";
+    wSubPick = v.languages.subtitles || "auto";
+  }
   if (v.phase === "over") {
     wStop();
     return wBox(`<p class="lead">The watch room is over.</p><p class="note">Thanks for watching. Open the games menu for more.</p>`);
@@ -110,7 +116,7 @@ function wSet(v, fromHost) {
   wPeople();
   wAsks();
   wSyncLine();
-  if (v.media && v.media !== wvMedia) wLoad();
+  if (v.media && wEffectiveMedia() !== wvMedia) wLoad();
   else if (fromHost) wApply(true);
 }
 
@@ -255,7 +261,7 @@ function wPicker(changing) {
             )
             .join("")
         : `<p class="note">Nothing found.</p>`;
-      res.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => wLanguage(wSearch[+b.dataset.i])));
+      res.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => wEpisode(wSearch[+b.dataset.i])));
     }, 300);
   };
   q.focus();
@@ -263,38 +269,12 @@ function wPicker(changing) {
   if (c) c.onclick = () => ((wChanging = false), (wvKey = ""), (wvMedia = ""), wSet(wv));
 }
 
-function wPickerHeading(s, step) {
+function wPickerHeading(s) {
   return `<div class="wpickhead">${s.cover ? `<img src="${esc(s.cover)}" alt="">` : ""}
-    <div><span class="wpickey">STEP ${step} OF 2</span><h3>${esc(s.title)}</h3></div></div>`;
+    <div><span class="wpickey">EPISODE SELECTION</span><h3>${esc(s.title)}</h3></div></div>`;
 }
 
-function wLanguage(s) {
-  const res = document.getElementById("wres");
-  if (!res) return;
-  res.innerHTML = `<div class="wpickflow">
-    ${wPickerHeading(s, 1)}
-    <h4>How would you like to watch?</h4>
-    <div class="waudiogrid">
-      <button class="waudiocard" id="wsub">
-        <span class="waudioicon">${icon("captions")}</span><b>Subtitled</b>
-        <small>Original audio with subtitles</small>
-        <span class="waudioaction">Choose Sub ${icon("arrow-right")}</span>
-      </button>
-      <button class="waudiocard" id="wdubpick">
-        <span class="waudioicon">${icon("headphones")}</span><b>Dubbed</b>
-        <small>English audio when available</small>
-        <span class="waudioaction">Choose Dub ${icon("arrow-right")}</span>
-      </button>
-    </div>
-    <p class="note">If a dub is unavailable, playback automatically switches to subtitles.</p>
-    <button class="btn alt" id="wback">Back to results</button>
-  </div>`;
-  document.getElementById("wsub").onclick = () => wEpisode(s, false);
-  document.getElementById("wdubpick").onclick = () => wEpisode(s, true);
-  document.getElementById("wback").onclick = () => document.getElementById("q").oninput();
-}
-
-function wEpisode(s, dub) {
+function wEpisode(s) {
   const last = Math.max(1, s.aired || s.episodes || 1);
   const next = wv.show && wv.show.id === s.id ? Math.min(wv.ep + 1, last) : 1;
   let selected = next;
@@ -305,9 +285,9 @@ function wEpisode(s, dub) {
     const start = page * 24 + 1;
     const end = Math.min(last, start + 23);
     res.innerHTML = `<div class="wpickflow">
-      ${wPickerHeading(s, 2)}
+      ${wPickerHeading(s)}
       <div class="weptop"><div><h4>Select an episode</h4><p class="note">${last} episode${last === 1 ? "" : "s"} available to select</p></div>
-        <span class="pill">${dub ? "Dub" : "Sub"} preferred</span></div>
+        <span class="pill">Audio in player settings</span></div>
       <div class="wepgrid">${Array.from({ length: end - start + 1 }, (_, i) => {
         const ep = start + i;
         return `<button class="wepcard${ep === selected ? " chosen" : ""}" data-ep="${ep}" aria-pressed="${ep === selected}">
@@ -318,7 +298,7 @@ function wEpisode(s, dub) {
       ${last > 24 ? `<div class="wepnav"><button class="btn alt" id="wprev" ${page === 0 ? "disabled" : ""}>Previous</button>
         <span class="note">Episodes ${start}–${end} of ${last}</span>
         <button class="btn alt" id="wnext" ${end === last ? "disabled" : ""}>Next</button></div>` : ""}
-      <div class="wepfooter"><button class="btn alt" id="wback">Change audio</button>
+      <div class="wepfooter"><button class="btn alt" id="wback">Back to results</button>
         <button class="btn" id="wgo">${icon("play")} Play episode ${selected}</button></div>
     </div>`;
     res.querySelectorAll("[data-ep]").forEach((button) => {
@@ -327,7 +307,7 @@ function wEpisode(s, dub) {
         draw();
       };
     });
-    document.getElementById("wback").onclick = () => wLanguage(s);
+    document.getElementById("wback").onclick = () => document.getElementById("q").oninput();
     if (last > 24) {
       document.getElementById("wprev").onclick = () => { if (page > 0) { page--; draw(); } };
       document.getElementById("wnext").onclick = () => { if ((page + 1) * 24 < last) { page++; draw(); } };
@@ -337,7 +317,7 @@ function wEpisode(s, dub) {
       go.disabled = true;
       wChanging = false;
       wvKey = "";
-      api("watch/pick", { room, show: s.id, ep: selected, dub })
+      api("watch/pick", { room, show: s.id, ep: selected, dub: true })
         .then((nv) => wSet(nv))
         .catch((err) => { go.disabled = false; showError(err); });
     };
@@ -381,11 +361,18 @@ function hlsReady() {
   return hlsLoading;
 }
 
+function wEffectiveMedia() {
+  if (!wv) return "";
+  const variants = wv.audio_media || {};
+  const mode = /^(en|eng)(-|$)/.test(wAudioPick) ? "dub" : /^(ja|jpn)(-|$)/.test(wAudioPick) ? "sub" : "";
+  return mode && variants[mode] ? variants[mode] : wv.media;
+}
+
 async function wLoad() {
   const vid = document.getElementById("wvid");
   if (!vid) return;
   wDestroy();
-  wvMedia = wv.media;
+  wvMedia = wEffectiveMedia();
   wFails = 0;
   const at = wTarget();
   for (const s of wv.subs || []) {
@@ -411,7 +398,7 @@ async function wLoad() {
     } catch (e) {
       return showError(e);
     }
-    if (wvMedia !== wv.media) return;
+    if (wvMedia !== wEffectiveMedia()) return;
     if (!Hls.isSupported()) return showError(new Error("This Discord can't play the stream."));
     wHls = new Hls({ startPosition: at, maxBufferLength: 40, backBufferLength: 60, enableWorker: false, renderTextTracksNatively: true });
     wHls.on(Hls.Events.ERROR, (_, d) => {
@@ -421,10 +408,11 @@ async function wLoad() {
       setTimeout(() => wHls && wHls.startLoad(), 1500);
     });
     wHls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, wSubs);
-    wHls.loadSource(wv.media);
+    wHls.on(Hls.Events.AUDIO_TRACKS_UPDATED, wAudioTracks);
+    wHls.loadSource(wvMedia);
     wHls.attachMedia(vid);
   } else {
-    vid.src = wv.media;
+    vid.src = wvMedia;
     vid.currentTime = at;
   }
   wApply(true);
@@ -503,7 +491,8 @@ function wBar() {
   const bar = document.getElementById("wbar");
   const v = wv;
   const btn = (id, ic, label, alt = true) => `<button class="btn${alt ? " alt" : ""}" id="${id}" title="${esc(label)}">${icon(ic)}<span>${esc(label)}</span></button>`;
-  const common = `<span class="wbarlabel">CC</span><select id="wsub" aria-label="Subtitles"></select>
+  const common = `<button class="btn alt" id="wsettings" title="Audio and subtitle languages"><span>Audio &amp; Subtitles</span></button>
+    <div class="wsettings" id="wsettingsmenu" hidden><label>Audio language<select id="waudio" aria-label="Audio language"></select></label><label>Subtitles<select id="wsub" aria-label="Subtitle language"></select></label><p class="note" id="wsettingshint"></p></div>
     <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
     <button class="btn alt wfullscreen" id="wfull" title="Toggle theater mode" aria-label="Toggle theater mode" aria-pressed="${wFull}">${icon(wFull ? "minimize" : "maximize")}</button>`;
   if (v.is_host) {
@@ -536,7 +525,10 @@ function wBar() {
   vol.value = vid.volume;
   vol.oninput = () => ((vid.volume = +vol.value), (vid.muted = +vol.value === 0));
   document.getElementById("wfull").onclick = () => wFullscreen(!wFull);
-  document.getElementById("wsub").onchange = (e) => ((wSubPick = e.target.value), wSubs());
+  document.getElementById("wsettings").onclick = () => { const menu = document.getElementById("wsettingsmenu"); menu.hidden = !menu.hidden; };
+  document.getElementById("wsub").onchange = (e) => { wSubPick = e.target.value; wSettingsDirty = true; wSubs(); wSaveLanguages(); };
+  document.getElementById("waudio").onchange = (e) => { wAudioPick = e.target.value; wSettingsDirty = true; wAudioTracks(); wSaveLanguages(); if (wv.audio_media && wEffectiveMedia() !== wvMedia) wLoad(); };
+  wAudioTracks();
   wSubs();
 }
 
@@ -571,6 +563,50 @@ document.addEventListener("fullscreenchange", () => {
   }
 });
 
+// Changes affect this viewer only. Shared playback position stays unchanged.
+function wSaveLanguages() {
+  api("watch/languages", { room, audio: wAudioPick, subtitles: wSubPick })
+    .then((saved) => {
+      if (wv) wv.languages = saved;
+      wSettingsDirty = false;
+    })
+    .catch(showError);
+}
+
+function wAudioTracks() {
+  const select = document.getElementById("waudio");
+  if (!select) return;
+  const variants = wv && wv.audio_media || {};
+  if (Object.keys(variants).length) {
+    select.innerHTML = `<option value="auto">Automatic</option>` +
+      (variants.sub ? `<option value="ja">Japanese</option>` : "") +
+      (variants.dub ? `<option value="en">English</option>` : "");
+    select.disabled = Object.keys(variants).length < 2;
+    select.value = /^(en|eng)(-|$)/.test(wAudioPick) && variants.dub ? "en" :
+      /^(ja|jpn)(-|$)/.test(wAudioPick) && variants.sub ? "ja" : "auto";
+    document.getElementById("wsettingshint").textContent =
+      wAudioPick !== "auto" && select.value === "auto" ? "Preferred audio unavailable; using an available language." : "";
+    return;
+  }
+  const tracks = wHls ? wHls.audioTracks || [] : [];
+  const current = tracks.findIndex((track) => {
+    const language = (track.lang || "").toLowerCase();
+    const preferred = wAudioPick === "en" ? "eng" : wAudioPick === "ja" ? "jpn" : wAudioPick;
+    return wAudioPick !== "auto" && (language === preferred || language.startsWith(preferred + "-") || language === wAudioPick || language.startsWith(wAudioPick + "-"));
+  });
+  select.innerHTML = `<option value="auto">Automatic</option>` + tracks.map((track, index) =>
+    `<option value="${esc((track.lang || "").toLowerCase())}" data-index="${index}">${esc(track.name || track.lang || "Track " + (index + 1))}</option>`).join("");
+  if (!tracks.length) {
+    select.disabled = true;
+    document.getElementById("wsettingshint").textContent = "This playback only provides one audio track. Other languages will appear when available.";
+  } else {
+    select.disabled = false;
+    select.value = current >= 0 ? (tracks[current].lang || "").toLowerCase() : "auto";
+    document.getElementById("wsettingshint").textContent = current < 0 && wAudioPick !== "auto" ? "Preferred audio unavailable; using available audio." : "";
+    if (current >= 0 && wHls.audioTrack !== current) wHls.audioTrack = current;
+  }
+}
+
 // wSubs fills the subtitle picker and shows the picked track: English by
 // default.
 function wSubs() {
@@ -579,13 +615,21 @@ function wSubs() {
   if (!vid || !sel) return;
   const tracks = Array.from(vid.textTracks).filter((t) => t.kind === "subtitles" || t.kind === "captions");
   let pick = wSubPick;
+  if (pick === "off") pick = "-1";
+  else if (pick !== "auto" && !/^[0-9]+$/.test(pick)) {
+    const match = tracks.findIndex((t) => {
+      const lang = (t.language || "").toLowerCase();
+      return lang === pick || lang.startsWith(pick + "-") || pick === "en" && lang === "eng" || pick === "ja" && lang === "jpn";
+    });
+    pick = String(match >= 0 ? match : -1);
+  }
   if (pick === "auto") {
     const en = tracks.findIndex((t) => /^en/i.test(t.language) || /english/i.test(t.label));
     pick = String(en >= 0 ? en : tracks.length ? 0 : -1);
   }
-  sel.innerHTML = `<option value="-1">Subtitles off</option>` + tracks.map((t, i) => `<option value="${i}">${esc(t.label || t.language || "Track " + (i + 1))}</option>`).join("");
-  sel.value = pick;
-  sel.hidden = tracks.length === 0;
+  sel.innerHTML = `<option value="off">Subtitles off</option><option value="auto">Automatic</option>` + tracks.map((t, i) => `<option value="${esc((t.language || "und").toLowerCase())}">${esc(t.label || t.language || "Track " + (i + 1))}</option>`).join("");
+  sel.value = wSubPick === "auto" ? "auto" : wSubPick === "off" ? "off" : wSubPick;
+  if (sel.selectedIndex < 0) sel.value = "auto";
   tracks.forEach((t, i) => (t.mode = String(i) === pick ? "showing" : "disabled"));
 }
 

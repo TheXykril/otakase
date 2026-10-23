@@ -115,6 +115,7 @@ type watchRoom struct {
 	media         *watchMedia
 	old           *watchMedia // the episode before, still served for a moment
 	entry         string
+	audioEntries map[string]string
 	subs          []watchSub
 
 	playing bool
@@ -379,7 +380,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.phase, r.errText = "loading", ""
 	r.loadStep, r.loadSince = "Checking catalog for episode", time.Now()
 	r.finishMedia()
-	r.streams, r.link, r.subs, r.entry = nil, 0, nil, ""
+	r.streams, r.link, r.subs, r.entry, r.audioEntries = nil, 0, nil, "", nil
 	r.setPos(0, false, watchNow())
 	r.dur = 0
 	r.asks = nil
@@ -411,7 +412,11 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 				}
 			}
 			if err == nil {
-				info.Streams = []streamLink{{URL: link}}
+				media := streamLink{URL: link}
+				if parsed, parseErr := url.Parse(link); parseErr == nil && parsed.Query().Get("subtitles") == "en" {
+					media.Subtitles = []streamSubtitle{{URL: fmt.Sprintf("http://%s/subs/en.vtt", parsed.Host), Language: "en", Label: "English"}}
+				}
+				info.Streams = []streamLink{media}
 			}
 		}
 		b.watch.mu.Lock()
@@ -472,6 +477,17 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	r.link = k
 	m, entry, subIDs := newWatchMedia(r.streams[k], r.dub)
 	r.media, r.entry, r.subs = m, entry, nil
+	r.audioEntries = nil
+	if u, err := url.Parse(r.streams[k].URL); err == nil && u.Hostname() == "127.0.0.1" && u.Query().Get("languages") != "" {
+		r.audioEntries = map[string]string{}
+		for _, mode := range strings.Split(u.Query().Get("languages"), ",") {
+			if mode != "sub" && mode != "dub" { continue }
+			variant := *u
+			variant.Path = "/" + mode + "/playlist.m3u8"
+			variant.RawQuery = ""
+			r.audioEntries[mode] = watchMediaPath(m.key, m.add(variant.String(), "list"))
+		}
+	}
 	for n, s := range r.streams[k].Subtitles {
 		label := s.Label
 		if label == "" {
@@ -542,6 +558,7 @@ type watchView struct {
 	Dub     bool          `json:"dub,omitempty"`
 	Media   string        `json:"media,omitempty"`
 	HLS     bool          `json:"hls,omitempty"`
+	AudioMedia map[string]string `json:"audio_media,omitempty"`
 	Subs    []watchSub    `json:"subs,omitempty"`
 	Playing bool          `json:"playing"`
 	Pos     float64       `json:"pos"`
@@ -550,7 +567,8 @@ type watchView struct {
 	Members []watchPerson `json:"members"`
 	Asks    []watchAsk    `json:"asks"`
 	Sync    bool          `json:"sync"`
-	Linked  []string      `json:"linked,omitempty"` // "AniList", "MAL"
+	Linked  []string      `json:"linked,omitempty"`
+	Languages watchLanguagePreference `json:"languages"` // "AniList", "MAL"
 	Max     int           `json:"max"`
 }
 
@@ -570,6 +588,7 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 	if r.media != nil {
 		v.Media = watchMediaPath(r.media.key, r.entry)
 		v.HLS = strings.HasSuffix(r.entry, ".m3u8")
+		v.AudioMedia = r.audioEntries
 		v.Subs = r.subs
 	}
 	if !r.started.IsZero() {
@@ -590,6 +609,11 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 func (b *bot) watchExtras(v *watchView, user string) {
 	b.store.view(func(d *storeData) {
 		v.Sync = !d.WatchNoSync[user]
+		v.Languages = watchLanguagePreference{Audio: "auto", Subtitles: "auto"}
+		if p, ok := d.WatchLanguages[user]; ok {
+			if watchValidLanguage(p.Audio, false) { v.Languages.Audio = p.Audio }
+			if watchValidLanguage(p.Subtitles, true) { v.Languages.Subtitles = p.Subtitles }
+		}
 		if l, ok := d.AniList[user]; ok && l.Verified && l.Token != "" {
 			v.Linked = append(v.Linked, "AniList")
 		}
@@ -614,6 +638,7 @@ func init() {
 	apiHandle("POST /activity/api/watch/answer", (*bot).watchAnswer)
 	apiHandle("POST /activity/api/watch/take", (*bot).watchTake)
 	apiHandle("POST /activity/api/watch/sync", (*bot).watchSync)
+	apiHandle("POST /activity/api/watch/languages", (*bot).watchLanguageSettings)
 	apiHandle("POST /activity/api/watch/end", (*bot).watchEnd)
 	apiHandle("GET /activity/api/watch/cover", (*bot).watchCover)
 	apiHandle("GET /activity/api/watch/media/{key}/{id}", (*bot).watchMediaAPI)
@@ -631,6 +656,8 @@ type watchIn struct {
 	Show    int     `json:"show"`
 	Ep      int     `json:"ep"`
 	Dub     bool    `json:"dub"`
+	Audio string `json:"audio"`
+	Subtitles string `json:"subtitles"`
 	Act     string  `json:"act"`
 	Pos     float64 `json:"pos"`
 	Playing bool    `json:"playing"`

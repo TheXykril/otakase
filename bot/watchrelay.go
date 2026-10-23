@@ -283,13 +283,23 @@ func trimMaster(body string, maxHeight int, dub bool) string {
 	}
 	v := pickVariant(vars, maxHeight)
 	out := head
-	if a := pickAudio(audio, v.audio, dub); a != "" {
-		a = hlsDefault.ReplaceAllString(a, "DEFAULT=YES")
-		if !strings.Contains(a, "DEFAULT=") {
-			a += ",DEFAULT=YES"
+	preferred := pickAudio(audio, v.audio, dub)
+	for _, a := range audio {
+		if m := hlsGroupID.FindStringSubmatch(a); v.audio != "" && (m == nil || m[1] != v.audio) {
+			continue
 		}
-		if !strings.Contains(a, "AUTOSELECT=") {
-			a += ",AUTOSELECT=YES"
+		// Preserve all available audio tracks so every viewer can select
+		// their own language without fetching the video twice.
+		if hlsDefault.MatchString(a) {
+			if a == preferred {
+				a = hlsDefault.ReplaceAllString(a, "DEFAULT=YES")
+			} else {
+				a = hlsDefault.ReplaceAllString(a, "DEFAULT=NO")
+			}
+		} else if a == preferred {
+			a += ",DEFAULT=YES"
+		} else {
+			a += ",DEFAULT=NO"
 		}
 		out = append(out, a)
 	}

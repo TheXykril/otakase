@@ -145,27 +145,48 @@ func probeBotMedia(ctx context.Context, source, mode string) (botMedia, error) {
 	return chooseBotMedia(p, mode)
 }
 
+// Convert the selected text track once so each viewer can switch subtitles
+// independently. Unsupported subtitle formats retain the original burn-in.
+func botSubtitleVTT(ctx context.Context, source string, ordinal int) []byte {
+ if ordinal < 0 { return nil }
+ run, cancel := context.WithTimeout(ctx, 40*time.Second)
+ defer cancel()
+ data, err := botCommandOutput(exec.CommandContext(run, "ffmpeg", "-hide_banner", "-loglevel", "error",
+  "-nostdin", "-i", source, "-map", fmt.Sprintf("0:s:%d", ordinal),
+  "-c:s", "webvtt", "-f", "webvtt", "pipe:1"), 4<<20)
+ if err != nil || !bytes.HasPrefix(data, []byte("WEBVTT")) { return nil }
+ return data
+}
+
 type botSegments struct {
 	ctx         context.Context
 	dir, source string
 	media       botMedia
+	primary     string
+	subtitles   []byte
+	variants    map[string]botMedia
 	gate        chan struct{}
 	mu          sync.Mutex
-	cache       map[int][]byte
-	order       []int
+	cache       map[string][]byte
+	order       []string
 }
 
-func (s *botSegments) playlist() string {
+func (s *botSegments) playlist(mode string) string {
+	media := s.media
+	if selected, ok := s.variants[mode]; ok { media = selected }
 	var b strings.Builder
 	fmt.Fprintf(&b, "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n")
-	for i := 0; float64(i*segmentSeconds) < s.media.duration; i++ {
-		fmt.Fprintf(&b, "#EXTINF:%.6f,\nseg%d.ts\n", math.Min(segmentSeconds, s.media.duration-float64(i*segmentSeconds)), i)
+	for i := 0; float64(i*segmentSeconds) < media.duration; i++ {
+		fmt.Fprintf(&b, "#EXTINF:%.6f,\nseg%d.ts\n", math.Min(segmentSeconds, media.duration-float64(i*segmentSeconds)), i)
 	}
 	b.WriteString("#EXT-X-ENDLIST\n")
 	return b.String()
 }
-func (s *botSegments) segment(ctx context.Context, n int) ([]byte, error) {
-	if n < 0 || float64(n*segmentSeconds) >= s.media.duration {
+func (s *botSegments) segment(ctx context.Context, n int, mode string) ([]byte, error) {
+	media := s.media
+	if selected, ok := s.variants[mode]; ok { media = selected }
+	key := fmt.Sprintf("%s:%d", mode, n)
+	if n < 0 || float64(n*segmentSeconds) >= media.duration {
 		return nil, fmt.Errorf("invalid segment")
 	}
 	select {
@@ -177,7 +198,7 @@ func (s *botSegments) segment(ctx context.Context, n int) ([]byte, error) {
 		return nil, s.ctx.Err()
 	}
 	s.mu.Lock()
-	data := s.cache[n]
+	data := s.cache[key]
 	s.mu.Unlock()
 	if data != nil {
 		return data, nil
@@ -188,10 +209,10 @@ func (s *botSegments) segment(ctx context.Context, n int) ([]byte, error) {
 	defer stop()
 	start := strconv.Itoa(n * segmentSeconds)
 	filter := "scale=w=min(1280\\,iw):h=min(720\\,ih):force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1"
-	if s.media.subtitle >= 0 {
-		filter = fmt.Sprintf("setpts=PTS+%s/TB,subtitles=source%s:si=%d,setpts=PTS-STARTPTS,", start, filepath.Ext(s.source), s.media.subtitle) + filter
+	if media.subtitle >= 0 {
+		filter = fmt.Sprintf("setpts=PTS+%s/TB,subtitles=source%s:si=%d,setpts=PTS-STARTPTS,", start, filepath.Ext(s.source), media.subtitle) + filter
 	}
-	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "1", "-ss", start, "-i", s.source, "-t", "4", "-map", fmt.Sprintf("0:%d", s.media.video), "-map", fmt.Sprintf("0:%d", s.media.audio), "-vf", filter, "-filter_threads", "1", "-c:v", "libx264", "-threads", "1", "-preset", "veryfast", "-crf", "26", "-maxrate", "1800k", "-bufsize", "3600k", "-pix_fmt", "yuv420p", "-r", "24", "-c:a", "aac", "-ac", "2", "-b:a", "128k", "-output_ts_offset", start, "-mpegts_copyts", "1", "-muxdelay", "0", "-f", "mpegts", "pipe:1"}
+	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "1", "-ss", start, "-i", s.source, "-t", "4", "-map", fmt.Sprintf("0:%d", media.video), "-map", fmt.Sprintf("0:%d", media.audio), "-vf", filter, "-filter_threads", "1", "-c:v", "libx264", "-threads", "1", "-preset", "veryfast", "-crf", "26", "-maxrate", "1800k", "-bufsize", "3600k", "-pix_fmt", "yuv420p", "-r", "24", "-c:a", "aac", "-ac", "2", "-b:a", "128k", "-output_ts_offset", start, "-mpegts_copyts", "1", "-muxdelay", "0", "-f", "mpegts", "pipe:1"}
 	cmd := exec.CommandContext(run, "ffmpeg", args...)
 	cmd.Dir = s.dir
 	data, err := botCommandOutput(cmd, 4<<20)
@@ -204,15 +225,15 @@ func (s *botSegments) segment(ctx context.Context, n int) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cache == nil {
-		s.cache = map[int][]byte{}
+		s.cache = map[string][]byte{}
 	}
 	// At most 16 segments (64 MiB), shared by every viewer.
 	if len(s.order) >= 16 {
 		delete(s.cache, s.order[0])
 		s.order = s.order[1:]
 	}
-	s.cache[n] = data
-	s.order = append(s.order, n)
+	s.cache[key] = data
+	s.order = append(s.order, key)
 	return data, nil
 }
 func (s *botSegments) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -220,18 +241,33 @@ func (s *botSegments) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if r.URL.Path == "/playlist.m3u8" {
-		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-		io.WriteString(w, s.playlist())
+	mode := s.primary
+	path := r.URL.Path
+	if strings.HasPrefix(path, "/sub/") || strings.HasPrefix(path, "/dub/") {
+		parts := strings.SplitN(strings.TrimPrefix(path, "/"), "/", 2)
+		mode, path = parts[0], "/" + parts[1]
+		if _, ok := s.variants[mode]; !ok { http.NotFound(w, r); return }
+	}
+	if path == "/subs/en.vtt" && len(s.subtitles) != 0 {
+		w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
+		w.Header().Set("Content-Length", strconv.Itoa(len(s.subtitles)))
+		if r.Method == "GET" { _, _ = w.Write(s.subtitles) }
 		return
 	}
-	raw := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/seg"), ".ts")
+	if path == "/playlist.m3u8" {
+		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+		io.WriteString(w, s.playlist(mode))
+		return
+	}
+	raw := strings.TrimSuffix(strings.TrimPrefix(path, "/seg"), ".ts")
 	n, err := strconv.Atoi(raw)
-	if err != nil || r.URL.Path != fmt.Sprintf("/seg%d.ts", n) || n < 0 || float64(n*segmentSeconds) >= s.media.duration {
+	media := s.media
+	if selected, ok := s.variants[mode]; ok { media = selected }
+	if err != nil || path != fmt.Sprintf("/seg%d.ts", n) || n < 0 || float64(n*segmentSeconds) >= media.duration {
 		http.NotFound(w, r)
 		return
 	}
-	data, err := s.segment(r.Context(), n)
+	data, err := s.segment(r.Context(), n, mode)
 	if err != nil {
 		http.Error(w, "Video segment unavailable", http.StatusServiceUnavailable)
 		return
@@ -269,8 +305,25 @@ func serveTorrentForBot(hash, mode string) error {
 	if err != nil {
 		return err
 	}
-	segments := &botSegments{ctx: ctx, dir: dir, source: source, media: media, gate: make(chan struct{}, 1)}
-	if _, err = segments.segment(ctx, 0); err != nil {
+	variants := map[string]botMedia{mode: media}
+	other := "sub"
+	if mode == "sub" { other = "dub" }
+	if alt, altErr := probeBotMedia(ctx, source, other); altErr == nil {
+		variants[other] = alt
+	}
+	var subtitles []byte
+ if sub, ok := variants["sub"]; ok {
+  subtitles = botSubtitleVTT(ctx, source, sub.subtitle)
+ }
+ if len(subtitles) > 0 {
+  for language, track := range variants {
+   track.subtitle = -1
+   variants[language] = track
+  }
+  media.subtitle = -1
+ }
+ segments := &botSegments{ctx: ctx, dir: dir, source: source, media: media, primary: mode, subtitles: subtitles, variants: variants, gate: make(chan struct{}, 1)}
+	if _, err = segments.segment(ctx, 0, mode); err != nil {
 		return err
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -281,7 +334,11 @@ func serveTorrentForBot(hash, mode string) error {
 	defer server.Close()
 	failed := make(chan error, 1)
 	go func() { failed <- server.Serve(listener) }()
-	fmt.Printf("http://127.0.0.1:%d/playlist.m3u8\n", listener.Addr().(*net.TCPAddr).Port)
+	languages := mode
+ if len(variants) > 1 { languages = "sub,dub" }
+ subquery := ""
+ if len(subtitles) > 0 { subquery = "&subtitles=en" }
+ fmt.Printf("http://127.0.0.1:%d/playlist.m3u8?languages=%s%s\n", listener.Addr().(*net.TCPAddr).Port, languages, subquery)
 	select {
 	case <-ctx.Done():
 		return nil
