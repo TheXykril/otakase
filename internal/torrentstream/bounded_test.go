@@ -91,19 +91,21 @@ func TestDownloadForBotLocalSwarm(t *testing.T) {
 }
 
 func TestReadBotTorrentLimits(t *testing.T) {
- for _, tc := range []struct {
-  name string
-  env map[string]string
-  wantTorrent, wantStorage int64
- }{
-  {"defaults", nil, 4 << 30, 8 << 30},
-  {"custom", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "6", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "12"}, 6 << 30, 12 << 30},
-  {"bad values", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "-1", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "not-a-number"}, 4 << 30, 8 << 30},
-  {"oversized", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "99", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "99"}, 4 << 30, 8 << 30},
- } {
-  t.Run(tc.name, func(t *testing.T) {
-   got := readBotTorrentLimits(func(key string) string { return tc.env[key] })
-   if got.torrent != tc.wantTorrent || got.storage != tc.wantStorage { t.Fatalf("got %+v", got) }
-  })
- }
+	for _, tc := range []struct {
+		name                     string
+		env                      map[string]string
+		wantTorrent, wantStorage int64
+	}{
+		{"defaults", nil, 4 << 30, 8 << 30},
+		{"custom", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "6", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "12"}, 6 << 30, 12 << 30},
+		{"bad values", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "-1", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "not-a-number"}, 4 << 30, 8 << 30},
+		{"oversized", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "99", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "99"}, 4 << 30, 8 << 30},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := readBotTorrentLimits(func(key string) string { return tc.env[key] })
+			if got.torrent != tc.wantTorrent || got.storage != tc.wantStorage {
+				t.Fatalf("got %+v", got)
+			}
+		})
+	}
 }
