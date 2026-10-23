@@ -1092,6 +1092,7 @@ func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
      if v.Thumbnail != "" { old.Thumbnail = v.Thumbnail }
      result[ep] = old
    }
+   if len(result) > 0 {
    episodePreviewCache.Lock()
    if len(episodePreviewCache.entries) >= 256 {
      clear(episodePreviewCache.entries)
@@ -1101,6 +1102,7 @@ func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
      previews map[int]watchEpisodePreview
    }{until: time.Now().Add(30 * time.Minute), previews: result}
    episodePreviewCache.Unlock()
+   }
    writeJSON(w, http.StatusOK, result)
  }
 
