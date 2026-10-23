@@ -20,6 +20,7 @@ let wAudioPick = "auto";
 let wSettingsDirty = false;
 let wSearch = [];
 let wFull = false; // the player fills the window
+let wControlsTimer = 0;
 let wChanging = false; // the host is picking another show while one plays
 
 const wFmt = (s) => {
@@ -146,7 +147,16 @@ function wDraw() {
     <p class="note" id="wsync"></p><div class="row" id="wmore"></div></div>
     <div class="err" id="err"></div>`);
   if (document.getElementById("wpick")) wPicker();
-  if (document.getElementById("wbar")) wBar();
+  if (document.getElementById("wbar")) {
+    wBar();
+    const player = document.getElementById("wplayer");
+    if (player) player.addEventListener("click", () => { if (wFull) wRevealControls(); });
+    const bar = document.getElementById("wbar");
+    bar.addEventListener("pointerdown", () => { clearTimeout(wControlsTimer); });
+    bar.addEventListener("pointerup", () => { if (wFull) wRevealControls(); });
+    bar.addEventListener("focusin", () => { clearTimeout(wControlsTimer); });
+    bar.addEventListener("focusout", () => { if (wFull) wRevealControls(); });
+  }
   wMore();
   if (v.ends) document.getElementById("wends").textContent = "Ends " + new Date(v.ends).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   else document.getElementById("wends").hidden = true;
@@ -534,13 +544,28 @@ function wBar() {
   wSubs();
 }
 
+// Reveal the overlay controls on touch, then hide them while video is playing.
+function wRevealControls() {
+  const st = document.getElementById("wstage");
+  if (!st || !wFull) return;
+  clearTimeout(wControlsTimer);
+  st.classList.remove("controls-hidden");
+  const vid = document.getElementById("wvid");
+  if (vid && !vid.paused) wControlsTimer = setTimeout(() => {
+    if (!st.contains(document.activeElement) || document.activeElement === vid) st.classList.add("controls-hidden");
+  }, 3500);
+}
+
 // Theater mode always works inside the embedded Activity; native fullscreen
 // is optional because Discord may block the browser fullscreen API.
 function wFullscreen(on) {
   const st = document.getElementById("wstage");
   if (!st) return;
   wFull = on;
+  clearTimeout(wControlsTimer);
   st.classList.toggle("full", on);
+  st.classList.remove("controls-hidden");
+  if (on) wRevealControls();
   document.body.classList.toggle("wfull", on);
   const b = document.getElementById("wfull");
   if (b) {
