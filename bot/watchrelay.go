@@ -428,7 +428,7 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	switch kind {
 	case "list":
-		data, _, err := cache.get(m.key+" "+u, func() ([]byte, string, error) {
+		load := func() ([]byte, string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), watchUpstreamWait)
 			defer cancel()
 			body, _, err := m.fetch(ctx, u, 4<<20)
@@ -437,7 +437,14 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 			}
 			base, _ := url.Parse(u)
 			return []byte(m.rewritePlaylist(string(body), base)), "application/vnd.apple.mpegurl", nil
-		})
+		}
+		var data []byte
+		var err error
+		if strings.HasPrefix(u, "http://127.0.0.1:") {
+			data, _, err = load()
+		} else {
+			data, _, err = cache.get(m.key+" "+u, load)
+		}
 		m.write(w, r, data, "application/vnd.apple.mpegurl", err)
 	case "seg":
 		data, typ, err := m.segment(u, cache)
