@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.9
+
+- Watch room: Sub and Dub preferences now use large, clear selection cards.
+- Episode selection uses a responsive numbered card grid, with pagination for longer shows, instead of manual number entry.
+
 ## 1.30.8
 
 - Watch room: choosing an anime opens a Sub or Dub preference menu before picking an episode, replacing the repeated dub checkbox.
