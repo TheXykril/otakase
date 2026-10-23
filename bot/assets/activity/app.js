@@ -294,8 +294,9 @@ function page(title, body) {
   clearTimeout(pending);
   if (where === "watch") watchLeave();
   where = "";
-  app.innerHTML = `<button class="back" id="back">${icon("back")} Games</button><header><h1>${title}</h1><span class="pill" id="side" hidden></span></header>${body}`;
-  document.getElementById("back").onclick = menu;
+  app.innerHTML = `${launchMode === "watch" ? "" : `<button class="back" id="back">${icon("back")} Games</button>`}<header><h1>${title}</h1><span class="pill" id="side" hidden></span></header>${body}`;
+  const back = document.getElementById("back");
+  if (back) back.onclick = menu;
   enter();
 }
 
