@@ -1010,6 +1010,39 @@ func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
        if !payload.Pagination.HasNextPage || len(payload.Data) == 0 { break }
      }
    }
+   // Jikan supplies episode titles for MAL entries absent from Tenrai.
+   // Preserve Tenrai thumbnails and never replace a non-empty title.
+   if show.MalID > 0 {
+     for page := 1; page <= 4; page++ {
+       endpoint := fmt.Sprintf("https://api.jikan.moe/v4/anime/%d/episodes?page=%d", show.MalID, page)
+       req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
+       if err != nil { break }
+       resp, err := activityClient.Do(req)
+       if err != nil { break }
+       if resp.StatusCode != http.StatusOK { resp.Body.Close(); break }
+       var payload struct {
+         Data []struct {
+           MalID int `json:"mal_id"`
+           Title string `json:"title"`
+           TitleJapanese string `json:"title_japanese"`
+         } `json:"data"`
+         Pagination struct { HasNextPage bool `json:"has_next_page"` } `json:"pagination"`
+       }
+       err = json.NewDecoder(http.MaxBytesReader(w, resp.Body, 2<<20)).Decode(&payload)
+       resp.Body.Close()
+       if err != nil { break }
+       for _, ep := range payload.Data {
+         if ep.MalID < 1 || ep.MalID > show.lastEpisode() { continue }
+         current := result[ep.MalID]
+         if current.Title == "" {
+           current.Title = ep.Title
+           if current.Title == "" { current.Title = ep.TitleJapanese }
+           result[ep.MalID] = current
+         }
+       }
+       if !payload.Pagination.HasNextPage || len(payload.Data) == 0 { break }
+     }
+   }
    writeJSON(w, http.StatusOK, result)
  }
 
