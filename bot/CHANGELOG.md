@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.10
+
+- Watch room: improve player controls with a clearer toolbar, subtitles and volume labels, and responsive sizing.
+- Fullscreen button now uses a reliable theater layout inside the Activity, with native fullscreen when allowed by the host.
+
 ## 1.30.9
 
 - Watch room: Sub and Dub preferences now use large, clear selection cards.
