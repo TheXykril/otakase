@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.7
+
+- Watch room: hosts can cancel an episode while it is being found or prepared, returning to episode selection without ending the room.
+- Canceling stops the active lookup process and pending Relay preparation rather than letting the abandoned request continue.
+
 ## 1.30.6
 
 - Watch room: public playback failures now show a clear, discreet explanation and a report code instead of technical helper errors.
