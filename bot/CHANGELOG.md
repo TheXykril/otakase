@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.21
+
+- Watch Together: remove TMDB episode artwork integration and API key setting; Kitsu, TVmaze and AniMap remain available without credentials.
+
 ## 1.30.20
 
 - Watch Together: add Kitsu, TVmaze and optional TMDB episode artwork via AniMap ID matching.
