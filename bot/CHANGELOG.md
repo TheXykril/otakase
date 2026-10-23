@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Watch room (in development): remember personal audio and subtitle language preferences and select them in the player.
+- Keep multiple audio renditions in supported HLS playlists and simplify episode selection to a single step.
+
 ## 1.30.10
 
 - Watch room: improve player controls with a clearer toolbar, subtitles and volume labels, and responsive sizing.
