@@ -166,16 +166,16 @@ func (c *watchInfos) get(ctx context.Context, cli string, id, ep int, dub, adult
 
 // watchShow is a show as the room shows it.
 type watchShow struct {
-	ID       int    `json:"id"`
-	MalID    int    `json:"mal_id,omitempty"`
-	Title    string `json:"title"`
-	Episodes int    `json:"episodes,omitempty"` // 0 while airing with no total
-	Aired    int    `json:"aired,omitempty"`    // episodes out so far, for airing shows
-	Cover    string `json:"cover,omitempty"`
+	ID       int                   `json:"id"`
+	MalID    int                   `json:"mal_id,omitempty"`
+	Title    string                `json:"title"`
+	Episodes int                   `json:"episodes,omitempty"` // 0 while airing with no total
+	Aired    int                   `json:"aired,omitempty"`    // episodes out so far, for airing shows
+	Cover    string                `json:"cover,omitempty"`
 	Previews []watchEpisodePreview `json:"previews,omitempty"`
-	Year     int    `json:"year,omitempty"`
-	Format   string `json:"format,omitempty"`
-	Adult    bool   `json:"adult,omitempty"`
+	Year     int                   `json:"year,omitempty"`
+	Format   string                `json:"format,omitempty"`
+	Adult    bool                  `json:"adult,omitempty"`
 }
 
 // lastEpisode is the highest episode that can be picked.
@@ -190,7 +190,7 @@ func (s watchShow) lastEpisode() int {
 }
 
 type watchEpisodePreview struct {
-	Title string `json:"title"`
+	Title     string `json:"title"`
 	Thumbnail string `json:"thumbnail"`
 }
 
