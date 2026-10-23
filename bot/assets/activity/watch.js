@@ -116,7 +116,7 @@ function wSet(v, fromHost) {
   wPeople();
   wAsks();
   wSyncLine();
-  if (v.media && v.media !== wvMedia) wLoad();
+  if (v.media && wEffectiveMedia() !== wvMedia) wLoad();
   else if (fromHost) wApply(true);
 }
 
@@ -361,11 +361,18 @@ function hlsReady() {
   return hlsLoading;
 }
 
+async function wEffectiveMedia() {
+  if (!wv) return "";
+  const variants = wv.audio_media || {};
+  const mode = /^(en|eng)(-|$)/.test(wAudioPick) ? "dub" : /^(ja|jpn)(-|$)/.test(wAudioPick) ? "sub" : "";
+  return mode && variants[mode] ? variants[mode] : wv.media;
+}
+
 async function wLoad() {
   const vid = document.getElementById("wvid");
   if (!vid) return;
   wDestroy();
-  wvMedia = wv.media;
+  wvMedia = wEffectiveMedia();
   wFails = 0;
   const at = wTarget();
   for (const s of wv.subs || []) {
@@ -391,7 +398,7 @@ async function wLoad() {
     } catch (e) {
       return showError(e);
     }
-    if (wvMedia !== wv.media) return;
+    if (wvMedia !== wEffectiveMedia()) return;
     if (!Hls.isSupported()) return showError(new Error("This Discord can't play the stream."));
     wHls = new Hls({ startPosition: at, maxBufferLength: 40, backBufferLength: 60, enableWorker: false, renderTextTracksNatively: true });
     wHls.on(Hls.Events.ERROR, (_, d) => {
@@ -402,10 +409,10 @@ async function wLoad() {
     });
     wHls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, wSubs);
     wHls.on(Hls.Events.AUDIO_TRACKS_UPDATED, wAudioTracks);
-    wHls.loadSource(wv.media);
+    wHls.loadSource(wvMedia);
     wHls.attachMedia(vid);
   } else {
-    vid.src = wv.media;
+    vid.src = wvMedia;
     vid.currentTime = at;
   }
   wApply(true);
@@ -520,7 +527,7 @@ function wBar() {
   document.getElementById("wfull").onclick = () => wFullscreen(!wFull);
   document.getElementById("wsettings").onclick = () => { const menu = document.getElementById("wsettingsmenu"); menu.hidden = !menu.hidden; };
   document.getElementById("wsub").onchange = (e) => { wSubPick = e.target.value; wSettingsDirty = true; wSubs(); wSaveLanguages(); };
-  document.getElementById("waudio").onchange = (e) => { wAudioPick = e.target.value; wSettingsDirty = true; wAudioTracks(); wSaveLanguages(); };
+  document.getElementById("waudio").onchange = (e) => { wAudioPick = e.target.value; wSettingsDirty = true; wAudioTracks(); wSaveLanguages(); if (wv.audio_media && wEffectiveMedia() !== wvMedia) wLoad(); };
   wAudioTracks();
   wSubs();
 }
@@ -569,6 +576,18 @@ function wSaveLanguages() {
 function wAudioTracks() {
   const select = document.getElementById("waudio");
   if (!select) return;
+  const variants = wv && wv.audio_media || {};
+  if (Object.keys(variants).length) {
+    select.innerHTML = `<option value="auto">Automatic</option>` +
+      (variants.sub ? `<option value="ja">Japanese</option>` : "") +
+      (variants.dub ? `<option value="en">English</option>` : "");
+    select.disabled = Object.keys(variants).length < 2;
+    select.value = /^(en|eng)(-|$)/.test(wAudioPick) && variants.dub ? "en" :
+      /^(ja|jpn)(-|$)/.test(wAudioPick) && variants.sub ? "ja" : "auto";
+    document.getElementById("wsettingshint").textContent =
+      wAudioPick !== "auto" && select.value === "auto" ? "Preferred audio unavailable; using an available language." : "";
+    return;
+  }
   const tracks = wHls ? wHls.audioTracks || [] : [];
   const current = tracks.findIndex((track) => {
     const language = (track.lang || "").toLowerCase();
