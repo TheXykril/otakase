@@ -552,7 +552,7 @@ function wRevealControls() {
   st.classList.remove("controls-hidden");
   const vid = document.getElementById("wvid");
   if (vid && !vid.paused) wControlsTimer = setTimeout(() => {
-    if (!st.contains(document.activeElement) || document.activeElement === vid) st.classList.add("controls-hidden");
+    if (!st.querySelector("#wsettingsmenu:not([hidden])")) st.classList.add("controls-hidden");
   }, 3500);
 }
 
