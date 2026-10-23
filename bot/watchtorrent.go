@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -70,8 +69,8 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string) (*watchTorre
 	if err != nil {
 		return nil, "", err
 	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	stderr := &botLimitedLog{limit: 8192}
+	cmd.Stderr = stderr
 	cleanWatchTorrentDirs()
 	home, err := os.MkdirTemp("", "otakase-room-torrent-")
 	if err != nil {
@@ -159,4 +158,31 @@ func cleanWatchTorrentDirs() {
 		}
 		lock.Close()
 	}
+}
+
+type botLimitedLog struct {
+	mu sync.Mutex
+	data []byte
+	limit int
+}
+
+func (l *botLimitedLog) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(p) >= l.limit {
+		l.data = append(l.data[:0], p[len(p)-l.limit:]...)
+	} else {
+		excess := len(l.data) + len(p) - l.limit
+		if excess > 0 {
+			l.data = append(l.data[:0], l.data[excess:]...)
+		}
+		l.data = append(l.data, p...)
+	}
+	return len(p), nil
+}
+
+func (l *botLimitedLog) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return string(l.data)
 }
