@@ -550,7 +550,8 @@ type watchView struct {
 	Members []watchPerson `json:"members"`
 	Asks    []watchAsk    `json:"asks"`
 	Sync    bool          `json:"sync"`
-	Linked  []string      `json:"linked,omitempty"` // "AniList", "MAL"
+	Linked  []string      `json:"linked,omitempty"`
+	Languages watchLanguagePreference `json:"languages"` // "AniList", "MAL"
 	Max     int           `json:"max"`
 }
 
@@ -590,6 +591,11 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 func (b *bot) watchExtras(v *watchView, user string) {
 	b.store.view(func(d *storeData) {
 		v.Sync = !d.WatchNoSync[user]
+		v.Languages = watchLanguagePreference{Audio: "auto", Subtitles: "auto"}
+		if p, ok := d.WatchLanguages[user]; ok {
+			if watchValidLanguage(p.Audio, false) { v.Languages.Audio = p.Audio }
+			if watchValidLanguage(p.Subtitles, true) { v.Languages.Subtitles = p.Subtitles }
+		}
 		if l, ok := d.AniList[user]; ok && l.Verified && l.Token != "" {
 			v.Linked = append(v.Linked, "AniList")
 		}
@@ -614,6 +620,7 @@ func init() {
 	apiHandle("POST /activity/api/watch/answer", (*bot).watchAnswer)
 	apiHandle("POST /activity/api/watch/take", (*bot).watchTake)
 	apiHandle("POST /activity/api/watch/sync", (*bot).watchSync)
+	apiHandle("POST /activity/api/watch/languages", (*bot).watchLanguageSettings)
 	apiHandle("POST /activity/api/watch/end", (*bot).watchEnd)
 	apiHandle("GET /activity/api/watch/cover", (*bot).watchCover)
 	apiHandle("GET /activity/api/watch/media/{key}/{id}", (*bot).watchMediaAPI)
@@ -631,6 +638,8 @@ type watchIn struct {
 	Show    int     `json:"show"`
 	Ep      int     `json:"ep"`
 	Dub     bool    `json:"dub"`
+	Audio string `json:"audio"`
+	Subtitles string `json:"subtitles"`
 	Act     string  `json:"act"`
 	Pos     float64 `json:"pos"`
 	Playing bool    `json:"playing"`
