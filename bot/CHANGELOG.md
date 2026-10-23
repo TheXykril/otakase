@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.4
+
+- Watch room: display source lookup and torrent preparation stages with elapsed time in the Activity.
+- Give slower torrent source searches up to eight minutes before timing out, and show a clear timeout error when they fail.
+
 ## 1.30.3
 
 - Watch room: torrent episodes now resolve directly from indexed releases without waiting for peers during lookup. Source errors display their cause instead of always claiming the episode is missing.
