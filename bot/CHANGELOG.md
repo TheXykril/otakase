@@ -4,10 +4,6 @@
 
 ## 1.30.21
 
-- Watch Together: remove TMDB episode artwork integration and API key setting; Kitsu, TVmaze and AniMap remain available without credentials.
-
-## 1.30.21
-
 - Watch Together: remove TMDB episode artwork integration and API key setting; other sources remain available without credentials.
 
 ## 1.30.20
