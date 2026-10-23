@@ -438,3 +438,20 @@ func TestParseStreamInfo(t *testing.T) {
 		t.Error("no JSON should fail")
 	}
 }
+
+func TestWatchTorrentOnlyStreamInfo(t *testing.T) {
+	hash := "0123456789abcdef0123456789abcdef01234567"
+	info, err := parseStreamInfo(`{"anilist_id":123,"episode":1,"mode":"sub","streams":[],"torrents":[{"info_hash":"` + hash + `"}]}`)
+	if err != nil || len(info.Streams) != 0 || len(info.Torrents) != 1 || info.Torrents[0].InfoHash != hash {
+		t.Fatalf("torrent-only info: %+v, %v", info, err)
+	}
+	if _, err := parseStreamInfo(`{"anilist_id":123,"episode":1,"streams":[]}`); err == nil {
+		t.Fatal("source-free episode should fail")
+	}
+}
+
+func TestWatchTorrentRejectsBadHash(t *testing.T) {
+	if _, _, err := startWatchTorrent("/nonexistent-cli", "not-a-hash"); err == nil {
+		t.Fatal("invalid torrent hash should fail before launching helper")
+	}
+}
