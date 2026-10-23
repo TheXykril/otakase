@@ -2,6 +2,7 @@ package main
 
 import (
  "fmt"
+ "strings"
  "log"
  "sync"
  "time"
@@ -46,4 +47,18 @@ func recentWatchDiagnostics() []watchDiagnostic {
   out[len(out)-i-1] = item
  }
  return out
+}
+
+func publicWatchError(err error) string {
+ msg := strings.ToLower(err.Error())
+ switch {
+ case strings.Contains(msg, "timed out"), strings.Contains(msg, "deadline exceeded"), strings.Contains(msg, "timeout"):
+  return "Source lookup or preparation timed out"
+ case strings.Contains(msg, "no release"), strings.Contains(msg, "not found"), strings.Contains(msg, "no episode"), strings.Contains(msg, "no playable"), strings.Contains(msg, "no source"), strings.Contains(msg, "no links"):
+  return "No playable episode source was found"
+ case strings.Contains(msg, "torrent"), strings.Contains(msg, "download"), strings.Contains(msg, "peer"), strings.Contains(msg, "probe"), strings.Contains(msg, "encode"), strings.Contains(msg, "audio"), strings.Contains(msg, "subtitle"):
+  return "Torrent or video preparation failed"
+ default:
+  return "Episode could not start"
+ }
 }
