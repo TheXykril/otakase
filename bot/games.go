@@ -169,8 +169,7 @@ func ranked(points map[string]int, n int) []guessRank {
 func gameCommands() []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		{Name: "leaderboard", Description: "Game points leaderboard this week and all time, and a button to play"},
-		{Name: "otakase", Description: "Open Otakase Activity: watch anime together or play games with friends"},
-		{Name: "games", Description: "Open Otakase Activity (legacy shortcut for games and watch rooms)"},
+		{Name: "activity", Description: "Open Otakase Activity to watch anime together or play games"},
 		{Name: "game-ban", Description: "Give a member a break from games: no playing, no points (0 hours lifts it)", DefaultMemberPermissions: &permMod,
 			Options: []*discordgo.ApplicationCommandOption{
 				{Type: discordgo.ApplicationCommandOptionUser, Name: "member", Description: "Who", Required: true},
@@ -194,7 +193,7 @@ func (b *bot) gameCommand(i *discordgo.InteractionCreate, name string) bool {
 	switch name {
 	case "leaderboard":
 		b.gamesBoard(i)
-	case "games", "otakase":
+	case "activity":
 		b.dailyCommand(i)
 	case "riddle-add":
 		b.addRiddle(i)
@@ -297,7 +296,7 @@ func (b *bot) gamesBoard(i *discordgo.InteractionCreate) {
 	desc := "Every game is in the **Otakase Activity**: the daily puzzle, guess the anime, higher or lower, " +
 		"emoji riddles, title scramble, zoomed cover, timeline, connections, redacted, anime grid, hangman, wordle, quiz, " +
 		"two truths and a lie, and watch bingo; with the call: quiz show, imposter, draw it, hot potato and guess who. " +
-		"Play alone or together with everyone in a call. Open it with the button below or `/otakase` (or `/games`); add your own riddle with `/riddle-add`."
+		"Play alone or together with everyone in a call. Open it with the button below or `/activity`; add your own riddle with `/riddle-add`."
 	if len(champs) > 0 {
 		var who []string
 		for _, c := range champs {

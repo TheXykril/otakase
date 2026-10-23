@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- Activity: open Watch Together and games with `/otakase`; `/games` remains available as a shortcut.
+- Activity: use `/activity` instead of `/otakase` or `/games` for Watch Together and games.
+
 - Rename games-only Activity headings and prepare a unified Activity cover graphic.
 
 ## 1.30.12
