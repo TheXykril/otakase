@@ -269,9 +269,9 @@ function wPicker(changing) {
   if (c) c.onclick = () => ((wChanging = false), (wvKey = ""), (wvMedia = ""), wSet(wv));
 }
 
-function wPickerHeading(s, step) {
+function wPickerHeading(s) {
   return `<div class="wpickhead">${s.cover ? `<img src="${esc(s.cover)}" alt="">` : ""}
-    <div><span class="wpickey">STEP ${step} OF 2</span><h3>${esc(s.title)}</h3></div></div>`;
+    <div><span class="wpickey">EPISODE SELECTION</span><h3>${esc(s.title)}</h3></div></div>`;
 }
 
 function wEpisode(s) {
@@ -285,7 +285,7 @@ function wEpisode(s) {
     const start = page * 24 + 1;
     const end = Math.min(last, start + 23);
     res.innerHTML = `<div class="wpickflow">
-      ${wPickerHeading(s, 1)}
+      ${wPickerHeading(s)}
       <div class="weptop"><div><h4>Select an episode</h4><p class="note">${last} episode${last === 1 ? "" : "s"} available to select</p></div>
         <span class="pill">Audio in player settings</span></div>
       <div class="wepgrid">${Array.from({ length: end - start + 1 }, (_, i) => {
