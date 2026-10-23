@@ -402,13 +402,14 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 			r.changed()
 			return
 		}
-		r.torrent = torrent
 		r.streams = info.Streams
 		// Shown as it plays: a show without a dub plays subbed.
 		r.dub = info.Mode == "dub"
 		if !b.startStream(r, 0) {
+			if torrent != nil { torrent.stop() }
 			return
 		}
+		r.torrent = torrent
 		// The next episode is looked up ahead, so it starts at once.
 		if ep < show.lastEpisode() {
 			watchAhead(func() { b.watch.infos.get(cli, show.ID, ep+1, dub, adult) })
