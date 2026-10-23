@@ -132,8 +132,14 @@ type storeData struct {
 	// Notebook giveaways by their message id, see giveaway.go.
 	Giveaways map[string]*giveaway `json:"giveaways,omitempty"`
 	// Watch tickets from redeemed codes by Discord user id: one watch
-	// session each in the Activity player, once it opens.
+	// room each in the games Activity, see watchroom.go.
 	WatchTickets map[string]int `json:"watch_tickets,omitempty"`
+	// Members who don't want the watch room to move their lists on.
+	WatchNoSync map[string]bool `json:"watch_no_sync,omitempty"`
+	// The last watch rooms, newest last, for the dashboard and the log.
+	WatchRooms []watchRoomLog `json:"watch_rooms,omitempty"`
+	// MyAnimeList links by Discord user id, see mal.go.
+	MAL map[string]malLink `json:"mal,omitempty"`
 }
 
 type warning struct {

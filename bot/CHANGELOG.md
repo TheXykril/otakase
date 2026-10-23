@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.30.0
+
+- **Watch room** in the games Activity: the bot plays an anime for
+  everyone in the voice call, in step. The member who opens it picks the
+  show and episode and controls playback; everyone else follows along and
+  can ask to pause, skip the opening or go to the next episode. Staff can
+  take control. Up to 10 people (`/settings watch_room_max`), 720p, soft
+  subtitles, 4 hours from the first episode. One room at a time across the
+  server. 18+ shows only in age-restricted voice channels.
+- Opening a room takes a **watch ticket**, spent once the first episode
+  plays. Staff need one too.
+- Watching an episode in the room moves your **AniList** (proven link) and
+  **MyAnimeList** progress on. Switch it off for yourself in the room, or
+  for everyone with `/settings watch_room_progress`.
+- **`/link-mal`** and `/unlink-mal`: link MyAnimeList (needs the new
+  `mal_client_id` and `mal_client_secret` options).
+- Every `/redeem` code now gives a watch ticket and nothing else.
+
 ## 1.29.0
 
 - **Hanko (判子)**, the server's own currency. Earned with no limit from

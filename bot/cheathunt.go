@@ -4,9 +4,9 @@ package main
 // terminal, or typing uuddlrlrba in rofi) starts a puzzle hunt made for the
 // member whose app is linked (cheatpuzzles.go). Solving it mints a one-time
 // code. Codes are not tied to anyone: the finder can redeem it or give it
-// away, and the first /redeem wins. Each redeemed code is numbered in the
-// hall of fame (/cheaters) as "found by X, redeemed by Y", and the
-// redeemer gets the Cheater role. A member finds at most one code a week.
+// away, and the first /redeem wins. Its only reward is a watch ticket: one
+// watch room the bot hosts in the games Activity (watchroom.go). A member
+// finds at most one code a week.
 //
 //	POST /v1/cheat (auth)        → the member's hunt, started when there is none
 //	POST /v1/cheat/answer (auth) {"answer":"…"} → {"correct", "message"} and the hunt
@@ -27,7 +27,6 @@ import (
 )
 
 const (
-	cheatRole        = "Cheater"
 	cheatHuntTTL     = 7 * 24 * time.Hour // an unsolved hunt is replaced after this
 	cheatMaxWrong    = 25                 // wrong answers before a hunt is lost
 	cheatLostPause   = time.Hour          // before a new hunt after losing one
@@ -44,8 +43,7 @@ type cheatHunt struct {
 }
 
 // cheatCode is a minted code, by the code itself. Codes staff made with
-// /codes (codes.go) have no Finder but MintedBy and Note, and stay out of
-// the hall of fame.
+// /codes (codes.go) have no Finder but MintedBy and Note.
 type cheatCode struct {
 	Finder     string    `json:"finder"` // Discord user id
 	Found      time.Time `json:"found"`
@@ -54,7 +52,7 @@ type cheatCode struct {
 	Kind       string    `json:"kind"`
 	RedeemedBy string    `json:"redeemed_by,omitempty"`
 	Redeemed   time.Time `json:"redeemed,omitzero"`
-	Number     int       `json:"number,omitempty"` // place in the hall of fame
+	Number     int       `json:"number,omitempty"` // place in the old hall of fame, codes redeemed before it went
 }
 
 // cheatView is what the app shows. Status is "puzzle", "found" (a code,
@@ -97,7 +95,6 @@ func init() {
 		Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionString, Name: "code", Description: "The code, like ABCD-EFGH-JKLM", Required: true, MaxLength: 20},
 		}}, (*bot).redeemCommand)
-	registerCommand(&discordgo.ApplicationCommand{Name: "cheaters", Description: "The hall of fame"}, (*bot).cheatersCommand)
 }
 
 // nextWeek is when the ISO week of t ends: Monday 00:00 UTC.
@@ -284,8 +281,8 @@ func (b *bot) cheatWhisper(user, words string, now time.Time) (string, bool) {
 	return next, ok
 }
 
-// redeemCheat redeems a code for user and returns its number in the hall of
-// fame and who found it.
+// redeemCheat redeems a code for user, giving them a watch ticket, and
+// returns the code.
 func (b *bot) redeemCheat(user, input string, now time.Time) (cheatCode, error) {
 	if cheatRedeemFails.full(user, now) {
 		return cheatCode{}, errLinkTooMany
@@ -303,13 +300,6 @@ func (b *bot) redeemCheat(user, input string, now time.Time) (cheatCode, error) 
 			err = errLinkNotFound
 		default:
 			x.RedeemedBy, x.Redeemed = user, now
-			if x.Finder != "" {
-				n := 1
-				for _, c := range d.CheatCodes {
-					n = max(n, c.Number+1)
-				}
-				x.Number = n
-			}
 			d.CheatCodes[code] = x
 			if d.WatchTickets == nil {
 				d.WatchTickets = map[string]int{}
@@ -321,18 +311,6 @@ func (b *bot) redeemCheat(user, input string, now time.Time) (cheatCode, error) 
 		cheatRedeemFails.allow(user, now)
 	}
 	return x, err
-}
-
-// hallOfFame is the redeemed codes, first first.
-func hallOfFame(d *storeData) []cheatCode {
-	var out []cheatCode
-	for _, c := range d.CheatCodes {
-		if c.Number > 0 {
-			out = append(out, c)
-		}
-	}
-	slices.SortFunc(out, func(a, b cheatCode) int { return a.Number - b.Number })
-	return out
 }
 
 // ── App side ──
@@ -434,85 +412,15 @@ func (b *bot) redeemCommand(i *discordgo.InteractionCreate) {
 		b.respond(i, true, errorEmbed("That code doesn't exist."))
 		return
 	}
-	if x.Finder == "" {
-		b.respondQuiet(i, true, &discordgo.MessageEmbed{Title: "Code accepted", Color: shu,
-			Description: "You got a **watch ticket**: one watch session hosted by the bot in Discord, once the watch room opens. " + watchTicketLine(b, user)})
-		return
+	who := ""
+	switch x.Finder {
+	case "":
+	case user:
+		who = " You found it yourself."
+	default:
+		who = fmt.Sprintf(" It was found by <@%s>.", x.Finder)
 	}
-	who := fmt.Sprintf("found by <@%s>", x.Finder)
-	if x.Finder == user {
-		who = "found and redeemed by you"
-	}
-	b.respondQuiet(i, true, &discordgo.MessageEmbed{Title: fmt.Sprintf("Cheater #%d", x.Number), Color: shu,
-		Description: fmt.Sprintf("Code accepted, %s. You're in the hall of fame (`/cheaters`), the %s role is yours, and so is a **watch ticket** for the watch room once it opens. %s",
-			who, cheatRole, watchTicketLine(b, user))})
-	go b.cheatReward(x)
-}
-
-// cheatReward gives the role and tells the server.
-func (b *bot) cheatReward(x cheatCode) {
-	if b.s == nil || b.s.State == nil {
-		return
-	}
-	if role := b.cheatRoleID(); role != "" {
-		if err := b.s.GuildMemberRoleAdd(b.cfg.GuildID, x.RedeemedBy, role); err != nil {
-			log.Printf("cheater role: %v", err)
-		}
-	}
-	ch := b.gamesChannel()
-	if ch == "" {
-		return
-	}
-	line := fmt.Sprintf("Found by <@%s>, redeemed by <@%s>.", x.Finder, x.RedeemedBy)
-	if x.Finder == x.RedeemedBy {
-		line = fmt.Sprintf("Found and redeemed by <@%s>.", x.Finder)
-	}
-	e := &discordgo.MessageEmbed{Title: fmt.Sprintf("Cheat code #%d redeemed", x.Number), Color: shu,
-		Description: line + "\n\nHow? That's for you to find out."}
-	if _, err := b.s.ChannelMessageSendComplex(ch, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{e},
-		AllowedMentions: &discordgo.MessageAllowedMentions{}}); err != nil {
-		log.Printf("cheat post: %v", err)
-	}
-}
-
-// cheatRoleID finds the Cheater role, making it when it's missing.
-func (b *bot) cheatRoleID() string {
-	g, err := b.s.State.Guild(b.cfg.GuildID)
-	if err != nil {
-		return ""
-	}
-	for _, r := range g.Roles {
-		if strings.EqualFold(strings.TrimSpace(r.Name), cheatRole) {
-			return r.ID
-		}
-	}
-	color := 0x7FD962
-	r, err := b.s.GuildRoleCreate(b.cfg.GuildID, &discordgo.RoleParams{Name: cheatRole, Color: &color})
-	if err != nil {
-		log.Printf("cheater role create: %v", err)
-		return ""
-	}
-	return r.ID
-}
-
-func (b *bot) cheatersCommand(i *discordgo.InteractionCreate) {
-	var fame []cheatCode
-	b.store.view(func(d *storeData) { fame = hallOfFame(d) })
-	b.respondQuiet(i, false, cheatersEmbed(fame))
-}
-
-func cheatersEmbed(fame []cheatCode) *discordgo.MessageEmbed {
-	if len(fame) == 0 {
-		return &discordgo.MessageEmbed{Title: "Hall of fame", Color: shu, Description: "Nobody yet. There is a way in, somewhere."}
-	}
-	var lines []string
-	for _, c := range fame[max(0, len(fame)-25):] {
-		who := fmt.Sprintf("found by <@%s>, redeemed by <@%s>", c.Finder, c.RedeemedBy)
-		if c.Finder == c.RedeemedBy {
-			who = fmt.Sprintf("found and redeemed by <@%s>", c.Finder)
-		}
-		lines = append(lines, fmt.Sprintf("**#%d** · %s · %s · <t:%d:d>", c.Number, who, c.Kind, c.Redeemed.Unix()))
-	}
-	return &discordgo.MessageEmbed{Title: "Hall of fame", Color: shu, Description: strings.Join(lines, "\n"),
-		Footer: &discordgo.MessageEmbedFooter{Text: dashPlural(len(fame), "code") + " redeemed"}}
+	b.respondQuiet(i, true, &discordgo.MessageEmbed{Title: "Code accepted", Color: shu,
+		Description: "You got a **watch ticket**: one watch room the bot hosts for your call. Open the games Activity in a voice channel and pick **Watch room**." +
+			who + " " + watchTicketLine(b, user)})
 }

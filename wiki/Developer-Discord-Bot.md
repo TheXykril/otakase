@@ -243,7 +243,7 @@ server and stays connected to Discord.
 - **Staff codes:** `/codes mint|list|revoke` (`codes.go`) make one-use
   `/redeem` codes for giveaways and events. Every redeemed code adds a
   watch ticket (`WatchTickets` in the data file) for the Activity watch
-  room once it exists.
+  room.
 - **Moderation:** deleted and edited messages go to `mod-log` (else
   mod-chat); `/verification off|on|auto` (an Unverified role and a verify
   channel, see the comment at the top of `verification.go`); warnings expire
@@ -355,6 +355,21 @@ token (in the data file, readable only by the bot) so Plan to watch can add
 shows to the member's list; `/unlink-anilist` deletes it, and a token AniList
 refuses is dropped. Profiles are read from AniList's public API, so a list set to private shows the stats without
 the watching list.
+
+## MyAnimeList linking
+
+`/link-mal` lets members link MyAnimeList so the watch room moves their MAL
+list on, like a proven AniList link. It needs a MAL API app: myanimelist.net
+→ Account Settings → API → Create ID, App Type **web**, App Redirect URL
+`https://bot.xyverion.com/v1/mal/callback` (`OTAKASE_PUBLIC_URL` +
+`/v1/mal/callback` when the API lives elsewhere). Set its Client ID and
+Client Secret as the add-on options `mal_client_id` and `mal_client_secret`
+(`OTAKASE_MAL_CLIENT_ID`, `OTAKASE_MAL_CLIENT_SECRET`). The command gives a
+one-use button to `/v1/mal`, which sends the member to MAL (PKCE "plain",
+the only kind MAL takes) and back to the callback; the bot keeps the token
+and refresh token in the data file and refreshes them as they run out.
+`/unlink-mal` deletes them. Without the options the command says it isn't
+set up.
 
 ## Hosting
 
@@ -487,6 +502,54 @@ npm i @discord/embedded-app-sdk esbuild
 echo 'export { DiscordSDK } from "@discord/embedded-app-sdk";' > entry.js
 npx esbuild entry.js --bundle --minify --format=iife --global-name=Discord --legal-comments=none --outfile=sdk.js
 ```
+
+#### Watch room
+
+The first tile, **Watch room** (`watchroom.go`, `watchrelay.go`,
+`watchsource.go`, page in `assets/activity/watch.js`), has the bot play an
+anime for everyone in the call, in step. Opening one takes a watch ticket
+(from `/redeem` codes); the ticket is spent once the first episode plays,
+so a room that never plays costs nothing. Staff need a ticket too. Only one
+room runs at a time across the server; other calls see where it is. Members'
+own `/watchparty` parties are separate.
+
+- The member who opens it hosts: they search AniList, pick an episode and
+  sub or dub, and control playback. Everyone else follows the host's
+  position (late joiners jump to it) and can ask the host to pause, play,
+  skip the opening (85 seconds) or go to the next episode; the host gets
+  Yes and No. Staff can take control; when the host leaves, whoever has
+  been in the room longest takes over. The host or staff can end it.
+- A room lasts 4 hours from its first episode, as many episodes as fit.
+  `/settings watch_room_max` sets how many fit in it (default 10; the
+  opener and staff always get in).
+- 18+ shows only in age-restricted voice channels.
+- Episodes are found by the otakase CLI in the image:
+  `otakase -stream-info <anilist id>:<episode>` (with `-dub`, and
+  `-stream-adult` for 18+) prints the episode's links, headers and
+  subtitles as JSON without asking anything. The next episode is looked
+  up while the current one plays. The CLI must be new enough to have the
+  flag; the Dockerfile takes the latest release, else main.
+- The relay serves `/activity/api/watch/media/{key}/{id}`: the key is
+  random per episode, ids are handed out for each address the playlists
+  name, so it fetches nothing else. The master playlist is cut to one
+  variant (the best at or under 720p) and one audio track, so everyone
+  asks for the same segments; a 192 MB memory cache fetches each one once
+  and the next three ahead. Segments served as pictures are unmasked.
+  Subtitles become WebVTT (SRT and ASS are converted), English on by
+  default, picked per viewer.
+- Upload is about 2.5 Mbps per viewer at 720p, download about one stream.
+  Each finished room is logged with its traffic (`watch room over: …` in
+  the log, `WatchRooms` in the data file, last 20).
+- Members with a proven AniList link or a MAL link get their progress set
+  to the episode once they've been in the room for 80% of it (marked
+  completed at the last episode, rewatches left as rewatches). Each member
+  can switch it off in the room; staff can switch it off for everyone with
+  `/settings watch_room_progress`.
+
+The host's page reports its position every 4 seconds (`watch/beat`); the
+room only wakes the other pages when it's more than 2 seconds off where
+they expect, or when playback state changes. Pages long poll
+`watch/state` like the party rooms.
 
 #### Admin tools in the Activity
 
