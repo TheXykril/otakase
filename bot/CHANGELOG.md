@@ -2,9 +2,12 @@
 
 ## Unreleased
 
-- Activity: use `/activity` instead of `/otakase` or `/games` for Watch Together and games.
+## 1.30.13
 
-- Rename games-only Activity headings and prepare a unified Activity cover graphic.
+- Activity: add `/games` for games only and `/watch` to open Watch Together directly; `/activity` keeps the full menu.
+- Watch Together: improve theater playback controls with tap-to-reveal overlays.
+- Activity: add mobile spacing for Discord controls across games, watch rooms, and moderation screens.
+- Refresh the Activity menu and cover layout.
 
 ## 1.30.12
 
