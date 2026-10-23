@@ -469,7 +469,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 // download/encoder could overwhelm small add-on hosts.
 func (b *bot) findWatchAlternate(ctx context.Context, room *watchRoom, gen int, cli string, showID, ep int, adult, dub bool) {
     info, err := b.watch.infos.get(ctx, cli, showID, ep, dub, adult)
-    if err != nil || len(info.Streams) == 0 || ctx.Err() != nil {
+    if err != nil || len(info.Streams) == 0 || ctx.Err() != nil || info.Mode != map[bool]string{true: "dub", false: "sub"}[dub] {
         return
     }
     mode := "sub"
