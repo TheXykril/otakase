@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.19
+
+- Watch Together: use Jikan for missing episode titles and display compact cards when episode artwork is unavailable.
+
 ## 1.30.18
 
 - Activity: place moderation and sound controls in a dedicated toolbar instead of floating over game cards.
