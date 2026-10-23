@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -680,6 +681,7 @@ func init() {
 	apiHandle("POST /activity/api/watch/sync", (*bot).watchSync)
 	apiHandle("POST /activity/api/watch/languages", (*bot).watchLanguageSettings)
 	apiHandle("POST /activity/api/watch/end", (*bot).watchEnd)
+	apiHandle("GET /activity/api/watch/episodes", (*bot).watchEpisodes)
 	apiHandle("GET /activity/api/watch/cover", (*bot).watchCover)
 	apiHandle("GET /activity/api/watch/media/{key}/{id}", (*bot).watchMediaAPI)
 	apiHandle("HEAD /activity/api/watch/media/{key}/{id}", (*bot).watchMediaAPI)
@@ -947,6 +949,69 @@ func (b *bot) watchSearchAPI(w http.ResponseWriter, r *http.Request) {
 func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
 	proxyAniList(w, r, r.URL.Query().Get("u"))
 }
+
+
+ // watchEpisodes loads episode-specific metadata only when the picker opens.
+ // Tenrai's Jikan-compatible data is indexed by MAL episode number; AniList
+ // previews remain the fallback when the upstream has no cover.
+ func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
+   user := b.actUser(w, r)
+   if user == "" { return }
+   if !watchSearchLimit.allow(user, watchNow()) {
+     apiError(w, http.StatusTooManyRequests, "slow down"); return
+   }
+   id, err := strconv.Atoi(r.URL.Query().Get("id"))
+   if err != nil || id < 1 { apiError(w, http.StatusBadRequest, "invalid anime"); return }
+   show, err := watchShowByID(id)
+   if err != nil { apiError(w, http.StatusBadGateway, "anime unavailable"); return }
+   if show.Adult {
+     b.watch.mu.Lock()
+     allowed := b.watch.cur != nil && b.watch.cur.id == r.URL.Query().Get("room") && b.watch.cur.adult
+     b.watch.mu.Unlock()
+     if !allowed { apiError(w, http.StatusForbidden, "not available in this room"); return }
+   }
+   result := make(map[int]watchEpisodePreview)
+   if show.MalID > 0 {
+     for page := 1; page <= 4; page++ {
+       endpoint := fmt.Sprintf("https://api.tenrai.org/v1/anime/%d/episodes?page=%d", show.MalID, page)
+       req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
+       if err != nil { break }
+       resp, err := activityClient.Do(req)
+       if err != nil { break }
+       if resp.StatusCode != http.StatusOK { resp.Body.Close(); break }
+       var payload struct {
+         Data []struct {
+           MalID int `json:"mal_id"`
+           Title string `json:"title"`
+           Images struct {
+             JPG struct { ImageURL string `json:"image_url"` } `json:"jpg"`
+             WebP struct { ImageURL string `json:"image_url"` } `json:"webp"`
+           } `json:"images"`
+           ImageURL string `json:"image_url"`
+         } `json:"data"`
+         Pagination struct { HasNextPage bool `json:"has_next_page"` } `json:"pagination"`
+       }
+       err = json.NewDecoder(http.MaxBytesReader(w, resp.Body, 2<<20)).Decode(&payload)
+       resp.Body.Close()
+       if err != nil { break }
+       for _, ep := range payload.Data {
+         if ep.MalID < 1 || ep.MalID > show.lastEpisode() { continue }
+         img := ep.Images.JPG.ImageURL
+         if img == "" { img = ep.Images.WebP.ImageURL }
+         if img == "" { img = ep.ImageURL }
+         // The image proxy only permits known hosts, so never send arbitrary URLs.
+         if strings.HasPrefix(img, "https://img1.ak.crunchyroll.com/") ||
+           strings.HasPrefix(img, "https://static.crunchyroll.com/") ||
+           strings.HasPrefix(img, "https://s4.anilist.co/") {
+           img = "api/watch/cover?u=" + url.QueryEscape(img)
+         } else { img = "" }
+         result[ep.MalID] = watchEpisodePreview{Title: ep.Title, Thumbnail: img}
+       }
+       if !payload.Pagination.HasNextPage || len(payload.Data) == 0 { break }
+     }
+   }
+   writeJSON(w, http.StatusOK, result)
+ }
 
 // watchPick starts an episode (host only).
 func (b *bot) watchPick(w http.ResponseWriter, r *http.Request) {
