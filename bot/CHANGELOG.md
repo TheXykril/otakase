@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.8
+
+- Watch room: choosing an anime opens a Sub or Dub preference menu before picking an episode, replacing the repeated dub checkbox.
+- When Dub is unavailable, playback automatically falls back to Sub.
+
 ## 1.30.7
 
 - Watch room: hosts can cancel an episode while it is being found or prepared, returning to episode selection without ending the room.
