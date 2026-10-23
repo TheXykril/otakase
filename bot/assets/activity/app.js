@@ -1,4 +1,4 @@
-// The Otakase games Activity: the watch room (watch.js), a menu of games played alone (the daily
+// The Otakase Activity: the watch room (watch.js), a menu of games played alone (the daily
 // puzzle, guess the anime, higher or lower, emoji riddles, title scramble,
 // the puzzles: zoomed cover, timeline, connections, redacted, anime grid,
 // hangman, wordle, quiz, two truths and a lie; watch bingo), games played
@@ -314,8 +314,8 @@ function showError(e) {
 async function start() {
   const cfg = await api("config");
   gamesOff = cfg.off || [];
-  if (!cfg.ready) return message("The games Activity isn't set up yet. Play in chat: /leaderboard lists every game.");
-  if (!new URLSearchParams(location.search).get("frame_id")) return message("Open this inside Discord: /games on the Otakase server.");
+  if (!cfg.ready) return message("The Otakase Activity isn't set up yet. Play in chat: /leaderboard lists every game.");
+  if (!new URLSearchParams(location.search).get("frame_id")) return message("Open this inside Discord: /otakase on the Otakase server.");
   sdk = new Discord.DiscordSDK(cfg.client_id);
   await sdk.ready();
   const { code } = await sdk.commands.authorize({
@@ -353,7 +353,7 @@ function menu() {
     return `<span class="tag live">#${daily.num} · ${daily.play.guesses.length}/${daily.tries} · today's puzzle</span>`;
   };
   app.innerHTML = `
-    <header class="hero"><div><h1>Otakase <span>Games</span></h1><p class="sub">Pick a game. Wins give points for the weekly board.</p></div>${
+    <header class="hero"><div><h1>Otakase <span>Activity</span></h1><p class="sub">Watch anime together or pick a game to play.</p></div>${
       me ? `<span class="pill">${esc(me)}</span>` : ""
     }</header>
     <div class="menu">${GAMES.map(
@@ -1011,7 +1011,7 @@ function drawLobby(box, v, fresh) {
   fill(
     box,
     `<div class="lobby">
-      <p class="muted lead">${v.members.length === 1 ? "Just you so far. Everyone who opens Otakase Games in this call lands here." : `${v.members.length} people in this call.`}</p>
+      <p class="muted lead">${v.members.length === 1 ? "Just you so far. Everyone who opens Otakase Activity in this call lands here." : `${v.members.length} people in this call.`}</p>
       <div class="people">${people}</div>
       ${amHost() ? pick : `<p class="wait">${icon("clock")} Waiting for <b>${esc(host.name || "the host")}</b> to pick a game</p>`}
       <div class="err" id="err"></div>
@@ -3001,7 +3001,7 @@ function playFx(f) {
       break;
     }
     case "update": {
-      const el = fxPop(`<b>Updating Otakase Games</b><small>Don't close Discord</small><span class="bar"><i></i></span><small class="pc">0%</small>`, 7600, "drop upd");
+      const el = fxPop(`<b>Updating Otakase Activity</b><small>Don't close Discord</small><span class="bar"><i></i></span><small class="pc">0%</small>`, 7600, "drop upd");
       const t0 = Date.now();
       const tick = setInterval(() => {
         const pc = Math.min(100, Math.round(((Date.now() - t0) / 5200) * 100 * (0.7 + Math.random() * 0.3)));

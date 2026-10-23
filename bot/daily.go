@@ -354,7 +354,7 @@ func (b *bot) dailyBoardMessage(p dailyPuzzle, pl dailyPlay, note string) *disco
 	for k, g := range pl.Guesses {
 		rows = append(rows, dailyRow(k, g))
 	}
-	desc := "One show a day for everyone, played in the Otakase Games Activity; each try shows how close it is.\n" +
+	desc := "One show a day for everyone, played in the Otakase Activity; each try shows how close it is.\n" +
 		"-# 🟩 right · 🟨 close · ⬆⬇ the answer's is higher or lower · Year · Format · Episodes · Score · Studio · Source · Genres · Popularity"
 	if len(rows) > 0 {
 		desc = strings.Join(rows, "\n\n")

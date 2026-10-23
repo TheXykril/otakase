@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Activity: open Watch Together and games with `/otakase`; `/games` remains available as a shortcut.
+- Rename games-only Activity headings and prepare a unified Activity cover graphic.
+
 ## 1.30.12
 
 - Watch room: stop defaulting all episodes to Dub when no preference is selected.
