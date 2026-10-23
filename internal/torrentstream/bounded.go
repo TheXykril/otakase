@@ -72,7 +72,7 @@ func (s boundedStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, ha
 // to the caller's private directory; temporary payload storage is bounded by the configured total budget.
 func DownloadForBot(ctx context.Context, hash, dir string) (string, error) {
 	limits := readBotTorrentLimits(os.Getenv)
- if limits.storage < limits.torrent { return "", fmt.Errorf("torrent storage budget is smaller than the torrent size limit") }
+ if limits.storage < 2*limits.torrent { return "", fmt.Errorf("torrent storage budget must be at least twice the torrent size limit") }
  cache := filepath.Join(dir, "pieces")
 	defer os.RemoveAll(cache)
 	disk := storage.NewFile(cache)
@@ -82,7 +82,7 @@ func DownloadForBot(ctx context.Context, hash, dir string) (string, error) {
 	cfg.DataDir = cache
 	cfg.ListenPort = 0
 	cfg.NoDefaultPortForwarding = true
-	cfg.DefaultStorage = boundedStorage{ClientImpl: disk, rejected: rejected, limit: min(limits.torrent, limits.storage/2)}
+	cfg.DefaultStorage = boundedStorage{ClientImpl: disk, rejected: rejected, limit: limits.torrent}
 	cfg.NoUpload, cfg.Seed = true, false
 	cfg.EstablishedConnsPerTorrent = 16
 	cfg.HalfOpenConnsPerTorrent, cfg.TotalHalfOpenConns = 4, 4
