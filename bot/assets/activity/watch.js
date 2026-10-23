@@ -309,9 +309,9 @@ function wEpisode(s) {
       <div class="wepgrid">${Array.from({ length: end - start + 1 }, (_, i) => {
         const ep = start + i;
         const preview = previews.get(ep);
-        const picture = preview && preview.thumbnail ? `<img loading="lazy" src="${esc(preview.thumbnail)}" alt="">` : `${icon("play")}`;
+        const picture = preview && preview.thumbnail ? `<img loading="lazy" src="${esc(preview.thumbnail)}" alt="">` : "";
         const caption = preview && preview.title && preview.title.trim().toLowerCase() !== `episode ${ep}` && preview.title.trim().toLowerCase() !== `ep ${ep}` ? esc(preview.title) : "";
-        return `<button class="wepcard${ep === selected ? " chosen" : ""}" data-ep="${ep}" aria-pressed="${ep === selected}">
+        return `<button class="wepcard${ep === selected ? " chosen" : ""}${picture ? "" : " noimage"}" data-ep="${ep}" aria-pressed="${ep === selected}">
           <span class="wepvisual">${picture}</span><span class="wepdetails"><span class="wepnumber">EP ${String(ep).padStart(2, "0")}</span>${caption ? `<strong>${caption}</strong>` : ""}</span>
           ${ep === selected ? `<span class="wepcheck">${icon("check")}</span>` : ""}
         </button>`;
