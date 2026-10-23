@@ -290,10 +290,16 @@ func trimMaster(body string, maxHeight int, dub bool) string {
 		}
 		// Preserve all available audio tracks so every viewer can select
 		// their own language without fetching the video twice.
-		if a == preferred {
-			a = hlsDefault.ReplaceAllString(a, "DEFAULT=YES")
+		if hlsDefault.MatchString(a) {
+			if a == preferred {
+				a = hlsDefault.ReplaceAllString(a, "DEFAULT=YES")
+			} else {
+				a = hlsDefault.ReplaceAllString(a, "DEFAULT=NO")
+			}
+		} else if a == preferred {
+			a += ",DEFAULT=YES"
 		} else {
-			a = hlsDefault.ReplaceAllString(a, "DEFAULT=NO")
+			a += ",DEFAULT=NO"
 		}
 		out = append(out, a)
 	}
