@@ -287,6 +287,12 @@ function wPickerHeading(s) {
 }
 
 function wEpisode(s) {
+  const previews = new Map();
+  for (const item of s.previews || []) {
+    const title = item.title || "";
+    const match = title.match(/\b(?:episode|ep\.?)[\s:]*([0-9]+)\b/i) || title.match(/^([0-9]+)\s*[-:.]/);
+    if (match && !previews.has(Number(match[1]))) previews.set(Number(match[1]), item);
+  }
   const last = Math.max(1, s.aired || s.episodes || 1);
   const next = wv.show && wv.show.id === s.id ? Math.min(wv.ep + 1, last) : 1;
   let selected = next;
@@ -302,8 +308,11 @@ function wEpisode(s) {
         <span class="pill">Audio in player settings</span></div>
       <div class="wepgrid">${Array.from({ length: end - start + 1 }, (_, i) => {
         const ep = start + i;
+        const preview = previews.get(ep);
+        const picture = preview && preview.thumbnail ? `<img loading="lazy" src="${esc(preview.thumbnail)}" alt="">` : `${icon("play")}`;
+        const caption = preview && preview.title ? esc(preview.title) : `Episode ${ep}`;
         return `<button class="wepcard${ep === selected ? " chosen" : ""}" data-ep="${ep}" aria-pressed="${ep === selected}">
-          <span class="wepnumber">EP</span><strong>${String(ep).padStart(2, "0")}</strong>
+          <span class="wepvisual">${picture}</span><span class="wepdetails"><span class="wepnumber">EP ${String(ep).padStart(2, "0")}</span><strong>${caption}</strong></span>
           ${ep === selected ? `<span class="wepcheck">${icon("check")}</span>` : ""}
         </button>`;
       }).join("")}</div>

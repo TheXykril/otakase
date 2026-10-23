@@ -385,11 +385,13 @@ func (b *bot) activityCover(w http.ResponseWriter, r *http.Request) {
 
 // proxyAniList passes a picture on AniList's image host through.
 func proxyAniList(w http.ResponseWriter, r *http.Request, src string) {
-	if !strings.HasPrefix(src, "https://s4.anilist.co/") {
+	if !strings.HasPrefix(src, "https://s4.anilist.co/") && !strings.HasPrefix(src, "https://img1.ak.crunchyroll.com/") && !strings.HasPrefix(src, "https://static.crunchyroll.com/") {
 		http.NotFound(w, r)
 		return
 	}
-	resp, err := activityClient.Get(src)
+	imageClient := *activityClient
+	imageClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := imageClient.Get(src)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		if err == nil {
 			resp.Body.Close()

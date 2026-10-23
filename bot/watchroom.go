@@ -932,6 +932,14 @@ func (b *bot) watchSearchAPI(w http.ResponseWriter, r *http.Request) {
 		if list[k].Cover != "" {
 			list[k].Cover = "api/watch/cover?u=" + url.QueryEscape(list[k].Cover)
 		}
+		for j := range list[k].Previews {
+			u := list[k].Previews[j].Thumbnail
+			if strings.HasPrefix(u, "https://s4.anilist.co/") || strings.HasPrefix(u, "https://img1.ak.crunchyroll.com/") || strings.HasPrefix(u, "https://static.crunchyroll.com/") {
+				list[k].Previews[j].Thumbnail = "api/watch/cover?u=" + url.QueryEscape(u)
+			} else {
+				list[k].Previews[j].Thumbnail = ""
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, list)
 }

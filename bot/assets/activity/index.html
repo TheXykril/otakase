@@ -768,6 +768,18 @@
   .wepnav { margin-top:15px; }
   .wepfooter { margin-top:19px; padding-top:15px; border-top:1px solid var(--line); }
   @media (max-width:460px) { .wpickflow { padding:12px; } .waudiogrid { gap:8px; } .waudiocard { padding:13px; } .wepgrid { grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:7px; } }
+
+@media (pointer: coarse) and (orientation: landscape) { main { max-width:none; padding-top:max(30px,var(--discord-safe-area-inset-top,0px)); padding-right:max(110px,calc(24px + var(--discord-safe-area-inset-right,0px))); padding-bottom:max(120px,calc(24px + var(--discord-safe-area-inset-bottom,0px))); } .wstage.full .wbar, .wstage:fullscreen .wbar { right:max(110px,calc(24px + var(--discord-safe-area-inset-right,0px))); bottom:max(110px,calc(24px + var(--discord-safe-area-inset-bottom,0px))); } }
+
+.wepgrid { grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+.wepcard { padding:0; overflow:hidden; align-items:stretch; justify-content:flex-start; }
+.wepvisual { display:grid; place-items:center; width:100%; aspect-ratio:16/9; background:#282a34; overflow:hidden; }
+.wepvisual img { width:100%; height:100%; object-fit:cover; }
+.wepdetails { padding:10px; text-align:left; }
+
+.wepcard .wepdetails strong { font-size:13px; line-height:1.35; overflow-wrap:anywhere; }
+.wepcard .wepvisual svg { width:32px; height:32px; color:var(--soft); }
+@media (max-width:460px) { .wepgrid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 </style>
 </head>
 <body>
