@@ -954,7 +954,18 @@ func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
  // watchEpisodes loads episode-specific metadata only when the picker opens.
  // Tenrai's Jikan-compatible data is indexed by MAL episode number; AniList
  // previews remain the fallback when the upstream has no cover.
- func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
+ var episodePreviewCache = struct {
+ sync.Mutex
+ entries map[int]struct {
+   until time.Time
+   previews map[int]watchEpisodePreview
+ }
+}{entries: make(map[int]struct {
+ until time.Time
+ previews map[int]watchEpisodePreview
+})}
+
+func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
    user := b.actUser(w, r)
    if user == "" { return }
    if !watchSearchLimit.allow(user, watchNow()) {
@@ -969,6 +980,13 @@ func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
      allowed := b.watch.cur != nil && b.watch.cur.id == r.URL.Query().Get("room") && b.watch.cur.adult
      b.watch.mu.Unlock()
      if !allowed { apiError(w, http.StatusForbidden, "not available in this room"); return }
+   }
+   episodePreviewCache.Lock()
+   cached, found := episodePreviewCache.entries[id]
+   episodePreviewCache.Unlock()
+   if found && time.Now().Before(cached.until) {
+     writeJSON(w, http.StatusOK, cached.previews)
+     return
    }
    ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
    defer cancel()
@@ -1073,6 +1091,15 @@ func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
      if v.Thumbnail != "" { old.Thumbnail = v.Thumbnail }
      result[ep] = old
    }
+   episodePreviewCache.Lock()
+   if len(episodePreviewCache.entries) >= 256 {
+     clear(episodePreviewCache.entries)
+   }
+   episodePreviewCache.entries[id] = struct {
+     until time.Time
+     previews map[int]watchEpisodePreview
+   }{until: time.Now().Add(30 * time.Minute), previews: result}
+   episodePreviewCache.Unlock()
    writeJSON(w, http.StatusOK, result)
  }
 
