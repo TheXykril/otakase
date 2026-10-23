@@ -256,6 +256,21 @@ class OtakaseStatusCard extends OtakaseBase {
   }
 }
 
+// ── Watch room diagnostics ──
+
+class OtakaseWatchErrorsCard extends OtakaseBase {
+  _draw() {
+    const errors = this._s.watch_errors || [];
+    const rows = errors.length
+      ? errors.map((e) => `<li><span class="grow"><b>${esc(e.code)}</b> · ${esc(e.show)} · episode ${Number(e.episode) || "?"}<br>
+          <span class="muted">${new Date(e.at).toLocaleString()} · ${esc(e.stage)}</span><br>
+          <span class="bad">${esc(e.detail)}</span></span></li>`).join("")
+      : "<li>No recent watch room errors.</li>";
+    this._body(this._title("Watch room diagnostics") +
+      "<p class=\"muted\">Recent failures. Match the report code shown in the Activity.</p><ul>" + rows + "</ul>");
+  }
+}
+
 // ── Controls ──
 
 class OtakaseControlsCard extends OtakaseBase {
@@ -532,6 +547,7 @@ class OtakaseBotCard extends HTMLElement {
 
 const CARDS = [
   ["otakase-bot-status-card", OtakaseStatusCard, "Otakase Bot: status", "Version, members, latency and failing background jobs."],
+  ["otakase-bot-watch-errors-card", OtakaseWatchErrorsCard, "Otakase Bot: watch errors", "Detailed watch-room failures matched to public report codes."],
   ["otakase-bot-controls-card", OtakaseControlsCard, "Otakase Bot: controls", "Join verification, spoiler guard, invites and other switches."],
   ["otakase-bot-today-card", OtakaseTodayCard, "Otakase Bot: today", "Today's airing board, watch parties and voice rooms."],
   ["otakase-bot-leaderboard-card", OtakaseLeaderboardCard, "Otakase Bot: leaderboard", "Chat levels, game points, guess the anime points and top helpers."],
