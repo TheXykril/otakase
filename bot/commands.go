@@ -321,7 +321,7 @@ func helpEmbed() *discordgo.MessageEmbed {
 		"Type `#123` to show a GitHub issue or pull request",
 		"`/link-github` Contributor role if you have a merged pull request",
 		"`/link-anilist` link your AniList, then `/profile` shows what you watch",
-		"`/games` opens the games Activity: the daily puzzle and a dozen more games, alone or with your call (`/leaderboard` for the points board, `/riddle-add` your own emoji riddle)",
+		"`/otakase` opens the Otakase Activity for Watch Together and games (`/games` also works) (`/leaderboard` for the points board, `/riddle-add` your own emoji riddle)",
 		"`/rank` your level from chatting, `/levels` the most active members",
 		"`/compare` your AniList next to another member's",
 		"`/recommend` five shows for you; `/server-top` what members here watch",
