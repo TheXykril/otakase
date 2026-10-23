@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -69,7 +70,8 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string) (*watchTorre
 	if err != nil {
 		return nil, "", err
 	}
-	cmd.Stderr = io.Discard
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	cleanWatchTorrentDirs()
 	home, err := os.MkdirTemp("", "otakase-room-torrent-")
 	if err != nil {
@@ -119,7 +121,11 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string) (*watchTorre
 		u, err := url.Parse(link)
 		if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.Port() == "" || u.Path != "/playlist.m3u8" {
 			t.stop()
-			return nil, "", fmt.Errorf("torrent helper returned invalid address")
+			if detail := strings.TrimSpace(stderr.String()); detail != "" {
+				lines := strings.Split(detail, "\n")
+				return nil, "", fmt.Errorf("torrent preparation failed: %s", strings.TrimSpace(lines[len(lines)-1]))
+			}
+			return nil, "", fmt.Errorf("torrent helper exited without a valid playback address")
 		}
 		go func() {
 			select {
