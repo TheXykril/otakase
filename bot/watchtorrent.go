@@ -61,7 +61,7 @@ func startWatchTorrent(cli, hash string) (*watchTorrent, string, error) {
  select {
  case link := <-ready:
   u, err := url.Parse(link)
-  if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.Port() == "" || strings.TrimPrefix(u.Path, "/") != strings.ToLower(hash) {
+  if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.Port() == "" || u.Path != "/playlist.m3u8" {
    t.stop()
    return nil, "", fmt.Errorf("torrent helper returned invalid address")
   }
