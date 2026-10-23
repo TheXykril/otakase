@@ -18,7 +18,7 @@ import (
 func TestBoundedStorageRejectsBeforeOpening(t *testing.T) {
 	for _, info := range []*metainfo.Info{{Length: BotTorrentLimit + 1}, {Length: 0}, {Files: make([]metainfo.FileInfo, 257)}} {
 		rejected := make(chan error, 1)
-		s := boundedStorage{rejected: rejected}
+		s := boundedStorage{rejected: rejected, limit: BotTorrentLimit}
 		if _, err := s.OpenTorrent(context.Background(), info, metainfo.Hash{}); err == nil {
 			t.Fatal("oversized storage accepted")
 		}
@@ -87,5 +87,25 @@ func TestDownloadForBotLocalSwarm(t *testing.T) {
 	}
 	if _, err = os.Stat(filepath.Join(dir, "pieces")); !os.IsNotExist(err) {
 		t.Fatal("torrent cache retained")
+	}
+}
+
+func TestReadBotTorrentLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name                     string
+		env                      map[string]string
+		wantTorrent, wantStorage int64
+	}{
+		{"defaults", nil, 4 << 30, 8 << 30},
+		{"custom", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "6", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "12"}, 6 << 30, 12 << 30},
+		{"bad values", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "-1", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "not-a-number"}, 4 << 30, 8 << 30},
+		{"oversized", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "99", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "99"}, 4 << 30, 8 << 30},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := readBotTorrentLimits(func(key string) string { return tc.env[key] })
+			if got.torrent != tc.wantTorrent || got.storage != tc.wantStorage {
+				t.Fatalf("got %+v", got)
+			}
+		})
 	}
 }

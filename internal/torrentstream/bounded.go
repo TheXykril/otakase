@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
@@ -13,20 +14,47 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const BotTorrentLimit int64 = 1 << 30
+const (
+	BotTorrentLimit        int64 = 4 << 30
+	BotTorrentStorageLimit int64 = 8 << 30
+	maxBotTorrentGiB        int64 = 16
+)
+
+type botTorrentLimits struct {
+	torrent int64
+	storage int64
+}
+
+// Limits are expressed in GiB. An invalid setting falls back to its default.
+func readBotTorrentLimits(getenv func(string) string) botTorrentLimits {
+	parse := func(name string, fallback int64) int64 {
+		n, err := strconv.ParseInt(getenv(name), 10, 64)
+		if err != nil || n < 1 || n > maxBotTorrentGiB*2 {
+			return fallback
+		}
+		return n << 30
+	}
+	torrentLimit := parse("OTAKASE_WATCH_TORRENT_MAX_GIB", BotTorrentLimit)
+	storageLimit := parse("OTAKASE_WATCH_TORRENT_STORAGE_GIB", BotTorrentStorageLimit)
+	if torrentLimit > maxBotTorrentGiB {
+		torrentLimit = BotTorrentLimit
+	}
+	return botTorrentLimits{torrent: torrentLimit, storage: storageLimit}
+}
 
 type boundedStorage struct {
 	storage.ClientImpl
 	rejected chan error
+	limit    int64
 }
 
 func (s boundedStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, hash metainfo.Hash) (storage.TorrentImpl, error) {
 	total := info.Length
-	valid := total >= 0 && total <= BotTorrentLimit && len(info.Files) <= 256
+	valid := total >= 0 && total <= s.limit && len(info.Files) <= 256
 	if len(info.Files) > 0 {
 		total = 0
 		for _, file := range info.Files {
-			if file.Length < 0 || file.Length > BotTorrentLimit-total {
+			if file.Length < 0 || file.Length > s.limit-total {
 				valid = false
 				break
 			}
@@ -45,8 +73,13 @@ func (s boundedStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, ha
 }
 
 // DownloadForBot buffers one bounded episode. Both the cache and output belong
-// to the caller's private directory; peak payload disk usage is at most 2 GiB.
+// to the caller's private directory. The cache and extracted video together
+// cannot exceed the configured temporary payload budget.
 func DownloadForBot(ctx context.Context, hash, dir string) (string, error) {
+	limits := readBotTorrentLimits(os.Getenv)
+	if limits.storage < 2*limits.torrent {
+		return "", fmt.Errorf("torrent storage budget must be at least twice the torrent size limit")
+	}
 	cache := filepath.Join(dir, "pieces")
 	defer os.RemoveAll(cache)
 	disk := storage.NewFile(cache)
@@ -56,7 +89,7 @@ func DownloadForBot(ctx context.Context, hash, dir string) (string, error) {
 	cfg.DataDir = cache
 	cfg.ListenPort = 0
 	cfg.NoDefaultPortForwarding = true
-	cfg.DefaultStorage = boundedStorage{disk, rejected}
+	cfg.DefaultStorage = boundedStorage{ClientImpl: disk, rejected: rejected, limit: limits.torrent}
 	cfg.NoUpload, cfg.Seed = true, false
 	cfg.EstablishedConnsPerTorrent = 16
 	cfg.HalfOpenConnsPerTorrent, cfg.TotalHalfOpenConns = 4, 4
