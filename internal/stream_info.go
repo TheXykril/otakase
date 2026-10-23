@@ -119,8 +119,10 @@ func torrentLinks(result ProviderEpisodeResult) []TorrentLink {
 		if err == nil && u.Scheme == "magnet" {
 			for _, xt := range u.Query()["xt"] {
 				const prefix = "urn:btih:"
-				if !strings.HasPrefix(strings.ToLower(xt), prefix) { continue }
-				hash := strings.ToLower(strings.TrimPrefix(strings.ToLower(xt), prefix))
+				if !strings.HasPrefix(strings.ToLower(xt), prefix) {
+					continue
+				}
+				hash := strings.TrimPrefix(strings.ToLower(xt), prefix)
 				if len(hash) == 40 && strings.Trim(hash, "0123456789abcdef") == "" && !seen[hash] {
 					seen[hash] = true
 					out = append(out, TorrentLink{InfoHash: hash})
