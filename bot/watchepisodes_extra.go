@@ -115,7 +115,7 @@ func extraEpisodePreviews(ctx context.Context, show watchShow, result map[int]wa
    if episodeJSON(ctx, endpoint, &season) && len(season.Episodes) == show.Episodes {
      for _, ep := range season.Episodes {
        if !strings.HasPrefix(ep.StillPath,"/") { continue }
-       fillEpisode(result, ep.EpisodeNumber, max, ep.Name, "https://image.tmdb.org/t/p/w500"+ep.StillPath)
+       fillEpisode(result, ep.EpisodeNumber, max, ep.Name, "https://image.tmdb.org/t/p/w300"+ep.StillPath)
      }
    }
  }
