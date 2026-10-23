@@ -10,19 +10,29 @@ import (
  "os/exec"
  "strings"
  "sync"
+ "syscall"
  "time"
 )
 
-const watchTorrentStartWait = 65 * time.Second
+const watchTorrentStartWait = 150 * time.Second
 
 type watchTorrent struct {
  cmd *exec.Cmd
+ stdin io.WriteCloser
+ done chan struct{}
  once sync.Once
 }
 
 func (t *watchTorrent) stop() {
  if t != nil {
-  t.once.Do(func() { if t.cmd.Process != nil { _ = t.cmd.Process.Kill() } })
+  t.once.Do(func() {
+   _ = t.stdin.Close()
+   select {
+   case <-t.done:
+   case <-time.After(5 * time.Second):
+    if t.cmd.Process != nil { _ = syscall.Kill(-t.cmd.Process.Pid, syscall.SIGKILL) }
+   }
+  })
  }
 }
 
@@ -33,6 +43,7 @@ func startWatchTorrent(cli, hash string) (*watchTorrent, string, error) {
   return nil, "", errors.New("invalid torrent infohash")
  }
  cmd := exec.Command(cli, "-torrent-serve", hash)
+ cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
  stdout, err := cmd.StdoutPipe()
  if err != nil { return nil, "", err }
  stdin, err := cmd.StdinPipe()
@@ -45,7 +56,7 @@ func startWatchTorrent(cli, hash string) (*watchTorrent, string, error) {
   _ = os.RemoveAll(home)
   return nil, "", err
  }
- t := &watchTorrent{cmd: cmd}
+ t := &watchTorrent{cmd: cmd, stdin: stdin, done: make(chan struct{})}
  ready := make(chan string, 1)
  go func() {
   line, _ := bufio.NewReader(stdout).ReadString('\n')
@@ -53,6 +64,7 @@ func startWatchTorrent(cli, hash string) (*watchTorrent, string, error) {
  }()
  go func() {
   _ = cmd.Wait()
+  close(t.done)
   _ = stdin.Close()
   _ = os.RemoveAll(home)
  }()
