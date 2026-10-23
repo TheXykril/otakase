@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-label="Otakase activity cover, watch together and play games">
+<defs>
+<linearGradient id="sky" x2="1" y2="1"><stop stop-color="#10132c"/><stop offset=".55" stop-color="#29204e"/><stop offset="1" stop-color="#805080"/></linearGradient>
+<linearGradient id="mount" x2="0" y2="1"><stop stop-color="#333365"/><stop offset="1" stop-color="#101527"/></linearGradient>
+<radialGradient id="sun"><stop stop-color="#ffd3b0"/><stop offset="1" stop-color="#f29dc0" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="1200" height="675" fill="url(#sky)"/>
+<circle cx="845" cy="290" r="255" fill="url(#sun)" opacity=".8"/>
+<circle cx="845" cy="290" r="96" fill="#ffb9ca" opacity=".84"/>
+<g fill="#ffdeed" opacity=".85"><circle cx="105" cy="83" r="2"/><circle cx="439" cy="96" r="2.5"/><circle cx="643" cy="143" r="2"/><circle cx="1003" cy="94" r="3"/><circle cx="1105" cy="252" r="2"/><circle cx="741" cy="56" r="2.4"/><circle cx="343" cy="240" r="1.8"/></g>
+<path d="M0 475 140 345 240 437 379 330 545 482 707 358 853 462 1018 323 1200 464V675H0Z" fill="#352d61"/>
+<path d="M0 539 196 416 327 518 468 414 645 552 828 438 965 536 1111 426 1200 500V675H0Z" fill="url(#mount)"/>
+<path d="M0 575Q155 535 304 578T602 575T890 575T1200 563V675H0Z" fill="#111527"/>
+<g transform="translate(890 442)" fill="#171629" stroke="#be9de2" stroke-width="4" stroke-linejoin="round"><path d="M-58 26Q-78-35-39-66L-23-103 1-75 41-77 62-103 77-63Q102-29 70 37L65 90H-65Z"/><path d="M-62 75Q-137 77-116 15" fill="none" stroke-width="20" stroke-linecap="round"/></g>
+<g font-family="Arial,Helvetica,sans-serif" fill="#fff">
+<text x="75" y="270" font-weight="800" font-size="106" letter-spacing="-4">Otakase</text>
+<text x="81" y="329" font-size="32" fill="#f0c8f7" font-weight="600">WATCH TOGETHER  ·  PLAY TOGETHER</text>
+</g>
+<g transform="translate(78 380)">
+<rect width="225" height="78" rx="22" fill="#bc72dd" opacity=".96"/>
+<path d="m34 20 0 38 33-19Z" fill="#fff"/>
+<text x="83" y="48" fill="white" font-size="24" font-weight="700" font-family="Arial,Helvetica,sans-serif">Watch</text>
+<rect x="239" width="202" height="78" rx="22" fill="#40345f" stroke="#a48dc2" stroke-width="2"/>
+<path d="m271 39 10-11h26l10 11-10 12-12-7h-5l-12 7Z" stroke="#e2c3fa" fill="none" stroke-width="4" stroke-linejoin="round"/>
+<text x="333" y="48" fill="white" font-size="24" font-weight="700" font-family="Arial,Helvetica,sans-serif">Play</text>
+</g>
+</svg>
