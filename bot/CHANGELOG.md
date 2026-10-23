@@ -5,7 +5,6 @@
 ## 1.30.2
 
 - Watch room: increase the default torrent episode limit to 4 GiB, with an 8 GiB temporary storage budget. Both limits are configurable in the add-on options.
-
 - Watch rooms can play torrent-only episodes after buffering, with bounded disk usage and encoding load.
 - Torrent playback selects the requested audio language, renders embedded English text subtitles, and supports seeking throughout the episode.
 - Room changes cancel pending downloads; helper crashes release temporary files. Playback synchronization now follows host buffering.
