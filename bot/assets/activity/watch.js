@@ -510,7 +510,7 @@ function wBar() {
   const bar = document.getElementById("wbar");
   const v = wv;
   const btn = (id, ic, label, alt = true) => `<button class="btn${alt ? " alt" : ""}" id="${id}" title="${esc(label)}">${icon(ic)}<span>${esc(label)}</span></button>`;
-  const common = `<button class="btn alt" id="wsettings" title="Audio and subtitle languages">${icon("settings")}<span>Languages</span></button>
+  const common = `<button class="btn alt" id="wsettings" title="Audio and subtitle languages"><span>Audio &amp; Subtitles</span></button>
     <div class="wsettings" id="wsettingsmenu" hidden><label>Audio language<select id="waudio" aria-label="Audio language"></select></label><label>Subtitles<select id="wsub" aria-label="Subtitle language"></select></label><p class="note" id="wsettingshint"></p></div>
     <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
     <button class="btn alt wfullscreen" id="wfull" title="Toggle theater mode" aria-label="Toggle theater mode" aria-pressed="${wFull}">${icon(wFull ? "minimize" : "maximize")}</button>`;
@@ -598,7 +598,8 @@ function wAudioTracks() {
   const tracks = wHls ? wHls.audioTracks || [] : [];
   const current = tracks.findIndex((track) => {
     const language = (track.lang || "").toLowerCase();
-    return wAudioPick !== "auto" && (language === wAudioPick || language.startsWith(wAudioPick + "-"));
+    const preferred = wAudioPick === "en" ? "eng" : wAudioPick === "ja" ? "jpn" : wAudioPick;
+    return wAudioPick !== "auto" && (language === preferred || language.startsWith(preferred + "-") || language === wAudioPick || language.startsWith(wAudioPick + "-"));
   });
   select.innerHTML = `<option value="auto">Automatic</option>` + tracks.map((track, index) =>
     `<option value="${esc((track.lang || "").toLowerCase())}" data-index="${index}">${esc(track.name || track.lang || "Track " + (index + 1))}</option>`).join("");
