@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.17
+
+- Watch Together: separate episode numbers and titles, and omit duplicate fallback titles.
+- Activity: fix mobile floating moderation and sound controls positioning beneath Discord overlays.
+
 ## 1.30.16
 
 - Watch Together: load episode titles and supported thumbnails from Tenrai when opening the episode picker, with AniList fallback.
