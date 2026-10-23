@@ -252,7 +252,7 @@ function wPicker(changing) {
             )
             .join("")
         : `<p class="note">Nothing found.</p>`;
-      res.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => wEpisode(wSearch[+b.dataset.i])));
+      res.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => wLanguage(wSearch[+b.dataset.i])));
     }, 300);
   };
   q.focus();
@@ -260,15 +260,29 @@ function wPicker(changing) {
   if (c) c.onclick = () => ((wChanging = false), (wvKey = ""), (wvMedia = ""), wSet(wv));
 }
 
-function wEpisode(s) {
+function wLanguage(s) {
+  const res = document.getElementById("wres");
+  if (!res) return;
+  res.innerHTML = `<div class="wepick">${s.cover ? `<img src="${esc(s.cover)}" alt="">` : ""}<div>
+    <h3>${esc(s.title)}</h3>
+    <p class="note">Choose the audio you prefer.</p>
+    <div class="row"><button class="btn" id="wsub">Sub</button><button class="btn" id="wdubpick">Dub</button></div>
+    <p class="note">If a dub isn't available, the episode will play with subtitles.</p>
+    <button class="btn alt" id="wback">Back</button></div></div>`;
+  document.getElementById("wsub").onclick = () => wEpisode(s, false);
+  document.getElementById("wdubpick").onclick = () => wEpisode(s, true);
+  document.getElementById("wback").onclick = () => document.getElementById("q").oninput();
+}
+
+function wEpisode(s, dub) {
   const last = s.aired || s.episodes || 1;
   const next = wv.show && wv.show.id === s.id ? Math.min(wv.ep + 1, last) : 1;
   document.getElementById("wres").innerHTML = `<div class="wepick">${s.cover ? `<img src="${esc(s.cover)}" alt="">` : ""}<div>
     <h3>${esc(s.title)}</h3><p class="note">${last} episode${last === 1 ? "" : "s"} to pick from</p>
     <div class="row"><label>Episode <input type="number" id="wep" min="1" max="${last}" value="${next}"></label>
-    <label class="wsw"><input type="checkbox" id="wdub"> Dub</label></div>
-    <div class="row"><button class="btn" id="wgo">${icon("play")} Play</button><button class="btn alt" id="wback">Back</button></div></div></div>`;
-  document.getElementById("wback").onclick = () => document.getElementById("q").oninput();
+    <span class="pill">${dub ? "Dub preferred" : "Sub preferred"}</span></div>
+    <div class="row"><button class="btn" id="wgo">${icon("play")} Play</button><button class="btn alt" id="wback">Change audio</button></div></div></div>`;
+  document.getElementById("wback").onclick = () => wLanguage(s);
   const go = document.getElementById("wgo");
   go.onclick = () => {
     const ep = Math.round(+document.getElementById("wep").value);
@@ -276,7 +290,7 @@ function wEpisode(s) {
     go.disabled = true;
     wChanging = false;
     wvKey = "";
-    api("watch/pick", { room, show: s.id, ep, dub: document.getElementById("wdub").checked })
+    api("watch/pick", { room, show: s.id, ep, dub })
       .then((nv) => wSet(nv))
       .catch((err) => ((go.disabled = false), showError(err)));
   };
