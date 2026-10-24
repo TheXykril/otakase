@@ -2,8 +2,16 @@
 
 ## Unreleased
 
-- Watch tickets: server owners can add or remove tickets from the Activity moderation panel; Home Assistant dashboard provides ticket balance controls and an account list.
-- Redeem codes: `/codes mint` now sets tickets per code (1 to 100, default 1). Puzzle-hunt codes award five tickets, while older codes retain their original one-ticket reward.
+## 1.30.35
+
+- Watch tickets: the Discord server owner can add or remove tickets through Activity moderation. The Home Assistant moderation dashboard lists ticket balances and lets authenticated administrators adjust them.
+- Redeem codes: `/codes mint` supports 1–100 tickets per code, defaulting to one. Cheat-code puzzles award five tickets; existing codes retain their one-ticket reward.
+
+## 1.30.34
+
+- Watch Together: expose every selectable language in torrent media instead of only Japanese and English, with separate on-demand audio playlists.
+- Watch Together: keep audio renditions from multiple HLS audio groups, including unlabelled HLS tracks.
+- Watch Together: discover supported language releases for KickAssAnime episodes and allow each viewer to switch to an available release independently.
 
 ## 1.30.33
 
