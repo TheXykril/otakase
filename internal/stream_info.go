@@ -99,7 +99,13 @@ func ResolveStreamInfo(config Config, anilistID, episode int) (StreamInfo, error
 				// names, so the Activity can offer only playable choices.
 				if result.ProviderName == "kickassanime" && result.ProviderID != "" {
 					alternates := kickassanime.EpisodeAudioVariants(result.ProviderID, episode, 5*time.Second)
+					// Do not advertise a separate language when multiple
+					// locale pages resolve to the same unlabelled stream.
+					// Its HLS audio renditions are discovered by the player.
+					urlCounts := map[string]int{}
+					for _, alt := range alternates { urlCounts[alt.URL]++ }
 					for lang, alternate := range alternates {
+						if urlCounts[alternate.URL] > 1 { continue }
 						if alternate.URL == "" { continue }
 						same := false
 						for _, original := range streams {
