@@ -24,8 +24,9 @@ func watchBot(t *testing.T, streamURL string) (*bot, *time.Time) {
 	b.cfg.GuildID = "g"
 	now := time.Date(2026, 10, 23, 20, 0, 0, 0, time.UTC)
 	oldNow, oldCh, oldClock, oldResolve, oldShow := watchNow, watchChannel, watchClock, watchResolve, watchShowByID
-	oldAdmin, oldAhead := isGameAdmin, watchAhead
+	oldAdmin, oldAhead, oldSkipLookup := isGameAdmin, watchAhead, watchSkipLookup
 	watchAhead = func(func()) {}
+	watchSkipLookup = func(context.Context, int, int) (watchSkipIntervals, error) { return watchSkipIntervals{}, nil }
 	watchNow = func() time.Time { return now }
 	watchChannel = func(_ *bot, id string) *discordgo.Channel {
 		switch id {
@@ -50,7 +51,7 @@ func watchBot(t *testing.T, streamURL string) (*bot, *time.Time) {
 	gameAdmins.Unlock()
 	t.Cleanup(func() {
 		watchNow, watchChannel, watchClock, watchResolve, watchShowByID = oldNow, oldCh, oldClock, oldResolve, oldShow
-		isGameAdmin, watchAhead = oldAdmin, oldAhead
+		isGameAdmin, watchAhead, watchSkipLookup = oldAdmin, oldAhead, oldSkipLookup
 	})
 	return b, &now
 }
