@@ -14,7 +14,10 @@ type watchLanguagePreference struct {
 var watchLanguageCode = regexp.MustCompile(`^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,2}$`)
 
 func watchValidLanguage(value string, subtitles bool) bool {
-	if value == "auto" || subtitles && value == "off" {
+	if value == "off" {
+		return subtitles
+	}
+	if value == "auto" {
 		return true
 	}
 	// Unlabelled container and HLS tracks are selected by their bounded index.

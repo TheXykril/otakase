@@ -505,6 +505,9 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
         if _, exists := r.audioEntries[other]; !exists {
             go b.findWatchAlternate(ctx, r, gen, cli, show.ID, ep, adult, !r.dub)
         }
+		if r.provider == "kickassanime" {
+			go b.findWatchLanguages(ctx, r, gen, cli, show.ID, ep, adult, dub)
+		}
 		// The next episode is looked up ahead, so it starts at once.
 		if ep < show.lastEpisode() {
 			watchAhead(func() { b.watch.infos.get(context.Background(), cli, show.ID, ep+1, dub, adult) })
@@ -512,6 +515,35 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	}()
 }
 
+
+// findWatchLanguages looks up other playable languages after the episode
+// starts. Results belong only to the room generation that requested them.
+func (b *bot) findWatchLanguages(ctx context.Context, room *watchRoom, gen int, cli string, showID, ep int, adult, dub bool) {
+	info, err := watchResolveAudio(ctx, cli, showID, ep, dub, adult)
+	if err != nil {
+		if ctx.Err() == nil {
+			log.Printf("watch audio discovery for %d:%d: %v", showID, ep, err)
+		}
+		return
+	}
+	if ctx.Err() != nil || info.Provider != "kickassanime" {
+		return
+	}
+	b.watch.mu.Lock()
+	defer b.watch.mu.Unlock()
+	if b.watch.cur != room || room.gen != gen || room.phase != "play" || room.media == nil || room.provider != info.Provider {
+		return
+	}
+	if room.audioReleases == nil {
+		room.audioReleases = map[string]streamLink{}
+	}
+	for language, link := range info.AudioVariants {
+		room.audioReleases[language] = link
+	}
+	if room.addAudioReleases() {
+		room.changed()
+	}
+}
 
 // findWatchAlternate makes separately published audio versions selectable.
 // Torrent alternatives are intentionally not started here: starting another
@@ -601,25 +633,7 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	if _, ok := r.audioEntries[currentMode]; !ok {
 		r.audioEntries[currentMode] = watchMediaPath(m.key, entry)
 	}
-	// Some streaming providers publish each audio language as a different
-	// episode URL. Keep these relays available alongside the selected stream.
-	for language, link := range r.audioReleases {
-		if !watchAudioLanguage(language) || link.URL == "" || link.URL == r.streams[k].URL {
-			continue
-		}
-		if _, exists := r.audioEntries[language]; exists { continue }
-		other, otherEntry, _ := newWatchMedia(link, language == "en")
-		if r.extraAudioMedia == nil { r.extraAudioMedia = map[string]*watchMedia{} }
-		r.extraAudioMedia[language] = other
-		path := watchMediaPath(other.key, otherEntry)
-		r.audioEntries[language] = path
-		// Legacy selections and background sub/dub discovery use these aliases.
-		alias := ""
-		if language == "ja" { alias = "sub" } else if language == "en" { alias = "dub" }
-		if alias != "" {
-			if _, exists := r.audioEntries[alias]; !exists { r.audioEntries[alias] = path }
-		}
-	}
+	r.addAudioReleases()
 	for n, s := range r.streams[k].Subtitles {
 		label := s.Label
 		if label == "" {
@@ -635,6 +649,44 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	r.setPos(0, true, now)
 	r.changed()
 	return true
+}
+
+// addAudioReleases registers separate audio releases for independent viewers.
+// The room lock must be held by the caller.
+func (r *watchRoom) addAudioReleases() bool {
+	if r.media == nil {
+		return false
+	}
+	added := false
+	for language, link := range r.audioReleases {
+		if !watchAudioLanguage(language) || link.URL == "" || link.URL == r.streams[r.link].URL {
+			continue
+		}
+		if _, exists := r.audioEntries[language]; exists {
+			continue
+		}
+		other, otherEntry, _ := newWatchMedia(link, language == "en")
+		if r.extraAudioMedia == nil {
+			r.extraAudioMedia = map[string]*watchMedia{}
+		}
+		r.extraAudioMedia[language] = other
+		path := watchMediaPath(other.key, otherEntry)
+		r.audioEntries[language] = path
+		added = true
+		// Legacy selections and background sub/dub discovery use these aliases.
+		alias := ""
+		if language == "ja" {
+			alias = "sub"
+		} else if language == "en" {
+			alias = "dub"
+		}
+		if alias != "" {
+			if _, exists := r.audioEntries[alias]; !exists {
+				r.audioEntries[alias] = path
+			}
+		}
+	}
+	return added
 }
 
 // Only allow audio codes emitted by the helper, never arbitrary URL paths.

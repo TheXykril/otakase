@@ -156,7 +156,7 @@ function wSet(v, fromHost) {
 
 function wDraw() {
   const v = wv;
-  const showLine = v.show ? `<b>${esc(v.show.title)}</b> · episode ${v.ep}${v.last_ep ? ` of ${v.last_ep}` : ""}${v.dub ? " · dub" : ""}` : "";
+  const showLine = v.show ? `<b>${esc(v.show.title)}</b> · episode ${v.ep}${v.last_ep ? ` of ${v.last_ep}` : ""}` : "";
   let stage;
   if (v.phase === "pick" || (v.phase === "error" && !v.media)) {
     stage = v.is_host
@@ -491,25 +491,31 @@ async function wLoad() {
     if (wv.is_host && wv.ep < wv.last_ep) wCtl("next");
   };
   vid.ontimeupdate = wTime;
-  if (/\.m3u8(?:$|\?)/i.test(wvMedia) && !vid.canPlayType("application/vnd.apple.mpegurl")) {
+  if (/\.m3u8(?:$|\?)/i.test(wvMedia)) {
     try {
       await hlsReady();
     } catch (e) {
-      return showError(e);
+      if (!vid.canPlayType("application/vnd.apple.mpegurl")) return showError(e);
     }
     if (wvMedia !== wEffectiveMedia()) return;
-    if (!Hls.isSupported()) return showError(new Error("This Discord can't play the stream."));
-    wHls = new Hls({ startPosition: at, maxBufferLength: 40, backBufferLength: 60, enableWorker: false, renderTextTracksNatively: true });
-    wHls.on(Hls.Events.ERROR, (_, d) => {
-      if (!d.fatal) return;
-      if (d.type === Hls.ErrorTypes.MEDIA_ERROR) return wHls.recoverMediaError();
-      if (++wFails > 4) return wBroken();
-      setTimeout(() => wHls && wHls.startLoad(), 1500);
-    });
-    wHls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, wSubs);
-    wHls.on(Hls.Events.AUDIO_TRACKS_UPDATED, wAudioTracks);
-    wHls.loadSource(wvMedia);
-    wHls.attachMedia(vid);
+    if (window.Hls && Hls.isSupported()) {
+      wHls = new Hls({ startPosition: at, maxBufferLength: 40, backBufferLength: 60, enableWorker: false, renderTextTracksNatively: true });
+      wHls.on(Hls.Events.ERROR, (_, d) => {
+        if (!d.fatal) return;
+        if (d.type === Hls.ErrorTypes.MEDIA_ERROR) return wHls.recoverMediaError();
+        if (++wFails > 4) return wBroken();
+        setTimeout(() => wHls && wHls.startLoad(), 1500);
+      });
+      wHls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, wSubs);
+      wHls.on(Hls.Events.AUDIO_TRACKS_UPDATED, wAudioTracks);
+      wHls.loadSource(wvMedia);
+      wHls.attachMedia(vid);
+    } else if (vid.canPlayType("application/vnd.apple.mpegurl")) {
+      vid.src = wvMedia;
+      vid.currentTime = at;
+    } else {
+      return showError(new Error("This Discord can't play the stream."));
+    }
   } else {
     vid.src = wvMedia;
     vid.currentTime = at;

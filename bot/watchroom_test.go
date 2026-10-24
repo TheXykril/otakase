@@ -341,6 +341,74 @@ func TestWatchRoomLanguageReleases(t *testing.T) {
 	}
 }
 
+func TestWatchRoomAddsLanguagesAfterPlaybackStarts(t *testing.T) {
+	main := "https://video.example/en/playlist.m3u8"
+	r := &watchRoom{spent: true, gen: 1, dub: true, provider: "kickassanime",
+		streams: []streamLink{{URL: main}}}
+	b := &bot{}
+	b.watch.cur = r
+	if !b.startStream(r, 0) {
+		t.Fatal("episode did not start")
+	}
+	old := watchResolveAudio
+	watchResolveAudio = func(_ context.Context, _ string, _, _ int, _, _ bool) (streamInfo, error) {
+		return streamInfo{Provider: "kickassanime", AudioVariants: map[string]streamLink{
+			"ja": {URL: "https://video.example/ja/playlist.m3u8"},
+			"de": {URL: "https://video.example/de/playlist.m3u8"},
+		}}, nil
+	}
+	t.Cleanup(func() { watchResolveAudio = old })
+	b.findWatchLanguages(context.Background(), r, 1, "", 1, 1, false, true)
+	for _, lang := range []string{"ja", "de", "sub", "dub"} {
+		if r.audioEntries[lang] == "" {
+			t.Fatalf("missing %s after background discovery", lang)
+		}
+	}
+	if len(r.extraAudioMedia) != 2 {
+		t.Fatalf("got %d language relays", len(r.extraAudioMedia))
+	}
+	previous := r.audioEntries["de"]
+	r.gen++
+	r.audioEntries = map[string]string{}
+	b.findWatchLanguages(context.Background(), r, 1, "", 1, 1, false, true)
+	if r.audioEntries["de"] != "" || previous == "" {
+		t.Fatal("stale language lookup modified a new episode")
+	}
+}
+
+func TestTrimMasterPreservesAllMultilingualTracks(t *testing.T) {
+	// The selected KickAssAnime episode uses ten renditions in one HLS group.
+	master := `#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="Japanese",DEFAULT=YES,LANGUAGE="jpn",URI="ja/playlist.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="English",LANGUAGE="eng",URI="en/playlist.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="German",LANGUAGE="ger",URI="de/playlist.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="Spanish",LANGUAGE="spa",URI="es/playlist.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="French",LANGUAGE="fre",URI="fr/playlist.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="Hindi",LANGUAGE="hin",URI="hi/playlist.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="Italian",LANGUAGE="ita",URI="it/playlist.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="Portuguese",LANGUAGE="por",URI="pt/playlist.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="Tamil",LANGUAGE="tam",URI="ta/playlist.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="Telugu",LANGUAGE="tel",URI="te/playlist.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=3900000,RESOLUTION=1280x720,AUDIO="stereo"
+720/playlist.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=7500000,RESOLUTION=1920x1080,AUDIO="stereo"
+1080/playlist.m3u8
+`
+	for _, dub := range []bool{false, true} {
+		out := trimMaster(master, 720, dub)
+		if strings.Count(out, "#EXT-X-MEDIA:TYPE=AUDIO") != 10 || !strings.Contains(out, "720/playlist.m3u8") {
+			t.Fatalf("lost HLS renditions: %s", out)
+		}
+		want := `NAME="Japanese",DEFAULT=YES`
+		if dub {
+			want = `NAME="English",LANGUAGE="eng",URI="en/playlist.m3u8",DEFAULT=YES`
+		}
+		if !strings.Contains(out, want) {
+			t.Fatalf("wrong default audio: %s", out)
+		}
+	}
+}
+
 func TestWatchAudioLanguage(t *testing.T) {
 	for _, lang := range []string{"ja", "en", "de", "sub", "dub", "track-7"} {
 		if !watchAudioLanguage(lang) { t.Errorf("rejected %q", lang) }
