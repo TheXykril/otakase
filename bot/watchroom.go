@@ -410,7 +410,8 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.audioReleases = nil
 	r.skipIntervals = watchSkipIntervals{}
 	r.skipReady = show.MalID <= 0
-	r.skipSeq = 0
+	// Keep skipSeq monotonic across episodes: a quick next-episode load must
+	// not reuse an old value before the host receives the new playback view.
 	r.skipHoldUntil = time.Time{}
 	r.skipTarget = 0
 	r.setPos(0, false, watchNow())
