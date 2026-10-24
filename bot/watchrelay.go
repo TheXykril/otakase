@@ -283,25 +283,52 @@ func trimMaster(body string, maxHeight int, dub bool) string {
 	}
 	v := pickVariant(vars, maxHeight)
 	out := head
-	preferred := pickAudio(audio, v.audio, dub)
-	for _, a := range audio {
-		if m := hlsGroupID.FindStringSubmatch(a); v.audio != "" && (m == nil || m[1] != v.audio) {
-			continue
-		}
-		// Preserve all available audio tracks so every viewer can select
-		// their own language without fetching the video twice.
-		if hlsDefault.MatchString(a) {
-			if a == preferred {
-				a = hlsDefault.ReplaceAllString(a, "DEFAULT=YES")
-			} else {
-				a = hlsDefault.ReplaceAllString(a, "DEFAULT=NO")
+	// Some providers split languages across HLS audio groups while the
+	// chosen video variant references only one of those groups. Remap
+	// explicit audio rendition URIs into the chosen group so Hls.js can
+	// expose all languages without switching the video rendition.
+	var merged []string
+	seen := map[string]bool{}
+	for pass := 0; pass < 2; pass++ {
+		for _, entry := range audio {
+			group := hlsGroupID.FindStringSubmatch(entry)
+			if v.audio == "" || group == nil { continue }
+			inGroup := group[1] == v.audio
+			if (pass == 0) != inGroup { continue }
+			if !inGroup {
+				// An implicit/muxed audio rendition cannot be transplanted.
+				if !hlsURIAttr.MatchString(entry) { continue }
+				entry = strings.Replace(entry, `GROUP-ID="`+group[1]+`"`, `GROUP-ID="`+v.audio+`"`, 1)
 			}
-		} else if a == preferred {
-			a += ",DEFAULT=YES"
-		} else {
-			a += ",DEFAULT=NO"
+			// The selected group's rendition wins when a language occurs
+			// in multiple encoding groups.
+			key := entry
+			if lang := hlsLanguage.FindStringSubmatch(entry); lang != nil {
+				key = strings.ToLower(lang[1])
+			}
+			if seen[key] { continue }
+			seen[key] = true
+			merged = append(merged, entry)
 		}
-		out = append(out, a)
+	}
+	if v.audio == "" {
+		// A variant without an audio group cannot switch renditions.
+		merged = nil
+	}
+	preferred := pickAudio(merged, v.audio, dub)
+	for _, entry := range merged {
+		if hlsDefault.MatchString(entry) {
+			if entry == preferred {
+				entry = hlsDefault.ReplaceAllString(entry, "DEFAULT=YES")
+			} else {
+				entry = hlsDefault.ReplaceAllString(entry, "DEFAULT=NO")
+			}
+		} else if entry == preferred {
+			entry += ",DEFAULT=YES"
+		} else {
+			entry += ",DEFAULT=NO"
+		}
+		out = append(out, entry)
 	}
 	return strings.Join(append(out, v.inf, v.uri), "\n") + "\n"
 }
