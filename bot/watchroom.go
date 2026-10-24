@@ -48,7 +48,6 @@ const (
 	watchPollWait   = 25 * time.Second
 	watchTick       = 2 * time.Second
 	watchDrift      = 2.0 // seconds the host may be off before everyone is told
-	watchSkipOP     = 85  // seconds a skip of the opening jumps
 	watchLogKeep    = 20
 )
 
@@ -80,7 +79,7 @@ type watchAsk struct {
 	ID   int       `json:"id"`
 	User string    `json:"user"`
 	Name string    `json:"name"`
-	Kind string    `json:"kind"` // pause, play, skip (the opening), next
+	Kind string    `json:"kind"` // pause, play, forward (10s), next
 	At   time.Time `json:"-"`
 }
 
@@ -129,6 +128,13 @@ type watchRoom struct {
 	pos     float64
 	at      time.Time
 	dur     float64
+	autoSkipOP bool // host controls room-wide opening/ending auto-skip
+	autoSkipED bool
+	skipIntervals watchSkipIntervals
+	skipReady bool
+	skipSeq int // incremented when the server seeks past a real skip interval
+	skipTarget float64
+	skipHoldUntil time.Time
 
 	asks []watchAsk
 	askN int
@@ -259,6 +265,15 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 	}
 	r.tick = now
 	r.peak = max(r.peak, len(r.members))
+	if r.phase == "play" && r.playing {
+		if target, ok := watchSkipTarget(r.skipIntervals.match(r.dur), r.position(now), r.dur, r.autoSkipOP, r.autoSkipED); ok {
+			r.setPos(target, true, now)
+			r.skipSeq++
+			r.skipTarget = target
+			r.skipHoldUntil = now.Add(8 * time.Second)
+			r.changed()
+		}
+	}
 
 	var count []string
 	if r.phase == "play" && r.playing && r.dur > 0 {
@@ -393,6 +408,11 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.streams, r.link, r.subs, r.entry, r.audioEntries = nil, 0, nil, "", nil
 	r.provider = ""
 	r.audioReleases = nil
+	r.skipIntervals = watchSkipIntervals{}
+	r.skipReady = show.MalID <= 0
+	r.skipSeq = 0
+	r.skipHoldUntil = time.Time{}
+	r.skipTarget = 0
 	r.setPos(0, false, watchNow())
 	r.dur = 0
 	r.asks = nil
@@ -404,6 +424,20 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.changed()
 	ctx, cancel := context.WithCancel(context.Background())
 	r.torrentCancel = cancel
+	if show.MalID > 0 {
+		go func() {
+			spans, err := watchSkipLookup(ctx, show.MalID, ep)
+			if ctx.Err() != nil { return }
+			if err != nil { log.Printf("watch opening/ending lookup for %d:%d: %v", show.MalID, ep, err) }
+			b.watch.mu.Lock()
+			if b.watch.cur == r && r.gen == gen && r.phase != "over" {
+				r.skipIntervals = spans
+				r.skipReady = true
+				r.changed()
+			}
+			b.watch.mu.Unlock()
+		}()
+	}
 	go func() {
 		info, err := b.watch.infos.get(ctx, cli, show.ID, ep, dub, adult)
 		if err == nil && len(info.Streams) == 0 && len(info.Torrents) > 0 {
@@ -734,6 +768,11 @@ type watchView struct {
 	Media   string        `json:"media,omitempty"`
 	HLS     bool          `json:"hls,omitempty"`
 	AudioMedia map[string]string `json:"audio_media,omitempty"`
+	AutoSkipOP bool `json:"auto_skip_op"`
+	AutoSkipED bool `json:"auto_skip_ed"`
+	SkipReady bool `json:"skip_ready"`
+	SkipTimes watchSkipTimes `json:"skip_times"`
+	SkipSeq int `json:"skip_seq"`
 	AudioOrigins map[string]*watchPlaybackOrigin `json:"audio_origins,omitempty"`
 	Origin *watchPlaybackOrigin `json:"origin,omitempty"`
 	AlternateOrigin *watchPlaybackOrigin `json:"alternate_origin,omitempty"`
@@ -755,7 +794,9 @@ type watchView struct {
 func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) watchView {
 	v := watchView{Ver: r.ver, Room: r.id, Me: user, Host: r.host, IsHost: r.host == user, Staff: staff, Phase: r.phase,
 		Err: r.errText, Adult: r.adult, Show: r.show, Ep: r.ep, Dub: r.dub, Playing: r.playing, Pos: r.position(now),
-		Dur: r.dur, Members: []watchPerson{}, Asks: []watchAsk{}, Max: b.watchMax()}
+		Dur: r.dur, AutoSkipOP: r.autoSkipOP, AutoSkipED: r.autoSkipED,
+		SkipReady: r.skipReady, SkipTimes: r.skipIntervals.match(r.dur), SkipSeq: r.skipSeq,
+		Members: []watchPerson{}, Asks: []watchAsk{}, Max: b.watchMax()}
 	if r.phase == "loading" {
 		v.LoadStep = r.loadStep
 		v.LoadSince = r.loadSince.UnixMilli()
@@ -1354,15 +1395,25 @@ func (b *bot) watchDo(r *watchRoom, act string, pos float64) string {
 			playing = act == "play"
 		}
 		r.setPos(pos, playing, now)
-	case "skip":
+	case "forward":
 		if r.phase != "play" {
 			return "nothing is playing"
 		}
-		p := r.position(now) + watchSkipOP
+		p := r.position(now) + 10
 		if r.dur > 0 {
-			p = math.Min(p, r.dur-1)
+			p = math.Min(p, math.Max(0, r.dur-0.5))
 		}
 		r.setPos(p, r.playing, now)
+	case "op-on", "op-off", "ed-on", "ed-off":
+		if r.phase != "play" {
+			return "nothing is playing"
+		}
+		switch act {
+		case "op-on": r.autoSkipOP = true
+		case "op-off": r.autoSkipOP = false
+		case "ed-on": r.autoSkipED = true
+		case "ed-off": r.autoSkipED = false
+		}
 	case "next", "prev":
 		if r.show == nil {
 			return "no show picked"
@@ -1413,6 +1464,14 @@ func (b *bot) watchBeat(w http.ResponseWriter, r *http.Request) {
 		cur.dur = in.Dur
 		cur.changed()
 	}
+	// The host may report its old video time while the new auto-skip seek
+	// is still on its way through the Activity's state poll. Do not rewind
+	// the whole room with that stale heartbeat.
+	if now.Before(cur.skipHoldUntil) && in.Pos < cur.skipTarget-1 {
+		writeJSON(w, http.StatusOK, map[string]int{"ver": cur.ver})
+		return
+	}
+	if in.Pos >= cur.skipTarget-1 { cur.skipHoldUntil = time.Time{} }
 	drift := math.Abs(cur.position(now) - in.Pos)
 	moved := in.Playing != cur.playing || drift > watchDrift
 	cur.setPos(in.Pos, in.Playing, now)
@@ -1429,7 +1488,7 @@ func (b *bot) watchAskAPI(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !slices.Contains([]string{"pause", "play", "skip", "next"}, in.Kind) {
+	if !slices.Contains([]string{"pause", "play", "forward", "next"}, in.Kind) {
 		apiError(w, http.StatusBadRequest, "unknown request")
 		return
 	}
