@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.39
+
+- Watch Together: restore native HLS playback on supported Discord clients to address silent video after the previous audio change.
+- Watch Together: read audio languages from the selected HLS stream on the bot and provide a separate playable language route for each rendition. The picker works without browser audio-track reporting.
+
 ## 1.30.38
 
 - Watch Together: show embedded HLS audio tracks even when Discord reports native HLS support. Solo Leveling season 2 episode 1 exposes Japanese, English, German, Spanish, French, Hindi, Italian, Portuguese, Tamil, and Telugu in its stream.

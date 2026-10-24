@@ -599,3 +599,72 @@ func TestWatchTorrentRejectsBadHash(t *testing.T) {
 		t.Fatal("invalid torrent hash should fail before launching helper")
 	}
 }
+
+// TestHLSLanguagesForNativePlayback verifies the server, not the browser,
+// enumerates real language renditions and builds independently playable masters.
+func TestHLSLanguagesForNativePlayback(t *testing.T) {
+	master := `#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="English",LANGUAGE="eng",DEFAULT=YES,URI="en/audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="Japanese",LANGUAGE="jpn",DEFAULT=NO,URI="ja/audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="German",LANGUAGE="ger",DEFAULT=NO,URI="de/audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="No address",LANGUAGE="spa",DEFAULT=NO
+#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720,AUDIO="stereo"
+720/index.m3u8
+`
+	codes := hlsAvailableAudio(master)
+	if got := strings.Join(codes, ","); got != "en,ja,de" {
+		t.Fatalf("advertised HLS languages = %q", got)
+	}
+	for _, tt := range []struct{ language, expected string }{
+		{"en", `NAME="English",LANGUAGE="eng",DEFAULT=YES`},
+		{"ja", `NAME="Japanese",LANGUAGE="jpn",DEFAULT=YES`},
+		{"de", `NAME="German",LANGUAGE="ger",DEFAULT=YES`},
+	} {
+		m, _, _ := newWatchMedia(streamLink{URL: "https://media.example/master.m3u8"}, false)
+		m.audio = tt.language
+		base, _ := url.Parse(m.link.URL)
+		out := m.rewritePlaylist(master, base)
+		if !strings.Contains(out, tt.expected) || strings.Count(out, "DEFAULT=YES") != 1 {
+			t.Fatalf("%s master did not select one correct default: %s", tt.language, out)
+		}
+	}
+	if got := hlsAvailableAudio("#EXTM3U\n#EXTINF:10,\na.ts\n"); len(got) != 0 {
+		t.Fatalf("media playlist reported %v", got)
+	}
+}
+
+func TestWatchHLSLanguagesReachRoom(t *testing.T) {
+	master := `#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="English",LANGUAGE="eng",DEFAULT=YES,URI="en/audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="stereo",NAME="Japanese",LANGUAGE="jpn",DEFAULT=NO,URI="ja/audio.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=1280x720,AUDIO="stereo"
+720/index.m3u8
+`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, master)
+	}))
+	defer server.Close()
+	b := &bot{}
+	link := streamLink{URL: server.URL + "/master.m3u8"}
+	media, entry, _ := newWatchMedia(link, true)
+	room := &watchRoom{gen: 7, phase: "play", media: media, entry: entry,
+		streams: []streamLink{link}, audioEntries: map[string]string{"dub": watchMediaPath(media.key, entry)}}
+	b.watch.cur = room
+	b.findWatchHLSTracks(context.Background(), room, 7, media)
+	for _, code := range []string{"en", "ja"} {
+		if room.audioEntries[code] == "" || room.extraAudioMedia[code] == nil ||
+			room.extraAudioMedia[code].audio != code {
+			t.Fatalf("language %q not exposed through watch relay", code)
+		}
+	}
+	if room.audioEntries["dub"] == "" {
+		t.Fatal("existing dub fallback was lost")
+	}
+	// A stale callback must not modify the next episode.
+	room.gen++
+	room.audioEntries = map[string]string{}
+	b.findWatchHLSTracks(context.Background(), room, 7, media)
+	if len(room.audioEntries) != 0 {
+		t.Fatal("stale HLS probe updated a new generation")
+	}
+}
