@@ -727,6 +727,16 @@
   .wbar input[type=range] { padding: 0; accent-color: var(--shu); width: 90px; }
   .wseek { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .wseek input[type=range] { min-width:100px; cursor:pointer; }
+  .wseektrack { flex:1; min-width:100px; position:relative; display:flex; align-items:center; height:24px; }
+  .wseektrack #wpos { flex:1; width:100%; min-width:0; max-width:none; margin:0; accent-color:var(--shu); }
+  .wseektrack .wprog { flex:1; width:100%; }
+  .wskipmarkers { position:absolute; left:7px; right:7px; top:50%; height:4px; transform:translateY(-50%); pointer-events:none; z-index:2; }
+  .wskipband { position:absolute; top:0; height:4px; min-width:2px; border-radius:2px; background:var(--gold); opacity:.45; }
+  .wskipband.ed { background:var(--accent); }
+  .wskipband.active { opacity:1; }
+  .wskipband::before, .wskipband::after { content:""; position:absolute; top:-2px; height:8px; width:2px; background:inherit; }
+  .wskipband::before { left:0; } .wskipband::after { right:0; }
+  .wskipbandlabel { position:absolute; bottom:8px; left:0; font-size:10px; font-weight:700; line-height:1; letter-spacing:.02em; color:var(--text); text-shadow:0 1px 2px var(--tile); opacity:.85; }
   .wseek input[type=range] { flex: 1; width: auto; max-width: none; accent-color: var(--shu); }
   .wprog { flex: 1; height: 4px; border-radius: 99px; background: var(--no); overflow: hidden; }
   .wprog i { display: block; height: 100%; width: 0; background: var(--shu); }
