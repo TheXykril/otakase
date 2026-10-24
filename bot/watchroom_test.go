@@ -306,6 +306,49 @@ func TestTrimMaster(t *testing.T) {
 	}
 }
 
+func TestWatchRoomLanguageReleases(t *testing.T) {
+	b := &bot{}
+	main := "https://video.example/en/playlist.m3u8"
+	room := &watchRoom{
+		spent: true,
+		dub: true,
+		streams: []streamLink{{URL: main}},
+		audioReleases: map[string]streamLink{
+			"en": {URL: main},
+			"ja": {URL: "https://video.example/ja/playlist.m3u8"},
+			"de": {URL: "https://video.example/de/playlist.m3u8"},
+		},
+	}
+	if !b.startStream(room, 0) {
+		t.Fatal("episode did not start")
+	}
+	for _, lang := range []string{"dub", "ja", "de", "sub"} {
+		if room.audioEntries[lang] == "" { t.Fatalf("missing %s audio playlist", lang) }
+	}
+	if len(room.extraAudioMedia) != 2 {
+		t.Fatalf("expected Japanese and German relays, got %d", len(room.extraAudioMedia))
+	}
+	if room.audioEntries["sub"] != room.audioEntries["ja"] {
+		t.Fatal("legacy sub alias did not follow Japanese release")
+	}
+	if room.audioEntries["dub"] == room.audioEntries["ja"] {
+		t.Fatal("separate audio release reused current playlist")
+	}
+	room.finishMedia()
+	if len(room.extraAudioMedia) > 0 {
+		t.Fatal("old language media remained after episode finished")
+	}
+}
+
+func TestWatchAudioLanguage(t *testing.T) {
+	for _, lang := range []string{"ja", "en", "de", "sub", "dub", "track-7"} {
+		if !watchAudioLanguage(lang) { t.Errorf("rejected %q", lang) }
+	}
+	for _, lang := range []string{"", "ja/../../x", "EN", "track-9999", "track-abc", "en-us"} {
+		if watchAudioLanguage(lang) { t.Errorf("accepted invalid route %q", lang) }
+	}
+}
+
 func TestTrimMasterKeepsAudioFromOtherGroups(t *testing.T) {
 	master := `#EXTM3U
 #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="primary",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="en/audio.m3u8"
