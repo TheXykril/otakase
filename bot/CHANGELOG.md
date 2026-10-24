@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.26
+
+- Watch Together: display the current stream's audio language even when audio is muxed into the video, and keep searching for separate language alternatives.
+- Activity: shrink the theater playback overlay and move language choices into a compact popover.
+
 ## 1.30.25
 
 - Watch Together: discover missing dubbed/subbed alternatives even when other audio variants exist, and skip duplicate source URLs.
