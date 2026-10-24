@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.35
+
+- Watch tickets: the Discord server owner can add or remove tickets from the Activity moderation panel. Home Assistant administrators can manage ticket balances from the dashboard.
+- Redeem codes: `/codes mint` supports 1–100 tickets per code, defaulting to one. Cheat-code puzzles award five tickets; existing codes retain their one-ticket reward.
+
 ## 1.30.34
 
 - Watch Together: expose every selectable language in torrent media instead of only Japanese and English, with separate on-demand audio playlists.
