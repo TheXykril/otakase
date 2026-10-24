@@ -60,11 +60,28 @@ async function watchView() {
 
 function wBox(html) {
   const detached = document.body.querySelector(":scope > #wstage");
+  const el = document.getElementById("wbox");
+  if (!el) return;
+  if (detached && wFull) {
+    const next = document.createElement("div");
+    next.innerHTML = html;
+    const nextStage = next.querySelector("#wstage");
+    if (nextStage) {
+      // Keep the fullscreen element itself mounted. Replacing it forces
+      // native fullscreen to exit and can't be undone without another tap.
+      detached.className = nextStage.className;
+      detached.innerHTML = nextStage.innerHTML;
+      const marker = document.createElement("div");
+      marker.id = "wstage-placeholder";
+      nextStage.replaceWith(marker);
+      el.replaceChildren(...next.childNodes);
+      return;
+    }
+  }
   if (detached) detached.remove();
   const marker = document.getElementById("wstage-placeholder");
   if (marker) marker.remove();
-  const el = document.getElementById("wbox");
-  if (el) el.innerHTML = html;
+  el.innerHTML = html;
 }
 
 async function watchJoin() {
@@ -90,6 +107,7 @@ async function watchJoin() {
 // wSet takes a new view of the room and redraws what changed.
 function wSet(v, fromHost) {
   if (!v || where !== "watch") return;
+  const previous = wv;
   const oldAudioMedia = JSON.stringify((wv && wv.audio_media) || {});
   wv = v;
   wvAt = Date.now();
@@ -108,11 +126,17 @@ function wSet(v, fromHost) {
   }
   wChanging = false;
   if (key !== wvKey) {
-    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
-    wFull = false;
-    document.body.classList.remove("wfull");
+    // Episode changes pass through loading, often for several seconds.
+    // Keep the theater shell and native fullscreen element for that transition.
+    const sameShow = previous && previous.show && v.show && previous.show.id === v.show.id;
+    const episodePhase = (phase) => phase === "play" || phase === "loading";
+    const keepTheater = wFull && sameShow && episodePhase(previous.phase) && episodePhase(v.phase);
+    if (wFull && !keepTheater) wFullscreen(false);
+    if (previous && previous.phase === "play" && v.phase !== "play") wDestroy();
+    clearTimeout(wControlsTimer);
     wvKey = key;
     wDraw();
+    if (keepTheater) wRevealControls();
   }
   const elapsedEl = document.getElementById("wloadelapsed");
   if (elapsedEl && v.load_since) {
@@ -138,7 +162,11 @@ function wDraw() {
   } else if (v.phase === "loading") {
     const step = v.load_step || "Finding episode sources";
     const elapsed = v.load_since ? Math.max(0, Math.floor((Date.now() - v.load_since) / 1000)) : 0;
-    stage = `<div class="msg loading"><p><b id="wloadstep">${esc(step)}</b></p><p class="note">Elapsed: <span id="wloadelapsed">${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}</span></p><p class="note">Alternative playback can take several minutes to connect and buffer. The current step updates as preparation advances.</p></div>`;
+    const loadingStage = `<div class="msg loading"><p><b id="wloadstep">${esc(step)}</b></p><p class="note">Elapsed: <span id="wloadelapsed">${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}</span></p><p class="note">Alternative playback can take several minutes to connect and buffer. The current step updates as preparation advances.</p></div>`;
+    stage = wFull
+      ? `<div class="wstage full" id="wstage"><div class="wplayer wloading" id="wplayer">${loadingStage}</div>
+        <button class="btn alt wloadingexit" id="wfull" aria-label="Exit theater mode" title="Exit theater mode">${icon("minimize")}</button></div>`
+      : loadingStage;
   } else {
     stage = `<div class="wstage${wFull ? " full" : ""}" id="wstage"><div class="wplayer" id="wplayer"><video id="wvid" playsinline preload="auto"></video>
       <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div></div>
@@ -151,6 +179,8 @@ function wDraw() {
     <p class="note" id="wsync"></p><div class="row" id="wmore"></div></div>
     <div class="err" id="err"></div>`);
   if (document.getElementById("wpick")) wPicker();
+  const loadingExit = document.getElementById("wloadingexit") || (wv.phase === "loading" && document.getElementById("wfull"));
+  if (loadingExit) loadingExit.onclick = () => { wFullscreen(false); wDraw(); };
   if (document.getElementById("wbar")) {
     wBar();
     const player = document.getElementById("wplayer");
@@ -649,6 +679,7 @@ document.addEventListener("fullscreenchange", () => {
   if (!document.fullscreenElement && wFull && document.getElementById("wstage")) {
     // Leaving real full screen (Esc) leaves the filled window too.
     wFullscreen(false);
+    if (wv && wv.phase === "loading") wDraw();
   }
 });
 
