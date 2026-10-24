@@ -530,7 +530,7 @@ function wBar() {
   const bar = document.getElementById("wbar");
   const v = wv;
   const btn = (id, ic, label, alt = true) => `<button class="btn${alt ? " alt" : ""}" id="${id}" title="${esc(label)}">${icon(ic)}<span>${esc(label)}</span></button>`;
-  const common = `<button class="btn alt" id="wsettings" title="Audio and subtitle languages"><span>Audio &amp; Subtitles</span></button>
+  const common = `<button class="btn alt" id="wsettings" title="Audio and subtitle languages" aria-label="Audio and subtitle languages"><span>Languages</span></button>
     <div class="wsettings" id="wsettingsmenu" hidden><label>Audio language<select id="waudio" aria-label="Audio language"></select></label><label>Subtitles<select id="wsub" aria-label="Subtitle language"></select></label><p class="note" id="wsettingshint"></p></div>
     <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
     <button class="btn alt wfullscreen" id="wfull" title="Toggle theater mode" aria-label="Toggle theater mode" aria-pressed="${wFull}">${icon(wFull ? "minimize" : "maximize")}</button>`;
@@ -639,7 +639,7 @@ function wAudioTracks() {
     select.value = /^(en|eng)(-|$)/.test(wAudioPick) && variants.dub ? "en" :
       /^(ja|jpn)(-|$)/.test(wAudioPick) && variants.sub ? "ja" : "auto";
     document.getElementById("wsettingshint").textContent =
-      wAudioPick !== "auto" && select.value === "auto" ? "Preferred audio unavailable; using an available language." : "";
+      wAudioPick !== "auto" && select.value === "auto" ? "The requested language is not available in the discovered streams." : "Dub and sub options shown here are separate playable streams.";
     return;
   }
   const tracks = wHls ? wHls.audioTracks || [] : [];
@@ -652,7 +652,7 @@ function wAudioTracks() {
     `<option value="${esc((track.lang || "").toLowerCase())}" data-index="${index}">${esc(track.name || track.lang || "Track " + (index + 1))}</option>`).join("");
   if (!tracks.length) {
     select.disabled = true;
-    document.getElementById("wsettingshint").textContent = "This playback only provides one audio track. Other languages will appear when available.";
+    document.getElementById("wsettingshint").textContent = "No alternative audio stream or embedded audio track was found for this episode.";
   } else {
     select.disabled = false;
     select.value = current >= 0 ? (tracks[current].lang || "").toLowerCase() : "auto";
