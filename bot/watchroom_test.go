@@ -306,6 +306,29 @@ func TestTrimMaster(t *testing.T) {
 	}
 }
 
+func TestTrimMasterKeepsAudioFromOtherGroups(t *testing.T) {
+	master := `#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="primary",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="en/audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="alternate",NAME="Japanese",LANGUAGE="ja",URI="ja/audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="alternate",NAME="German",LANGUAGE="de",URI="de/audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="alternate",NAME="English Duplicate",LANGUAGE="en",URI="en/other.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1200000,RESOLUTION=1280x720,AUDIO="primary"
+video/main.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1920x1080,AUDIO="alternate"
+video/hd.m3u8
+`
+	out := trimMaster(master, 720, false)
+	for _, path := range []string{"en/audio.m3u8", "ja/audio.m3u8", "de/audio.m3u8", "video/main.m3u8"} {
+		if !strings.Contains(out, path) {
+			t.Fatalf("audio rendition %q was dropped:\n%s", path, out)
+		}
+	}
+	if strings.Contains(out, "en/other.m3u8") || strings.Contains(out, "video/hd.m3u8") ||
+		strings.Contains(out, `GROUP-ID="alternate"`) {
+		t.Fatalf("master contains duplicate language or incorrect audio group:\n%s", out)
+	}
+}
+
 func TestToWebVTT(t *testing.T) {
 	srt := "1\r\n00:00:01,500 --> 00:00:03,000\r\nHello\r\n"
 	if got := toWebVTT(srt); !strings.HasPrefix(got, "WEBVTT") || !strings.Contains(got, "00:00:01.500 --> 00:00:03.000") {
