@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.32
+
+- Watch Together: keep theater mode, including native fullscreen, active while changing episodes and loading the next one; show progress and an exit button without leaving theater.
+
 ## 1.30.31
 
 - Watch Together: matching expand and collapse theater icons.
