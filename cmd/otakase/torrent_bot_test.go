@@ -115,7 +115,7 @@ func TestBotSegmentsIntegration(t *testing.T) {
 		}
 	}
 	dub, err := probeBotMedia(ctx, source, "dub")
- if err != nil { t.Fatal(err) }
+ if err != nil || dub.audio != 1 { t.Fatalf("dub track: %+v %v", dub, err) }
  primary, variants, err := probeBotMediaVariants(ctx, source, "sub")
  if err != nil || primary.audio != m.audio {
   t.Fatalf("multi-audio probe: %+v %v", primary, err)
