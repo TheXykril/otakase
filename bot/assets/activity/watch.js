@@ -147,6 +147,7 @@ function wSet(v, fromHost) {
   wAsks();
   wSyncLine();
   if (oldAudioMedia !== JSON.stringify(v.audio_media || {})) wAudioTracks();
+  wUpdateOrigin();
   if (v.media && wEffectiveMedia() !== wvMedia) wLoad();
   else if (fromHost) wApply(true);
 }
@@ -582,9 +583,11 @@ function wBar() {
   const bar = document.getElementById("wbar");
   const v = wv;
   const btn = (id, ic, label, alt = true) => `<button class="btn${alt ? " alt" : ""}" id="${id}" title="${esc(label)}">${icon(ic)}<span>${esc(label)}</span></button>`;
+  const origin = v.origin ? '<span class="worigin" id="worigin"></span>' : "";
   const common = `<button class="btn alt" id="wsettings" title="Audio and subtitle languages" aria-label="Audio and subtitle languages"><span>Languages</span></button>
     <div class="wsettings" id="wsettingsmenu" hidden><label>Audio language<select id="waudio" aria-label="Audio language"></select></label><label>Subtitles<select id="wsub" aria-label="Subtitle language"></select></label><p class="note" id="wsettingshint"></p></div>
     <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
+    ${origin}
     <button class="btn alt wfullscreen" id="wfull" title="Toggle theater mode" aria-label="Toggle theater mode" aria-pressed="${wFull}">${icon(wFull ? "minimize" : "maximize")}</button>`;
   if (v.is_host) {
     bar.innerHTML = `<div class="wseek"><span id="wcur">0:00</span><input type="range" id="wpos" min="0" max="1" step="0.1" value="0" aria-label="Position"><span id="wdur">0:00</span></div>
@@ -618,9 +621,34 @@ function wBar() {
   document.getElementById("wfull").onclick = () => wFullscreen(!wFull);
   document.getElementById("wsettings").onclick = () => { const menu = document.getElementById("wsettingsmenu"); menu.hidden = !menu.hidden; };
   document.getElementById("wsub").onchange = (e) => { wSubPick = e.target.value; wSettingsDirty = true; wSubs(); wSaveLanguages(); };
-  document.getElementById("waudio").onchange = (e) => { wAudioPick = e.target.value; wSettingsDirty = true; wAudioTracks(); wSaveLanguages(); if (wv.audio_media && wEffectiveMedia() !== wvMedia) wLoad(); };
+  document.getElementById("waudio").onchange = (e) => { wAudioPick = e.target.value; wSettingsDirty = true; wAudioTracks(); wSaveLanguages(); wUpdateOrigin(); if (wv.audio_media && wEffectiveMedia() !== wvMedia) wLoad(); };
   wAudioTracks();
   wSubs();
+  wUpdateOrigin();
+}
+
+// Update the private source hint when the viewer switches to a separate
+// audio release. The server only supplies these details to developers/admins.
+function wUpdateOrigin() {
+  const indicator = document.getElementById("worigin");
+  if (!indicator || !wv) return;
+  const alternate = wv.alternate_origin;
+  const media = wv.audio_media || {};
+  const origin = alternate && media[alternate.mode] === wEffectiveMedia()
+    ? alternate : wv.origin;
+  if (!origin) {
+    indicator.hidden = true;
+    return;
+  }
+  const names = { anikoto: "Anikoto", kickassanime: "KickAssAnime",
+    anizone: "AniZone", anipub: "AniPub", anineko: "AniNeko",
+    nyaa: "Nyaa", sukebei: "Sukebei", anidb: "AniDB" };
+  const provider = names[String(origin.provider || "").toLowerCase()]
+    || origin.provider || "Unknown";
+  indicator.hidden = false;
+  indicator.textContent = "via " + provider + (origin.link ? " · #" + origin.link : "");
+  indicator.title = provider + (origin.host ? " · " + origin.host : "")
+    + (origin.link ? " · link " + origin.link : "");
 }
 
 // Reveal the overlay controls on touch, then hide them while video is playing.
