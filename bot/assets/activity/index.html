@@ -796,17 +796,17 @@
   .sndtip { right:max(66px,calc(62px + var(--discord-safe-area-inset-right,0px))); bottom:max(120px,calc(32px + var(--discord-safe-area-inset-bottom,0px))); }
 }
 
-/* Floating controls, kept clear of Discord's mobile overlays. */
+/* Activity controls live in a dedicated row, outside the video. */
 #activitytools {
-  position:fixed;
-  z-index:40;
-  right:max(16px,env(safe-area-inset-right,0px));
-  bottom:max(18px,calc(12px + env(safe-area-inset-bottom,0px)));
+  position:relative;
+  z-index:3;
+  max-width:880px;
+  margin:0 auto;
+  padding:12px 16px 0;
   display:flex;
-  flex-direction:row;
+  justify-content:flex-end;
   align-items:center;
   gap:10px;
-  pointer-events:none;
 }
 #activitytools:empty { display:none; }
 #activitytools .adm, #activitytools .snd {
@@ -814,27 +814,27 @@
   top:auto; right:auto; bottom:auto;
   flex:0 0 40px;
   width:40px; height:40px;
-  pointer-events:auto;
+  box-shadow:none;
 }
 #activitytools .sndtip {
   position:absolute;
-  right:0;
-  bottom:calc(100% + 8px);
-  top:auto;
+  top:100%; right:16px; bottom:auto;
   white-space:nowrap;
 }
 @media (pointer:coarse) and (orientation:portrait) {
-  #activitytools {
-    right:max(16px,calc(12px + var(--discord-safe-area-inset-right,0px)));
-    bottom:max(96px,calc(76px + var(--discord-safe-area-inset-bottom,0px)));
-  }
+  #activitytools { padding-top:max(92px,calc(76px + var(--discord-safe-area-inset-top,0px))); }
 }
 @media (pointer:coarse) and (orientation:landscape) {
-  #activitytools {
-    right:max(112px,calc(90px + var(--discord-safe-area-inset-right,0px)));
-    bottom:max(32px,calc(20px + var(--discord-safe-area-inset-bottom,0px)));
-  }
+  #activitytools { max-width:none; padding-right:max(110px,calc(24px + var(--discord-safe-area-inset-right,0px))); }
 }
+/* Compact video-first controls; language choices live in the settings menu. */
+.wbar .row { flex-wrap:wrap; }
+.wbar .row .btn { flex:0 0 auto; }
+.wbar .row .btn span { display:none; }
+.wbar .row #wsettings span { display:inline; }
+.wbar .wsettings { position:relative; }
+.wstage.full { height:100dvh; }
+.wstage.full .wbar { max-height:min(55dvh,360px); }
 /* No still available: text-first layout instead of a blank video frame. */
 .wepcard.noimage { min-height:96px; justify-content:center; }
 .wepcard.noimage .wepvisual { display:none; }

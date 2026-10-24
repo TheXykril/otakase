@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.24
+
+- Activity: return moderation and sound controls to a dedicated non-floating row.
+- Watch Together: make player controls more compact and clarify when separate dubbed/subbed streams are available.
+
 ## 1.30.23
 
 - Activity: restore floating moderation and sound controls with mobile safe-area positioning.
