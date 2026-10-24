@@ -179,7 +179,7 @@ function wDraw() {
     <p class="note" id="wsync"></p><div class="row" id="wmore"></div></div>
     <div class="err" id="err"></div>`);
   if (document.getElementById("wpick")) wPicker();
-  const loadingExit = document.getElementById("wloadingexit") || (wv.phase === "loading" && document.getElementById("wfull"));
+  const loadingExit = v.phase === "loading" && wFull && document.getElementById("wfull");
   if (loadingExit) loadingExit.onclick = () => { wFullscreen(false); wDraw(); };
   if (document.getElementById("wbar")) {
     wBar();
@@ -476,7 +476,7 @@ async function wLoad() {
   }
   vid.onloadedmetadata = () => wSubs();
   vid.onwaiting = () => { document.getElementById("wspin").hidden = false; if (wv.is_host) wBeatNow(); };
-  vid.onplaying = () => { document.getElementById("wspin").hidden = true; if (wv.is_host) wBeatNow(); };
+  vid.onplaying = () => { document.getElementById("wspin").hidden = true; if (wv.is_host) wBeatNow(); if (wFull) wRevealControls(); };
   vid.oncanplay = () => (document.getElementById("wspin").hidden = true);
   vid.onerror = () => wBroken();
   vid.onended = () => {
