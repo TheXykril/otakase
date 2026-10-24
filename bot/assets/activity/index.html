@@ -713,6 +713,9 @@
   .wsettings select { width:100%; max-width:none; }
   .wsettings p { grid-column:1/-1; margin:0; }
   .wbarlabel { color:var(--muted); display:inline-flex; align-items:center; font-size:12px; font-weight:700; }
+  .worigin { color:var(--muted); opacity:.7; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:175px; cursor:help; }
+  .worigin[hidden] { display:none; }
+  @media (max-width:520px) { .worigin { max-width:108px; font-size:10px; } }
   .wbar .wfullscreen { margin-left:auto; }
   .wbar select, .wbar input[type=range] { font: inherit; font-size: 13px; color: var(--text); background: var(--tile); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; max-width: 160px; }
   .wbar input[type=range] { padding: 0; accent-color: var(--shu); width: 90px; }
