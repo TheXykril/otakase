@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Watch tickets: server owners can add or remove tickets from the Activity moderation panel; Home Assistant dashboard provides ticket balance controls and an account list.
+- Redeem codes: `/codes mint` now sets tickets per code (1 to 100, default 1). Puzzle-hunt codes award five tickets, while older codes retain their original one-ticket reward.
+
 ## 1.30.33
 
 - Watch Together: show a small playback-provider indicator only to developers and administrators, with the selected stream host and fallback number on hover. Regular members receive no provider details.
