@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestWatchSkipIntervalsMatchRelease(t *testing.T) {
@@ -106,5 +107,54 @@ func TestLookupWatchSkipV2AndFallback(t *testing.T) {
 	}
 	if len(seen) != 2 || seen[1] != "/v1/skip-times/154587/3" {
 		t.Fatalf("v1 fallback wasn't used: %v", seen)
+	}
+}
+
+func TestWatchRoomAutoSkipAndForwardControls(t *testing.T) {
+	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	oldClock := watchNow
+	watchNow = func() time.Time { return now }
+	t.Cleanup(func() { watchNow = oldClock })
+	room := &watchRoom{
+		id: "room", opened: now, phase: "play", playing: true,
+		pos: 90, at: now, dur: 1440, autoSkipOP: true,
+		members: map[string]*watchMember{"host": {name: "Host", seen: now}},
+		skipIntervals: watchSkipIntervals{OP: []watchSkipSpan{{Start: 74, End: 162}}},
+	}
+	b := &bot{}
+	b.watch.cur = room
+	if !b.watchStep(room, now) || room.skipSeq != 1 || room.pos != 162 {
+		t.Fatalf("opening wasn't skipped for the whole room: pos=%v seq=%v", room.pos, room.skipSeq)
+	}
+	now = now.Add(2 * time.Second)
+	b.watchStep(room, now)
+	if room.skipSeq != 1 {
+		t.Fatal("same opening skipped repeatedly")
+	}
+	if err := b.watchDo(room, "op-off", -1); err != "" || room.autoSkipOP {
+		t.Fatalf("op toggle off: %v", err)
+	}
+	if err := b.watchDo(room, "seek", 90); err != "" {
+		t.Fatalf("rewind: %v", err)
+	}
+	now = now.Add(2 * time.Second)
+	b.watchStep(room, now)
+	if room.skipSeq != 1 {
+		t.Fatal("disabled automatic skipping still sought forward")
+	}
+	if err := b.watchDo(room, "forward", -1); err != "" || room.pos < 100 || room.pos > 103 {
+		t.Fatalf("+10s forward wrong: pos=%v err=%v", room.pos, err)
+	}
+	if err := b.watchDo(room, "ed-on", -1); err != "" || !room.autoSkipED {
+		t.Fatalf("ed toggle on: %v", err)
+	}
+	room.skipIntervals.ED = []watchSkipSpan{{Start: 1220, End: 1305}}
+	if err := b.watchDo(room, "seek", 1228); err != "" {
+		t.Fatalf("seek to ending: %v", err)
+	}
+	now = now.Add(2 * time.Second)
+	b.watchStep(room, now)
+	if room.skipSeq != 2 || room.pos != 1305 {
+		t.Fatalf("ending wasn't skipped: pos=%v seq=%v", room.pos, room.skipSeq)
 	}
 }
