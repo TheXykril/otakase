@@ -11,6 +11,71 @@ type watchLanguagePreference struct {
 	Subtitles string `json:"subtitles"`
 }
 
+// These account-wide defaults apply only when the player uses Automatic.
+type watchPlaybackPreferences struct {
+	Audio       string `json:"audio"`
+	BackupAudio string `json:"backup_audio"`
+	Subtitles   string `json:"subtitles"`
+}
+
+func watchDefaultPreferences() watchPlaybackPreferences {
+	return watchPlaybackPreferences{Audio: "auto", BackupAudio: "auto", Subtitles: "auto"}
+}
+
+func watchPreferredLanguage(value string, subtitles bool) bool {
+	// Container track indices are episode-specific and must not become
+	// account-wide preferences.
+	if value == "off" { return subtitles }
+	return value == "auto" || watchLanguageCode.MatchString(value)
+}
+
+func watchNormalizePreferences(p watchPlaybackPreferences) watchPlaybackPreferences {
+	normal := watchDefaultPreferences()
+	if watchPreferredLanguage(p.Audio, false) { normal.Audio = p.Audio }
+	if watchPreferredLanguage(p.BackupAudio, false) { normal.BackupAudio = p.BackupAudio }
+	if watchPreferredLanguage(p.Subtitles, true) { normal.Subtitles = p.Subtitles }
+	if normal.Audio == "auto" || normal.Audio == normal.BackupAudio { normal.BackupAudio = "auto" }
+	return normal
+}
+
+func (b *bot) watchPreferencesGet(w http.ResponseWriter, r *http.Request) {
+	user := b.actUser(w, r)
+	if user == "" { return }
+	var prefs watchPlaybackPreferences
+	b.store.view(func(d *storeData) { prefs = watchNormalizePreferences(d.WatchPreferences[user]) })
+	writeJSON(w, http.StatusOK, prefs)
+}
+
+func (b *bot) watchPreferencesSet(w http.ResponseWriter, r *http.Request) {
+	user := b.actUser(w, r)
+	if user == "" { return }
+	if !watchActLimit.allow(user, watchNow()) {
+		apiError(w, http.StatusTooManyRequests, "slow down")
+		return
+	}
+	var p watchPlaybackPreferences
+	if !readJSON(w, r, 4<<10, &p) { return }
+	p.Audio = strings.ToLower(strings.TrimSpace(p.Audio))
+	p.BackupAudio = strings.ToLower(strings.TrimSpace(p.BackupAudio))
+	p.Subtitles = strings.ToLower(strings.TrimSpace(p.Subtitles))
+	if !watchPreferredLanguage(p.Audio, false) ||
+		!watchPreferredLanguage(p.BackupAudio, false) ||
+		!watchPreferredLanguage(p.Subtitles, true) {
+		apiError(w, http.StatusBadRequest, "invalid language preference")
+		return
+	}
+	p = watchNormalizePreferences(p)
+	b.store.update(func(d *storeData) {
+		if d.WatchPreferences == nil { d.WatchPreferences = make(map[string]watchPlaybackPreferences) }
+		d.WatchPreferences[user] = p
+		// Choosing account-wide defaults selects Automatic in the player.
+		// A later manual player selection still overrides these defaults.
+		if d.WatchLanguages == nil { d.WatchLanguages = make(map[string]watchLanguagePreference) }
+		d.WatchLanguages[user] = watchLanguagePreference{Audio: "auto", Subtitles: "auto"}
+	})
+	writeJSON(w, http.StatusOK, p)
+}
+
 var watchLanguageCode = regexp.MustCompile(`^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,2}$`)
 
 func watchValidLanguage(value string, subtitles bool) bool {

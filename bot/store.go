@@ -137,6 +137,7 @@ type storeData struct {
 	// Members who don't want the watch room to move their lists on.
 	WatchNoSync map[string]bool `json:"watch_no_sync,omitempty"`
 	WatchLanguages map[string]watchLanguagePreference `json:"watch_languages,omitempty"`
+	WatchPreferences map[string]watchPlaybackPreferences `json:"watch_preferences,omitempty"`
 	// The last watch rooms, newest last, for the dashboard and the log.
 	WatchRooms []watchRoomLog `json:"watch_rooms,omitempty"`
 	// MyAnimeList links by Discord user id, see mal.go.

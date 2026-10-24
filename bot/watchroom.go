@@ -885,7 +885,8 @@ type watchView struct {
 	Asks    []watchAsk    `json:"asks"`
 	Sync    bool          `json:"sync"`
 	Linked  []string      `json:"linked,omitempty"`
-	Languages watchLanguagePreference `json:"languages"` // "AniList", "MAL"
+	Languages watchLanguagePreference `json:"languages"`
+	Preferences watchPlaybackPreferences `json:"preferences"`
 	Max     int           `json:"max"`
 }
 
@@ -948,6 +949,7 @@ func (b *bot) watchExtras(v *watchView, user string) {
 			if watchValidLanguage(p.Audio, false) { v.Languages.Audio = p.Audio }
 			if watchValidLanguage(p.Subtitles, true) { v.Languages.Subtitles = p.Subtitles }
 		}
+		v.Preferences = watchNormalizePreferences(d.WatchPreferences[user])
 		if l, ok := d.AniList[user]; ok && l.Verified && l.Token != "" {
 			v.Linked = append(v.Linked, "AniList")
 		}
@@ -973,6 +975,8 @@ func init() {
 	apiHandle("POST /activity/api/watch/take", (*bot).watchTake)
 	apiHandle("POST /activity/api/watch/sync", (*bot).watchSync)
 	apiHandle("POST /activity/api/watch/languages", (*bot).watchLanguageSettings)
+	apiHandle("GET /activity/api/watch/preferences", (*bot).watchPreferencesGet)
+	apiHandle("POST /activity/api/watch/preferences", (*bot).watchPreferencesSet)
 	apiHandle("POST /activity/api/watch/end", (*bot).watchEnd)
 	apiHandle("GET /activity/api/watch/episodes", (*bot).watchEpisodes)
 	apiHandle("GET /activity/api/watch/cover", (*bot).watchCover)
