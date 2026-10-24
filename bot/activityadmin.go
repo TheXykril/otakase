@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -131,6 +132,170 @@ func (b *bot) discordStaff(user string) bool {
 		}
 	}
 	return false
+}
+
+// isGuildOwner grants ticket management only to the Discord server owner.
+func (b *bot) isGuildOwner(user string) bool {
+	if user == "" || b.s == nil || b.s.State == nil {
+		return false
+	}
+	g, err := b.s.State.Guild(b.cfg.GuildID)
+	return err == nil && g != nil && g.OwnerID == user
+}
+
+var ticketUserID = regexp.MustCompile(`^[0-9]{17,20}package main
+
+import (
+	"fmt"
+	"math/rand/v2"
+	"net/http"
+	"regexp"
+	"slices"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/bwmarrin/discordgo"
+)
+
+// Admin powers in the games Activity. Staff (a staff role, Manage Server,
+// Moderate Members or Administrator) get a shield menu in every room,
+// whoever hosts it: start or end a game, pause, skip a round, void a win,
+// sit someone out until the next game, hide their wrong answers, clear a
+// drawing, fix points and bench members from games for a while (also from
+// the dashboard and /game-ban).
+//
+// The same menu has harmless pranks. They only change what one screen
+// shows or who a party game picks, and they end when the room goes back to
+// the lobby or a new game starts after one finished: nobody loses points or
+// data to a prank. Moderation steps are logged to staff; pranks are not,
+// so they stay a surprise.
+
+const (
+	gameAdminCache = 2 * time.Minute
+	dodgeTime      = 30 * time.Second
+	fxKeep         = 15 * time.Second
+	bombRigMax     = 40 * time.Second
+	gameBanMax     = 30 * 24 * time.Hour
+)
+
+// kkTrash is what Koi-Koi bots say when an admin lets them talk back.
+var kkTrash = []string{
+	"Is that really the card you wanted?",
+	"My grandma plays faster than this.",
+	"I've seen better hands at a sushi conveyor belt.",
+	"Koi-koi? More like koi-oh-no.",
+	"Take your time. I'm ageing like fine sake.",
+	"That move was... a choice.",
+	"Bold. Wrong, but bold.",
+	"I'm not even trying.",
+	"You call that a combo?",
+	"Even the willow card feels sorry for you.",
+	"Did you shuffle your brain too?",
+	"I'd say good luck, but you'll need more than luck.",
+}
+
+// sillyHints are the fake hints a prank sends when the admin types none.
+var sillyHints = []string{
+	"It's Shrek.",
+	"The main character is a toaster.",
+	"Think harder. No, harder.",
+	"It aired on a Tuesday. Probably.",
+	"The answer has letters in it.",
+	"Your mum watched this one.",
+	"It's the one with the guy.",
+	"Starts with a vowel, or a consonant.",
+}
+
+// ── Who is staff ──
+
+// isGameAdmin is the staff check, swapped in tests.
+var isGameAdmin = (*bot).discordStaff
+
+var gameAdmins struct {
+	sync.Mutex
+	m map[string]adminSeen
+}
+
+type adminSeen struct {
+	ok bool
+	at time.Time
+}
+
+// isAdmin reports whether user may use the admin menu, from a short cache.
+// Call it without holding the rooms' lock: a miss asks Discord.
+func (b *bot) isAdmin(user string) bool {
+	if user == "" {
+		return false
+	}
+	now := time.Now()
+	gameAdmins.Lock()
+	s, ok := gameAdmins.m[user]
+	gameAdmins.Unlock()
+	if ok && now.Sub(s.at) < gameAdminCache {
+		return s.ok
+	}
+	yes := isGameAdmin(b, user)
+	gameAdmins.Lock()
+	if gameAdmins.m == nil {
+		gameAdmins.m = map[string]adminSeen{}
+	}
+	gameAdmins.m[user] = adminSeen{yes, now}
+	gameAdmins.Unlock()
+	return yes
+}
+
+// discordStaff reports whether a member is the owner, has a staff role, or
+// a role that can manage the server or moderate members.
+func (b *bot) discordStaff(user string) bool {
+	if b.s == nil || b.cfg.GuildID == "" {
+		return false
+	}
+	m, err := b.s.State.Member(b.cfg.GuildID, user)
+	if err != nil || m == nil {
+		if m, err = b.s.GuildMember(b.cfg.GuildID, user); err != nil || m == nil {
+			return false
+		}
+	}
+	g, _ := b.s.State.Guild(b.cfg.GuildID)
+	if g != nil && g.OwnerID == user {
+		return true
+	}
+	const staffPerms = discordgo.PermissionAdministrator | discordgo.PermissionManageGuild | discordgo.PermissionModerateMembers
+	for _, id := range m.Roles {
+		if contains(b.cfg.StaffRoles, id) {
+			return true
+		}
+		if g == nil {
+			continue
+		}
+		for _, r := range g.Roles {
+			if r.ID == id && r.Permissions&staffPerms != 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+)
+
+// adjustWatchTickets clamps removal at zero and returns the resulting balance.
+func (b *bot) adjustWatchTickets(user string, delta int) int {
+	balance := 0
+	b.store.update(func(d *storeData) {
+		if d.WatchTickets == nil {
+			d.WatchTickets = map[string]int{}
+		}
+		balance = max(0, d.WatchTickets[user]+delta)
+		if balance == 0 {
+			delete(d.WatchTickets, user)
+		} else {
+			d.WatchTickets[user] = balance
+		}
+	})
+	return balance
 }
 
 // setAdmin remembers whether a member is staff. Hold the lock.
@@ -296,6 +461,7 @@ type adminMember struct {
 }
 
 type adminView struct {
+	Owner    bool          `json:"owner,omitempty"`
 	Members  []adminMember `json:"members"`
 	ImpRig   string        `json:"imp_rig,omitempty"`
 	BombRig  string        `json:"bomb_rig,omitempty"`
@@ -464,7 +630,7 @@ func (b *bot) adminViewFill(r *togetherRoom, v *togetherView, user string, now t
 		return
 	}
 	a := &adminView{Members: []adminMember{}, ImpRig: r.impRig, BombRig: r.bombRig, Trash: r.trash, Swap: r.swap != nil, Roulette: r.roulette,
-		Locked: r.locked, Off: v.Off, Games: offable}
+		Locked: r.locked, Off: v.Off, Games: offable, Owner: b.isGuildOwner(user)}
 	if a.Off == nil {
 		a.Off = []string{}
 	}
@@ -545,6 +711,22 @@ func (b *bot) togetherAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 	if !b.isAdmin(user) {
 		apiError(w, http.StatusForbidden, "only staff can do that")
+		return
+	}
+	// Ticket balances belong to the server, not a particular room.
+	if in.Kind == "tickets" {
+		if !b.isGuildOwner(user) {
+			apiError(w, http.StatusForbidden, "only the server owner can change tickets")
+			return
+		}
+		if !ticketUserID.MatchString(in.Target) || in.N == 0 || in.N < -100 || in.N > 100 {
+			apiError(w, http.StatusBadRequest, "enter a Discord user ID and 1 to 100 tickets")
+			return
+		}
+		before := b.watchTickets(in.Target)
+		balance := b.adjustWatchTickets(in.Target, in.N)
+		b.adminNote(user, in.Target, fmt.Sprintf("changed %%s watch tickets from %d to %d", before, balance))
+		writeJSON(w, http.StatusOK, map[string]int{"balance": balance})
 		return
 	}
 	// Bans and points live outside the room.
