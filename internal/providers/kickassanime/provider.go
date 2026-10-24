@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers"
@@ -115,7 +116,12 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 	if err := requireLocale(id, locale, mode); err != nil {
 		return nil, nil, err
 	}
+	return episodeURLForLocale(id, epNo, locale)
+}
 
+// episodeURLForLocale resolves a listed language without re-fetching show
+// details for each individual language.
+func episodeURLForLocale(id string, epNo int, locale string) ([]string, map[string]providers.StreamPlaybackHint, error) {
 	listing, err := fetchEpisodes(id, locale, epNo)
 	if err != nil {
 		return nil, nil, err
@@ -183,4 +189,60 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 		return nil, nil, fmt.Errorf("no playable server for episode %d: %w", epNo, lastErr)
 	}
 	return nil, nil, fmt.Errorf("no playable server for episode %d", epNo)
+}
+
+
+// AudioVariant is a separately indexed language release with the headers it
+// requires. The Activity can serve it beside the initially selected stream.
+type AudioVariant struct {
+	URL  string
+	Hint providers.StreamPlaybackHint
+}
+
+// EpisodeAudioVariants looks up the actual episode in each language the show
+// lists. Do not label a language as available just because the show lists its
+// locale: some episodes do not have a playable release in that language.
+func EpisodeAudioVariants(showID string, episode int, maxWait time.Duration) map[string]AudioVariant {
+	variants := map[string]AudioVariant{}
+	show, err := fetchShow(showID)
+	if err != nil { return variants }
+	locales := make(map[string]string)
+	for _, locale := range show.Locales {
+		lang := strings.ToLower(strings.SplitN(strings.ReplaceAll(locale, "_", "-"), "-", 2)[0])
+		if len(lang) != 2 { continue }
+		legal := true
+		for _, ch := range lang {
+			if ch < 'a' || ch > 'z' { legal = false }
+		}
+		if legal && locales[lang] == "" && len(locales) < 16 {
+			locales[lang] = locale
+		}
+	}
+	if len(locales) == 0 { return variants }
+	type answer struct { lang string; value AudioVariant }
+	results := make(chan answer, len(locales))
+	gate := make(chan struct{}, 4)
+	for lang, locale := range locales {
+		go func(lang, locale string) {
+			gate <- struct{}{}
+			defer func(){ <-gate }()
+			links, hints, err := episodeURLForLocale(showID, episode, locale)
+			if err != nil || len(links) == 0 { results <- answer{}; return }
+			results <- answer{lang: lang, value: AudioVariant{URL: links[0], Hint: hints[links[0]]}}
+		}(lang, locale)
+	}
+	if maxWait <= 0 { maxWait = 5*time.Second }
+	timer := time.NewTimer(maxWait)
+	defer timer.Stop()
+	for remaining := len(locales); remaining > 0; remaining-- {
+		select {
+		case result := <-results:
+			if result.lang != "" && result.value.URL != "" {
+				variants[result.lang] = result.value
+			}
+		case <-timer.C:
+			return variants
+		}
+	}
+	return variants
 }
