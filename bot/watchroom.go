@@ -120,6 +120,8 @@ type watchRoom struct {
 	old           *watchMedia // the episode before, still served for a moment
 	entry         string
 	audioEntries map[string]string
+	audioReleases map[string]streamLink
+	extraAudioMedia map[string]*watchMedia
 	alternateMedia *watchMedia
 	subs          []watchSub
 
@@ -376,6 +378,7 @@ func (r *watchRoom) finishMedia() {
 	r.old, r.media = r.media, nil
 	r.alternateMedia = nil
 	r.alternateOrigin = nil
+	r.extraAudioMedia = nil
 }
 
 // ── Episodes ──
@@ -389,6 +392,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.finishMedia()
 	r.streams, r.link, r.subs, r.entry, r.audioEntries = nil, 0, nil, "", nil
 	r.provider = ""
+	r.audioReleases = nil
 	r.setPos(0, false, watchNow())
 	r.dur = 0
 	r.asks = nil
@@ -444,6 +448,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 			return
 		}
 		r.streams = info.Streams
+		r.audioReleases = info.AudioVariants
 		r.provider = info.Provider
 		// Shown as it plays: a show without a dub plays subbed.
 		r.dub = info.Mode == "dub"
@@ -543,12 +548,12 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	r.audioEntries = nil
 	if u, err := url.Parse(r.streams[k].URL); err == nil && u.Hostname() == "127.0.0.1" && u.Query().Get("languages") != "" {
 		r.audioEntries = map[string]string{}
-		for _, mode := range strings.Split(u.Query().Get("languages"), ",") {
-			if mode != "sub" && mode != "dub" { continue }
+		for _, language := range strings.Split(u.Query().Get("languages"), ",") {
+			if !watchAudioLanguage(language) { continue }
 			variant := *u
-			variant.Path = "/" + mode + "/playlist.m3u8"
+			variant.Path = "/" + language + "/playlist.m3u8"
 			variant.RawQuery = ""
-			r.audioEntries[mode] = watchMediaPath(m.key, m.add(variant.String(), "list"))
+			r.audioEntries[language] = watchMediaPath(m.key, m.add(variant.String(), "list"))
 		}
 	}
 	// A muxed video may have audio without advertising separate tracks.
@@ -560,6 +565,25 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	if r.dub { currentMode = "dub" }
 	if _, ok := r.audioEntries[currentMode]; !ok {
 		r.audioEntries[currentMode] = watchMediaPath(m.key, entry)
+	}
+	// Some streaming providers publish each audio language as a different
+	// episode URL. Keep these relays available alongside the selected stream.
+	for language, link := range r.audioReleases {
+		if !watchAudioLanguage(language) || link.URL == "" || link.URL == r.streams[k].URL {
+			continue
+		}
+		if _, exists := r.audioEntries[language]; exists { continue }
+		other, otherEntry, _ := newWatchMedia(link, language == "en")
+		if r.extraAudioMedia == nil { r.extraAudioMedia = map[string]*watchMedia{} }
+		r.extraAudioMedia[language] = other
+		path := watchMediaPath(other.key, otherEntry)
+		r.audioEntries[language] = path
+		// Legacy selections and background sub/dub discovery use these aliases.
+		alias := ""
+		if language == "ja" { alias = "sub" } else if language == "en" { alias = "dub" }
+		if alias != "" {
+			if _, exists := r.audioEntries[alias]; !exists { r.audioEntries[alias] = path }
+		}
 	}
 	for n, s := range r.streams[k].Subtitles {
 		label := s.Label
@@ -576,6 +600,26 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	r.setPos(0, true, now)
 	r.changed()
 	return true
+}
+
+// Only allow audio codes emitted by the helper, never arbitrary URL paths.
+func watchAudioLanguage(code string) bool {
+	if code == "sub" || code == "dub" { return true }
+	if len(code) == 2 {
+		for _, ch := range code {
+			if ch < 'a' || ch > 'z' { return false }
+		}
+		return true
+	}
+	if strings.HasPrefix(code, "track-") {
+		ordinal := strings.TrimPrefix(code, "track-")
+		if len(ordinal) == 0 || len(ordinal) > 3 { return false }
+		for _, ch := range ordinal {
+			if ch < '0' || ch > '9' { return false }
+		}
+		return true
+	}
+	return false
 }
 
 func watchMediaPath(key, id string) string { return "api/watch/media/" + key + "/" + id }
@@ -690,6 +734,7 @@ type watchView struct {
 	Media   string        `json:"media,omitempty"`
 	HLS     bool          `json:"hls,omitempty"`
 	AudioMedia map[string]string `json:"audio_media,omitempty"`
+	AudioOrigins map[string]*watchPlaybackOrigin `json:"audio_origins,omitempty"`
 	Origin *watchPlaybackOrigin `json:"origin,omitempty"`
 	AlternateOrigin *watchPlaybackOrigin `json:"alternate_origin,omitempty"`
 	Subs    []watchSub    `json:"subs,omitempty"`
@@ -723,6 +768,13 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 		v.HLS = strings.HasSuffix(r.entry, ".m3u8")
 		v.AudioMedia = r.audioEntries
 		v.Subs = r.subs
+		if r.phase == "play" && len(r.extraAudioMedia) > 0 {
+			v.AudioOrigins = make(map[string]*watchPlaybackOrigin, len(r.extraAudioMedia))
+			for lang := range r.extraAudioMedia {
+				v.AudioOrigins[lang] = &watchPlaybackOrigin{Provider: r.provider,
+					Host: watchPlaybackHost(r.audioReleases[lang].URL), Mode: lang}
+			}
+		}
 		if r.phase == "play" && r.link >= 0 && r.link < len(r.streams) {
 			v.Origin = &watchPlaybackOrigin{Provider: r.provider, Host: watchPlaybackHost(r.streams[r.link].URL), Link: r.link + 1}
 			v.AlternateOrigin = r.alternateOrigin
@@ -849,7 +901,7 @@ func (b *bot) watchAnswerView(w http.ResponseWriter, r *watchRoom, user string, 
 	b.watch.mu.Unlock()
 	b.watchExtras(&v, user)
 	if !b.watchCanInspectPlayback(user) {
-		v.Origin, v.AlternateOrigin = nil, nil
+		v.Origin, v.AlternateOrigin, v.AudioOrigins = nil, nil, nil
 	}
 	writeJSON(w, http.StatusOK, v)
 }
@@ -1510,9 +1562,10 @@ func (b *bot) watchMediaAPI(w http.ResponseWriter, r *http.Request) {
 	var m *watchMedia
 	if cur := b.watch.cur; cur != nil {
 		for _, c := range []*watchMedia{cur.media, cur.old, cur.alternateMedia} {
-			if c != nil && c.key == key {
-				m = c
-			}
+			if c != nil && c.key == key { m = c }
+		}
+		for _, c := range cur.extraAudioMedia {
+			if c != nil && c.key == key { m = c }
 		}
 	}
 	cache := b.watchCache()

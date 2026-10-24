@@ -7,7 +7,9 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/thexykril/otakase/internal/providers/kickassanime"
 	"github.com/thexykril/otakase/internal/providers/nyaa"
 )
 
@@ -23,6 +25,7 @@ type StreamInfo struct {
 	Provider  string        `json:"provider"`
 	Mode      string        `json:"mode"`
 	Streams   []StreamLink  `json:"streams"`
+	AudioVariants map[string]StreamLink `json:"audio_variants,omitempty"`
 	Torrents  []TorrentLink `json:"torrents,omitempty"`
 }
 
@@ -91,6 +94,39 @@ func ResolveStreamInfo(config Config, anilistID, episode int) (StreamInfo, error
 			}
 			info.Provider, info.Mode, info.Streams, info.Torrents = result.ProviderName, mode, streams, torrents
 			if len(streams) > 0 {
+				// This provider indexes different spoken languages as separate
+				// releases. Discover real episode URLs, not merely locale
+				// names, so the Activity can offer only playable choices.
+				if result.ProviderName == "kickassanime" && result.ProviderID != "" {
+					alternates := kickassanime.EpisodeAudioVariants(result.ProviderID, episode, 5*time.Second)
+					// Do not advertise a separate language when multiple
+					// locale pages resolve to the same unlabelled stream.
+					// Its HLS audio renditions are discovered by the player.
+					urlCounts := map[string]int{}
+					for _, alt := range alternates { urlCounts[alt.URL]++ }
+					for lang, alternate := range alternates {
+						if urlCounts[alternate.URL] > 1 { continue }
+						if alternate.URL == "" { continue }
+						same := false
+						for _, original := range streams {
+							if original.URL == alternate.URL { same = true; break }
+						}
+						if same { continue }
+						links := streamLinks(ProviderEpisodeResult{
+							Links: []string{alternate.URL},
+							LinkHints: map[string]StreamPlaybackHint{alternate.URL: {
+								Referrer: alternate.Hint.Referrer,
+								Headers: alternate.Hint.Headers,
+								Subtitle: alternate.Hint.Subtitle,
+								Subtitles: alternate.Hint.Subtitles,
+							}},
+						})
+						if len(links) > 0 {
+							if info.AudioVariants == nil { info.AudioVariants = map[string]StreamLink{} }
+							info.AudioVariants[lang] = links[0]
+						}
+					}
+				}
 				return info, nil
 			}
 			if torrentFallback == nil {

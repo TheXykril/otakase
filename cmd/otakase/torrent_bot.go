@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -145,6 +146,79 @@ func probeBotMedia(ctx context.Context, source, mode string) (botMedia, error) {
 	return chooseBotMedia(p, mode)
 }
 
+// botAudioLanguage normalizes ffprobe language tags for the Activity's
+// selector and the local relay routes. Unknown tracks retain their stream
+// number so they remain selectable without inventing a language.
+func botAudioLanguage(tag string, index int) string {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = strings.SplitN(strings.ReplaceAll(tag, "_", "-"), "-", 2)[0]
+	codes := map[string]string{
+		"jpn": "ja", "eng": "en", "deu": "de", "ger": "de",
+		"spa": "es", "fra": "fr", "fre": "fr", "hin": "hi",
+		"ita": "it", "por": "pt", "tam": "ta", "tel": "te",
+		"kor": "ko", "zho": "zh", "chi": "zh", "rus": "ru",
+		"ara": "ar", "pol": "pl", "tur": "tr", "ukr": "uk",
+		"ind": "id", "nld": "nl", "dut": "nl", "tha": "th",
+	}
+	if code := codes[tag]; code != "" {
+		return code
+	}
+	if len(tag) == 2 {
+		for _, ch := range tag {
+			if ch < 'a' || ch > 'z' { return fmt.Sprintf("track-%d", index) }
+		}
+		return tag
+	}
+	return fmt.Sprintf("track-%d", index)
+}
+
+// probeBotMediaVariants reads ffprobe once and keeps a playable rendition for
+// every audio language, not just the Japanese/English tracks used to start
+// playback. Duplicates prefer the file's default track.
+func probeBotMediaVariants(ctx context.Context, source, mode string) (botMedia, map[string]botMedia, error) {
+	run, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	out, err := botCommandOutput(exec.CommandContext(run, "ffprobe", "-v", "error", "-threads", "1",
+		"-show_streams", "-show_format", "-of", "json", source), 1<<20)
+	if err != nil {
+		return botMedia{}, nil, fmt.Errorf("probe video: %w", err)
+	}
+	var p botProbe
+	if err = json.Unmarshal(out, &p); err != nil {
+		return botMedia{}, nil, err
+	}
+	primary, err := chooseBotMedia(p, mode)
+	if err != nil { return botMedia{}, nil, err }
+	variants := map[string]botMedia{mode: primary}
+	defaults := map[string]int{}
+	for _, stream := range p.Streams {
+		if stream.CodecType != "audio" || strings.Contains(strings.ToLower(stream.Tags.Title), "commentary") {
+			continue
+		}
+		code := botAudioLanguage(stream.Tags.Language, stream.Index)
+		if _, exists := variants[code]; exists && stream.Disposition.Default <= defaults[code] {
+			continue
+		}
+		track := primary
+		track.audio = stream.Index
+		track.subtitle = -1 // Other languages should never burn in English subtitles.
+		variants[code] = track
+		defaults[code] = stream.Disposition.Default
+		if len(variants) >= 26 { break }
+	}
+	// Keep sub/dub aliases for older clients and for the primary URL.
+	if ja, ok := variants["ja"]; ok {
+		if sub, subErr := chooseBotMedia(p, "sub"); subErr == nil { ja = sub }
+		variants["sub"] = ja
+	}
+	if en, ok := variants["en"]; ok {
+		if dub, dubErr := chooseBotMedia(p, "dub"); dubErr == nil { en = dub }
+		variants["dub"] = en
+	}
+	variants[mode] = primary
+	return primary, variants, nil
+}
+
 // Convert the selected text track once so each viewer can switch subtitles
 // independently. Unsupported subtitle formats retain the original burn-in.
 func botSubtitleVTT(ctx context.Context, source string, ordinal int) []byte {
@@ -243,10 +317,9 @@ func (s *botSegments) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	mode := s.primary
 	path := r.URL.Path
-	if strings.HasPrefix(path, "/sub/") || strings.HasPrefix(path, "/dub/") {
-		parts := strings.SplitN(strings.TrimPrefix(path, "/"), "/", 2)
+	if parts := strings.SplitN(strings.TrimPrefix(path, "/"), "/", 2); len(parts) == 2 && parts[0] != "subs" {
+		if _, ok := s.variants[parts[0]]; !ok { http.NotFound(w, r); return }
 		mode, path = parts[0], "/" + parts[1]
-		if _, ok := s.variants[mode]; !ok { http.NotFound(w, r); return }
 	}
 	if path == "/subs/en.vtt" && len(s.subtitles) != 0 {
 		w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
@@ -301,16 +374,8 @@ func serveTorrentForBot(hash, mode string) error {
 	if err != nil {
 		return err
 	}
-	media, err := probeBotMedia(ctx, source, mode)
-	if err != nil {
-		return err
-	}
-	variants := map[string]botMedia{mode: media}
-	other := "sub"
-	if mode == "sub" { other = "dub" }
-	if alt, altErr := probeBotMedia(ctx, source, other); altErr == nil {
-		variants[other] = alt
-	}
+	media, variants, err := probeBotMediaVariants(ctx, source, mode)
+	if err != nil { return err }
 	var subtitles []byte
  if sub, ok := variants["sub"]; ok {
   subtitles = botSubtitleVTT(ctx, source, sub.subtitle)
@@ -334,11 +399,15 @@ func serveTorrentForBot(hash, mode string) error {
 	defer server.Close()
 	failed := make(chan error, 1)
 	go func() { failed <- server.Serve(listener) }()
-	languages := mode
- if len(variants) > 1 { languages = "sub,dub" }
- subquery := ""
+	// Advertise only real language routes; "sub" and "dub" are aliases.
+	languages := make([]string, 0, len(variants))
+	for name := range variants {
+		if name != "sub" && name != "dub" { languages = append(languages, name) }
+	}
+	sort.Strings(languages)
+	subquery := ""
  if len(subtitles) > 0 { subquery = "&subtitles=en" }
- fmt.Printf("http://127.0.0.1:%d/playlist.m3u8?languages=%s%s\n", listener.Addr().(*net.TCPAddr).Port, languages, subquery)
+ fmt.Printf("http://127.0.0.1:%d/playlist.m3u8?languages=%s%s\n", listener.Addr().(*net.TCPAddr).Port, strings.Join(languages, ","), subquery)
 	select {
 	case <-ctx.Done():
 		return nil

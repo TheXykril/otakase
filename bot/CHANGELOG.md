@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.30.34
+
+- Watch Together: expose every selectable language in torrent media instead of only Japanese and English, with separate on-demand audio playlists.
+- Watch Together: keep audio renditions from multiple HLS audio groups, including unlabelled HLS tracks.
+- Watch Together: discover supported language releases for KickAssAnime episodes and allow each viewer to switch to an available release independently.
+
 ## 1.30.33
 
 - Watch Together: show a small playback-provider indicator only to developers and administrators, with the selected stream host and fallback number on hover. Regular members receive no provider details.

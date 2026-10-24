@@ -306,6 +306,72 @@ func TestTrimMaster(t *testing.T) {
 	}
 }
 
+func TestWatchRoomLanguageReleases(t *testing.T) {
+	b := &bot{}
+	main := "https://video.example/en/playlist.m3u8"
+	room := &watchRoom{
+		spent: true,
+		dub: true,
+		streams: []streamLink{{URL: main}},
+		audioReleases: map[string]streamLink{
+			"en": {URL: main},
+			"ja": {URL: "https://video.example/ja/playlist.m3u8"},
+			"de": {URL: "https://video.example/de/playlist.m3u8"},
+		},
+	}
+	if !b.startStream(room, 0) {
+		t.Fatal("episode did not start")
+	}
+	for _, lang := range []string{"dub", "ja", "de", "sub"} {
+		if room.audioEntries[lang] == "" { t.Fatalf("missing %s audio playlist", lang) }
+	}
+	if len(room.extraAudioMedia) != 2 {
+		t.Fatalf("expected Japanese and German relays, got %d", len(room.extraAudioMedia))
+	}
+	if room.audioEntries["sub"] != room.audioEntries["ja"] {
+		t.Fatal("legacy sub alias did not follow Japanese release")
+	}
+	if room.audioEntries["dub"] == room.audioEntries["ja"] {
+		t.Fatal("separate audio release reused current playlist")
+	}
+	room.finishMedia()
+	if len(room.extraAudioMedia) > 0 {
+		t.Fatal("old language media remained after episode finished")
+	}
+}
+
+func TestWatchAudioLanguage(t *testing.T) {
+	for _, lang := range []string{"ja", "en", "de", "sub", "dub", "track-7"} {
+		if !watchAudioLanguage(lang) { t.Errorf("rejected %q", lang) }
+	}
+	for _, lang := range []string{"", "ja/../../x", "EN", "track-9999", "track-abc", "en-us"} {
+		if watchAudioLanguage(lang) { t.Errorf("accepted invalid route %q", lang) }
+	}
+}
+
+func TestTrimMasterKeepsAudioFromOtherGroups(t *testing.T) {
+	master := `#EXTM3U
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="primary",NAME="English",LANGUAGE="en",DEFAULT=YES,URI="en/audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="alternate",NAME="Japanese",LANGUAGE="ja",URI="ja/audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="alternate",NAME="German",LANGUAGE="de",URI="de/audio.m3u8"
+#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="alternate",NAME="English Duplicate",LANGUAGE="en",URI="en/other.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=1200000,RESOLUTION=1280x720,AUDIO="primary"
+video/main.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1920x1080,AUDIO="alternate"
+video/hd.m3u8
+`
+	out := trimMaster(master, 720, false)
+	for _, path := range []string{"en/audio.m3u8", "ja/audio.m3u8", "de/audio.m3u8", "video/main.m3u8"} {
+		if !strings.Contains(out, path) {
+			t.Fatalf("audio rendition %q was dropped:\n%s", path, out)
+		}
+	}
+	if strings.Contains(out, "en/other.m3u8") || strings.Contains(out, "video/hd.m3u8") ||
+		strings.Contains(out, `GROUP-ID="alternate"`) {
+		t.Fatalf("master contains duplicate language or incorrect audio group:\n%s", out)
+	}
+}
+
 func TestToWebVTT(t *testing.T) {
 	srt := "1\r\n00:00:01,500 --> 00:00:03,000\r\nHello\r\n"
 	if got := toWebVTT(srt); !strings.HasPrefix(got, "WEBVTT") || !strings.Contains(got, "00:00:01.500 --> 00:00:03.000") {
@@ -437,6 +503,14 @@ func TestParseStreamInfo(t *testing.T) {
 	}
 	if _, err := parseStreamInfo("nope\n"); err == nil {
 		t.Error("no JSON should fail")
+	}
+}
+
+func TestParseStreamInfoAudioVariants(t *testing.T) {
+	info, err := parseStreamInfo(`{"anilist_id":1,"episode":2,"provider":"kickassanime","mode":"dub","streams":[{"url":"https://a/en.m3u8"}],"audio_variants":{"de":{"url":"https://a/de.m3u8","referrer":"https://kaa.lt/"}}}`)
+	if err != nil || info.AudioVariants["de"].URL != "https://a/de.m3u8" ||
+		info.AudioVariants["de"].Referrer != "https://kaa.lt/" {
+		t.Fatalf("missing language release metadata: %+v, %v", info, err)
 	}
 }
 

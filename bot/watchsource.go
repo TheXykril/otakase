@@ -33,6 +33,7 @@ type streamInfo struct {
 	Provider  string       `json:"provider"`
 	Mode      string       `json:"mode"`
 	Streams   []streamLink `json:"streams"`
+	AudioVariants map[string]streamLink `json:"audio_variants,omitempty"`
 	Torrents  []struct {
 		InfoHash string `json:"info_hash"`
 	} `json:"torrents,omitempty"`
