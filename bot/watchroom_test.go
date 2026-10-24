@@ -179,7 +179,7 @@ func TestWatchRoomControlsAndRequests(t *testing.T) {
 	if code := watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "pause"}, &v); code != 200 || len(v.Asks) != 1 {
 		t.Fatalf("ask: %d %+v", code, v)
 	}
-	if code := watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "skip"}, nil); code != http.StatusTooManyRequests {
+	if code := watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward"}, nil); code != http.StatusTooManyRequests {
 		t.Fatalf("second ask while one waits: %d", code)
 	}
 	if code := watchPost(b, (*bot).watchAskAPI, "a", watchIn{Room: "r", Kind: "pause"}, nil); code != http.StatusBadRequest {
@@ -195,10 +195,10 @@ func TestWatchRoomControlsAndRequests(t *testing.T) {
 	if code := watchPost(b, (*bot).watchAnswer, "a", watchIn{Room: "r", ID: v.Asks[0].ID, OK: true}, &v); code != 200 || v.Playing || len(v.Asks) != 0 {
 		t.Fatalf("answer: %d %+v", code, v)
 	}
-	// Skip the opening jumps ahead from where it is.
-	watchPost(b, (*bot).watchCtl, "a", watchIn{Room: "r", Act: "skip"}, &v)
-	if v.Pos < 194 || v.Pos > 196 {
-		t.Fatalf("skip to %v", v.Pos)
+	// Manual forward seeks ten seconds, independently of opening timestamps.
+	watchPost(b, (*bot).watchCtl, "a", watchIn{Room: "r", Act: "forward"}, &v)
+	if v.Pos < 119.9 || v.Pos > 120.1 {
+		t.Fatalf("+10s jumped to %v", v.Pos)
 	}
 	// Staff take over; the old host is now a member.
 	if code := watchPost(b, (*bot).watchTake, "b", watchIn{Room: "r"}, nil); code != http.StatusForbidden {
