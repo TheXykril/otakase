@@ -543,12 +543,12 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	r.audioEntries = nil
 	if u, err := url.Parse(r.streams[k].URL); err == nil && u.Hostname() == "127.0.0.1" && u.Query().Get("languages") != "" {
 		r.audioEntries = map[string]string{}
-		for _, mode := range strings.Split(u.Query().Get("languages"), ",") {
-			if mode != "sub" && mode != "dub" { continue }
+		for _, language := range strings.Split(u.Query().Get("languages"), ",") {
+			if !watchAudioLanguage(language) { continue }
 			variant := *u
-			variant.Path = "/" + mode + "/playlist.m3u8"
+			variant.Path = "/" + language + "/playlist.m3u8"
 			variant.RawQuery = ""
-			r.audioEntries[mode] = watchMediaPath(m.key, m.add(variant.String(), "list"))
+			r.audioEntries[language] = watchMediaPath(m.key, m.add(variant.String(), "list"))
 		}
 	}
 	// A muxed video may have audio without advertising separate tracks.
@@ -576,6 +576,26 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	r.setPos(0, true, now)
 	r.changed()
 	return true
+}
+
+// Only allow audio codes emitted by the helper, never arbitrary URL paths.
+func watchAudioLanguage(code string) bool {
+	if code == "sub" || code == "dub" { return true }
+	if len(code) == 2 {
+		for _, ch := range code {
+			if ch < 'a' || ch > 'z' { return false }
+		}
+		return true
+	}
+	if strings.HasPrefix(code, "track-") {
+		ordinal := strings.TrimPrefix(code, "track-")
+		if len(ordinal) == 0 || len(ordinal) > 3 { return false }
+		for _, ch := range ordinal {
+			if ch < '0' || ch > '9' { return false }
+		}
+		return true
+	}
+	return false
 }
 
 func watchMediaPath(key, id string) string { return "api/watch/media/" + key + "/" + id }
