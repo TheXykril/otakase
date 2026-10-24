@@ -59,6 +59,10 @@ async function watchView() {
 }
 
 function wBox(html) {
+  const detached = document.body.querySelector(":scope > #wstage");
+  if (detached) detached.remove();
+  const marker = document.getElementById("wstage-placeholder");
+  if (marker) marker.remove();
   const el = document.getElementById("wbox");
   if (el) el.innerHTML = html;
 }
