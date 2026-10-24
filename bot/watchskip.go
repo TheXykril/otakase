@@ -39,7 +39,7 @@ func (span watchSkipSpan) valid() bool {
 		span.Start >= 0 && span.End > span.Start && span.End-span.Start <= 600
 }
 
-func (spans []watchSkipSpan) best(duration float64) watchSkipSpan {
+func bestWatchSkipSpan(spans []watchSkipSpan, duration float64) watchSkipSpan {
 	best := watchSkipSpan{}
 	gap := math.Inf(1)
 	if duration <= 0 || math.IsNaN(duration) || math.IsInf(duration, 0) {
@@ -66,7 +66,7 @@ func (spans []watchSkipSpan) best(duration float64) watchSkipSpan {
 // The resolved timings may describe different releases of an episode. Use
 // the closest fit only after the host reports its actual video duration.
 func (intervals watchSkipIntervals) match(duration float64) watchSkipTimes {
-	return watchSkipTimes{OP: intervals.OP.best(duration), ED: intervals.ED.best(duration)}
+	return watchSkipTimes{OP: bestWatchSkipSpan(intervals.OP, duration), ED: bestWatchSkipSpan(intervals.ED, duration)}
 }
 
 // Returns the true end of the opening/ending the room is currently within.
@@ -127,9 +127,9 @@ func skipRoute(version string, malID, episode int) string {
 	query := url.Values{}
 	query.Add("types", "op")
 	query.Add("types", "ed")
-	query.Add("types", "mixed-op")
-	query.Add("types", "mixed-ed")
 	if version == "v2" {
+		query.Add("types", "mixed-op")
+		query.Add("types", "mixed-ed")
 		query.Set("episodeLength", "0")
 	}
 	return "/" + version + "/skip-times/" + strconv.Itoa(malID) + "/" + strconv.Itoa(episode) + "?" + query.Encode()
