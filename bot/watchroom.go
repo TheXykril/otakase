@@ -545,6 +545,16 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 			r.audioEntries[mode] = watchMediaPath(m.key, m.add(variant.String(), "list"))
 		}
 	}
+	// A muxed video may have audio without advertising separate tracks.
+	// Always expose the current release's language to each viewer.
+	if r.audioEntries == nil {
+		r.audioEntries = make(map[string]string)
+	}
+	currentMode := "sub"
+	if r.dub { currentMode = "dub" }
+	if _, ok := r.audioEntries[currentMode]; !ok {
+		r.audioEntries[currentMode] = watchMediaPath(m.key, entry)
+	}
 	for n, s := range r.streams[k].Subtitles {
 		label := s.Label
 		if label == "" {

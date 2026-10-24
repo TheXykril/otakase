@@ -835,6 +835,41 @@
 .wbar .wsettings { position:relative; }
 .wstage.full { height:100dvh; }
 .wstage.full .wbar { max-height:min(55dvh,360px); }
+/* Keep language selection out of the playback bar until requested. */
+.wsettings[hidden] { display:none !important; }
+.wstage.full .wbar, .wstage:fullscreen .wbar {
+  left:50%;
+  right:auto;
+  bottom:max(16px,env(safe-area-inset-bottom,0px));
+  width:min(900px,calc(100% - 32px));
+  transform:translateX(-50%);
+  max-height:none;
+  overflow:visible;
+  padding:8px 12px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(14,16,22,.82);
+}
+.wstage.full.controls-hidden .wbar { transform:translate(-50%,12px); }
+.wstage.full .wsettings, .wstage:fullscreen .wsettings {
+  position:absolute;
+  bottom:calc(100% + 8px);
+  right:8px;
+  width:min(360px,calc(100vw - 48px));
+  max-height:45dvh;
+  overflow-y:auto;
+  margin:0;
+  padding:12px;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  background:rgba(20,22,30,.97);
+  box-shadow:0 12px 32px rgba(0,0,0,.5);
+}
+.wstage.full .wsettings select, .wstage:fullscreen .wsettings select { min-width:0; width:100%; }
+@media (pointer:coarse) and (orientation:landscape) {
+  .wstage.full .wbar, .wstage:fullscreen .wbar {
+    bottom:max(16px,env(safe-area-inset-bottom,0px));
+    width:min(760px,calc(100% - 136px));
+  }
+}
 /* No still available: text-first layout instead of a blank video frame. */
 .wepcard.noimage { min-height:96px; justify-content:center; }
 .wepcard.noimage .wepvisual { display:none; }
