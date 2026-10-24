@@ -148,6 +148,7 @@ function wSet(v, fromHost) {
   wAsks();
   wSyncLine();
   wSkipControls();
+  wSeekMarkers();
   if (oldAudioMedia !== JSON.stringify(v.audio_media || {})) wAudioTracks();
   wUpdateOrigin();
   if (v.media && wEffectiveMedia() !== wvMedia) wLoad();
@@ -625,8 +626,8 @@ function wBar() {
     ${origin}
     <button class="btn alt wfullscreen" id="wfull" title="Toggle theater mode" aria-label="Toggle theater mode" aria-pressed="${wFull}">${icon(wFull ? "minimize" : "maximize")}</button>`;
   if (v.is_host) {
-    bar.innerHTML = `<div class="wseek"><span id="wcur">0:00</span><input type="range" id="wpos" min="0" max="1" step="0.1" value="0" aria-label="Position"><span id="wdur">0:00</span></div>
-      <div class="row">${btn("wpp", "pause", "Pause", false)}${btn("wback10", "undo", "-10s")}${btn("wforward10", "ff", "+10s")}
+    bar.innerHTML = `<div class="wseek"><span id="wcur">0:00</span><div class="wseektrack"><input type="range" id="wpos" min="0" max="1" step="0.1" value="0" aria-label="Position"><div class="wskipmarkers" id="wskipmarkers" aria-hidden="true"></div></div><span id="wdur">0:00</span></div>
+      <div class="row">${btn("wpp", "pause", "Pause", false)}${btn("wback10", "rewind", "-10s")}${btn("wforward10", "ff", "+10s")}
       ${v.ep > 1 ? btn("wprev", "back", "Prev ep") : ""}${v.ep < v.last_ep ? btn("wnext", "skip", "Next ep") : ""}${common}</div>`;
     const vid = document.getElementById("wvid");
     document.getElementById("wpp").onclick = () => wCtl(vid.paused ? "play" : "pause");
@@ -642,7 +643,7 @@ function wBar() {
       wCtl("seek", +pos.value);
     };
   } else {
-    bar.innerHTML = `<div class="wseek"><span id="wcur">0:00</span><div class="wprog"><i id="wprog"></i></div><span id="wdur">0:00</span></div>
+    bar.innerHTML = `<div class="wseek"><span id="wcur">0:00</span><div class="wseektrack"><div class="wprog"><i id="wprog"></i></div><div class="wskipmarkers" id="wskipmarkers" aria-hidden="true"></div></div><span id="wdur">0:00</span></div>
       <div class="row">${btn("wapp", "pause", "Ask to pause")}${btn("waforward", "ff", "Ask +10s")}${v.ep < v.last_ep ? btn("wanext", "skip", "Ask for next ep") : ""}${common}</div>`;
     document.getElementById("wapp").onclick = () => wAsk(wv.playing ? "pause" : "play");
     document.getElementById("waforward").onclick = () => wAsk("forward");
@@ -665,6 +666,7 @@ function wBar() {
   wSubs();
   wUpdateOrigin();
   wSkipControls();
+  wSeekMarkers();
 }
 
 // Keep room-wide automatic skip toggles current without rebuilding the player.
@@ -691,6 +693,43 @@ function wSkipControls() {
   const span = (s) => s && s.end > s.start ? wFmt(s.start) + "–" + wFmt(s.end) : "unavailable";
   hint.textContent = "Opening: " + span(times.op) + " · Ending: " + span(times.ed)
     + (!wv.is_host ? " · Only the host can change these switches." : "");
+}
+
+// Mark the actual OP/ED intervals along the entire video timeline.
+// Render ranges rather than a guessed fixed point; inactive switches leave
+// a faint guide so the host still knows where the opening/ending would be.
+// Every update is based on the current episode view, so stale ranges vanish.
+function wSeekMarkers() {
+  const rail = document.getElementById("wskipmarkers");
+  if (!rail || !wv) return;
+  const duration = Number(wv.dur);
+  const times = wv.skip_times || {};
+  if (!wv.skip_ready || !Number.isFinite(duration) || duration <= 0) {
+    rail.replaceChildren();
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  for (const [kind, span, enabled] of [
+    ["OP", times.op, wv.auto_skip_op],
+    ["ED", times.ed, wv.auto_skip_ed],
+  ]) {
+    if (!span) continue;
+    const start = Number(span.start), end = Number(span.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > duration + 1) continue;
+    const from = Math.max(0, Math.min(100, 100 * start / duration));
+    const to = Math.max(from, Math.min(100, 100 * end / duration));
+    const marker = document.createElement("span");
+    marker.className = "wskipband " + kind.toLowerCase() + (enabled ? " active" : "");
+    marker.style.left = from + "%";
+    marker.style.width = (to - from) + "%";
+    marker.title = kind + " " + wFmt(start) + "–" + wFmt(end) + (enabled ? " · auto-skip on" : " · auto-skip off");
+    const label = document.createElement("span");
+    label.className = "wskipbandlabel";
+    label.textContent = kind;
+    marker.appendChild(label);
+    fragment.appendChild(marker);
+  }
+  rail.replaceChildren(fragment);
 }
 
 // Update the private source hint when the viewer switches to a separate
