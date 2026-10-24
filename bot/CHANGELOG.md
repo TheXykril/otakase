@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.40
+
+- Watch Together: match the rewind and forward seek icons with mirrored arrows.
+- Watch Together: mark the episode's known opening and ending intervals directly on the seek bar, with stronger markers when automatic skipping is enabled. Unknown or mismatched intervals stay unmarked.
+
 ## 1.30.39
 
 - Watch Together: restore native HLS playback on supported Discord clients to address silent video after the previous audio change.
