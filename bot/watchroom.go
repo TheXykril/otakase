@@ -497,6 +497,11 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		}
 		r.torrent = torrent
 		r.torrentCancel = cancel
+		// Inspect the exact stream being relayed for embedded HLS languages.
+		// This runs after playback starts and never delays the first frame.
+		if r.media != nil && looksLikeHLS(r.media.link.URL) {
+			go b.findWatchHLSTracks(ctx, r, gen, r.media)
+		}
         // Some providers expose Sub and Dub as separate releases rather than
         // multiple audio tracks. Look up the other version without delaying
         // the first viewer; only reuse directly playable links here.
@@ -515,6 +520,48 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	}()
 }
 
+
+// findWatchHLSTracks advertises the selected stream's real audio renditions.
+// Each language gets its own relay URL with the correct default track, so
+// native HLS playback works even without browser audio-track enumeration.
+func (b *bot) findWatchHLSTracks(ctx context.Context, room *watchRoom, gen int, media *watchMedia) {
+	probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	master, _, err := media.fetch(probeCtx, media.link.URL, 4<<20)
+	if err != nil {
+		if probeCtx.Err() == nil {
+			log.Printf("watch HLS audio discovery: %v", err)
+		}
+		return
+	}
+	languages := hlsAvailableAudio(string(master))
+	if len(languages) == 0 || probeCtx.Err() != nil {
+		return
+	}
+	b.watch.mu.Lock()
+	defer b.watch.mu.Unlock()
+	if b.watch.cur != room || room.gen != gen || room.phase != "play" || room.media != media {
+		return
+	}
+	added := false
+	for _, language := range languages {
+		if room.audioEntries[language] != "" {
+			continue
+		}
+		stream, entry, _ := newWatchMedia(media.link, media.dub)
+		stream.audio = language
+		if room.extraAudioMedia == nil {
+			room.extraAudioMedia = map[string]*watchMedia{}
+		}
+		room.extraAudioMedia[language] = stream
+		room.audioEntries[language] = watchMediaPath(stream.key, entry)
+		added = true
+	}
+	if added {
+		log.Printf("watch HLS audio: %s episode %d offers %s", room.provider, room.ep, strings.Join(languages, ", "))
+		room.changed()
+	}
+}
 
 // findWatchLanguages looks up other playable languages after the episode
 // starts. Results belong only to the room generation that requested them.
@@ -865,8 +912,12 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 		if r.phase == "play" && len(r.extraAudioMedia) > 0 {
 			v.AudioOrigins = make(map[string]*watchPlaybackOrigin, len(r.extraAudioMedia))
 			for lang := range r.extraAudioMedia {
+				link := r.audioReleases[lang].URL
+				if link == "" && r.link >= 0 && r.link < len(r.streams) {
+					link = r.streams[r.link].URL
+				}
 				v.AudioOrigins[lang] = &watchPlaybackOrigin{Provider: r.provider,
-					Host: watchPlaybackHost(r.audioReleases[lang].URL), Mode: lang}
+					Host: watchPlaybackHost(link), Mode: lang}
 			}
 		}
 		if r.phase == "play" && r.link >= 0 && r.link < len(r.streams) {

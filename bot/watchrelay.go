@@ -58,9 +58,10 @@ type streamSubtitle struct {
 
 // watchMedia is one episode as the relay serves it.
 type watchMedia struct {
-	key  string
-	link streamLink
-	dub  bool // pick the English audio track
+	key   string
+	link  streamLink
+	dub   bool   // pick the English audio track
+	audio string // force an HLS rendition for native players
 
 	mu    sync.Mutex
 	ids   map[string]string // id → upstream address
@@ -168,7 +169,7 @@ var hlsURIAttr = regexp.MustCompile(`URI="([^"]*)"`)
 // playlist is cut to one variant and one audio track first.
 func (m *watchMedia) rewritePlaylist(body string, base *url.URL) string {
 	if strings.Contains(body, "#EXT-X-STREAM-INF") {
-		body = trimMaster(body, watchMaxHeight, m.dub)
+		body = trimMasterAudio(body, watchMaxHeight, m.dub, m.audio)
 	}
 	var out []string
 	var segs []string
@@ -243,6 +244,12 @@ var (
 // otherwise play its default, Japanese, for a dub too. Subtitle groups
 // stay; I-frame playlists go.
 func trimMaster(body string, maxHeight int, dub bool) string {
+	return trimMasterAudio(body, maxHeight, dub, "")
+}
+
+// trimMasterAudio selects one advertised language as the default. Separate
+// relayed master URLs make HLS languages selectable in native video players.
+func trimMasterAudio(body string, maxHeight int, dub bool, language string) string {
 	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
 	var head []string
 	var vars []hlsVariant
@@ -316,6 +323,14 @@ func trimMaster(body string, maxHeight int, dub bool) string {
 		merged = nil
 	}
 	preferred := pickAudio(merged, v.audio, dub)
+	if language != "" {
+		for _, entry := range merged {
+			if hlsAudioLanguage(entry) == language {
+				preferred = entry
+				break
+			}
+		}
+	}
 	for _, entry := range merged {
 		if hlsDefault.MatchString(entry) {
 			if entry == preferred {
@@ -331,6 +346,52 @@ func trimMaster(body string, maxHeight int, dub bool) string {
 		out = append(out, entry)
 	}
 	return strings.Join(append(out, v.inf, v.uri), "\n") + "\n"
+}
+
+// hlsAudioLanguage converts the common ISO 639-2 tags in HLS manifests to
+// the two-letter language codes accepted by the watch room.
+func hlsAudioLanguage(line string) string {
+	match := hlsLanguage.FindStringSubmatch(line)
+	if match == nil {
+		return ""
+	}
+	code := strings.ToLower(strings.Split(match[1], "-")[0])
+	aliases := map[string]string{
+		"jpn": "ja", "eng": "en", "deu": "de", "ger": "de",
+		"spa": "es", "fra": "fr", "fre": "fr", "hin": "hi",
+		"ita": "it", "por": "pt", "tam": "ta", "tel": "te",
+		"kor": "ko", "zho": "zh", "chi": "zh", "rus": "ru",
+	}
+	if short, ok := aliases[code]; ok {
+		code = short
+	}
+	if len(code) != 2 || !watchAudioLanguage(code) {
+		return ""
+	}
+	return code
+}
+
+// hlsAvailableAudio reports only independently addressable renditions of the
+// chosen video variant. A native HLS player receives one relay URL per code.
+func hlsAvailableAudio(body string) []string {
+	if !strings.Contains(body, "#EXT-X-STREAM-INF") {
+		return nil
+	}
+	master := trimMaster(body, watchMaxHeight, false)
+	seen := map[string]bool{}
+	var languages []string
+	for _, line := range strings.Split(master, "\n") {
+		if !strings.HasPrefix(line, "#EXT-X-MEDIA:") || !strings.Contains(line, "TYPE=AUDIO") ||
+			!hlsURIAttr.MatchString(line) {
+			continue
+		}
+		language := hlsAudioLanguage(line)
+		if language != "" && !seen[language] {
+			seen[language] = true
+			languages = append(languages, language)
+		}
+	}
+	return languages
 }
 
 func pickVariant(vars []hlsVariant, maxHeight int) hlsVariant {
