@@ -708,6 +708,41 @@ func (b *bot) dashModeration() template.HTML {
 		dashStats(dashStat{"Warnings, last 30 days", fmt.Sprint(recent)}, dashStat{"Members ever warned", fmt.Sprint(len(counts))}),
 		dashHTMLTable([]string{"Member", "30 days · all", "Clear all"}, rows, "No warnings. Nice and calm."),
 		dashNote("Reasons and messages stay in Discord; use /warnings there."),
+		dashHeading("Watch tickets"),
+		b.dashWatchTickets(),
+	)
+}
+
+// dashWatchTickets lists ticket balances and owner controls for the authenticated dashboard.
+func (b *bot) dashWatchTickets() template.HTML {
+	type holder struct { ID string; Count int }
+	var holders []holder
+	total := 0
+	b.store.view(func(d *storeData) {
+		for id, count := range d.WatchTickets {
+			if count > 0 {
+				holders = append(holders, holder{id, count})
+				total += count
+			}
+		}
+	})
+	sort.Slice(holders, func(i, j int) bool {
+		if holders[i].Count != holders[j].Count { return holders[i].Count > holders[j].Count }
+		return holders[i].ID < holders[j].ID
+	})
+	var rows [][]string
+	for _, h := range holders {
+		if len(rows) == 30 { break }
+		rows = append(rows, []string{b.dashName(h.ID) + " (" + h.ID + ")", fmt.Sprint(h.Count)})
+	}
+	amount := &dashNumber{Value: "1", Min: "1", Max: "100", Step: "1"}
+	return dashJoin(
+		dashStats(dashStat{"Tickets available", fmt.Sprint(total)}, dashStat{"Members with tickets", fmt.Sprint(len(holders))}),
+		dashControls(
+			dashControl{Section: "moderation", Do: "ticket-add", Line: "Discord user ID", TextMax: 20, Number: amount, Button: "Add tickets"},
+			dashControl{Section: "moderation", Do: "ticket-remove", Line: "Discord user ID", TextMax: 20, Number: amount, Button: "Remove tickets", Quiet: true},
+		),
+		dashTable([]string{"Member", "Tickets"}, rows, "Nobody has watch tickets."),
 	)
 }
 
