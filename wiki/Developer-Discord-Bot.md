@@ -520,8 +520,9 @@ own `/watchparty` parties are separate.
   Yes and No. The host can separately enable Auto OP and Auto ED under
   playback settings: AniSkip timings are looked up asynchronously for each
   episode and checked against the playing release duration. Missing or
-  mismatched intervals are not skipped. Staff can take control; when the host leaves, whoever has
-  been in the room longest takes over. The host or staff can end it.
+  mismatched intervals are not skipped. Staff can take control; when the
+  host leaves, whoever has been in the room longest takes over. The host
+  or staff can end it.
 - A room lasts 4 hours from its first episode, as many episodes as fit.
   `/settings watch_room_max` sets how many fit in it (default 10; the
   opener and staff always get in).
