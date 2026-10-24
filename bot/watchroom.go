@@ -734,6 +734,7 @@ type watchView struct {
 	Media   string        `json:"media,omitempty"`
 	HLS     bool          `json:"hls,omitempty"`
 	AudioMedia map[string]string `json:"audio_media,omitempty"`
+	AudioOrigins map[string]*watchPlaybackOrigin `json:"audio_origins,omitempty"`
 	Origin *watchPlaybackOrigin `json:"origin,omitempty"`
 	AlternateOrigin *watchPlaybackOrigin `json:"alternate_origin,omitempty"`
 	Subs    []watchSub    `json:"subs,omitempty"`
@@ -767,6 +768,13 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 		v.HLS = strings.HasSuffix(r.entry, ".m3u8")
 		v.AudioMedia = r.audioEntries
 		v.Subs = r.subs
+		if r.phase == "play" && len(r.extraAudioMedia) > 0 {
+			v.AudioOrigins = make(map[string]*watchPlaybackOrigin, len(r.extraAudioMedia))
+			for lang := range r.extraAudioMedia {
+				v.AudioOrigins[lang] = &watchPlaybackOrigin{Provider: r.provider,
+					Host: watchPlaybackHost(r.audioReleases[lang].URL), Mode: lang}
+			}
+		}
 		if r.phase == "play" && r.link >= 0 && r.link < len(r.streams) {
 			v.Origin = &watchPlaybackOrigin{Provider: r.provider, Host: watchPlaybackHost(r.streams[r.link].URL), Link: r.link + 1}
 			v.AlternateOrigin = r.alternateOrigin
@@ -893,7 +901,7 @@ func (b *bot) watchAnswerView(w http.ResponseWriter, r *watchRoom, user string, 
 	b.watch.mu.Unlock()
 	b.watchExtras(&v, user)
 	if !b.watchCanInspectPlayback(user) {
-		v.Origin, v.AlternateOrigin = nil, nil
+		v.Origin, v.AlternateOrigin, v.AudioOrigins = nil, nil, nil
 	}
 	writeJSON(w, http.StatusOK, v)
 }
