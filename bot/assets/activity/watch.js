@@ -653,34 +653,41 @@ function wSaveLanguages() {
 function wAudioTracks() {
   const select = document.getElementById("waudio");
   if (!select) return;
-  const variants = wv && wv.audio_media || {};
-  if (Object.keys(variants).length) {
-    select.innerHTML = `<option value="auto">Automatic</option>` +
-      (variants.sub ? `<option value="ja">Japanese</option>` : "") +
-      (variants.dub ? `<option value="en">English</option>` : "");
-    select.disabled = false;
-    select.value = /^(en|eng)(-|$)/.test(wAudioPick) && variants.dub ? "en" :
-      /^(ja|jpn)(-|$)/.test(wAudioPick) && variants.sub ? "ja" : "auto";
-    document.getElementById("wsettingshint").textContent =
-      wAudioPick !== "auto" && select.value === "auto" ? "The requested language is not available in the discovered streams." : "Dub and sub options shown here are separate playable streams.";
-    return;
-  }
+  const variants = (wv && wv.audio_media) || {};
   const tracks = wHls ? wHls.audioTracks || [] : [];
-  const current = tracks.findIndex((track) => {
-    const language = (track.lang || "").toLowerCase();
-    const preferred = wAudioPick === "en" ? "eng" : wAudioPick === "ja" ? "jpn" : wAudioPick;
-    return wAudioPick !== "auto" && (language === preferred || language.startsWith(preferred + "-") || language === wAudioPick || language.startsWith(wAudioPick + "-"));
-  });
-  select.innerHTML = `<option value="auto">Automatic</option>` + tracks.map((track, index) =>
-    `<option value="${esc((track.lang || "").toLowerCase())}" data-index="${index}">${esc(track.name || track.lang || "Track " + (index + 1))}</option>`).join("");
-  if (!tracks.length) {
-    select.disabled = true;
-    document.getElementById("wsettingshint").textContent = "No alternative audio stream or embedded audio track was found for this episode.";
-  } else {
-    select.disabled = false;
-    select.value = current >= 0 ? (tracks[current].lang || "").toLowerCase() : "auto";
-    document.getElementById("wsettingshint").textContent = current < 0 && wAudioPick !== "auto" ? "Preferred audio unavailable; using available audio." : "";
-    if (current >= 0 && wHls.audioTrack !== current) wHls.audioTrack = current;
+  const options = [{ value: "auto", label: "Automatic" }];
+  const seen = new Set();
+  const names = { ja: "Japanese", en: "English", de: "German", es: "Spanish",
+    fr: "French", hi: "Hindi", it: "Italian", pt: "Portuguese",
+    ta: "Tamil", te: "Telugu", ko: "Korean" };
+  const normalized = (code) => String(code || "").toLowerCase().replace(/^jpn$/, "ja")
+    .replace(/^eng$/, "en").replace(/^deu$/, "de").replace(/^ger$/, "de")
+    .replace(/^spa$/, "es").replace(/^fra$/, "fr").replace(/^fre$/, "fr")
+    .replace(/^hin$/, "hi").replace(/^ita$/, "it").replace(/^por$/, "pt")
+    .replace(/^tam$/, "ta").replace(/^tel$/, "te").replace(/^kor$/, "ko");
+  const add = (code, label) => {
+    const lang = normalized(code);
+    if (!lang || seen.has(lang)) return;
+    seen.add(lang);
+    options.push({ value: lang, label: label || names[lang.split("-")[0]] || lang });
+  };
+  if (variants.sub) add("ja");
+  if (variants.dub) add("en");
+  tracks.forEach((track) => add(track.lang, track.name || names[normalized(track.lang).split("-")[0]]));
+  select.innerHTML = options.map((o) =>
+    `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("");
+  select.disabled = options.length === 1;
+  const preferred = normalized(wAudioPick);
+  select.value = seen.has(preferred) ? preferred : "auto";
+  const hint = document.getElementById("wsettingshint");
+  if (hint) hint.textContent = options.length === 1
+    ? "No selectable audio tracks were reported by this stream."
+    : preferred !== "auto" && !seen.has(preferred)
+      ? "Preferred audio unavailable; using the current stream."
+      : "";
+  if (wHls && tracks.length) {
+    const index = tracks.findIndex((track) => normalized(track.lang) === preferred);
+    if (index >= 0 && wHls.audioTrack !== index) wHls.audioTrack = index;
   }
 }
 
