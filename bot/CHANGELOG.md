@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.25
+
+- Watch Together: discover missing dubbed/subbed alternatives even when other audio variants exist, and skip duplicate source URLs.
+
 ## 1.30.24
 
 - Activity: return moderation and sound controls to a dedicated non-floating row.
