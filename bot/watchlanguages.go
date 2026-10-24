@@ -18,7 +18,7 @@ func watchValidLanguage(value string, subtitles bool) bool {
 		return true
 	}
 	// Unlabelled container and HLS tracks are selected by their bounded index.
-	if strings.HasPrefix(value, "track-") || strings.HasPrefix(value, "hls-") {
+	if !subtitles && (strings.HasPrefix(value, "track-") || strings.HasPrefix(value, "hls-")) {
 		i := strings.IndexByte(value, '-')
 		n := value[i+1:]
 		if len(n) == 0 || len(n) > 3 { return false }
