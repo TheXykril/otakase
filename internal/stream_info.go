@@ -18,15 +18,15 @@ import (
 // episode it plays in its watch room, so this never prompts: a show no
 // provider can be matched to on its own is an error, not a menu.
 type StreamInfo struct {
-	AnilistID int           `json:"anilist_id"`
-	Episode   int           `json:"episode"`
-	Title     string        `json:"title"`
-	Episodes  int           `json:"episodes,omitempty"`
-	Provider  string        `json:"provider"`
-	Mode      string        `json:"mode"`
-	Streams   []StreamLink  `json:"streams"`
+	AnilistID     int                   `json:"anilist_id"`
+	Episode       int                   `json:"episode"`
+	Title         string                `json:"title"`
+	Episodes      int                   `json:"episodes,omitempty"`
+	Provider      string                `json:"provider"`
+	Mode          string                `json:"mode"`
+	Streams       []StreamLink          `json:"streams"`
 	AudioVariants map[string]StreamLink `json:"audio_variants,omitempty"`
-	Torrents  []TorrentLink `json:"torrents,omitempty"`
+	Torrents      []TorrentLink         `json:"torrents,omitempty"`
 }
 
 // TorrentLink identifies a torrent without exposing the CLI's temporary local server.
@@ -64,6 +64,17 @@ func ParseStreamInfoArg(arg string) (anilistID, episode int, err error) {
 // audio first, then the other. Only http(s) links count: torrents need the
 // app's own streamer, which a server relaying the episode doesn't have.
 func ResolveStreamInfo(config Config, anilistID, episode int) (StreamInfo, error) {
+	return resolveStreamInfo(config, anilistID, episode, true)
+}
+
+// ResolveStreamInfoFast leaves the optional per-language provider lookup to
+// the caller. The watch room starts playback with this result, then discovers
+// the additional releases in the background.
+func ResolveStreamInfoFast(config Config, anilistID, episode int) (StreamInfo, error) {
+	return resolveStreamInfo(config, anilistID, episode, false)
+}
+
+func resolveStreamInfo(config Config, anilistID, episode int, discoverLanguages bool) (StreamInfo, error) {
 	nyaa.SetStreamInfoOnly(true)
 	defer nyaa.SetStreamInfoOnly(false)
 	anime, err := GetAnimeDataByID(anilistID, "")
@@ -97,32 +108,45 @@ func ResolveStreamInfo(config Config, anilistID, episode int) (StreamInfo, error
 				// This provider indexes different spoken languages as separate
 				// releases. Discover real episode URLs, not merely locale
 				// names, so the Activity can offer only playable choices.
-				if result.ProviderName == "kickassanime" && result.ProviderID != "" {
-					alternates := kickassanime.EpisodeAudioVariants(result.ProviderID, episode, 5*time.Second)
+				if discoverLanguages && result.ProviderName == "kickassanime" && result.ProviderID != "" {
+					alternates := kickassanime.EpisodeAudioVariants(result.ProviderID, episode, 45*time.Second)
 					// Do not advertise a separate language when multiple
 					// locale pages resolve to the same unlabelled stream.
 					// Its HLS audio renditions are discovered by the player.
 					urlCounts := map[string]int{}
-					for _, alt := range alternates { urlCounts[alt.URL]++ }
+					for _, alt := range alternates {
+						urlCounts[alt.URL]++
+					}
 					for lang, alternate := range alternates {
-						if urlCounts[alternate.URL] > 1 { continue }
-						if alternate.URL == "" { continue }
+						if urlCounts[alternate.URL] > 1 {
+							continue
+						}
+						if alternate.URL == "" {
+							continue
+						}
 						same := false
 						for _, original := range streams {
-							if original.URL == alternate.URL { same = true; break }
+							if original.URL == alternate.URL {
+								same = true
+								break
+							}
 						}
-						if same { continue }
+						if same {
+							continue
+						}
 						links := streamLinks(ProviderEpisodeResult{
 							Links: []string{alternate.URL},
 							LinkHints: map[string]StreamPlaybackHint{alternate.URL: {
-								Referrer: alternate.Hint.Referrer,
-								Headers: alternate.Hint.Headers,
-								Subtitle: alternate.Hint.Subtitle,
+								Referrer:  alternate.Hint.Referrer,
+								Headers:   alternate.Hint.Headers,
+								Subtitle:  alternate.Hint.Subtitle,
 								Subtitles: alternate.Hint.Subtitles,
 							}},
 						})
 						if len(links) > 0 {
-							if info.AudioVariants == nil { info.AudioVariants = map[string]StreamLink{} }
+							if info.AudioVariants == nil {
+								info.AudioVariants = map[string]StreamLink{}
+							}
 							info.AudioVariants[lang] = links[0]
 						}
 					}

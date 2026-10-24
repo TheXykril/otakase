@@ -26,26 +26,39 @@ const (
 
 // streamInfo is `otakase -stream-info`'s answer.
 type streamInfo struct {
-	AnilistID int          `json:"anilist_id"`
-	Episode   int          `json:"episode"`
-	Title     string       `json:"title"`
-	Episodes  int          `json:"episodes"`
-	Provider  string       `json:"provider"`
-	Mode      string       `json:"mode"`
-	Streams   []streamLink `json:"streams"`
+	AnilistID     int                   `json:"anilist_id"`
+	Episode       int                   `json:"episode"`
+	Title         string                `json:"title"`
+	Episodes      int                   `json:"episodes"`
+	Provider      string                `json:"provider"`
+	Mode          string                `json:"mode"`
+	Streams       []streamLink          `json:"streams"`
 	AudioVariants map[string]streamLink `json:"audio_variants,omitempty"`
-	Torrents  []struct {
+	Torrents      []struct {
 		InfoHash string `json:"info_hash"`
 	} `json:"torrents,omitempty"`
 }
 
-// watchResolve runs the CLI, a variable for tests.
+// watchResolve runs the fast CLI lookup, a variable for tests.
 var watchResolve = func(parent context.Context, cli string, anilistID, episode int, dub, adult bool) (streamInfo, error) {
+	return watchResolveCLI(parent, cli, anilistID, episode, dub, adult, true)
+}
+
+// watchResolveAudio completes the slower language-release lookup after the
+// episode starts. It is separate so tests can control its completion.
+var watchResolveAudio = func(parent context.Context, cli string, anilistID, episode int, dub, adult bool) (streamInfo, error) {
+	return watchResolveCLI(parent, cli, anilistID, episode, dub, adult, false)
+}
+
+func watchResolveCLI(parent context.Context, cli string, anilistID, episode int, dub, adult, fast bool) (streamInfo, error) {
 	ctx, cancel := context.WithTimeout(parent, watchResolveWait)
 	defer cancel()
 	home, _ := os.MkdirTemp("", "otakase-watch")
 	defer os.RemoveAll(home)
 	args := []string{"-stream-info", fmt.Sprintf("%d:%d", anilistID, episode)}
+	if fast {
+		args = append(args, "-stream-info-fast")
+	}
 	if dub {
 		args = append(args, "-dub")
 	}
@@ -212,7 +225,7 @@ type watchMediaJSON struct {
 		Large string `json:"large"`
 	} `json:"coverImage"`
 	Previews []watchEpisodePreview `json:"streamingEpisodes"`
-	Next *struct {
+	Next     *struct {
 		Episode int `json:"episode"`
 	} `json:"nextAiringEpisode"`
 }

@@ -239,7 +239,11 @@ func runCommandAndExit(f *cliFlags, cfg *internal.Config) {
 			applyAudioFlags(cfg, f)
 			cfg.AdultContent = f.streamAdult
 			var info internal.StreamInfo
-			info, err = internal.ResolveStreamInfo(*cfg, anilistID, episode)
+			if f.streamInfoFast {
+				info, err = internal.ResolveStreamInfoFast(*cfg, anilistID, episode)
+			} else {
+				info, err = internal.ResolveStreamInfo(*cfg, anilistID, episode)
+			}
 			if err == nil {
 				fmt.Println(internal.FormatStreamInfo(info))
 				os.Exit(0)
