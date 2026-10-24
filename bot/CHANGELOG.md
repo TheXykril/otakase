@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.37
+
+- Watch Together: replace the fixed 85-second Skip OP action with a +10-second seek and matching request for viewers.
+- Watch Together: add room-wide Auto OP and Auto ED toggles to playback settings. When enabled, the room skips known opening and ending intervals from AniSkip at their actual episode positions; missing or mismatched timings never cause a guessed seek.
+
 ## 1.30.36
 
 - Watch Together: restore enabled Activity background music when returning to Games from the watch lobby or a room, including when Discord suspends Web Audio during playback.

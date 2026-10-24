@@ -108,6 +108,7 @@ async function watchJoin() {
 function wSet(v, fromHost) {
   if (!v || where !== "watch") return;
   const previous = wv;
+  const oldSkipSeq = previous ? previous.skip_seq || 0 : 0;
   const oldAudioMedia = JSON.stringify((wv && wv.audio_media) || {});
   wv = v;
   wvAt = Date.now();
@@ -146,10 +147,11 @@ function wSet(v, fromHost) {
   wPeople();
   wAsks();
   wSyncLine();
+  wSkipControls();
   if (oldAudioMedia !== JSON.stringify(v.audio_media || {})) wAudioTracks();
   wUpdateOrigin();
   if (v.media && wEffectiveMedia() !== wvMedia) wLoad();
-  else if (fromHost) wApply(true);
+  else if (fromHost || (v.is_host && v.skip_seq && oldSkipSeq !== v.skip_seq)) wApply(true);
 }
 
 function wDraw() {
@@ -589,19 +591,31 @@ function wBar() {
   const v = wv;
   const btn = (id, ic, label, alt = true) => `<button class="btn${alt ? " alt" : ""}" id="${id}" title="${esc(label)}">${icon(ic)}<span>${esc(label)}</span></button>`;
   const origin = v.origin ? '<span class="worigin" id="worigin"></span>' : "";
-  const common = `<button class="btn alt" id="wsettings" title="Audio and subtitle languages" aria-label="Audio and subtitle languages"><span>Languages</span></button>
-    <div class="wsettings" id="wsettingsmenu" hidden><label>Audio language<select id="waudio" aria-label="Audio language"></select></label><label>Subtitles<select id="wsub" aria-label="Subtitle language"></select></label><p class="note" id="wsettingshint"></p></div>
+  const common = `<button class="btn alt" id="wsettings" title="Audio, subtitles and automatic skips" aria-label="Playback settings"><span>Settings</span></button>
+    <div class="wsettings" id="wsettingsmenu" hidden>
+      <label>Audio language<select id="waudio" aria-label="Audio language"></select></label>
+      <label>Subtitles<select id="wsub" aria-label="Subtitle language"></select></label>
+      <p class="note" id="wsettingshint"></p>
+      <div class="wskipsettings">
+        <span class="wskiptitle">Automatic skips · everyone in this room</span>
+        <div class="wskiptoggles">
+          <button type="button" class="btn alt wskiptoggle" id="wautoop" aria-pressed="false">OP · Off</button>
+          <button type="button" class="btn alt wskiptoggle" id="wautoed" aria-pressed="false">ED · Off</button>
+        </div>
+        <p class="note" id="wskiphint"></p>
+      </div>
+    </div>
     <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
     ${origin}
     <button class="btn alt wfullscreen" id="wfull" title="Toggle theater mode" aria-label="Toggle theater mode" aria-pressed="${wFull}">${icon(wFull ? "minimize" : "maximize")}</button>`;
   if (v.is_host) {
     bar.innerHTML = `<div class="wseek"><span id="wcur">0:00</span><input type="range" id="wpos" min="0" max="1" step="0.1" value="0" aria-label="Position"><span id="wdur">0:00</span></div>
-      <div class="row">${btn("wpp", "pause", "Pause", false)}${btn("wback10", "undo", "10s")}${btn("wskip", "ff", "Skip OP")}
+      <div class="row">${btn("wpp", "pause", "Pause", false)}${btn("wback10", "undo", "-10s")}${btn("wforward10", "ff", "+10s")}
       ${v.ep > 1 ? btn("wprev", "back", "Prev ep") : ""}${v.ep < v.last_ep ? btn("wnext", "skip", "Next ep") : ""}${common}</div>`;
     const vid = document.getElementById("wvid");
     document.getElementById("wpp").onclick = () => wCtl(vid.paused ? "play" : "pause");
     document.getElementById("wback10").onclick = () => wCtl("seek", Math.max(0, vid.currentTime - 10));
-    document.getElementById("wskip").onclick = () => wCtl("skip");
+    document.getElementById("wforward10").onclick = () => wCtl("forward");
     const on = (id, fn) => document.getElementById(id) && (document.getElementById(id).onclick = fn);
     on("wprev", () => wCtl("prev"));
     on("wnext", () => wCtl("next"));
@@ -613,9 +627,9 @@ function wBar() {
     };
   } else {
     bar.innerHTML = `<div class="wseek"><span id="wcur">0:00</span><div class="wprog"><i id="wprog"></i></div><span id="wdur">0:00</span></div>
-      <div class="row">${btn("wapp", "pause", "Ask to pause")}${btn("waskip", "ff", "Ask to skip OP")}${v.ep < v.last_ep ? btn("wanext", "skip", "Ask for next ep") : ""}${common}</div>`;
+      <div class="row">${btn("wapp", "pause", "Ask to pause")}${btn("waforward", "ff", "Ask +10s")}${v.ep < v.last_ep ? btn("wanext", "skip", "Ask for next ep") : ""}${common}</div>`;
     document.getElementById("wapp").onclick = () => wAsk(wv.playing ? "pause" : "play");
-    document.getElementById("waskip").onclick = () => wAsk("skip");
+    document.getElementById("waforward").onclick = () => wAsk("forward");
     const n = document.getElementById("wanext");
     if (n) n.onclick = () => wAsk("next");
   }
@@ -627,9 +641,40 @@ function wBar() {
   document.getElementById("wsettings").onclick = () => { const menu = document.getElementById("wsettingsmenu"); menu.hidden = !menu.hidden; };
   document.getElementById("wsub").onchange = (e) => { wSubPick = e.target.value; wSettingsDirty = true; wSubs(); wSaveLanguages(); };
   document.getElementById("waudio").onchange = (e) => { wAudioPick = e.target.value; wSettingsDirty = true; wAudioTracks(); wSaveLanguages(); wUpdateOrigin(); if (wv.audio_media && wEffectiveMedia() !== wvMedia) wLoad(); };
+  const op = document.getElementById("wautoop");
+  const ed = document.getElementById("wautoed");
+  op.onclick = () => wCtl(wv.auto_skip_op ? "op-off" : "op-on");
+  ed.onclick = () => wCtl(wv.auto_skip_ed ? "ed-off" : "ed-on");
   wAudioTracks();
   wSubs();
   wUpdateOrigin();
+  wSkipControls();
+}
+
+// Keep room-wide automatic skip toggles current without rebuilding the player.
+function wSkipControls() {
+  if (!wv) return;
+  for (const [id, enabled] of [["wautoop", !!wv.auto_skip_op], ["wautoed", !!wv.auto_skip_ed]]) {
+    const button = document.getElementById(id);
+    if (!button) continue;
+    button.setAttribute("aria-pressed", String(enabled));
+    button.textContent = (id === "wautoop" ? "OP" : "ED") + " · " + (enabled ? "On" : "Off");
+    button.disabled = !wv.is_host;
+  }
+  const hint = document.getElementById("wskiphint");
+  if (!hint) return;
+  if (!wv.skip_ready) {
+    hint.textContent = "Looking up episode-specific opening and ending times…";
+    return;
+  }
+  if (!wv.dur) {
+    hint.textContent = "Waiting for the video duration to verify skip times…";
+    return;
+  }
+  const times = wv.skip_times || {};
+  const span = (s) => s && s.end > s.start ? wFmt(s.start) + "–" + wFmt(s.end) : "unavailable";
+  hint.textContent = "Opening: " + span(times.op) + " · Ending: " + span(times.ed)
+    + (!wv.is_host ? " · Only the host can change these switches." : "");
 }
 
 // Update the private source hint when the viewer switches to a separate
