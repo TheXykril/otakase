@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.27
+
+- Watch Together: center the theater video in the Activity viewport by moving the fullscreen player outside transformed page containers; restore normal layout when leaving theater mode.
+
 ## 1.30.26
 
 - Watch Together: display the current stream's audio language even when audio is muxed into the video, and keep searching for separate language alternatives.
