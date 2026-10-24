@@ -456,8 +456,12 @@ function hlsReady() {
 function wEffectiveMedia() {
   if (!wv) return "";
   const variants = wv.audio_media || {};
-  const mode = /^(en|eng)(-|$)/.test(wAudioPick) ? "dub" : /^(ja|jpn)(-|$)/.test(wAudioPick) ? "sub" : "";
-  return mode && variants[mode] ? variants[mode] : wv.media;
+  const pick = wAudioPick.toLowerCase();
+  // Prefer an actual audio-language rendition; support legacy sub/dub URLs.
+  if (variants[pick]) return variants[pick];
+  if (/^(en|eng)(-|$)/.test(pick) && variants.dub) return variants.dub;
+  if (/^(ja|jpn)(-|$)/.test(pick) && variants.sub) return variants.sub;
+  return wv.media;
 }
 
 async function wLoad() {
@@ -730,21 +734,32 @@ function wAudioTracks() {
   const seen = new Set();
   const names = { ja: "Japanese", en: "English", de: "German", es: "Spanish",
     fr: "French", hi: "Hindi", it: "Italian", pt: "Portuguese",
-    ta: "Tamil", te: "Telugu", ko: "Korean" };
+    ta: "Tamil", te: "Telugu", ko: "Korean", zh: "Chinese",
+    ru: "Russian", ar: "Arabic", pl: "Polish", tr: "Turkish",
+    uk: "Ukrainian", id: "Indonesian", nl: "Dutch", th: "Thai" };
   const normalized = (code) => String(code || "").toLowerCase().replace(/^jpn$/, "ja")
     .replace(/^eng$/, "en").replace(/^deu$/, "de").replace(/^ger$/, "de")
     .replace(/^spa$/, "es").replace(/^fra$/, "fr").replace(/^fre$/, "fr")
     .replace(/^hin$/, "hi").replace(/^ita$/, "it").replace(/^por$/, "pt")
-    .replace(/^tam$/, "ta").replace(/^tel$/, "te").replace(/^kor$/, "ko");
+    .replace(/^tam$/, "ta").replace(/^tel$/, "te").replace(/^kor$/, "ko")
+    .replace(/^rus$/, "ru").replace(/^zho$/, "zh").replace(/^chi$/, "zh");
   const add = (code, label) => {
     const lang = normalized(code);
     if (!lang || seen.has(lang)) return;
     seen.add(lang);
-    options.push({ value: lang, label: label || names[lang.split("-")[0]] || lang });
+    const fallback = /^track-(\d+)$/.test(lang) ? "Audio track " + lang.split("-")[1]
+      : /^hls-(\d+)$/.test(lang) ? "Audio track " + (+lang.split("-")[1] + 1)
+      : names[lang.split("-")[0]] || lang;
+    options.push({ value: lang, label: label || fallback });
   };
-  if (variants.sub) add("ja");
-  if (variants.dub) add("en");
-  tracks.forEach((track) => add(track.lang, track.name || names[normalized(track.lang).split("-")[0]]));
+  // Language-specific torrent or provider releases appear even if their
+  // manifest has only one muxed audio track.
+  Object.keys(variants).sort().forEach((code) => {
+    add(code === "sub" ? "ja" : code === "dub" ? "en" : code);
+  });
+  // HLS alternative renditions may have no LANGUAGE tag; keep those
+  // selectable by track index instead of silently omitting them.
+  tracks.forEach((track, index) => add(track.lang || "hls-" + index, track.name));
   select.innerHTML = options.map((o) =>
     `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("");
   select.disabled = options.length === 1;
@@ -757,7 +772,8 @@ function wAudioTracks() {
       ? "Preferred audio unavailable; using the current stream."
       : "";
   if (wHls && tracks.length) {
-    const index = tracks.findIndex((track) => normalized(track.lang) === preferred);
+    const index = tracks.findIndex((track, i) =>
+      normalized(track.lang || "hls-" + i) === preferred);
     if (index >= 0 && wHls.audioTrack !== index) wHls.audioTrack = index;
   }
 }
