@@ -154,7 +154,19 @@ function wDraw() {
   if (document.getElementById("wbar")) {
     wBar();
     const player = document.getElementById("wplayer");
-    if (player) player.addEventListener("click", () => { if (wFull) wRevealControls(); });
+    if (player) player.addEventListener("click", (e) => {
+      if (!wFull || e.target.closest("button, input, select, a, label")) return;
+      const stage = document.getElementById("wstage");
+      if (!stage) return;
+      if (stage.classList.contains("controls-hidden")) {
+        wRevealControls();
+      } else {
+        clearTimeout(wControlsTimer);
+        const menu = document.getElementById("wsettingsmenu");
+        if (menu) menu.hidden = true;
+        stage.classList.add("controls-hidden");
+      }
+    });
     const bar = document.getElementById("wbar");
     bar.addEventListener("pointerdown", () => { clearTimeout(wControlsTimer); });
     bar.addEventListener("pointerup", () => { if (wFull) wRevealControls(); });
