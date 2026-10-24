@@ -712,6 +712,12 @@
   .wsettings label { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--muted); }
   .wsettings select { width:100%; max-width:none; }
   .wsettings p { grid-column:1/-1; margin:0; }
+  .wskipsettings { grid-column:1/-1; display:grid; gap:8px; padding-top:10px; border-top:1px solid var(--line); }
+  .wskiptitle { color:var(--muted); font-size:12px; font-weight:700; }
+  .wskiptoggles { display:flex; flex-wrap:wrap; gap:8px; }
+  .wskiptoggle[aria-pressed="true"] { border-color:var(--shu); color:var(--text); background:var(--tile); }
+  .wskiptoggle:disabled { cursor:default; opacity:.65; }
+  .wskipsettings .note { margin:0; font-size:12px; }
   .wbarlabel { color:var(--muted); display:inline-flex; align-items:center; font-size:12px; font-weight:700; }
   .worigin { color:var(--muted); opacity:.7; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:175px; cursor:help; }
   .worigin[hidden] { display:none; }
