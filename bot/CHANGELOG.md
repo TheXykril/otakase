@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.30.38
+
 - Watch Together: show embedded HLS audio tracks even when Discord reports native HLS support. Solo Leveling season 2 episode 1 exposes Japanese, English, German, Spanish, French, Hindi, Italian, Portuguese, Tamil, and Telugu in its stream.
 - Watch Together: start playback before checking slower separate-language releases, then add playable choices as they arrive. Keep the episode heading neutral and reject subtitle-only choices for audio preferences.
 
