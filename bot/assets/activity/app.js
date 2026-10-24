@@ -3258,7 +3258,7 @@ function admButton(v) {
 function admDo(kind, target = "", text = "", n = 0) {
   return api("party/admin", { room, kind, target, text, n })
     .then((v) => {
-      admNote = "Done.";
+      admNote = kind === "tickets" ? `Balance: ${v.balance} watch tickets.` : "Done.";
       if (v.view) setRoom(v.view);
       else if (document.getElementById("admsheet")) admSheet();
     })
@@ -3422,7 +3422,7 @@ function admSheet() {
     })
     .join("");
   const scroll = el.closest(".modal").scrollTop;
-  const boxes = ["ahint", "aname", "apup", "awarn", "aoff"];
+  const boxes = ["ahint", "aname", "apup", "awarn", "aoff", "aticketuser", "aticketcount"];
   const kept = {};
   for (const id of boxes) {
     const b = document.getElementById(id);
@@ -3433,6 +3433,10 @@ function admSheet() {
     <p class="note">${running ? esc(game) + (tv.paused ? " · paused" : "") : "In the lobby"} · ${tv.members.length} here. Pranks end when the game does; moderation steps go to the staff log.</p>
     ${gameBtns ? `<h3 class="lh">This game</h3><div class="abtns">${gameBtns}</div>` : ""}
     <h3 class="lh">Room and server</h3><div class="abtns">${roomBtns}</div><div class="ahint">${offRow}</div>
+    ${a.owner ? `<h3 class="lh">Watch tickets</h3><p class="note">Server owner only. Enter a Discord user ID and select a ticket adjustment.</p>
+      <div class="ahint"><input id="aticketuser" inputmode="numeric" placeholder="Discord user ID" maxlength="20" value="${esc(admPick || "")}">
+      <input id="aticketcount" type="number" min="1" max="100" value="1" aria-label="Ticket amount"></div>
+      <div class="abtns">${btn("tickets", "Add tickets", { n: 1 })}${btn("tickets", "Remove tickets", { n: -1 })}</div>` : ""}
     <h3 class="lh">Pranks for everyone</h3><div class="abtns">${fun}</div>
     <h3 class="lh">Players</h3><div class="arows">${rows}</div>
     <p class="anote" role="status">${esc(admNote)}</p>`;
@@ -3457,8 +3461,20 @@ function admSheet() {
         const from = { hint: "ahint", rename: "aname", puppet: "apup", warn: "awarn", "game-off": "aoff" }[b.dataset.k];
         if (from) text = (document.getElementById(from) || {}).value || "";
         if (b.dataset.k === "puppet" || b.dataset.k === "warn") (document.getElementById(from) || {}).value = "";
+        let target = b.dataset.t;
+        let amount = +b.dataset.n;
+        if (b.dataset.k === "tickets") {
+          target = (document.getElementById("aticketuser") || {}).value?.trim() || "";
+          const n = +(document.getElementById("aticketcount") || {}).value;
+          if (!/^\d{17,20}$/.test(target) || !Number.isInteger(n) || n < 1 || n > 100) {
+            admNote = "Enter a Discord user ID and 1 to 100 tickets.";
+            admSheet();
+            return;
+          }
+          amount *= n;
+        }
         b.disabled = true;
-        admDo(b.dataset.k, b.dataset.t, text, +b.dataset.n);
+        admDo(b.dataset.k, target, text, amount);
       })
   );
 }
