@@ -506,6 +506,14 @@ func TestParseStreamInfo(t *testing.T) {
 	}
 }
 
+func TestParseStreamInfoAudioVariants(t *testing.T) {
+	info, err := parseStreamInfo(`{"anilist_id":1,"episode":2,"provider":"kickassanime","mode":"dub","streams":[{"url":"https://a/en.m3u8"}],"audio_variants":{"de":{"url":"https://a/de.m3u8","referrer":"https://kaa.lt/"}}}`)
+	if err != nil || info.AudioVariants["de"].URL != "https://a/de.m3u8" ||
+		info.AudioVariants["de"].Referrer != "https://kaa.lt/" {
+		t.Fatalf("missing language release metadata: %+v, %v", info, err)
+	}
+}
+
 func TestWatchTorrentOnlyStreamInfo(t *testing.T) {
 	hash := "0123456789abcdef0123456789abcdef01234567"
 	info, err := parseStreamInfo(`{"anilist_id":123,"episode":1,"mode":"sub","streams":[],"torrents":[{"info_hash":"` + hash + `"}]}`)
