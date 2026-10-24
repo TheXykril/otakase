@@ -895,6 +895,15 @@ body > .wstage.full .wplayer video {
   object-fit:contain;
   object-position:center center;
 }
+/* Keep the next-episode loading screen inside the active theater. */
+body > .wstage.full .wplayer.wloading { padding:24px; text-align:center; }
+.wstage.full .wloading .msg { max-width:560px; }
+.wstage.full .wloadingexit {
+  position:absolute;
+  top:max(16px,env(safe-area-inset-top,0px));
+  right:max(16px,env(safe-area-inset-right,0px));
+  z-index:3;
+}
 /* No still available: text-first layout instead of a blank video frame. */
 .wepcard.noimage { min-height:96px; justify-content:center; }
 .wepcard.noimage .wepvisual { display:none; }
