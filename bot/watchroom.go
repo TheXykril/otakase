@@ -633,6 +633,44 @@ func watchPlaybackHost(raw string) string {
 	return host
 }
 
+// Source diagnostics are restricted to the guild owner, administrators and
+// developer/maintainer roles. Moderation-only permissions do not grant access.
+func (b *bot) watchCanInspectPlayback(user string) bool {
+	if user == "" || b.s == nil || b.cfg.GuildID == "" {
+		return false
+	}
+	guild, err := b.s.State.Guild(b.cfg.GuildID)
+	if err != nil || guild == nil || len(guild.Roles) == 0 {
+		guild, err = b.s.Guild(b.cfg.GuildID)
+		if err != nil || guild == nil {
+			return false
+		}
+	}
+	if guild.OwnerID == user {
+		return true
+	}
+	member, err := b.s.State.Member(b.cfg.GuildID, user)
+	if err != nil || member == nil {
+		member, err = b.s.GuildMember(b.cfg.GuildID, user)
+		if err != nil || member == nil {
+			return false
+		}
+	}
+	for _, id := range member.Roles {
+		for _, role := range guild.Roles {
+			if role.ID != id {
+				continue
+			}
+			if role.Permissions&(discordgo.PermissionAdministrator|discordgo.PermissionManageGuild) != 0 ||
+				strings.EqualFold(role.Name, "Developer") ||
+				strings.EqualFold(role.Name, "Maintainer") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 type watchView struct {
 	Ver     int           `json:"ver"`
 	Room    string        `json:"room"`
