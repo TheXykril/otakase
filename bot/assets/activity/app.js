@@ -64,6 +64,7 @@ const ICONS = {
   who: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><path d="M15 15l4 4M19 15l-4 4"/>',
   koikoi: '<rect x="3" y="4" width="10" height="15" rx="1.5" transform="rotate(-8 8 11.5)"/><rect x="11" y="5" width="10" height="15" rx="1.5" transform="rotate(8 16 12.5)"/><circle cx="16" cy="10" r="2.2"/>',
   undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+  rewind: '<path d="M21 5v14l-9-7zM12 5v14l-9-7z"/>',
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/>',
   bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
