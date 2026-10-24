@@ -590,6 +590,19 @@ function wFullscreen(on) {
   if (!st) return;
   wFull = on;
   clearTimeout(wControlsTimer);
+  // Move the theater stage out of animated Activity containers. Their
+  // transforms otherwise turn position:fixed into an offset local box.
+  if (on && st.parentElement !== document.body) {
+    const marker = document.createElement("div");
+    marker.id = "wstage-placeholder";
+    st.parentNode.insertBefore(marker, st);
+    document.body.appendChild(st);
+  } else if (!on && st.parentElement === document.body) {
+    const marker = document.getElementById("wstage-placeholder");
+    if (marker && marker.parentNode) {
+      marker.parentNode.replaceChild(st, marker);
+    }
+  }
   st.classList.toggle("full", on);
   st.classList.remove("controls-hidden");
   if (on) wRevealControls();
