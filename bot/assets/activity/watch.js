@@ -385,6 +385,12 @@ function wDestroy() {
 }
 
 function wStop() {
+  wFull = false;
+  document.body.classList.remove("wfull");
+  const detached = document.body.querySelector(":scope > #wstage");
+  if (detached) detached.remove();
+  const marker = document.getElementById("wstage-placeholder");
+  if (marker) marker.remove();
   wvLoop++;
   wDestroy();
 }
