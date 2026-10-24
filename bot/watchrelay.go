@@ -58,9 +58,9 @@ type streamSubtitle struct {
 
 // watchMedia is one episode as the relay serves it.
 type watchMedia struct {
-	key  string
-	link streamLink
-	dub  bool // pick the English audio track
+	key   string
+	link  streamLink
+	dub   bool   // pick the English audio track
 	audio string // force an HLS rendition for native players
 
 	mu    sync.Mutex

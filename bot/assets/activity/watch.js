@@ -508,17 +508,21 @@ async function wLoad() {
       }
       if (wvMedia !== wEffectiveMedia()) return;
       if (window.Hls && Hls.isSupported()) {
-      wHls = new Hls({ startPosition: at, maxBufferLength: 40, backBufferLength: 60, enableWorker: false, renderTextTracksNatively: true });
-      wHls.on(Hls.Events.ERROR, (_, d) => {
-        if (!d.fatal) return;
-        if (d.type === Hls.ErrorTypes.MEDIA_ERROR) return wHls.recoverMediaError();
-        if (++wFails > 4) return wBroken();
-        setTimeout(() => wHls && wHls.startLoad(), 1500);
-      });
-      wHls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, wSubs);
-      wHls.on(Hls.Events.AUDIO_TRACKS_UPDATED, wAudioTracks);
-      wHls.loadSource(wvMedia);
-      wHls.attachMedia(vid);
+        const hls = new Hls({ startPosition: at, maxBufferLength: 40, backBufferLength: 60, enableWorker: false, renderTextTracksNatively: true });
+        wHls = hls;
+        hls.on(Hls.Events.ERROR, (_, d) => {
+          if (!d.fatal || wHls !== hls) return;
+          if (d.type === Hls.ErrorTypes.MEDIA_ERROR && wFails < 2) {
+            wFails++;
+            return hls.recoverMediaError();
+          }
+          if (++wFails > 4) return wBroken();
+          setTimeout(() => { if (wHls === hls) hls.startLoad(); }, 1500);
+        });
+        hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, wSubs);
+        hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, wAudioTracks);
+        hls.loadSource(wvMedia);
+        hls.attachMedia(vid);
       } else {
         return showError(new Error("This Discord can't play the stream."));
       }
