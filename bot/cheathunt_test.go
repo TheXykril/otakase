@@ -225,7 +225,7 @@ func TestCheatHuntFlow(t *testing.T) {
 		t.Fatalf("redeemed flag: %v", m)
 	}
 	b.store.view(func(d *storeData) {
-		if d.WatchTickets["u2"] != 1 || d.WatchTickets["u1"] != 0 {
+		if d.WatchTickets["u2"] != 5 || d.WatchTickets["u1"] != 0 {
 			t.Fatalf("tickets %v", d.WatchTickets)
 		}
 	})
@@ -267,5 +267,28 @@ func TestNextWeek(t *testing.T) {
 		if want := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
 			t.Errorf("Oct %d: %v", day, got)
 		}
+	}
+}
+
+func TestTicketRewards(t *testing.T) {
+	b := cheatTestBot(t)
+	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	var codes []string
+	b.store.update(func(d *storeData) {
+		codes = mintCodesWithTickets(d, "staff", "event", 2, 3, now)
+		legacy := newCheatCode()
+		d.CheatCodes[legacy] = cheatCode{Found: now, Kind: "minted", MintedBy: "staff"}
+		codes = append(codes, legacy)
+	})
+	for _, c := range codes {
+		if _, err := b.redeemCheat("member", c, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := b.watchTickets("member"); got != 7 {
+		t.Fatalf("expected 3 + 3 + 1 tickets, got %d", got)
+	}
+	if _, err := b.redeemCheat("member", codes[0], now); err != errLinkNotFound {
+		t.Fatalf("redeemed code accepted again: %v", err)
 	}
 }

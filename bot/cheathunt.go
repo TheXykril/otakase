@@ -4,7 +4,7 @@ package main
 // terminal, or typing uuddlrlrba in rofi) starts a puzzle hunt made for the
 // member whose app is linked (cheatpuzzles.go). Solving it mints a one-time
 // code. Codes are not tied to anyone: the finder can redeem it or give it
-// away, and the first /redeem wins. Its only reward is a watch ticket: one
+// away, and the first /redeem wins. Its reward is five watch tickets: one ticket opens one
 // watch room the bot hosts in the games Activity (watchroom.go). A member
 // finds at most one code a week.
 //
@@ -52,6 +52,7 @@ type cheatCode struct {
 	Kind       string    `json:"kind"`
 	RedeemedBy string    `json:"redeemed_by,omitempty"`
 	Redeemed   time.Time `json:"redeemed,omitzero"`
+	Tickets    int       `json:"tickets,omitempty"` // zero on older codes means one ticket
 	Number     int       `json:"number,omitempty"` // place in the old hall of fame, codes redeemed before it went
 }
 
@@ -237,7 +238,7 @@ func (b *bot) cheatAnswer(user, answer string, now time.Time) (correct bool, msg
 			if d.CheatCodes == nil {
 				d.CheatCodes = map[string]cheatCode{}
 			}
-			d.CheatCodes[code] = cheatCode{Finder: user, Found: now, Kind: h.Puzzle.Kind}
+			d.CheatCodes[code] = cheatCode{Finder: user, Found: now, Kind: h.Puzzle.Kind, Tickets: 5}
 			delete(d.CheatHunts, user)
 			log.Printf("cheat: member %s solved a %s hunt", user, h.Puzzle.Kind)
 			v = cheatView{Status: "found", Code: formatCheatCode(code), Until: nextWeek(now),
@@ -281,7 +282,15 @@ func (b *bot) cheatWhisper(user, words string, now time.Time) (string, bool) {
 	return next, ok
 }
 
-// redeemCheat redeems a code for user, giving them a watch ticket, and
+// ticketReward preserves the one-ticket reward on codes made before this field existed.
+func ticketReward(c cheatCode) int {
+	if c.Tickets <= 0 {
+		return 1
+	}
+	return c.Tickets
+}
+
+// redeemCheat redeems a code for user, giving them its ticket reward, and
 // returns the code.
 func (b *bot) redeemCheat(user, input string, now time.Time) (cheatCode, error) {
 	if cheatRedeemFails.full(user, now) {
@@ -304,7 +313,7 @@ func (b *bot) redeemCheat(user, input string, now time.Time) (cheatCode, error) 
 			if d.WatchTickets == nil {
 				d.WatchTickets = map[string]int{}
 			}
-			d.WatchTickets[user]++
+			d.WatchTickets[user] += ticketReward(x)
 		}
 	})
 	if err == errLinkWrong {
@@ -421,6 +430,6 @@ func (b *bot) redeemCommand(i *discordgo.InteractionCreate) {
 		who = fmt.Sprintf(" It was found by <@%s>.", x.Finder)
 	}
 	b.respondQuiet(i, true, &discordgo.MessageEmbed{Title: "Code accepted", Color: shu,
-		Description: "You got a **watch ticket**: one watch room the bot hosts for your call. Open the games Activity in a voice channel and pick **Watch room**." +
+		Description: fmt.Sprintf("You got **%s**. Each ticket opens one watch room for your call. Open the games Activity in a voice channel and pick **Watch room**.", dashPlural(ticketReward(x), "watch ticket")) +
 			who + " " + watchTicketLine(b, user)})
 }

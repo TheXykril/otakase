@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -131,6 +132,34 @@ func (b *bot) discordStaff(user string) bool {
 		}
 	}
 	return false
+}
+
+// isGuildOwner grants ticket management only to the Discord server owner.
+func (b *bot) isGuildOwner(user string) bool {
+	if user == "" || b.s == nil || b.s.State == nil {
+		return false
+	}
+	g, err := b.s.State.Guild(b.cfg.GuildID)
+	return err == nil && g != nil && g.OwnerID == user
+}
+
+var ticketUserID = regexp.MustCompile(`^[0-9]{17,20}$`)
+
+// adjustWatchTickets clamps removal at zero and returns the resulting balance.
+func (b *bot) adjustWatchTickets(user string, delta int) int {
+	balance := 0
+	b.store.update(func(d *storeData) {
+		if d.WatchTickets == nil {
+			d.WatchTickets = map[string]int{}
+		}
+		balance = max(0, d.WatchTickets[user]+delta)
+		if balance == 0 {
+			delete(d.WatchTickets, user)
+		} else {
+			d.WatchTickets[user] = balance
+		}
+	})
+	return balance
 }
 
 // setAdmin remembers whether a member is staff. Hold the lock.
@@ -296,6 +325,7 @@ type adminMember struct {
 }
 
 type adminView struct {
+	Owner    bool          `json:"owner,omitempty"`
 	Members  []adminMember `json:"members"`
 	ImpRig   string        `json:"imp_rig,omitempty"`
 	BombRig  string        `json:"bomb_rig,omitempty"`
@@ -464,7 +494,7 @@ func (b *bot) adminViewFill(r *togetherRoom, v *togetherView, user string, now t
 		return
 	}
 	a := &adminView{Members: []adminMember{}, ImpRig: r.impRig, BombRig: r.bombRig, Trash: r.trash, Swap: r.swap != nil, Roulette: r.roulette,
-		Locked: r.locked, Off: v.Off, Games: offable}
+		Locked: r.locked, Off: v.Off, Games: offable, Owner: b.isGuildOwner(user)}
 	if a.Off == nil {
 		a.Off = []string{}
 	}
@@ -545,6 +575,22 @@ func (b *bot) togetherAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 	if !b.isAdmin(user) {
 		apiError(w, http.StatusForbidden, "only staff can do that")
+		return
+	}
+	// Ticket balances belong to the server, not a particular room.
+	if in.Kind == "tickets" {
+		if !b.isGuildOwner(user) {
+			apiError(w, http.StatusForbidden, "only the server owner can change tickets")
+			return
+		}
+		if !ticketUserID.MatchString(in.Target) || in.N == 0 || in.N < -100 || in.N > 100 {
+			apiError(w, http.StatusBadRequest, "enter a Discord user ID and 1 to 100 tickets")
+			return
+		}
+		before := b.watchTickets(in.Target)
+		balance := b.adjustWatchTickets(in.Target, in.N)
+		b.adminNote(user, in.Target, fmt.Sprintf("changed %%s watch tickets from %d to %d", before, balance))
+		writeJSON(w, http.StatusOK, map[string]int{"balance": balance})
 		return
 	}
 	// Bans and points live outside the room.
