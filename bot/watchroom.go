@@ -455,7 +455,9 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
         // Some providers expose Sub and Dub as separate releases rather than
         // multiple audio tracks. Look up the other version without delaying
         // the first viewer; only reuse directly playable links here.
-        if r.audioEntries == nil {
+        other := "dub"
+        if r.dub { other = "sub" }
+        if _, exists := r.audioEntries[other]; !exists {
             go b.findWatchAlternate(ctx, r, gen, cli, show.ID, ep, adult, !r.dub)
         }
 		// The next episode is looked up ahead, so it starts at once.
