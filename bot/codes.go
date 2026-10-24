@@ -2,7 +2,7 @@ package main
 
 // Codes staff make for giveaways and the like. They work with /redeem like
 // the cheat codes (cheathunt.go): one use, first /redeem wins, and each
-// gives a watch ticket.
+// gives a configurable number of watch tickets.
 //
 //	/codes mint count note   → the new codes, only shown to the one who made them
 //	/codes list              → codes staff made that nobody redeemed yet
@@ -19,6 +19,7 @@ import (
 
 const (
 	codesMaxMint = 25
+	codesMaxTickets = 100
 	codesMaxNote = 100
 )
 
@@ -30,6 +31,7 @@ func init() {
 				Options: []*discordgo.ApplicationCommandOption{
 					{Type: discordgo.ApplicationCommandOptionInteger, Name: "count", Description: fmt.Sprintf("How many (1 to %d)", codesMaxMint),
 						Required: true, MinValue: ptr(1.0), MaxValue: codesMaxMint},
+					{Type: discordgo.ApplicationCommandOptionInteger, Name: "tickets", Description: "Tickets per code (1 to 100, default 1)", MinValue: ptr(1.0), MaxValue: codesMaxTickets},
 					{Type: discordgo.ApplicationCommandOptionString, Name: "note", Description: "What they're for, like a giveaway's name", MaxLength: codesMaxNote},
 				}},
 			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "list", Description: "Codes staff made that nobody redeemed yet"},
@@ -40,8 +42,13 @@ func init() {
 		}}, (*bot).codesCommand)
 }
 
-// mintCodes makes n codes and returns them.
+// mintCodes retains the original one-ticket default for existing callers.
 func mintCodes(d *storeData, by, note string, n int, now time.Time) []string {
+	return mintCodesWithTickets(d, by, note, n, 1, now)
+}
+
+// mintCodesWithTickets makes n codes worth tickets each.
+func mintCodesWithTickets(d *storeData, by, note string, n, tickets int, now time.Time) []string {
 	if d.CheatCodes == nil {
 		d.CheatCodes = map[string]cheatCode{}
 	}
@@ -51,7 +58,7 @@ func mintCodes(d *storeData, by, note string, n int, now time.Time) []string {
 		for _, taken := d.CheatCodes[code]; taken; _, taken = d.CheatCodes[code] {
 			code = newCheatCode()
 		}
-		d.CheatCodes[code] = cheatCode{Found: now, Kind: "minted", MintedBy: by, Note: note}
+		d.CheatCodes[code] = cheatCode{Found: now, Kind: "minted", MintedBy: by, Note: note, Tickets: tickets}
 		out = append(out, code)
 	}
 	return out
@@ -98,29 +105,33 @@ func (b *bot) codesCommand(i *discordgo.InteractionCreate) {
 	switch sub.Name {
 	case "mint":
 		n := min(max(int(opts["count"].IntValue()), 1), codesMaxMint)
+		tickets := 1
+		if o, ok := opts["tickets"]; ok {
+			tickets = min(max(int(o.IntValue()), 1), codesMaxTickets)
+		}
 		note := ""
 		if o, ok := opts["note"]; ok {
 			note = clip(cleanText(o.StringValue(), false), codesMaxNote)
 		}
 		var codes []string
-		b.store.update(func(d *storeData) { codes = mintCodes(d, user, note, n, appNow()) })
+		b.store.update(func(d *storeData) { codes = mintCodesWithTickets(d, user, note, n, tickets, appNow()) })
 		lines := make([]string, len(codes))
 		for k, c := range codes {
 			lines[k] = "`" + formatCheatCode(c) + "`"
 		}
-		what := dashPlural(n, "code")
+		what := dashPlural(n, "code") + " worth " + dashPlural(tickets, "watch ticket") + " each"
 		if note != "" {
 			what += " for " + note
 		}
 		b.staffNote(&discordgo.MessageEmbed{Title: "Codes", Color: shu, Description: fmt.Sprintf("<@%s> made %s.", user, what)})
 		b.respondQuiet(i, true, &discordgo.MessageEmbed{Title: "New codes", Color: shu,
-			Description: strings.Join(lines, "\n") + "\n\nEach works once with `/redeem`, for whoever is first, and gives a watch ticket. Only you see this."})
+			Description: strings.Join(lines, "\n") + "\n\nEach works once with `/redeem`, for whoever is first, and gives " + dashPlural(tickets, "watch ticket") + ". Only you see this."})
 	case "list":
 		var lines []string
 		b.store.view(func(d *storeData) {
 			for _, c := range unusedMinted(d) {
 				x := d.CheatCodes[c]
-				line := fmt.Sprintf("`%s` · <@%s> · <t:%d:d>", formatCheatCode(c), x.MintedBy, x.Found.Unix())
+				line := fmt.Sprintf("`%s` · <@%s> · <t:%d:d> · %s", formatCheatCode(c), x.MintedBy, x.Found.Unix(), dashPlural(ticketReward(x), "ticket"))
 				if x.Note != "" {
 					line += " · " + x.Note
 				}
