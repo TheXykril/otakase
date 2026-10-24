@@ -111,6 +111,8 @@ type watchRoom struct {
 	gen       int // bumps with every episode load, so a slow one can't land late
 
 	streams       []streamLink
+	provider      string // provider that resolved the selected episode
+	alternateOrigin *watchPlaybackOrigin
 	link          int // index into streams
 	torrent       *watchTorrent
 	torrentCancel context.CancelFunc
@@ -373,6 +375,7 @@ func (r *watchRoom) finishMedia() {
 	}
 	r.old, r.media = r.media, nil
 	r.alternateMedia = nil
+	r.alternateOrigin = nil
 }
 
 // ── Episodes ──
@@ -385,6 +388,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.loadStep, r.loadSince = "Checking catalog for episode", time.Now()
 	r.finishMedia()
 	r.streams, r.link, r.subs, r.entry, r.audioEntries = nil, 0, nil, "", nil
+	r.provider = ""
 	r.setPos(0, false, watchNow())
 	r.dur = 0
 	r.asks = nil
@@ -440,6 +444,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 			return
 		}
 		r.streams = info.Streams
+		r.provider = info.Provider
 		// Shown as it plays: a show without a dub plays subbed.
 		r.dub = info.Mode == "dub"
 		r.torrentCancel = nil
@@ -502,6 +507,7 @@ func (b *bot) findWatchAlternate(ctx context.Context, room *watchRoom, gen int, 
     if selected < 0 { return }
     media, entry, _ := newWatchMedia(info.Streams[selected], dub)
     room.alternateMedia = media
+    room.alternateOrigin = &watchPlaybackOrigin{Provider: info.Provider, Host: watchPlaybackHost(info.Streams[selected].URL), Link: selected + 1, Mode: mode}
     if room.audioEntries == nil {
         room.audioEntries = map[string]string{}
     }
@@ -607,6 +613,26 @@ type watchPerson struct {
 	Host bool   `json:"host,omitempty"`
 }
 
+// These details are only returned to the room's developers and administrators.
+// Never send raw stream URLs, headers or credentials to the Activity.
+type watchPlaybackOrigin struct {
+	Provider string `json:"provider"`
+	Host     string `json:"host,omitempty"`
+	Link     int    `json:"link,omitempty"`
+	Mode     string `json:"mode,omitempty"`
+}
+
+func watchPlaybackHost(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil { return "" }
+	host := strings.ToLower(u.Hostname())
+	switch host {
+	case "127.0.0.1", "::1", "localhost":
+		return "Local relay"
+	}
+	return host
+}
+
 type watchView struct {
 	Ver     int           `json:"ver"`
 	Room    string        `json:"room"`
@@ -626,6 +652,8 @@ type watchView struct {
 	Media   string        `json:"media,omitempty"`
 	HLS     bool          `json:"hls,omitempty"`
 	AudioMedia map[string]string `json:"audio_media,omitempty"`
+	Origin *watchPlaybackOrigin `json:"origin,omitempty"`
+	AlternateOrigin *watchPlaybackOrigin `json:"alternate_origin,omitempty"`
 	Subs    []watchSub    `json:"subs,omitempty"`
 	Playing bool          `json:"playing"`
 	Pos     float64       `json:"pos"`
@@ -657,6 +685,10 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 		v.HLS = strings.HasSuffix(r.entry, ".m3u8")
 		v.AudioMedia = r.audioEntries
 		v.Subs = r.subs
+		if r.phase == "play" && r.link >= 0 && r.link < len(r.streams) {
+			v.Origin = &watchPlaybackOrigin{Provider: r.provider, Host: watchPlaybackHost(r.streams[r.link].URL), Link: r.link + 1}
+			v.AlternateOrigin = r.alternateOrigin
+		}
 	}
 	if !r.started.IsZero() {
 		v.Ends = r.started.Add(watchRoomLength).UnixMilli()
@@ -778,6 +810,9 @@ func (b *bot) watchAnswerView(w http.ResponseWriter, r *watchRoom, user string, 
 	v := b.watchViewOf(r, user, staff, watchNow())
 	b.watch.mu.Unlock()
 	b.watchExtras(&v, user)
+	if !b.watchCanInspectPlayback(user) {
+		v.Origin, v.AlternateOrigin = nil, nil
+	}
 	writeJSON(w, http.StatusOK, v)
 }
 
