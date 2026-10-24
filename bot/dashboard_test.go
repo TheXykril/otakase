@@ -286,6 +286,15 @@ func TestDashboardMoreControls(t *testing.T) {
 	if page := dashGet(t, h, "/?s=moderation", "127.0.0.1:1", nil).Body.String(); !strings.Contains(page, `value="clear-warnings"`) || !strings.Contains(page, "required") {
 		t.Error("no clear button with a tick box")
 	}
+	if page := dashGet(t, h, "/?s=moderation", "127.0.0.1:1", nil).Body.String(); !strings.Contains(page, `value="ticket-add"`) || !strings.Contains(page, `value="ticket-remove"`) {
+		t.Error("watch ticket controls missing")
+	}
+	userID := "123456789012345678"
+	post(url.Values{"s": {"moderation"}, "do": {"ticket-add"}, "text": {userID}, "v": {"5"}})
+	post(url.Values{"s": {"moderation"}, "do": {"ticket-remove"}, "text": {userID}, "v": {"2"}})
+	if got := b.watchTickets(userID); got != 3 { t.Errorf("watch ticket balance: %d", got) }
+	post(url.Values{"s": {"moderation"}, "do": {"ticket-remove"}, "text": {userID}, "v": {"100"}})
+	if got := b.watchTickets(userID); got != 0 { t.Errorf("ticket balance below zero: %d", got) }
 	post(url.Values{"s": {"moderation"}, "do": {"clear-warnings"}, "name": {"u1"}})
 	var left int
 	b.store.view(func(d *storeData) { left = len(d.Warnings["u1"]) })
