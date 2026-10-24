@@ -54,6 +54,7 @@ const ICONS = {
   sound: '<path d="M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>',
   mute: '<path d="M4 9v6h4l5 4V5L8 9zM17 9l5 6M22 9l-5 6"/>',
   music: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l-1.62 1.62a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.05 1.55V21h-2.4v-1.3a1.7 1.7 0 0 0-1.05-1.55 1.7 1.7 0 0 0-1.87.34l-1.62-1.62A1.7 1.7 0 0 0 8.6 15a1.7 1.7 0 0 0-1.55-1.05H5.7v-2.4h1.35A1.7 1.7 0 0 0 8.6 10.5a1.7 1.7 0 0 0-.34-1.87l1.62-1.62a1.7 1.7 0 0 0 1.87.34 1.7 1.7 0 0 0 1.05-1.55V4.5h2.4v1.3a1.7 1.7 0 0 0 1.05 1.55 1.7 1.7 0 0 0 1.87-.34l1.62 1.62a1.7 1.7 0 0 0-.34 1.87 1.7 1.7 0 0 0 1.55 1.05h1.35v2.4h-1.35A1.7 1.7 0 0 0 19.4 15z"/>',
   shuffle: '<path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',
   quiz: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4M12 16.5h.01"/>',
   truths: '<path d="M4 6h10M4 12h10M4 18h6"/><path d="M17 15l4 4M21 15l-4 4M16 6l1.5 1.5L21 4M16 10.5l1.5 1.5 3.5-3.5"/>',
@@ -2886,6 +2887,115 @@ function soundApply() {
     sfx("tap");
   };
   soundApply();
+})();
+
+// Account-wide Watch Together defaults. Manual player selections override
+// these settings until Automatic is selected again.
+(function preferencesButton() {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = "prefbtn";
+  button.className = "prefbtn";
+  button.innerHTML = icon("settings");
+  button.title = "Watch Together preferences";
+  button.setAttribute("aria-label", "Watch Together preferences");
+  button.setAttribute("aria-expanded", "false");
+  document.getElementById("activitytools").appendChild(button);
+
+  const languages = [
+    ["auto", "Use stream default"], ["ja", "Japanese"], ["en", "English"],
+    ["de", "German"], ["es", "Spanish"], ["fr", "French"],
+    ["hi", "Hindi"], ["it", "Italian"], ["pt", "Portuguese"],
+    ["ta", "Tamil"], ["te", "Telugu"], ["ko", "Korean"],
+    ["zh", "Chinese"], ["ru", "Russian"], ["ar", "Arabic"],
+    ["pl", "Polish"], ["tr", "Turkish"], ["uk", "Ukrainian"],
+    ["id", "Indonesian"], ["nl", "Dutch"], ["th", "Thai"],
+  ];
+  const choices = (firstLabel) => languages.map(([code, name]) =>
+    `<option value="${code}">${esc(code === "auto" ? firstLabel : name)}</option>`).join("");
+
+  button.onclick = async (event) => {
+    event.stopPropagation();
+    if (document.getElementById("prefsoverlay")) return;
+    const layer = document.createElement("div");
+    layer.id = "prefsoverlay";
+    layer.className = "prefsoverlay";
+    layer.innerHTML = `<section class="prefscard" role="dialog" aria-modal="true" aria-labelledby="prefstitle">
+      <div class="prefshead"><h2 id="prefstitle">Watch Together preferences</h2>
+        <button type="button" id="prefsclose" aria-label="Close preferences">${icon("x")}</button></div>
+      <p class="note">These settings belong to your account. Automatic tries your first audio language, then your backup, then the stream default.</p>
+      <label>Preferred audio language<select id="prefaudio">${choices("Stream default")}</select></label>
+      <label>Backup audio language<select id="prefbackup">${choices("Stream default")}</select></label>
+      <label>Preferred subtitle language<select id="prefsub">
+        <option value="auto">Automatic</option><option value="off">Subtitles off</option>
+        ${choices("Automatic").replace('<option value="auto">Automatic</option>', "")}
+      </select></label>
+      <p class="note">Manual player choices take priority until you select Automatic again. Unavailable subtitle languages remain off.</p>
+      <p class="prefstatus" id="prefstatus" role="status"></p>
+      <div class="prefsactions"><button type="button" class="btn alt" id="prefcancel">Cancel</button>
+        <button type="button" class="btn" id="prefsave">Save preferences</button></div>
+    </section>`;
+    document.body.appendChild(layer);
+    button.setAttribute("aria-expanded", "true");
+    const audio = layer.querySelector("#prefaudio");
+    const backup = layer.querySelector("#prefbackup");
+    const sub = layer.querySelector("#prefsub");
+    const status = layer.querySelector("#prefstatus");
+    const save = layer.querySelector("#prefsave");
+    const available = (el, value) => {
+      el.value = value;
+      if (!el.value) el.value = "auto";
+    };
+    const updateBackup = () => {
+      backup.disabled = audio.value === "auto";
+      if (backup.disabled || backup.value === audio.value) backup.value = "auto";
+    };
+    audio.onchange = updateBackup;
+    backup.onchange = updateBackup;
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.stopPropagation(); close(); }
+    };
+    const close = () => {
+      document.removeEventListener("keydown", onKey, true);
+      layer.remove();
+      button.setAttribute("aria-expanded", "false");
+      button.focus();
+    };
+    document.addEventListener("keydown", onKey, true);
+    layer.addEventListener("click", (e) => { if (e.target === layer) close(); });
+    layer.querySelector("#prefsclose").onclick = close;
+    layer.querySelector("#prefcancel").onclick = close;
+    save.disabled = true;
+    status.textContent = "Loading your preferences…";
+    try {
+      const current = await api("watch/preferences");
+      if (!layer.isConnected) return;
+      available(audio, current.audio || "auto");
+      available(backup, current.backup_audio || "auto");
+      available(sub, current.subtitles || "auto");
+      updateBackup();
+      save.disabled = false;
+      status.textContent = "";
+      audio.focus();
+    } catch (error) {
+      status.textContent = error.message;
+      return;
+    }
+    save.onclick = async () => {
+      save.disabled = true;
+      status.textContent = "Saving…";
+      try {
+        const saved = await api("watch/preferences", {
+          audio: audio.value, backup_audio: backup.value, subtitles: sub.value,
+        });
+        if (typeof wPreferencesChanged === "function") wPreferencesChanged(saved);
+        close();
+      } catch (error) {
+        save.disabled = false;
+        status.textContent = error.message;
+      }
+    };
+  };
 })();
 
 // The first tap anywhere wakes the audio (browsers block it before).

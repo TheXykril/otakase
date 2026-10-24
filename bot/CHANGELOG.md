@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.41
+
+- Activity: add a personal Watch Together preferences button beside the sound control, with saved first-choice and backup audio languages plus a preferred subtitle language.
+- Watch Together: Automatic now tries each viewer's first audio language, then their backup, then the current stream's default. Manual player selections still override these preferences; saving account defaults returns the player to Automatic.
+
 ## 1.30.40
 
 - Watch Together: match the rewind and forward seek icons with mirrored arrows.

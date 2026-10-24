@@ -110,6 +110,7 @@ function wSet(v, fromHost) {
   const previous = wv;
   const oldSkipSeq = previous ? previous.skip_seq || 0 : 0;
   const oldAudioMedia = JSON.stringify((wv && wv.audio_media) || {});
+  const oldPreferences = JSON.stringify((wv && wv.preferences) || {});
   wv = v;
   wvAt = Date.now();
   if (v.languages && !wSettingsDirty) {
@@ -149,7 +150,11 @@ function wSet(v, fromHost) {
   wSyncLine();
   wSkipControls();
   wSeekMarkers();
-  if (oldAudioMedia !== JSON.stringify(v.audio_media || {})) wAudioTracks();
+  if (oldAudioMedia !== JSON.stringify(v.audio_media || {}) ||
+      oldPreferences !== JSON.stringify(v.preferences || {})) {
+    wAudioTracks();
+    wSubs();
+  }
   wUpdateOrigin();
   if (v.media && wEffectiveMedia() !== wvMedia) wLoad();
   else if (fromHost || (v.is_host && v.skip_seq && oldSkipSeq !== v.skip_seq)) wApply(true);
@@ -456,15 +461,37 @@ function hlsReady() {
   return hlsLoading;
 }
 
+// Normalize ISO 639-2 tags exposed by HLS, torrents and separate releases.
+function wNormAudio(code) {
+  return String(code || "").toLowerCase().replace(/^jpn$/, "ja")
+    .replace(/^eng$/, "en").replace(/^deu$/, "de").replace(/^ger$/, "de")
+    .replace(/^spa$/, "es").replace(/^fra$/, "fr").replace(/^fre$/, "fr")
+    .replace(/^hin$/, "hi").replace(/^ita$/, "it").replace(/^por$/, "pt")
+    .replace(/^tam$/, "ta").replace(/^tel$/, "te").replace(/^kor$/, "ko")
+    .replace(/^rus$/, "ru").replace(/^zho$/, "zh").replace(/^chi$/, "zh");
+}
+
+// Manual language selection wins. Automatic follows this member's preferred
+// language, backup language, and finally the original stream default.
+function wAudioCandidates() {
+  if (wAudioPick !== "auto") return [wNormAudio(wAudioPick)];
+  const pref = (wv && wv.preferences) || {};
+  const codes = [wNormAudio(pref.audio), wNormAudio(pref.backup_audio)];
+  return codes.filter((code, i) => code && code !== "auto" && codes.indexOf(code) === i);
+}
+
 function wEffectiveMedia() {
   if (!wv) return "";
   const variants = wv.audio_media || {};
-  const pick = wAudioPick.toLowerCase();
-  // Prefer an actual audio-language rendition; support legacy sub/dub URLs.
-  if (variants[pick]) return variants[pick];
-  if (variants[pick.split("-")[0]]) return variants[pick.split("-")[0]];
-  if (/^(en|eng)(-|$)/.test(pick) && variants.dub) return variants.dub;
-  if (/^(ja|jpn)(-|$)/.test(pick) && variants.sub) return variants.sub;
+  const embedded = wHls && wvMedia === wv.media ? wHls.audioTracks || [] : [];
+  for (const pick of wAudioCandidates()) {
+    // Each HLS rendition has a relay URL even on native players.
+    if (variants[pick]) return variants[pick];
+    if (variants[pick.split("-")[0]]) return variants[pick.split("-")[0]];
+    if (/^(en|eng)(-|$)/.test(pick) && variants.dub) return variants.dub;
+    if (/^(ja|jpn)(-|$)/.test(pick) && variants.sub) return variants.sub;
+    if (embedded.some((track) => wNormAudio(track.lang) === pick)) return wv.media;
+  }
   return wv.media;
 }
 
@@ -823,6 +850,19 @@ document.addEventListener("fullscreenchange", () => {
   }
 });
 
+// Saving account-wide preferences resets manual player choices to Automatic.
+function wPreferencesChanged(preferences) {
+  if (!wv) return;
+  wv.preferences = preferences;
+  wv.languages = { audio: "auto", subtitles: "auto" };
+  wSettingsDirty = false;
+  wAudioPick = "auto";
+  wSubPick = "auto";
+  wAudioTracks();
+  wSubs();
+  if (wv.media && wEffectiveMedia() !== wvMedia) wLoad();
+}
+
 // Changes affect this viewer only. Shared playback position stays unchanged.
 function wSaveLanguages() {
   api("watch/languages", { room, audio: wAudioPick, subtitles: wSubPick })
@@ -845,12 +885,7 @@ function wAudioTracks() {
     ta: "Tamil", te: "Telugu", ko: "Korean", zh: "Chinese",
     ru: "Russian", ar: "Arabic", pl: "Polish", tr: "Turkish",
     uk: "Ukrainian", id: "Indonesian", nl: "Dutch", th: "Thai" };
-  const normalized = (code) => String(code || "").toLowerCase().replace(/^jpn$/, "ja")
-    .replace(/^eng$/, "en").replace(/^deu$/, "de").replace(/^ger$/, "de")
-    .replace(/^spa$/, "es").replace(/^fra$/, "fr").replace(/^fre$/, "fr")
-    .replace(/^hin$/, "hi").replace(/^ita$/, "it").replace(/^por$/, "pt")
-    .replace(/^tam$/, "ta").replace(/^tel$/, "te").replace(/^kor$/, "ko")
-    .replace(/^rus$/, "ru").replace(/^zho$/, "zh").replace(/^chi$/, "zh");
+  const normalized = wNormAudio;
   const add = (code, label) => {
     const lang = normalized(code);
     if (!lang || seen.has(lang)) return;
@@ -872,17 +907,25 @@ function wAudioTracks() {
     `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("");
   select.disabled = options.length === 1;
   const preferred = normalized(wAudioPick);
-  select.value = seen.has(preferred) ? preferred : "auto";
+  const candidates = wAudioCandidates();
+  select.value = preferred === "auto" || !seen.has(preferred) ? "auto" : preferred;
   const hint = document.getElementById("wsettingshint");
-  if (hint) hint.textContent = options.length === 1
-    ? "No selectable audio tracks were reported by this stream."
-    : preferred !== "auto" && !seen.has(preferred)
-      ? "Preferred audio unavailable; using the current stream."
-      : "";
+  if (hint) hint.textContent = preferred === "auto" && candidates.length
+    ? "Automatic: " + candidates.map((code) => names[code.split("-")[0]] || code).join(" → ") + " → stream default."
+    : options.length === 1
+      ? "No selectable audio tracks were reported by this stream."
+      : preferred !== "auto" && !seen.has(preferred)
+        ? "Selected audio unavailable; using the current stream."
+        : "";
   if (wHls && tracks.length) {
-    const index = tracks.findIndex((track, i) =>
-      normalized(track.lang || "hls-" + i) === preferred);
-    if (index >= 0 && wHls.audioTrack !== index) wHls.audioTrack = index;
+    for (const code of candidates) {
+      const index = tracks.findIndex((track, i) =>
+        normalized(track.lang || "hls-" + i) === code);
+      if (index >= 0) {
+        if (wHls.audioTrack !== index) wHls.audioTrack = index;
+        break;
+      }
+    }
   }
 }
 
@@ -893,7 +936,8 @@ function wSubs() {
   const sel = document.getElementById("wsub");
   if (!vid || !sel) return;
   const tracks = Array.from(vid.textTracks).filter((t) => t.kind === "subtitles" || t.kind === "captions");
-  let pick = wSubPick;
+  // Automatic subtitles use the viewer's saved preference.
+  let pick = wSubPick === "auto" ? ((wv && wv.preferences) || {}).subtitles || "auto" : wSubPick;
   if (pick === "off") pick = "-1";
   else if (pick !== "auto" && !/^[0-9]+$/.test(pick)) {
     const match = tracks.findIndex((t) => {
