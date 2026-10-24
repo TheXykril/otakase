@@ -55,7 +55,7 @@ func TestBotSegmentsIntegration(t *testing.T) {
 	os.WriteFile(subtitles, []byte("1\n00:00:08,000 --> 00:00:11,500\nLate subtitle\n"), 0600)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	args := []string{"-v", "error", "-f", "lavfi", "-i", "color=black:s=320x180:r=24:d=12", "-f", "lavfi", "-i", "sine=frequency=440:duration=12", "-f", "lavfi", "-i", "sine=frequency=880:duration=12", "-i", subtitles, "-map", "0:v", "-map", "1:a", "-map", "2:a", "-map", "3:s", "-c:v", "libx264", "-threads", "1", "-c:a", "aac", "-c:s", "srt", "-metadata:s:a:0", "language=eng", "-metadata:s:a:1", "language=jpn", "-metadata:s:s:0", "language=eng", source}
+	args := []string{"-v", "error", "-f", "lavfi", "-i", "color=black:s=320x180:r=24:d=12", "-f", "lavfi", "-i", "sine=frequency=440:duration=12", "-f", "lavfi", "-i", "sine=frequency=880:duration=12", "-f", "lavfi", "-i", "sine=frequency=660:duration=12", "-i", subtitles, "-map", "0:v", "-map", "1:a", "-map", "2:a", "-map", "3:a", "-map", "4:s", "-c:v", "libx264", "-threads", "1", "-c:a", "aac", "-c:s", "srt", "-metadata:s:a:0", "language=eng", "-metadata:s:a:1", "language=jpn", "-metadata:s:a:2", "language=deu", "-metadata:s:s:0", "language=eng", source}
 	if out, err := exec.CommandContext(ctx, "ffmpeg", args...).CombinedOutput(); err != nil {
 		t.Fatalf("fixture: %v %s", err, out)
 	}
@@ -116,13 +116,20 @@ func TestBotSegmentsIntegration(t *testing.T) {
 	}
 	dub, err := probeBotMedia(ctx, source, "dub")
  if err != nil { t.Fatal(err) }
- s.variants = map[string]botMedia{"sub": m, "dub": dub}
- for _, mode := range []string{"sub", "dub"} {
-  data, err := s.segment(ctx, 0, mode)
-  if err != nil || len(data) == 0 { t.Fatalf("%s variant: %v", mode, err) }
+ primary, variants, err := probeBotMediaVariants(ctx, source, "sub")
+ if err != nil || primary.audio != m.audio {
+  t.Fatalf("multi-audio probe: %+v %v", primary, err)
  }
- if len(s.cache) != 4 { t.Fatalf("audio renditions were not cached separately: %d", len(s.cache)) }
- for _, route := range []string{"/sub/playlist.m3u8", "/dub/playlist.m3u8"} {
+ if variants["ja"].audio != 2 || variants["en"].audio != 1 || variants["de"].audio != 3 {
+  t.Fatalf("missing or wrong audio languages: %+v", variants)
+ }
+ s.variants = variants
+ for _, language := range []string{"sub", "dub", "ja", "en", "de"} {
+  data, err := s.segment(ctx, 0, language)
+  if err != nil || len(data) == 0 { t.Fatalf("%s variant: %v", language, err) }
+ }
+ if len(s.cache) < 6 { t.Fatalf("audio renditions were not cached separately: %d", len(s.cache)) }
+ for _, route := range []string{"/sub/playlist.m3u8", "/dub/playlist.m3u8", "/de/playlist.m3u8"} {
   res := httptest.NewRecorder()
   s.ServeHTTP(res, httptest.NewRequest(http.MethodGet, route, nil))
   if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), "seg0.ts") {
@@ -134,6 +141,24 @@ func TestBotSegmentsIntegration(t *testing.T) {
  if _, err := s.segment(ctx, 100, "sub"); err == nil {
 		t.Fatal("out-of-range segment accepted")
 	}
+ notFound := httptest.NewRecorder()
+ s.ServeHTTP(notFound, httptest.NewRequest(http.MethodGet, "/xx/playlist.m3u8", nil))
+ if notFound.Code != http.StatusNotFound {
+  t.Fatalf("unsupported language route returned %d", notFound.Code)
+ }
+}
+
+func TestBotAudioLanguageCodes(t *testing.T) {
+ for _, tc := range []struct{ raw, expected string }{
+  {"jpn", "ja"}, {"eng", "en"}, {"deu", "de"}, {"spa", "es"},
+  {"fra", "fr"}, {"hin", "hi"}, {"ita", "it"}, {"por", "pt"},
+  {"tam", "ta"}, {"tel", "te"}, {"zh-CN", "zh"},
+  {"und", "track-7"}, {"", "track-7"},
+ } {
+  if got := botAudioLanguage(tc.raw, 7); got != tc.expected {
+   t.Errorf("botAudioLanguage(%q) = %q, want %q", tc.raw, got, tc.expected)
+  }
+ }
 }
 
 func TestBotOutputLimit(t *testing.T) {
