@@ -455,7 +455,9 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
         // Some providers expose Sub and Dub as separate releases rather than
         // multiple audio tracks. Look up the other version without delaying
         // the first viewer; only reuse directly playable links here.
-        if r.audioEntries == nil {
+        other := "dub"
+        if r.dub { other = "sub" }
+        if _, exists := r.audioEntries[other]; !exists {
             go b.findWatchAlternate(ctx, r, gen, cli, show.ID, ep, adult, !r.dub)
         }
 		// The next episode is looked up ahead, so it starts at once.
@@ -481,11 +483,24 @@ func (b *bot) findWatchAlternate(ctx context.Context, room *watchRoom, gen int, 
     if b.watch.cur != room || room.gen != gen || room.phase != "play" || room.media == nil {
         return
     }
-    // Do not publish a second label for the exact same source.
-    if info.Streams[0].URL == room.streams[room.link].URL {
-        return
+    // Skip duplicate releases and use the first distinct playable URL.
+    selected := -1
+    for i, candidate := range info.Streams {
+        if candidate.URL == "" { continue }
+        duplicate := false
+        for _, active := range room.streams {
+            if active.URL == candidate.URL {
+                duplicate = true
+                break
+            }
+        }
+        if !duplicate {
+            selected = i
+            break
+        }
     }
-    media, entry, _ := newWatchMedia(info.Streams[0], dub)
+    if selected < 0 { return }
+    media, entry, _ := newWatchMedia(info.Streams[selected], dub)
     room.alternateMedia = media
     if room.audioEntries == nil {
         room.audioEntries = map[string]string{}
