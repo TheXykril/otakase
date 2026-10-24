@@ -459,6 +459,7 @@ function wEffectiveMedia() {
   const pick = wAudioPick.toLowerCase();
   // Prefer an actual audio-language rendition; support legacy sub/dub URLs.
   if (variants[pick]) return variants[pick];
+  if (variants[pick.split("-")[0]]) return variants[pick.split("-")[0]];
   if (/^(en|eng)(-|$)/.test(pick) && variants.dub) return variants.dub;
   if (/^(ja|jpn)(-|$)/.test(pick) && variants.sub) return variants.sub;
   return wv.media;
@@ -638,8 +639,11 @@ function wUpdateOrigin() {
   if (!indicator || !wv) return;
   const alternate = wv.alternate_origin;
   const media = wv.audio_media || {};
-  const origin = alternate && media[alternate.mode] === wEffectiveMedia()
-    ? alternate : wv.origin;
+  const pick = String(wAudioPick || "auto").toLowerCase().split("-")[0];
+  const locale = (wv.audio_origins || {})[pick];
+  const actual = wEffectiveMedia();
+  const origin = locale && media[pick] === actual ? locale
+    : alternate && media[alternate.mode] === actual ? alternate : wv.origin;
   if (!origin) {
     indicator.hidden = true;
     return;
