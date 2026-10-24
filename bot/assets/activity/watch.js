@@ -704,11 +704,14 @@ function wSeekMarkers() {
   if (!rail || !wv) return;
   const duration = Number(wv.dur);
   const times = wv.skip_times || {};
+  const track = rail.parentElement;
   if (!wv.skip_ready || !Number.isFinite(duration) || duration <= 0) {
     rail.replaceChildren();
+    if (track) track.title = "";
     return;
   }
   const fragment = document.createDocumentFragment();
+  const descriptions = [];
   for (const [kind, span, enabled] of [
     ["OP", times.op, wv.auto_skip_op],
     ["ED", times.ed, wv.auto_skip_ed],
@@ -722,7 +725,7 @@ function wSeekMarkers() {
     marker.className = "wskipband " + kind.toLowerCase() + (enabled ? " active" : "");
     marker.style.left = from + "%";
     marker.style.width = (to - from) + "%";
-    marker.title = kind + " " + wFmt(start) + "–" + wFmt(end) + (enabled ? " · auto-skip on" : " · auto-skip off");
+    descriptions.push(kind + " " + wFmt(start) + "–" + wFmt(end) + (enabled ? " (auto-skip on)" : " (auto-skip off)"));
     const label = document.createElement("span");
     label.className = "wskipbandlabel";
     label.textContent = kind;
@@ -730,6 +733,7 @@ function wSeekMarkers() {
     fragment.appendChild(marker);
   }
   rail.replaceChildren(fragment);
+  if (track) track.title = descriptions.join(" · ");
 }
 
 // Update the private source hint when the viewer switches to a separate
