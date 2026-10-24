@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.33
+
+- Watch Together: show a small playback-provider indicator only to developers and administrators, with the selected stream host and fallback number on hover. Regular members receive no provider details.
+
 ## 1.30.32
 
 - Watch Together: keep theater mode, including native fullscreen, active while changing episodes and loading the next one; show progress and an exit button without leaving theater.
