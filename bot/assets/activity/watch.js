@@ -59,6 +59,10 @@ async function watchView() {
 }
 
 function wBox(html) {
+  const detached = document.body.querySelector(":scope > #wstage");
+  if (detached) detached.remove();
+  const marker = document.getElementById("wstage-placeholder");
+  if (marker) marker.remove();
   const el = document.getElementById("wbox");
   if (el) el.innerHTML = html;
 }
@@ -381,6 +385,12 @@ function wDestroy() {
 }
 
 function wStop() {
+  wFull = false;
+  document.body.classList.remove("wfull");
+  const detached = document.body.querySelector(":scope > #wstage");
+  if (detached) detached.remove();
+  const marker = document.getElementById("wstage-placeholder");
+  if (marker) marker.remove();
   wvLoop++;
   wDestroy();
 }
@@ -590,6 +600,19 @@ function wFullscreen(on) {
   if (!st) return;
   wFull = on;
   clearTimeout(wControlsTimer);
+  // Move the theater stage out of animated Activity containers. Their
+  // transforms otherwise turn position:fixed into an offset local box.
+  if (on && st.parentElement !== document.body) {
+    const marker = document.createElement("div");
+    marker.id = "wstage-placeholder";
+    st.parentNode.insertBefore(marker, st);
+    document.body.appendChild(st);
+  } else if (!on && st.parentElement === document.body) {
+    const marker = document.getElementById("wstage-placeholder");
+    if (marker && marker.parentNode) {
+      marker.parentNode.replaceChild(st, marker);
+    }
+  }
   st.classList.toggle("full", on);
   st.classList.remove("controls-hidden");
   if (on) wRevealControls();
