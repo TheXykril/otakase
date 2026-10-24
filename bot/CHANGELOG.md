@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.36
+
+- Watch Together: restore enabled Activity background music when returning to Games from the watch lobby or a room, including when Discord suspends Web Audio during playback.
+
 ## 1.30.35
 
 - Watch tickets: the Discord server owner can add or remove tickets from the Activity moderation panel. Home Assistant administrators can manage ticket balances from the dashboard.

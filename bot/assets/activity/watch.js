@@ -835,22 +835,27 @@ function wTime() {
   }
 }
 
-// Leaving the page leaves the room: app.js calls this as another page
-// opens.
-function watchLeave() {
-  if (!wv || !session) return;
-  where = where === "watch" ? "" : where;
+// Leaving the Watch Together page restores Activity sound even when the
+// visitor never joined a room (the lobby and busy-room pages have no wv).
+// Only tell the server to leave when there was an actual room session.
+function watchLeave(pageClosing = false) {
+  if (where !== "watch" && !wv) return;
+  const wasInRoom = !!wv;
+  if (where === "watch") where = "";
   wStop();
-  fetch("api/watch/leave", {
-    method: "POST",
-    keepalive: true,
-    headers: { Authorization: "Bearer " + session, "Content-Type": "application/json" },
-    body: JSON.stringify({ room }),
-  }).catch(() => {});
+  if (wasInRoom && session) {
+    fetch("api/watch/leave", {
+      method: "POST",
+      keepalive: true,
+      headers: { Authorization: "Bearer " + session, "Content-Type": "application/json" },
+      body: JSON.stringify({ room }),
+    }).catch(() => {});
+  }
   wv = null;
-  wFull = false;
-  document.body.classList.remove("wfull");
-  setTimeout(soundApply);
+  wvKey = "";
+  // A page transition can immediately resume sound; closing the Discord
+  // Activity should not restart music while the document is unloading.
+  if (!pageClosing) soundApply();
 }
 
-addEventListener("pagehide", watchLeave);
+addEventListener("pagehide", () => watchLeave(true));

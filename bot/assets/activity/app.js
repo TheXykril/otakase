@@ -2843,9 +2843,20 @@ function musicStop() {
 }
 
 function soundApply() {
-  // The watch room has its own sound: no music over the anime.
-  if (soundMode === "music" && !document.hidden && where !== "watch") musicStart();
-  else musicStop();
+  // Keep the user's music preference, but mute it on Watch Together pages.
+  const playMusic = soundMode === "music" && !document.hidden && where !== "watch";
+  if (!playMusic) {
+    musicStop();
+  } else if (actx && actx.state !== "running") {
+    // Video playback or Discord can suspend Web Audio while watching.
+    // Resume the existing context after returning to Games, then restore
+    // music only if the user is still on a non-watch page.
+    actx.resume().then(() => {
+      if (soundMode === "music" && !document.hidden && where !== "watch") musicStart();
+    }).catch(() => {});
+  } else {
+    musicStart();
+  }
   const b = document.getElementById("snd");
   if (b) {
     b.innerHTML = icon(soundMode === "off" ? "mute" : soundMode === "music" ? "music" : "sound");
