@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.29
+
+- Watch Together: restore visible expand and collapse icons on the theater mode button.
+
 ## 1.30.28
 
 - Watch Together: show every audio language advertised by the active HLS stream, alongside separately discovered subbed/dubbed releases, and allow per-viewer track selection.
