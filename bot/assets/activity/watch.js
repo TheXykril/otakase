@@ -667,6 +667,10 @@ function wSkipControls() {
     hint.textContent = "Looking up episode-specific opening and ending times…";
     return;
   }
+  if (!wv.dur) {
+    hint.textContent = "Waiting for the video duration to verify skip times…";
+    return;
+  }
   const times = wv.skip_times || {};
   const span = (s) => s && s.end > s.start ? wFmt(s.start) + "–" + wFmt(s.end) : "unavailable";
   hint.textContent = "Opening: " + span(times.op) + " · Ending: " + span(times.ed)
