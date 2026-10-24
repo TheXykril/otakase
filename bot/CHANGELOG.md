@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.28
+
+- Watch Together: show every audio language advertised by the active HLS stream, alongside separately discovered subbed/dubbed releases, and allow per-viewer track selection.
+
 ## 1.30.27
 
 - Watch Together: center the theater video in the Activity viewport by moving the fullscreen player outside transformed page containers; restore normal layout when leaving theater mode.
