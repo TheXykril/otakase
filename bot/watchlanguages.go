@@ -17,6 +17,14 @@ func watchValidLanguage(value string, subtitles bool) bool {
 	if value == "auto" || subtitles && value == "off" {
 		return true
 	}
+	// Unlabelled container and HLS tracks are selected by their bounded index.
+	if strings.HasPrefix(value, "track-") || strings.HasPrefix(value, "hls-") {
+		i := strings.IndexByte(value, '-')
+		n := value[i+1:]
+		if len(n) == 0 || len(n) > 3 { return false }
+		for _, ch := range n { if ch < '0' || ch > '9' { return false } }
+		return true
+	}
 	return watchLanguageCode.MatchString(value)
 }
 
