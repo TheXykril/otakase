@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.31
+
+- Watch Together: matching expand and collapse theater icons.
+
 ## 1.30.30
 
 - Watch Together: tapping the video in theater mode now toggles the control overlay, including dismissing the language panel.
