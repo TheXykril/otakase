@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"strconv"
 	"io"
 	"log"
 	"net/http"
@@ -285,6 +286,22 @@ func (b *bot) dashDo(in dashInput, who string) error {
 		return b.dashSuggestionStatus(name, v, who)
 	case "clear-warnings":
 		return b.dashClearWarnings(name, who)
+	case "ticket-add", "ticket-remove":
+		user := strings.TrimSpace(in.Text)
+		if !ticketUserID.MatchString(user) {
+			return fmt.Errorf("Enter a valid Discord user ID.")
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 100 {
+			return fmt.Errorf("Choose 1 to 100 tickets.")
+		}
+		if do == "ticket-remove" {
+			n = -n
+		}
+		before := b.watchTickets(user)
+		balance := b.adjustWatchTickets(user, n)
+		b.modLog(&discordgo.MessageEmbed{Color: 0x8A8276, Description: fmt.Sprintf("%s changed watch tickets for <@%s> from %d to %d.", who, user, before, balance)}, nil, false)
+		setFlash(false, "%s now has %s.", b.dashName(user), dashPlural(balance, "watch ticket"))
 	case "say":
 		return b.dashSay(v, in.Text, who)
 	case "guess-reset-week":
