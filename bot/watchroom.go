@@ -120,6 +120,8 @@ type watchRoom struct {
 	old           *watchMedia // the episode before, still served for a moment
 	entry         string
 	audioEntries map[string]string
+	audioReleases map[string]streamLink
+	extraAudioMedia map[string]*watchMedia
 	alternateMedia *watchMedia
 	subs          []watchSub
 
@@ -376,6 +378,7 @@ func (r *watchRoom) finishMedia() {
 	r.old, r.media = r.media, nil
 	r.alternateMedia = nil
 	r.alternateOrigin = nil
+	r.extraAudioMedia = nil
 }
 
 // ── Episodes ──
@@ -389,6 +392,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.finishMedia()
 	r.streams, r.link, r.subs, r.entry, r.audioEntries = nil, 0, nil, "", nil
 	r.provider = ""
+	r.audioReleases = nil
 	r.setPos(0, false, watchNow())
 	r.dur = 0
 	r.asks = nil
@@ -444,6 +448,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 			return
 		}
 		r.streams = info.Streams
+		r.audioReleases = info.AudioVariants
 		r.provider = info.Provider
 		// Shown as it plays: a show without a dub plays subbed.
 		r.dub = info.Mode == "dub"
@@ -560,6 +565,25 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	if r.dub { currentMode = "dub" }
 	if _, ok := r.audioEntries[currentMode]; !ok {
 		r.audioEntries[currentMode] = watchMediaPath(m.key, entry)
+	}
+	// Some streaming providers publish each audio language as a different
+	// episode URL. Keep these relays available alongside the selected stream.
+	for language, link := range r.audioReleases {
+		if !watchAudioLanguage(language) || link.URL == "" || link.URL == r.streams[k].URL {
+			continue
+		}
+		if _, exists := r.audioEntries[language]; exists { continue }
+		other, otherEntry, _ := newWatchMedia(link, language == "en")
+		if r.extraAudioMedia == nil { r.extraAudioMedia = map[string]*watchMedia{} }
+		r.extraAudioMedia[language] = other
+		path := watchMediaPath(other.key, otherEntry)
+		r.audioEntries[language] = path
+		// Legacy selections and background sub/dub discovery use these aliases.
+		alias := ""
+		if language == "ja" { alias = "sub" } else if language == "en" { alias = "dub" }
+		if alias != "" {
+			if _, exists := r.audioEntries[alias]; !exists { r.audioEntries[alias] = path }
+		}
 	}
 	for n, s := range r.streams[k].Subtitles {
 		label := s.Label
@@ -1530,9 +1554,10 @@ func (b *bot) watchMediaAPI(w http.ResponseWriter, r *http.Request) {
 	var m *watchMedia
 	if cur := b.watch.cur; cur != nil {
 		for _, c := range []*watchMedia{cur.media, cur.old, cur.alternateMedia} {
-			if c != nil && c.key == key {
-				m = c
-			}
+			if c != nil && c.key == key { m = c }
+		}
+		for _, c := range cur.extraAudioMedia {
+			if c != nil && c.key == key { m = c }
 		}
 	}
 	cache := b.watchCache()
