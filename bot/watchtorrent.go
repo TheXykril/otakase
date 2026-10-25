@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -16,7 +18,9 @@ import (
 	"time"
 )
 
-const watchTorrentStartWait = 11 * time.Minute
+// The helper may join for 3 minutes, read the video for 3, encode the first
+// part for 3 and buffer a slow download for up to 8 more.
+const watchTorrentStartWait = 20 * time.Minute
 
 type watchTorrent struct {
 	cmd   *exec.Cmd
@@ -139,6 +143,7 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string, progress fun
 			}
 			return nil, "", fmt.Errorf("torrent helper exited without a valid playback address")
 		}
+		stderr.follow(func(line string) { log.Printf("watch helper: %s", line) })
 		go func() {
 			select {
 			case <-ctx.Done():
@@ -155,13 +160,18 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string, progress fun
 
 // watchProgressText keeps a helper progress line short and printable.
 func watchProgressText(step string) string {
+	return watchHelperLine(step, 80)
+}
+
+// watchHelperLine strips control characters from a helper line and clips it.
+func watchHelperLine(step string, limit int) string {
 	step = strings.Map(func(r rune) rune {
 		if r < ' ' || r == 0x7f {
 			return -1
 		}
 		return r
 	}, step)
-	return clip(strings.TrimSpace(step), 80)
+	return clip(strings.TrimSpace(step), limit)
 }
 
 // Locks are inherited by helpers, so restarting the bot never removes a live
@@ -188,11 +198,45 @@ type botLimitedLog struct {
 	mu    sync.Mutex
 	data  []byte
 	limit int
+
+	// echo, once set, hears each later line; at most botEchoLines of them.
+	echo    func(string)
+	pending []byte
+	echoed  int
+}
+
+const botEchoLines = 60
+
+// follow sends the helper's later lines to echo: segment failures and the
+// download state while the episode plays.
+func (l *botLimitedLog) follow(echo func(string)) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.echo = echo
 }
 
 func (l *botLimitedLog) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.echo != nil {
+		l.pending = append(l.pending, p...)
+		for {
+			line, rest, ok := bytes.Cut(l.pending, []byte("\n"))
+			if !ok {
+				break
+			}
+			// Only the helper's own notes; anything else on stderr is noise.
+			note, isNote := bytes.CutPrefix(line, []byte("note "))
+			if text := watchHelperLine(string(note), 300); isNote && text != "" && l.echoed < botEchoLines {
+				l.echoed++
+				l.echo(text)
+			}
+			l.pending = rest
+		}
+		if len(l.pending) > 4096 {
+			l.pending = l.pending[:0]
+		}
+	}
 	if len(p) >= l.limit {
 		l.data = append(l.data[:0], p[len(p)-l.limit:]...)
 	} else {

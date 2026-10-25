@@ -734,11 +734,18 @@ plays from the download cache itself, so `watch_torrent_storage_gib` (default
 8 GiB) only has to hold the torrent; a smaller budget lowers the size limit to
 it. Hosts without IPv6 fall back to IPv4 only. The file list must arrive within
 three minutes and the first segment within three more. `-stream-info` hands over
-up to three nyaa releases, best first, and the bot tries the next one when a
+up to three nyaa releases, 720p ones first (the room plays at most 720p), then the rest best first, and the bot tries the next one when a
 swarm doesn't answer. Until its playlist is ready the helper prints
 `progress <text>` lines on stdout (step and loaded percentage, worded so viewers
 can't tell the source is a torrent), which the
-room shows as its loading step; errors name the step that failed. Downloads are limited to
+room shows as its loading step; errors name the step that failed. After the
+first segment the helper buffers: it downloads the episode in order and waits
+until a minute of video is ahead, or, when the download is slower than the
+video's bitrate, enough that playback never catches up before the end (at most
+8 minutes; a download stalled for 3 minutes fails). While the episode plays the
+helper writes `note …` lines to stderr (failed segments with ffmpeg's last
+error, and download state every minute); the bot logs up to 60 of them as
+`watch helper: …`. The torrent client's own log is discarded. Downloads are limited to
 8 MiB/s and 16 established peers; uploads are disabled. One helper, including
 startup, runs at a time per bot process.
 

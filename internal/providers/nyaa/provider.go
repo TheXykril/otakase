@@ -36,6 +36,26 @@ func SetStreamInfoOnly(enabled bool) { streamInfoOnly.Store(enabled) }
 // streamInfoCandidates is how many releases stream-info hands over, best first.
 const streamInfoCandidates = 3
 
+// botQuality is the resolution the watch room asks for first.
+const botQuality = 720
+
+// preferQuality moves releases of quality to the front, keeping the order
+// within both groups.
+func preferQuality(releases []Release, quality int) []Release {
+	out := make([]Release, 0, len(releases))
+	for _, release := range releases {
+		if release.Quality == quality {
+			out = append(out, release)
+		}
+	}
+	for _, release := range releases {
+		if release.Quality != quality {
+			out = append(out, release)
+		}
+	}
+	return out
+}
+
 // dubMarkers identify a release that carries an English audio track. The index
 // is overwhelmingly subtitled, so dub is opt-in rather than assumed.
 var dubMarkers = regexp.MustCompile(`(?i)\b(dual[\s-]?audio|dual|dub(bed)?|multi[\s-]?audio)\b`)
@@ -328,7 +348,9 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 
 	if streamInfoOnly.Load() {
 		// The watch room tries these in turn, so a release whose swarm
-		// does not answer is not the end of it.
+		// does not answer is not the end of it. It plays 720p: half the
+		// download of 1080p, and the room shows no more than 720p anyway.
+		candidates = preferQuality(candidates, botQuality)
 		var links []string
 		for _, release := range candidates[:min(len(candidates), streamInfoCandidates)] {
 			links = append(links, "magnet:?xt=urn:btih:"+release.InfoHash)

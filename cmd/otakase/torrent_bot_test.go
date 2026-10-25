@@ -316,3 +316,20 @@ func TestBotSegmentsJoinShortTail(t *testing.T) {
 		t.Fatalf("%d segments, last %v s", s.segments(), s.length(10))
 	}
 }
+
+func TestBotBufferTarget(t *testing.T) {
+	// A 24 minute episode of 1440 MB needs 1 MB a second.
+	const mb = 1 << 20
+	for _, c := range []struct {
+		speed, want float64
+	}{
+		{-1, 90 * mb},        // speed unknown
+		{2 * mb, 60 * mb},    // fast: a minute ahead
+		{0.6 * mb, 720 * mb}, // slow: (1.1 - 0.6) MB/s for 1440 s
+		{0, 1440 * mb},       // stalled: the whole episode at most
+	} {
+		if got := botBufferTarget(mb, c.speed, 1440, 1440*mb); math.Abs(got-c.want) > mb {
+			t.Errorf("speed %.0f: target %.0f MB, want %.0f MB", c.speed/mb, got/mb, c.want/mb)
+		}
+	}
+}

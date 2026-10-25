@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -103,5 +104,23 @@ func TestWatchTorrentReportsProgress(t *testing.T) {
 	}
 	if len(steps) != 2 || steps[0] != "Connecting to source" || steps[1] != "Reading the video [31m(4%)" {
 		t.Fatalf("steps %q", steps)
+	}
+}
+
+func TestWatchHelperNotesReachLog(t *testing.T) {
+	l := &botLimitedLog{limit: 64}
+	l.Write([]byte("note before the playlist\n"))
+	var lines []string
+	l.follow(func(line string) { lines = append(lines, line) })
+	l.Write([]byte("[client] a peer went away\nnote segment 3 (sub) fai"))
+	l.Write([]byte("led after 45s\n\x1b[31mnote x\nnote download 4%\n"))
+	for i := 0; i < botEchoLines+5; i++ {
+		l.Write([]byte("note again\n"))
+	}
+	if len(lines) != botEchoLines || lines[0] != "segment 3 (sub) failed after 45s" || lines[1] != "download 4%" {
+		t.Fatalf("%d lines: %q", len(lines), lines[:min(3, len(lines))])
+	}
+	if !strings.Contains(l.String(), "note again") || len(l.String()) > 64 {
+		t.Fatalf("tail %q", l.String())
 	}
 }
