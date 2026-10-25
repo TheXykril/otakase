@@ -96,8 +96,8 @@ func parseFlags(cfg *internal.Config) *cliFlags {
 	flag.BoolVar(&f.editConfig, "e", false, "Edit config")
 	flag.BoolVar(&f.sub, "sub", false, "Watch sub version")
 	flag.BoolVar(&f.dub, "dub", false, "Watch dub version")
-	flag.BoolVar(&f.softSub, "softsub", false, "Prefer soft subtitles when available (anineko)")
-	flag.BoolVar(&f.hardSub, "hardsub", false, "Prefer hard subtitles when available (anineko)")
+	flag.BoolVar(&f.softSub, "softsub", false, "Prefer soft subtitles when available")
+	flag.BoolVar(&f.hardSub, "hardsub", false, "Prefer hard subtitles when available")
 	flag.BoolVar(&f.version, "v", false, "Print version information")
 	// Read from os.Args before parsing (see main); registered so it is
 	// accepted and listed in the help.

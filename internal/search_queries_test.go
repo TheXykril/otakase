@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The failure this guards against: AniList hands otakase a long romaji title, anipub
+// The failure this guards against: AniList hands otakase a long romaji title, anizone
 // indexes the English release title, and the search reports "no results" for a show
 // the provider actually carries.
 func TestBuildSearchQueryVariantsFallsBackToEnglishTitle(t *testing.T) {

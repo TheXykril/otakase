@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/thexykril/otakase/internal/icons"
-	"github.com/thexykril/otakase/internal/providers/anipub"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // ProviderMappingOutcome is how a provider search for a show ended.
@@ -1082,7 +1082,7 @@ func ResolveUntrackedProviderSearch(config *Config, initialQuery string) (provid
 // result, or 0.
 func malIDFromProviderExtraData(data any) int {
 	switch hit := data.(type) {
-	case anipub.SearchItem:
+	case providers.SearchHit:
 		return hit.MalID
 	default:
 		return 0

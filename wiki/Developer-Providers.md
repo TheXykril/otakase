@@ -24,8 +24,8 @@ loading.
 | `internal/provider_disabled.go` | Which providers are switched off, and the default stack order |
 | `internal/provider.go` | The provider stack: search, retries, `name::id` keys |
 
-Current providers: `anidb`, `anikoto`, `anineko`, `anipub`, `anizone`,
-`kickassanime`, `nyaa` (which also registers `sukebei`).
+Current providers: `anikoto`, `anizone`, `kickassanime`, `nyaa` (which also
+registers `sukebei`).
 
 A provider package imports `providers` and `providerhost` and never
 `internal` itself; `internal` imports the providers, so going the other way
@@ -66,16 +66,16 @@ type SelectionOption struct {
 ```
 
 Return the host's raw id in `Key`. When several providers are searched at
-once the app stores it as `provider::id` (for example `anikoto::154587`) and
+once the app stores it as `provider::id` (for example `anikoto::one-piece-odmau`) and
 strips the prefix again before calling you.
 
 Put format, year or season in `Label` when the host has several entries with
 near-identical names; people pick from that line. Keep `Title` plain.
 
-`ExtraData` is only read for types the app knows. Today that's
-`anipub.SearchItem`, whose MAL id is used to tie a result to a list entry.
-Using it for another provider means teaching `malIDFromProviderExtraData` in
-`internal/provider_mapping.go` about your type.
+`ExtraData` is only read when it is a `providers.SearchHit`. Its `MalID` ties a
+result to a list entry (`malIDFromProviderExtraData` in
+`internal/provider_mapping.go`), and its `Episodes` count is shown in the menu.
+Attach one when your host's search gives either.
 
 ### PlaybackConfig
 
@@ -88,8 +88,8 @@ type PlaybackConfig struct {
 
 Only `SubStyle` matters to hosts that serve both hardsubbed and softsubbed
 streams. `substyle.Choose(hasSoft, hasHard, config.SubStyle)` makes the
-decision, asking the user once per run when the setting is `ask`. `anineko`
-uses it.
+decision, asking the user once per run when the setting is `ask`. No current
+provider needs it.
 
 ## Optional interfaces
 
@@ -148,7 +148,7 @@ methods by calling one function, as `anikoto` does.
   definitive answer and is not retried.
 - `providerhost.HTTPStatusOK` and `providerhost.HTTPStatusError(context,
   status, body)` give the same error shape every provider uses.
-- Prefix your messages with the provider name: `anikoto: no dub for 154587
+- Prefix your messages with the provider name: `anikoto: no dub for one-piece-odmau
   episode 3`.
 
 ## Adding one
@@ -163,9 +163,9 @@ internal/providers/yoursite/
   provider_test.go
 ```
 
-Look at `anikoto` for a small JSON API, `anipub` for a host that resolves
-through embed pages, `anineko` for HTML scraping with soft/hard subtitles, and
-`nyaa` for something that isn't an HTTP stream at all.
+Look at `anikoto` for HTML scraping that resolves through an embed page (and
+falls back across mirror domains), `kickassanime` for a JSON API, and `nyaa`
+for something that isn't an HTTP stream at all.
 
 ### 2. Register it
 

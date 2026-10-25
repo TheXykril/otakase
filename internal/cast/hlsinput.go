@@ -38,8 +38,8 @@ func InputArgs(streamURL string) []string {
 
 // IsWholeFile reports whether a stream is a single file rather than an HLS
 // playlist. The torrent provider serves the release itself from a local port,
-// and a direct link names its container. A playlist is always named as one:
-// anineko proxies its HLS through a local port too.
+// and a direct link names its container. A playlist is always named as one,
+// even when it is served from a local port.
 func IsWholeFile(streamURL string) bool {
 	parsed, err := url.Parse(strings.TrimSpace(streamURL))
 	if err != nil {

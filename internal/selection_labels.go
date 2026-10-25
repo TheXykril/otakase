@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/thexykril/otakase/internal/providers/anipub"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // labelEpisodeCountRE finds the "(N episodes)" a search label carries.
@@ -55,7 +55,7 @@ func episodeCountFromSelectionOption(opt SelectionOption) (int, bool) {
 			return count, true
 		}
 	}
-	if item, ok := opt.ExtraData.(anipub.SearchItem); ok && item.Episodes > 0 {
+	if item, ok := opt.ExtraData.(providers.SearchHit); ok && item.Episodes > 0 {
 		return item.Episodes, true
 	}
 	return 0, false

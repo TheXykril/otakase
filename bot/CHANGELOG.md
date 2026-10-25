@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.53
+
+- Watch Together: Anikoto works again. It moved to a new site (anikototv.to, with anikoto.cz as a backup), and the watch room picks it up with this update.
+- Watch Together: AniDB, AniNeko and AniPub are gone from the source list. Their sites have shut down.
+
 ## 1.30.52
 
 - Watch Together: when you stop watching, leave or the room ends, where you were is saved to your AniList notes and MAL comments the same way Otakase does it, so the app resumes from there. Only shows already on your list, and only if you were there from the start of the episode.

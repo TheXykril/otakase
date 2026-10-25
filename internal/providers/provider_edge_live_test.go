@@ -116,7 +116,7 @@ func liveProvider(name string) edgeProvider {
 
 // edgeProviders are the hosts the edge cases are run against.
 func edgeProviders() []edgeProvider {
-	return []edgeProvider{liveProvider("anipub"), liveProvider("anineko")}
+	return []edgeProvider{liveProvider("anizone"), liveProvider("kickassanime")}
 }
 
 func (p edgeProvider) search(query, mode string) ([]providers.SelectionOption, error) {

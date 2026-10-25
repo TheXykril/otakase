@@ -70,10 +70,11 @@ func TestProviderSearchResolvesRomajiOnlyTitlesLive(t *testing.T) {
 	}
 }
 
-// TestAnipubNeedsEnglishTitleVariantLive pins the exact failure from the bug
-// report: anipub indexes only the English release title, so the romaji query
-// misses and the search must fall through to a variant to find the show.
-func TestAnipubNeedsEnglishTitleVariantLive(t *testing.T) {
+// TestAnizoneNeedsEnglishTitleVariantLive pins a host missing the full romaji
+// title: anizone does not find it, so the search must fall through to a
+// variant to find the show. (The original report was against anipub, since
+// removed; anizone fails the same way.)
+func TestAnizoneNeedsEnglishTitleVariantLive(t *testing.T) {
 	if os.Getenv("OTAKASE_LIVE_SEARCH_TEST") != "1" {
 		t.Skip("set OTAKASE_LIVE_SEARCH_TEST=1")
 	}
@@ -82,20 +83,20 @@ func TestAnipubNeedsEnglishTitleVariantLive(t *testing.T) {
 	english := "Rich Girl Caretaker: I'm Secretly the Caregiver of the Most Popular Girl in This Rich Kid School"
 	title := AnimeTitle{Romaji: romaji, English: english}
 
-	config := &Config{Provider: `["anipub"]`, AnimeNameLanguage: "english"}
+	config := &Config{Provider: `["anizone"]`, AnimeNameLanguage: "english"}
 	previous := GetGlobalConfig()
 	SetGlobalConfig(config)
 	t.Cleanup(func() { SetGlobalConfig(previous) })
 
 	// Without variants the romaji query misses outright — the original bug.
-	_, romajiErr := searchAnimeWithProviders([]string{"anipub"}, romaji, "sub")
+	_, romajiErr := searchAnimeWithProviders([]string{"anizone"}, romaji, "sub")
 	if romajiErr == nil {
-		t.Skip("anipub now indexes the romaji title; this regression no longer reproduces")
+		t.Skip("anizone now indexes the romaji title; this regression no longer reproduces")
 	}
 	// Being throttled proves nothing either way, and failing on it would make a
 	// scheduled run cry wolf about a provider that is perfectly healthy.
 	if errors.Is(romajiErr, providerhost.ErrRateLimited) {
-		t.Skip("anipub is rate limiting; cannot exercise the variant fallback right now")
+		t.Skip("anizone is rate limiting; cannot exercise the variant fallback right now")
 	}
 
 	state := &providerMappingSearchState{
@@ -106,7 +107,7 @@ func TestAnipubNeedsEnglishTitleVariantLive(t *testing.T) {
 
 	results, err := searchAnimeForMapping(config, state, "sub")
 	if errors.Is(err, providerhost.ErrRateLimited) {
-		t.Skip("anipub is rate limiting; cannot exercise the variant fallback right now")
+		t.Skip("anizone is rate limiting; cannot exercise the variant fallback right now")
 	}
 	if err != nil {
 		t.Fatalf("expected a variant to rescue the search, got %v", err)

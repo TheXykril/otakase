@@ -9,22 +9,22 @@ import (
 func dubOnlyStack(t *testing.T) (Config, *Anime) {
 	t.Helper()
 	provider := &stackStubProvider{
-		name: "anipub",
+		name: "anizone",
 		episodeResults: map[string]map[string][]string{
-			"anipub-id": {"dub": {"anipub-dub"}},
+			"anizone-id": {"dub": {"anizone-dub"}},
 		},
 		searchResults: map[string][]SelectionOption{
-			"dub": {{Title: "Example", Key: "anipub-id"}},
-			"sub": {{Title: "Example", Key: "anipub-id"}},
+			"dub": {{Title: "Example", Key: "anizone-id"}},
+			"sub": {{Title: "Example", Key: "anizone-id"}},
 		},
 	}
 	withProviderFactories(t, provider)
 
-	config := Config{Provider: `["anipub"]`, SubOrDub: "sub", AutoAudioFallback: true}
+	config := Config{Provider: `["anizone"]`, SubOrDub: "sub", AutoAudioFallback: true}
 	anime := &Anime{
 		Title:        AnimeTitle{Romaji: "Example"},
-		ProviderName: "anipub",
-		ProviderId:   "anipub-id",
+		ProviderName: "anizone",
+		ProviderId:   "anizone-id",
 	}
 	return config, anime
 }
@@ -44,7 +44,7 @@ func TestAutoAudioFallbackPlaysWithoutPrompting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected the alternate mode to play automatically, got %v", err)
 	}
-	if result.Mode != "dub" || len(result.Links) == 0 || result.Links[0] != "anipub-dub" {
+	if result.Mode != "dub" || len(result.Links) == 0 || result.Links[0] != "anizone-dub" {
 		t.Fatalf("expected the dub stream, got %#v", result)
 	}
 }

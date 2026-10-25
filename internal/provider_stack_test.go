@@ -12,7 +12,7 @@ import (
 	"github.com/thexykril/otakase/internal/providers"
 )
 
-var fullTestStack = []string{"anikoto", "kickassanime", "anizone", "anipub", "anineko", "nyaa", "sukebei", "anidb"}
+var fullTestStack = []string{"anikoto", "kickassanime", "anizone", "nyaa", "sukebei"}
 
 // stackStubProvider stands in for a registered provider. Searches answer
 // from searchResults by audio; episodes answer from episodeErrors, then
@@ -81,12 +81,12 @@ func TestConfiguredProviderNamesAcceptsOrderedLists(t *testing.T) {
 		{name: "empty", provider: "", want: fullTestStack},
 		{name: "stacked", provider: "stacked", want: fullTestStack},
 		{name: "older stack spelling", provider: " Auto ", want: fullTestStack},
-		{name: "json list", provider: `["anikoto","anineko"]`, want: []string{"anikoto", "anineko"}},
-		{name: "comma list", provider: "anineko,anikoto", want: []string{"anineko", "anikoto"}},
-		{name: "plus list", provider: "anikoto+anineko", want: []string{"anikoto", "anineko"}},
-		{name: "pipe and semicolon", provider: "anipub|nyaa;anikoto", want: []string{"anipub", "nyaa", "anikoto"}},
-		{name: "repeats and aliases", provider: `["AniPub","anipub","Kick-Ass Anime"]`, want: []string{"anipub", "kickassanime"}},
-		{name: "unknown names dropped", provider: `["nonsense","anineko"]`, want: []string{"anineko"}},
+		{name: "json list", provider: `["anikoto","anizone"]`, want: []string{"anikoto", "anizone"}},
+		{name: "comma list", provider: "anizone,anikoto", want: []string{"anizone", "anikoto"}},
+		{name: "plus list", provider: "anikoto+anizone", want: []string{"anikoto", "anizone"}},
+		{name: "pipe and semicolon", provider: "kickassanime|nyaa;anikoto", want: []string{"kickassanime", "nyaa", "anikoto"}},
+		{name: "repeats and aliases", provider: `["AniZone","anizone","Kick-Ass Anime"]`, want: []string{"anizone", "kickassanime"}},
+		{name: "unknown names dropped", provider: `["nonsense","anizone"]`, want: []string{"anizone"}},
 		{name: "nothing known", provider: `["nonsense"]`, want: []string{"anikoto"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -105,12 +105,12 @@ func TestCanonicalProviderConfigValueMigratesLegacyValues(t *testing.T) {
 
 	for _, tc := range []struct{ raw, want string }{
 		{raw: "anikoto", want: `["anikoto"]`},
-		{raw: "anineko", want: `["anineko"]`},
-		{raw: "anineko,anikoto", want: `["anineko","anikoto"]`},
+		{raw: "anizone", want: `["anizone"]`},
+		{raw: "anizone,anikoto", want: `["anizone","anikoto"]`},
 		{raw: "", want: "stacked"},
 		{raw: "STACK", want: "stacked"},
 		{raw: strings.Join(fullTestStack, ","), want: "stacked"},
-		{raw: `["anipub","senshi"]`, want: "stacked"},
+		{raw: `["kickassanime","senshi"]`, want: "stacked"},
 	} {
 		got := canonicalProviderConfigValue(tc.raw)
 		if got != tc.want {
@@ -140,8 +140,8 @@ func TestLoadConfigMigratesLegacyProviderToList(t *testing.T) {
 	if !strings.Contains(string(saved), `Provider=["anikoto"]`) {
 		t.Fatalf("config file was not migrated to anikoto-only list:\n%s", saved)
 	}
-	if strings.Contains(string(saved), "anineko") {
-		t.Fatalf("migration added anineko without consent:\n%s", saved)
+	if strings.Contains(string(saved), "anizone") {
+		t.Fatalf("migration added anizone without consent:\n%s", saved)
 	}
 }
 
@@ -163,10 +163,10 @@ func TestProviderQualifiedIDsRoundTrip(t *testing.T) {
 		id, name, raw string
 		ok            bool
 	}{
-		{id: "anipub::frieren::s2", name: "anipub", raw: "frieren::s2", ok: true},
+		{id: "kickassanime::frieren::s2", name: "kickassanime", raw: "frieren::s2", ok: true},
 		{id: "frieren", raw: "frieren"},
 		{id: "nonsense::21", raw: "nonsense::21"},
-		{id: "anipub::", raw: "anipub::"},
+		{id: "kickassanime::", raw: "kickassanime::"},
 	} {
 		name, raw, ok := ParseProviderQualifiedID(tc.id)
 		if name != tc.name || raw != tc.raw || ok != tc.ok {
@@ -178,23 +178,23 @@ func TestProviderQualifiedIDsRoundTrip(t *testing.T) {
 func TestProviderIDForAnimePrefersTheQualifiedID(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	anime := &Anime{ProviderName: "anipub", ProviderId: "anineko::slug"}
-	if name, id := AnimeProviderID(anime); name != "anineko" || id != "slug" {
+	anime := &Anime{ProviderName: "kickassanime", ProviderId: "anizone::slug"}
+	if name, id := AnimeProviderID(anime); name != "anizone" || id != "slug" {
 		t.Fatalf("got (%q, %q), want the provider the id names", name, id)
 	}
-	anime = &Anime{ProviderName: "AniPub", ProviderId: "42"}
-	if name, id := AnimeProviderID(anime); name != "anipub" || id != "42" {
+	anime = &Anime{ProviderName: "KickAssAnime", ProviderId: "42"}
+	if name, id := AnimeProviderID(anime); name != "kickassanime" || id != "42" {
 		t.Fatalf("got (%q, %q)", name, id)
 	}
 }
 
 func TestQualifySelectionOptionTagsTheLabelOnce(t *testing.T) {
-	got := qualifySelectionOption("anipub", SelectionOption{Key: "7", Label: "Show"})
-	if got.Key != "anipub::7" || got.Label != "Show [anipub]" {
+	got := qualifySelectionOption("kickassanime", SelectionOption{Key: "7", Label: "Show"})
+	if got.Key != "kickassanime::7" || got.Label != "Show [kickassanime]" {
 		t.Fatalf("got %+v", got)
 	}
-	again := qualifySelectionOption("anipub", got)
-	if again.Key != "anipub::7" || again.Label != "Show [anipub]" {
+	again := qualifySelectionOption("kickassanime", got)
+	if again.Key != "kickassanime::7" || again.Label != "Show [kickassanime]" {
 		t.Fatalf("qualifying twice changed the option: %+v", again)
 	}
 }
@@ -204,15 +204,15 @@ func TestSearchAnimeReturnsProviderQualifiedStackResultsInOrder(t *testing.T) {
 		name:          "anikoto",
 		searchResults: map[string][]SelectionOption{"sub": {{Title: "First", Key: "anikoto-id", Label: "First"}}},
 	}
-	anineko := &stackStubProvider{
-		name: "anineko",
+	anizone := &stackStubProvider{
+		name: "anizone",
 		searchResults: map[string][]SelectionOption{"sub": {
 			{Title: "Second", Key: "pahe-id", Label: "Second"},
 			{Title: "Second again", Key: "pahe-id", Label: "Duplicate"},
 		}},
 	}
-	withProviderFactories(t, anikoto, anineko)
-	withGlobalConfig(t, &Config{Provider: `["anikoto","anineko"]`})
+	withProviderFactories(t, anikoto, anizone)
+	withGlobalConfig(t, &Config{Provider: `["anikoto","anizone"]`})
 
 	got, err := SearchAnime("query", "sub")
 	if err != nil {
@@ -222,10 +222,10 @@ func TestSearchAnimeReturnsProviderQualifiedStackResultsInOrder(t *testing.T) {
 	for i, option := range got {
 		keys[i] = option.Key
 	}
-	if want := []string{"anikoto::anikoto-id", "anineko::pahe-id"}; !slices.Equal(keys, want) {
+	if want := []string{"anikoto::anikoto-id", "anizone::pahe-id"}; !slices.Equal(keys, want) {
 		t.Fatalf("keys %v, want %v (qualified, stack order, repeats dropped)", keys, want)
 	}
-	if got[1].Label != "Second [anineko]" {
+	if got[1].Label != "Second [anizone]" {
 		t.Fatalf("label does not name the provider: %q", got[1].Label)
 	}
 }
@@ -235,24 +235,24 @@ func TestResolveEpisodeURLUsesProviderListOrder(t *testing.T) {
 		name:           "anikoto",
 		episodeResults: map[string]map[string][]string{"anikoto-id": {"sub": {"anikoto-sub"}}},
 	}
-	anineko := &stackStubProvider{
-		name:           "anineko",
-		episodeResults: map[string]map[string][]string{"pahe-id": {"sub": {"anineko-sub"}}},
+	anizone := &stackStubProvider{
+		name:           "anizone",
+		episodeResults: map[string]map[string][]string{"pahe-id": {"sub": {"anizone-sub"}}},
 		searchResults:  map[string][]SelectionOption{"sub": {{Title: "Example", Key: "pahe-id"}}},
 	}
-	withProviderFactories(t, anikoto, anineko)
+	withProviderFactories(t, anikoto, anizone)
 
-	cfg := Config{Provider: `["anineko","anikoto"]`, SubOrDub: "sub"}
+	cfg := Config{Provider: `["anizone","anikoto"]`, SubOrDub: "sub"}
 	anime := &Anime{Title: AnimeTitle{Romaji: "Example"}, ProviderName: "anikoto", ProviderId: "anikoto-id"}
 
 	got, err := ResolveEpisodeURL(cfg, anime, 1)
 	if err != nil {
 		t.Fatalf("ResolveEpisodeURL: %v", err)
 	}
-	if got.ProviderName != "anineko" || got.ProviderID != "pahe-id" || got.Links[0] != "anineko-sub" {
-		t.Fatalf("expected anineko to win by config order, got %#v", got)
+	if got.ProviderName != "anizone" || got.ProviderID != "pahe-id" || got.Links[0] != "anizone-sub" {
+		t.Fatalf("expected anizone to win by config order, got %#v", got)
 	}
-	if anime.ProviderName != "anineko" || anime.ProviderId != "pahe-id" {
+	if anime.ProviderName != "anizone" || anime.ProviderId != "pahe-id" {
 		t.Fatalf("the mapping did not move to the provider that served: %+v", anime)
 	}
 }
@@ -260,20 +260,20 @@ func TestResolveEpisodeURLUsesProviderListOrder(t *testing.T) {
 func TestProviderNamesForAnimeAppendsTheStoredProvider(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	cfg := &Config{Provider: `["anineko","anipub"]`}
+	cfg := &Config{Provider: `["anizone","kickassanime"]`}
 	got := providerNamesForAnime(cfg, &Anime{ProviderName: "nyaa", ProviderId: "x"})
-	if want := []string{"anineko", "anipub", "nyaa"}; !slices.Equal(got, want) {
+	if want := []string{"anizone", "kickassanime", "nyaa"}; !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
-	got = providerNamesForAnime(cfg, &Anime{ProviderName: "anipub", ProviderId: "x"})
-	if want := []string{"anineko", "anipub"}; !slices.Equal(got, want) {
+	got = providerNamesForAnime(cfg, &Anime{ProviderName: "kickassanime", ProviderId: "x"})
+	if want := []string{"anizone", "kickassanime"}; !slices.Equal(got, want) {
 		t.Fatalf("a stored provider already in the stack was added again: %v", got)
 	}
 }
 
 func TestFilterExcludedProviders(t *testing.T) {
-	kept := filterExcludedProviders([]string{"anineko", "anikoto", "anipub"}, []string{"anineko", "ANINEKO"})
-	if want := []string{"anikoto", "anipub"}; !slices.Equal(kept, want) {
+	kept := filterExcludedProviders([]string{"anizone", "anikoto", "kickassanime"}, []string{"anizone", "ANIZONE"})
+	if want := []string{"anikoto", "kickassanime"}; !slices.Equal(kept, want) {
 		t.Fatalf("kept %v, want %v", kept, want)
 	}
 }
@@ -284,28 +284,28 @@ func TestResolveEpisodeURLExcludingProvidersSkipsTheFailedOne(t *testing.T) {
 		episodeResults: map[string]map[string][]string{"anikoto-id": {"sub": {"anikoto-sub"}}},
 		searchResults:  map[string][]SelectionOption{"sub": {{Title: "Example", Key: "anikoto-id"}}},
 	}
-	anipub := &stackStubProvider{
-		name:           "anipub",
-		episodeResults: map[string]map[string][]string{"anipub-id": {"sub": {"anipub-sub"}}},
-		searchResults:  map[string][]SelectionOption{"sub": {{Title: "Example", Key: "anipub-id"}}},
+	kickassanime := &stackStubProvider{
+		name:           "kickassanime",
+		episodeResults: map[string]map[string][]string{"kickassanime-id": {"sub": {"kickassanime-sub"}}},
+		searchResults:  map[string][]SelectionOption{"sub": {{Title: "Example", Key: "kickassanime-id"}}},
 	}
-	withProviderFactories(t, anikoto, anipub)
+	withProviderFactories(t, anikoto, kickassanime)
 
-	cfg := Config{Provider: `["anipub","anikoto"]`, SubOrDub: "sub"}
-	anime := &Anime{Title: AnimeTitle{Romaji: "Example"}, ProviderName: "anipub", ProviderId: "anipub-id"}
+	cfg := Config{Provider: `["kickassanime","anikoto"]`, SubOrDub: "sub"}
+	anime := &Anime{Title: AnimeTitle{Romaji: "Example"}, ProviderName: "kickassanime", ProviderId: "kickassanime-id"}
 
-	got, err := ResolveEpisodeURLExcludingProvidersMode(cfg, anime, 1, []string{"anipub"}, cfg.SubOrDub)
+	got, err := ResolveEpisodeURLExcludingProvidersMode(cfg, anime, 1, []string{"kickassanime"}, cfg.SubOrDub)
 	if err != nil {
 		t.Fatalf("ResolveEpisodeURLExcludingProvidersMode: %v", err)
 	}
 	if got.ProviderName != "anikoto" || got.Links[0] != "anikoto-sub" {
 		t.Fatalf("expected anikoto fallback, got %#v", got)
 	}
-	if len(anipub.calls) != 0 {
-		t.Fatalf("the excluded provider was asked: %v", anipub.calls)
+	if len(kickassanime.calls) != 0 {
+		t.Fatalf("the excluded provider was asked: %v", kickassanime.calls)
 	}
 
-	if _, err := ResolveEpisodeURLExcludingProvidersMode(cfg, anime, 1, []string{"anipub", "anikoto"}, "sub"); err == nil {
+	if _, err := ResolveEpisodeURLExcludingProvidersMode(cfg, anime, 1, []string{"kickassanime", "anikoto"}, "sub"); err == nil {
 		t.Fatal("expected an error with every provider excluded")
 	}
 }
@@ -385,29 +385,29 @@ func TestResolveEpisodeURLForPlaybackTriesAllPreferredProvidersBeforeAudioFallba
 		episodeResults: map[string]map[string][]string{"shared-id": {"sub": {"anikoto-sub"}}},
 		episodeErrors:  map[string]map[string]error{"shared-id": {"dub": errors.New("no anikoto dub")}},
 	}
-	anineko := &stackStubProvider{
-		name:           "anineko",
-		episodeResults: map[string]map[string][]string{"pahe-id": {"dub": {"anineko-dub"}}},
+	anizone := &stackStubProvider{
+		name:           "anizone",
+		episodeResults: map[string]map[string][]string{"pahe-id": {"dub": {"anizone-dub"}}},
 		searchResults:  map[string][]SelectionOption{"dub": {{Title: "Example", Key: "pahe-id"}}},
 	}
-	withProviderFactories(t, anikoto, anineko)
+	withProviderFactories(t, anikoto, anizone)
 	withPromptSelect(t, func([]SelectionOption) (SelectionOption, error) {
 		t.Fatal("offered the other audio while a later provider still had dub")
 		return SelectionOption{}, nil
 	})
 
-	cfg := Config{Provider: `["anikoto","anineko"]`, SubOrDub: "dub"}
+	cfg := Config{Provider: `["anikoto","anizone"]`, SubOrDub: "dub"}
 	anime := &Anime{Title: AnimeTitle{Romaji: "Example"}, ProviderName: "anikoto", ProviderId: "shared-id"}
 
 	got, err := ResolveEpisodeURLForPlayback(cfg, anime, 1)
 	if err != nil {
 		t.Fatalf("ResolveEpisodeURLForPlayback: %v", err)
 	}
-	if got.ProviderName != "anineko" || got.Mode != "dub" || got.Links[0] != "anineko-dub" {
-		t.Fatalf("expected anineko dub before sub fallback, got %#v", got)
+	if got.ProviderName != "anizone" || got.Mode != "dub" || got.Links[0] != "anizone-dub" {
+		t.Fatalf("expected anizone dub before sub fallback, got %#v", got)
 	}
 	if slices.Contains(anikoto.calls, "anikoto:sub") {
-		t.Fatalf("anikoto sub fallback was tried before anineko dub: %#v", anikoto.calls)
+		t.Fatalf("anikoto sub fallback was tried before anizone dub: %#v", anikoto.calls)
 	}
 }
 

@@ -11,9 +11,9 @@ func TestSplitRofiLabel(t *testing.T) {
 		label, title, meta string
 	}{
 		// The shapes the providers actually produce.
-		{"One Piece · 1171 eps [anipub]", "One Piece", "· 1171 eps [anipub]"},
-		{"Attack on Titan — TV • 25 Episodes [anineko]", "Attack on Titan", "— TV • 25 Episodes [anineko]"},
-		{"Frieren: Beyond Journey's End [anipub]", "Frieren: Beyond Journey's End", "[anipub]"},
+		{"One Piece · 1171 eps [anizone]", "One Piece", "· 1171 eps [anizone]"},
+		{"Attack on Titan — TV • 25 Episodes [kickassanime]", "Attack on Titan", "— TV • 25 Episodes [kickassanime]"},
+		{"Frieren: Beyond Journey's End [anizone]", "Frieren: Beyond Journey's End", "[anizone]"},
 		{"One Piece Film Red", "One Piece Film Red", ""},
 		{"One Piece · 1171 eps", "One Piece", "· 1171 eps"},
 		// A colon is part of a title, not a metadata separator.
@@ -32,14 +32,14 @@ func TestSplitRofiLabel(t *testing.T) {
 func TestRofiRowMarkupDimsMetadata(t *testing.T) {
 	rofiMetaColor = "#4b4e55"
 
-	row := rofiRowMarkup("One Piece · 1171 eps [anipub]")
+	row := rofiRowMarkup("One Piece · 1171 eps [anizone]")
 	if !strings.HasPrefix(row, "One Piece <span") {
 		t.Fatalf("expected the title outside the span, got %q", row)
 	}
 	if !strings.Contains(row, `foreground="#4b4e55"`) {
 		t.Fatalf("expected the metadata dimmed, got %q", row)
 	}
-	if !strings.Contains(row, "· 1171 eps [anipub]</span>") {
+	if !strings.Contains(row, "· 1171 eps [anizone]</span>") {
 		t.Fatalf("expected the metadata inside the span, got %q", row)
 	}
 
@@ -54,7 +54,7 @@ func TestRofiRowMarkupDimsMetadata(t *testing.T) {
 func TestRofiRowMarkupEscapesPango(t *testing.T) {
 	rofiMetaColor = "#4b4e55"
 
-	row := rofiRowMarkup("Tom & Jerry <Special> [anipub]")
+	row := rofiRowMarkup("Tom & Jerry <Special> [anizone]")
 	if strings.Contains(row, "Tom & Jerry") {
 		t.Fatalf("ampersand was not escaped: %q", row)
 	}
@@ -94,10 +94,10 @@ func TestRofiRowMarkupRoundTripsToOriginalLabel(t *testing.T) {
 	rofiMetaColor = "#4b4e55"
 
 	labels := []string{
-		"One Piece · 1171 eps [anipub]",
-		"Attack on Titan — TV • 25 Episodes [anineko]",
-		"Frieren: Beyond Journey's End [anipub]",
-		"Tom & Jerry <Special> [anipub]",
+		"One Piece · 1171 eps [anizone]",
+		"Attack on Titan — TV • 25 Episodes [kickassanime]",
+		"Frieren: Beyond Journey's End [anizone]",
+		"Tom & Jerry <Special> [anizone]",
 		"Re:Zero kara Hajimeru Isekai Seikatsu",
 		"One Piece Film Red",
 	}

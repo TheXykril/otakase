@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers"
 )
 
@@ -35,11 +34,11 @@ func (p *Provider) SearchAnime(query, mode string) ([]providers.SelectionOption,
 	}
 	options := make([]providers.SelectionOption, 0, len(results))
 	for _, result := range results {
-		if result.ID == 0 || strings.TrimSpace(result.Name) == "" {
+		if result.Slug == "" || strings.TrimSpace(result.Name) == "" {
 			continue
 		}
 		options = append(options, providers.SelectionOption{
-			Key:   strconv.Itoa(result.ID),
+			Key:   result.Slug,
 			Title: result.Name,
 			Label: describe(result),
 		})
@@ -66,11 +65,10 @@ func describe(result searchResult) string {
 
 // EpisodesList returns the episode numbers carried in the requested language.
 //
-// Sub and dub are separate entries for the same number here, so the list is
-// filtered by language rather than deduplicated: a show that exists only in one
-// of them must report an empty list for the other, not a list that cannot play.
+// A show that exists only in one language must report an empty list for the
+// other, not a list that cannot play.
 func (p *Provider) EpisodesList(showID, mode string) ([]string, error) {
-	episodes, err := p.api().episodes(showID)
+	episodes, err := p.api().episodeList(showID)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +77,7 @@ func (p *Provider) EpisodesList(showID, mode string) ([]string, error) {
 	numbers := make([]int, 0, len(episodes))
 	seen := map[int]bool{}
 	for _, ep := range episodes {
-		if !strings.EqualFold(ep.Category, category) || ep.Number <= 0 || seen[ep.Number] {
+		if !ep.has(category) || seen[ep.Number] {
 			continue
 		}
 		seen[ep.Number] = true
@@ -109,109 +107,39 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 
 // GetEpisodeURLForModeWithHints resolves the stream and the headers it needs.
 //
-// The host serves its segments from a CDN that rejects requests without a
-// referrer and a browser user-agent, and it states both in the response rather
-// than leaving them to be discovered by a 403. They are passed through as-is.
-// requireCategory reports whether this show carries the requested episode in the
-// requested language, so a mode the show does not have fails here rather than
-// resolving to the other one under the wrong label.
-func (p *Provider) requireCategory(showID, category string, epNo int) error {
-	episodes, err := p.api().episodes(showID)
-	if err != nil {
-		// The listing is a check, not the stream. If it cannot be fetched, let
-		// the stream request be the thing that succeeds or fails.
-		providerhost.Log(fmt.Sprintf("anikoto: could not confirm %s availability for %s: %v", category, showID, err))
-		return nil
-	}
-	for _, ep := range episodes {
-		if ep.Number == epNo && strings.EqualFold(ep.Category, category) {
-			return nil
-		}
-	}
-	return fmt.Errorf("anikoto: %s has no %s for episode %d", showID, category, epNo)
-}
-
+// megaplay's CDN refuses manifests and segments without its own page as the
+// referrer, so that and a browser user-agent travel with the link.
+//
+// A language the episode does not carry fails here rather than resolving to the
+// other one under the wrong label, which lets GetEpisodeURLForPlayback's
+// fallback offer the other language instead.
 func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig, id string, epNo int, mode string) ([]string, map[string]providers.StreamPlaybackHint, error) {
-	category := normalizeCategory(mode)
-
-	// The host answers /link for a dub category even when the show has no dub,
-	// returning the sub stream under the dub label. Nothing downstream can tell:
-	// ProviderEpisodeResult.Mode is the mode that was asked for, so the episode
-	// plays with Japanese audio while the program believes it is a dub -- and
-	// the cast then skips burning the subtitles it needed.
-	//
-	// EpisodesList already refuses a category a show does not carry, for exactly
-	// this reason. Applying the same rule here costs one extra request and lets
-	// GetEpisodeURLForPlayback's existing fallback offer the other language
-	// rather than silently mislabelling this one.
-	if err := p.requireCategory(id, category, epNo); err != nil {
-		return nil, nil, err
-	}
-
-	response, err := p.api().link(id, category, epNo)
+	response, err := p.api().link(id, normalizeCategory(mode), epNo)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	ordered := orderStreams(response.Streams)
-	subtitle := preferredSubtitle(response.Subtitles)
-	tracks := subtitleTracks(response.Subtitles)
-
-	urls := make([]string, 0, len(ordered))
-	hints := make(map[string]providers.StreamPlaybackHint, len(ordered))
-	for _, s := range ordered {
-		if strings.TrimSpace(s.URL) == "" {
-			continue
-		}
-		urls = append(urls, s.URL)
-
-		headers := map[string]string{}
-		for key, value := range s.HTTPHeaders {
-			headers[key] = value
-		}
-		refer := s.Referer
-		if refer == "" {
-			refer = referer
-		}
-		if _, ok := headers["Referer"]; !ok {
-			headers["Referer"] = refer
-		}
-		hints[s.URL] = providers.StreamPlaybackHint{
-			Referrer:  refer,
-			Subtitle:  subtitle,
-			Subtitles: tracks,
-			Headers:   headers,
-		}
+	refer := response.Referer
+	if refer == "" {
+		refer = referer
 	}
-	if len(urls) == 0 {
-		return nil, nil, fmt.Errorf("anikoto: no playable stream for %s episode %d", id, epNo)
+	hint := providers.StreamPlaybackHint{
+		Referrer:  refer,
+		Subtitle:  preferredSubtitle(response.Subtitles),
+		Subtitles: subtitleTracks(response.Subtitles),
+		Headers:   map[string]string{"Referer": refer, "User-Agent": userAgent},
 	}
-	return urls, hints, nil
-}
-
-// orderStreams puts the host's own preference first: the stream it marks
-// default, then by its stated priority. Falling back down this list is what
-// happens when a server is having a bad day, so the order matters.
-func orderStreams(streams []stream) []stream {
-	ordered := make([]stream, len(streams))
-	copy(ordered, streams)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		if ordered[i].Default != ordered[j].Default {
-			return ordered[i].Default
-		}
-		return ordered[i].Priority < ordered[j].Priority
-	})
-	return ordered
+	return []string{response.URL}, map[string]providers.StreamPlaybackHint{response.URL: hint}, nil
 }
 
 // subtitleTracks lists every subtitle the host offers.
 func subtitleTracks(subtitles []subtitle) []providers.SubtitleTrack {
 	var tracks []providers.SubtitleTrack
 	for _, sub := range subtitles {
-		if sub.File == "" {
+		if !sub.caption() {
 			continue
 		}
-		tracks = append(tracks, providers.SubtitleTrack{URL: sub.File, Language: sub.Language, Label: sub.Label})
+		label := strings.TrimSpace(sub.Label)
+		tracks = append(tracks, providers.SubtitleTrack{URL: sub.File, Language: label, Label: label})
 	}
 	return tracks
 }
@@ -220,15 +148,12 @@ func subtitleTracks(subtitles []subtitle) []providers.SubtitleTrack {
 // otherwise the first English one, otherwise nothing rather than a guess.
 func preferredSubtitle(subtitles []subtitle) string {
 	for _, sub := range subtitles {
-		if sub.Default && sub.File != "" {
+		if sub.Default && sub.caption() {
 			return sub.File
 		}
 	}
 	for _, sub := range subtitles {
-		if sub.File == "" {
-			continue
-		}
-		if strings.EqualFold(sub.Language, "english") || strings.EqualFold(sub.Label, "English") {
+		if sub.caption() && strings.Contains(strings.ToLower(sub.Label), "english") {
 			return sub.File
 		}
 	}
@@ -236,8 +161,8 @@ func preferredSubtitle(subtitles []subtitle) string {
 }
 
 // SkipRange reports the intro and outro the host gives for an episode, in
-// seconds. It comes back from the same request that resolves the stream, so
-// asking for it costs nothing extra.
+// seconds. It comes back with the stream, and the client keeps the last few
+// resolutions, so asking right after playing costs nothing extra.
 func (p *Provider) SkipRange(id, mode string, epNo int) (intro, outro []int, err error) {
 	response, err := p.api().link(id, normalizeCategory(mode), epNo)
 	if err != nil {

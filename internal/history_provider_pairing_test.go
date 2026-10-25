@@ -13,13 +13,13 @@ import (
 // wrote anime.ProviderId alongside GetProvider().Name(), which is the first
 // *configured* provider, not the one that actually served the episode.
 //
-// Playing an episode that anipub could not serve but anineko could stored
-// anineko's slug under the name "anipub", and every later run then handed that
-// slug straight back to anipub:
+// Playing an episode that anizone could not serve but kickassanime could stored
+// kickassanime's slug under the name "anizone", and every later run then handed that
+// slug straight back to anizone:
 //
-//	anipub episode: invalid anipub show id "rich-girl-caretaker-im-secretly-..."
+//	anizone episode: invalid anizone show id "rich-girl-caretaker-im-secretly-..."
 //
-// which took anipub out of the running for that show permanently. The pairing
+// which took anizone out of the running for that show permanently. The pairing
 // cannot be checked at runtime -- a wrong name is still a valid string -- so it
 // is pinned here at the call sites instead.
 func TestHistoryWritesPairTheIDWithItsOwnProvider(t *testing.T) {

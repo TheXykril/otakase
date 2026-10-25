@@ -63,12 +63,12 @@ func TestEpisodeLinkFailureMenuReadsWell(t *testing.T) {
 
 func TestEpisodeLinkFailureDiagnosisNamesEpisodeAudioAndProviders(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	cfg := &Config{Provider: `["anipub","anikoto"]`, SubOrDub: "sub"}
-	frieren := &Anime{Title: AnimeTitle{English: "Frieren: Beyond Journey's End"}, Ep: Episode{Number: 12}, ProviderName: "anipub"}
+	cfg := &Config{Provider: `["anizone","anikoto"]`, SubOrDub: "sub"}
+	frieren := &Anime{Title: AnimeTitle{English: "Frieren: Beyond Journey's End"}, Ep: Episode{Number: 12}, ProviderName: "anizone"}
 
 	msg := episodeLinkFailureDiagnosis(cfg, frieren, errors.New("no sub episode links found across providers"))
 	want := "Couldn't find Episode 12 (sub) for \"Frieren: Beyond Journey's End\"\n" +
-		"Tried: anipub, anikoto\n" +
+		"Tried: anizone, anikoto\n" +
 		"Reason: no sub episode links found across providers"
 	if msg != want {
 		t.Fatalf("diagnosis:\n%s\nwant:\n%s", msg, want)
@@ -176,7 +176,7 @@ func TestResolveEpisodeLinksWithRecoverySkipsTheAudioQuestionWithNoOtherAudio(t 
 		return SelectionOption{Key: "back"}, nil
 	})
 
-	cfg := &Config{Provider: `["anikoto","no-anineko"]`, SubOrDub: "sub"}
+	cfg := &Config{Provider: `["anikoto","no-kickassanime"]`, SubOrDub: "sub"}
 	if got, ok := resolveEpisodeLinksWithRecovery(cfg, anikotoExample(3), nil); ok || len(got.Links) > 0 {
 		t.Fatalf("expected a back-out, got ok=%v %#v", ok, got)
 	}

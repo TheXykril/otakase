@@ -54,7 +54,7 @@ jobs:
           # The download test is deliberately excluded: it pulls ~165 MB.
           run_tests() {
             go test -count=1 -timeout 10m \
-              -run 'TestProviderSearchResolvesRomajiOnlyTitlesLive|TestAnipubNeedsEnglishTitleVariantLive' \
+              -run 'TestProviderSearchResolvesRomajiOnlyTitlesLive|TestAnizoneNeedsEnglishTitleVariantLive' \
               ./internal/ 2>&1 | tee live-tests.txt
             return "${PIPESTATUS[0]}"
           }

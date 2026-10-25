@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	_ "github.com/thexykril/otakase/internal/loadproviders"
-	"github.com/thexykril/otakase/internal/providers/anipub"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 func TestSearchStateWalksTheStack(t *testing.T) {
 	t.Run("a single provider has no next one", func(t *testing.T) {
-		single := &providerMappingSearchState{allProviders: []string{"anineko"}}
+		single := &providerMappingSearchState{allProviders: []string{"kickassanime"}}
 		if next := single.nextProviderLabel(); next != "" {
 			t.Fatalf("next provider %q, want none", next)
 		}
@@ -28,9 +28,9 @@ func TestSearchStateWalksTheStack(t *testing.T) {
 	})
 
 	t.Run("from the whole stack the next is its first", func(t *testing.T) {
-		state := &providerMappingSearchState{allProviders: []string{"anipub", "anineko"}}
-		if got := state.nextProviderLabel(); got != "anipub" {
-			t.Fatalf("next provider %q, want anipub", got)
+		state := &providerMappingSearchState{allProviders: []string{"anizone", "kickassanime"}}
+		if got := state.nextProviderLabel(); got != "anizone" {
+			t.Fatalf("next provider %q, want anizone", got)
 		}
 		if got := state.currentProviderLabel(); got != "all configured providers" {
 			t.Fatalf("scope label %q", got)
@@ -41,7 +41,7 @@ func TestSearchStateWalksTheStack(t *testing.T) {
 	})
 
 	t.Run("advancing walks the stack one at a time", func(t *testing.T) {
-		state := &providerMappingSearchState{allProviders: []string{"anipub", "anineko", "nyaa"}}
+		state := &providerMappingSearchState{allProviders: []string{"anizone", "kickassanime", "nyaa"}}
 		for i, name := range state.allProviders {
 			if !state.advanceToNextProvider() {
 				t.Fatalf("advance %d failed", i+1)
@@ -67,7 +67,7 @@ func TestSearchStateWalksTheStack(t *testing.T) {
 		}
 
 		state.resetToAllProviders()
-		if state.sequential || state.nextProviderLabel() != "anipub" {
+		if state.sequential || state.nextProviderLabel() != "anizone" {
 			t.Fatal("reset did not return to the whole stack")
 		}
 	})
@@ -76,8 +76,8 @@ func TestSearchStateWalksTheStack(t *testing.T) {
 // secondOfTwo is a search narrowed to the second provider of a two-provider
 // stack, with the config that stack comes from.
 func secondOfTwo() (*Config, *providerMappingSearchState) {
-	stack := []string{"anipub", "anineko"}
-	return &Config{Provider: `["anipub","anineko"]`},
+	stack := []string{"anizone", "kickassanime"}
+	return &Config{Provider: `["anizone","kickassanime"]`},
 		&providerMappingSearchState{allProviders: stack, sequential: true, providerIndex: 1}
 }
 
@@ -86,30 +86,30 @@ func TestABarePickBelongsToTheProviderBeingSearched(t *testing.T) {
 	config, search := secondOfTwo()
 
 	pick := SelectionOption{Key: "frieren-beyond-journeys-end", Title: "Frieren: Beyond Journey's End"}
-	if owner := providerNameFromSelection(config, search, pick); owner != "anineko" {
-		t.Fatalf("pick attributed to %q, want anineko", owner)
+	if owner := providerNameFromSelection(config, search, pick); owner != "kickassanime" {
+		t.Fatalf("pick attributed to %q, want kickassanime", owner)
 	}
 
 	var mapped Anime
 	applySelectedProviderMapping(config, search, &mapped, pick)
-	if mapped.ProviderName != "anineko" || mapped.ProviderId != pick.Key {
+	if mapped.ProviderName != "kickassanime" || mapped.ProviderId != pick.Key {
 		t.Fatalf("stored as %s/%s", mapped.ProviderName, mapped.ProviderId)
 	}
 }
 
 func TestProviderNameFromSelectionReadsKeyThenLabel(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	config := &Config{Provider: `["anipub","anineko"]`}
-	state := &providerMappingSearchState{allProviders: []string{"anipub", "anineko"}}
+	config := &Config{Provider: `["anizone","kickassanime"]`}
+	state := &providerMappingSearchState{allProviders: []string{"anizone", "kickassanime"}}
 
 	for _, tc := range []struct {
 		option SelectionOption
 		want   string
 	}{
-		{option: SelectionOption{Key: "anineko::frieren", Label: "Frieren [anipub]"}, want: "anineko"},
+		{option: SelectionOption{Key: "kickassanime::frieren", Label: "Frieren [anizone]"}, want: "kickassanime"},
 		{option: SelectionOption{Key: "frieren", Label: "Frieren [nyaa]"}, want: "nyaa"},
-		{option: SelectionOption{Key: "frieren", Label: "Frieren [nonsense]"}, want: "anipub"},
-		{option: SelectionOption{Key: "frieren", Label: "Frieren"}, want: "anipub"},
+		{option: SelectionOption{Key: "frieren", Label: "Frieren [nonsense]"}, want: "anizone"},
+		{option: SelectionOption{Key: "frieren", Label: "Frieren"}, want: "anizone"},
 	} {
 		if got := providerNameFromSelection(config, state, tc.option); got != tc.want {
 			t.Errorf("%+v: got %q, want %q", tc.option, got, tc.want)
@@ -117,8 +117,8 @@ func TestProviderNameFromSelectionReadsKeyThenLabel(t *testing.T) {
 	}
 
 	var anime Anime
-	applySelectedProviderMapping(config, state, &anime, SelectionOption{Key: "anineko::frieren"})
-	if anime.ProviderName != "anineko" || anime.ProviderId != "frieren" {
+	applySelectedProviderMapping(config, state, &anime, SelectionOption{Key: "kickassanime::frieren"})
+	if anime.ProviderName != "kickassanime" || anime.ProviderId != "frieren" {
 		t.Fatalf("a qualified pick was stored as %+v", anime)
 	}
 }
@@ -129,24 +129,24 @@ func TestAnAutomaticMatchBelongsToTheProviderBeingSearched(t *testing.T) {
 
 	matched := Anime{ProviderId: "frieren-beyond-journeys-end"}
 	applyMatchedProviderMapping(config, search, &matched)
-	if matched.ProviderName != "anineko" || matched.ProviderId != "frieren-beyond-journeys-end" {
+	if matched.ProviderName != "kickassanime" || matched.ProviderId != "frieren-beyond-journeys-end" {
 		t.Fatalf("stored as %s/%s", matched.ProviderName, matched.ProviderId)
 	}
 
-	qualified := Anime{ProviderId: "anipub::42"}
+	qualified := Anime{ProviderId: "anizone::42"}
 	applyMatchedProviderMapping(config, search, &qualified)
-	if qualified.ProviderName != "anipub" || qualified.ProviderId != "42" {
+	if qualified.ProviderName != "anizone" || qualified.ProviderId != "42" {
 		t.Fatalf("a qualified match was stored as %s/%s", qualified.ProviderName, qualified.ProviderId)
 	}
 }
 
 func TestActiveProviderNameFallsBackToTheStackHead(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
-	config := &Config{Provider: `["nyaa","anipub"]`}
+	config := &Config{Provider: `["nyaa","anizone"]`}
 	if got := activeProviderName(config, nil); got != "nyaa" {
 		t.Fatalf("without a search: %q", got)
 	}
-	whole := &providerMappingSearchState{allProviders: []string{"anipub"}}
+	whole := &providerMappingSearchState{allProviders: []string{"anizone"}}
 	if got := activeProviderName(config, whole); got != "nyaa" {
 		t.Fatalf("searching the whole stack: %q", got)
 	}
@@ -189,8 +189,8 @@ func TestProviderListingMatchSignals(t *testing.T) {
 		option SelectionOption
 		match  bool
 	}{
-		{name: "MAL id in search data", option: SelectionOption{ExtraData: anipub.SearchItem{MalID: 52991}}, match: true},
-		{name: "other MAL id in search data", option: SelectionOption{ExtraData: anipub.SearchItem{MalID: 1}}},
+		{name: "MAL id in search data", option: SelectionOption{ExtraData: providers.SearchHit{MalID: 52991}}, match: true},
+		{name: "other MAL id in search data", option: SelectionOption{ExtraData: providers.SearchHit{MalID: 1}}},
 		{name: "AniList cover", option: SelectionOption{Thumbnail: "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx154587-n1fmjRv4JQUd.jpg"}, match: true},
 		{name: "another show's AniList cover", option: SelectionOption{Thumbnail: "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/98478.jpg"}},
 		{name: "MAL poster", option: SelectionOption{Thumbnail: "https://example.org/posters/52991.webp"}, match: true},
@@ -244,33 +244,33 @@ func TestAutoMatchProviderListingPrefersTheMALKey(t *testing.T) {
 }
 
 func TestResolveAnimeProviderMappingTakesAnAutomaticMatch(t *testing.T) {
-	anipubStub := &stackStubProvider{
-		name:          "anipub",
+	anizoneStub := &stackStubProvider{
+		name:          "anizone",
 		searchResults: map[string][]SelectionOption{"sub": {{Key: "52991", Title: "Sousou no Frieren"}}},
 	}
-	withProviderFactories(t, anipubStub)
+	withProviderFactories(t, anizoneStub)
 	withPromptSelect(t, func(options []SelectionOption) (SelectionOption, error) {
 		t.Fatalf("a menu was shown for an automatic match: %+v", options)
 		return SelectionOption{}, nil
 	})
 
-	config := &Config{Provider: `["anipub"]`, SubOrDub: "sub"}
+	config := &Config{Provider: `["anizone"]`, SubOrDub: "sub"}
 	anime := &Anime{AnilistId: 154587, MalId: 52991, Title: AnimeTitle{English: "Frieren"}}
 	outcome, err := resolveAnimeProviderMapping(config, anime, "Frieren", nil, false)
 	if err != nil || outcome != ProviderMappingOK {
 		t.Fatalf("got (%v, %v)", outcome, err)
 	}
-	if anime.ProviderName != "anipub" || anime.ProviderId != "52991" {
+	if anime.ProviderName != "anizone" || anime.ProviderId != "52991" {
 		t.Fatalf("mapped to %s/%s", anime.ProviderName, anime.ProviderId)
 	}
 }
 
 func TestResolveAnimeProviderMappingBacksOutOfTheMatchMenu(t *testing.T) {
-	anipubStub := &stackStubProvider{
-		name:          "anipub",
+	anizoneStub := &stackStubProvider{
+		name:          "anizone",
 		searchResults: map[string][]SelectionOption{"sub": {{Key: "x", Title: "Something else"}}},
 	}
-	withProviderFactories(t, anipubStub)
+	withProviderFactories(t, anizoneStub)
 	var menus [][]string
 	withPromptSelect(t, func(options []SelectionOption) (SelectionOption, error) {
 		var keys []string
@@ -281,7 +281,7 @@ func TestResolveAnimeProviderMappingBacksOutOfTheMatchMenu(t *testing.T) {
 		return SelectionOption{Key: "back"}, nil
 	})
 
-	config := &Config{Provider: `["anipub"]`, SubOrDub: "sub"}
+	config := &Config{Provider: `["anizone"]`, SubOrDub: "sub"}
 	anime := &Anime{AnilistId: 154587, MalId: 52991, Title: AnimeTitle{English: "Frieren"}}
 	outcome, err := resolveAnimeProviderMapping(config, anime, "Frieren", nil, false)
 	if err != nil || outcome != ProviderMappingBack {
@@ -293,8 +293,8 @@ func TestResolveAnimeProviderMappingBacksOutOfTheMatchMenu(t *testing.T) {
 }
 
 func TestResolveUntrackedProviderSearchRecoveryAnswers(t *testing.T) {
-	withProviderFactories(t, &stackStubProvider{name: "anipub"}, &stackStubProvider{name: "anineko"})
-	config := &Config{Provider: `["anipub","anineko"]`, SubOrDub: "sub"}
+	withProviderFactories(t, &stackStubProvider{name: "anizone"}, &stackStubProvider{name: "kickassanime"})
+	config := &Config{Provider: `["anizone","kickassanime"]`, SubOrDub: "sub"}
 
 	for _, tc := range []struct {
 		answers []string
@@ -323,7 +323,7 @@ func TestResolveUntrackedProviderSearchRecoveryAnswers(t *testing.T) {
 }
 
 func TestMalIDFromProviderExtraData(t *testing.T) {
-	if got := malIDFromProviderExtraData(anipub.SearchItem{MalID: 7}); got != 7 {
+	if got := malIDFromProviderExtraData(providers.SearchHit{MalID: 7}); got != 7 {
 		t.Fatalf("got %d", got)
 	}
 	if got := malIDFromProviderExtraData("7"); got != 0 {

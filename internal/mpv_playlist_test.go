@@ -213,7 +213,7 @@ func TestFinalizePlaylistSwitchRecordsTheNewEpisode(t *testing.T) {
 	show := &Anime{
 		AnilistId:      269,
 		ProviderId:     "269",
-		ProviderName:   "anipub",
+		ProviderName:   "anizone",
 		Title:          AnimeTitle{English: "Show"},
 		FillerEpisodes: []int{33, 41},
 		Ep:             Episode{Number: 40},

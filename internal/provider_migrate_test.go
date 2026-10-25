@@ -37,15 +37,17 @@ func TestMigrateProviderConfig(t *testing.T) {
 	for _, tc := range []migration{
 		{"legacy senshi default", `["senshi"]`, "stacked", true},
 		{"legacy allanime default", `["allanime"]`, "stacked", true},
-		{"removed provider beside a working one", `["senshi","anineko"]`, "stacked", true},
+		{"shut-down anipub", `["anipub"]`, "stacked", true},
+		{"shut-down anineko and anidb", `["anineko","anidb"]`, "stacked", true},
+		{"removed provider beside a working one", `["senshi","anizone"]`, "stacked", true},
 		{"empty", "", "stacked", true},
 		{"stack alias", "stack", "stacked", true},
 		{"already stacked", "stacked", "stacked", false},
 		{"padded stacked", " stacked ", "stacked", false},
-		{"single anineko", `["anineko"]`, `["anineko"]`, false},
-		{"single bare name", "anineko", `["anineko"]`, true},
+		{"single anizone", `["anizone"]`, `["anizone"]`, false},
+		{"single bare name", "anizone", `["anizone"]`, true},
 		{"alias spelling", `["Kick-Ass Anime"]`, `["kickassanime"]`, true},
-		{"own list", `["anipub","anineko"]`, "stacked", true},
+		{"own list", `["kickassanime","anizone"]`, "stacked", true},
 	} {
 		value, changed := migrateProviderConfig(tc.raw)
 		if value != tc.want || changed != tc.changed {
@@ -55,13 +57,13 @@ func TestMigrateProviderConfig(t *testing.T) {
 }
 
 func TestIsFactoryDefaultProvider(t *testing.T) {
-	withDisabledProvidersForTest(t, "anidb")
+	withDisabledProvidersForTest(t, "nyaa")
 	for raw, want := range map[string]bool{
-		"":                   true,
-		"auto":               true,
-		`["anidb"]`:          true,
-		`["anipub"]`:         false,
-		`["anipub","anidb"]`: false,
+		"":                        true,
+		"auto":                    true,
+		`["nyaa"]`:                true,
+		`["kickassanime"]`:        false,
+		`["kickassanime","nyaa"]`: false,
 	} {
 		if got := isFactoryDefaultProvider(raw); got != want {
 			t.Errorf("%q: got %v, want %v", raw, got, want)
@@ -86,9 +88,9 @@ func TestParseConfigBool(t *testing.T) {
 }
 
 func TestMigrateProviderConfigReplacesASingleDisabledProvider(t *testing.T) {
-	withDisabledProvidersForTest(t, "anidb")
+	withDisabledProvidersForTest(t, "nyaa")
 
-	if got, changed := migrateProviderConfig(`["anidb"]`); got != "stacked" || !changed {
+	if got, changed := migrateProviderConfig(`["nyaa"]`); got != "stacked" || !changed {
 		t.Fatalf("got (%q, %v), want the stack", got, changed)
 	}
 }
@@ -99,7 +101,7 @@ func TestIsStackedProviderConfig(t *testing.T) {
 			t.Errorf("%q should read as the stack", raw)
 		}
 	}
-	for _, raw := range []string{"", "anipub", "stacks"} {
+	for _, raw := range []string{"", "kickassanime", "stacks"} {
 		if isStackedProviderConfig(raw) {
 			t.Errorf("%q should not read as the stack", raw)
 		}
@@ -109,10 +111,10 @@ func TestIsStackedProviderConfig(t *testing.T) {
 func TestProviderConfigDisplayLabel(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	if got := providerConfigDisplayLabel(`["anineko","anipub"]`); got != "anineko → anipub" {
+	if got := providerConfigDisplayLabel(`["anizone","kickassanime"]`); got != "anizone → kickassanime" {
 		t.Errorf("list: got %q", got)
 	}
-	if got := providerConfigDisplayLabel(`["anipub"]`); got != "anipub" {
+	if got := providerConfigDisplayLabel(`["kickassanime"]`); got != "kickassanime" {
 		t.Errorf("single: got %q", got)
 	}
 	if got := providerConfigDisplayLabel("auto"); got != "Default with fallback ("+strings.Join(fullTestStack, " → ")+")" {
@@ -167,7 +169,7 @@ func TestUpgradeMovesAnOwnListToTheStackAndRecordsTheVersion(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 	dir := t.TempDir()
 	confPath, share := filepath.Join(dir, "otakase.conf"), filepath.Join(dir, "share")
-	if err := os.WriteFile(confPath, []byte("Provider=[\"anineko\",\"nyaa\"]\nStoragePath="+share+"\n"), 0644); err != nil {
+	if err := os.WriteFile(confPath, []byte("Provider=[\"anizone\",\"nyaa\"]\nStoragePath="+share+"\n"), 0644); err != nil {
 		t.Fatalf("seeding the config: %v", err)
 	}
 
@@ -175,7 +177,7 @@ func TestUpgradeMovesAnOwnListToTheStackAndRecordsTheVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if conf.Provider != `["anineko","nyaa"]` {
+	if conf.Provider != `["anizone","nyaa"]` {
 		t.Fatalf("loading alone changed the provider to %q", conf.Provider)
 	}
 
