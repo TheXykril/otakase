@@ -502,6 +502,9 @@ async function wLoad() {
   wvMedia = wEffectiveMedia();
   wFails = 0;
   const at = wTarget();
+  // The video element survives episode and language switches; drop the
+  // previous source's tracks so they don't pile up in the picker.
+  vid.querySelectorAll("track").forEach((t) => t.remove());
   for (const s of wv.subs || []) {
     const tr = document.createElement("track");
     tr.kind = "subtitles";
@@ -509,6 +512,7 @@ async function wLoad() {
     if (s.lang) tr.srclang = s.lang;
     tr.src = s.url;
     vid.appendChild(tr);
+    wSubsFollow(tr, s.url);
   }
   vid.onloadedmetadata = () => {
     wSubs();
@@ -927,6 +931,46 @@ function wAudioTracks() {
       }
     }
   }
+}
+
+// wSubsFollow keeps a growing subtitle file up to date. A torrent's
+// subtitles are converted while it downloads, and the bot marks the file
+// as partial until then. The browser loads a track once, so newer copies
+// are handed to it as a local file until the marker is gone.
+function wSubsFollow(tr, url) {
+  const media = wvMedia;
+  let last = "";
+  let local = "";
+  let tries = 0;
+  const live = () => wvMedia === media && tr.isConnected;
+  const step = async () => {
+    if (!live()) {
+      if (local) URL.revokeObjectURL(local);
+      return;
+    }
+    let text = "";
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.ok) text = await res.text();
+    } catch (e) {
+      text = "";
+    }
+    if (!live()) {
+      if (local) URL.revokeObjectURL(local);
+      return;
+    }
+    const partial = /\nNOTE otakase-partial\n/.test(text);
+    if (text && text !== last && (partial || local)) {
+      const old = local;
+      local = URL.createObjectURL(new Blob([text], { type: "text/vtt" }));
+      tr.src = local;
+      if (old) URL.revokeObjectURL(old);
+    }
+    if (text) last = text;
+    // Keep following a partial file; retry a failed fetch only briefly.
+    if (partial ? ++tries < 360 : !text && ++tries < 3) setTimeout(step, 10000);
+  };
+  setTimeout(step, 3000);
 }
 
 // wSubs fills the subtitle picker and shows the picked track: English by

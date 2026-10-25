@@ -3,16 +3,19 @@ package torrentstream
 import (
 	"bytes"
 	"context"
-	"github.com/anacrolix/torrent"
-	"github.com/anacrolix/torrent/bencode"
-	"github.com/anacrolix/torrent/metainfo"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/bencode"
+	"github.com/anacrolix/torrent/metainfo"
 )
 
 func TestBoundedStorageRejectsBeforeOpening(t *testing.T) {
@@ -30,7 +33,7 @@ func TestBoundedStorageRejectsBeforeOpening(t *testing.T) {
 	}
 }
 
-func TestDownloadForBotLocalSwarm(t *testing.T) {
+func TestStreamForBotLocalSwarm(t *testing.T) {
 	seedDir := t.TempDir()
 	payload := bytes.Repeat([]byte("local episode fixture"), 4096)
 	source := filepath.Join(seedDir, "episode.mkv")
@@ -77,16 +80,58 @@ func TestDownloadForBotLocalSwarm(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	dir := t.TempDir()
-	path, err := DownloadForBot(ctx, mi.HashInfoBytes().HexString(), dir)
+	stream, err := StreamForBot(ctx, mi.HashInfoBytes().HexString(), dir)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// A range from the middle answers before the rest has to be fetched.
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, stream.URL, nil)
+	req.Header.Set("Range", "bytes=40000-40099")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	part, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusPartialContent || !bytes.Equal(part, payload[40000:40100]) {
+		t.Fatalf("range answer %d differs", res.StatusCode)
+	}
+	if res, err = http.Get(stream.URL + ".other"); err == nil {
+		res.Body.Close()
+		if res.StatusCode != http.StatusNotFound {
+			t.Fatalf("unknown path answered %d", res.StatusCode)
+		}
+	}
+	path, err := stream.WaitComplete(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(path, filepath.Join(dir, "pieces")) || strings.Contains(filepath.Base(path), "episode") {
+		t.Fatalf("episode stored under the torrent's own name: %s", path)
 	}
 	got, err := os.ReadFile(path)
 	if err != nil || !bytes.Equal(got, payload) {
 		t.Fatalf("download differs: %v", err)
 	}
+	if done, length, _ := stream.Progress(); done != length || !stream.Complete() {
+		t.Fatalf("progress %d of %d", done, length)
+	}
+	stream.Close()
 	if _, err = os.Stat(filepath.Join(dir, "pieces")); !os.IsNotExist(err) {
 		t.Fatal("torrent cache retained")
+	}
+}
+
+func TestBotFileName(t *testing.T) {
+	info := &metainfo.Info{Name: "[Group] Show"}
+	a := botFileName(info, &metainfo.FileInfo{Path: []string{"Show - 01.mkv"}})
+	b := botFileName(info, &metainfo.FileInfo{Path: []string{"Show - 02.mkv"}})
+	evil := botFileName(info, &metainfo.FileInfo{Path: []string{"..", "x,movie=a:si=0"}})
+	if a == b || !strings.HasSuffix(a, ".mkv") {
+		t.Fatalf("names %q %q", a, b)
+	}
+	if strings.Count(evil, ".") != 1 || strings.ContainsAny(evil, "/,:=") {
+		t.Fatalf("unsafe name %q", evil)
 	}
 }
 
@@ -100,7 +145,7 @@ func TestReadBotTorrentLimits(t *testing.T) {
 		{"custom", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "6", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "12"}, 6 << 30, 12 << 30},
 		{"bad values", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "-1", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "not-a-number"}, 4 << 30, 8 << 30},
 		{"oversized", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "99", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "99"}, 4 << 30, 8 << 30},
-		{"small storage", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "4", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "4"}, 2 << 30, 4 << 30},
+		{"small storage", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "6", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "4"}, 4 << 30, 4 << 30},
 		{"largest", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "16", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "32"}, 16 << 30, 32 << 30},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

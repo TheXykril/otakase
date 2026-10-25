@@ -2,12 +2,16 @@ package torrentstream
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
-	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
@@ -27,8 +31,8 @@ type botTorrentLimits struct {
 }
 
 // Limits are expressed in GiB. An invalid setting falls back to its default.
-// The cache and the extracted video both live on disk, so the storage budget
-// always holds twice the torrent limit; a smaller budget lowers that limit.
+// The episode plays from the torrent cache itself, so the storage budget only
+// has to hold the torrent; a smaller budget lowers the torrent limit.
 func readBotTorrentLimits(getenv func(string) string) botTorrentLimits {
 	parse := func(name string, fallback, maxGiB int64) int64 {
 		n, err := strconv.ParseInt(getenv(name), 10, 64)
@@ -39,8 +43,8 @@ func readBotTorrentLimits(getenv func(string) string) botTorrentLimits {
 	}
 	torrentLimit := parse("OTAKASE_WATCH_TORRENT_MAX_GIB", BotTorrentLimit, maxBotTorrentGiB)
 	storageLimit := parse("OTAKASE_WATCH_TORRENT_STORAGE_GIB", BotTorrentStorageLimit, maxBotTorrentGiB*2)
-	if torrentLimit > storageLimit/2 {
-		torrentLimit = storageLimit / 2
+	if torrentLimit > storageLimit {
+		torrentLimit = storageLimit
 	}
 	return botTorrentLimits{torrent: torrentLimit, storage: storageLimit}
 }
@@ -75,69 +79,171 @@ func (s boundedStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, ha
 	return s.ClientImpl.OpenTorrent(ctx, info, hash)
 }
 
-// DownloadForBot buffers one bounded episode. Both the cache and output belong
-// to the caller's private directory. The cache and extracted video together
-// cannot exceed the configured temporary payload budget.
-func DownloadForBot(ctx context.Context, hash, dir string) (string, error) {
+// BotStream is one episode a watch-room helper plays while it downloads.
+// ffmpeg reads URL like any web source: reads block until the pieces they
+// need arrive, and those pieces jump the queue, so playback starts after the
+// first few megabytes instead of after the whole file.
+type BotStream struct {
+	URL string
+
+	client *torrent.Client
+	disk   storage.ClientImplCloser
+	file   *torrent.File
+	local  string
+	server *http.Server
+	cache  string
+}
+
+// StreamForBot joins the torrent and serves its episode on a loopback port.
+// The cache lives in the caller's private directory and stays within the
+// configured size limit. ctx bounds the wait for the torrent's file list.
+func StreamForBot(ctx context.Context, hash, dir string) (_ *BotStream, err error) {
 	limits := readBotTorrentLimits(os.Getenv)
-	cache := filepath.Join(dir, "pieces")
-	defer os.RemoveAll(cache)
-	disk := storage.NewFile(cache)
-	defer disk.Close()
+	s := &BotStream{cache: filepath.Join(dir, "pieces")}
+	defer func() {
+		if err != nil {
+			s.Close()
+		}
+	}()
+	// Files are stored under fixed safe names, so the finished episode can
+	// be handed to ffmpeg's subtitle filter by path.
+	s.disk = storage.NewFileOpts(storage.NewFileClientOpts{
+		ClientBaseDir: s.cache,
+		FilePathMaker: func(opts storage.FilePathMakerOpts) string { return botFileName(opts.Info, opts.File) },
+	})
 	rejected := make(chan error, 1)
 	cfg := torrent.NewDefaultClientConfig()
-	cfg.DataDir = cache
+	cfg.DataDir = s.cache
 	cfg.ListenPort = 0
 	cfg.NoDefaultPortForwarding = true
-	cfg.DefaultStorage = boundedStorage{ClientImpl: disk, rejected: rejected, limit: limits.torrent}
+	cfg.DefaultStorage = boundedStorage{ClientImpl: s.disk, rejected: rejected, limit: limits.torrent}
 	cfg.NoUpload, cfg.Seed = true, false
 	cfg.EstablishedConnsPerTorrent = 16
 	cfg.HalfOpenConnsPerTorrent, cfg.TotalHalfOpenConns = 4, 4
 	cfg.DownloadRateLimiter = rate.NewLimiter(8<<20, 1<<20)
-	client, err := torrent.NewClient(cfg)
+	s.client, err = torrent.NewClient(cfg)
 	if err != nil {
 		// Containers often have no IPv6 at all; listen on IPv4 only there.
 		cfg.DisableIPv6 = true
-		client, err = torrent.NewClient(cfg)
+		s.client, err = torrent.NewClient(cfg)
 	}
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	defer client.Close()
 	magnet := "magnet:?xt=urn:btih:" + hash
 	for _, tracker := range publicTrackers {
 		magnet += "&tr=" + tracker
 	}
-	t, err := client.AddMagnet(magnet)
+	t, err := s.client.AddMagnet(magnet)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	select {
 	case <-ctx.Done():
-		return "", ctx.Err()
-	case err := <-rejected:
-		return "", err
+		return nil, ctx.Err()
+	case err = <-rejected:
+		return nil, err
 	case <-t.GotInfo():
 	}
-	f := largestVideoFile(t)
-	if f == nil {
-		return "", fmt.Errorf("torrent contains no video")
+	s.file = largestVideoFile(t)
+	if s.file == nil {
+		return nil, fmt.Errorf("torrent contains no video")
 	}
-	path := filepath.Join(dir, "source"+sourceExt(f.Path()))
-	out, err := os.Create(path)
+	fi := s.file.FileInfo()
+	s.local = filepath.Join(s.cache, botFileName(t.Info(), &fi))
+	// The whole episode downloads in the background, the head and the tail
+	// first: players read the container header and Matroska's seek index
+	// before the first frame.
+	s.file.SetPriority(torrent.PiecePriorityNormal)
+	if info := t.Info(); info.PieceLength > 0 {
+		begin, end := s.file.BeginPieceIndex(), s.file.EndPieceIndex()
+		edge := int((tailBytes + info.PieceLength - 1) / info.PieceLength)
+		for i := begin; i < end; i++ {
+			if i < begin+edge || i >= end-edge {
+				t.Piece(i).SetPriority(torrent.PiecePriorityHigh)
+			}
+		}
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	defer out.Close()
-	reader := f.NewReader()
+	s.URL = fmt.Sprintf("http://127.0.0.1:%d/source%s", listener.Addr().(*net.TCPAddr).Port, sourceExt(s.file.Path()))
+	s.server = &http.Server{Handler: http.HandlerFunc(s.serve), ReadHeaderTimeout: 5 * time.Second}
+	go s.server.Serve(listener)
+	return s, nil
+}
+
+func (s *BotStream) serve(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/source"+sourceExt(s.file.Path()) {
+		http.NotFound(w, r)
+		return
+	}
+	reader := s.file.NewReader()
 	defer reader.Close()
-	reader.SetContext(ctx)
+	reader.SetContext(r.Context())
+	// Responsive: a seek re-prioritises the pieces at the new position
+	// rather than waiting for the sequential download to get there.
 	reader.SetReadahead(8 << 20)
-	_, err = io.Copy(out, reader)
-	if err != nil {
-		return "", err
+	reader.SetResponsive()
+	w.Header().Set("Content-Type", "application/octet-stream")
+	http.ServeContent(w, r, "", time.Time{}, reader)
+}
+
+// Complete reports whether the whole episode is on disk.
+func (s *BotStream) Complete() bool {
+	return s.file.BytesCompleted() >= s.file.Length()
+}
+
+// Progress reports the downloaded and total bytes and the connected peers.
+func (s *BotStream) Progress() (completed, length int64, peers int) {
+	return s.file.BytesCompleted(), s.file.Length(), s.file.Torrent().Stats().ActivePeers
+}
+
+// WaitComplete waits for the whole episode and returns its local path.
+func (s *BotStream) WaitComplete(ctx context.Context) (string, error) {
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for !s.Complete() {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-tick.C:
+		}
 	}
-	return path, out.Close()
+	// A finished file loses its .part suffix once every piece it shares
+	// with its neighbours is in too; both names hold the whole episode.
+	for _, path := range []string{s.local, s.local + ".part"} {
+		if info, err := os.Stat(path); err == nil && info.Size() == s.file.Length() {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("downloaded episode not found")
+}
+
+// Close stops the download and deletes the cache.
+func (s *BotStream) Close() {
+	if s.server != nil {
+		s.server.Close()
+	}
+	if s.client != nil {
+		s.client.Close()
+	}
+	if s.disk != nil {
+		s.disk.Close()
+	}
+	os.RemoveAll(s.cache)
+}
+
+// botFileName is where a torrent's file is stored: a fixed name derived
+// from its path, so nothing the torrent names reaches the file system.
+func botFileName(info *metainfo.Info, file *metainfo.FileInfo) string {
+	name := info.BestName()
+	if file != nil && len(file.BestPath()) > 0 {
+		name += "/" + strings.Join(file.BestPath(), "/")
+	}
+	sum := sha1.Sum([]byte(name))
+	return hex.EncodeToString(sum[:10]) + sourceExt(name)
 }
 
 // sourceExt keeps the extracted file's name safe to put in an ffmpeg filter

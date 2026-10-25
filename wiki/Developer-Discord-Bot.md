@@ -530,9 +530,17 @@ own `/watchparty` parties are separate.
 - Episodes are found by the otakase CLI in the image:
   `otakase -stream-info <anilist id>:<episode>` (with `-dub`, and
   `-stream-adult` for 18+) prints the episode's links, headers and
-  subtitles as JSON without asking anything. The next episode is looked
-  up while the current one plays. The CLI must be new enough to have the
-  flag; the Dockerfile takes the latest release, else main.
+  subtitles as JSON without asking anything. The episode starts from the
+  fast lookup (`-stream-info-fast`, three-minute limit). After it plays,
+  the other lookups run one after another, so a small host runs one CLI at
+  a time: for KickAssAnime, `-stream-languages kickassanime:<show id>:<ep>`
+  fetches the other spoken-language releases by the show id the first
+  lookup returned (`provider_id`), without searching again; then the other
+  audio version (sub or dub) is looked up only if that did not already
+  bring it; then the next episode, so it starts at once. An older CLI
+  without `-stream-languages` gets the full lookup instead. The CLI must
+  be new enough to have the flags; the Dockerfile takes the latest
+  release, else main.
 - The relay serves `/activity/api/watch/media/{key}/{id}`: the key is
   random per episode, ids are handed out for each address the playlists
   name, so it fetches nothing else. The master playlist is cut to one
@@ -710,27 +718,54 @@ Install ffmpeg, ffprobe and a font package on non-container hosts. Container bui
 accept `OTAKASE_CLI_REF` to pin the helper for branch validation; the add-on defaults
 to main. The build fails if the helper cannot be built.
 
-The helper buffers the selected video before announcing a complete VOD playlist.
+The helper plays the episode while it downloads. It serves the torrent's video
+file on a private loopback port; ffmpeg and ffprobe read it like any web source.
+A read blocks until its pieces arrive, and the reader is responsive, so the
+pieces at the playback position (and after a seek) jump the queue. The rest of
+the file keeps downloading in the background, the first and last 4 MiB first
+because players read the container header and Matroska's seek index before the
+first frame. The helper announces its playlist once the first segment is
+encoded. Files are stored under fixed names derived from their torrent path,
+so nothing the torrent names reaches the file system or an ffmpeg filter.
+
 Torrents larger than `watch_torrent_max_gib` (default 4 GiB, up to 16) or
-containing more than 256 files are rejected before opening storage. The download
-cache and the completed source both sit on disk, so `watch_torrent_storage_gib`
-(default 8 GiB) must hold twice the size limit; a smaller budget lowers the size
-limit to half of it. Hosts without IPv6 fall back to IPv4 only. Downloading stops after ten
-minutes. Downloads are limited to 8 MiB/s and 16 established peers; uploads are
-disabled. One helper, including startup, runs at a time per bot process.
+containing more than 256 files are rejected before opening storage. The episode
+plays from the download cache itself, so `watch_torrent_storage_gib` (default
+8 GiB) only has to hold the torrent; a smaller budget lowers the size limit to
+it. Hosts without IPv6 fall back to IPv4 only. The file list must arrive within
+three minutes and the first segment within three more. Downloads are limited to
+8 MiB/s and 16 established peers; uploads are disabled. One helper, including
+startup, runs at a time per bot process.
 
 Segments are encoded on demand, so forward and backward seeks do not depend on
-a growing playlist. One encoder runs at a time with one decoding, filtering and
-encoding thread, at most 720p/24 fps, and a 30-second segment deadline. The helper
-retains at most 16 segments, each capped at 4 MiB, in memory. The existing relay
-cache is separately bounded. These are application limits, not an OS CPU quota.
+a growing playlist. The picture is encoded once and shared by every audio
+language: one video encoder runs at a time, with one decoding, filtering and
+encoding thread, at most 720p/24 fps. Each language adds only an audio encode
+(two at a time), and the two are remuxed into one MPEG-TS segment without
+re-encoding. Every language keeps its own plain media playlist
+(`/<lang>/playlist.m3u8`), because the bundled Hls.js is the light build, which
+does not play separate audio renditions. Each ffmpeg job has a 45-second
+deadline, longer than before because a segment may wait for pieces. The helper
+keeps at most 64 MiB of encoded pictures and sound in memory, which covers
+about a minute of video and every language's audio for it; the bot relay caches
+the remuxed segments separately. These are application limits, not an OS CPU
+quota.
 
 Sub mode requires labelled Japanese audio and English dialogue subtitles; dub
 mode requires labelled English audio and uses English signs/forced subtitles
-when available. Commentary tracks are excluded. Embedded ASS/SSA, SRT and WebVTT
-subtitles are burned into the video. Bitmap subtitles and unlabelled audio are
-rejected when needed, rather than silently selecting the wrong language. Burned
-subtitles cannot be toggled off.
+when available. Commentary tracks are excluded. Bitmap subtitles and unlabelled
+audio are rejected when needed, rather than silently selecting the wrong
+language.
+
+Embedded ASS/SSA, SRT and WebVTT subtitles become a soft WebVTT track
+(`/subs/en.vtt`) that each viewer can turn off. Subtitles are interleaved
+through the whole file, so ffmpeg converts them while the torrent downloads,
+writing each line as its part arrives. Until it finishes, the file starts with
+a `NOTE otakase-partial` block; the relay does not cache it, and the Activity
+fetches it again every 10 seconds and hands the newer copy to the browser,
+until the marker is gone. Only when ffmpeg cannot convert the track does the
+helper burn the subtitles in, and since the subtitle filter reads the whole
+track up front, that case still waits up to ten minutes for the full download.
 
 Closing a room or changing episodes cancels pending startup and terminates the
 helper. All temporary files live under its private directory. The bot kills

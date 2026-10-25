@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -369,7 +370,7 @@ func TestWatchRoomAddsLanguagesAfterPlaybackStarts(t *testing.T) {
 		}}, nil
 	}
 	t.Cleanup(func() { watchResolveAudio = old })
-	b.findWatchLanguages(context.Background(), r, 1, "", 1, 1, false, true)
+	b.findWatchLanguages(context.Background(), r, 1, "", 1, 1, false, true, "")
 	for _, lang := range []string{"ja", "de", "sub", "dub"} {
 		if r.audioEntries[lang] == "" {
 			t.Fatalf("missing %s after background discovery", lang)
@@ -381,7 +382,7 @@ func TestWatchRoomAddsLanguagesAfterPlaybackStarts(t *testing.T) {
 	previous := r.audioEntries["de"]
 	r.gen++
 	r.audioEntries = map[string]string{}
-	b.findWatchLanguages(context.Background(), r, 1, "", 1, 1, false, true)
+	b.findWatchLanguages(context.Background(), r, 1, "", 1, 1, false, true, "")
 	if r.audioEntries["de"] != "" || previous == "" {
 		t.Fatal("stale language lookup modified a new episode")
 	}
@@ -726,5 +727,91 @@ func TestWatchInfosWaiterOutlivesCanceledLookup(t *testing.T) {
 	}
 	if calls.Load() != 2 {
 		t.Fatalf("%d lookups", calls.Load())
+	}
+}
+
+// A KickAssAnime episode asks for its other languages by the show id the
+// first lookup found, and those carry the dub too, so nothing searches for
+// the show again. The next episode is looked up only after that.
+func TestWatchEpisodeStartLookupsRunOnce(t *testing.T) {
+	b, _ := watchBot(t, "https://cdn.example/ep.m3u8")
+	var mu sync.Mutex
+	var order []string
+	note := func(s string) {
+		mu.Lock()
+		order = append(order, s)
+		mu.Unlock()
+	}
+	ahead := make(chan struct{})
+	watchAhead = func(fn func()) { note("ahead"); close(ahead) }
+	watchResolve = func(_ context.Context, _ string, id, ep int, dub, _ bool) (streamInfo, error) {
+		note(fmt.Sprintf("resolve %d dub=%v", ep, dub))
+		return streamInfo{AnilistID: id, Episode: ep, Provider: "kickassanime", ProviderID: "show-1", Mode: "sub",
+			Streams: []streamLink{{URL: "https://cdn.example/ja.m3u8"}}}, nil
+	}
+	oldAudio, oldLanguages := watchResolveAudio, watchResolveLanguages
+	t.Cleanup(func() { watchResolveAudio, watchResolveLanguages = oldAudio, oldLanguages })
+	watchResolveAudio = func(context.Context, string, int, int, bool, bool) (streamInfo, error) {
+		note("full lookup")
+		return streamInfo{}, errors.New("unexpected")
+	}
+	watchResolveLanguages = func(_ context.Context, _, provider, id string, ep int) (streamInfo, error) {
+		note(fmt.Sprintf("languages %s %s %d", provider, id, ep))
+		return streamInfo{Provider: "kickassanime", AudioVariants: map[string]streamLink{
+			"en": {URL: "https://cdn.example/en.m3u8"},
+			"ja": {URL: "https://cdn.example/ja.m3u8"}, // the playing release itself
+		}}, nil
+	}
+	b.store.update(func(d *storeData) { d.WatchTickets = map[string]int{"a": 1} })
+	if code := watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r1", Channel: "vc"}, nil); code != 200 {
+		t.Fatalf("open: %d", code)
+	}
+	if code := watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r1", Show: 5, Ep: 3}, nil); code != 200 {
+		t.Fatalf("pick: %d", code)
+	}
+	waitLoaded(t, b)
+	select {
+	case <-ahead:
+	case <-time.After(5 * time.Second):
+		t.Fatal("next episode never looked up")
+	}
+	mu.Lock()
+	got := strings.Join(order, "; ")
+	mu.Unlock()
+	if want := "resolve 3 dub=false; languages kickassanime show-1 3; ahead"; got != want {
+		t.Fatalf("lookups %q, want %q", got, want)
+	}
+	b.watch.mu.Lock()
+	defer b.watch.mu.Unlock()
+	room := b.watch.cur
+	if room.audioEntries["dub"] == "" || room.audioEntries["dub"] != room.audioEntries["en"] {
+		t.Fatalf("dub not taken from the language lookup: %v", room.audioEntries)
+	}
+	if _, dup := room.audioReleases["ja"]; dup {
+		t.Fatal("the playing release was offered again as a language")
+	}
+}
+
+func TestWatchLanguagesFallBackForOldCLI(t *testing.T) {
+	main := "https://video.example/en/playlist.m3u8"
+	r := &watchRoom{spent: true, gen: 1, dub: true, provider: "kickassanime", streams: []streamLink{{URL: main}}}
+	b := &bot{}
+	b.watch.cur = r
+	if !b.startStream(r, 0) {
+		t.Fatal("episode did not start")
+	}
+	oldAudio, oldLanguages := watchResolveAudio, watchResolveLanguages
+	t.Cleanup(func() { watchResolveAudio, watchResolveLanguages = oldAudio, oldLanguages })
+	watchResolveLanguages = func(context.Context, string, string, string, int) (streamInfo, error) {
+		return streamInfo{}, errWatchCLITooOld
+	}
+	full := 0
+	watchResolveAudio = func(context.Context, string, int, int, bool, bool) (streamInfo, error) {
+		full++
+		return streamInfo{Provider: "kickassanime", AudioVariants: map[string]streamLink{"de": {URL: "https://video.example/de/playlist.m3u8"}}}, nil
+	}
+	b.findWatchLanguages(context.Background(), r, 1, "", 1, 1, false, true, "show-1")
+	if full != 1 || r.audioEntries["de"] == "" {
+		t.Fatalf("old CLI fallback: %d full lookups, %v", full, r.audioEntries)
 	}
 }

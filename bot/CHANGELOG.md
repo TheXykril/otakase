@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.30.43
+
+- Watch Together: torrent episodes start playing while they download instead of after the whole file is in. Seeking ahead fetches that part of the episode first.
+- Watch Together: torrent episodes with several audio languages encode the picture once and share it between languages, so switching language and serving more languages costs much less.
+- Watch Together: torrent subtitles appear as the episode downloads and fill in as more of it arrives. They stay a separate track viewers can turn off.
+- Watch Together: subtitle tracks no longer pile up in the picker after switching language or episode.
+- Watch Together: starting an episode runs fewer source lookups, one at a time, and an episode lookup gives up after three minutes instead of eight.
+
 ## 1.30.42
 
 - Watch Together: the Torrent size limit setting now works; before, it always stayed at 4 GiB. A storage budget under twice that size lowers the limit instead of stopping torrent playback.

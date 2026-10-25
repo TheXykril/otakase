@@ -195,3 +195,11 @@ func TestPresenceStateSendsChanges(t *testing.T) {
 		t.Fatalf("a lost duration should fall back to position+1, got send=%v total=%d", send, total)
 	}
 }
+
+func TestStreamLanguagesArgument(t *testing.T) {
+	for _, arg := range []string{"", "kickassanime", "kickassanime:show", "kickassanime::3", "kickassanime:show:x", "nyaa:show:1", "kickassanime:show:0"} {
+		if _, err := streamLanguages(arg); err == nil {
+			t.Errorf("accepted %q", arg)
+		}
+	}
+}

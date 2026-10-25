@@ -20,8 +20,12 @@ import (
 // progress on.
 
 const (
-	watchResolveWait = 8 * time.Minute
-	watchInfoTTL     = 30 * time.Minute
+	// The fast lookup only has to find one playable link; the full one also
+	// asks every language page of the provider.
+	watchResolveFastWait = 3 * time.Minute
+	watchResolveWait     = 8 * time.Minute
+	watchLanguagesWait   = 2 * time.Minute
+	watchInfoTTL         = 30 * time.Minute
 )
 
 // streamInfo is `otakase -stream-info`'s answer.
@@ -31,6 +35,7 @@ type streamInfo struct {
 	Title         string                `json:"title"`
 	Episodes      int                   `json:"episodes"`
 	Provider      string                `json:"provider"`
+	ProviderID    string                `json:"provider_id,omitempty"`
 	Mode          string                `json:"mode"`
 	Streams       []streamLink          `json:"streams"`
 	AudioVariants map[string]streamLink `json:"audio_variants,omitempty"`
@@ -50,11 +55,13 @@ var watchResolveAudio = func(parent context.Context, cli string, anilistID, epis
 	return watchResolveCLI(parent, cli, anilistID, episode, dub, adult, false)
 }
 
+// watchResolveLanguages asks for the other language releases of a show the
+// fast lookup already matched, without searching for it again.
+var watchResolveLanguages = func(parent context.Context, cli, provider, providerID string, episode int) (streamInfo, error) {
+	return watchRunCLI(parent, cli, watchLanguagesWait, true, "-stream-languages", fmt.Sprintf("%s:%s:%d", provider, providerID, episode))
+}
+
 func watchResolveCLI(parent context.Context, cli string, anilistID, episode int, dub, adult, fast bool) (streamInfo, error) {
-	ctx, cancel := context.WithTimeout(parent, watchResolveWait)
-	defer cancel()
-	home, _ := os.MkdirTemp("", "otakase-watch")
-	defer os.RemoveAll(home)
 	args := []string{"-stream-info", fmt.Sprintf("%d:%d", anilistID, episode)}
 	if fast {
 		args = append(args, "-stream-info-fast")
@@ -65,6 +72,20 @@ func watchResolveCLI(parent context.Context, cli string, anilistID, episode int,
 	if adult {
 		args = append(args, "-stream-adult")
 	}
+	wait := watchResolveWait
+	if fast {
+		wait = watchResolveFastWait
+	}
+	return watchRunCLI(parent, cli, wait, false, args...)
+}
+
+// watchRunCLI runs the CLI with a throwaway home and reads its JSON answer.
+// An answer may carry no links when only languages were asked for.
+func watchRunCLI(parent context.Context, cli string, wait time.Duration, languagesOnly bool, args ...string) (streamInfo, error) {
+	ctx, cancel := context.WithTimeout(parent, wait)
+	defer cancel()
+	home, _ := os.MkdirTemp("", "otakase-watch")
+	defer os.RemoveAll(home)
 	cmd := exec.CommandContext(ctx, cli, args...)
 	cmd.Env = append(os.Environ(), "HOME="+home, "XDG_CONFIG_HOME="+home)
 	var stderr strings.Builder
@@ -74,12 +95,15 @@ func watchResolveCLI(parent context.Context, cli string, anilistID, episode int,
 		return streamInfo{}, ctx.Err()
 	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return streamInfo{}, fmt.Errorf("episode source lookup timed out after %s", watchResolveWait)
+		return streamInfo{}, fmt.Errorf("episode source lookup timed out after %s", wait)
 	}
 	if errors.Is(err, exec.ErrNotFound) {
 		return streamInfo{}, errors.New("the otakase CLI isn't in this bot's image")
 	}
 	info, perr := parseStreamInfo(string(out))
+	if languagesOnly && errors.Is(perr, errNoPlayableLink) {
+		perr = nil
+	}
 	if perr == nil {
 		return info, nil
 	}
@@ -92,12 +116,17 @@ func watchResolveCLI(parent context.Context, cli string, anilistID, episode int,
 			msg = err.Error()
 		}
 		if strings.Contains(msg, "flag provided but not defined") {
-			msg = "the otakase CLI in this bot's image is too old for the watch room"
+			return streamInfo{}, errWatchCLITooOld
 		}
 		return streamInfo{}, errors.New(clip(msg, 300))
 	}
 	return streamInfo{}, perr
 }
+
+var (
+	errNoPlayableLink = errors.New("no playable link")
+	errWatchCLITooOld = errors.New("the otakase CLI in this bot's image is too old for the watch room")
+)
 
 // parseStreamInfo reads the JSON line the CLI prints last.
 func parseStreamInfo(out string) (streamInfo, error) {
@@ -112,7 +141,7 @@ func parseStreamInfo(out string) (streamInfo, error) {
 			return info, err
 		}
 		if len(info.Streams) == 0 && len(info.Torrents) == 0 {
-			return info, errors.New("no playable link")
+			return info, errNoPlayableLink
 		}
 		return info, nil
 	}

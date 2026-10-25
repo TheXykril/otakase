@@ -564,7 +564,7 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 		}
 		m.write(w, r, data, typ, err)
 	case "sub":
-		data, _, err := cache.get(m.key+" "+u, func() ([]byte, string, error) {
+		load := func() ([]byte, string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), watchUpstreamWait)
 			defer cancel()
 			body, _, err := m.fetch(ctx, u, 4<<20)
@@ -572,7 +572,17 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 				return nil, "", err
 			}
 			return []byte(toWebVTT(string(body))), "text/vtt", nil
-		})
+		}
+		var data []byte
+		var err error
+		if strings.HasPrefix(u, "http://127.0.0.1:") {
+			// The torrent helper's subtitles grow while the episode
+			// downloads; the player fetches them again for new lines.
+			w.Header().Set("Cache-Control", "no-store")
+			data, _, err = load()
+		} else {
+			data, _, err = cache.get(m.key+" "+u, load)
+		}
 		m.write(w, r, data, "text/vtt; charset=utf-8", err)
 	default:
 		m.stream(w, r, u)
