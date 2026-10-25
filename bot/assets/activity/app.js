@@ -73,6 +73,7 @@ const ICONS = {
   minimize: '<path d="M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6"/>',
   play: '<path d="M7 4v16l13-8z"/>',
   pause: '<path d="M8 4v16M16 4v16"/>',
+  stop: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
   skip: '<path d="M5 4v16l10-8zM19 4v16"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   ff: '<path d="M3 5v14l9-7zM12 5v14l9-7z"/>',

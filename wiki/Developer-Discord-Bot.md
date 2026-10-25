@@ -564,6 +564,14 @@ own `/watchparty` parties are separate.
   completed at the last episode, rewatches left as rewatches). Each member
   can switch it off in the room; staff can switch it off for everyone with
   `/settings watch_room_progress`.
+- When a member stops (the Stop button in the player, leaving the room,
+  dropping out for 45 seconds, or the room ending), the bot writes where
+  they were as the app's `[otakase:<episode>@<seconds>]` tag into their
+  AniList notes and MAL comments, replacing only that tag, so the app
+  resumes there (`bot/watchresume.go`). It only writes for shows already on
+  the list, when the member watched at least 10 seconds and joined within
+  the first minute of the episode, and follows the same switches as the
+  progress update.
 
 The host's page reports its position every 4 seconds (`watch/beat`); the
 room only wakes the other pages when it's more than 2 seconds off where
