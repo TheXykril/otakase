@@ -8,9 +8,9 @@ import (
 
 func TestWatchValidLanguage(t *testing.T) {
 	cases := []struct {
-		value string
+		value     string
 		subtitles bool
-		valid bool
+		valid     bool
 	}{
 		{"auto", false, true},
 		{"auto", true, true},
@@ -36,10 +36,14 @@ func TestWatchValidLanguage(t *testing.T) {
 
 func TestWatchPreferredLanguage(t *testing.T) {
 	for _, code := range []string{"auto", "en", "ja", "pt-br"} {
-		if !watchPreferredLanguage(code, false) { t.Errorf("audio %q rejected", code) }
+		if !watchPreferredLanguage(code, false) {
+			t.Errorf("audio %q rejected", code)
+		}
 	}
 	for _, code := range []string{"off", "track-1", "hls-2", "invalid/code", ""} {
-		if watchPreferredLanguage(code, false) { t.Errorf("audio %q accepted", code) }
+		if watchPreferredLanguage(code, false) {
+			t.Errorf("audio %q accepted", code)
+		}
 	}
 	if !watchPreferredLanguage("off", true) {
 		t.Fatal("subtitles off was rejected")
@@ -64,16 +68,24 @@ func TestWatchPreferencesAccountDefaults(t *testing.T) {
 	if code := togetherPost(b, (*bot).watchPreferencesSet, "a", in, &saved); code != 200 {
 		t.Fatalf("save returned %d", code)
 	}
-	if saved != in { t.Fatalf("saved %+v, want %+v", saved, in) }
+	if saved != in {
+		t.Fatalf("saved %+v, want %+v", saved, in)
+	}
 	var other watchPlaybackPreferences
 	r := httptest.NewRequest("GET", "/activity/api/watch/preferences", nil)
 	r.Header.Set("Authorization", "Bearer "+b.acts.add("b"))
 	w := httptest.NewRecorder()
 	b.watchPreferencesGet(w, r)
-	if err := json.Unmarshal(w.Body.Bytes(), &other); err != nil { t.Fatal(err) }
-	if other != watchDefaultPreferences() { t.Fatalf("other member inherited preferences: %+v", other) }
+	if err := json.Unmarshal(w.Body.Bytes(), &other); err != nil {
+		t.Fatal(err)
+	}
+	if other != watchDefaultPreferences() {
+		t.Fatalf("other member inherited preferences: %+v", other)
+	}
 	b.store.view(func(d *storeData) {
-		if d.WatchPreferences["a"] != in { t.Errorf("stored %+v", d.WatchPreferences["a"]) }
+		if d.WatchPreferences["a"] != in {
+			t.Errorf("stored %+v", d.WatchPreferences["a"])
+		}
 		if got := d.WatchLanguages["a"]; got.Audio != "auto" || got.Subtitles != "auto" {
 			t.Errorf("manual choice not reset: %+v", got)
 		}

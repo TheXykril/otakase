@@ -292,9 +292,13 @@ func TestDashboardMoreControls(t *testing.T) {
 	userID := "123456789012345678"
 	post(url.Values{"s": {"moderation"}, "do": {"ticket-add"}, "text": {userID}, "v": {"5"}})
 	post(url.Values{"s": {"moderation"}, "do": {"ticket-remove"}, "text": {userID}, "v": {"2"}})
-	if got := b.watchTickets(userID); got != 3 { t.Errorf("watch ticket balance: %d", got) }
+	if got := b.watchTickets(userID); got != 3 {
+		t.Errorf("watch ticket balance: %d", got)
+	}
 	post(url.Values{"s": {"moderation"}, "do": {"ticket-remove"}, "text": {userID}, "v": {"100"}})
-	if got := b.watchTickets(userID); got != 0 { t.Errorf("ticket balance below zero: %d", got) }
+	if got := b.watchTickets(userID); got != 0 {
+		t.Errorf("ticket balance below zero: %d", got)
+	}
 	post(url.Values{"s": {"moderation"}, "do": {"clear-warnings"}, "name": {"u1"}})
 	var left int
 	b.store.view(func(d *storeData) { left = len(d.Warnings["u1"]) })

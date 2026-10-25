@@ -299,12 +299,18 @@ func trimMasterAudio(body string, maxHeight int, dub bool, language string) stri
 	for pass := 0; pass < 2; pass++ {
 		for _, entry := range audio {
 			group := hlsGroupID.FindStringSubmatch(entry)
-			if v.audio == "" || group == nil { continue }
+			if v.audio == "" || group == nil {
+				continue
+			}
 			inGroup := group[1] == v.audio
-			if (pass == 0) != inGroup { continue }
+			if (pass == 0) != inGroup {
+				continue
+			}
 			if !inGroup {
 				// An implicit/muxed audio rendition cannot be transplanted.
-				if !hlsURIAttr.MatchString(entry) { continue }
+				if !hlsURIAttr.MatchString(entry) {
+					continue
+				}
 				entry = strings.Replace(entry, `GROUP-ID="`+group[1]+`"`, `GROUP-ID="`+v.audio+`"`, 1)
 			}
 			// The selected group's rendition wins when a language occurs
@@ -313,7 +319,9 @@ func trimMasterAudio(body string, maxHeight int, dub bool, language string) stri
 			if lang := hlsLanguage.FindStringSubmatch(entry); lang != nil {
 				key = strings.ToLower(lang[1])
 			}
-			if seen[key] { continue }
+			if seen[key] {
+				continue
+			}
 			seen[key] = true
 			merged = append(merged, entry)
 		}

@@ -100,40 +100,40 @@ type watchRoom struct {
 	spent   bool      // the owner's ticket is used
 	members map[string]*watchMember
 
-	show    *watchShow
-	ep      int
-	dub     bool
-	phase   string // pick, loading, play, error, over
+	show      *watchShow
+	ep        int
+	dub       bool
+	phase     string // pick, loading, play, error, over
 	errText   string
 	loadStep  string // current episode preparation step
 	loadSince time.Time
 	gen       int // bumps with every episode load, so a slow one can't land late
 
-	streams       []streamLink
-	provider      string // provider that resolved the selected episode
+	streams         []streamLink
+	provider        string // provider that resolved the selected episode
 	alternateOrigin *watchPlaybackOrigin
-	link          int // index into streams
-	torrent       *watchTorrent
-	torrentCancel context.CancelFunc
-	media         *watchMedia
-	old           *watchMedia // the episode before, still served for a moment
-	entry         string
-	audioEntries map[string]string
-	audioReleases map[string]streamLink
+	link            int // index into streams
+	torrent         *watchTorrent
+	torrentCancel   context.CancelFunc
+	media           *watchMedia
+	old             *watchMedia // the episode before, still served for a moment
+	entry           string
+	audioEntries    map[string]string
+	audioReleases   map[string]streamLink
 	extraAudioMedia map[string]*watchMedia
-	alternateMedia *watchMedia
-	subs          []watchSub
+	alternateMedia  *watchMedia
+	subs            []watchSub
 
-	playing bool
-	pos     float64
-	at      time.Time
-	dur     float64
-	autoSkipOP bool // host controls room-wide opening/ending auto-skip
-	autoSkipED bool
+	playing       bool
+	pos           float64
+	at            time.Time
+	dur           float64
+	autoSkipOP    bool // host controls room-wide opening/ending auto-skip
+	autoSkipED    bool
 	skipIntervals watchSkipIntervals
-	skipReady bool
-	skipSeq int // incremented when the server seeks past a real skip interval
-	skipTarget float64
+	skipReady     bool
+	skipSeq       int // incremented when the server seeks past a real skip interval
+	skipTarget    float64
 	skipHoldUntil time.Time
 
 	asks []watchAsk
@@ -428,8 +428,12 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	if show.MalID > 0 {
 		go func() {
 			spans, err := watchSkipLookup(ctx, show.MalID, ep)
-			if ctx.Err() != nil { return }
-			if err != nil { log.Printf("watch opening/ending lookup for %d:%d: %v", show.MalID, ep, err) }
+			if ctx.Err() != nil {
+				return
+			}
+			if err != nil {
+				log.Printf("watch opening/ending lookup for %d:%d: %v", show.MalID, ep, err)
+			}
 			b.watch.mu.Lock()
 			if b.watch.cur == r && r.gen == gen && r.phase != "over" {
 				r.skipIntervals = spans
@@ -502,14 +506,16 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		if r.media != nil && looksLikeHLS(r.media.link.URL) {
 			go b.findWatchHLSTracks(ctx, r, gen, r.media)
 		}
-        // Some providers expose Sub and Dub as separate releases rather than
-        // multiple audio tracks. Look up the other version without delaying
-        // the first viewer; only reuse directly playable links here.
-        other := "dub"
-        if r.dub { other = "sub" }
-        if _, exists := r.audioEntries[other]; !exists {
-            go b.findWatchAlternate(ctx, r, gen, cli, show.ID, ep, adult, !r.dub)
-        }
+		// Some providers expose Sub and Dub as separate releases rather than
+		// multiple audio tracks. Look up the other version without delaying
+		// the first viewer; only reuse directly playable links here.
+		other := "dub"
+		if r.dub {
+			other = "sub"
+		}
+		if _, exists := r.audioEntries[other]; !exists {
+			go b.findWatchAlternate(ctx, r, gen, cli, show.ID, ep, adult, !r.dub)
+		}
 		if r.provider == "kickassanime" {
 			go b.findWatchLanguages(ctx, r, gen, cli, show.ID, ep, adult, dub)
 		}
@@ -519,7 +525,6 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		}
 	}()
 }
-
 
 // findWatchHLSTracks advertises the selected stream's real audio renditions.
 // Each language gets its own relay URL with the correct default track, so
@@ -596,45 +601,53 @@ func (b *bot) findWatchLanguages(ctx context.Context, room *watchRoom, gen int, 
 // Torrent alternatives are intentionally not started here: starting another
 // download/encoder could overwhelm small add-on hosts.
 func (b *bot) findWatchAlternate(ctx context.Context, room *watchRoom, gen int, cli string, showID, ep int, adult, dub bool) {
-    info, err := b.watch.infos.get(ctx, cli, showID, ep, dub, adult)
-    if err != nil || len(info.Streams) == 0 || ctx.Err() != nil || info.Mode != map[bool]string{true: "dub", false: "sub"}[dub] {
-        return
-    }
-    mode := "sub"
-    if dub { mode = "dub" }
-    b.watch.mu.Lock()
-    defer b.watch.mu.Unlock()
-    if b.watch.cur != room || room.gen != gen || room.phase != "play" || room.media == nil {
-        return
-    }
-    // Skip duplicate releases and use the first distinct playable URL.
-    selected := -1
-    for i, candidate := range info.Streams {
-        if candidate.URL == "" { continue }
-        duplicate := false
-        for _, active := range room.streams {
-            if active.URL == candidate.URL {
-                duplicate = true
-                break
-            }
-        }
-        if !duplicate {
-            selected = i
-            break
-        }
-    }
-    if selected < 0 { return }
-    media, entry, _ := newWatchMedia(info.Streams[selected], dub)
-    room.alternateMedia = media
-    room.alternateOrigin = &watchPlaybackOrigin{Provider: info.Provider, Host: watchPlaybackHost(info.Streams[selected].URL), Link: selected + 1, Mode: mode}
-    if room.audioEntries == nil {
-        room.audioEntries = map[string]string{}
-    }
-    current := "sub"
-    if room.dub { current = "dub" }
-    room.audioEntries[current] = watchMediaPath(room.media.key, room.entry)
-    room.audioEntries[mode] = watchMediaPath(media.key, entry)
-    room.changed()
+	info, err := b.watch.infos.get(ctx, cli, showID, ep, dub, adult)
+	if err != nil || len(info.Streams) == 0 || ctx.Err() != nil || info.Mode != map[bool]string{true: "dub", false: "sub"}[dub] {
+		return
+	}
+	mode := "sub"
+	if dub {
+		mode = "dub"
+	}
+	b.watch.mu.Lock()
+	defer b.watch.mu.Unlock()
+	if b.watch.cur != room || room.gen != gen || room.phase != "play" || room.media == nil {
+		return
+	}
+	// Skip duplicate releases and use the first distinct playable URL.
+	selected := -1
+	for i, candidate := range info.Streams {
+		if candidate.URL == "" {
+			continue
+		}
+		duplicate := false
+		for _, active := range room.streams {
+			if active.URL == candidate.URL {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			selected = i
+			break
+		}
+	}
+	if selected < 0 {
+		return
+	}
+	media, entry, _ := newWatchMedia(info.Streams[selected], dub)
+	room.alternateMedia = media
+	room.alternateOrigin = &watchPlaybackOrigin{Provider: info.Provider, Host: watchPlaybackHost(info.Streams[selected].URL), Link: selected + 1, Mode: mode}
+	if room.audioEntries == nil {
+		room.audioEntries = map[string]string{}
+	}
+	current := "sub"
+	if room.dub {
+		current = "dub"
+	}
+	room.audioEntries[current] = watchMediaPath(room.media.key, room.entry)
+	room.audioEntries[mode] = watchMediaPath(media.key, entry)
+	room.changed()
 }
 
 // startStream plays link k of the episode. Hold the lock.
@@ -663,7 +676,9 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	if u, err := url.Parse(r.streams[k].URL); err == nil && u.Hostname() == "127.0.0.1" && u.Query().Get("languages") != "" {
 		r.audioEntries = map[string]string{}
 		for _, language := range strings.Split(u.Query().Get("languages"), ",") {
-			if !watchAudioLanguage(language) { continue }
+			if !watchAudioLanguage(language) {
+				continue
+			}
 			variant := *u
 			variant.Path = "/" + language + "/playlist.m3u8"
 			variant.RawQuery = ""
@@ -676,7 +691,9 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 		r.audioEntries = make(map[string]string)
 	}
 	currentMode := "sub"
-	if r.dub { currentMode = "dub" }
+	if r.dub {
+		currentMode = "dub"
+	}
 	if _, ok := r.audioEntries[currentMode]; !ok {
 		r.audioEntries[currentMode] = watchMediaPath(m.key, entry)
 	}
@@ -738,18 +755,26 @@ func (r *watchRoom) addAudioReleases() bool {
 
 // Only allow audio codes emitted by the helper, never arbitrary URL paths.
 func watchAudioLanguage(code string) bool {
-	if code == "sub" || code == "dub" { return true }
+	if code == "sub" || code == "dub" {
+		return true
+	}
 	if len(code) == 2 {
 		for _, ch := range code {
-			if ch < 'a' || ch > 'z' { return false }
+			if ch < 'a' || ch > 'z' {
+				return false
+			}
 		}
 		return true
 	}
 	if strings.HasPrefix(code, "track-") {
 		ordinal := strings.TrimPrefix(code, "track-")
-		if len(ordinal) == 0 || len(ordinal) > 3 { return false }
+		if len(ordinal) == 0 || len(ordinal) > 3 {
+			return false
+		}
 		for _, ch := range ordinal {
-			if ch < '0' || ch > '9' { return false }
+			if ch < '0' || ch > '9' {
+				return false
+			}
 		}
 		return true
 	}
@@ -802,7 +827,9 @@ type watchPlaybackOrigin struct {
 
 func watchPlaybackHost(raw string) string {
 	u, err := url.Parse(raw)
-	if err != nil { return "" }
+	if err != nil {
+		return ""
+	}
 	host := strings.ToLower(u.Hostname())
 	switch host {
 	case "127.0.0.1", "::1", "localhost":
@@ -850,44 +877,44 @@ func (b *bot) watchCanInspectPlayback(user string) bool {
 }
 
 type watchView struct {
-	Ver     int           `json:"ver"`
-	Room    string        `json:"room"`
-	Me      string        `json:"me"`
-	Host    string        `json:"host"`
-	IsHost  bool          `json:"is_host"`
-	Staff   bool          `json:"staff,omitempty"`
-	Phase     string `json:"phase"`
-	LoadStep  string `json:"load_step,omitempty"`
-	LoadSince int64  `json:"load_since,omitempty"`
-	Err     string        `json:"err,omitempty"`
-	Adult   bool          `json:"adult,omitempty"`
-	Show    *watchShow    `json:"show,omitempty"`
-	Ep      int           `json:"ep,omitempty"`
-	LastEp  int           `json:"last_ep,omitempty"`
-	Dub     bool          `json:"dub,omitempty"`
-	Media   string        `json:"media,omitempty"`
-	HLS     bool          `json:"hls,omitempty"`
-	AudioMedia map[string]string `json:"audio_media,omitempty"`
-	AutoSkipOP bool `json:"auto_skip_op"`
-	AutoSkipED bool `json:"auto_skip_ed"`
-	SkipReady bool `json:"skip_ready"`
-	SkipTimes watchSkipTimes `json:"skip_times"`
-	SkipSeq int `json:"skip_seq"`
-	AudioOrigins map[string]*watchPlaybackOrigin `json:"audio_origins,omitempty"`
-	Origin *watchPlaybackOrigin `json:"origin,omitempty"`
-	AlternateOrigin *watchPlaybackOrigin `json:"alternate_origin,omitempty"`
-	Subs    []watchSub    `json:"subs,omitempty"`
-	Playing bool          `json:"playing"`
-	Pos     float64       `json:"pos"`
-	Dur     float64       `json:"dur,omitempty"`
-	Ends    int64         `json:"ends,omitempty"` // unix ms, once started
-	Members []watchPerson `json:"members"`
-	Asks    []watchAsk    `json:"asks"`
-	Sync    bool          `json:"sync"`
-	Linked  []string      `json:"linked,omitempty"`
-	Languages watchLanguagePreference `json:"languages"`
-	Preferences watchPlaybackPreferences `json:"preferences"`
-	Max     int           `json:"max"`
+	Ver             int                             `json:"ver"`
+	Room            string                          `json:"room"`
+	Me              string                          `json:"me"`
+	Host            string                          `json:"host"`
+	IsHost          bool                            `json:"is_host"`
+	Staff           bool                            `json:"staff,omitempty"`
+	Phase           string                          `json:"phase"`
+	LoadStep        string                          `json:"load_step,omitempty"`
+	LoadSince       int64                           `json:"load_since,omitempty"`
+	Err             string                          `json:"err,omitempty"`
+	Adult           bool                            `json:"adult,omitempty"`
+	Show            *watchShow                      `json:"show,omitempty"`
+	Ep              int                             `json:"ep,omitempty"`
+	LastEp          int                             `json:"last_ep,omitempty"`
+	Dub             bool                            `json:"dub,omitempty"`
+	Media           string                          `json:"media,omitempty"`
+	HLS             bool                            `json:"hls,omitempty"`
+	AudioMedia      map[string]string               `json:"audio_media,omitempty"`
+	AutoSkipOP      bool                            `json:"auto_skip_op"`
+	AutoSkipED      bool                            `json:"auto_skip_ed"`
+	SkipReady       bool                            `json:"skip_ready"`
+	SkipTimes       watchSkipTimes                  `json:"skip_times"`
+	SkipSeq         int                             `json:"skip_seq"`
+	AudioOrigins    map[string]*watchPlaybackOrigin `json:"audio_origins,omitempty"`
+	Origin          *watchPlaybackOrigin            `json:"origin,omitempty"`
+	AlternateOrigin *watchPlaybackOrigin            `json:"alternate_origin,omitempty"`
+	Subs            []watchSub                      `json:"subs,omitempty"`
+	Playing         bool                            `json:"playing"`
+	Pos             float64                         `json:"pos"`
+	Dur             float64                         `json:"dur,omitempty"`
+	Ends            int64                           `json:"ends,omitempty"` // unix ms, once started
+	Members         []watchPerson                   `json:"members"`
+	Asks            []watchAsk                      `json:"asks"`
+	Sync            bool                            `json:"sync"`
+	Linked          []string                        `json:"linked,omitempty"`
+	Languages       watchLanguagePreference         `json:"languages"`
+	Preferences     watchPlaybackPreferences        `json:"preferences"`
+	Max             int                             `json:"max"`
 }
 
 // viewOf is the room as user sees it. Hold the room lock; sync and linked
@@ -946,8 +973,12 @@ func (b *bot) watchExtras(v *watchView, user string) {
 		v.Sync = !d.WatchNoSync[user]
 		v.Languages = watchLanguagePreference{Audio: "auto", Subtitles: "auto"}
 		if p, ok := d.WatchLanguages[user]; ok {
-			if watchValidLanguage(p.Audio, false) { v.Languages.Audio = p.Audio }
-			if watchValidLanguage(p.Subtitles, true) { v.Languages.Subtitles = p.Subtitles }
+			if watchValidLanguage(p.Audio, false) {
+				v.Languages.Audio = p.Audio
+			}
+			if watchValidLanguage(p.Subtitles, true) {
+				v.Languages.Subtitles = p.Subtitles
+			}
 		}
 		v.Preferences = watchNormalizePreferences(d.WatchPreferences[user])
 		if l, ok := d.AniList[user]; ok && l.Verified && l.Token != "" {
@@ -990,21 +1021,21 @@ var (
 )
 
 type watchIn struct {
-	Room    string  `json:"room"`
-	Channel string  `json:"channel"`
-	Show    int     `json:"show"`
-	Ep      int     `json:"ep"`
-	Dub     bool    `json:"dub"`
-	Audio string `json:"audio"`
-	Subtitles string `json:"subtitles"`
-	Act     string  `json:"act"`
-	Pos     float64 `json:"pos"`
-	Playing bool    `json:"playing"`
-	Dur     float64 `json:"dur"`
-	Kind    string  `json:"kind"`
-	ID      int     `json:"id"`
-	OK      bool    `json:"ok"`
-	On      bool    `json:"on"`
+	Room      string  `json:"room"`
+	Channel   string  `json:"channel"`
+	Show      int     `json:"show"`
+	Ep        int     `json:"ep"`
+	Dub       bool    `json:"dub"`
+	Audio     string  `json:"audio"`
+	Subtitles string  `json:"subtitles"`
+	Act       string  `json:"act"`
+	Pos       float64 `json:"pos"`
+	Playing   bool    `json:"playing"`
+	Dur       float64 `json:"dur"`
+	Kind      string  `json:"kind"`
+	ID        int     `json:"id"`
+	OK        bool    `json:"ok"`
+	On        bool    `json:"on"`
 }
 
 // watchRead reads a request for the room the page is in. The room is the
@@ -1250,160 +1281,221 @@ func (b *bot) watchCover(w http.ResponseWriter, r *http.Request) {
 	proxyAniList(w, r, r.URL.Query().Get("u"))
 }
 
-
- // watchEpisodes loads episode-specific metadata only when the picker opens.
- // Tenrai's Jikan-compatible data is indexed by MAL episode number; AniList
- // previews remain the fallback when the upstream has no cover.
- var episodePreviewCache = struct {
- sync.Mutex
- entries map[int]struct {
-   until time.Time
-   previews map[int]watchEpisodePreview
- }
+// watchEpisodes loads episode-specific metadata only when the picker opens.
+// Tenrai's Jikan-compatible data is indexed by MAL episode number; AniList
+// previews remain the fallback when the upstream has no cover.
+var episodePreviewCache = struct {
+	sync.Mutex
+	entries map[int]struct {
+		until    time.Time
+		previews map[int]watchEpisodePreview
+	}
 }{entries: make(map[int]struct {
- until time.Time
- previews map[int]watchEpisodePreview
+	until    time.Time
+	previews map[int]watchEpisodePreview
 })}
 
 func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
-   user := b.actUser(w, r)
-   if user == "" { return }
-   if !watchSearchLimit.allow(user, watchNow()) {
-     apiError(w, http.StatusTooManyRequests, "slow down"); return
-   }
-   id, err := strconv.Atoi(r.URL.Query().Get("id"))
-   if err != nil || id < 1 { apiError(w, http.StatusBadRequest, "invalid anime"); return }
-   show, err := watchShowByID(id)
-   if err != nil { apiError(w, http.StatusBadGateway, "anime unavailable"); return }
-   if show.Adult {
-     b.watch.mu.Lock()
-     allowed := b.watch.cur != nil && b.watch.cur.id == r.URL.Query().Get("room") && b.watch.cur.adult
-     b.watch.mu.Unlock()
-     if !allowed { apiError(w, http.StatusForbidden, "not available in this room"); return }
-   }
-   episodePreviewCache.Lock()
-   cached, found := episodePreviewCache.entries[id]
-   episodePreviewCache.Unlock()
-   if found && time.Now().Before(cached.until) {
-     writeJSON(w, http.StatusOK, cached.previews)
-     return
-   }
-   ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-   defer cancel()
-   tenrai := make(map[int]watchEpisodePreview)
-   jikan := make(map[int]watchEpisodePreview)
-   kitsu := make(map[int]watchEpisodePreview)
-   var wg sync.WaitGroup
-   wg.Add(3)
-   go func() {
-     defer wg.Done()
-   if show.MalID > 0 {
-     for page := 1; page <= 4; page++ {
-       endpoint := fmt.Sprintf("https://api.tenrai.org/v1/anime/%d/episodes?page=%d", show.MalID, page)
-       req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-       if err != nil { break }
-       resp, err := activityClient.Do(req)
-       if err != nil { break }
-       if resp.StatusCode != http.StatusOK { resp.Body.Close(); break }
-       var payload struct {
-         Data []struct {
-           MalID int `json:"mal_id"`
-           Title string `json:"title"`
-           Images struct {
-             JPG struct { ImageURL string `json:"image_url"` } `json:"jpg"`
-             WebP struct { ImageURL string `json:"image_url"` } `json:"webp"`
-           } `json:"images"`
-           ImageURL string `json:"image_url"`
-         } `json:"data"`
-         Pagination struct { HasNextPage bool `json:"has_next_page"` } `json:"pagination"`
-       }
-       err = json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&payload)
-       resp.Body.Close()
-       if err != nil { break }
-       for _, ep := range payload.Data {
-         if ep.MalID < 1 || ep.MalID > show.lastEpisode() { continue }
-         img := ep.Images.JPG.ImageURL
-         if img == "" { img = ep.Images.WebP.ImageURL }
-         if img == "" { img = ep.ImageURL }
-         // The image proxy only permits known hosts, so never send arbitrary URLs.
-         if strings.HasPrefix(img, "https://img1.ak.crunchyroll.com/") ||
-           strings.HasPrefix(img, "https://static.crunchyroll.com/") ||
-           strings.HasPrefix(img, "https://s4.anilist.co/") {
-           img = "api/watch/cover?u=" + url.QueryEscape(img)
-         } else { img = "" }
-         tenrai[ep.MalID] = watchEpisodePreview{Title: ep.Title, Thumbnail: img}
-       }
-       if !payload.Pagination.HasNextPage || len(payload.Data) == 0 { break }
-     }
-   }
-   }()
-   go func() {
-     defer wg.Done()
-   // Jikan supplies episode titles for MAL entries absent from Tenrai.
-   // Preserve Tenrai thumbnails and never replace a non-empty title.
-   if show.MalID > 0 {
-     for page := 1; page <= 4; page++ {
-       endpoint := fmt.Sprintf("https://api.jikan.moe/v4/anime/%d/episodes?page=%d", show.MalID, page)
-       req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-       if err != nil { break }
-       resp, err := activityClient.Do(req)
-       if err != nil { break }
-       if resp.StatusCode != http.StatusOK { resp.Body.Close(); break }
-       var payload struct {
-         Data []struct {
-           MalID int `json:"mal_id"`
-           Title string `json:"title"`
-           TitleJapanese string `json:"title_japanese"`
-         } `json:"data"`
-         Pagination struct { HasNextPage bool `json:"has_next_page"` } `json:"pagination"`
-       }
-       err = json.NewDecoder(http.MaxBytesReader(w, resp.Body, 2<<20)).Decode(&payload)
-       resp.Body.Close()
-       if err != nil { break }
-       for _, ep := range payload.Data {
-         if ep.MalID < 1 || ep.MalID > show.lastEpisode() { continue }
-         current := jikan[ep.MalID]
-         if current.Title == "" {
-           current.Title = ep.Title
-           if current.Title == "" { current.Title = ep.TitleJapanese }
-           jikan[ep.MalID] = current
-         }
-       }
-       if !payload.Pagination.HasNextPage || len(payload.Data) == 0 { break }
-     }
-   }
-   }()
-   go func() {
-     defer wg.Done()
-     extraEpisodePreviews(ctx, show, kitsu)
-   }()
-   wg.Wait()
-   result := make(map[int]watchEpisodePreview)
-   for ep, v := range kitsu { result[ep] = v }
-   for ep, v := range jikan {
-     old := result[ep]
-     if v.Title != "" { old.Title = v.Title }
-     result[ep] = old
-   }
-   for ep, v := range tenrai {
-     old := result[ep]
-     if v.Title != "" { old.Title = v.Title }
-     if v.Thumbnail != "" { old.Thumbnail = v.Thumbnail }
-     result[ep] = old
-   }
-   if len(result) > 0 {
-   episodePreviewCache.Lock()
-   if len(episodePreviewCache.entries) >= 256 {
-     clear(episodePreviewCache.entries)
-   }
-   episodePreviewCache.entries[id] = struct {
-     until time.Time
-     previews map[int]watchEpisodePreview
-   }{until: time.Now().Add(30 * time.Minute), previews: result}
-   episodePreviewCache.Unlock()
-   }
-   writeJSON(w, http.StatusOK, result)
- }
+	user := b.actUser(w, r)
+	if user == "" {
+		return
+	}
+	if !watchSearchLimit.allow(user, watchNow()) {
+		apiError(w, http.StatusTooManyRequests, "slow down")
+		return
+	}
+	id, err := strconv.Atoi(r.URL.Query().Get("id"))
+	if err != nil || id < 1 {
+		apiError(w, http.StatusBadRequest, "invalid anime")
+		return
+	}
+	show, err := watchShowByID(id)
+	if err != nil {
+		apiError(w, http.StatusBadGateway, "anime unavailable")
+		return
+	}
+	if show.Adult {
+		b.watch.mu.Lock()
+		allowed := b.watch.cur != nil && b.watch.cur.id == r.URL.Query().Get("room") && b.watch.cur.adult
+		b.watch.mu.Unlock()
+		if !allowed {
+			apiError(w, http.StatusForbidden, "not available in this room")
+			return
+		}
+	}
+	episodePreviewCache.Lock()
+	cached, found := episodePreviewCache.entries[id]
+	episodePreviewCache.Unlock()
+	if found && time.Now().Before(cached.until) {
+		writeJSON(w, http.StatusOK, cached.previews)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	tenrai := make(map[int]watchEpisodePreview)
+	jikan := make(map[int]watchEpisodePreview)
+	kitsu := make(map[int]watchEpisodePreview)
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		if show.MalID > 0 {
+			for page := 1; page <= 4; page++ {
+				endpoint := fmt.Sprintf("https://api.tenrai.org/v1/anime/%d/episodes?page=%d", show.MalID, page)
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+				if err != nil {
+					break
+				}
+				resp, err := activityClient.Do(req)
+				if err != nil {
+					break
+				}
+				if resp.StatusCode != http.StatusOK {
+					resp.Body.Close()
+					break
+				}
+				var payload struct {
+					Data []struct {
+						MalID  int    `json:"mal_id"`
+						Title  string `json:"title"`
+						Images struct {
+							JPG struct {
+								ImageURL string `json:"image_url"`
+							} `json:"jpg"`
+							WebP struct {
+								ImageURL string `json:"image_url"`
+							} `json:"webp"`
+						} `json:"images"`
+						ImageURL string `json:"image_url"`
+					} `json:"data"`
+					Pagination struct {
+						HasNextPage bool `json:"has_next_page"`
+					} `json:"pagination"`
+				}
+				err = json.NewDecoder(io.LimitReader(resp.Body, 2<<20)).Decode(&payload)
+				resp.Body.Close()
+				if err != nil {
+					break
+				}
+				for _, ep := range payload.Data {
+					if ep.MalID < 1 || ep.MalID > show.lastEpisode() {
+						continue
+					}
+					img := ep.Images.JPG.ImageURL
+					if img == "" {
+						img = ep.Images.WebP.ImageURL
+					}
+					if img == "" {
+						img = ep.ImageURL
+					}
+					// The image proxy only permits known hosts, so never send arbitrary URLs.
+					if strings.HasPrefix(img, "https://img1.ak.crunchyroll.com/") ||
+						strings.HasPrefix(img, "https://static.crunchyroll.com/") ||
+						strings.HasPrefix(img, "https://s4.anilist.co/") {
+						img = "api/watch/cover?u=" + url.QueryEscape(img)
+					} else {
+						img = ""
+					}
+					tenrai[ep.MalID] = watchEpisodePreview{Title: ep.Title, Thumbnail: img}
+				}
+				if !payload.Pagination.HasNextPage || len(payload.Data) == 0 {
+					break
+				}
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		// Jikan supplies episode titles for MAL entries absent from Tenrai.
+		// Preserve Tenrai thumbnails and never replace a non-empty title.
+		if show.MalID > 0 {
+			for page := 1; page <= 4; page++ {
+				endpoint := fmt.Sprintf("https://api.jikan.moe/v4/anime/%d/episodes?page=%d", show.MalID, page)
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+				if err != nil {
+					break
+				}
+				resp, err := activityClient.Do(req)
+				if err != nil {
+					break
+				}
+				if resp.StatusCode != http.StatusOK {
+					resp.Body.Close()
+					break
+				}
+				var payload struct {
+					Data []struct {
+						MalID         int    `json:"mal_id"`
+						Title         string `json:"title"`
+						TitleJapanese string `json:"title_japanese"`
+					} `json:"data"`
+					Pagination struct {
+						HasNextPage bool `json:"has_next_page"`
+					} `json:"pagination"`
+				}
+				err = json.NewDecoder(http.MaxBytesReader(w, resp.Body, 2<<20)).Decode(&payload)
+				resp.Body.Close()
+				if err != nil {
+					break
+				}
+				for _, ep := range payload.Data {
+					if ep.MalID < 1 || ep.MalID > show.lastEpisode() {
+						continue
+					}
+					current := jikan[ep.MalID]
+					if current.Title == "" {
+						current.Title = ep.Title
+						if current.Title == "" {
+							current.Title = ep.TitleJapanese
+						}
+						jikan[ep.MalID] = current
+					}
+				}
+				if !payload.Pagination.HasNextPage || len(payload.Data) == 0 {
+					break
+				}
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		extraEpisodePreviews(ctx, show, kitsu)
+	}()
+	wg.Wait()
+	result := make(map[int]watchEpisodePreview)
+	for ep, v := range kitsu {
+		result[ep] = v
+	}
+	for ep, v := range jikan {
+		old := result[ep]
+		if v.Title != "" {
+			old.Title = v.Title
+		}
+		result[ep] = old
+	}
+	for ep, v := range tenrai {
+		old := result[ep]
+		if v.Title != "" {
+			old.Title = v.Title
+		}
+		if v.Thumbnail != "" {
+			old.Thumbnail = v.Thumbnail
+		}
+		result[ep] = old
+	}
+	if len(result) > 0 {
+		episodePreviewCache.Lock()
+		if len(episodePreviewCache.entries) >= 256 {
+			clear(episodePreviewCache.entries)
+		}
+		episodePreviewCache.entries[id] = struct {
+			until    time.Time
+			previews map[int]watchEpisodePreview
+		}{until: time.Now().Add(30 * time.Minute), previews: result}
+		episodePreviewCache.Unlock()
+	}
+	writeJSON(w, http.StatusOK, result)
+}
 
 // watchPick starts an episode (host only).
 func (b *bot) watchPick(w http.ResponseWriter, r *http.Request) {
@@ -1517,10 +1609,14 @@ func (b *bot) watchDo(r *watchRoom, act string, pos float64) string {
 			return "nothing is playing"
 		}
 		switch act {
-		case "op-on": r.autoSkipOP = true
-		case "op-off": r.autoSkipOP = false
-		case "ed-on": r.autoSkipED = true
-		case "ed-off": r.autoSkipED = false
+		case "op-on":
+			r.autoSkipOP = true
+		case "op-off":
+			r.autoSkipOP = false
+		case "ed-on":
+			r.autoSkipED = true
+		case "ed-off":
+			r.autoSkipED = false
 		}
 	case "next", "prev":
 		if r.show == nil {
@@ -1579,7 +1675,9 @@ func (b *bot) watchBeat(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]int{"ver": cur.ver})
 		return
 	}
-	if in.Pos >= cur.skipTarget-1 { cur.skipHoldUntil = time.Time{} }
+	if in.Pos >= cur.skipTarget-1 {
+		cur.skipHoldUntil = time.Time{}
+	}
 	drift := math.Abs(cur.position(now) - in.Pos)
 	moved := in.Playing != cur.playing || drift > watchDrift
 	cur.setPos(in.Pos, in.Playing, now)
@@ -1729,10 +1827,14 @@ func (b *bot) watchMediaAPI(w http.ResponseWriter, r *http.Request) {
 	var m *watchMedia
 	if cur := b.watch.cur; cur != nil {
 		for _, c := range []*watchMedia{cur.media, cur.old, cur.alternateMedia} {
-			if c != nil && c.key == key { m = c }
+			if c != nil && c.key == key {
+				m = c
+			}
 		}
 		for _, c := range cur.extraAudioMedia {
-			if c != nil && c.key == key { m = c }
+			if c != nil && c.key == key {
+				m = c
+			}
 		}
 	}
 	cache := b.watchCache()

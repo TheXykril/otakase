@@ -32,7 +32,9 @@ func TestWatchSkipIntervalsMatchRelease(t *testing.T) {
 		{Start: 90, End: 60}, {Start: -1, End: 90},
 		{Start: 0, End: 800}, {Start: math.NaN(), End: 90},
 	} {
-		if bad.valid() { t.Fatalf("accepted invalid skip span: %+v", bad) }
+		if bad.valid() {
+			t.Fatalf("accepted invalid skip span: %+v", bad)
+		}
 	}
 }
 
@@ -42,10 +44,10 @@ func TestWatchSkipTargetOnlyInsideKnownIntervals(t *testing.T) {
 		ED: watchSkipSpan{Start: 1235, End: 1318},
 	}
 	cases := []struct {
-		name string
-		pos float64
+		name   string
+		pos    float64
 		op, ed bool
-		want float64
+		want   float64
 	}{
 		{"before opening", 32, true, true, 0},
 		{"inside opening", 78, true, false, 152},
@@ -118,7 +120,7 @@ func TestWatchRoomAutoSkipAndForwardControls(t *testing.T) {
 	room := &watchRoom{
 		id: "room", opened: now, phase: "play", playing: true,
 		pos: 90, at: now, dur: 1440, autoSkipOP: true,
-		members: map[string]*watchMember{"host": {name: "Host", seen: now}},
+		members:       map[string]*watchMember{"host": {name: "Host", seen: now}},
 		skipIntervals: watchSkipIntervals{OP: []watchSkipSpan{{Start: 74, End: 162}}},
 	}
 	b := &bot{}

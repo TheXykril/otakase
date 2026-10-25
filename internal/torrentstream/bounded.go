@@ -17,7 +17,7 @@ import (
 const (
 	BotTorrentLimit        int64 = 4 << 30
 	BotTorrentStorageLimit int64 = 8 << 30
-	maxBotTorrentGiB        int64 = 16
+	maxBotTorrentGiB       int64 = 16
 )
 
 type botTorrentLimits struct {

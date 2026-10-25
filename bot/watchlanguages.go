@@ -25,22 +25,34 @@ func watchDefaultPreferences() watchPlaybackPreferences {
 func watchPreferredLanguage(value string, subtitles bool) bool {
 	// Container track indices are episode-specific and must not become
 	// account-wide preferences.
-	if value == "off" { return subtitles }
+	if value == "off" {
+		return subtitles
+	}
 	return value == "auto" || watchLanguageCode.MatchString(value)
 }
 
 func watchNormalizePreferences(p watchPlaybackPreferences) watchPlaybackPreferences {
 	normal := watchDefaultPreferences()
-	if watchPreferredLanguage(p.Audio, false) { normal.Audio = p.Audio }
-	if watchPreferredLanguage(p.BackupAudio, false) { normal.BackupAudio = p.BackupAudio }
-	if watchPreferredLanguage(p.Subtitles, true) { normal.Subtitles = p.Subtitles }
-	if normal.Audio == "auto" || normal.Audio == normal.BackupAudio { normal.BackupAudio = "auto" }
+	if watchPreferredLanguage(p.Audio, false) {
+		normal.Audio = p.Audio
+	}
+	if watchPreferredLanguage(p.BackupAudio, false) {
+		normal.BackupAudio = p.BackupAudio
+	}
+	if watchPreferredLanguage(p.Subtitles, true) {
+		normal.Subtitles = p.Subtitles
+	}
+	if normal.Audio == "auto" || normal.Audio == normal.BackupAudio {
+		normal.BackupAudio = "auto"
+	}
 	return normal
 }
 
 func (b *bot) watchPreferencesGet(w http.ResponseWriter, r *http.Request) {
 	user := b.actUser(w, r)
-	if user == "" { return }
+	if user == "" {
+		return
+	}
 	var prefs watchPlaybackPreferences
 	b.store.view(func(d *storeData) { prefs = watchNormalizePreferences(d.WatchPreferences[user]) })
 	writeJSON(w, http.StatusOK, prefs)
@@ -48,13 +60,17 @@ func (b *bot) watchPreferencesGet(w http.ResponseWriter, r *http.Request) {
 
 func (b *bot) watchPreferencesSet(w http.ResponseWriter, r *http.Request) {
 	user := b.actUser(w, r)
-	if user == "" { return }
+	if user == "" {
+		return
+	}
 	if !watchActLimit.allow(user, watchNow()) {
 		apiError(w, http.StatusTooManyRequests, "slow down")
 		return
 	}
 	var p watchPlaybackPreferences
-	if !readJSON(w, r, 4<<10, &p) { return }
+	if !readJSON(w, r, 4<<10, &p) {
+		return
+	}
 	p.Audio = strings.ToLower(strings.TrimSpace(p.Audio))
 	p.BackupAudio = strings.ToLower(strings.TrimSpace(p.BackupAudio))
 	p.Subtitles = strings.ToLower(strings.TrimSpace(p.Subtitles))
@@ -66,11 +82,15 @@ func (b *bot) watchPreferencesSet(w http.ResponseWriter, r *http.Request) {
 	}
 	p = watchNormalizePreferences(p)
 	b.store.update(func(d *storeData) {
-		if d.WatchPreferences == nil { d.WatchPreferences = make(map[string]watchPlaybackPreferences) }
+		if d.WatchPreferences == nil {
+			d.WatchPreferences = make(map[string]watchPlaybackPreferences)
+		}
 		d.WatchPreferences[user] = p
 		// Choosing account-wide defaults selects Automatic in the player.
 		// A later manual player selection still overrides these defaults.
-		if d.WatchLanguages == nil { d.WatchLanguages = make(map[string]watchLanguagePreference) }
+		if d.WatchLanguages == nil {
+			d.WatchLanguages = make(map[string]watchLanguagePreference)
+		}
 		d.WatchLanguages[user] = watchLanguagePreference{Audio: "auto", Subtitles: "auto"}
 	})
 	writeJSON(w, http.StatusOK, p)
@@ -89,8 +109,14 @@ func watchValidLanguage(value string, subtitles bool) bool {
 	if !subtitles && (strings.HasPrefix(value, "track-") || strings.HasPrefix(value, "hls-")) {
 		i := strings.IndexByte(value, '-')
 		n := value[i+1:]
-		if len(n) == 0 || len(n) > 3 { return false }
-		for _, ch := range n { if ch < '0' || ch > '9' { return false } }
+		if len(n) == 0 || len(n) > 3 {
+			return false
+		}
+		for _, ch := range n {
+			if ch < '0' || ch > '9' {
+				return false
+			}
+		}
 		return true
 	}
 	return watchLanguageCode.MatchString(value)

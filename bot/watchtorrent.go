@@ -161,8 +161,8 @@ func cleanWatchTorrentDirs() {
 }
 
 type botLimitedLog struct {
-	mu sync.Mutex
-	data []byte
+	mu    sync.Mutex
+	data  []byte
 	limit int
 }
 

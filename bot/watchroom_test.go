@@ -311,8 +311,8 @@ func TestWatchRoomLanguageReleases(t *testing.T) {
 	b := &bot{}
 	main := "https://video.example/en/playlist.m3u8"
 	room := &watchRoom{
-		spent: true,
-		dub: true,
+		spent:   true,
+		dub:     true,
 		streams: []streamLink{{URL: main}},
 		audioReleases: map[string]streamLink{
 			"en": {URL: main},
@@ -324,7 +324,9 @@ func TestWatchRoomLanguageReleases(t *testing.T) {
 		t.Fatal("episode did not start")
 	}
 	for _, lang := range []string{"dub", "ja", "de", "sub"} {
-		if room.audioEntries[lang] == "" { t.Fatalf("missing %s audio playlist", lang) }
+		if room.audioEntries[lang] == "" {
+			t.Fatalf("missing %s audio playlist", lang)
+		}
 	}
 	if len(room.extraAudioMedia) != 2 {
 		t.Fatalf("expected Japanese and German relays, got %d", len(room.extraAudioMedia))
@@ -411,10 +413,14 @@ func TestTrimMasterPreservesAllMultilingualTracks(t *testing.T) {
 
 func TestWatchAudioLanguage(t *testing.T) {
 	for _, lang := range []string{"ja", "en", "de", "sub", "dub", "track-7"} {
-		if !watchAudioLanguage(lang) { t.Errorf("rejected %q", lang) }
+		if !watchAudioLanguage(lang) {
+			t.Errorf("rejected %q", lang)
+		}
 	}
 	for _, lang := range []string{"", "ja/../../x", "EN", "track-9999", "track-abc", "en-us"} {
-		if watchAudioLanguage(lang) { t.Errorf("accepted invalid route %q", lang) }
+		if watchAudioLanguage(lang) {
+			t.Errorf("accepted invalid route %q", lang)
+		}
 	}
 }
 
