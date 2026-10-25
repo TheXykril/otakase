@@ -736,7 +736,11 @@ the file keeps downloading in the background, the first and last 4 MiB first
 because players read the container header and Matroska's seek index before the
 first frame. The helper announces its playlist once the first segment is
 encoded. Files are stored under fixed names derived from their torrent path,
-so nothing the torrent names reaches the file system or an ffmpeg filter.
+so nothing the torrent names reaches the file system or an ffmpeg filter. Each 4 s
+segment is encoded on its own without B-frames. With B-frames, every segment's
+decode times start a frame or two before its first picture, the first segment
+(which cannot go below zero) overlaps the second, and Chromium's built-in HLS
+player, which Discord uses, stops with "Parsed buffers not in DTS sequence".
 
 Torrents larger than `watch_torrent_max_gib` (default 4 GiB, up to 16) or
 containing more than 256 files are rejected before opening storage. The episode

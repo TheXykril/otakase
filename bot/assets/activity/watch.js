@@ -529,7 +529,8 @@ async function wLoad() {
   vid.onerror = () => {
     const e = vid.error;
     const why = (wHls ? "hls.js" : "native") + " video error " + (e ? e.code + " " + (e.message || "") : "");
-    if (!wHls && wNoNative !== wvMedia && window.Hls && Hls.isSupported() && /\.m3u8(?:$|\?)/i.test(wvMedia)) {
+    // Hls.js is only loaded once the built-in player has failed.
+    if (!wHls && wNoNative !== wvMedia && /\.m3u8(?:$|\?)/i.test(wvMedia)) {
       wNoNative = wvMedia;
       wLastErr = why;
       return wLoad();
