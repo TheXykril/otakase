@@ -39,6 +39,10 @@ type StreamPlaybackHint struct {
 	// the player can use a language other than the one Subtitle defaults to.
 	// Empty when the host offers one track or none.
 	Subtitles []SubtitleTrack
+	// HLS marks a stream that is an HLS playlist although its address does
+	// not say so (no .m3u8 in it). Players that choose by the address -- the
+	// quality pick, the bot's watch room -- read this instead.
+	HLS bool
 }
 
 // SubtitleTrack is one external subtitle file a host offers.

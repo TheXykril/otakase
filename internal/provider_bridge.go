@@ -63,6 +63,7 @@ func fromStreamHints(in map[string]providers.StreamPlaybackHint) map[string]Stre
 			Subtitle:  hint.Subtitle,
 			Headers:   hint.Headers,
 			Subtitles: hint.Subtitles,
+			HLS:       hint.HLS,
 		}
 	}
 	return converted

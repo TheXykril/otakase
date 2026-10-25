@@ -107,3 +107,17 @@ func TestSearchStreamInfoSkipsSlowSiteAndOtherLanguage(t *testing.T) {
 		t.Fatalf("asked %s, want the sub sites only", got)
 	}
 }
+
+// A playlist without .m3u8 in its address is passed on as one, or the watch
+// room would relay it as a video file.
+func TestStreamLinksCarryTheHLSMark(t *testing.T) {
+	link := "https://megavid.buzz/vid/VIDEO/token"
+	result := ProviderEpisodeResult{Links: []string{link}, LinkHints: map[string]StreamPlaybackHint{link: {HLS: true}}}
+	streams := streamLinks(result)
+	if len(streams) != 1 || !streams[0].HLS {
+		t.Fatalf("streams = %+v", streams)
+	}
+	if !strings.Contains(FormatStreamInfo(StreamInfo{Streams: streams}), `"hls":true`) {
+		t.Error("the mark must reach the JSON the bot reads")
+	}
+}

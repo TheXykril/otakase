@@ -12,7 +12,7 @@ import (
 	"github.com/thexykril/otakase/internal/providers"
 )
 
-var fullTestStack = []string{"anikoto", "kickassanime", "anizone", "nyaa", "sukebei"}
+var fullTestStack = []string{"anikoto", "megavid", "kickassanime", "anizone", "nyaa", "sukebei"}
 
 // stackStubProvider stands in for a registered provider. Searches answer
 // from searchResults by audio; episodes answer from episodeErrors, then

@@ -41,6 +41,9 @@ type StreamLink struct {
 	Referrer  string            `json:"referrer,omitempty"`
 	Headers   map[string]string `json:"headers,omitempty"`
 	Subtitles []StreamSubtitle  `json:"subtitles,omitempty"`
+	// HLS is set for a playlist whose address does not end in .m3u8, so the
+	// watch room relays it as one.
+	HLS bool `json:"hls,omitempty"`
 }
 
 // StreamSubtitle is a subtitle track of a link.
@@ -283,7 +286,7 @@ func streamLinks(result ProviderEpisodeResult) []StreamLink {
 		}
 		s := StreamLink{URL: link}
 		if hint, ok := result.LinkHints[link]; ok {
-			s.Referrer, s.Headers = hint.Referrer, hint.Headers
+			s.Referrer, s.Headers, s.HLS = hint.Referrer, hint.Headers, hint.HLS
 			for _, t := range hint.Subtitles {
 				s.Subtitles = append(s.Subtitles, StreamSubtitle{URL: t.URL, Language: t.Language, Label: t.Label})
 			}

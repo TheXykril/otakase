@@ -48,6 +48,14 @@ type streamLink struct {
 	Referrer  string            `json:"referrer,omitempty"`
 	Headers   map[string]string `json:"headers,omitempty"`
 	Subtitles []streamSubtitle  `json:"subtitles,omitempty"`
+	// HLS marks a playlist whose address doesn't say so (megavid's /vid/
+	// links); markHLSLinks sets it.
+	HLS bool `json:"hls,omitempty"`
+}
+
+// isHLS tells a playlist from a file.
+func (l streamLink) isHLS() bool {
+	return l.HLS || looksLikeHLS(l.URL)
 }
 
 type streamSubtitle struct {
@@ -79,7 +87,7 @@ func newWatchMedia(link streamLink, dub bool) (m *watchMedia, entry string, subs
 	m = &watchMedia{key: newToken(16), link: link, dub: dub, ids: map[string]string{}, byURL: map[string]string{},
 		kind: map[string]string{}, next: map[string][]string{}}
 	kind := "file"
-	if looksLikeHLS(link.URL) {
+	if link.isHLS() {
 		kind = "list"
 	}
 	entry = m.add(link.URL, kind)
@@ -96,6 +104,64 @@ func looksLikeHLS(u string) bool {
 		return false
 	}
 	return strings.HasSuffix(strings.ToLower(p.Path), ".m3u8") || strings.Contains(strings.ToLower(u), "m3u8")
+}
+
+// watchSniffWait bounds the request markHLSLinks makes per link.
+const watchSniffWait = 5 * time.Second
+
+// markHLSLinks asks the provider about each link whose address doesn't name
+// a playlist and that the app hasn't already marked, and marks the ones
+// that answer with one. Without this a playlist served under a bare address
+// is relayed as a video file, which the browser cannot play.
+func markHLSLinks(ctx context.Context, info *streamInfo) {
+	var wg sync.WaitGroup
+	mark := func(link *streamLink) {
+		if link.URL == "" || link.isHLS() {
+			return
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			link.HLS = sniffHLS(ctx, *link)
+		}()
+	}
+	for k := range info.Streams {
+		mark(&info.Streams[k])
+	}
+	variants := make(map[string]*streamLink, len(info.AudioVariants))
+	for language, link := range info.AudioVariants {
+		variants[language] = &link
+		mark(variants[language])
+	}
+	wg.Wait()
+	for language, link := range variants {
+		info.AudioVariants[language] = *link
+	}
+}
+
+// sniffHLS reads the start of an address to see whether it is a playlist.
+func sniffHLS(ctx context.Context, link streamLink) bool {
+	ctx, cancel := context.WithTimeout(ctx, watchSniffWait)
+	defer cancel()
+	req, err := (&watchMedia{link: link}).request(ctx, link.URL)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Range", "bytes=0-63")
+	resp, err := watchUpstream.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		return false
+	}
+	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "mpegurl") {
+		return true
+	}
+	head := make([]byte, 7)
+	n, _ := io.ReadFull(resp.Body, head)
+	return string(head[:n]) == "#EXTM3U"
 }
 
 // add gives an upstream address an id. Ids carry an extension players

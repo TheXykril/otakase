@@ -839,7 +839,7 @@ function wUpdateOrigin() {
     indicator.hidden = true;
     return;
   }
-  const names = { anikoto: "Anikoto", kickassanime: "KickAssAnime",
+  const names = { anikoto: "Anikoto", megavid: "Megavid", kickassanime: "KickAssAnime",
     anizone: "AniZone", nyaa: "Nyaa", sukebei: "Sukebei" };
   const provider = names[String(origin.provider || "").toLowerCase()]
     || origin.provider || "Unknown";

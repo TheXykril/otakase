@@ -133,6 +133,9 @@ type StreamPlaybackHint struct {
 	// HLSBitrate is the bandwidth of the variant Quality chose, when the link
 	// had to stay the master; zero when nothing was chosen.
 	HLSBitrate int
+	// HLS marks a playlist whose address does not end in .m3u8; see
+	// providers.StreamPlaybackHint.
+	HLS bool
 }
 
 // playingVideo is the mpv side of the episode.

@@ -542,7 +542,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		r.torrentCancel = cancel
 		// Inspect the exact stream being relayed for embedded HLS languages.
 		// This runs after playback starts and never delays the first frame.
-		if media := r.media; media != nil && looksLikeHLS(media.link.URL) {
+		if media := r.media; media != nil && media.link.isHLS() {
 			b.watch.bg.Go(func() { b.findWatchHLSTracks(ctx, r, gen, media) })
 		}
 		// Some providers expose Sub and Dub as separate releases rather than

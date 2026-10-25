@@ -28,8 +28,8 @@ func TestDiagnoseLog(t *testing.T) {
 		"Wrong match is common — search again and pick the right title.":                                   {"wrong-match"},
 		`failed to run Rofi: exec: \"rofi\": executable file not found in $PATH`:                           {"rofi"},
 		"Downloading needs ffmpeg, which was not found.":                                                   {"ffmpeg"},
-		"No cast devices found.": {"cast"},
-		"Playing episode 3 (sub)\nEpisode completed! Progress updated: 3": {},
+		"No cast devices found.":                                                                           {"cast"},
+		"Playing episode 3 (sub)\nEpisode completed! Progress updated: 3":                                  {},
 		// The mpv socket going away when the player closes is normal.
 		`"dial unix /tmp/otakasempvsocket: connect: connection refused"`: {},
 	}

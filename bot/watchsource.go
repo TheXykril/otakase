@@ -105,6 +105,7 @@ func watchRunCLI(parent context.Context, cli string, wait time.Duration, languag
 		perr = nil
 	}
 	if perr == nil {
+		markHLSLinks(parent, &info)
 		return info, nil
 	}
 	if err != nil {
