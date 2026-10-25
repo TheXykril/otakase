@@ -715,7 +715,10 @@ func (b *bot) dashModeration() template.HTML {
 
 // dashWatchTickets lists ticket balances and owner controls for the authenticated dashboard.
 func (b *bot) dashWatchTickets() template.HTML {
-	type holder struct { ID string; Count int }
+	type holder struct {
+		ID    string
+		Count int
+	}
 	var holders []holder
 	total := 0
 	b.store.view(func(d *storeData) {
@@ -727,12 +730,16 @@ func (b *bot) dashWatchTickets() template.HTML {
 		}
 	})
 	sort.Slice(holders, func(i, j int) bool {
-		if holders[i].Count != holders[j].Count { return holders[i].Count > holders[j].Count }
+		if holders[i].Count != holders[j].Count {
+			return holders[i].Count > holders[j].Count
+		}
 		return holders[i].ID < holders[j].ID
 	})
 	var rows [][]string
 	for _, h := range holders {
-		if len(rows) == 30 { break }
+		if len(rows) == 30 {
+			break
+		}
 		rows = append(rows, []string{b.dashName(h.ID) + " (" + h.ID + ")", fmt.Sprint(h.Count)})
 	}
 	amount := &dashNumber{Value: "1", Min: "1", Max: "100", Step: "1"}

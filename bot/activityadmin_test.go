@@ -306,7 +306,13 @@ func TestAdjustWatchTickets(t *testing.T) {
 	if !ticketUserID.MatchString(id) || ticketUserID.MatchString("not-a-user") {
 		t.Fatal("invalid Discord ID validation")
 	}
-	if got := b.adjustWatchTickets(id, 5); got != 5 { t.Fatalf("add: %d", got) }
-	if got := b.adjustWatchTickets(id, -2); got != 3 { t.Fatalf("remove: %d", got) }
-	if got := b.adjustWatchTickets(id, -100); got != 0 { t.Fatalf("clamp: %d", got) }
+	if got := b.adjustWatchTickets(id, 5); got != 5 {
+		t.Fatalf("add: %d", got)
+	}
+	if got := b.adjustWatchTickets(id, -2); got != 3 {
+		t.Fatalf("remove: %d", got)
+	}
+	if got := b.adjustWatchTickets(id, -100); got != 0 {
+		t.Fatalf("clamp: %d", got)
+	}
 }

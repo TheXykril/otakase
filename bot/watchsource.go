@@ -139,20 +139,25 @@ func (c *watchInfos) get(ctx context.Context, cli string, id, ep int, dub, adult
 	if c.m == nil {
 		c.m = map[string]watchInfoEntry{}
 	}
-	e, ok := c.m[key]
-	if ok && (e.ready != nil || time.Since(e.at) < watchInfoTTL && e.err == nil) {
-		c.mu.Unlock()
-		if e.ready != nil {
-			select {
-			case <-e.ready:
-			case <-ctx.Done():
-				return streamInfo{}, ctx.Err()
-			}
-			c.mu.Lock()
-			e = c.m[key]
-			c.mu.Unlock()
+	for waited := false; ; waited = true {
+		e, ok := c.m[key]
+		if !ok || e.ready == nil && !waited && (time.Since(e.at) >= watchInfoTTL || e.err != nil) {
+			break
 		}
-		return e.info, e.err
+		if e.ready == nil {
+			// A fresh answer, or the one just waited for, failed or not.
+			c.mu.Unlock()
+			return e.info, e.err
+		}
+		// Someone else is looking it up. If their lookup was called off,
+		// the entry is gone when it ends and this caller looks it up itself.
+		c.mu.Unlock()
+		select {
+		case <-e.ready:
+		case <-ctx.Done():
+			return streamInfo{}, ctx.Err()
+		}
+		c.mu.Lock()
 	}
 	ready := make(chan struct{})
 	c.m[key] = watchInfoEntry{ready: ready, at: time.Now()}

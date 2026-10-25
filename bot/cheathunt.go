@@ -53,7 +53,7 @@ type cheatCode struct {
 	RedeemedBy string    `json:"redeemed_by,omitempty"`
 	Redeemed   time.Time `json:"redeemed,omitzero"`
 	Tickets    int       `json:"tickets,omitempty"` // zero on older codes means one ticket
-	Number     int       `json:"number,omitempty"` // place in the old hall of fame, codes redeemed before it went
+	Number     int       `json:"number,omitempty"`  // place in the old hall of fame, codes redeemed before it went
 }
 
 // cheatView is what the app shows. Status is "puzzle", "found" (a code,

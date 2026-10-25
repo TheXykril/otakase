@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
@@ -17,7 +18,7 @@ import (
 const (
 	BotTorrentLimit        int64 = 4 << 30
 	BotTorrentStorageLimit int64 = 8 << 30
-	maxBotTorrentGiB        int64 = 16
+	maxBotTorrentGiB       int64 = 16
 )
 
 type botTorrentLimits struct {
@@ -26,18 +27,20 @@ type botTorrentLimits struct {
 }
 
 // Limits are expressed in GiB. An invalid setting falls back to its default.
+// The cache and the extracted video both live on disk, so the storage budget
+// always holds twice the torrent limit; a smaller budget lowers that limit.
 func readBotTorrentLimits(getenv func(string) string) botTorrentLimits {
-	parse := func(name string, fallback int64) int64 {
+	parse := func(name string, fallback, maxGiB int64) int64 {
 		n, err := strconv.ParseInt(getenv(name), 10, 64)
-		if err != nil || n < 1 || n > maxBotTorrentGiB*2 {
+		if err != nil || n < 1 || n > maxGiB {
 			return fallback
 		}
 		return n << 30
 	}
-	torrentLimit := parse("OTAKASE_WATCH_TORRENT_MAX_GIB", BotTorrentLimit)
-	storageLimit := parse("OTAKASE_WATCH_TORRENT_STORAGE_GIB", BotTorrentStorageLimit)
-	if torrentLimit > maxBotTorrentGiB {
-		torrentLimit = BotTorrentLimit
+	torrentLimit := parse("OTAKASE_WATCH_TORRENT_MAX_GIB", BotTorrentLimit, maxBotTorrentGiB)
+	storageLimit := parse("OTAKASE_WATCH_TORRENT_STORAGE_GIB", BotTorrentStorageLimit, maxBotTorrentGiB*2)
+	if torrentLimit > storageLimit/2 {
+		torrentLimit = storageLimit / 2
 	}
 	return botTorrentLimits{torrent: torrentLimit, storage: storageLimit}
 }
@@ -77,9 +80,6 @@ func (s boundedStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, ha
 // cannot exceed the configured temporary payload budget.
 func DownloadForBot(ctx context.Context, hash, dir string) (string, error) {
 	limits := readBotTorrentLimits(os.Getenv)
-	if limits.storage < 2*limits.torrent {
-		return "", fmt.Errorf("torrent storage budget must be at least twice the torrent size limit")
-	}
 	cache := filepath.Join(dir, "pieces")
 	defer os.RemoveAll(cache)
 	disk := storage.NewFile(cache)
@@ -95,6 +95,11 @@ func DownloadForBot(ctx context.Context, hash, dir string) (string, error) {
 	cfg.HalfOpenConnsPerTorrent, cfg.TotalHalfOpenConns = 4, 4
 	cfg.DownloadRateLimiter = rate.NewLimiter(8<<20, 1<<20)
 	client, err := torrent.NewClient(cfg)
+	if err != nil {
+		// Containers often have no IPv6 at all; listen on IPv4 only there.
+		cfg.DisableIPv6 = true
+		client, err = torrent.NewClient(cfg)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -118,7 +123,7 @@ func DownloadForBot(ctx context.Context, hash, dir string) (string, error) {
 	if f == nil {
 		return "", fmt.Errorf("torrent contains no video")
 	}
-	path := filepath.Join(dir, "source"+filepath.Ext(f.Path()))
+	path := filepath.Join(dir, "source"+sourceExt(f.Path()))
 	out, err := os.Create(path)
 	if err != nil {
 		return "", err
@@ -133,4 +138,16 @@ func DownloadForBot(ctx context.Context, hash, dir string) (string, error) {
 		return "", err
 	}
 	return path, out.Close()
+}
+
+// sourceExt keeps the extracted file's name safe to put in an ffmpeg filter
+// graph: the torrent names the file, so anything unusual becomes .mkv, which
+// ffmpeg still opens by its content.
+func sourceExt(name string) string {
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	case ".mkv", ".mp4", ".m4v", ".webm", ".avi", ".ts", ".mov", ".wmv", ".flv", ".ogm":
+		return ext
+	}
+	return ".mkv"
 }

@@ -100,6 +100,8 @@ func TestReadBotTorrentLimits(t *testing.T) {
 		{"custom", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "6", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "12"}, 6 << 30, 12 << 30},
 		{"bad values", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "-1", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "not-a-number"}, 4 << 30, 8 << 30},
 		{"oversized", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "99", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "99"}, 4 << 30, 8 << 30},
+		{"small storage", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "4", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "4"}, 2 << 30, 4 << 30},
+		{"largest", map[string]string{"OTAKASE_WATCH_TORRENT_MAX_GIB": "16", "OTAKASE_WATCH_TORRENT_STORAGE_GIB": "32"}, 16 << 30, 32 << 30},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := readBotTorrentLimits(func(key string) string { return tc.env[key] })
@@ -107,5 +109,21 @@ func TestReadBotTorrentLimits(t *testing.T) {
 				t.Fatalf("got %+v", got)
 			}
 		})
+	}
+}
+
+func TestSourceExt(t *testing.T) {
+	for in, want := range map[string]string{
+		"Show - 01.mkv":         ".mkv",
+		"Show - 01.MP4":         ".mp4",
+		"a.x,movie=/etc/passwd": ".mkv",
+		"a.mkv:si=0":            ".mkv",
+		"no extension":          ".mkv",
+		"[Group] Show 01.webm":  ".webm",
+		"Show.01.avi'":          ".mkv",
+	} {
+		if got := sourceExt(in); got != want {
+			t.Errorf("sourceExt(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

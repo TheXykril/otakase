@@ -46,17 +46,17 @@ func TestTorrentLinksDoNotLeakLoopbackStreams(t *testing.T) {
 }
 
 func TestTorrentLinksFromMagnetWithoutLocalServer(t *testing.T) {
- hash := "0123456789abcdef0123456789abcdef01234567"
- result := ProviderEpisodeResult{Links: []string{
-  "magnet:?xt=urn:btih:" + hash,
-  "magnet:?xt=urn:btih:" + hash,
-  "magnet:?xt=urn:btih:not-valid",
- }}
- links := torrentLinks(result)
- if len(links) != 1 || links[0].InfoHash != hash {
-  t.Fatalf("magnet infohashes: %+v", links)
- }
- if len(streamLinks(result)) != 0 {
-  t.Fatal("magnet link must not be passed to the browser relay")
- }
+	hash := "0123456789abcdef0123456789abcdef01234567"
+	result := ProviderEpisodeResult{Links: []string{
+		"magnet:?xt=urn:btih:" + hash,
+		"magnet:?xt=urn:btih:" + hash,
+		"magnet:?xt=urn:btih:not-valid",
+	}}
+	links := torrentLinks(result)
+	if len(links) != 1 || links[0].InfoHash != hash {
+		t.Fatalf("magnet infohashes: %+v", links)
+	}
+	if len(streamLinks(result)) != 0 {
+		t.Fatal("magnet link must not be passed to the browser relay")
+	}
 }

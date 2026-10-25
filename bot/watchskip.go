@@ -92,8 +92,8 @@ func watchSkipTarget(times watchSkipTimes, pos, duration float64, op, ed bool) (
 }
 
 var (
-	watchSkipAPI = "https://api.aniskip.com"
-	watchSkipHTTP = &http.Client{Timeout: 8 * time.Second}
+	watchSkipAPI    = "https://api.aniskip.com"
+	watchSkipHTTP   = &http.Client{Timeout: 8 * time.Second}
 	watchSkipLookup = lookupWatchSkip
 )
 
@@ -142,13 +142,13 @@ func lookupWatchSkip(ctx context.Context, malID, episode int) (watchSkipInterval
 		return watchSkipIntervals{}, nil
 	}
 	var v2 struct {
-		Found bool `json:"found"`
+		Found   bool `json:"found"`
 		Results []struct {
 			Interval struct {
 				Start float64 `json:"startTime"`
-				End float64 `json:"endTime"`
+				End   float64 `json:"endTime"`
 			} `json:"interval"`
-			Kind string `json:"skipType"`
+			Kind   string  `json:"skipType"`
 			Length float64 `json:"episodeLength"`
 		} `json:"results"`
 	}
@@ -156,7 +156,7 @@ func lookupWatchSkip(ctx context.Context, malID, episode int) (watchSkipInterval
 	if err == nil && ok && v2.Found {
 		spans := watchSkipIntervals{}
 		for _, item := range v2.Results {
-			spans.add(item.Kind, watchSkipSpan{Start:item.Interval.Start, End:item.Interval.End, length:item.Length})
+			spans.add(item.Kind, watchSkipSpan{Start: item.Interval.Start, End: item.Interval.End, length: item.Length})
 		}
 		return spans, nil
 	}
@@ -164,18 +164,20 @@ func lookupWatchSkip(ctx context.Context, malID, episode int) (watchSkipInterval
 		return watchSkipIntervals{}, ctx.Err()
 	}
 	var v1 struct {
-		Found bool `json:"found"`
+		Found   bool `json:"found"`
 		Results []struct {
 			Interval struct {
 				Start float64 `json:"start_time"`
-				End float64 `json:"end_time"`
+				End   float64 `json:"end_time"`
 			} `json:"interval"`
 			Kind string `json:"skip_type"`
 		} `json:"results"`
 	}
 	ok, fallbackErr := fetchWatchSkip(ctx, skipRoute("v1", malID, episode), &v1)
 	if fallbackErr != nil {
-		if err != nil { return watchSkipIntervals{}, fmt.Errorf("AniSkip v2: %v, v1: %w", err, fallbackErr) }
+		if err != nil {
+			return watchSkipIntervals{}, fmt.Errorf("AniSkip v2: %v, v1: %w", err, fallbackErr)
+		}
 		return watchSkipIntervals{}, fallbackErr
 	}
 	if !ok || !v1.Found {
@@ -183,13 +185,15 @@ func lookupWatchSkip(ctx context.Context, malID, episode int) (watchSkipInterval
 	}
 	spans := watchSkipIntervals{}
 	for _, item := range v1.Results {
-		spans.add(item.Kind, watchSkipSpan{Start:item.Interval.Start, End:item.Interval.End})
+		spans.add(item.Kind, watchSkipSpan{Start: item.Interval.Start, End: item.Interval.End})
 	}
 	return spans, nil
 }
 
 func (intervals *watchSkipIntervals) add(kind string, span watchSkipSpan) {
-	if !span.valid() { return }
+	if !span.valid() {
+		return
+	}
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case "op", "mixed-op":
 		intervals.OP = append(intervals.OP, span)

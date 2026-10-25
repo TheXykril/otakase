@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	codesMaxMint = 25
+	codesMaxMint    = 25
 	codesMaxTickets = 100
-	codesMaxNote = 100
+	codesMaxNote    = 100
 )
 
 func init() {

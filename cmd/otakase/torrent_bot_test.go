@@ -115,50 +115,58 @@ func TestBotSegmentsIntegration(t *testing.T) {
 		}
 	}
 	dub, err := probeBotMedia(ctx, source, "dub")
- if err != nil || dub.audio != 1 { t.Fatalf("dub track: %+v %v", dub, err) }
- primary, variants, err := probeBotMediaVariants(ctx, source, "sub")
- if err != nil || primary.audio != m.audio {
-  t.Fatalf("multi-audio probe: %+v %v", primary, err)
- }
- if variants["ja"].audio != 2 || variants["en"].audio != 1 || variants["de"].audio != 3 {
-  t.Fatalf("missing or wrong audio languages: %+v", variants)
- }
- s.variants = variants
- for _, language := range []string{"sub", "dub", "ja", "en", "de"} {
-  data, err := s.segment(ctx, 0, language)
-  if err != nil || len(data) == 0 { t.Fatalf("%s variant: %v", language, err) }
- }
- if len(s.cache) < 6 { t.Fatalf("audio renditions were not cached separately: %d", len(s.cache)) }
- for _, route := range []string{"/sub/playlist.m3u8", "/dub/playlist.m3u8", "/de/playlist.m3u8"} {
-  res := httptest.NewRecorder()
-  s.ServeHTTP(res, httptest.NewRequest(http.MethodGet, route, nil))
-  if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), "seg0.ts") {
-   t.Fatalf("%s returned %d %q", route, res.Code, res.Body.String())
-  }
- }
- vtt := botSubtitleVTT(ctx, source, m.subtitle)
- if !strings.Contains(string(vtt), "Late subtitle") { t.Fatalf("subtitle conversion failed: %q", vtt) }
- if _, err := s.segment(ctx, 100, "sub"); err == nil {
+	if err != nil || dub.audio != 1 {
+		t.Fatalf("dub track: %+v %v", dub, err)
+	}
+	primary, variants, err := probeBotMediaVariants(ctx, source, "sub")
+	if err != nil || primary.audio != m.audio {
+		t.Fatalf("multi-audio probe: %+v %v", primary, err)
+	}
+	if variants["ja"].audio != 2 || variants["en"].audio != 1 || variants["de"].audio != 3 {
+		t.Fatalf("missing or wrong audio languages: %+v", variants)
+	}
+	s.variants = variants
+	for _, language := range []string{"sub", "dub", "ja", "en", "de"} {
+		data, err := s.segment(ctx, 0, language)
+		if err != nil || len(data) == 0 {
+			t.Fatalf("%s variant: %v", language, err)
+		}
+	}
+	if len(s.cache) < 6 {
+		t.Fatalf("audio renditions were not cached separately: %d", len(s.cache))
+	}
+	for _, route := range []string{"/sub/playlist.m3u8", "/dub/playlist.m3u8", "/de/playlist.m3u8"} {
+		res := httptest.NewRecorder()
+		s.ServeHTTP(res, httptest.NewRequest(http.MethodGet, route, nil))
+		if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), "seg0.ts") {
+			t.Fatalf("%s returned %d %q", route, res.Code, res.Body.String())
+		}
+	}
+	vtt := botSubtitleVTT(ctx, source, m.subtitle)
+	if !strings.Contains(string(vtt), "Late subtitle") {
+		t.Fatalf("subtitle conversion failed: %q", vtt)
+	}
+	if _, err := s.segment(ctx, 100, "sub"); err == nil {
 		t.Fatal("out-of-range segment accepted")
 	}
- notFound := httptest.NewRecorder()
- s.ServeHTTP(notFound, httptest.NewRequest(http.MethodGet, "/xx/playlist.m3u8", nil))
- if notFound.Code != http.StatusNotFound {
-  t.Fatalf("unsupported language route returned %d", notFound.Code)
- }
+	notFound := httptest.NewRecorder()
+	s.ServeHTTP(notFound, httptest.NewRequest(http.MethodGet, "/xx/playlist.m3u8", nil))
+	if notFound.Code != http.StatusNotFound {
+		t.Fatalf("unsupported language route returned %d", notFound.Code)
+	}
 }
 
 func TestBotAudioLanguageCodes(t *testing.T) {
- for _, tc := range []struct{ raw, expected string }{
-  {"jpn", "ja"}, {"eng", "en"}, {"deu", "de"}, {"spa", "es"},
-  {"fra", "fr"}, {"hin", "hi"}, {"ita", "it"}, {"por", "pt"},
-  {"tam", "ta"}, {"tel", "te"}, {"zh-CN", "zh"},
-  {"und", "track-7"}, {"", "track-7"},
- } {
-  if got := botAudioLanguage(tc.raw, 7); got != tc.expected {
-   t.Errorf("botAudioLanguage(%q) = %q, want %q", tc.raw, got, tc.expected)
-  }
- }
+	for _, tc := range []struct{ raw, expected string }{
+		{"jpn", "ja"}, {"eng", "en"}, {"deu", "de"}, {"spa", "es"},
+		{"fra", "fr"}, {"hin", "hi"}, {"ita", "it"}, {"por", "pt"},
+		{"tam", "ta"}, {"tel", "te"}, {"zh-CN", "zh"},
+		{"und", "track-7"}, {"", "track-7"},
+	} {
+		if got := botAudioLanguage(tc.raw, 7); got != tc.expected {
+			t.Errorf("botAudioLanguage(%q) = %q, want %q", tc.raw, got, tc.expected)
+		}
+	}
 }
 
 func TestBotOutputLimit(t *testing.T) {
