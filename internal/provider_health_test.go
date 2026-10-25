@@ -25,15 +25,15 @@ func withProviderHealthClock(t *testing.T) *time.Time {
 func TestProviderCooldownTripsAfterRepeatedUnreachableFailures(t *testing.T) {
 	withProviderHealthClock(t)
 
-	unreachable := errors.New(`Post "https://anipub.live/anime/filter": EOF`)
+	unreachable := errors.New(`Post "https://anizone.live/anime/filter": EOF`)
 
-	noteProviderFailure("anipub", unreachable)
-	if _, cooling := providerCoolingUntil("anipub"); cooling {
+	noteProviderFailure("anizone", unreachable)
+	if _, cooling := providerCoolingUntil("anizone"); cooling {
 		t.Fatal("one failure should not trip the cooldown")
 	}
 
-	noteProviderFailure("anipub", unreachable)
-	if _, cooling := providerCoolingUntil("anipub"); !cooling {
+	noteProviderFailure("anizone", unreachable)
+	if _, cooling := providerCoolingUntil("anizone"); !cooling {
 		t.Fatalf("expected a cooldown after %d failures", providerFailuresBeforeCooldown)
 	}
 }
@@ -44,9 +44,9 @@ func TestProviderCooldownIgnoresCleanMisses(t *testing.T) {
 	withProviderHealthClock(t)
 
 	for i := 0; i < 5; i++ {
-		noteProviderFailure("anipub", errors.New(`no results for "demo"`))
+		noteProviderFailure("anizone", errors.New(`no results for "demo"`))
 	}
-	if _, cooling := providerCoolingUntil("anipub"); cooling {
+	if _, cooling := providerCoolingUntil("anizone"); cooling {
 		t.Fatal("a clean miss must never trip the cooldown")
 	}
 }
@@ -55,20 +55,20 @@ func TestProviderCooldownExpires(t *testing.T) {
 	now := withProviderHealthClock(t)
 
 	unreachable := errors.New("context deadline exceeded")
-	noteProviderFailure("anipub", unreachable)
-	noteProviderFailure("anipub", unreachable)
-	if _, cooling := providerCoolingUntil("anipub"); !cooling {
+	noteProviderFailure("anizone", unreachable)
+	noteProviderFailure("anizone", unreachable)
+	if _, cooling := providerCoolingUntil("anizone"); !cooling {
 		t.Fatal("expected a cooldown")
 	}
 
 	*now = now.Add(providerCooldown + time.Second)
-	if _, cooling := providerCoolingUntil("anipub"); cooling {
+	if _, cooling := providerCoolingUntil("anizone"); cooling {
 		t.Fatal("expected the cooldown to expire")
 	}
 
 	// The slate is clean, so a single failure must not immediately re-trip it.
-	noteProviderFailure("anipub", unreachable)
-	if _, cooling := providerCoolingUntil("anipub"); cooling {
+	noteProviderFailure("anizone", unreachable)
+	if _, cooling := providerCoolingUntil("anizone"); cooling {
 		t.Fatal("expected a fresh failure count after the cooldown expired")
 	}
 }
@@ -77,11 +77,11 @@ func TestProviderSuccessClearsFailures(t *testing.T) {
 	withProviderHealthClock(t)
 
 	unreachable := errors.New("connection reset by peer")
-	noteProviderFailure("anineko", unreachable)
-	noteProviderSuccess("anineko")
-	noteProviderFailure("anineko", unreachable)
+	noteProviderFailure("kickassanime", unreachable)
+	noteProviderSuccess("kickassanime")
+	noteProviderFailure("kickassanime", unreachable)
 
-	if _, cooling := providerCoolingUntil("anineko"); cooling {
+	if _, cooling := providerCoolingUntil("kickassanime"); cooling {
 		t.Fatal("a success between failures must reset the streak")
 	}
 }
@@ -91,23 +91,23 @@ func TestSearchSkipsCoolingProviderWithoutContactingIt(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 	withProviderHealthClock(t)
 
-	eof := errors.New(`Post "https://anipub.live/anime/filter": EOF`)
+	eof := errors.New(`Post "https://anizone.live/anime/filter": EOF`)
 	// A whole search counts as one failure regardless of its internal retries, so
 	// the cooldown trips after providerFailuresBeforeCooldown failed searches.
 	dead := &stubSearchProvider{
-		name: "anipub",
+		name: "anizone",
 		errs: []error{eof, eof, eof, eof, eof, eof},
 	}
-	stubProvider(t, "anipub", dead)
+	stubProvider(t, "anizone", dead)
 
 	for i := 0; i < providerFailuresBeforeCooldown; i++ {
-		if _, err := searchProviderWithRetry("anipub", "demo", "sub"); err == nil {
+		if _, err := searchProviderWithRetry("anizone", "demo", "sub"); err == nil {
 			t.Fatalf("search %d: expected the dead provider to fail", i+1)
 		}
 	}
 	callsAfterFirst := dead.calls.Load()
 
-	_, err := searchProviderWithRetry("anipub", "demo", "sub")
+	_, err := searchProviderWithRetry("anizone", "demo", "sub")
 	if err == nil {
 		t.Fatal("expected the cooling provider to report an error")
 	}
@@ -123,8 +123,8 @@ func TestSearchSkipsCoolingProviderWithoutContactingIt(t *testing.T) {
 // A cooling provider must not turn into a confusing error for the user.
 func TestCoolingProviderReportsAsUnreachable(t *testing.T) {
 	failure := providerFailure{
-		provider: "anipub",
-		err:      &errProviderCooling{provider: "anipub", until: time.Now().Add(time.Minute)},
+		provider: "anizone",
+		err:      &errProviderCooling{provider: "anizone", until: time.Now().Add(time.Minute)},
 	}
 	if failure.kind() != failureUnreachable {
 		t.Fatalf("expected a cooling provider to report as unreachable, got %v", failure.kind())
@@ -137,16 +137,16 @@ func TestSearchStillUsesHealthyProvidersWhileAnotherCools(t *testing.T) {
 	withProviderHealthClock(t)
 
 	unreachable := errors.New("EOF")
-	noteProviderFailure("anipub", unreachable)
-	noteProviderFailure("anipub", unreachable)
+	noteProviderFailure("anizone", unreachable)
+	noteProviderFailure("anizone", unreachable)
 
-	stubProvider(t, "anipub", &stubSearchProvider{name: "anipub"})
-	stubProvider(t, "anineko", &stubSearchProvider{
-		name:    "anineko",
+	stubProvider(t, "anizone", &stubSearchProvider{name: "anizone"})
+	stubProvider(t, "kickassanime", &stubSearchProvider{
+		name:    "kickassanime",
 		results: []providers.SelectionOption{{Key: "8433", Label: "Rich Girl Caretaker"}},
 	})
 
-	results, err := searchAnimeWithProviders([]string{"anipub", "anineko"}, "demo", "sub")
+	results, err := searchAnimeWithProviders([]string{"anizone", "kickassanime"}, "demo", "sub")
 	if err != nil {
 		t.Fatalf("search failed: %v", err)
 	}

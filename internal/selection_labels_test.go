@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/thexykril/otakase/internal/providers/anipub"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 func TestFormatAnimeSearchLabelAddsKnownCount(t *testing.T) {
@@ -29,11 +29,11 @@ func TestFormatAnimeSearchLabelAddsKnownCount(t *testing.T) {
 func TestSearchResultsTickTheMatchingCount(t *testing.T) {
 	results := []SelectionOption{
 		{Key: "a", Label: "One Piece (1090 episodes) [anikoto]"},
-		{Key: "b", Label: "One Pace (300 episodes) [anineko]"},
+		{Key: "b", Label: "One Pace (300 episodes) [kickassanime]"},
 	}
 	display := ProviderSearchOptionsForDisplay(results, &Entry{Media: Media{Episodes: 1090}})
 
-	want := []string{"One Piece (1090 episodes) [anikoto] ✓", "One Pace (300 episodes) [anineko]"}
+	want := []string{"One Piece (1090 episodes) [anikoto] ✓", "One Pace (300 episodes) [kickassanime]"}
 	for i := range want {
 		if display[i].Label != want[i] {
 			t.Errorf("result %d = %q, want %q", i, display[i].Label, want[i])
@@ -66,9 +66,9 @@ func TestManualProviderSearchIsOffUnlessSet(t *testing.T) {
 // A provider that knows the count but leaves it out of the title still gets
 // it shown, ahead of its tag.
 func TestEpisodeCountFromSearchItemGoesBeforeTheTag(t *testing.T) {
-	item := anipub.SearchItem{Name: "Frieren", Episodes: 28}
-	option := SelectionOption{Key: "session", Label: "Frieren [anipub]", Title: "Frieren", ExtraData: item}
-	if got := ensureEpisodeCountInLabel(option).Label; got != "Frieren (28 episodes) [anipub]" {
+	item := providers.SearchHit{Episodes: 28}
+	option := SelectionOption{Key: "session", Label: "Frieren [anizone]", Title: "Frieren", ExtraData: item}
+	if got := ensureEpisodeCountInLabel(option).Label; got != "Frieren (28 episodes) [anizone]" {
 		t.Errorf("label = %q", got)
 	}
 }

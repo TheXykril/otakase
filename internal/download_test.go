@@ -220,7 +220,7 @@ func TestDownloadEpisodeSkipsExistingFile(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	anime := &Anime{Title: AnimeTitle{English: "Demo Show"}, ProviderName: "anipub", ProviderId: "1"}
+	anime := &Anime{Title: AnimeTitle{English: "Demo Show"}, ProviderName: "kickassanime", ProviderId: "1"}
 	path := DownloadPath(dir, GetAnimeName(*anime), 1, "sub", DownloadFormatMKV)
 	if err := os.WriteFile(path, []byte("already downloaded"), 0644); err != nil {
 		t.Fatal(err)
@@ -248,7 +248,7 @@ func TestDownloadEpisodeSkipsExistingFileInOtherFormat(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	anime := &Anime{Title: AnimeTitle{English: "Demo Show"}, ProviderName: "anipub", ProviderId: "1"}
+	anime := &Anime{Title: AnimeTitle{English: "Demo Show"}, ProviderName: "kickassanime", ProviderId: "1"}
 	path := DownloadPath(dir, GetAnimeName(*anime), 2, "sub", DownloadFormatMP4)
 	if err := os.WriteFile(path, []byte("already downloaded"), 0644); err != nil {
 		t.Fatal(err)
@@ -371,8 +371,8 @@ func TestDownloadInfoRoundTrip(t *testing.T) {
 	t.Cleanup(func() { downloadSkipTimes = previous })
 
 	video := filepath.Join(t.TempDir(), "Demo Show - Episode 03 (sub).mkv")
-	anime := &Anime{Title: AnimeTitle{English: "Demo Show"}, AnilistId: 21, MalId: 20, TotalEpisodes: 12, ProviderName: "anipub", ProviderId: "77"}
-	writeDownloadInfo(Config{}, anime, 3, "sub", "anipub", video)
+	anime := &Anime{Title: AnimeTitle{English: "Demo Show"}, AnilistId: 21, MalId: 20, TotalEpisodes: 12, ProviderName: "kickassanime", ProviderId: "77"}
+	writeDownloadInfo(Config{}, anime, 3, "sub", "kickassanime", video)
 
 	if DownloadInfoPath(video) != strings.TrimSuffix(video, ".mkv")+".otakase.json" {
 		t.Fatalf("unexpected info path %q", DownloadInfoPath(video))
@@ -384,7 +384,7 @@ func TestDownloadInfoRoundTrip(t *testing.T) {
 	if info.AnilistID != 21 || info.MalID != 20 || info.Episode != 3 || info.Mode != "sub" || info.TotalEpisodes != 12 {
 		t.Fatalf("unexpected info %+v", info)
 	}
-	if info.Provider != "anipub" || info.ProviderID != "77" || info.File != filepath.Base(video) {
+	if info.Provider != "kickassanime" || info.ProviderID != "77" || info.File != filepath.Base(video) {
 		t.Fatalf("unexpected source %+v", info)
 	}
 	if info.SkipTimes.Op.End != 180 || info.SkipTimes.Ed.Start != 1300 {

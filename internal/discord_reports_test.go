@@ -90,7 +90,7 @@ func TestNoteProviderResultOnlyWhenLinked(t *testing.T) {
 	noteProviderResult("AniZone", "search", errors.New(`Get "https://x.example/s": connection refused`))
 	noteProviderResult("anizone", "episode", errors.New("connection reset"))  // a second failure: not again
 	noteProviderResult("anikoto", "search", errors.New(`no results for "x"`)) // answered: it works
-	noteProviderResult("anipub", "search", &errProviderCooling{provider: "anipub"})
+	noteProviderResult("kickassanime", "search", &errProviderCooling{provider: "kickassanime"})
 	var got []providerReportBody
 	for len(got) < 2 {
 		select {
@@ -282,8 +282,8 @@ func TestAskServerOption(t *testing.T) {
 	if got := withAskServerOption(config, options, " FRIEREN "); len(got) != 2 {
 		t.Fatal("offered twice for one show")
 	}
-	title, desc := askServerText("Frieren", 154587, "Tried: anikoto, anipub")
-	if title != "Where to watch Frieren?" || !strings.Contains(desc, "https://anilist.co/anime/154587") || !strings.Contains(desc, "Tried: anikoto, anipub") {
+	title, desc := askServerText("Frieren", 154587, "Tried: anikoto, kickassanime")
+	if title != "Where to watch Frieren?" || !strings.Contains(desc, "https://anilist.co/anime/154587") || !strings.Contains(desc, "Tried: anikoto, kickassanime") {
 		t.Fatalf("text: %q %q", title, desc)
 	}
 }

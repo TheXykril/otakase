@@ -26,7 +26,7 @@ func TestDownloadEpisodeLive(t *testing.T) {
 
 	anime := &Anime{
 		Title:        AnimeTitle{English: "One Piece", Romaji: "One Piece"},
-		ProviderName: "anipub",
+		ProviderName: "anizone",
 		ProviderId:   "10",
 	}
 

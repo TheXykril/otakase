@@ -11,7 +11,7 @@ import (
 const mixedHistory = "1,abc,3,100,5\n" +
 	"2,def,4,200,Old Name\n" +
 	"3,ghi,5,300,1400,Six Col\n" +
-	"4,anineko::jkl,6,400,1420,anineko,\"Name, with \"\"quotes\"\"\"\n"
+	"4,kickassanime::jkl,6,400,1420,kickassanime,\"Name, with \"\"quotes\"\"\"\n"
 
 // writeHistoryFixture puts contents in a history file of its own and makes
 // GetAnimeName independent of whatever config another test left behind.
@@ -49,9 +49,9 @@ func TestParseAnimeRowLayouts(t *testing.T) {
 		{"five columns with a duration", []string{"123", "p", "4", "55", "24"}, 24, "123", "allanime"},
 		{"five columns, padded number is a name", []string{"123", "p", "4", "55", " 24"}, 0, " 24", "allanime"},
 		{"six columns", []string{"123", "p", "4", "55", " 24 ", "Six"}, 24, "Six", "allanime"},
-		{"seven columns", []string{"123", "p", "4", "55", "24", "anineko", "Current"}, 24, "Current", "anineko"},
-		{"unreadable duration", []string{"123", "p", "4", "55", "n/a", "anineko", "Current"}, 0, "Current", "anineko"},
-		{"padded required numbers", []string{" 123", "p", "4 ", " 55 ", "24", "anineko", "Current"}, 24, "Current", "anineko"},
+		{"seven columns", []string{"123", "p", "4", "55", "24", "kickassanime", "Current"}, 24, "Current", "kickassanime"},
+		{"unreadable duration", []string{"123", "p", "4", "55", "n/a", "kickassanime", "Current"}, 0, "Current", "kickassanime"},
+		{"padded required numbers", []string{" 123", "p", "4 ", " 55 ", "24", "kickassanime", "Current"}, 24, "Current", "kickassanime"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -116,7 +116,7 @@ func TestHistoryReadsEveryOldRowLayout(t *testing.T) {
 	if rows[2].Ep.Duration != 1400 || GetAnimeName(rows[2]) != "Six Col" {
 		t.Errorf("six-column row misread: %+v", rows[2])
 	}
-	if rows[3].ProviderId != "anineko::jkl" || GetAnimeName(rows[3]) != `Name, with "quotes"` {
+	if rows[3].ProviderId != "kickassanime::jkl" || GetAnimeName(rows[3]) != `Name, with "quotes"` {
 		t.Errorf("seven-column row misread: %+v", rows[3])
 	}
 }
@@ -133,7 +133,7 @@ func TestHistoryRoundTripsThroughAnUpdate(t *testing.T) {
 	want := "1,abc,3,100,5,allanime,1\n" +
 		"2,def,4,200,0,allanime,Old Name\n" +
 		"3,ghi,6,10,1400,anizone,Six Col\n" +
-		"4,jkl,6,400,1420,anineko,\"Name, with \"\"quotes\"\"\"\n"
+		"4,jkl,6,400,1420,kickassanime,\"Name, with \"\"quotes\"\"\"\n"
 	if got := readHistoryFile(t, path); got != want {
 		t.Fatalf("history after update:\n%s\nwant:\n%s", got, want)
 	}
@@ -152,10 +152,10 @@ func TestHistoryRoundTripsThroughAnUpdate(t *testing.T) {
 }
 
 func TestLocalUpdateAnimeMatchesOnProviderID(t *testing.T) {
-	path := writeHistoryFixture(t, "4,jkl,6,400,1420,anineko,Show\n")
+	path := writeHistoryFixture(t, "4,jkl,6,400,1420,kickassanime,Show\n")
 
 	// A qualified id names the same row as the bare one on file.
-	if err := LocalUpdateAnime(path, 4, "anineko::jkl", 7, 5, 1420, "Show", "anineko"); err != nil {
+	if err := LocalUpdateAnime(path, 4, "kickassanime::jkl", 7, 5, 1420, "Show", "kickassanime"); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 	// Same show, another provider: a row of its own.
@@ -163,7 +163,7 @@ func TestLocalUpdateAnimeMatchesOnProviderID(t *testing.T) {
 		t.Fatalf("add: %v", err)
 	}
 
-	want := "4,jkl,7,5,1420,anineko,Show\n" +
+	want := "4,jkl,7,5,1420,kickassanime,Show\n" +
 		"4,xyz,2,0,0,anizone,4\n"
 	if got := readHistoryFile(t, path); got != want {
 		t.Fatalf("history:\n%s\nwant:\n%s", got, want)
@@ -251,18 +251,18 @@ func TestLocalRemapAnimeProviderMovesEveryRowOfTheShow(t *testing.T) {
 		"7,other,1,10,1400,anizone,Seven\n"+
 		"8,eight,1,1,1,anikoto,Eight\n")
 
-	if err := LocalRemapAnimeProvider(path, 7, "anineko", "anineko::new", "", 3, 50, 1410); err != nil {
+	if err := LocalRemapAnimeProvider(path, 7, "kickassanime", "kickassanime::new", "", 3, 50, 1410); err != nil {
 		t.Fatalf("remap: %v", err)
 	}
-	if err := LocalRemapAnimeProvider(path, 9, "anineko", "nine", "Nine", 1, 0, 0); err != nil {
+	if err := LocalRemapAnimeProvider(path, 9, "kickassanime", "nine", "Nine", 1, 0, 0); err != nil {
 		t.Fatalf("remap of a show with no history: %v", err)
 	}
 
-	want := "7,new,3,50,1410,anineko,Seven\n" +
-		"7,new,3,50,1410,anineko,Seven\n" +
+	want := "7,new,3,50,1410,kickassanime,Seven\n" +
+		"7,new,3,50,1410,kickassanime,Seven\n" +
 		"7,other,1,10,1400,anizone,Seven\n" +
 		"8,eight,1,1,1,anikoto,Eight\n" +
-		"9,nine,1,0,0,anineko,Nine\n"
+		"9,nine,1,0,0,kickassanime,Nine\n"
 	if got := readHistoryFile(t, path); got != want {
 		t.Fatalf("history after remap:\n%s\nwant:\n%s", got, want)
 	}

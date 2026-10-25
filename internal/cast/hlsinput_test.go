@@ -40,7 +40,7 @@ func TestInputArgsLeaveWholeFilesAlone(t *testing.T) {
 	}
 	for _, stream := range []string{
 		"https://cdn.example/master.m3u8?token=abc",
-		"http://127.0.0.1:40000/stream/abc/master.m3u8", // anineko's local proxy
+		"http://127.0.0.1:40000/stream/abc/master.m3u8", // kickassanime's local proxy
 		"https://cdn.example/playlist",
 	} {
 		if got := InputArgs(stream); len(got) == 0 {

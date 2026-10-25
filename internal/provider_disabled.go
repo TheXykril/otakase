@@ -73,28 +73,24 @@ func filterEnabledProviders(candidates []string) []string {
 }
 
 // preferredProviderOrder ranks providers by how reliably they currently resolve
-// streams. anipub and anineko are the two that verifiably work end to end; the
-// rest are kept registered so an explicit config can still select them.
-// anikoto leads because its identifiers are AniList media ids, which is what the
-// tracker already knows every entry by. Every other provider has to work out
-// which of its shows is the one on the user's list, and getting that wrong is
-// the failure this project has spent most of its history repairing. anikoto
-// also answers with a plain HLS manifest, a subtitle track, the HTTP headers its
-// CDN requires, and per-episode intro and outro ranges, in two requests.
+// streams.
+//
+// anikoto leads: it carries sub and dub for nearly everything, answers with a
+// plain HLS manifest, English captions and per-episode intro and outro ranges,
+// and its servers fall back to one another.
 //
 // kickassanime follows: it answers as cheaply, carries whole seasons rather than
 // only what is recent, and like anikoto indexes dubs separately, so a dub
 // request either gets a dub or a straight answer that there is none.
 //
 // nyaa sits behind the streaming hosts because it costs more to start -- peers
-// have to be found before the first frame -- but ahead of the broken ones,
-// because it reliably carries an episode in the week it airs even when every
-// streaming host is still missing it.
+// have to be found before the first frame -- but it reliably carries an episode
+// in the week it airs even when every streaming host is still missing it.
 //
-// sukebei comes last of the working ones: it carries only adult titles, which
-// none of the others do, so it is the one left to try for those, and is only
-// in the stack at all when AdultContent is on.
-var preferredProviderOrder = []string{"anikoto", "kickassanime", "anizone", "anipub", "anineko", "nyaa", "sukebei", "anidb"}
+// sukebei comes last: it carries only adult titles, which none of the others
+// do, so it is the one left to try for those, and is only in the stack at all
+// when AdultContent is on.
+var preferredProviderOrder = []string{"anikoto", "kickassanime", "anizone", "nyaa", "sukebei"}
 
 // defaultEnabledProviderStack is the "stacked" setting spelled out: the
 // enabled providers in preferredProviderOrder, then any others registered, in

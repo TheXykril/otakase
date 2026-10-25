@@ -840,8 +840,7 @@ function wUpdateOrigin() {
     return;
   }
   const names = { anikoto: "Anikoto", kickassanime: "KickAssAnime",
-    anizone: "AniZone", anipub: "AniPub", anineko: "AniNeko",
-    nyaa: "Nyaa", sukebei: "Sukebei", anidb: "AniDB" };
+    anizone: "AniZone", nyaa: "Nyaa", sukebei: "Sukebei" };
   const provider = names[String(origin.provider || "").toLowerCase()]
     || origin.provider || "Unknown";
   indicator.hidden = false;

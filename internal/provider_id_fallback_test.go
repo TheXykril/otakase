@@ -37,15 +37,15 @@ func (p *narrowTitleProvider) GetEpisodeURL(config Config, id string, epNo int) 
 }
 
 // Resolving a provider for playback searched the full AniList title once and
-// gave up. anineko carries "Rich Girl Caretaker: I'm Secretly the Caregiver of
+// gave up. kickassanime carries "Rich Girl Caretaker: I'm Secretly the Caregiver of
 // the Most Popular Girl in This Rich Kid School" only as "Rich Girl Caretaker",
 // so episode 10 was reported missing on the one host that actually had it,
-// while anipub -- which matched the long title but stops at episode 5 -- was the
+// while anizone -- which matched the long title but stops at episode 5 -- was the
 // only host consulted. The same title variants the initial search already uses
 // are now tried here too.
 func TestFindProviderIDFallsBackToTitleVariants(t *testing.T) {
 	provider := &narrowTitleProvider{
-		name:    "anineko",
+		name:    "kickassanime",
 		answers: map[string]string{"Rich Girl Caretaker": "rich-girl-caretaker"},
 	}
 	anime := &Anime{
@@ -75,7 +75,7 @@ func TestFindProviderIDFallsBackToTitleVariants(t *testing.T) {
 // simplified forms, which are likelier to match the wrong show.
 func TestFindProviderIDStopsAtTheFirstMatch(t *testing.T) {
 	provider := &narrowTitleProvider{
-		name:    "anipub",
+		name:    "anizone",
 		answers: map[string]string{"Rich Girl Caretaker: I'm Secretly the Caregiver": "8433"},
 	}
 	anime := &Anime{Title: AnimeTitle{English: "Rich Girl Caretaker: I'm Secretly the Caregiver"}}
@@ -94,7 +94,7 @@ func TestFindProviderIDStopsAtTheFirstMatch(t *testing.T) {
 
 // When nothing matches, the error must still name the title the user knows.
 func TestFindProviderIDReportsThePrimaryTitle(t *testing.T) {
-	provider := &narrowTitleProvider{name: "anineko", answers: map[string]string{}}
+	provider := &narrowTitleProvider{name: "kickassanime", answers: map[string]string{}}
 	anime := &Anime{Title: AnimeTitle{English: "Some Show That Is Not Carried"}}
 
 	_, err := findProviderIDForAnime(provider, &Config{AnimeNameLanguage: "english"}, anime, "sub")
@@ -108,10 +108,10 @@ func TestFindProviderIDReportsThePrimaryTitle(t *testing.T) {
 
 // A provider already mapped to this anime keeps its id without searching.
 func TestFindProviderIDUsesTheExistingMapping(t *testing.T) {
-	provider := &narrowTitleProvider{name: "anipub", answers: map[string]string{}}
+	provider := &narrowTitleProvider{name: "anizone", answers: map[string]string{}}
 	anime := &Anime{
 		Title:        AnimeTitle{English: "Anything"},
-		ProviderName: "anipub",
+		ProviderName: "anizone",
 		ProviderId:   "8433",
 	}
 
@@ -128,7 +128,7 @@ func TestFindProviderIDUsesTheExistingMapping(t *testing.T) {
 }
 
 // staleMappingProvider serves episodes only for its own real id, and rejects
-// anything else the way anipub rejects a slug from another host.
+// anything else the way anizone rejects a slug from another host.
 type staleMappingProvider struct {
 	name     string
 	realID   string
@@ -158,26 +158,26 @@ func (p *staleMappingProvider) GetEpisodeURL(config providers.PlaybackConfig, id
 }
 
 // otakase used to file the id of whichever provider served an episode under the
-// name of the first configured one, so an anineko slug was stored as an anipub
-// id and handed back to anipub forever after. Those histories already exist, so
+// name of the first configured one, so an kickassanime slug was stored as an anizone
+// id and handed back to anizone forever after. Those histories already exist, so
 // a stored id that does not work is re-derived rather than believed.
 func TestStaleStoredMappingIsRederived(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
 	const title = "Rich Girl Caretaker"
-	provider := &staleMappingProvider{name: "anipub", realID: "8433", title: title}
-	restore := providers.SetFactoryForTest("anipub", func() providers.Provider { return provider })
+	provider := &staleMappingProvider{name: "anizone", realID: "8433", title: title}
+	restore := providers.SetFactoryForTest("anizone", func() providers.Provider { return provider })
 	t.Cleanup(restore)
 
 	anime := &Anime{
 		Title: AnimeTitle{English: title},
-		// The corrupted pairing: another host's slug filed under anipub.
-		ProviderName: "anipub",
+		// The corrupted pairing: another host's slug filed under anizone.
+		ProviderName: "anizone",
 		ProviderId:   "rich-girl-caretaker-im-secretly-the-caregiver",
 	}
 	config := Config{AnimeNameLanguage: "english", SubOrDub: "sub"}
 
-	result, err := episodeModeResultWithProviders(config, anime, 1, "sub", []string{"anipub"})
+	result, err := episodeModeResultWithProviders(config, anime, 1, "sub", []string{"anizone"})
 	if err != nil {
 		t.Fatalf("expected the stale mapping to be re-derived, got %v", err)
 	}
@@ -196,17 +196,17 @@ func TestStaleStoredMappingIsRederived(t *testing.T) {
 func TestGoodStoredMappingIsNotResearched(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	provider := &staleMappingProvider{name: "anipub", realID: "8433", title: "Rich Girl Caretaker"}
-	restore := providers.SetFactoryForTest("anipub", func() providers.Provider { return provider })
+	provider := &staleMappingProvider{name: "anizone", realID: "8433", title: "Rich Girl Caretaker"}
+	restore := providers.SetFactoryForTest("anizone", func() providers.Provider { return provider })
 	t.Cleanup(restore)
 
 	anime := &Anime{
 		Title:        AnimeTitle{English: "Rich Girl Caretaker"},
-		ProviderName: "anipub",
+		ProviderName: "anizone",
 		ProviderId:   "8433",
 	}
 
-	if _, err := episodeModeResultWithProviders(Config{AnimeNameLanguage: "english"}, anime, 1, "sub", []string{"anipub"}); err != nil {
+	if _, err := episodeModeResultWithProviders(Config{AnimeNameLanguage: "english"}, anime, 1, "sub", []string{"anizone"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if provider.searched != 0 {

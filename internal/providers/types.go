@@ -8,8 +8,16 @@ type SelectionOption struct {
 	Title      string
 	Thumbnail  string
 	// ExtraData is anything else the search returned that can tie the result
-	// to a tracker entry, such as a MAL id. Its type is the provider's own.
+	// to a tracker entry. A provider that knows a result's MAL id or episode
+	// count attaches a SearchHit.
 	ExtraData any
+}
+
+// SearchHit is the ExtraData a provider attaches when its search result
+// carries a MAL id or an episode count. Zero means unknown.
+type SearchHit struct {
+	MalID    int
+	Episodes int
 }
 
 // PlaybackConfig is the part of the user's settings a provider reads.

@@ -28,7 +28,7 @@ func TestFailedPlaylistSwitchRestoresWatchProgress(t *testing.T) {
 
 	// A provider stack that carries nothing: every switch attempt fails.
 	withAllProvidersEnabledForTest(t)
-	config := Config{Provider: `["anipub"]`, SubOrDub: "dub", PercentageToMarkComplete: 85}
+	config := Config{Provider: `["anizone"]`, SubOrDub: "dub", PercentageToMarkComplete: 85}
 	pc := &PlaylistController{
 		config:    &config,
 		anime:     anime,

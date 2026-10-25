@@ -18,8 +18,8 @@ var liveBenchCases = []struct {
 	provider string
 	showID   string
 }{
-	{provider: "anipub", showID: "2454"},
-	{provider: "anineko"},
+	{provider: "anizone", showID: "2454"},
+	{provider: "kickassanime"},
 }
 
 // benchCasesWithShow are the cases that can time the steps after search.

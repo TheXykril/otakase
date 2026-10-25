@@ -190,10 +190,10 @@ func writeCastSessionFile(config *Config, session castSessionFile) (string, erro
 }
 
 // isProcessLocalLink reports a link only this process can serve. A torrent is
-// streamed from a server inside otakase, and anineko's streams go through a
-// local proxy; both close when this process exits -- which, on a handoff, is
-// straight after spawning the window. Any loopback link is one of those, since
-// no provider hands out a link to the viewer's own machine.
+// streamed from a server inside otakase, which closes when this process exits
+// -- which, on a handoff, is straight after spawning the window. Any loopback
+// link is one of those, since no provider hands out a link to the viewer's own
+// machine.
 func isProcessLocalLink(link string) bool {
 	parsed, err := url.Parse(link)
 	if err != nil {

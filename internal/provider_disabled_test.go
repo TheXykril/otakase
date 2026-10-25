@@ -29,27 +29,11 @@ func withDisabledProvidersForTest(t *testing.T, names ...string) {
 	t.Cleanup(func() { disabledProviderReasonForTest = previous })
 }
 
-// A provider that stops working is disabled before it is removed, so a stack
-// built from the defaults never offers one that cannot play. anidb is the
-// standing example: its host is serving a maintenance page.
-func TestADegradedProviderIsDisabledWithAReason(t *testing.T) {
-	if ProviderEnabled("anidb") != false {
-		t.Fatal("expected anidb to be disabled while anidb.app is under maintenance")
-	}
-	if reason := ProviderDisabledReason("anidb"); reason == "" {
-		t.Fatal("a disabled provider must say why, or the menu cannot explain itself")
-	}
-	for _, working := range []string{"anipub", "anineko"} {
-		if !ProviderEnabled(working) {
-			t.Errorf("%s should stay enabled", working)
-		}
-	}
-}
-
-// allanime, animepahe and senshi were removed in 2.0.0. Nothing should claim
-// they exist -- a name that resolves to no provider must not read as enabled.
+// allanime, animepahe and senshi were removed in 2.0.0, and anidb, anineko and
+// anipub when their hosts shut down. Nothing should claim they exist -- a name
+// that resolves to no provider must not read as enabled.
 func TestRemovedProvidersAreGone(t *testing.T) {
-	for _, name := range []string{"allanime", "animepahe", "senshi"} {
+	for _, name := range []string{"allanime", "animepahe", "senshi", "anidb", "anineko", "anipub"} {
 		if ProviderEnabled(name) {
 			t.Errorf("%s was removed but still reports as enabled", name)
 		}
@@ -66,7 +50,7 @@ func TestConfiguredStackLeavesOutDisabledProviders(t *testing.T) {
 	// stack. Which provider that is changes as the stack is reordered, and
 	// that reordering should not fail a test about fallback.
 	stackHead := defaultEnabledProviderStack()[0]
-	enabledStack := []string{"anikoto", "kickassanime", "anizone", "anipub", "anineko", "nyaa"}
+	enabledStack := []string{"anikoto", "kickassanime", "anizone", "nyaa"}
 
 	for _, tc := range []struct {
 		name string // what the config holds
@@ -89,23 +73,24 @@ func TestConfiguredStackLeavesOutDisabledProviders(t *testing.T) {
 func TestConfiguredStackKeepsProvidersOnceEnabled(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	got := ConfiguredProviderNames(&Config{Provider: `["anidb","nyaa"]`})
-	if want := []string{"anidb", "nyaa"}; !slices.Equal(got, want) {
+	got := ConfiguredProviderNames(&Config{Provider: `["sukebei","nyaa"]`})
+	if want := []string{"sukebei", "nyaa"}; !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
 
 func TestProviderByNameFollowsTheDisabledList(t *testing.T) {
-	if _, err := ProviderByName("anidb"); err == nil {
-		t.Fatal("a disabled anidb was handed out")
+	withGlobalConfig(t, &Config{})
+	if _, err := ProviderByName("sukebei"); err == nil {
+		t.Fatal("a disabled sukebei was handed out")
 	}
 
 	withAllProvidersEnabledForTest(t)
-	p, err := ProviderByName("AniDB")
+	p, err := ProviderByName("Sukebei")
 	if err != nil {
-		t.Fatalf("anidb once enabled: %v", err)
+		t.Fatalf("sukebei once enabled: %v", err)
 	}
-	if p.Name() != "anidb" {
+	if p.Name() != "sukebei" {
 		t.Fatalf("got provider %q", p.Name())
 	}
 	if _, err := ProviderByName("nonsense"); err == nil {
@@ -125,25 +110,25 @@ func TestAdultOnlyProvidersNeedAdultContent(t *testing.T) {
 }
 
 func TestConfigDisabledProvidersAreDisabled(t *testing.T) {
-	withGlobalConfig(t, &Config{DisabledProviders: "anipub, Kick-Ass Anime"})
+	withGlobalConfig(t, &Config{DisabledProviders: "anizone, Kick-Ass Anime"})
 
-	for _, name := range []string{"anipub", "kickassanime"} {
+	for _, name := range []string{"anizone", "kickassanime"} {
 		if ProviderEnabled(name) {
 			t.Errorf("%s is listed in DisabledProviders but reads as enabled", name)
 		} else if ProviderDisabledReason(name) == "" {
 			t.Errorf("%s has no reason", name)
 		}
 	}
-	if !ProviderEnabled("anineko") {
-		t.Error("anineko is not listed but reads as disabled")
+	if !ProviderEnabled("anikoto") {
+		t.Error("anikoto is not listed but reads as disabled")
 	}
 }
 
 func TestDefaultStackFollowsThePreferredOrderAndSkipsDisabled(t *testing.T) {
-	withDisabledProvidersForTest(t, "anikoto", "anidb")
+	withDisabledProvidersForTest(t, "anikoto", "nyaa")
 
 	got := defaultEnabledProviderStack()
-	want := []string{"kickassanime", "anizone", "anipub", "anineko", "nyaa", "sukebei"}
+	want := []string{"kickassanime", "anizone", "sukebei"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -153,12 +138,12 @@ func TestDefaultStackFollowsThePreferredOrderAndSkipsDisabled(t *testing.T) {
 }
 
 func TestEnsureEnabledProviderNamesFallsBackToOneProvider(t *testing.T) {
-	withDisabledProvidersForTest(t, "anikoto", "anidb")
+	withDisabledProvidersForTest(t, "anikoto", "nyaa")
 
-	if got := ensureEnabledProviderNames([]string{"anidb", "anipub", "anipub"}); !slices.Equal(got, []string{"anipub"}) {
+	if got := ensureEnabledProviderNames([]string{"nyaa", "anizone", "anizone"}); !slices.Equal(got, []string{"anizone"}) {
 		t.Errorf("enabled names: got %v", got)
 	}
-	if got := ensureEnabledProviderNames([]string{"anidb", "nonsense"}); !slices.Equal(got, []string{"kickassanime"}) {
+	if got := ensureEnabledProviderNames([]string{"nyaa", "nonsense"}); !slices.Equal(got, []string{"kickassanime"}) {
 		t.Errorf("nothing enabled: got %v, want the head of the stack", got)
 	}
 

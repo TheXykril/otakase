@@ -28,7 +28,7 @@ func TestIsRetryableProviderError(t *testing.T) {
 		netErr,
 		io.EOF,
 		io.ErrUnexpectedEOF,
-		errors.New(`Post "https://anipub.live/anime/filter": EOF`),
+		errors.New(`Post "https://anizone.live/anime/filter": EOF`),
 		errors.New("context deadline exceeded (Client.Timeout exceeded while awaiting headers)"),
 		fmt.Errorf("wrapped: %w", io.ErrUnexpectedEOF),
 		errors.New("read: connection reset by peer"),
@@ -45,7 +45,7 @@ func TestIsRetryableProviderError(t *testing.T) {
 		nil,
 		errors.New(`no results for "some show"`),
 		errors.New("provider request failed with status 404"),
-		errors.New("anipub: could not decode search response"),
+		errors.New("anizone: could not decode search response"),
 	}
 	for _, err := range notRetryable {
 		if isRetryableProviderError(err) {
@@ -92,15 +92,15 @@ func TestSearchProviderWithRetryRetriesTransientFailures(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
 	stub := &stubSearchProvider{
-		name: "anipub",
+		name: "anizone",
 		errs: []error{errors.New("context deadline exceeded")},
 		results: []providers.SelectionOption{
 			{Key: "1", Label: "Recovered Show"},
 		},
 	}
-	stubProvider(t, "anipub", stub)
+	stubProvider(t, "anizone", stub)
 
-	options, err := searchProviderWithRetry("anipub", "demo", "sub")
+	options, err := searchProviderWithRetry("anizone", "demo", "sub")
 	if err != nil {
 		t.Fatalf("expected retry to succeed, got %v", err)
 	}
@@ -116,12 +116,12 @@ func TestSearchProviderWithRetryDoesNotRetryDefinitiveMiss(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
 	stub := &stubSearchProvider{
-		name: "anipub",
+		name: "anizone",
 		errs: []error{errors.New(`no results for "demo"`), nil},
 	}
-	stubProvider(t, "anipub", stub)
+	stubProvider(t, "anizone", stub)
 
-	if _, err := searchProviderWithRetry("anipub", "demo", "sub"); err == nil {
+	if _, err := searchProviderWithRetry("anizone", "demo", "sub"); err == nil {
 		t.Fatal("expected the miss to be reported")
 	}
 	if got := stub.calls.Load(); got != 1 {
@@ -136,13 +136,13 @@ func TestSearchAnimeWithProvidersRunsConcurrently(t *testing.T) {
 
 	const stall = 300 * time.Millisecond
 
-	slow := &stubSearchProvider{name: "anineko", delay: stall, results: []providers.SelectionOption{{Key: "slow", Label: "Slow"}}}
-	alsoSlow := &stubSearchProvider{name: "anipub", delay: stall, results: []providers.SelectionOption{{Key: "fast", Label: "Fast"}}}
-	stubProvider(t, "anineko", slow)
-	stubProvider(t, "anipub", alsoSlow)
+	slow := &stubSearchProvider{name: "kickassanime", delay: stall, results: []providers.SelectionOption{{Key: "slow", Label: "Slow"}}}
+	alsoSlow := &stubSearchProvider{name: "anizone", delay: stall, results: []providers.SelectionOption{{Key: "fast", Label: "Fast"}}}
+	stubProvider(t, "kickassanime", slow)
+	stubProvider(t, "anizone", alsoSlow)
 
 	start := time.Now()
-	results, err := searchAnimeWithProviders([]string{"anipub", "anineko"}, "demo", "sub")
+	results, err := searchAnimeWithProviders([]string{"anizone", "kickassanime"}, "demo", "sub")
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -162,20 +162,20 @@ func TestSearchAnimeWithProvidersRunsConcurrently(t *testing.T) {
 func TestSearchAnimeWithProvidersPreservesStackOrder(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	fast := &stubSearchProvider{name: "anineko", results: []providers.SelectionOption{{Key: "n1", Label: "From anineko"}}}
-	slow := &stubSearchProvider{name: "anipub", delay: 150 * time.Millisecond, results: []providers.SelectionOption{{Key: "p1", Label: "From anipub"}}}
-	stubProvider(t, "anineko", fast)
-	stubProvider(t, "anipub", slow)
+	fast := &stubSearchProvider{name: "kickassanime", results: []providers.SelectionOption{{Key: "n1", Label: "From kickassanime"}}}
+	slow := &stubSearchProvider{name: "anizone", delay: 150 * time.Millisecond, results: []providers.SelectionOption{{Key: "p1", Label: "From anizone"}}}
+	stubProvider(t, "kickassanime", fast)
+	stubProvider(t, "anizone", slow)
 
-	results, err := searchAnimeWithProviders([]string{"anipub", "anineko"}, "demo", "sub")
+	results, err := searchAnimeWithProviders([]string{"anizone", "kickassanime"}, "demo", "sub")
 	if err != nil {
 		t.Fatalf("search failed: %v", err)
 	}
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %v", results)
 	}
-	if !strings.HasPrefix(results[0].Key, "anipub"+providerIDSeparator) {
-		t.Fatalf("expected the anipub result first despite it being slower, got %q", results[0].Key)
+	if !strings.HasPrefix(results[0].Key, "anizone"+providerIDSeparator) {
+		t.Fatalf("expected the anizone result first despite it being slower, got %q", results[0].Key)
 	}
 }
 
@@ -184,17 +184,17 @@ func TestSearchAnimeWithProvidersSurvivesDeadProvider(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
 	dead := &stubSearchProvider{
-		name: "anipub",
+		name: "anizone",
 		errs: []error{
-			errors.New(`Post "https://anipub.live/anime/filter": EOF`),
-			errors.New(`Post "https://anipub.live/anime/filter": EOF`),
+			errors.New(`Post "https://anizone.live/anime/filter": EOF`),
+			errors.New(`Post "https://anizone.live/anime/filter": EOF`),
 		},
 	}
-	alive := &stubSearchProvider{name: "anipub", results: []providers.SelectionOption{{Key: "8433", Label: "Rich Girl Caretaker"}}}
-	stubProvider(t, "anipub", dead)
-	stubProvider(t, "anipub", alive)
+	alive := &stubSearchProvider{name: "anizone", results: []providers.SelectionOption{{Key: "8433", Label: "Rich Girl Caretaker"}}}
+	stubProvider(t, "anizone", dead)
+	stubProvider(t, "anizone", alive)
 
-	results, err := searchAnimeWithProviders([]string{"anipub", "anipub"}, "demo", "sub")
+	results, err := searchAnimeWithProviders([]string{"anizone", "anizone"}, "demo", "sub")
 	if err != nil {
 		t.Fatalf("expected the healthy provider to carry the search, got %v", err)
 	}
@@ -206,14 +206,14 @@ func TestSearchAnimeWithProvidersSurvivesDeadProvider(t *testing.T) {
 func TestSearchAnimeWithProvidersReportsWhenAllFail(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	stubProvider(t, "anipub", &stubSearchProvider{name: "anipub", errs: []error{errors.New("EOF"), errors.New("EOF")}})
-	stubProvider(t, "anineko", &stubSearchProvider{name: "anineko", errs: []error{errors.New(`no results for "demo"`)}})
+	stubProvider(t, "anizone", &stubSearchProvider{name: "anizone", errs: []error{errors.New("EOF"), errors.New("EOF")}})
+	stubProvider(t, "kickassanime", &stubSearchProvider{name: "kickassanime", errs: []error{errors.New(`no results for "demo"`)}})
 
-	_, err := searchAnimeWithProviders([]string{"anipub", "anineko"}, "demo", "sub")
+	_, err := searchAnimeWithProviders([]string{"anizone", "kickassanime"}, "demo", "sub")
 	if err == nil {
 		t.Fatal("expected an error when every provider fails")
 	}
-	for _, want := range []string{"anipub", "anineko"} {
+	for _, want := range []string{"anizone", "kickassanime"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("expected %q named in %v", want, err)
 		}
@@ -224,15 +224,15 @@ func TestSearchAnimeWithProvidersReportsWhenAllFail(t *testing.T) {
 func TestSearchAnimeWithProvidersIsRaceFree(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	stubProvider(t, "anipub", &stubSearchProvider{name: "anipub", results: []providers.SelectionOption{{Key: "a", Label: "A"}}})
-	stubProvider(t, "anineko", &stubSearchProvider{name: "anineko", results: []providers.SelectionOption{{Key: "b", Label: "B"}}})
+	stubProvider(t, "anizone", &stubSearchProvider{name: "anizone", results: []providers.SelectionOption{{Key: "a", Label: "A"}}})
+	stubProvider(t, "kickassanime", &stubSearchProvider{name: "kickassanime", results: []providers.SelectionOption{{Key: "b", Label: "B"}}})
 
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := searchAnimeWithProviders([]string{"anipub", "anineko"}, "demo", "sub"); err != nil {
+			if _, err := searchAnimeWithProviders([]string{"anizone", "kickassanime"}, "demo", "sub"); err != nil {
 				t.Errorf("search failed: %v", err)
 			}
 		}()
@@ -240,25 +240,25 @@ func TestSearchAnimeWithProvidersIsRaceFree(t *testing.T) {
 	wg.Wait()
 }
 
-// Anineko spends ~17s on its browser challenge. Before the grace window, a
+// Kickassanime spends ~17s on its browser challenge. Before the grace window, a
 // stacked search waited on it even when another provider had answered in 0.2s.
 func TestSearchAnimeWithProvidersDoesNotWaitOnStragglers(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	fast := &stubSearchProvider{name: "anipub", results: []providers.SelectionOption{{Key: "p1", Label: "Fast"}}}
-	// Far longer than providerSearchGrace, standing in for anineko.
-	straggler := &stubSearchProvider{name: "anineko", delay: 15 * time.Second, results: []providers.SelectionOption{{Key: "x", Label: "Slow"}}}
-	stubProvider(t, "anipub", fast)
-	stubProvider(t, "anineko", straggler)
+	fast := &stubSearchProvider{name: "anizone", results: []providers.SelectionOption{{Key: "p1", Label: "Fast"}}}
+	// Far longer than providerSearchGrace, standing in for kickassanime.
+	straggler := &stubSearchProvider{name: "kickassanime", delay: 15 * time.Second, results: []providers.SelectionOption{{Key: "x", Label: "Slow"}}}
+	stubProvider(t, "anizone", fast)
+	stubProvider(t, "kickassanime", straggler)
 
 	start := time.Now()
-	results, err := searchAnimeWithProviders([]string{"anipub", "anineko"}, "demo", "sub")
+	results, err := searchAnimeWithProviders([]string{"anizone", "kickassanime"}, "demo", "sub")
 	elapsed := time.Since(start)
 
 	if err != nil {
 		t.Fatalf("search failed: %v", err)
 	}
-	if len(results) != 1 || results[0].Label != "Fast [anipub]" {
+	if len(results) != 1 || results[0].Label != "Fast [anizone]" {
 		t.Fatalf("expected the fast provider's result, got %v", results)
 	}
 	if elapsed > providerSearchGrace+2*time.Second {
@@ -271,11 +271,11 @@ func TestSearchAnimeWithProvidersDoesNotWaitOnStragglers(t *testing.T) {
 func TestSearchAnimeWithProvidersReturnsImmediatelyWhenAllFast(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	stubProvider(t, "anipub", &stubSearchProvider{name: "anipub", results: []providers.SelectionOption{{Key: "a", Label: "A"}}})
-	stubProvider(t, "anineko", &stubSearchProvider{name: "anineko", results: []providers.SelectionOption{{Key: "b", Label: "B"}}})
+	stubProvider(t, "anizone", &stubSearchProvider{name: "anizone", results: []providers.SelectionOption{{Key: "a", Label: "A"}}})
+	stubProvider(t, "kickassanime", &stubSearchProvider{name: "kickassanime", results: []providers.SelectionOption{{Key: "b", Label: "B"}}})
 
 	start := time.Now()
-	results, err := searchAnimeWithProviders([]string{"anipub", "anineko"}, "demo", "sub")
+	results, err := searchAnimeWithProviders([]string{"anizone", "kickassanime"}, "demo", "sub")
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -294,14 +294,14 @@ func TestSearchAnimeWithProvidersReturnsImmediatelyWhenAllFast(t *testing.T) {
 func TestSearchAnimeWithProvidersReportsPendingProvidersAsUnreachable(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 
-	fast := &stubSearchProvider{name: "anipub", results: []providers.SelectionOption{{Key: "p1", Label: "Fast"}}}
-	straggler := &stubSearchProvider{name: "anineko", delay: 15 * time.Second, errs: []error{errors.New("boom")}}
-	stubProvider(t, "anipub", fast)
-	stubProvider(t, "anineko", straggler)
+	fast := &stubSearchProvider{name: "anizone", results: []providers.SelectionOption{{Key: "p1", Label: "Fast"}}}
+	straggler := &stubSearchProvider{name: "kickassanime", delay: 15 * time.Second, errs: []error{errors.New("boom")}}
+	stubProvider(t, "anizone", fast)
+	stubProvider(t, "kickassanime", straggler)
 
 	// The fast provider succeeds, so the straggler is abandoned and simply absent
 	// from the results rather than reported as an error.
-	results, err := searchAnimeWithProviders([]string{"anipub", "anineko"}, "demo", "sub")
+	results, err := searchAnimeWithProviders([]string{"anizone", "kickassanime"}, "demo", "sub")
 	if err != nil {
 		t.Fatalf("search failed: %v", err)
 	}
@@ -315,9 +315,9 @@ func TestSearchAnimeWithProvidersReportsPendingProvidersAsUnreachable(t *testing
 // simply being rate limited.
 func TestRateLimitsAreRetryable(t *testing.T) {
 	for _, err := range []error{
-		fmt.Errorf("anipub: %w", providerhost.ErrRateLimited),
+		fmt.Errorf("anizone: %w", providerhost.ErrRateLimited),
 		errors.New(`{"error":"Too many requests, try again in a minute"}`),
-		errors.New("anipub request failed with status 429: rate limit exceeded"),
+		errors.New("anizone request failed with status 429: rate limit exceeded"),
 	} {
 		if !isRetryableProviderError(err) {
 			t.Fatalf("expected %v to be retryable", err)
@@ -327,7 +327,7 @@ func TestRateLimitsAreRetryable(t *testing.T) {
 
 // ...and it must be reported as the host being unavailable, not as a clean miss.
 func TestRateLimitReadsAsUnreachableNotAMiss(t *testing.T) {
-	failure := providerFailure{provider: "anipub", err: fmt.Errorf("anipub: %w", providerhost.ErrRateLimited)}
+	failure := providerFailure{provider: "anizone", err: fmt.Errorf("anizone: %w", providerhost.ErrRateLimited)}
 	if got := failure.kind(); got != failureUnreachable {
 		t.Fatalf("kind = %v, want failureUnreachable", got)
 	}
