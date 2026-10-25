@@ -716,7 +716,10 @@ up at once.
 The bot launches the CLI from the same checkout with `-torrent-serve HASH sub|dub`.
 Install ffmpeg, ffprobe and a font package on non-container hosts. Container builds
 accept `OTAKASE_CLI_REF` to pin the helper for branch validation; the add-on defaults
-to main. The build fails if the helper cannot be built.
+to main. The build fails if the helper cannot be built. The helper is fetched
+straight from GitHub (`GOPRIVATE`), not through proxy.golang.org, which can answer
+`main` with a commit half an hour old. The bot logs the helper's module version
+at startup (`app helper v0.0.0-…-<commit>`).
 
 The helper plays the episode while it downloads. It serves the torrent's video
 file on a private loopback port; ffmpeg and ffprobe read it like any web source.

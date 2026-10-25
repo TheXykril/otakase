@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.47
+
+- The add-on now builds the app from the newest code on GitHub. Before, it could ship the previous app version for up to half an hour after an update, so Watch Together fixes didn't arrive. The log shows which app build is inside ("app helper v0.0.0-…-abc1234").
+
 ## 1.30.46
 
 - Watch Together: an episode that downloads slower than it plays now buffers first ("Buffering N%") until it can keep up, instead of stalling and then failing with "No source could play". A download that stops completely for 3 minutes ends with an error.
