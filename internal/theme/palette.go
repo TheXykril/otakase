@@ -143,7 +143,7 @@ func withAccent(dark bool, accent, name string, source Source) Palette {
 
 // OmarchyThemePath is the directory Omarchy links the active theme into.
 func OmarchyThemePath() string {
-	home, err := os.UserHomeDir()
+	home, err := homeDir()
 	if err != nil {
 		return ""
 	}
@@ -152,7 +152,7 @@ func OmarchyThemePath() string {
 
 // omarchyThemeName reads the active theme's slug, e.g. "solitude".
 func omarchyThemeName() string {
-	home, err := os.UserHomeDir()
+	home, err := homeDir()
 	if err != nil {
 		return ""
 	}

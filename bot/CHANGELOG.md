@@ -5,6 +5,7 @@
 ## 1.30.54
 
 - Watch Together: new source Megavid, tried right after Anikoto. It finds episodes by MAL id, so it doesn't pick the wrong show, and it has its own copy of what it carries, so it still works when Anikoto is down. Sub and dub with subtitles in several languages.
+- Watch Together: streams whose address doesn't end in .m3u8 (some Megavid shows) now play in the room instead of failing as a broken video file.
 
 ## 1.30.53
 
