@@ -531,6 +531,9 @@ own `/watchparty` parties are separate.
   backup audio and two subtitle languages: `sub_subtitles` for the original
   Japanese audio and `subtitles` for dubs. The player's Automatic subtitle
   choice uses the one matching the audio this viewer hears.
+  They also hold `skip_op` and `skip_ed`: a room starts with its automatic
+  opening/ending skips set from its opener's preferences; the host can still
+  toggle them for the room.
 - Episodes are found by the otakase CLI in the image:
   `otakase -stream-info <anilist id>:<episode>` (with `-dub`, and
   `-stream-adult` for 18+) prints the episode's links, headers and
@@ -564,6 +567,14 @@ own `/watchparty` parties are separate.
   completed at the last episode, rewatches left as rewatches). Each member
   can switch it off in the room; staff can switch it off for everyone with
   `/settings watch_room_progress`.
+- When a member stops (the Stop button in the player, leaving the room,
+  dropping out for 45 seconds, or the room ending), the bot writes where
+  they were as the app's `[otakase:<episode>@<seconds>]` tag into their
+  AniList notes and MAL comments, replacing only that tag, so the app
+  resumes there (`bot/watchresume.go`). It only writes for shows already on
+  the list, when the member watched at least 10 seconds and joined within
+  the first minute of the episode, and follows the same switches as the
+  progress update.
 
 The host's page reports its position every 4 seconds (`watch/beat`); the
 room only wakes the other pages when it's more than 2 seconds off where

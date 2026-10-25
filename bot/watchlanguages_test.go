@@ -104,3 +104,19 @@ func TestWatchPreferencesAccountDefaults(t *testing.T) {
 		t.Errorf("invalid sub-audio subtitles accepted, status %d", code)
 	}
 }
+
+func TestWatchRoomOpensWithOwnersSkipPreferences(t *testing.T) {
+	b, _ := watchBot(t, "https://cdn.example/ep.mp4")
+	b.store.update(func(d *storeData) {
+		d.WatchTickets = map[string]int{"a": 1}
+		d.WatchPreferences = map[string]watchPlaybackPreferences{"a": {SkipOP: true}, "b": {SkipED: true}}
+	})
+	watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r", Channel: "vc"}, nil)
+	if r := b.watch.cur; !r.autoSkipOP || r.autoSkipED {
+		t.Fatalf("skips op=%v ed=%v, want the owner's (op only)", r.autoSkipOP, r.autoSkipED)
+	}
+	if p := watchNormalizePreferences(watchPlaybackPreferences{SkipED: true}); !p.SkipED || p.SkipOP {
+		t.Fatalf("normalize dropped skips: %+v", p)
+	}
+}

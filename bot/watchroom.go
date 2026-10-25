@@ -75,6 +75,7 @@ type watchMember struct {
 	seen    time.Time
 	watched float64 // seconds of this episode they were in the room while it played
 	counted bool    // their lists were moved on for this episode
+	from    float64 // where the episode was when they joined it
 }
 
 type watchAsk struct {
@@ -106,6 +107,7 @@ type watchRoom struct {
 	beatFrom  float64 // the first playing position the host reported
 	beatStart bool
 	members   map[string]*watchMember
+	resumes   []watchResume // positions of members who left, to save
 
 	show      *watchShow
 	ep        int
@@ -224,6 +226,7 @@ func (r *watchRoom) prune(now time.Time) {
 	gone := false
 	for id, m := range r.members {
 		if now.Sub(m.seen) > watchGone {
+			r.keepResume(id, m.seen)
 			delete(r.members, id)
 			gone = true
 		}
@@ -324,6 +327,7 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 	if closeWhy != "" {
 		b.closeWatchRoom(r, now)
 	}
+	b.flushResumes(r)
 	b.watch.mu.Unlock()
 
 	if len(count) > 0 {
@@ -361,6 +365,10 @@ func (b *bot) watchSyncers(users []string) []string {
 
 // closeWatchRoom ends the room and logs what it cost. Hold the lock.
 func (b *bot) closeWatchRoom(r *watchRoom, now time.Time) {
+	for id := range r.members {
+		r.keepResume(id, now)
+	}
+	b.flushResumes(r)
 	r.phase = "over"
 	r.finishMedia()
 	r.changed()
@@ -442,7 +450,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.dur = 0
 	r.asks = nil
 	for _, m := range r.members {
-		m.watched, m.counted = 0, false
+		m.watched, m.counted, m.from = 0, false, 0
 	}
 	r.gen++
 	gen, adult, cli := r.gen, r.adult && show.Adult, b.cfg.OtakaseCLI
@@ -1194,6 +1202,8 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 	staff := b.isAdmin(user)
 	name := b.dashName(user)
 	tickets := b.watchTickets(user)
+	var prefs watchPlaybackPreferences
+	b.store.view(func(d *storeData) { prefs = watchNormalizePreferences(d.WatchPreferences[user]) })
 	ch := watchChannel(b, in.Channel)
 	adult := ch != nil && ch.NSFW
 	now := watchNow()
@@ -1226,7 +1236,7 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cur = &watchRoom{id: in.Room, channel: in.Channel, adult: adult, owner: user, host: user, opened: now,
-			phase: "pick", members: map[string]*watchMember{}}
+			phase: "pick", members: map[string]*watchMember{}, autoSkipOP: prefs.SkipOP, autoSkipED: prefs.SkipED}
 		b.watch.cur = cur
 		watchClock(b, cur)
 		log.Printf("watch room opened by member %s in channel %s", user, in.Channel)
@@ -1234,7 +1244,11 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 	if m, ok := cur.members[user]; ok {
 		m.seen = now
 	} else {
-		cur.members[user] = &watchMember{name: name, joined: now, seen: now}
+		m := &watchMember{name: name, joined: now, seen: now}
+		if cur.phase == "play" {
+			m.from = cur.position(now)
+		}
+		cur.members[user] = m
 		cur.changed()
 	}
 	b.watchAnswerView(w, cur, user, staff)
@@ -1292,16 +1306,23 @@ func (b *bot) watchLeave(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	out := map[string]any{"ok": true}
 	b.watch.mu.Lock()
 	if cur := b.watch.cur; cur != nil && cur.id == in.Room {
 		if _, ok := cur.members[user]; ok {
+			now := watchNow()
+			if p, ok := cur.resumeOf(user, now); ok {
+				cur.resumes = append(cur.resumes, p)
+				out["ep"], out["secs"] = p.ep, p.secs
+			}
 			delete(cur.members, user)
-			cur.prune(watchNow())
+			cur.prune(now)
 			cur.changed()
+			b.flushResumes(cur)
 		}
 	}
 	b.watch.mu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	writeJSON(w, http.StatusOK, out)
 }
 
 // watchSearchAPI searches AniList for the host's picker.

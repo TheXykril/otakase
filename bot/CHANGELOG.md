@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.30.52
+
+- Watch Together: when you stop watching, leave or the room ends, where you were is saved to your AniList notes and MAL comments the same way Otakase does it, so the app resumes from there. Only shows already on your list, and only if you were there from the start of the episode.
+- Watch Together: a Stop button in the player leaves the room for you, like quitting the player in Otakase. The room keeps playing for everyone else, and Watch again brings you back in.
+- Watch Together: preferences have Skip openings (OP) and Skip endings (ED) switches. Rooms you open start with those automatic skips on; the host can still change them for everyone during the room.
+
 ## 1.30.51
 
 - Watch Together: preferences have two subtitle settings, one for Japanese audio (sub) and one for dubs. With Automatic, the player follows the one for the audio you hear, so you can watch dubs without subtitles and subs with them. Subs default to Automatic (English).

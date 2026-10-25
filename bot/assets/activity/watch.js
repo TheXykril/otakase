@@ -236,7 +236,7 @@ function wSyncLine() {
     el.innerHTML = "Link /link-anilist or /link-mal and episodes you watch here count on your list.";
     return;
   }
-  el.innerHTML = `<label class="wsw"><input type="checkbox" id="wsyncbox" ${wv.sync ? "checked" : ""}> Move my ${linked.join(" and ")} on after each episode I watch</label>`;
+  el.innerHTML = `<label class="wsw"><input type="checkbox" id="wsyncbox" ${wv.sync ? "checked" : ""}> Move my ${linked.join(" and ")} on after each episode I watch and save where I stop</label>`;
   document.getElementById("wsyncbox").onchange = (e) =>
     api("watch/sync", { room, on: e.target.checked })
       .then((r) => (wv.sync = r.sync))
@@ -251,6 +251,7 @@ function wMore() {
   if (v.is_host && v.phase === "loading") html += `<button class="btn alt" id="wcancel">${icon("x")} Cancel loading</button>`;
   if (v.is_host && v.show && v.phase !== "loading") html += `<button class="btn alt" id="wchange">${icon("shuffle")} Change show</button>`;
   if (v.staff && !v.is_host) html += `<button class="btn alt" id="wtake">${icon("shield")} Take control</button>`;
+  if (v.phase === "loading") html += `<button class="btn alt" id="wstopme">${icon("stop")} Stop watching</button>`;
   if (v.is_host || v.staff) html += `<button class="btn alt" id="wend">${icon("x")} End room</button>`;
   el.innerHTML = html;
   const on = (id, fn) => document.getElementById(id) && (document.getElementById(id).onclick = fn);
@@ -261,6 +262,7 @@ function wMore() {
     wDestroy();
     wPicker(true);
   });
+  on("wstopme", wStopWatching);
   on("wtake", () => api("watch/take", { room }).then((nv) => ((wvKey = ""), (wvMedia = ""), wSet(nv))).catch(showError));
   on("wend", (e) => {
     const b = e.currentTarget;
@@ -271,6 +273,27 @@ function wMore() {
     }
     api("watch/end", { room }).catch(showError);
   });
+}
+
+// wStopWatching is quitting the player: this member leaves the room, which
+// keeps playing for everyone else, and their list notes get where they
+// stopped so Otakase can pick it up from there.
+async function wStopWatching() {
+  const v = wv;
+  if (wFull) wFullscreen(false);
+  wStop();
+  wv = null;
+  wvKey = wvMedia = "";
+  wBox(loading("Stopping…"));
+  const r = await api("watch/leave", { room }).catch(() => ({}));
+  if (where !== "watch") return;
+  const synced = v && v.sync && (v.linked || []).length;
+  const at = r.ep ? `You stopped at <b>${wFmt(r.secs)}</b> of episode ${r.ep}.` : "You stopped watching.";
+  const note = r.ep && synced ? `Saving where you stopped to your ${v.linked.join(" and ")}, so Otakase can resume from there.` : "The room keeps playing for everyone else.";
+  wBox(`<p class="lead">${at}</p><p class="note">${note}</p>
+    <button class="btn" id="wagain">${icon("play")} Watch again</button><div class="err" id="err"></div>`);
+  const b = document.getElementById("wagain");
+  b.onclick = () => ((b.disabled = true), watchView().catch((e) => ((b.disabled = false), showError(e))));
 }
 
 // ── Requests ──
@@ -686,6 +709,7 @@ function wBar() {
     </div>
     <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
     ${origin}
+    <button class="btn alt" id="wstopbar" title="Stop watching" aria-label="Stop watching">${icon("stop")}<span>Stop</span></button>
     <button class="btn alt wfullscreen" id="wfull" title="Toggle theater mode" aria-label="Toggle theater mode" aria-pressed="${wFull}">${icon(wFull ? "minimize" : "maximize")}</button>`;
   if (v.is_host) {
     bar.innerHTML = `<div class="wseek"><span id="wcur">0:00</span><div class="wseektrack"><input type="range" id="wpos" min="0" max="1" step="0.1" value="0" aria-label="Position"><div class="wskipmarkers" id="wskipmarkers" aria-hidden="true"></div></div><span id="wdur">0:00</span></div>
@@ -717,6 +741,7 @@ function wBar() {
   vol.value = vid.volume;
   vol.oninput = () => ((vid.volume = +vol.value), (vid.muted = +vol.value === 0));
   document.getElementById("wfull").onclick = () => wFullscreen(!wFull);
+  document.getElementById("wstopbar").onclick = wStopWatching;
   document.getElementById("wsettings").onclick = () => { const menu = document.getElementById("wsettingsmenu"); menu.hidden = !menu.hidden; };
   document.getElementById("wsub").onchange = (e) => { wSubPick = e.target.value; wSettingsDirty = true; wSubs(); wSaveLanguages(); };
   document.getElementById("waudio").onchange = (e) => { wAudioPick = e.target.value; wSettingsDirty = true; wAudioTracks(); wSaveLanguages(); wUpdateOrigin(); if (wv.audio_media && wEffectiveMedia() !== wvMedia) wLoad(); };
