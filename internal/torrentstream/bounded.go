@@ -5,6 +5,8 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -13,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	alog "github.com/anacrolix/log"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
@@ -123,6 +126,10 @@ func StreamForBot(ctx context.Context, hash, dir string, waiting func(connected,
 	cfg.EstablishedConnsPerTorrent = 16
 	cfg.HalfOpenConnsPerTorrent, cfg.TotalHalfOpenConns = 4, 4
 	cfg.DownloadRateLimiter = rate.NewLimiter(8<<20, 1<<20)
+	// The client's own complaints (a cancelled read, a peer gone) would
+	// bury the helper's lines on stderr, which the bot logs.
+	cfg.Slogger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg.Logger = alog.NewLogger().FilterLevel(alog.Disabled)
 	s.client, err = torrent.NewClient(cfg)
 	if err != nil {
 		// Containers often have no IPv6 at all; listen on IPv4 only there.
@@ -210,6 +217,47 @@ func (s *BotStream) Complete() bool {
 // Progress reports the downloaded and total bytes and the connected peers.
 func (s *BotStream) Progress() (completed, length int64, peers int) {
 	return s.file.BytesCompleted(), s.file.Length(), s.file.Torrent().Stats().ActivePeers
+}
+
+// Ahead reports how many bytes from the start of the episode are already
+// downloaded without a gap: what playback can rely on.
+func (s *BotStream) Ahead() int64 {
+	// Piece states can trail the completed byte count for a moment.
+	if s.Complete() {
+		return s.file.Length()
+	}
+	t := s.file.Torrent()
+	info := t.Info()
+	if info == nil || info.PieceLength <= 0 {
+		return 0
+	}
+	begin, end := s.file.BeginPieceIndex(), s.file.EndPieceIndex()
+	i := begin
+	for i < end && t.PieceState(i).Complete {
+		i++
+	}
+	if i == end {
+		return s.file.Length()
+	}
+	ahead := int64(i)*info.PieceLength - s.file.Offset()
+	return max(0, min(ahead, s.file.Length()))
+}
+
+// Sequential downloads the episode in order from the start in the
+// background until ctx ends, so what plays next arrives first.
+func (s *BotStream) Sequential(ctx context.Context) {
+	reader := s.file.NewReader()
+	reader.SetContext(ctx)
+	reader.SetReadahead(32 << 20)
+	go func() {
+		defer reader.Close()
+		buf := make([]byte, 1<<20)
+		for ctx.Err() == nil {
+			if _, err := reader.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
 }
 
 // WaitComplete waits for the whole episode and returns its local path.

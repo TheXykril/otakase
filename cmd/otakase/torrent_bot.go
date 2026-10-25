@@ -459,8 +459,14 @@ func (s *botSegments) ffmpeg(ctx context.Context, args []string) ([]byte, error)
 	defer stop()
 	cmd := exec.CommandContext(run, "ffmpeg", append([]string{"-hide_banner", "-loglevel", "error", "-nostdin"}, args...)...)
 	cmd.Dir = s.dir
+	stderr := &botLimitedOutput{limit: 2048}
+	cmd.Stderr = stderr
 	data, err := botCommandOutput(cmd, 4<<20)
 	if err != nil {
+		if detail := strings.TrimSpace(stderr.buffer.String()); detail != "" {
+			lines := strings.Split(detail, "\n")
+			err = fmt.Errorf("%w: %s", err, strings.TrimSpace(lines[len(lines)-1]))
+		}
 		return nil, fmt.Errorf("encode segment: %w", err)
 	}
 	return data, nil
@@ -583,12 +589,113 @@ func (s *botSegments) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	begun := time.Now()
 	data, err := s.segment(r.Context(), n, mode)
 	if err != nil {
+		// The bot writes "note" lines to its log.
+		fmt.Fprintf(os.Stderr, "note segment %d (%s) failed after %s: %v\n", n, mode, time.Since(begun).Round(time.Second), err)
 		http.Error(w, "Video segment unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	write("video/mp2t", data)
+}
+
+// botBufferWait bounds the wait for a slow download before playback starts
+// anyway; botStallWait gives up on a download that stopped completely.
+const (
+	botBufferWait = 8 * time.Minute
+	botStallWait  = 3 * time.Minute
+)
+
+// bufferBotStream holds playback back until the episode downloads in order
+// far enough ahead that it can keep up: a minute of video, or more when the
+// download is slower than the video plays, enough that it never catches up
+// with the player before the end.
+func bufferBotStream(ctx context.Context, stream *torrentstream.BotStream, duration float64, progress *botProgress) error {
+	stream.Sequential(ctx)
+	_, length, _ := stream.Progress()
+	if duration <= 0 || length <= 0 {
+		return nil
+	}
+	need := float64(length) / duration // bytes per second of video
+	type sample struct {
+		at   time.Time
+		done int64
+	}
+	var samples []sample
+	begun, moved := time.Now(), time.Now()
+	last, shown := stream.Ahead(), 0
+	tick := time.NewTicker(2 * time.Second)
+	defer tick.Stop()
+	for {
+		ahead := stream.Ahead()
+		done, _, _ := stream.Progress()
+		now := time.Now()
+		if ahead != last {
+			last, moved = ahead, now
+		}
+		samples = append(samples, sample{now, done})
+		for len(samples) > 1 && now.Sub(samples[0].at) > 20*time.Second {
+			samples = samples[1:]
+		}
+		speed := -1.0 // not known yet
+		if span := now.Sub(samples[0].at).Seconds(); span >= 10 {
+			speed = float64(done-samples[0].done) / span
+		}
+		target := botBufferTarget(need, speed, duration, length)
+		switch {
+		case float64(ahead) >= target:
+			return nil
+		case now.Sub(begun) > botBufferWait:
+			fmt.Fprintf(os.Stderr, "note buffering stopped after %s at %d of %.0f bytes; playing anyway\n", botBufferWait, ahead, target)
+			return nil
+		case now.Sub(moved) > botStallWait:
+			return fmt.Errorf("download stalled for %s while buffering", botStallWait)
+		}
+		// The target moves with the speed; the number shown only goes up.
+		shown = max(shown, min(int(float64(ahead)*100/target), 99))
+		progress.stepPlain(fmt.Sprintf("Buffering %d%%", shown))
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-tick.C:
+		}
+	}
+}
+
+// botBufferTarget is how many bytes must be downloaded in order before
+// playback starts: a minute of video, or, when the download (speed bytes a
+// second, negative while unknown) is slower than the video plays, enough
+// that the player never catches up with it before the end.
+func botBufferTarget(need, speed, duration float64, length int64) float64 {
+	target := need * 60
+	if speed < 0 {
+		target = need * 90 // no speed yet: assume a little slow
+	} else if shortfall := need*1.1 - speed; shortfall > 0 {
+		target = max(target, shortfall*duration)
+	}
+	return min(target, float64(length))
+}
+
+// reportBotStream writes the download state to stderr every minute while
+// the episode plays; the bot keeps the lines in its log.
+func reportBotStream(ctx context.Context, stream *torrentstream.BotStream) {
+	tick := time.NewTicker(time.Minute)
+	defer tick.Stop()
+	prev, _, _ := stream.Progress()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		done, length, peers := stream.Progress()
+		fmt.Fprintf(os.Stderr, "note download %d%%, %d MB in order, %d KB/s, %d peers\n", done*100/max(length, 1), stream.Ahead()>>20, (done-prev)/60/1024, peers)
+		prev = done
+		if done >= length {
+			return
+		}
+	}
 }
 
 // botProgress tells the bot what the helper is doing before the playlist
@@ -600,12 +707,21 @@ type botProgress struct {
 	stream  *torrentstream.BotStream
 	done    chan struct{}
 	stopped bool
+	plain   bool // the step carries its own percentage
 }
 
 func (p *botProgress) step(text string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.text = text
+	p.text, p.plain = text, false
+	p.printLocked()
+}
+
+// stepPlain shows text without the download percentage.
+func (p *botProgress) stepPlain(text string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.text, p.plain = text, true
 	p.printLocked()
 }
 
@@ -614,7 +730,7 @@ func (p *botProgress) printLocked() {
 		return
 	}
 	line := p.text
-	if p.stream != nil {
+	if p.stream != nil && !p.plain {
 		done, total, _ := p.stream.Progress()
 		if total > 0 {
 			line += fmt.Sprintf(" (%d%% loaded)", done*100/total)
@@ -738,6 +854,10 @@ func serveTorrentForBot(hash, mode string) error {
 	if err != nil {
 		return fmt.Errorf("first segment: %w", err)
 	}
+	if err = bufferBotStream(ctx, stream, media.duration, progress); err != nil {
+		return err
+	}
+	go reportBotStream(ctx, stream)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return err

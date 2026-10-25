@@ -84,6 +84,7 @@ func TestStreamForBotLocalSwarm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stream.Sequential(ctx)
 	// A range from the middle answers before the rest has to be fetched.
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, stream.URL, nil)
 	req.Header.Set("Range", "bytes=40000-40099")
@@ -115,6 +116,9 @@ func TestStreamForBotLocalSwarm(t *testing.T) {
 	}
 	if done, length, _ := stream.Progress(); done != length || !stream.Complete() {
 		t.Fatalf("progress %d of %d", done, length)
+	}
+	if _, length, _ := stream.Progress(); stream.Ahead() != length {
+		t.Fatalf("%d of %d bytes in order", stream.Ahead(), length)
 	}
 	stream.Close()
 	if _, err = os.Stat(filepath.Join(dir, "pieces")); !os.IsNotExist(err) {

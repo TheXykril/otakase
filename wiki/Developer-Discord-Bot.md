@@ -738,7 +738,14 @@ up to three nyaa releases, best first, and the bot tries the next one when a
 swarm doesn't answer. Until its playlist is ready the helper prints
 `progress <text>` lines on stdout (step and loaded percentage, worded so viewers
 can't tell the source is a torrent), which the
-room shows as its loading step; errors name the step that failed. Downloads are limited to
+room shows as its loading step; errors name the step that failed. After the
+first segment the helper buffers: it downloads the episode in order and waits
+until a minute of video is ahead, or, when the download is slower than the
+video's bitrate, enough that playback never catches up before the end (at most
+8 minutes; a download stalled for 3 minutes fails). While the episode plays the
+helper writes `note …` lines to stderr (failed segments with ffmpeg's last
+error, and download state every minute); the bot logs up to 60 of them as
+`watch helper: …`. The torrent client's own log is discarded. Downloads are limited to
 8 MiB/s and 16 established peers; uploads are disabled. One helper, including
 startup, runs at a time per bot process.
 
