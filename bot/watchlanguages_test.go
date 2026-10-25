@@ -49,7 +49,7 @@ func TestWatchPreferredLanguage(t *testing.T) {
 		t.Fatal("subtitles off was rejected")
 	}
 	got := watchNormalizePreferences(watchPlaybackPreferences{Audio: "en", BackupAudio: "en", Subtitles: "off"})
-	if got.Audio != "en" || got.BackupAudio != "auto" || got.Subtitles != "off" {
+	if got.Audio != "en" || got.BackupAudio != "auto" || got.Subtitles != "off" || got.SubSubtitles != "auto" {
 		t.Fatalf("duplicate backup not normalized: %+v", got)
 	}
 }
@@ -64,7 +64,7 @@ func TestWatchPreferencesAccountDefaults(t *testing.T) {
 		}
 	})
 	var saved watchPlaybackPreferences
-	in := watchPlaybackPreferences{Audio: "fr", BackupAudio: "en", Subtitles: "ja"}
+	in := watchPlaybackPreferences{Audio: "fr", BackupAudio: "en", Subtitles: "off", SubSubtitles: "en"}
 	if code := togetherPost(b, (*bot).watchPreferencesSet, "a", in, &saved); code != 200 {
 		t.Fatalf("save returned %d", code)
 	}
@@ -93,5 +93,14 @@ func TestWatchPreferencesAccountDefaults(t *testing.T) {
 	if code := togetherPost(b, (*bot).watchPreferencesSet, "a",
 		watchPlaybackPreferences{Audio: "off", BackupAudio: "ja", Subtitles: "auto"}, nil); code != 400 {
 		t.Errorf("invalid audio preference accepted, status %d", code)
+	}
+	// A page from before the sub-audio setting existed leaves it Automatic.
+	if code := togetherPost(b, (*bot).watchPreferencesSet, "a",
+		watchPlaybackPreferences{Audio: "auto", BackupAudio: "auto", Subtitles: "off"}, &saved); code != 200 || saved.SubSubtitles != "auto" {
+		t.Errorf("old page save: status %d, %+v", code, saved)
+	}
+	if code := togetherPost(b, (*bot).watchPreferencesSet, "a",
+		watchPlaybackPreferences{Audio: "auto", BackupAudio: "auto", Subtitles: "off", SubSubtitles: "track-1"}, nil); code != 400 {
+		t.Errorf("invalid sub-audio subtitles accepted, status %d", code)
 	}
 }

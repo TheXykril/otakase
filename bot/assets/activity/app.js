@@ -2926,7 +2926,11 @@ function soundApply() {
       <p class="note">These settings belong to your account. Automatic tries your first audio language, then your backup, then the stream default.</p>
       <label>Preferred audio language<select id="prefaudio">${choices("Stream default")}</select></label>
       <label>Backup audio language<select id="prefbackup">${choices("Stream default")}</select></label>
-      <label>Preferred subtitle language<select id="prefsub">
+      <label>Subtitles with Japanese audio (sub)<select id="prefsubsub">
+        <option value="auto">Automatic</option><option value="off">Subtitles off</option>
+        ${choices("Automatic").replace('<option value="auto">Automatic</option>', "")}
+      </select></label>
+      <label>Subtitles with other audio (dub)<select id="prefsub">
         <option value="auto">Automatic</option><option value="off">Subtitles off</option>
         ${choices("Automatic").replace('<option value="auto">Automatic</option>', "")}
       </select></label>
@@ -2940,6 +2944,7 @@ function soundApply() {
     const audio = layer.querySelector("#prefaudio");
     const backup = layer.querySelector("#prefbackup");
     const sub = layer.querySelector("#prefsub");
+    const subSub = layer.querySelector("#prefsubsub");
     const status = layer.querySelector("#prefstatus");
     const save = layer.querySelector("#prefsave");
     const available = (el, value) => {
@@ -2973,6 +2978,7 @@ function soundApply() {
       available(audio, current.audio || "auto");
       available(backup, current.backup_audio || "auto");
       available(sub, current.subtitles || "auto");
+      available(subSub, current.sub_subtitles || "auto");
       updateBackup();
       save.disabled = false;
       status.textContent = "";
@@ -2986,7 +2992,7 @@ function soundApply() {
       status.textContent = "Saving…";
       try {
         const saved = await api("watch/preferences", {
-          audio: audio.value, backup_audio: backup.value, subtitles: sub.value,
+          audio: audio.value, backup_audio: backup.value, subtitles: sub.value, sub_subtitles: subSub.value,
         });
         if (typeof wPreferencesChanged === "function") wPreferencesChanged(saved);
         close();

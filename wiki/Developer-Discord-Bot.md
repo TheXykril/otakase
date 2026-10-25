@@ -527,6 +527,10 @@ own `/watchparty` parties are separate.
   `/settings watch_room_max` sets how many fit in it (default 10; the
   opener and staff always get in).
 - 18+ shows only in age-restricted voice channels.
+- Each member's preferences (the Activity's preferences button) hold audio,
+  backup audio and two subtitle languages: `sub_subtitles` for the original
+  Japanese audio and `subtitles` for dubs. The player's Automatic subtitle
+  choice uses the one matching the audio this viewer hears.
 - Episodes are found by the otakase CLI in the image:
   `otakase -stream-info <anilist id>:<episode>` (with `-dub`, and
   `-stream-adult` for 18+) prints the episode's links, headers and

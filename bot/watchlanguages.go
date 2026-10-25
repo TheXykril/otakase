@@ -12,14 +12,17 @@ type watchLanguagePreference struct {
 }
 
 // These account-wide defaults apply only when the player uses Automatic.
+// Subtitles applies to dubbed audio, SubSubtitles to the original Japanese
+// audio, so a member can watch dubs without subtitles and subs with them.
 type watchPlaybackPreferences struct {
-	Audio       string `json:"audio"`
-	BackupAudio string `json:"backup_audio"`
-	Subtitles   string `json:"subtitles"`
+	Audio        string `json:"audio"`
+	BackupAudio  string `json:"backup_audio"`
+	Subtitles    string `json:"subtitles"`
+	SubSubtitles string `json:"sub_subtitles"`
 }
 
 func watchDefaultPreferences() watchPlaybackPreferences {
-	return watchPlaybackPreferences{Audio: "auto", BackupAudio: "auto", Subtitles: "auto"}
+	return watchPlaybackPreferences{Audio: "auto", BackupAudio: "auto", Subtitles: "auto", SubSubtitles: "auto"}
 }
 
 func watchPreferredLanguage(value string, subtitles bool) bool {
@@ -41,6 +44,9 @@ func watchNormalizePreferences(p watchPlaybackPreferences) watchPlaybackPreferen
 	}
 	if watchPreferredLanguage(p.Subtitles, true) {
 		normal.Subtitles = p.Subtitles
+	}
+	if watchPreferredLanguage(p.SubSubtitles, true) {
+		normal.SubSubtitles = p.SubSubtitles
 	}
 	if normal.Audio == "auto" || normal.Audio == normal.BackupAudio {
 		normal.BackupAudio = "auto"
@@ -74,9 +80,15 @@ func (b *bot) watchPreferencesSet(w http.ResponseWriter, r *http.Request) {
 	p.Audio = strings.ToLower(strings.TrimSpace(p.Audio))
 	p.BackupAudio = strings.ToLower(strings.TrimSpace(p.BackupAudio))
 	p.Subtitles = strings.ToLower(strings.TrimSpace(p.Subtitles))
+	p.SubSubtitles = strings.ToLower(strings.TrimSpace(p.SubSubtitles))
+	if p.SubSubtitles == "" {
+		// Pages loaded before the setting existed don't send it.
+		p.SubSubtitles = "auto"
+	}
 	if !watchPreferredLanguage(p.Audio, false) ||
 		!watchPreferredLanguage(p.BackupAudio, false) ||
-		!watchPreferredLanguage(p.Subtitles, true) {
+		!watchPreferredLanguage(p.Subtitles, true) ||
+		!watchPreferredLanguage(p.SubSubtitles, true) {
 		apiError(w, http.StatusBadRequest, "invalid language preference")
 		return
 	}
