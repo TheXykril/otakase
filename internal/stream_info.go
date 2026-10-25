@@ -87,13 +87,52 @@ func resolveStreamInfo(config Config, anilistID, episode int, discoverLanguages 
 		return info, fmt.Errorf("%s has %d episodes", info.Title, anime.TotalEpisodes)
 	}
 
+	return searchStreamInfo(config, anime, info, episode, providerNamesForAnime(&config, &anime), discoverLanguages)
+}
+
+// streamInfoProviderWait bounds one site's answer. A site that is down can
+// take a minute to say so, twice (both languages), and the watch room's
+// whole lookup has three.
+var streamInfoProviderWait = 30 * time.Second
+
+// streamInfoLookup asks one site for the episode, a variable for tests.
+var streamInfoLookup = episodeModeResultWithProviders
+
+// lookupStreamInfo is streamInfoLookup, given up on after wait. The
+// abandoned request finishes in the background; the CLI exits soon after.
+func lookupStreamInfo(config Config, anime Anime, episode int, mode, name string, wait time.Duration) (ProviderEpisodeResult, error) {
+	type answer struct {
+		result ProviderEpisodeResult
+		err    error
+	}
+	done := make(chan answer, 1)
+	go func() {
+		result, err := streamInfoLookup(config, &anime, episode, mode, []string{name})
+		done <- answer{result, err}
+	}()
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case a := <-done:
+		return a.result, a.err
+	case <-timer.C:
+		return ProviderEpisodeResult{}, fmt.Errorf("no answer within %s", wait)
+	}
+}
+
+// searchStreamInfo asks the sites in order, in the preferred language
+// first, for a web link; a download is the fallback. Once a download is
+// found in the preferred language, the other language isn't searched.
+func searchStreamInfo(config Config, anime Anime, info StreamInfo, episode int, names []string, discoverLanguages bool) (StreamInfo, error) {
 	preferred := normalizeTranslationType(config.SubOrDub)
 	var failures []string
 	var torrentFallback *StreamInfo
 	for _, mode := range []string{preferred, alternateTranslationType(preferred)} {
-		for _, name := range providerNamesForAnime(&config, &anime) {
-			show := anime
-			result, err := episodeModeResultWithProviders(config, &show, episode, mode, []string{name})
+		if torrentFallback != nil {
+			break
+		}
+		for _, name := range names {
+			result, err := lookupStreamInfo(config, anime, episode, mode, name, streamInfoProviderWait)
 			if err != nil {
 				failures = append(failures, fmt.Sprintf("%s %s: %v", name, mode, err))
 				continue

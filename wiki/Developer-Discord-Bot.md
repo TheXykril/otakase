@@ -531,7 +531,10 @@ own `/watchparty` parties are separate.
   `otakase -stream-info <anilist id>:<episode>` (with `-dub`, and
   `-stream-adult` for 18+) prints the episode's links, headers and
   subtitles as JSON without asking anything. The episode starts from the
-  fast lookup (`-stream-info-fast`, three-minute limit). After it plays,
+  fast lookup (`-stream-info-fast`, three-minute limit). Each site gets
+  30 seconds to answer (one that is down can take a minute to say so), and
+  once a download is found in the preferred language the other language
+  isn't searched. After it plays,
   the other lookups run one after another, so a small host runs one CLI at
   a time: for KickAssAnime, `-stream-languages kickassanime:<show id>:<ep>`
   fetches the other spoken-language releases by the show id the first
