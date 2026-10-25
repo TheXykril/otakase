@@ -15,6 +15,10 @@ let wBeat = 0;
 let wHostAct = 0; // when the host last did something, so its own echo isn't followed
 let wNeedTap = false;
 let wFails = 0;
+// wNoNative is set after the player's built-in HLS failed on this media;
+// Hls.js gets the next try before the source counts as broken.
+let wNoNative = "";
+let wLastErr = "";
 let wSubPick = "auto";
 let wAudioPick = "auto";
 let wSettingsDirty = false;
@@ -500,6 +504,7 @@ async function wLoad() {
   if (!vid) return;
   wDestroy();
   wvMedia = wEffectiveMedia();
+  if (wNoNative !== wvMedia) wLastErr = "";
   wFails = 0;
   const at = wTarget();
   // The video element survives episode and language switches; drop the
@@ -521,7 +526,16 @@ async function wLoad() {
   vid.onwaiting = () => { document.getElementById("wspin").hidden = false; if (wv.is_host) wBeatNow(); };
   vid.onplaying = () => { document.getElementById("wspin").hidden = true; if (wv.is_host) wBeatNow(); if (wFull) wRevealControls(); };
   vid.oncanplay = () => (document.getElementById("wspin").hidden = true);
-  vid.onerror = () => wBroken();
+  vid.onerror = () => {
+    const e = vid.error;
+    const why = (wHls ? "hls.js" : "native") + " video error " + (e ? e.code + " " + (e.message || "") : "");
+    if (!wHls && wNoNative !== wvMedia && window.Hls && Hls.isSupported() && /\.m3u8(?:$|\?)/i.test(wvMedia)) {
+      wNoNative = wvMedia;
+      wLastErr = why;
+      return wLoad();
+    }
+    wBroken(why);
+  };
   vid.onended = () => {
     if (wv.is_host && wv.ep < wv.last_ep) wCtl("next");
   };
@@ -530,7 +544,7 @@ async function wLoad() {
     // Native HLS decodes in Discord environments where MSE playback may
     // expose tracks but fail to output audio. The relay provides a separate
     // master for each available language, so native playback can switch too.
-    if (vid.canPlayType("application/vnd.apple.mpegurl")) {
+    if (vid.canPlayType("application/vnd.apple.mpegurl") && wNoNative !== wvMedia) {
       vid.src = wvMedia;
     } else {
       try {
@@ -548,12 +562,15 @@ async function wLoad() {
         const hls = new Hls({ startPosition: at, maxBufferLength: 40, backBufferLength: 60, enableWorker: false, renderTextTracksNatively: true, fragLoadPolicy });
         wHls = hls;
         hls.on(Hls.Events.ERROR, (_, d) => {
-          if (!d.fatal || wHls !== hls) return;
+          if (wHls !== hls) return;
+          wLastErr = "hls.js " + d.type + " " + d.details + (d.response && d.response.code ? " HTTP " + d.response.code : "")
+            + (d.reason ? " " + d.reason : "") + (d.error && d.error.message ? " " + d.error.message : "");
+          if (!d.fatal) return;
           if (d.type === Hls.ErrorTypes.MEDIA_ERROR && wFails < 2) {
             wFails++;
             return hls.recoverMediaError();
           }
-          if (++wFails > 4) return wBroken();
+          if (++wFails > 4) return wBroken(wLastErr);
           setTimeout(() => { if (wHls === hls) hls.startLoad(); }, 1500);
         });
         hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, wSubs);
@@ -573,8 +590,15 @@ async function wLoad() {
 }
 
 // wBroken moves the host to the episode's next source; others just wait.
-function wBroken() {
-  if (wv && wv.is_host) wCtl("broken");
+// why goes to the bot's log, with the last error before it.
+function wBroken(why) {
+  if (!wv || !wv.is_host) return;
+  if (wLastErr && wLastErr !== why) why = (why || "") + " (before: " + wLastErr + ")";
+  const vid = document.getElementById("wvid");
+  wHostAct = Date.now();
+  api("watch/ctl", { room, act: "broken", pos: vid ? vid.currentTime : -1, why: String(why || "").slice(0, 300) })
+    .then((nv) => wSet(nv, true))
+    .catch(showError);
 }
 
 // wTarget is where the host is now, as far as this page knows.
