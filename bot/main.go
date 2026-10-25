@@ -299,6 +299,10 @@ func main() {
 	go b.keepRunning("Watch bingo", b.bingoLoop)
 	go b.keepRunning("Join verification", b.verifyLoop)
 	log.Print("running")
+	// Which app build the add-on carries, e.g. v0.0.0-20261025144152-f226cba84c4b.
+	if v, err := os.ReadFile("/usr/local/share/otakase/cli-version"); err == nil {
+		log.Printf("app helper %s", strings.TrimSpace(string(v)))
+	}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
