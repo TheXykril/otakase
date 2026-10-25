@@ -711,9 +711,11 @@ accept `OTAKASE_CLI_REF` to pin the helper for branch validation; the add-on def
 to main. The build fails if the helper cannot be built.
 
 The helper buffers the selected video before announcing a complete VOD playlist.
-Torrents larger than 1 GiB or containing more than 256 files are rejected before
-opening storage. The download cache plus the completed source use at most 2 GiB
-of payload space, excluding filesystem metadata. Downloading stops after ten
+Torrents larger than `watch_torrent_max_gib` (default 4 GiB, up to 16) or
+containing more than 256 files are rejected before opening storage. The download
+cache and the completed source both sit on disk, so `watch_torrent_storage_gib`
+(default 8 GiB) must hold twice the size limit; a smaller budget lowers the size
+limit to half of it. Hosts without IPv6 fall back to IPv4 only. Downloading stops after ten
 minutes. Downloads are limited to 8 MiB/s and 16 established peers; uploads are
 disabled. One helper, including startup, runs at a time per bot process.
 

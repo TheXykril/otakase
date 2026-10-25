@@ -165,6 +165,7 @@ type watchRooms struct {
 	cur   *watchRoom
 	cache *segCache
 	infos watchInfos
+	bg    sync.WaitGroup // an episode's lookups, so tests can wait them out
 }
 
 // changed bumps the version and wakes the waiting pages. Hold the lock.
@@ -401,7 +402,9 @@ func (r *watchRoom) finishMedia() {
 // loadEpisode looks the episode up and starts it. Hold the lock; the
 // lookup runs on its own and lands only if nothing was picked since.
 func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
-	r.show, r.ep, r.dub = &show, ep, dub
+	// The room keeps its own copy: the lookups below read show unlocked.
+	shown := show
+	r.show, r.ep, r.dub = &shown, ep, dub
 	r.phase, r.errText = "loading", ""
 	r.loadStep, r.loadSince = "Checking catalog for episode", time.Now()
 	r.finishMedia()
@@ -426,7 +429,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	r.torrentCancel = cancel
 	if show.MalID > 0 {
-		go func() {
+		b.watch.bg.Go(func() {
 			spans, err := watchSkipLookup(ctx, show.MalID, ep)
 			if ctx.Err() != nil {
 				return
@@ -441,9 +444,9 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 				r.changed()
 			}
 			b.watch.mu.Unlock()
-		}()
+		})
 	}
-	go func() {
+	b.watch.bg.Go(func() {
 		info, err := b.watch.infos.get(ctx, cli, show.ID, ep, dub, adult)
 		if err == nil && len(info.Streams) == 0 && len(info.Torrents) > 0 {
 			b.watch.mu.Lock()
@@ -503,8 +506,8 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		r.torrentCancel = cancel
 		// Inspect the exact stream being relayed for embedded HLS languages.
 		// This runs after playback starts and never delays the first frame.
-		if r.media != nil && looksLikeHLS(r.media.link.URL) {
-			go b.findWatchHLSTracks(ctx, r, gen, r.media)
+		if media := r.media; media != nil && looksLikeHLS(media.link.URL) {
+			b.watch.bg.Go(func() { b.findWatchHLSTracks(ctx, r, gen, media) })
 		}
 		// Some providers expose Sub and Dub as separate releases rather than
 		// multiple audio tracks. Look up the other version without delaying
@@ -514,16 +517,17 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 			other = "sub"
 		}
 		if _, exists := r.audioEntries[other]; !exists {
-			go b.findWatchAlternate(ctx, r, gen, cli, show.ID, ep, adult, !r.dub)
+			altDub := !r.dub
+			b.watch.bg.Go(func() { b.findWatchAlternate(ctx, r, gen, cli, show.ID, ep, adult, altDub) })
 		}
 		if r.provider == "kickassanime" {
-			go b.findWatchLanguages(ctx, r, gen, cli, show.ID, ep, adult, dub)
+			b.watch.bg.Go(func() { b.findWatchLanguages(ctx, r, gen, cli, show.ID, ep, adult, dub) })
 		}
 		// The next episode is looked up ahead, so it starts at once.
 		if ep < show.lastEpisode() {
 			watchAhead(func() { b.watch.infos.get(context.Background(), cli, show.ID, ep+1, dub, adult) })
 		}
-	}()
+	})
 }
 
 // findWatchHLSTracks advertises the selected stream's real audio renditions.

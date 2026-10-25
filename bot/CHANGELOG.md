@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.42
+
+- Watch Together: the Torrent size limit setting now works; before, it always stayed at 4 GiB. A storage budget under twice that size lowers the limit instead of stopping torrent playback.
+- Watch Together: torrent playback works on hosts without IPv6.
+- Watch Together: picking an episode again right after cancelling it no longer fails with "No source could play".
 ## 1.30.41
 
 - Activity: add a personal Watch Together preferences button beside the sound control, with saved first-choice and backup audio languages plus a preferred subtitle language.

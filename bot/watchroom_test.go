@@ -53,6 +53,15 @@ func watchBot(t *testing.T, streamURL string) (*bot, *time.Time) {
 		watchNow, watchChannel, watchClock, watchResolve, watchShowByID = oldNow, oldCh, oldClock, oldResolve, oldShow
 		isGameAdmin, watchAhead, watchSkipLookup = oldAdmin, oldAhead, oldSkipLookup
 	})
+	// Runs first: stop the room's lookups before the fakes above go back.
+	t.Cleanup(func() {
+		b.watch.mu.Lock()
+		if b.watch.cur != nil {
+			b.watch.cur.finishMedia()
+		}
+		b.watch.mu.Unlock()
+		b.watch.bg.Wait()
+	})
 	return b, &now
 }
 
@@ -491,6 +500,7 @@ func TestWatchRelay(t *testing.T) {
 	watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
 	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 1, Ep: 1}, nil)
 	waitLoaded(t, b)
+	b.watch.bg.Wait() // the audio probe reads the link being changed below
 	b.watch.mu.Lock()
 	b.watch.cur.media.link.Referrer = "https://site.example/"
 	media := b.watch.cur.media
@@ -672,5 +682,49 @@ func TestWatchHLSLanguagesReachRoom(t *testing.T) {
 	b.findWatchHLSTracks(context.Background(), room, 7, media)
 	if len(room.audioEntries) != 0 {
 		t.Fatal("stale HLS probe updated a new generation")
+	}
+}
+
+// A lookup called off by its room must not hand an empty answer to another
+// room waiting on the same episode; the waiter looks it up itself.
+func TestWatchInfosWaiterOutlivesCanceledLookup(t *testing.T) {
+	old := watchResolve
+	t.Cleanup(func() { watchResolve = old })
+	started := make(chan struct{})
+	var calls atomic.Int32
+	watchResolve = func(ctx context.Context, _ string, id, ep int, _, _ bool) (streamInfo, error) {
+		if calls.Add(1) == 1 {
+			close(started)
+			<-ctx.Done()
+			return streamInfo{}, ctx.Err()
+		}
+		return streamInfo{AnilistID: id, Episode: ep, Streams: []streamLink{{URL: "https://video.example/a.m3u8"}}}, nil
+	}
+	var infos watchInfos
+	first, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		infos.get(first, "", 1, 2, false, false)
+	}()
+	<-started
+	type answer struct {
+		info streamInfo
+		err  error
+	}
+	got := make(chan answer, 1)
+	go func() {
+		info, err := infos.get(context.Background(), "", 1, 2, false, false)
+		got <- answer{info, err}
+	}()
+	time.Sleep(20 * time.Millisecond) // let the second caller start waiting
+	cancel()
+	<-done
+	a := <-got
+	if a.err != nil || len(a.info.Streams) != 1 {
+		t.Fatalf("waiter got %+v, %v", a.info, a.err)
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("%d lookups", calls.Load())
 	}
 }
