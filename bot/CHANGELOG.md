@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.50
+
+- Watch Together: finding an episode no longer runs out of time when a site is down. Each site gets 30 seconds, and once an episode is found as a download, the other language isn't searched as well. Rokudo's Bad Girls episode 1 is now found in 40 s instead of over 2 minutes.
+
 ## 1.30.49
 
 - Watch Together: episodes that come as downloads now play in Discord's built-in player. Before, it stopped at once with "No source could play". If the built-in player fails anyway, the room now really switches to the other player.
