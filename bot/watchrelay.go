@@ -110,13 +110,13 @@ func looksLikeHLS(u string) bool {
 const watchSniffWait = 5 * time.Second
 
 // markHLSLinks asks the provider about each link whose address doesn't name
-// a playlist, and marks the ones that answer with one. Without this a
-// playlist served under a bare address is relayed as a video file, which
-// the browser cannot play.
+// a playlist and that the app hasn't already marked, and marks the ones
+// that answer with one. Without this a playlist served under a bare address
+// is relayed as a video file, which the browser cannot play.
 func markHLSLinks(ctx context.Context, info *streamInfo) {
 	var wg sync.WaitGroup
 	mark := func(link *streamLink) {
-		if link.URL == "" || looksLikeHLS(link.URL) {
+		if link.URL == "" || link.isHLS() {
 			return
 		}
 		wg.Add(1)

@@ -75,6 +75,7 @@ type source struct {
 	Status   string    `json:"status"`
 	Message  string    `json:"message"`
 	Source   string    `json:"source"`
+	Type     string    `json:"type"`
 	Tracks   []track   `json:"tracks"`
 	Chapters []chapter `json:"chapters"`
 }

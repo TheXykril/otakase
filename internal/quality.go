@@ -260,10 +260,10 @@ func applyQualityPreference(config *Config, anime *Anime, result *ProviderEpisod
 		return
 	}
 	selected := BestLink(result.Links)
-	if !looksLikeHLS(selected) {
+	hint := result.LinkHints[selected]
+	if !looksLikeHLS(selected) && !(hint.HLS && isHTTPStreamLink(selected)) {
 		return
 	}
-	hint := result.LinkHints[selected]
 	referrer := strings.TrimSpace(hint.Referrer)
 	if referrer == "" {
 		referrer = providers.Referrer(result.ProviderName)

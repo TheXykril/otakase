@@ -164,6 +164,9 @@ func TestStreamsOwnCopyFirst(t *testing.T) {
 	if hint.Headers["Referer"] != referer || hint.Headers["User-Agent"] == "" {
 		t.Errorf("headers = %v", hint.Headers)
 	}
+	if !hint.HLS {
+		t.Error("every copy is a playlist and must say so: some are named /vid/<video>/<token>")
+	}
 	if hint.Subtitle != "https://subs.invalid/en.vtt" {
 		t.Errorf("subtitle = %q, want the English track", hint.Subtitle)
 	}

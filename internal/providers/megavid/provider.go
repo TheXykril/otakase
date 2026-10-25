@@ -127,6 +127,8 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 			Subtitle:  subtitle,
 			Subtitles: subtitleTracks(src.Tracks),
 			Headers:   map[string]string{"Referer": referer, "User-Agent": userAgent},
+			// Some copies are /vid/<video>/<token> with no .m3u8 in the name.
+			HLS: src.Type == "" || strings.EqualFold(src.Type, "hls"),
 		}
 	}
 	return urls, hints, nil

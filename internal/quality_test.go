@@ -263,3 +263,25 @@ func TestResetMPVHLSBitrate(t *testing.T) {
 		t.Fatalf("sent %v", sent)
 	}
 }
+
+// A playlist named without .m3u8 (megavid's /vid/<video>/<token>) is still
+// narrowed when its provider marks it as HLS.
+func TestApplyQualityReadsAMarkedPlaylist(t *testing.T) {
+	master := strings.Replace(testMaster, "https://other.example/1080/index.m3u8", "1080/index.m3u8", 1)
+	server, hits := masterServer(t, master)
+	link := server.URL + "/show/master.m3u8"
+	result := qualityTestResult(link)
+	marked := server.URL + "/vid/VIDEO/token"
+	hint := result.LinkHints[link]
+	hint.HLS = true
+	result = ProviderEpisodeResult{Links: []string{marked}, LinkHints: map[string]StreamPlaybackHint{marked: hint}}
+
+	applyQualityPreference(&Config{StoragePath: t.TempDir(), Quality: "720"}, &Anime{}, &result)
+
+	if atomic.LoadInt32(hits) == 0 || len(result.Links) != 1 || result.Links[0] == marked {
+		t.Fatalf("the marked playlist was not narrowed: %v", result.Links)
+	}
+	if !result.LinkHints[result.Links[0]].HLS {
+		t.Error("the mark should follow the link to its variant")
+	}
+}
