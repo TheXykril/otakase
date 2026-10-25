@@ -80,7 +80,7 @@ func TestStreamForBotLocalSwarm(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	dir := t.TempDir()
-	stream, err := StreamForBot(ctx, mi.HashInfoBytes().HexString(), dir)
+	stream, err := StreamForBot(ctx, mi.HashInfoBytes().HexString(), dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -733,7 +733,12 @@ containing more than 256 files are rejected before opening storage. The episode
 plays from the download cache itself, so `watch_torrent_storage_gib` (default
 8 GiB) only has to hold the torrent; a smaller budget lowers the size limit to
 it. Hosts without IPv6 fall back to IPv4 only. The file list must arrive within
-three minutes and the first segment within three more. Downloads are limited to
+three minutes and the first segment within three more. `-stream-info` hands over
+up to three nyaa releases, best first, and the bot tries the next one when a
+swarm doesn't answer. Until its playlist is ready the helper prints
+`progress <text>` lines on stdout (step and loaded percentage, worded so viewers
+can't tell the source is a torrent), which the
+room shows as its loading step; errors name the step that failed. Downloads are limited to
 8 MiB/s and 16 established peers; uploads are disabled. One helper, including
 startup, runs at a time per bot process.
 
@@ -760,7 +765,9 @@ language.
 Embedded ASS/SSA, SRT and WebVTT subtitles become a soft WebVTT track
 (`/subs/en.vtt`) that each viewer can turn off. Subtitles are interleaved
 through the whole file, so ffmpeg converts them while the torrent downloads,
-writing each line as its part arrives. Until it finishes, the file starts with
+writing each line as its part arrives. ffmpeg fails at once on a track it
+cannot convert, so one still running after 15 seconds counts as converting even
+before its first line. Until it finishes, the file starts with
 a `NOTE otakase-partial` block; the relay does not cache it, and the Activity
 fetches it again every 10 seconds and hands the newer copy to the browser,
 until the marker is gone. Only when ffmpeg cannot convert the track does the

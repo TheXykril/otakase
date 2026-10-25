@@ -462,7 +462,14 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		if err == nil && len(info.Streams) == 0 && len(info.Torrents) > 0 {
 			var link string
 			for _, candidate := range info.Torrents {
-				torrent, link, err = watchStartTorrent(ctx, cli, candidate.InfoHash, info.Mode)
+				torrent, link, err = watchStartTorrent(ctx, cli, candidate.InfoHash, info.Mode, func(step string) {
+					b.watch.mu.Lock()
+					defer b.watch.mu.Unlock()
+					if b.watch.cur == r && r.gen == gen && r.phase == "loading" && step != "" {
+						r.loadStep = step
+						r.changed()
+					}
+				})
 				if err == nil || ctx.Err() != nil {
 					break
 				}

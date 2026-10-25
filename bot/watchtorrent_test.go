@@ -19,7 +19,7 @@ func TestWatchTorrentCancellationAndCleanup(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	_, _, err := startWatchTorrent(ctx, helper, "0123456789abcdef0123456789abcdef01234567", "sub")
+	_, _, err := startWatchTorrent(ctx, helper, "0123456789abcdef0123456789abcdef01234567", "sub", nil)
 	if err == nil {
 		t.Fatal("cancelled startup succeeded")
 	}
@@ -41,7 +41,7 @@ func TestWatchTorrentStopAndCrash(t *testing.T) {
 			os.WriteFile(helper, []byte("#!/bin/sh\necho http://127.0.0.1:12345/playlist.m3u8\nread line\n"), 0700)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			tor, _, err := startWatchTorrent(ctx, helper, "0123456789abcdef0123456789abcdef01234567", "dub")
+			tor, _, err := startWatchTorrent(ctx, helper, "0123456789abcdef0123456789abcdef01234567", "dub", nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -83,5 +83,25 @@ func TestWatchTorrentReclaimsOnlyUnlockedDirs(t *testing.T) {
 	}
 	if _, err = os.Stat(live); err != nil {
 		t.Fatal("live directory removed")
+	}
+}
+
+func TestWatchTorrentReportsProgress(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("TMPDIR", root)
+	helper := filepath.Join(root, "helper")
+	script := "#!/bin/sh\necho 'progress Connecting to source'\nprintf 'progress Reading the video \\033[31m(4%%)\\n'\necho http://127.0.0.1:12345/playlist.m3u8\nread line\n"
+	os.WriteFile(helper, []byte(script), 0700)
+	var steps []string
+	tor, link, err := startWatchTorrent(context.Background(), helper, "0123456789abcdef0123456789abcdef01234567", "sub", func(step string) { steps = append(steps, step) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tor.stop()
+	if link != "http://127.0.0.1:12345/playlist.m3u8" {
+		t.Fatalf("link %q", link)
+	}
+	if len(steps) != 2 || steps[0] != "Connecting to source" || steps[1] != "Reading the video [31m(4%)" {
+		t.Fatalf("steps %q", steps)
 	}
 }

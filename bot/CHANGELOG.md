@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.30.44
+
+- Watch Together: an episode that is slow to start now shows what it is doing while it gets ready (connecting, reading the video, preparing the first part) with how much has loaded. The wording never names where the episode comes from.
+- Watch Together: when a torrent's peers don't answer, the next best release is tried instead of giving up.
+- Watch Together: torrent subtitles no longer wait for the whole episode to download when their first line is a while into the episode.
+- Watch Together: a failed torrent start says which step failed in the bot log.
+
 ## 1.30.43
 
 - Watch Together: torrent episodes start playing while they download instead of after the whole file is in. Seeking ahead fetches that part of the episode first.

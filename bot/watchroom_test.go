@@ -612,7 +612,7 @@ func TestWatchTorrentOnlyStreamInfo(t *testing.T) {
 }
 
 func TestWatchTorrentRejectsBadHash(t *testing.T) {
-	if _, _, err := startWatchTorrent(context.Background(), "/nonexistent-cli", "not-a-hash", "sub"); err == nil {
+	if _, _, err := startWatchTorrent(context.Background(), "/nonexistent-cli", "not-a-hash", "sub", nil); err == nil {
 		t.Fatal("invalid torrent hash should fail before launching helper")
 	}
 }

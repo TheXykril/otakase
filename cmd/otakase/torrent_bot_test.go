@@ -232,6 +232,12 @@ func TestBotSubtitlesPartial(t *testing.T) {
 	if done || string(data) != want {
 		t.Fatalf("partial body %q", data)
 	}
+	// Nothing converted yet: still a valid, partial file.
+	os.WriteFile(s.path, nil, 0600)
+	if data, done = s.body(); done || string(data) != "WEBVTT\n\n"+botSubtitlesPartial+"\n\n" {
+		t.Fatalf("empty body %q", data)
+	}
+	os.WriteFile(s.path, []byte("WEBVTT\n\n00:00.000 --> 00:01.000\nOne\n\n00:02.000 --> 00:03.000\nTw"), 0600)
 	s.done = true
 	if data, done = s.body(); !done || strings.Contains(string(data), botSubtitlesPartial) || !strings.HasSuffix(string(data), "Tw") {
 		t.Fatalf("finished body %q", data)

@@ -44,7 +44,9 @@ func (t *watchTorrent) stop() {
 var watchStartTorrent = startWatchTorrent
 var watchTorrentSlot = make(chan struct{}, 1)
 
-func startWatchTorrent(ctx context.Context, cli, hash, mode string) (*watchTorrent, string, error) {
+// startWatchTorrent starts the helper and waits for its playlist address.
+// Until then the helper prints "progress <text>" lines, handed to progress.
+func startWatchTorrent(ctx context.Context, cli, hash, mode string, progress func(string)) (*watchTorrent, string, error) {
 	if len(hash) != 40 || strings.Trim(hash, "0123456789abcdefABCDEF") != "" {
 		return nil, "", errors.New("invalid torrent infohash")
 	}
@@ -98,8 +100,19 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string) (*watchTorre
 	t := &watchTorrent{cmd: cmd, stdin: stdin, done: make(chan struct{})}
 	ready := make(chan string, 1)
 	go func() {
-		line, _ := bufio.NewReader(stdout).ReadString('\n')
-		ready <- strings.TrimSpace(line)
+		lines := bufio.NewScanner(stdout)
+		for lines.Scan() {
+			line := strings.TrimSpace(lines.Text())
+			if step, ok := strings.CutPrefix(line, "progress "); ok {
+				if progress != nil {
+					progress(watchProgressText(step))
+				}
+				continue
+			}
+			ready <- line
+			return
+		}
+		ready <- ""
 	}()
 	go func() {
 		_ = cmd.Wait()
@@ -138,6 +151,17 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string) (*watchTorre
 		t.stop()
 		return nil, "", errors.New("torrent source did not start in time")
 	}
+}
+
+// watchProgressText keeps a helper progress line short and printable.
+func watchProgressText(step string) string {
+	step = strings.Map(func(r rune) rune {
+		if r < ' ' || r == 0x7f {
+			return -1
+		}
+		return r
+	}, step)
+	return clip(strings.TrimSpace(step), 80)
 }
 
 // Locks are inherited by helpers, so restarting the bot never removes a live
