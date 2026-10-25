@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -264,10 +265,13 @@ func followBotSubtitles(ctx context.Context, source, dir string, ordinal int) *b
 		s.mu.Unlock()
 		close(exited)
 	}()
+	// ffmpeg fails at once on a track it cannot convert. One still running
+	// after a short while is converting; on a slow torrent its first line
+	// may be a while off, and the player is told to check back meanwhile.
 	tick := time.NewTicker(250 * time.Millisecond)
 	defer tick.Stop()
-	timeout := time.NewTimer(90 * time.Second)
-	defer timeout.Stop()
+	settle := time.NewTimer(15 * time.Second)
+	defer settle.Stop()
 	for {
 		if data, _ := s.body(); bytes.HasPrefix(data, []byte("WEBVTT")) {
 			return s
@@ -278,10 +282,8 @@ func followBotSubtitles(ctx context.Context, source, dir string, ordinal int) *b
 				return s
 			}
 			return nil
-		case <-timeout.C:
-			_ = cmd.Process.Kill()
-			<-exited
-			return nil
+		case <-settle.C:
+			return s
 		case <-ctx.Done():
 			<-exited
 			return nil
@@ -303,7 +305,13 @@ func (s *botSubtitles) body() ([]byte, bool) {
 	defer f.Close()
 	data, _ := io.ReadAll(io.LimitReader(f, 4<<20))
 	data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
-	if done || !bytes.HasPrefix(data, []byte("WEBVTT")) {
+	if !bytes.HasPrefix(data, []byte("WEBVTT")) {
+		if done {
+			return data, done
+		}
+		data = []byte("WEBVTT\n\n") // nothing written yet
+	}
+	if done {
 		return data, done
 	}
 	if cut := bytes.LastIndex(data, []byte("\n\n")); cut >= 0 {
@@ -557,6 +565,72 @@ func (s *botSegments) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	write("video/mp2t", data)
 }
 
+// botProgress tells the bot what the helper is doing before the playlist
+// is ready, as "progress <text>" lines on stdout, with the download state
+// once the torrent is joined.
+type botProgress struct {
+	mu      sync.Mutex
+	text    string
+	stream  *torrentstream.BotStream
+	done    chan struct{}
+	stopped bool
+}
+
+func (p *botProgress) step(text string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.text = text
+	p.printLocked()
+}
+
+func (p *botProgress) printLocked() {
+	if p.stopped {
+		return
+	}
+	line := p.text
+	if p.stream != nil {
+		done, total, peers := p.stream.Progress()
+		if total > 0 {
+			line += fmt.Sprintf(" (%d%% downloaded, %d peers)", done*100/total, peers)
+		}
+	}
+	fmt.Printf("progress %s\n", line)
+}
+
+// follow repeats the current step with fresh download numbers.
+func (p *botProgress) follow(stream *torrentstream.BotStream) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.stream = stream
+	if p.stopped || p.done != nil {
+		return
+	}
+	p.done = make(chan struct{})
+	go func(done chan struct{}) {
+		tick := time.NewTicker(3 * time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-tick.C:
+				p.mu.Lock()
+				p.printLocked()
+				p.mu.Unlock()
+			}
+		}
+	}(p.done)
+}
+
+func (p *botProgress) stop() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.stopped && p.done != nil {
+		close(p.done)
+	}
+	p.stopped = true
+}
+
 func serveTorrentForBot(hash, mode string) error {
 	if !torrentBotHash.MatchString(hash) || (mode != "sub" && mode != "dub") {
 		return fmt.Errorf("invalid torrent playback request")
@@ -573,15 +647,25 @@ func serveTorrentForBot(hash, mode string) error {
 		return err
 	}
 	defer os.RemoveAll(dir)
+	progress := &botProgress{}
+	defer progress.stop()
 	// Play while downloading: ffmpeg reads the torrent through a loopback
 	// server that fetches the pieces it asks for first.
+	progress.step("Finding torrent peers")
 	join, joined := context.WithTimeout(ctx, 3*time.Minute)
-	stream, err := torrentstream.StreamForBot(join, hash, dir)
+	stream, err := torrentstream.StreamForBot(join, hash, dir, func(connected, known int) {
+		progress.step(fmt.Sprintf("Finding torrent peers (%d connected, %d known)", connected, known))
+	})
 	joined()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("no torrent peers sent the file list within 3 minutes")
+		}
 		return err
 	}
 	defer stream.Close()
+	progress.follow(stream)
+	progress.step("Reading the video")
 	media, variants, err := probeBotMediaVariants(ctx, stream.URL, mode, 3*time.Minute)
 	if err != nil {
 		return err
@@ -593,6 +677,7 @@ func serveTorrentForBot(hash, mode string) error {
 	if sub, ok := variants["sub"]; ok && sub.subtitle >= 0 {
 		ordinal = sub.subtitle
 	}
+	progress.step("Preparing subtitles")
 	segments.subs = followBotSubtitles(ctx, stream.URL, dir, ordinal)
 	if segments.subs != nil {
 		for language, track := range variants {
@@ -604,11 +689,12 @@ func serveTorrentForBot(hash, mode string) error {
 		// A track ffmpeg cannot convert is burnt in instead. The subtitle
 		// filter reads the whole track up front, so this one case still
 		// waits for the full download.
+		progress.step("Downloading the whole episode for its subtitles")
 		wait, done := context.WithTimeout(ctx, 10*time.Minute)
 		local, err := stream.WaitComplete(wait)
 		done()
 		if err != nil {
-			return err
+			return fmt.Errorf("download for burnt-in subtitles: %w", err)
 		}
 		segments.input, segments.burnFile = local, "source"+filepath.Ext(local)
 		if strings.HasSuffix(local, ".part") {
@@ -618,11 +704,12 @@ func serveTorrentForBot(hash, mode string) error {
 			return err
 		}
 	}
+	progress.step("Encoding the first part")
 	warm, warmed := context.WithTimeout(ctx, 3*time.Minute)
 	_, err = segments.segment(warm, 0, mode)
 	warmed()
 	if err != nil {
-		return err
+		return fmt.Errorf("first segment: %w", err)
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -644,6 +731,7 @@ func serveTorrentForBot(hash, mode string) error {
 	if segments.subs != nil {
 		subquery = "&subtitles=en"
 	}
+	progress.stop()
 	fmt.Printf("http://127.0.0.1:%d/playlist.m3u8?languages=%s%s\n", listener.Addr().(*net.TCPAddr).Port, strings.Join(languages, ","), subquery)
 	select {
 	case <-ctx.Done():

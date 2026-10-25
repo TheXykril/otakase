@@ -33,6 +33,9 @@ var streamInfoOnly atomic.Bool
 
 func SetStreamInfoOnly(enabled bool) { streamInfoOnly.Store(enabled) }
 
+// streamInfoCandidates is how many releases stream-info hands over, best first.
+const streamInfoCandidates = 3
+
 // dubMarkers identify a release that carries an English audio track. The index
 // is overwhelmingly subtitled, so dub is opt-in rather than assumed.
 var dubMarkers = regexp.MustCompile(`(?i)\b(dual[\s-]?audio|dual|dub(bed)?|multi[\s-]?audio)\b`)
@@ -323,13 +326,19 @@ func (p *Provider) GetEpisodeURLForMode(config providers.PlaybackConfig, id stri
 		return nil, err
 	}
 
+	if streamInfoOnly.Load() {
+		// The watch room tries these in turn, so a release whose swarm
+		// does not answer is not the end of it.
+		var links []string
+		for _, release := range candidates[:min(len(candidates), streamInfoCandidates)] {
+			links = append(links, "magnet:?xt=urn:btih:"+release.InfoHash)
+		}
+		return links, nil
+	}
 	for _, release := range candidates {
 		providerhost.Log(fmt.Sprintf("%s: episode %d -> %q (%d seeders, %s)",
 			p.name, epNo, release.Title, release.Seeders, release.Size))
 
-		if streamInfoOnly.Load() {
-			return []string{"magnet:?xt=urn:btih:" + release.InfoHash}, nil
-		}
 		streamURL, err := torrentstream.Stream(release.InfoHash)
 		if err != nil {
 			// Another release may have a healthier swarm.

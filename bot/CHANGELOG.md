@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.30.44
+
+- Watch Together: a torrent episode now shows what it is doing while it gets ready (finding peers, reading the video, encoding the first part) with download progress and peer count.
+- Watch Together: when a torrent's peers don't answer, the next best release is tried instead of giving up.
+- Watch Together: torrent subtitles no longer wait for the whole episode to download when their first line is a while into the episode.
+- Watch Together: a failed torrent start says which step failed in the bot log.
+
 ## 1.30.43
 
 - Watch Together: torrent episodes start playing while they download instead of after the whole file is in. Seeking ahead fetches that part of the episode first.

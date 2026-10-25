@@ -96,8 +96,10 @@ type BotStream struct {
 
 // StreamForBot joins the torrent and serves its episode on a loopback port.
 // The cache lives in the caller's private directory and stays within the
-// configured size limit. ctx bounds the wait for the torrent's file list.
-func StreamForBot(ctx context.Context, hash, dir string) (_ *BotStream, err error) {
+// configured size limit. ctx bounds the wait for the torrent's file list;
+// meanwhile waiting, when set, hears every few seconds how many peers are
+// connected and how many are known.
+func StreamForBot(ctx context.Context, hash, dir string, waiting func(connected, known int)) (_ *BotStream, err error) {
 	limits := readBotTorrentLimits(os.Getenv)
 	s := &BotStream{cache: filepath.Join(dir, "pieces")}
 	defer func() {
@@ -138,12 +140,22 @@ func StreamForBot(ctx context.Context, hash, dir string) (_ *BotStream, err erro
 	if err != nil {
 		return nil, err
 	}
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err = <-rejected:
-		return nil, err
-	case <-t.GotInfo():
+	tick := time.NewTicker(3 * time.Second)
+	defer tick.Stop()
+	for info := false; !info; {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case err = <-rejected:
+			return nil, err
+		case <-t.GotInfo():
+			info = true
+		case <-tick.C:
+			if waiting != nil {
+				stats := t.Stats()
+				waiting(stats.ActivePeers, stats.TotalPeers)
+			}
+		}
 	}
 	s.file = largestVideoFile(t)
 	if s.file == nil {
