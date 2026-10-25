@@ -19,6 +19,10 @@ type watchPlaybackPreferences struct {
 	BackupAudio  string `json:"backup_audio"`
 	Subtitles    string `json:"subtitles"`
 	SubSubtitles string `json:"sub_subtitles"`
+	// SkipOP and SkipED turn the room's automatic opening and ending skips
+	// on when this member opens a room.
+	SkipOP bool `json:"skip_op"`
+	SkipED bool `json:"skip_ed"`
 }
 
 func watchDefaultPreferences() watchPlaybackPreferences {
@@ -36,6 +40,7 @@ func watchPreferredLanguage(value string, subtitles bool) bool {
 
 func watchNormalizePreferences(p watchPlaybackPreferences) watchPlaybackPreferences {
 	normal := watchDefaultPreferences()
+	normal.SkipOP, normal.SkipED = p.SkipOP, p.SkipED
 	if watchPreferredLanguage(p.Audio, false) {
 		normal.Audio = p.Audio
 	}

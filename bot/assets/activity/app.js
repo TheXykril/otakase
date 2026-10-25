@@ -2936,6 +2936,10 @@ function soundApply() {
         ${choices("Automatic").replace('<option value="auto">Automatic</option>', "")}
       </select></label>
       <p class="note">Manual player choices take priority until you select Automatic again. Unavailable subtitle languages remain off.</p>
+      <div class="prefskips"><span>Skip automatically in rooms you open</span>
+        <label class="wsw"><input type="checkbox" id="prefskipop"> Openings (OP)</label>
+        <label class="wsw"><input type="checkbox" id="prefskiped"> Endings (ED)</label></div>
+      <p class="note">The host can still switch skips on or off for everyone during the room.</p>
       <p class="prefstatus" id="prefstatus" role="status"></p>
       <div class="prefsactions"><button type="button" class="btn alt" id="prefcancel">Cancel</button>
         <button type="button" class="btn" id="prefsave">Save preferences</button></div>
@@ -2946,6 +2950,8 @@ function soundApply() {
     const backup = layer.querySelector("#prefbackup");
     const sub = layer.querySelector("#prefsub");
     const subSub = layer.querySelector("#prefsubsub");
+    const skipOP = layer.querySelector("#prefskipop");
+    const skipED = layer.querySelector("#prefskiped");
     const status = layer.querySelector("#prefstatus");
     const save = layer.querySelector("#prefsave");
     const available = (el, value) => {
@@ -2980,6 +2986,8 @@ function soundApply() {
       available(backup, current.backup_audio || "auto");
       available(sub, current.subtitles || "auto");
       available(subSub, current.sub_subtitles || "auto");
+      skipOP.checked = !!current.skip_op;
+      skipED.checked = !!current.skip_ed;
       updateBackup();
       save.disabled = false;
       status.textContent = "";
@@ -2994,6 +3002,7 @@ function soundApply() {
       try {
         const saved = await api("watch/preferences", {
           audio: audio.value, backup_audio: backup.value, subtitles: sub.value, sub_subtitles: subSub.value,
+          skip_op: skipOP.checked, skip_ed: skipED.checked,
         });
         if (typeof wPreferencesChanged === "function") wPreferencesChanged(saved);
         close();

@@ -1202,6 +1202,8 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 	staff := b.isAdmin(user)
 	name := b.dashName(user)
 	tickets := b.watchTickets(user)
+	var prefs watchPlaybackPreferences
+	b.store.view(func(d *storeData) { prefs = watchNormalizePreferences(d.WatchPreferences[user]) })
 	ch := watchChannel(b, in.Channel)
 	adult := ch != nil && ch.NSFW
 	now := watchNow()
@@ -1234,7 +1236,7 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cur = &watchRoom{id: in.Room, channel: in.Channel, adult: adult, owner: user, host: user, opened: now,
-			phase: "pick", members: map[string]*watchMember{}}
+			phase: "pick", members: map[string]*watchMember{}, autoSkipOP: prefs.SkipOP, autoSkipED: prefs.SkipED}
 		b.watch.cur = cur
 		watchClock(b, cur)
 		log.Printf("watch room opened by member %s in channel %s", user, in.Channel)

@@ -531,6 +531,9 @@ own `/watchparty` parties are separate.
   backup audio and two subtitle languages: `sub_subtitles` for the original
   Japanese audio and `subtitles` for dubs. The player's Automatic subtitle
   choice uses the one matching the audio this viewer hears.
+  They also hold `skip_op` and `skip_ed`: a room starts with its automatic
+  opening/ending skips set from its opener's preferences; the host can still
+  toggle them for the room.
 - Episodes are found by the otakase CLI in the image:
   `otakase -stream-info <anilist id>:<episode>` (with `-dub`, and
   `-stream-adult` for 18+) prints the episode's links, headers and
