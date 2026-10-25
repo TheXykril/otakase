@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.51
+
+- Watch Together: preferences have two subtitle settings, one for Japanese audio (sub) and one for dubs. With Automatic, the player follows the one for the audio you hear, so you can watch dubs without subtitles and subs with them. Subs default to Automatic (English).
+
 ## 1.30.50
 
 - Watch Together: finding an episode no longer runs out of time when a site is down. Each site gets 30 seconds, and once an episode is found as a download, the other language isn't searched as well. Rokudo's Bad Girls episode 1 is now found in 40 s instead of over 2 minutes.

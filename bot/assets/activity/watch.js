@@ -576,6 +576,7 @@ async function wLoad() {
         });
         hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, wSubs);
         hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, wAudioTracks);
+        hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, wSubs);
         hls.loadSource(wvMedia);
         hls.attachMedia(vid);
       } else {
@@ -1003,6 +1004,19 @@ function wSubsFollow(tr, url) {
   setTimeout(step, 3000);
 }
 
+// wPlayingSub tells whether this viewer hears the original Japanese audio:
+// the language release they play, else the Hls.js audio track, else the
+// room's release.
+function wPlayingSub() {
+  if (!wv) return false;
+  for (const [code, url] of Object.entries(wv.audio_media || {})) {
+    if (url === wvMedia) return code === "sub" || wNormAudio(code).split("-")[0] === "ja";
+  }
+  const track = wHls && wHls.audioTracks ? wHls.audioTracks[wHls.audioTrack] : null;
+  if (track && track.lang) return wNormAudio(track.lang).split("-")[0] === "ja";
+  return !wv.dub;
+}
+
 // wSubs fills the subtitle picker and shows the picked track: English by
 // default.
 function wSubs() {
@@ -1010,8 +1024,10 @@ function wSubs() {
   const sel = document.getElementById("wsub");
   if (!vid || !sel) return;
   const tracks = Array.from(vid.textTracks).filter((t) => t.kind === "subtitles" || t.kind === "captions");
-  // Automatic subtitles use the viewer's saved preference.
-  let pick = wSubPick === "auto" ? ((wv && wv.preferences) || {}).subtitles || "auto" : wSubPick;
+  // Automatic subtitles use the viewer's saved preference for the audio
+  // they hear: one for the original Japanese audio, one for dubs.
+  const pref = (wv && wv.preferences) || {};
+  let pick = wSubPick !== "auto" ? wSubPick : (wPlayingSub() ? pref.sub_subtitles : pref.subtitles) || "auto";
   if (pick === "off") pick = "-1";
   else if (pick !== "auto" && !/^[0-9]+$/.test(pick)) {
     const match = tracks.findIndex((t) => {
