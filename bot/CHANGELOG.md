@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.54
+
+- Watch Together: new source Megavid, tried right after Anikoto. It finds episodes by MAL id, so it doesn't pick the wrong show, and it has its own copy of what it carries, so it still works when Anikoto is down. Sub and dub with subtitles in several languages.
+
 ## 1.30.53
 
 - Watch Together: Anikoto works again. It moved to a new site (anikototv.to, with anikoto.cz as a backup), and the watch room picks it up with this update.

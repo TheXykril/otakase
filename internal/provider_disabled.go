@@ -79,6 +79,10 @@ func filterEnabledProviders(candidates []string) []string {
 // plain HLS manifest, English captions and per-episode intro and outro ranges,
 // and its servers fall back to one another.
 //
+// megavid follows: it is addressed by MAL id, so it never plays the wrong show,
+// and it keeps its own copy of what it carries rather than relaying the same
+// CDN anikoto uses, so it still answers when that one is down.
+//
 // kickassanime follows: it answers as cheaply, carries whole seasons rather than
 // only what is recent, and like anikoto indexes dubs separately, so a dub
 // request either gets a dub or a straight answer that there is none.
@@ -90,7 +94,7 @@ func filterEnabledProviders(candidates []string) []string {
 // sukebei comes last: it carries only adult titles, which none of the others
 // do, so it is the one left to try for those, and is only in the stack at all
 // when AdultContent is on.
-var preferredProviderOrder = []string{"anikoto", "kickassanime", "anizone", "nyaa", "sukebei"}
+var preferredProviderOrder = []string{"anikoto", "megavid", "kickassanime", "anizone", "nyaa", "sukebei"}
 
 // defaultEnabledProviderStack is the "stacked" setting spelled out: the
 // enabled providers in preferredProviderOrder, then any others registered, in

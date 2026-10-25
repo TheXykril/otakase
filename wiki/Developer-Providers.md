@@ -24,8 +24,8 @@ loading.
 | `internal/provider_disabled.go` | Which providers are switched off, and the default stack order |
 | `internal/provider.go` | The provider stack: search, retries, `name::id` keys |
 
-Current providers: `anikoto`, `anizone`, `kickassanime`, `nyaa` (which also
-registers `sukebei`).
+Current providers: `anikoto`, `anizone`, `kickassanime`, `megavid`, `nyaa`
+(which also registers `sukebei`).
 
 A provider package imports `providers` and `providerhost` and never
 `internal` itself; `internal` imports the providers, so going the other way
@@ -165,7 +165,8 @@ internal/providers/yoursite/
 
 Look at `anikoto` for HTML scraping that resolves through an embed page (and
 falls back across mirror domains), `kickassanime` for a JSON API, and `nyaa`
-for something that isn't an HTTP stream at all.
+for something that isn't an HTTP stream at all. `megavid` shows a host
+addressed by MAL id: it searches AniList and attaches a `SearchHit`.
 
 ### 2. Register it
 
