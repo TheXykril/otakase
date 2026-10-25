@@ -1,9 +1,11 @@
 package megavid
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,6 +32,14 @@ func writeSource(w http.ResponseWriter, src map[string]any) {
 //	       per-request token, as megavid answers a show with no dub.
 func stubHost(t *testing.T) (*Provider, *stub) {
 	t.Helper()
+	previous := lookupHost
+	lookupHost = func(_ context.Context, host string) ([]string, error) {
+		if host == "gone.invalid" {
+			return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+		}
+		return []string{"192.0.2.1"}, nil
+	}
+	t.Cleanup(func() { lookupHost = previous })
 	s := &stub{}
 	s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -62,6 +72,9 @@ func stubHost(t *testing.T) (*Provider, *stub) {
 		case strings.HasPrefix(r.URL.Path, "/mal/52991/1/"):
 			lang := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/mal/52991/1/"), "/source")
 			stream := "https://relay.invalid/" + lang + "/master.txt"
+			if r.URL.Query().Get("gone") == "1" {
+				stream = "https://gone.invalid/" + lang + "/master.txt"
+			}
 			if own {
 				stream = "https://own.invalid/" + lang + "/playlist.m3u8"
 			}
@@ -238,5 +251,22 @@ func TestValidSpan(t *testing.T) {
 		if got := validSpan(span[0], span[1]); got != nil {
 			t.Errorf("%v should be rejected, got %v", span, got)
 		}
+	}
+}
+
+// A copy on a host with no DNS records is left out rather than handed to the
+// player to fail on.
+func TestACopyOnAMissingHostIsLeftOut(t *testing.T) {
+	p, _ := stubHost(t)
+	previous := copies
+	copies = []string{"noax=1", "gone=1"}
+	t.Cleanup(func() { copies = previous })
+
+	urls, _, err := p.GetEpisodeURLForModeWithHints(providers.PlaybackConfig{}, "52991", 1, "sub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(urls) != 1 || urls[0] != "https://own.invalid/sub/playlist.m3u8" {
+		t.Errorf("urls = %v, want only the copy whose host exists", urls)
 	}
 }

@@ -1,11 +1,15 @@
 package megavid
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/thexykril/otakase/internal/providers"
 )
@@ -151,6 +155,10 @@ func (p *Provider) resolve(malID, epNo int, lang string) ([]source, error) {
 				continue
 			}
 		}
+		if err := hostExists(src.Source); err != nil {
+			errs = append(errs, err.Error())
+			continue
+		}
 		if seen[streamIdentity(src.Source)] {
 			continue
 		}
@@ -161,6 +169,28 @@ func (p *Provider) resolve(malID, epNo int, lang string) ([]source, error) {
 		return nil, fmt.Errorf("megavid: no %s stream for %d episode %d: %s", lang, malID, epNo, strings.Join(errs, "; "))
 	}
 	return found, nil
+}
+
+// lookupHost is net.DefaultResolver.LookupHost, replaceable in tests.
+var lookupHost = net.DefaultResolver.LookupHost
+
+// hostExists refuses a stream on a host that has no DNS records. megavid's
+// relayed copy names s-NN.megavid.se hosts that did not exist in October
+// 2026; handing one to the player only delays the fallback. Any other lookup
+// failure lets the stream through, for the player to try.
+func hostExists(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = lookupHost(ctx, u.Hostname())
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+		return fmt.Errorf("megavid: stream host %s does not exist", u.Hostname())
+	}
+	return nil
 }
 
 // streamIdentity is what names the video in a stream URL. megavid's /vid/
