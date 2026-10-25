@@ -589,9 +589,9 @@ func (p *botProgress) printLocked() {
 	}
 	line := p.text
 	if p.stream != nil {
-		done, total, peers := p.stream.Progress()
+		done, total, _ := p.stream.Progress()
 		if total > 0 {
-			line += fmt.Sprintf(" (%d%% downloaded, %d peers)", done*100/total, peers)
+			line += fmt.Sprintf(" (%d%% loaded)", done*100/total)
 		}
 	}
 	fmt.Printf("progress %s\n", line)
@@ -651,10 +651,11 @@ func serveTorrentForBot(hash, mode string) error {
 	defer progress.stop()
 	// Play while downloading: ffmpeg reads the torrent through a loopback
 	// server that fetches the pieces it asks for first.
-	progress.step("Finding torrent peers")
+	progress.step("Connecting to source")
 	join, joined := context.WithTimeout(ctx, 3*time.Minute)
-	stream, err := torrentstream.StreamForBot(join, hash, dir, func(connected, known int) {
-		progress.step(fmt.Sprintf("Finding torrent peers (%d connected, %d known)", connected, known))
+	// Viewers see neutral wording; peer counts stay out of the room.
+	stream, err := torrentstream.StreamForBot(join, hash, dir, func(connected, _ int) {
+		progress.step(fmt.Sprintf("Connecting to source (%d connections)", connected))
 	})
 	joined()
 	if err != nil {
@@ -689,7 +690,7 @@ func serveTorrentForBot(hash, mode string) error {
 		// A track ffmpeg cannot convert is burnt in instead. The subtitle
 		// filter reads the whole track up front, so this one case still
 		// waits for the full download.
-		progress.step("Downloading the whole episode for its subtitles")
+		progress.step("Loading the whole episode for subtitles")
 		wait, done := context.WithTimeout(ctx, 10*time.Minute)
 		local, err := stream.WaitComplete(wait)
 		done()
@@ -704,7 +705,7 @@ func serveTorrentForBot(hash, mode string) error {
 			return err
 		}
 	}
-	progress.step("Encoding the first part")
+	progress.step("Preparing the first part")
 	warm, warmed := context.WithTimeout(ctx, 3*time.Minute)
 	_, err = segments.segment(warm, 0, mode)
 	warmed()

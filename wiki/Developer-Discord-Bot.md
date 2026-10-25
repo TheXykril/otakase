@@ -736,7 +736,8 @@ it. Hosts without IPv6 fall back to IPv4 only. The file list must arrive within
 three minutes and the first segment within three more. `-stream-info` hands over
 up to three nyaa releases, best first, and the bot tries the next one when a
 swarm doesn't answer. Until its playlist is ready the helper prints
-`progress <text>` lines on stdout (step, download percentage, peers), which the
+`progress <text>` lines on stdout (step and loaded percentage, worded so viewers
+can't tell the source is a torrent), which the
 room shows as its loading step; errors name the step that failed. Downloads are limited to
 8 MiB/s and 16 established peers; uploads are disabled. One helper, including
 startup, runs at a time per bot process.

@@ -90,7 +90,7 @@ func TestWatchTorrentReportsProgress(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("TMPDIR", root)
 	helper := filepath.Join(root, "helper")
-	script := "#!/bin/sh\necho 'progress Finding torrent peers'\nprintf 'progress Reading the video \\033[31m(4%%)\\n'\necho http://127.0.0.1:12345/playlist.m3u8\nread line\n"
+	script := "#!/bin/sh\necho 'progress Connecting to source'\nprintf 'progress Reading the video \\033[31m(4%%)\\n'\necho http://127.0.0.1:12345/playlist.m3u8\nread line\n"
 	os.WriteFile(helper, []byte(script), 0700)
 	var steps []string
 	tor, link, err := startWatchTorrent(context.Background(), helper, "0123456789abcdef0123456789abcdef01234567", "sub", func(step string) { steps = append(steps, step) })
@@ -101,7 +101,7 @@ func TestWatchTorrentReportsProgress(t *testing.T) {
 	if link != "http://127.0.0.1:12345/playlist.m3u8" {
 		t.Fatalf("link %q", link)
 	}
-	if len(steps) != 2 || steps[0] != "Finding torrent peers" || steps[1] != "Reading the video [31m(4%)" {
+	if len(steps) != 2 || steps[0] != "Connecting to source" || steps[1] != "Reading the video [31m(4%)" {
 		t.Fatalf("steps %q", steps)
 	}
 }
