@@ -263,6 +263,50 @@ func TestBoardMessageFitsComponentLimit(t *testing.T) {
 	}
 }
 
+func TestBoardMessageOneOptionPerShow(t *testing.T) {
+	// A show airing two or three episodes in a day once made Discord reject
+	// the board for duplicate option values.
+	shows := []airing{{ID: 7, At: 100, Episode: 5, Title: "A"}, {ID: 7, At: 200, Episode: 6, Title: "A"}, {ID: 7, At: 300, Episode: 7, Title: "A"}, {ID: 8, At: 400, Episode: 1, Title: "B"}}
+	for i := 9; i < 40; i++ {
+		shows = append(shows, airing{ID: i, At: int64(500 + i), Episode: 1, Title: "S"})
+	}
+	var menu *discordgo.SelectMenu
+	var find func(c discordgo.MessageComponent)
+	find = func(c discordgo.MessageComponent) {
+		switch v := c.(type) {
+		case discordgo.Container:
+			for _, x := range v.Components {
+				find(x)
+			}
+		case discordgo.ActionsRow:
+			for _, x := range v.Components {
+				find(x)
+			}
+		case discordgo.SelectMenu:
+			menu = &v
+		}
+	}
+	for _, c := range boardMessage(shows, time.Unix(0, 0), "", boardMarks{}) {
+		find(c)
+	}
+	if menu == nil {
+		t.Fatal("no show menu")
+	}
+	if len(menu.Options) != 25 {
+		t.Errorf("%d options, Discord allows 25", len(menu.Options))
+	}
+	values := map[string]bool{}
+	for _, o := range menu.Options {
+		if values[o.Value] {
+			t.Errorf("duplicate option value %s", o.Value)
+		}
+		values[o.Value] = true
+	}
+	if menu.Options[0].Description != "Episodes 5–7" {
+		t.Errorf("first option: %q", menu.Options[0].Description)
+	}
+}
+
 func TestMyAiringEmbed(t *testing.T) {
 	all := []airing{{ID: 1, At: 200, Episode: 2, Title: "B", URL: "u"}, {ID: 2, At: 100, Episode: 1, Title: "A", URL: "u"}, {ID: 3, At: 50, Title: "C"}}
 	e := myAiringEmbed(all, map[int]bool{1: true, 2: true})

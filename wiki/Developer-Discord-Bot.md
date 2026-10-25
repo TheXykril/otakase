@@ -744,8 +744,11 @@ startup, runs at a time per bot process.
 
 Segments are encoded on demand, so forward and backward seeks do not depend on
 a growing playlist. The picture is encoded once and shared by every audio
-language: one video encoder runs at a time, with one decoding, filtering and
-encoding thread, at most 720p/24 fps. Each language adds only an audio encode
+language: one video encoder runs at a time, decoding and encoding on every
+core (a single Raspberry Pi 5 core encodes 1080p slower than it plays), at
+most 720p/24 fps. A last segment under a second joins the one before it,
+because ffmpeg writes nothing for a few frames. The Activity's Hls.js waits up
+to a minute for a segment's first byte. Each language adds only an audio encode
 (two at a time), and the two are remuxed into one MPEG-TS segment without
 re-encoding. Every language keeps its own plain media playlist
 (`/<lang>/playlist.m3u8`), because the bundled Hls.js is the light build, which

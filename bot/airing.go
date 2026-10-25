@@ -254,8 +254,21 @@ func boardMessage(shows []airing, now time.Time, picture string, marks boardMark
 		}
 		parts = append(parts, discordgo.TextDisplay{Content: clip(head+"\n"+strings.Join(aired, "\n"), 2000)})
 	}
+	// One option per show: Discord rejects the whole post when two options
+	// share a value, as happens when a show airs two episodes in one day.
 	var opts []discordgo.SelectMenuOption
+	seen := map[int]int{}
 	for _, s := range shows {
+		if i, ok := seen[s.ID]; ok {
+			first := strings.TrimPrefix(strings.TrimPrefix(opts[i].Description, "Episodes "), "Episode ")
+			first, _, _ = strings.Cut(first, "–")
+			opts[i].Description = "Episodes " + first + "–" + strconv.Itoa(s.Episode)
+			continue
+		}
+		if len(opts) == 25 {
+			continue
+		}
+		seen[s.ID] = len(opts)
 		opts = append(opts, discordgo.SelectMenuOption{Label: clip(s.Title, 100), Value: strconv.Itoa(s.ID), Description: "Episode " + strconv.Itoa(s.Episode)})
 	}
 	parts = append(parts, gap,

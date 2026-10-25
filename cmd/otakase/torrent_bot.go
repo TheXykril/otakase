@@ -363,15 +363,39 @@ func (s *botSegments) variant(mode string) (botMedia, bool) {
 	return s.media, mode == s.primary
 }
 
+// segments counts the playlist's segments. A sliver of a few frames at
+// the end joins the segment before it: ffmpeg writes nothing for it, and
+// the player stops on the failed request.
 func (s *botSegments) segments() int {
-	return int(math.Ceil(s.media.duration / segmentSeconds))
+	n := int(math.Ceil(s.media.duration / segmentSeconds))
+	if n > 1 && s.media.duration-float64((n-1)*segmentSeconds) < 1 {
+		n--
+	}
+	return n
+}
+
+// duration is segment n's length as an ffmpeg -t value; the last segment
+// reads to the end.
+func (s *botSegments) duration(n int) string {
+	if n == s.segments()-1 {
+		return strconv.FormatFloat(s.length(n)+1, 'f', 3, 64)
+	}
+	return strconv.Itoa(segmentSeconds)
+}
+
+// length is how many seconds segment n lasts.
+func (s *botSegments) length(n int) float64 {
+	if n == s.segments()-1 {
+		return math.Max(s.media.duration-float64(n*segmentSeconds), 0.1)
+	}
+	return segmentSeconds
 }
 
 func (s *botSegments) playlist() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n")
+	fmt.Fprintf(&b, "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:5\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n")
 	for i := 0; i < s.segments(); i++ {
-		fmt.Fprintf(&b, "#EXTINF:%.6f,\nseg%d.ts\n", math.Min(segmentSeconds, s.media.duration-float64(i*segmentSeconds)), i)
+		fmt.Fprintf(&b, "#EXTINF:%.6f,\nseg%d.ts\n", s.length(i), i)
 	}
 	b.WriteString("#EXT-X-ENDLIST\n")
 	return b.String()
@@ -456,9 +480,11 @@ func (s *botSegments) video(ctx context.Context, n, subtitle int) ([]byte, error
 		}
 		filter = fmt.Sprintf("setpts=PTS+%s/TB,subtitles=%s:si=%d,setpts=PTS-STARTPTS,", start, s.burnFile, subtitle) + filter
 	}
-	args := []string{"-threads", "1", "-ss", start, "-i", s.input, "-t", "4",
-		"-map", fmt.Sprintf("0:%d", s.media.video), "-an", "-sn", "-vf", filter, "-filter_threads", "1",
-		"-c:v", "libx264", "-threads", "1", "-preset", "veryfast", "-crf", "26", "-maxrate", "1800k", "-bufsize", "3600k",
+	// Every core helps: on a Raspberry Pi one core decodes and encodes a
+	// 1080p segment slower than it plays, and the player gives up waiting.
+	args := []string{"-threads", "0", "-ss", start, "-i", s.input, "-t", s.duration(n),
+		"-map", fmt.Sprintf("0:%d", s.media.video), "-an", "-sn", "-vf", filter,
+		"-c:v", "libx264", "-threads", "0", "-preset", "veryfast", "-crf", "26", "-maxrate", "1800k", "-bufsize", "3600k",
 		"-pix_fmt", "yuv420p", "-r", "24", "-output_ts_offset", start, "-mpegts_copyts", "1", "-muxdelay", "0", "-f", "mpegts", "pipe:1"}
 	return s.encode(ctx, s.videoGate, fmt.Sprintf("v%d:%d", subtitle, n), args)
 }
@@ -469,7 +495,7 @@ func (s *botSegments) audio(ctx context.Context, n, track int) ([]byte, error) {
 		return nil, fmt.Errorf("invalid segment")
 	}
 	start := strconv.Itoa(n * segmentSeconds)
-	args := []string{"-threads", "1", "-ss", start, "-i", s.input, "-t", "4",
+	args := []string{"-threads", "1", "-ss", start, "-i", s.input, "-t", s.duration(n),
 		"-map", fmt.Sprintf("0:%d", track), "-vn", "-sn", "-c:a", "aac", "-ac", "2", "-b:a", "128k",
 		"-output_ts_offset", start, "-mpegts_copyts", "1", "-muxdelay", "0", "-f", "mpegts", "pipe:1"}
 	return s.encode(ctx, s.audioGate, fmt.Sprintf("a%d:%d", track, n), args)
