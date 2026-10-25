@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.49
+
+- Watch Together: episodes that come as downloads now play in Discord's built-in player. Before, it stopped at once with "No source could play". If the built-in player fails anyway, the room now really switches to the other player.
+
 ## 1.30.48
 
 - Watch Together: a room that ends before half a minute of the episode played gives the watch ticket back, for example when the source fails or everyone leaves while it loads.

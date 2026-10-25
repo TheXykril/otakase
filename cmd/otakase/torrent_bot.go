@@ -488,9 +488,13 @@ func (s *botSegments) video(ctx context.Context, n, subtitle int) ([]byte, error
 	}
 	// Every core helps: on a Raspberry Pi one core decodes and encodes a
 	// 1080p segment slower than it plays, and the player gives up waiting.
+	// No B-frames: they start each segment's decode times a frame or two
+	// before its first picture, so the first segment, which cannot go below
+	// zero, overlaps the next and Chromium's built-in HLS player stops with
+	// "Parsed buffers not in DTS sequence".
 	args := []string{"-threads", "0", "-ss", start, "-i", s.input, "-t", s.duration(n),
 		"-map", fmt.Sprintf("0:%d", s.media.video), "-an", "-sn", "-vf", filter,
-		"-c:v", "libx264", "-threads", "0", "-preset", "veryfast", "-crf", "26", "-maxrate", "1800k", "-bufsize", "3600k",
+		"-c:v", "libx264", "-threads", "0", "-preset", "veryfast", "-bf", "0", "-crf", "26", "-maxrate", "1800k", "-bufsize", "3600k",
 		"-pix_fmt", "yuv420p", "-r", "24", "-output_ts_offset", start, "-mpegts_copyts", "1", "-muxdelay", "0", "-f", "mpegts", "pipe:1"}
 	return s.encode(ctx, s.videoGate, fmt.Sprintf("v%d:%d", subtitle, n), args)
 }
