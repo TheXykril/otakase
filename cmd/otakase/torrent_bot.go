@@ -132,8 +132,8 @@ func botCommandOutput(cmd *exec.Cmd, limit int) ([]byte, error) {
 	return output.buffer.Bytes(), err
 }
 
-func probeBotMedia(ctx context.Context, source, mode string) (botMedia, error) {
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+func probeBotMedia(ctx context.Context, source, mode string, wait time.Duration) (botMedia, error) {
+	ctx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	out, err := botCommandOutput(exec.CommandContext(ctx, "ffprobe", "-v", "error", "-threads", "1", "-show_streams", "-show_format", "-of", "json", source), 1<<20)
 	if err != nil {
@@ -177,8 +177,8 @@ func botAudioLanguage(tag string, index int) string {
 // probeBotMediaVariants reads ffprobe once and keeps a playable rendition for
 // every audio language, not just the Japanese/English tracks used to start
 // playback. Duplicates prefer the file's default track.
-func probeBotMediaVariants(ctx context.Context, source, mode string) (botMedia, map[string]botMedia, error) {
-	run, cancel := context.WithTimeout(ctx, 20*time.Second)
+func probeBotMediaVariants(ctx context.Context, source, mode string, wait time.Duration) (botMedia, map[string]botMedia, error) {
+	run, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	out, err := botCommandOutput(exec.CommandContext(run, "ffprobe", "-v", "error", "-threads", "1",
 		"-show_streams", "-show_format", "-of", "json", source), 1<<20)
@@ -229,139 +229,323 @@ func probeBotMediaVariants(ctx context.Context, source, mode string) (botMedia, 
 	return primary, variants, nil
 }
 
-// Convert the selected text track once so each viewer can switch subtitles
-// independently. Unsupported subtitle formats retain the original burn-in.
-func botSubtitleVTT(ctx context.Context, source string, ordinal int) []byte {
+// botSubtitles is the episode's dialogue track as WebVTT. ffmpeg converts
+// it while the torrent downloads, so the file grows as the episode comes
+// in; until it is finished it carries a marker telling the player to fetch
+// it again.
+type botSubtitles struct {
+	path string
+	mu   sync.Mutex
+	done bool
+}
+
+const botSubtitlesPartial = "NOTE otakase-partial"
+
+// followBotSubtitles starts converting text track ordinal of source. It
+// returns nil when ffmpeg cannot convert the track, so the caller burns the
+// subtitles in instead.
+func followBotSubtitles(ctx context.Context, source, dir string, ordinal int) *botSubtitles {
 	if ordinal < 0 {
 		return nil
 	}
-	run, cancel := context.WithTimeout(ctx, 40*time.Second)
-	defer cancel()
-	data, err := botCommandOutput(exec.CommandContext(run, "ffmpeg", "-hide_banner", "-loglevel", "error",
-		"-nostdin", "-i", source, "-map", fmt.Sprintf("0:s:%d", ordinal),
-		"-c:s", "webvtt", "-f", "webvtt", "pipe:1"), 4<<20)
-	if err != nil || !bytes.HasPrefix(data, []byte("WEBVTT")) {
+	s := &botSubtitles{path: filepath.Join(dir, "subtitles.vtt")}
+	_ = os.Remove(s.path)
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+		"-i", source, "-map", fmt.Sprintf("0:s:%d", ordinal), "-c:s", "webvtt",
+		"-flush_packets", "1", "-fs", strconv.Itoa(4<<20), "-f", "webvtt", s.path)
+	if err := cmd.Start(); err != nil {
 		return nil
 	}
-	return data
-}
-
-type botSegments struct {
-	ctx         context.Context
-	dir, source string
-	media       botMedia
-	primary     string
-	subtitles   []byte
-	variants    map[string]botMedia
-	gate        chan struct{}
-	mu          sync.Mutex
-	cache       map[string][]byte
-	order       []string
-}
-
-func (s *botSegments) playlist(mode string) string {
-	media := s.media
-	if selected, ok := s.variants[mode]; ok {
-		media = selected
+	exited := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		s.mu.Lock()
+		s.done = true
+		s.mu.Unlock()
+		close(exited)
+	}()
+	tick := time.NewTicker(250 * time.Millisecond)
+	defer tick.Stop()
+	timeout := time.NewTimer(90 * time.Second)
+	defer timeout.Stop()
+	for {
+		if data, _ := s.body(); bytes.HasPrefix(data, []byte("WEBVTT")) {
+			return s
+		}
+		select {
+		case <-exited:
+			if data, _ := s.body(); bytes.HasPrefix(data, []byte("WEBVTT")) {
+				return s
+			}
+			return nil
+		case <-timeout.C:
+			_ = cmd.Process.Kill()
+			<-exited
+			return nil
+		case <-ctx.Done():
+			<-exited
+			return nil
+		case <-tick.C:
+		}
 	}
+}
+
+// body returns the cues converted so far. An unfinished file is cut after
+// its last whole cue and marked partial.
+func (s *botSubtitles) body() ([]byte, bool) {
+	s.mu.Lock()
+	done := s.done
+	s.mu.Unlock()
+	f, err := os.Open(s.path)
+	if err != nil {
+		return nil, done
+	}
+	defer f.Close()
+	data, _ := io.ReadAll(io.LimitReader(f, 4<<20))
+	data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+	if done || !bytes.HasPrefix(data, []byte("WEBVTT")) {
+		return data, done
+	}
+	if cut := bytes.LastIndex(data, []byte("\n\n")); cut >= 0 {
+		data = data[:cut+2]
+	}
+	header, rest := data, []byte(nil)
+	if split := bytes.Index(data, []byte("\n\n")); split >= 0 {
+		header, rest = data[:split], data[split+2:]
+	}
+	out := append(append([]byte{}, header...), "\n\n"+botSubtitlesPartial+"\n\n"...)
+	return append(out, rest...), false
+}
+
+// botSegments serves the episode as HLS, transcoded four seconds at a time
+// when a player asks. The picture is encoded once and shared by every
+// language; each language only adds an audio encode, which is cheap, and
+// the two are remuxed into one segment. Each language keeps its own plain
+// playlist, which every player, including the light Hls.js build, plays.
+type botSegments struct {
+	ctx      context.Context
+	dir      string
+	input    string // what ffmpeg reads: the torrent's loopback URL or a local file
+	burnFile string // the local file subtitles are burnt in from, relative to dir
+	media    botMedia
+	primary  string
+	subs     *botSubtitles
+	variants map[string]botMedia
+
+	videoGate, audioGate chan struct{}
+	mu                   sync.Mutex
+	cache                map[string][]byte
+	order                []string
+	size                 int
+}
+
+// botSegmentCache bounds the shared cache of encoded pictures and sound:
+// about a minute of video and every language's audio for it.
+const botSegmentCache = 64 << 20
+
+func newBotSegments(ctx context.Context, dir, input string, media botMedia, primary string, variants map[string]botMedia) *botSegments {
+	return &botSegments{ctx: ctx, dir: dir, input: input, media: media, primary: primary, variants: variants,
+		videoGate: make(chan struct{}, 1), audioGate: make(chan struct{}, 2)}
+}
+
+func (s *botSegments) variant(mode string) (botMedia, bool) {
+	if selected, ok := s.variants[mode]; ok {
+		return selected, true
+	}
+	return s.media, mode == s.primary
+}
+
+func (s *botSegments) segments() int {
+	return int(math.Ceil(s.media.duration / segmentSeconds))
+}
+
+func (s *botSegments) playlist() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n")
-	for i := 0; float64(i*segmentSeconds) < media.duration; i++ {
-		fmt.Fprintf(&b, "#EXTINF:%.6f,\nseg%d.ts\n", math.Min(segmentSeconds, media.duration-float64(i*segmentSeconds)), i)
+	for i := 0; i < s.segments(); i++ {
+		fmt.Fprintf(&b, "#EXTINF:%.6f,\nseg%d.ts\n", math.Min(segmentSeconds, s.media.duration-float64(i*segmentSeconds)), i)
 	}
 	b.WriteString("#EXT-X-ENDLIST\n")
 	return b.String()
 }
-func (s *botSegments) segment(ctx context.Context, n int, mode string) ([]byte, error) {
-	media := s.media
-	if selected, ok := s.variants[mode]; ok {
-		media = selected
-	}
-	key := fmt.Sprintf("%s:%d", mode, n)
-	if n < 0 || float64(n*segmentSeconds) >= media.duration {
-		return nil, fmt.Errorf("invalid segment")
-	}
-	select {
-	case s.gate <- struct{}{}:
-		defer func() { <-s.gate }()
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-s.ctx.Done():
-		return nil, s.ctx.Err()
-	}
+
+// encode runs one ffmpeg job behind gate, or answers from the cache. A
+// request that waited on the gate finds a job someone else ran in the cache.
+func (s *botSegments) encode(ctx context.Context, gate chan struct{}, key string, args []string) ([]byte, error) {
 	s.mu.Lock()
 	data := s.cache[key]
 	s.mu.Unlock()
 	if data != nil {
 		return data, nil
 	}
-	run, cancel := context.WithTimeout(s.ctx, 30*time.Second)
-	defer cancel()
-	stop := context.AfterFunc(ctx, cancel)
-	defer stop()
-	start := strconv.Itoa(n * segmentSeconds)
-	filter := "scale=w=min(1280\\,iw):h=min(720\\,ih):force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1"
-	if media.subtitle >= 0 {
-		filter = fmt.Sprintf("setpts=PTS+%s/TB,subtitles=source%s:si=%d,setpts=PTS-STARTPTS,", start, filepath.Ext(s.source), media.subtitle) + filter
+	select {
+	case gate <- struct{}{}:
+		defer func() { <-gate }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-s.ctx.Done():
+		return nil, s.ctx.Err()
 	}
-	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "1", "-ss", start, "-i", s.source, "-t", "4", "-map", fmt.Sprintf("0:%d", media.video), "-map", fmt.Sprintf("0:%d", media.audio), "-vf", filter, "-filter_threads", "1", "-c:v", "libx264", "-threads", "1", "-preset", "veryfast", "-crf", "26", "-maxrate", "1800k", "-bufsize", "3600k", "-pix_fmt", "yuv420p", "-r", "24", "-c:a", "aac", "-ac", "2", "-b:a", "128k", "-output_ts_offset", start, "-mpegts_copyts", "1", "-muxdelay", "0", "-f", "mpegts", "pipe:1"}
-	cmd := exec.CommandContext(run, "ffmpeg", args...)
-	cmd.Dir = s.dir
-	data, err := botCommandOutput(cmd, 4<<20)
+	s.mu.Lock()
+	data = s.cache[key]
+	s.mu.Unlock()
+	if data != nil {
+		return data, nil
+	}
+	data, err := s.ffmpeg(ctx, args)
 	if err != nil {
-		return nil, fmt.Errorf("encode segment: %w", err)
-	}
-	if len(data) > 4<<20 {
-		return nil, fmt.Errorf("segment exceeds size limit")
+		return nil, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cache == nil {
 		s.cache = map[string][]byte{}
 	}
-	// At most 16 segments (64 MiB), shared by every viewer.
-	if len(s.order) >= 16 {
-		delete(s.cache, s.order[0])
-		s.order = s.order[1:]
+	if _, ok := s.cache[key]; !ok {
+		for len(s.order) > 0 && s.size+len(data) > botSegmentCache {
+			s.size -= len(s.cache[s.order[0]])
+			delete(s.cache, s.order[0])
+			s.order = s.order[1:]
+		}
+		s.cache[key] = data
+		s.order = append(s.order, key)
+		s.size += len(data)
 	}
-	s.cache[key] = data
-	s.order = append(s.order, key)
 	return data, nil
 }
+
+func (s *botSegments) ffmpeg(ctx context.Context, args []string) ([]byte, error) {
+	// Pieces of a torrent still downloading may take a while to arrive; the
+	// first segment, encoded at startup, may wait for peers even longer.
+	limit := 45 * time.Second
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) > limit {
+		limit = time.Until(deadline)
+	}
+	run, cancel := context.WithTimeout(s.ctx, limit)
+	defer cancel()
+	stop := context.AfterFunc(ctx, cancel)
+	defer stop()
+	cmd := exec.CommandContext(run, "ffmpeg", append([]string{"-hide_banner", "-loglevel", "error", "-nostdin"}, args...)...)
+	cmd.Dir = s.dir
+	data, err := botCommandOutput(cmd, 4<<20)
+	if err != nil {
+		return nil, fmt.Errorf("encode segment: %w", err)
+	}
+	return data, nil
+}
+
+// video encodes segment n of the picture, with subtitle track subtitle
+// burnt in when it is not negative.
+func (s *botSegments) video(ctx context.Context, n, subtitle int) ([]byte, error) {
+	if n < 0 || n >= s.segments() {
+		return nil, fmt.Errorf("invalid segment")
+	}
+	start := strconv.Itoa(n * segmentSeconds)
+	filter := "scale=w=min(1280\\,iw):h=min(720\\,ih):force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1"
+	if subtitle >= 0 {
+		if s.burnFile == "" {
+			return nil, fmt.Errorf("subtitles cannot be burnt in")
+		}
+		filter = fmt.Sprintf("setpts=PTS+%s/TB,subtitles=%s:si=%d,setpts=PTS-STARTPTS,", start, s.burnFile, subtitle) + filter
+	}
+	args := []string{"-threads", "1", "-ss", start, "-i", s.input, "-t", "4",
+		"-map", fmt.Sprintf("0:%d", s.media.video), "-an", "-sn", "-vf", filter, "-filter_threads", "1",
+		"-c:v", "libx264", "-threads", "1", "-preset", "veryfast", "-crf", "26", "-maxrate", "1800k", "-bufsize", "3600k",
+		"-pix_fmt", "yuv420p", "-r", "24", "-output_ts_offset", start, "-mpegts_copyts", "1", "-muxdelay", "0", "-f", "mpegts", "pipe:1"}
+	return s.encode(ctx, s.videoGate, fmt.Sprintf("v%d:%d", subtitle, n), args)
+}
+
+// audio encodes segment n of audio stream track.
+func (s *botSegments) audio(ctx context.Context, n, track int) ([]byte, error) {
+	if n < 0 || n >= s.segments() {
+		return nil, fmt.Errorf("invalid segment")
+	}
+	start := strconv.Itoa(n * segmentSeconds)
+	args := []string{"-threads", "1", "-ss", start, "-i", s.input, "-t", "4",
+		"-map", fmt.Sprintf("0:%d", track), "-vn", "-sn", "-c:a", "aac", "-ac", "2", "-b:a", "128k",
+		"-output_ts_offset", start, "-mpegts_copyts", "1", "-muxdelay", "0", "-f", "mpegts", "pipe:1"}
+	return s.encode(ctx, s.audioGate, fmt.Sprintf("a%d:%d", track, n), args)
+}
+
+// segment is segment n of language mode: the shared picture and that
+// language's sound, encoded side by side and remuxed without re-encoding.
+func (s *botSegments) segment(ctx context.Context, n int, mode string) ([]byte, error) {
+	media, ok := s.variant(mode)
+	if !ok || n < 0 || n >= s.segments() {
+		return nil, fmt.Errorf("invalid segment")
+	}
+	type result struct {
+		data []byte
+		err  error
+	}
+	sound := make(chan result, 1)
+	go func() {
+		data, err := s.audio(ctx, n, media.audio)
+		sound <- result{data, err}
+	}()
+	picture, err := s.video(ctx, n, media.subtitle)
+	audio := <-sound
+	if err == nil {
+		err = audio.err
+	}
+	if err != nil {
+		return nil, err
+	}
+	parts := make([]string, 2)
+	for k, data := range [][]byte{picture, audio.data} {
+		f, err := os.CreateTemp(s.dir, "part-*.ts")
+		if err != nil {
+			return nil, err
+		}
+		parts[k] = f.Name()
+		defer os.Remove(f.Name())
+		_, err = f.Write(data)
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return s.ffmpeg(ctx, []string{"-i", parts[0], "-i", parts[1], "-map", "0:v", "-map", "1:a", "-c", "copy",
+		"-copyts", "-mpegts_copyts", "1", "-muxdelay", "0", "-f", "mpegts", "pipe:1"})
+}
+
 func (s *botSegments) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" && r.Method != "HEAD" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	mode := s.primary
-	path := r.URL.Path
-	if parts := strings.SplitN(strings.TrimPrefix(path, "/"), "/", 2); len(parts) == 2 && parts[0] != "subs" {
-		if _, ok := s.variants[parts[0]]; !ok {
+	write := func(typ string, data []byte) {
+		w.Header().Set("Content-Type", typ)
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+		if r.Method != "HEAD" {
+			_, _ = w.Write(data)
+		}
+	}
+	if r.URL.Path == "/subs/en.vtt" && s.subs != nil {
+		data, done := s.subs.body()
+		if !done {
+			w.Header().Set("Cache-Control", "no-store")
+		}
+		write("text/vtt; charset=utf-8", data)
+		return
+	}
+	mode, path := s.primary, r.URL.Path
+	if dir, rest, ok := strings.Cut(strings.TrimPrefix(path, "/"), "/"); ok {
+		if _, known := s.variant(dir); !known {
 			http.NotFound(w, r)
 			return
 		}
-		mode, path = parts[0], "/"+parts[1]
-	}
-	if path == "/subs/en.vtt" && len(s.subtitles) != 0 {
-		w.Header().Set("Content-Type", "text/vtt; charset=utf-8")
-		w.Header().Set("Content-Length", strconv.Itoa(len(s.subtitles)))
-		if r.Method == "GET" {
-			_, _ = w.Write(s.subtitles)
-		}
-		return
+		mode, path = dir, "/"+rest
 	}
 	if path == "/playlist.m3u8" {
-		w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
-		io.WriteString(w, s.playlist(mode))
+		write("application/vnd.apple.mpegurl", []byte(s.playlist()))
 		return
 	}
 	raw := strings.TrimSuffix(strings.TrimPrefix(path, "/seg"), ".ts")
 	n, err := strconv.Atoi(raw)
-	media := s.media
-	if selected, ok := s.variants[mode]; ok {
-		media = selected
-	}
-	if err != nil || path != fmt.Sprintf("/seg%d.ts", n) || n < 0 || float64(n*segmentSeconds) >= media.duration {
+	if err != nil || path != fmt.Sprintf("/seg%d.ts", n) || n < 0 || n >= s.segments() {
 		http.NotFound(w, r)
 		return
 	}
@@ -370,11 +554,7 @@ func (s *botSegments) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Video segment unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	w.Header().Set("Content-Type", "video/mp2t")
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	if r.Method != "HEAD" {
-		w.Write(data)
-	}
+	write("video/mp2t", data)
 }
 
 func serveTorrentForBot(hash, mode string) error {
@@ -393,29 +573,55 @@ func serveTorrentForBot(hash, mode string) error {
 		return err
 	}
 	defer os.RemoveAll(dir)
-	download, done := context.WithTimeout(ctx, 10*time.Minute)
-	source, err := torrentstream.DownloadForBot(download, hash, dir)
-	done()
+	// Play while downloading: ffmpeg reads the torrent through a loopback
+	// server that fetches the pieces it asks for first.
+	join, joined := context.WithTimeout(ctx, 3*time.Minute)
+	stream, err := torrentstream.StreamForBot(join, hash, dir)
+	joined()
 	if err != nil {
 		return err
 	}
-	media, variants, err := probeBotMediaVariants(ctx, source, mode)
+	defer stream.Close()
+	media, variants, err := probeBotMediaVariants(ctx, stream.URL, mode, 3*time.Minute)
 	if err != nil {
 		return err
 	}
-	var subtitles []byte
-	if sub, ok := variants["sub"]; ok {
-		subtitles = botSubtitleVTT(ctx, source, sub.subtitle)
+	segments := newBotSegments(ctx, dir, stream.URL, media, mode, variants)
+	// Soft subtitles let every viewer turn them off; the dub's signs track
+	// is used when there is no dialogue track.
+	ordinal := media.subtitle
+	if sub, ok := variants["sub"]; ok && sub.subtitle >= 0 {
+		ordinal = sub.subtitle
 	}
-	if len(subtitles) > 0 {
+	segments.subs = followBotSubtitles(ctx, stream.URL, dir, ordinal)
+	if segments.subs != nil {
 		for language, track := range variants {
 			track.subtitle = -1
 			variants[language] = track
 		}
-		media.subtitle = -1
+		segments.media.subtitle = -1
+	} else if ordinal >= 0 {
+		// A track ffmpeg cannot convert is burnt in instead. The subtitle
+		// filter reads the whole track up front, so this one case still
+		// waits for the full download.
+		wait, done := context.WithTimeout(ctx, 10*time.Minute)
+		local, err := stream.WaitComplete(wait)
+		done()
+		if err != nil {
+			return err
+		}
+		segments.input, segments.burnFile = local, "source"+filepath.Ext(local)
+		if strings.HasSuffix(local, ".part") {
+			segments.burnFile = "source" + filepath.Ext(strings.TrimSuffix(local, ".part"))
+		}
+		if err = os.Symlink(local, filepath.Join(dir, segments.burnFile)); err != nil {
+			return err
+		}
 	}
-	segments := &botSegments{ctx: ctx, dir: dir, source: source, media: media, primary: mode, subtitles: subtitles, variants: variants, gate: make(chan struct{}, 1)}
-	if _, err = segments.segment(ctx, 0, mode); err != nil {
+	warm, warmed := context.WithTimeout(ctx, 3*time.Minute)
+	_, err = segments.segment(warm, 0, mode)
+	warmed()
+	if err != nil {
 		return err
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -435,7 +641,7 @@ func serveTorrentForBot(hash, mode string) error {
 	}
 	sort.Strings(languages)
 	subquery := ""
-	if len(subtitles) > 0 {
+	if segments.subs != nil {
 		subquery = "&subtitles=en"
 	}
 	fmt.Printf("http://127.0.0.1:%d/playlist.m3u8?languages=%s%s\n", listener.Addr().(*net.TCPAddr).Port, strings.Join(languages, ","), subquery)

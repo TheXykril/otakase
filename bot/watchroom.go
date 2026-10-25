@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -111,6 +112,7 @@ type watchRoom struct {
 
 	streams         []streamLink
 	provider        string // provider that resolved the selected episode
+	providerID      string // the show's id there, for the language lookup
 	alternateOrigin *watchPlaybackOrigin
 	link            int // index into streams
 	torrent         *watchTorrent
@@ -409,7 +411,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 	r.loadStep, r.loadSince = "Checking catalog for episode", time.Now()
 	r.finishMedia()
 	r.streams, r.link, r.subs, r.entry, r.audioEntries = nil, 0, nil, "", nil
-	r.provider = ""
+	r.provider, r.providerID = "", ""
 	r.audioReleases = nil
 	r.skipIntervals = watchSkipIntervals{}
 	r.skipReady = show.MalID <= 0
@@ -491,7 +493,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		}
 		r.streams = info.Streams
 		r.audioReleases = info.AudioVariants
-		r.provider = info.Provider
+		r.provider, r.providerID = info.Provider, info.ProviderID
 		// Shown as it plays: a show without a dub plays subbed.
 		r.dub = info.Mode == "dub"
 		r.torrentCancel = nil
@@ -511,23 +513,42 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
 		}
 		// Some providers expose Sub and Dub as separate releases rather than
 		// multiple audio tracks. Look up the other version without delaying
-		// the first viewer; only reuse directly playable links here.
+		// the first viewer; only reuse directly playable links here. The
+		// lookups run one after another, so a small host runs one CLI at a
+		// time, and each is skipped once an earlier one answered it.
 		other := "dub"
 		if r.dub {
 			other = "sub"
 		}
-		if _, exists := r.audioEntries[other]; !exists {
-			altDub := !r.dub
-			b.watch.bg.Go(func() { b.findWatchAlternate(ctx, r, gen, cli, show.ID, ep, adult, altDub) })
-		}
-		if r.provider == "kickassanime" {
-			b.watch.bg.Go(func() { b.findWatchLanguages(ctx, r, gen, cli, show.ID, ep, adult, dub) })
-		}
-		// The next episode is looked up ahead, so it starts at once.
-		if ep < show.lastEpisode() {
-			watchAhead(func() { b.watch.infos.get(context.Background(), cli, show.ID, ep+1, dub, adult) })
-		}
+		_, haveOther := r.audioEntries[other]
+		languages, providerID := r.provider == "kickassanime", r.providerID
+		last := show.lastEpisode()
+		b.watch.bg.Go(func() {
+			if languages {
+				// Its language pages usually carry the other version too.
+				b.findWatchLanguages(ctx, r, gen, cli, show.ID, ep, adult, dub, providerID)
+			}
+			if !haveOther && !b.watchHasAudio(r, gen, other) {
+				b.findWatchAlternate(ctx, r, gen, cli, show.ID, ep, adult, other == "dub")
+			}
+			// The next episode is looked up ahead, so it starts at once.
+			if ep < last && ctx.Err() == nil {
+				watchAhead(func() { b.watch.infos.get(context.Background(), cli, show.ID, ep+1, dub, adult) })
+			}
+		})
 	})
+}
+
+// watchHasAudio reports whether the room's current episode already offers
+// audio version mode.
+func (b *bot) watchHasAudio(room *watchRoom, gen int, mode string) bool {
+	b.watch.mu.Lock()
+	defer b.watch.mu.Unlock()
+	if b.watch.cur != room || room.gen != gen {
+		return true // nothing to look up for an episode no longer playing
+	}
+	_, ok := room.audioEntries[mode]
+	return ok
 }
 
 // findWatchHLSTracks advertises the selected stream's real audio renditions.
@@ -574,8 +595,16 @@ func (b *bot) findWatchHLSTracks(ctx context.Context, room *watchRoom, gen int, 
 
 // findWatchLanguages looks up other playable languages after the episode
 // starts. Results belong only to the room generation that requested them.
-func (b *bot) findWatchLanguages(ctx context.Context, room *watchRoom, gen int, cli string, showID, ep int, adult, dub bool) {
-	info, err := watchResolveAudio(ctx, cli, showID, ep, dub, adult)
+func (b *bot) findWatchLanguages(ctx context.Context, room *watchRoom, gen int, cli string, showID, ep int, adult, dub bool, providerID string) {
+	var info streamInfo
+	err := errWatchCLITooOld
+	if providerID != "" {
+		info, err = watchResolveLanguages(ctx, cli, "kickassanime", providerID, ep)
+	}
+	if errors.Is(err, errWatchCLITooOld) {
+		// Without the show's id, or with an older CLI, search it again.
+		info, err = watchResolveAudio(ctx, cli, showID, ep, dub, adult)
+	}
 	if err != nil {
 		if ctx.Err() == nil {
 			log.Printf("watch audio discovery for %d:%d: %v", showID, ep, err)
@@ -594,7 +623,13 @@ func (b *bot) findWatchLanguages(ctx context.Context, room *watchRoom, gen int, 
 		room.audioReleases = map[string]streamLink{}
 	}
 	for language, link := range info.AudioVariants {
-		room.audioReleases[language] = link
+		duplicate := false
+		for _, active := range room.streams {
+			duplicate = duplicate || active.URL == link.URL
+		}
+		if !duplicate {
+			room.audioReleases[language] = link
+		}
 	}
 	if room.addAudioReleases() {
 		room.changed()

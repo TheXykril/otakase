@@ -23,6 +23,7 @@ type StreamInfo struct {
 	Title         string                `json:"title"`
 	Episodes      int                   `json:"episodes,omitempty"`
 	Provider      string                `json:"provider"`
+	ProviderID    string                `json:"provider_id,omitempty"`
 	Mode          string                `json:"mode"`
 	Streams       []StreamLink          `json:"streams"`
 	AudioVariants map[string]StreamLink `json:"audio_variants,omitempty"`
@@ -104,52 +105,18 @@ func resolveStreamInfo(config Config, anilistID, episode int, discoverLanguages 
 				continue
 			}
 			info.Provider, info.Mode, info.Streams, info.Torrents = result.ProviderName, mode, streams, torrents
+			// The watch room asks for the other languages of this very
+			// show later, without searching for it again.
+			info.ProviderID = ""
+			if result.ProviderName == "kickassanime" {
+				info.ProviderID = result.ProviderID
+			}
 			if len(streams) > 0 {
 				// This provider indexes different spoken languages as separate
 				// releases. Discover real episode URLs, not merely locale
 				// names, so the Activity can offer only playable choices.
 				if discoverLanguages && result.ProviderName == "kickassanime" && result.ProviderID != "" {
-					alternates := kickassanime.EpisodeAudioVariants(result.ProviderID, episode, 45*time.Second)
-					// Do not advertise a separate language when multiple
-					// locale pages resolve to the same unlabelled stream.
-					// Its HLS audio renditions are discovered by the player.
-					urlCounts := map[string]int{}
-					for _, alt := range alternates {
-						urlCounts[alt.URL]++
-					}
-					for lang, alternate := range alternates {
-						if urlCounts[alternate.URL] > 1 {
-							continue
-						}
-						if alternate.URL == "" {
-							continue
-						}
-						same := false
-						for _, original := range streams {
-							if original.URL == alternate.URL {
-								same = true
-								break
-							}
-						}
-						if same {
-							continue
-						}
-						links := streamLinks(ProviderEpisodeResult{
-							Links: []string{alternate.URL},
-							LinkHints: map[string]StreamPlaybackHint{alternate.URL: {
-								Referrer:  alternate.Hint.Referrer,
-								Headers:   alternate.Hint.Headers,
-								Subtitle:  alternate.Hint.Subtitle,
-								Subtitles: alternate.Hint.Subtitles,
-							}},
-						})
-						if len(links) > 0 {
-							if info.AudioVariants == nil {
-								info.AudioVariants = map[string]StreamLink{}
-							}
-							info.AudioVariants[lang] = links[0]
-						}
-					}
+					info.AudioVariants = kickassAudioVariants(result.ProviderID, episode, streams)
 				}
 				return info, nil
 			}
@@ -166,6 +133,64 @@ func resolveStreamInfo(config Config, anilistID, episode int, discoverLanguages 
 		return info, errors.New("no provider is enabled")
 	}
 	return info, fmt.Errorf("episode %d not found: %s", episode, strings.Join(failures, "; "))
+}
+
+// ResolveStreamLanguages finds the other spoken-language releases of an
+// episode the fast lookup already matched, by the provider's show id, so the
+// watch room does not search for the show a second time.
+func ResolveStreamLanguages(provider, providerID string, episode int) (StreamInfo, error) {
+	if provider != "kickassanime" || providerID == "" || episode < 1 {
+		return StreamInfo{}, fmt.Errorf("no separate language releases for %s", provider)
+	}
+	return StreamInfo{Episode: episode, Provider: provider, ProviderID: providerID,
+		AudioVariants: kickassAudioVariants(providerID, episode, nil)}, nil
+}
+
+// kickassAudioVariants turns KickAssAnime's per-language episode pages into
+// playable links. This provider indexes different spoken languages as
+// separate releases. Discover real episode URLs, not merely locale names,
+// so the Activity can offer only playable choices.
+func kickassAudioVariants(providerID string, episode int, streams []StreamLink) map[string]StreamLink {
+	alternates := kickassanime.EpisodeAudioVariants(providerID, episode, 45*time.Second)
+	// Do not advertise a separate language when multiple locale pages
+	// resolve to the same unlabelled stream. Its HLS audio renditions are
+	// discovered by the player.
+	urlCounts := map[string]int{}
+	for _, alt := range alternates {
+		urlCounts[alt.URL]++
+	}
+	var out map[string]StreamLink
+	for lang, alternate := range alternates {
+		if urlCounts[alternate.URL] > 1 || alternate.URL == "" {
+			continue
+		}
+		same := false
+		for _, original := range streams {
+			if original.URL == alternate.URL {
+				same = true
+				break
+			}
+		}
+		if same {
+			continue
+		}
+		links := streamLinks(ProviderEpisodeResult{
+			Links: []string{alternate.URL},
+			LinkHints: map[string]StreamPlaybackHint{alternate.URL: {
+				Referrer:  alternate.Hint.Referrer,
+				Headers:   alternate.Hint.Headers,
+				Subtitle:  alternate.Hint.Subtitle,
+				Subtitles: alternate.Hint.Subtitles,
+			}},
+		})
+		if len(links) > 0 {
+			if out == nil {
+				out = map[string]StreamLink{}
+			}
+			out[lang] = links[0]
+		}
+	}
+	return out
 }
 
 // torrentLinks preserves local torrentstream results as portable infohashes.
