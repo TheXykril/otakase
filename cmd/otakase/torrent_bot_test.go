@@ -300,3 +300,19 @@ func TestBotOutputLimit(t *testing.T) {
 		t.Fatal("oversized output retained")
 	}
 }
+
+func TestBotSegmentsJoinShortTail(t *testing.T) {
+	// A 40.04 s episode once ended on a 0.04 s segment ffmpeg wrote nothing
+	// for, and the player stopped with an error.
+	s := newBotSegments(context.Background(), t.TempDir(), "x", botMedia{duration: 40.04}, "sub", nil)
+	if s.segments() != 10 || math.Abs(s.length(9)-4.04) > 0.001 || strings.Contains(s.playlist(), "seg10.ts") {
+		t.Fatalf("%d segments, last %v s:\n%s", s.segments(), s.length(9), s.playlist())
+	}
+	if s.duration(0) != "4" || s.duration(9) != "5.040" {
+		t.Fatalf("ffmpeg lengths %s %s", s.duration(0), s.duration(9))
+	}
+	s.media.duration = 41.5
+	if s.segments() != 11 || math.Abs(s.length(10)-1.5) > 0.001 {
+		t.Fatalf("%d segments, last %v s", s.segments(), s.length(10))
+	}
+}

@@ -540,7 +540,12 @@ async function wLoad() {
       }
       if (wvMedia !== wEffectiveMedia()) return;
       if (window.Hls && Hls.isSupported()) {
-        const hls = new Hls({ startPosition: at, maxBufferLength: 40, backBufferLength: 60, enableWorker: false, renderTextTracksNatively: true });
+        // Segments the bot encodes as they are asked for can take a while on
+        // a small host; wait up to a minute for each before counting it lost.
+        const fragLoadPolicy = { default: { maxTimeToFirstByteMs: 60000, maxLoadTimeMs: 120000,
+          timeoutRetry: { maxNumRetry: 3, retryDelayMs: 0, maxRetryDelayMs: 0 },
+          errorRetry: { maxNumRetry: 6, retryDelayMs: 1000, maxRetryDelayMs: 8000 } } };
+        const hls = new Hls({ startPosition: at, maxBufferLength: 40, backBufferLength: 60, enableWorker: false, renderTextTracksNatively: true, fragLoadPolicy });
         wHls = hls;
         hls.on(Hls.Events.ERROR, (_, d) => {
           if (!d.fatal || wHls !== hls) return;

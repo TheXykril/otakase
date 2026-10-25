@@ -2,10 +2,16 @@
 
 ## Unreleased
 
+## 1.30.45
+
+- Watch Together: slow-starting episodes no longer show the player and then fail with "No source could play". The bot prepares each part of the video on every core instead of one, and the player waits longer for a part before giving up.
+- Watch Together: such episodes no longer stop with an error on their last fraction of a second.
+- Daily airing post: a show airing two episodes in one day no longer stops the post (Discord refused the doubled menu entry); it shows once, as "Episodes 5–6".
+
 ## 1.30.44
 
 - Watch Together: an episode that is slow to start now shows what it is doing while it gets ready (connecting, reading the video, preparing the first part) with how much has loaded. The wording never names where the episode comes from.
-- Watch Together: when a torrent's peers don't answer, the next best release is tried instead of giving up.
+- Watch Together: when one copy of an episode doesn't answer, the next best one is tried instead of giving up.
 - Watch Together: torrent subtitles no longer wait for the whole episode to download when their first line is a while into the episode.
 - Watch Together: a failed torrent start says which step failed in the bot log.
 
