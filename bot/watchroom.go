@@ -22,7 +22,8 @@ import (
 
 // The watch room: the bot hosts an anime episode inside the games Activity
 // and everyone in the call watches it in step. Opening one takes a watch
-// ticket (from /redeem codes), spent once the first episode plays; staff
+// ticket (from /redeem codes), spent once the first episode starts and
+// given back if the room ends before half a minute of it played; staff
 // need one too. Only one room runs at a time across the server, since the
 // bot fetches and relays the video itself (watchrelay.go); members' own
 // /watchparty parties are separate and unaffected.
@@ -99,7 +100,12 @@ type watchRoom struct {
 	opened  time.Time
 	started time.Time // first episode played; zero before
 	spent   bool      // the owner's ticket is used
-	members map[string]*watchMember
+	// watched is set once the host's player got through half a minute of
+	// video; a room that ends before that gives the ticket back.
+	watched   bool
+	beatFrom  float64 // the first playing position the host reported
+	beatStart bool
+	members   map[string]*watchMember
 
 	show      *watchShow
 	ep        int
@@ -360,6 +366,19 @@ func (b *bot) closeWatchRoom(r *watchRoom, now time.Time) {
 	r.changed()
 	if b.watch.cur == r {
 		b.watch.cur = nil
+	}
+	if r.spent && !r.watched {
+		// Nothing played: the source failed or everyone left while it
+		// loaded. The ticket goes back.
+		r.spent = false
+		owner := r.owner
+		go b.store.update(func(d *storeData) {
+			if d.WatchTickets == nil {
+				d.WatchTickets = map[string]int{}
+			}
+			d.WatchTickets[owner]++
+		})
+		log.Printf("watch room: ticket returned to member %s, nothing played", owner)
 	}
 	if r.started.IsZero() {
 		return
@@ -829,6 +848,10 @@ func watchAudioLanguage(code string) bool {
 
 func watchMediaPath(key, id string) string { return "api/watch/media/" + key + "/" + id }
 
+// watchCountsAsWatched is how many seconds must play before a room keeps
+// the ticket it spent.
+const watchCountsAsWatched = 30
+
 // spendTicket uses one of the member's watch tickets.
 func (b *bot) spendTicket(user string) bool {
 	ok := false
@@ -1082,6 +1105,7 @@ type watchIn struct {
 	ID        int     `json:"id"`
 	OK        bool    `json:"ok"`
 	On        bool    `json:"on"`
+	Why       string  `json:"why"` // why the host's player gave up, for the log
 }
 
 // watchRead reads a request for the room the page is in. The room is the
@@ -1602,6 +1626,13 @@ func (b *bot) watchCtl(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusForbidden, "only the host controls playback")
 		return
 	}
+	if in.Act == "broken" && cur.phase == "play" {
+		why := watchHelperLine(in.Why, 300)
+		if why == "" {
+			why = "no reason given"
+		}
+		log.Printf("watch room: the host's player gave up on %s episode %d, link %d: %s", cur.provider, cur.ep, cur.link+1, why)
+	}
 	if err := b.watchDo(cur, in.Act, in.Pos); err != "" {
 		b.watch.mu.Unlock()
 		apiError(w, http.StatusBadRequest, err)
@@ -1723,6 +1754,13 @@ func (b *bot) watchBeat(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Pos >= cur.skipTarget-1 {
 		cur.skipHoldUntil = time.Time{}
+	}
+	if in.Playing && !cur.watched {
+		if !cur.beatStart {
+			cur.beatFrom, cur.beatStart = in.Pos, true
+		} else if in.Pos-cur.beatFrom >= watchCountsAsWatched {
+			cur.watched = true
+		}
 	}
 	drift := math.Abs(cur.position(now) - in.Pos)
 	moved := in.Playing != cur.playing || drift > watchDrift

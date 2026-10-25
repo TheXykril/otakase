@@ -815,3 +815,36 @@ func TestWatchLanguagesFallBackForOldCLI(t *testing.T) {
 		t.Fatalf("old CLI fallback: %d full lookups, %v", full, r.audioEntries)
 	}
 }
+
+func TestWatchRoomReturnsTicketWhenNothingPlayed(t *testing.T) {
+	for _, played := range []float64{0, 31} {
+		b, now := watchBot(t, "https://cdn.example/ep.mp4")
+		b.store.update(func(d *storeData) { d.WatchTickets = map[string]int{"a": 1} })
+		watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
+		watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 5, Ep: 1}, nil)
+		waitLoaded(t, b)
+		r := b.watch.cur
+		if b.watchTickets("a") != 0 {
+			t.Fatal("ticket not spent when the episode started")
+		}
+		watchPost(b, (*bot).watchBeat, "a", watchIn{Room: "r", Pos: 0, Playing: true, Dur: 1400}, nil)
+		watchPost(b, (*bot).watchBeat, "a", watchIn{Room: "r", Pos: played, Playing: true, Dur: 1400}, nil)
+		// The source fails: the room ends without the episode playing.
+		watchPost(b, (*bot).watchCtl, "a", watchIn{Room: "r", Act: "broken"}, nil)
+		b.watch.mu.Lock()
+		b.closeWatchRoom(r, *now)
+		b.watch.mu.Unlock()
+		want := 1
+		if played > 0 {
+			want = 0
+		}
+		deadline := time.Now().Add(2 * time.Second)
+		for b.watchTickets("a") != want && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if got := b.watchTickets("a"); got != want {
+			t.Fatalf("played %v s: %d tickets left, want %d", played, got, want)
+		}
+		b.watch.bg.Wait() // the next bot replaces the lookups this one still runs
+	}
+}

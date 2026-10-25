@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.48
+
+- Watch Together: a room that ends before half a minute of the episode played gives the watch ticket back, for example when the source fails or everyone leaves while it loads.
+- Watch Together: when Discord's built-in player can't play an episode, the room tries the other player before giving up, and the add-on log records why the player gave up.
+
 ## 1.30.47
 
 - The add-on now builds the app from the newest code on GitHub. Before, it could ship the previous app version for up to half an hour after an update, so Watch Together fixes didn't arrive. The log shows which app build is inside ("app helper v0.0.0-…-abc1234").

@@ -711,6 +711,13 @@ DISCORD_BOT_TOKEN=... OTAKASE_GUILD_ID=... go run .
 Slash commands are registered to the one server at startup, so changes show
 up at once.
 
+When the host's player gives up on a link, the page sends the reason
+(`why`: native or Hls.js, the media error code or Hls.js error details) with the
+`broken` control and the bot logs it as `watch room: the host's player gave up
+on …`. A native HLS failure first retries the same media with Hls.js. A room
+that closes before the host's player got through 30 seconds of video returns
+the owner's ticket.
+
 ### Watch-room torrent playback
 
 The bot launches the CLI from the same checkout with `-torrent-serve HASH sub|dub`.
