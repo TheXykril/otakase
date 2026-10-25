@@ -5,6 +5,7 @@
 ## 1.30.46
 
 - Watch Together: an episode that downloads slower than it plays now buffers first ("Buffering N%") until it can keep up, instead of stalling and then failing with "No source could play". A download that stops completely for 3 minutes ends with an error.
+- Watch Together: episodes that come as downloads now pick the 720p copy first (half the size of 1080p, and the room plays at most 720p) and use other qualities only when there is no 720p.
 - Watch Together: the add-on log now records why a part of the video failed and how fast the episode downloads while it plays.
 
 ## 1.30.45

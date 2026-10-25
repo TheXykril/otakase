@@ -734,7 +734,7 @@ plays from the download cache itself, so `watch_torrent_storage_gib` (default
 8 GiB) only has to hold the torrent; a smaller budget lowers the size limit to
 it. Hosts without IPv6 fall back to IPv4 only. The file list must arrive within
 three minutes and the first segment within three more. `-stream-info` hands over
-up to three nyaa releases, best first, and the bot tries the next one when a
+up to three nyaa releases, 720p ones first (the room plays at most 720p), then the rest best first, and the bot tries the next one when a
 swarm doesn't answer. Until its playlist is ready the helper prints
 `progress <text>` lines on stdout (step and loaded percentage, worded so viewers
 can't tell the source is a torrent), which the

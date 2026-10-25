@@ -110,3 +110,14 @@ func TestDubOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestPreferQuality(t *testing.T) {
+	releases := []Release{{Title: "a", Quality: 1080}, {Title: "b", Quality: 720}, {Title: "c", Quality: 480}, {Title: "d", Quality: 720}}
+	got := ""
+	for _, release := range preferQuality(releases, botQuality) {
+		got += release.Title
+	}
+	if got != "bdac" {
+		t.Fatalf("order %q, want 720p first then the rest as they were", got)
+	}
+}
