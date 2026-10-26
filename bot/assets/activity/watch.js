@@ -26,6 +26,8 @@ let wSearch = [];
 let wFull = false; // the player fills the window
 let wControlsTimer = 0;
 let wChanging = false; // the host is picking another show while one plays
+let wOsdTimer = 0;
+let wKeySeek = null; // where the last key seek went, so held arrows add up
 
 const wFmt = (s) => {
   s = Math.max(0, Math.floor(s || 0));
@@ -182,7 +184,7 @@ function wDraw() {
       : loadingStage;
   } else {
     stage = `<div class="wstage${wFull ? " full" : ""}" id="wstage"><div class="wplayer" id="wplayer"><video id="wvid" playsinline preload="auto"></video>
-      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div></div>
+      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div></div>
       <div class="wbar" id="wbar"></div></div>`;
   }
   wBox(`<div class="whead"><span class="wshow">${showLine || "Nothing playing yet"}</span><span class="pill" id="wends"></span></div>
@@ -706,6 +708,9 @@ function wBar() {
         </div>
         <p class="note" id="wskiphint"></p>
       </div>
+      <p class="note wkeyhelp">${v.is_host
+        ? "Keys: Space pause · ←/→ 10s · ↑/↓ volume · M mute · F theater · Shift+N next ep · 0–9 jump · Home start"
+        : "Keys: Space ask to pause · → ask +10s · ↑/↓ volume · M mute · F theater · Shift+N ask for next ep"}</p>
     </div>
     <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
     ${origin}
@@ -900,6 +905,107 @@ function wFullscreen(on) {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && wFull) wFullscreen(false);
+});
+
+// wOsd flashes a short note over the video, for keys with no button to watch.
+function wOsd(text) {
+  const el = document.getElementById("wosd");
+  if (!el) return;
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(wOsdTimer);
+  wOsdTimer = setTimeout(() => (el.hidden = true), 900);
+}
+
+function wVolume(vid, volume, muted) {
+  vid.volume = Math.max(0, Math.min(1, volume));
+  vid.muted = muted;
+  const vol = document.getElementById("wvol");
+  if (vol) vol.value = vid.muted ? 0 : vid.volume;
+  wOsd(vid.muted || vid.volume === 0 ? "Muted" : "Volume " + Math.round(vid.volume * 100) + "%");
+}
+
+// wKeySeek moves the host by step seconds (or to an absolute spot), from
+// where the last key press sent it while the room hasn't caught up yet.
+function wSeekBy(vid, step, to) {
+  const now = Date.now();
+  const from = wKeySeek && now - wKeySeek.at < 1500 ? wKeySeek.to : vid.currentTime;
+  const dur = wv.dur || (isFinite(vid.duration) ? vid.duration : 0);
+  let pos = to !== undefined ? to : from + step;
+  pos = Math.max(0, dur ? Math.min(pos, Math.max(0, dur - 0.5)) : pos);
+  wKeySeek = { to: pos, at: now };
+  wCtl("seek", pos);
+  wOsd(wFmt(pos) + (dur ? " / " + wFmt(dur) : ""));
+}
+
+// Player keys. Pause and seeking go through the room like the buttons do;
+// volume, mute and theater mode only change this page.
+document.addEventListener("keydown", (e) => {
+  if (where !== "watch" || !wv || wv.phase !== "play" || e.ctrlKey || e.metaKey || e.altKey) return;
+  const vid = document.getElementById("wvid");
+  if (!vid) return;
+  const t = e.target || {};
+  if (t.isContentEditable || /^(TEXTAREA|SELECT)$/.test(t.tagName || "")) return;
+  if (t.tagName === "INPUT" && t.type !== "range") return;
+  const host = wv.is_host;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  switch (key) {
+    case " ":
+    case "k":
+      if (e.repeat) break;
+      if (host) wCtl(vid.paused ? "play" : "pause");
+      else {
+        wAsk(wv.playing ? "pause" : "play");
+        wOsd(wv.playing ? "Asked to pause" : "Asked to play");
+      }
+      break;
+    case "ArrowLeft":
+    case "j":
+      if (host) wSeekBy(vid, -10);
+      else wOsd("Only the host can go back");
+      break;
+    case "ArrowRight":
+    case "l":
+      if (host) wSeekBy(vid, 10);
+      else if (!e.repeat) {
+        wAsk("forward");
+        wOsd("Asked for +10s");
+      }
+      break;
+    case "ArrowUp":
+      wVolume(vid, vid.volume + 0.05, false);
+      break;
+    case "ArrowDown":
+      wVolume(vid, vid.volume - 0.05, false);
+      break;
+    case "m":
+      if (e.repeat) break;
+      if (vid.muted || vid.volume === 0) wVolume(vid, vid.volume || 0.5, false);
+      else wVolume(vid, vid.volume, true);
+      break;
+    case "f":
+      if (!e.repeat) wFullscreen(!wFull);
+      break;
+    case "n":
+      if (!e.shiftKey || e.repeat || !(wv.ep < wv.last_ep)) return;
+      if (host) wCtl("next");
+      else {
+        wAsk("next");
+        wOsd("Asked for the next episode");
+      }
+      break;
+    case "Home":
+      if (!host) return;
+      wSeekBy(vid, 0, 0);
+      break;
+    default: {
+      const dur = wv.dur || (isFinite(vid.duration) ? vid.duration : 0);
+      if (!host || !dur || !/^[0-9]$/.test(key) || e.repeat) return;
+      wSeekBy(vid, 0, (dur * +key) / 10);
+    }
+  }
+  e.preventDefault();
+  if (wFull) wRevealControls();
 });
 document.addEventListener("fullscreenchange", () => {
   if (!document.fullscreenElement && wFull && document.getElementById("wstage")) {
