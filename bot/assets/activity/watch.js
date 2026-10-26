@@ -23,6 +23,8 @@ let wSubPick = "auto";
 let wAudioPick = "auto";
 let wSettingsDirty = false;
 let wSearch = [];
+let wLists = null; // the host's own Continue and Planning lists
+let wListTab = "continue";
 let wFull = false; // the player fills the window
 let wControlsTimer = 0;
 let wChanging = false; // the host is picking another show while one plays
@@ -330,39 +332,84 @@ function wAsks() {
 function wPicker(changing) {
   const box = document.getElementById("wpick");
   box.innerHTML = `<p class="lead">Pick something to watch.</p>
-    ${searchBox("Search AniList…")}<div class="wresults" id="wres"></div>
+    ${searchBox("Search AniList…")}<div class="tabs wtabs" id="wtabs" hidden></div><div class="wresults" id="wres"></div>
     ${changing ? `<button class="btn alt" id="wcancel">Back to the episode</button>` : ""}`;
   document.getElementById("list").remove();
   const q = document.getElementById("q");
   let t = 0;
   q.oninput = () => {
     clearTimeout(t);
+    const text = q.value.trim();
+    if (text.length < 2) return wListsDraw();
     t = setTimeout(async () => {
-      const text = q.value.trim();
-      if (text.length < 2) return (document.getElementById("wres").innerHTML = "");
       try {
         wSearch = await api(`watch/search?room=${encodeURIComponent(room)}&q=${encodeURIComponent(text)}`);
       } catch (e) {
         return showError(e);
       }
       if (q.value.trim() !== text) return;
+      document.getElementById("wtabs").hidden = true;
       const res = document.getElementById("wres");
-      res.innerHTML = wSearch.length
-        ? wSearch
-            .map(
-              (s, i) => `<button class="wshowcard" data-i="${i}">${s.cover ? `<img src="${esc(s.cover)}" alt="" loading="lazy">` : "<i></i>"}
-              <span><b>${esc(s.title)}</b><small>${[s.year, s.format && s.format.replace("_", " ").toLowerCase(), s.aired ? s.aired + " out" : s.episodes ? s.episodes + " eps" : ""]
-                .filter(Boolean)
-                .join(" · ")}</small></span></button>`
-            )
-            .join("")
-        : `<p class="note">Nothing found.</p>`;
+      res.innerHTML = wSearch.length ? wSearch.map((s, i) => wShowCard(s, i, wShowFacts(s))).join("") : `<p class="note">Nothing found.</p>`;
       res.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => wEpisode(wSearch[+b.dataset.i])));
     }, 300);
   };
   q.focus();
   const c = document.getElementById("wcancel");
   if (c) c.onclick = () => ((wChanging = false), (wvKey = ""), (wvMedia = ""), wSet(wv));
+  wLists = null;
+  wListsDraw();
+  api(`watch/lists?room=${encodeURIComponent(room)}`)
+    .then((lists) => {
+      wLists = lists;
+      if (wListTab === "continue" && !lists.continue.length && lists.planning.length) wListTab = "planning";
+      if (document.getElementById("q") === q && q.value.trim().length < 2) wListsDraw();
+    })
+    .catch(() => {
+      wLists = { anilist: false, mal: false, continue: [], planning: [], note: "Couldn't load your lists." };
+      if (document.getElementById("q") === q && q.value.trim().length < 2) wListsDraw();
+    });
+}
+
+function wShowFacts(s) {
+  return [s.year, s.format && s.format.replace("_", " ").toLowerCase(), s.aired ? s.aired + " out" : s.episodes ? s.episodes + " eps" : ""].filter(Boolean).join(" · ");
+}
+
+function wShowCard(s, i, facts) {
+  return `<button class="wshowcard" data-i="${i}">${s.cover ? `<img src="${esc(s.cover)}" alt="" loading="lazy">` : "<i></i>"}
+    <span><b>${esc(s.title)}</b><small>${esc(facts)}</small></span></button>`;
+}
+
+// wListsDraw shows the host's own lists under the search while it is empty:
+// Continue starts at the next episode, from a saved position when there is
+// one; Planning at the first.
+function wListsDraw() {
+  const tabs = document.getElementById("wtabs");
+  const res = document.getElementById("wres");
+  if (!tabs || !res) return;
+  if (!wLists) {
+    tabs.hidden = true;
+    res.innerHTML = `<p class="note">Loading your lists…</p>`;
+    return;
+  }
+  if (!wLists.anilist && !wLists.mal) {
+    tabs.hidden = true;
+    res.innerHTML = `<p class="note">${esc(wLists.note || "Link AniList with /link-anilist or MyAnimeList with /link-mal to pick from your own lists here.")}</p>`;
+    return;
+  }
+  tabs.hidden = false;
+  tabs.innerHTML = [["continue", "Continue"], ["planning", "Planning"]]
+    .map(([key, label]) => `<button class="btn ${wListTab === key ? "" : "alt"}" data-tab="${key}">${label} <small>${wLists[key].length}</small></button>`)
+    .join("");
+  tabs.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => ((wListTab = b.dataset.tab), wListsDraw())));
+  const list = wLists[wListTab];
+  const empty = wListTab === "continue" ? "Nothing to continue: no show you're watching has a new episode out." : "Your planning list is empty.";
+  res.innerHTML = (wLists.note ? `<p class="note">${esc(wLists.note)}</p>` : "") + (list.length
+    ? list.map((s, i) => wShowCard(s, i, wListTab === "continue"
+      ? `Episode ${s.next}${s.aired || s.episodes ? " of " + (s.aired || s.episodes) : ""}${s.resume ? " · resume at " + wFmt(s.resume) : ""}`
+      : wShowFacts(s))).join("")
+    : `<p class="note">${empty}</p>`);
+  res.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => wEpisode(list[+b.dataset.i], list[+b.dataset.i])));
 }
 
 function wPickerHeading(s) {
@@ -370,7 +417,9 @@ function wPickerHeading(s) {
     <div><span class="wpickey">EPISODE SELECTION</span><h3>${esc(s.title)}</h3></div></div>`;
 }
 
-function wEpisode(s) {
+// wEpisode is the episode grid for show s; item is its entry on the host's
+// list, which picks the next episode and may carry a position to resume.
+function wEpisode(s, item) {
   const previews = new Map();
   for (const item of s.previews || []) {
     const title = item.title || "";
@@ -378,7 +427,8 @@ function wEpisode(s) {
     if (match && !previews.has(Number(match[1]))) previews.set(Number(match[1]), item);
   }
   const last = Math.max(1, s.aired || s.episodes || 1);
-  const next = wv.show && wv.show.id === s.id ? Math.min(wv.ep + 1, last) : 1;
+  const next = item && item.next ? Math.min(item.next, last) : wv.show && wv.show.id === s.id ? Math.min(wv.ep + 1, last) : 1;
+  const resumeEp = item && item.resume ? item.next : 0;
   let selected = next;
   let page = Math.floor((selected - 1) / 24);
   const res = document.getElementById("wres");
@@ -403,8 +453,10 @@ function wEpisode(s) {
       ${last > 24 ? `<div class="wepnav"><button class="btn alt" id="wprev" ${page === 0 ? "disabled" : ""}>Previous</button>
         <span class="note">Episodes ${start}–${end} of ${last}</span>
         <button class="btn alt" id="wnext" ${end === last ? "disabled" : ""}>Next</button></div>` : ""}
-      <div class="wepfooter"><button class="btn alt" id="wback">Back to results</button>
-        <button class="btn" id="wgo">${icon("play")} Play episode ${selected}</button></div>
+      <div class="wepfooter"><button class="btn alt" id="wback">${item ? "Back to your list" : "Back to results"}</button>
+        ${selected === resumeEp ? `<button class="btn alt" id="wfromstart">From the start</button>
+        <button class="btn" id="wgo">${icon("play")} Resume episode ${selected} at ${wFmt(item.resume)}</button>`
+        : `<button class="btn" id="wgo">${icon("play")} Play episode ${selected}</button>`}</div>
     </div>`;
     res.querySelectorAll(".wepvisual img").forEach((img) => {
       img.onerror = () => {
@@ -423,15 +475,18 @@ function wEpisode(s) {
       document.getElementById("wprev").onclick = () => { if (page > 0) { page--; draw(); } };
       document.getElementById("wnext").onclick = () => { if ((page + 1) * 24 < last) { page++; draw(); } };
     }
-    const go = document.getElementById("wgo");
-    go.onclick = () => {
-      go.disabled = true;
+    const play = (button, pos) => {
+      button.disabled = true;
       wChanging = false;
       wvKey = "";
-      api("watch/pick", { room, show: s.id, ep: selected, dub: /^(en|eng)(-|$)/.test(wAudioPick) })
+      api("watch/pick", { room, show: s.id, ep: selected, pos, dub: /^(en|eng)(-|$)/.test(wAudioPick) })
         .then((nv) => wSet(nv))
-        .catch((err) => { go.disabled = false; showError(err); });
+        .catch((err) => { button.disabled = false; showError(err); });
     };
+    const go = document.getElementById("wgo");
+    go.onclick = () => play(go, selected === resumeEp ? item.resume : 0);
+    const fromStart = document.getElementById("wfromstart");
+    if (fromStart) fromStart.onclick = () => play(fromStart, 0);
   };
   draw();
   fetch(`api/watch/episodes?id=${encodeURIComponent(s.id)}&room=${encodeURIComponent(room)}`, {

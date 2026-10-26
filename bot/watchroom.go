@@ -112,7 +112,8 @@ type watchRoom struct {
 	show      *watchShow
 	ep        int
 	dub       bool
-	phase     string // pick, loading, play, error, over
+	startAt   float64 // where the episode starts: 0, or a saved position to resume from
+	phase     string  // pick, loading, play, error, over
 	errText   string
 	loadStep  string // current episode preparation step
 	loadSince time.Time
@@ -291,7 +292,8 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 	if r.phase == "play" && r.playing && r.dur > 0 {
 		for id, m := range r.members {
 			m.watched += elapsed
-			if !m.counted && m.watched >= watchedEnough*r.dur {
+			// A resumed episode counts on most of what was left of it.
+			if !m.counted && m.watched >= watchedEnough*math.Max(r.dur-r.startAt, 30) {
 				m.counted = true
 				count = append(count, id)
 			}
@@ -430,10 +432,10 @@ func (r *watchRoom) finishMedia() {
 
 // loadEpisode looks the episode up and starts it. Hold the lock; the
 // lookup runs on its own and lands only if nothing was picked since.
-func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
+func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool, start float64) {
 	// The room keeps its own copy: the lookups below read show unlocked.
 	shown := show
-	r.show, r.ep, r.dub = &shown, ep, dub
+	r.show, r.ep, r.dub, r.startAt = &shown, ep, dub, start
 	r.phase, r.errText = "loading", ""
 	r.loadStep, r.loadSince = "Checking catalog for episode", time.Now()
 	r.finishMedia()
@@ -786,7 +788,7 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	}
 	r.phase, r.errText = "play", ""
 	r.episodes++
-	r.setPos(0, true, now)
+	r.setPos(r.startAt, true, now)
 	r.changed()
 	return true
 }
@@ -1626,7 +1628,13 @@ func (b *bot) watchPick(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusForbidden, "the watch room's time is up")
 		return
 	}
-	b.loadEpisode(cur, show, in.Ep, in.Dub)
+	// Pos is a saved position to resume from, picked from the host's
+	// Continue list.
+	start := in.Pos
+	if math.IsNaN(start) || start < watchResumeMin || start > 6*3600 {
+		start = 0
+	}
+	b.loadEpisode(cur, show, in.Ep, in.Dub, start)
 	b.watchAnswerView(w, cur, user, staff)
 }
 
@@ -1733,7 +1741,7 @@ func (b *bot) watchDo(r *watchRoom, act string, pos float64) string {
 		if !r.started.IsZero() && now.After(r.started.Add(watchRoomLength)) {
 			return "the watch room's time is up"
 		}
-		b.loadEpisode(r, *r.show, ep, r.dub)
+		b.loadEpisode(r, *r.show, ep, r.dub, 0)
 		return ""
 	case "broken":
 		if r.phase == "play" {

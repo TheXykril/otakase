@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.60
+
+- Watch Together: the host's show picker now shows your own lists under the search. Continue has the shows you're watching on AniList or MyAnimeList at the next episode, and starts where you stopped when Otakase or the room saved your spot for that episode (with a From the start button too). Planning has your Plan to watch list. Link with /link-anilist or /link-mal; a private AniList list shows once your link is proven, and only to you.
+
 ## 1.30.59
 
 - Watch Together: in theater mode the controls no longer pop back up after an OP/ED skip, a seek or a new episode. They stay hidden until you tap the video, and stay shown if they already were. Player keys no longer bring them up either; the small note over the video shows what the key did.

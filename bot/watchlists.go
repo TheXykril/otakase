@@ -1,0 +1,338 @@
+package main
+
+import (
+	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+// The watch room's picker shows the host their own lists next to the
+// search: Continue (shows they are watching, at the next episode, from
+// where Otakase or the room last stopped when there is a saved
+// [otakase:ep@secs] tag for it) and Planning. The lists come from the
+// member's linked AniList (read with their own token, so a private list
+// shows to them) and MyAnimeList; nobody else's lists are ever read.
+
+// watchListMax is how many shows each list shows.
+const watchListMax = 50
+
+// watchListTTL keeps a member's lists for a moment, so flipping tabs or
+// reopening the picker doesn't ask the trackers again.
+const watchListTTL = time.Minute
+
+// watchListItem is a show on a member's list, at the episode to play.
+type watchListItem struct {
+	watchShow
+	Next     int `json:"next"`               // episode to play
+	Resume   int `json:"resume,omitempty"`   // seconds into Next to start from
+	Progress int `json:"progress,omitempty"` // episodes watched
+	updated  int64
+}
+
+type watchLists struct {
+	AniList  bool            `json:"anilist"`
+	MAL      bool            `json:"mal"`
+	Continue []watchListItem `json:"continue"`
+	Planning []watchListItem `json:"planning"`
+	Note     string          `json:"note,omitempty"`
+}
+
+// watchListEntry is one list entry as a tracker has it.
+type watchListEntry struct {
+	show     watchShow
+	status   string // the show's airing status
+	progress int
+	notes    string
+	updated  int64
+}
+
+const watchListMediaFields = `id idMal isAdult episodes format seasonYear status title { romaji english } coverImage { large } nextAiringEpisode { episode }`
+
+type watchListMediaJSON struct {
+	watchMediaJSON
+	Status string `json:"status"`
+}
+
+// anilistWatchList reads one of a member's AniList lists: watching
+// (CURRENT and REPEATING) or planning, most recently updated first.
+var anilistWatchList = func(token string, userID int, planning bool) ([]watchListEntry, error) {
+	statuses := []string{"CURRENT", "REPEATING"}
+	if planning {
+		statuses = []string{"PLANNING"}
+	}
+	var r struct {
+		Data struct {
+			Page struct {
+				MediaList []struct {
+					Progress  int                `json:"progress"`
+					Notes     *string            `json:"notes"`
+					UpdatedAt int64              `json:"updatedAt"`
+					Media     watchListMediaJSON `json:"media"`
+				} `json:"mediaList"`
+			} `json:"Page"`
+		} `json:"data"`
+	}
+	query := `query ($id: Int, $s: [MediaListStatus], $n: Int) { Page(perPage: $n) { mediaList(userId: $id, type: ANIME, status_in: $s, sort: UPDATED_TIME_DESC) {
+		progress notes updatedAt media { ` + watchListMediaFields + ` } } } }`
+	if err := anilistSocialPost(token, query, map[string]any{"id": userID, "s": statuses, "n": watchListMax}, &r); err != nil {
+		return nil, tokenErr(err)
+	}
+	out := []watchListEntry{}
+	for _, e := range r.Data.Page.MediaList {
+		notes := ""
+		if e.Notes != nil {
+			notes = *e.Notes
+		}
+		out = append(out, watchListEntry{show: e.Media.show(), status: e.Media.Status, progress: e.Progress, notes: notes, updated: e.UpdatedAt})
+	}
+	return out, nil
+}
+
+// malWatchList reads one of a member's MyAnimeList lists, with the shows
+// found on AniList so the room can play them.
+var malWatchList = func(token string, planning bool) ([]watchListEntry, error) {
+	status := "watching"
+	if planning {
+		status = "plan_to_watch"
+	}
+	var r struct {
+		Data []struct {
+			Node struct {
+				ID int `json:"id"`
+			} `json:"node"`
+			ListStatus struct {
+				Watched   int    `json:"num_episodes_watched"`
+				Comments  string `json:"comments"`
+				UpdatedAt string `json:"updated_at"`
+			} `json:"list_status"`
+		} `json:"data"`
+	}
+	fields := url.QueryEscape("list_status{num_episodes_watched,comments,updated_at}")
+	path := "/users/@me/animelist?status=" + status + "&sort=list_updated_at&nsfw=true&limit=" + strconv.Itoa(watchListMax) + "&fields=" + fields
+	if err := malGet(token, path, &r); err != nil {
+		return nil, err
+	}
+	if len(r.Data) == 0 {
+		return []watchListEntry{}, nil
+	}
+	ids := make([]int, 0, len(r.Data))
+	for _, e := range r.Data {
+		ids = append(ids, e.Node.ID)
+	}
+	var shows struct {
+		Data struct {
+			Page struct {
+				Media []watchListMediaJSON `json:"media"`
+			} `json:"Page"`
+		} `json:"data"`
+	}
+	if err := anilistSocialPost("", `query ($ids: [Int], $n: Int) { Page(perPage: $n) { media(idMal_in: $ids, type: ANIME) { `+watchListMediaFields+` } } }`,
+		map[string]any{"ids": ids, "n": watchListMax}, &shows); err != nil {
+		return nil, err
+	}
+	byMal := map[int]watchListMediaJSON{}
+	for _, m := range shows.Data.Page.Media {
+		byMal[m.IDMal] = m
+	}
+	out := []watchListEntry{}
+	for _, e := range r.Data {
+		m, ok := byMal[e.Node.ID]
+		if !ok {
+			continue
+		}
+		var updated int64
+		if t, err := time.Parse(time.RFC3339, e.ListStatus.UpdatedAt); err == nil {
+			updated = t.Unix()
+		}
+		out = append(out, watchListEntry{show: m.show(), status: m.Status, progress: e.ListStatus.Watched, notes: e.ListStatus.Comments, updated: updated})
+	}
+	return out, nil
+}
+
+// watchResumeIn reads the saved position from notes.
+func watchResumeIn(notes string) (ep, secs int) {
+	m := watchResumeTag.FindStringSubmatch(notes)
+	if m == nil {
+		return 0, 0
+	}
+	ep, _ = strconv.Atoi(m[1])
+	secs, _ = strconv.Atoi(m[2])
+	return ep, secs
+}
+
+// mergeWatchList puts the trackers' entries together, one per show: the
+// furthest progress, the later saved position, the latest update. Only
+// shows the room can play stay: out already, not 18+ unless adult, and
+// for Continue with the next episode out.
+func mergeWatchList(lists [][]watchListEntry, adult, continuing bool) []watchListItem {
+	type merged struct {
+		item          watchListItem
+		tagEp, tagSec int
+	}
+	byID := map[int]*merged{}
+	var order []int
+	for _, list := range lists {
+		for _, e := range list {
+			if e.status == "NOT_YET_RELEASED" || e.show.Format == "MUSIC" || (e.show.Adult && !adult) {
+				continue
+			}
+			ep, secs := watchResumeIn(e.notes)
+			m, ok := byID[e.show.ID]
+			if !ok {
+				m = &merged{item: watchListItem{watchShow: e.show}}
+				byID[e.show.ID] = m
+				order = append(order, e.show.ID)
+			}
+			m.item.Progress = max(m.item.Progress, e.progress)
+			m.item.updated = max(m.item.updated, e.updated)
+			if ep > m.tagEp || ep == m.tagEp && secs > m.tagSec {
+				m.tagEp, m.tagSec = ep, secs
+			}
+		}
+	}
+	out := []watchListItem{}
+	for _, id := range order {
+		m := byID[id]
+		it := m.item
+		it.Next = it.Progress + 1
+		if !continuing {
+			it.Next = max(1, min(it.Next, it.lastEpisode()))
+		}
+		if it.Next > it.lastEpisode() {
+			continue // caught up, the next episode isn't out yet
+		}
+		// The saved position only counts for the episode it names, as in the app.
+		if m.tagEp == it.Next && m.tagSec >= watchResumeMin {
+			it.Resume = m.tagSec
+		}
+		out = append(out, it)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].updated > out[j].updated })
+	if len(out) > watchListMax {
+		out = out[:watchListMax]
+	}
+	return out
+}
+
+type watchListCacheEntry struct {
+	at    time.Time
+	adult bool
+	lists watchLists
+}
+
+var watchListCache = struct {
+	sync.Mutex
+	m map[string]watchListCacheEntry
+}{m: map[string]watchListCacheEntry{}}
+
+// userWatchLists reads user's own lists from the trackers they linked.
+func (b *bot) userWatchLists(user string, adult bool) watchLists {
+	now := time.Now()
+	watchListCache.Lock()
+	if c, ok := watchListCache.m[user]; ok && c.adult == adult && now.Sub(c.at) < watchListTTL {
+		watchListCache.Unlock()
+		return c.lists
+	}
+	watchListCache.Unlock()
+
+	var al anilistLink
+	var mal malLink
+	var hasAL, hasMAL bool
+	b.store.view(func(d *storeData) {
+		al, hasAL = d.AniList[user]
+		mal, hasMAL = d.MAL[user]
+	})
+	out := watchLists{AniList: hasAL && al.ID > 0, MAL: hasMAL && b.malReady(), Continue: []watchListItem{}, Planning: []watchListItem{}}
+	if !out.AniList && !out.MAL {
+		return out
+	}
+	var watching, planning [][]watchListEntry
+	var failed []string
+	if out.AniList {
+		// A proven link reads with the member's token, so a private list
+		// shows; otherwise only a public one does.
+		token := ""
+		if al.Verified {
+			token = al.Token
+		}
+		w, err1 := anilistWatchList(token, al.ID, false)
+		p, err2 := anilistWatchList(token, al.ID, true)
+		if err1 != nil || err2 != nil {
+			logWatchErr("anilist lists", user, firstErr(err1, err2))
+			failed = append(failed, "AniList")
+		}
+		watching, planning = append(watching, w), append(planning, p)
+	}
+	if out.MAL {
+		if l, err := b.freshMAL(user, mal); err != nil {
+			logWatchErr("mal lists", user, err)
+			failed = append(failed, "MyAnimeList")
+		} else {
+			w, err1 := malWatchList(l.AccessToken, false)
+			p, err2 := malWatchList(l.AccessToken, true)
+			if err1 != nil || err2 != nil {
+				logWatchErr("mal lists", user, firstErr(err1, err2))
+				failed = append(failed, "MyAnimeList")
+			}
+			watching, planning = append(watching, w), append(planning, p)
+		}
+	}
+	out.Continue = mergeWatchList(watching, adult, true)
+	out.Planning = mergeWatchList(planning, adult, false)
+	for _, l := range [][]watchListItem{out.Continue, out.Planning} {
+		for k := range l {
+			if l[k].Cover != "" {
+				l[k].Cover = "api/watch/cover?u=" + url.QueryEscape(l[k].Cover)
+			}
+		}
+	}
+	if len(failed) > 0 {
+		out.Note = "Couldn't read your " + strings.Join(failed, " and ") + " list. Try again in a bit."
+		return out // not kept, so the next look asks again
+	}
+	watchListCache.Lock()
+	watchListCache.m[user] = watchListCacheEntry{at: now, adult: adult, lists: out}
+	for k, c := range watchListCache.m {
+		if now.Sub(c.at) >= watchListTTL {
+			delete(watchListCache.m, k)
+		}
+	}
+	watchListCache.Unlock()
+	return out
+}
+
+func firstErr(errs ...error) error {
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func init() {
+	apiHandle("GET /activity/api/watch/lists", (*bot).watchListsAPI)
+}
+
+// watchListsAPI is the signed-in member's own lists for the picker.
+func (b *bot) watchListsAPI(w http.ResponseWriter, r *http.Request) {
+	user := b.actUser(w, r)
+	if user == "" {
+		return
+	}
+	if !watchSearchLimit.allow(user, watchNow()) {
+		apiError(w, http.StatusTooManyRequests, "slow down")
+		return
+	}
+	adult := false
+	b.watch.mu.Lock()
+	if cur := b.watch.cur; cur != nil && cur.id == r.URL.Query().Get("room") {
+		adult = cur.adult
+	}
+	b.watch.mu.Unlock()
+	writeJSON(w, http.StatusOK, b.userWatchLists(user, adult))
+}
