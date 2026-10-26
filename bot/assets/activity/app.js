@@ -363,6 +363,7 @@ function menu() {
   where = "menu";
   const tag = (g) => {
     if (g.key === "party") return `<span class="tag live" id="ptag">${partyTag()}</span>`;
+    if (g.key === "watch") return `<span class="tag live" id="wtag" hidden></span>`;
     if (g.key !== "daily" || !daily) return "";
     if (daily.play.done) return `<span class="tag done">#${daily.num} · ${esc(daily.score)}</span>`;
     return `<span class="tag live">#${daily.num} · ${daily.play.guesses.length}/${daily.tries} · today's puzzle</span>`;
@@ -378,6 +379,17 @@ function menu() {
         ]()}<span class="no">${String(i + 1).padStart(2, "0")}</span><h3>${esc(g.name)}</h3><p>${esc(g.text)}</p>${tag(g)}</button>`
     ).join("")}</div>`;
   app.querySelectorAll("[data-game]").forEach((el) => (el.onclick = () => (el.classList.contains("off") ? message("Staff turned this game off for now.") : open(el.dataset.game))));
+  // A watch room running anywhere shows on its tile; an 18+ one only as a room.
+  api(`watch/status?room=${encodeURIComponent(room)}`)
+    .then((st) => {
+      const tag = document.getElementById("wtag");
+      if (!tag || !st.busy) return;
+      tag.textContent = st.here ? `live in this call · ${st.people} watching`
+        : st.show && !st.adult ? `live: ${st.show}${st.ep ? " ep " + st.ep : ""} · ${st.people} watching`
+          : `live in ${st.channel_name ? "#" + st.channel_name : "another call"}`;
+      tag.hidden = false;
+    })
+    .catch(() => {});
 }
 
 function open(game) {

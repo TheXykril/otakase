@@ -679,7 +679,11 @@
   .wplayer video { width: 100%; height: 100%; display: block; background: #000; }
   .wplayer:fullscreen { border-radius: 0; aspect-ratio: auto; }
   .wtap { position: absolute; inset: 0; margin: auto; width: max-content; height: max-content; padding: 14px 22px; border-radius: 10px; border: 0; background: var(--shu); color: #fff; font: inherit; font-weight: 700; font-size: 17px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
-  .wtap[hidden], .wspin[hidden], .wosd[hidden] { display: none; }
+  .wtap[hidden], .wspin[hidden], .wosd[hidden], .wevent[hidden] { display: none; }
+  .wevent { position: absolute; top: 12px; left: 12px; z-index: 3; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; pointer-events: none; max-width: calc(100% - 24px); }
+  .wevent span { padding: 5px 10px; border-radius: 8px; background: rgba(0, 0, 0, .72); color: #fff; font-size: 13px; font-weight: 600; }
+  .wevent.show { animation: wevent .25s ease-out; }
+  @keyframes wevent { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
   .wosd { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); padding: 6px 12px; border-radius: 8px; background: rgba(0, 0, 0, .7); color: #fff; font-weight: 700; font-size: 14px; pointer-events: none; z-index: 2; }
   .wspin { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, .25); border-top-color: var(--shu); animation: spin .8s linear infinite; pointer-events: none; }
   .wstage.full { position: fixed; inset: 0; width:100vw; height:100dvh; z-index: 9999; display: flex; flex-direction: column; background: #08090d; padding: 0; }
@@ -749,10 +753,25 @@
   .wask.mine { background: var(--tile); border-color: var(--line); color: var(--muted); }
   .wside { margin-top: 14px; }
   .wmain { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
-  @media (min-width: 900px) { .wmain { grid-template-columns: minmax(0, 1fr) 290px; align-items: start; } }
+  @media (min-width: 900px) { .wmain { grid-template-columns: minmax(0, 1fr) 290px; } }
   .wleft { min-width: 0; }
+  .wleft .wbar { margin-bottom: 0; }
+  .wasks:empty { display: none; }
+  .wlive { display: flex; gap: 14px; align-items: center; padding: 12px; margin: 10px 0 14px; border: 1px solid var(--shu); border-radius: 12px; background: var(--tile); }
+  .wlive img, .wlive > i { width: 60px; height: 86px; object-fit: cover; border-radius: 8px; flex: none; background: var(--tile2); }
+  .wlive span { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .wlive span > b { font-size: 17px; }
+  .wlive small { color: var(--muted); font-size: 13px; display: inline-flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+  .wlive small b { color: var(--text); }
+  .wlive svg.i { width: 14px; height: 14px; color: var(--gold); }
   .wchat { display: flex; flex-direction: column; height: 340px; background: var(--tile); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  @media (min-width: 900px) { .wchatslot .wchat { height: min(70vh, 520px); } }
+  /* Beside the player the chat takes the player column's height (video and
+     controls) instead of its own, so the two line up. */
+  @media (min-width: 900px) {
+    .wmain { align-items: stretch; }
+    .wchatslot { position: relative; min-height: 300px; }
+    .wchatslot .wchat { position: absolute; inset: 0; height: auto; }
+  }
   .wchathead { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
   .wchathead b { display: inline-flex; gap: 6px; align-items: center; }
   .wchathead .btn { padding: 4px 6px; min-height: 0; display: none; }

@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -138,5 +141,70 @@ func TestWatchMemberState(t *testing.T) {
 	b.watch.mu.Unlock()
 	if st != "" {
 		t.Fatalf("stale report still %q", st)
+	}
+}
+
+func TestWatchStatusShowsLiveRoom(t *testing.T) {
+	b, _ := watchBot(t, "https://cdn.example/ep.mp4")
+	b.store.update(func(d *storeData) { d.WatchTickets = map[string]int{"a": 1, "z": 1} })
+	status := func(user, room string) map[string]any {
+		r := httptest.NewRequest("GET", "/x?room="+room, nil)
+		r.Header.Set("Authorization", "Bearer "+b.acts.add(user))
+		w := httptest.NewRecorder()
+		b.watchStatus(w, r)
+		out := map[string]any{}
+		json.NewDecoder(w.Body).Decode(&out)
+		return out
+	}
+	watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r1", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r1", Show: 5, Ep: 3}, nil)
+	waitLoaded(t, b)
+	st := status("x", "elsewhere")
+	if st["busy"] != true || st["here"] != false || st["show"] != "Show 5" || st["ep"] != float64(3) ||
+		st["host"] != "member a" || st["people"] != float64(1) || st["channel_name"] != "lounge" || st["playing"] != true {
+		t.Fatalf("live room: %v", st)
+	}
+	// An 18+ room says only that it runs, and where.
+	b.watch.mu.Lock()
+	b.watch.cur.adult = true
+	b.watch.mu.Unlock()
+	st = status("x", "elsewhere")
+	if st["adult"] != true || st["show"] != nil || st["host"] != nil || st["cover"] != nil || st["ep"] != nil {
+		t.Fatalf("18+ room leaked: %v", st)
+	}
+}
+
+func TestWatchRoomEvents(t *testing.T) {
+	b, now := watchBot(t, "https://cdn.example/ep.mp4")
+	b.store.update(func(d *storeData) { d.WatchTickets = map[string]int{"a": 1} })
+	watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 5, Ep: 1}, nil)
+	waitLoaded(t, b)
+	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchCtl, "a", watchIn{Room: "r", Act: "pause", Pos: 61}, nil)
+	watchPost(b, (*bot).watchCtl, "a", watchIn{Room: "r", Act: "seek", Pos: 750}, nil)
+	watchPost(b, (*bot).watchHandOver, "a", watchIn{Room: "r", User: "b"}, nil)
+	var v watchView
+	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r", Channel: "vc"}, &v)
+	var texts []string
+	for _, e := range v.Events {
+		texts = append(texts, e.Text)
+	}
+	want := []string{"member a put on Show 5, episode 1", "member b joined", "member a paused", "member a jumped to 12:30", "member a passed hosting to member b"}
+	if strings.Join(texts, "|") != strings.Join(want, "|") {
+		t.Fatalf("events %q", texts)
+	}
+	// They only last a moment.
+	r := b.watch.cur
+	*now = now.Add(watchEventTTL + time.Second)
+	for _, m := range r.members {
+		m.seen = *now
+	}
+	b.watchStep(r, *now)
+	if len(r.events) != 0 {
+		t.Fatalf("old events kept: %+v", r.events)
+	}
+	if watchTimeText(3725) != "1:02:05" || watchTimeText(65) != "1:05" {
+		t.Fatal("time text")
 	}
 }
