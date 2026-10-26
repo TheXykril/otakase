@@ -4,6 +4,7 @@ package loadproviders
 
 import (
 	_ "github.com/thexykril/otakase/internal/providers/anikoto"
+	_ "github.com/thexykril/otakase/internal/providers/animex"
 	_ "github.com/thexykril/otakase/internal/providers/anizone"
 	_ "github.com/thexykril/otakase/internal/providers/kickassanime"
 	_ "github.com/thexykril/otakase/internal/providers/megavid"

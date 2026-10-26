@@ -87,6 +87,9 @@ func filterEnabledProviders(candidates []string) []string {
 // only what is recent, and like anikoto indexes dubs separately, so a dub
 // request either gets a dub or a straight answer that there is none.
 //
+// animex follows: like megavid it is addressed by id (AniList's), and it
+// reaches two hosts through one API, one of which no other provider uses.
+//
 // nyaa sits behind the streaming hosts because it costs more to start -- peers
 // have to be found before the first frame -- but it reliably carries an episode
 // in the week it airs even when every streaming host is still missing it.
@@ -94,7 +97,7 @@ func filterEnabledProviders(candidates []string) []string {
 // sukebei comes last: it carries only adult titles, which none of the others
 // do, so it is the one left to try for those, and is only in the stack at all
 // when AdultContent is on.
-var preferredProviderOrder = []string{"anikoto", "megavid", "kickassanime", "anizone", "nyaa", "sukebei"}
+var preferredProviderOrder = []string{"anikoto", "megavid", "kickassanime", "anizone", "animex", "nyaa", "sukebei"}
 
 // defaultEnabledProviderStack is the "stacked" setting spelled out: the
 // enabled providers in preferredProviderOrder, then any others registered, in
