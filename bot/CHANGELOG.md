@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.30.63
+
+- Watch Together: anyone can vote to skip the opening or the ending. When more than half the room agrees it skips for everyone, whether or not the host turned automatic skips on. The host's own vote skips at once.
+- Watch Together: the people list now shows a spinner next to anyone still loading and how far behind anyone who's fallen behind is.
+- Watch Together: the host (or staff) can hand hosting to anyone in the room from the people list, not only to the next person when they leave.
+- Watch Together: the host can invite people from the Activity. Search for a member and they get a direct message with a link to the call. An invite to an 18+ room also lets them into that private voice channel.
+
 ## 1.30.62
 
 - Watch Together: the room now waits until everyone's player has the episode loaded before it plays, and does the same after a seek, a +10s or the host pressing play. It shows who it's waiting for, plays anyway after 15 seconds (30 on a new episode), and the host can press Start now. A room with one person never waits.
