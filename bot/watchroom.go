@@ -43,6 +43,7 @@ import (
 
 const (
 	watchRoomLength = 4 * time.Hour
+	watchPerkLength = 8 * time.Hour    // a room opened by staff or the Game Champion
 	watchGone       = 45 * time.Second // a member who hasn't polled this long has left
 	watchEmptyClose = time.Minute      // an empty room closes after this
 	watchPickWait   = 15 * time.Minute // a room that never played closes after this
@@ -101,6 +102,9 @@ type watchRoom struct {
 	opened  time.Time
 	started time.Time // first episode played; zero before
 	spent   bool      // the owner's ticket is used
+	// perks is set when staff or the Game Champion opened it: no ticket,
+	// 8 hours instead of 4 and room for more people (watch_room_max_perks).
+	perks bool
 	// watched is set once the host's player got through half a minute of
 	// video; a room that ends before that gives the ticket back.
 	watched   bool
@@ -112,7 +116,8 @@ type watchRoom struct {
 	show      *watchShow
 	ep        int
 	dub       bool
-	phase     string // pick, loading, play, error, over
+	startAt   float64 // where the episode starts: 0, or a saved position to resume from
+	phase     string  // pick, loading, play, error, over
 	errText   string
 	loadStep  string // current episode preparation step
 	loadSince time.Time
@@ -291,7 +296,8 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 	if r.phase == "play" && r.playing && r.dur > 0 {
 		for id, m := range r.members {
 			m.watched += elapsed
-			if !m.counted && m.watched >= watchedEnough*r.dur {
+			// A resumed episode counts on most of what was left of it.
+			if !m.counted && m.watched >= watchedEnough*math.Max(r.dur-r.startAt, 30) {
 				m.counted = true
 				count = append(count, id)
 			}
@@ -312,7 +318,7 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 
 	closeWhy := ""
 	switch {
-	case !r.started.IsZero() && now.After(r.started.Add(watchRoomLength)):
+	case !r.ends().IsZero() && now.After(r.ends()):
 		closeWhy = "time"
 	case len(r.members) == 0 && now.Sub(r.lastSeen()) > watchEmptyClose:
 		closeWhy = "empty"
@@ -430,10 +436,10 @@ func (r *watchRoom) finishMedia() {
 
 // loadEpisode looks the episode up and starts it. Hold the lock; the
 // lookup runs on its own and lands only if nothing was picked since.
-func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool) {
+func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool, start float64) {
 	// The room keeps its own copy: the lookups below read show unlocked.
 	shown := show
-	r.show, r.ep, r.dub = &shown, ep, dub
+	r.show, r.ep, r.dub, r.startAt = &shown, ep, dub, start
 	r.phase, r.errText = "loading", ""
 	r.loadStep, r.loadSince = "Checking catalog for episode", time.Now()
 	r.finishMedia()
@@ -734,16 +740,17 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 		r.changed()
 		return false
 	}
-	if !r.spent && !b.spendTicket(r.owner) {
+	if !r.spent && !r.perks && !b.spendTicket(r.owner) {
 		r.finishMedia()
 		r.phase, r.errText = "error", "The member who opened this room has no watch ticket left."
 		r.changed()
 		return false
 	}
 	now := watchNow()
-	if !r.spent {
-		r.spent, r.started = true, now
+	if r.started.IsZero() {
+		r.started = now
 	}
+	r.spent = !r.perks
 	r.finishMedia()
 	r.link = k
 	m, entry, subIDs := newWatchMedia(r.streams[k], r.dub)
@@ -786,7 +793,7 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	}
 	r.phase, r.errText = "play", ""
 	r.episodes++
-	r.setPos(0, true, now)
+	r.setPos(r.startAt, true, now)
 	r.changed()
 	return true
 }
@@ -878,9 +885,33 @@ func (b *bot) spendTicket(user string) bool {
 	return ok
 }
 
-// watchMax is how many can be in the room (/settings watch_room_max).
-// Staff and the member who opened it always get in.
-func (b *bot) watchMax() int { return b.settingInt("watch_room_max") }
+// watchMax is how many can be in a room (/settings watch_room_max, or
+// watch_room_max_perks for one opened by staff or the Game Champion). Staff
+// and the member who opened it always get in.
+func (b *bot) watchMax(perks bool) int {
+	if perks {
+		return b.settingInt("watch_room_max_perks")
+	}
+	return b.settingInt("watch_room_max")
+}
+
+// ends is when the room's time is up; zero before it started.
+func (r *watchRoom) ends() time.Time {
+	switch {
+	case r.started.IsZero():
+		return time.Time{}
+	case r.perks:
+		return r.started.Add(watchPerkLength)
+	}
+	return r.started.Add(watchRoomLength)
+}
+
+// isChampion reports whether user holds this week's Game Champion role.
+func (b *bot) isChampion(user string) bool {
+	champ := false
+	b.store.view(func(d *storeData) { champ = contains(d.Champions, user) })
+	return champ
+}
 
 func (b *bot) watchTickets(user string) int {
 	n := 0
@@ -1004,7 +1035,7 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 		Err: r.errText, Adult: r.adult, Show: r.show, Ep: r.ep, Dub: r.dub, Playing: r.playing, Pos: r.position(now),
 		Dur: r.dur, AutoSkipOP: r.autoSkipOP, AutoSkipED: r.autoSkipED,
 		SkipReady: r.skipReady, SkipTimes: r.skipIntervals.match(r.dur), SkipSeq: r.skipSeq,
-		Members: []watchPerson{}, Asks: []watchAsk{}, Max: b.watchMax()}
+		Members: []watchPerson{}, Asks: []watchAsk{}, Max: b.watchMax(r.perks)}
 	if r.phase == "loading" {
 		v.LoadStep = r.loadStep
 		v.LoadSince = r.loadSince.UnixMilli()
@@ -1033,8 +1064,8 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 			v.AlternateOrigin = r.alternateOrigin
 		}
 	}
-	if !r.started.IsZero() {
-		v.Ends = r.started.Add(watchRoomLength).UnixMilli()
+	if e := r.ends(); !e.IsZero() {
+		v.Ends = e.UnixMilli()
 	}
 	for _, id := range r.people() {
 		v.Members = append(v.Members, watchPerson{ID: id, Name: r.members[id].name, Host: id == r.host})
@@ -1175,7 +1206,14 @@ func (b *bot) watchStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	room := r.URL.Query().Get("room")
-	out := map[string]any{"tickets": b.watchTickets(user), "max": b.watchMax()}
+	perks := ""
+	switch {
+	case b.isAdmin(user):
+		perks = "staff"
+	case b.isChampion(user):
+		perks = "champion"
+	}
+	out := map[string]any{"tickets": b.watchTickets(user), "max": b.watchMax(perks != ""), "perks": perks}
 	b.watch.mu.Lock()
 	if cur := b.watch.cur; cur != nil {
 		out["busy"] = true
@@ -1185,11 +1223,12 @@ func (b *bot) watchStatus(w http.ResponseWriter, r *http.Request) {
 			out["channel_name"] = c.Name
 		}
 		out["people"] = len(cur.members)
+		out["max"] = b.watchMax(cur.perks)
 		if cur.show != nil {
 			out["show"] = cur.show.Title
 		}
-		if !cur.started.IsZero() {
-			out["ends"] = cur.started.Add(watchRoomLength).UnixMilli()
+		if e := cur.ends(); !e.IsZero() {
+			out["ends"] = e.UnixMilli()
 		}
 	}
 	b.watch.mu.Unlock()
@@ -1205,6 +1244,7 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 	staff := b.isAdmin(user)
 	name := b.dashName(user)
 	tickets := b.watchTickets(user)
+	perks := staff || b.isChampion(user)
 	var prefs watchPlaybackPreferences
 	b.store.view(func(d *storeData) { prefs = watchNormalizePreferences(d.WatchPreferences[user]) })
 	ch := watchChannel(b, in.Channel)
@@ -1222,13 +1262,13 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusConflict, "A watch room is already running in "+where+". Only one runs at a time.")
 		return
 	case cur != nil:
-		if _, ok := cur.members[user]; !ok && len(cur.members) >= b.watchMax() && user != cur.owner && !staff {
+		if _, ok := cur.members[user]; !ok && len(cur.members) >= b.watchMax(cur.perks) && user != cur.owner && !staff {
 			b.watch.mu.Unlock()
-			apiError(w, http.StatusForbidden, fmt.Sprintf("The watch room is full (%d people).", b.watchMax()))
+			apiError(w, http.StatusForbidden, fmt.Sprintf("The watch room is full (%d people).", b.watchMax(cur.perks)))
 			return
 		}
 	default:
-		if tickets < 1 {
+		if tickets < 1 && !perks {
 			b.watch.mu.Unlock()
 			apiError(w, http.StatusPaymentRequired, "Opening a watch room takes a watch ticket. Redeem a code with /redeem to get one.")
 			return
@@ -1239,7 +1279,7 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cur = &watchRoom{id: in.Room, channel: in.Channel, adult: adult, owner: user, host: user, opened: now,
-			phase: "pick", members: map[string]*watchMember{}, autoSkipOP: prefs.SkipOP, autoSkipED: prefs.SkipED}
+			phase: "pick", members: map[string]*watchMember{}, perks: perks, autoSkipOP: prefs.SkipOP, autoSkipED: prefs.SkipED}
 		b.watch.cur = cur
 		watchClock(b, cur)
 		log.Printf("watch room opened by member %s in channel %s", user, in.Channel)
@@ -1621,12 +1661,18 @@ func (b *bot) watchPick(w http.ResponseWriter, r *http.Request) {
 		b.watch.mu.Unlock()
 		apiError(w, http.StatusBadRequest, fmt.Sprintf("pick an episode from 1 to %d", show.lastEpisode()))
 		return
-	case !cur.started.IsZero() && watchNow().After(cur.started.Add(watchRoomLength)):
+	case !cur.ends().IsZero() && watchNow().After(cur.ends()):
 		b.watch.mu.Unlock()
 		apiError(w, http.StatusForbidden, "the watch room's time is up")
 		return
 	}
-	b.loadEpisode(cur, show, in.Ep, in.Dub)
+	// Pos is a saved position to resume from, picked from the host's
+	// Continue list.
+	start := in.Pos
+	if math.IsNaN(start) || start < watchResumeMin || start > 6*3600 {
+		start = 0
+	}
+	b.loadEpisode(cur, show, in.Ep, in.Dub, start)
 	b.watchAnswerView(w, cur, user, staff)
 }
 
@@ -1730,10 +1776,10 @@ func (b *bot) watchDo(r *watchRoom, act string, pos float64) string {
 		if ep < 1 || ep > r.show.lastEpisode() {
 			return "there's no episode " + strconv.Itoa(ep)
 		}
-		if !r.started.IsZero() && now.After(r.started.Add(watchRoomLength)) {
+		if !r.ends().IsZero() && now.After(r.ends()) {
 			return "the watch room's time is up"
 		}
-		b.loadEpisode(r, *r.show, ep, r.dub)
+		b.loadEpisode(r, *r.show, ep, r.dub, 0)
 		return ""
 	case "broken":
 		if r.phase == "play" {

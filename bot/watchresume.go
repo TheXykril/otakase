@@ -45,7 +45,7 @@ func (r *watchRoom) resumeOf(user string, now time.Time) (watchResume, bool) {
 		return watchResume{}, false
 	}
 	secs := int(r.position(now))
-	if m.from > watchResumeLate || m.watched < watchResumeMin || secs < watchResumeMin {
+	if m.from > r.startAt+watchResumeLate || m.watched < watchResumeMin || secs < watchResumeMin {
 		return watchResume{}, false
 	}
 	return watchResume{user: user, show: *r.show, ep: r.ep, secs: secs}, true

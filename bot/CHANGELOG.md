@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.61
+
+- Watch Together: the host's show picker now shows your own lists under the search. Continue has the shows you're watching on AniList or MyAnimeList at the next episode, and starts where you stopped when Otakase or the room saved your spot for that episode (with a From the start button too). Planning has your Plan to watch list. Link with /link-anilist or /link-mal; a private AniList list shows once your link is proven, and only to you.
+- Watch Together: staff and this week's Game Champion open watch rooms without a ticket. Their rooms last 8 hours instead of 4 and fit up to 30 people (`/settings watch_room_max_perks`). Other rooms are unchanged.
+
 ## 1.30.60
 
 - Voice rooms: `/room privacy` has a new **18+** choice. The room is marked age-restricted in Discord, stays hidden and only people the owner invites can join (Lock and Hide are off for it). Watch Together can play 18+ titles in such a room. Every room's controls also get an **Invite** button to add someone without typing `/room-invite`.

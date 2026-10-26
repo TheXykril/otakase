@@ -512,7 +512,8 @@ The first tile, **Watch room** (`watchroom.go`, `watchrelay.go`,
 `watchsource.go`, page in `assets/activity/watch.js`), has the bot play an
 anime for everyone in the call, in step. Opening one takes a watch ticket
 (from `/redeem` codes); the ticket is spent once the first episode plays,
-so a room that never plays costs nothing. Staff need a ticket too. Only one
+so a room that never plays costs nothing. Staff and the Game Champion
+need none (below). Only one
 room runs at a time across the server; other calls see where it is. Members'
 own `/watchparty` parties are separate.
 
@@ -529,6 +530,10 @@ own `/watchparty` parties are separate.
 - A room lasts 4 hours from its first episode, as many episodes as fit.
   `/settings watch_room_max` sets how many fit in it (default 10; the
   opener and staff always get in).
+- Staff and this week's **Game Champion** (`Champions` in the data file)
+  open rooms without a ticket; their room lasts 8 hours and fits
+  `/settings watch_room_max_perks` people (default 30). The room keeps this
+  for its life even if the role moves on.
 - 18+ shows only in age-restricted voice channels.
 - Each member's preferences (the Activity's preferences button) hold audio,
   backup audio and two subtitle languages: `sub_subtitles` for the original
@@ -578,6 +583,19 @@ own `/watchparty` parties are separate.
   the list, when the member watched at least 10 seconds and joined within
   the first minute of the episode, and follows the same switches as the
   progress update.
+- The host's picker shows their own lists under the search
+  (`bot/watchlists.go`, `GET watch/lists`): **Continue** (AniList Watching
+  and Rewatching, MAL Watching) at the next episode, and **Planning**. A
+  member linked to both gets one entry per show with the furthest progress.
+  Shows whose next episode isn't out, 18+ shows outside age-restricted
+  channels and unreleased ones are left out. When the notes hold an
+  `[otakase:<episode>@<seconds>]` tag for exactly that next episode, the
+  pick starts there (`pos` on `watch/pick`, kept as the room's `startAt`),
+  like the app does. A proven AniList link reads with the member's token,
+  so private lists show to them; an unproven one reads the public list.
+  Only the signed-in member's own lists are ever read. Lists are kept for
+  a minute. A resumed episode counts for list progress at 80% of what was
+  left of it.
 
 The host's page reports its position every 4 seconds (`watch/beat`); the
 room only wakes the other pages when it's more than 2 seconds off where
