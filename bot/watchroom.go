@@ -43,6 +43,7 @@ import (
 
 const (
 	watchRoomLength = 4 * time.Hour
+	watchPerkLength = 8 * time.Hour    // a room opened by staff or the Game Champion
 	watchGone       = 45 * time.Second // a member who hasn't polled this long has left
 	watchEmptyClose = time.Minute      // an empty room closes after this
 	watchPickWait   = 15 * time.Minute // a room that never played closes after this
@@ -101,9 +102,9 @@ type watchRoom struct {
 	opened  time.Time
 	started time.Time // first episode played; zero before
 	spent   bool      // the owner's ticket is used
-	// champion is set when a Game Champion opened it: no ticket, no time
-	// limit and room for more people (watch_room_max_champion).
-	champion bool
+	// perks is set when staff or the Game Champion opened it: no ticket,
+	// 8 hours instead of 4 and room for more people (watch_room_max_perks).
+	perks bool
 	// watched is set once the host's player got through half a minute of
 	// video; a room that ends before that gives the ticket back.
 	watched   bool
@@ -739,7 +740,7 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 		r.changed()
 		return false
 	}
-	if !r.spent && !r.champion && !b.spendTicket(r.owner) {
+	if !r.spent && !r.perks && !b.spendTicket(r.owner) {
 		r.finishMedia()
 		r.phase, r.errText = "error", "The member who opened this room has no watch ticket left."
 		r.changed()
@@ -749,7 +750,7 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	if r.started.IsZero() {
 		r.started = now
 	}
-	r.spent = !r.champion
+	r.spent = !r.perks
 	r.finishMedia()
 	r.link = k
 	m, entry, subIDs := newWatchMedia(r.streams[k], r.dub)
@@ -885,20 +886,22 @@ func (b *bot) spendTicket(user string) bool {
 }
 
 // watchMax is how many can be in a room (/settings watch_room_max, or
-// watch_room_max_champion for a Game Champion's). Staff and the member who
-// opened it always get in.
-func (b *bot) watchMax(champion bool) int {
-	if champion {
-		return b.settingInt("watch_room_max_champion")
+// watch_room_max_perks for one opened by staff or the Game Champion). Staff
+// and the member who opened it always get in.
+func (b *bot) watchMax(perks bool) int {
+	if perks {
+		return b.settingInt("watch_room_max_perks")
 	}
 	return b.settingInt("watch_room_max")
 }
 
-// ends is when the room's time is up; zero when it has none (not started,
-// or a Game Champion's).
+// ends is when the room's time is up; zero before it started.
 func (r *watchRoom) ends() time.Time {
-	if r.started.IsZero() || r.champion {
+	switch {
+	case r.started.IsZero():
 		return time.Time{}
+	case r.perks:
+		return r.started.Add(watchPerkLength)
 	}
 	return r.started.Add(watchRoomLength)
 }
@@ -1032,7 +1035,7 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 		Err: r.errText, Adult: r.adult, Show: r.show, Ep: r.ep, Dub: r.dub, Playing: r.playing, Pos: r.position(now),
 		Dur: r.dur, AutoSkipOP: r.autoSkipOP, AutoSkipED: r.autoSkipED,
 		SkipReady: r.skipReady, SkipTimes: r.skipIntervals.match(r.dur), SkipSeq: r.skipSeq,
-		Members: []watchPerson{}, Asks: []watchAsk{}, Max: b.watchMax(r.champion)}
+		Members: []watchPerson{}, Asks: []watchAsk{}, Max: b.watchMax(r.perks)}
 	if r.phase == "loading" {
 		v.LoadStep = r.loadStep
 		v.LoadSince = r.loadSince.UnixMilli()
@@ -1203,8 +1206,14 @@ func (b *bot) watchStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	room := r.URL.Query().Get("room")
-	champion := b.isChampion(user)
-	out := map[string]any{"tickets": b.watchTickets(user), "max": b.watchMax(champion), "champion": champion}
+	perks := ""
+	switch {
+	case b.isAdmin(user):
+		perks = "staff"
+	case b.isChampion(user):
+		perks = "champion"
+	}
+	out := map[string]any{"tickets": b.watchTickets(user), "max": b.watchMax(perks != ""), "perks": perks}
 	b.watch.mu.Lock()
 	if cur := b.watch.cur; cur != nil {
 		out["busy"] = true
@@ -1214,7 +1223,7 @@ func (b *bot) watchStatus(w http.ResponseWriter, r *http.Request) {
 			out["channel_name"] = c.Name
 		}
 		out["people"] = len(cur.members)
-		out["max"] = b.watchMax(cur.champion)
+		out["max"] = b.watchMax(cur.perks)
 		if cur.show != nil {
 			out["show"] = cur.show.Title
 		}
@@ -1235,7 +1244,7 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 	staff := b.isAdmin(user)
 	name := b.dashName(user)
 	tickets := b.watchTickets(user)
-	champion := b.isChampion(user)
+	perks := staff || b.isChampion(user)
 	var prefs watchPlaybackPreferences
 	b.store.view(func(d *storeData) { prefs = watchNormalizePreferences(d.WatchPreferences[user]) })
 	ch := watchChannel(b, in.Channel)
@@ -1253,13 +1262,13 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusConflict, "A watch room is already running in "+where+". Only one runs at a time.")
 		return
 	case cur != nil:
-		if _, ok := cur.members[user]; !ok && len(cur.members) >= b.watchMax(cur.champion) && user != cur.owner && !staff {
+		if _, ok := cur.members[user]; !ok && len(cur.members) >= b.watchMax(cur.perks) && user != cur.owner && !staff {
 			b.watch.mu.Unlock()
-			apiError(w, http.StatusForbidden, fmt.Sprintf("The watch room is full (%d people).", b.watchMax(cur.champion)))
+			apiError(w, http.StatusForbidden, fmt.Sprintf("The watch room is full (%d people).", b.watchMax(cur.perks)))
 			return
 		}
 	default:
-		if tickets < 1 && !champion {
+		if tickets < 1 && !perks {
 			b.watch.mu.Unlock()
 			apiError(w, http.StatusPaymentRequired, "Opening a watch room takes a watch ticket. Redeem a code with /redeem to get one.")
 			return
@@ -1270,7 +1279,7 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cur = &watchRoom{id: in.Room, channel: in.Channel, adult: adult, owner: user, host: user, opened: now,
-			phase: "pick", members: map[string]*watchMember{}, champion: champion, autoSkipOP: prefs.SkipOP, autoSkipED: prefs.SkipED}
+			phase: "pick", members: map[string]*watchMember{}, perks: perks, autoSkipOP: prefs.SkipOP, autoSkipED: prefs.SkipED}
 		b.watch.cur = cur
 		watchClock(b, cur)
 		log.Printf("watch room opened by member %s in channel %s", user, in.Channel)

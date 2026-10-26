@@ -41,7 +41,7 @@ var settings = []setting{
 	{Name: "welcome_dm", Type: settingBool, Desc: "DM new members a welcome", Default: func(c config) string { return strconv.FormatBool(c.WelcomeDM) }},
 	{Name: "score_sharing", Type: settingBool, Desc: "Members can share scores from the app in the reviews channel", Default: func(config) string { return "true" }},
 	{Name: "watch_room_max", Type: settingInt, Min: 1, Max: 100, Desc: "How many people fit in the watch room; each one costs about 2.5 Mbps of upload at 720p", Default: func(config) string { return "10" }},
-	{Name: "watch_room_max_champion", Type: settingInt, Min: 1, Max: 100, Desc: "How many people fit in a watch room opened by the Game Champion (no ticket or time limit for them)", Default: func(config) string { return "30" }},
+	{Name: "watch_room_max_perks", Type: settingInt, Min: 1, Max: 100, Desc: "How many people fit in a watch room opened by staff or the Game Champion (no ticket, 8 hours)", Default: func(config) string { return "30" }},
 	{Name: "watch_room_progress", Type: settingBool, Desc: "The watch room moves members' AniList and MAL progress on after they watch an episode", Default: func(config) string { return "true" }},
 	{Name: "capsule_threshold", Type: settingFloat, Min: 0, Max: 1, Desc: "How close in meaning to a bad example a time capsule message must be to get blocked (0-1, lower is stricter)", Default: func(config) string { return "0.6" }},
 	{Name: "match_threshold", Type: settingFloat, Min: 0, Max: 1, Desc: "How close in meaning a chat question must be to get an answer (0-1, higher is stricter)", Default: func(c config) string { return formatFloat(c.AIThreshold) }},

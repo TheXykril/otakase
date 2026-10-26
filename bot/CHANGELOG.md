@@ -5,7 +5,7 @@
 ## 1.30.60
 
 - Watch Together: the host's show picker now shows your own lists under the search. Continue has the shows you're watching on AniList or MyAnimeList at the next episode, and starts where you stopped when Otakase or the room saved your spot for that episode (with a From the start button too). Planning has your Plan to watch list. Link with /link-anilist or /link-mal; a private AniList list shows once your link is proven, and only to you.
-- Watch Together: this week's Game Champion opens watch rooms without a ticket. Their room has no 4-hour limit and fits up to 30 people (`/settings watch_room_max_champion`). Other rooms are unchanged.
+- Watch Together: staff and this week's Game Champion open watch rooms without a ticket. Their rooms last 8 hours instead of 4 and fit up to 30 people (`/settings watch_room_max_perks`). Other rooms are unchanged.
 
 ## 1.30.59
 

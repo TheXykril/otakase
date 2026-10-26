@@ -91,9 +91,6 @@ func TestWatchRoomTicketsAndOneAtATime(t *testing.T) {
 	if code := watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r1", Channel: "vc"}, nil); code != http.StatusPaymentRequired {
 		t.Fatalf("no ticket: %d", code)
 	}
-	if code := watchPost(b, (*bot).watchOpen, "staff", watchIn{Room: "r1", Channel: "vc"}, nil); code != http.StatusPaymentRequired {
-		t.Fatalf("staff need a ticket too: %d", code)
-	}
 	b.store.update(func(d *storeData) { d.WatchTickets = map[string]int{"a": 1, "z": 1} })
 	if code := watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r1", Channel: "nowhere"}, nil); code != http.StatusBadRequest {
 		t.Fatalf("not a server voice channel: %d", code)
@@ -849,39 +846,47 @@ func TestWatchRoomReturnsTicketWhenNothingPlayed(t *testing.T) {
 	}
 }
 
-func TestWatchRoomGameChampion(t *testing.T) {
-	b, now := watchBot(t, "https://cdn.example/ep.mp4")
-	b.store.update(func(d *storeData) { d.Champions = []string{"champ"} })
-	var v watchView
-	if code := watchPost(b, (*bot).watchOpen, "champ", watchIn{Room: "r", Channel: "vc"}, &v); code != 200 || v.Max != 30 {
-		t.Fatalf("champion opens without a ticket: %d %+v", code, v)
-	}
-	watchPost(b, (*bot).watchPick, "champ", watchIn{Room: "r", Show: 5, Ep: 1}, nil)
-	waitLoaded(t, b)
-	b.watch.mu.Lock()
-	v = b.watchViewOf(b.watch.cur, "champ", false, watchNow())
-	b.watch.mu.Unlock()
-	if v.Phase != "play" || v.Ends != 0 {
-		t.Fatalf("playing without a time limit: %+v", v)
-	}
-	for k := 0; k < 29; k++ {
-		if code := watchPost(b, (*bot).watchOpen, fmt.Sprint("m", k), watchIn{Room: "r", Channel: "vc"}, nil); code != 200 {
-			t.Fatalf("member %d of 30: %d", k+2, code)
-		}
-	}
-	if code := watchPost(b, (*bot).watchOpen, "late", watchIn{Room: "r", Channel: "vc"}, nil); code != http.StatusForbidden {
-		t.Fatalf("31st person: %d", code)
-	}
-	// Still open well past four hours.
-	*now = now.Add(watchRoomLength + time.Hour)
-	b.watch.cur.members["champ"].seen = *now
-	if !b.watchStep(b.watch.cur, *now) || b.watch.cur == nil {
-		t.Fatal("champion's room closed on time")
-	}
-	// Ending before anything counted as watched gives no ticket back.
-	watchPost(b, (*bot).watchEnd, "champ", watchIn{Room: "r"}, nil)
-	time.Sleep(20 * time.Millisecond)
-	if n := b.watchTickets("champ"); n != 0 {
-		t.Fatalf("champion got %d tickets from a free room", n)
+func TestWatchRoomPerks(t *testing.T) {
+	for _, opener := range []string{"champ", "staff"} {
+		t.Run(opener, func(t *testing.T) {
+			b, now := watchBot(t, "https://cdn.example/ep.mp4")
+			b.store.update(func(d *storeData) { d.Champions = []string{"champ"} })
+			var v watchView
+			if code := watchPost(b, (*bot).watchOpen, opener, watchIn{Room: "r", Channel: "vc"}, &v); code != 200 || v.Max != 30 {
+				t.Fatalf("opens without a ticket: %d %+v", code, v)
+			}
+			watchPost(b, (*bot).watchPick, opener, watchIn{Room: "r", Show: 5, Ep: 1}, nil)
+			waitLoaded(t, b)
+			b.watch.mu.Lock()
+			v = b.watchViewOf(b.watch.cur, opener, false, watchNow())
+			b.watch.mu.Unlock()
+			if v.Phase != "play" || v.Ends != now.Add(watchPerkLength).UnixMilli() {
+				t.Fatalf("playing for 8 hours: %+v", v)
+			}
+			for k := 0; k < 29; k++ {
+				if code := watchPost(b, (*bot).watchOpen, fmt.Sprint("m", k), watchIn{Room: "r", Channel: "vc"}, nil); code != 200 {
+					t.Fatalf("member %d of 30: %d", k+2, code)
+				}
+			}
+			if code := watchPost(b, (*bot).watchOpen, "late", watchIn{Room: "r", Channel: "vc"}, nil); code != http.StatusForbidden {
+				t.Fatalf("31st person: %d", code)
+			}
+			// Still open past four hours, closed after eight.
+			r := b.watch.cur
+			*now = now.Add(watchRoomLength + time.Hour)
+			r.members[opener].seen = *now
+			if !b.watchStep(r, *now) || b.watch.cur == nil {
+				t.Fatal("closed after four hours")
+			}
+			*now = now.Add(3*time.Hour + time.Minute)
+			r.members[opener].seen = *now
+			if b.watchStep(r, *now) || b.watch.cur != nil {
+				t.Fatal("still open after eight hours")
+			}
+			time.Sleep(20 * time.Millisecond)
+			if n := b.watchTickets(opener); n != 0 {
+				t.Fatalf("got %d tickets from a free room", n)
+			}
+		})
 	}
 }
