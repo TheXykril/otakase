@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -186,5 +187,38 @@ func TestHLSRelayReturnsBadGatewayOnCDNDenial(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadGateway {
 		t.Fatalf("relay status = %d", resp.StatusCode)
+	}
+}
+
+func TestHLSRelayKeepsInlineKeys(t *testing.T) {
+	p := &hlsRelay{items: make(map[string]relayItem), lookup: make(map[string]string)}
+	base, _ := url.Parse("https://fetch8.flixcloud.cc/stream/720p/index.m3u8")
+	const key = "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAAAAAA=="
+	playlist := "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"" + key + "\"\n" +
+		"#EXTINF:5,\nhttps://stream.overcdn.site/part.ttf\n"
+	got, err := p.rewrite([]byte(playlist), base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), `URI="`+key+`"`) {
+		t.Fatalf("inline key was modified: %s", got)
+	}
+	if !strings.Contains(string(got), "1.ts") {
+		t.Fatalf("known CDN segment was not relayed: %s", got)
+	}
+}
+
+func TestHLSRelayRejectsUnknownHostsWithoutLeakingURLs(t *testing.T) {
+	p := &hlsRelay{items: make(map[string]relayItem), lookup: make(map[string]string)}
+	base, _ := url.Parse("https://fetch8.flixcloud.cc/stream/index.m3u8")
+	const secret = "private-signed-media-token"
+	_, err := p.rewrite([]byte("#EXTM3U\nhttps://unlisted-cdn.example.net/seg.ttf?token="+secret+"\n"), base)
+	if err == nil {
+		t.Fatal("unknown CDN was accepted")
+	}
+	if !strings.Contains(err.Error(), "unlisted-cdn.example.net") ||
+		!strings.Contains(err.Error(), `scheme="https"`) ||
+		strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "seg.ttf") {
+		t.Fatalf("unsafe CDN error omitted host or leaked URL: %s", err)
 	}
 }

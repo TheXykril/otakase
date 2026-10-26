@@ -159,8 +159,18 @@ func (p *hlsRelay) get(id string) (relayItem, bool) {
 
 func (p *hlsRelay) reference(base *url.URL, reference, kind string) (string, error) {
 	u, err := base.Parse(reference)
-	if err != nil || !flixMediaURL(u.String()) {
-		return "", errors.New("reanime: unsafe HLS resource")
+	if err != nil {
+		return "", errors.New("reanime: invalid HLS resource URL")
+	}
+	if !flixMediaURL(u.String()) {
+		// Never log the full URL: FlixCloud resources can contain signed
+		// tokens and media IDs. Only the scheme and hostname are useful
+		// when deciding whether a new CDN belongs on the allowlist.
+		host := u.Hostname()
+		if len(host) > 253 {
+			host = host[:253]
+		}
+		return "", fmt.Errorf("reanime: unsafe HLS resource (scheme=%q, host=%q)", u.Scheme, host)
 	}
 	if strings.HasSuffix(strings.ToLower(u.Path), ".m3u8") {
 		kind = "list"
@@ -186,6 +196,11 @@ func (p *hlsRelay) rewrite(playlist []byte, base *url.URL) ([]byte, error) {
 					return ""
 				}
 				match := flixURI.FindStringSubmatch(attr)
+				// AES keys can be embedded as data: URIs. They are already
+				// complete and must not be sent to an HTTP relay.
+				if strings.HasPrefix(strings.ToLower(match[1]), "data:") {
+					return attr
+				}
 				kind := "seg"
 				if strings.HasPrefix(line, "#EXT-X-MEDIA:") || strings.HasPrefix(line, "#EXT-X-I-FRAME-STREAM-INF:") {
 					kind = "list"
