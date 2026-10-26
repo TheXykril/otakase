@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.30.64
+
+- Watch Together: the room chat beside the player is now exactly as tall as the video and its controls, instead of running past them.
+- Watch Together: the Watch room page shows the room running in another call: the show, the episode, who's hosting, how many are watching and which voice channel to join. The games menu tile says when a room is live. A room in an 18+ channel only shows that one runs and where.
+- Watch Together: what happens in the room pops up over the video for a moment: someone pausing, pressing play, jumping or skipping ahead, a new episode, hosting being passed on, a skip by vote, people joining and leaving.
+- Watch Together: volume goes up to 300%, with the slider or the Up key. It only changes your own player and is remembered on your device.
+
 ## 1.30.63
 
 - Watch Together: anyone can vote to skip the opening or the ending. When more than half the room agrees it skips for everyone, whether or not the host turned automatic skips on. The host's own vote skips at once.

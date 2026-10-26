@@ -162,6 +162,9 @@ type watchRoom struct {
 	chat  []watchChat
 	chatN int
 
+	events []watchEvent // what just happened, flashed over the video (watchevents.go)
+	eventN int
+
 	vote *watchVote // a running skip vote (watchvote.go)
 
 	// The ready check (watchready.go): hold is the running check's id, 0
@@ -250,6 +253,7 @@ func (r *watchRoom) prune(now time.Time) {
 	for id, m := range r.members {
 		if now.Sub(m.seen) > watchGone {
 			r.keepResume(id, m.seen)
+			r.note("%s dropped out", r.name(id))
 			delete(r.members, id)
 			gone = true
 		}
@@ -257,6 +261,7 @@ func (r *watchRoom) prune(now time.Time) {
 	if _, ok := r.members[r.host]; !ok {
 		if ids := r.people(); len(ids) > 0 {
 			r.host = ids[0]
+			r.note("%s is now the host", r.name(r.host))
 			gone = true
 		}
 	}
@@ -300,6 +305,7 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 	if r.dropVote(now) {
 		r.changed()
 	}
+	r.dropEvents(now)
 	elapsed := now.Sub(r.tick).Seconds()
 	if r.tick.IsZero() || elapsed > 3*watchTick.Seconds() {
 		elapsed = 0
@@ -312,6 +318,7 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 			r.skipSeq++
 			r.skipTarget = target
 			r.skipHoldUntil = now.Add(8 * time.Second)
+			r.note("Skipped the %s", map[bool]string{true: "ending", false: "opening"}[target >= r.dur-1 || target > r.dur/2])
 			r.changed()
 		}
 	}
@@ -1085,6 +1092,7 @@ type watchView struct {
 	Members         []watchPerson                   `json:"members"`
 	Asks            []watchAsk                      `json:"asks"`
 	Chat            []watchChat                     `json:"chat"`
+	Events          []watchEvent                    `json:"events,omitempty"`
 	Vote            *watchVote                      `json:"vote,omitempty"`
 	CanVote         bool                            `json:"can_vote,omitempty"`
 	Hold            int                             `json:"hold,omitempty"`
@@ -1109,6 +1117,7 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 	if v.Chat == nil {
 		v.Chat = []watchChat{}
 	}
+	v.Events = slices.Clone(r.events)
 	if r.hold != 0 {
 		v.Hold, v.HoldWaiting, v.HoldEnds, v.HoldReady = r.hold, r.holdWaiting(), r.holdUntil.UnixMilli(), r.ready[user]
 	}
@@ -1316,8 +1325,21 @@ func (b *bot) watchStatus(w http.ResponseWriter, r *http.Request) {
 		}
 		out["people"] = len(cur.members)
 		out["max"] = b.watchMax(cur.perks)
-		if cur.show != nil {
+		// An 18+ room stays private: anyone can see that a room runs
+		// somewhere, but not what or who.
+		if cur.adult {
+			out["adult"] = true
+		} else if cur.show != nil {
 			out["show"] = cur.show.Title
+			out["cover"] = cur.show.Cover
+			out["ep"] = cur.ep
+			out["last_ep"] = cur.show.lastEpisode()
+			out["playing"] = cur.phase == "play" && (cur.playing || cur.hold != 0)
+		}
+		if !cur.adult {
+			if h, ok := cur.members[cur.host]; ok {
+				out["host"] = h.name
+			}
 		}
 		if e := cur.ends(); !e.IsZero() {
 			out["ends"] = e.UnixMilli()
@@ -1384,6 +1406,9 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 			m.from = cur.position(now)
 		}
 		cur.members[user] = m
+		if len(cur.members) > 1 {
+			cur.note("%s joined", name)
+		}
 		cur.changed()
 	}
 	b.watchAnswerView(w, cur, user, staff)
@@ -1450,6 +1475,7 @@ func (b *bot) watchLeave(w http.ResponseWriter, r *http.Request) {
 				cur.resumes = append(cur.resumes, p)
 				out["ep"], out["secs"] = p.ep, p.secs
 			}
+			cur.note("%s left", cur.name(user))
 			delete(cur.members, user)
 			cur.prune(now)
 			cur.changed()
@@ -1765,6 +1791,7 @@ func (b *bot) watchPick(w http.ResponseWriter, r *http.Request) {
 		start = 0
 	}
 	b.loadEpisode(cur, show, in.Ep, in.Dub, start)
+	cur.note("%s put on %s, episode %d", cur.name(user), show.Title, in.Ep)
 	b.watchAnswerView(w, cur, user, staff)
 }
 
@@ -1800,6 +1827,7 @@ func (b *bot) watchCtl(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadRequest, err)
 		return
 	}
+	cur.noteControl(user, in.Act)
 	b.watchAnswerView(w, cur, user, staff)
 }
 
@@ -2027,8 +2055,8 @@ func (b *bot) watchAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 	a := cur.asks[k]
 	cur.asks = slices.Delete(cur.asks, k, k+1)
-	if in.OK {
-		b.watchDo(cur, a.Kind, -1)
+	if in.OK && b.watchDo(cur, a.Kind, -1) == "" {
+		cur.noteControl(user, a.Kind)
 	}
 	cur.changed()
 	b.watchAnswerView(w, cur, user, staff)
@@ -2051,6 +2079,7 @@ func (b *bot) watchTake(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cur.host = user
+	cur.note("%s took control", cur.name(user))
 	cur.changed()
 	b.watchAnswerView(w, cur, user, true)
 }
@@ -2085,6 +2114,7 @@ func (b *bot) watchHandOver(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cur.host = in.User
+	cur.note("%s passed hosting to %s", cur.name(user), cur.name(in.User))
 	cur.changed()
 	log.Printf("watch room: member %s handed hosting to %s", user, in.User)
 	b.watchAnswerView(w, cur, user, staff)

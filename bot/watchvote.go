@@ -93,9 +93,18 @@ func (b *bot) watchVoteAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	cur.vote.who[user] = true
 	cur.vote.To = to
-	if len(cur.vote.who) >= watchVoteNeed(len(cur.members)) || user == cur.host {
+	part := map[string]string{"op": "opening", "ed": "ending"}[kind]
+	switch {
+	case user == cur.host:
 		cur.setPos(to, cur.playing, now)
 		cur.vote = nil
+		cur.note("%s skipped the %s", cur.name(user), part)
+	case len(cur.vote.who) >= watchVoteNeed(len(cur.members)):
+		cur.setPos(to, cur.playing, now)
+		cur.vote = nil
+		cur.note("The room voted to skip the %s", part)
+	case len(cur.vote.who) == 1:
+		cur.note("%s wants to skip the %s", cur.name(user), part)
 	}
 	cur.changed()
 	b.watchAnswerView(w, cur, user, staff)

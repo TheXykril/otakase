@@ -553,6 +553,19 @@ own `/watchparty` parties are separate.
   the call. An invite grants nothing on its own — they still have to be
   able to join the voice channel — but an invite to an 18+ room also opens
   that private voice channel to them, the way `/room-invite` does.
+- `GET watch/status` also describes the room running in another call for
+  the lobby and the menu tile: show, cover, episode, host, people and voice
+  channel. For a room in an age-restricted channel it only says that one
+  runs and where.
+- **Room events** (`watchevents.go`) are short notes about what just
+  happened: a member's play, pause, seek, +10s or episode change, hosting
+  passing on, an automatic or voted skip, people joining, leaving or
+  dropping out. The view carries the last few for ten seconds and the
+  Activity flashes each new one over the video; they are not chat and are
+  never stored.
+- Each viewer's **volume** goes to 300%: up to 100% is the video's own
+  volume, above it a Web Audio gain node (wired to the video only once
+  someone goes past 100%). It is saved in the browser.
 - A viewer who falls behind on their own (buffering) is not yanked
   forward: under 4 seconds behind the player runs 15% faster until it
   catches up, and further behind it offers a **Catch up** button. A jump of

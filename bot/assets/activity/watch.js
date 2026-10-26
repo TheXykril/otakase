@@ -33,6 +33,8 @@ let wKeySeek = null; // where the last key seek went, so held arrows add up
 let wReadySent = 0; // the ready check this player last said it was ready for
 let wJump = false; // the host's spot moved: follow it at once
 let wChatSeen = 0; // the last chat message drawn
+let wEventSeen = 0; // the last room event flashed
+let wEventTimer = 0;
 let wChatUnread = 0;
 let wChatOpen = false; // the chat panel in theater mode
 let wChatDraft = "";
@@ -57,11 +59,9 @@ async function watchView() {
   const st = await api(`watch/status?room=${encodeURIComponent(room)}`);
   if (where !== "watch") return;
   if (st.busy && !st.here) {
-    const at = st.channel_name ? "#" + st.channel_name : "another call";
-    return wBox(`<p class="lead">A watch room is running in <b>${esc(at)}</b>${st.show ? `: ${esc(st.show)}` : ""}.</p>
-      <p class="note">Only one runs at a time, since the bot streams it to everyone. Join that call to watch, or come back once it's over${
-        st.ends ? ` (by ${new Date(st.ends).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : ""
-      }.</p>`);
+    const by = st.ends ? ` It ends by ${new Date(st.ends).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.` : "";
+    return wBox(`<h3 class="lh">${icon("watch")} Live now</h3>${wLiveCard(st)}
+      <p class="note">Only one room runs at a time, since the bot streams it to everyone. Join that voice channel and open the Activity there to watch along.${by}</p>`);
   }
   if (st.busy) return watchJoin();
   const t = st.tickets || 0;
@@ -74,6 +74,20 @@ async function watchView() {
     <div class="err" id="err"></div>`);
   const b = document.getElementById("wopen");
   if (b) b.onclick = () => ((b.disabled = true), watchJoin().catch((e) => ((b.disabled = false), showError(e))));
+}
+
+// wLiveCard is the room running in another call, as the lobby shows it.
+// An 18+ room only says that one runs and where.
+function wLiveCard(st) {
+  const at = st.channel_name ? "#" + st.channel_name : "another call";
+  const people = `${st.people || 0}/${st.max || 0} watching`;
+  if (st.adult || !st.show) {
+    return `<div class="wlive"><i></i><span><b>${st.adult ? "A private room" : "Picking a show"}</b><small>${esc(at)} · ${people}</small></span></div>`;
+  }
+  const ep = st.ep ? `Episode ${st.ep}${st.last_ep ? " of " + st.last_ep : ""}` : "";
+  return `<div class="wlive">${st.cover ? `<img src="${esc(st.cover)}" alt="" loading="lazy">` : "<i></i>"}
+    <span><b>${esc(st.show)}</b><small>${[ep, st.playing ? "playing" : "paused"].filter(Boolean).join(" · ")}</small>
+    <small>${icon("crown")} ${esc(st.host || "Someone")} · ${people} · <b>${esc(at)}</b></small></span></div>`;
 }
 
 function wBox(html) {
@@ -107,6 +121,7 @@ async function watchJoin() {
   wvKey = wvMedia = "";
   // Messages from before this member came in aren't news.
   wChatSeen = Math.max(0, ...(v.chat || []).map((c) => c.id));
+  wEventSeen = Math.max(0, ...(v.events || []).map((e) => e.id));
   wSet(v);
   const me = ++wvLoop;
   (async () => {
@@ -175,6 +190,7 @@ function wSet(v, fromHost) {
     const was = previous.pos + (previous.playing ? (wvAt - previousAt) / 1000 : 0);
     if (Math.abs(v.pos - was) > 3 || previous.playing !== v.playing) wJump = true;
   }
+  wEvents();
   wPeople();
   wVote();
   wAsks();
@@ -213,7 +229,7 @@ function wDraw() {
       : loadingStage;
   } else {
     stage = `<div class="wstage${wFull ? " full" : ""}" id="wstage"><div class="wplayer" id="wplayer"><video id="wvid" playsinline preload="auto"></video>
-      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div>
+      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div><div class="wevent" id="wevent" hidden></div>
       <div class="whold" id="whold" hidden></div><button class="wcatch" id="wcatch" hidden></button>
       <div class="wvote" id="wvote" hidden></div></div>
       <div class="wbar" id="wbar"></div></div>`;
@@ -963,7 +979,7 @@ function wBar() {
         ? "Keys: Space pause · ←/→ 10s · ↑/↓ volume · M mute · F theater · Shift+N next ep · 0–9 jump · Home start"
         : "Keys: Space ask to pause · → ask +10s · ↑/↓ volume · M mute · F theater · Shift+N ask for next ep"}</p>
     </div>
-    <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
+    <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="3" step="0.05" value="1" aria-label="Volume (up to 300%)">
     ${origin}
     <button class="btn alt" id="wchatbtn" title="Room chat" aria-label="Room chat">${icon("message")}<span>Chat</span><i class="wbadge" id="wchatbadge" hidden></i></button>
     <button class="btn alt" id="wstopbar" title="Stop watching" aria-label="Stop watching">${icon("stop")}<span>Stop</span></button>
@@ -995,8 +1011,13 @@ function wBar() {
   }
   const vid = document.getElementById("wvid");
   const vol = document.getElementById("wvol");
-  vol.value = vid.volume;
-  vol.oninput = () => ((vid.volume = +vol.value), (vid.muted = +vol.value === 0));
+  wVolumeApply(vid);
+  vol.oninput = () => {
+    wVol = +vol.value;
+    wMuted = false;
+    wVolumeApply(vid);
+    wVolumeSave();
+  };
   document.getElementById("wfull").onclick = () => wFullscreen(!wFull);
   document.getElementById("wstopbar").onclick = wStopWatching;
   document.getElementById("wsettings").onclick = () => { const menu = document.getElementById("wsettingsmenu"); menu.hidden = !menu.hidden; };
@@ -1356,6 +1377,23 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && wFull) wFullscreen(false);
 });
 
+// wEvents flashes what just happened in the room (a pause, a skip, someone
+// joining) over the video for a moment. Several at once show together.
+function wEvents() {
+  const fresh = ((wv && wv.events) || []).filter((e) => e.id > wEventSeen);
+  if (!fresh.length) return;
+  wEventSeen = fresh[fresh.length - 1].id;
+  const el = document.getElementById("wevent");
+  if (!el) return;
+  el.innerHTML = fresh.slice(-3).map((e) => `<span>${esc(e.text)}</span>`).join("");
+  el.hidden = false;
+  el.classList.remove("show");
+  void el.offsetWidth;
+  el.classList.add("show");
+  clearTimeout(wEventTimer);
+  wEventTimer = setTimeout(() => (el.hidden = true), 1800 + 400 * Math.min(fresh.length - 1, 2));
+}
+
 // wOsd flashes a short note over the video, for keys with no button to watch.
 function wOsd(text) {
   const el = document.getElementById("wosd");
@@ -1366,12 +1404,64 @@ function wOsd(text) {
   wOsdTimer = setTimeout(() => (el.hidden = true), 900);
 }
 
-function wVolume(vid, volume, muted) {
-  vid.volume = Math.max(0, Math.min(1, volume));
-  vid.muted = muted;
+// Volume goes to 300%, for this viewer only. Up to 100% is the player's own
+// volume; above it a Web Audio gain boosts the sound. The boost is wired in
+// only once someone goes past 100% (a tap or a key, so the browser lets the
+// audio start), and a video element can be wired only once.
+let wVol = wVolumeLoad();
+let wMuted = false;
+let wAudioCtx = null;
+const wGains = new WeakMap();
+
+function wVolumeLoad() {
+  try {
+    const v = parseFloat(localStorage.getItem("otakase-watch-volume"));
+    if (v >= 0 && v <= 3) return v;
+  } catch (e) {}
+  return 1;
+}
+
+function wVolumeSave() {
+  try {
+    localStorage.setItem("otakase-watch-volume", String(wVol));
+  } catch (e) {}
+}
+
+function wBoost(vid) {
+  if (wGains.has(vid)) return wGains.get(vid);
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  try {
+    wAudioCtx = wAudioCtx || new Ctx();
+    const gain = wAudioCtx.createGain();
+    wAudioCtx.createMediaElementSource(vid).connect(gain);
+    gain.connect(wAudioCtx.destination);
+    wGains.set(vid, gain);
+    return gain;
+  } catch (e) {
+    return null;
+  }
+}
+
+function wVolumeApply(vid) {
+  if (!vid) return;
+  vid.volume = Math.max(0, Math.min(1, wVol));
+  vid.muted = wMuted || wVol === 0;
+  const gain = wVol > 1 ? wBoost(vid) : wGains.get(vid);
+  if (gain) {
+    gain.gain.value = Math.max(1, wVol);
+    if (wAudioCtx && wAudioCtx.state === "suspended") wAudioCtx.resume().catch(() => {});
+  }
   const vol = document.getElementById("wvol");
-  if (vol) vol.value = vid.muted ? 0 : vid.volume;
-  wOsd(vid.muted || vid.volume === 0 ? "Muted" : "Volume " + Math.round(vid.volume * 100) + "%");
+  if (vol) vol.value = vid.muted ? 0 : wVol;
+}
+
+function wVolume(vid, volume, muted) {
+  wVol = Math.round(Math.max(0, Math.min(3, volume)) * 100) / 100;
+  wMuted = muted;
+  wVolumeApply(vid);
+  wVolumeSave();
+  wOsd(vid.muted ? "Muted" : "Volume " + Math.round(wVol * 100) + "%");
 }
 
 // wKeySeek moves the host by step seconds (or to an absolute spot), from
@@ -1422,15 +1512,15 @@ document.addEventListener("keydown", (e) => {
       }
       break;
     case "ArrowUp":
-      wVolume(vid, vid.volume + 0.05, false);
+      wVolume(vid, wVol + (wVol >= 1 ? 0.1 : 0.05), false);
       break;
     case "ArrowDown":
-      wVolume(vid, vid.volume - 0.05, false);
+      wVolume(vid, wVol - (wVol > 1 ? 0.1 : 0.05), false);
       break;
     case "m":
       if (e.repeat) break;
-      if (vid.muted || vid.volume === 0) wVolume(vid, vid.volume || 0.5, false);
-      else wVolume(vid, vid.volume, true);
+      if (vid.muted || wVol === 0) wVolume(vid, wVol || 0.5, false);
+      else wVolume(vid, wVol, true);
       break;
     case "f":
       if (!e.repeat) wFullscreen(!wFull);
