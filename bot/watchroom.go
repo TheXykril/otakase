@@ -154,6 +154,17 @@ type watchRoom struct {
 	asks []watchAsk
 	askN int
 
+	chat  []watchChat
+	chatN int
+
+	// The ready check (watchready.go): hold is the running check's id, 0
+	// when there is none; the room waits at holdPos until holdUntil.
+	hold      int
+	holdN     int
+	holdPos   float64
+	holdUntil time.Time
+	ready     map[string]bool
+
 	ver  int
 	wake chan struct{}
 	tick time.Time
@@ -276,6 +287,9 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 		return false
 	}
 	r.prune(now)
+	if r.phase == "play" && r.holdDone(now) {
+		r.release(now)
+	}
 	elapsed := now.Sub(r.tick).Seconds()
 	if r.tick.IsZero() || elapsed > 3*watchTick.Seconds() {
 		elapsed = 0
@@ -452,6 +466,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool, start 
 	// not reuse an old value before the host receives the new playback view.
 	r.skipHoldUntil = time.Time{}
 	r.skipTarget = 0
+	r.unhold()
 	r.setPos(0, false, watchNow())
 	r.dur = 0
 	r.asks = nil
@@ -793,7 +808,7 @@ func (b *bot) startStream(r *watchRoom, k int) bool {
 	}
 	r.phase, r.errText = "play", ""
 	r.episodes++
-	r.setPos(r.startAt, true, now)
+	r.holdAt(r.startAt, watchReadyFirst, now)
 	r.changed()
 	return true
 }
@@ -1021,6 +1036,11 @@ type watchView struct {
 	Ends            int64                           `json:"ends,omitempty"` // unix ms, once started
 	Members         []watchPerson                   `json:"members"`
 	Asks            []watchAsk                      `json:"asks"`
+	Chat            []watchChat                     `json:"chat"`
+	Hold            int                             `json:"hold,omitempty"`
+	HoldWaiting     []string                        `json:"hold_waiting,omitempty"`
+	HoldEnds        int64                           `json:"hold_ends,omitempty"` // unix ms
+	HoldReady       bool                            `json:"hold_ready,omitempty"`
 	Sync            bool                            `json:"sync"`
 	Linked          []string                        `json:"linked,omitempty"`
 	Languages       watchLanguagePreference         `json:"languages"`
@@ -1035,7 +1055,13 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 		Err: r.errText, Adult: r.adult, Show: r.show, Ep: r.ep, Dub: r.dub, Playing: r.playing, Pos: r.position(now),
 		Dur: r.dur, AutoSkipOP: r.autoSkipOP, AutoSkipED: r.autoSkipED,
 		SkipReady: r.skipReady, SkipTimes: r.skipIntervals.match(r.dur), SkipSeq: r.skipSeq,
-		Members: []watchPerson{}, Asks: []watchAsk{}, Max: b.watchMax(r.perks)}
+		Members: []watchPerson{}, Asks: []watchAsk{}, Chat: slices.Clone(r.chat), Max: b.watchMax(r.perks)}
+	if v.Chat == nil {
+		v.Chat = []watchChat{}
+	}
+	if r.hold != 0 {
+		v.Hold, v.HoldWaiting, v.HoldEnds, v.HoldReady = r.hold, r.holdWaiting(), r.holdUntil.UnixMilli(), r.ready[user]
+	}
 	if r.phase == "loading" {
 		v.LoadStep = r.loadStep
 		v.LoadSince = r.loadSince.UnixMilli()
@@ -1113,6 +1139,8 @@ func init() {
 	apiHandle("POST /activity/api/watch/ctl", (*bot).watchCtl)
 	apiHandle("POST /activity/api/watch/beat", (*bot).watchBeat)
 	apiHandle("POST /activity/api/watch/ask", (*bot).watchAskAPI)
+	apiHandle("POST /activity/api/watch/ready", (*bot).watchReady)
+	apiHandle("POST /activity/api/watch/chat", (*bot).watchChatSay)
 	apiHandle("POST /activity/api/watch/answer", (*bot).watchAnswer)
 	apiHandle("POST /activity/api/watch/take", (*bot).watchTake)
 	apiHandle("POST /activity/api/watch/sync", (*bot).watchSync)
@@ -1148,6 +1176,7 @@ type watchIn struct {
 	OK        bool    `json:"ok"`
 	On        bool    `json:"on"`
 	Why       string  `json:"why"` // why the host's player gave up, for the log
+	Text      string  `json:"text"`
 }
 
 // watchRead reads a request for the room the page is in. The room is the
@@ -1314,7 +1343,7 @@ func (b *bot) watchState(w http.ResponseWriter, r *http.Request) {
 		cur := b.watch.cur
 		if cur == nil || cur.id != id {
 			b.watch.mu.Unlock()
-			writeJSON(w, http.StatusOK, watchView{Room: id, Me: user, Phase: "over", Members: []watchPerson{}, Asks: []watchAsk{}})
+			writeJSON(w, http.StatusOK, watchView{Room: id, Me: user, Phase: "over", Members: []watchPerson{}, Asks: []watchAsk{}, Chat: []watchChat{}})
 			return
 		}
 		m, in := cur.members[user]
@@ -1721,6 +1750,7 @@ func (b *bot) watchDo(r *watchRoom, act string, pos float64) string {
 			return "nothing is loading"
 		}
 		r.gen++
+		r.unhold()
 		r.finishMedia()
 		r.phase, r.errText = "pick", ""
 		r.loadStep = ""
@@ -1737,20 +1767,37 @@ func (b *bot) watchDo(r *watchRoom, act string, pos float64) string {
 		} else if pos < 0 || math.IsNaN(pos) {
 			pos = r.position(now)
 		}
-		playing := r.playing
+		if act == "play" && r.hold != 0 {
+			// Play while the room waits for everyone: the host starts it now.
+			r.release(now)
+			return ""
+		}
+		playing := r.playing || r.hold != 0
 		if act != "seek" {
 			playing = act == "play"
 		}
-		r.setPos(pos, playing, now)
+		r.unhold()
+		if playing {
+			r.holdAt(pos, watchReadyWait, now)
+		} else {
+			r.setPos(pos, false, now)
+		}
 	case "forward":
 		if r.phase != "play" {
 			return "nothing is playing"
 		}
 		p := r.position(now) + 10
+		if r.hold != 0 {
+			p = r.holdPos + 10
+		}
 		if r.dur > 0 {
 			p = math.Min(p, math.Max(0, r.dur-0.5))
 		}
-		r.setPos(p, r.playing, now)
+		if r.playing || r.hold != 0 {
+			r.holdAt(p, watchReadyWait, now)
+		} else {
+			r.setPos(p, false, now)
+		}
 	case "op-on", "op-off", "ed-on", "ed-off":
 		if r.phase != "play" {
 			return "nothing is playing"
@@ -1814,6 +1861,12 @@ func (b *bot) watchBeat(w http.ResponseWriter, r *http.Request) {
 	if in.Dur > 0 && in.Dur < 6*3600 && math.Abs(in.Dur-cur.dur) > 1 {
 		cur.dur = in.Dur
 		cur.changed()
+	}
+	// While the room waits for everyone, the host's paused player says
+	// nothing the room needs.
+	if cur.hold != 0 {
+		writeJSON(w, http.StatusOK, map[string]int{"ver": cur.ver})
+		return
 	}
 	// The host may report its old video time while the new auto-skip seek
 	// is still on its way through the Activity's state poll. Do not rewind

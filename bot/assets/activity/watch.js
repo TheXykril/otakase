@@ -30,6 +30,14 @@ let wControlsTimer = 0;
 let wChanging = false; // the host is picking another show while one plays
 let wOsdTimer = 0;
 let wKeySeek = null; // where the last key seek went, so held arrows add up
+let wReadySent = 0; // the ready check this player last said it was ready for
+let wJump = false; // the host's spot moved: follow it at once
+let wChatSeen = 0; // the last chat message drawn
+let wChatUnread = 0;
+let wChatOpen = false; // the chat panel in theater mode
+let wChatDraft = "";
+let wQuality = -1; // Hls.js level this viewer picked, -1 for automatic
+let wSubLook = null; // this viewer's subtitle size, colour and background
 
 const wFmt = (s) => {
   s = Math.max(0, Math.floor(s || 0));
@@ -97,6 +105,8 @@ function wBox(html) {
 async function watchJoin() {
   const v = await api("watch/open", { room, channel });
   wvKey = wvMedia = "";
+  // Messages from before this member came in aren't news.
+  wChatSeen = Math.max(0, ...(v.chat || []).map((c) => c.id));
   wSet(v);
   const me = ++wvLoop;
   (async () => {
@@ -118,6 +128,7 @@ async function watchJoin() {
 function wSet(v, fromHost) {
   if (!v || where !== "watch") return;
   const previous = wv;
+  const previousAt = wvAt;
   const oldSkipSeq = previous ? previous.skip_seq || 0 : 0;
   const oldAudioMedia = JSON.stringify((wv && wv.audio_media) || {});
   const oldPreferences = JSON.stringify((wv && wv.preferences) || {});
@@ -158,8 +169,16 @@ function wSet(v, fromHost) {
     const seconds = Math.max(0, Math.floor((Date.now() - v.load_since) / 1000));
     elapsedEl.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
   }
+  // A viewer follows the host at once when the room's spot jumps (a seek,
+  // an automatic skip); drifting behind on its own offers a catch-up instead.
+  if (!v.is_host && previous && previous.phase === "play" && v.phase === "play") {
+    const was = previous.pos + (previous.playing ? (wvAt - previousAt) / 1000 : 0);
+    if (Math.abs(v.pos - was) > 3 || previous.playing !== v.playing) wJump = true;
+  }
   wPeople();
   wAsks();
+  wHoldDraw();
+  wChatDraw();
   wSyncLine();
   wSkipControls();
   wSeekMarkers();
@@ -169,8 +188,10 @@ function wSet(v, fromHost) {
     wSubs();
   }
   wUpdateOrigin();
+  const holdChanged = previous && (previous.hold || 0) !== (v.hold || 0);
   if (v.media && wEffectiveMedia() !== wvMedia) wLoad();
-  else if (fromHost || (v.is_host && v.skip_seq && oldSkipSeq !== v.skip_seq)) wApply(true);
+  else if (fromHost || holdChanged || (v.is_host && v.skip_seq && oldSkipSeq !== v.skip_seq)) wApply(true);
+  else if (wJump) wApply(false);
 }
 
 function wDraw() {
@@ -191,12 +212,14 @@ function wDraw() {
       : loadingStage;
   } else {
     stage = `<div class="wstage${wFull ? " full" : ""}" id="wstage"><div class="wplayer" id="wplayer"><video id="wvid" playsinline preload="auto"></video>
-      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div></div>
+      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div>
+      <div class="whold" id="whold" hidden></div><button class="wcatch" id="wcatch" hidden></button></div>
       <div class="wbar" id="wbar"></div></div>`;
   }
   wBox(`<div class="whead"><span class="wshow">${showLine || "Nothing playing yet"}</span><span class="pill" id="wends"></span></div>
-    ${stage}
-    <div class="wasks" id="wasks"></div>
+    <div class="wmain"><div class="wleft">${stage}
+    <div class="wasks" id="wasks"></div></div>
+    <div class="wchatslot" id="wchatslot">${wChatBox()}</div></div>
     <div class="wside"><h3 class="lh">${icon("users")} Watching <span id="wcount"></span></h3><div class="wpeople" id="wpeople"></div>
     <p class="note" id="wsync"></p><div class="row" id="wmore"></div></div>
     <div class="err" id="err"></div>`);
@@ -223,6 +246,8 @@ function wDraw() {
     bar.addEventListener("focusout", () => { if (wFull) wRevealControls(); });
   }
   wMore();
+  wChatSetup();
+  wHoldDraw();
   if (v.ends) document.getElementById("wends").textContent = "Ends " + new Date(v.ends).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   else document.getElementById("wends").hidden = true;
 }
@@ -607,7 +632,11 @@ async function wLoad() {
   };
   vid.onwaiting = () => { document.getElementById("wspin").hidden = false; if (wv.is_host) wBeatNow(); };
   vid.onplaying = () => { document.getElementById("wspin").hidden = true; if (wv.is_host) wBeatNow(); if (wFull && !wControlsHidden()) wRevealControls(); };
-  vid.oncanplay = () => (document.getElementById("wspin").hidden = true);
+  vid.oncanplay = () => {
+    document.getElementById("wspin").hidden = true;
+    if (wv.hold) wReadyCheck(vid);
+  };
+  vid.onseeked = () => { if (wv.hold) wReadyCheck(vid); };
   vid.onerror = () => {
     const e = vid.error;
     const why = (wHls ? "hls.js" : "native") + " video error " + (e ? e.code + " " + (e.message || "") : "");
@@ -656,6 +685,11 @@ async function wLoad() {
           if (++wFails > 4) return wBroken(wLastErr);
           setTimeout(() => { if (wHls === hls) hls.startLoad(); }, 1500);
         });
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (wQuality >= 0 && wQuality < hls.levels.length) hls.currentLevel = wQuality;
+          wQualityDraw();
+        });
+        hls.on(Hls.Events.LEVEL_SWITCHED, wQualityDraw);
         hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, wSubs);
         hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, wAudioTracks);
         hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, wSubs);
@@ -669,7 +703,10 @@ async function wLoad() {
     vid.src = wvMedia;
   }
   wApply(true);
-  wFollow = setInterval(() => wApply(false), 1000);
+  wFollow = setInterval(() => {
+    wApply(false);
+    if (wv && wv.hold) wHoldDraw();
+  }, 1000);
   if (wv.is_host) wBeat = setInterval(wBeatNow, 4000);
 }
 
@@ -698,15 +735,83 @@ function wTarget() {
 function wApply(force) {
   const vid = document.getElementById("wvid");
   if (!vid || !wv || wv.phase !== "play") return;
+  if (wv.hold) wReadyCheck(vid);
   if (wv.is_host && !force) return;
   const t = wTarget();
-  if (vid.readyState > 0 && Math.abs(vid.currentTime - t) > (wv.is_host ? 0.5 : 2)) vid.currentTime = t;
+  if (wv.is_host) {
+    if (vid.readyState > 0 && Math.abs(vid.currentTime - t) > 0.5) vid.currentTime = t;
+  } else wFollowHost(vid, t, force);
   if (wv.playing && vid.paused) {
     vid.play().then(
       () => wTap(false),
       () => wTap(true)
     );
   } else if (!wv.playing && !vid.paused) vid.pause();
+}
+
+// wFollowHost keeps a viewer on the host's clock. Small drift is played
+// away a little faster; a jump of the room's spot is followed at once; a
+// player that fell behind on its own (it was buffering) gets a catch-up
+// button rather than being yanked forward into another wait.
+function wFollowHost(vid, t, force) {
+  if (vid.readyState === 0) return;
+  const off = t - vid.currentTime; // seconds behind the host
+  const stalled = vid.seeking || vid.readyState < 3;
+  if (off < -2 || ((force || wJump || !wv.playing || wv.hold) && Math.abs(off) > 2)) {
+    vid.currentTime = t;
+    vid.playbackRate = 1;
+    wJump = false;
+    return wCatchUp(0);
+  }
+  wJump = false;
+  if (off > 4) {
+    vid.playbackRate = 1;
+    return wCatchUp(off);
+  }
+  wCatchUp(0);
+  vid.playbackRate = off > 0.6 && !stalled && wv.playing ? 1.15 : 1;
+}
+
+function wCatchUp(behind) {
+  const b = document.getElementById("wcatch");
+  if (!b) return;
+  b.hidden = !behind;
+  if (!behind) return;
+  b.innerHTML = `${icon("ff")} ${Math.round(behind)}s behind · Catch up`;
+  b.onclick = () => {
+    const vid = document.getElementById("wvid");
+    if (vid) vid.currentTime = wTarget();
+    wCatchUp(0);
+  };
+}
+
+// wReadyCheck tells the room once this player has the held spot loaded.
+function wReadyCheck(vid) {
+  if (!wv || !wv.hold || wv.hold_ready || wReadySent === wv.hold) return;
+  if (vid.readyState < 3 || vid.seeking || Math.abs(vid.currentTime - wv.pos) > 1.5) return;
+  const id = wv.hold;
+  wReadySent = id;
+  api("watch/ready", { room, id })
+    .then((nv) => wSet(nv))
+    .catch(() => { if (wReadySent === id) wReadySent = 0; });
+}
+
+// wHoldDraw shows who the room is waiting for while a ready check runs.
+function wHoldDraw() {
+  const el = document.getElementById("whold");
+  if (!el) return;
+  if (!wv || !wv.hold) {
+    el.hidden = true;
+    return;
+  }
+  const waiting = wv.hold_waiting || [];
+  const left = wv.hold_ends ? Math.max(0, Math.ceil((wv.hold_ends - Date.now()) / 1000)) : 0;
+  el.hidden = false;
+  el.innerHTML = `<b>Waiting for everyone to load</b>
+    <small>${waiting.length ? "Still loading: " + waiting.map(esc).join(", ") : "Starting…"}${left ? ` · plays in ${left}s at most` : ""}</small>
+    ${wv.is_host ? `<button class="btn" id="wholdgo">${icon("play")} Start now</button>` : ""}`;
+  const go = document.getElementById("wholdgo");
+  if (go) go.onclick = () => wCtl("play");
 }
 
 function wTap(show) {
@@ -748,6 +853,7 @@ function wAsk(kind) {
 
 // wBar draws the controls: the host's, or the requests for everyone else.
 function wBar() {
+  wSubLook = wSubLook || wSubLookLoad();
   const bar = document.getElementById("wbar");
   const v = wv;
   const btn = (id, ic, label, alt = true) => `<button class="btn${alt ? " alt" : ""}" id="${id}" title="${esc(label)}">${icon(ic)}<span>${esc(label)}</span></button>`;
@@ -756,7 +862,14 @@ function wBar() {
     <div class="wsettings" id="wsettingsmenu" hidden>
       <label>Audio language<select id="waudio" aria-label="Audio language"></select></label>
       <label>Subtitles<select id="wsub" aria-label="Subtitle language"></select></label>
+      <label>Quality<select id="wquality" aria-label="Video quality"></select></label>
       <p class="note" id="wsettingshint"></p>
+      <div class="wsublook">
+        <span class="wskiptitle">Subtitle look · only you</span>
+        <label>Size<select id="wsubsize">${wOptions(WSUB_SIZES, wSubLook.size)}</select></label>
+        <label>Colour<select id="wsubcolor">${wOptions(WSUB_COLORS, wSubLook.color)}</select></label>
+        <label>Background<select id="wsubback">${wOptions(WSUB_BACKS, wSubLook.back)}</select></label>
+      </div>
       <div class="wskipsettings">
         <span class="wskiptitle">Automatic skips · everyone in this room</span>
         <div class="wskiptoggles">
@@ -771,6 +884,7 @@ function wBar() {
     </div>
     <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="1" step="0.05" value="1" aria-label="Volume">
     ${origin}
+    <button class="btn alt" id="wchatbtn" title="Room chat" aria-label="Room chat">${icon("message")}<span>Chat</span><i class="wbadge" id="wchatbadge" hidden></i></button>
     <button class="btn alt" id="wstopbar" title="Stop watching" aria-label="Stop watching">${icon("stop")}<span>Stop</span></button>
     <button class="btn alt wfullscreen" id="wfull" title="Toggle theater mode" aria-label="Toggle theater mode" aria-pressed="${wFull}">${icon(wFull ? "minimize" : "maximize")}</button>`;
   if (v.is_host) {
@@ -807,15 +921,196 @@ function wBar() {
   document.getElementById("wsettings").onclick = () => { const menu = document.getElementById("wsettingsmenu"); menu.hidden = !menu.hidden; };
   document.getElementById("wsub").onchange = (e) => { wSubPick = e.target.value; wSettingsDirty = true; wSubs(); wSaveLanguages(); };
   document.getElementById("waudio").onchange = (e) => { wAudioPick = e.target.value; wSettingsDirty = true; wAudioTracks(); wSaveLanguages(); wUpdateOrigin(); if (wv.audio_media && wEffectiveMedia() !== wvMedia) wLoad(); };
+  document.getElementById("wquality").onchange = (e) => {
+    wQuality = +e.target.value;
+    if (wHls) wHls.currentLevel = wQuality;
+    wQualityDraw();
+  };
+  for (const [id, key] of [["wsubsize", "size"], ["wsubcolor", "color"], ["wsubback", "back"]]) {
+    document.getElementById(id).onchange = (e) => {
+      wSubLook[key] = e.target.value;
+      wSubLookSave();
+      wSubLookApply();
+    };
+  }
+  document.getElementById("wchatbtn").onclick = () => {
+    wChatOpen = !wChatOpen;
+    wChatPlace();
+    if (wChatOpen) {
+      const input = document.getElementById("wchatin");
+      if (input) input.focus();
+    }
+  };
   const op = document.getElementById("wautoop");
   const ed = document.getElementById("wautoed");
   op.onclick = () => wCtl(wv.auto_skip_op ? "op-off" : "op-on");
   ed.onclick = () => wCtl(wv.auto_skip_ed ? "ed-off" : "ed-on");
   wAudioTracks();
   wSubs();
+  wQualityDraw();
+  wSubLookApply();
+  wChatPlace();
   wUpdateOrigin();
   wSkipControls();
   wSeekMarkers();
+}
+
+// wQualityDraw fills the quality picker. Hls.js steps down on its own when
+// the connection is slow; a viewer can also hold one size. A player with
+// built-in HLS picks for itself.
+function wQualityDraw() {
+  const sel = document.getElementById("wquality");
+  if (!sel) return;
+  const levels = wHls ? wHls.levels || [] : [];
+  if (levels.length < 2) {
+    sel.innerHTML = `<option value="-1">Automatic</option>`;
+    sel.disabled = true;
+    return;
+  }
+  const name = (l, i) => (l.height ? l.height + "p" : Math.round((l.bitrate || 0) / 1000) + " kbps") || "Level " + (i + 1);
+  const now = wHls.currentLevel >= 0 ? levels[wHls.currentLevel] : null;
+  const order = levels.map((l, i) => i).sort((a, b) => (levels[b].height || levels[b].bitrate) - (levels[a].height || levels[a].bitrate));
+  sel.innerHTML = `<option value="-1">Automatic${wQuality < 0 && now ? " (" + esc(name(now, wHls.currentLevel)) + ")" : ""}</option>`
+    + order.map((i) => `<option value="${i}">${esc(name(levels[i], i))}</option>`).join("");
+  sel.disabled = false;
+  sel.value = String(wQuality);
+}
+
+// ── Subtitle look ──
+
+const WSUB_SIZES = [["75", "Small"], ["100", "Normal"], ["130", "Large"], ["165", "Huge"]];
+const WSUB_COLORS = [["#ffffff", "White"], ["#ffe14d", "Yellow"], ["#7fe7ff", "Cyan"], ["#8dff9a", "Green"], ["#ffb3d9", "Pink"]];
+const WSUB_BACKS = [["shadow", "Shadow"], ["box", "Dark box"], ["none", "None"]];
+
+function wOptions(list, value) {
+  return list.map(([v, label]) => `<option value="${v}"${v === value ? " selected" : ""}>${label}</option>`).join("");
+}
+
+function wSubLookLoad() {
+  const look = { size: "100", color: "#ffffff", back: "shadow" };
+  try {
+    const saved = JSON.parse(localStorage.getItem("otakase-watch-subs") || "{}");
+    for (const [key, list] of [["size", WSUB_SIZES], ["color", WSUB_COLORS], ["back", WSUB_BACKS]]) {
+      if (list.some(([v]) => v === saved[key])) look[key] = saved[key];
+    }
+  } catch (e) {}
+  return look;
+}
+
+function wSubLookSave() {
+  try {
+    localStorage.setItem("otakase-watch-subs", JSON.stringify(wSubLook));
+  } catch (e) {}
+}
+
+// wSubLookApply styles the subtitle cues in this viewer's player only.
+function wSubLookApply() {
+  wSubLook = wSubLook || wSubLookLoad();
+  let el = document.getElementById("wsubstyle");
+  if (!el) {
+    el = document.createElement("style");
+    el.id = "wsubstyle";
+    document.head.appendChild(el);
+  }
+  const back = wSubLook.back === "box" ? "background: rgba(0, 0, 0, .72); text-shadow: none;"
+    : wSubLook.back === "none" ? "background: transparent; text-shadow: none;"
+      : "background: transparent; text-shadow: 0 0 4px #000, 0 2px 3px #000, 0 0 2px #000;";
+  el.textContent = `#wvid::cue { font-size: ${+wSubLook.size}%; color: ${wSubLook.color}; ${back} }`;
+}
+
+// ── Room chat ──
+
+function wChatBox() {
+  return `<div class="wchat" id="wchat"><div class="wchathead"><b>${icon("message")} Room chat</b><button class="btn alt" id="wchatclose" aria-label="Close chat">${icon("x")}</button></div>
+    <div class="wchatlog" id="wchatlog"><p class="note">Say hi. Put spoilers between || marks: ||like this||.</p></div>
+    <form class="wchatform" id="wchatform"><input id="wchatin" maxlength="300" autocomplete="off" placeholder="Message · ||spoiler||" aria-label="Chat message"><button class="btn" aria-label="Send">${icon("send")}</button></form></div>`;
+}
+
+function wChatSetup() {
+  const form = document.getElementById("wchatform");
+  if (!form) return;
+  const input = document.getElementById("wchatin");
+  input.value = wChatDraft;
+  input.oninput = () => (wChatDraft = input.value);
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    input.disabled = true;
+    api("watch/chat", { room, text })
+      .then((nv) => {
+        input.value = wChatDraft = "";
+        wSet(nv);
+      })
+      .catch(showError)
+      .finally(() => {
+        input.disabled = false;
+        input.focus();
+      });
+  };
+  document.getElementById("wchatclose").onclick = () => {
+    wChatOpen = false;
+    wChatPlace();
+  };
+  wChatDraw();
+  wChatPlace();
+}
+
+// wChatPlace docks the chat inside the theater stage, where the chat
+// button opens and closes it, and puts it back beside the player after.
+function wChatPlace() {
+  const chat = document.getElementById("wchat");
+  if (!chat) return;
+  const st = document.getElementById("wstage");
+  const docked = wFull && st;
+  const target = docked ? st : document.getElementById("wchatslot");
+  if (target && chat.parentElement !== target) target.appendChild(chat);
+  chat.classList.toggle("docked", !!docked);
+  chat.classList.toggle("open", !!docked && wChatOpen);
+  if (!docked || wChatOpen) wChatUnread = 0;
+  const badge = document.getElementById("wchatbadge");
+  if (badge) {
+    badge.hidden = !wChatUnread;
+    badge.textContent = wChatUnread > 9 ? "9+" : String(wChatUnread);
+  }
+  const btn = document.getElementById("wchatbtn");
+  if (btn) btn.hidden = !wFull;
+}
+
+// wSpoilers escapes a message and blurs its ||spoilers||.
+function wSpoilers(text) {
+  return esc(text).replace(/\|\|(.+?)\|\|/g, '<span class="wspoil" tabindex="0" title="Spoiler: tap to show">$1</span>');
+}
+
+function wChatDraw() {
+  const log = document.getElementById("wchatlog");
+  if (!log || !wv) return;
+  const chat = wv.chat || [];
+  const last = chat.length ? chat[chat.length - 1].id : 0;
+  const key = chat.map((c) => c.id).join(",");
+  if (log.dataset.key === key) return;
+  log.dataset.key = key;
+  const fresh = chat.filter((c) => c.id > wChatSeen && c.user !== wv.me).length;
+  wChatSeen = Math.max(wChatSeen, last);
+  const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  const mod = wv.is_host || wv.staff;
+  log.innerHTML = chat.length
+    ? chat.map((c) => `<p class="wmsg${c.user === wv.me ? " mine" : ""}"><b>${esc(c.name)}</b> <span>${wSpoilers(c.text)}</span>${
+      mod || c.user === wv.me ? `<button class="wmsgdel" data-del="${c.id}" aria-label="Remove message" title="Remove">${icon("x")}</button>` : ""}</p>`).join("")
+    : `<p class="note">Say hi. Put spoilers between || marks: ||like this||.</p>`;
+  log.querySelectorAll(".wspoil").forEach((s) => {
+    s.onclick = () => s.classList.toggle("shown");
+    s.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); s.classList.toggle("shown"); } };
+  });
+  log.querySelectorAll("[data-del]").forEach((b) => {
+    b.onclick = () => api("watch/chat", { room, act: "delete", id: +b.dataset.del }).then((nv) => wSet(nv)).catch(showError);
+  });
+  if (nearBottom || fresh) log.scrollTop = log.scrollHeight;
+  const chatEl = document.getElementById("wchat");
+  if (fresh && chatEl && chatEl.classList.contains("docked") && !wChatOpen) {
+    wChatUnread += fresh;
+    wChatPlace();
+  }
 }
 
 // Keep room-wide automatic skip toggles current without rebuilding the player.
@@ -919,7 +1214,7 @@ function wRevealControls() {
   st.classList.remove("controls-hidden");
   const vid = document.getElementById("wvid");
   if (vid && !vid.paused) wControlsTimer = setTimeout(() => {
-    if (!st.querySelector("#wsettingsmenu:not([hidden])")) st.classList.add("controls-hidden");
+    if (!st.querySelector("#wsettingsmenu:not([hidden]), #wchat.open")) st.classList.add("controls-hidden");
   }, 3500);
 }
 
@@ -959,6 +1254,8 @@ function wFullscreen(on) {
   }
   st.classList.toggle("full", on);
   st.classList.remove("controls-hidden");
+  if (!on) wChatOpen = false;
+  wChatPlace();
   if (on) wRevealControls();
   document.body.classList.toggle("wfull", on);
   const b = document.getElementById("wfull");

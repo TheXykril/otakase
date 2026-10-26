@@ -24,8 +24,9 @@ import (
 // on under /activity/api/watch/media/{key}/{id}. Playlists are rewritten so
 // every address in them points back here; ids are handed out per address,
 // so the relay never fetches anything a playlist didn't name. The master
-// playlist keeps one variant (the best at or under watchMaxHeight) and one
-// audio track: everyone then asks for the same segments, and the segment
+// playlist keeps the best variant at or under watchMaxHeight, two smaller
+// ones for slow connections (watchLadder) and one default audio track:
+// everyone on the same variant asks for the same segments, and the segment
 // cache fetches each from the provider once however many are watching.
 // key is random per episode and the only thing a viewer needs, which lets
 // <video> and <track> load without the session header.
@@ -421,7 +422,38 @@ func trimMasterAudio(body string, maxHeight int, dub bool, language string) stri
 		}
 		out = append(out, entry)
 	}
-	return strings.Join(append(out, v.inf, v.uri), "\n") + "\n"
+	for _, l := range watchLadder(vars, v) {
+		out = append(out, l.inf, l.uri)
+	}
+	return strings.Join(out, "\n") + "\n"
+}
+
+// watchLadder is the variant the room plays plus up to two smaller ones on
+// the same audio group: the biggest under it and the smallest. A viewer on
+// a slow connection then steps down instead of stalling, and everyone else
+// still asks for the same segments. The chosen variant stays first, where
+// players start.
+func watchLadder(vars []hlsVariant, best hlsVariant) []hlsVariant {
+	smaller := func(v hlsVariant) bool {
+		if best.height > 0 && v.height > 0 {
+			return v.height < best.height
+		}
+		return v.bandwidth > 0 && v.bandwidth < best.bandwidth
+	}
+	var lower []hlsVariant // smallest first, as pickVariant sorted them
+	for _, v := range vars {
+		if v.uri != best.uri && v.audio == best.audio && smaller(v) {
+			lower = append(lower, v)
+		}
+	}
+	out := []hlsVariant{best}
+	if len(lower) > 0 {
+		out = append(out, lower[len(lower)-1])
+	}
+	if len(lower) > 1 {
+		out = append(out, lower[0])
+	}
+	return out
 }
 
 // hlsAudioLanguage converts the common ISO 639-2 tags in HLS manifests to

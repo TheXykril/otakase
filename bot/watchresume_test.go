@@ -81,6 +81,7 @@ func TestWatchRoomSavesWhereMembersStop(t *testing.T) {
 	}
 	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 7, Ep: 4}, nil)
 	waitLoaded(t, b)
+	watchAllReady(b)
 	watchPost(b, (*bot).watchBeat, "a", watchIn{Room: "r", Pos: 0, Playing: true, Dur: 1400}, nil)
 	tick(40, "a", "b", "d")
 

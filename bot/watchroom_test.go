@@ -123,6 +123,7 @@ func TestWatchRoomTicketsAndOneAtATime(t *testing.T) {
 		t.Fatalf("pick: %d %+v", code, v)
 	}
 	waitLoaded(t, b)
+	watchAllReady(b)
 	b.watch.mu.Lock()
 	v = b.watchViewOf(b.watch.cur, "b", false, watchNow())
 	b.watch.mu.Unlock()
@@ -171,6 +172,7 @@ func TestWatchRoomControlsAndRequests(t *testing.T) {
 	watchPost(b, (*bot).watchOpen, "staff", watchIn{Room: "r", Channel: "vc"}, nil)
 	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 5, Ep: 1}, nil)
 	waitLoaded(t, b)
+	watchAllReady(b)
 	r := b.watch.cur
 
 	// The host's page reports where it is; the room follows it.
@@ -262,6 +264,10 @@ func TestWatchRoomCountsWatchers(t *testing.T) {
 	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 7, Ep: 4}, nil)
 	waitLoaded(t, b)
 	r := b.watch.cur
+	// Both players load the episode, and the ready check lets it play.
+	hold := r.hold
+	watchPost(b, (*bot).watchReady, "a", watchIn{Room: "r", ID: hold}, nil)
+	watchPost(b, (*bot).watchReady, "b", watchIn{Room: "r", ID: hold}, nil)
 	watchPost(b, (*bot).watchBeat, "a", watchIn{Room: "r", Pos: 0, Playing: true, Dur: 100}, nil)
 	for k := 0; k < 45; k++ {
 		*now = now.Add(watchTick)
@@ -299,7 +305,8 @@ func TestTrimMaster(t *testing.T) {
 #EXT-X-I-FRAME-STREAM-INF:BANDWIDTH=100000,URI="iframe.m3u8"
 `
 	out := trimMaster(master, 720, false)
-	if !strings.Contains(out, "720/p.m3u8") || strings.Contains(out, "1080/") || strings.Contains(out, "360/") ||
+	// 720p plays, 360p stays as a step down for slow connections, 1080p goes.
+	if !strings.Contains(out, "720/p.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=900000,RESOLUTION=640x360,AUDIO=\"a\"\n360/p.m3u8") || strings.Contains(out, "1080/") ||
 		!strings.Contains(out, `NAME="Japanese"`) || !strings.Contains(out, `NAME="English"`) || strings.Contains(out, "iframe") {
 		t.Fatalf("trimmed:\n%s", out)
 	}
