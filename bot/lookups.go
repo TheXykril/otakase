@@ -48,12 +48,12 @@ func latestRelease(token string) (*discordgo.MessageEmbed, []discordgo.MessageCo
 	}
 	v := strings.TrimPrefix(r.TagName, "v")
 	return &discordgo.MessageEmbed{
-		Title:       "Otakase " + v,
-		URL:         r.HTMLURL,
-		Description: fmt.Sprintf("Released <t:%d:D>. Update with `otakase -u`, or see `/install`.", r.PublishedAt.Unix()),
-		Color:       shu,
-	}, linkButtons("Download", r.HTMLURL, "Changelog",
-		fmt.Sprintf("%s/blob/%s/CHANGELOG.md", repoURL, r.TagName))
+			Title:       "Otakase " + v,
+			URL:         r.HTMLURL,
+			Description: fmt.Sprintf("Released <t:%d:D>. Update with `otakase -u`, or see `/install`.", r.PublishedAt.Unix()),
+			Color:       shu,
+		}, linkButtons("Download", r.HTMLURL, "Changelog",
+			fmt.Sprintf("%s/blob/%s/CHANGELOG.md", repoURL, r.TagName))
 }
 
 const anilistQuery = `query ($q: String) {

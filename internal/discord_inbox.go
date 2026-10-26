@@ -74,27 +74,59 @@ func StartDiscordInbox(config *Config) {
 	if !discordEnabled(config) {
 		return
 	}
-	discordInboxOnce.Do(func() { go runDiscordInbox(config) })
+	retry, retryMax := discordInboxRetry, discordInboxRetryMax
+	discordInboxOnce.Do(func() { go runDiscordInbox(config, retry, retryMax, nil) })
 }
 
-func runDiscordInbox(config *Config) {
-	wait := discordInboxRetry
+// runDiscordInbox reads the inbox until stop is closed; a nil stop runs for
+// the life of the process. The retry waits are passed in rather than read
+// from the package variables so a test can't change them under a running
+// reader.
+func runDiscordInbox(config *Config, retry, retryMax time.Duration, stop <-chan struct{}) {
+	wait := retry
 	for {
+		if !discordInboxPause(stop, 0) {
+			return
+		}
 		if !discordLinked(config) {
-			time.Sleep(discordInboxIdle)
+			if !discordInboxPause(stop, discordInboxIdle) {
+				return
+			}
 			continue
 		}
 		items, err := fetchDiscordInbox(config, discordInboxWait)
 		if err != nil {
 			if !errors.Is(err, errDiscordUnauthorized) {
 				Log(fmt.Sprintf("Discord: inbox: %v", err))
-				time.Sleep(wait)
-				wait = min(wait*2, discordInboxRetryMax)
+				if !discordInboxPause(stop, wait) {
+					return
+				}
+				wait = min(wait*2, retryMax)
 			}
 			continue
 		}
-		wait = discordInboxRetry
+		wait = retry
 		handleDiscordInbox(config, items)
+	}
+}
+
+// discordInboxPause waits d, and reports false if stop closed first.
+func discordInboxPause(stop <-chan struct{}, d time.Duration) bool {
+	select {
+	case <-stop:
+		return false
+	default:
+	}
+	if d <= 0 {
+		return true
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-stop:
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 

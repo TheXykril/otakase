@@ -111,9 +111,6 @@ func TestDiscordSettingsOnlyAllowed(t *testing.T) {
 
 func TestDiscordInboxRetriesAfterFailure(t *testing.T) {
 	stubNotifications(t)
-	previous, previousMax := discordInboxRetry, discordInboxRetryMax
-	discordInboxRetry, discordInboxRetryMax = time.Millisecond, 5*time.Millisecond
-	t.Cleanup(func() { discordInboxRetry, discordInboxRetryMax = previous, previousMax })
 	var mu sync.Mutex
 	calls := 0
 	got := make(chan struct{})
@@ -139,7 +136,15 @@ func TestDiscordInboxRetriesAfterFailure(t *testing.T) {
 	defer srv.Close()
 	config := newDiscordTestConfig(t, srv.URL)
 	saveDiscordLink(config, discordLink{Token: "tok"})
-	go runDiscordInbox(config)
+	stop, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		runDiscordInbox(config, time.Millisecond, 5*time.Millisecond, stop)
+	}()
+	defer func() {
+		close(stop)
+		<-stopped
+	}()
 	select {
 	case <-got:
 	case <-time.After(5 * time.Second):
