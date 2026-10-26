@@ -36,7 +36,12 @@ func flixBrowserHeaders() map[string]string {
 
 var flixSegmentMask = [...]byte{157, 42, 241, 71, 179, 142, 92, 112, 166, 25, 228, 59, 216, 98, 15, 197}
 
-var flixURI = regexp.MustCompile(`URI="([^"]+)"`)
+var (
+	flixURI = regexp.MustCompile(`URI="([^"]+)"`)
+	// HLS child playlists can reference numbered vault hosts on another CDN.
+	// Don't allow other hosts under sirencdn.top.
+	flixVaultHost = regexp.MustCompile(`^vault-[0-9]+\.sirencdn\.top$`)
+)
 
 // DecodeManifest reverses the player's Base64/XOR mask on FlixCloud playlists.
 // A normal, unmasked playlist is also valid.
@@ -91,7 +96,8 @@ func DecodeSegment(body []byte) ([]byte, error) {
 
 func flixMediaHost(host string) bool {
 	host = strings.ToLower(host)
-	return flixHost(host) || host == "overcdn.site" || strings.HasSuffix(host, ".overcdn.site")
+	return flixHost(host) || host == "overcdn.site" || strings.HasSuffix(host, ".overcdn.site") ||
+		flixVaultHost.MatchString(host)
 }
 
 func flixMediaURL(raw string) bool {

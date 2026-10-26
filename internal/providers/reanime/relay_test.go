@@ -73,7 +73,8 @@ func TestDecodeFlixSegment(t *testing.T) {
 func TestHLSRelayDecryptsAndRewrites(t *testing.T) {
 	key := bytes.Repeat([]byte{23}, 32)
 	manifest := "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=200000\nsub.m3u8\n"
-	child := "#EXTM3U\n#EXTINF:2,\nseg.webp\n"
+	// FlixCloud child playlists can reference the numbered Siren CDN vaults.
+	child := "#EXTM3U\n#EXTINF:2,\nhttps://vault-95.sirencdn.top/seg.ttf\n"
 	video := bytes.Repeat([]byte{0x47}, 600)
 	masked := bytes.Clone(video)
 	for i := range masked {
@@ -87,7 +88,7 @@ func TestHLSRelayDecryptsAndRewrites(t *testing.T) {
 			_, _ = w.Write(encodedManifest(manifest, key))
 		case "/sub.m3u8":
 			_, _ = w.Write(encodedManifest(child, key))
-		case "/seg.webp":
+		case "/seg.ttf":
 			_, _ = w.Write(append([]byte("RIFF\x00\x00\x00\x00WEBP"), masked...))
 		default:
 			http.NotFound(w, r)
@@ -220,5 +221,31 @@ func TestHLSRelayRejectsUnknownHostsWithoutLeakingURLs(t *testing.T) {
 		!strings.Contains(err.Error(), `scheme="https"`) ||
 		strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "seg.ttf") {
 		t.Fatalf("unsafe CDN error omitted host or leaked URL: %s", err)
+	}
+}
+
+func TestFlixMediaHostAllowsOnlyNumberedSirenVaults(t *testing.T) {
+	for _, raw := range []string{
+		"https://vault-95.sirencdn.top/video/segment.ttf",
+		"https://vault-1.sirencdn.top/video/segment.ttf",
+		"https://vault-950.sirencdn.top/stream/playlist.m3u8",
+	} {
+		if !flixMediaURL(raw) {
+			t.Errorf("rejected allowed CDN host: %s", raw)
+		}
+	}
+	for _, raw := range []string{
+		"https://sirencdn.top/video/segment.ttf",
+		"https://other.sirencdn.top/video/segment.ttf",
+		"https://vault-x.sirencdn.top/video/segment.ttf",
+		"https://vault-95.sirencdn.top.evil.example/video/segment.ttf",
+		"https://notvault-95.sirencdn.top/video/segment.ttf",
+		"http://vault-95.sirencdn.top/video/segment.ttf",
+		"https://vault-95.sirencdn.top:8443/video/segment.ttf",
+		"https://user@vault-95.sirencdn.top/video/segment.ttf",
+	} {
+		if flixMediaURL(raw) {
+			t.Errorf("accepted unsafe CDN URL: %s", raw)
+		}
 	}
 }
