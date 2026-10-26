@@ -54,8 +54,8 @@ func TestWatchSkipVote(t *testing.T) {
 	}
 	// The third carries it: the room jumps past the opening.
 	watchPost(b, (*bot).watchVoteAPI, "d", watchIn{Room: "r"}, nil)
-	if room.vote != nil || room.pos != 162 {
-		t.Fatalf("majority: vote %+v pos %v", room.vote, room.pos)
+	if room.vote != nil || room.pos != 162 || !room.playing || room.skipSeq != 1 {
+		t.Fatalf("majority: vote %+v pos %v playing %v skip %d", room.vote, room.pos, room.playing, room.skipSeq)
 	}
 
 	// Outside an opening or ending there's nothing to vote on.

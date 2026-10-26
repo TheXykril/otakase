@@ -230,6 +230,20 @@ func (r *watchRoom) setPos(p float64, playing bool, now time.Time) {
 	r.pos, r.playing, r.at = math.Max(0, p), playing, now
 }
 
+// skipTo jumps the room past an opening or ending and keeps it playing or
+// paused as it was. The skip number tells the host's page to follow, and
+// its stale heartbeats are ignored until it gets there. Hold the lock.
+func (r *watchRoom) skipTo(to float64, now time.Time) {
+	if r.hold != 0 {
+		r.holdAt(to, watchReadyWait, now)
+	} else {
+		r.setPos(to, r.playing, now)
+	}
+	r.skipSeq++
+	r.skipTarget = to
+	r.skipHoldUntil = now.Add(8 * time.Second)
+}
+
 // people is the members, longest in the room first. Hold the lock.
 func (r *watchRoom) people() []string {
 	ids := make([]string, 0, len(r.members))
@@ -314,10 +328,7 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 	r.peak = max(r.peak, len(r.members))
 	if r.phase == "play" && r.playing {
 		if target, ok := watchSkipTarget(r.skipIntervals.match(r.dur), r.position(now), r.dur, r.autoSkipOP, r.autoSkipED); ok {
-			r.setPos(target, true, now)
-			r.skipSeq++
-			r.skipTarget = target
-			r.skipHoldUntil = now.Add(8 * time.Second)
+			r.skipTo(target, now)
 			r.note("Skipped the %s", map[bool]string{true: "ending", false: "opening"}[target >= r.dur-1 || target > r.dur/2])
 			r.changed()
 		}
@@ -1241,6 +1252,7 @@ type watchIn struct {
 	Act       string  `json:"act"`
 	Pos       float64 `json:"pos"`
 	Playing   bool    `json:"playing"`
+	Buffering bool    `json:"buffering"` // the player means to play but is still loading
 	Dur       float64 `json:"dur"`
 	Kind      string  `json:"kind"`
 	ID        int     `json:"id"`
@@ -1947,7 +1959,7 @@ func (b *bot) watchBeat(w http.ResponseWriter, r *http.Request) {
 	now := watchNow()
 	if m := cur.members[user]; m != nil && cur.phase == "play" && !math.IsNaN(in.Pos) && in.Pos >= 0 {
 		was, wasStuck := m.pos, m.stuck
-		m.pos, m.stuck, m.beatAt = in.Pos, !in.Playing && cur.playing, now
+		m.pos, m.stuck, m.beatAt = in.Pos, in.Buffering || !in.Playing && cur.playing, now
 		// The people bar only has to hear about a real change of state.
 		if wasStuck != m.stuck || math.Abs(was-in.Pos) > 5 {
 			cur.changed()

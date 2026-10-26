@@ -929,7 +929,15 @@ function wBeatNow() {
   fetch("api/watch/beat", {
     method: "POST",
     headers: { Authorization: "Bearer " + session, "Content-Type": "application/json" },
-    body: JSON.stringify({ room, pos: vid.currentTime, playing: !vid.paused && !vid.ended && vid.readyState >= 3, dur: isFinite(vid.duration) ? vid.duration : 0 }),
+    // A player loading after a seek or skip still means to play: reporting it
+    // as paused would pause the room and leave it paused once it loads.
+    body: JSON.stringify({
+      room,
+      pos: vid.currentTime,
+      playing: !vid.paused && !vid.ended,
+      buffering: vid.seeking || vid.readyState < 3,
+      dur: isFinite(vid.duration) ? vid.duration : 0,
+    }),
   }).catch(() => {});
 }
 
