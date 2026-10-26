@@ -39,8 +39,9 @@ const (
 	watchBrowserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 )
 
-// watchUpstream is the client for provider fetches, a variable for tests.
-var watchUpstream = &http.Client{Timeout: 2 * time.Minute}
+// watchUpstream is the client for provider fetches, a variable for tests. It
+// refuses private network addresses; see watchguard.go.
+var watchUpstream = newWatchUpstream()
 
 // streamLink is one link from `otakase -stream-info`.
 type streamLink struct {
@@ -189,7 +190,7 @@ func (m *watchMedia) lookup(id string) (u, kind string, ok bool) {
 
 // request builds a provider request with the headers the link needs.
 func (m *watchMedia) request(ctx context.Context, u string) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	req, err := http.NewRequestWithContext(withWatchLocal(ctx, m.link.URL), "GET", u, nil)
 	if err != nil {
 		return nil, err
 	}

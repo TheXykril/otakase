@@ -2,9 +2,13 @@
 
 ## Unreleased
 
+## 1.30.57
+
+- Watch Together: new source ReAnime, tried after Animex. It finds episodes by AniList id, with sub and dub, subtitles and a second HD server. A dub that shares its video with the sub is only offered when the stream really has English audio.
+
 ## 1.30.56
 
-- Watch Together: new ReAnime (FlixCloud) source after Animex, with sub and dub servers, subtitles, and alternative HD servers. Looks up servers by AniList ID when the old watch API is gone and checks English audio before offering a dub from a shared player. Sends the browser header required by FlixCloud and decodes the protected playlists and video segments for local playback and Watch Together. Uses browser fetch headers on media requests.
+- Watch Together: the video relay no longer fetches addresses on your home network (LAN, loopback, link-local, CGNAT). A source's playlist can't point the bot at Home Assistant or other local devices any more. Torrent episodes still play from the local helper.
 
 ## 1.30.55
 
