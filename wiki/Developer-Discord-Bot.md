@@ -123,8 +123,11 @@ server and stays connected to Discord.
   category, and moves them in. `/room` does the same with a choice of public
   or private, a name and a member limit, and changes the room when the member
   already has one. A private room is hidden from everyone but its owner, the
-  people they add with `/room-invite`, the staff roles and the bot. The owner
-  can rename it and move people. A room is deleted after it has been empty
+  people they add with `/room-invite` (or the panel's **Invite** button),
+  the staff roles and the bot. An 18+ room is a private room that is also
+  marked age-restricted (NSFW) in Discord; it can't be locked open or shown,
+  so only invited people get in, and it's the kind of channel the watch room
+  needs to play AdultContent titles. The owner can rename it and move people. A room is deleted after it has been empty
   for a minute (a new room waits two minutes for its owner). `OTAKASE_CREATE_ROOM` sets the
   channel when the name doesn't match.
 - **Suggestions:** `/suggest` opens a form (idea and optional details) and

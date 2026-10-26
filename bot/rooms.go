@@ -50,12 +50,21 @@ var (
 	roomGuest  = int64(discordgo.PermissionViewChannel | discordgo.PermissionVoiceConnect)
 )
 
+// Room privacy, as /room takes it. An 18+ room is an age-restricted
+// channel that is always private: only people the owner invites get in.
+const (
+	roomPublic  = "public"
+	roomPrivate = "private"
+	roomAdult   = "adult"
+)
+
 func roomCommands() []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		{Name: "room", Description: "Make your own voice channel, or change the one you have", Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionString, Name: "privacy", Description: "Who can join (default public)", Choices: []*discordgo.ApplicationCommandOptionChoice{
 				{Name: "Public: anyone can join", Value: "public"},
 				{Name: "Private: only people you invite", Value: "private"},
+				{Name: "18+: age-restricted, only people you invite", Value: "adult"},
 			}},
 			{Type: discordgo.ApplicationCommandOptionString, Name: "name", Description: "Channel name", MaxLength: 60},
 			{Type: discordgo.ApplicationCommandOptionInteger, Name: "limit", Description: "Max people (0 = no limit)", MinValue: &zero, MaxValue: 99},
@@ -106,7 +115,7 @@ func (b *bot) ownedRoom(userID string) string {
 
 // createRoom makes a voice room in parent, or when that's empty in the
 // category of the Create room channel (else the lounge's).
-func (b *bot) createRoom(m *discordgo.Member, name string, private bool, limit int, parent string, extra ...*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
+func (b *bot) createRoom(m *discordgo.Member, name, privacy string, limit int, parent string, extra ...*discordgo.PermissionOverwrite) (*discordgo.Channel, error) {
 	if name == "" {
 		name = displayName(m) + "'s room"
 	}
@@ -118,8 +127,8 @@ func (b *bot) createRoom(m *discordgo.Member, name string, private bool, limit i
 		}
 	}
 	ch, err := b.s.GuildChannelCreateComplex(b.cfg.GuildID, discordgo.GuildChannelCreateData{
-		Name: name, Type: discordgo.ChannelTypeGuildVoice, ParentID: parent, UserLimit: limit,
-		PermissionOverwrites: mergeOverwrites(b.overwrites(m.User.ID, private), extra),
+		Name: name, Type: discordgo.ChannelTypeGuildVoice, ParentID: parent, UserLimit: limit, NSFW: privacy == roomAdult,
+		PermissionOverwrites: mergeOverwrites(b.overwrites(m.User.ID, privacy != roomPublic), extra),
 	}, discordgo.WithAuditLogReason("Voice room for "+m.User.Username))
 	if err != nil {
 		return nil, err
@@ -170,7 +179,7 @@ func (b *bot) onVoiceState(s *discordgo.Session, v *discordgo.VoiceStateUpdate) 
 	}
 	ch := b.ownedRoom(v.UserID)
 	if ch == "" {
-		c, err := b.createRoom(v.Member, "", false, 0, "")
+		c, err := b.createRoom(v.Member, "", roomPublic, 0, "")
 		if err != nil {
 			log.Printf("create room: %v", err)
 			return
@@ -301,7 +310,7 @@ func (b *bot) roomCommand(i *discordgo.InteractionCreate) {
 			edit["user_limit"] = limit
 		}
 		if privacy != "" {
-			ow := b.overwrites(owner, privacy == "private")
+			ow := b.overwrites(owner, privacy != roomPublic)
 			// Keep members already invited.
 			if c, err := b.s.State.Channel(ch); err == nil {
 				for _, p := range c.PermissionOverwrites {
@@ -311,6 +320,7 @@ func (b *bot) roomCommand(i *discordgo.InteractionCreate) {
 				}
 			}
 			edit["permission_overwrites"] = ow
+			edit["nsfw"] = privacy == roomAdult
 		}
 		if len(edit) == 0 {
 			b.respond(i, true, &discordgo.MessageEmbed{Color: shu, Description: fmt.Sprintf("Your room is <#%s>. Pass a privacy, name or limit to change it.", ch)})
@@ -325,7 +335,10 @@ func (b *bot) roomCommand(i *discordgo.InteractionCreate) {
 		go b.refreshRoomPanel(ch)
 		return
 	}
-	c, err := b.createRoom(i.Member, name, privacy == "private", max(limit, 0), "")
+	if privacy == "" {
+		privacy = roomPublic
+	}
+	c, err := b.createRoom(i.Member, name, privacy, max(limit, 0), "")
 	if err != nil {
 		log.Printf("create room: %v", err)
 		b.respond(i, true, errorEmbed("Couldn't make the room. The bot needs **Manage Channels** and **Move Members**."))
@@ -338,8 +351,11 @@ func (b *bot) roomCommand(i *discordgo.InteractionCreate) {
 	} else {
 		text += "Join it within 2 minutes or it's removed."
 	}
-	if privacy == "private" {
+	switch privacy {
+	case roomPrivate:
 		text += " Only you can see it; use `/room-invite` to let people in."
+	case roomAdult:
+		text += " It's age-restricted (18+) and only you can see it; use `/room-invite` or the **Invite** button to let people in."
 	}
 	text += " It's deleted once everyone leaves."
 	b.respond(i, true, &discordgo.MessageEmbed{Color: shu, Description: text})
@@ -356,11 +372,17 @@ func (b *bot) roomInvite(i *discordgo.InteractionCreate) {
 		b.respond(i, true, errorEmbed("Pick another member."))
 		return
 	}
-	if err := b.s.ChannelPermissionSet(ch, user.ID, discordgo.PermissionOverwriteTypeMember, roomGuest, 0); err != nil {
+	if err := b.inviteToRoom(ch, user.ID); err != nil {
 		log.Printf("room invite: %v", err)
 		b.respond(i, true, errorEmbed("Couldn't add them."))
 		return
 	}
 	b.respond(i, false, &discordgo.MessageEmbed{Color: shu,
 		Description: fmt.Sprintf("<@%s>, <@%s> invited you to <#%s>.", user.ID, i.Member.User.ID, ch)})
+}
+
+// inviteToRoom lets a member see and join a room, clearing anything that
+// kept them out (like a kick from a locked room).
+func (b *bot) inviteToRoom(ch, user string) error {
+	return b.s.ChannelPermissionSet(ch, user, discordgo.PermissionOverwriteTypeMember, roomGuest, 0)
 }

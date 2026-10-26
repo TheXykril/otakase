@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.60
+
+- Voice rooms: `/room privacy` has a new **18+** choice. The room is marked age-restricted in Discord, stays hidden and only people the owner invites can join (Lock and Hide are off for it). Watch Together can play 18+ titles in such a room. Every room's controls also get an **Invite** button to add someone without typing `/room-invite`.
+
 ## 1.30.59
 
 - Watch Together: in theater mode the controls no longer pop back up after an OP/ED skip, a seek or a new episode. They stay hidden until you tap the video, and stay shown if they already were. Player keys no longer bring them up either; the small note over the video shows what the key did.
