@@ -526,6 +526,10 @@ own `/watchparty` parties are separate.
 - A room lasts 4 hours from its first episode, as many episodes as fit.
   `/settings watch_room_max` sets how many fit in it (default 10; the
   opener and staff always get in).
+- This week's **Game Champion** (`Champions` in the data file) opens rooms
+  without a ticket; their room has no time limit (it still closes when
+  empty or ended) and fits `/settings watch_room_max_champion` people
+  (default 30). The room keeps this for its life even if the role moves on.
 - 18+ shows only in age-restricted voice channels.
 - Each member's preferences (the Activity's preferences button) hold audio,
   backup audio and two subtitle languages: `sub_subtitles` for the original

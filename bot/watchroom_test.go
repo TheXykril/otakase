@@ -136,7 +136,7 @@ func TestWatchRoomTicketsAndOneAtATime(t *testing.T) {
 		t.Fatal("the ticket is spent once the first episode plays")
 	}
 	// The room is full at ten.
-	for k := 0; k < b.watchMax()-2; k++ {
+	for k := 0; k < b.watchMax(false)-2; k++ {
 		watchPost(b, (*bot).watchOpen, fmt.Sprint("m", k), watchIn{Room: "r1", Channel: "vc"}, nil)
 	}
 	if code := watchPost(b, (*bot).watchOpen, "late", watchIn{Room: "r1", Channel: "vc"}, nil); code != http.StatusForbidden {
@@ -846,5 +846,42 @@ func TestWatchRoomReturnsTicketWhenNothingPlayed(t *testing.T) {
 			t.Fatalf("played %v s: %d tickets left, want %d", played, got, want)
 		}
 		b.watch.bg.Wait() // the next bot replaces the lookups this one still runs
+	}
+}
+
+func TestWatchRoomGameChampion(t *testing.T) {
+	b, now := watchBot(t, "https://cdn.example/ep.mp4")
+	b.store.update(func(d *storeData) { d.Champions = []string{"champ"} })
+	var v watchView
+	if code := watchPost(b, (*bot).watchOpen, "champ", watchIn{Room: "r", Channel: "vc"}, &v); code != 200 || v.Max != 30 {
+		t.Fatalf("champion opens without a ticket: %d %+v", code, v)
+	}
+	watchPost(b, (*bot).watchPick, "champ", watchIn{Room: "r", Show: 5, Ep: 1}, nil)
+	waitLoaded(t, b)
+	b.watch.mu.Lock()
+	v = b.watchViewOf(b.watch.cur, "champ", false, watchNow())
+	b.watch.mu.Unlock()
+	if v.Phase != "play" || v.Ends != 0 {
+		t.Fatalf("playing without a time limit: %+v", v)
+	}
+	for k := 0; k < 29; k++ {
+		if code := watchPost(b, (*bot).watchOpen, fmt.Sprint("m", k), watchIn{Room: "r", Channel: "vc"}, nil); code != 200 {
+			t.Fatalf("member %d of 30: %d", k+2, code)
+		}
+	}
+	if code := watchPost(b, (*bot).watchOpen, "late", watchIn{Room: "r", Channel: "vc"}, nil); code != http.StatusForbidden {
+		t.Fatalf("31st person: %d", code)
+	}
+	// Still open well past four hours.
+	*now = now.Add(watchRoomLength + time.Hour)
+	b.watch.cur.members["champ"].seen = *now
+	if !b.watchStep(b.watch.cur, *now) || b.watch.cur == nil {
+		t.Fatal("champion's room closed on time")
+	}
+	// Ending before anything counted as watched gives no ticket back.
+	watchPost(b, (*bot).watchEnd, "champ", watchIn{Room: "r"}, nil)
+	time.Sleep(20 * time.Millisecond)
+	if n := b.watchTickets("champ"); n != 0 {
+		t.Fatalf("champion got %d tickets from a free room", n)
 	}
 }

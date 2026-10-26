@@ -58,9 +58,11 @@ async function watchView() {
   if (st.busy) return watchJoin();
   const t = st.tickets || 0;
   wBox(`<p class="lead">The bot plays an anime for everyone in this call, in step. Whoever opens the room picks the show and controls it; everyone else can ask for a pause or a skip.</p>
-    <p class="note">Up to ${st.max} people · 720p · 4 hours from the first episode · your AniList or MAL moves on as you watch (link them with /link-anilist and /link-mal).</p>
-    <p>${icon("star")} You have <b>${t}</b> watch ticket${t === 1 ? "" : "s"}. Opening a room uses one once the first episode plays.</p>
-    ${t > 0 ? `<button class="btn" id="wopen">${icon("play")} Open the watch room</button>` : `<p class="note">Get a ticket by redeeming a code with <b>/redeem</b>. Codes come from giveaways, events and somewhere hidden in Otakase.</p>`}
+    <p class="note">Up to ${st.max} people · 720p · ${st.champion ? "no time limit" : "4 hours from the first episode"} · your AniList or MAL moves on as you watch (link them with /link-anilist and /link-mal).</p>
+    ${st.champion
+      ? `<p>${icon("star")} You're this week's <b>Game Champion</b>: your rooms need no ticket, have no time limit and fit up to ${st.max} people.</p>`
+      : `<p>${icon("star")} You have <b>${t}</b> watch ticket${t === 1 ? "" : "s"}. Opening a room uses one once the first episode plays.</p>`}
+    ${t > 0 || st.champion ? `<button class="btn" id="wopen">${icon("play")} Open the watch room</button>` : `<p class="note">Get a ticket by redeeming a code with <b>/redeem</b>. Codes come from giveaways, events and somewhere hidden in Otakase.</p>`}
     <div class="err" id="err"></div>`);
   const b = document.getElementById("wopen");
   if (b) b.onclick = () => ((b.disabled = true), watchJoin().catch((e) => ((b.disabled = false), showError(e))));
