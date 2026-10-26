@@ -25,7 +25,7 @@ loading.
 | `internal/provider.go` | The provider stack: search, retries, `name::id` keys |
 
 Current providers: `anikoto`, `animex`, `anizone`, `kickassanime`, `megavid`,
-`nyaa` (which also registers `sukebei`).
+`reanime`, `nyaa` (which also registers `sukebei`).
 
 A provider package imports `providers` and `providerhost` and never
 `internal` itself; `internal` imports the providers, so going the other way
@@ -318,3 +318,35 @@ Keep provider names out of `internal/`. When a host needs something new:
 - [ ] Throttling returns `ErrRateLimited`; network errors aren't hidden
 - [ ] Unit tests with no network; live tests behind an env var
 - [ ] `-provider-status` shows results
+
+## ReAnime (FlixCloud)
+
+The `reanime` provider uses ReAnime's search and episode APIs. It resolves
+FlixCloud HLS playback through the embedded WASM transform in Go. No separate
+runtime service is needed. Sub and dub are selected from the episode servers,
+with HD-2 tried before HD-1; subtitle tracks and chapter ranges are passed on.
+
+Aliases: `flixcloud`, `flixcloud.cc`, `reanime.to`. The default stack tries
+ReAnime after Animex and before Nyaa. Player resolution has a per-server time
+limit, embedded WASM memory is capped, and cached skip ranges are bounded.
+Server lookup reads the AniList ID from search results or `/api/v1/anime/<slug>`,
+then uses `/api/flix/<anilist ID>/<episode>`; the older `/api/watch`
+endpoint is only a fallback. Intro and outro ranges come solely from the
+FlixCloud player. When sub and dub entries share an embed, the provider only
+offers dub if the returned HLS master explicitly lists English audio on an
+active rendition. If its audio languages are missing or ambiguous, dub is
+unavailable and the next provider is tried rather than mislabeling Japanese.
+Remote player changes may break playback, so live testing is required.
+
+### FlixCloud HLS playback
+
+ReAnime returns a signed FlixCloud URL and a Base64 playlist key obtained from
+the same WASM module that decrypts the URL. A playlist fetch can return Base64
+text instead of `#EXTM3U`; decode that response using the key before parsing
+its HLS audio tracks. Image-wrapped transport segments also need unwrapping.
+
+`StreamPlaybackHint.FlixCloudKey` is carried through `internal/stream_info.go`
+to the bot, since the `-stream-info` process exits before Watch Together serves
+the video. The CLI uses a loopback HLS relay while mpv plays; the bot decodes
+within `watchrelay.go`. Both send FlixCloud's Referer and a browser User-Agent.
+The key is session data and must not be logged or sent to Activity clients.

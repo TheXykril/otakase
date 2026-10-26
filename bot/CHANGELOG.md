@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.56
+
+- Watch Together: new ReAnime (FlixCloud) source after Animex, with sub and dub servers, subtitles, and alternative HD servers. Looks up servers by AniList ID when the old watch API is gone and checks English audio before offering a dub from a shared player. Sends the browser header required by FlixCloud and decodes the protected playlists and video segments for local playback and Watch Together.
+
 ## 1.30.55
 
 - Watch Together: new source Animex, tried after Anizone. It finds episodes by AniList id, so it doesn't pick the wrong show. Sub and dub, with subtitles in many languages.

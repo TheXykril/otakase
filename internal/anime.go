@@ -82,6 +82,7 @@ type Episode struct {
 	// SubtitleURL among them; the rest are offered to mpv to switch to.
 	SubtitleTracks []SubtitleTrack   `json:"-"`
 	StreamHeaders  map[string]string `json:"-"`
+	StreamFlixKey string            `json:"-"`
 	// StreamHLSBitrate caps mpv at one variant of an HLS master whose audio
 	// is a separate rendition; see applyQualityPreference. Zero is no cap.
 	StreamHLSBitrate int `json:"-"`
@@ -127,6 +128,7 @@ type StreamPlaybackHint struct {
 	// Headers are extra HTTP headers the stream's CDN requires; see the
 	// providers package for why a referrer alone is sometimes not enough.
 	Headers map[string]string
+	FlixCloudKey string
 	// Subtitles is every subtitle track the provider offered; Subtitle is the
 	// one its own default picked.
 	Subtitles []SubtitleTrack

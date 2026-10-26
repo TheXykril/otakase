@@ -35,6 +35,9 @@ type StreamPlaybackHint struct {
 	// unless Origin names the player's domain, and MPV's --referrer cannot set
 	// Origin. Anything here is passed through to the player as-is.
 	Headers map[string]string
+	// FlixCloudKey is the per-embed playlist decoding key, not a URL.
+	// The bot carries it in stream-info and the local player uses its relay.
+	FlixCloudKey string
 	// Subtitles lists every subtitle track the host offers for the stream, so
 	// the player can use a language other than the one Subtitle defaults to.
 	// Empty when the host offers one track or none.

@@ -50,7 +50,7 @@ func TestConfiguredStackLeavesOutDisabledProviders(t *testing.T) {
 	// stack. Which provider that is changes as the stack is reordered, and
 	// that reordering should not fail a test about fallback.
 	stackHead := defaultEnabledProviderStack()[0]
-	enabledStack := []string{"anikoto", "megavid", "kickassanime", "anizone", "animex", "nyaa"}
+	enabledStack := []string{"anikoto", "megavid", "kickassanime", "anizone", "animex", "reanime", "nyaa"}
 
 	for _, tc := range []struct {
 		name string // what the config holds
@@ -128,7 +128,7 @@ func TestDefaultStackFollowsThePreferredOrderAndSkipsDisabled(t *testing.T) {
 	withDisabledProvidersForTest(t, "anikoto", "megavid", "animex", "nyaa")
 
 	got := defaultEnabledProviderStack()
-	want := []string{"kickassanime", "anizone", "sukebei"}
+	want := []string{"kickassanime", "anizone", "reanime", "sukebei"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}

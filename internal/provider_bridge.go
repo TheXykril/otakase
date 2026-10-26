@@ -61,8 +61,9 @@ func fromStreamHints(in map[string]providers.StreamPlaybackHint) map[string]Stre
 		converted[link] = StreamPlaybackHint{
 			Referrer:  hint.Referrer,
 			Subtitle:  hint.Subtitle,
-			Headers:   hint.Headers,
-			Subtitles: hint.Subtitles,
+			Headers:      hint.Headers,
+			FlixCloudKey: hint.FlixCloudKey,
+			Subtitles:    hint.Subtitles,
 			HLS:       hint.HLS,
 		}
 	}
@@ -179,6 +180,7 @@ func applyStreamPlaybackHints(anime *Anime, streams []string, hints map[string]S
 		anime.Ep.SubtitleURL = ""
 		anime.Ep.SubtitleTracks = nil
 		anime.Ep.StreamHeaders = nil
+		anime.Ep.StreamFlixKey = ""
 		anime.Ep.StreamHLSBitrate = 0
 		return
 	}
@@ -186,5 +188,6 @@ func applyStreamPlaybackHints(anime *Anime, streams []string, hints map[string]S
 	anime.Ep.SubtitleURL = pickSubtitleForHint(GetGlobalConfig(), anime, hint)
 	anime.Ep.SubtitleTracks = hint.Subtitles
 	anime.Ep.StreamHeaders = hint.Headers
+	anime.Ep.StreamFlixKey = hint.FlixCloudKey
 	anime.Ep.StreamHLSBitrate = hint.HLSBitrate
 }
