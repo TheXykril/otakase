@@ -535,6 +535,24 @@ own `/watchparty` parties are separate.
   episode), the host can press Start now, and a room with one member never
   waits. The host's heartbeat is ignored while a check runs, so a player
   that is already ahead can't drag the room with it.
+- Anyone can **vote to skip** the opening or ending (`watchvote.go`,
+  `POST watch/vote`). The room offers a vote only while it is inside a real
+  AniSkip interval; once more than half the people in it agree it jumps
+  past it for everyone, independently of the host's automatic skips. The
+  host's own vote skips at once. A vote lasts 20 seconds or until the room
+  leaves the interval.
+- The people list carries each player's **state**, reported on its
+  heartbeat: a spinner while it is still loading or buffering, and how many
+  seconds behind it is when it has fallen behind the room.
+- The host, or staff, can **hand hosting** to anyone in the room from the
+  people list (`POST watch/host`), not only to the next-oldest member when
+  the host leaves.
+- The host can **invite** a server member from the Activity
+  (`watchinvite.go`, `GET watch/people` to search, `POST watch/invite`):
+  the bot sends them a direct message with what is playing and a link to
+  the call. An invite grants nothing on its own — they still have to be
+  able to join the voice channel — but an invite to an 18+ room also opens
+  that private voice channel to them, the way `/room-invite` does.
 - A viewer who falls behind on their own (buffering) is not yanked
   forward: under 4 seconds behind the player runs 15% faster until it
   catches up, and further behind it offers a **Catch up** button. A jump of

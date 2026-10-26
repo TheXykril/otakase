@@ -784,6 +784,26 @@
   .wcatch svg.i { width: 16px; height: 16px; }
   .wsublook { grid-column: 1/-1; display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
   .wsublook .wskiptitle { grid-column: 1/-1; }
+  .wvote { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 14px; border-radius: 99px; background: rgba(0, 0, 0, .78); color: #fff; font-size: 14px; max-width: calc(100% - 24px); }
+  .wvote[hidden] { display: none; }
+  .wvote b { color: var(--gold); }
+  .wvote .btn { padding: 6px 14px; min-height: 0; }
+  .wperson { display: inline-flex; gap: 5px; align-items: center; font: inherit; cursor: default; }
+  .wperson[data-host] { cursor: pointer; }
+  .wperson[data-host]:hover { border-color: var(--accent); }
+  .wperson.sure { border-color: var(--gold); }
+  .wperson.behind { border-color: var(--shu); }
+  .wperson.loading { opacity: .7; }
+  .wdot { display: inline-flex; }
+  .wdot svg.i { width: 13px; height: 13px; }
+  .wdot.behind { color: var(--shu); }
+  .wdot.loading { color: var(--muted); animation: spin 3s linear infinite; }
+  .winvite { margin-top: 10px; padding: 12px; background: var(--tile); border: 1px solid var(--line); border-radius: 12px; }
+  .winvitehead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .winvitehead b { display: inline-flex; gap: 6px; align-items: center; }
+  .winvitehead .btn { padding: 4px 8px; min-height: 0; }
+  .winvite input { width: 100%; font: inherit; color: var(--text); background: var(--tile2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+  .winvitelist { display: grid; gap: 6px; max-height: 240px; overflow-y: auto; }
   .wpeople { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
   .wsw { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
   .wsw input { accent-color: var(--shu); }

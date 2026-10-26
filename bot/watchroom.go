@@ -77,6 +77,11 @@ type watchMember struct {
 	watched float64 // seconds of this episode they were in the room while it played
 	counted bool    // their lists were moved on for this episode
 	from    float64 // where the episode was when they joined it
+
+	// What this member's player last reported, for the people bar.
+	pos    float64
+	stuck  bool // it was buffering or still loading
+	beatAt time.Time
 }
 
 type watchAsk struct {
@@ -156,6 +161,8 @@ type watchRoom struct {
 
 	chat  []watchChat
 	chatN int
+
+	vote *watchVote // a running skip vote (watchvote.go)
 
 	// The ready check (watchready.go): hold is the running check's id, 0
 	// when there is none; the room waits at holdPos until holdUntil.
@@ -289,6 +296,9 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 	r.prune(now)
 	if r.phase == "play" && r.holdDone(now) {
 		r.release(now)
+	}
+	if r.dropVote(now) {
+		r.changed()
 	}
 	elapsed := now.Sub(r.tick).Seconds()
 	if r.tick.IsZero() || elapsed > 3*watchTick.Seconds() {
@@ -467,6 +477,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool, start 
 	r.skipHoldUntil = time.Time{}
 	r.skipTarget = 0
 	r.unhold()
+	r.vote = nil
 	r.setPos(0, false, watchNow())
 	r.dur = 0
 	r.asks = nil
@@ -936,10 +947,47 @@ func (b *bot) watchTickets(user string) int {
 
 // ── What the page gets ──
 
+// memberState is how a member's player is doing, for the people bar. Hold
+// the lock.
+func (r *watchRoom) memberState(id string, now time.Time) (string, int) {
+	m := r.members[id]
+	if r.phase != "play" || m == nil {
+		return "", 0
+	}
+	if r.hold != 0 {
+		if r.ready[id] {
+			return "watching", 0
+		}
+		return "loading", 0
+	}
+	if m.beatAt.IsZero() || now.Sub(m.beatAt) > 12*time.Second {
+		return "", 0
+	}
+	if m.stuck {
+		return "loading", 0
+	}
+	if behind := r.position(now) - m.pos; behind > 5 {
+		return "behind", int(behind)
+	}
+	return "watching", 0
+}
+
+// memberStateOf is memberState's first result, for tests.
+func (r *watchRoom) stateOnly(id string, now time.Time) string {
+	st, _ := r.memberState(id, now)
+	return st
+}
+
 type watchPerson struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Host bool   `json:"host,omitempty"`
+	// State is how this person's player is doing, as it last reported:
+	// "watching", "loading" (it has the episode but not the spot yet, or
+	// it is buffering) or "behind" (more than a few seconds behind the
+	// room). Empty means it hasn't said anything yet.
+	State  string `json:"state,omitempty"`
+	Behind int    `json:"behind,omitempty"` // whole seconds, when behind
 }
 
 // These details are only returned to the room's developers and administrators.
@@ -1037,6 +1085,8 @@ type watchView struct {
 	Members         []watchPerson                   `json:"members"`
 	Asks            []watchAsk                      `json:"asks"`
 	Chat            []watchChat                     `json:"chat"`
+	Vote            *watchVote                      `json:"vote,omitempty"`
+	CanVote         bool                            `json:"can_vote,omitempty"`
 	Hold            int                             `json:"hold,omitempty"`
 	HoldWaiting     []string                        `json:"hold_waiting,omitempty"`
 	HoldEnds        int64                           `json:"hold_ends,omitempty"` // unix ms
@@ -1061,6 +1111,14 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 	}
 	if r.hold != 0 {
 		v.Hold, v.HoldWaiting, v.HoldEnds, v.HoldReady = r.hold, r.holdWaiting(), r.holdUntil.UnixMilli(), r.ready[user]
+	}
+	if _, _, inside := r.watchVoteSpan(now); inside {
+		v.CanVote = true
+	}
+	if r.vote != nil {
+		vote := *r.vote
+		vote.Votes, vote.Need, vote.Mine = len(r.vote.who), watchVoteNeed(len(r.members)), r.vote.who[user]
+		v.Vote = &vote
 	}
 	if r.phase == "loading" {
 		v.LoadStep = r.loadStep
@@ -1094,7 +1152,9 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 		v.Ends = e.UnixMilli()
 	}
 	for _, id := range r.people() {
-		v.Members = append(v.Members, watchPerson{ID: id, Name: r.members[id].name, Host: id == r.host})
+		p := watchPerson{ID: id, Name: r.members[id].name, Host: id == r.host}
+		p.State, p.Behind = r.memberState(id, now)
+		v.Members = append(v.Members, p)
 	}
 	for _, a := range r.asks {
 		if v.IsHost || a.User == user {
@@ -1140,6 +1200,8 @@ func init() {
 	apiHandle("POST /activity/api/watch/beat", (*bot).watchBeat)
 	apiHandle("POST /activity/api/watch/ask", (*bot).watchAskAPI)
 	apiHandle("POST /activity/api/watch/ready", (*bot).watchReady)
+	apiHandle("POST /activity/api/watch/vote", (*bot).watchVoteAPI)
+	apiHandle("POST /activity/api/watch/host", (*bot).watchHandOver)
 	apiHandle("POST /activity/api/watch/chat", (*bot).watchChatSay)
 	apiHandle("POST /activity/api/watch/answer", (*bot).watchAnswer)
 	apiHandle("POST /activity/api/watch/take", (*bot).watchTake)
@@ -1177,6 +1239,7 @@ type watchIn struct {
 	On        bool    `json:"on"`
 	Why       string  `json:"why"` // why the host's player gave up, for the log
 	Text      string  `json:"text"`
+	User      string  `json:"user"` // the member an invite or a handover names
 }
 
 // watchRead reads a request for the room the page is in. The room is the
@@ -1853,11 +1916,19 @@ func (b *bot) watchBeat(w http.ResponseWriter, r *http.Request) {
 	if cur == nil {
 		return
 	}
+	now := watchNow()
+	if m := cur.members[user]; m != nil && cur.phase == "play" && !math.IsNaN(in.Pos) && in.Pos >= 0 {
+		was, wasStuck := m.pos, m.stuck
+		m.pos, m.stuck, m.beatAt = in.Pos, !in.Playing && cur.playing, now
+		// The people bar only has to hear about a real change of state.
+		if wasStuck != m.stuck || math.Abs(was-in.Pos) > 5 {
+			cur.changed()
+		}
+	}
 	if cur.host != user || cur.phase != "play" || math.IsNaN(in.Pos) || in.Pos < 0 {
 		writeJSON(w, http.StatusOK, map[string]int{"ver": cur.ver})
 		return
 	}
-	now := watchNow()
 	if in.Dur > 0 && in.Dur < 6*3600 && math.Abs(in.Dur-cur.dur) > 1 {
 		cur.dur = in.Dur
 		cur.changed()
@@ -1982,6 +2053,41 @@ func (b *bot) watchTake(w http.ResponseWriter, r *http.Request) {
 	cur.host = user
 	cur.changed()
 	b.watchAnswerView(w, cur, user, true)
+}
+
+// watchHandOver passes hosting to another member of the room. The host
+// does it from the people list; staff can too.
+func (b *bot) watchHandOver(w http.ResponseWriter, r *http.Request) {
+	user, in, ok := b.watchRead(w, r)
+	if !ok {
+		return
+	}
+	staff := b.isAdmin(user)
+	b.watch.mu.Lock()
+	cur := b.inRoom(w, in.Room, user)
+	if cur == nil {
+		b.watch.mu.Unlock()
+		return
+	}
+	switch {
+	case cur.host != user && !staff:
+		b.watch.mu.Unlock()
+		apiError(w, http.StatusForbidden, "only the host passes it on")
+		return
+	case in.User == cur.host:
+		b.watch.mu.Unlock()
+		apiError(w, http.StatusBadRequest, "they're already the host")
+		return
+	}
+	if _, there := cur.members[in.User]; !there {
+		b.watch.mu.Unlock()
+		apiError(w, http.StatusNotFound, "they're not in the room any more")
+		return
+	}
+	cur.host = in.User
+	cur.changed()
+	log.Printf("watch room: member %s handed hosting to %s", user, in.User)
+	b.watchAnswerView(w, cur, user, staff)
 }
 
 // watchSync switches whether the room moves the member's lists on.

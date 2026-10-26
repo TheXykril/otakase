@@ -176,6 +176,7 @@ function wSet(v, fromHost) {
     if (Math.abs(v.pos - was) > 3 || previous.playing !== v.playing) wJump = true;
   }
   wPeople();
+  wVote();
   wAsks();
   wHoldDraw();
   wChatDraw();
@@ -213,7 +214,8 @@ function wDraw() {
   } else {
     stage = `<div class="wstage${wFull ? " full" : ""}" id="wstage"><div class="wplayer" id="wplayer"><video id="wvid" playsinline preload="auto"></video>
       <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div>
-      <div class="whold" id="whold" hidden></div><button class="wcatch" id="wcatch" hidden></button></div>
+      <div class="whold" id="whold" hidden></div><button class="wcatch" id="wcatch" hidden></button>
+      <div class="wvote" id="wvote" hidden></div></div>
       <div class="wbar" id="wbar"></div></div>`;
   }
   wBox(`<div class="whead"><span class="wshow">${showLine || "Nothing playing yet"}</span><span class="pill" id="wends"></span></div>
@@ -255,8 +257,47 @@ function wDraw() {
 function wPeople() {
   const el = document.getElementById("wpeople");
   if (!el) return;
-  el.innerHTML = wv.members.map((m) => `<span class="pill">${m.host ? icon("crown") + " " : ""}${esc(m.name)}</span>`).join("");
+  const canHand = wv.is_host || wv.staff;
+  const mark = { loading: icon("clock"), behind: icon("ff") };
+  el.innerHTML = wv.members.map((m) => {
+    const tag = m.state === "behind" ? ` title="${m.behind}s behind"` : m.state === "loading" ? ` title="Loading"` : "";
+    const dot = mark[m.state] ? `<i class="wdot ${m.state}">${mark[m.state]}</i>` : "";
+    const hand = canHand && !m.host ? ` data-host="${esc(m.id)}"` : "";
+    return `<button class="pill wperson ${m.state || ""}"${tag}${hand}${hand ? "" : " disabled"}>${m.host ? icon("crown") + " " : ""}${esc(m.name)}${dot}</button>`;
+  }).join("");
+  el.querySelectorAll("[data-host]").forEach((b) => (b.onclick = () => {
+    if (!b.classList.contains("sure")) {
+      b.classList.add("sure");
+      b.title = "Make them the host? Tap again";
+      return;
+    }
+    api("watch/host", { room, user: b.dataset.host }).then((nv) => wSet(nv)).catch(showError);
+  }));
   document.getElementById("wcount").textContent = `${wv.members.length}/${wv.max}`;
+}
+
+// wVote draws the skip-vote banner over the video: a button to call one
+// during an opening or ending, the tally once it is running.
+function wVote() {
+  const el = document.getElementById("wvote");
+  if (!el) return;
+  const v = wv;
+  if (v.phase !== "play" || (!v.can_vote && !v.vote)) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  const kind = (v.vote && v.vote.kind) || "op";
+  const label = kind === "ed" ? "ending" : "opening";
+  if (v.vote) {
+    el.innerHTML = `<span>${icon("skip")} Skip the ${label}? <b>${v.vote.votes}/${v.vote.need}</b></span>
+      <button class="btn" id="wvotebtn"${v.vote.mine ? " disabled" : ""}>${v.vote.mine ? "Voted" : "Skip"}</button>`;
+  } else {
+    el.innerHTML = `<span>${icon("skip")} ${label.charAt(0).toUpperCase() + label.slice(1)} playing</span>
+      <button class="btn" id="wvotebtn">Vote to skip</button>`;
+  }
+  const b = document.getElementById("wvotebtn");
+  if (b) b.onclick = () => { b.disabled = true; api("watch/vote", { room }).then((nv) => wSet(nv)).catch((e) => { b.disabled = false; showError(e); }); };
 }
 
 function wSyncLine() {
@@ -283,6 +324,7 @@ function wMore() {
   if (v.is_host && v.show && v.phase !== "loading") html += `<button class="btn alt" id="wchange">${icon("shuffle")} Change show</button>`;
   if (v.staff && !v.is_host) html += `<button class="btn alt" id="wtake">${icon("shield")} Take control</button>`;
   if (v.phase === "loading") html += `<button class="btn alt" id="wstopme">${icon("stop")} Stop watching</button>`;
+  if (v.is_host || v.staff) html += `<button class="btn alt" id="winvite">${icon("users")} Invite someone</button>`;
   if (v.is_host || v.staff) html += `<button class="btn alt" id="wend">${icon("x")} End room</button>`;
   el.innerHTML = html;
   const on = (id, fn) => document.getElementById(id) && (document.getElementById(id).onclick = fn);
@@ -294,6 +336,7 @@ function wMore() {
     wPicker(true);
   });
   on("wstopme", wStopWatching);
+  on("winvite", wInvite);
   on("wtake", () => api("watch/take", { room }).then((nv) => ((wvKey = ""), (wvMedia = ""), wSet(nv))).catch(showError));
   on("wend", (e) => {
     const b = e.currentTarget;
@@ -325,6 +368,44 @@ async function wStopWatching() {
     <button class="btn" id="wagain">${icon("play")} Watch again</button><div class="err" id="err"></div>`);
   const b = document.getElementById("wagain");
   b.onclick = () => ((b.disabled = true), watchView().catch((e) => ((b.disabled = false), showError(e))));
+}
+
+// wInvite opens a small finder to message someone into the room.
+function wInvite() {
+  const host = document.getElementById("wmore");
+  if (!host || document.getElementById("winvitebox")) return;
+  const box = document.createElement("div");
+  box.className = "winvite";
+  box.id = "winvitebox";
+  box.innerHTML = `<div class="winvitehead"><b>${icon("users")} Invite someone</b><button class="btn alt" id="winviteclose" aria-label="Close">${icon("x")}</button></div>
+    <input id="winviteq" autocomplete="off" placeholder="Search people…" aria-label="Search people">
+    <div class="winvitelist" id="winvitelist"><p class="note">They get a direct message with a link to this call.</p></div>`;
+  host.after(box);
+  const q = document.getElementById("winviteq");
+  const list = document.getElementById("winvitelist");
+  document.getElementById("winviteclose").onclick = () => box.remove();
+  let t = 0;
+  const load = async () => {
+    let people;
+    try {
+      people = await api(`watch/people?room=${encodeURIComponent(room)}&q=${encodeURIComponent(q.value.trim())}`);
+    } catch (e) {
+      return showError(e);
+    }
+    if (!document.getElementById("winviteq")) return;
+    list.innerHTML = people.length
+      ? people.map((p) => `<button class="wshowcard" data-id="${esc(p.id)}"><i></i><span><b>${esc(p.name)}</b></span></button>`).join("")
+      : `<p class="note">Nobody found.</p>`;
+    list.querySelectorAll("[data-id]").forEach((b) => (b.onclick = () => {
+      b.disabled = true;
+      api("watch/invite", { room, user: b.dataset.id })
+        .then((nv) => { b.querySelector("b").textContent += " · invited"; wSet(nv); })
+        .catch((e) => { b.disabled = false; showError(e); });
+    }));
+  };
+  q.oninput = () => { clearTimeout(t); t = setTimeout(load, 250); };
+  q.focus();
+  load();
 }
 
 // ── Requests ──
