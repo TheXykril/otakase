@@ -13,7 +13,8 @@ import (
 )
 
 // Room controls: every voice room gets a panel in its chat with buttons
-// for the owner to rename, lock, limit, hide, kick and hand the room over.
+// for the owner to rename, lock, limit, hide, invite, kick and hand the
+// room over.
 // When the owner leaves, the room goes to whoever has been in it longest.
 
 // roomState is what the panel shows about a room.
@@ -22,11 +23,12 @@ type roomState struct {
 	Locked bool // @everyone can't connect
 	Hidden bool // @everyone can't see it
 	Limit  int
+	Adult  bool // age-restricted (18+): stays hidden and invite only
 }
 
 // roomStateOf reads a room's state from its channel.
 func roomStateOf(c *discordgo.Channel, guildID, owner string) roomState {
-	st := roomState{Owner: owner, Limit: c.UserLimit}
+	st := roomState{Owner: owner, Limit: c.UserLimit, Adult: c.NSFW}
 	if o := findOverwrite(c, guildID); o != nil {
 		st.Locked = o.Deny&discordgo.PermissionVoiceConnect != 0
 		st.Hidden = o.Deny&discordgo.PermissionViewChannel != 0
@@ -57,6 +59,9 @@ func roomPanel(st roomState) (*discordgo.MessageEmbed, []discordgo.MessageCompon
 	if st.Limit > 0 {
 		limit = fmt.Sprintf("%d people", st.Limit)
 	}
+	if st.Adult {
+		access, seen = "Invite only", "Hidden, 18+"
+	}
 	e := &discordgo.MessageEmbed{Title: "Room controls", Color: shu,
 		Description: "Only the room owner (or staff) can use these buttons. The room is deleted once everyone leaves.",
 		Fields: []*discordgo.MessageEmbedField{
@@ -75,11 +80,12 @@ func roomPanel(st roomState) (*discordgo.MessageEmbed, []discordgo.MessageCompon
 	return e, []discordgo.MessageComponent{
 		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 			discordgo.Button{Label: "Rename", Style: discordgo.SecondaryButton, CustomID: "rc-rename"},
-			discordgo.Button{Label: lock, Style: discordgo.SecondaryButton, CustomID: "rc-lock"},
+			discordgo.Button{Label: lock, Style: discordgo.SecondaryButton, CustomID: "rc-lock", Disabled: st.Adult},
 			discordgo.Button{Label: "Limit", Style: discordgo.SecondaryButton, CustomID: "rc-limit"},
-			discordgo.Button{Label: hide, Style: discordgo.SecondaryButton, CustomID: "rc-hide"},
+			discordgo.Button{Label: hide, Style: discordgo.SecondaryButton, CustomID: "rc-hide", Disabled: st.Adult},
 		}},
 		discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+			discordgo.Button{Label: "Invite", Style: discordgo.PrimaryButton, CustomID: "rc-invite"},
 			discordgo.Button{Label: "Kick", Style: discordgo.DangerButton, CustomID: "rc-kick"},
 			discordgo.Button{Label: "Transfer owner", Style: discordgo.SecondaryButton, CustomID: "rc-owner"},
 		}},
@@ -258,6 +264,30 @@ func (b *bot) roomControl(i *discordgo.InteractionCreate, id string) {
 			CustomID: "value", Label: "Max people (0 = no limit, up to 99)", Style: discordgo.TextInputShort, Required: true, MaxLength: 2})
 	case "rc-lock", "rc-hide":
 		b.roomAct(i, false, func() string { return b.toggleRoom(ch, r, id == "rc-lock") })
+	case "rc-invite":
+		b.respond(i, true, &discordgo.MessageEmbed{Color: shu, Description: "Who should be able to see and join the room?"},
+			discordgo.ActionsRow{Components: []discordgo.MessageComponent{
+				discordgo.SelectMenu{MenuType: discordgo.UserSelectMenu, CustomID: "rc-invite-pick", Placeholder: "Pick someone to invite"},
+			}})
+	case "rc-invite-pick":
+		vals := i.MessageComponentData().Values
+		if len(vals) == 0 {
+			return
+		}
+		b.roomAct(i, true, func() string {
+			if vals[0] == r.Owner || vals[0] == b.s.State.User.ID {
+				return "Pick another member."
+			}
+			if u := i.MessageComponentData().Resolved.Users[vals[0]]; u != nil && u.Bot {
+				return "Pick another member."
+			}
+			if err := b.inviteToRoom(ch, vals[0]); err != nil {
+				log.Printf("room invite: %v", err)
+				return "Couldn't add them."
+			}
+			b.roomSay(ch, fmt.Sprintf("<@%s>, <@%s> invited you to this room.", vals[0], i.Member.User.ID), vals[0])
+			return fmt.Sprintf("Invited <@%s>.", vals[0])
+		})
 	case "rc-kick", "rc-owner":
 		b.pickRoomMember(i, r, id == "rc-kick")
 	case "rc-kick-pick", "rc-owner-pick":
@@ -366,6 +396,9 @@ func (b *bot) toggleRoom(ch string, r room, lock bool) string {
 	c, err := b.s.Channel(ch)
 	if err != nil {
 		return "Couldn't read the room."
+	}
+	if c.NSFW {
+		return "An 18+ room always stays hidden and invite only. Use `/room privacy` to change that."
 	}
 	bit := int64(discordgo.PermissionViewChannel)
 	if lock {
