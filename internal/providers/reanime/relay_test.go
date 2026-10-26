@@ -135,8 +135,13 @@ func TestHLSRelayDecryptsAndRewrites(t *testing.T) {
 		t.Fatalf("upstream requests = %d", len(upstreamHeaders))
 	}
 	for _, h := range upstreamHeaders {
-		if h.Get("User-Agent") != userAgent || h.Get("Referer") != flixURL+"/" {
-			t.Fatalf("missing playback headers: %v", h)
+		if h.Get("Referer") != flixURL+"/" {
+			t.Fatalf("missing referrer header: %v", h)
+		}
+		for name, want := range flixBrowserHeaders() {
+			if h.Get(name) != want {
+				t.Fatalf("missing browser header %s: %v", name, h)
+			}
 		}
 	}
 	stop()
@@ -154,4 +159,32 @@ func ExampleDecodeManifest() {
 	playlist, _ := DecodeManifest(encodedManifest("#EXTM3U\n", key), base64.StdEncoding.EncodeToString(key))
 	fmt.Print(string(playlist))
 	// Output: #EXTM3U
+}
+
+func TestHLSRelayReturnsBadGatewayOnCDNDenial(t *testing.T) {
+	key := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "denied", http.StatusForbidden)
+	}))
+	defer upstream.Close()
+	client := &http.Client{Transport: relayTransport(func(req *http.Request) (*http.Response, error) {
+		copy := req.Clone(req.Context())
+		copy.URL.Scheme = "http"
+		copy.URL.Host = strings.TrimPrefix(upstream.URL, "http://")
+		copy.Host = copy.URL.Host
+		return http.DefaultTransport.RoundTrip(copy)
+	})}
+	link, stop, err := StartRelay("https://fetch8.flixcloud.cc/master.m3u8?token=sensitive", key, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stop()
+	resp, err := http.Get(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("relay status = %d", resp.StatusCode)
+	}
 }

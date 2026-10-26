@@ -543,8 +543,10 @@ func TestFlixCloudPlaybackRequiresBrowserUserAgent(t *testing.T) {
 			if hint.Headers["User-Agent"] != userAgent {
 				t.Fatalf("%s playback browser User-Agent = %q, want %q", mode, hint.Headers["User-Agent"], userAgent)
 			}
-			if hint.Headers["Origin"] != "" {
-				t.Fatalf("%s requested unnecessary Origin header", mode)
+			for k, want := range flixBrowserHeaders() {
+				if hint.Headers[k] != want {
+					t.Fatalf("%s browser header %s = %q, want %q", mode, k, hint.Headers[k], want)
+				}
 			}
 		})
 	}

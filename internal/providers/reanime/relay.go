@@ -17,7 +17,22 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/thexykril/otakase/internal/providerhost"
 )
+
+// flixBrowserHeaders marks video requests as cross-origin browser fetches.
+// Some FlixCloud segment hosts reject requests with only a Referer and UA.
+func flixBrowserHeaders() map[string]string {
+	return map[string]string{
+		"User-Agent":     userAgent,
+		"Origin":         flixURL,
+		"Accept":         "*/*",
+		"Sec-Fetch-Site": "cross-site",
+		"Sec-Fetch-Mode": "cors",
+		"Sec-Fetch-Dest": "empty",
+	}
+}
 
 var flixSegmentMask = [...]byte{157, 42, 241, 71, 179, 142, 92, 112, 166, 25, 228, 59, 216, 98, 15, 197}
 
@@ -96,6 +111,24 @@ type hlsRelay struct {
 	next   int
 	client *http.Client
 	key    string
+	logged sync.Map
+}
+
+// relayStatus records the source hostname and fetch stage, never a signed
+// stream URL or playlist key. Repeated failures are logged only once.
+func (p *hlsRelay) relayStatus(item relayItem, status string) {
+	if providerhost.Log == nil {
+		return
+	}
+	host := "unknown"
+	if parsed, err := url.Parse(item.link); err == nil {
+		host = parsed.Hostname()
+	}
+	line := item.kind + " " + host + ": " + status
+	if _, loaded := p.logged.LoadOrStore(line, struct{}{}); loaded {
+		return
+	}
+	providerhost.Log("reanime HLS relay " + line)
 }
 
 func (p *hlsRelay) add(link, kind string) string {
@@ -189,23 +222,38 @@ func (p *hlsRelay) serve(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	fail := func(status string) {
+		p.relayStatus(item, status)
+		http.Error(w, "video source unavailable", http.StatusBadGateway)
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, item.link, nil)
 	if err != nil {
-		http.Error(w, "bad video URL", http.StatusBadGateway)
+		fail("request setup failed")
 		return
 	}
 	req.Header.Set("Referer", flixURL+"/")
-	req.Header.Set("User-Agent", userAgent)
+	for name, value := range flixBrowserHeaders() {
+		req.Header.Set(name, value)
+	}
 	resp, err := p.client.Do(req)
 	if err != nil {
-		http.Error(w, "video fetch failed", http.StatusBadGateway)
+		switch {
+		case errors.Is(err, context.DeadlineExceeded):
+			fail("upstream timeout")
+		case errors.Is(err, context.Canceled):
+			fail("request canceled")
+		default:
+			// Transport errors can include the signed URL. Never print
+			// the error value, only its type.
+			fail(fmt.Sprintf("upstream transport error (%T)", err))
+		}
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		http.Error(w, "video source unavailable", http.StatusBadGateway)
+		fail(fmt.Sprintf("upstream HTTP %d", resp.StatusCode))
 		return
 	}
 	limit := int64(16 << 20)
@@ -216,8 +264,12 @@ func (p *hlsRelay) serve(w http.ResponseWriter, r *http.Request) {
 		limit = 1 << 20
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
-	if err != nil || int64(len(body)) > limit {
-		http.Error(w, "video response too large", http.StatusBadGateway)
+	if err != nil {
+		fail("upstream body read failed")
+		return
+	}
+	if int64(len(body)) > limit {
+		fail("upstream response too large")
 		return
 	}
 	mime := resp.Header.Get("Content-Type")
@@ -237,9 +289,10 @@ func (p *hlsRelay) serve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil {
-		http.Error(w, "video decoding failed", http.StatusBadGateway)
+		fail("decode failed: " + err.Error())
 		return
 	}
+	p.relayStatus(item, "decoded OK")
 	w.Header().Set("Content-Type", mime)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
@@ -293,5 +346,8 @@ func StartRelay(streamURL, key string, client *http.Client) (string, func(), err
 		once.Do(func() { _ = server.Close() })
 	}
 	go func() { _ = server.Serve(listener) }()
+	if providerhost.Log != nil {
+		providerhost.Log("reanime HLS relay ready on loopback")
+	}
 	return "http://" + listener.Addr().String() + root + entry, stop, nil
 }
