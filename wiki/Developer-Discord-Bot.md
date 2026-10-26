@@ -527,6 +527,30 @@ own `/watchparty` parties are separate.
   mismatched intervals are not skipped. Staff can take control; when the
   host leaves, whoever has been in the room longest takes over. The host
   or staff can end it.
+- A **ready check** (`watchready.go`) holds the room when an episode
+  starts, when the host presses play and after a seek or a +10s: it waits
+  at that spot until every member's player reports the spot loaded
+  (`POST watch/ready` with the check's id), then plays for everyone at
+  once. A slow player holds it for at most 15 seconds (30 for a new
+  episode), the host can press Start now, and a room with one member never
+  waits. The host's heartbeat is ignored while a check runs, so a player
+  that is already ahead can't drag the room with it.
+- A viewer who falls behind on their own (buffering) is not yanked
+  forward: under 4 seconds behind the player runs 15% faster until it
+  catches up, and further behind it offers a **Catch up** button. A jump of
+  the room's own position (a seek, an automatic skip) is still followed at
+  once.
+- **Room chat** (`watchchat.go`) is text beside the video for the people in
+  the room, 60 messages kept in memory with the room and nothing stored.
+  Text between `||` marks is blurred until tapped. The author, the host and
+  staff can take a message down; invites are refused and ten messages per
+  twenty seconds is the limit.
+- Each viewer picks their own **subtitle size, colour and background** and
+  their own **quality** in the player's settings. Both are local: the look
+  is a `::cue` rule saved in the browser, and the quality picker switches
+  the Hls.js level. The relayed master keeps the chosen variant plus up to
+  two smaller ones on the same audio group (`watchLadder`), so a slow
+  connection steps down instead of freezing.
 - A room lasts 4 hours from its first episode, as many episodes as fit.
   `/settings watch_room_max` sets how many fit in it (default 10; the
   opener and staff always get in).
@@ -561,9 +585,10 @@ own `/watchparty` parties are separate.
   release, else main.
 - The relay serves `/activity/api/watch/media/{key}/{id}`: the key is
   random per episode, ids are handed out for each address the playlists
-  name, so it fetches nothing else. The master playlist is cut to one
-  variant (the best at or under 720p) and one audio track, so everyone
-  asks for the same segments; a 192 MB memory cache fetches each one once
+  name, so it fetches nothing else. The master playlist is cut to the best
+  variant at or under 720p, up to two smaller ones for slow connections,
+  and one default audio track, so everyone on a variant asks for the same
+  segments; a 192 MB memory cache fetches each one once
   and the next three ahead. Segments served as pictures are unmasked.
   Subtitles become WebVTT (SRT and ASS are converted), English on by
   default, picked per viewer.

@@ -77,6 +77,8 @@ const ICONS = {
   skip: '<path d="M5 4v16l10-8zM19 4v16"/>',
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   ff: '<path d="M3 5v14l9-7zM12 5v14l9-7z"/>',
+  message: '<path d="M4 5h16v11H9l-5 4z"/>',
+  send: '<path d="M3 11l18-8-8 18-2-8z"/>',
   watch: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4M10 8.5v5l4-2.5z"/>',
 };
 const icon = (name) =>

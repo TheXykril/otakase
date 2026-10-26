@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.30.62
+
+- Watch Together: the room now waits until everyone's player has the episode loaded before it plays, and does the same after a seek, a +10s or the host pressing play. It shows who it's waiting for, plays anyway after 15 seconds (30 on a new episode), and the host can press Start now. A room with one person never waits.
+- Watch Together: if your player falls behind the room while it buffers, it catches up by itself when it's close, and offers a Catch up button when it's further behind, instead of freezing or jumping around.
+- Watch Together: room chat beside the video. Messages live with the room and aren't stored anywhere. Put spoilers between || marks and they stay blurred until someone taps them. In theater mode the Chat button opens it over the video with a count of what you missed. You can remove your own messages; the host and staff can remove any.
+- Watch Together: pick your own video quality in the player settings, and the stream now carries smaller sizes too, so a slow connection steps down instead of stalling. Everything stays at 720p at most.
+- Watch Together: pick your own subtitle size, colour and background (shadow, dark box or none). It only changes your own player and is remembered on your device.
+
 ## 1.30.61
 
 - Watch Together: the host's show picker now shows your own lists under the search. Continue has the shows you're watching on AniList or MyAnimeList at the next episode, and starts where you stopped when Otakase or the room saved your spot for that episode (with a From the start button too). Planning has your Plan to watch list. Link with /link-anilist or /link-mal; a private AniList list shows once your link is proven, and only to you.
