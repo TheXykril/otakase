@@ -68,6 +68,7 @@ func SeekMPV(socket string, seconds int) (interface{}, error) {
 }
 
 func ExitMPV(socket string) error {
+	stopFlixPlaybackRelay()
 	_, err := MPVSendCommand(socket, []interface{}{"quit"})
 	if err != nil {
 		Log("Error closing MPV: " + err.Error())

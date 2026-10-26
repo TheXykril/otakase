@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 func TestParseStreamInfoArg(t *testing.T) {
@@ -119,5 +121,29 @@ func TestStreamLinksCarryTheHLSMark(t *testing.T) {
 	}
 	if !strings.Contains(FormatStreamInfo(StreamInfo{Streams: streams}), `"hls":true`) {
 		t.Error("the mark must reach the JSON the bot reads")
+	}
+}
+
+func TestFlixCloudKeyReachesPlayerAndWatchRoom(t *testing.T) {
+	link := "https://fetch1.flixcloud.cc/master.m3u8"
+	const key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+	hints := fromStreamHints(map[string]providers.StreamPlaybackHint{
+		link: {FlixCloudKey: key, HLS: true, Headers: map[string]string{"User-Agent": "browser"}},
+	})
+	anime := &Anime{}
+	applyStreamPlaybackHints(anime, []string{link}, hints)
+	if anime.Ep.StreamFlixKey != key || anime.Ep.StreamHeaders["User-Agent"] != "browser" {
+		t.Fatalf("playback HLS key was lost: %+v", anime.Ep.StreamHeaders)
+	}
+	streams := streamLinks(ProviderEpisodeResult{Links: []string{link}, LinkHints: hints})
+	if len(streams) != 1 || streams[0].FlixCloudKey != key {
+		t.Fatalf("stream-info HLS key was lost: %+v", streams)
+	}
+	if !strings.Contains(FormatStreamInfo(StreamInfo{Streams: streams}), `"flixcloud_key":"`+key+`"`) {
+		t.Fatal("watch room JSON has no HLS decoding key")
+	}
+	applyStreamPlaybackHints(anime, []string{"https://another.example/a.mp4"}, nil)
+	if anime.Ep.StreamFlixKey != "" {
+		t.Fatal("playlist key survived a provider switch")
 	}
 }

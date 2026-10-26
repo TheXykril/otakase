@@ -45,6 +45,15 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 		return "", fmt.Errorf("empty video link")
 	}
 
+	if anime.Ep.StreamFlixKey != "" && runtime.GOOS != "android" {
+		var err error
+		link, err = startFlixPlaybackRelay(link, anime.Ep.StreamFlixKey)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		stopFlixPlaybackRelay()
+	}
 	playback := buildPlaybackArgs(config, anime, link, args)
 
 	if socket := anime.Ep.Player.SocketPath; socket != "" && IsMPVRunning(socket) {
@@ -66,6 +75,7 @@ func StartVideo(link string, args []string, title string, anime *Anime) (string,
 		}
 	}
 	if err := launchMPV(config, anime, socket, link, title, playback.args); err != nil {
+		stopFlixPlaybackRelay()
 		return "", err
 	}
 	return socket, nil

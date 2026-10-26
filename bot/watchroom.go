@@ -592,6 +592,9 @@ func (b *bot) findWatchHLSTracks(ctx context.Context, room *watchRoom, gen int, 
 	probeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	master, _, err := media.fetch(probeCtx, media.link.URL, 4<<20)
+	if err == nil && media.link.FlixCloudKey != "" {
+		master, err = flixDecodeManifest(master, media.link.FlixCloudKey)
+	}
 	if err != nil {
 		if probeCtx.Err() == nil {
 			log.Printf("watch HLS audio discovery: %v", err)

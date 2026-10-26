@@ -45,10 +45,11 @@ var watchUpstream = newWatchUpstream()
 
 // streamLink is one link from `otakase -stream-info`.
 type streamLink struct {
-	URL       string            `json:"url"`
-	Referrer  string            `json:"referrer,omitempty"`
-	Headers   map[string]string `json:"headers,omitempty"`
-	Subtitles []streamSubtitle  `json:"subtitles,omitempty"`
+	URL          string            `json:"url"`
+	Referrer     string            `json:"referrer,omitempty"`
+	Headers      map[string]string `json:"headers,omitempty"`
+	FlixCloudKey string            `json:"flixcloud_key,omitempty"`
+	Subtitles    []streamSubtitle  `json:"subtitles,omitempty"`
 	// HLS marks a playlist whose address doesn't say so (megavid's /vid/
 	// links); markHLSLinks sets it.
 	HLS bool `json:"hls,omitempty"`
@@ -608,6 +609,12 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 			if err != nil {
 				return nil, "", err
 			}
+			if m.link.FlixCloudKey != "" {
+				body, err = flixDecodeManifest(body, m.link.FlixCloudKey)
+				if err != nil {
+					return nil, "", err
+				}
+			}
 			base, _ := url.Parse(u)
 			return []byte(m.rewritePlaylist(string(body), base)), "application/vnd.apple.mpegurl", nil
 		}
@@ -623,7 +630,11 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 	case "seg":
 		data, typ, err := m.segment(u, cache)
 		if errors.Is(err, errTooBig) {
-			m.stream(w, r, u)
+			if m.link.FlixCloudKey != "" {
+				http.Error(w, "video segment too large", http.StatusBadGateway)
+			} else {
+				m.stream(w, r, u)
+			}
 			return
 		}
 		if err == nil {
@@ -658,7 +669,7 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 
 func (m *watchMedia) segment(u string, cache *segCache) ([]byte, string, error) {
 	key := u
-	if strings.HasPrefix(u, "http://127.0.0.1:") {
+	if strings.HasPrefix(u, "http://127.0.0.1:") || m.link.FlixCloudKey != "" {
 		key = m.key + " " + u
 	}
 	return cache.get(key, func() ([]byte, string, error) {
@@ -667,6 +678,12 @@ func (m *watchMedia) segment(u string, cache *segCache) ([]byte, string, error) 
 		data, typ, err := m.fetch(ctx, u, watchCacheItem)
 		if err != nil {
 			return nil, "", err
+		}
+		if m.link.FlixCloudKey != "" {
+			data, err = flixDecodeSegment(data)
+			if err != nil {
+				return nil, "", err
+			}
 		}
 		data, typ = unmaskSegment(data, typ)
 		return data, typ, nil
