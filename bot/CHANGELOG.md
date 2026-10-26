@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.59
+
+- Watch Together: in theater mode the controls no longer pop back up after an OP/ED skip, a seek or a new episode. They stay hidden until you tap the video, and stay shown if they already were. Player keys no longer bring them up either; the small note over the video shows what the key did.
+
 ## 1.30.58
 
 - Watch Together: keyboard shortcuts in the player. Space (or K) pauses and plays, Left/Right (or J/L) jump 10 seconds, Up/Down change volume, M mutes, F toggles theater mode, Shift+N goes to the next episode, and the host can press 0–9 to jump through the episode or Home to go back to the start. Pause and seeking go through the room like the buttons; viewers' keys send the same requests their buttons do. Volume and mute only change your own player. Keys do nothing while you type in a text box. The list is in the player's Settings menu.
