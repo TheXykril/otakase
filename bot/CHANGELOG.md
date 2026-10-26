@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.56
+
+- Watch Together: the video relay no longer fetches addresses on your home network (LAN, loopback, link-local, CGNAT). A source's playlist can't point the bot at Home Assistant or other local devices any more. Torrent episodes still play from the local helper.
+
 ## 1.30.55
 
 - Watch Together: new source Animex, tried after Anizone. It finds episodes by AniList id, so it doesn't pick the wrong show. Sub and dub, with subtitles in many languages.
