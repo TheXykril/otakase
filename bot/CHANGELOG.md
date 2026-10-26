@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.58
+
+- Watch Together: keyboard shortcuts in the player. Space (or K) pauses and plays, Left/Right (or J/L) jump 10 seconds, Up/Down change volume, M mutes, F toggles theater mode, Shift+N goes to the next episode, and the host can press 0–9 to jump through the episode or Home to go back to the start. Pause and seeking go through the room like the buttons; viewers' keys send the same requests their buttons do. Volume and mute only change your own player. Keys do nothing while you type in a text box. The list is in the player's Settings menu.
+
 ## 1.30.57
 
 - Watch Together: new source ReAnime, tried after Animex. It finds episodes by AniList id, with sub and dub, subtitles and a second HD server. A dub that shares its video with the sub is only offered when the stream really has English audio.
