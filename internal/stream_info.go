@@ -37,11 +37,11 @@ type TorrentLink struct {
 
 // StreamLink is one playable link and what fetching it takes.
 type StreamLink struct {
-	URL       string            `json:"url"`
-	Referrer  string            `json:"referrer,omitempty"`
-	Headers   map[string]string `json:"headers,omitempty"`
-	FlixCloudKey string         `json:"flixcloud_key,omitempty"`
-	Subtitles []StreamSubtitle  `json:"subtitles,omitempty"`
+	URL          string            `json:"url"`
+	Referrer     string            `json:"referrer,omitempty"`
+	Headers      map[string]string `json:"headers,omitempty"`
+	FlixCloudKey string            `json:"flixcloud_key,omitempty"`
+	Subtitles    []StreamSubtitle  `json:"subtitles,omitempty"`
 	// HLS is set for a playlist whose address does not end in .m3u8, so the
 	// watch room relays it as one.
 	HLS bool `json:"hls,omitempty"`

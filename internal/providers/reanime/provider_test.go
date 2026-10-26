@@ -558,7 +558,7 @@ func TestSharedDubEncryptedHLSAudio(t *testing.T) {
 		case "/api/v1/anime/test":
 			fmt.Fprint(w, `{"anilist_id":123}`)
 		case "/api/flix/123/1":
-			fmt.Fprint(w, `{"servers":[{"serverName":"HD-2","dataType":"sub","dataLink":"https://flixcloud.cc/e/one?v=2"},{"serverName":"HD-2","dataType":"dub","dataLink":"https://flixcloud.cc/e/one?v=2"}]}`)
+			fmt.Fprint(w, `{"success":true,"servers":[{"serverName":"HD-2","dataType":"sub","dataLink":"https://flixcloud.cc/e/one?v=2"},{"serverName":"HD-2","dataType":"dub","dataLink":"https://flixcloud.cc/e/one?v=2"}]}`)
 		case "/master.m3u8":
 			if r.Header.Get("User-Agent") == "" || r.Header.Get("Referer") != flixURL+"/" {
 				t.Errorf("missing CDN headers: %v", r.Header)

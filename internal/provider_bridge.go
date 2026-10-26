@@ -59,12 +59,12 @@ func fromStreamHints(in map[string]providers.StreamPlaybackHint) map[string]Stre
 	converted := make(map[string]StreamPlaybackHint, len(in))
 	for link, hint := range in {
 		converted[link] = StreamPlaybackHint{
-			Referrer:  hint.Referrer,
-			Subtitle:  hint.Subtitle,
+			Referrer:     hint.Referrer,
+			Subtitle:     hint.Subtitle,
 			Headers:      hint.Headers,
 			FlixCloudKey: hint.FlixCloudKey,
 			Subtitles:    hint.Subtitles,
-			HLS:       hint.HLS,
+			HLS:          hint.HLS,
 		}
 	}
 	return converted

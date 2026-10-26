@@ -141,12 +141,12 @@ func (p *Provider) GetEpisodeURLForModeWithHints(_ providers.PlaybackConfig, id 
 			}
 		}
 		hint := providers.StreamPlaybackHint{
-			HLS:       true,
-			Referrer:  flixURL + "/",
+			HLS:          true,
+			Referrer:     flixURL + "/",
 			Headers:      map[string]string{"User-Agent": userAgent},
 			FlixCloudKey: stream.ManifestKey,
 			Subtitles:    stream.Subtitles,
-			Subtitle:  stream.Subtitle,
+			Subtitle:     stream.Subtitle,
 		}
 		if audio == "dub" {
 			hint.Subtitle = ""

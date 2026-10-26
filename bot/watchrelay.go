@@ -44,11 +44,11 @@ var watchUpstream = &http.Client{Timeout: 2 * time.Minute}
 
 // streamLink is one link from `otakase -stream-info`.
 type streamLink struct {
-	URL       string            `json:"url"`
-	Referrer  string            `json:"referrer,omitempty"`
-	Headers   map[string]string `json:"headers,omitempty"`
-	FlixCloudKey string         `json:"flixcloud_key,omitempty"`
-	Subtitles []streamSubtitle  `json:"subtitles,omitempty"`
+	URL          string            `json:"url"`
+	Referrer     string            `json:"referrer,omitempty"`
+	Headers      map[string]string `json:"headers,omitempty"`
+	FlixCloudKey string            `json:"flixcloud_key,omitempty"`
+	Subtitles    []streamSubtitle  `json:"subtitles,omitempty"`
 	// HLS marks a playlist whose address doesn't say so (megavid's /vid/
 	// links); markHLSLinks sets it.
 	HLS bool `json:"hls,omitempty"`

@@ -68,9 +68,9 @@ func TestWatchRelayDecryptsFlixStream(t *testing.T) {
 	}))
 	defer upstream.Close()
 	media, entry, _ := newWatchMedia(streamLink{
-		URL: upstream.URL + "/master.m3u8",
+		URL:          upstream.URL + "/master.m3u8",
 		FlixCloudKey: base64.StdEncoding.EncodeToString(key),
-		Headers: map[string]string{"User-Agent": watchBrowserAgent},
+		Headers:      map[string]string{"User-Agent": watchBrowserAgent},
 	}, false)
 	cache := newSegCache(1 << 20)
 	load := func(id string) string {
