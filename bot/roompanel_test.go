@@ -71,3 +71,36 @@ func TestRoomStateAndPanel(t *testing.T) {
 		t.Errorf("no overwrite: %+v", st)
 	}
 }
+
+func TestAdultRoomPanel(t *testing.T) {
+	c := &discordgo.Channel{NSFW: true, PermissionOverwrites: roomOverwrites("g", "bot", "o", nil, true)}
+	st := roomStateOf(c, "g", "o")
+	if !st.Adult || !st.Locked || !st.Hidden {
+		t.Fatalf("state %+v", st)
+	}
+	e, comps := roomPanel(st)
+	row := comps[0].(discordgo.ActionsRow).Components
+	if !row[1].(discordgo.Button).Disabled || !row[3].(discordgo.Button).Disabled {
+		t.Errorf("lock and hide should be off in an 18+ room: %v %v", row[1], row[3])
+	}
+	if e.Fields[1].Value != "Invite only" || e.Fields[2].Value != "Hidden, 18+" {
+		t.Errorf("fields %v %v", e.Fields[1].Value, e.Fields[2].Value)
+	}
+	if b := comps[1].(discordgo.ActionsRow).Components[0].(discordgo.Button); b.CustomID != "rc-invite" {
+		t.Errorf("invite button: %+v", b)
+	}
+	_, comps = roomPanel(roomState{Owner: "o"})
+	if comps[0].(discordgo.ActionsRow).Components[1].(discordgo.Button).Disabled {
+		t.Error("lock disabled in a normal room")
+	}
+}
+
+func TestRoomPrivacyChoices(t *testing.T) {
+	var vals []any
+	for _, c := range roomCommands()[0].Options[0].Choices {
+		vals = append(vals, c.Value)
+	}
+	if len(vals) != 3 || vals[2] != roomAdult {
+		t.Errorf("choices %v", vals)
+	}
+}

@@ -261,10 +261,10 @@ func (b *bot) planParty(member *discordgo.Member, title string, minutes int64, l
 		log.Printf("watchparty category: %v", err) // the room goes with the other rooms
 	}
 	name, perms := clip("🎬 "+show.Title, 90), partyOverwrites(b.cfg.GuildID, host.ID, mode)
-	c, err := b.createRoom(member, name, false, limit, cat, perms...)
+	c, err := b.createRoom(member, name, roomPublic, limit, cat, perms...)
 	if err != nil && cat != "" {
 		// The category may have just gone with the last party; use the rooms one.
-		c, err = b.createRoom(member, name, false, limit, "", perms...)
+		c, err = b.createRoom(member, name, roomPublic, limit, "", perms...)
 	}
 	if err != nil {
 		log.Printf("watchparty channel: %v", err)
