@@ -141,10 +141,13 @@ function wSet(v, fromHost) {
     const keepTheater = wFull && sameShow && episodePhase(previous.phase) && episodePhase(v.phase);
     if (wFull && !keepTheater) wFullscreen(false);
     if (previous && previous.phase === "play" && v.phase !== "play") wDestroy();
+    const stage = document.getElementById("wstage");
+    const wasHidden = keepTheater && stage && stage.classList.contains("controls-hidden");
     clearTimeout(wControlsTimer);
     wvKey = key;
     wDraw();
-    if (keepTheater) wRevealControls();
+    // A new episode keeps the controls the way the viewer left them.
+    if (keepTheater) wasHidden ? wHideControls() : wRevealControls();
   }
   const elapsedEl = document.getElementById("wloadelapsed");
   if (elapsedEl && v.load_since) {
@@ -206,10 +209,7 @@ function wDraw() {
       if (stage.classList.contains("controls-hidden")) {
         wRevealControls();
       } else {
-        clearTimeout(wControlsTimer);
-        const menu = document.getElementById("wsettingsmenu");
-        if (menu) menu.hidden = true;
-        stage.classList.add("controls-hidden");
+        wHideControls();
       }
     });
     const bar = document.getElementById("wbar");
@@ -549,7 +549,7 @@ async function wLoad() {
     if (vid.readyState > 0 && Math.abs(vid.currentTime - at) > 2) vid.currentTime = at;
   };
   vid.onwaiting = () => { document.getElementById("wspin").hidden = false; if (wv.is_host) wBeatNow(); };
-  vid.onplaying = () => { document.getElementById("wspin").hidden = true; if (wv.is_host) wBeatNow(); if (wFull) wRevealControls(); };
+  vid.onplaying = () => { document.getElementById("wspin").hidden = true; if (wv.is_host) wBeatNow(); if (wFull && !wControlsHidden()) wRevealControls(); };
   vid.oncanplay = () => (document.getElementById("wspin").hidden = true);
   vid.onerror = () => {
     const e = vid.error;
@@ -866,6 +866,20 @@ function wRevealControls() {
   }, 3500);
 }
 
+function wControlsHidden() {
+  const st = document.getElementById("wstage");
+  return !!st && st.classList.contains("controls-hidden");
+}
+
+function wHideControls() {
+  const st = document.getElementById("wstage");
+  if (!st || !wFull) return;
+  clearTimeout(wControlsTimer);
+  const menu = document.getElementById("wsettingsmenu");
+  if (menu) menu.hidden = true;
+  st.classList.add("controls-hidden");
+}
+
 // Theater mode always works inside the embedded Activity; native fullscreen
 // is optional because Discord may block the browser fullscreen API.
 function wFullscreen(on) {
@@ -1005,7 +1019,6 @@ document.addEventListener("keydown", (e) => {
     }
   }
   e.preventDefault();
-  if (wFull) wRevealControls();
 });
 document.addEventListener("fullscreenchange", () => {
   if (!document.fullscreenElement && wFull && document.getElementById("wstage")) {
