@@ -28,6 +28,16 @@ var watchHoldN atomic.Int64
 // holdAt stops the room at pos until everyone is ready. Hold the lock.
 func (r *watchRoom) holdAt(pos float64, wait time.Duration, now time.Time) {
 	pos = math.Max(0, pos)
+	// A spot inside an opening or ending the room skips waits at its end
+	// instead, so nobody loads the opening only to jump past it right after.
+	// (skipTo itself lands past the span, so this never repeats for it.)
+	if to, ok := watchSkipTarget(r.skipIntervals.match(r.dur), pos, r.dur, r.autoSkipOP, r.autoSkipED); ok {
+		pos = to
+		r.noteSkip(to)
+		// As skipTo: the host's page follows, its stale beats are ignored.
+		r.skipSeq++
+		r.skipTarget, r.skipHoldUntil = to, now.Add(8*time.Second)
+	}
 	if len(r.members) < 2 {
 		r.unhold()
 		r.setPos(pos, true, now)

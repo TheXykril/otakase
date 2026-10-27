@@ -921,7 +921,9 @@ function wFollowHost(vid, t, force) {
   if (vid.readyState === 0) return;
   const off = t - vid.currentTime; // seconds behind the host
   const stalled = vid.seeking || vid.readyState < 3;
-  if (off < -2 || ((force || wJump || !wv.playing || wv.hold) && Math.abs(off) > 2)) {
+  // While the room waits for everyone, a player counts as ready within 1.5s
+  // of the held spot, so it has to get closer than that.
+  if (off < -2 || ((force || wJump || !wv.playing) && Math.abs(off) > 2) || (wv.hold && Math.abs(off) > 1)) {
     vid.currentTime = t;
     vid.playbackRate = 1;
     wJump = false;
@@ -954,7 +956,8 @@ function wReadyCheck(vid) {
   if (!wv || !wv.hold || wv.hold_ready || wReadySent === wv.hold) return;
   // The host's own player isn't moved by the room's clock; while the room
   // waits it belongs at the held spot too, or it never counts as ready.
-  if (wv.is_host && vid.readyState > 0 && !vid.seeking && Math.abs(vid.currentTime - wv.pos) > 1.5) {
+  // Not right after the host's own seek, which the room hasn't answered yet.
+  if (wv.is_host && Date.now() - wHostAct > 2000 && vid.readyState > 0 && !vid.seeking && Math.abs(vid.currentTime - wv.pos) > 1) {
     vid.currentTime = wv.pos;
     return;
   }

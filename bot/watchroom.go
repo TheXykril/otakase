@@ -369,7 +369,7 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 	if r.phase == "play" && r.playing {
 		if target, ok := watchSkipTarget(r.skipIntervals.match(r.dur), r.position(now), r.dur, r.autoSkipOP, r.autoSkipED); ok {
 			r.skipTo(target, now)
-			r.note("Skipped the %s", map[bool]string{true: "ending", false: "opening"}[target >= r.dur-1 || target > r.dur/2])
+			r.noteSkip(target)
 			r.changed()
 		}
 	}

@@ -7,6 +7,8 @@
 - Watch Together: in theater mode the host now sees members' requests (pause, play, skip ahead, next episode) pop up over the video with Yes and No, with a soft ping. Each stays until the host answers or it runs out, with a bar showing the time left. A member in theater mode sees the request they sent.
 - Watch Together: a request to skip ahead 10 seconds no longer shows as "asks to undefined".
 - Watch Together: fixed "Waiting for everyone to load" listing the host as still loading after they opened a second room, and the host's player now moves to the held spot itself so it always counts as loaded.
+- Watch Together: fixed a viewer getting stuck as "still loading" when their player sat 1.5 to 2 seconds off the spot the room was waiting at, which held everyone until the timeout.
+- Watch Together: a seek or skip ahead that lands inside an opening or ending the room skips now waits at its end straight away, instead of loading the opening, playing, then skipping past it.
 
 ## 1.30.66
 
