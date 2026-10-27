@@ -62,7 +62,8 @@ func TestResumeRowAnilistID(t *testing.T) {
 }
 
 // Rows come from the recent list, in its order, named from the watch history;
-// a show with no history, or no longer on the tracker's list, is left out.
+// a show with no history, or no longer in Watching or Rewatching on the
+// tracker, is left out.
 func TestContinueWatchingRows(t *testing.T) {
 	dir := t.TempDir()
 	history := strings.Join([]string{
@@ -79,7 +80,9 @@ func TestContinueWatchingRows(t *testing.T) {
 	}
 
 	config := &Config{StoragePath: dir, ContinueWatchingRows: 5, TrackingRemote: TrackingRemoteAniList}
-	list := &AnimeList{Watching: []Entry{{Media: Media{ID: 101}}, {Media: Media{ID: 202}}}}
+	// 303 was finished, saved position or not; 202 is rewatched.
+	list := &AnimeList{Watching: []Entry{{Media: Media{ID: 101}}}, Rewatching: []Entry{{Media: Media{ID: 202}}},
+		Completed: []Entry{{Media: Media{ID: 303}}}}
 	rows := continueWatchingRows(config, list)
 	if len(rows) != 2 {
 		t.Fatalf("rows = %+v", rows)

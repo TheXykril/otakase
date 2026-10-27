@@ -976,3 +976,16 @@ Local verification: run `go test ./...` in both the repository root and `bot/`,
 and `go test -race ./...` in `bot/`. The CLI integration test generates a local
 dual-audio MKV and checks subtitle rendering after out-of-order segment requests.
 It requires ffmpeg and ffprobe; otherwise that test is skipped.
+
+### Watch-room movie
+
+Searching `otakase` in the room picker lists "Otakase: The Movie" (show id `-1`, never
+sent to AniList). Picking it runs the CLI as `-movie-serve "<host name>"`, with the
+host's AniList access token in `OTAKASE_MOVIE_ANILIST_TOKEN` when their link has one.
+The helper builds the same ASS subtitle, lavfi graph and synthesised music the app
+plays in mpv, draws them once with ffmpeg (libass, 1280×720, no B-frames) into a
+4-second HLS VOD playlist, printing `progress Developing the film N%` lines, then
+prints the loopback playlist address and serves only `playlist.m3u8` and `seg*.ts`
+until stdin closes, like `-torrent-serve`. It shares the torrent helper's slot, so
+only one runs at a time. The film is about 100 seconds; drawing it takes a few
+minutes on a small host. Watching it never counts on lists or saves a position.

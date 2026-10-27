@@ -28,8 +28,7 @@ let wSubPick = "auto";
 let wAudioPick = "auto";
 let wSettingsDirty = false;
 let wSearch = [];
-let wLists = null; // the host's own Continue and Planning lists
-let wListTab = "continue";
+let wLists = null; // the host's own Continue list
 let wFull = false; // the player fills the window
 let wControlsTimer = 0;
 let wChanging = false; // the host is picking another show while one plays
@@ -616,11 +615,10 @@ function wPicker(changing) {
   api(`watch/lists?room=${encodeURIComponent(wRoom)}`)
     .then((lists) => {
       wLists = lists;
-      if (wListTab === "continue" && !lists.continue.length && lists.planning.length) wListTab = "planning";
       if (document.getElementById("q") === q && q.value.trim().length < 2) wListsDraw();
     })
     .catch(() => {
-      wLists = { anilist: false, mal: false, continue: [], planning: [], note: "Couldn't load your lists." };
+      wLists = { anilist: false, mal: false, continue: [], note: "Couldn't load your lists." };
       if (document.getElementById("q") === q && q.value.trim().length < 2) wListsDraw();
     });
 }
@@ -634,9 +632,9 @@ function wShowCard(s, i, facts) {
     <span><b>${esc(s.title)}</b><small>${esc(facts)}</small></span></button>`;
 }
 
-// wListsDraw shows the host's own lists under the search while it is empty:
-// Continue starts at the next episode, from a saved position when there is
-// one; Planning at the first.
+// wListsDraw shows the host's Continue list under the search while it is
+// empty: each show starts at the next episode, from a saved position when
+// there is one.
 function wListsDraw() {
   const tabs = document.getElementById("wtabs");
   const res = document.getElementById("wres");
@@ -652,17 +650,12 @@ function wListsDraw() {
     return;
   }
   tabs.hidden = false;
-  tabs.innerHTML = [["continue", "Continue"], ["planning", "Planning"]]
-    .map(([key, label]) => `<button class="btn ${wListTab === key ? "" : "alt"}" data-tab="${key}">${label} <small>${wLists[key].length}</small></button>`)
-    .join("");
-  tabs.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => ((wListTab = b.dataset.tab), wListsDraw())));
-  const list = wLists[wListTab];
-  const empty = wListTab === "continue" ? "Nothing to continue: no show you're watching has a new episode out." : "Your planning list is empty.";
+  tabs.innerHTML = `<button class="btn">Continue <small>${wLists.continue.length}</small></button>`;
+  const list = wLists.continue;
   res.innerHTML = (wLists.note ? `<p class="note">${esc(wLists.note)}</p>` : "") + (list.length
-    ? list.map((s, i) => wShowCard(s, i, wListTab === "continue"
-      ? `Episode ${s.next}${s.aired || s.episodes ? " of " + (s.aired || s.episodes) : ""}${s.resume ? " · resume at " + wFmt(s.resume) : ""}`
-      : wShowFacts(s))).join("")
-    : `<p class="note">${empty}</p>`);
+    ? list.map((s, i) => wShowCard(s, i,
+      `Episode ${s.next}${s.aired || s.episodes ? " of " + (s.aired || s.episodes) : ""}${s.resume ? " · resume at " + wFmt(s.resume) : ""}`)).join("")
+    : `<p class="note">Nothing to continue: no show you're watching has a new episode out.</p>`);
   res.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => wEpisode(list[+b.dataset.i], list[+b.dataset.i])));
 }
 
