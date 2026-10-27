@@ -663,6 +663,47 @@ room only wakes the other pages when it's more than 2 seconds off where
 they expect, or when playback state changes. Pages long poll
 `watch/state` like the party rooms.
 
+#### Watch room edge cache
+
+Without it every viewer pulls each segment from the bot, so the bot's
+upload is about 2.5 Mbps per viewer. With it (`bot/watchedge.go`,
+`bot/deploy/edge-worker.js`) viewers pull video segments from a Cloudflare
+Worker that keeps each one in Cloudflare's cache for six hours and asks the
+bot only on a miss: a few fetches per segment, however many watch.
+Playlists, subtitles, sync and whole files still come from the bot.
+
+- Variant playlists point segment lines at
+  `<watch_cdn>/activity/api/watch/media/<key>/<n>.ts`; the Worker forwards
+  only that path to the bot and answers 404 to anything else.
+- Nothing can be billed on the Workers Free plan: past 100,000 requests a
+  day the Worker returns errors until midnight UTC. The bot counts the
+  segments it hands out through the Worker per UTC day and serves them
+  itself from `/settings watch_cdn_daily` (default 90000; 0 turns the edge
+  cache off without a restart). The count is in memory and starts over when
+  the bot restarts.
+- A player whose segment fails through the Worker (`cdn` in the view) loads
+  its playlists again with `?direct=1`, which keeps that player on the bot
+  for the rest of the room.
+
+Setup, all on free plans:
+
+1. Cloudflare dashboard (the account that holds xyverion.com) → Workers &
+   Pages → Create → Worker. Name it `otakase-edge`, deploy the hello-world
+   worker, then Edit code, paste `bot/deploy/edge-worker.js` and Deploy.
+   Leave the account on Workers Free and add no payment method.
+2. The Worker → Settings → Domains & Routes → Add → Custom domain:
+   `cdn.xyverion.com`. The Worker's cache only works on a custom domain, not
+   on `workers.dev`.
+3. Discord developer portal → the app → Activities → URL Mappings → add
+   prefix `/cdn`, target `cdn.xyverion.com`.
+4. Add-on option `watch_cdn` (or `OTAKASE_WATCH_CDN`): `/.proxy/cdn`, then
+   restart the add-on.
+5. Watch a room and check the Worker's Metrics: requests should climb
+   while the bot's upload stays flat. If segments fail, players fall back to
+   the bot on their own, so a wrong mapping shows up as Worker requests
+   staying at zero. Discord serves prefix mappings under `/.proxy/<prefix>`;
+   if it doesn't, try `/cdn` as `watch_cdn`.
+
 #### Admin tools in the Activity
 
 Staff (the owner, a staff role, or a role with Administrator, Manage Server

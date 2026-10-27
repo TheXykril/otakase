@@ -585,6 +585,28 @@ func TestWatchRelay(t *testing.T) {
 	if _, err := url.Parse(entry); err != nil {
 		t.Error(err)
 	}
+
+	// With the edge cache on, segments point at it; ?direct=1 keeps them
+	// on the bot, cached playlist or not.
+	b.cfg.WatchCDN = "/.proxy/cdn"
+	if _, list := get(variant); !strings.Contains(list, "\n/.proxy/cdn/activity/api/watch/media/"+media.key+"/"+segs[0]+"\n") ||
+		strings.Contains(list, `URI="/.proxy`) {
+		t.Fatalf("variant through the edge:\n%s", list)
+	}
+	r = httptest.NewRequest("GET", "/x?direct=1", nil)
+	r.SetPathValue("key", media.key)
+	r.SetPathValue("id", variant)
+	w = httptest.NewRecorder()
+	b.watchMediaAPI(w, r)
+	if strings.Contains(w.Body.String(), "/.proxy/cdn") {
+		t.Fatalf("direct variant:\n%s", w.Body.String())
+	}
+	b.watch.mu.Lock()
+	used := b.watch.edge.segs
+	b.watch.mu.Unlock()
+	if used != len(segs) {
+		t.Errorf("edge count %d, want %d", used, len(segs))
+	}
 }
 
 func TestUnmaskSegment(t *testing.T) {

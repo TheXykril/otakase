@@ -205,6 +205,7 @@ type watchRooms struct {
 	mu    sync.Mutex
 	rooms map[string]*watchRoom
 	cache *segCache
+	edge  edgeUse // segments handed to the edge cache today (watchedge.go)
 	infos watchInfos
 	bg    sync.WaitGroup // an episode's lookups, so tests can wait them out
 }
@@ -1173,6 +1174,9 @@ type watchView struct {
 	Languages       watchLanguagePreference         `json:"languages"`
 	Preferences     watchPlaybackPreferences        `json:"preferences"`
 	Max             int                             `json:"max"`
+	// CDN is the edge cache's path when one is set up (watchedge.go), so
+	// a player can tell its segments failing there.
+	CDN string `json:"cdn,omitempty"`
 }
 
 // viewOf is the room as user sees it. Hold the room lock; sync and linked
@@ -1182,7 +1186,8 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 		Err: r.errText, Adult: r.adult, Show: r.show, Ep: r.ep, Dub: r.dub, Playing: r.playing, Pos: r.position(now),
 		Dur: r.dur, AutoSkipOP: r.autoSkipOP, AutoSkipED: r.autoSkipED,
 		SkipReady: r.skipReady, SkipTimes: r.skipIntervals.match(r.dur), SkipSeq: r.skipSeq,
-		Members: []watchPerson{}, Asks: []watchAsk{}, Chat: slices.Clone(r.chat), Max: b.watchMax(r.perks)}
+		Members: []watchPerson{}, Asks: []watchAsk{}, Chat: slices.Clone(r.chat), Max: b.watchMax(r.perks),
+		CDN: strings.TrimRight(b.cfg.WatchCDN, "/")}
 	if v.Chat == nil {
 		v.Chat = []watchChat{}
 	}
@@ -2263,5 +2268,5 @@ func (b *bot) watchMediaAPI(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	m.serve(w, r, id, cache)
+	m.serveVia(w, r, id, cache, b.watchEdgeFor(r))
 }

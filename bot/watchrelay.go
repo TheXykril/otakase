@@ -624,8 +624,14 @@ func (c *segCache) get(key string, load func() ([]byte, string, error)) ([]byte,
 
 // ── Serving ──
 
-// serveMedia answers one relay request.
+// serve answers one relay request, every segment from the bot.
 func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, cache *segCache) {
+	m.serveVia(w, r, id, cache, watchEdge{})
+}
+
+// serveVia answers one relay request, with playlists pointing their
+// segments where edge says (watchedge.go).
+func (m *watchMedia) serveVia(w http.ResponseWriter, r *http.Request, id string, cache *segCache, edge watchEdge) {
 	u, kind, ok := m.lookup(id)
 	if !ok {
 		http.NotFound(w, r)
@@ -657,6 +663,13 @@ func (m *watchMedia) serve(w http.ResponseWriter, r *http.Request, id string, ca
 			data, _, err = load()
 		} else {
 			data, _, err = cache.get(m.key+" "+u, load)
+		}
+		if err == nil {
+			var n int
+			data, n = edgePlaylist(data, m.key, edge)
+			if n > 0 && edge.count != nil {
+				edge.count(n)
+			}
 		}
 		m.write(w, r, data, "application/vnd.apple.mpegurl", err)
 	case "seg":

@@ -18,6 +18,10 @@ let wFails = 0;
 // wNoNative is set after the player's built-in HLS failed on this media;
 // Hls.js gets the next try before the source counts as broken.
 let wNoNative = "";
+// wDirect is set once a segment failed to load through the edge cache
+// (wv.cdn): from then on this player asks the bot for its playlists with
+// ?direct=1, which keeps every segment on the bot.
+let wDirect = false;
 let wLastErr = "";
 let wSubPick = "auto";
 let wAudioPick = "auto";
@@ -695,16 +699,32 @@ function wAudioCandidates() {
 function wEffectiveMedia() {
   if (!wv) return "";
   const variants = wv.audio_media || {};
-  const embedded = wHls && wvMedia === wv.media ? wHls.audioTracks || [] : [];
+  const embedded = wHls && wvMedia === wDirectURL(wv.media) ? wHls.audioTracks || [] : [];
   for (const pick of wAudioCandidates()) {
     // Each HLS rendition has a relay URL even on native players.
-    if (variants[pick]) return variants[pick];
-    if (variants[pick.split("-")[0]]) return variants[pick.split("-")[0]];
-    if (/^(en|eng)(-|$)/.test(pick) && variants.dub) return variants.dub;
-    if (/^(ja|jpn)(-|$)/.test(pick) && variants.sub) return variants.sub;
-    if (embedded.some((track) => wNormAudio(track.lang) === pick)) return wv.media;
+    if (variants[pick]) return wDirectURL(variants[pick]);
+    if (variants[pick.split("-")[0]]) return wDirectURL(variants[pick.split("-")[0]]);
+    if (/^(en|eng)(-|$)/.test(pick) && variants.dub) return wDirectURL(variants.dub);
+    if (/^(ja|jpn)(-|$)/.test(pick) && variants.sub) return wDirectURL(variants.sub);
+    if (embedded.some((track) => wNormAudio(track.lang) === pick)) return wDirectURL(wv.media);
   }
-  return wv.media;
+  return wDirectURL(wv.media);
+}
+
+// wDirectURL is a playlist address as this player loads it.
+function wDirectURL(u) {
+  if (!wDirect || !u || !/\.m3u8$/i.test(u)) return u;
+  return u + "?direct=1";
+}
+
+// wEdgeFailed moves this player off the edge cache after a segment failed
+// to load through it, and reloads. False when it already was off.
+function wEdgeFailed(url) {
+  if (wDirect || !wv || !wv.cdn || (url && !url.includes(wv.cdn))) return false;
+  wDirect = true;
+  wLastErr = "edge cache failed, loading from the bot";
+  wLoad();
+  return true;
 }
 
 async function wLoad() {
@@ -741,6 +761,8 @@ async function wLoad() {
   vid.onerror = () => {
     const e = vid.error;
     const why = (wHls ? "hls.js" : "native") + " video error " + (e ? e.code + " " + (e.message || "") : "");
+    // A native player doesn't say which file failed; try the bot first.
+    if (!wHls && wEdgeFailed("")) return;
     // Hls.js is only loaded once the built-in player has failed.
     if (!wHls && wNoNative !== wvMedia && /\.m3u8(?:$|\?)/i.test(wvMedia)) {
       wNoNative = wvMedia;
@@ -779,6 +801,7 @@ async function wLoad() {
           wLastErr = "hls.js " + d.type + " " + d.details + (d.response && d.response.code ? " HTTP " + d.response.code : "")
             + (d.reason ? " " + d.reason : "") + (d.error && d.error.message ? " " + d.error.message : "");
           if (!d.fatal) return;
+          if (d.type === Hls.ErrorTypes.NETWORK_ERROR && d.frag && wEdgeFailed(d.frag.url)) return;
           if (d.type === Hls.ErrorTypes.MEDIA_ERROR && wFails < 2) {
             wFails++;
             return hls.recoverMediaError();
@@ -1690,7 +1713,7 @@ function wSubsFollow(tr, url) {
 function wPlayingSub() {
   if (!wv) return false;
   for (const [code, url] of Object.entries(wv.audio_media || {})) {
-    if (url === wvMedia) return code === "sub" || wNormAudio(code).split("-")[0] === "ja";
+    if (wDirectURL(url) === wvMedia) return code === "sub" || wNormAudio(code).split("-")[0] === "ja";
   }
   const track = wHls && wHls.audioTracks ? wHls.audioTracks[wHls.audioTrack] : null;
   if (track && track.lang) return wNormAudio(track.lang).split("-")[0] === "ja";
