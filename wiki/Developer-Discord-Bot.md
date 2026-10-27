@@ -57,7 +57,11 @@ server and stays connected to Discord.
   per channel every 10 minutes. Code spans and channel mentions are skipped.
 - **/provider-status:** runs `otakase -provider-status` with the latest
   release (bundled in the add-on, fetched by `install.sh`) and lists which
-  sources answer, cached for five minutes. 18+ sources are never listed.
+  sources answer, cached for five minutes. The answer is only seen by the
+  member who asked. 18+ sources (shown as "nyaa 18+") are listed, along with
+  the apps' reports for them, only when the member's AniList is linked with
+  access and has adult content on (`Viewer.options.displayAdultContent`);
+  everyone else, and the public "is it down?" reply, never sees them.
   The same check is posted as a reply when someone asks in chat whether
   otakase or a source is down (`downRe` in `providers.go`), at most once per
   channel every ten minutes.

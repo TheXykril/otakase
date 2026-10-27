@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.75
+
+- `/provider-status` lists the 18+ sources too for members whose linked AniList (linked with access) has adult content turned on. Everyone else sees the list as before, and so does the automatic "is it down?" reply in chat.
+
 ## 1.30.74
 
 - Watch Together: when a room ends (the host ends it, its time runs out, or it couldn't come back after a bot restart), everyone in it lands back on the Watch room page with a short note, so a new room can be opened or a live one joined without leaving the Activity. Before, a room started from a command left a page with no buttons at all.
