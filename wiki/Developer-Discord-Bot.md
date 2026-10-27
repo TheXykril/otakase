@@ -663,6 +663,17 @@ room only wakes the other pages when it's more than 2 seconds off where
 they expect, or when playback state changes. Pages long poll
 `watch/state` like the party rooms.
 
+Restarts (`bot/watchrestart.go`): open rooms are written to the store
+(`watch_open`) on shutdown and every 30 seconds while they change, and
+opened again on start before the API answers: same people (each counted as
+just seen, so they have 45 seconds to poll again), host, owner, spent
+ticket, time limit, chat and skip settings. The episode resolves again with
+a new media key and waits for everyone at the saved spot; pages see the new
+key and reload the player. A room whose time ran out while the bot was down
+stays closed. Activity sign-ins are kept in the store too
+(`activity_sessions`, by SHA-256 of the token, never the token), so pages
+don't have to sign in again.
+
 #### Watch room edge cache
 
 Without it every viewer pulls each segment from the bot, so the bot's

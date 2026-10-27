@@ -229,6 +229,9 @@ function wSet(v, fromHost) {
   }
   wUpdateOrigin();
   const holdChanged = previous && (previous.hold || 0) !== (v.hold || 0);
+  // A new episode (or the room back after a bot restart) tries the edge
+  // cache again: a failure there may have been the bot being away.
+  if (previous && previous.media && v.media && previous.media !== v.media) wDirect = false;
   if (v.media && wEffectiveMedia() !== wvMedia) wLoad();
   else if (fromHost || holdChanged || (v.is_host && v.skip_seq && oldSkipSeq !== v.skip_seq)) wApply(true);
   else if (wJump) wApply(false);

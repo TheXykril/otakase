@@ -53,6 +53,11 @@ type storeData struct {
 	Parties map[string]watchParty `json:"parties,omitempty"`
 	// Spoiler guard mode: off, nudge or hide ("" = nudge).
 	SpoilerGuard string `json:"spoiler_guard,omitempty"`
+	// Open watch rooms, to open again after a restart (watchrestart.go).
+	WatchOpen []watchSaved `json:"watch_open,omitempty"`
+	// Activity sign-ins by the hash of their token, so pages stay signed
+	// in across a restart.
+	ActivitySessions map[string]activitySession `json:"activity_sessions,omitempty"`
 	// Guess the anime points by Discord user id.
 	Guess map[string]guessScore `json:"guess,omitempty"`
 	// Chat XP by Discord user id.

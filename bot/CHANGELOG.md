@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.68
+
+- Watch Together: watch rooms survive a bot restart or add-on update. Everyone stays in the room with the same host, chat and time left; the episode loads again and picks up where it was, after everyone has it loaded. The ticket isn't spent again. A room whose time ran out during the restart stays closed.
+- Games Activity: open pages stay signed in across a bot restart instead of asking to sign in again.
+
 ## 1.30.67
 
 - Watch Together: in theater mode the host now sees members' requests (pause, play, skip ahead, next episode) pop up over the video with Yes and No, with a soft ping. Each stays until the host answers or it runs out, with a bar showing the time left. A member in theater mode sees the request they sent.
