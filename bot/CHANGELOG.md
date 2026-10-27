@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.78
+
+- Dashboard Games page: when last week ended in a tie, "Last week's Game Champion" lists every tied member instead of just one. The role and the Monday post already went to all of them.
+
 ## 1.30.77
 
 - Activity: the menu shows everyone in this Activity, and a short note says when someone joins or leaves.

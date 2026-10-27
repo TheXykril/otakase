@@ -405,3 +405,17 @@ func TestActivityFonts(t *testing.T) {
 		}
 	}
 }
+
+func TestGamesSummaryTiedChampions(t *testing.T) {
+	b := testGamesBot(t)
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	last := weekKey(now.AddDate(0, 0, -7))
+	b.store.update(func(d *storeData) {
+		addGamePoints(d, "x", "riddle", 4, last)
+		addGamePoints(d, "y", "daily", 4, last)
+		addGamePoints(d, "z", "daily", 2, last)
+	})
+	if got := b.gamesSummary(now).last; len(got) != 2 || got[0] != "x" || got[1] != "y" {
+		t.Errorf("tied champions = %v, want x and y", got)
+	}
+}
