@@ -1,0 +1,18 @@
+/.gradle
+/captures/
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+**/*.jks
+
+# Generated Go binding. Rebuild with app/scripts/build-core.sh.
+/app/libs/*.aar
+/app/libs/*-sources.jar
+
+# Kotlin compiler state
+.kotlin/
