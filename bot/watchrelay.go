@@ -77,9 +77,12 @@ type watchMedia struct {
 	mu    sync.Mutex
 	ids   map[string]string // id → upstream address
 	byURL map[string]string // upstream address → id
-	kind  map[string]string // id → "list", "seg", "file" or "sub"
+	kind  map[string]string // id → "list", "seg", "join", "file" or "sub"
 	next  map[string][]string
 	n     int
+	// edgeSeg is how long, on average, the segments players fetch through
+	// the edge cache last (watchedge.go); 0 while none go through it.
+	edgeSeg float64
 
 	in, out atomic.Int64 // bytes from the provider, bytes to viewers
 }
@@ -176,7 +179,7 @@ func (m *watchMedia) add(u, kind string) string {
 		return id
 	}
 	m.n++
-	ext := map[string]string{"list": ".m3u8", "seg": ".ts", "file": ".mp4", "sub": ".vtt"}[kind]
+	ext := map[string]string{"list": ".m3u8", "seg": ".ts", "join": ".ts", "file": ".mp4", "sub": ".vtt"}[kind]
 	id := strconv.Itoa(m.n) + ext
 	m.ids[id], m.byURL[u], m.kind[id] = u, id, kind
 	return id
@@ -664,11 +667,17 @@ func (m *watchMedia) serveVia(w http.ResponseWriter, r *http.Request, id string,
 		} else {
 			data, _, err = cache.get(m.key+" "+u, load)
 		}
+		if err == nil && edge.prefix != "" {
+			data = m.joinSegments(data)
+		}
 		if err == nil {
 			var n int
-			data, n = edgePlaylist(data, m.key, edge)
-			if n > 0 && edge.count != nil {
-				edge.count(n)
+			var secs float64
+			data, n, secs = edgePlaylist(data, m.key, edge)
+			if n > 0 {
+				m.mu.Lock()
+				m.edgeSeg = secs / float64(n)
+				m.mu.Unlock()
 			}
 		}
 		m.write(w, r, data, "application/vnd.apple.mpegurl", err)
@@ -686,6 +695,9 @@ func (m *watchMedia) serveVia(w http.ResponseWriter, r *http.Request, id string,
 			go m.prefetch(id, cache)
 		}
 		m.write(w, r, data, typ, err)
+	case "join":
+		data, err := m.joined(u, cache)
+		m.write(w, r, data, "video/mp2t", err)
 	case "sub":
 		load := func() ([]byte, string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), watchUpstreamWait)

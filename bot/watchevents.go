@@ -77,6 +77,12 @@ func (r *watchRoom) noteControl(who, act string) {
 	}
 }
 
+// noteSkip notes an automatic skip of the opening or ending that ends at
+// target. Hold the lock.
+func (r *watchRoom) noteSkip(target float64) {
+	r.note("Skipped the %s", map[bool]string{true: "ending", false: "opening"}[target >= r.dur-1 || target > r.dur/2])
+}
+
 // watchTimeText is a position as the player shows it: 12:05 or 1:02:05.
 func watchTimeText(secs float64) string {
 	t := int(math.Max(0, secs))

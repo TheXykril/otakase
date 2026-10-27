@@ -39,6 +39,8 @@ let wJump = false; // the host's spot moved: follow it at once
 let wChatSeen = 0; // the last chat message drawn
 let wEventSeen = 0; // the last room event flashed
 let wEventTimer = 0;
+let wAskSeen = 0; // the last request the host was pinged for
+let wAskKey = ""; // the requests the theater pop-ups show now
 let wChatUnread = 0;
 let wChatOpen = false; // the chat panel in theater mode
 let wChatDraft = "";
@@ -53,7 +55,17 @@ const wFmt = (s) => {
   return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 };
 
-const ASK_TEXT = { pause: "pause", play: "play", skip: "skip the opening", next: "go to the next episode" };
+const ASK_TEXT = { pause: "pause", play: "play", forward: "skip ahead 10 seconds", next: "go to the next episode" };
+
+// wSecs is a jump's length: 50s, or 2:30 from a minute up.
+const wSecs = (n) => (n < 60 ? `${Math.round(n)}s` : wFmt(n));
+
+// wAskText is what a request asks for, after "asks to".
+function wAskText(a) {
+  if (a.kind === "seek") return `jump to ${wFmt(a.pos || 0)}`;
+  if (a.kind === "forward" && a.by && a.by !== 10) return a.by > 0 ? `skip ahead ${wSecs(a.by)}` : `go back ${wSecs(-a.by)}`;
+  return ASK_TEXT[a.kind] || a.kind;
+}
 
 // watchView is the tile's page: the lobby, then the room.
 async function watchView() {
@@ -130,6 +142,9 @@ async function watchJoin() {
   // Messages from before this member came in aren't news.
   wChatSeen = Math.max(0, ...(v.chat || []).map((c) => c.id));
   wEventSeen = Math.max(0, ...(v.events || []).map((e) => e.id));
+  wAskSeen = Math.max(0, ...(v.asks || []).map((a) => a.id));
+  wReadySent = 0;
+  wAskKey = "";
   wSet(v);
   const me = ++wvLoop;
   (async () => {
@@ -237,9 +252,9 @@ function wDraw() {
       : loadingStage;
   } else {
     stage = `<div class="wstage${wFull ? " full" : ""}" id="wstage"><div class="wplayer" id="wplayer"><video id="wvid" playsinline preload="auto"></video>
-      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div><div class="wevent" id="wevent" hidden></div>
+      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div><div class="wevent" id="wevent" hidden></div><div class="wreq" id="wreq"></div>
       <div class="whold" id="whold" hidden></div><button class="wcatch" id="wcatch" hidden></button>
-      <div class="wvote" id="wvote" hidden></div></div>
+      <div class="wvote" id="wvote" hidden></div><div class="wconfirm" id="wconfirm" hidden></div></div>
       <div class="wbar" id="wbar"></div></div>`;
   }
   wBox(`<div class="whead"><span class="wshow">${showLine || "Nothing playing yet"}</span><span class="pill" id="wends"></span></div>
@@ -435,28 +450,63 @@ function wInvite() {
 // ── Requests ──
 
 function wAsks() {
+  const asks = wv.asks || [];
   const el = document.getElementById("wasks");
-  if (!el) return;
-  if (wv.is_host) {
-    el.innerHTML = wv.asks
-      .map(
-        (a) => `<div class="wask"><span><b>${esc(a.name)}</b> asks to ${ASK_TEXT[a.kind]}</span>
+  if (el) {
+    el.innerHTML = wv.is_host
+      ? asks
+          .map(
+            (a) => `<div class="wask"><span><b>${esc(a.name)}</b> asks to ${esc(wAskText(a))}</span>
         <button class="btn" data-ok="${a.id}">Yes</button><button class="btn alt" data-no="${a.id}">No</button></div>`
-      )
-      .join("");
-    el.querySelectorAll("[data-ok],[data-no]").forEach(
-      (b) =>
-        (b.onclick = () => {
-          b.disabled = true;
-          wHostAct = Date.now();
-          api("watch/answer", { room, id: +(b.dataset.ok || b.dataset.no), ok: !!b.dataset.ok })
-            .then((nv) => wSet(nv, true))
-            .catch(showError);
-        })
-    );
-  } else {
-    el.innerHTML = wv.asks.map((a) => `<div class="wask mine"><span>Asked the host to ${ASK_TEXT[a.kind]}…</span></div>`).join("");
+          )
+          .join("")
+      : asks.map((a) => `<div class="wask mine"><span>Asked the host to ${esc(wAskText(a))}…</span></div>`).join("");
+    wAnswerButtons(el);
   }
+  // A new request pings the host, who may be in theater mode.
+  const newest = Math.max(0, ...asks.map((a) => a.id));
+  if (wv.is_host && newest > wAskSeen) sfx("tick");
+  wAskSeen = Math.max(wAskSeen, newest);
+  wAskPops();
+}
+
+// wAskPops shows the requests over the video in theater mode, where the list
+// under the player is out of sight. The host's stay up with Yes and No until
+// answered or until the request lapses; a member sees the one they sent.
+// They only redraw when the requests change, so the countdowns run smoothly.
+function wAskPops() {
+  const el = document.getElementById("wreq");
+  if (!el) return;
+  const asks = wv.asks || [];
+  const key = (wv.is_host ? "h" : "m") + asks.map((a) => [a.id, a.kind, a.by, a.pos].join(":")).join(",");
+  if (key === wAskKey && el.childElementCount === asks.length) return;
+  wAskKey = key;
+  el.innerHTML = asks
+    .map((a) => {
+      const left = Math.max(0, a.left_ms || 0) / 1000;
+      const bar = `<i class="wreqtime" style="animation-duration:${left.toFixed(1)}s;--from:${Math.min(1, left / 30).toFixed(3)}"></i>`;
+      return wv.is_host
+        ? `<div class="wreqpop"><span><b>${esc(a.name)}</b> asks to ${esc(wAskText(a))}</span>
+          <span class="wreqbtns"><button class="btn" data-ok="${a.id}">Yes</button><button class="btn alt" data-no="${a.id}">No</button></span>${bar}</div>`
+        : `<div class="wreqpop mine"><span>Asked the host to ${esc(wAskText(a))}…</span>${bar}</div>`;
+    })
+    .join("");
+  wAnswerButtons(el);
+}
+
+// wAnswerButtons wires the host's Yes and No buttons in a list of requests.
+function wAnswerButtons(el) {
+  el.querySelectorAll("[data-ok],[data-no]").forEach(
+    (b) =>
+      (b.onclick = (e) => {
+        e.stopPropagation();
+        el.querySelectorAll(`[data-ok="${b.dataset.ok || b.dataset.no}"],[data-no="${b.dataset.ok || b.dataset.no}"]`).forEach((x) => (x.disabled = true));
+        wHostAct = Date.now();
+        api("watch/answer", { room, id: +(b.dataset.ok || b.dataset.no), ok: !!b.dataset.ok })
+          .then((nv) => wSet(nv, true))
+          .catch(showError);
+      })
+  );
 }
 
 // ── Picking a show ──
@@ -881,7 +931,9 @@ function wFollowHost(vid, t, force) {
   if (vid.readyState === 0) return;
   const off = t - vid.currentTime; // seconds behind the host
   const stalled = vid.seeking || vid.readyState < 3;
-  if (off < -2 || ((force || wJump || !wv.playing || wv.hold) && Math.abs(off) > 2)) {
+  // While the room waits for everyone, a player counts as ready within 1.5s
+  // of the held spot, so it has to get closer than that.
+  if (off < -2 || ((force || wJump || !wv.playing) && Math.abs(off) > 2) || (wv.hold && Math.abs(off) > 1)) {
     vid.currentTime = t;
     vid.playbackRate = 1;
     wJump = false;
@@ -912,6 +964,13 @@ function wCatchUp(behind) {
 // wReadyCheck tells the room once this player has the held spot loaded.
 function wReadyCheck(vid) {
   if (!wv || !wv.hold || wv.hold_ready || wReadySent === wv.hold) return;
+  // The host's own player isn't moved by the room's clock; while the room
+  // waits it belongs at the held spot too, or it never counts as ready.
+  // Not right after the host's own seek, which the room hasn't answered yet.
+  if (wv.is_host && Date.now() - wHostAct > 2000 && vid.readyState > 0 && !vid.seeking && Math.abs(vid.currentTime - wv.pos) > 1) {
+    vid.currentTime = wv.pos;
+    return;
+  }
   if (vid.readyState < 3 || vid.seeking || Math.abs(vid.currentTime - wv.pos) > 1.5) return;
   const id = wv.hold;
   wReadySent = id;
@@ -977,10 +1036,61 @@ function wCtl(act, pos) {
     .catch(showError);
 }
 
-function wAsk(kind) {
-  api("watch/ask", { room, kind })
+function wAsk(kind, extra) {
+  api("watch/ask", { room, kind, ...extra })
     .then((nv) => wSet(nv))
     .catch(showError);
+}
+
+// wAskBy asks the host to jump step seconds ahead (back when below 0).
+// Presses close together add up into one request, so +10s five times asks
+// for +50s, up to a minute; a jump already waiting for the host is changed, not repeated.
+let wAskDraft = null;
+let wAskDraftTimer = 0;
+function wAskBy(step) {
+  const now = Date.now();
+  const mine = (wv.asks || []).find((a) => a.kind === "forward");
+  let by = wAskDraft && now - wAskDraft.at < 4000 ? wAskDraft.by : mine ? mine.by || 10 : 0;
+  by = Math.max(-60, Math.min(60, by + step)); // a minute either way; the bar goes further
+  wAskDraft = { by, at: now };
+  clearTimeout(wAskDraftTimer);
+  if (!by) {
+    wOsd("No jump");
+    return;
+  }
+  wOsd(by > 0 ? `Ask +${wSecs(by)}` : `Ask -${wSecs(-by)}`);
+  wAskDraftTimer = setTimeout(() => wAsk("forward", { by }), 450);
+}
+
+// wAskJump asks, after a yes from this member, for the host to jump to pos:
+// a tap on the bar or a number key is easy to do by accident.
+let wConfirmTimer = 0;
+function wAskJump(pos) {
+  const el = document.getElementById("wconfirm");
+  if (!el || !wv) return;
+  const dur = wv.dur || 0;
+  pos = Math.max(0, Math.round(dur ? Math.min(pos, Math.max(0, dur - 1)) : pos));
+  const off = pos - wTarget();
+  const rel = Math.abs(off) < 1 ? "" : ` (${off > 0 ? "+" : "-"}${wSecs(Math.abs(off))})`;
+  el.innerHTML = `<span>Ask the host to jump to <b>${wFmt(pos)}</b>${rel}?</span>
+    <span class="wreqbtns"><button class="btn" id="wconfirmyes">Ask</button><button class="btn alt" id="wconfirmno">Cancel</button></span>`;
+  el.hidden = false;
+  const close = () => {
+    clearTimeout(wConfirmTimer);
+    el.hidden = true;
+  };
+  document.getElementById("wconfirmyes").onclick = (e) => {
+    e.stopPropagation();
+    close();
+    wAsk("seek", { pos });
+    wOsd("Asked to jump to " + wFmt(pos));
+  };
+  document.getElementById("wconfirmno").onclick = (e) => {
+    e.stopPropagation();
+    close();
+  };
+  clearTimeout(wConfirmTimer);
+  wConfirmTimer = setTimeout(close, 10000);
 }
 
 // wBar draws the controls: the host's, or the requests for everyone else.
@@ -1012,7 +1122,7 @@ function wBar() {
       </div>
       <p class="note wkeyhelp">${v.is_host
         ? "Keys: Space pause · ←/→ 10s · ↑/↓ volume · M mute · F theater · Shift+N next ep · 0–9 jump · Home start"
-        : "Keys: Space ask to pause · → ask +10s · ↑/↓ volume · M mute · F theater · Shift+N ask for next ep"}</p>
+        : "Tap the bar to ask for a spot. Keys: Space ask to pause · ←/→ ask -10s/+10s (press more to add up) · 0–9 ask to jump · ↑/↓ volume · M mute · F theater · Shift+N ask for next ep"}</p>
     </div>
     <span class="wbarlabel">${icon("volume-2")}</span><input type="range" id="wvol" min="0" max="3" step="0.05" value="1" aria-label="Volume (up to 300%)">
     ${origin}
@@ -1037,10 +1147,19 @@ function wBar() {
       wCtl("seek", +pos.value);
     };
   } else {
-    bar.innerHTML = `<div class="wseek"><span id="wcur">0:00</span><div class="wseektrack"><div class="wprog"><i id="wprog"></i></div><div class="wskipmarkers" id="wskipmarkers" aria-hidden="true"></div></div><span id="wdur">0:00</span></div>
-      <div class="row">${btn("wapp", "pause", "Ask to pause")}${btn("waforward", "ff", "Ask +10s")}${v.ep < v.last_ep ? btn("wanext", "skip", "Ask for next ep") : ""}${common}</div>`;
+    bar.innerHTML = `<div class="wseek"><span id="wcur">0:00</span><div class="wseektrack wasktrack" id="wasktrack" title="Ask the host to jump here"><div class="wprog"><i id="wprog"></i></div><div class="wskipmarkers" id="wskipmarkers" aria-hidden="true"></div></div><span id="wdur">0:00</span></div>
+      <div class="row">${btn("wapp", "pause", "Ask to pause")}${btn("waback", "rewind", "Ask -10s")}${btn("waforward", "ff", "Ask +10s")}${v.ep < v.last_ep ? btn("wanext", "skip", "Ask for next ep") : ""}${common}</div>`;
+    const vid0 = document.getElementById("wvid");
     document.getElementById("wapp").onclick = () => wAsk(wv.playing ? "pause" : "play");
-    document.getElementById("waforward").onclick = () => wAsk("forward");
+    document.getElementById("waback").onclick = () => wAskBy(-10);
+    document.getElementById("waforward").onclick = () => wAskBy(10);
+    const track = document.getElementById("wasktrack");
+    track.onclick = (e) => {
+      const box = track.getBoundingClientRect();
+      const dur = wv.dur || (isFinite(vid0.duration) ? vid0.duration : 0);
+      if (!dur || !box.width) return;
+      wAskJump((Math.min(Math.max(e.clientX - box.left, 0), box.width) / box.width) * dur);
+    };
     const n = document.getElementById("wanext");
     if (n) n.onclick = () => wAsk("next");
   }
@@ -1536,15 +1655,12 @@ document.addEventListener("keydown", (e) => {
     case "ArrowLeft":
     case "j":
       if (host) wSeekBy(vid, -10);
-      else wOsd("Only the host can go back");
+      else wAskBy(-10);
       break;
     case "ArrowRight":
     case "l":
       if (host) wSeekBy(vid, 10);
-      else if (!e.repeat) {
-        wAsk("forward");
-        wOsd("Asked for +10s");
-      }
+      else wAskBy(10);
       break;
     case "ArrowUp":
       wVolume(vid, wVol + (wVol >= 1 ? 0.1 : 0.05), false);
@@ -1574,8 +1690,9 @@ document.addEventListener("keydown", (e) => {
       break;
     default: {
       const dur = wv.dur || (isFinite(vid.duration) ? vid.duration : 0);
-      if (!host || !dur || !/^[0-9]$/.test(key) || e.repeat) return;
-      wSeekBy(vid, 0, (dur * +key) / 10);
+      if (!dur || !/^[0-9]$/.test(key) || e.repeat) return;
+      if (host) wSeekBy(vid, 0, (dur * +key) / 10);
+      else wAskJump((dur * +key) / 10);
     }
   }
   e.preventDefault();

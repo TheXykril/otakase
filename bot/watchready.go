@@ -3,6 +3,7 @@ package main
 import (
 	"math"
 	"net/http"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,16 +19,31 @@ const (
 	watchReadyFirst = 30 * time.Second // a new episode loads from nothing
 )
 
+// watchHoldN numbers ready checks across every room. A page keeps the id it
+// last said it was ready for, so a new room must never reuse one: with ids
+// counted per room, a host opening a second room skipped its first check
+// and everyone else saw them loading until the check timed out.
+var watchHoldN atomic.Int64
+
 // holdAt stops the room at pos until everyone is ready. Hold the lock.
 func (r *watchRoom) holdAt(pos float64, wait time.Duration, now time.Time) {
 	pos = math.Max(0, pos)
+	// A spot inside an opening or ending the room skips waits at its end
+	// instead, so nobody loads the opening only to jump past it right after.
+	// (skipTo itself lands past the span, so this never repeats for it.)
+	if to, ok := watchSkipTarget(r.skipIntervals.match(r.dur), pos, r.dur, r.autoSkipOP, r.autoSkipED); ok {
+		pos = to
+		r.noteSkip(to)
+		// As skipTo: the host's page follows, its stale beats are ignored.
+		r.skipSeq++
+		r.skipTarget, r.skipHoldUntil = to, now.Add(8*time.Second)
+	}
 	if len(r.members) < 2 {
 		r.unhold()
 		r.setPos(pos, true, now)
 		return
 	}
-	r.holdN++
-	r.hold, r.holdPos, r.holdUntil = r.holdN, pos, now.Add(wait)
+	r.hold, r.holdPos, r.holdUntil = int(watchHoldN.Add(1)), pos, now.Add(wait)
 	r.ready = map[string]bool{}
 	r.setPos(pos, false, now)
 }

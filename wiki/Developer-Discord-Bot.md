@@ -675,12 +675,23 @@ Playlists, subtitles, sync and whole files still come from the bot.
 - Variant playlists point segment lines at
   `<watch_cdn>/activity/api/watch/media/<key>/<n>.ts`; the Worker forwards
   only that path to the bot and answers 404 to anything else.
+- Every segment a player fetches through the Worker is one Worker request,
+  cache hit or not. To make fewer, edge playlists join runs of up to three
+  segments (at most 20 s) into one id that serves the parts end to end
+  (`joinSegments`). Only finished playlists of plain transport stream
+  segments are joined: `#EXT-X-KEY`, `#EXT-X-MAP` and `#EXT-X-BYTERANGE`
+  playlists stay as they are, a tag between segments ends a run, and a
+  joined id whose parts turn out not to be TS answers 502 so the player
+  falls back to the bot. Players on `?direct=1` get the plain playlist.
 - Nothing can be billed on the Workers Free plan: past 100,000 requests a
-  day the Worker returns errors until midnight UTC. The bot counts the
-  segments it hands out through the Worker per UTC day and serves them
-  itself from `/settings watch_cdn_daily` (default 90000; 0 turns the edge
-  cache off without a restart). The count is in memory and starts over when
-  the bot restarts.
+  day the Worker returns errors until midnight UTC. The bot estimates the
+  day's Worker requests from playback (`edgeTick`): each member's seconds
+  played over the average edge segment length, times 1.25 for buffering
+  ahead, seeks and retries. Handing out a playlist counts nothing, since a
+  viewer who joins and watches a minute fetches a minute of it. From
+  `/settings watch_cdn_daily` (default 90000; 0 turns the edge cache off
+  without a restart) new playlists point at the bot again. The count is in
+  memory and starts over when the bot restarts.
 - A player whose segment fails through the Worker (`cdn` in the view) loads
   its playlists again with `?direct=1`, which keeps that player on the bot
   for the rest of the room.
@@ -698,6 +709,11 @@ Setup, all on free plans:
    prefix `/cdn`, target `cdn.xyverion.com`.
 4. Add-on option `watch_cdn` (or `OTAKASE_WATCH_CDN`): `/.proxy/cdn`, then
    restart the add-on.
+   Optional: Security → WAF → Custom rules → a Block rule for
+   `(http.host eq "cdn.xyverion.com" and not (starts_with(http.request.uri.path, "/activity/api/watch/media/") and ends_with(http.request.uri.path, ".ts")))`.
+   The firewall answers before the Worker runs, so stray requests don't use
+   up the free requests. Don't add a rate limit: viewers reach the Worker
+   through Discord's proxy, a few shared addresses.
 5. Watch a room and check the Worker's Metrics: requests should climb
    while the bot's upload stays flat. If segments fail, players fall back to
    the bot on their own, so a wrong mapping shows up as Worker requests

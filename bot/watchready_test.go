@@ -198,3 +198,190 @@ func TestWatchLadder(t *testing.T) {
 		t.Fatalf("single:\n%s", out)
 	}
 }
+
+// A page remembers the last check it answered, so two rooms (or one room
+// opened again) must never hand out the same check id.
+func TestWatchHoldIDsNeverRepeat(t *testing.T) {
+	now := time.Now()
+	room := func() *watchRoom {
+		return &watchRoom{members: map[string]*watchMember{"a": {}, "b": {}}}
+	}
+	first, second := room(), room()
+	first.holdAt(0, watchReadyFirst, now)
+	second.holdAt(0, watchReadyFirst, now)
+	if first.hold == 0 || first.hold == second.hold {
+		t.Fatalf("hold ids %d and %d", first.hold, second.hold)
+	}
+	was := second.hold
+	second.holdAt(30, watchReadyWait, now)
+	if second.hold == was {
+		t.Fatal("the next check in a room kept the old id")
+	}
+}
+
+// Skips one after another: every skip starts a fresh check at the new spot,
+// a ready for an earlier one doesn't count, and the room plays from the last
+// spot once everyone has it.
+func TestWatchReadyCheckSkipsInARow(t *testing.T) {
+	b, now := watchBot(t, "https://cdn.example/ep.mp4")
+	b.store.update(func(d *storeData) { d.WatchTickets = map[string]int{"a": 1} })
+	watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 7, Ep: 1}, nil)
+	waitLoaded(t, b)
+	watchAllReady(b)
+	r := b.watch.only()
+	watchPost(b, (*bot).watchBeat, "a", watchIn{Room: "r", Pos: 100, Playing: true, Dur: 1400}, nil)
+
+	// The host presses +10s five times before anyone has loaded.
+	var holds []int
+	var v watchView
+	for k := 1; k <= 5; k++ {
+		v = watchSee(b, (*bot).watchCtl, "a", watchIn{Room: "r", Act: "forward"})
+		if v.Hold == 0 || v.Playing || v.Pos != 100+float64(10*k) {
+			t.Fatalf("forward %d: %+v", k, v)
+		}
+		if len(holds) > 0 && v.Hold == holds[len(holds)-1] {
+			t.Fatalf("forward %d kept the old check", k)
+		}
+		holds = append(holds, v.Hold)
+		*now = now.Add(300 * time.Millisecond)
+	}
+	// Readies for the earlier checks arrive late and count for nothing.
+	for _, id := range holds[:4] {
+		watchPost(b, (*bot).watchReady, "a", watchIn{Room: "r", ID: id}, nil)
+		watchPost(b, (*bot).watchReady, "b", watchIn{Room: "r", ID: id}, nil)
+	}
+	if r.hold != holds[4] || r.playing || len(r.holdWaiting()) != 2 {
+		t.Fatalf("stale readies let go: hold %d playing %v waiting %v", r.hold, r.playing, r.holdWaiting())
+	}
+	watchPost(b, (*bot).watchReady, "a", watchIn{Room: "r", ID: holds[4]}, nil)
+	v = watchSee(b, (*bot).watchReady, "b", watchIn{Room: "r", ID: holds[4]})
+	if v.Hold != 0 || !v.Playing || v.Pos != 150 {
+		t.Fatalf("after the last skip: %+v", v)
+	}
+
+	// A member asks for +10s three times, the host says yes each time.
+	for k := 1; k <= 3; k++ {
+		v = watchSee(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward"})
+		if len(v.Asks) != 1 {
+			t.Fatalf("ask %d: %+v", k, v.Asks)
+		}
+		v = watchSee(b, (*bot).watchAnswer, "a", watchIn{Room: "r", ID: v.Asks[0].ID, OK: true})
+		if v.Hold == 0 || v.Pos != 150+float64(10*k) || len(v.Asks) != 0 {
+			t.Fatalf("answer %d: %+v", k, v)
+		}
+	}
+	// Both load the last spot; the host's ready reaches the bot before the
+	// member's, the room plays only after both.
+	v = watchSee(b, (*bot).watchReady, "a", watchIn{Room: "r", ID: r.hold})
+	if v.Playing || len(v.HoldWaiting) != 1 {
+		t.Fatalf("one of two ready: %+v", v)
+	}
+	v = watchSee(b, (*bot).watchReady, "b", watchIn{Room: "r", ID: r.hold})
+	if v.Hold != 0 || !v.Playing || v.Pos != 180 {
+		t.Fatalf("after the asked skips: %+v", v)
+	}
+
+	// A seek into the opening waits at its end instead, and the room plays
+	// from there once both have it, with nothing left to skip.
+	r.autoSkipOP = true
+	r.skipIntervals = watchSkipIntervals{OP: []watchSkipSpan{{Start: 185, End: 275}}}
+	v = watchSee(b, (*bot).watchCtl, "a", watchIn{Room: "r", Act: "seek", Pos: 186})
+	if v.Hold == 0 || v.Playing || v.Pos != 275 {
+		t.Fatalf("seek into the opening: %+v", v)
+	}
+	// And +10s pressed twice inside it lands past it too.
+	r.skipIntervals.OP = []watchSkipSpan{{Start: 280, End: 370}}
+	watchSee(b, (*bot).watchCtl, "a", watchIn{Room: "r", Act: "forward"})
+	v = watchSee(b, (*bot).watchCtl, "a", watchIn{Room: "r", Act: "forward"})
+	if v.Hold == 0 || v.Pos != 380 {
+		t.Fatalf("forward through the opening: %+v", v)
+	}
+	watchPost(b, (*bot).watchReady, "a", watchIn{Room: "r", ID: v.Hold}, nil)
+	watchPost(b, (*bot).watchReady, "b", watchIn{Room: "r", ID: v.Hold}, nil)
+	seq := r.skipSeq
+	*now = now.Add(time.Second)
+	r.members["a"].seen, r.members["b"].seen = *now, *now
+	b.watchStep(r, *now)
+	if r.hold != 0 || !r.playing || r.skipSeq != seq || r.position(*now) != 381 {
+		t.Fatalf("after the skips: hold %d playing %v seq %d->%d pos %v", r.hold, r.playing, seq, r.skipSeq, r.position(*now))
+	}
+}
+
+// Members can ask for any jump: ahead or back by some seconds, or to a spot.
+// A second jump while one waits changes the waiting one.
+func TestWatchAskJumps(t *testing.T) {
+	b, _ := watchBot(t, "https://cdn.example/ep.mp4")
+	b.store.update(func(d *storeData) { d.WatchTickets = map[string]int{"a": 1} })
+	watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 7, Ep: 1}, nil)
+	waitLoaded(t, b)
+	watchAllReady(b)
+	r := b.watch.only()
+	watchPost(b, (*bot).watchBeat, "a", watchIn{Room: "r", Pos: 100, Playing: true, Dur: 1400}, nil)
+	answer := func(ok bool) watchView {
+		t.Helper()
+		b.watch.mu.Lock()
+		v := b.watchViewOf(r, "a", false, watchNow())
+		b.watch.mu.Unlock()
+		if len(v.Asks) != 1 {
+			t.Fatalf("host sees %+v", v.Asks)
+		}
+		v = watchSee(b, (*bot).watchAnswer, "a", watchIn{Room: "r", ID: v.Asks[0].ID, OK: ok})
+		watchAllReady(b)
+		return v
+	}
+
+	// +10s pressed five times is one request for +50s.
+	var v watchView
+	for k := 1; k <= 5; k++ {
+		v = watchSee(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward", By: float64(10 * k)})
+		if len(v.Asks) != 1 || v.Asks[0].By != float64(10*k) || v.Asks[0].ID != 1 {
+			t.Fatalf("ask %d: %+v", k, v.Asks)
+		}
+	}
+	answer(true)
+	if r.pos != 150 || !r.playing {
+		t.Fatalf("+50s: pos %v playing %v", r.pos, r.playing)
+	}
+	// The presses stop adding up at a minute.
+	v = watchSee(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward", By: 90})
+	if len(v.Asks) != 1 || v.Asks[0].By != 60 {
+		t.Fatalf("+90s: %+v", v.Asks)
+	}
+	v = watchSee(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward", By: -500})
+	if len(v.Asks) != 1 || v.Asks[0].By != -60 {
+		t.Fatalf("-500s: %+v", v.Asks)
+	}
+	// Back 30s, then a jump to a spot that replaces it.
+	watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward", By: -30}, nil)
+	v = watchSee(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "seek", Pos: 725.4})
+	if len(v.Asks) != 1 || v.Asks[0].Kind != "seek" || v.Asks[0].Pos != 725 {
+		t.Fatalf("seek ask: %+v", v.Asks)
+	}
+	answer(true)
+	if r.pos != 725 {
+		t.Fatalf("jump to 12:05: pos %v", r.pos)
+	}
+	watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward", By: -30}, nil)
+	answer(true)
+	if r.pos != 695 {
+		t.Fatalf("back 30s: pos %v", r.pos)
+	}
+	// No moves the room nowhere; a spot past the end isn't a request.
+	watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "seek", Pos: 10}, nil)
+	answer(false)
+	if r.pos != 695 {
+		t.Fatalf("said no: pos %v", r.pos)
+	}
+	if code := watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "seek", Pos: 1500}, nil); code != http.StatusBadRequest {
+		t.Fatalf("past the end: %d", code)
+	}
+	// A jump doesn't replace a different request.
+	watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "pause"}, nil)
+	if code := watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "seek", Pos: 20}, nil); code != http.StatusTooManyRequests {
+		t.Fatalf("jump over a pause request: %d", code)
+	}
+}
