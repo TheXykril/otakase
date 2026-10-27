@@ -323,7 +323,7 @@ func (b *bot) gamesBoard(i *discordgo.InteractionCreate) {
 	if f := b.featuredField(); f != nil {
 		fields = append(fields, f)
 	}
-	b.respond(i, false, &discordgo.MessageEmbed{Title: "Leaderboard", Color: shu, Description: desc, Fields: fields,
+	b.respond(i, onlyAsker(i), &discordgo.MessageEmbed{Title: "Leaderboard", Color: shu, Description: desc, Fields: fields,
 		Footer: &discordgo.MessageEmbedFooter{Text: "Points from every game · the week's winner gets " + championRole}}, comps...)
 }
 

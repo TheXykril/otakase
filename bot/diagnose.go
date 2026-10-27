@@ -28,5 +28,5 @@ func diagnoseEmbed() *discordgo.MessageEmbed {
 }
 
 func (b *bot) diagnose(i *discordgo.InteractionCreate) {
-	b.respond(i, false, diagnoseEmbed())
+	b.respond(i, onlyAsker(i), diagnoseEmbed())
 }

@@ -90,7 +90,7 @@ func (b *bot) wrapCommand(i *discordgo.InteractionCreate) {
 		year = int(v.IntValue())
 	}
 	self := who.ID == i.Member.User.ID
-	b.deferThen(i, false, func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	b.deferThen(i, onlyAsker(i), func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 		st, _ := b.watchStatsOf(who.ID)
 		return wrapView(who.ID, self, year, st.Years[year], appNow(), appShowInfo), nil
 	})

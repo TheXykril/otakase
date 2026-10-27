@@ -285,8 +285,7 @@ func (b *bot) roomControl(i *discordgo.InteractionCreate, id string) {
 				log.Printf("room invite: %v", err)
 				return "Couldn't add them."
 			}
-			b.roomSay(ch, fmt.Sprintf("<@%s>, <@%s> invited you to this room.", vals[0], i.Member.User.ID), vals[0])
-			return fmt.Sprintf("Invited <@%s>.", vals[0])
+			return b.tellInvited(ch, vals[0], i.Member.User.ID)
 		})
 	case "rc-kick", "rc-owner":
 		b.pickRoomMember(i, r, id == "rc-kick")

@@ -356,7 +356,7 @@ func (b *bot) appCommand(i *discordgo.InteractionCreate) {
 				}
 			}
 		}
-		b.respondQuiet(i, false, b.watchTimeEmbed(who.ID, who.ID == user))
+		b.respondQuiet(i, onlyAsker(i), b.watchTimeEmbed(who.ID, who.ID == user))
 	}
 }
 

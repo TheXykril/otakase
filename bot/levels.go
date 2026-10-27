@@ -219,7 +219,7 @@ func (b *bot) levels(i *discordgo.InteractionCreate) {
 		level, _, _ := levelFor(r.Points)
 		lines = append(lines, fmt.Sprintf("**%d.** <@%s> · level %d · %s XP", k+1, r.User, level, thousands(r.Points)))
 	}
-	b.respond(i, false, &discordgo.MessageEmbed{Title: "Levels", Description: strings.Join(lines, "\n"), Color: shu,
+	b.respond(i, onlyAsker(i), &discordgo.MessageEmbed{Title: "Levels", Description: strings.Join(lines, "\n"), Color: shu,
 		Footer: &discordgo.MessageEmbedFooter{Text: "XP for chatting, once a minute · /rank for yours"}})
 }
 
@@ -260,7 +260,8 @@ func (b *bot) rank(i *discordgo.InteractionCreate) {
 		name = i.Member.Nick
 	}
 	if err := b.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource}); err != nil {
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: answerFlags(i)}}); err != nil {
 		log.Printf("defer: %v", err)
 		return
 	}

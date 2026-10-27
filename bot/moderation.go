@@ -458,12 +458,14 @@ func (b *bot) filterMessage(m *discordgo.MessageCreate) bool {
 	if newcomerLink(m, time.Now()) {
 		b.msgs.markRemoved("link from a new account", m.ID)
 		_ = b.s.ChannelMessageDelete(m.ChannelID, m.ID, discordgo.WithAuditLogReason("Link from a new account"))
-		note, err := b.s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-			Content:         fmt.Sprintf("<@%s> links unlock after your first day here. Your message was removed, sorry about that.", m.Author.ID),
-			AllowedMentions: &discordgo.MessageAllowedMentions{Users: []string{m.Author.ID}},
-		})
-		if err == nil {
-			time.AfterFunc(20*time.Second, func() { _ = b.s.ChannelMessageDelete(note.ChannelID, note.ID) })
+		if !b.dmText(m.Author.ID, fmt.Sprintf("Links unlock after your first day here, so your message in <#%s> was removed. Sorry about that.", m.ChannelID)) {
+			note, err := b.s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+				Content:         fmt.Sprintf("<@%s> links unlock after your first day here. Your message was removed, sorry about that.", m.Author.ID),
+				AllowedMentions: &discordgo.MessageAllowedMentions{Users: []string{m.Author.ID}},
+			})
+			if err == nil {
+				time.AfterFunc(20*time.Second, func() { _ = b.s.ChannelMessageDelete(note.ChannelID, note.ID) })
+			}
 		}
 		b.modLog(&discordgo.MessageEmbed{Color: 0x8A8276,
 			Description: fmt.Sprintf("Removed a link from new account <@%s> in <#%s>:\n```\n%s\n```", m.Author.ID, m.ChannelID,

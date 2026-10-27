@@ -33,7 +33,8 @@ func init() {
 // whosWatchingAnswer is /whos-watching: the list, and its buttons.
 func (b *bot) whosWatchingAnswer(i *discordgo.InteractionCreate) {
 	if err := b.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource}); err != nil {
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: answerFlags(i)}}); err != nil {
 		log.Printf("defer: %v", err)
 		return
 	}

@@ -185,7 +185,8 @@ func (b *bot) serverTop(i *discordgo.InteractionCreate) {
 		return
 	}
 	if err := b.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource}); err != nil {
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: answerFlags(i)}}); err != nil {
 		log.Printf("defer: %v", err)
 		return
 	}

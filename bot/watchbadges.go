@@ -259,7 +259,7 @@ func (b *bot) badgesCommand(i *discordgo.InteractionCreate) {
 		who = optUser(i, o)
 	}
 	st, _ := b.watchStatsOf(who.ID)
-	b.respondQuiet(i, false, badgesView(who.ID, who.ID == i.Member.User.ID, st, appNow()))
+	b.respondQuiet(i, onlyAsker(i), badgesView(who.ID, who.ID == i.Member.User.ID, st, appNow()))
 }
 
 // badgesView lists the badges earned with when, the ones still to get, and
