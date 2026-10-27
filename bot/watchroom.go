@@ -89,8 +89,10 @@ type watchAsk struct {
 	ID   int       `json:"id"`
 	User string    `json:"user"`
 	Name string    `json:"name"`
-	Kind string    `json:"kind"`    // pause, play, forward (10s), next
-	Left int64     `json:"left_ms"` // until it lapses, set for each view
+	Kind string    `json:"kind"`          // pause, play, forward, seek, next
+	By   float64   `json:"by,omitempty"`  // forward: seconds, back when below 0
+	Pos  float64   `json:"pos,omitempty"` // seek: the spot asked for
+	Left int64     `json:"left_ms"`       // until it lapses, set for each view
 	At   time.Time `json:"-"`
 }
 
@@ -1319,6 +1321,7 @@ type watchIn struct {
 	Buffering bool    `json:"buffering"` // the player means to play but is still loading
 	Dur       float64 `json:"dur"`
 	Kind      string  `json:"kind"`
+	By        float64 `json:"by"` // an asked jump: seconds ahead, or back when below 0
 	ID        int     `json:"id"`
 	OK        bool    `json:"ok"`
 	On        bool    `json:"on"`
@@ -2076,17 +2079,38 @@ func (b *bot) watchBeat(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]int{"ver": cur.ver})
 }
 
-// watchAskAPI is a member asking the host for a pause, play, skip of the
-// opening or the next episode.
+// watchAskAPI is a member asking the host for a pause, play, a jump (ahead
+// or back by some seconds, or to a spot) or the next episode. Asking for
+// another jump while one waits changes the waiting one, so pressing +10s
+// five times asks for +50s.
 func (b *bot) watchAskAPI(w http.ResponseWriter, r *http.Request) {
 	user, in, ok := b.watchRead(w, r)
 	if !ok {
 		return
 	}
-	if !slices.Contains([]string{"pause", "play", "forward", "next"}, in.Kind) {
+	if !slices.Contains([]string{"pause", "play", "forward", "seek", "next"}, in.Kind) {
 		apiError(w, http.StatusBadRequest, "unknown request")
 		return
 	}
+	ask := watchAsk{User: user, Kind: in.Kind}
+	switch in.Kind {
+	case "forward":
+		if in.By == 0 {
+			in.By = 10
+		}
+		if math.IsNaN(in.By) || math.Abs(in.By) > 6*3600 {
+			apiError(w, http.StatusBadRequest, "that's too far")
+			return
+		}
+		ask.By = math.Round(in.By)
+	case "seek":
+		if math.IsNaN(in.Pos) || in.Pos < 0 || in.Pos > 6*3600 {
+			apiError(w, http.StatusBadRequest, "that's outside the episode")
+			return
+		}
+		ask.Pos = math.Round(in.Pos)
+	}
+	jump := func(kind string) bool { return kind == "forward" || kind == "seek" }
 	staff := b.isAdmin(user)
 	b.watch.mu.Lock()
 	cur := b.inRoom(w, in.Room, user)
@@ -2099,17 +2123,61 @@ func (b *bot) watchAskAPI(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadRequest, "you're the host, just do it")
 		return
 	}
-	for _, a := range cur.asks {
-		if a.User == user {
+	if jump(in.Kind) && cur.phase != "play" {
+		b.watch.mu.Unlock()
+		apiError(w, http.StatusBadRequest, "nothing is playing")
+		return
+	}
+	if in.Kind == "seek" && cur.dur > 0 && ask.Pos > cur.dur {
+		b.watch.mu.Unlock()
+		apiError(w, http.StatusBadRequest, "that's outside the episode")
+		return
+	}
+	for k, a := range cur.asks {
+		if a.User != user {
+			continue
+		}
+		if !jump(a.Kind) || !jump(in.Kind) {
 			b.watch.mu.Unlock()
 			apiError(w, http.StatusTooManyRequests, "wait for the host to answer your last request")
 			return
 		}
+		// The same request, now for somewhere else: it keeps its place
+		// and starts its wait again.
+		cur.asks[k].Kind, cur.asks[k].By, cur.asks[k].Pos, cur.asks[k].At = ask.Kind, ask.By, ask.Pos, watchNow()
+		cur.changed()
+		b.watchAnswerView(w, cur, user, staff)
+		return
 	}
 	cur.askN++
-	cur.asks = append(cur.asks, watchAsk{ID: cur.askN, User: user, Name: cur.members[user].name, Kind: in.Kind, At: watchNow()})
+	ask.ID, ask.Name, ask.At = cur.askN, cur.members[user].name, watchNow()
+	cur.asks = append(cur.asks, ask)
 	cur.changed()
 	b.watchAnswerView(w, cur, user, staff)
+}
+
+// askDo carries out a request the host accepted and says which control it
+// was, for the room's events. A jump by some seconds counts from where the
+// room is when the host says yes. Hold the lock.
+func (b *bot) askDo(r *watchRoom, a watchAsk) (string, string) {
+	switch a.Kind {
+	case "forward":
+		if a.By == 10 {
+			return "forward", b.watchDo(r, "forward", -1)
+		}
+		from := r.position(watchNow())
+		if r.hold != 0 {
+			from = r.holdPos
+		}
+		to := math.Max(0, from+a.By)
+		if r.dur > 0 {
+			to = math.Min(to, math.Max(0, r.dur-0.5))
+		}
+		return "seek", b.watchDo(r, "seek", to)
+	case "seek":
+		return "seek", b.watchDo(r, "seek", a.Pos)
+	}
+	return a.Kind, b.watchDo(r, a.Kind, -1)
 }
 
 // watchAnswer is the host saying yes or no to a request.
@@ -2138,8 +2206,10 @@ func (b *bot) watchAnswer(w http.ResponseWriter, r *http.Request) {
 	}
 	a := cur.asks[k]
 	cur.asks = slices.Delete(cur.asks, k, k+1)
-	if in.OK && b.watchDo(cur, a.Kind, -1) == "" {
-		cur.noteControl(user, a.Kind)
+	if in.OK {
+		if act, err := b.askDo(cur, a); err == "" {
+			cur.noteControl(user, act)
+		}
 	}
 	cur.changed()
 	b.watchAnswerView(w, cur, user, staff)

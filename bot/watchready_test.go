@@ -308,3 +308,71 @@ func TestWatchReadyCheckSkipsInARow(t *testing.T) {
 		t.Fatalf("after the skips: hold %d playing %v seq %d->%d pos %v", r.hold, r.playing, seq, r.skipSeq, r.position(*now))
 	}
 }
+
+// Members can ask for any jump: ahead or back by some seconds, or to a spot.
+// A second jump while one waits changes the waiting one.
+func TestWatchAskJumps(t *testing.T) {
+	b, _ := watchBot(t, "https://cdn.example/ep.mp4")
+	b.store.update(func(d *storeData) { d.WatchTickets = map[string]int{"a": 1} })
+	watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 7, Ep: 1}, nil)
+	waitLoaded(t, b)
+	watchAllReady(b)
+	r := b.watch.only()
+	watchPost(b, (*bot).watchBeat, "a", watchIn{Room: "r", Pos: 100, Playing: true, Dur: 1400}, nil)
+	answer := func(ok bool) watchView {
+		t.Helper()
+		b.watch.mu.Lock()
+		v := b.watchViewOf(r, "a", false, watchNow())
+		b.watch.mu.Unlock()
+		if len(v.Asks) != 1 {
+			t.Fatalf("host sees %+v", v.Asks)
+		}
+		v = watchSee(b, (*bot).watchAnswer, "a", watchIn{Room: "r", ID: v.Asks[0].ID, OK: ok})
+		watchAllReady(b)
+		return v
+	}
+
+	// +10s pressed five times is one request for +50s.
+	var v watchView
+	for k := 1; k <= 5; k++ {
+		v = watchSee(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward", By: float64(10 * k)})
+		if len(v.Asks) != 1 || v.Asks[0].By != float64(10*k) || v.Asks[0].ID != 1 {
+			t.Fatalf("ask %d: %+v", k, v.Asks)
+		}
+	}
+	answer(true)
+	if r.pos != 150 || !r.playing {
+		t.Fatalf("+50s: pos %v playing %v", r.pos, r.playing)
+	}
+	// Back 30s, then a jump to a spot that replaces it.
+	watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward", By: -30}, nil)
+	v = watchSee(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "seek", Pos: 725.4})
+	if len(v.Asks) != 1 || v.Asks[0].Kind != "seek" || v.Asks[0].Pos != 725 {
+		t.Fatalf("seek ask: %+v", v.Asks)
+	}
+	answer(true)
+	if r.pos != 725 {
+		t.Fatalf("jump to 12:05: pos %v", r.pos)
+	}
+	watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward", By: -30}, nil)
+	answer(true)
+	if r.pos != 695 {
+		t.Fatalf("back 30s: pos %v", r.pos)
+	}
+	// No moves the room nowhere; a spot past the end isn't a request.
+	watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "seek", Pos: 10}, nil)
+	answer(false)
+	if r.pos != 695 {
+		t.Fatalf("said no: pos %v", r.pos)
+	}
+	if code := watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "seek", Pos: 1500}, nil); code != http.StatusBadRequest {
+		t.Fatalf("past the end: %d", code)
+	}
+	// A jump doesn't replace a different request.
+	watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "pause"}, nil)
+	if code := watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "seek", Pos: 20}, nil); code != http.StatusTooManyRequests {
+		t.Fatalf("jump over a pause request: %d", code)
+	}
+}
