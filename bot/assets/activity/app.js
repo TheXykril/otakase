@@ -396,7 +396,7 @@ function menu() {
 
 function open(game) {
   if ((launchMode === "games" && game === "watch") || (launchMode === "watch" && game !== "watch")) return;
-  const views = { watch: watchView, party: partyView, koikoi: kkOpen, daily: dailyView, guess: soloStart, riddle: soloStart, scramble: soloStart, hl: hlStart, bingo: bingoView, board: boardView };
+  const views = { watch: () => watchView(), party: partyView, koikoi: kkOpen, daily: dailyView, guess: soloStart, riddle: soloStart, scramble: soloStart, hl: hlStart, bingo: bingoView, board: boardView };
   Promise.resolve((views[game] || pzOpen)(game)).catch(showError);
 }
 

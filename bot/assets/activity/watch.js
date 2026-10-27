@@ -67,8 +67,10 @@ function wAskText(a) {
   return ASK_TEXT[a.kind] || a.kind;
 }
 
-// watchView is the tile's page: the lobby, then the room.
-async function watchView() {
+// watchView is the tile's page: the lobby, then the room. note, when set,
+// says why the visitor is back in the lobby (their room ended).
+async function watchView(note) {
+  const said = note ? `<p class="wnote">${esc(note)}</p>` : "";
   page("Watch <span>room</span>", `<div id="wbox">${loading("Looking for the watch room…")}</div>`);
   where = "watch";
   soundApply();
@@ -80,13 +82,13 @@ async function watchView() {
   if (st.full) {
     const ends = live.map((r) => r.ends).filter(Boolean);
     const by = ends.length ? ` The next one ends by ${new Date(Math.min(...ends)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.` : "";
-    wBox(`<h3 class="lh">${icon("watch")} Live now</h3>${liveCards}
+    wBox(`${said}<h3 class="lh">${icon("watch")} Live now</h3>${liveCards}
       <p class="note">All ${st.rooms_max} watch room${st.rooms_max === 1 ? " is" : "s are"} in use, since the bot streams each one itself. Join one to watch along from here, or hop into its voice channel to talk too.${by}</p>
       <div class="err" id="err"></div>`);
     return wLiveButtons();
   }
   const t = st.tickets || 0;
-  wBox(`${live.length ? `<h3 class="lh">${icon("watch")} Live now</h3>${liveCards}
+  wBox(`${said}${live.length ? `<h3 class="lh">${icon("watch")} Live now</h3>${liveCards}
     <p class="note">Join a room to watch along from here (go to its voice channel to talk too), or open a room of your own in this call.</p>` : ""}<p class="lead">The bot plays an anime for everyone in this call, in step. Whoever opens the room picks the show and controls it; everyone else can ask for a pause or a skip.</p>
     <p class="note">Up to ${st.max} people · 720p · ${st.perks ? "8" : "4"} hours from the first episode · your AniList or MAL moves on as you watch (link them with /link-anilist and /link-mal).</p>
     ${st.perks
@@ -175,6 +177,9 @@ async function watchJoin(id) {
         headers: { Authorization: "Bearer " + session },
       }).catch(() => null);
       if (me !== wvLoop || where !== "watch") break;
+      // Dropped from the room (gone quiet too long, or it moved on without
+      // this member): back to the lobby rather than waiting on it forever.
+      if (r && r.status === 403) return wGone("You're no longer in that watch room.");
       const nv = r && r.ok ? await r.json().catch(() => null) : null;
       if (nv) wSet(nv);
       else await new Promise((ok) => setTimeout(ok, 3000));
@@ -182,6 +187,18 @@ async function watchJoin(id) {
     }
     if (me === wvLoop) where === "watch" ? wStop() : watchLeave();
   })();
+}
+
+// wGone leaves a room that ended (or this member was dropped from) and puts
+// the lobby back, so a new room can be opened or a live one joined without
+// closing the Activity. A watch launch has no games menu to fall back to.
+function wGone(note) {
+  if (wFull) wFullscreen(false);
+  wStop();
+  wv = null;
+  wvKey = wvMedia = "";
+  wChanging = false;
+  watchView(note).catch(showError);
 }
 
 // wSet takes a new view of the room and redraws what changed.
@@ -198,10 +215,7 @@ function wSet(v, fromHost) {
     wAudioPick = v.languages.audio || "auto";
     wSubPick = v.languages.subtitles || "auto";
   }
-  if (v.phase === "over") {
-    wStop();
-    return wBox(`<p class="lead">The watch room is over.</p><p class="note">Thanks for watching. Open the games menu for more.</p>`);
-  }
+  if (v.phase === "over") return wGone("The watch room is over. Thanks for watching!");
   const key = [v.phase, v.is_host, v.show && v.show.id, v.ep, v.err, v.media, v.load_step].join("|");
   if (wChanging && v.is_host) {
     wvKey = key;
