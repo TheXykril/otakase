@@ -118,7 +118,7 @@ func (p watchResume) edit() func(string) string {
 // worth saving. Hold the lock.
 func (r *watchRoom) resumeOf(user string, now time.Time) (watchResume, bool) {
 	m, ok := r.members[user]
-	if !ok || r.phase != "play" || r.show == nil || r.ep < 1 {
+	if !ok || r.phase != "play" || r.show == nil || !r.show.tracked() || r.ep < 1 {
 		return watchResume{}, false
 	}
 	secs := int(r.position(now))
@@ -312,7 +312,7 @@ type watchOffer struct {
 // haven't answered. Hold the lock.
 func (r *watchRoom) countAsk(user string, now time.Time) int {
 	m, ok := r.members[user]
-	if !ok || m.counted || m.asked || r.phase != "play" || r.show == nil || r.ep < 1 || r.dur <= 0 {
+	if !ok || m.counted || m.asked || r.phase != "play" || r.show == nil || !r.show.tracked() || r.ep < 1 || r.dur <= 0 {
 		return 0
 	}
 	if m.from <= r.startAt+watchResumeLate || m.watched < watchResumeMin || r.position(now) < watchedEnough*r.dur {

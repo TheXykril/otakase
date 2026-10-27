@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.30.71
+
+- Watch Together: the picker's own list is just Continue now; the Planning tab is gone.
+- Watch Together: Continue only shows shows you're still watching. A show moved to Completed, Paused, Dropped or Planning on AniList or MyAnimeList no longer shows up, even with a saved position in its notes.
+- Watch Together: the app's hidden film can play in the room too. It is drawn on the bot's host before it starts, which takes a few minutes, and is about the host when their AniList is linked with access.
+
 ## 1.30.70
 
 - Watch Together: when an episode counts as watched for you, the saved position in your AniList notes or MyAnimeList comments moves to the start of the next episode, e.g. `[otakase:6@0]` after episode 5, the same as the app now does. This happens whenever the show has a next episode, even one not out yet. After the last episode it reads `[otakase:12@done]` followed by a short line from Otakase. A tag further on (from watching an older episode again) is never moved back.

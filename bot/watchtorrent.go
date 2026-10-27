@@ -54,6 +54,13 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string, progress fun
 	if len(hash) != 40 || strings.Trim(hash, "0123456789abcdefABCDEF") != "" {
 		return nil, "", errors.New("invalid torrent infohash")
 	}
+	return startWatchHelper(ctx, cli, []string{"-torrent-serve", hash, mode}, nil, progress)
+}
+
+// startWatchHelper starts a CLI helper that serves the room an HLS playlist
+// on a loopback port: the torrent helper, or the one that draws the
+// movie. extraEnv is added to the helper's environment.
+func startWatchHelper(ctx context.Context, cli string, args, extraEnv []string, progress func(string)) (*watchTorrent, string, error) {
 	select {
 	case watchTorrentSlot <- struct{}{}:
 	case <-ctx.Done():
@@ -65,7 +72,7 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string, progress fun
 			<-watchTorrentSlot
 		}
 	}()
-	cmd := exec.Command(cli, "-torrent-serve", hash, mode)
+	cmd := exec.Command(cli, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -94,6 +101,7 @@ func startWatchTorrent(ctx context.Context, cli, hash, mode string, progress fun
 	}
 	cmd.ExtraFiles = []*os.File{lock}
 	cmd.Env = append(os.Environ(), "HOME="+home, "XDG_CONFIG_HOME="+home, "TMPDIR="+home, "GOMAXPROCS=2", "OTAKASE_ROOM_DIR="+home)
+	cmd.Env = append(cmd.Env, extraEnv...)
 	if err := cmd.Start(); err != nil {
 		_ = stdin.Close()
 		_ = stdout.Close()

@@ -11,13 +11,14 @@ import (
 )
 
 // The watch room's picker shows the host their own lists next to the
-// search: Continue (shows they are watching, at the next episode, from
+// search: Continue, the shows they are watching, at the next episode, from
 // where Otakase or the room last stopped when there is a saved
-// [otakase:ep@secs] tag for it) and Planning. The lists come from the
+// [otakase:ep@secs] tag for it. A show moved out of Watching on either
+// tracker leaves it, saved position or not. The lists come from the
 // member's linked AniList (read with their own token, so a private list
 // shows to them) and MyAnimeList; nobody else's lists are ever read.
 
-// watchListMax is how many shows each list shows.
+// watchListMax is how many shows the list shows.
 const watchListMax = 50
 
 // watchListTTL keeps a member's lists for a moment, so flipping tabs or
@@ -37,7 +38,6 @@ type watchLists struct {
 	AniList  bool            `json:"anilist"`
 	MAL      bool            `json:"mal"`
 	Continue []watchListItem `json:"continue"`
-	Planning []watchListItem `json:"planning"`
 	Note     string          `json:"note,omitempty"`
 }
 
@@ -57,13 +57,10 @@ type watchListMediaJSON struct {
 	Status string `json:"status"`
 }
 
-// anilistWatchList reads one of a member's AniList lists: watching
-// (CURRENT and REPEATING) or planning, most recently updated first.
-var anilistWatchList = func(token string, userID int, planning bool) ([]watchListEntry, error) {
+// anilistWatchList reads what a member is watching on AniList (CURRENT
+// and REPEATING), most recently updated first.
+var anilistWatchList = func(token string, userID int) ([]watchListEntry, error) {
 	statuses := []string{"CURRENT", "REPEATING"}
-	if planning {
-		statuses = []string{"PLANNING"}
-	}
 	var r struct {
 		Data struct {
 			Page struct {
@@ -92,13 +89,10 @@ var anilistWatchList = func(token string, userID int, planning bool) ([]watchLis
 	return out, nil
 }
 
-// malWatchList reads one of a member's MyAnimeList lists, with the shows
-// found on AniList so the room can play them.
-var malWatchList = func(token string, planning bool) ([]watchListEntry, error) {
+// malWatchList reads what a member is watching on MyAnimeList, with the
+// shows found on AniList so the room can play them.
+var malWatchList = func(token string) ([]watchListEntry, error) {
 	status := "watching"
-	if planning {
-		status = "plan_to_watch"
-	}
 	var r struct {
 		Data []struct {
 			Node struct {
@@ -153,6 +147,73 @@ var malWatchList = func(token string, planning bool) ([]watchListEntry, error) {
 	return out, nil
 }
 
+// anilistOffWatching is which of shows (AniList ids) are on the member's
+// AniList in a list other than Watching and Rewatching.
+var anilistOffWatching = func(token string, userID int, shows []int) (map[int]bool, error) {
+	off := map[int]bool{}
+	if len(shows) == 0 {
+		return off, nil
+	}
+	var r struct {
+		Data struct {
+			Page struct {
+				MediaList []struct {
+					MediaID int    `json:"mediaId"`
+					Status  string `json:"status"`
+				} `json:"mediaList"`
+			} `json:"Page"`
+		} `json:"data"`
+	}
+	query := `query ($id: Int, $m: [Int], $n: Int) { Page(perPage: $n) { mediaList(userId: $id, type: ANIME, mediaId_in: $m) { mediaId status } } }`
+	if err := anilistSocialPost(token, query, map[string]any{"id": userID, "m": shows, "n": len(shows)}, &r); err != nil {
+		return nil, tokenErr(err)
+	}
+	for _, e := range r.Data.Page.MediaList {
+		if e.Status != "CURRENT" && e.Status != "REPEATING" {
+			off[e.MediaID] = true
+		}
+	}
+	return off, nil
+}
+
+// malOffWatching is which shows (MyAnimeList ids) are on the member's
+// MyAnimeList in a list other than Watching.
+var malOffWatching = func(token string) (map[int]bool, error) {
+	var r struct {
+		Data []struct {
+			Node struct {
+				ID int `json:"id"`
+			} `json:"node"`
+			ListStatus struct {
+				Status string `json:"status"`
+			} `json:"list_status"`
+		} `json:"data"`
+	}
+	path := "/users/@me/animelist?nsfw=true&limit=1000&fields=" + url.QueryEscape("list_status{status}")
+	if err := malGet(token, path, &r); err != nil {
+		return nil, err
+	}
+	off := map[int]bool{}
+	for _, e := range r.Data {
+		if e.ListStatus.Status != "watching" {
+			off[e.Node.ID] = true
+		}
+	}
+	return off, nil
+}
+
+// dropOffWatching leaves out of one tracker's watching entries the shows the
+// other tracker has in another list: moved on there, they were put down.
+func dropOffWatching(entries []watchListEntry, off func(watchShow) bool) []watchListEntry {
+	kept := entries[:0:0]
+	for _, e := range entries {
+		if !off(e.show) {
+			kept = append(kept, e)
+		}
+	}
+	return kept
+}
+
 // watchResumeIn reads the saved position from notes.
 func watchResumeIn(notes string) (ep, secs int) {
 	m := watchResumeTag.FindStringSubmatch(notes)
@@ -167,8 +228,8 @@ func watchResumeIn(notes string) (ep, secs int) {
 // mergeWatchList puts the trackers' entries together, one per show: the
 // furthest progress, the later saved position, the latest update. Only
 // shows the room can play stay: out already, not 18+ unless adult, and
-// for Continue with the next episode out.
-func mergeWatchList(lists [][]watchListEntry, adult, continuing bool) []watchListItem {
+// with the next episode out.
+func mergeWatchList(lists [][]watchListEntry, adult bool) []watchListItem {
 	type merged struct {
 		item          watchListItem
 		tagEp, tagSec int
@@ -199,9 +260,6 @@ func mergeWatchList(lists [][]watchListEntry, adult, continuing bool) []watchLis
 		m := byID[id]
 		it := m.item
 		it.Next = it.Progress + 1
-		if !continuing {
-			it.Next = max(1, min(it.Next, it.lastEpisode()))
-		}
 		if it.Next > it.lastEpisode() {
 			continue // caught up, the next episode isn't out yet
 		}
@@ -246,48 +304,63 @@ func (b *bot) userWatchLists(user string, adult bool) watchLists {
 		al, hasAL = d.AniList[user]
 		mal, hasMAL = d.MAL[user]
 	})
-	out := watchLists{AniList: hasAL && al.ID > 0, MAL: hasMAL && b.malReady(), Continue: []watchListItem{}, Planning: []watchListItem{}}
+	out := watchLists{AniList: hasAL && al.ID > 0, MAL: hasMAL && b.malReady(), Continue: []watchListItem{}}
 	if !out.AniList && !out.MAL {
 		return out
 	}
-	var watching, planning [][]watchListEntry
-	var failed []string
+	var alWatching, malWatching []watchListEntry
+	var alErr, malErr error
+	// A proven link reads with the member's token, so a private list
+	// shows; otherwise only a public one does.
+	alToken, malToken := "", ""
 	if out.AniList {
-		// A proven link reads with the member's token, so a private list
-		// shows; otherwise only a public one does.
-		token := ""
 		if al.Verified {
-			token = al.Token
+			alToken = al.Token
 		}
-		w, err1 := anilistWatchList(token, al.ID, false)
-		p, err2 := anilistWatchList(token, al.ID, true)
-		if err1 != nil || err2 != nil {
-			logWatchErr("anilist lists", user, firstErr(err1, err2))
-			failed = append(failed, "AniList")
+		if alWatching, alErr = anilistWatchList(alToken, al.ID); alErr != nil {
+			logWatchErr("anilist lists", user, alErr)
 		}
-		watching, planning = append(watching, w), append(planning, p)
 	}
 	if out.MAL {
-		if l, err := b.freshMAL(user, mal); err != nil {
+		l, err := b.freshMAL(user, mal)
+		if err == nil {
+			malToken = l.AccessToken
+			malWatching, err = malWatchList(malToken)
+		}
+		if malErr = err; err != nil {
 			logWatchErr("mal lists", user, err)
-			failed = append(failed, "MyAnimeList")
-		} else {
-			w, err1 := malWatchList(l.AccessToken, false)
-			p, err2 := malWatchList(l.AccessToken, true)
-			if err1 != nil || err2 != nil {
-				logWatchErr("mal lists", user, firstErr(err1, err2))
-				failed = append(failed, "MyAnimeList")
-			}
-			watching, planning = append(watching, w), append(planning, p)
 		}
 	}
-	out.Continue = mergeWatchList(watching, adult, true)
-	out.Planning = mergeWatchList(planning, adult, false)
-	for _, l := range [][]watchListItem{out.Continue, out.Planning} {
-		for k := range l {
-			if l[k].Cover != "" {
-				l[k].Cover = "api/watch/cover?u=" + url.QueryEscape(l[k].Cover)
-			}
+	// With both linked, a show watched on one but moved on on the other
+	// was put down: the trackers only disagree until the app or the
+	// member syncs them.
+	if out.AniList && out.MAL && alErr == nil && malErr == nil {
+		var ids []int
+		for _, e := range malWatching {
+			ids = append(ids, e.show.ID)
+		}
+		if off, err := anilistOffWatching(alToken, al.ID, ids); err != nil {
+			logWatchErr("anilist list status", user, err)
+		} else {
+			malWatching = dropOffWatching(malWatching, func(s watchShow) bool { return off[s.ID] })
+		}
+		if off, err := malOffWatching(malToken); err != nil {
+			logWatchErr("mal list status", user, err)
+		} else {
+			alWatching = dropOffWatching(alWatching, func(s watchShow) bool { return s.MalID > 0 && off[s.MalID] })
+		}
+	}
+	var failed []string
+	if alErr != nil {
+		failed = append(failed, "AniList")
+	}
+	if malErr != nil {
+		failed = append(failed, "MyAnimeList")
+	}
+	out.Continue = mergeWatchList([][]watchListEntry{alWatching, malWatching}, adult)
+	for k := range out.Continue {
+		if out.Continue[k].Cover != "" {
+			out.Continue[k].Cover = "api/watch/cover?u=" + url.QueryEscape(out.Continue[k].Cover)
 		}
 	}
 	if len(failed) > 0 {
@@ -303,15 +376,6 @@ func (b *bot) userWatchLists(user string, adult bool) watchLists {
 	}
 	watchListCache.Unlock()
 	return out
-}
-
-func firstErr(errs ...error) error {
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func init() {

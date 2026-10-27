@@ -26,7 +26,7 @@ func TestMergeWatchList(t *testing.T) {
 		{show: listShow(3, 24, 0), progress: 7, updated: 20},
 		{show: listShow(6, 12, 0), progress: 1, notes: "[otakase:2@5]", updated: 5}, // too early to count
 	}
-	got := mergeWatchList([][]watchListEntry{anilist, mal}, false, true)
+	got := mergeWatchList([][]watchListEntry{anilist, mal}, false)
 	want := []struct{ id, next, resume int }{{1, 5, 754}, {3, 8, 0}, {6, 2, 0}}
 	if len(got) != len(want) {
 		t.Fatalf("got %+v", got)
@@ -36,13 +36,8 @@ func TestMergeWatchList(t *testing.T) {
 			t.Errorf("item %d = %d ep %d @%d, want %+v", k, got[k].ID, got[k].Next, got[k].Resume, w)
 		}
 	}
-	if adult := mergeWatchList([][]watchListEntry{anilist}, true, true); len(adult) != 3 || adult[0].ID != 4 {
+	if adult := mergeWatchList([][]watchListEntry{anilist}, true); len(adult) != 3 || adult[0].ID != 4 {
 		t.Errorf("adult room: %+v", adult)
-	}
-
-	plan := mergeWatchList([][]watchListEntry{{{show: listShow(9, 0, 0)}, {show: listShow(8, 12, 0), progress: 12}}}, false, false)
-	if len(plan) != 2 || plan[0].Next != 1 || plan[1].Next != 12 {
-		t.Errorf("planning: %+v", plan)
 	}
 }
 
@@ -57,13 +52,10 @@ func TestWatchListsAPI(t *testing.T) {
 	var mu sync.Mutex
 	var asked []string
 	old := anilistWatchList
-	anilistWatchList = func(token string, id int, planning bool) ([]watchListEntry, error) {
+	anilistWatchList = func(token string, id int) ([]watchListEntry, error) {
 		mu.Lock()
 		asked = append(asked, token)
 		mu.Unlock()
-		if planning {
-			return []watchListEntry{{show: listShow(id+1, 12, 0)}}, nil
-		}
 		return []watchListEntry{{show: listShow(id, 12, 0), progress: 2, notes: "[otakase:3@99]"}}, nil
 	}
 	t.Cleanup(func() {
@@ -82,7 +74,7 @@ func TestWatchListsAPI(t *testing.T) {
 
 	code, body := get("a")
 	if code != http.StatusOK || !strings.Contains(body, `"anilist":true`) || !strings.Contains(body, `"next":3,"resume":99`) ||
-		!strings.Contains(body, `"id":12`) || strings.Count(body, "api/watch/cover?u=https") != 2 {
+		strings.Contains(body, "planning") || strings.Count(body, "api/watch/cover?u=https") != 1 {
 		t.Fatalf("a: %d %s", code, body)
 	}
 	// From the cache the second time, covers the same.
@@ -94,11 +86,11 @@ func TestWatchListsAPI(t *testing.T) {
 		t.Errorf("b: %s", body)
 	}
 	mu.Lock()
-	if strings.Join(asked, ",") != "ta,ta,," {
+	if strings.Join(asked, ",") != "ta," {
 		t.Errorf("tokens used: %q", asked)
 	}
 	mu.Unlock()
-	if _, body := get("c"); !strings.Contains(body, `"anilist":false,"mal":false,"continue":[],"planning":[]`) {
+	if _, body := get("c"); !strings.Contains(body, `"anilist":false,"mal":false,"continue":[]`) {
 		t.Errorf("unlinked: %s", body)
 	}
 }
@@ -134,5 +126,54 @@ func TestWatchRoomResumesFromSavedPosition(t *testing.T) {
 	b.watch.mu.Unlock()
 	if start != 0 {
 		t.Errorf("negative start kept: %v", start)
+	}
+}
+
+func TestDropOffWatching(t *testing.T) {
+	a, b := listShow(1, 12, 0), listShow(2, 12, 0)
+	a.MalID, b.MalID = 101, 102
+	entries := []watchListEntry{{show: a}, {show: b}}
+	kept := dropOffWatching(entries, func(s watchShow) bool { return map[int]bool{102: true}[s.MalID] })
+	if len(kept) != 1 || kept[0].show.ID != 1 || len(entries) != 2 || entries[1].show.ID != 2 {
+		t.Errorf("kept %+v from %+v", kept, entries)
+	}
+}
+
+// A show watching on one tracker but moved on on the other leaves Continue,
+// even with a saved position.
+func TestWatchListsLeaveShowsMovedOn(t *testing.T) {
+	b, _ := watchBot(t, "https://cdn.example/ep.mp4")
+	b.store.update(func(d *storeData) {
+		d.AniList = map[string]anilistLink{"a": {ID: 11, Verified: true, Token: "ta"}}
+		d.MAL = map[string]malLink{"a": {AccessToken: "tm", Expires: appNow().Add(48 * time.Hour)}}
+	})
+	b.cfg.MALClientID, b.cfg.MALSecret = "id", "secret"
+	shows := []watchShow{listShow(1, 12, 0), listShow(2, 12, 0), listShow(3, 12, 0)}
+	for k := range shows {
+		shows[k].MalID = 100 + shows[k].ID
+	}
+	olds := []any{anilistWatchList, malWatchList, anilistOffWatching, malOffWatching}
+	// AniList watches 1 and 2; MAL watches 1 and 3, and finished 2 there.
+	anilistWatchList = func(string, int) ([]watchListEntry, error) {
+		return []watchListEntry{{show: shows[0], progress: 1}, {show: shows[1], progress: 1, notes: "[otakase:2@300]"}}, nil
+	}
+	malWatchList = func(string) ([]watchListEntry, error) {
+		return []watchListEntry{{show: shows[0], progress: 1}, {show: shows[2], progress: 1}}, nil
+	}
+	// On AniList 3 is paused.
+	anilistOffWatching = func(_ string, _ int, ids []int) (map[int]bool, error) { return map[int]bool{3: true}, nil }
+	malOffWatching = func(string) (map[int]bool, error) { return map[int]bool{102: true}, nil }
+	t.Cleanup(func() {
+		anilistWatchList = olds[0].(func(string, int) ([]watchListEntry, error))
+		malWatchList = olds[1].(func(string) ([]watchListEntry, error))
+		anilistOffWatching = olds[2].(func(string, int, []int) (map[int]bool, error))
+		malOffWatching = olds[3].(func(string) (map[int]bool, error))
+		watchListCache.Lock()
+		watchListCache.m = map[string]watchListCacheEntry{}
+		watchListCache.Unlock()
+	})
+	lists := b.userWatchLists("a", false)
+	if len(lists.Continue) != 1 || lists.Continue[0].ID != 1 {
+		t.Errorf("continue: %+v", lists.Continue)
 	}
 }

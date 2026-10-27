@@ -100,8 +100,10 @@ func noteRecentShow(storagePath string, anilistID int, adult bool, now time.Time
 // still have an entry in the watch history. A show missing from it has
 // nothing to resume, and its title would have to be fetched to name it.
 //
-// With a remote tracker a show must also still be on the list: playback looks
-// the pick up there, and one removed since would end the run with an error.
+// With a remote tracker a show must also still be in Watching or Rewatching:
+// playback looks the pick up there, one removed since would end the run with
+// an error, and one moved to another list was put down on purpose, saved
+// position or not.
 func continueWatchingRows(config *Config, list *AnimeList) []SelectionOption {
 	if config == nil || config.ContinueWatchingRows <= 0 {
 		return nil
@@ -129,9 +131,9 @@ func continueWatchingRows(config *Config, list *AnimeList) []SelectionOption {
 		}
 		cover := ""
 		if list != nil && UsesRemoteTracking(config) {
-			listed, err := FindAnimeByAnilistID(*list, strconv.Itoa(show.AnilistID))
+			listed := watchingEntry(*list, show.AnilistID)
 			// The list's flag also covers shows recorded before Adult was.
-			if err != nil || (listed.Media.IsAdult && !showAdult) {
+			if listed == nil || (listed.Media.IsAdult && !showAdult) {
 				continue
 			}
 			cover = listed.CoverImage
@@ -144,6 +146,18 @@ func continueWatchingRows(config *Config, list *AnimeList) []SelectionOption {
 		})
 	}
 	return rows
+}
+
+// watchingEntry is the show's entry in Watching or Rewatching, or nil.
+func watchingEntry(list AnimeList, anilistID int) *Entry {
+	for _, entries := range [][]Entry{list.Watching, list.Rewatching} {
+		for i := range entries {
+			if entries[i].Media.ID == anilistID {
+				return &entries[i]
+			}
+		}
+	}
+	return nil
 }
 
 // continueWatchingLabel names a row: "Frieren · ep 13 at 12:34". A position

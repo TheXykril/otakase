@@ -429,7 +429,7 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 	b.flushResumes(r)
 	b.watch.mu.Unlock()
 
-	if len(count) > 0 {
+	if len(count) > 0 && show.tracked() {
 		go b.countWatched(b.watchSyncers(count), show, ep)
 	}
 	return closeWhy == ""
@@ -581,7 +581,20 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool, start 
 			b.watch.mu.Unlock()
 		})
 	}
+	host, hostName := r.host, r.name(r.host)
 	b.watch.bg.Go(func() {
+		step := func(text string) {
+			b.watch.mu.Lock()
+			defer b.watch.mu.Unlock()
+			if b.watch.open(r) && r.gen == gen && r.phase == "loading" && text != "" {
+				r.loadStep = text
+				r.changed()
+			}
+		}
+		if show.isMovie() {
+			b.loadWatchMovie(ctx, cancel, r, gen, cli, host, hostName, step)
+			return
+		}
 		info, err := b.watch.infos.get(ctx, cli, show.ID, ep, dub, adult)
 		if err == nil && len(info.Streams) == 0 && len(info.Torrents) > 0 {
 			b.watch.mu.Lock()
@@ -595,14 +608,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool, start 
 		if err == nil && len(info.Streams) == 0 && len(info.Torrents) > 0 {
 			var link string
 			for _, candidate := range info.Torrents {
-				torrent, link, err = watchStartTorrent(ctx, cli, candidate.InfoHash, info.Mode, func(step string) {
-					b.watch.mu.Lock()
-					defer b.watch.mu.Unlock()
-					if b.watch.open(r) && r.gen == gen && r.phase == "loading" && step != "" {
-						r.loadStep = step
-						r.changed()
-					}
-				})
+				torrent, link, err = watchStartTorrent(ctx, cli, candidate.InfoHash, info.Mode, step)
 				if err == nil || ctx.Err() != nil {
 					break
 				}
@@ -1628,6 +1634,9 @@ func (b *bot) watchSearchAPI(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadGateway, "couldn't reach AniList, try again in a bit")
 		return
 	}
+	if isWatchMovieQuery(q) {
+		list = append([]watchShow{watchMovieShow()}, list...)
+	}
 	for k := range list {
 		if list[k].Cover != "" {
 			list[k].Cover = "api/watch/cover?u=" + url.QueryEscape(list[k].Cover)
@@ -1871,7 +1880,10 @@ func (b *bot) watchPick(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	show, err := watchShowByID(in.Show)
+	show, err := watchMovieShow(), error(nil)
+	if in.Show != watchMovieID {
+		show, err = watchShowByID(in.Show)
+	}
 	if err != nil {
 		apiError(w, http.StatusBadGateway, "couldn't reach AniList, try again in a bit")
 		return
