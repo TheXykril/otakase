@@ -89,8 +89,15 @@ func (f *fakeResumePush) count() int {
 	return len(f.pushes)
 }
 
+func (f *fakeResumePush) finish(_ *Config, _ int, finished, _ int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pushes = append(f.pushes, syncedResume{Episode: finished + 1})
+	return nil
+}
+
 func newTestResumePusher(clock *time.Time, fake *fakeResumePush) *resumePusher {
-	r := &resumePusher{now: func() time.Time { return *clock }, push: fake.push}
+	r := &resumePusher{now: func() time.Time { return *clock }, push: fake.push, finish: fake.finish}
 	// The exit-cleanup registration is not what these tests are about.
 	r.once.Do(func() {})
 	return r
@@ -150,5 +157,56 @@ func TestTheFirstPollsBeforeAResumeSeekAreIgnored(t *testing.T) {
 	r.flush()
 	if fake.count() != 0 {
 		t.Fatalf("a position of 1s replaced whatever the trackers held")
+	}
+}
+
+func TestTheTagMovesPastAFinishedEpisode(t *testing.T) {
+	cases := []struct {
+		in              string
+		finished, total int
+		want            string
+	}{
+		{"", 5, 12, "[otakase:6@0]"},
+		{"loved it", 5, 12, "loved it\n[otakase:6@0]"},
+		{"loved it\n[otakase:5@1300]", 5, 12, "loved it\n[otakase:6@0]"},
+		{"[otakase:5@1300]", 5, 0, "[otakase:6@0]"},
+		// The last episode: nothing left to resume.
+		{"loved it\n[otakase:12@1300]", 12, 12, "loved it"},
+		{"[otakase:12@1300]", 12, 12, ""},
+		// Watching an earlier episode again leaves a tag further on alone.
+		{"[otakase:9@300]", 5, 12, "[otakase:9@300]"},
+	}
+	for _, c := range cases {
+		if got := syncedResumeAfterEpisode(c.in, c.finished, c.total); got != c.want {
+			t.Errorf("syncedResumeAfterEpisode(%q, %d, %d) = %q, want %q", c.in, c.finished, c.total, got, c.want)
+		}
+	}
+	// The start of an episode is not a place to seek to.
+	if p, ok := parseSyncedResumeTag("[otakase:6@0]"); ok {
+		t.Fatalf("[otakase:6@0] read as %+v", p)
+	}
+}
+
+func TestAFinishedEpisodeIsNotWrittenBackAtExit(t *testing.T) {
+	clock := time.Unix(1000, 0)
+	fake := &fakeResumePush{}
+	r := newTestResumePusher(&clock, fake)
+
+	r.note(nil, 42, 5, 1300)
+	r.episodeDone(nil, 42, 5, 12)
+	waitForPushes(t, fake, 1)
+	// A last poll of the finished episode, then quitting.
+	r.note(nil, 42, 5, 1310)
+	r.flush()
+	if fake.count() != 1 || fake.pushes[0] != (syncedResume{Episode: 6}) {
+		t.Fatalf("pushes %+v, want only the move to episode 6", fake.pushes)
+	}
+
+	// The next episode's position is saved as usual.
+	r.note(nil, 42, 6, 40)
+	r.flush()
+	waitForPushes(t, fake, 2)
+	if last := fake.pushes[1]; last != (syncedResume{Episode: 6, Seconds: 40}) {
+		t.Fatalf("flushed %+v, want episode 6 at 40s", last)
 	}
 }

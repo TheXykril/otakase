@@ -284,6 +284,15 @@ func TestWatchRoomCountsWatchers(t *testing.T) {
 		return true, nil
 	}
 	t.Cleanup(func() { anilistProgress = old })
+	var notes []string
+	oldResume := anilistResume
+	anilistResume = func(token string, show int, edit func(string) string) error {
+		mu.Lock()
+		notes = append(notes, fmt.Sprintf("%s:%d:%s", token, show, edit("good one\n[otakase:4@612]")))
+		mu.Unlock()
+		return nil
+	}
+	t.Cleanup(func() { anilistResume = oldResume })
 
 	watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
 	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r", Channel: "vc"}, nil)
@@ -304,9 +313,9 @@ func TestWatchRoomCountsWatchers(t *testing.T) {
 	}
 	for k := 0; k < 100; k++ {
 		mu.Lock()
-		n := len(got)
+		n := len(got) + len(notes)
 		mu.Unlock()
-		if n > 0 {
+		if n > 1 {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -315,6 +324,10 @@ func TestWatchRoomCountsWatchers(t *testing.T) {
 	defer mu.Unlock()
 	if len(got) != 1 || got[0] != "ta:7:4" {
 		t.Fatalf("progress updates %v (b switched it off)", got)
+	}
+	// The saved position moves on to the start of the next episode with it.
+	if len(notes) != 1 || notes[0] != "ta:7:good one\n[otakase:5@0]" {
+		t.Fatalf("note updates %v", notes)
 	}
 }
 

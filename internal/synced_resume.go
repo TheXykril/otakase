@@ -88,6 +88,32 @@ func withSyncedResumeTag(notes string, p syncedResume) string {
 	return trimmed + "\n" + tag
 }
 
+// withoutSyncedResumeTag returns notes with the tag taken out, and whatever
+// that leaves at the end trimmed.
+func withoutSyncedResumeTag(notes string) string {
+	if !syncedResumeTagPattern.MatchString(notes) {
+		return notes
+	}
+	return strings.TrimRight(syncedResumeTagPattern.ReplaceAllString(notes, ""), " \t\r\n")
+}
+
+// syncedResumeAfterEpisode is notes once episode finished has been watched
+// through: the tag points at the start of the next episode, or is gone when
+// finished was the show's last (total is 0 while that is not known). A tag
+// already past finished -- the viewer went back to an earlier episode -- is
+// left where it is.
+func syncedResumeAfterEpisode(notes string, finished, total int) string {
+	if match := syncedResumeTagPattern.FindStringSubmatch(notes); match != nil {
+		if episode, err := strconv.Atoi(match[1]); err == nil && episode > finished {
+			return notes
+		}
+	}
+	if total > 0 && finished >= total {
+		return withoutSyncedResumeTag(notes)
+	}
+	return withSyncedResumeTag(notes, syncedResume{Episode: finished + 1})
+}
+
 // laterSyncedResume picks the position further into the show, which is the
 // one to trust when two trackers disagree.
 func laterSyncedResume(a, b syncedResume) syncedResume {
@@ -203,9 +229,24 @@ func fetchSyncedResume(config *Config, anilistID int) (syncedResume, bool) {
 }
 
 // pushSyncedResume writes p into every configured tracker's entry for the
-// show. A show that is not on a list is left alone: writing the note would
-// add it.
+// show.
 func pushSyncedResume(config *Config, anilistID int, p syncedResume) error {
+	return editSyncedResume(config, anilistID, func(notes string) string {
+		return withSyncedResumeTag(notes, p)
+	})
+}
+
+// pushEpisodeFinished moves the tag on past an episode watched through.
+func pushEpisodeFinished(config *Config, anilistID, finished, total int) error {
+	return editSyncedResume(config, anilistID, func(notes string) string {
+		return syncedResumeAfterEpisode(notes, finished, total)
+	})
+}
+
+// editSyncedResume rewrites every configured tracker's entry for the show
+// with edit. A show that is not on a list is left alone: writing the note
+// would add it.
+func editSyncedResume(config *Config, anilistID int, edit func(string) string) error {
 	// The trackers are written side by side: this runs from the exit cleanup,
 	// which has a short budget for everything.
 	var (
@@ -227,7 +268,7 @@ func pushSyncedResume(config *Config, anilistID int, p syncedResume) error {
 			keep(err)
 			return
 		}
-		if updated := withSyncedResumeTag(notes, p); updated != notes {
+		if updated := edit(notes); updated != notes {
 			keep(save(updated))
 		}
 	}
@@ -318,6 +359,10 @@ func saveMyAnimeListEntryComments(config *Config, malID int, comments string) er
 // resumePusher paces tracker writes for the episode that is playing. The
 // latest position is always held; a write goes out when the interval has
 // passed, and whatever is still unwritten goes out from the exit cleanup.
+//
+// Once an episode is watched through, its tag is moved on to the next one,
+// and positions still held for that episode or an earlier one are dropped so
+// they cannot put it back.
 type resumePusher struct {
 	mu        sync.Mutex
 	config    *Config
@@ -327,12 +372,19 @@ type resumePusher struct {
 	lastPush  time.Time
 	busy      bool
 	once      sync.Once
+	// doneShow and doneEp are the show and the furthest episode of it
+	// watched through.
+	doneShow int
+	doneEp   int
+	// writing keeps tracker writes in the order they were made.
+	writing sync.Mutex
 
-	now  func() time.Time
-	push func(config *Config, anilistID int, p syncedResume) error
+	now    func() time.Time
+	push   func(config *Config, anilistID int, p syncedResume) error
+	finish func(config *Config, anilistID, finished, total int) error
 }
 
-var syncedResumePusher = &resumePusher{now: time.Now, push: pushSyncedResume}
+var syncedResumePusher = &resumePusher{now: time.Now, push: pushSyncedResume, finish: pushEpisodeFinished}
 
 // NoteSyncedResume records where anime is, for the trackers.
 func NoteSyncedResume(config *Config, anime *Anime) {
@@ -340,6 +392,22 @@ func NoteSyncedResume(config *Config, anime *Anime) {
 		return
 	}
 	syncedResumePusher.note(config, anime.AnilistId, anime.Ep.Number, anime.Ep.Player.PlaybackTime)
+}
+
+// noteEpisodeFinished moves the tag past an episode whose progress was just
+// written, when it is the show now playing.
+func noteEpisodeFinished(config *Config, anilistID, finished int) {
+	anime := GetGlobalAnime()
+	if anime == nil || anime.AnilistId != anilistID || anime.Untracked || !ShouldWriteRemoteTracking(config, anime) {
+		return
+	}
+	syncedResumePusher.episodeDone(config, anilistID, finished, anime.TotalEpisodes)
+}
+
+// stale reports whether p is for an episode already watched through. Hold
+// the lock.
+func (r *resumePusher) stale(anilistID int, p syncedResume) bool {
+	return anilistID == r.doneShow && p.Episode <= r.doneEp
 }
 
 func (r *resumePusher) note(config *Config, anilistID, episode, seconds int) {
@@ -354,11 +422,14 @@ func (r *resumePusher) note(config *Config, anilistID, episode, seconds int) {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.stale(anilistID, next) {
+		return
+	}
 	now := r.now()
 	if anilistID != r.anilistID {
 		// Another show: whatever the last one had not written yet still goes.
 		if r.anilistID != 0 && syncedResumeWorthPushing(r.pushed, r.pending) {
-			go r.push(r.config, r.anilistID, r.pending)
+			go r.run(r.config, r.anilistID, r.pending, false)
 		}
 		r.anilistID = anilistID
 		r.pushed = syncedResume{}
@@ -375,19 +446,54 @@ func (r *resumePusher) note(config *Config, anilistID, episode, seconds int) {
 	}
 	r.busy = true
 	r.lastPush = now
-	go r.run(config, anilistID, next)
+	go r.run(config, anilistID, next, true)
 }
 
-func (r *resumePusher) run(config *Config, anilistID int, p syncedResume) {
-	err := r.push(config, anilistID, p)
+// run writes p. paced is set for the write note started, which holds busy
+// until it is done.
+func (r *resumePusher) run(config *Config, anilistID int, p syncedResume, paced bool) {
+	r.writing.Lock()
+	r.mu.Lock()
+	stale := r.stale(anilistID, p)
+	r.mu.Unlock()
+	var err error
+	if !stale {
+		err = r.push(config, anilistID, p)
+	}
+	r.writing.Unlock()
 	if err != nil {
 		Log(fmt.Sprintf("Synced resume: could not save episode %d at %ds: %v", p.Episode, p.Seconds, err))
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.busy = false
-	if err == nil && r.anilistID == anilistID {
+	if paced {
+		r.busy = false
+	}
+	if err == nil && !stale && r.anilistID == anilistID {
 		r.pushed = p
+	}
+}
+
+// episodeDone moves the tag on past finished and waits for the write, since
+// the run may be about to end.
+func (r *resumePusher) episodeDone(config *Config, anilistID, finished, total int) {
+	if anilistID == 0 || finished < 1 {
+		return
+	}
+	r.mu.Lock()
+	if r.doneShow != anilistID {
+		r.doneShow, r.doneEp = anilistID, 0
+	}
+	r.doneEp = max(r.doneEp, finished)
+	if r.anilistID == anilistID && r.stale(anilistID, r.pending) {
+		r.pending = syncedResume{}
+	}
+	r.mu.Unlock()
+
+	r.writing.Lock()
+	defer r.writing.Unlock()
+	if err := r.finish(config, anilistID, finished, total); err != nil {
+		Log(fmt.Sprintf("Synced resume: could not move past episode %d: %v", finished, err))
 	}
 }
 
@@ -402,5 +508,5 @@ func (r *resumePusher) flush() {
 	if !due {
 		return
 	}
-	r.run(config, anilistID, p)
+	r.run(config, anilistID, p, false)
 }

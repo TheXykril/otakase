@@ -22,6 +22,29 @@ func TestWithResumeTag(t *testing.T) {
 	}
 }
 
+func TestResumeAfterEpisode(t *testing.T) {
+	cases := []struct {
+		in             string
+		finished, last int
+		want           string
+	}{
+		{"", 5, 12, "[otakase:6@0]"},
+		{"loved it", 5, 12, "loved it\n[otakase:6@0]"},
+		{"loved it\n[otakase:5@1300]", 5, 12, "loved it\n[otakase:6@0]"},
+		{"[otakase:5@1300]", 5, 0, "[otakase:6@0]"},
+		// The last episode: nothing left to resume.
+		{"loved it\n[otakase:12@1300]", 12, 12, "loved it"},
+		{"[otakase:12@1300]", 12, 12, ""},
+		// Watching an earlier episode again leaves a tag further on alone.
+		{"[otakase:9@300]", 5, 12, "[otakase:9@300]"},
+	}
+	for _, c := range cases {
+		if got := resumeAfterEpisode(c.in, c.finished, c.last); got != c.want {
+			t.Errorf("resumeAfterEpisode(%q, %d, %d) = %q, want %q", c.in, c.finished, c.last, got, c.want)
+		}
+	}
+}
+
 func TestWatchRoomSavesWhereMembersStop(t *testing.T) {
 	b, now := watchBot(t, "https://cdn.example/ep.mp4")
 	b.store.update(func(d *storeData) {
@@ -37,9 +60,9 @@ func TestWatchRoomSavesWhereMembersStop(t *testing.T) {
 	var mu sync.Mutex
 	var got []string
 	old := anilistResume
-	anilistResume = func(token string, show, ep, secs int) error {
+	anilistResume = func(token string, show int, edit func(string) string) error {
 		mu.Lock()
-		got = append(got, fmt.Sprintf("%s:%d:%d@%d", token, show, ep, secs))
+		got = append(got, fmt.Sprintf("%s:%d:%s", token, show, edit("")))
 		mu.Unlock()
 		return nil
 	}
@@ -91,7 +114,7 @@ func TestWatchRoomSavesWhereMembersStop(t *testing.T) {
 	if left["ep"] != float64(4) || left["secs"] != float64(80) {
 		t.Fatalf("leave answered %v", left)
 	}
-	if l := wait(1); len(l) != 1 || l[0] != "tb:7:4@80" {
+	if l := wait(1); len(l) != 1 || l[0] != "tb:7:[otakase:4@80]" {
 		t.Fatalf("after b stopped: %v", l)
 	}
 
@@ -101,11 +124,77 @@ func TestWatchRoomSavesWhereMembersStop(t *testing.T) {
 
 	// d switched list updates off; the room closing saves a.
 	watchPost(b, (*bot).watchEnd, "a", watchIn{Room: "r"}, nil)
-	if l := wait(2); len(l) != 2 || l[0] != "ta:7:4@100" || l[1] != "tb:7:4@80" {
+	if l := wait(2); len(l) != 2 || l[0] != "ta:7:[otakase:4@100]" || l[1] != "tb:7:[otakase:4@80]" {
 		t.Fatalf("after the room closed: %v", l)
 	}
 	time.Sleep(20 * time.Millisecond)
 	if l := wait(3); len(l) != 2 {
 		t.Fatalf("saved for someone who shouldn't be: %v", l)
+	}
+}
+
+func TestLeavingNearTheEndFinishesTheEpisode(t *testing.T) {
+	b, now := watchBot(t, "https://cdn.example/ep.mp4")
+	b.store.update(func(d *storeData) {
+		d.WatchTickets = map[string]int{"a": 1}
+		d.AniList = map[string]anilistLink{"a": {ID: 1, Verified: true, Token: "ta"}, "b": {ID: 2, Verified: true, Token: "tb"}}
+	})
+	var mu sync.Mutex
+	var got []string
+	oldProgress, oldResume := anilistProgress, anilistResume
+	anilistProgress = func(token string, show watchShow, ep int) (bool, error) {
+		mu.Lock()
+		got = append(got, fmt.Sprintf("progress %s:%d:%d", token, show.ID, ep))
+		mu.Unlock()
+		return true, nil
+	}
+	anilistResume = func(token string, show int, edit func(string) string) error {
+		mu.Lock()
+		got = append(got, fmt.Sprintf("note %s:%d:%s", token, show, edit("[otakase:4@300]")))
+		mu.Unlock()
+		return nil
+	}
+	t.Cleanup(func() { anilistProgress, anilistResume = oldProgress, oldResume })
+
+	watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r", Channel: "vc"}, nil)
+	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 7, Ep: 4}, nil)
+	waitLoaded(t, b)
+	watchAllReady(b)
+	watchPost(b, (*bot).watchBeat, "a", watchIn{Room: "r", Pos: 0, Playing: true, Dur: 1400}, nil)
+	r := b.watch.only()
+	for k := 0; k < 10; k++ {
+		*now = now.Add(watchTick)
+		b.watch.mu.Lock()
+		for _, m := range r.members {
+			m.seen = *now
+		}
+		b.watch.mu.Unlock()
+		b.watchStep(r, *now)
+	}
+	// Into the ending, then b goes.
+	b.watch.mu.Lock()
+	r.setPos(1200, true, *now)
+	b.watch.mu.Unlock()
+
+	var left map[string]any
+	watchPost(b, (*bot).watchLeave, "b", watchIn{Room: "r"}, &left)
+	if left["done"] != true || left["ep"] != float64(4) {
+		t.Fatalf("leave answered %v", left)
+	}
+	for k := 0; k < 200; k++ {
+		mu.Lock()
+		n := len(got)
+		mu.Unlock()
+		if n >= 2 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	sort.Strings(got)
+	if len(got) != 2 || got[0] != "note tb:7:[otakase:5@0]" || got[1] != "progress tb:7:4" {
+		t.Fatalf("saved %v, want b's list and note moved past episode 4", got)
 	}
 }

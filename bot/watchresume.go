@@ -16,6 +16,13 @@ import (
 // and resumes there. Anything else in the note stays as it was; only the
 // tag is replaced. A show that is not on a list is left alone, since
 // writing the note would add it.
+//
+// Once a member has watched an episode through (when the room moves their
+// list on, or they leave with 80% or more of it played), the tag points at
+// the start of the next episode, the same as the app: [otakase:6@0] after
+// episode 5. When there is no next episode (the show's last, or the next
+// one isn't out yet) it is taken out. A tag already further on is never
+// moved back.
 
 var watchResumeTag = regexp.MustCompile(`\[otakase:(\d+)@(\d+)\]`)
 
@@ -35,6 +42,18 @@ type watchResume struct {
 	show watchShow
 	ep   int
 	secs int
+	done bool // ep was watched through: the tag moves past it
+	// count is set when the member left near the end of an episode the room
+	// had not counted for them yet: their list moves on as they go.
+	count bool
+}
+
+// edit is what saving p does to a note.
+func (p watchResume) edit() func(string) string {
+	if p.done {
+		return func(notes string) string { return resumeAfterEpisode(notes, p.ep, p.show.outSoFar()) }
+	}
+	return func(notes string) string { return withResumeTag(notes, p.ep, p.secs) }
 }
 
 // resumeOf is where user is in the episode, or false when there is nothing
@@ -48,7 +67,12 @@ func (r *watchRoom) resumeOf(user string, now time.Time) (watchResume, bool) {
 	if m.from > r.startAt+watchResumeLate || m.watched < watchResumeMin || secs < watchResumeMin {
 		return watchResume{}, false
 	}
-	return watchResume{user: user, show: *r.show, ep: r.ep, secs: secs}, true
+	p := watchResume{user: user, show: *r.show, ep: r.ep, secs: secs, done: m.counted}
+	if !m.counted && r.dur > 0 && float64(secs) >= watchedEnough*r.dur {
+		// Leaving near the end is finishing it.
+		p.done, p.count = true, true
+	}
+	return p, true
 }
 
 // keepResume queues user's position to be saved as they leave. Hold the
@@ -87,15 +111,20 @@ func (b *bot) saveResumes(saves []watchResume) {
 		if off {
 			continue
 		}
+		if p.count {
+			// Moves the list on and the note with it.
+			b.countWatched([]string{p.user}, p.show, p.ep)
+			continue
+		}
 		if hasAL && al.Verified && al.Token != "" {
-			if err := anilistResume(al.Token, p.show.ID, p.ep, p.secs); err != nil {
+			if err := anilistResume(al.Token, p.show.ID, p.edit()); err != nil {
 				logWatchErr("anilist resume", p.user, err)
 			}
 		}
 		if hasMAL && p.show.MalID > 0 && b.malReady() {
 			if l, err := b.freshMAL(p.user, mal); err != nil {
 				logWatchErr("mal resume", p.user, err)
-			} else if err := malResume(l.AccessToken, p.show.MalID, p.ep, p.secs); err != nil {
+			} else if err := malResume(l.AccessToken, p.show.MalID, p.edit()); err != nil {
 				logWatchErr("mal resume", p.user, err)
 			}
 		}
@@ -124,8 +153,38 @@ func withResumeTag(notes string, episode, secs int) string {
 	return trimmed + "\n" + tag
 }
 
-// anilistResume saves the tag in the member's AniList notes for the show.
-var anilistResume = func(token string, show, episode, secs int) error {
+// outSoFar is the episodes out, 0 when that isn't known.
+func (s watchShow) outSoFar() int {
+	if s.Aired > 0 {
+		return s.Aired
+	}
+	return s.Episodes
+}
+
+// withoutResumeTag returns notes with the tag taken out, and whatever that
+// leaves at the end trimmed.
+func withoutResumeTag(notes string) string {
+	if !watchResumeTag.MatchString(notes) {
+		return notes
+	}
+	return strings.TrimRight(watchResumeTag.ReplaceAllString(notes, ""), " \t\r\n")
+}
+
+// resumeAfterEpisode is notes once episode finished has been watched
+// through: the tag points at the start of the next episode, or is gone
+// when there is no next episode yet (last is 0 while not known).
+func resumeAfterEpisode(notes string, finished, last int) string {
+	if ep, _ := watchResumeIn(notes); ep > finished {
+		return notes
+	}
+	if last > 0 && finished >= last {
+		return withoutResumeTag(notes)
+	}
+	return withResumeTag(notes, finished+1, 0)
+}
+
+// anilistResume edits the tag in the member's AniList notes for the show.
+var anilistResume = func(token string, show int, edit func(string) string) error {
 	var r struct {
 		Data struct {
 			Media *struct {
@@ -145,7 +204,7 @@ var anilistResume = func(token string, show, episode, secs int) error {
 	if n := r.Data.Media.MediaListEntry.Notes; n != nil {
 		notes = *n
 	}
-	next := withResumeTag(notes, episode, secs)
+	next := edit(notes)
 	if next == notes {
 		return nil
 	}
@@ -163,8 +222,8 @@ var anilistResume = func(token string, show, episode, secs int) error {
 	return nil
 }
 
-// malResume saves the tag in the member's MyAnimeList comments for the show.
-var malResume = func(token string, malID, episode, secs int) error {
+// malResume edits the tag in the member's MyAnimeList comments for the show.
+var malResume = func(token string, malID int, edit func(string) string) error {
 	var cur struct {
 		Status *struct {
 			Comments string `json:"comments"`
@@ -176,7 +235,7 @@ var malResume = func(token string, malID, episode, secs int) error {
 	if cur.Status == nil {
 		return nil
 	}
-	next := withResumeTag(cur.Status.Comments, episode, secs)
+	next := edit(cur.Status.Comments)
 	if next == cur.Status.Comments {
 		return nil
 	}

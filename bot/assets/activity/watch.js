@@ -427,8 +427,12 @@ async function wStopWatching() {
   const r = await api("watch/leave", { room: wRoom }).catch(() => ({}));
   if (where !== "watch") return;
   const synced = v && v.sync && (v.linked || []).length;
-  const at = r.ep ? `You stopped at <b>${wFmt(r.secs)}</b> of episode ${r.ep}.` : "You stopped watching.";
-  const note = r.ep && synced ? `Saving where you stopped to your ${v.linked.join(" and ")}, so Otakase can resume from there.` : "The room keeps playing for everyone else.";
+  const at = r.done ? `You finished episode ${r.ep}.` : r.ep ? `You stopped at <b>${wFmt(r.secs)}</b> of episode ${r.ep}.` : "You stopped watching.";
+  const note = !(r.ep && synced)
+    ? "The room keeps playing for everyone else."
+    : r.done
+      ? `Your ${v.linked.join(" and ")} moved on, so Otakase starts the next episode.`
+      : `Saving where you stopped to your ${v.linked.join(" and ")}, so Otakase can resume from there.`;
   wBox(`<p class="lead">${at}</p><p class="note">${note}</p>
     <button class="btn" id="wagain">${icon("play")} Watch again</button><div class="err" id="err"></div>`);
   const b = document.getElementById("wagain");

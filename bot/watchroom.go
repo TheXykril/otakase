@@ -1576,7 +1576,7 @@ func (b *bot) watchLeave(w http.ResponseWriter, r *http.Request) {
 			now := watchNow()
 			if p, ok := cur.resumeOf(user, now); ok {
 				cur.resumes = append(cur.resumes, p)
-				out["ep"], out["secs"] = p.ep, p.secs
+				out["ep"], out["secs"], out["done"] = p.ep, p.secs, p.done
 			}
 			cur.note("%s left", cur.name(user))
 			delete(cur.members, user)
