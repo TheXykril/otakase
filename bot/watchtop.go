@@ -160,7 +160,7 @@ func (b *bot) serverWatchTopCommand(i *discordgo.InteractionCreate) {
 	if o, ok := optionMap(i)["week"]; ok && o.StringValue() == "last" {
 		week, title = isoWeekKey(now.AddDate(0, 0, -7)), "Most watched last week"
 	}
-	b.deferThen(i, false, func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	b.deferThen(i, onlyAsker(i), func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 		e, _ := serverTopView(title, b.serverWeek(week), appShowInfo)
 		return e, nil
 	})

@@ -257,7 +257,7 @@ func (b *bot) changelog(i *discordgo.InteractionCreate) {
 	if o, ok := opts["since"]; ok {
 		since = strings.TrimSpace(o.StringValue())
 	}
-	b.deferThen(i, false, func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	b.deferThen(i, onlyAsker(i), func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 		return changelogAnswer(b.cfg.GitHubToken, version, since)
 	})
 }

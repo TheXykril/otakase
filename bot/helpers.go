@@ -441,5 +441,5 @@ func helpersEmbed(h map[string]helperStat, caller string, threshold int) *discor
 func (b *bot) helpers(i *discordgo.InteractionCreate) {
 	var e *discordgo.MessageEmbed
 	b.store.view(func(d *storeData) { e = helpersEmbed(d.Helpers, i.Member.User.ID, b.cfg.HelperPoints) })
-	b.respond(i, false, e)
+	b.respond(i, onlyAsker(i), e)
 }

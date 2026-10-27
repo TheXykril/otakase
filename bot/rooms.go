@@ -377,8 +377,17 @@ func (b *bot) roomInvite(i *discordgo.InteractionCreate) {
 		b.respond(i, true, errorEmbed("Couldn't add them."))
 		return
 	}
-	b.respond(i, false, &discordgo.MessageEmbed{Color: shu,
-		Description: fmt.Sprintf("<@%s>, <@%s> invited you to <#%s>.", user.ID, i.Member.User.ID, ch)})
+	b.respond(i, true, &discordgo.MessageEmbed{Color: shu, Description: b.tellInvited(ch, user.ID, i.Member.User.ID)})
+}
+
+// tellInvited DMs an invited member a link to the room, or pings them in
+// the room when their DMs are closed. The answer is for the inviter.
+func (b *bot) tellInvited(ch, user, from string) string {
+	if b.dmInvite(user, from, ch, "their room") {
+		return fmt.Sprintf("Invited <@%s>. They got a DM with a link to the room.", user)
+	}
+	b.roomSay(ch, fmt.Sprintf("<@%s>, <@%s> invited you to this room.", user, from), user)
+	return fmt.Sprintf("Invited <@%s>. Their DMs are closed, so they were pinged in the room.", user)
 }
 
 // inviteToRoom lets a member see and join a room, clearing anything that

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.30.76
+
+- Lookups now answer only the member who used them: `/help`, `/install`, `/faq`, `/diagnose`, `/latest`, `/changelog`, `/anime`, `/helpers`, `/levels`, `/rank`, `/leaderboard`, `/profile`, `/compare`, `/server-top`, `/server-watch-top`, `/watch-time`, `/whos-watching`, `/badges`, `/wrap` and `/featured`. Each has a new **share** option that posts the answer for everyone instead, e.g. to show someone a `/faq` answer.
+- `/room-invite` and the room panel's Invite button: the confirmation is only for the inviter, and the invited member gets a DM with a button that opens the room. Members with closed DMs are pinged in the room like before.
+- New accounts whose link was removed get a DM saying why instead of a ping in the channel (the short channel note stays as a fallback for closed DMs).
+
 ## 1.30.75
 
 - `/provider-status` lists the 18+ sources too for members whose linked AniList (linked with access) has adult content turned on. Everyone else sees the list as before, and so does the automatic "is it down?" reply in chat.

@@ -68,6 +68,7 @@ func (b *bot) registerCommands() error {
 		cmds = append(cmds, &discordgo.ApplicationCommand{
 			Name: "link-github", Description: "Get the Contributor role for a merged pull request"})
 	}
+	addShareOptions(cmds)
 	_, err := b.s.ApplicationCommandBulkOverwrite(b.s.State.User.ID, b.cfg.GuildID, cmds)
 	return err
 }
@@ -105,20 +106,20 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		}
 		switch d.Name {
 		case "help":
-			b.respond(i, false, helpEmbed())
+			b.respond(i, onlyAsker(i), helpEmbed())
 		case "install":
 			g := installGuides[opt("system")]
-			b.respond(i, false, &discordgo.MessageEmbed{Title: "Install on " + g.Title, Description: g.Body, Color: shu,
+			b.respond(i, onlyAsker(i), &discordgo.MessageEmbed{Title: "Install on " + g.Title, Description: g.Body, Color: shu,
 				Footer: &discordgo.MessageEmbedFooter{Text: "Otakase needs mpv · more on the website"}})
 		case "faq":
 			f, _ := faqByKey(opt("topic"))
-			b.respond(i, false, &discordgo.MessageEmbed{Title: f.Question, Description: b.faqAnswer(f).Answer, Color: shu})
+			b.respond(i, onlyAsker(i), &discordgo.MessageEmbed{Title: f.Question, Description: b.faqAnswer(f).Answer, Color: shu})
 		case "latest":
-			b.deferThen(i, false, func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+			b.deferThen(i, onlyAsker(i), func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 				return latestRelease(b.cfg.GitHubToken)
 			})
 		case "anime":
-			b.deferThen(i, false, func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) { return searchAnime(opt("title")) })
+			b.deferThen(i, onlyAsker(i), func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) { return searchAnime(opt("title")) })
 		case "link-github":
 			b.startGitHubLink(i)
 		case "provider-status":

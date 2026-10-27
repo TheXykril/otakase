@@ -185,7 +185,7 @@ func (b *bot) featuredHeartbeat(ev heartbeatEvent) {
 
 func (b *bot) featuredCommand(i *discordgo.InteractionCreate) {
 	user := i.Member.User.ID
-	b.deferThen(i, false, func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	b.deferThen(i, onlyAsker(i), func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 		now := appNow()
 		p, ok := b.featuredToday(now)
 		if !ok {
