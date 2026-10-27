@@ -585,7 +585,7 @@ function wAnswerButtons(el) {
 function wPicker(changing) {
   const box = document.getElementById("wpick");
   box.innerHTML = `<p class="lead">Pick something to watch.</p>
-    ${searchBox("Search AniList…")}<div class="tabs wtabs" id="wtabs" hidden></div><div class="wresults" id="wres"></div>
+    ${searchBox("Search AniList…")}<div class="wresults" id="wres"></div>
     ${changing ? `<button class="btn alt" id="wcancel">Back to the episode</button>` : ""}`;
   document.getElementById("list").remove();
   const q = document.getElementById("q");
@@ -601,7 +601,6 @@ function wPicker(changing) {
         return showError(e);
       }
       if (q.value.trim() !== text) return;
-      document.getElementById("wtabs").hidden = true;
       const res = document.getElementById("wres");
       res.innerHTML = wSearch.length ? wSearch.map((s, i) => wShowCard(s, i, wShowFacts(s))).join("") : `<p class="note">Nothing found.</p>`;
       res.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => wEpisode(wSearch[+b.dataset.i])));
@@ -634,28 +633,25 @@ function wShowCard(s, i, facts) {
 
 // wListsDraw shows the host's Continue list under the search while it is
 // empty: each show starts at the next episode, from a saved position when
-// there is one.
+// there is one; caught-up shows come last, at the latest episode.
 function wListsDraw() {
-  const tabs = document.getElementById("wtabs");
   const res = document.getElementById("wres");
-  if (!tabs || !res) return;
+  if (!res) return;
   if (!wLists) {
-    tabs.hidden = true;
     res.innerHTML = `<p class="note">Loading your lists…</p>`;
     return;
   }
   if (!wLists.anilist && !wLists.mal) {
-    tabs.hidden = true;
     res.innerHTML = `<p class="note">${esc(wLists.note || "Link AniList with /link-anilist or MyAnimeList with /link-mal to pick from your own lists here.")}</p>`;
     return;
   }
-  tabs.hidden = false;
-  tabs.innerHTML = `<button class="btn">Continue <small>${wLists.continue.length}</small></button>`;
   const list = wLists.continue;
-  res.innerHTML = (wLists.note ? `<p class="note">${esc(wLists.note)}</p>` : "") + (list.length
-    ? list.map((s, i) => wShowCard(s, i,
-      `Episode ${s.next}${s.aired || s.episodes ? " of " + (s.aired || s.episodes) : ""}${s.resume ? " · resume at " + wFmt(s.resume) : ""}`)).join("")
-    : `<p class="note">Nothing to continue: no show you're watching has a new episode out.</p>`);
+  res.innerHTML = (list.length
+    ? list.map((s, i) => wShowCard(s, i, s.caught_up
+      ? `Caught up · episode ${s.next} is the latest`
+      : `Episode ${s.next}${s.aired || s.episodes ? " of " + (s.aired || s.episodes) : ""}${s.resume ? " · resume at " + wFmt(s.resume) : ""}`)).join("")
+    : `<p class="note">Nothing to continue: you're not watching anything on your lists.</p>`) +
+    (wLists.note ? `<p class="note">${esc(wLists.note)}</p>` : "");
   res.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => wEpisode(list[+b.dataset.i], list[+b.dataset.i])));
 }
 

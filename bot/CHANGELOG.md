@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.30.72
+
+- Watch Together: Continue lists every show you're watching. Shows you're caught up on are no longer hidden; they come last, at the latest episode.
+- Watch Together: when AniList and MyAnimeList disagree on a show, Continue goes by the newer change, as the app does. A show you moved to Watching on one tracker but that still sits in Planning on the other is listed again; one you moved out of Watching later on the other tracker is not.
+- Watch Together: a note under Continue says which watching shows aren't listed and why (moved out of Watching later on the other tracker, not out yet, 18+ outside an 18+ room, or not found on AniList).
+- Watch Together: the lone Continue tab button is gone; the list shows straight under the search.
+
 ## 1.30.71
 
 - Watch Together: the picker's own list is just Continue now; the Planning tab is gone.

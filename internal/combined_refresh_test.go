@@ -93,3 +93,39 @@ func TestCombinedRefreshGivesUpRatherThanHanging(t *testing.T) {
 		t.Errorf("cached list should have been kept, got progress %d", got)
 	}
 }
+
+// The launch writes only what the caches disagreed on. A show moved to
+// Watching on AniList's site since the last run reached the merged list but
+// stayed in Planning on MyAnimeList until the next launch, so the refresh
+// writes what the fresh lists still disagree on.
+func TestCombinedRefreshWritesFreshDisagreements(t *testing.T) {
+	queued := make(chan dualSyncWrites, 1)
+	previous := queueRefreshSyncWrites
+	queueRefreshSyncWrites = func(_ *Config, writes dualSyncWrites) { queued <- writes }
+	t.Cleanup(func() { queueRefreshSyncWrites = previous })
+
+	planning := Entry{Media: Media{ID: 7, MalID: 70}, Status: "PLANNING", UpdatedAt: time.Now().Add(-time.Hour)}
+	watching := planning
+	watching.Status, watching.UpdatedAt = "CURRENT", time.Now()
+	cached := AnimeList{Planning: []Entry{planning}}
+
+	user := &User{Token: "ani", ListSync: NewAnimeListSync(cached)}
+	aniListUser := &User{ListSync: NewAnimeListSync(cached)}
+	myAnimeListUser := &User{ListSync: NewAnimeListSync(cached)}
+	go refreshCombinedRemoteAnimeList(&Config{StoragePath: t.TempDir()}, user, aniListUser, myAnimeListUser)
+
+	aniListUser.ListSync.Replace(AnimeList{Watching: []Entry{watching}}, false)
+	aniListUser.ListSync.MarkRefreshDone()
+	myAnimeListUser.ListSync.MarkRefreshDone()
+
+	select {
+	case w := <-queued:
+		if w.aniListToken != "ani" || len(w.aniList) != 0 || len(w.myAnimeList) != 1 || w.myAnimeList[0].Status != "CURRENT" {
+			t.Errorf("queued %+v", w)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the refresh wrote nothing to MyAnimeList")
+	}
+	// Let it finish saving the caches before the temp dir goes.
+	<-user.ListSync.RefreshDone()
+}
