@@ -358,6 +358,21 @@ func awaitTrackerRefreshes(sources []*User, limit time.Duration) bool {
 	return true
 }
 
+// queueRefreshSyncWrites writes what the refreshed lists still disagree on,
+// after the launch's own writes finish. It never holds up the refresh, which
+// playback waits on.
+var queueRefreshSyncWrites = func(config *Config, writes dualSyncWrites) {
+	if writes.count() == 0 {
+		return
+	}
+	Log(fmt.Sprintf("Combined refresh: %d AniList and %d MyAnimeList update(s) queued",
+		len(writes.aniList), len(writes.myAnimeList)))
+	go func() {
+		WaitForDualSyncWrites()
+		startDualSyncWrites(config, writes)
+	}()
+}
+
 func refreshCombinedRemoteAnimeList(config *Config, user, aniListUser, myAnimeListUser *User) {
 	defer user.ListSync.MarkRefreshDone()
 
@@ -367,6 +382,16 @@ func refreshCombinedRemoteAnimeList(config *Config, user, aniListUser, myAnimeLi
 	}
 
 	again := buildDualRemoteSyncPlan(aniListUser.ListSync.Current(), myAnimeListUser.ListSync.Current())
+	// The launch only wrote what the two caches disagreed on, so a change
+	// made on a tracker's site since the last run reached the merged list
+	// but not the other tracker until the next launch. Moving a show to
+	// Watching on AniList left it in Planning on MyAnimeList, and anything
+	// reading MyAnimeList (the Discord watch room) saw the old status.
+	queueRefreshSyncWrites(config, dualSyncWrites{
+		aniListToken: user.Token,
+		aniList:      again.AniListUpdates,
+		myAnimeList:  again.MyAnimeListUpdates,
+	})
 	if animeListEqual(user.ListSync.Current(), again.Merged) {
 		return
 	}

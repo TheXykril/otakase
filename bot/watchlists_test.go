@@ -54,7 +54,7 @@ func TestWatchListNote(t *testing.T) {
 		t.Errorf("nothing hidden: %q", n)
 	}
 	n := watchListNote(watchListHidden{notOut: []string{"Soon"}, adult: 2, notFound: 1}, map[string][]string{"MyAnimeList": {"Gone"}})
-	want := "Not listed: Gone (completed, paused or dropped on MyAnimeList); Soon (not out yet); 2 18+ shows (only in an 18+ room); 1 MyAnimeList show (not found on AniList)."
+	want := "Not listed: Gone (moved out of Watching on MyAnimeList); Soon (not out yet); 2 18+ shows (only in an 18+ room); 1 MyAnimeList show (not found on AniList)."
 	if n != want {
 		t.Errorf("note:\n%s\nwant\n%s", n, want)
 	}
@@ -148,28 +148,20 @@ func TestWatchRoomResumesFromSavedPosition(t *testing.T) {
 	}
 }
 
-// Planning on the other tracker only lags behind; it doesn't hide a show.
-func TestMovedOn(t *testing.T) {
-	for _, s := range []string{"COMPLETED", "PAUSED", "DROPPED", "completed", "on_hold", "dropped"} {
-		if !movedOn(s) {
-			t.Errorf("%s not moved on", s)
-		}
-	}
-	for _, s := range []string{"CURRENT", "REPEATING", "PLANNING", "watching", "plan_to_watch", ""} {
-		if movedOn(s) {
-			t.Errorf("%s moved on", s)
-		}
-	}
-}
-
 func TestDropOffWatching(t *testing.T) {
-	a, b := listShow(1, 12, 0), listShow(2, 12, 0)
-	a.MalID, b.MalID = 101, 102
+	a, b, c := listShow(1, 12, 0), listShow(2, 12, 0), listShow(3, 12, 0)
+	a.MalID, b.MalID, c.MalID = 101, 102, 103
 	b.Title = "Two"
-	entries := []watchListEntry{{show: a}, {show: b}}
-	kept, dropped := dropOffWatching(entries, func(s watchShow) bool { return map[int]bool{102: true}[s.MalID] })
-	if len(kept) != 1 || kept[0].show.ID != 1 || len(entries) != 2 || entries[1].show.ID != 2 || strings.Join(dropped, ",") != "Two" {
-		t.Errorf("kept %+v from %+v", kept, entries)
+	// 2 was dropped on the other tracker after it was last watched here; 3
+	// still sits in Planning there from before it was started here.
+	entries := []watchListEntry{{show: a, updated: 50}, {show: b, updated: 50}, {show: c, updated: 50}}
+	off := map[int]int64{102: 60, 103: 40}
+	kept, dropped := dropOffWatching(entries, func(s watchShow) (int64, bool) {
+		at, ok := off[s.MalID]
+		return at, ok
+	})
+	if len(kept) != 2 || kept[0].show.ID != 1 || kept[1].show.ID != 3 || len(entries) != 3 || entries[1].show.ID != 2 || strings.Join(dropped, ",") != "Two" {
+		t.Errorf("kept %+v dropped %v from %+v", kept, dropped, entries)
 	}
 }
 
@@ -195,13 +187,13 @@ func TestWatchListsLeaveShowsMovedOn(t *testing.T) {
 		return []watchListEntry{{show: shows[0], progress: 1}, {show: shows[2], progress: 1}}, nil
 	}
 	// On AniList 3 is paused.
-	anilistOffWatching = func(_ string, _ int, ids []int) (map[int]bool, error) { return map[int]bool{3: true}, nil }
-	malOffWatching = func(string) (map[int]bool, error) { return map[int]bool{102: true}, nil }
+	anilistOffWatching = func(_ string, _ int, ids []int) (map[int]int64, error) { return map[int]int64{3: 10}, nil }
+	malOffWatching = func(string) (map[int]int64, error) { return map[int]int64{102: 10}, nil }
 	t.Cleanup(func() {
 		anilistWatchList = olds[0].(func(string, int) ([]watchListEntry, error))
 		malWatchList = olds[1].(func(string) ([]watchListEntry, error))
-		anilistOffWatching = olds[2].(func(string, int, []int) (map[int]bool, error))
-		malOffWatching = olds[3].(func(string) (map[int]bool, error))
+		anilistOffWatching = olds[2].(func(string, int, []int) (map[int]int64, error))
+		malOffWatching = olds[3].(func(string) (map[int]int64, error))
 		watchListCache.Lock()
 		watchListCache.m = map[string]watchListCacheEntry{}
 		watchListCache.Unlock()
@@ -210,7 +202,7 @@ func TestWatchListsLeaveShowsMovedOn(t *testing.T) {
 	if len(lists.Continue) != 1 || lists.Continue[0].ID != 1 {
 		t.Errorf("continue: %+v", lists.Continue)
 	}
-	if !strings.Contains(lists.Note, "completed, paused or dropped on AniList") || !strings.Contains(lists.Note, "completed, paused or dropped on MyAnimeList") {
+	if !strings.Contains(lists.Note, "moved out of Watching on AniList") || !strings.Contains(lists.Note, "moved out of Watching on MyAnimeList") {
 		t.Errorf("note: %q", lists.Note)
 	}
 }
