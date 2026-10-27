@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -79,13 +81,63 @@ func takeActivityLaunchMode(user string) string {
 }
 
 type activitySession struct {
-	user    string
-	expires time.Time
+	User    string    `json:"user"`
+	Expires time.Time `json:"expires"`
 }
 
+// activitySessions are the Activity's sign-ins by the hash of their token.
+// They are kept in the store too (saveActivitySessions), so a restart
+// doesn't sign every open page out; the store never holds a usable token.
 type activitySessions struct {
 	mu sync.Mutex
 	m  map[string]activitySession
+}
+
+func activityTokenHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// all is a copy of the sign-ins that haven't run out.
+func (a *activitySessions) all() map[string]activitySession {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := make(map[string]activitySession, len(a.m))
+	now := time.Now()
+	for h, s := range a.m {
+		if now.Before(s.Expires) {
+			out[h] = s
+		}
+	}
+	return out
+}
+
+// saveActivitySessions writes the sign-ins to the store.
+func (b *bot) saveActivitySessions() {
+	all := b.acts.all()
+	b.store.update(func(d *storeData) { d.ActivitySessions = all })
+}
+
+func init() {
+	// Pages signed in before a restart stay signed in.
+	onStart(func(b *bot) { b.loadActivitySessions() })
+}
+
+// loadActivitySessions takes back the sign-ins the store kept.
+func (b *bot) loadActivitySessions() {
+	var kept map[string]activitySession
+	b.store.view(func(d *storeData) { kept = maps.Clone(d.ActivitySessions) })
+	b.acts.mu.Lock()
+	defer b.acts.mu.Unlock()
+	if b.acts.m == nil {
+		b.acts.m = map[string]activitySession{}
+	}
+	now := time.Now()
+	for h, s := range kept {
+		if now.Before(s.Expires) {
+			b.acts.m[h] = s
+		}
+	}
 }
 
 func (a *activitySessions) add(user string) string {
@@ -99,11 +151,11 @@ func (a *activitySessions) add(user string) string {
 	}
 	now := time.Now()
 	for t, s := range a.m {
-		if now.After(s.expires) {
+		if now.After(s.Expires) {
 			delete(a.m, t)
 		}
 	}
-	a.m[token] = activitySession{user: user, expires: now.Add(activitySessionTTL)}
+	a.m[activityTokenHash(token)] = activitySession{User: user, Expires: now.Add(activitySessionTTL)}
 	return token
 }
 
@@ -115,11 +167,11 @@ func (a *activitySessions) user(r *http.Request) string {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	s, ok := a.m[token]
-	if !ok || time.Now().After(s.expires) {
+	s, ok := a.m[activityTokenHash(token)]
+	if !ok || time.Now().After(s.Expires) {
 		return ""
 	}
-	return s.user
+	return s.User
 }
 
 // activityReady reports whether the Activity can sign members in.
@@ -268,7 +320,9 @@ func (b *bot) activityToken(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = u.Username
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"session": b.acts.add(u.ID), "name": name, "access_token": tok.AccessToken, "mode": takeActivityLaunchMode(u.ID)})
+	session := b.acts.add(u.ID)
+	b.saveActivitySessions()
+	writeJSON(w, http.StatusOK, map[string]any{"session": session, "name": name, "access_token": tok.AccessToken, "mode": takeActivityLaunchMode(u.ID)})
 }
 
 // activityState is what the page shows.

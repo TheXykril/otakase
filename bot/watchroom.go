@@ -209,8 +209,11 @@ type watchRooms struct {
 	rooms map[string]*watchRoom
 	cache *segCache
 	edge  edgeUse // segments handed to the edge cache today (watchedge.go)
-	infos watchInfos
-	bg    sync.WaitGroup // an episode's lookups, so tests can wait them out
+	// lastSave is what saveWatchRooms last wrote (watchrestart.go). Only
+	// its loop and shutdown touch it.
+	lastSave string
+	infos    watchInfos
+	bg       sync.WaitGroup // an episode's lookups, so tests can wait them out
 }
 
 // room is the open room for this Activity instance, nil when there is
