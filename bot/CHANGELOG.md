@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.65
+
+- Watch Together: the room keeps playing after a seek, a skip of the opening or ending, a skip vote or a jump ahead. The host's player loading the new spot no longer pauses everyone until someone presses play again.
+- Watch Together: a skip by vote now moves the host's own player too, so the room doesn't jump back to where the host was.
+
 ## 1.30.64
 
 - Watch Together: the room chat beside the player is now exactly as tall as the video and its controls, instead of running past them.

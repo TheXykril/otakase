@@ -181,6 +181,23 @@ func TestWatchRoomControlsAndRequests(t *testing.T) {
 	if p := r.position(*now); p < 109.9 || p > 110.1 || r.dur != 1400 {
 		t.Fatalf("position %v dur %v", p, r.dur)
 	}
+	// A host player still loading after a jump keeps the room playing, and
+	// a seek right after it doesn't pause the room either.
+	watchPost(b, (*bot).watchBeat, "a", watchIn{Room: "r", Pos: 300, Playing: true, Buffering: true, Dur: 1400}, nil)
+	if !r.playing || !r.members["a"].stuck {
+		t.Fatalf("buffering host: playing %v stuck %v", r.playing, r.members["a"].stuck)
+	}
+	watchPost(b, (*bot).watchCtl, "a", watchIn{Room: "r", Act: "seek", Pos: 320}, nil)
+	if r.hold == 0 || r.holdPos != 320 {
+		t.Fatalf("seek while buffering should wait to play: hold %d at %v", r.hold, r.holdPos)
+	}
+	watchAllReady(b)
+	if !r.playing {
+		t.Fatal("room stayed paused after the seek")
+	}
+	watchPost(b, (*bot).watchBeat, "a", watchIn{Room: "r", Pos: 100, Playing: true, Dur: 1400}, nil)
+	*now = now.Add(10 * time.Second)
+
 	// Members can't control, only ask.
 	if code := watchPost(b, (*bot).watchCtl, "b", watchIn{Room: "r", Act: "pause"}, nil); code != http.StatusForbidden {
 		t.Fatalf("member control: %d", code)
