@@ -35,8 +35,8 @@ class PlaybackPageState extends State<PlaybackPage> {
     player = Player(
       configuration: const PlayerConfiguration(
         libass: true,
-        libassAndroidFont: 'assets/fonts/Inter-Regular.otf',
-        libassAndroidFontName: 'Inter',
+        libassAndroidFont: 'assets/fonts/NotoSansJP-Regular.otf',
+        libassAndroidFontName: 'Noto Sans JP',
       ),
     );
     video = VideoController(

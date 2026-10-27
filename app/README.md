@@ -66,6 +66,24 @@ for release-mode spike builds. This is a test APK, not a distribution signing
 setup. Never commit a key or key.properties. Use the same test key across
 updates, or uninstall the previous test app before installing a different key.
 
+## Release signing
+
+Release APKs are signed with the Otakase release key when
+`app/android/key.properties` exists. It is ignored by Git and looks like:
+
+```properties
+storeFile=/absolute/path/to/otakase-release.jks
+storePassword=...
+keyAlias=otakase
+keyPassword=...
+```
+
+Without it the build falls back to the machine's debug key. A debug-signed APK
+cannot update one signed with the release key (or one built on another
+machine), so every APK given to anyone must use the release key. Keep the
+keystore and its passwords backed up offline. Losing them means installed apps
+can only be replaced by uninstalling first.
+
 ## Core boundary
 
 mobilecore/ is public because gomobile builds a generated wrapper module which
@@ -145,8 +163,8 @@ both declare required=false, with phone and LEANBACK_LAUNCHER entries.
    HLS clip, with master, variant and segments served on device loopback. Every
    request must include X-Otakase-Probe, Referer and User-Agent or it gets 403.
    Confirm accepted resources include both playlists and segments, refused=0,
-   moving video, sound, red ASS heading and the rotated moving sign for 15s.
-3. Probe uses PlayerConfiguration(libass: true), a bundled Inter font, raw ASS
+   moving video, sound, red ASS heading, the rotated moving sign for 15s and the Japanese sign at top right (no empty boxes).
+3. Probe uses PlayerConfiguration(libass: true), a bundled Noto Sans JP font (Latin, kana and kanji), raw ASS
    content and native libass. No SRT/WebVTT conversion or Flutter subtitle
    overlay. Subtitles > Off and Load ASS probe allow comparing the same scene.
 4. Search with megavid, choose an episode and play it. Repeat with anikoto.
@@ -202,4 +220,4 @@ ffmpeg -f lavfi -i testsrc2=size=640x360:rate=24 \
 ```
 
 master.m3u8 names variant.m3u8. Synthetic media is about 2 MiB of the APK.
-Inter is copied from the existing mpv skin and retains the SIL OFL in assets/fonts.
+Noto Sans JP (notofonts/noto-cjk, SubsetOTF) is bundled under the SIL OFL in assets/fonts, so Japanese signs render instead of empty boxes.

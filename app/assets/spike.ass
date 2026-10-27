@@ -8,10 +8,11 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Inter,44,&H00FFFFFF,&H00FFFFFF,&H00101010,&H60000000,0,0,0,0,100,100,0,0,1,2,1,2,30,30,40,1
+Style: Default,Noto Sans JP,44,&H00FFFFFF,&H00FFFFFF,&H00101010,&H60000000,0,0,0,0,100,100,0,0,1,2,1,2,30,30,40,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 Dialogue: 0,0:00:00.00,9:59:59.00,Default,,0,0,0,,{\an8\pos(640,54)\c&H3648D8&\bord3}Otakase ASS probe
 Dialogue: 1,0:00:00.00,9:59:59.00,Default,,0,0,0,,{\an2\pos(640,650)}Styled {\b1}ASS{\b0} through libass, without conversion.
 Dialogue: 2,0:00:00.00,0:00:15.00,Default,,0,0,0,,{\an7\move(70,220,650,220)\frz-10\c&H50D8FF&}Moving and rotated sign
+Dialogue: 3,0:00:00.00,9:59:59.00,Default,,0,0,0,,{\an9\pos(1240,120)\c&H3648D8&}任 お任せ・日本語の看板

@@ -19,4 +19,4 @@ flutter:
   assets:
     - assets/probe/
     - assets/spike.ass
-    - assets/fonts/Inter-Regular.otf
+    - assets/fonts/NotoSansJP-Regular.otf
