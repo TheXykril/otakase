@@ -5,7 +5,8 @@
 ## 1.30.72
 
 - Watch Together: Continue lists every show you're watching. Shows you're caught up on are no longer hidden; they come last, at the latest episode.
-- Watch Together: a note under Continue says which watching shows aren't listed and why (moved off Watching on the other tracker, not out yet, 18+ outside an 18+ room, or not found on AniList).
+- Watch Together: a show you're watching on one tracker but still have in Planning on the other is listed again. Only Completed, Paused or Dropped on the other tracker hides it.
+- Watch Together: a note under Continue says which watching shows aren't listed and why (completed, paused or dropped on the other tracker, not out yet, 18+ outside an 18+ room, or not found on AniList).
 - Watch Together: the lone Continue tab button is gone; the list shows straight under the search.
 
 ## 1.30.71

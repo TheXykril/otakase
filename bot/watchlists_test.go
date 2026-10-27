@@ -54,7 +54,7 @@ func TestWatchListNote(t *testing.T) {
 		t.Errorf("nothing hidden: %q", n)
 	}
 	n := watchListNote(watchListHidden{notOut: []string{"Soon"}, adult: 2, notFound: 1}, map[string][]string{"MyAnimeList": {"Gone"}})
-	want := "Not listed: Gone (not in Watching on MyAnimeList); Soon (not out yet); 2 18+ shows (only in an 18+ room); 1 MyAnimeList show (not found on AniList)."
+	want := "Not listed: Gone (completed, paused or dropped on MyAnimeList); Soon (not out yet); 2 18+ shows (only in an 18+ room); 1 MyAnimeList show (not found on AniList)."
 	if n != want {
 		t.Errorf("note:\n%s\nwant\n%s", n, want)
 	}
@@ -148,6 +148,20 @@ func TestWatchRoomResumesFromSavedPosition(t *testing.T) {
 	}
 }
 
+// Planning on the other tracker only lags behind; it doesn't hide a show.
+func TestMovedOn(t *testing.T) {
+	for _, s := range []string{"COMPLETED", "PAUSED", "DROPPED", "completed", "on_hold", "dropped"} {
+		if !movedOn(s) {
+			t.Errorf("%s not moved on", s)
+		}
+	}
+	for _, s := range []string{"CURRENT", "REPEATING", "PLANNING", "watching", "plan_to_watch", ""} {
+		if movedOn(s) {
+			t.Errorf("%s moved on", s)
+		}
+	}
+}
+
 func TestDropOffWatching(t *testing.T) {
 	a, b := listShow(1, 12, 0), listShow(2, 12, 0)
 	a.MalID, b.MalID = 101, 102
@@ -196,7 +210,7 @@ func TestWatchListsLeaveShowsMovedOn(t *testing.T) {
 	if len(lists.Continue) != 1 || lists.Continue[0].ID != 1 {
 		t.Errorf("continue: %+v", lists.Continue)
 	}
-	if !strings.Contains(lists.Note, "not in Watching on AniList") || !strings.Contains(lists.Note, "not in Watching on MyAnimeList") {
+	if !strings.Contains(lists.Note, "completed, paused or dropped on AniList") || !strings.Contains(lists.Note, "completed, paused or dropped on MyAnimeList") {
 		t.Errorf("note: %q", lists.Note)
 	}
 }

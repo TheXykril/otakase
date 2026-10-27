@@ -14,11 +14,12 @@ import (
 // search: Continue, every show they are watching, at the next episode, from
 // where Otakase or the room last stopped when there is a saved
 // [otakase:ep@secs] tag for it. Shows caught up with what has aired come
-// after the rest, at the latest episode. A show moved out of Watching on
-// either tracker leaves it, saved position or not; the note under the list
-// says which shows were left out and why. The lists come from the
-// member's linked AniList (read with their own token, so a private list
-// shows to them) and MyAnimeList; nobody else's lists are ever read.
+// after the rest, at the latest episode. A show completed, paused or
+// dropped on either tracker leaves it, saved position or not; the note
+// under the list says which shows were left out and why. The lists come
+// from the member's linked AniList (read with their own token, so a
+// private list shows to them) and MyAnimeList; nobody else's lists are
+// ever read.
 
 // watchListMax is how many shows the list shows.
 const watchListMax = 50
@@ -152,8 +153,9 @@ var malWatchList = func(token string) ([]watchListEntry, error) {
 	return out, nil
 }
 
-// anilistOffWatching is which of shows (AniList ids) are on the member's
-// AniList in a list other than Watching and Rewatching.
+// anilistOffWatching is which of shows (AniList ids) the member moved on
+// from on AniList: Completed, Paused or Dropped. Planning isn't moving on;
+// that list just hasn't caught up with the other tracker yet.
 var anilistOffWatching = func(token string, userID int, shows []int) (map[int]bool, error) {
 	off := map[int]bool{}
 	if len(shows) == 0 {
@@ -174,15 +176,25 @@ var anilistOffWatching = func(token string, userID int, shows []int) (map[int]bo
 		return nil, tokenErr(err)
 	}
 	for _, e := range r.Data.Page.MediaList {
-		if e.Status != "CURRENT" && e.Status != "REPEATING" {
+		if movedOn(e.Status) {
 			off[e.MediaID] = true
 		}
 	}
 	return off, nil
 }
 
-// malOffWatching is which shows (MyAnimeList ids) are on the member's
-// MyAnimeList in a list other than Watching.
+// movedOn is whether a list status, AniList's or MyAnimeList's, means
+// the member is done with the show for now.
+func movedOn(status string) bool {
+	switch status {
+	case "COMPLETED", "PAUSED", "DROPPED", "completed", "on_hold", "dropped":
+		return true
+	}
+	return false
+}
+
+// malOffWatching is which shows (MyAnimeList ids) the member moved on from
+// on MyAnimeList: Completed, On Hold or Dropped, not Plan to Watch.
 var malOffWatching = func(token string) (map[int]bool, error) {
 	var r struct {
 		Data []struct {
@@ -200,7 +212,7 @@ var malOffWatching = func(token string) (map[int]bool, error) {
 	}
 	off := map[int]bool{}
 	for _, e := range r.Data {
-		if e.ListStatus.Status != "watching" {
+		if movedOn(e.ListStatus.Status) {
 			off[e.Node.ID] = true
 		}
 	}
@@ -322,7 +334,7 @@ func watchListNote(h watchListHidden, movedOn map[string][]string) string {
 	var parts []string
 	for _, tracker := range []string{"AniList", "MyAnimeList"} {
 		if t := movedOn[tracker]; len(t) > 0 {
-			parts = append(parts, strings.Join(t, ", ")+" (not in Watching on "+tracker+")")
+			parts = append(parts, strings.Join(t, ", ")+" (completed, paused or dropped on "+tracker+")")
 		}
 	}
 	if len(h.notOut) > 0 {
@@ -395,9 +407,9 @@ func (b *bot) userWatchLists(user string, adult bool) watchLists {
 			logWatchErr("mal lists", user, err)
 		}
 	}
-	// With both linked, a show watched on one but moved on on the other
-	// was put down: the trackers only disagree until the app or the
-	// member syncs them.
+	// With both linked, a show watched on one but completed, paused or
+	// dropped on the other was put down: the trackers only disagree until
+	// the app or the member syncs them. Planning on the other one isn't.
 	movedOn := map[string][]string{}
 	if out.AniList && out.MAL && alErr == nil && malErr == nil {
 		var ids []int
