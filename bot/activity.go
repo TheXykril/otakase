@@ -322,6 +322,7 @@ func (b *bot) activityToken(w http.ResponseWriter, r *http.Request) {
 	}
 	session := b.acts.add(u.ID)
 	b.saveActivitySessions()
+	b.syncTrackersSoon(u.ID)
 	writeJSON(w, http.StatusOK, map[string]any{"session": session, "name": name, "access_token": tok.AccessToken, "mode": takeActivityLaunchMode(u.ID)})
 }
 

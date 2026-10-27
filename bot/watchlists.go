@@ -381,6 +381,7 @@ func (b *bot) userWatchLists(user string, adult bool) watchLists {
 	if !out.AniList && !out.MAL {
 		return out
 	}
+	b.syncTrackersSoon(user)
 	var alWatching, malWatching []watchListEntry
 	var alErr, malErr error
 	// A proven link reads with the member's token, so a private list

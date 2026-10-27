@@ -172,6 +172,7 @@ func TestWatchListsLeaveShowsMovedOn(t *testing.T) {
 	b.store.update(func(d *storeData) {
 		d.AniList = map[string]anilistLink{"a": {ID: 11, Verified: true, Token: "ta"}}
 		d.MAL = map[string]malLink{"a": {AccessToken: "tm", Expires: appNow().Add(48 * time.Hour)}}
+		d.Settings = map[string]string{"tracker_sync": "false"} // trackersync_test.go covers it
 	})
 	b.cfg.MALClientID, b.cfg.MALSecret = "id", "secret"
 	shows := []watchShow{listShow(1, 12, 0), listShow(2, 12, 0), listShow(3, 12, 0)}
