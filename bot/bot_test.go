@@ -157,7 +157,11 @@ const sampleStatus = `Provider status (search query: "one piece")
 `
 
 func TestParseProviderStatus(t *testing.T) {
-	list := parseProviderStatus(sampleStatus)
+	all := parseProviderStatus(sampleStatus)
+	if len(all) != 3 || !all[2].adult {
+		t.Fatalf("got %+v, want 3 providers with the last one 18+", all)
+	}
+	list := visibleProviders(all, false)
 	if len(list) != 2 {
 		t.Fatalf("got %d providers, want 2 (adult one hidden): %+v", len(list), list)
 	}
@@ -169,6 +173,21 @@ func TestParseProviderStatus(t *testing.T) {
 	}
 	if !strings.Contains(providerLine(list[0]), "under maintenance") {
 		t.Errorf("failure detail missing: %s", providerLine(list[0]))
+	}
+}
+
+func TestProviderEmbedAdult(t *testing.T) {
+	all := parseProviderStatus(sampleStatus)
+	hidden := providerEmbed(all, "otakase 1", false)
+	if strings.Contains(hidden.Description, "18+") || hidden.Title != "Sources: 1 of 2 working" {
+		t.Errorf("18+ source shown to everyone: %s / %s", hidden.Title, hidden.Description)
+	}
+	shown := providerEmbed(all, "otakase 1", true)
+	if shown.Title != "Sources: 1 of 3 working" || !strings.Contains(shown.Description, "**nyaa 18+** · not answering · needs AdultContent") {
+		t.Errorf("18+ source missing: %s / %s", shown.Title, shown.Description)
+	}
+	if strings.Contains(strings.ToLower(shown.Description+shown.Footer.Text), "sukebei") {
+		t.Errorf("host name leaked: %s", shown.Description)
 	}
 }
 

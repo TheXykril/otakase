@@ -31,8 +31,17 @@ var (
 	resultsRe      = regexp.MustCompile(`^(\d+) result\(s\) in (.+)$`)
 )
 
-// adultProviders are never listed; they only serve 18+ titles.
-var adultProviders = map[string]bool{"sukebei": true}
+// adultProviders only serve 18+ titles. They are listed only to members
+// whose linked AniList shows adult content, under a discreet name.
+var adultProviders = map[string]string{"sukebei": "nyaa 18+"}
+
+// providerDisplayName is the name members see for a source.
+func providerDisplayName(name string) string {
+	if n, ok := adultProviders[name]; ok {
+		return n
+	}
+	return name
+}
 
 // parseProviderStatus reads the CLI's report.
 func parseProviderStatus(out string) []providerResult {
@@ -40,7 +49,8 @@ func parseProviderStatus(out string) []providerResult {
 	var cur *providerResult
 	for _, line := range strings.Split(out, "\n") {
 		if m := providerLineRe.FindStringSubmatch(line); m != nil {
-			list = append(list, providerResult{Name: m[2], OK: m[1] == "✓", Enabled: !strings.Contains(m[3], "disabled")})
+			_, adult := adultProviders[m[2]]
+			list = append(list, providerResult{Name: m[2], OK: m[1] == "✓", Enabled: !strings.Contains(m[3], "disabled"), adult: adult})
 			cur = &list[len(list)-1]
 			continue
 		}
@@ -58,13 +68,18 @@ func parseProviderStatus(out string) []providerResult {
 			cur.Detail = t
 		}
 	}
-	out2 := list[:0]
+	return list
+}
+
+// visibleProviders is the list without the 18+ sources unless adult is set.
+func visibleProviders(list []providerResult, adult bool) []providerResult {
+	var out []providerResult
 	for _, p := range list {
-		if !p.adult && !adultProviders[p.Name] {
-			out2 = append(out2, p)
+		if adult || !p.adult {
+			out = append(out, p)
 		}
 	}
-	return out2
+	return out
 }
 
 func providerLine(p providerResult) string {
@@ -79,15 +94,23 @@ func providerLine(p providerResult) string {
 			detail = detail[i+2:]
 		}
 		detail = clip(detail, 80)
+		if p.adult {
+			// The error can name the 18+ host; keep it discreet.
+			detail = "not answering"
+		}
 	}
 	state := ""
-	if !p.Enabled {
+	switch {
+	case !p.Enabled && p.adult:
+		state = " · needs AdultContent"
+	case !p.Enabled:
 		state = " · off by default"
 	}
-	return fmt.Sprintf("%s **%s** · %s%s", icon, p.Name, detail, state)
+	return fmt.Sprintf("%s **%s** · %s%s", icon, providerDisplayName(p.Name), detail, state)
 }
 
-func providerEmbed(list []providerResult, version string) *discordgo.MessageEmbed {
+func providerEmbed(list []providerResult, version string, adult bool) *discordgo.MessageEmbed {
+	list = visibleProviders(list, adult)
 	working := 0
 	var lines []string
 	for _, p := range list {
@@ -103,6 +126,9 @@ func providerEmbed(list []providerResult, version string) *discordgo.MessageEmbe
 		Footer:      &discordgo.MessageEmbedFooter{Text: "Checked with " + version + " · run otakase -provider-status to compare with yours"},
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
+	if adult {
+		e.Footer.Text += " · 18+ sources shown because your AniList allows adult content"
+	}
 	if working == 0 {
 		e.Color = 0x8A8276
 	}
@@ -112,22 +138,76 @@ func providerEmbed(list []providerResult, version string) *discordgo.MessageEmbe
 // providerCache keeps the last report for five minutes, so a busy support
 // channel doesn't run the check over and over.
 type providerCache struct {
-	mu    sync.Mutex
-	at    time.Time
-	embed *discordgo.MessageEmbed
+	mu      sync.Mutex
+	at      time.Time
+	list    []providerResult
+	version string
 }
 
-func (b *bot) providerStatus() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
-	e, comps := b.checkProviders()
-	return withAppReports(e, appNow()), comps
+// providerStatus is the source check as one viewer should see it: 18+
+// sources only when adult is set.
+func (b *bot) providerStatus(adult bool) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	list, version, fail := b.checkProviders()
+	if fail != nil {
+		return fail, nil
+	}
+	return withAppReports(providerEmbed(list, version, adult), appNow(), adult), nil
 }
 
-func (b *bot) checkProviders() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+// providerStatusFor answers /provider-status. The reply is only seen by
+// the member who asked, so it can list the 18+ sources when their AniList
+// allows adult content.
+func (b *bot) providerStatusFor(userID string) func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	return func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+		return b.providerStatus(b.adultAllowed(userID))
+	}
+}
+
+// adultAllowed reports whether the member's linked AniList has adult
+// content turned on. Members without a linked AniList, or linked by name
+// only (the bot can't read their settings then), count as off.
+func (b *bot) adultAllowed(userID string) bool {
+	var link anilistLink
+	b.store.view(func(d *storeData) { link = d.AniList[userID] })
+	if link.Token == "" {
+		return false
+	}
+	on, err := anilistDisplaysAdult(link.Token)
+	if err != nil {
+		log.Printf("adult setting: %v", err)
+		return false
+	}
+	return on
+}
+
+// anilistDisplaysAdult reads the viewer's "18+ content" setting.
+func anilistDisplaysAdult(token string) (bool, error) {
+	var r struct {
+		Data struct {
+			Viewer *struct {
+				Options struct {
+					DisplayAdultContent bool `json:"displayAdultContent"`
+				} `json:"options"`
+			} `json:"Viewer"`
+		} `json:"data"`
+	}
+	if err := anilistSocialPost(token, `{ Viewer { options { displayAdultContent } } }`, nil, &r); err != nil {
+		return false, err
+	}
+	if r.Data.Viewer == nil {
+		return false, fmt.Errorf("no viewer")
+	}
+	return r.Data.Viewer.Options.DisplayAdultContent, nil
+}
+
+// checkProviders runs the CLI's check, or returns the cached result. fail
+// is set instead when there is nothing to show.
+func (b *bot) checkProviders() (list []providerResult, version string, fail *discordgo.MessageEmbed) {
 	c := &b.providers
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.embed != nil && time.Since(c.at) < 5*time.Minute {
-		return c.embed, nil
+	if c.list != nil && time.Since(c.at) < 5*time.Minute {
+		return c.list, c.version, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
@@ -140,24 +220,24 @@ func (b *bot) checkProviders() (*discordgo.MessageEmbed, []discordgo.MessageComp
 		return string(out), err
 	}
 	out, err := run("-provider-status")
-	list := parseProviderStatus(out)
-	if len(list) == 0 {
+	list = parseProviderStatus(out)
+	if len(visibleProviders(list, false)) == 0 {
 		if errors.Is(err, exec.ErrNotFound) {
-			return errorEmbed("The source check isn't available on this bot right now. Run `otakase -provider-status` yourself instead."), nil
+			return nil, "", errorEmbed("The source check isn't available on this bot right now. Run `otakase -provider-status` yourself instead.")
 		}
 		if err != nil {
-			return errorEmbed("Couldn't run the source check here (%v). Run `otakase -provider-status` yourself instead.", err), nil
+			return nil, "", errorEmbed("Couldn't run the source check here (%v). Run `otakase -provider-status` yourself instead.", err)
 		}
-		return errorEmbed("The source check gave no results. Run `otakase -provider-status` yourself instead."), nil
+		return nil, "", errorEmbed("The source check gave no results. Run `otakase -provider-status` yourself instead.")
 	}
-	version := "otakase"
+	version = "otakase"
 	if v, err := run("-v"); err == nil {
 		if i := strings.LastIndex(strings.TrimSpace(v), " "); i >= 0 {
 			version = "otakase " + strings.TrimSpace(v)[i+1:]
 		}
 	}
-	c.embed, c.at = providerEmbed(list, version), time.Now()
-	return c.embed, nil
+	c.list, c.version, c.at = list, version, time.Now()
+	return list, version, nil
 }
 
 // downRe spots "is it down?" questions in chat, which get the source check
@@ -179,7 +259,8 @@ func (b *bot) downCheck(m *discordgo.MessageCreate) {
 	}
 	go func() {
 		_ = b.s.ChannelTyping(m.ChannelID)
-		e, _ := b.providerStatus()
+		// Everyone in the channel sees this one, so no 18+ sources.
+		e, _ := b.providerStatus(false)
 		_, err := b.s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 			Content:         "Here's what works from the bot's side right now:",
 			Embeds:          []*discordgo.MessageEmbed{e},

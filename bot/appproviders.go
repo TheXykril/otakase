@@ -115,13 +115,14 @@ type providerTally struct {
 }
 
 // providerTallies counts the reports of the last window by source, failing
-// ones first. Adult-only sources are left out, as in the source check.
-func providerTallies(now time.Time) []providerTally {
+// ones first. Adult-only sources are left out unless adult is set, as in
+// the source check.
+func providerTallies(now time.Time, adult bool) []providerTally {
 	appProviderReports.Lock()
 	defer appProviderReports.Unlock()
 	var list []providerTally
 	for name, byUser := range appProviderReports.m {
-		if adultProviders[name] {
+		if _, ok := adultProviders[name]; ok && !adult {
 			continue
 		}
 		t := providerTally{Name: name}
@@ -156,13 +157,14 @@ func providerTallies(now time.Time) []providerTally {
 func providerReportLines(list []providerTally, now time.Time) []string {
 	var lines []string
 	for _, t := range list {
+		name := providerDisplayName(t.Name)
 		switch {
 		case t.Failing > 0 && t.Works > 0:
-			lines = append(lines, fmt.Sprintf("🟠 **%s** failing for %s, working for %d (latest %s)", t.Name, dashPlural(t.Failing, "member"), t.Works, agoText(now.Sub(t.Recent))))
+			lines = append(lines, fmt.Sprintf("🟠 **%s** failing for %s, working for %d (latest %s)", name, dashPlural(t.Failing, "member"), t.Works, agoText(now.Sub(t.Recent))))
 		case t.Failing > 0:
-			lines = append(lines, fmt.Sprintf("🔴 **%s** failing for %s (latest %s)", t.Name, dashPlural(t.Failing, "member"), agoText(now.Sub(t.Recent))))
+			lines = append(lines, fmt.Sprintf("🔴 **%s** failing for %s (latest %s)", name, dashPlural(t.Failing, "member"), agoText(now.Sub(t.Recent))))
 		default:
-			lines = append(lines, fmt.Sprintf("🟢 **%s** working for %s", t.Name, dashPlural(t.Works, "member")))
+			lines = append(lines, fmt.Sprintf("🟢 **%s** working for %s", name, dashPlural(t.Works, "member")))
 		}
 		if len(lines) == 10 {
 			break
@@ -185,8 +187,8 @@ func agoText(d time.Duration) string {
 
 // withAppReports is a copy of the source check with what the apps reported
 // added as a field; the cached check itself is left alone.
-func withAppReports(e *discordgo.MessageEmbed, now time.Time) *discordgo.MessageEmbed {
-	lines := providerReportLines(providerTallies(now), now)
+func withAppReports(e *discordgo.MessageEmbed, now time.Time, adult bool) *discordgo.MessageEmbed {
+	lines := providerReportLines(providerTallies(now, adult), now)
 	if e == nil || len(lines) == 0 {
 		return e
 	}

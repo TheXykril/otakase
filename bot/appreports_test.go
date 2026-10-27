@@ -87,7 +87,7 @@ func TestProviderReports(t *testing.T) {
 	now = now.Add(10 * time.Minute)
 	send("u3", `{"provider":"allanime","ok":true}`)
 
-	lines := providerReportLines(providerTallies(now), now)
+	lines := providerReportLines(providerTallies(now, false), now)
 	want := []string{
 		"🟠 **allanime** failing for 2 members, working for 2 (latest 10 min ago)",
 		"🟢 **anikoto** working for 1 member",
@@ -95,7 +95,11 @@ func TestProviderReports(t *testing.T) {
 	if strings.Join(lines, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("lines:\n%s", strings.Join(lines, "\n"))
 	}
-	e := withAppReports(&discordgo.MessageEmbed{Title: "Sources"}, now)
+	adult := providerReportLines(providerTallies(now, true), now)
+	if len(adult) != 3 || !strings.Contains(strings.Join(adult, "\n"), "🔴 **nyaa 18+** failing for 1 member") {
+		t.Fatalf("18+ lines:\n%s", strings.Join(adult, "\n"))
+	}
+	e := withAppReports(&discordgo.MessageEmbed{Title: "Sources"}, now, false)
 	if len(e.Fields) != 1 || !strings.Contains(e.Fields[0].Value, "allanime") {
 		t.Fatalf("embed: %+v", e.Fields)
 	}
@@ -104,10 +108,10 @@ func TestProviderReports(t *testing.T) {
 	}
 	// Old reports drop out of the window.
 	later := now.Add(4 * time.Hour)
-	if got := providerTallies(later); len(got) != 0 {
+	if got := providerTallies(later, false); len(got) != 0 {
 		t.Fatalf("stale tallies: %v", got)
 	}
-	if e := withAppReports(&discordgo.MessageEmbed{Title: "Sources"}, later); len(e.Fields) != 0 {
+	if e := withAppReports(&discordgo.MessageEmbed{Title: "Sources"}, later, false); len(e.Fields) != 0 {
 		t.Fatal("no field without reports")
 	}
 }

@@ -122,7 +122,7 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		case "link-github":
 			b.startGitHubLink(i)
 		case "provider-status":
-			b.deferThen(i, true, b.providerStatus)
+			b.deferThen(i, true, b.providerStatusFor(interactionUser(i).ID))
 		case "bug":
 			b.reportBug(i)
 		case "watchparty":
