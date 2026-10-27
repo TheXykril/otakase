@@ -513,9 +513,12 @@ The first tile, **Watch room** (`watchroom.go`, `watchrelay.go`,
 anime for everyone in the call, in step. Opening one takes a watch ticket
 (from `/redeem` codes); the ticket is spent once the first episode plays,
 so a room that never plays costs nothing. Staff and the Game Champion
-need none (below). Only one
-room runs at a time across the server; other calls see where it is. Members'
-own `/watchparty` parties are separate.
+need none (below). Each call (Activity instance) has its own room, and up
+to `/settings watch_rooms_max` rooms (default 3) run at once across the
+server; `b.watch.rooms` maps instance ids to rooms. Every room is relayed on
+its own, so the bot's upload is the sum of all rooms' viewers. Once the
+limit is reached, other calls see where the rooms are and can't open
+another. Members' own `/watchparty` parties are separate.
 
 - The member who opens it hosts: they search AniList, pick an episode and
   sub or dub, and control playback. Everyone else follows the host's
@@ -553,10 +556,11 @@ own `/watchparty` parties are separate.
   the call. An invite grants nothing on its own — they still have to be
   able to join the voice channel — but an invite to an 18+ room also opens
   that private voice channel to them, the way `/room-invite` does.
-- `GET watch/status` also describes the room running in another call for
-  the lobby and the menu tile: show, cover, episode, host, people and voice
-  channel. For a room in an age-restricted channel it only says that one
-  runs and where.
+- `GET watch/status` describes the room in this call at its top level
+  (`here`), and every room running in other calls under `rooms`, oldest
+  first, for the lobby and the menu tile: show, cover, episode, host,
+  people and voice channel. For a room in an age-restricted channel it only
+  says that one runs and where. `full` is set when no other room can open.
 - **Room events** (`watchevents.go`) are short notes about what just
   happened: a member's play, pause, seek, +10s or episode change, hosting
   passing on, an automatic or voted skip, people joining, leaving or
@@ -586,8 +590,9 @@ own `/watchparty` parties are separate.
   `/settings watch_room_max` sets how many fit in it (default 10; the
   opener and staff always get in).
 - Staff and this week's **Game Champion** (`Champions` in the data file)
-  open rooms without a ticket; their room lasts 8 hours and fits
-  `/settings watch_room_max_perks` people (default 30). The room keeps this
+  open rooms without a ticket; their room lasts 8 hours. A staff room fits
+  `/settings watch_room_max_perks` people (default 30), a Game Champion's
+  `/settings watch_room_max_champion` (default 20). The room keeps this
   for its life even if the role moves on.
 - 18+ shows only in age-restricted voice channels.
 - Each member's preferences (the Activity's preferences button) hold audio,

@@ -113,7 +113,7 @@ func TestWatchRoomOpensWithOwnersSkipPreferences(t *testing.T) {
 	})
 	watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
 	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r", Channel: "vc"}, nil)
-	if r := b.watch.cur; !r.autoSkipOP || r.autoSkipED {
+	if r := b.watch.only(); !r.autoSkipOP || r.autoSkipED {
 		t.Fatalf("skips op=%v ed=%v, want the owner's (op only)", r.autoSkipOP, r.autoSkipED)
 	}
 	if p := watchNormalizePreferences(watchPlaybackPreferences{SkipED: true}); !p.SkipED || p.SkipOP {

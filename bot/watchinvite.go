@@ -74,8 +74,8 @@ func (b *bot) watchPeopleAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.watch.mu.Lock()
-	cur := b.watch.cur
-	if cur == nil || cur.id != r.URL.Query().Get("room") {
+	cur := b.watch.room(r.URL.Query().Get("room"))
+	if cur == nil {
 		b.watch.mu.Unlock()
 		apiError(w, http.StatusNotFound, "the watch room is over")
 		return

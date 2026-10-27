@@ -330,7 +330,7 @@ func (b *bot) watchListsAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	adult := false
 	b.watch.mu.Lock()
-	if cur := b.watch.cur; cur != nil && cur.id == r.URL.Query().Get("room") {
+	if cur := b.watch.room(r.URL.Query().Get("room")); cur != nil {
 		adult = cur.adult
 	}
 	b.watch.mu.Unlock()

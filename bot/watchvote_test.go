@@ -22,10 +22,10 @@ func watchVoteRoom(t *testing.T, now time.Time) (*bot, *watchRoom) {
 	}
 	b := testGamesBot(t)
 	b.cfg.GuildID = "g"
-	b.watch.cur = room
+	b.watch.add(room)
 	t.Cleanup(func() {
 		b.watch.mu.Lock()
-		b.watch.cur = nil
+		b.watch.rooms = nil
 		b.watch.mu.Unlock()
 	})
 	return b, room
@@ -160,15 +160,19 @@ func TestWatchStatusShowsLiveRoom(t *testing.T) {
 	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r1", Show: 5, Ep: 3}, nil)
 	waitLoaded(t, b)
 	st := status("x", "elsewhere")
-	if st["busy"] != true || st["here"] != false || st["show"] != "Show 5" || st["ep"] != float64(3) ||
+	if st["busy"] != true || st["here"] != nil {
+		t.Fatalf("room elsewhere: %v", st)
+	}
+	st = st["rooms"].([]any)[0].(map[string]any)
+	if st["show"] != "Show 5" || st["ep"] != float64(3) ||
 		st["host"] != "member a" || st["people"] != float64(1) || st["channel_name"] != "lounge" || st["playing"] != true {
 		t.Fatalf("live room: %v", st)
 	}
 	// An 18+ room says only that it runs, and where.
 	b.watch.mu.Lock()
-	b.watch.cur.adult = true
+	b.watch.only().adult = true
 	b.watch.mu.Unlock()
-	st = status("x", "elsewhere")
+	st = status("x", "elsewhere")["rooms"].([]any)[0].(map[string]any)
 	if st["adult"] != true || st["show"] != nil || st["host"] != nil || st["cover"] != nil || st["ep"] != nil {
 		t.Fatalf("18+ room leaked: %v", st)
 	}
@@ -195,7 +199,7 @@ func TestWatchRoomEvents(t *testing.T) {
 		t.Fatalf("events %q", texts)
 	}
 	// They only last a moment.
-	r := b.watch.cur
+	r := b.watch.only()
 	*now = now.Add(watchEventTTL + time.Second)
 	for _, m := range r.members {
 		m.seen = *now

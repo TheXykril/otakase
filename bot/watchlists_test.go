@@ -109,7 +109,7 @@ func TestWatchRoomResumesFromSavedPosition(t *testing.T) {
 	watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
 	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 7, Ep: 5, Pos: 754}, nil)
 	waitLoaded(t, b)
-	r := b.watch.cur
+	r := b.watch.only()
 	b.watch.mu.Lock()
 	pos := r.position(*now)
 	b.watch.mu.Unlock()

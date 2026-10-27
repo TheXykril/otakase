@@ -45,7 +45,7 @@ func TestWatchRoomSavesWhereMembersStop(t *testing.T) {
 	}
 	t.Cleanup(func() { anilistResume = old })
 	tick := func(n int, keep ...string) {
-		r := b.watch.cur
+		r := b.watch.only()
 		for k := 0; k < n; k++ {
 			*now = now.Add(watchTick)
 			b.watch.mu.Lock()

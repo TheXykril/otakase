@@ -58,14 +58,18 @@ async function watchView() {
   soundApply();
   const st = await api(`watch/status?room=${encodeURIComponent(room)}`);
   if (where !== "watch") return;
-  if (st.busy && !st.here) {
-    const by = st.ends ? ` It ends by ${new Date(st.ends).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.` : "";
-    return wBox(`<h3 class="lh">${icon("watch")} Live now</h3>${wLiveCard(st)}
-      <p class="note">Only one room runs at a time, since the bot streams it to everyone. Join that voice channel and open the Activity there to watch along.${by}</p>`);
+  if (st.here) return watchJoin();
+  const live = st.rooms || [];
+  const liveCards = live.map(wLiveCard).join("");
+  if (st.full) {
+    const ends = live.map((r) => r.ends).filter(Boolean);
+    const by = ends.length ? ` The next one ends by ${new Date(Math.min(...ends)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.` : "";
+    return wBox(`<h3 class="lh">${icon("watch")} Live now</h3>${liveCards}
+      <p class="note">All ${st.rooms_max} watch room${st.rooms_max === 1 ? " is" : "s are"} in use, since the bot streams each one itself. Join one of those voice channels and open the Activity there to watch along.${by}</p>`);
   }
-  if (st.busy) return watchJoin();
   const t = st.tickets || 0;
-  wBox(`<p class="lead">The bot plays an anime for everyone in this call, in step. Whoever opens the room picks the show and controls it; everyone else can ask for a pause or a skip.</p>
+  wBox(`${live.length ? `<h3 class="lh">${icon("watch")} Live now</h3>${liveCards}
+    <p class="note">Join that voice channel to watch along, or open a room of your own in this call.</p>` : ""}<p class="lead">The bot plays an anime for everyone in this call, in step. Whoever opens the room picks the show and controls it; everyone else can ask for a pause or a skip.</p>
     <p class="note">Up to ${st.max} people · 720p · ${st.perks ? "8" : "4"} hours from the first episode · your AniList or MAL moves on as you watch (link them with /link-anilist and /link-mal).</p>
     ${st.perks
       ? `<p>${icon("star")} ${st.perks === "staff" ? "You're <b>staff</b>" : "You're this week's <b>Game Champion</b>"}: your rooms need no ticket, last 8 hours and fit up to ${st.max} people.</p>`
@@ -76,7 +80,7 @@ async function watchView() {
   if (b) b.onclick = () => ((b.disabled = true), watchJoin().catch((e) => ((b.disabled = false), showError(e))));
 }
 
-// wLiveCard is the room running in another call, as the lobby shows it.
+// wLiveCard is a room running in another call, as the lobby shows it.
 // An 18+ room only says that one runs and where.
 function wLiveCard(st) {
   const at = st.channel_name ? "#" + st.channel_name : "another call";
