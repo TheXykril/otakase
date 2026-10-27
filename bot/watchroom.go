@@ -89,7 +89,8 @@ type watchAsk struct {
 	ID   int       `json:"id"`
 	User string    `json:"user"`
 	Name string    `json:"name"`
-	Kind string    `json:"kind"` // pause, play, forward (10s), next
+	Kind string    `json:"kind"`    // pause, play, forward (10s), next
+	Left int64     `json:"left_ms"` // until it lapses, set for each view
 	At   time.Time `json:"-"`
 }
 
@@ -172,7 +173,6 @@ type watchRoom struct {
 	// The ready check (watchready.go): hold is the running check's id, 0
 	// when there is none; the room waits at holdPos until holdUntil.
 	hold      int
-	holdN     int
 	holdPos   float64
 	holdUntil time.Time
 	ready     map[string]bool
@@ -1241,6 +1241,7 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 	}
 	for _, a := range r.asks {
 		if v.IsHost || a.User == user {
+			a.Left = max(0, (watchAskTTL - now.Sub(a.At)).Milliseconds())
 			v.Asks = append(v.Asks, a)
 		}
 	}

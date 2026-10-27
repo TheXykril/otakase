@@ -198,3 +198,23 @@ func TestWatchLadder(t *testing.T) {
 		t.Fatalf("single:\n%s", out)
 	}
 }
+
+// A page remembers the last check it answered, so two rooms (or one room
+// opened again) must never hand out the same check id.
+func TestWatchHoldIDsNeverRepeat(t *testing.T) {
+	now := time.Now()
+	room := func() *watchRoom {
+		return &watchRoom{members: map[string]*watchMember{"a": {}, "b": {}}}
+	}
+	first, second := room(), room()
+	first.holdAt(0, watchReadyFirst, now)
+	second.holdAt(0, watchReadyFirst, now)
+	if first.hold == 0 || first.hold == second.hold {
+		t.Fatalf("hold ids %d and %d", first.hold, second.hold)
+	}
+	was := second.hold
+	second.holdAt(30, watchReadyWait, now)
+	if second.hold == was {
+		t.Fatal("the next check in a room kept the old id")
+	}
+}

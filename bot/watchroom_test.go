@@ -221,6 +221,13 @@ func TestWatchRoomControlsAndRequests(t *testing.T) {
 	if len(v.Asks) != 1 || v.Asks[0].Kind != "pause" {
 		t.Fatalf("host sees %+v", v.Asks)
 	}
+	// The host's pop-up counts down to when the request lapses.
+	b.watch.mu.Lock()
+	later := b.watchViewOf(r, "a", false, now.Add(10*time.Second))
+	b.watch.mu.Unlock()
+	if v.Asks[0].Left != watchAskTTL.Milliseconds() || later.Asks[0].Left != (watchAskTTL-10*time.Second).Milliseconds() {
+		t.Fatalf("time left: %d then %d", v.Asks[0].Left, later.Asks[0].Left)
+	}
 	if code := watchPost(b, (*bot).watchAnswer, "a", watchIn{Room: "r", ID: v.Asks[0].ID, OK: true}, &v); code != 200 || v.Playing || len(v.Asks) != 0 {
 		t.Fatalf("answer: %d %+v", code, v)
 	}

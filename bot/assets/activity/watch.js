@@ -39,6 +39,8 @@ let wJump = false; // the host's spot moved: follow it at once
 let wChatSeen = 0; // the last chat message drawn
 let wEventSeen = 0; // the last room event flashed
 let wEventTimer = 0;
+let wAskSeen = 0; // the last request the host was pinged for
+let wAskKey = ""; // the requests the theater pop-ups show now
 let wChatUnread = 0;
 let wChatOpen = false; // the chat panel in theater mode
 let wChatDraft = "";
@@ -53,7 +55,7 @@ const wFmt = (s) => {
   return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 };
 
-const ASK_TEXT = { pause: "pause", play: "play", skip: "skip the opening", next: "go to the next episode" };
+const ASK_TEXT = { pause: "pause", play: "play", forward: "skip ahead 10 seconds", next: "go to the next episode" };
 
 // watchView is the tile's page: the lobby, then the room.
 async function watchView() {
@@ -130,6 +132,9 @@ async function watchJoin() {
   // Messages from before this member came in aren't news.
   wChatSeen = Math.max(0, ...(v.chat || []).map((c) => c.id));
   wEventSeen = Math.max(0, ...(v.events || []).map((e) => e.id));
+  wAskSeen = Math.max(0, ...(v.asks || []).map((a) => a.id));
+  wReadySent = 0;
+  wAskKey = "";
   wSet(v);
   const me = ++wvLoop;
   (async () => {
@@ -237,7 +242,7 @@ function wDraw() {
       : loadingStage;
   } else {
     stage = `<div class="wstage${wFull ? " full" : ""}" id="wstage"><div class="wplayer" id="wplayer"><video id="wvid" playsinline preload="auto"></video>
-      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div><div class="wevent" id="wevent" hidden></div>
+      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div><div class="wevent" id="wevent" hidden></div><div class="wreq" id="wreq"></div>
       <div class="whold" id="whold" hidden></div><button class="wcatch" id="wcatch" hidden></button>
       <div class="wvote" id="wvote" hidden></div></div>
       <div class="wbar" id="wbar"></div></div>`;
@@ -435,28 +440,63 @@ function wInvite() {
 // ── Requests ──
 
 function wAsks() {
+  const asks = wv.asks || [];
   const el = document.getElementById("wasks");
-  if (!el) return;
-  if (wv.is_host) {
-    el.innerHTML = wv.asks
-      .map(
-        (a) => `<div class="wask"><span><b>${esc(a.name)}</b> asks to ${ASK_TEXT[a.kind]}</span>
+  if (el) {
+    el.innerHTML = wv.is_host
+      ? asks
+          .map(
+            (a) => `<div class="wask"><span><b>${esc(a.name)}</b> asks to ${esc(ASK_TEXT[a.kind] || a.kind)}</span>
         <button class="btn" data-ok="${a.id}">Yes</button><button class="btn alt" data-no="${a.id}">No</button></div>`
-      )
-      .join("");
-    el.querySelectorAll("[data-ok],[data-no]").forEach(
-      (b) =>
-        (b.onclick = () => {
-          b.disabled = true;
-          wHostAct = Date.now();
-          api("watch/answer", { room, id: +(b.dataset.ok || b.dataset.no), ok: !!b.dataset.ok })
-            .then((nv) => wSet(nv, true))
-            .catch(showError);
-        })
-    );
-  } else {
-    el.innerHTML = wv.asks.map((a) => `<div class="wask mine"><span>Asked the host to ${ASK_TEXT[a.kind]}…</span></div>`).join("");
+          )
+          .join("")
+      : asks.map((a) => `<div class="wask mine"><span>Asked the host to ${esc(ASK_TEXT[a.kind] || a.kind)}…</span></div>`).join("");
+    wAnswerButtons(el);
   }
+  // A new request pings the host, who may be in theater mode.
+  const newest = Math.max(0, ...asks.map((a) => a.id));
+  if (wv.is_host && newest > wAskSeen) sfx("tick");
+  wAskSeen = Math.max(wAskSeen, newest);
+  wAskPops();
+}
+
+// wAskPops shows the requests over the video in theater mode, where the list
+// under the player is out of sight. The host's stay up with Yes and No until
+// answered or until the request lapses; a member sees the one they sent.
+// They only redraw when the requests change, so the countdowns run smoothly.
+function wAskPops() {
+  const el = document.getElementById("wreq");
+  if (!el) return;
+  const asks = wv.asks || [];
+  const key = (wv.is_host ? "h" : "m") + asks.map((a) => a.id).join(",");
+  if (key === wAskKey && el.childElementCount === asks.length) return;
+  wAskKey = key;
+  el.innerHTML = asks
+    .map((a) => {
+      const left = Math.max(0, a.left_ms || 0) / 1000;
+      const bar = `<i class="wreqtime" style="animation-duration:${left.toFixed(1)}s;--from:${Math.min(1, left / 30).toFixed(3)}"></i>`;
+      return wv.is_host
+        ? `<div class="wreqpop"><span><b>${esc(a.name)}</b> asks to ${esc(ASK_TEXT[a.kind] || a.kind)}</span>
+          <span class="wreqbtns"><button class="btn" data-ok="${a.id}">Yes</button><button class="btn alt" data-no="${a.id}">No</button></span>${bar}</div>`
+        : `<div class="wreqpop mine"><span>Asked the host to ${esc(ASK_TEXT[a.kind] || a.kind)}…</span>${bar}</div>`;
+    })
+    .join("");
+  wAnswerButtons(el);
+}
+
+// wAnswerButtons wires the host's Yes and No buttons in a list of requests.
+function wAnswerButtons(el) {
+  el.querySelectorAll("[data-ok],[data-no]").forEach(
+    (b) =>
+      (b.onclick = (e) => {
+        e.stopPropagation();
+        el.querySelectorAll(`[data-ok="${b.dataset.ok || b.dataset.no}"],[data-no="${b.dataset.ok || b.dataset.no}"]`).forEach((x) => (x.disabled = true));
+        wHostAct = Date.now();
+        api("watch/answer", { room, id: +(b.dataset.ok || b.dataset.no), ok: !!b.dataset.ok })
+          .then((nv) => wSet(nv, true))
+          .catch(showError);
+      })
+  );
 }
 
 // ── Picking a show ──
@@ -912,6 +952,12 @@ function wCatchUp(behind) {
 // wReadyCheck tells the room once this player has the held spot loaded.
 function wReadyCheck(vid) {
   if (!wv || !wv.hold || wv.hold_ready || wReadySent === wv.hold) return;
+  // The host's own player isn't moved by the room's clock; while the room
+  // waits it belongs at the held spot too, or it never counts as ready.
+  if (wv.is_host && vid.readyState > 0 && !vid.seeking && Math.abs(vid.currentTime - wv.pos) > 1.5) {
+    vid.currentTime = wv.pos;
+    return;
+  }
   if (vid.readyState < 3 || vid.seeking || Math.abs(vid.currentTime - wv.pos) > 1.5) return;
   const id = wv.hold;
   wReadySent = id;

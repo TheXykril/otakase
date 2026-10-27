@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.30.67
+
+- Watch Together: in theater mode the host now sees members' requests (pause, play, skip ahead, next episode) pop up over the video with Yes and No, with a soft ping. Each stays until the host answers or it runs out, with a bar showing the time left. A member in theater mode sees the request they sent.
+- Watch Together: a request to skip ahead 10 seconds no longer shows as "asks to undefined".
+- Watch Together: fixed "Waiting for everyone to load" listing the host as still loading after they opened a second room, and the host's player now moves to the held spot itself so it always counts as loaded.
+
 ## 1.30.66
 
 - Watch Together: more than one watch room can run at once, one per call. Up to 3 by default (`/settings watch_rooms_max`). Each room is streamed on its own, so every room adds to the bot's upload. The Watch room page lists every room running in other calls, and the games menu tile says how many are live.
