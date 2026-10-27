@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.73
+
+- Members with both AniList (linked with access) and MyAnimeList linked get their two lists kept in line: when they open the Activity or the watch room's picker (at most every 30 minutes), any show the two lists disagree on (status or episodes watched) gets the newer change copied to the other list. Shows on only one list are left alone. Staff can turn it off with `/settings tracker_sync`.
+
 ## 1.30.72
 
 - Watch Together: Continue lists every show you're watching. Shows you're caught up on are no longer hidden; they come last, at the latest episode.

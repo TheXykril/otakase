@@ -644,12 +644,15 @@ another. Members' own `/watchparty` parties are separate.
   the list, when the member watched at least 10 seconds and joined within
   the first minute of the episode, and follows the same switches as the
   progress update.
-- The host's picker shows their own lists under the search
-  (`bot/watchlists.go`, `GET watch/lists`): **Continue** (AniList Watching
-  and Rewatching, MAL Watching) at the next episode, and **Planning**. A
-  member linked to both gets one entry per show with the furthest progress.
-  Shows whose next episode isn't out, 18+ shows outside age-restricted
-  channels and unreleased ones are left out. When the notes hold an
+- The host's picker shows their own **Continue** list under the search
+  (`bot/watchlists.go`, `GET watch/lists`): every show on AniList Watching
+  and Rewatching or MAL Watching, at the next episode. A member linked to
+  both gets one entry per show with the furthest progress; where the two
+  trackers disagree, the newer change wins, as in the app, so a show moved
+  out of Watching later on the other tracker is left out. Caught-up shows
+  come last, at the latest episode. Unreleased shows, 18+ shows outside
+  age-restricted channels and MAL entries AniList doesn't know are left
+  out, and a note under the list names them. When the notes hold an
   `[otakase:<episode>@<seconds>]` tag for exactly that next episode, the
   pick starts there (`pos` on `watch/pick`, kept as the room's `startAt`),
   like the app does. A proven AniList link reads with the member's token,
@@ -657,6 +660,14 @@ another. Members' own `/watchparty` parties are separate.
   Only the signed-in member's own lists are ever read. Lists are kept for
   a minute. A resumed episode counts for list progress at 80% of what was
   left of it.
+- Members with a proven AniList link and a MAL link get the two lists kept
+  in line (`bot/trackersync.go`): on signing in to the Activity or opening
+  the picker, at most every 30 minutes, the bot reads both whole lists in
+  the background and, for every show on both that they disagree on
+  (status or episodes watched), writes the newer entry to the other
+  tracker, up to 100 writes a run, half a second apart. Shows on only one
+  list are left alone; copying whole lists is the app's tracker sync
+  action. Staff switch it off with `/settings tracker_sync`.
 
 The host's page reports its position every 4 seconds (`watch/beat`); the
 room only wakes the other pages when it's more than 2 seconds off where
