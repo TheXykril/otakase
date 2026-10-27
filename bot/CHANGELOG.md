@@ -9,6 +9,8 @@
 - Watch Together: members can ask for any jump, not just +10s. Tap the progress bar (or press 0–9) to ask for a spot, with an "are you sure" first. -10s/+10s buttons and ←/→ add up while pressed, so five presses ask for +50s (up to a minute either way), and change a jump request that is still waiting instead of being refused. The host sees "asks to jump to 12:05", "asks to skip ahead 50s" or "asks to go back 30s".
 - Watch Together: fixed "Waiting for everyone to load" listing the host as still loading after they opened a second room, and the host's player now moves to the held spot itself so it always counts as loaded.
 - Watch Together: fixed a viewer getting stuck as "still loading" when their player sat 1.5 to 2 seconds off the spot the room was waiting at, which held everyone until the timeout.
+- Watch Together edge cache: viewers make up to 3 times fewer requests to the Cloudflare Worker for the same video (short video pieces are joined into bigger ones), so the free daily limit lasts much longer.
+- Watch Together edge cache: the bot now counts Worker use from what is actually played instead of counting a whole episode every time someone loads it, so it no longer stops using the Worker far too early in the day.
 - Watch Together: a seek or skip ahead that lands inside an opening or ending the room skips now waits at its end straight away, instead of loading the opening, playing, then skipping past it.
 
 ## 1.30.66

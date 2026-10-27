@@ -608,11 +608,16 @@ func TestWatchRelay(t *testing.T) {
 	if strings.Contains(w.Body.String(), "/.proxy/cdn") {
 		t.Fatalf("direct variant:\n%s", w.Body.String())
 	}
+	// Handing out playlists counts nothing: only playing does (edgeTick).
+	// An encrypted playlist keeps its segments apart.
 	b.watch.mu.Lock()
 	used := b.watch.edge.segs
 	b.watch.mu.Unlock()
-	if used != len(segs) {
-		t.Errorf("edge count %d, want %d", used, len(segs))
+	media.mu.Lock()
+	seg := media.edgeSeg
+	media.mu.Unlock()
+	if used != 0 || seg != 4 {
+		t.Errorf("edge count %v, segment length %v", used, seg)
 	}
 }
 

@@ -377,6 +377,7 @@ func (b *bot) watchStep(r *watchRoom, now time.Time) bool {
 		}
 	}
 
+	b.edgeTick(r, elapsed, now)
 	var count []string
 	if r.phase == "play" && r.playing && r.dur > 0 {
 		for id, m := range r.members {
