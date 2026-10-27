@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.30.74
+
+- Watch Together: when a room ends (the host ends it, its time runs out, or it couldn't come back after a bot restart), everyone in it lands back on the Watch room page with a short note, so a new room can be opened or a live one joined without leaving the Activity. Before, a room started from a command left a page with no buttons at all.
+- Watch Together: someone dropped from a room (gone quiet too long) is sent back to the Watch room page too, instead of the player waiting on the room forever.
+
 ## 1.30.73
 
 - Members with both AniList (linked with access) and MyAnimeList linked get their two lists kept in line: when they open the Activity or the watch room's picker (at most every 30 minutes), any show the two lists disagree on (status or episodes watched) gets the newer change copied to the other list. Shows on only one list are left alone. Staff can turn it off with `/settings tracker_sync`.
