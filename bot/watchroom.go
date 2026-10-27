@@ -49,6 +49,7 @@ const (
 	watchEmptyClose = time.Minute      // an empty room closes after this
 	watchPickWait   = 15 * time.Minute // a room that never played closes after this
 	watchAskTTL     = 30 * time.Second
+	watchAskJumpMax = 60 // seconds a -10s/+10s request adds up to
 	watchPollWait   = 25 * time.Second
 	watchTick       = 2 * time.Second
 	watchDrift      = 2.0 // seconds the host may be off before everyone is told
@@ -2098,11 +2099,13 @@ func (b *bot) watchAskAPI(w http.ResponseWriter, r *http.Request) {
 		if in.By == 0 {
 			in.By = 10
 		}
-		if math.IsNaN(in.By) || math.Abs(in.By) > 6*3600 {
+		if math.IsNaN(in.By) {
 			apiError(w, http.StatusBadRequest, "that's too far")
 			return
 		}
-		ask.By = math.Round(in.By)
+		// The -10s/+10s presses add up to a minute either way; further
+		// is what tapping the bar is for.
+		ask.By = math.Round(math.Max(-watchAskJumpMax, math.Min(watchAskJumpMax, in.By)))
 	case "seek":
 		if math.IsNaN(in.Pos) || in.Pos < 0 || in.Pos > 6*3600 {
 			apiError(w, http.StatusBadRequest, "that's outside the episode")

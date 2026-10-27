@@ -346,6 +346,15 @@ func TestWatchAskJumps(t *testing.T) {
 	if r.pos != 150 || !r.playing {
 		t.Fatalf("+50s: pos %v playing %v", r.pos, r.playing)
 	}
+	// The presses stop adding up at a minute.
+	v = watchSee(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward", By: 90})
+	if len(v.Asks) != 1 || v.Asks[0].By != 60 {
+		t.Fatalf("+90s: %+v", v.Asks)
+	}
+	v = watchSee(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward", By: -500})
+	if len(v.Asks) != 1 || v.Asks[0].By != -60 {
+		t.Fatalf("-500s: %+v", v.Asks)
+	}
 	// Back 30s, then a jump to a spot that replaces it.
 	watchPost(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "forward", By: -30}, nil)
 	v = watchSee(b, (*bot).watchAskAPI, "b", watchIn{Room: "r", Kind: "seek", Pos: 725.4})

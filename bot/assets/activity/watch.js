@@ -1044,14 +1044,14 @@ function wAsk(kind, extra) {
 
 // wAskBy asks the host to jump step seconds ahead (back when below 0).
 // Presses close together add up into one request, so +10s five times asks
-// for +50s; a jump already waiting for the host is changed, not repeated.
+// for +50s, up to a minute; a jump already waiting for the host is changed, not repeated.
 let wAskDraft = null;
 let wAskDraftTimer = 0;
 function wAskBy(step) {
   const now = Date.now();
   const mine = (wv.asks || []).find((a) => a.kind === "forward");
   let by = wAskDraft && now - wAskDraft.at < 4000 ? wAskDraft.by : mine ? mine.by || 10 : 0;
-  by += step;
+  by = Math.max(-60, Math.min(60, by + step)); // a minute either way; the bar goes further
   wAskDraft = { by, at: now };
   clearTimeout(wAskDraftTimer);
   if (!by) {
