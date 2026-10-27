@@ -77,12 +77,13 @@ func (b *bot) dashPodiumOf(list []guessRank) template.HTML {
 
 // gamesSummary is what the Games page reads from the store.
 type gamesSummary struct {
-	week, all, last, xp, guessWeek, guessAll []guessRank
-	byGame                                   map[string]int
-	weekTotal                                int
-	daily                                    dailyPuzzle
-	played, solved                           int
-	riddles                                  int
+	week, all, xp, guessWeek, guessAll []guessRank
+	last                               []string // last week's champions, ties share it
+	byGame                             map[string]int
+	weekTotal                          int
+	daily                              dailyPuzzle
+	played, solved                     int
+	riddles                            int
 }
 
 func (b *bot) gamesSummary(now time.Time) gamesSummary {
@@ -95,7 +96,7 @@ func (b *bot) gamesSummary(now time.Time) gamesSummary {
 			g.weekTotal += p
 		}
 		g.week, g.all = ranked(weekly, 0), ranked(allPoints(d), 0)
-		g.last = ranked(weekPoints(d, weekKey(now.UTC().AddDate(0, 0, -7))), 1)
+		g.last = weekWinners(weekPoints(d, weekKey(now.UTC().AddDate(0, 0, -7))))
 		g.xp = xpRanked(d.XP)
 		g.guessWeek, g.guessAll = guessLeaders(d.Guess, wk, true), guessLeaders(d.Guess, wk, false)
 		for _, s := range d.Games {
@@ -128,7 +129,11 @@ func (b *bot) dashGames() template.HTML {
 
 	champion := "nobody yet"
 	if len(g.last) > 0 {
-		champion = b.dashName(g.last[0].User)
+		var names []string
+		for _, u := range g.last {
+			names = append(names, b.dashName(u))
+		}
+		champion = joinAnd(names)
 	}
 	daily := dashStat{"Daily puzzle, not picked yet", "—"}
 	if g.daily.Day == dailyDay(now) {
