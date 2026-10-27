@@ -379,14 +379,16 @@ function menu() {
         ]()}<span class="no">${String(i + 1).padStart(2, "0")}</span><h3>${esc(g.name)}</h3><p>${esc(g.text)}</p>${tag(g)}</button>`
     ).join("")}</div>`;
   app.querySelectorAll("[data-game]").forEach((el) => (el.onclick = () => (el.classList.contains("off") ? message("Staff turned this game off for now.") : open(el.dataset.game))));
-  // A watch room running anywhere shows on its tile; an 18+ one only as a room.
+  // Watch rooms running anywhere show on its tile; an 18+ one only as a room.
   api(`watch/status?room=${encodeURIComponent(room)}`)
     .then((st) => {
       const tag = document.getElementById("wtag");
       if (!tag || !st.busy) return;
+      const other = (st.rooms || [])[0];
       tag.textContent = st.here ? `live in this call · ${st.people} watching`
-        : st.show && !st.adult ? `live: ${st.show}${st.ep ? " ep " + st.ep : ""} · ${st.people} watching`
-          : `live in ${st.channel_name ? "#" + st.channel_name : "another call"}`;
+        : st.rooms.length > 1 ? `${st.rooms.length} rooms live`
+          : other.show && !other.adult ? `live: ${other.show}${other.ep ? " ep " + other.ep : ""} · ${other.people} watching`
+            : `live in ${other.channel_name ? "#" + other.channel_name : "another call"}`;
       tag.hidden = false;
     })
     .catch(() => {});

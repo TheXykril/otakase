@@ -60,6 +60,7 @@ type config struct {
 	DiscordSecret      string   // the Discord app's client secret, for the daily puzzle Activity
 	MALClientID        string   // MyAnimeList API app for /link-mal, empty = off
 	MALSecret          string   // that app's client secret
+	WatchCDN           string   // Discord URL mapping path of the edge cache Worker, e.g. /.proxy/cdn; empty = off
 }
 
 // loadEnvFile sets variables from a KEY=value file, keeping any that are
@@ -108,6 +109,7 @@ var haOptions = map[string]string{
 	"discord_client_secret":     "OTAKASE_DISCORD_CLIENT_SECRET",
 	"mal_client_id":             "OTAKASE_MAL_CLIENT_ID",
 	"mal_client_secret":         "OTAKASE_MAL_CLIENT_SECRET",
+	"watch_cdn":                 "OTAKASE_WATCH_CDN",
 }
 
 // loadHAOptions sets variables from a Home Assistant add-on options file,
@@ -162,6 +164,7 @@ func loadConfig() config {
 		DiscordSecret:      strings.TrimSpace(os.Getenv("OTAKASE_DISCORD_CLIENT_SECRET")),
 		MALClientID:        strings.TrimSpace(os.Getenv("OTAKASE_MAL_CLIENT_ID")),
 		MALSecret:          strings.TrimSpace(os.Getenv("OTAKASE_MAL_CLIENT_SECRET")),
+		WatchCDN:           strings.TrimSpace(os.Getenv("OTAKASE_WATCH_CDN")),
 	}
 	if h, err := strconv.Atoi(os.Getenv("OTAKASE_AIRING_HOUR")); err == nil && h >= 0 && h < 24 {
 		c.AiringHour = h

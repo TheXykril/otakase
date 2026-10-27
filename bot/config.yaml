@@ -1,6 +1,6 @@
 # Home Assistant add-on for the Discord bot. See wiki/Developer-Discord-Bot.md.
 name: Otakase Bot
-version: "1.30.65"
+version: "1.30.66"
 slug: otakase_bot
 description: Discord bot for the Otakase community server
 url: https://github.com/TheXykril/otakase/wiki/Developer-Discord-Bot
@@ -40,6 +40,7 @@ options:
   discord_client_secret: ""
   mal_client_id: ""
   mal_client_secret: ""
+  watch_cdn: ""
 schema:
   token: password
   guild_id: str
@@ -60,3 +61,4 @@ schema:
   discord_client_secret: password?
   mal_client_id: str?
   mal_client_secret: password?
+  watch_cdn: str?

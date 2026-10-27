@@ -124,7 +124,7 @@ func TestWatchRoomAutoSkipAndForwardControls(t *testing.T) {
 		skipIntervals: watchSkipIntervals{OP: []watchSkipSpan{{Start: 74, End: 162}}},
 	}
 	b := &bot{}
-	b.watch.cur = room
+	b.watch.add(room)
 	if !b.watchStep(room, now) || room.skipSeq != 1 || room.pos != 162 {
 		t.Fatalf("opening wasn't skipped for the whole room: pos=%v seq=%v", room.pos, room.skipSeq)
 	}

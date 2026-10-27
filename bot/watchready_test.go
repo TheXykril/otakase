@@ -11,7 +11,7 @@ import (
 func watchAllReady(b *bot) {
 	b.watch.mu.Lock()
 	defer b.watch.mu.Unlock()
-	r := b.watch.cur
+	r := b.watch.only()
 	if r.hold == 0 {
 		return
 	}
@@ -36,7 +36,7 @@ func TestWatchReadyCheck(t *testing.T) {
 	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r", Channel: "vc"}, nil)
 	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 7, Ep: 1}, nil)
 	waitLoaded(t, b)
-	r := b.watch.cur
+	r := b.watch.only()
 
 	// A new episode waits for both players.
 	var v watchView
@@ -151,7 +151,7 @@ func TestWatchChat(t *testing.T) {
 		t.Fatalf("host deletes: %d %+v", code, v.Chat)
 	}
 	// The room keeps the latest messages only.
-	r := b.watch.cur
+	r := b.watch.only()
 	for k := 0; k < watchChatKeep+5; k++ {
 		r.chatN++
 		r.chat = append(r.chat, watchChat{ID: r.chatN, User: "c", Text: "x"})

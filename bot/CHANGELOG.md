@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.30.66
+
+- Watch Together: more than one watch room can run at once, one per call. Up to 3 by default (`/settings watch_rooms_max`). Each room is streamed on its own, so every room adds to the bot's upload. The Watch room page lists every room running in other calls, and the games menu tile says how many are live.
+- Watch Together: a Game Champion's room now fits up to 20 people (`/settings watch_room_max_champion`). Staff rooms stay at 30.
+- Watch Together: optional edge cache. With a free Cloudflare Worker set up (new add-on option `watch_cdn`, setup in the wiki), viewers load video from Cloudflare instead of the bot, so the bot's upload stays low however many watch. It goes back to the bot by itself if the Worker fails or the daily free limit gets close (`/settings watch_cdn_daily`).
+
 ## 1.30.65
 
 - Watch Together: the room keeps playing after a seek, a skip of the opening or ending, a skip vote or a jump ahead. The host's player loading the new spot no longer pauses everyone until someone presses play again.

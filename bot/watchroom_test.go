@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -57,8 +58,8 @@ func watchBot(t *testing.T, streamURL string) (*bot, *time.Time) {
 	// Runs first: stop the room's lookups before the fakes above go back.
 	t.Cleanup(func() {
 		b.watch.mu.Lock()
-		if b.watch.cur != nil {
-			b.watch.cur.finishMedia()
+		for _, r := range b.watch.rooms {
+			r.finishMedia()
 		}
 		b.watch.mu.Unlock()
 		b.watch.bg.Wait()
@@ -75,7 +76,7 @@ func waitLoaded(t *testing.T, b *bot) {
 	t.Helper()
 	for k := 0; k < 200; k++ {
 		b.watch.mu.Lock()
-		phase := b.watch.cur.phase
+		phase := b.watch.only().phase
 		b.watch.mu.Unlock()
 		if phase != "loading" {
 			return
@@ -102,7 +103,8 @@ func TestWatchRoomTicketsAndOneAtATime(t *testing.T) {
 	if b.watchTickets("a") != 1 {
 		t.Fatal("ticket spent before anything played")
 	}
-	// Another call can't open a second room.
+	// Another call can't open a room past watch_rooms_max.
+	b.store.update(func(d *storeData) { d.Settings = map[string]string{"watch_rooms_max": "1"} })
 	if code := watchPost(b, (*bot).watchOpen, "z", watchIn{Room: "r2", Channel: "vc"}, nil); code != http.StatusConflict {
 		t.Fatalf("second room: %d", code)
 	}
@@ -125,7 +127,7 @@ func TestWatchRoomTicketsAndOneAtATime(t *testing.T) {
 	waitLoaded(t, b)
 	watchAllReady(b)
 	b.watch.mu.Lock()
-	v = b.watchViewOf(b.watch.cur, "b", false, watchNow())
+	v = b.watchViewOf(b.watch.only(), "b", false, watchNow())
 	b.watch.mu.Unlock()
 	if v.Phase != "play" || !v.Playing || !v.HLS || !strings.HasPrefix(v.Media, "api/watch/media/") || len(v.Subs) != 1 || v.Ends == 0 {
 		t.Fatalf("playing: %+v", v)
@@ -134,7 +136,7 @@ func TestWatchRoomTicketsAndOneAtATime(t *testing.T) {
 		t.Fatal("the ticket is spent once the first episode plays")
 	}
 	// The room is full at ten.
-	for k := 0; k < b.watchMax(false)-2; k++ {
+	for k := 0; k < b.watchMax("")-2; k++ {
 		watchPost(b, (*bot).watchOpen, fmt.Sprint("m", k), watchIn{Room: "r1", Channel: "vc"}, nil)
 	}
 	if code := watchPost(b, (*bot).watchOpen, "late", watchIn{Room: "r1", Channel: "vc"}, nil); code != http.StatusForbidden {
@@ -143,9 +145,9 @@ func TestWatchRoomTicketsAndOneAtATime(t *testing.T) {
 	// Four hours after it started the room closes.
 	*now = now.Add(watchRoomLength + time.Minute)
 	for _, id := range append([]string{"a", "b"}, "m0") {
-		b.watch.cur.members[id].seen = *now
+		b.watch.only().members[id].seen = *now
 	}
-	if b.watchStep(b.watch.cur, *now) || b.watch.cur != nil {
+	if b.watchStep(b.watch.only(), *now) || b.watch.only() != nil {
 		t.Fatal("room still open after four hours")
 	}
 	var logs []watchRoomLog
@@ -173,7 +175,7 @@ func TestWatchRoomControlsAndRequests(t *testing.T) {
 	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 5, Ep: 1}, nil)
 	waitLoaded(t, b)
 	watchAllReady(b)
-	r := b.watch.cur
+	r := b.watch.only()
 
 	// The host's page reports where it is; the room follows it.
 	watchPost(b, (*bot).watchBeat, "a", watchIn{Room: "r", Pos: 100, Playing: true, Dur: 1400}, nil)
@@ -280,7 +282,7 @@ func TestWatchRoomCountsWatchers(t *testing.T) {
 	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r", Channel: "vc"}, nil)
 	watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 7, Ep: 4}, nil)
 	waitLoaded(t, b)
-	r := b.watch.cur
+	r := b.watch.only()
 	// Both players load the episode, and the ready check lets it play.
 	hold := r.hold
 	watchPost(b, (*bot).watchReady, "a", watchIn{Room: "r", ID: hold}, nil)
@@ -379,7 +381,7 @@ func TestWatchRoomAddsLanguagesAfterPlaybackStarts(t *testing.T) {
 	r := &watchRoom{spent: true, gen: 1, dub: true, provider: "kickassanime",
 		streams: []streamLink{{URL: main}}}
 	b := &bot{}
-	b.watch.cur = r
+	b.watch.add(r)
 	if !b.startStream(r, 0) {
 		t.Fatal("episode did not start")
 	}
@@ -524,9 +526,9 @@ func TestWatchRelay(t *testing.T) {
 	waitLoaded(t, b)
 	b.watch.bg.Wait() // the audio probe reads the link being changed below
 	b.watch.mu.Lock()
-	b.watch.cur.media.link.Referrer = "https://site.example/"
-	media := b.watch.cur.media
-	entry := b.watch.cur.entry
+	b.watch.only().media.link.Referrer = "https://site.example/"
+	media := b.watch.only().media
+	entry := b.watch.only().entry
 	b.watch.mu.Unlock()
 
 	get := func(id string) (int, string) {
@@ -582,6 +584,28 @@ func TestWatchRelay(t *testing.T) {
 	}
 	if _, err := url.Parse(entry); err != nil {
 		t.Error(err)
+	}
+
+	// With the edge cache on, segments point at it; ?direct=1 keeps them
+	// on the bot, cached playlist or not.
+	b.cfg.WatchCDN = "/.proxy/cdn"
+	if _, list := get(variant); !strings.Contains(list, "\n/.proxy/cdn/activity/api/watch/media/"+media.key+"/"+segs[0]+"\n") ||
+		strings.Contains(list, `URI="/.proxy`) {
+		t.Fatalf("variant through the edge:\n%s", list)
+	}
+	r = httptest.NewRequest("GET", "/x?direct=1", nil)
+	r.SetPathValue("key", media.key)
+	r.SetPathValue("id", variant)
+	w = httptest.NewRecorder()
+	b.watchMediaAPI(w, r)
+	if strings.Contains(w.Body.String(), "/.proxy/cdn") {
+		t.Fatalf("direct variant:\n%s", w.Body.String())
+	}
+	b.watch.mu.Lock()
+	used := b.watch.edge.segs
+	b.watch.mu.Unlock()
+	if used != len(segs) {
+		t.Errorf("edge count %d, want %d", used, len(segs))
 	}
 }
 
@@ -687,7 +711,7 @@ func TestWatchHLSLanguagesReachRoom(t *testing.T) {
 	media, entry, _ := newWatchMedia(link, true)
 	room := &watchRoom{gen: 7, phase: "play", media: media, entry: entry,
 		streams: []streamLink{link}, audioEntries: map[string]string{"dub": watchMediaPath(media.key, entry)}}
-	b.watch.cur = room
+	b.watch.add(room)
 	b.findWatchHLSTracks(context.Background(), room, 7, media)
 	for _, code := range []string{"en", "ja"} {
 		if room.audioEntries[code] == "" || room.extraAudioMedia[code] == nil ||
@@ -804,7 +828,7 @@ func TestWatchEpisodeStartLookupsRunOnce(t *testing.T) {
 	}
 	b.watch.mu.Lock()
 	defer b.watch.mu.Unlock()
-	room := b.watch.cur
+	room := b.watch.only()
 	if room.audioEntries["dub"] == "" || room.audioEntries["dub"] != room.audioEntries["en"] {
 		t.Fatalf("dub not taken from the language lookup: %v", room.audioEntries)
 	}
@@ -817,7 +841,7 @@ func TestWatchLanguagesFallBackForOldCLI(t *testing.T) {
 	main := "https://video.example/en/playlist.m3u8"
 	r := &watchRoom{spent: true, gen: 1, dub: true, provider: "kickassanime", streams: []streamLink{{URL: main}}}
 	b := &bot{}
-	b.watch.cur = r
+	b.watch.add(r)
 	if !b.startStream(r, 0) {
 		t.Fatal("episode did not start")
 	}
@@ -844,7 +868,7 @@ func TestWatchRoomReturnsTicketWhenNothingPlayed(t *testing.T) {
 		watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r", Channel: "vc"}, nil)
 		watchPost(b, (*bot).watchPick, "a", watchIn{Room: "r", Show: 5, Ep: 1}, nil)
 		waitLoaded(t, b)
-		r := b.watch.cur
+		r := b.watch.only()
 		if b.watchTickets("a") != 0 {
 			t.Fatal("ticket not spent when the episode started")
 		}
@@ -876,35 +900,36 @@ func TestWatchRoomPerks(t *testing.T) {
 			b, now := watchBot(t, "https://cdn.example/ep.mp4")
 			b.store.update(func(d *storeData) { d.Champions = []string{"champ"} })
 			var v watchView
-			if code := watchPost(b, (*bot).watchOpen, opener, watchIn{Room: "r", Channel: "vc"}, &v); code != 200 || v.Max != 30 {
+			max := map[string]int{"champ": 20, "staff": 30}[opener]
+			if code := watchPost(b, (*bot).watchOpen, opener, watchIn{Room: "r", Channel: "vc"}, &v); code != 200 || v.Max != max {
 				t.Fatalf("opens without a ticket: %d %+v", code, v)
 			}
 			watchPost(b, (*bot).watchPick, opener, watchIn{Room: "r", Show: 5, Ep: 1}, nil)
 			waitLoaded(t, b)
 			b.watch.mu.Lock()
-			v = b.watchViewOf(b.watch.cur, opener, false, watchNow())
+			v = b.watchViewOf(b.watch.only(), opener, false, watchNow())
 			b.watch.mu.Unlock()
 			if v.Phase != "play" || v.Ends != now.Add(watchPerkLength).UnixMilli() {
 				t.Fatalf("playing for 8 hours: %+v", v)
 			}
-			for k := 0; k < 29; k++ {
+			for k := 0; k < max-1; k++ {
 				if code := watchPost(b, (*bot).watchOpen, fmt.Sprint("m", k), watchIn{Room: "r", Channel: "vc"}, nil); code != 200 {
-					t.Fatalf("member %d of 30: %d", k+2, code)
+					t.Fatalf("member %d of %d: %d", k+2, max, code)
 				}
 			}
 			if code := watchPost(b, (*bot).watchOpen, "late", watchIn{Room: "r", Channel: "vc"}, nil); code != http.StatusForbidden {
-				t.Fatalf("31st person: %d", code)
+				t.Fatalf("person %d: %d", max+1, code)
 			}
 			// Still open past four hours, closed after eight.
-			r := b.watch.cur
+			r := b.watch.only()
 			*now = now.Add(watchRoomLength + time.Hour)
 			r.members[opener].seen = *now
-			if !b.watchStep(r, *now) || b.watch.cur == nil {
+			if !b.watchStep(r, *now) || b.watch.only() == nil {
 				t.Fatal("closed after four hours")
 			}
 			*now = now.Add(3*time.Hour + time.Minute)
 			r.members[opener].seen = *now
-			if b.watchStep(r, *now) || b.watch.cur != nil {
+			if b.watchStep(r, *now) || b.watch.only() != nil {
 				t.Fatal("still open after eight hours")
 			}
 			time.Sleep(20 * time.Millisecond)
@@ -912,5 +937,94 @@ func TestWatchRoomPerks(t *testing.T) {
 				t.Fatalf("got %d tickets from a free room", n)
 			}
 		})
+	}
+}
+
+// only is the one open room, for tests that run a single room; nil when
+// none is open.
+func (w *watchRooms) only() *watchRoom {
+	if len(w.rooms) > 1 {
+		panic("more than one watch room open")
+	}
+	for _, r := range w.rooms {
+		return r
+	}
+	return nil
+}
+
+func TestWatchRoomsAtOnce(t *testing.T) {
+	b, now := watchBot(t, "https://cdn.example/ep.mp4")
+	b.store.update(func(d *storeData) {
+		d.WatchTickets = map[string]int{"a": 1}
+		d.Champions = []string{"champ"}
+		d.Settings = map[string]string{"watch_rooms_max": "2"}
+	})
+	status := func(user, room string) map[string]any {
+		r := httptest.NewRequest("GET", "/x?room="+room, nil)
+		r.Header.Set("Authorization", "Bearer "+b.acts.add(user))
+		w := httptest.NewRecorder()
+		b.watchStatus(w, r)
+		out := map[string]any{}
+		json.NewDecoder(w.Body).Decode(&out)
+		return out
+	}
+	room := func(id string) *watchRoom {
+		b.watch.mu.Lock()
+		defer b.watch.mu.Unlock()
+		return b.watch.room(id)
+	}
+	if code := watchPost(b, (*bot).watchOpen, "a", watchIn{Room: "r1", Channel: "vc"}, nil); code != 200 {
+		t.Fatalf("first room: %d", code)
+	}
+	*now = now.Add(time.Second)
+	if code := watchPost(b, (*bot).watchOpen, "staff", watchIn{Room: "r2", Channel: "nsfw"}, nil); code != 200 {
+		t.Fatalf("second room: %d", code)
+	}
+	if code := watchPost(b, (*bot).watchOpen, "champ", watchIn{Room: "r3", Channel: "vc"}, nil); code != http.StatusConflict {
+		t.Fatalf("third room past the limit: %d", code)
+	}
+	// Each room keeps its own people and picks.
+	watchPost(b, (*bot).watchOpen, "b", watchIn{Room: "r1", Channel: "vc"}, nil)
+	if code := watchPost(b, (*bot).watchPick, "staff", watchIn{Room: "r1", Show: 5, Ep: 1}, nil); code != http.StatusForbidden {
+		t.Fatalf("host of another room picks here: %d", code)
+	}
+	r1, r2 := room("r1"), room("r2")
+	if len(r1.members) != 2 || len(r2.members) != 1 || r1.host != "a" || r2.host != "staff" || r2.perks != "staff" || r1.perks != "" {
+		t.Fatalf("rooms mixed up: %+v %+v", r1.members, r2.members)
+	}
+
+	st := status("x", "elsewhere")
+	if st["full"] != true || st["here"] != nil || st["rooms_max"] != float64(2) || len(st["rooms"].([]any)) != 2 {
+		t.Fatalf("both rooms elsewhere: %v", st)
+	}
+	if first := st["rooms"].([]any)[0].(map[string]any); first["channel"] != "vc" || first["people"] != float64(2) {
+		t.Fatalf("oldest room first: %v", first)
+	}
+	st = status("a", "r1")
+	if st["full"] != false || st["here"] != true || st["people"] != float64(2) || len(st["rooms"].([]any)) != 1 {
+		t.Fatalf("own room: %v", st)
+	}
+	if other := st["rooms"].([]any)[0].(map[string]any); other["adult"] != true || other["host"] != nil {
+		t.Fatalf("18+ room elsewhere leaked: %v", other)
+	}
+
+	// One room closing leaves the other running and makes space again.
+	// r2 has been playing, r1 never started.
+	b.watch.mu.Lock()
+	r2.started = *now
+	b.watch.mu.Unlock()
+	*now = now.Add(watchPickWait + time.Minute)
+	r2.members["staff"].seen = *now
+	if b.watchStep(r1, *now) {
+		t.Fatal("unused room still open")
+	}
+	if room("r1") != nil || room("r2") != r2 || !b.watchStep(r2, *now) {
+		t.Fatal("closing one room touched the other")
+	}
+	if code := watchPost(b, (*bot).watchOpen, "champ", watchIn{Room: "r3", Channel: "vc"}, nil); code != 200 {
+		t.Fatalf("room after one closed: %d", code)
+	}
+	if status("x", "elsewhere")["full"] != true {
+		t.Fatal("full again")
 	}
 }
