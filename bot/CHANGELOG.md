@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.69
+
+- Watch Together: the "Live now" list on the Watch room page has a Join button on each room, so you can watch along with a room running in another call without moving. A "Go to #channel" button next to it opens that room's voice channel if you want to talk too. This also works when every room is in use. Private (age-restricted) rooms still only show that they run and can't be joined from outside their channel.
+
 ## 1.30.68
 
 - Watch Together: watch rooms survive a bot restart or add-on update. Everyone stays in the room with the same host, chat and time left; the episode loads again and picks up where it was, after everyone has it loaded. The ticket isn't spent again. A room whose time ran out during the restart stays closed.

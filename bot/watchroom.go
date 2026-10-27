@@ -1414,9 +1414,11 @@ func (b *bot) watchStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// watchCard is one running room as the tile and the lobby show it. An 18+
-// room stays private: anyone can see that a room runs somewhere, but not
-// what or who. Hold the lock.
+// watchCard is one running room as the tile and the lobby show it, with its
+// id so the lobby can join it from another call and a link to its voice
+// channel. An 18+ room stays private: anyone can see that a room runs
+// somewhere, but not what or who, and it can't be joined from outside its
+// channel. Hold the lock.
 func (b *bot) watchCard(cur *watchRoom) map[string]any {
 	out := map[string]any{"channel": cur.channel, "people": len(cur.members), "max": b.watchMax(cur.perks)}
 	if c := watchChannel(b, cur.channel); c != nil {
@@ -1425,6 +1427,10 @@ func (b *bot) watchCard(cur *watchRoom) map[string]any {
 	if cur.adult {
 		out["adult"] = true
 	} else {
+		out["id"] = cur.id
+		if b.cfg.GuildID != "" && cur.channel != "" {
+			out["link"] = "https://discord.com/channels/" + b.cfg.GuildID + "/" + cur.channel
+		}
 		if cur.show != nil {
 			out["show"] = cur.show.Title
 			out["cover"] = cur.show.Cover
@@ -1466,6 +1472,13 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusConflict, fmt.Sprintf("All %d watch rooms are in use. Join one of those calls, or try again once one ends.", n))
 		return
 	case cur != nil:
+		// A room in another call can be joined from the lobby, except an
+		// 18+ one: that stays with whoever is in its age-restricted channel.
+		if _, ok := cur.members[user]; !ok && cur.adult && in.Channel != cur.channel {
+			b.watch.mu.Unlock()
+			apiError(w, http.StatusForbidden, "That room is private. Join its voice channel to watch along.")
+			return
+		}
 		if _, ok := cur.members[user]; !ok && len(cur.members) >= b.watchMax(cur.perks) && user != cur.owner && !staff {
 			b.watch.mu.Unlock()
 			apiError(w, http.StatusForbidden, fmt.Sprintf("The watch room is full (%d people).", b.watchMax(cur.perks)))

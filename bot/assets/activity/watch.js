@@ -4,6 +4,7 @@
 // pause, the opening skipped or the next episode. Uses app.js's helpers.
 "use strict";
 
+let wRoom = ""; // the watch room this page is in: this call's, or one joined from the lobby
 let wv = null; // the room as the server last showed it
 let wvAt = 0; // when it arrived, for the follow clock
 let wvMedia = ""; // the media the player has loaded
@@ -74,18 +75,20 @@ async function watchView() {
   soundApply();
   const st = await api(`watch/status?room=${encodeURIComponent(room)}`);
   if (where !== "watch") return;
-  if (st.here) return watchJoin();
+  if (st.here) return watchJoin(room);
   const live = st.rooms || [];
   const liveCards = live.map(wLiveCard).join("");
   if (st.full) {
     const ends = live.map((r) => r.ends).filter(Boolean);
     const by = ends.length ? ` The next one ends by ${new Date(Math.min(...ends)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.` : "";
-    return wBox(`<h3 class="lh">${icon("watch")} Live now</h3>${liveCards}
-      <p class="note">All ${st.rooms_max} watch room${st.rooms_max === 1 ? " is" : "s are"} in use, since the bot streams each one itself. Join one of those voice channels and open the Activity there to watch along.${by}</p>`);
+    wBox(`<h3 class="lh">${icon("watch")} Live now</h3>${liveCards}
+      <p class="note">All ${st.rooms_max} watch room${st.rooms_max === 1 ? " is" : "s are"} in use, since the bot streams each one itself. Join one to watch along from here, or hop into its voice channel to talk too.${by}</p>
+      <div class="err" id="err"></div>`);
+    return wLiveButtons();
   }
   const t = st.tickets || 0;
   wBox(`${live.length ? `<h3 class="lh">${icon("watch")} Live now</h3>${liveCards}
-    <p class="note">Join that voice channel to watch along, or open a room of your own in this call.</p>` : ""}<p class="lead">The bot plays an anime for everyone in this call, in step. Whoever opens the room picks the show and controls it; everyone else can ask for a pause or a skip.</p>
+    <p class="note">Join a room to watch along from here (go to its voice channel to talk too), or open a room of your own in this call.</p>` : ""}<p class="lead">The bot plays an anime for everyone in this call, in step. Whoever opens the room picks the show and controls it; everyone else can ask for a pause or a skip.</p>
     <p class="note">Up to ${st.max} people · 720p · ${st.perks ? "8" : "4"} hours from the first episode · your AniList or MAL moves on as you watch (link them with /link-anilist and /link-mal).</p>
     ${st.perks
       ? `<p>${icon("star")} ${st.perks === "staff" ? "You're <b>staff</b>" : "You're this week's <b>Game Champion</b>"}: your rooms need no ticket, last 8 hours and fit up to ${st.max} people.</p>`
@@ -93,21 +96,38 @@ async function watchView() {
     ${t > 0 || st.perks ? `<button class="btn" id="wopen">${icon("play")} Open the watch room</button>` : `<p class="note">Get a ticket by redeeming a code with <b>/redeem</b>. Codes come from giveaways, events and somewhere hidden in Otakase.</p>`}
     <div class="err" id="err"></div>`);
   const b = document.getElementById("wopen");
-  if (b) b.onclick = () => ((b.disabled = true), watchJoin().catch((e) => ((b.disabled = false), showError(e))));
+  if (b) b.onclick = () => ((b.disabled = true), watchJoin(room).catch((e) => ((b.disabled = false), showError(e))));
+  wLiveButtons();
 }
 
-// wLiveCard is a room running in another call, as the lobby shows it.
-// An 18+ room only says that one runs and where.
+// wLiveCard is a room running in another call, as the lobby shows it, with
+// a button to join it from here and one to go to its voice channel. An 18+
+// room only says that one runs and where, and can't be joined from another
+// call.
 function wLiveCard(st) {
   const at = st.channel_name ? "#" + st.channel_name : "another call";
   const people = `${st.people || 0}/${st.max || 0} watching`;
+  const full = (st.people || 0) >= (st.max || 0);
+  const join = st.id
+    ? `<div class="wlivebtns"><button class="btn" data-wjoin="${esc(st.id)}"${full ? " disabled" : ""}>${icon("play")} ${full ? "Full" : "Join"}</button>${
+        st.link ? `<button class="btn alt" data-wvoice="${esc(st.link)}">${icon("users")} Go to ${esc(at)}</button>` : ""
+      }</div>`
+    : "";
   if (st.adult || !st.show) {
-    return `<div class="wlive"><i></i><span><b>${st.adult ? "A private room" : "Picking a show"}</b><small>${esc(at)} · ${people}</small></span></div>`;
+    return `<div class="wlive"><i></i><span><b>${st.adult ? "A private room" : "Picking a show"}</b><small>${esc(at)} · ${people}</small>${join}</span></div>`;
   }
   const ep = st.ep ? `Episode ${st.ep}${st.last_ep ? " of " + st.last_ep : ""}` : "";
   return `<div class="wlive">${st.cover ? `<img src="${esc(st.cover)}" alt="" loading="lazy">` : "<i></i>"}
     <span><b>${esc(st.show)}</b><small>${[ep, st.playing ? "playing" : "paused"].filter(Boolean).join(" · ")}</small>
-    <small>${icon("crown")} ${esc(st.host || "Someone")} · ${people} · <b>${esc(at)}</b></small></span></div>`;
+    <small>${icon("crown")} ${esc(st.host || "Someone")} · ${people} · <b>${esc(at)}</b></small>${join}</span></div>`;
+}
+
+// wLiveButtons wires the lobby's Join and voice channel buttons.
+function wLiveButtons() {
+  for (const b of document.querySelectorAll("#wbox [data-wjoin]")) {
+    b.onclick = () => ((b.disabled = true), watchJoin(b.dataset.wjoin).catch((e) => ((b.disabled = false), showError(e))));
+  }
+  for (const b of document.querySelectorAll("#wbox [data-wvoice]")) b.onclick = () => openLink(b.dataset.wvoice);
 }
 
 function wBox(html) {
@@ -136,8 +156,11 @@ function wBox(html) {
   el.innerHTML = html;
 }
 
-async function watchJoin() {
-  const v = await api("watch/open", { room, channel });
+// watchJoin joins the room with this id: this call's own (opening it when
+// none runs yet), or one running in another call.
+async function watchJoin(id) {
+  const v = await api("watch/open", { room: id, channel });
+  wRoom = id;
   wvKey = wvMedia = "";
   // Messages from before this member came in aren't news.
   wChatSeen = Math.max(0, ...(v.chat || []).map((c) => c.id));
@@ -149,7 +172,7 @@ async function watchJoin() {
   const me = ++wvLoop;
   (async () => {
     while (me === wvLoop && where === "watch") {
-      const r = await fetch(`api/watch/state?room=${encodeURIComponent(room)}&v=${wv ? wv.ver : -1}`, {
+      const r = await fetch(`api/watch/state?room=${encodeURIComponent(wRoom)}&v=${wv ? wv.ver : -1}`, {
         headers: { Authorization: "Bearer " + session },
       }).catch(() => null);
       if (me !== wvLoop || where !== "watch") break;
@@ -313,7 +336,7 @@ function wPeople() {
       b.title = "Make them the host? Tap again";
       return;
     }
-    api("watch/host", { room, user: b.dataset.host }).then((nv) => wSet(nv)).catch(showError);
+    api("watch/host", { room: wRoom, user: b.dataset.host }).then((nv) => wSet(nv)).catch(showError);
   }));
   document.getElementById("wcount").textContent = `${wv.members.length}/${wv.max}`;
 }
@@ -339,7 +362,7 @@ function wVote() {
       <button class="btn" id="wvotebtn">Vote to skip</button>`;
   }
   const b = document.getElementById("wvotebtn");
-  if (b) b.onclick = () => { b.disabled = true; api("watch/vote", { room }).then((nv) => wSet(nv)).catch((e) => { b.disabled = false; showError(e); }); };
+  if (b) b.onclick = () => { b.disabled = true; api("watch/vote", { room: wRoom }).then((nv) => wSet(nv)).catch((e) => { b.disabled = false; showError(e); }); };
 }
 
 function wSyncLine() {
@@ -352,7 +375,7 @@ function wSyncLine() {
   }
   el.innerHTML = `<label class="wsw"><input type="checkbox" id="wsyncbox" ${wv.sync ? "checked" : ""}> Move my ${linked.join(" and ")} on after each episode I watch and save where I stop</label>`;
   document.getElementById("wsyncbox").onchange = (e) =>
-    api("watch/sync", { room, on: e.target.checked })
+    api("watch/sync", { room: wRoom, on: e.target.checked })
       .then((r) => (wv.sync = r.sync))
       .catch(showError);
 }
@@ -370,7 +393,7 @@ function wMore() {
   if (v.is_host || v.staff) html += `<button class="btn alt" id="wend">${icon("x")} End room</button>`;
   el.innerHTML = html;
   const on = (id, fn) => document.getElementById(id) && (document.getElementById(id).onclick = fn);
-  on("wcancel", () => api("watch/ctl", { room, act: "cancel" }).then((nv) => ((wvKey = ""), wSet(nv))).catch(showError));
+  on("wcancel", () => api("watch/ctl", { room: wRoom, act: "cancel" }).then((nv) => ((wvKey = ""), wSet(nv))).catch(showError));
   on("wchange", () => {
     wChanging = true;
     wBox(`<div id="wpick"></div>`);
@@ -379,7 +402,7 @@ function wMore() {
   });
   on("wstopme", wStopWatching);
   on("winvite", wInvite);
-  on("wtake", () => api("watch/take", { room }).then((nv) => ((wvKey = ""), (wvMedia = ""), wSet(nv))).catch(showError));
+  on("wtake", () => api("watch/take", { room: wRoom }).then((nv) => ((wvKey = ""), (wvMedia = ""), wSet(nv))).catch(showError));
   on("wend", (e) => {
     const b = e.currentTarget;
     if (!b.classList.contains("sure")) {
@@ -387,7 +410,7 @@ function wMore() {
       b.lastChild.textContent = " Sure? Tap again";
       return;
     }
-    api("watch/end", { room }).catch(showError);
+    api("watch/end", { room: wRoom }).catch(showError);
   });
 }
 
@@ -401,7 +424,7 @@ async function wStopWatching() {
   wv = null;
   wvKey = wvMedia = "";
   wBox(loading("Stopping…"));
-  const r = await api("watch/leave", { room }).catch(() => ({}));
+  const r = await api("watch/leave", { room: wRoom }).catch(() => ({}));
   if (where !== "watch") return;
   const synced = v && v.sync && (v.linked || []).length;
   const at = r.ep ? `You stopped at <b>${wFmt(r.secs)}</b> of episode ${r.ep}.` : "You stopped watching.";
@@ -430,7 +453,7 @@ function wInvite() {
   const load = async () => {
     let people;
     try {
-      people = await api(`watch/people?room=${encodeURIComponent(room)}&q=${encodeURIComponent(q.value.trim())}`);
+      people = await api(`watch/people?room=${encodeURIComponent(wRoom)}&q=${encodeURIComponent(q.value.trim())}`);
     } catch (e) {
       return showError(e);
     }
@@ -440,7 +463,7 @@ function wInvite() {
       : `<p class="note">Nobody found.</p>`;
     list.querySelectorAll("[data-id]").forEach((b) => (b.onclick = () => {
       b.disabled = true;
-      api("watch/invite", { room, user: b.dataset.id })
+      api("watch/invite", { room: wRoom, user: b.dataset.id })
         .then((nv) => { b.querySelector("b").textContent += " · invited"; wSet(nv); })
         .catch((e) => { b.disabled = false; showError(e); });
     }));
@@ -505,7 +528,7 @@ function wAnswerButtons(el) {
         e.stopPropagation();
         el.querySelectorAll(`[data-ok="${b.dataset.ok || b.dataset.no}"],[data-no="${b.dataset.ok || b.dataset.no}"]`).forEach((x) => (x.disabled = true));
         wHostAct = Date.now();
-        api("watch/answer", { room, id: +(b.dataset.ok || b.dataset.no), ok: !!b.dataset.ok })
+        api("watch/answer", { room: wRoom, id: +(b.dataset.ok || b.dataset.no), ok: !!b.dataset.ok })
           .then((nv) => wSet(nv, true))
           .catch(showError);
       })
@@ -528,7 +551,7 @@ function wPicker(changing) {
     if (text.length < 2) return wListsDraw();
     t = setTimeout(async () => {
       try {
-        wSearch = await api(`watch/search?room=${encodeURIComponent(room)}&q=${encodeURIComponent(text)}`);
+        wSearch = await api(`watch/search?room=${encodeURIComponent(wRoom)}&q=${encodeURIComponent(text)}`);
       } catch (e) {
         return showError(e);
       }
@@ -544,7 +567,7 @@ function wPicker(changing) {
   if (c) c.onclick = () => ((wChanging = false), (wvKey = ""), (wvMedia = ""), wSet(wv));
   wLists = null;
   wListsDraw();
-  api(`watch/lists?room=${encodeURIComponent(room)}`)
+  api(`watch/lists?room=${encodeURIComponent(wRoom)}`)
     .then((lists) => {
       wLists = lists;
       if (wListTab === "continue" && !lists.continue.length && lists.planning.length) wListTab = "planning";
@@ -664,7 +687,7 @@ function wEpisode(s, item) {
       button.disabled = true;
       wChanging = false;
       wvKey = "";
-      api("watch/pick", { room, show: s.id, ep: selected, pos, dub: /^(en|eng)(-|$)/.test(wAudioPick) })
+      api("watch/pick", { room: wRoom, show: s.id, ep: selected, pos, dub: /^(en|eng)(-|$)/.test(wAudioPick) })
         .then((nv) => wSet(nv))
         .catch((err) => { button.disabled = false; showError(err); });
     };
@@ -674,7 +697,7 @@ function wEpisode(s, item) {
     if (fromStart) fromStart.onclick = () => play(fromStart, 0);
   };
   draw();
-  fetch(`api/watch/episodes?id=${encodeURIComponent(s.id)}&room=${encodeURIComponent(room)}`, {
+  fetch(`api/watch/episodes?id=${encodeURIComponent(s.id)}&room=${encodeURIComponent(wRoom)}`, {
     headers: { Authorization: "Bearer " + session },
   }).then((r) => r.ok ? r.json() : null).then((episodes) => {
     if (!episodes || document.getElementById("wres") !== res) return;
@@ -894,7 +917,7 @@ function wBroken(why) {
   if (wLastErr && wLastErr !== why) why = (why || "") + " (before: " + wLastErr + ")";
   const vid = document.getElementById("wvid");
   wHostAct = Date.now();
-  api("watch/ctl", { room, act: "broken", pos: vid ? vid.currentTime : -1, why: String(why || "").slice(0, 300) })
+  api("watch/ctl", { room: wRoom, act: "broken", pos: vid ? vid.currentTime : -1, why: String(why || "").slice(0, 300) })
     .then((nv) => wSet(nv, true))
     .catch(showError);
 }
@@ -977,7 +1000,7 @@ function wReadyCheck(vid) {
   if (vid.readyState < 3 || vid.seeking || Math.abs(vid.currentTime - wv.pos) > 1.5) return;
   const id = wv.hold;
   wReadySent = id;
-  api("watch/ready", { room, id })
+  api("watch/ready", { room: wRoom, id })
     .then((nv) => wSet(nv))
     .catch(() => { if (wReadySent === id) wReadySent = 0; });
 }
@@ -1021,7 +1044,7 @@ function wBeatNow() {
     // A player loading after a seek or skip still means to play: reporting it
     // as paused would pause the room and leave it paused once it loads.
     body: JSON.stringify({
-      room,
+      room: wRoom,
       pos: vid.currentTime,
       playing: !vid.paused && !vid.ended,
       buffering: vid.seeking || vid.readyState < 3,
@@ -1034,13 +1057,13 @@ function wCtl(act, pos) {
   wHostAct = Date.now();
   const vid = document.getElementById("wvid");
   if (pos === undefined) pos = vid ? vid.currentTime : -1;
-  return api("watch/ctl", { room, act, pos })
+  return api("watch/ctl", { room: wRoom, act, pos })
     .then((nv) => wSet(nv, true))
     .catch(showError);
 }
 
 function wAsk(kind, extra) {
-  api("watch/ask", { room, kind, ...extra })
+  api("watch/ask", { room: wRoom, kind, ...extra })
     .then((nv) => wSet(nv))
     .catch(showError);
 }
@@ -1296,7 +1319,7 @@ function wChatSetup() {
     const text = input.value.trim();
     if (!text) return;
     input.disabled = true;
-    api("watch/chat", { room, text })
+    api("watch/chat", { room: wRoom, text })
       .then((nv) => {
         input.value = wChatDraft = "";
         wSet(nv);
@@ -1362,7 +1385,7 @@ function wChatDraw() {
     s.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); s.classList.toggle("shown"); } };
   });
   log.querySelectorAll("[data-del]").forEach((b) => {
-    b.onclick = () => api("watch/chat", { room, act: "delete", id: +b.dataset.del }).then((nv) => wSet(nv)).catch(showError);
+    b.onclick = () => api("watch/chat", { room: wRoom, act: "delete", id: +b.dataset.del }).then((nv) => wSet(nv)).catch(showError);
   });
   if (nearBottom || fresh) log.scrollTop = log.scrollHeight;
   const chatEl = document.getElementById("wchat");
@@ -1723,7 +1746,7 @@ function wPreferencesChanged(preferences) {
 
 // Changes affect this viewer only. Shared playback position stays unchanged.
 function wSaveLanguages() {
-  api("watch/languages", { room, audio: wAudioPick, subtitles: wSubPick })
+  api("watch/languages", { room: wRoom, audio: wAudioPick, subtitles: wSubPick })
     .then((saved) => {
       if (wv) wv.languages = saved;
       wSettingsDirty = false;
@@ -1909,7 +1932,7 @@ function watchLeave(pageClosing = false) {
       method: "POST",
       keepalive: true,
       headers: { Authorization: "Bearer " + session, "Content-Type": "application/json" },
-      body: JSON.stringify({ room }),
+      body: JSON.stringify({ room: wRoom }),
     }).catch(() => {});
   }
   wv = null;

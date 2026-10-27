@@ -1016,9 +1016,28 @@ func TestWatchRoomsAtOnce(t *testing.T) {
 	if st["full"] != false || st["here"] != true || st["people"] != float64(2) || len(st["rooms"].([]any)) != 1 {
 		t.Fatalf("own room: %v", st)
 	}
-	if other := st["rooms"].([]any)[0].(map[string]any); other["adult"] != true || other["host"] != nil {
+	if other := st["rooms"].([]any)[0].(map[string]any); other["adult"] != true || other["host"] != nil || other["id"] != nil || other["link"] != nil {
 		t.Fatalf("18+ room elsewhere leaked: %v", other)
 	}
+
+	// The lobby can join a room running in another call, but not an 18+ one.
+	if first := status("x", "elsewhere")["rooms"].([]any)[0].(map[string]any); first["id"] != "r1" || first["link"] != "https://discord.com/channels/g/vc" {
+		t.Fatalf("joinable room card: %v", first)
+	}
+	var v watchView
+	if code := watchPost(b, (*bot).watchOpen, "c", watchIn{Room: "r1", Channel: "nsfw"}, &v); code != 200 || v.IsHost || len(v.Members) != 3 {
+		t.Fatalf("join from another call: %d %+v", code, v)
+	}
+	if code := watchPost(b, (*bot).watchOpen, "d", watchIn{Room: "r2", Channel: "vc"}, nil); code != http.StatusForbidden {
+		t.Fatalf("18+ room joined from another call: %d", code)
+	}
+	if code := watchPost(b, (*bot).watchOpen, "d", watchIn{Room: "r2", Channel: "nsfw"}, nil); code != 200 {
+		t.Fatalf("18+ room from its own channel: %d", code)
+	}
+	b.watch.mu.Lock()
+	delete(r1.members, "c")
+	delete(r2.members, "d")
+	b.watch.mu.Unlock()
 
 	// One room closing leaves the other running and makes space again.
 	// r2 has been playing, r1 never started.
