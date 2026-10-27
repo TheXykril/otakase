@@ -498,11 +498,24 @@ games to play; `/activity` then shows today's board. To turn it on:
 3. **Activities → Settings**: turn on **Enable Activities**, then restart
    the add-on.
 
-The page signs in with the Embedded App SDK (`identify` only), the bot trades
+The page signs in with the Embedded App SDK (`identify`, plus `rpc.voice.read`
+for speaking and `rpc.activities.write` for the status line; a member who
+turns those two down signs in with `identify` alone), the bot trades
 the code for the member's id with the client secret and gives the page a
 12 hour session. Covers come through `/activity/api/cover/{id}`, since an
 Activity can only load from its own address. `sdk.js` is the
-`@discord/embedded-app-sdk` bundle; to update it:
+`@discord/embedded-app-sdk` bundle. `discord.js` holds the SDK features:
+the participants list (`getInstanceConnectedParticipants` and
+`ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE`), speaking rings
+(`SPEAKING_START`/`SPEAKING_STOP` on the voice channel), the member's status
+line (`setActivity`, at most every 5 seconds; Watching for the watch room,
+18+ rooms without title or cover), the platform and orientation
+(`body[data-platform]`, `body[data-orient]`; theater mode locks a phone to
+landscape with `setOrientationLockState`) and the small window
+(`ACTIVITY_LAYOUT_MODE_UPDATE` sets `body[data-layout]` to `pip` or `grid`;
+the watch room switches to theater mode there so only the video shows).
+Every call is allowed to fail and the page works without it. To update the
+bundle:
 
 ```sh
 npm i @discord/embedded-app-sdk esbuild

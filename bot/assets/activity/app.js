@@ -327,21 +327,18 @@ async function start() {
   if (!new URLSearchParams(location.search).get("frame_id")) return message("Open this inside Discord: /activity on the Otakase server.");
   sdk = new Discord.DiscordSDK(cfg.client_id);
   await sdk.ready();
-  const { code } = await sdk.commands.authorize({
-    client_id: cfg.client_id,
-    response_type: "code",
-    state: "",
-    prompt: "none",
-    scope: ["identify"],
-  });
+  const authorize = (scope) => sdk.commands.authorize({ client_id: cfg.client_id, response_type: "code", state: "", prompt: "none", scope });
+  // A member who turns down the extra scopes (discord.js) still gets in.
+  const { code } = await authorize(DS_SCOPES).catch(() => authorize(["identify"]));
   const tok = await api("token", { code });
   session = tok.session;
   launchMode = ["games", "watch"].includes(tok.mode) ? tok.mode : "";
   me = tok.name || "";
   try {
-    await sdk.commands.authenticate({ access_token: tok.access_token });
+    const auth = await sdk.commands.authenticate({ access_token: tok.access_token });
+    dsStart(auth && auth.user && auth.user.id);
   } catch (_) {
-    // Only needed for SDK features this page doesn't use.
+    // Only the Discord features in discord.js need it; the games don't.
   }
   channel = sdk.channelId || "";
   room = String(sdk.instanceId || channel || "solo").replace(/[^A-Za-z0-9_.:-]/g, "").slice(0, 100) || "solo";
@@ -371,13 +368,15 @@ function menu() {
   app.innerHTML = `
     <header class="hero"><div><h1>Otakase <span>Activity</span></h1><p class="sub">${launchMode === "games" ? "Pick a game to play." : "Watch anime together or pick a game to play."}</p></div>${
       me ? `<span class="pill">${esc(me)}</span>` : ""
-    }</header>
+    }<div class="dshere" id="dshere" data-label="In this Activity" hidden></div></header>
     <div class="menu">${GAMES.filter((g) => launchMode !== "games" || g.key !== "watch").map(
       (g, i) =>
         `<button class="card${g.big ? " big" : ""}${gamesOff.includes(g.key) ? " off" : ""}" data-game="${g.key}" style="--c:${g.color};--i:${i}"><span class="jp">${JP[g.key]}</span>${PREVIEWS[
           g.key
         ]()}<span class="no">${String(i + 1).padStart(2, "0")}</span><h3>${esc(g.name)}</h3><p>${esc(g.text)}</p>${tag(g)}</button>`
     ).join("")}</div>`;
+  dsHereDraw();
+  dsGameActivity("");
   app.querySelectorAll("[data-game]").forEach((el) => (el.onclick = () => (el.classList.contains("off") ? message("Staff turned this game off for now.") : open(el.dataset.game))));
   // Watch rooms running anywhere show on its tile; an 18+ one only as a room.
   api(`watch/status?room=${encodeURIComponent(room)}`)
@@ -396,6 +395,7 @@ function menu() {
 
 function open(game) {
   if ((launchMode === "games" && game === "watch") || (launchMode === "watch" && game !== "watch")) return;
+  dsGameActivity(game);
   const views = { watch: () => watchView(), party: partyView, koikoi: kkOpen, daily: dailyView, guess: soloStart, riddle: soloStart, scramble: soloStart, hl: hlStart, bingo: bingoView, board: boardView };
   Promise.resolve((views[game] || pzOpen)(game)).catch(showError);
 }

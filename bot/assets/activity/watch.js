@@ -74,6 +74,7 @@ async function watchView(note) {
   page("Watch <span>room</span>", `<div id="wbox">${loading("Looking for the watch room…")}</div>`);
   where = "watch";
   soundApply();
+  dsGameActivity("watch");
   const st = await api(`watch/status?room=${encodeURIComponent(room)}`);
   if (where !== "watch") return;
   if (st.here) return watchJoin(room);
@@ -264,6 +265,7 @@ function wSet(v, fromHost) {
     wSubs();
   }
   wUpdateOrigin();
+  dsWatchActivity();
   const holdChanged = previous && (previous.hold || 0) !== (v.hold || 0);
   // A new episode (or the room back after a bot restart) tries the edge
   // cache again: a failure there may have been the bot being away.
@@ -291,7 +293,7 @@ function wDraw() {
       : loadingStage;
   } else {
     stage = `<div class="wstage${wFull ? " full" : ""}" id="wstage"><div class="wplayer" id="wplayer"><video id="wvid" playsinline preload="auto"></video>
-      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div><div class="wevent" id="wevent" hidden></div><div class="wreq" id="wreq"></div>
+      <button class="wtap" id="wtap" hidden>${icon("play")} Tap to watch</button><div class="wspin" id="wspin" hidden></div><div class="wosd" id="wosd" hidden></div><div class="wevent" id="wevent" hidden></div><div class="wtalk" id="wtalk" hidden></div><div class="wreq" id="wreq"></div>
       <div class="whold" id="whold" hidden></div><button class="wcatch" id="wcatch" hidden></button>
       <div class="wvote" id="wvote" hidden></div><div class="wconfirm" id="wconfirm" hidden></div></div>
       <div class="wbar" id="wbar"></div></div>`;
@@ -328,6 +330,7 @@ function wDraw() {
   wMore();
   wChatSetup();
   wHoldDraw();
+  dsTalkDraw();
   if (v.ends) document.getElementById("wends").textContent = "Ends " + new Date(v.ends).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   else document.getElementById("wends").hidden = true;
 }
@@ -341,8 +344,13 @@ function wPeople() {
     const tag = m.state === "behind" ? ` title="${m.behind}s behind"` : m.state === "loading" ? ` title="Loading"` : "";
     const dot = mark[m.state] ? `<i class="wdot ${m.state}">${mark[m.state]}</i>` : "";
     const hand = canHand && !m.host ? ` data-host="${esc(m.id)}"` : "";
-    return `<button class="pill wperson ${m.state || ""}"${tag}${hand}${hand ? "" : " disabled"}>${m.host ? icon("crown") + " " : ""}${esc(m.name)}${dot}</button>`;
+    const talk = dsTalking.has(m.id) ? " talking" : "";
+    return `<button class="pill wperson ${m.state || ""}${talk}" data-talk="${esc(m.id)}"${tag}${hand}${hand ? "" : " disabled"}>${m.host ? icon("crown") + " " : ""}${esc(m.name)}${dot}</button>`;
   }).join("");
+  // People in this Activity who aren't in the room (on the games, say).
+  const inRoom = new Set(wv.members.map((m) => m.id));
+  const away = dsPeople.filter((p) => !inRoom.has(p.id));
+  if (away.length) el.insertAdjacentHTML("beforeend", `<p class="note wpaway">Also in this Activity: ${away.map((p) => `<span class="dsname${dsTalking.has(p.id) ? " talking" : ""}" data-talk="${esc(p.id)}">${esc(p.name)}</span>`).join(", ")}</p>`);
   el.querySelectorAll("[data-host]").forEach((b) => (b.onclick = () => {
     if (!b.classList.contains("sure")) {
       b.classList.add("sure");
@@ -778,6 +786,7 @@ function wDestroy() {
 
 function wStop() {
   wFull = false;
+  dsLockOrientation(false);
   document.body.classList.remove("wfull");
   const detached = document.body.querySelector(":scope > #wstage");
   if (detached) detached.remove();
@@ -1569,6 +1578,7 @@ function wFullscreen(on) {
   const st = document.getElementById("wstage");
   if (!st) return;
   wFull = on;
+  dsLockOrientation(on);
   clearTimeout(wControlsTimer);
   // Move the theater stage out of animated Activity containers. Their
   // transforms otherwise turn position:fixed into an offset local box.

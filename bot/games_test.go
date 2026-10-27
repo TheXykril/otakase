@@ -343,7 +343,7 @@ func TestActivitySessions(t *testing.T) {
 	if body["error"] == "" {
 		t.Error("error message missing")
 	}
-	for _, f := range []string{"index.html", "app.js", "sdk.js"} {
+	for _, f := range []string{"index.html", "app.js", "sdk.js", "discord.js", "watch.js"} {
 		if _, err := activityFiles.ReadFile("assets/activity/" + f); err != nil {
 			t.Errorf("%s not embedded: %v", f, err)
 		}

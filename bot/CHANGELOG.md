@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.30.77
+
+- Activity: the menu shows everyone in this Activity, and a short note says when someone joins or leaves.
+- Activity: people talking in the call light up (menu faces, the watch room's people list). In theater mode, whoever talks shows over the video.
+- Activity: your Discord status shows what you do in it, e.g. "Watching Frieren · Episode 3 of 12 · 4 watching" with the cover and a clock, or the game you play. 18+ rooms only say "In a private watch room".
+- Watch room on phones: theater mode holds the phone in landscape, and turning the phone sideways while an episode plays opens theater mode. The keyboard hints are hidden on phones.
+- Activity in the small window (picture in picture, or a tile in the call grid): the episode keeps playing there with only the video showing; other pages show a small card of what's going on.
+- The Activity asks once for two more Discord permissions (seeing who talks, setting your status). Turning them down still lets you in, without those two features.
+
 ## 1.30.76
 
 - Lookups now answer only the member who used them: `/help`, `/install`, `/faq`, `/diagnose`, `/latest`, `/changelog`, `/anime`, `/helpers`, `/levels`, `/rank`, `/leaderboard`, `/profile`, `/compare`, `/server-top`, `/server-watch-top`, `/watch-time`, `/whos-watching`, `/badges`, `/wrap` and `/featured`. Each has a new **share** option that posts the answer for everyone instead, e.g. to show someone a `/faq` answer.
