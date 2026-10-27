@@ -29,9 +29,45 @@ var syncedResumeTagPattern = regexp.MustCompile(`\[otakase:(\d+)@(\d+|done)\]`)
 // done tag the line that came with it.
 var syncedResumeTagSpan = regexp.MustCompile(`\[otakase:\d+@(?:\d+\]|done\][^\n]*)`)
 
-// syncedDoneLines are the lines a done tag picks from: the chapters of
-// Otakase: The Movie.
-var syncedDoneLines = []string{"Counting the Stars", "The Voices", "Memories That Never Fade", "Legendary Conquests", "The Journey Continues"}
+// syncedDoneLines are the lines a done tag picks from.
+var syncedDoneLines = []string{
+	"お任せ. A journey well entrusted.",
+	"任. A story worthy of the seal.",
+	"The final scene receives our seal. 任",
+	"Otakase presents its final course.",
+	"The last frame, sealed in Shu red.",
+	"Another tale entrusted to 任.",
+	"A final bow, from Otakase.",
+	"Otakase archives another legend.",
+	"One more memory beneath the red seal.",
+	"Counting the stars with Otakase.",
+	"Otakase remembers every journey.",
+	"Legendary conquests, sealed by 任.",
+	"The next chapter belongs to Otakase.",
+	"お任せ. From the first to the last.",
+	"Otakase. A story entrusted to us.",
+	"One last serving from Otakase.",
+	"お任せ. Your journey was our honor.",
+	"Chosen with care. Sealed with 任.",
+	"From Otakase, with 心.",
+	"任. Your trust, our story.",
+	"Otakase. Until our paths cross again.",
+	"余韻. Let the story linger.",
+	"Otakase leaves a little 余韻.",
+	"The final frame, held in 心.",
+	"物語. Another world to remember.",
+	"Even Otakase cannot hold back time.",
+	"一期一会. One story, one encounter.",
+	"任. Some stories stay forever.",
+	"またね. Otakase awaits your return.",
+	"物語は続く. So does Otakase.",
+	"Otakase. Until the next 物語.",
+	"次の物語も、お任せ.",
+	"任. Until another story finds you.",
+	"ご縁. Another story brought us here.",
+	"Otakase. The next world awaits.",
+	"またいつか. With love, Otakase.",
+}
 
 var syncedDoneLine = func() string { return syncedDoneLines[rand.IntN(len(syncedDoneLines))] }
 
