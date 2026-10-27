@@ -78,6 +78,7 @@ type watchMember struct {
 	seen    time.Time
 	watched float64 // seconds of this episode they were in the room while it played
 	counted bool    // their lists were moved on for this episode
+	asked   bool    // they answered whether to count an episode they came in late to
 	from    float64 // where the episode was when they joined it
 
 	// What this member's player last reported, for the people bar.
@@ -214,6 +215,9 @@ type watchRooms struct {
 	lastSave string
 	infos    watchInfos
 	bg       sync.WaitGroup // an episode's lookups, so tests can wait them out
+	// offers are the episodes members left near the end of after coming in
+	// late, kept for a while so the leave screen can still count them.
+	offers map[string]watchOffer
 }
 
 // room is the open room for this Activity instance, nil when there is
@@ -552,7 +556,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool, start 
 	r.dur = 0
 	r.asks = nil
 	for _, m := range r.members {
-		m.watched, m.counted, m.from = 0, false, 0
+		m.watched, m.counted, m.asked, m.from = 0, false, false, 0
 	}
 	r.gen++
 	gen, adult, cli := r.gen, r.adult && show.Adult, b.cfg.OtakaseCLI
@@ -1172,6 +1176,7 @@ type watchView struct {
 	Events          []watchEvent                    `json:"events,omitempty"`
 	Vote            *watchVote                      `json:"vote,omitempty"`
 	CanVote         bool                            `json:"can_vote,omitempty"`
+	CountAsk        int                             `json:"count_ask,omitempty"` // an episode to offer counting, for a late joiner
 	Hold            int                             `json:"hold,omitempty"`
 	HoldWaiting     []string                        `json:"hold_waiting,omitempty"`
 	HoldEnds        int64                           `json:"hold_ends,omitempty"` // unix ms
@@ -1246,6 +1251,7 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 		p.State, p.Behind = r.memberState(id, now)
 		v.Members = append(v.Members, p)
 	}
+	v.CountAsk = r.countAsk(user, now)
 	for _, a := range r.asks {
 		if v.IsHost || a.User == user {
 			a.Left = max(0, (watchAskTTL - now.Sub(a.At)).Milliseconds())
@@ -1297,6 +1303,7 @@ func init() {
 	apiHandle("POST /activity/api/watch/answer", (*bot).watchAnswer)
 	apiHandle("POST /activity/api/watch/take", (*bot).watchTake)
 	apiHandle("POST /activity/api/watch/sync", (*bot).watchSync)
+	apiHandle("POST /activity/api/watch/count", (*bot).watchCount)
 	apiHandle("POST /activity/api/watch/languages", (*bot).watchLanguageSettings)
 	apiHandle("GET /activity/api/watch/preferences", (*bot).watchPreferencesGet)
 	apiHandle("POST /activity/api/watch/preferences", (*bot).watchPreferencesSet)
@@ -1576,7 +1583,12 @@ func (b *bot) watchLeave(w http.ResponseWriter, r *http.Request) {
 			now := watchNow()
 			if p, ok := cur.resumeOf(user, now); ok {
 				cur.resumes = append(cur.resumes, p)
-				out["ep"], out["secs"] = p.ep, p.secs
+				out["ep"], out["secs"], out["done"] = p.ep, p.secs, p.done
+			} else if ep := cur.countAsk(user, now); ep > 0 {
+				// Came in late but stayed to near the end: the leave
+				// screen asks whether to count it.
+				b.watch.offer(user, watchResume{user: user, show: *cur.show, ep: ep, done: true, count: true}, now)
+				out["ep"], out["ask"] = ep, true
 			}
 			cur.note("%s left", cur.name(user))
 			delete(cur.members, user)

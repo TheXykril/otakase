@@ -83,9 +83,14 @@ func writeForCurrentShow(mediaID int, toAniList func() error, toMAL func(*Config
 
 func UpdateAnimeProgress(token string, mediaID, progress int) error {
 	noteProgressWritten()
-	return writeForCurrentShow(mediaID,
+	err := writeForCurrentShow(mediaID,
 		func() error { return UpdateAniListAnimeProgress(token, mediaID, progress) },
 		func(cfg *Config, malID int) error { return updateMyAnimeListProgress(cfg, malID, progress) })
+	if err == nil {
+		// The episode is watched: the synced position moves on with it.
+		noteEpisodeFinished(GetGlobalConfig(), mediaID, progress)
+	}
+	return err
 }
 
 func UpdateAnimeStatus(token string, mediaID int, status string) error {

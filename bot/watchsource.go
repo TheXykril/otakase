@@ -378,6 +378,7 @@ func (b *bot) countWatched(users []string, show watchShow, episode int) {
 	if !b.settingBool("watch_room_progress") {
 		return
 	}
+	var done []watchResume
 	for _, user := range users {
 		var al anilistLink
 		var mal malLink
@@ -396,7 +397,10 @@ func (b *bot) countWatched(users []string, show watchShow, episode int) {
 				logWatchErr("mal progress", user, err)
 			}
 		}
+		done = append(done, watchResume{user: user, show: show, ep: episode, done: true})
 	}
+	// The saved position moves on with the list, as in the app.
+	b.saveResumes(done)
 }
 
 func logWatchErr(what, user string, err error) {
