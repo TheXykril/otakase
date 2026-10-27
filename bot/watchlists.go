@@ -10,11 +10,13 @@ import (
 	"time"
 )
 
-// The watch room's picker shows the host their own lists next to the
-// search: Continue, the shows they are watching, at the next episode, from
+// The watch room's picker shows the host their own list under the
+// search: Continue, every show they are watching, at the next episode, from
 // where Otakase or the room last stopped when there is a saved
-// [otakase:ep@secs] tag for it. A show moved out of Watching on either
-// tracker leaves it, saved position or not. The lists come from the
+// [otakase:ep@secs] tag for it. Shows caught up with what has aired come
+// after the rest, at the latest episode. A show moved out of Watching on
+// either tracker leaves it, saved position or not; the note under the list
+// says which shows were left out and why. The lists come from the
 // member's linked AniList (read with their own token, so a private list
 // shows to them) and MyAnimeList; nobody else's lists are ever read.
 
@@ -28,9 +30,10 @@ const watchListTTL = time.Minute
 // watchListItem is a show on a member's list, at the episode to play.
 type watchListItem struct {
 	watchShow
-	Next     int `json:"next"`               // episode to play
-	Resume   int `json:"resume,omitempty"`   // seconds into Next to start from
-	Progress int `json:"progress,omitempty"` // episodes watched
+	Next     int  `json:"next"`                // episode to play
+	Resume   int  `json:"resume,omitempty"`    // seconds into Next to start from
+	Progress int  `json:"progress,omitempty"`  // episodes watched
+	CaughtUp bool `json:"caught_up,omitempty"` // seen all that's out; Next is the latest episode
 	updated  int64
 }
 
@@ -136,6 +139,8 @@ var malWatchList = func(token string) ([]watchListEntry, error) {
 	for _, e := range r.Data {
 		m, ok := byMal[e.Node.ID]
 		if !ok {
+			// Not on AniList, so the room can't look it up; counted in the note.
+			out = append(out, watchListEntry{show: watchShow{MalID: e.Node.ID}})
 			continue
 		}
 		var updated int64
@@ -204,14 +209,17 @@ var malOffWatching = func(token string) (map[int]bool, error) {
 
 // dropOffWatching leaves out of one tracker's watching entries the shows the
 // other tracker has in another list: moved on there, they were put down.
-func dropOffWatching(entries []watchListEntry, off func(watchShow) bool) []watchListEntry {
-	kept := entries[:0:0]
+// The titles left out come back too.
+func dropOffWatching(entries []watchListEntry, off func(watchShow) bool) (kept []watchListEntry, dropped []string) {
+	kept = entries[:0:0]
 	for _, e := range entries {
-		if !off(e.show) {
-			kept = append(kept, e)
+		if off(e.show) {
+			dropped = append(dropped, e.show.Title)
+			continue
 		}
+		kept = append(kept, e)
 	}
-	return kept
+	return kept, dropped
 }
 
 // watchResumeIn reads the saved position from notes.
@@ -225,20 +233,47 @@ func watchResumeIn(notes string) (ep, secs int) {
 	return ep, secs
 }
 
+// watchListHidden counts the shows on a member's watching lists that
+// Continue leaves out, by reason, for the note under it.
+type watchListHidden struct {
+	notOut   []string // not released yet
+	adult    int      // 18+ outside an 18+ room
+	notFound int      // on MyAnimeList but not on AniList
+}
+
 // mergeWatchList puts the trackers' entries together, one per show: the
-// furthest progress, the later saved position, the latest update. Only
-// shows the room can play stay: out already, not 18+ unless adult, and
-// with the next episode out.
-func mergeWatchList(lists [][]watchListEntry, adult bool) []watchListItem {
+// furthest progress, the later saved position, the latest update. Shows the
+// room can't play stay out and are counted in hidden: not out yet, 18+
+// outside an 18+ room, or missing on AniList. Caught-up shows come last, at
+// their latest episode.
+func mergeWatchList(lists [][]watchListEntry, adult bool) ([]watchListItem, watchListHidden) {
 	type merged struct {
 		item          watchListItem
 		tagEp, tagSec int
 	}
+	var hidden watchListHidden
+	skipped := map[int]bool{}
 	byID := map[int]*merged{}
 	var order []int
 	for _, list := range lists {
 		for _, e := range list {
-			if e.status == "NOT_YET_RELEASED" || e.show.Format == "MUSIC" || (e.show.Adult && !adult) {
+			switch {
+			case e.show.ID == 0:
+				hidden.notFound++
+				continue
+			case e.show.Format == "MUSIC":
+				continue
+			case e.show.Adult && !adult:
+				if !skipped[e.show.ID] {
+					hidden.adult++
+				}
+				skipped[e.show.ID] = true
+				continue
+			case e.status == "NOT_YET_RELEASED":
+				if !skipped[e.show.ID] {
+					hidden.notOut = append(hidden.notOut, e.show.Title)
+				}
+				skipped[e.show.ID] = true
 				continue
 			}
 			ep, secs := watchResumeIn(e.notes)
@@ -260,8 +295,9 @@ func mergeWatchList(lists [][]watchListEntry, adult bool) []watchListItem {
 		m := byID[id]
 		it := m.item
 		it.Next = it.Progress + 1
-		if it.Next > it.lastEpisode() {
-			continue // caught up, the next episode isn't out yet
+		if last := it.lastEpisode(); it.Next > last {
+			// Caught up: listed anyway, at the latest episode.
+			it.Next, it.CaughtUp = last, true
 		}
 		// The saved position only counts for the episode it names, as in the app.
 		if m.tagEp == it.Next && m.tagSec >= watchResumeMin {
@@ -269,11 +305,39 @@ func mergeWatchList(lists [][]watchListEntry, adult bool) []watchListItem {
 		}
 		out = append(out, it)
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].updated > out[j].updated })
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].CaughtUp != out[j].CaughtUp {
+			return !out[i].CaughtUp
+		}
+		return out[i].updated > out[j].updated
+	})
 	if len(out) > watchListMax {
 		out = out[:watchListMax]
 	}
-	return out
+	return out, hidden
+}
+
+// watchListNote says which watching shows Continue left out and why.
+func watchListNote(h watchListHidden, movedOn map[string][]string) string {
+	var parts []string
+	for _, tracker := range []string{"AniList", "MyAnimeList"} {
+		if t := movedOn[tracker]; len(t) > 0 {
+			parts = append(parts, strings.Join(t, ", ")+" (not in Watching on "+tracker+")")
+		}
+	}
+	if len(h.notOut) > 0 {
+		parts = append(parts, strings.Join(h.notOut, ", ")+" (not out yet)")
+	}
+	if h.adult > 0 {
+		parts = append(parts, plural(h.adult, "18+ show")+" (only in an 18+ room)")
+	}
+	if h.notFound > 0 {
+		parts = append(parts, plural(h.notFound, "MyAnimeList show")+" (not found on AniList)")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Not listed: " + strings.Join(parts, "; ") + "."
 }
 
 type watchListCacheEntry struct {
@@ -334,20 +398,23 @@ func (b *bot) userWatchLists(user string, adult bool) watchLists {
 	// With both linked, a show watched on one but moved on on the other
 	// was put down: the trackers only disagree until the app or the
 	// member syncs them.
+	movedOn := map[string][]string{}
 	if out.AniList && out.MAL && alErr == nil && malErr == nil {
 		var ids []int
 		for _, e := range malWatching {
-			ids = append(ids, e.show.ID)
+			if e.show.ID > 0 {
+				ids = append(ids, e.show.ID)
+			}
 		}
 		if off, err := anilistOffWatching(alToken, al.ID, ids); err != nil {
 			logWatchErr("anilist list status", user, err)
 		} else {
-			malWatching = dropOffWatching(malWatching, func(s watchShow) bool { return off[s.ID] })
+			malWatching, movedOn["AniList"] = dropOffWatching(malWatching, func(s watchShow) bool { return s.ID > 0 && off[s.ID] })
 		}
 		if off, err := malOffWatching(malToken); err != nil {
 			logWatchErr("mal list status", user, err)
 		} else {
-			alWatching = dropOffWatching(alWatching, func(s watchShow) bool { return s.MalID > 0 && off[s.MalID] })
+			alWatching, movedOn["MyAnimeList"] = dropOffWatching(alWatching, func(s watchShow) bool { return s.MalID > 0 && off[s.MalID] })
 		}
 	}
 	var failed []string
@@ -357,14 +424,16 @@ func (b *bot) userWatchLists(user string, adult bool) watchLists {
 	if malErr != nil {
 		failed = append(failed, "MyAnimeList")
 	}
-	out.Continue = mergeWatchList([][]watchListEntry{alWatching, malWatching}, adult)
+	var hidden watchListHidden
+	out.Continue, hidden = mergeWatchList([][]watchListEntry{alWatching, malWatching}, adult)
+	out.Note = watchListNote(hidden, movedOn)
 	for k := range out.Continue {
 		if out.Continue[k].Cover != "" {
 			out.Continue[k].Cover = "api/watch/cover?u=" + url.QueryEscape(out.Continue[k].Cover)
 		}
 	}
 	if len(failed) > 0 {
-		out.Note = "Couldn't read your " + strings.Join(failed, " and ") + " list. Try again in a bit."
+		out.Note = strings.TrimSpace("Couldn't read your " + strings.Join(failed, " and ") + " list. Try again in a bit. " + out.Note)
 		return out // not kept, so the next look asks again
 	}
 	watchListCache.Lock()

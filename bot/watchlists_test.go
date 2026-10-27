@@ -19,25 +19,44 @@ func TestMergeWatchList(t *testing.T) {
 		{show: listShow(2, 0, 6), progress: 6, updated: 50},                            // airing, caught up
 		{show: listShow(3, 24, 0), progress: 2, notes: "[otakase:2@600]", updated: 10}, // saved spot is an episode already counted
 		{show: watchShow{ID: 4, Episodes: 2, Adult: true}, progress: 0, updated: 90},
-		{show: listShow(5, 12, 0), status: "NOT_YET_RELEASED", updated: 80},
+		{show: watchShow{ID: 5, Title: "Soon", Episodes: 12}, status: "NOT_YET_RELEASED", updated: 80},
 	}
 	mal := []watchListEntry{
 		{show: listShow(1, 12, 0), progress: 3, notes: "[otakase:5@100]", updated: 40},
 		{show: listShow(3, 24, 0), progress: 7, updated: 20},
 		{show: listShow(6, 12, 0), progress: 1, notes: "[otakase:2@5]", updated: 5}, // too early to count
+		{show: watchShow{MalID: 99}},                                                // not on AniList
 	}
-	got := mergeWatchList([][]watchListEntry{anilist, mal}, false)
-	want := []struct{ id, next, resume int }{{1, 5, 754}, {3, 8, 0}, {6, 2, 0}}
+	got, hidden := mergeWatchList([][]watchListEntry{anilist, mal}, false)
+	// Caught up goes last, at the latest episode.
+	want := []struct {
+		id, next, resume int
+		caught           bool
+	}{{1, 5, 754, false}, {3, 8, 0, false}, {6, 2, 0, false}, {2, 6, 0, true}}
 	if len(got) != len(want) {
 		t.Fatalf("got %+v", got)
 	}
 	for k, w := range want {
-		if got[k].ID != w.id || got[k].Next != w.next || got[k].Resume != w.resume {
+		if got[k].ID != w.id || got[k].Next != w.next || got[k].Resume != w.resume || got[k].CaughtUp != w.caught {
 			t.Errorf("item %d = %d ep %d @%d, want %+v", k, got[k].ID, got[k].Next, got[k].Resume, w)
 		}
 	}
-	if adult := mergeWatchList([][]watchListEntry{anilist}, true); len(adult) != 3 || adult[0].ID != 4 {
+	if hidden.adult != 1 || hidden.notFound != 1 || strings.Join(hidden.notOut, ",") != "Soon" {
+		t.Errorf("hidden: %+v", hidden)
+	}
+	if adult, _ := mergeWatchList([][]watchListEntry{anilist}, true); len(adult) != 4 || adult[0].ID != 4 {
 		t.Errorf("adult room: %+v", adult)
+	}
+}
+
+func TestWatchListNote(t *testing.T) {
+	if n := watchListNote(watchListHidden{}, map[string][]string{}); n != "" {
+		t.Errorf("nothing hidden: %q", n)
+	}
+	n := watchListNote(watchListHidden{notOut: []string{"Soon"}, adult: 2, notFound: 1}, map[string][]string{"MyAnimeList": {"Gone"}})
+	want := "Not listed: Gone (not in Watching on MyAnimeList); Soon (not out yet); 2 18+ shows (only in an 18+ room); 1 MyAnimeList show (not found on AniList)."
+	if n != want {
+		t.Errorf("note:\n%s\nwant\n%s", n, want)
 	}
 }
 
@@ -132,9 +151,10 @@ func TestWatchRoomResumesFromSavedPosition(t *testing.T) {
 func TestDropOffWatching(t *testing.T) {
 	a, b := listShow(1, 12, 0), listShow(2, 12, 0)
 	a.MalID, b.MalID = 101, 102
+	b.Title = "Two"
 	entries := []watchListEntry{{show: a}, {show: b}}
-	kept := dropOffWatching(entries, func(s watchShow) bool { return map[int]bool{102: true}[s.MalID] })
-	if len(kept) != 1 || kept[0].show.ID != 1 || len(entries) != 2 || entries[1].show.ID != 2 {
+	kept, dropped := dropOffWatching(entries, func(s watchShow) bool { return map[int]bool{102: true}[s.MalID] })
+	if len(kept) != 1 || kept[0].show.ID != 1 || len(entries) != 2 || entries[1].show.ID != 2 || strings.Join(dropped, ",") != "Two" {
 		t.Errorf("kept %+v from %+v", kept, entries)
 	}
 }
@@ -175,5 +195,8 @@ func TestWatchListsLeaveShowsMovedOn(t *testing.T) {
 	lists := b.userWatchLists("a", false)
 	if len(lists.Continue) != 1 || lists.Continue[0].ID != 1 {
 		t.Errorf("continue: %+v", lists.Continue)
+	}
+	if !strings.Contains(lists.Note, "not in Watching on AniList") || !strings.Contains(lists.Note, "not in Watching on MyAnimeList") {
+		t.Errorf("note: %q", lists.Note)
 	}
 }
