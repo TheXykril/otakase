@@ -4,8 +4,9 @@
 
 ## 1.30.70
 
-- Watch Together: when an episode counts as watched for you, the saved position in your AniList notes or MyAnimeList comments moves to the start of the next episode, e.g. `[otakase:6@0]` after episode 5, the same as the app now does. When there is no next episode (the show's last, or the next one isn't out yet) the tag is removed. A tag further on (from watching an older episode again) is never moved back.
+- Watch Together: when an episode counts as watched for you, the saved position in your AniList notes or MyAnimeList comments moves to the start of the next episode, e.g. `[otakase:6@0]` after episode 5, the same as the app now does. This happens whenever the show has a next episode, even one not out yet. After the last episode it reads `[otakase:12@done]` followed by a short line from Otakase. A tag further on (from watching an older episode again) is never moved back.
 - Watch Together: leaving with 80% or more of the episode played counts it as watched (list moves on, note as above) instead of saving where you stopped.
+- Watch Together: if you joined an episode late, the room can't count it on its own; near the end it now asks whether to count it on your list (also on the leave screen if you go before answering).
 
 ## 1.30.69
 

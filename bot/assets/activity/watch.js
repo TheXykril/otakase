@@ -433,8 +433,24 @@ async function wStopWatching() {
     : r.done
       ? `Your ${v.linked.join(" and ")} moved on, so Otakase starts the next episode.`
       : `Saving where you stopped to your ${v.linked.join(" and ")}, so Otakase can resume from there.`;
-  wBox(`<p class="lead">${at}</p><p class="note">${note}</p>
+  const ask = r.ask && synced
+    ? `<div class="wask" id="wcount"><span>You joined partway. Count episode ${r.ep} as watched on your ${esc(v.linked.join(" and "))}?</span>
+      <button class="btn" data-count="1">Yes</button><button class="btn alt" data-count="0">No</button></div>`
+    : "";
+  wBox(`<p class="lead">${at}</p><p class="note">${note}</p>${ask}
     <button class="btn" id="wagain">${icon("play")} Watch again</button><div class="err" id="err"></div>`);
+  const c = document.getElementById("wcount");
+  if (c) {
+    c.querySelectorAll("[data-count]").forEach(
+      (x) =>
+        (x.onclick = () => {
+          c.querySelectorAll("button").forEach((y) => (y.disabled = true));
+          api("watch/count", { room, ok: x.dataset.count === "1" })
+            .then((res) => (c.innerHTML = `<span>${res.counted ? `Episode ${r.ep} counted.` : "Left as it was."}</span>`))
+            .catch(showError);
+        })
+    );
+  }
   const b = document.getElementById("wagain");
   b.onclick = () => ((b.disabled = true), watchView().catch((e) => ((b.disabled = false), showError(e))));
 }
@@ -491,7 +507,9 @@ function wAsks() {
           )
           .join("")
       : asks.map((a) => `<div class="wask mine"><span>Asked the host to ${esc(wAskText(a))}…</span></div>`).join("");
+    el.innerHTML += wCountAsk("wask");
     wAnswerButtons(el);
+    wCountButtons(el);
   }
   // A new request pings the host, who may be in theater mode.
   const newest = Math.max(0, ...asks.map((a) => a.id));
@@ -508,10 +526,11 @@ function wAskPops() {
   const el = document.getElementById("wreq");
   if (!el) return;
   const asks = wv.asks || [];
-  const key = (wv.is_host ? "h" : "m") + asks.map((a) => [a.id, a.kind, a.by, a.pos].join(":")).join(",");
-  if (key === wAskKey && el.childElementCount === asks.length) return;
+  const count = wCountAsk("wreqpop");
+  const key = (wv.is_host ? "h" : "m") + asks.map((a) => [a.id, a.kind, a.by, a.pos].join(":")).join(",") + (count ? "c" + wv.count_ask : "");
+  if (key === wAskKey && el.childElementCount === asks.length + (count ? 1 : 0)) return;
   wAskKey = key;
-  el.innerHTML = asks
+  el.innerHTML = count + asks
     .map((a) => {
       const left = Math.max(0, a.left_ms || 0) / 1000;
       const bar = `<i class="wreqtime" style="animation-duration:${left.toFixed(1)}s;--from:${Math.min(1, left / 30).toFixed(3)}"></i>`;
@@ -522,6 +541,29 @@ function wAskPops() {
     })
     .join("");
   wAnswerButtons(el);
+  wCountButtons(el);
+}
+
+// wCountAsk is the question for a member who came in late to the episode
+// and stayed to near its end: the room only counts it for them if they say
+// so. cls is the box it sits in.
+function wCountAsk(cls) {
+  if (!wv.count_ask || !wv.sync || !(wv.linked || []).length) return "";
+  return `<div class="${cls}"><span>You joined partway. Count episode ${wv.count_ask} as watched on your ${esc(wv.linked.join(" and "))}?</span>
+    <span class="wreqbtns"><button class="btn" data-count="1">Yes</button><button class="btn alt" data-count="0">No</button></span></div>`;
+}
+
+function wCountButtons(el) {
+  el.querySelectorAll("[data-count]").forEach(
+    (b) =>
+      (b.onclick = (e) => {
+        e.stopPropagation();
+        el.querySelectorAll("[data-count]").forEach((x) => (x.disabled = true));
+        api("watch/count", { room: wRoom, ok: b.dataset.count === "1" })
+          .then((nv) => wSet(nv, true))
+          .catch(showError);
+      })
+  );
 }
 
 // wAnswerButtons wires the host's Yes and No buttons in a list of requests.

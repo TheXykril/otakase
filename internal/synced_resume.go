@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -20,7 +21,19 @@ import (
 // a device that has not played that far, and it is only trusted for the
 // episode it names.
 
-var syncedResumeTagPattern = regexp.MustCompile(`\[otakase:(\d+)@(\d+)\]`)
+// A finished show's last episode is tagged done, and a line from Otakase
+// follows it: [otakase:12@done] Story complete.
+var syncedResumeTagPattern = regexp.MustCompile(`\[otakase:(\d+)@(\d+|done)\]`)
+
+// syncedResumeTagSpan is what writing a tag replaces: the tag, and after a
+// done tag the line that came with it.
+var syncedResumeTagSpan = regexp.MustCompile(`\[otakase:\d+@(?:\d+\]|done\][^\n]*)`)
+
+// syncedDoneLines are the lines a done tag picks from: the chapters of
+// Otakase: The Movie.
+var syncedDoneLines = []string{"Counting the Stars", "The Voices", "Memories That Never Fade", "Legendary Conquests", "The Journey Continues"}
+
+var syncedDoneLine = func() string { return syncedDoneLines[rand.IntN(len(syncedDoneLines))] }
 
 const (
 	// syncedResumeInterval is how often a playing episode's position is written
@@ -70,10 +83,13 @@ func parseSyncedResumeTag(notes string) (syncedResume, bool) {
 // replaced where it stands; otherwise the tag goes on a line of its own after
 // whatever the viewer wrote.
 func withSyncedResumeTag(notes string, p syncedResume) string {
-	tag := formatSyncedResumeTag(p)
-	if syncedResumeTagPattern.MatchString(notes) {
+	return withSyncedTag(notes, formatSyncedResumeTag(p))
+}
+
+func withSyncedTag(notes, tag string) string {
+	if syncedResumeTagSpan.MatchString(notes) {
 		replaced := false
-		return syncedResumeTagPattern.ReplaceAllStringFunc(notes, func(string) string {
+		return syncedResumeTagSpan.ReplaceAllStringFunc(notes, func(string) string {
 			if replaced {
 				return ""
 			}
@@ -88,20 +104,11 @@ func withSyncedResumeTag(notes string, p syncedResume) string {
 	return trimmed + "\n" + tag
 }
 
-// withoutSyncedResumeTag returns notes with the tag taken out, and whatever
-// that leaves at the end trimmed.
-func withoutSyncedResumeTag(notes string) string {
-	if !syncedResumeTagPattern.MatchString(notes) {
-		return notes
-	}
-	return strings.TrimRight(syncedResumeTagPattern.ReplaceAllString(notes, ""), " \t\r\n")
-}
-
 // syncedResumeAfterEpisode is notes once episode finished has been watched
-// through: the tag points at the start of the next episode, or is gone when
-// finished was the show's last (total is 0 while that is not known). A tag
-// already past finished -- the viewer went back to an earlier episode -- is
-// left where it is.
+// through: the tag points at the start of the next episode when the show has
+// one, aired or not (total is 0 while that is not known), and marks the last
+// one done. A tag already past finished -- the viewer went back to an earlier
+// episode -- is left where it is.
 func syncedResumeAfterEpisode(notes string, finished, total int) string {
 	if match := syncedResumeTagPattern.FindStringSubmatch(notes); match != nil {
 		if episode, err := strconv.Atoi(match[1]); err == nil && episode > finished {
@@ -109,7 +116,7 @@ func syncedResumeAfterEpisode(notes string, finished, total int) string {
 		}
 	}
 	if total > 0 && finished >= total {
-		return withoutSyncedResumeTag(notes)
+		return withSyncedTag(notes, fmt.Sprintf("[otakase:%d@done] %s", finished, syncedDoneLine()))
 	}
 	return withSyncedResumeTag(notes, syncedResume{Episode: finished + 1})
 }
@@ -360,9 +367,9 @@ func saveMyAnimeListEntryComments(config *Config, malID int, comments string) er
 // latest position is always held; a write goes out when the interval has
 // passed, and whatever is still unwritten goes out from the exit cleanup.
 //
-// Once an episode is watched through, its tag is moved on to the next one,
-// and positions still held for that episode or an earlier one are dropped so
-// they cannot put it back.
+// Once an episode is watched through, its tag is moved on to the next one
+// (or marked done after the last), and positions still held for that episode or an
+// earlier one are dropped so they cannot put it back.
 type resumePusher struct {
 	mu        sync.Mutex
 	config    *Config

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -20,11 +21,23 @@ import (
 // Once a member has watched an episode through (when the room moves their
 // list on, or they leave with 80% or more of it played), the tag points at
 // the start of the next episode, the same as the app: [otakase:6@0] after
-// episode 5. When there is no next episode (the show's last, or the next
-// one isn't out yet) it is taken out. A tag already further on is never
-// moved back.
+// episode 5, as long as the show has a next episode, even one not out yet.
+// After the last episode it reads [otakase:12@done · <a line from Otakase>]. A tag already further
+// on is never moved back.
 
-var watchResumeTag = regexp.MustCompile(`\[otakase:(\d+)@(\d+)\]`)
+// A finished show's last episode is tagged done, and a line from Otakase
+// follows it: [otakase:12@done] Story complete.
+var watchResumeTag = regexp.MustCompile(`\[otakase:(\d+)@(\d+|done)\]`)
+
+// watchResumeTagSpan is what writing a tag replaces: the tag, and after a
+// done tag the line that came with it.
+var watchResumeTagSpan = regexp.MustCompile(`\[otakase:\d+@(?:\d+\]|done\][^\n]*)`)
+
+// watchDoneLines are the lines a done tag picks from, as in the app: the
+// chapters of Otakase: The Movie.
+var watchDoneLines = []string{"Counting the Stars", "The Voices", "Memories That Never Fade", "Legendary Conquests", "The Journey Continues"}
+
+var watchDoneLine = func() string { return watchDoneLines[rand.IntN(len(watchDoneLines))] }
 
 const (
 	// watchResumeMin is the least a member has to have watched, and the
@@ -51,7 +64,7 @@ type watchResume struct {
 // edit is what saving p does to a note.
 func (p watchResume) edit() func(string) string {
 	if p.done {
-		return func(notes string) string { return resumeAfterEpisode(notes, p.ep, p.show.outSoFar()) }
+		return func(notes string) string { return resumeAfterEpisode(notes, p.ep, p.show.Episodes) }
 	}
 	return func(notes string) string { return withResumeTag(notes, p.ep, p.secs) }
 }
@@ -135,10 +148,13 @@ func (b *bot) saveResumes(saves []watchResume) {
 // existing tag is replaced where it stands; otherwise the tag goes on a
 // line of its own after whatever the member wrote.
 func withResumeTag(notes string, episode, secs int) string {
-	tag := fmt.Sprintf("[otakase:%d@%d]", episode, secs)
-	if watchResumeTag.MatchString(notes) {
+	return withTag(notes, fmt.Sprintf("[otakase:%d@%d]", episode, secs))
+}
+
+func withTag(notes, tag string) string {
+	if watchResumeTagSpan.MatchString(notes) {
 		replaced := false
-		return watchResumeTag.ReplaceAllStringFunc(notes, func(string) string {
+		return watchResumeTagSpan.ReplaceAllStringFunc(notes, func(string) string {
 			if replaced {
 				return ""
 			}
@@ -153,32 +169,16 @@ func withResumeTag(notes string, episode, secs int) string {
 	return trimmed + "\n" + tag
 }
 
-// outSoFar is the episodes out, 0 when that isn't known.
-func (s watchShow) outSoFar() int {
-	if s.Aired > 0 {
-		return s.Aired
-	}
-	return s.Episodes
-}
-
-// withoutResumeTag returns notes with the tag taken out, and whatever that
-// leaves at the end trimmed.
-func withoutResumeTag(notes string) string {
-	if !watchResumeTag.MatchString(notes) {
-		return notes
-	}
-	return strings.TrimRight(watchResumeTag.ReplaceAllString(notes, ""), " \t\r\n")
-}
-
 // resumeAfterEpisode is notes once episode finished has been watched
-// through: the tag points at the start of the next episode, or is gone
-// when there is no next episode yet (last is 0 while not known).
-func resumeAfterEpisode(notes string, finished, last int) string {
+// through: the tag points at the start of the next episode when the show
+// has one, aired or not (total is 0 while not known), and marks the last
+// one done. A tag already further on is left alone.
+func resumeAfterEpisode(notes string, finished, total int) string {
 	if ep, _ := watchResumeIn(notes); ep > finished {
 		return notes
 	}
-	if last > 0 && finished >= last {
-		return withoutResumeTag(notes)
+	if total > 0 && finished >= total {
+		return withTag(notes, fmt.Sprintf("[otakase:%d@done] %s", finished, watchDoneLine()))
 	}
 	return withResumeTag(notes, finished+1, 0)
 }
@@ -252,4 +252,82 @@ var malResume = func(token string, malID int, edit func(string) string) error {
 		return fmt.Errorf("comments update: MyAnimeList answered %s", resp.Status)
 	}
 	return nil
+}
+
+// watchOfferTTL is how long the leave screen can still count an episode.
+const watchOfferTTL = 15 * time.Minute
+
+type watchOffer struct {
+	p  watchResume
+	at time.Time
+}
+
+// countAsk is the episode to ask user about counting, or 0: they came in
+// too late for the room to count it on its own, yet are near its end and
+// haven't answered. Hold the lock.
+func (r *watchRoom) countAsk(user string, now time.Time) int {
+	m, ok := r.members[user]
+	if !ok || m.counted || m.asked || r.phase != "play" || r.show == nil || r.ep < 1 || r.dur <= 0 {
+		return 0
+	}
+	if m.from <= r.startAt+watchResumeLate || m.watched < watchResumeMin || r.position(now) < watchedEnough*r.dur {
+		return 0
+	}
+	return r.ep
+}
+
+// offer keeps p for the leave screen to count. Hold the lock.
+func (w *watchRooms) offer(user string, p watchResume, now time.Time) {
+	if w.offers == nil {
+		w.offers = map[string]watchOffer{}
+	}
+	for id, o := range w.offers {
+		if now.Sub(o.at) > watchOfferTTL {
+			delete(w.offers, id)
+		}
+	}
+	w.offers[user] = watchOffer{p: p, at: now}
+}
+
+// watchCount is a late joiner's answer to whether the episode counts for
+// them: from the room while they're in it, or from the leave screen.
+func (b *bot) watchCount(w http.ResponseWriter, r *http.Request) {
+	user, in, ok := b.watchRead(w, r)
+	if !ok {
+		return
+	}
+	now := watchNow()
+	var save []watchResume
+	b.watch.mu.Lock()
+	if cur := b.watch.room(in.Room); cur != nil {
+		if m, ok := cur.members[user]; ok {
+			if ep := cur.countAsk(user, now); ep > 0 {
+				m.asked = true
+				if in.OK {
+					m.counted = true
+					save = append(save, watchResume{user: user, show: *cur.show, ep: ep, done: true, count: true})
+				}
+				cur.changed()
+			}
+			b.flushCount(save)
+			b.watchAnswerView(w, cur, user, b.isAdmin(user))
+			return
+		}
+	}
+	if o, ok := b.watch.offers[user]; ok {
+		delete(b.watch.offers, user)
+		if in.OK && now.Sub(o.at) <= watchOfferTTL {
+			save = append(save, o.p)
+		}
+	}
+	b.watch.mu.Unlock()
+	b.flushCount(save)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true, "counted": len(save) > 0})
+}
+
+// flushCount saves the episodes a member chose to count.
+func (b *bot) flushCount(save []watchResume) {
+	if len(save) > 0 {
+		go b.saveResumes(save)
+	}
 }

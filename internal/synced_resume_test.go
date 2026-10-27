@@ -161,6 +161,9 @@ func TestTheFirstPollsBeforeAResumeSeekAreIgnored(t *testing.T) {
 }
 
 func TestTheTagMovesPastAFinishedEpisode(t *testing.T) {
+	old := syncedDoneLine
+	syncedDoneLine = func() string { return "The Voices" }
+	t.Cleanup(func() { syncedDoneLine = old })
 	cases := []struct {
 		in              string
 		finished, total int
@@ -170,9 +173,9 @@ func TestTheTagMovesPastAFinishedEpisode(t *testing.T) {
 		{"loved it", 5, 12, "loved it\n[otakase:6@0]"},
 		{"loved it\n[otakase:5@1300]", 5, 12, "loved it\n[otakase:6@0]"},
 		{"[otakase:5@1300]", 5, 0, "[otakase:6@0]"},
-		// The last episode: nothing left to resume.
-		{"loved it\n[otakase:12@1300]", 12, 12, "loved it"},
-		{"[otakase:12@1300]", 12, 12, ""},
+		// The last episode is marked done.
+		{"loved it\n[otakase:12@1300]", 12, 12, "loved it\n[otakase:12@done] The Voices"},
+		{"[otakase:11@done] Counting the Stars", 12, 12, "[otakase:12@done] The Voices"},
 		// Watching an earlier episode again leaves a tag further on alone.
 		{"[otakase:9@300]", 5, 12, "[otakase:9@300]"},
 	}
@@ -181,9 +184,15 @@ func TestTheTagMovesPastAFinishedEpisode(t *testing.T) {
 			t.Errorf("syncedResumeAfterEpisode(%q, %d, %d) = %q, want %q", c.in, c.finished, c.total, got, c.want)
 		}
 	}
-	// The start of an episode is not a place to seek to.
-	if p, ok := parseSyncedResumeTag("[otakase:6@0]"); ok {
-		t.Fatalf("[otakase:6@0] read as %+v", p)
+	// The start of an episode, or a finished show, is not a place to seek to.
+	for _, tag := range []string{"[otakase:6@0]", "[otakase:12@done] The Voices"} {
+		if p, ok := parseSyncedResumeTag(tag); ok {
+			t.Fatalf("%s read as %+v", tag, p)
+		}
+	}
+	// Watching again replaces the done mark.
+	if got := withSyncedResumeTag("[otakase:12@done] The Voices\nmy note", syncedResume{Episode: 1, Seconds: 30}); got != "[otakase:1@30]\nmy note" {
+		t.Fatalf("rewatch tag %q", got)
 	}
 }
 
@@ -208,5 +217,18 @@ func TestAFinishedEpisodeIsNotWrittenBackAtExit(t *testing.T) {
 	waitForPushes(t, fake, 2)
 	if last := fake.pushes[1]; last != (syncedResume{Episode: 6, Seconds: 40}) {
 		t.Fatalf("flushed %+v, want episode 6 at 40s", last)
+	}
+}
+
+func TestTheLastEpisodeIsMarkedDone(t *testing.T) {
+	clock := time.Unix(1000, 0)
+	fake := &fakeResumePush{}
+	r := newTestResumePusher(&clock, fake)
+
+	r.note(nil, 42, 12, 1300)
+	r.episodeDone(nil, 42, 12, 12)
+	r.flush()
+	if fake.count() != 1 || fake.pushes[0] != (syncedResume{Episode: 13}) {
+		t.Fatalf("pushes %+v, want only the finish of episode 12", fake.pushes)
 	}
 }
