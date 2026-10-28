@@ -42,7 +42,10 @@ class Catalog {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
-            body: jsonEncode({'query': query, 'variables': variables}),
+            body: jsonEncode({
+              'query': query,
+              'variables': graphVariables(variables),
+            }),
           )
           .timeout(const Duration(seconds: 20));
     } catch (_) {

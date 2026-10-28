@@ -266,3 +266,9 @@ class SkipSpan {
     _ => 'Skip Ending',
   };
 }
+
+/// AniList reads an explicit null variable as a filter on null, so a search
+/// with format: null finds nothing and Media(idMal: null) finds no show.
+/// Unset variables are left out instead.
+Json graphVariables(Json variables) =>
+    Map.fromEntries(variables.entries.where((e) => e.value != null));

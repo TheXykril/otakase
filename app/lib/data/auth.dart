@@ -435,7 +435,10 @@ class AuthService extends ChangeNotifier {
               'Authorization': 'Bearer $token',
               'Content-Type': 'application/json',
             },
-            body: jsonEncode({'query': query, 'variables': variables}),
+            body: jsonEncode({
+              'query': query,
+              'variables': graphVariables(variables),
+            }),
           )
           .timeout(const Duration(seconds: 20)),
     );
