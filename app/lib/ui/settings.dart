@@ -45,6 +45,39 @@ Future<void> openSettings(
   }
 }
 
+// Friendly names for settings. The keys match the CLI config, so they stay
+// the storage keys; only the label shown to the viewer changes.
+const settingLabels = <String, String>{
+  'SubsLanguage': 'Subtitle language',
+  'AudioLanguages': 'Audio languages',
+  'SubtitleFont': 'Subtitle font',
+  'SubtitleSize': 'Subtitle size',
+  'SubtitleColour': 'Subtitle colour',
+  'SubtitleBackground': 'Subtitle background',
+  'SubtitleOutline': 'Subtitle outline',
+  'SubtitlePosition': 'Subtitle position',
+  'SubOrDub': 'Sub or dub',
+  'SubStyle': 'Subtitle style',
+  'AutoAudioFallback': 'Fall back to other audio',
+  'NextEpisodePrompt': 'Ask before next episode',
+  'SkipOp': 'Skip openings',
+  'SkipEd': 'Skip endings',
+  'SkipRecap': 'Skip recaps',
+  'SkipFiller': 'Skip filler episodes',
+  'SkipDelay': 'Skip delay',
+  'Quality': 'Quality',
+  'PercentageToMarkComplete': 'Mark watched at',
+  'AdultContent': 'AdultContent',
+  'ExperimentalMovies': 'Movies (experimental)',
+  'CheckUpdates': 'Check for updates',
+  'Notifications': 'Notifications',
+  'Updates': 'Updates',
+  'Diagnostics': 'Diagnostics',
+  'About': 'About',
+};
+
+String settingLabel(String key) => settingLabels[key] ?? key;
+
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, required this.services, required this.isTV});
   final AppServices services;
@@ -68,7 +101,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title ?? key),
+        title: Text(title ?? settingLabel(key)),
         content: TextField(
           autofocus: true,
           controller: controller,
@@ -99,7 +132,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> choose(String key, List<String> values) async {
     final result = await chooseValue(
       context,
-      key,
+      settingLabel(key),
       values,
       selected: store.text(key),
     );
@@ -111,7 +144,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> numberChoice(String key, List<int> values) async {
     final result = await chooseValue(
       context,
-      key,
+      settingLabel(key),
       values.map((v) => '$v').toList(),
       selected: store.text(key),
     );
@@ -168,7 +201,7 @@ class _SettingsPageState extends State<SettingsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  key,
+                  settingLabel(key),
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w500,
@@ -225,7 +258,7 @@ class _SettingsPageState extends State<SettingsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  key,
+                  settingLabel(key),
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w500,
@@ -261,7 +294,7 @@ class _SettingsPageState extends State<SettingsPage> {
     backgroundColor: panel,
     appBar: AppBar(
       backgroundColor: panel,
-      title: const Text('OTAKASE / PREFERENCES'),
+      title: const Text('OTAKASE'),
       leading: IconButton(
         tooltip: 'Back',
         autofocus: true,
