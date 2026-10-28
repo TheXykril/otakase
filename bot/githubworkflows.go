@@ -34,7 +34,6 @@ var ghWorkflows = []ghWorkflow{
 	{key: "dev", file: "dev-build.yml", label: "Dev build", needsVersion: true, takesVersion: true},
 	{key: "site", file: "site.yml", label: "Site"},
 	{key: "wiki", file: "wiki-sync.yml", label: "Wiki sync"},
-	{key: "providers", file: "provider-canary.yml", label: "Provider check"},
 }
 
 func workflowByKey(key string) (ghWorkflow, bool) {

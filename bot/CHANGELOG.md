@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.79
+
+- `/github` no longer offers the provider check: the scheduled provider check workflow is gone. Run `otakase -provider-status` locally instead.
+
 ## 1.30.78
 
 - Dashboard Games page: when last week ended in a tie, "Last week's Game Champion" lists every tied member instead of just one. The role and the Monday post already went to all of them.
