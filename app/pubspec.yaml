@@ -8,7 +8,7 @@ dependencies:
   flutter:
     sdk: flutter
   lucide_icons_flutter: 4.0.1
-  flutter_secure_storage: ^9.2.4
+  flutter_secure_storage: ^10.0.0
   qr_flutter: ^4.1.0
   http: 1.6.0
   html: 0.15.6
