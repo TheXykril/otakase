@@ -12,6 +12,7 @@ import 'device_status.dart';
 import 'seal.dart';
 import 'settings.dart';
 import 'show_page.dart';
+import 'profiles_page.dart';
 
 Future<void> openAccounts(
   BuildContext context,
@@ -134,7 +135,10 @@ class MorePage extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const OtakaseSeal(size: 38),
+                if (services.profiles case final manager?)
+                  ProfileAvatar(manager.active, size: 38)
+                else
+                  const OtakaseSeal(size: 38),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -177,6 +181,18 @@ class MorePage extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 20),
+        if (services.profiles case final manager?)
+          row(
+            'Profiles',
+            manager.active.name,
+            LucideIcons.users,
+            () => Navigator.push(
+              context,
+              OtakaseRoute<void>(
+                builder: (_) => ProfilesPage(manager: manager),
+              ),
+            ),
+          ),
         row(
           'Playback',
           'Resume, skips & quality',

@@ -45,11 +45,12 @@ const settingDefaults = <String, dynamic>{
 };
 
 class AppStore extends ChangeNotifier {
-  AppStore(this.preferences) {
+  AppStore(this.preferences, {this.namespace = ''}) {
     try {
       _values.addAll(
-        (jsonDecode(preferences.getString('settings.v1') ?? '{}') as Map)
-            .cast<String, dynamic>(),
+        (jsonDecode(
+          preferences.getString('${namespace}settings.v1') ?? '{}',
+        ) as Map).cast<String, dynamic>(),
       );
     } catch (_) {
       /* A damaged preference falls back to defaults. */
@@ -60,7 +61,7 @@ class AppStore extends ChangeNotifier {
     if (_values['SubStyle'] == 'ask') _values['SubStyle'] = 'soft';
     try {
       for (final e in (jsonDecode(
-        preferences.getString('history.v1') ?? '[]',
+        preferences.getString('${namespace}history.v1') ?? '[]',
       ) as List)) {
         final entry = WatchEntry.fromJson((e as Map).cast<String, dynamic>());
         _history[entry.anime.key] = entry;
@@ -70,6 +71,7 @@ class AppStore extends ChangeNotifier {
     }
   }
   final SharedPreferences preferences;
+  final String namespace;
   final Json _values = {};
   final Map<String, WatchEntry> _history = {};
   final Map<String, String> providerHealth = {};
@@ -136,7 +138,7 @@ class AppStore extends ChangeNotifier {
   Future<void> set(String key, dynamic val) async {
     _values[key] = val;
     notifyListeners();
-    await preferences.setString('settings.v1', jsonEncode(_values));
+    await preferences.setString('${namespace}settings.v1', jsonEncode(_values));
   }
 
   void health(String name, String status) {
@@ -189,7 +191,7 @@ class AppStore extends ChangeNotifier {
 
   Future<void> _persist() => preferences
       .setString(
-        'history.v1',
+        '${namespace}history.v1',
         jsonEncode(_history.values.map((e) => e.toJson()).toList()),
       )
       .then((_) {});

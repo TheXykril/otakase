@@ -8,6 +8,7 @@ import 'catalog.dart';
 import 'models.dart';
 import 'synced_resume.dart';
 import 'tracker_merge.dart';
+import 'store.dart';
 
 export 'tracker_merge.dart';
 
@@ -52,11 +53,24 @@ class CombinedAccountPage {
 }
 
 class TrackingService extends ChangeNotifier {
-  TrackingService(this.auth, {DateTime Function()? now})
+  TrackingService(this.auth, {DateTime Function()? now, this.store})
     : now = now ?? DateTime.now;
   final DateTime Function() now;
+  final AppStore? store;
   final AuthService auth;
   String? lastError;
+  bool closed = false;
+  @override
+  void notifyListeners() {
+    if (!closed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    closed = true;
+    super.dispose();
+  }
+
   int revision = 0;
   final Map<String, Future<void>> _writes = {};
   final Map<String, Anime> _shows = {};
@@ -90,7 +104,7 @@ class TrackingService extends ChangeNotifier {
       mal: pages['MAL']?.entries ?? [],
       notLoaded: [
         for (final service in ['AniList', 'MAL'])
-          if (!pages.containsKey(service)) service,
+          if (!pages.containsKey(service) || pages[service]!.fromCache) service,
       ],
     );
   }
@@ -100,6 +114,59 @@ class TrackingService extends ChangeNotifier {
     required bool adult,
     bool filterAdult = true,
   }) async {
+    try {
+      return await _list(service, adult: adult, filterAdult: filterAdult);
+    } catch (_) {
+      final cached = cachedList(
+        service,
+        adult: adult,
+        filterAdult: filterAdult,
+      );
+      if (cached != null) return cached;
+      rethrow;
+    }
+  }
+
+  String _identity(String service) =>
+      '${auth.account(service)?.userId}:${auth.account(service)?.username}';
+  AccountPage? cachedList(
+    String service, {
+    required bool adult,
+    bool filterAdult = true,
+  }) {
+    final data = store?.value('ListCache.$service');
+    if (!auth.signedIn(service) ||
+        data is! Map ||
+        data['identity'] != _identity(service)) {
+      return null;
+    }
+    try {
+      final rows = (data['entries'] as List)
+          .map((e) => ListEntry.fromJson((e as Map).cast<String, dynamic>()))
+          .where((e) => !filterAdult || adult || !e.anime.isAdult)
+          .toList();
+      for (final e in rows) {
+        _entries[_entryKey(service, e.anime)] = e;
+      }
+      return AccountPage(
+        rows,
+        avatar: auth.account(service)?.avatar ?? '',
+        fromCache: true,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<AccountPage> _list(
+    String service, {
+    required bool adult,
+    required bool filterAdult,
+  }) async {
+    final owner = _identity(service);
+    if (!auth.signedIn(service) || closed) {
+      throw const LoginFailure('Account signed out.');
+    }
     final rows = <String, ListEntry>{};
     if (service == 'AniList') {
       final account = auth.account(service)!;
@@ -130,7 +197,6 @@ class TrackingService extends ChangeNotifier {
             completedAt: FuzzyDate.fromJson(e['completedAt']),
           );
           rows[a.key] = entry;
-          _entries[_entryKey(service, a)] = entry;
         }
       }
     } else {
@@ -159,11 +225,20 @@ class TrackingService extends ChangeNotifier {
             completedAt: FuzzyDate.parse(s['finish_date'] as String?),
           );
           rows[a.key] = entry;
-          _entries[_entryKey(service, a)] = entry;
         }
         if ((d['paging'] as Map?)?['next'] == null) break;
       }
     }
+    if (closed || owner != _identity(service)) {
+      throw const LoginFailure('Account changed.');
+    }
+    for (final e in rows.values) {
+      _entries[_entryKey(service, e.anime)] = e;
+    }
+    await store?.set('ListCache.$service', {
+      'identity': owner,
+      'entries': rows.values.map((e) => e.toJson()).toList(),
+    });
     return AccountPage(
       rows.values.toList(),
       avatar: auth.account(service)!.avatar,

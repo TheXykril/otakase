@@ -199,6 +199,25 @@ and source fallback.
 The on-device HLS/ASS probe is the playback acceptance test.
 ## Data and local state
 
+Profiles keep separate service sessions. A profile owns its AniList/MAL credentials, pending
+OAuth state, Discord token namespace, settings, watch/resume history and public/private list
+caches. Secure keys use `profile.<id>.` prefixes. Preferences use the same profile namespace.
+The first migration copies legacy preferences and secure keys, commits the profile manifest,
+then removes the old keys. Failed credential migration leaves the legacy data available for retry.
+
+Up to six profiles are stored. TV defaults Ask on start to on, phones default to off, and a
+single unlocked profile starts directly. The TV picker uses a D-pad grid. More > Profiles
+supports switching, names, seal colours, linked avatars, deletion and optional direction locks.
+Codes have 4–8 directions and use salted PBKDF2-HMAC-SHA256 with 100,000 iterations off the
+UI isolate. Only salts and derived hashes are stored. Five failed attempts persist a 30-second
+wait. Lock permits expire and are consumed once. Setting a code requires two matching entries.
+
+Switching waits for playback stop and resume flush, closes the old login listener and sync
+worker, drains secure writes, and replaces the complete navigation/session tree. Old requests
+cannot fill a new profile's cache. Deletion confirms, closes an active session and removes only
+that profile's preference and registered secure keys. Cached lists are account-bound and remain
+readable offline under the profile's current visibility policy. Offline data never drives sync.
+
 AniList supplies the anime catalog, metadata and airing calendar. Public usernames read lists
 without tracker write access. Authenticated requests use the account's token and include
 private lists. MAL list entries resolve to AniList metadata through their MAL identifier.

@@ -315,10 +315,16 @@ class FuzzyDate {
 }
 
 class AccountPage {
-  const AccountPage(this.entries, {this.hasMore = false, this.avatar = ''});
+  const AccountPage(
+    this.entries, {
+    this.hasMore = false,
+    this.avatar = '',
+    this.fromCache = false,
+  });
   final List<ListEntry> entries;
   final bool hasMore;
   final String avatar;
+  final bool fromCache;
 }
 
 class WatchEntry {

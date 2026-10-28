@@ -6,6 +6,12 @@ Home holds your saved episodes and personal lists. Search browses anime. More ho
 Schedule, playback settings, subtitles and diagnostics. Touch and remote controls share the
 same app. Back closes menus before leaving a page.
 
+More > Profiles manages up to six profiles. Each keeps its own accounts, history, lists and
+playback settings. Switch profiles there without restarting. TV asks who is watching when
+more than one profile exists. Change Ask on start in Profiles. A direction code uses 4–8
+arrows, entered twice when set. Use the D-pad, arrow buttons or phone swipes to unlock.
+Five wrong codes pause attempts for 30 seconds. Existing data moves into Profile 1.
+
 Sign in through More > Accounts to sync AniList or MyAnimeList progress, status, scores and
 resume positions. With both signed in, Home combines your lists and updates both trackers.
 Shared titles use the most recently updated entry and one category picker. Background list

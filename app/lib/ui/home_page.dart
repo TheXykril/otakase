@@ -480,11 +480,14 @@ class _AccountBlockState extends State<AccountBlock> {
           s.listSync.afterLoad(page, force: forceSync);
         }
       } else if (s.auth.signedIn(widget.service)) {
-        result = (await s.tracking.list(
+        final page = await s.tracking.list(
           widget.service,
           adult: s.store.flag('AdultContent'),
-        )).entries;
+        );
+        result = page.entries;
+        if (page.fromCache) failed = [widget.service];
       } else {
+        final requestedUsername = username;
         final all = <String, ListEntry>{};
         for (var p = 1; ; p++) {
           final r = await s.catalog.publicList(
@@ -500,6 +503,12 @@ class _AccountBlockState extends State<AccountBlock> {
           if (!r.hasMore) break;
         }
         result = all.values.toList();
+        if (mounted && g == generation && username == requestedUsername) {
+          await s.store.set('PublicListCache.${widget.service}', {
+            'username': requestedUsername,
+            'entries': result.map((e) => e.toJson()).toList(),
+          });
+        }
       }
       if (mounted && g == generation) {
         setState(() {
@@ -511,7 +520,31 @@ class _AccountBlockState extends State<AccountBlock> {
         }
       }
     } catch (e) {
-      if (mounted && g == generation) setState(() => error = e.toString());
+      if (mounted && g == generation) {
+        final cached = widget.services.store.value(
+          'PublicListCache.${widget.service}',
+        );
+        if (!widget.services.auth.signedIn(widget.service) &&
+            cached is Map &&
+            cached['username'] == username) {
+          try {
+            final rows = (cached['entries'] as List)
+                .map(
+                  (e) => ListEntry.fromJson((e as Map).cast<String, dynamic>()),
+                )
+                .where((e) => widget.services.store.visible(e.anime))
+                .toList();
+            setState(() {
+              entries = rows;
+              notLoaded = [widget.service];
+            });
+          } catch (_) {
+            setState(() => error = e.toString());
+          }
+        } else {
+          setState(() => error = e.toString());
+        }
+      }
     } finally {
       if (mounted && g == generation) setState(() => busy = false);
     }

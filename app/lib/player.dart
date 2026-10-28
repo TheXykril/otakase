@@ -41,6 +41,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late int episode;
   late Anime anime;
   late final ResumePusher resumePusher;
+  bool profileStopped = false;
+  late final Future<void> Function() profileStop;
   int savedResume = 0;
   final completedEpisodes = <int>{};
   bool nextCancelled = false, scrubbing = false;
@@ -79,6 +81,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     episode = widget.episode;
     widget.services.tracking.remember(anime);
     resumePusher = widget.services.tracking.pusher();
+    profileStop = stopForProfileSwitch;
+    widget.services.stopPlayback = profileStop;
     player = Player(
       configuration: const PlayerConfiguration(
         libass: true,
@@ -236,6 +240,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Future<void> open({int? mirror}) async {
+    if (profileStopped) return;
     final g = ++generation;
     scope.cancel();
     scope = RequestScope();
@@ -474,6 +479,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   void tick(Duration p) {
+    if (profileStopped) return;
     if (!mounted || busy) return;
     if (p > Duration.zero && source != null) {
       unawaited(widget.services.store.rememberSource(anime, source!.provider));
@@ -523,6 +529,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Future<void> save({bool completed = false}) async {
+    if (profileStopped) return;
     if (busy || duration <= Duration.zero) return;
     final watched =
         completed ||
@@ -814,7 +821,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     hideTimer?.cancel();
     saveTimer?.cancel();
     nextTimer?.cancel();
-    unawaited(save().then((_) => resumePusher.flush()));
+    if (!profileStopped) unawaited(save().then((_) => resumePusher.flush()));
+    if (identical(widget.services.stopPlayback, profileStop)) {
+      widget.services.stopPlayback = null;
+    }
     for (final subscription in subscriptions) {
       unawaited(subscription.cancel());
     }
@@ -822,7 +832,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     playFocus.dispose();
     skipFocus.dispose();
     unawaited(
-      player.dispose().then((_) => widget.services.core.stopPlayback()),
+      player.dispose().then((_) async {
+        if (!profileStopped) await widget.services.core.stopPlayback();
+      }),
     );
     unawaited(
       SystemChrome.setEnabledSystemUIMode(
@@ -832,6 +844,24 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     );
     if (!widget.isTV) unawaited(SystemChrome.setPreferredOrientations([]));
     super.dispose();
+  }
+
+  Future<void> stopForProfileSwitch() async {
+    if (profileStopped) return;
+    hideTimer?.cancel();
+    saveTimer?.cancel();
+    nextTimer?.cancel();
+    generation++;
+    scope.cancel();
+    await player.pause();
+    await save();
+    await resumePusher.flush().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {},
+    );
+    profileStopped = true;
+    await player.stop();
+    await widget.services.core.stopPlayback();
   }
 
   @override

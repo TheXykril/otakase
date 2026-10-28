@@ -88,6 +88,12 @@ class AuthService extends ChangeNotifier {
   Timer? _expiry;
   bool _accepting = false;
   String? lastError;
+  bool closed = false;
+  @override
+  void notifyListeners() {
+    if (!closed) super.notifyListeners();
+  }
+
   final _completed = StreamController<String>.broadcast();
   Stream<String> get completed => _completed.stream;
   bool signedIn(String service) => accounts.containsKey(service);
@@ -97,6 +103,7 @@ class AuthService extends ChangeNotifier {
   Future<void> initialize({bool platformCallbacks = true}) async {
     for (final service in ['AniList', 'MAL']) {
       final raw = await storage.read('account.$service');
+      if (closed) return;
       if (raw != null) {
         try {
           accounts[service] = Account.fromJson(
@@ -119,6 +126,7 @@ class AuthService extends ChangeNotifier {
       }
     }
     await refreshAniListOptions();
+    if (closed) return;
     if (platformCallbacks) {
       platform.setMethodCallHandler((call) async {
         if (call.method == 'login' && call.arguments is String) {
@@ -549,6 +557,9 @@ class AuthService extends ChangeNotifier {
 
   @override
   void dispose() {
+    closed = true;
+    _pending = null;
+    accounts.clear();
     _expiry?.cancel();
     unawaited(_closeServer());
     unawaited(_completed.close());

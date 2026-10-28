@@ -6,25 +6,136 @@ import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core.dart';
-import 'data/catalog.dart';
-import 'data/store.dart';
+import 'data/auth.dart';
+import 'data/profiles.dart';
 import 'services.dart';
 import 'ui/app_shell.dart';
 import 'ui/components.dart';
 import 'ui/seal.dart';
+import 'ui/profiles_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   final core = CoreClient();
-  final store = AppStore(await SharedPreferences.getInstance());
-  final services = AppServices(catalog: Catalog(), store: store, core: core);
-  await services.auth.initialize();
+  final profiles = ProfileManager(
+    preferences: await SharedPreferences.getInstance(),
+    tokens: SecureTokenStore(),
+    core: core,
+    isTV: await core.isTV(),
+  );
+  try {
+    await profiles.initialize();
+  } catch (e) {
+    profiles.error = e.toString();
+  }
   await SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
     overlays: [SystemUiOverlay.bottom],
   );
-  runApp(OtakaseApp(services: services, isTV: await core.isTV(), splash: true));
+  runApp(ProfileHost(manager: profiles));
+}
+
+class ProfileHost extends StatefulWidget {
+  const ProfileHost({super.key, required this.manager});
+  final ProfileManager manager;
+  @override
+  State<ProfileHost> createState() => _ProfileHostState();
+}
+
+class _ProfileHostState extends State<ProfileHost> {
+  @override
+  void dispose() {
+    unawaited(widget.manager.close());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.manager,
+    builder: (context, _) {
+      final services = widget.manager.session;
+      if (services != null) {
+        return Directionality(
+          textDirection: TextDirection.ltr,
+          child: Stack(
+            children: [
+              OtakaseApp(
+                key: ValueKey(
+                  'session-${widget.manager.activeId}-${widget.manager.generation}',
+                ),
+                services: services,
+                isTV: widget.manager.isTV,
+              ),
+              if (widget.manager.busy)
+                const Positioned.fill(
+                  child: ColoredBox(
+                    color: bg,
+                    child: Center(child: CircularProgressIndicator(color: shu)),
+                  ),
+                ),
+            ],
+          ),
+        );
+      }
+      return AppLayout(
+        isTV: widget.manager.isTV,
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            fontFamily: 'Inter',
+            scaffoldBackgroundColor: bg,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: bg,
+              foregroundColor: fg,
+            ),
+            textTheme: TextTheme(
+              bodyMedium: TextStyle(
+                fontSize: widget.manager.isTV ? 20 : 16,
+                color: fg,
+              ),
+              bodySmall: TextStyle(
+                fontSize: widget.manager.isTV ? 20 : 15,
+                color: muted,
+              ),
+              labelLarge: TextStyle(fontSize: widget.manager.isTV ? 20 : 16),
+            ),
+            colorScheme: const ColorScheme.dark(
+              primary: shu,
+              surface: panel,
+              onSurface: fg,
+            ),
+          ),
+          home: widget.manager.profiles.isEmpty || !widget.manager.initialized
+              ? Scaffold(
+                  body: SafeArea(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(widget.manager.error ?? 'Loading profiles'),
+                          TextButton(
+                            onPressed: () async {
+                              try {
+                                await widget.manager.initialize();
+                              } catch (e) {
+                                widget.manager.error = e.toString();
+                                if (mounted) setState(() {});
+                              }
+                            },
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              : ProfilesChooser(manager: widget.manager),
+        ),
+      );
+    },
+  );
 }
 
 class OtakaseApp extends StatefulWidget {
