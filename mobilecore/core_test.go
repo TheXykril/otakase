@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/thexykril/otakase/internal/providerhost"
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -265,5 +266,70 @@ func TestTimeoutCloseLimitsAndHooks(t *testing.T) {
 	providerhost.Out("not printed")
 	if providerhost.PersistSubStylePreference("hard") == nil {
 		t.Fatal("style persistence unexpectedly available")
+	}
+}
+
+func TestProvidersOperationListsEverySource(t *testing.T) {
+	c := NewCore()
+	t.Cleanup(c.Close)
+	out := c.Result(c.Start(`{"version":1,"operation":"providers"}`))
+	var resp struct {
+		Data struct {
+			Providers []string `json:"providers"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Data.Providers) != 6 {
+		t.Fatalf("providers = %v", resp.Data.Providers)
+	}
+	for _, name := range resp.Data.Providers {
+		if _, ok := newProvider(name, http.DefaultClient); !ok {
+			t.Errorf("%s has no constructor", name)
+		}
+	}
+}
+
+func TestMatchUsesTrackerIDsWithoutSearching(t *testing.T) {
+	c := NewCore()
+	t.Cleanup(c.Close)
+	c.transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		t.Errorf("unexpected request to %s", r.URL)
+		return nil, fmt.Errorf("offline")
+	})
+	for provider, want := range map[string]string{"megavid": "52991", "animex": "154587"} {
+		out := c.Result(c.Start(fmt.Sprintf(`{"version":1,"operation":"match","provider":%q,"mode":"sub","titles":["Frieren"],"mal_id":52991,"anilist_id":154587}`, provider)))
+		if !strings.Contains(out, `"id":"`+want+`"`) {
+			t.Errorf("%s: %s", provider, out)
+		}
+	}
+}
+
+func TestMatchScorePrefersSameMALID(t *testing.T) {
+	req := request{Titles: []string{"Sousou no Frieren", "Frieren: Beyond Journey's End"}, MalID: 52991, Episodes: 28}
+	same := providers.SelectionOption{Title: "Something else", ExtraData: providers.SearchHit{MalID: 52991}}
+	other := providers.SelectionOption{Title: "Sousou no Frieren", ExtraData: providers.SearchHit{MalID: 1}}
+	exact := providers.SelectionOption{Title: "Frieren - Beyond Journey's End"}
+	sequel := providers.SelectionOption{Title: "Sousou no Frieren 2nd Season"}
+	if got := matchScore(same, req); got != 100 {
+		t.Errorf("same MAL id scored %d", got)
+	}
+	if got := matchScore(other, req); got != 0 {
+		t.Errorf("different MAL id scored %d", got)
+	}
+	if a, b := matchScore(exact, req), matchScore(sequel, req); a <= b || a < 50 {
+		t.Errorf("exact %d should beat sequel %d", a, b)
+	}
+}
+
+func TestSkipRangeValidation(t *testing.T) {
+	for _, r := range [][]int{nil, {5}, {10, 5}, {-1, 5}} {
+		if got := validRange(r); len(got) != 0 {
+			t.Errorf("validRange(%v) = %v", r, got)
+		}
+	}
+	if got := validRange([]int{80, 170}); len(got) != 2 {
+		t.Errorf("valid range dropped: %v", got)
 	}
 }

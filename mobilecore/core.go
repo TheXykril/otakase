@@ -9,16 +9,26 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/thexykril/otakase/internal/providerhost"
 	"github.com/thexykril/otakase/internal/providers"
 	"github.com/thexykril/otakase/internal/providers/anikoto"
+	"github.com/thexykril/otakase/internal/providers/animex"
+	"github.com/thexykril/otakase/internal/providers/anizone"
+	"github.com/thexykril/otakase/internal/providers/kickassanime"
 	"github.com/thexykril/otakase/internal/providers/megavid"
+	"github.com/thexykril/otakase/internal/providers/reanime"
 )
+
+// providerNames is the order sources are offered in. Torrent sources are not
+// part of the app yet.
+var providerNames = []string{"anikoto", "megavid", "animex", "kickassanime", "anizone", "reanime"}
 
 const requestTimeout = 90 * time.Second
 const maxRequests = 16
@@ -53,6 +63,12 @@ type request struct {
 	ShowID    string `json:"show_id"`
 	Episode   int    `json:"episode"`
 	Mode      string `json:"mode"`
+	// Titles, MalID, AnilistID and Episodes describe the tracker entry a
+	// match request looks for.
+	Titles    []string `json:"titles"`
+	MalID     int      `json:"mal_id"`
+	AnilistID int      `json:"anilist_id"`
+	Episodes  int      `json:"episodes"`
 }
 
 type apiError struct {
@@ -199,24 +215,24 @@ func (c *Core) execute(ctx context.Context, input string) string {
 	if err := dec.Decode(new(any)); err != io.EOF {
 		return failure("invalid_request", "Expected one JSON object.", false)
 	}
-	if req.Version != 1 || (req.Mode != "sub" && req.Mode != "dub") {
-		return failure("invalid_request", "Use version 1 and mode sub or dub.", false)
+	if req.Version != 1 {
+		return failure("invalid_request", "Use version 1.", false)
+	}
+	if req.Operation == "providers" {
+		return encode(response{Version: 1, Data: map[string]any{"providers": providerNames}})
+	}
+	if req.Mode != "sub" && req.Mode != "dub" {
+		return failure("invalid_request", "Use mode sub or dub.", false)
 	}
 	transport := &requestTransport{ctx: ctx, base: c.transport}
 	client := &http.Client{Transport: transport, Timeout: requestTimeout}
-	var p providers.HintResolver
-	var searcher providers.Provider
-	switch req.Provider {
-	case "megavid":
-		v := megavid.NewWithHTTPClient(client)
-		p = v
-		searcher = v
-	case "anikoto":
-		v := anikoto.NewWithHTTPClient(client)
-		p = v
-		searcher = v
-	default:
-		return failure("unsupported_provider", "Choose megavid or anikoto.", false)
+	searcher, ok := newProvider(req.Provider, client)
+	if !ok {
+		return failure("unsupported_provider", "Unknown source.", false)
+	}
+	p, ok := searcher.(providers.HintResolver)
+	if !ok {
+		return failure("unsupported_provider", "Source cannot resolve streams.", false)
 	}
 	var data any
 	var err error
@@ -266,6 +282,34 @@ func (c *Core) execute(ctx context.Context, input string) string {
 			return failure("no_stream", "Provider returned no playable streams.", true)
 		}
 		data = map[string]any{"streams": streams}
+	case "match":
+		if len(req.Titles) == 0 && req.MalID <= 0 && req.AnilistID <= 0 {
+			return failure("invalid_request", "A title or tracker id is required.", false)
+		}
+		var found show
+		found, err = matchShow(searcher, req)
+		if err == nil && found.ID == "" {
+			return failure("not_found", "This source does not have the show.", false)
+		}
+		data = map[string]any{"show": found}
+	case "skip":
+		if !validShowID(req.ShowID) || req.Episode <= 0 || req.Episode > 10000 {
+			return failure("invalid_request", "A show id and positive episode are required.", false)
+		}
+		ranger, ok := searcher.(providers.SkipRanger)
+		if !ok {
+			data = map[string]any{"intro": []int{}, "outro": []int{}}
+			break
+		}
+		var intro, outro []int
+		intro, outro, err = ranger.SkipRange(req.ShowID, req.Mode, req.Episode)
+		if err != nil {
+			// Skip times are a convenience; a source without them for this
+			// episode is not an error the viewer needs to see.
+			err = nil
+			intro, outro = nil, nil
+		}
+		data = map[string]any{"intro": validRange(intro), "outro": validRange(outro)}
 	default:
 		return failure("invalid_request", "Unknown operation.", false)
 	}
@@ -282,6 +326,150 @@ func (c *Core) execute(ctx context.Context, input string) string {
 		return failure("provider_error", "Provider request failed. Try another source or audio mode.", true)
 	}
 	return encode(response{Version: 1, Data: data})
+}
+
+// newProvider builds a fresh source. Sources that take a client get the
+// request's own, so cancelling a request stops their HTTP calls; anizone and
+// kickassanime use the shared providerhost client and stop at its timeout.
+func newProvider(name string, client *http.Client) (providers.Provider, bool) {
+	switch name {
+	case "anikoto":
+		return anikoto.NewWithHTTPClient(client), true
+	case "megavid":
+		return megavid.NewWithHTTPClient(client), true
+	case "animex":
+		return animex.NewWithHTTPClient(client), true
+	case "reanime":
+		return reanime.NewWithHTTPClient(client), true
+	case "anizone":
+		return &anizone.Provider{}, true
+	case "kickassanime":
+		return &kickassanime.Provider{}, true
+	}
+	return nil, false
+}
+
+func validRange(r []int) []int {
+	if len(r) != 2 || r[0] < 0 || r[1] <= r[0] {
+		return []int{}
+	}
+	return r
+}
+
+// matchShow finds the source's id for a tracker entry. megavid is keyed by
+// MAL id and animex by AniList id, so those need no search. Other sources are
+// searched by each title in turn; a result carrying the same MAL id wins
+// outright, otherwise the closest title does.
+func matchShow(p providers.Provider, req request) (show, error) {
+	switch {
+	case p.Name() == "megavid" && req.MalID > 0:
+		id := strconv.Itoa(req.MalID)
+		return show{ID: id, Title: firstTitle(req.Titles, id)}, nil
+	case p.Name() == "animex" && req.AnilistID > 0:
+		id := strconv.Itoa(req.AnilistID)
+		return show{ID: id, Title: firstTitle(req.Titles, id)}, nil
+	}
+	var best show
+	bestScore := 0
+	var lastErr error
+	tried := 0
+	for _, title := range req.Titles {
+		title = strings.TrimSpace(title)
+		if title == "" || len(title) > 300 {
+			continue
+		}
+		if tried == 3 {
+			break
+		}
+		tried++
+		options, err := p.SearchAnime(title, req.Mode)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		for _, o := range options {
+			score := matchScore(o, req)
+			if score > bestScore {
+				bestScore = score
+				best = show{ID: o.Key, Title: o.Title, Label: o.Label}
+			}
+		}
+		if bestScore >= 100 {
+			break
+		}
+	}
+	if bestScore < 50 {
+		if lastErr != nil && tried > 0 {
+			return show{}, lastErr
+		}
+		return show{}, nil
+	}
+	return best, nil
+}
+
+func firstTitle(titles []string, fallback string) string {
+	for _, t := range titles {
+		if strings.TrimSpace(t) != "" {
+			return t
+		}
+	}
+	return fallback
+}
+
+func matchScore(o providers.SelectionOption, req request) int {
+	hit, _ := o.ExtraData.(providers.SearchHit)
+	if hp, ok := o.ExtraData.(*providers.SearchHit); ok && hp != nil {
+		hit = *hp
+	}
+	if req.MalID > 0 && hit.MalID == req.MalID {
+		return 100
+	}
+	if req.MalID > 0 && hit.MalID > 0 {
+		// The source knows this result is a different show.
+		return 0
+	}
+	name := normalizeTitle(o.Title)
+	if name == "" {
+		name = normalizeTitle(o.Label)
+	}
+	score := 0
+	for _, t := range req.Titles {
+		want := normalizeTitle(t)
+		if want == "" || name == "" {
+			continue
+		}
+		s := 0
+		switch {
+		case name == want:
+			s = 90
+		case strings.HasPrefix(name, want) || strings.HasPrefix(want, name):
+			s = 70 - min(20, abs(len(name)-len(want)))
+		case strings.Contains(name, want) || strings.Contains(want, name):
+			s = 55 - min(20, abs(len(name)-len(want)))
+		}
+		score = max(score, s)
+	}
+	if score > 0 && req.Episodes > 0 && hit.Episodes == req.Episodes {
+		score += 5
+	}
+	return score
+}
+
+func normalizeTitle(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 func validShowID(id string) bool { return strings.TrimSpace(id) != "" && len(id) <= 300 }
