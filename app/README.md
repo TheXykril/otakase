@@ -1,9 +1,6 @@
-# Otakase mobile spike
+# Otakase Android app
 
-Developer notes for step 0 only. Android phone and Android TV share this app. Flutter requires Android 7.0
-(API 24) or newer. The Go AAR targets API 23.
-No accounts, tracker writes, resume changes, downloads, torrents, casting or bot
-changes are part of this spike. The CLI version stays unchanged.
+Developer notes for the Android phone and TV app. The read-only catalog uses AniList directly from Dart; public lists use the usernames in Settings. Playback uses the six HTTP sources in mobilecore. Login, tracker writes, downloads, torrents, casting and background playback are outside this change. Android 7.0 (API 24) or newer is required. The CLI version and CLI/bot behavior are unchanged.
 
 ## Pinned toolchain
 
@@ -13,8 +10,8 @@ changes are part of this spike. The CLI version stays unchanged.
 - gomobile and gobind: golang.org/x/mobile v0.0.0-20260821190718-4776eadac327.
 - JDK 17, built with Eclipse Temurin 17.0.21+9.
 - Android command-line tools 19.0 (archive commandlinetools-linux-13114758_latest.zip).
-- Android platform 36 and build tools 36.0.0.
-- Android NDK 28.2.13676358.
+- Android platforms 35 (plugin compile SDK) and 36; build tools 36.0.0.
+- Android NDK 28.2.13676358 and CMake 3.22.1.
 - Gradle 9.3.1, Android Gradle Plugin 9.1.0, Kotlin plugin 2.4.0.
 - media_kit 1.2.6, media_kit_video 2.0.1, media_kit_libs_video 1.0.7.
   Transitive media_kit_libs_android_video 1.3.8 is locked in pubspec.lock.
@@ -27,12 +24,13 @@ command-line tools. Keep the Flutter checkout outside this repository.
 ```sh
 git clone --branch 3.47.8 --depth 1 https://github.com/flutter/flutter.git "$HOME/flutter"
 export PATH="$HOME/flutter/bin:$HOME/go/bin:/usr/local/go/bin:$PATH"
+export CI=true # Avoid optional cloud-environment probes in build environments.
 export JAVA_HOME=/path/to/jdk-17
 export ANDROID_HOME="$HOME/Android/Sdk"
 export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 sdkmanager --licenses
-sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+sdkmanager 'platform-tools' 'platforms;android-35' 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358' 'cmake;3.22.1'
 flutter config --android-sdk "$ANDROID_HOME"
 flutter doctor -v
 
@@ -61,9 +59,8 @@ flutter build apk --release --target-platform android-arm,android-arm64 --split-
 
 Outputs live under app/build/app/outputs/flutter-apk/:
 app-release.apk (both ARM ABIs), app-arm64-v8a-release.apk and
-app-armeabi-v7a-release.apk. The template uses the local Android debug key even
-for release-mode spike builds. This is a test APK, not a distribution signing
-setup. Never commit a key or key.properties. Use the same test key across
+app-armeabi-v7a-release.apk. Without android/key.properties, release-mode builds use the local debug key.
+This is a developer APK signing fallback. Never commit a key or key.properties. Use the same test key across
 updates, or uninstall the previous test app before installing a different key.
 
 ## Release signing
@@ -89,14 +86,16 @@ can only be replaced by uninstalling first.
 mobilecore/ is public because gomobile builds a generated wrapper module which
 cannot import an internal package. The core itself belongs to the existing
 module and imports internal/providers and internal/providerhost directly.
-Only small opt-in HTTP-client constructors were added to megavid and anikoto.
+The six sources are anikoto, megavid, animex, kickassanime, anizone and reanime.
+Client injection remains isolated from registry factories.
 The registry factories and CLI/bot paths are unchanged. Root go.mod adds the
 pinned gobind tool without upgrading existing runtime dependencies.
 
 Kotlin owns one Core per Flutter engine. Start(JSON) returns a handle. Result
 waits on a worker thread. Cancel(handle) stops the operation and in-flight HTTP.
 Every result, including cancellation, gets collected once. Closing the engine
-cancels all work. Each operation has an isolated provider/client and a 90-second
+cancels all work and closes active playback relays. The stop operation releases
+ReAnime loopback relays when playback stops or switches source. Each operation has an isolated provider/client and a 90-second
 limit, at most 16 outstanding handles. A provider's DNS check can unwind for up
 to five seconds after Result has already returned cancellation.
 
@@ -167,16 +166,23 @@ both declare required=false, with phone and LEANBACK_LAUNCHER entries.
 3. Probe uses PlayerConfiguration(libass: true), a bundled Noto Sans JP font (Latin, kana and kanji), raw ASS
    content and native libass. No SRT/WebVTT conversion or Flutter subtitle
    overlay. Subtitles > Off and Load ASS probe allow comparing the same scene.
-4. Search with megavid, choose an episode and play it. Repeat with anikoto.
-   Provider headers and referrer are passed through Media.httpHeaders. Try sub
-   and dub separately. A missing dub must fail rather than silently play sub.
-5. On the focused video, left/right seek 10s and OK pauses. Down reaches the
-   visible controls, subtitle list and Back. Try cancellation during search or
-   episode resolution, return to the list, change provider and retry.
-6. Record startup to moving frame, playback errors, ASS signs and 1080p hardware
-   decoding on the Sony. The displayed position-start timer is not a first-frame
-   measurement. Native playback, libass appearance, TV decoding and memory
-   need real device checks. A successful APK build does not prove those results.
+4. Home: check the banner carousel, Watch Now, metadata and all rows. Navigate
+   MyList, Search filters, Schedule, Show details, Drawer and Settings. TV Up
+   returns to the top bar; Left there opens the drawer. Check card focus,
+   automatic row scrolling and the right settings sheet with only the D-pad.
+5. In Settings, enter public AniList and MAL usernames. Check each account's
+   status chips, pagination, private/invalid usernames and adult filtering.
+   AdultContent defaults off and filters catalog, airing rows, lists and history.
+6. Play sub and dub on all six sources. AutoFallback tries the selected source
+   first, then the other enabled sources; AutoAudioFallback controls whether
+   the opposite audio mode may be tried. Verify provider headers and ASS,
+   embedded/provider track selection, preferred language, quality, OP/ED/recap
+   marks and auto-skip, next countdown, remote media keys and resume after
+   process restart. Quality selects the matching HLS master bandwidth when
+   resolution metadata is available; otherwise the original default remains.
+   Check weak-TV scrolling, image cache, 1080p hardware decoding and memory.
+   Native playback, libass appearance and device performance require real
+   devices. A successful APK build does not prove those results.
 7. Measure idle and playing memory with the same APK on each device:
 
 ```sh
@@ -188,8 +194,7 @@ adb -s DEVICE shell input keyevent KEYCODE_BACK
 
 Stop and report any gomobile provider binding failure, HLS header failure or
 Android ASS rendering failure. Do not replace providers or convert subtitles to
-make a failed probe appear successful. The spike stays draft until device
-acceptance and memory measurements are recorded.
+make a failed probe appear successful. PR #105 stays draft until device acceptance and memory measurements are recorded.
 
 ## Go checks
 
@@ -204,9 +209,27 @@ go list -deps ./mobilecore
 
 mobilecore/testdata documents recording and sanitisation. Tests replay both
 providers, preserve playback hints, check validation, typed failures, HTTP
-cancellation, timeout, handle limits and non-interactive host hooks. The Flutter
-widget test exercises search and episode navigation with arrows, OK and Back.
+cancellation, timeout, handle limits and non-interactive host hooks. Flutter tests cover Home, phone navigation, show navigation, TV arrows/OK/Back
+and visible focus, adult filtering, public list parsing, cache, local persistence
+and source fallback.
 The on-device HLS/ASS probe is the playback acceptance test.
+## Data and local state
+
+AniList supplies trending, seasonal popularity, recent airingSchedules, the
+weekly schedule, search, show metadata, relations and recommendations. Queries
+are cached for ten minutes. Schedule times use the device timezone. Posters use
+cached_network_image with sized memory/disk thumbnails and lazy horizontal rows.
+MAL public lists use the public MyAnimeListClientID from config_defaults.go.
+No access tokens or tracker writes are used. shared_preferences stores versioned
+settings and local resume/watched records. Removing app data removes that history.
+
+Provider skip ranges take precedence; AniSkip can fill missing OP/ED/recap ranges
+when its episode length matches. Jikan filler flags apply only during automatic
+next-episode selection. All are optional and fail without blocking playback.
+The player keeps original ASS text and the bundled Noto Sans JP font. Android's
+voice search activity is used when installed, with keyboard search as fallback.
+Diagnostics retains the independent bundled HLS/ASS acceptance probe.
+
 ## Fixture regeneration
 
 The HLS clip contains generated test bars and a tone, with no external media:

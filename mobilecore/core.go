@@ -43,6 +43,7 @@ type Core struct {
 	mu        sync.Mutex
 	next      int64
 	closed    bool
+	relays    []func()
 	tasks     map[int64]*task
 	transport http.RoundTripper
 	timeout   time.Duration
@@ -176,11 +177,45 @@ func (c *Core) Cancel(id int64) {
 // Close cancels all outstanding work. No new request is accepted afterwards.
 func (c *Core) Close() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.closed = true
 	for _, t := range c.tasks {
 		t.cancel()
 	}
+	stops := c.relays
+	c.relays = nil
+	c.mu.Unlock()
+	for _, stop := range stops {
+		stop()
+	}
+}
+
+// StopPlayback releases loopback relays after a player stops or changes source.
+func (c *Core) StopPlayback() {
+	c.mu.Lock()
+	stops := c.relays
+	c.relays = nil
+	c.mu.Unlock()
+	for _, stop := range stops {
+		stop()
+	}
+}
+
+func (c *Core) replaceRelays(stops []func()) bool {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		for _, stop := range stops {
+			stop()
+		}
+		return false
+	}
+	old := c.relays
+	c.relays = stops
+	c.mu.Unlock()
+	for _, stop := range old {
+		stop()
+	}
+	return true
 }
 
 func contextFailure(err error) string {
@@ -217,6 +252,10 @@ func (c *Core) execute(ctx context.Context, input string) string {
 	}
 	if req.Version != 1 {
 		return failure("invalid_request", "Use version 1.", false)
+	}
+	if req.Operation == "stop" {
+		c.StopPlayback()
+		return encode(response{Version: 1, Data: map[string]bool{"stopped": true}})
 	}
 	if req.Operation == "providers" {
 		return encode(response{Version: 1, Data: map[string]any{"providers": providerNames}})
@@ -263,8 +302,19 @@ func (c *Core) execute(ctx context.Context, input string) string {
 		var hints map[string]providers.StreamPlaybackHint
 		urls, hints, err = p.GetEpisodeURLForModeWithHints(providers.PlaybackConfig{SubOrDub: req.Mode, SubStyle: "soft"}, req.ShowID, req.Episode, req.Mode)
 		streams := make([]stream, 0, len(urls))
+		relayStops := []func(){}
+		var lastRelayErr error
 		for _, u := range urls {
 			h := hints[u]
+			if h.FlixCloudKey != "" {
+				local, stop, relayErr := reanime.StartRelay(u, h.FlixCloudKey, &http.Client{Transport: c.transport, Timeout: 40 * time.Second})
+				if relayErr != nil {
+					lastRelayErr = relayErr
+					continue
+				}
+				relayStops = append(relayStops, stop)
+				u = local
+			}
 			headers := maps.Clone(h.Headers)
 			if headers == nil {
 				headers = make(map[string]string)
@@ -277,6 +327,16 @@ func (c *Core) execute(ctx context.Context, input string) string {
 				subs = append(subs, subtitle{URL: s.URL, Language: s.Language, Label: s.Label})
 			}
 			streams = append(streams, stream{URL: u, Headers: headers, Referrer: h.Referrer, HLS: h.HLS || strings.Contains(strings.ToLower(u), ".m3u8"), Subtitle: h.Subtitle, Subtitles: subs})
+		}
+		if len(streams) == 0 && err == nil {
+			err = lastRelayErr
+		}
+		if ctx.Err() != nil || err != nil || len(streams) == 0 {
+			for _, stop := range relayStops {
+				stop()
+			}
+		} else if !c.replaceRelays(relayStops) {
+			return failure("cancelled", "Playback closed.", false)
 		}
 		if err == nil && len(streams) == 0 {
 			return failure("no_stream", "Provider returned no playable streams.", true)

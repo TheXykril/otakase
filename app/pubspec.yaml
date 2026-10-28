@@ -1,12 +1,16 @@
 name: otakase
-description: Otakase Android phone and TV playback spike.
+description: Otakase Android phone and TV catalog and player.
 publish_to: none
-version: 0.0.1+1
+version: 0.1.0+2
 environment:
   sdk: ^3.13.7
 dependencies:
   flutter:
     sdk: flutter
+  http: 1.6.0
+  html: 0.15.6
+  shared_preferences: 2.5.4
+  cached_network_image: 3.4.1
   media_kit: 1.2.6
   media_kit_video: 2.0.1
   media_kit_libs_video: 1.0.7
@@ -17,6 +21,11 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/otakase.png
     - assets/probe/
     - assets/spike.ass
     - assets/fonts/NotoSansJP-Regular.otf
+  fonts:
+    - family: NotoSansJP
+      fonts:
+        - asset: assets/fonts/NotoSansJP-Regular.otf

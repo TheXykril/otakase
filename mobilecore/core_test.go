@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -331,5 +332,37 @@ func TestSkipRangeValidation(t *testing.T) {
 	}
 	if got := validRange([]int{80, 170}); len(got) != 2 {
 		t.Errorf("valid range dropped: %v", got)
+	}
+}
+
+func TestPlaybackRelayLifecycle(t *testing.T) {
+	c := NewCore()
+	var stopped atomic.Int32
+	if !c.replaceRelays([]func(){func() { stopped.Add(1) }}) {
+		t.Fatal("open core refused relay")
+	}
+	if !c.replaceRelays([]func(){func() { stopped.Add(10) }}) || stopped.Load() != 1 {
+		t.Fatal("replacing playback did not close previous relay")
+	}
+	out := c.Result(c.Start(`{"version":1,"operation":"stop"}`))
+	if !strings.Contains(out, `"stopped":true`) || stopped.Load() != 11 {
+		t.Fatalf("stop: %s, callbacks %d", out, stopped.Load())
+	}
+	c.StopPlayback()
+	if stopped.Load() != 11 {
+		t.Fatal("relay stopped twice")
+	}
+	c.replaceRelays([]func(){func() { stopped.Add(100) }})
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(c.Close)
+		wg.Go(c.StopPlayback)
+	}
+	wg.Wait()
+	if stopped.Load() != 111 {
+		t.Fatalf("concurrent close: %d", stopped.Load())
+	}
+	if c.replaceRelays([]func(){func() { stopped.Add(1000) }}) || stopped.Load() != 1111 {
+		t.Fatal("closed core retained relay")
 	}
 }

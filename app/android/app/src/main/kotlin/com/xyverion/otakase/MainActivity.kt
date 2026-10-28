@@ -1,5 +1,8 @@
 package com.xyverion.otakase
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
@@ -15,6 +18,8 @@ class MainActivity : FlutterActivity() {
     private val main = Handler(Looper.getMainLooper())
     private var channel: MethodChannel? = null
     private var detached = false
+    private var voiceResult: MethodChannel.Result? = null
+    private val voiceRequest = 3101
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -26,6 +31,19 @@ class MainActivity : FlutterActivity() {
                     packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
                         !packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
                 )
+                "voiceSearch" -> {
+                    if (voiceResult != null) result.error("busy", "Voice search already open", null)
+                    else try {
+                        voiceResult = result
+                        startActivityForResult(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Search Otakase")
+                        }, voiceRequest)
+                    } catch (_: Exception) {
+                        voiceResult = null
+                        result.error("unavailable", "Voice search unavailable", null)
+                    }
+                }
                 "start" -> {
                     val input = call.arguments as? String
                     if (input == null) result.error("invalid_request", "JSON required", null)
@@ -56,7 +74,18 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == voiceRequest) {
+            voiceResult?.success(if (resultCode == Activity.RESULT_OK)
+                data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() else null)
+            voiceResult = null
+        }
+    }
+
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        voiceResult?.success(null)
+        voiceResult = null
         detached = true
         channel?.setMethodCallHandler(null)
         channel = null
