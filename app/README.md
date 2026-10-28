@@ -22,6 +22,14 @@ and keep both devices on the same home network. Log out of each account separate
 A public username reads your list without login. Watched episodes and resume positions stay
 on this device until you sign in. The 18+ preference follows your AniList setting.
 
+Caught-up airing shows move from Continue to Up next, with the next episode’s countdown.
+More > Discord links each profile with the bot’s `/link-app` command. It receives queued
+shows and remote commands, reports source health, and sends watch time. Sharing title
+details is off by default. Finished scores ask before sharing. More > Time capsule keeps
+a letter and stats for April 12, with optional community messages through Discord. On TV,
+Type on phone opens a temporary page on your local network. Episode milestones and rare
+exit greetings use the same thresholds and badge state as the desktop app.
+
 Playback chooses a working copy automatically. Change Sub/Dub before playing and choose
 actual audio or subtitle tracks through Tracks. The red episode thread follows your saved
 position and continues through the played part of the timeline.

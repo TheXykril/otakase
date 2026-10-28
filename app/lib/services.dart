@@ -5,6 +5,9 @@ import 'data/catalog.dart';
 import 'data/store.dart';
 import 'data/list_sync.dart';
 import 'data/profiles.dart';
+import 'data/discord.dart';
+import 'data/heritage.dart';
+import 'data/models.dart';
 
 class AppServices {
   AppServices({
@@ -15,8 +18,18 @@ class AppServices {
     this.profiles,
     this.profileId = '1',
   }) : auth = auth ?? AuthService(client: catalog.client) {
-    resolver = SourceResolver(core, store);
+    discord = DiscordService(
+      client: catalog.client,
+      storage: this.auth.storage,
+      store: store,
+    );
+    heritage = Heritage(store, StatsRepository(this.auth), discord);
+    resolver = SourceResolver(core, store, report: discord.reportProvider);
     tracking = TrackingService(this.auth, store: store);
+    tracking.onProgressWritten = () => heritage.progressWritten = true;
+    discord.remote = (action, args) async {
+      await playerCommand?.call(action, args);
+    };
     listSync = ListSync(tracking: tracking, store: store);
     this.auth.addListener(_adultPreference);
     _adultPreference();
@@ -29,6 +42,9 @@ class AppServices {
   final AuthService auth;
   late final TrackingService tracking;
   late final ListSync listSync;
+  late final DiscordService discord;
+  late final Heritage heritage;
+  Future<void> Function(String action, Json args)? playerCommand;
   final ProfileManager? profiles;
   final String profileId;
   Future<void> Function()? stopPlayback;
@@ -36,6 +52,8 @@ class AppServices {
   Future<void> close() async {
     if (closed) return;
     await stopPlayback?.call();
+    heritage.closed = true;
+    await discord.close();
     closed = true;
     auth.removeListener(_adultPreference);
     listSync.dispose();

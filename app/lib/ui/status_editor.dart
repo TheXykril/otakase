@@ -6,6 +6,7 @@ import '../data/models.dart';
 import '../data/tracking.dart';
 import '../services.dart';
 import 'components.dart';
+import 'community_page.dart';
 
 Future<void> editListStatus(
   BuildContext context,
@@ -81,6 +82,15 @@ class _StatusEditorState extends State<_StatusEditor> {
       await s.store.setWatchedProgress(widget.anime, progress);
       await s.store.set('LocalStatus.${widget.anime.key}', status);
       await s.store.set('LocalScore.${widget.anime.key}', score);
+      if (mounted && status == 'COMPLETED' && score > 0) {
+        await offerRatingShare(
+          context,
+          s,
+          widget.anime,
+          score.toDouble(),
+          widget.isTV,
+        );
+      }
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) setState(() => error = e.toString());

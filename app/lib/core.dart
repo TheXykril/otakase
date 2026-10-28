@@ -109,7 +109,14 @@ class PlaybackSource {
 }
 
 class SourceResolver {
-  SourceResolver(this.core, this.store);
+  SourceResolver(this.core, this.store, {this.report});
+  final Future<void> Function(
+    String provider,
+    bool ok,
+    String kind,
+    String error,
+  )?
+  report;
   final CoreClient core;
   final AppStore store;
   final Map<String, String> _matches = {};
@@ -155,6 +162,7 @@ class SourceResolver {
       for (final audio in modes) {
         scope.check();
         status('Finding a copy · ${audio.toUpperCase()}');
+        var kind = 'search';
         try {
           final key = '$provider:${anime.key}:$audio';
           var id = _matches[key];
@@ -177,7 +185,9 @@ class SourceResolver {
               throw const CoreFailure('not_found', 'No matching show.');
             }
             _matches[key] = id;
+            unawaited(report?.call(provider, true, kind, '') ?? Future.value());
           }
+          kind = 'episode';
           final data = await core.request({
             'operation': 'resolve',
             'provider': provider,
@@ -193,6 +203,7 @@ class SourceResolver {
             throw const CoreFailure('no_stream', 'No stream for this episode.');
           }
           store.health(provider, 'Working');
+          unawaited(report?.call(provider, true, kind, '') ?? Future.value());
           scope.check();
           return PlaybackSource(
             provider: provider,
@@ -202,12 +213,24 @@ class SourceResolver {
           );
         } on CoreFailure catch (e) {
           if (e.code == 'cancelled') rethrow;
+          unawaited(
+            report?.call(
+                  provider,
+                  e.code == 'not_found' || e.code == 'no_results',
+                  kind,
+                  e.message,
+                ) ??
+                Future.value(),
+          );
           store.health(
             provider,
             e.code == 'not_found' ? 'No match' : 'Unavailable',
           );
-        } catch (_) {
+        } catch (e) {
           scope.check();
+          unawaited(
+            report?.call(provider, false, kind, e.toString()) ?? Future.value(),
+          );
           store.health(provider, 'Unavailable');
         }
       }

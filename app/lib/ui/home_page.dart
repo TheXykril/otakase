@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
+import '../data/continuation.dart';
 import '../data/tracking.dart';
 import '../services.dart';
 import 'components.dart';
@@ -222,7 +223,18 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   WatchEntry? focused;
   Timer? artTimer;
+  Timer? clock;
+  String identity = '';
+  final snapshots = <String, List<ListEntry>>{};
   final blocks = <String, GlobalKey<_AccountBlockState>>{};
+  @override
+  void initState() {
+    super.initState();
+    clock = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   Future<void> refresh() async {
     await Future.wait(
       blocks.values.map(
@@ -240,6 +252,11 @@ class _HomePageState extends State<HomePage> {
           : const Duration(milliseconds: 180),
       () {
         if (!mounted) return;
+        if (entry.anime.airedEpisodes > 0 &&
+            entry.progress >= entry.anime.airedEpisodes) {
+          setState(() => focused = null);
+          return;
+        }
         setState(
           () => focused = WatchEntry(
             anime: entry.anime,
@@ -253,13 +270,27 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     artTimer?.cancel();
+    clock?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final s = widget.services, store = s.store;
-    final continuing = store.continuing;
+    final stamp =
+        '${s.auth.accounts.values.map((a) => '${a.service}:${a.userId}').join(',')}:${store.text('AniListUsername')}:${store.text('MyAnimeListUsername')}:${store.adultAllowed}';
+    if (identity != stamp) {
+      identity = stamp;
+      snapshots.clear();
+      focused = null;
+    }
+    final continuation = buildContinuation(
+      snapshots.values.expand((e) => e).toList(),
+      store.history,
+      adult: store.adultAllowed,
+      now: DateTime.now(),
+    );
+    final continuing = continuation.continueWatching;
     final resume = continuing.firstOrNull;
     final stage =
         widget.isTV && focused != null && store.visible(focused!.anime)
@@ -336,6 +367,13 @@ class _HomePageState extends State<HomePage> {
               isTV: widget.isTV,
               onOpen: widget.onOpen,
               onFocused: focusEntry,
+              onLoaded: (entries) {
+                if (mounted) {
+                  setState(
+                    () => snapshots[combined ? 'Combined' : service] = entries,
+                  );
+                }
+              },
               autofocus: stage == null && service == lists.first,
             ),
           if (continuing.length > 1)
@@ -345,10 +383,21 @@ class _HomePageState extends State<HomePage> {
               isTV: widget.isTV,
               onOpen: widget.onOpen,
               progress: (a) {
-                final h = store.entry(a)!;
+                final h = continuing.firstWhere((e) => e.anime.key == a.key);
                 return h.duration > 0 ? h.position / h.duration : null;
               },
-              captions: (a) => 'Episode ${store.entry(a)!.episode}',
+              captions: (a) =>
+                  'Episode ${continuing.firstWhere((e) => e.anime.key == a.key).episode}',
+            ),
+          if (continuation.upNext.isNotEmpty)
+            PosterRow(
+              title: 'Up next',
+              items: continuation.upNext.map((e) => e.anime).toList(),
+              isTV: widget.isTV,
+              onOpen: widget.onOpen,
+              captions: (a) => continuation.upNext
+                  .firstWhere((e) => e.anime.key == a.key)
+                  .caption(DateTime.now()),
             ),
           if (configured.isEmpty)
             Padding(
@@ -402,6 +451,7 @@ class AccountBlock extends StatefulWidget {
     required this.isTV,
     required this.onOpen,
     this.onFocused,
+    this.onLoaded,
     this.autofocus = false,
     this.combineTrackers = false,
   });
@@ -410,6 +460,7 @@ class AccountBlock extends StatefulWidget {
   final bool isTV, autofocus, combineTrackers;
   final void Function(Anime) onOpen;
   final void Function(ListEntry)? onFocused;
+  final void Function(List<ListEntry>)? onLoaded;
   @override
   State<AccountBlock> createState() => _AccountBlockState();
 }
@@ -515,6 +566,7 @@ class _AccountBlockState extends State<AccountBlock> {
           entries = result;
           notLoaded = failed;
         });
+        widget.onLoaded?.call(result);
         if (widget.isTV && result.isNotEmpty && widget.autofocus) {
           widget.onFocused?.call(result.first);
         }
@@ -538,6 +590,7 @@ class _AccountBlockState extends State<AccountBlock> {
               entries = rows;
               notLoaded = [widget.service];
             });
+            widget.onLoaded?.call(rows);
           } catch (_) {
             setState(() => error = e.toString());
           }

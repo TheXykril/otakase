@@ -15,6 +15,8 @@ import 'home_page.dart';
 import 'more_page.dart';
 import 'seal.dart';
 import 'show_page.dart';
+import 'community_page.dart';
+import 'movie_page.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.services, required this.isTV});
@@ -42,6 +44,10 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     widget.services.selectRoot = choose;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await widget.services.discord.initialize();
+      if (mounted) await birthdayCapsule(context, widget.services, widget.isTV);
+    });
   }
 
   @override
@@ -130,7 +136,40 @@ class _AppShellState extends State<AppShell> {
         ],
       ),
     );
-    if (exit == true) await SystemNavigator.pop();
+    if (exit == true && mounted) {
+      final milestone = await widget.services.heritage.milestoneOnExit();
+      if (!mounted) return;
+      if (milestone > 0) {
+        await Navigator.push(
+          context,
+          OtakaseRoute<void>(
+            builder: (_) => OtakaseMovie(
+              services: widget.services,
+              isTV: widget.isTV,
+              milestone: milestone,
+            ),
+          ),
+        );
+      }
+      if (!mounted) return;
+      final greeting = await widget.services.discord.exitGreeting();
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (c) => AlertDialog(
+          content: Text(greeting),
+          actions: [
+            TextButton(
+              autofocus: true,
+              onPressed: () => Navigator.pop(c),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+      await widget.services.discord.stopWatching();
+      await SystemNavigator.pop();
+    }
   }
 
   Widget nav(int index) {
@@ -316,6 +355,7 @@ class _AppShellState extends State<AppShell> {
       widget.services.store,
       widget.services.auth,
       widget.services.tracking,
+      widget.services.discord,
     ]),
     builder: (context, _) {
       final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;

@@ -13,6 +13,7 @@ import 'seal.dart';
 import 'settings.dart';
 import 'show_page.dart';
 import 'profiles_page.dart';
+import 'community_page.dart';
 
 Future<void> openAccounts(
   BuildContext context,
@@ -238,6 +239,26 @@ class MorePage extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        ),
+        row(
+          'Discord',
+          services.discord.linked ? services.discord.name : 'Link this profile',
+          LucideIcons.messagesSquare,
+          () => openDetail(
+            context,
+            DiscordPage(services: services, isTV: isTV),
+            isTV,
+          ),
+        ),
+        row(
+          'Time capsule',
+          'Opens April 12',
+          LucideIcons.mail,
+          () => openDetail(
+            context,
+            CapsulePage(services: services, isTV: isTV),
+            isTV,
           ),
         ),
         row(

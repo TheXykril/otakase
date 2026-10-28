@@ -53,6 +53,7 @@ class CombinedAccountPage {
 }
 
 class TrackingService extends ChangeNotifier {
+  void Function()? onProgressWritten;
   TrackingService(this.auth, {DateTime Function()? now, this.store})
     : now = now ?? DateTime.now;
   final DateTime Function() now;
@@ -456,10 +457,10 @@ class TrackingService extends ChangeNotifier {
     double? score,
   }) => _serial(
     anime,
-    () => _each(
-      anime,
-      (s) => _save(s, anime, status: status, progress: progress, score: score),
-    ),
+    () => _each(anime, (s) async {
+      await _save(s, anime, status: status, progress: progress, score: score);
+      if (progress != null && !closed) onProgressWritten?.call();
+    }),
   );
 
   Future<SyncedResume> resume(Anime anime) async {
@@ -530,6 +531,7 @@ class TrackingService extends ChangeNotifier {
                   : 'CURRENT'),
         notes: syncedResumeAfterEpisode(e?.notes ?? '', episode, total),
       );
+      if (!closed) onProgressWritten?.call();
     }),
   );
   ResumePusher pusher() => ResumePusher(

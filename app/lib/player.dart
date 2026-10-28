@@ -43,6 +43,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final ResumePusher resumePusher;
   bool profileStopped = false;
   late final Future<void> Function() profileStop;
+  late final Future<void> Function(String, Json) commandHandler;
+  Timer? discordMeter;
   int savedResume = 0;
   final completedEpisodes = <int>{};
   bool nextCancelled = false, scrubbing = false;
@@ -83,6 +85,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     resumePusher = widget.services.tracking.pusher();
     profileStop = stopForProfileSwitch;
     widget.services.stopPlayback = profileStop;
+    commandHandler = control;
+    widget.services.playerCommand = commandHandler;
     player = Player(
       configuration: const PlayerConfiguration(
         libass: true,
@@ -97,6 +101,15 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         enableHardwareAcceleration: true,
       ),
     );
+    discordMeter = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!profileStopped && !busy && duration > Duration.zero) {
+        widget.services.discord.observe(
+          anime,
+          episode,
+          player.state.position.inMilliseconds / 1000,
+        );
+      }
+    });
     subscriptions.addAll([
       player.stream.position.listen(tick),
       player.stream.duration.listen((d) {
@@ -120,6 +133,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           return;
         }
         if (mounted && !busy && !retrying) {
+          if (source != null) {
+            unawaited(
+              widget.services.discord.reportProvider(
+                source!.provider,
+                false,
+                'playback',
+                message,
+              ),
+            );
+          }
           retrying = true;
           unawaited(
             tryAnotherCopy(automatic: true)
@@ -482,6 +505,15 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (profileStopped) return;
     if (!mounted || busy) return;
     if (p > Duration.zero && source != null) {
+      widget.services.discord.observe(anime, episode, p.inMilliseconds / 1000);
+      unawaited(
+        widget.services.discord.reportProvider(
+          source!.provider,
+          true,
+          'playback',
+          '',
+        ),
+      );
       unawaited(widget.services.store.rememberSource(anime, source!.provider));
     }
     final current = spans
@@ -582,6 +614,50 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  Future<void> control(String action, Json args) async {
+    if (!mounted || profileStopped) return;
+    switch (action) {
+      case 'pause':
+        await player.pause();
+      case 'play':
+        await player.play();
+      case 'toggle':
+        await player.playOrPause();
+      case 'skip':
+        await seek(85);
+      case 'seek':
+        await seek(number(args['seconds']).clamp(-86400, 86400));
+      case 'volume':
+        await player.setVolume(number(args['volume']).clamp(0, 100).toDouble());
+      case 'next':
+        if (!busy) await next();
+      case 'previous':
+        if (!busy && episode > 1) await pickEpisode(episode - 1);
+      case 'episode':
+        if (!busy) await pickEpisode(number(args['episode']));
+      case 'stop':
+        await save();
+        await resumePusher.flush();
+        await player.stop();
+        if (mounted) Navigator.pop(context);
+    }
+    if (mounted) showControls();
+  }
+
+  Future<void> pickEpisode(int target) async {
+    if (target < 1 || anime.airedEpisodes > 0 && target > anime.airedEpisodes) {
+      return;
+    }
+    await save();
+    await resumePusher.flush();
+    if (!mounted || profileStopped) return;
+    savedResume = 0;
+    nextCancelled = false;
+    episode = target;
+    failedSources.clear();
+    await open();
   }
 
   Future<void> next({bool automatic = false}) async {
@@ -816,6 +892,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    discordMeter?.cancel();
+    unawaited(widget.services.discord.stopWatching());
     generation++;
     scope.cancel();
     hideTimer?.cancel();
@@ -824,6 +902,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (!profileStopped) unawaited(save().then((_) => resumePusher.flush()));
     if (identical(widget.services.stopPlayback, profileStop)) {
       widget.services.stopPlayback = null;
+    }
+    if (identical(widget.services.playerCommand, commandHandler)) {
+      widget.services.playerCommand = null;
     }
     for (final subscription in subscriptions) {
       unawaited(subscription.cancel());
@@ -851,6 +932,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     hideTimer?.cancel();
     saveTimer?.cancel();
     nextTimer?.cancel();
+    discordMeter?.cancel();
+    await widget.services.discord.stopWatching();
+    if (identical(widget.services.playerCommand, commandHandler)) {
+      widget.services.playerCommand = null;
+    }
     generation++;
     scope.cancel();
     await player.pause();

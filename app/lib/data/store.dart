@@ -42,6 +42,8 @@ const settingDefaults = <String, dynamic>{
   'AutoFallback': true,
   'CheckUpdates': true,
   'SyncAniListMAL': true,
+  'DiscordShareWatching': false,
+  'DiscordShareRatings': 'ask',
 };
 
 class AppStore extends ChangeNotifier {
