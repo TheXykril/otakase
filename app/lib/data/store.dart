@@ -20,7 +20,7 @@ const settingDefaults = <String, dynamic>{
   'SubsLanguage': 'english',
   'AudioLanguages': 'japanese,chinese,english',
   'AutoAudioFallback': true,
-  'SubStyle': 'ask',
+  'SubStyle': 'soft',
   'SubtitleFont': 'Noto Sans JP',
   'SubtitleSize': 44,
   'SubtitleColour': '#FFFFFF',
@@ -55,6 +55,8 @@ class AppStore extends ChangeNotifier {
     } catch (_) {
       /* A damaged preference falls back to defaults. */
     }
+    // 'ask' opened a track menu at every episode start; it is gone.
+    if (_values['SubStyle'] == 'ask') _values['SubStyle'] = 'soft';
     try {
       for (final e in (jsonDecode(
         preferences.getString('history.v1') ?? '[]',

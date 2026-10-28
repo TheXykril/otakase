@@ -392,9 +392,9 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               row(
                 'SubStyle',
-                'Original ASS styling or language selection when playback starts.',
+                'soft keeps the release styling (ASS signs); plain uses the subtitle settings below.',
                 value: store.text('SubStyle'),
-                onTap: () => choose('SubStyle', ['ask', 'soft']),
+                onTap: () => choose('SubStyle', ['soft', 'plain']),
               ),
               row(
                 'SubOrDub',

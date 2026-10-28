@@ -95,7 +95,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           offerNext();
         }
       }),
-      player.stream.error.listen((_) {
+      player.stream.error.listen((message) {
+        // A subtitle or track error must not throw away a playing copy; only
+        // a file that never loaded counts as a broken stream.
+        if (message.toLowerCase().contains('sub') ||
+            player.state.duration > Duration.zero) {
+          return;
+        }
         if (mounted && !busy && !retrying) {
           retrying = true;
           unawaited(
@@ -254,6 +260,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       await configureQuality(stream, headers);
       await player.open(Media(stream.url, httpHeaders: headers), play: false);
       if (!mounted || g != generation) return;
+      // Seeking and adding subtitles before mpv has loaded the file fails, so
+      // wait until it reports a duration (a live stream may never do so).
+      if (player.state.duration == Duration.zero) {
+        try {
+          await player.stream.duration
+              .firstWhere((d) => d > Duration.zero)
+              .timeout(const Duration(seconds: 20));
+        } on TimeoutException {
+          // Play anyway; tracks are picked when they appear.
+        }
+      }
+      if (!mounted || g != generation) return;
       final history = widget.services.store.entry(widget.anime);
       if (widget.services.store.flag('ResumePlayback') &&
           history?.episode == episode &&
@@ -267,11 +285,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       unawaited(loadEpisodes(g));
       unawaited(loadSkips(g));
       showControls();
-      if (widget.services.store.text('SubStyle') == 'ask') {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && g == generation) unawaited(trackPanel());
-        });
-      }
     } catch (_) {
       if (mounted && g == generation) {
         setState(() {
@@ -380,15 +393,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           preferred,
         ),
       );
-      if (external.isNotEmpty) {
-        subSelected = true;
-        await externalSubtitle(external.first, g);
-        return;
+      for (final track in external) {
+        if (await externalSubtitle(track, g, manual: false)) {
+          subSelected = true;
+          return;
+        }
+        if (!mounted || g != generation) return;
       }
     }
   }
 
-  Future<void> externalSubtitle(Json track, int g) async {
+  Future<bool> externalSubtitle(Json track, int g, {bool manual = true}) async {
     try {
       final stream = source!.streams[copy];
       final headers = Map<String, String>.of(stream.headers);
@@ -396,24 +411,26 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       final response = await widget.services.catalog.client
           .get(Uri.parse(track['url'] as String), headers: headers)
           .timeout(const Duration(seconds: 15));
-      if (!mounted || g != generation) return;
+      if (!mounted || g != generation) return false;
       if (response.statusCode != 200) throw const FormatException();
       // libass receives the original text, including ASS positions and styles.
       await player.setSubtitleTrack(
         SubtitleTrack.data(
-          utf8.decode(response.bodyBytes),
+          utf8.decode(response.bodyBytes, allowMalformed: true),
           title: track['label'] as String? ?? 'Provider subtitles',
           language: track['language'] as String?,
         ),
       );
+      return true;
     } catch (_) {
-      if (mounted && g == generation) {
+      if (manual && mounted && g == generation) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Subtitle load failed. Choose another track.'),
           ),
         );
       }
+      return false;
     }
   }
 
