@@ -829,9 +829,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Image.asset('assets/mark.png', width: 64, height: 64),
+                      const SizedBox(height: 24),
                       const SkeletonBlock(width: 160, height: 2),
                       const SizedBox(height: 24),
-                      Text(status.toUpperCase(), style: mono),
+                      Text(status, style: uiStyle(context)),
                       const SizedBox(height: 16),
                       AppButton(
                         label: 'Back',
@@ -886,12 +888,20 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                   widget.anime.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: display.copyWith(fontSize: 20),
+                                  style: uiStyle(
+                                    context,
+                                    size: 20,
+                                    weight: FontWeight.w600,
+                                  ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   'EPISODE $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
-                                  style: mono,
+                                  style: uiStyle(
+                                    context,
+                                    size: 15,
+                                    color: muted,
+                                  ),
                                 ),
                               ],
                             ),
@@ -938,12 +948,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           decoration: BoxDecoration(
                             color: panel,
                             border: Border.all(color: line),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
                             children: [
                               ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
+                                borderRadius: BorderRadius.circular(12),
                                 child: CoverImage(
                                   widget.anime.cover,
                                   width: 54,
@@ -956,8 +966,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'NEXT · EP ${episode + 1}',
-                                      style: mono.copyWith(color: fg),
+                                      'Next · Episode ${episode + 1}',
+                                      style: uiStyle(
+                                        context,
+                                        weight: FontWeight.w600,
+                                      ),
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
@@ -966,7 +979,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                           )
                                           ? 'Continue the story?'
                                           : 'Playing in $countdownSeconds seconds',
-                                      style: prose.copyWith(fontSize: 18),
+                                      style: uiStyle(context),
                                     ),
                                     const SizedBox(height: 8),
                                     LinearProgressIndicator(
@@ -1063,18 +1076,30 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                             children: [
                               Text(
                                 time(position),
-                                style: mono.copyWith(letterSpacing: 1),
+                                style: mono.copyWith(
+                                  fontSize: widget.isTV ? 20 : 15,
+                                  color: fg,
+                                  letterSpacing: 0,
+                                ),
                               ),
                               const Spacer(),
                               if (player.state.buffering)
                                 Text(
-                                  'BUFFERING',
-                                  style: mono.copyWith(fontSize: 8),
+                                  'Buffering',
+                                  style: uiStyle(
+                                    context,
+                                    size: 15,
+                                    color: muted,
+                                  ),
                                 ),
                               const Spacer(),
                               Text(
                                 '−${time(duration - position)}',
-                                style: mono.copyWith(letterSpacing: 1),
+                                style: mono.copyWith(
+                                  fontSize: widget.isTV ? 20 : 15,
+                                  color: fg,
+                                  letterSpacing: 0,
+                                ),
                               ),
                             ],
                           ),

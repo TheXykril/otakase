@@ -22,6 +22,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 // Opt-in renders of production widgets. Image bytes and PNGs stay outside Git.
 const output = String.fromEnvironment('PHONE_SCREENSHOTS');
 const artwork = String.fromEnvironment('SCREENSHOT_ART');
+const verify = bool.fromEnvironment('VERIFY_PHONE_SCREENS');
+const enabled = verify || output != '';
 const story = Anime(
   id: 154587,
   malId: 52991,
@@ -102,12 +104,15 @@ Future<void> fonts() async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
-    if (output.isEmpty) return;
-    await Directory(output).create(recursive: true);
+    if (!enabled) return;
+    if (output.isNotEmpty) await Directory(output).create(recursive: true);
     await fonts();
     for (final name in ['cover.jpg', 'banner.jpg']) {
       final codec = await ui.instantiateImageCodec(
-        File('$artwork/$name').readAsBytesSync(),
+        artwork.isNotEmpty
+            ? File('$artwork/$name').readAsBytesSync()
+            : (await rootBundle.load('assets/otakase.png')).buffer
+                  .asUint8List(),
       );
       images['/$name'] = (await codec.getNextFrame()).image;
       codec.dispose();
@@ -175,11 +180,14 @@ void main() {
           reason: 'Artwork must be decoded before capture',
         );
       }
-      await expectLater(
-        find.byKey(const Key('phone-render')),
-        matchesGoldenFile(Uri.file('$output/$screen.png')),
-      );
+      expect(tester.takeException(), isNull);
+      if (output.isNotEmpty) {
+        await expectLater(
+          find.byKey(const Key('phone-render')),
+          matchesGoldenFile(Uri.file('$output/$screen.png')),
+        );
+      }
       await tester.pumpWidget(const SizedBox());
-    }, skip: output.isEmpty);
+    }, skip: !enabled);
   }
 }

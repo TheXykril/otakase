@@ -103,7 +103,10 @@ class _ShowPageState extends State<ShowPage> {
   }
 
   Widget header(int last, int position, int watched) => SizedBox(
-    height: (MediaQuery.sizeOf(context).height * .64).clamp(400, 600),
+    height: (MediaQuery.sizeOf(context).height * .7).clamp(
+      widget.isTV ? 540.0 : 560.0,
+      720.0,
+    ),
     child: Stack(
       fit: StackFit.expand,
       children: [
@@ -111,6 +114,19 @@ class _ShowPageState extends State<ShowPage> {
           Hero(tag: widget.heroTag!, child: HeroArt(anime, height: 600))
         else
           HeroArt(anime, height: 600),
+        const Positioned(
+          top: 24,
+          right: 24,
+          child: Text(
+            '映',
+            style: TextStyle(
+              fontFamily: 'NotoSerifJP',
+              fontSize: 48,
+              fontWeight: FontWeight.w700,
+              color: Color(0x1aece4d6),
+            ),
+          ),
+        ),
         Positioned(
           top: 10,
           left: 14,
@@ -135,10 +151,10 @@ class _ShowPageState extends State<ShowPage> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontFamily: 'ArchivoBlack',
-                      fontSize: widget.isTV ? 40 : 30,
+                      fontFamily: 'Inter',
+                      fontSize: widget.isTV ? 36 : 28,
                       letterSpacing: -.6,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       height: 1.2,
                     ),
                   ),
@@ -151,15 +167,15 @@ class _ShowPageState extends State<ShowPage> {
                         .map(
                           (g) => Text(
                             g,
-                            style: mono.copyWith(fontSize: 9, letterSpacing: 1),
+                            style: uiStyle(context, size: 15, color: muted),
                           ),
                         )
                         .toList(),
                   ),
                   if (anime.studio.isNotEmpty)
                     Text(
-                      anime.studio.toUpperCase(),
-                      style: mono.copyWith(fontSize: 9),
+                      anime.studio,
+                      style: uiStyle(context, size: 15, color: muted),
                     ),
                   const SizedBox(height: 16),
                   Wrap(
@@ -281,20 +297,11 @@ class _ShowPageState extends State<ShowPage> {
                               ),
                             ],
                           ),
-                        Text(
-                          anime.description,
-                          style: prose.copyWith(
-                            color: fg.withValues(alpha: .85),
-                            height: 1.6,
-                            fontSize: 21,
-                          ),
-                        ),
+                        Text(anime.description, style: uiStyle(context)),
                         const SizedBox(height: 24),
                         Row(
                           children: [
-                            const Expanded(
-                              child: SectionLabel('Episodes', kanji: '一'),
-                            ),
+                            const Expanded(child: SectionLabel('Episodes')),
                             for (final value in ['sub', 'dub'])
                               Padding(
                                 padding: const EdgeInsets.only(left: 8),
@@ -339,7 +346,7 @@ class _ShowPageState extends State<ShowPage> {
                                 child: Row(
                                   children: [
                                     ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(12),
                                       child: CoverImage(
                                         art(ep)?['thumbnail'] as String? ??
                                             anime.cover,
@@ -362,9 +369,10 @@ class _ShowPageState extends State<ShowPage> {
                                           if (resume > 0)
                                             Text(
                                               'Resume at ${Duration(seconds: resume).inMinutes}m ${resume % 60}s',
-                                              style: const TextStyle(
+                                              style: uiStyle(
+                                                context,
+                                                size: 15,
                                                 color: shu,
-                                                fontSize: 12,
                                               ),
                                             ),
                                         ],

@@ -16,7 +16,8 @@ const bg = Color(0xff0e0d0c),
     line = Color(0xff2a2724),
     fg = Color(0xffece4d6),
     fgBright = Color(0xfffff8ec),
-    muted = Color(0xff8a8276),
+    muted = Color(0xffb3aa9c),
+    disabled = Color(0xff8a8276),
     shu = Color(0xffd2492f),
     accentDeep = Color(0xffa83a22),
     ok = Color(0xff9bb67a),
@@ -25,16 +26,16 @@ const bg = Color(0xff0e0d0c),
 const mono = TextStyle(
   fontFamily: 'JetBrainsMono',
   fontFamilyFallback: ['NotoSansJP'],
-  fontSize: 10,
-  letterSpacing: 2,
+  fontSize: 15,
+  letterSpacing: .2,
   color: muted,
   height: 1.5,
 );
 const prose = TextStyle(
-  fontFamily: 'CormorantGaramond',
+  fontFamily: 'Inter',
   fontFamilyFallback: ['NotoSansJP'],
-  fontSize: 20,
-  height: 1.5,
+  fontSize: 16,
+  height: 1.4,
   color: fg,
 );
 const display = TextStyle(
@@ -45,6 +46,32 @@ const display = TextStyle(
   letterSpacing: -.6,
   color: fgBright,
 );
+
+// Share the device typography with routes, sheets and dialogs.
+class AppLayout extends InheritedWidget {
+  const AppLayout({super.key, required this.isTV, required super.child});
+  final bool isTV;
+  static bool tvOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppLayout>()?.isTV ?? false;
+  @override
+  bool updateShouldNotify(AppLayout old) => old.isTV != isTV;
+}
+
+TextStyle uiStyle(
+  BuildContext context, {
+  double size = 16,
+  Color color = fg,
+  FontWeight weight = FontWeight.w400,
+  double height = 1.4,
+}) => TextStyle(
+  fontFamily: 'Inter',
+  fontFamilyFallback: const ['NotoSansJP'],
+  fontSize: math.max(size, AppLayout.tvOf(context) ? 20 : 15),
+  fontWeight: weight,
+  height: height,
+  color: color,
+);
+
 const phoneBarHeight = 64.0, phoneBarMargin = 24.0;
 
 class PageInsets extends InheritedWidget {
@@ -68,7 +95,7 @@ class FocusBox extends StatefulWidget {
     this.autofocus = false,
     this.focusNode,
     this.padding = EdgeInsets.zero,
-    this.radius = 6,
+    this.radius = 12,
     this.scale = 1.08,
     this.onFocused,
   });
@@ -176,37 +203,40 @@ class AppButton extends StatelessWidget {
     isTV: isTV,
     autofocus: autofocus,
     focusNode: focusNode,
+    radius: 999,
     onPressed: onPressed,
-    child: Container(
-      padding: EdgeInsets.symmetric(horizontal: filled ? 20 : 8, vertical: 12),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: filled ? shu : Colors.transparent,
-        borderRadius: filled ? BorderRadius.circular(6) : null,
-        border: filled
-            ? null
-            : Border(
-                bottom: BorderSide(
-                  color: onPressed == null ? line : shu,
-                  width: 1,
-                ),
-              ),
+        color: onPressed == null
+            ? line
+            : filled
+            ? shu
+            : fgBright.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 18, color: onPressed == null ? muted : fgBright),
+            Icon(
+              icon,
+              size: isTV ? 24 : 20,
+              color: onPressed == null ? disabled : fgBright,
+            ),
             const SizedBox(width: 8),
           ],
           Flexible(
             child: Text(
-              label.toUpperCase(),
+              label,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: mono.copyWith(
+              style: uiStyle(
+                context,
+                weight: FontWeight.w600,
                 color: onPressed == null ? muted : fgBright,
-                fontSize: 11,
-                letterSpacing: 1.3,
               ),
             ),
           ),
@@ -231,22 +261,24 @@ class AppTab extends StatelessWidget {
   Widget build(BuildContext context) => FocusBox(
     isTV: isTV,
     onPressed: onPressed,
+    radius: 999,
     scale: 1.02,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: selected ? shu : line,
-            width: selected ? 2 : 1,
-          ),
-        ),
+        color: selected
+            ? (isTV ? fg : shu.withValues(alpha: .22))
+            : fgBright.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        label.toUpperCase(),
-        style: mono.copyWith(
-          color: selected ? fgBright : muted,
-          letterSpacing: 1.4,
+        label,
+        style: uiStyle(
+          context,
+          color: selected ? (isTV ? bg : fgBright) : muted,
+          weight: selected ? FontWeight.w600 : FontWeight.w500,
         ),
       ),
     ),
@@ -258,67 +290,34 @@ class PageHeading extends StatelessWidget {
   final String title, kanji;
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 104,
+    height: 84,
     child: Stack(
       alignment: Alignment.centerLeft,
       children: [
         Positioned(
           right: 0,
-          top: -6,
           child: Text(
             kanji,
             style: TextStyle(
               fontFamily: 'NotoSerifJP',
-              fontSize: 88,
+              fontSize: 48,
               fontWeight: FontWeight.w700,
-              height: 1,
-              color: fg.withValues(alpha: .09),
+              color: fg.withValues(alpha: .1),
             ),
           ),
         ),
-        Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('OTAKASE / ${title.toUpperCase()}', style: mono),
-            const SizedBox(height: 8),
-            Text(title, style: display),
-          ],
-        ),
+        Text(title, style: uiStyle(context, size: 30, weight: FontWeight.w700)),
       ],
     ),
   );
 }
 
 class SectionLabel extends StatelessWidget {
-  const SectionLabel(this.title, {super.key, this.kanji});
+  const SectionLabel(this.title, {super.key});
   final String title;
-  final String? kanji;
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      if (kanji != null) ...[
-        Text(
-          kanji!,
-          style: const TextStyle(
-            fontFamily: 'NotoSerifJP',
-            fontSize: 24,
-            color: shu,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(width: 12),
-      ],
-      Expanded(
-        child: Text(
-          title.toUpperCase(),
-          style: mono.copyWith(color: fg, letterSpacing: 2.2),
-        ),
-      ),
-      const SizedBox(width: 16),
-      const SizedBox(width: 28, child: Divider(color: line)),
-    ],
-  );
+  Widget build(BuildContext context) =>
+      Text(title, style: uiStyle(context, size: 20, weight: FontWeight.w600));
 }
 
 class EmptyState extends StatelessWidget {
@@ -351,13 +350,13 @@ class EmptyState extends StatelessWidget {
         Text(
           message,
           textAlign: TextAlign.center,
-          style: prose.copyWith(color: muted),
+          style: uiStyle(context, color: muted),
         ),
         const SizedBox(height: 16),
         if (action != null)
           action!
         else
-          Text('LEAVE IT TO US.', style: mono.copyWith(fontSize: 9)),
+          Text('Leave it to us.', style: uiStyle(context, color: muted)),
       ],
     ),
   );
@@ -375,7 +374,7 @@ class SkeletonBlock extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         color: line.withValues(alpha: .65),
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: BorderRadius.circular(12),
       ),
     ),
   );
@@ -434,6 +433,14 @@ class PageSkeleton extends StatelessWidget {
     child: ListView(
       padding: EdgeInsets.fromLTRB(24, 24, 24, contentBottom(context)),
       children: [
+        Row(
+          children: [
+            Image.asset('assets/mark.png', width: 32, height: 32),
+            const SizedBox(width: 16),
+            const SkeletonBlock(width: 160),
+          ],
+        ),
+        const SizedBox(height: 24),
         if (hero) const SkeletonBlock(height: 320),
         const SizedBox(height: 24),
         const SkeletonBlock(width: 160, height: 12),
@@ -595,10 +602,12 @@ class OtakaseRoute<T> extends PageRouteBuilder<T> {
   OtakaseRoute({required WidgetBuilder builder})
     : super(
         pageBuilder: (context, a, b) => builder(context),
-        transitionDuration: const Duration(milliseconds: 450),
-        reverseTransitionDuration: const Duration(milliseconds: 400),
-        transitionsBuilder: (context, a, b, child) =>
-            FadeTransition(opacity: a, child: child),
+        transitionDuration: const Duration(milliseconds: 300),
+        reverseTransitionDuration: const Duration(milliseconds: 250),
+        transitionsBuilder: (context, a, b, child) => FadeTransition(
+          opacity: CurvedAnimation(parent: a, curve: Curves.easeOut),
+          child: child,
+        ),
       );
 }
 
@@ -638,10 +647,11 @@ class PosterCard extends StatelessWidget {
     this.caption,
     this.autofocus = false,
     this.onFocused,
+    this.landscape = false,
   });
   final Anime anime;
   final VoidCallback onOpen;
-  final bool isTV, autofocus;
+  final bool isTV, autofocus, landscape;
   final double width;
   final double? progress;
   final String? caption;
@@ -669,31 +679,39 @@ class PosterCard extends StatelessWidget {
             Hero(
               tag: 'poster-${key ?? anime.key}',
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(12),
                 child: AspectRatio(
-                  aspectRatio: 2 / 3,
+                  aspectRatio: landscape ? 16 / 9 : 2 / 3,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
                       CoverImage(
-                        anime.cover,
+                        landscape && anime.banner.isNotEmpty
+                            ? anime.banner
+                            : anime.cover,
                         width: width,
-                        height: width * 1.5,
+                        height: landscape ? width * 9 / 16 : width * 1.5,
                       ),
                       Positioned(
                         top: 6,
-                        left: 6,
+                        right: 6,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 5,
                             vertical: 3,
                           ),
-                          color: bgDeep.withValues(alpha: .8),
+                          decoration: BoxDecoration(
+                            color: bgDeep.withValues(alpha: .85),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          constraints: BoxConstraints(maxWidth: width - 24),
                           child: Text(
                             '${anime.formatLabel} · ${anime.airedEpisodes}/${anime.episodes > 0 ? anime.episodes : '?'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: mono.copyWith(
-                              fontSize: 8,
-                              letterSpacing: .4,
+                              fontSize: isTV ? 20 : 15,
+                              letterSpacing: .1,
                               color: fg,
                             ),
                           ),
@@ -708,7 +726,7 @@ class PosterCard extends StatelessWidget {
                             value: progress!.clamp(0, 1),
                             backgroundColor: line,
                             color: shu,
-                            minHeight: 2,
+                            minHeight: 4,
                           ),
                         ),
                     ],
@@ -716,23 +734,26 @@ class PosterCard extends StatelessWidget {
                 ),
               ),
             ),
-            if (!isTV) ...[
+            if (!isTV || landscape) ...[
               const SizedBox(height: 7),
               Text(
-                '${anime.score > 0 ? anime.score.toStringAsFixed(1) : '—'} · ${anime.year > 0 ? anime.year : '?'} · ${anime.duration} MIN',
-                maxLines: 1,
-                style: mono.copyWith(
-                  fontSize: 8,
-                  letterSpacing: .1,
-                  color: anime.score >= 8 ? ok : muted,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                caption ?? anime.title,
+                anime.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: prose.copyWith(fontSize: 17, height: 1.15),
+                style: uiStyle(
+                  context,
+                  size: 15,
+                  weight: FontWeight.w500,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                caption ??
+                    '${anime.score > 0 ? anime.score.toStringAsFixed(1) : '—'} · ${anime.year > 0 ? anime.year : '?'} · ${anime.duration} min',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: uiStyle(context, size: 15, color: muted),
               ),
             ],
           ],
@@ -752,10 +773,11 @@ class PosterRow extends StatefulWidget {
     this.progress,
     this.captions,
     this.trailing,
+    this.landscape = false,
   });
   final String title;
   final List<Anime> items;
-  final bool isTV;
+  final bool isTV, landscape;
   final void Function(Anime) onOpen;
   final double? Function(Anime)? progress;
   final String? Function(Anime)? captions;
@@ -789,16 +811,9 @@ class _PosterRowState extends State<PosterRow> {
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) return const SizedBox.shrink();
-    final width = widget.isTV ? 154.0 : 130.0;
-    final kanji = {
-      'Continue Watching': '続',
-      'Recently Released': '新',
-      'Trending': '熱',
-      'Popular this season': '今',
-      'Airing today': '暦',
-      'Related': '縁',
-      'Recommended': '薦',
-    }[widget.title];
+    final width = widget.landscape
+        ? (widget.isTV ? 340.0 : 264.0)
+        : (widget.isTV ? 166.0 : 150.0);
     return Padding(
       key: ValueKey('section-${widget.title}'),
       padding: const EdgeInsets.only(top: 28, bottom: 4),
@@ -809,14 +824,16 @@ class _PosterRowState extends State<PosterRow> {
             padding: EdgeInsets.symmetric(horizontal: widget.isTV ? 48 : 24),
             child: Row(
               children: [
-                Expanded(child: SectionLabel(widget.title, kanji: kanji)),
+                Expanded(child: SectionLabel(widget.title)),
                 ?widget.trailing,
               ],
             ),
           ),
           const SizedBox(height: 14),
           SizedBox(
-            height: width * 1.5 + (widget.isTV ? 24 : 78),
+            height:
+                (widget.landscape ? width * 9 / 16 : width * 1.5) +
+                (widget.isTV && !widget.landscape ? 24 : 100),
             child: ListView.separated(
               controller: scroll,
               key: PageStorageKey('row-${widget.title}'),
@@ -835,12 +852,13 @@ class _PosterRowState extends State<PosterRow> {
                 onFocused: () => focus(i, width),
                 isTV: widget.isTV,
                 width: width,
+                landscape: widget.landscape,
                 progress: widget.progress?.call(widget.items[i]),
                 caption: widget.captions?.call(widget.items[i]),
               ),
             ),
           ),
-          if (widget.isTV)
+          if (widget.isTV && !widget.landscape)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 48),
               child: Column(
@@ -850,7 +868,7 @@ class _PosterRowState extends State<PosterRow> {
                     widget
                         .items[focused.clamp(0, widget.items.length - 1)]
                         .title,
-                    style: prose,
+                    style: uiStyle(context, weight: FontWeight.w500),
                   ),
                   MetaLine(
                     widget.items[focused.clamp(0, widget.items.length - 1)],
@@ -868,15 +886,35 @@ class MetaLine extends StatelessWidget {
   const MetaLine(this.anime, {super.key});
   final Anime anime;
   @override
-  Widget build(BuildContext context) => Text(
-    [
-      if (anime.score > 0) '★ ${anime.score.toStringAsFixed(1)}',
-      anime.formatLabel,
-      if (anime.year > 0) '${anime.year}',
-      if (anime.duration > 0) '${anime.duration} MIN',
-      if (anime.episodes > 0) '${anime.episodes} EP',
-    ].where((s) => s.isNotEmpty).join(' · '),
-    style: mono.copyWith(color: fg, letterSpacing: 1, fontSize: 9, height: 1.7),
+  Widget build(BuildContext context) => Wrap(
+    spacing: 6,
+    runSpacing: 6,
+    children:
+        [
+              if (anime.score > 0) '★ ${anime.score.toStringAsFixed(1)}',
+              anime.formatLabel,
+              if (anime.year > 0) '${anime.year}',
+              if (anime.duration > 0) '${anime.duration} min',
+              if (anime.episodes > 0) '${anime.episodes} ep',
+            ]
+            .where((s) => s.isNotEmpty)
+            .map(
+              (label) => Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: bgDeep.withValues(alpha: .65),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  label,
+                  style: uiStyle(context, size: 15, color: fg),
+                ),
+              ),
+            )
+            .toList(),
   );
 }
 
@@ -945,7 +983,10 @@ Future<String?> chooseValue(
   context: context,
   builder: (context) => AlertDialog(
     backgroundColor: panel,
-    title: Text(title, style: display.copyWith(fontSize: 22)),
+    title: Text(
+      title,
+      style: uiStyle(context, size: 22, weight: FontWeight.w600),
+    ),
     content: SizedBox(
       width: 460,
       height: (values.length * 56.0).clamp(80, 420),
@@ -956,7 +997,7 @@ Future<String?> chooseValue(
                 autofocus:
                     value == selected ||
                     selected == null && value == values.first,
-                title: Text(value, style: prose),
+                title: Text(value, style: uiStyle(context)),
                 trailing: value == selected
                     ? const Icon(LucideIcons.check, color: shu)
                     : null,

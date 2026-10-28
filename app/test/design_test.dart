@@ -7,6 +7,7 @@ import 'package:otakase/data/store.dart';
 import 'package:otakase/main.dart';
 import 'package:otakase/services.dart';
 import 'package:otakase/ui/components.dart';
+import 'package:otakase/ui/catalog_pages.dart';
 
 import 'widget_test.dart' as fixture;
 
@@ -131,6 +132,102 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+  testWidgets('v2 phone uses readable Inter, pill controls and a frosted bar', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    final label = tester.widget<Text>(find.text('Watch now'));
+    expect(label.style!.fontFamily, 'Inter');
+    expect(label.style!.fontSize, greaterThanOrEqualTo(15));
+    expect(muted, const Color(0xffb3aa9c));
+    expect(find.byType(BackdropFilter), findsOneWidget);
+    final home = find.byKey(const ValueKey('nav-Home'));
+    expect(
+      find.descendant(
+        of: home,
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w is AnimatedContainer &&
+              w.decoration is BoxDecoration &&
+              (w.decoration as BoxDecoration).color ==
+                  shu.withValues(alpha: .16),
+        ),
+      ),
+      findsOneWidget,
+    );
+    final watch = tester.widget<AppButton>(find.byType(AppButton).first);
+    expect(watch.filled, isTrue);
+    final ring = tester.widget<FocusBox>(
+      find.descendant(
+        of: find.byType(AppButton).first,
+        matching: find.byType(FocusBox),
+      ),
+    );
+    expect(ring.radius, 999);
+    expect(find.text('TONIGHT’S PICK'), findsNothing);
+    final headings = tester.widgetList<SectionLabel>(find.byType(SectionLabel));
+    expect(headings.map((h) => h.title), contains('Trending'));
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('v2 Continue watching uses landscape art and local progress', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    final page = tester.widget<HomePage>(find.byType(HomePage));
+    await page.services.store.progress(fixture.anime, 5, 720, 1440);
+    await tester.pumpAndSettle();
+    final row = tester.widget<PosterRow>(
+      find.byWidgetPredicate(
+        (w) => w is PosterRow && w.title == 'Continue watching',
+      ),
+    );
+    expect(row.landscape, isTrue);
+    await tester.scrollUntilVisible(
+      find.text('EP 5 · 12 min left'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    final card = tester.widget<PosterCard>(
+      find.byKey(ValueKey('Continue watching-${fixture.anime.key}')),
+    );
+    expect(card.landscape, isTrue);
+    expect(card.progress, .5);
+    expect(find.text('EP 5 · 12 min left'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('v2 TV has cream selected pills and readable settings', (
+    tester,
+  ) async {
+    await fixture.launch(tester, tv: true);
+    final home = find.byKey(const ValueKey('nav-Home'));
+    final text = tester.widget<Text>(
+      find.descendant(of: home, matching: find.text('Home')),
+    );
+    expect(text.style!.fontFamily, 'Inter');
+    expect(text.style!.fontSize, greaterThanOrEqualTo(20));
+    expect(text.style!.color, bg);
+    expect(
+      find.descendant(
+        of: home,
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w is AnimatedContainer &&
+              w.decoration is BoxDecoration &&
+              (w.decoration as BoxDecoration).color == fg,
+        ),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('nav-Settings')));
+    await tester.pumpAndSettle();
+    final setting = tester.widget<Text>(find.text('Subtitle language'));
+    expect(setting.style!.fontFamily, 'Inter');
+    expect(setting.style!.fontSize, greaterThanOrEqualTo(20));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
   test('hero retains extraLarge artwork across local persistence', () {
     final a = Anime.fromJson({
       'id': 1,

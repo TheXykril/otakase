@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -136,46 +137,33 @@ class _AppShellState extends State<AppShell> {
     isTV: widget.isTV,
     focusNode: index == 0 ? homeFocus : null,
     autofocus: index == 0,
+    radius: 999,
     scale: 1.02,
     onPressed: () => choose(index),
-    child: widget.isTV
-        ? Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: selected == index ? shu : Colors.transparent,
-                  width: 2,
-                ),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.symmetric(
+        horizontal: widget.isTV ? 16 : 12,
+        vertical: widget.isTV ? 10 : 11,
+      ),
+      decoration: BoxDecoration(
+        color: selected == index
+            ? (widget.isTV ? fg : shu.withValues(alpha: .16))
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: widget.isTV
+          ? Text(
+              label,
+              style: uiStyle(
+                context,
+                weight: FontWeight.w600,
+                color: selected == index ? bg : muted,
               ),
-            ),
-            child: Text(
-              label.toUpperCase(),
-              style: mono.copyWith(
-                fontSize: 11,
-                color: selected == index ? fgBright : muted,
-                letterSpacing: 1.7,
-              ),
-            ),
-          )
-        : SizedBox(
-            height: 44,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 21, color: selected == index ? shu : muted),
-                const SizedBox(height: 6),
-                Container(
-                  width: 3,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: selected == index ? shu : Colors.transparent,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-            ),
-          ),
+            )
+          : Icon(icon, size: 22, color: selected == index ? shu : muted),
+    ),
   );
   Widget tvNav() => Focus(
     focusNode: topFocus,
@@ -209,7 +197,7 @@ class _AppShellState extends State<AppShell> {
             icon: const Icon(LucideIcons.settings2, size: 19),
           ),
           const SizedBox(width: 16),
-          Text(clockTime(now), style: mono.copyWith(color: fg, fontSize: 11)),
+          Text(clockTime(now), style: uiStyle(context, color: muted)),
         ],
       ),
     ),
@@ -218,54 +206,83 @@ class _AppShellState extends State<AppShell> {
     top: false,
     child: Align(
       alignment: Alignment.bottomCenter,
-      child: Container(
-        key: const Key('phone-bottom-bar'),
-        height: phoneBarHeight,
-        margin: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-        constraints: const BoxConstraints(maxWidth: 440),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: panel,
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: line),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: FocusBox(
-                key: const Key('nav-Menu'),
-                onPressed: () => scaffold.currentState?.openDrawer(),
-                child: const SizedBox(
-                  height: 44,
-                  child: Icon(LucideIcons.menu, size: 21),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 440),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x40000000),
+                blurRadius: 24,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: Container(
+                key: const Key('phone-bottom-bar'),
+                height: phoneBarHeight,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: panel.withValues(alpha: .85),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: fgBright.withValues(alpha: .1)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: FocusBox(
+                        key: const Key('nav-Menu'),
+                        radius: 999,
+                        onPressed: () => scaffold.currentState?.openDrawer(),
+                        child: const SizedBox(
+                          height: 44,
+                          child: Icon(LucideIcons.menu, size: 22),
+                        ),
+                      ),
+                    ),
+                    for (final e in [
+                      ('Home', LucideIcons.house, 0),
+                      ('Search', LucideIcons.search, 2),
+                      ('MyList', LucideIcons.bookmark, 1),
+                      ('Schedule', LucideIcons.calendarDays, 3),
+                    ])
+                      Expanded(
+                        child: Tooltip(
+                          message: e.$1,
+                          child: nav(e.$1, e.$2, e.$3),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
-            for (final e in [
-              ('Home', LucideIcons.house, 0),
-              ('Search', LucideIcons.search, 2),
-              ('MyList', LucideIcons.bookmark, 1),
-              ('Schedule', LucideIcons.calendarDays, 3),
-            ])
-              Expanded(
-                child: Tooltip(message: e.$1, child: nav(e.$1, e.$2, e.$3)),
-              ),
-          ],
+          ),
         ),
       ),
     ),
   );
+
   Widget drawer() => Drawer(
     width: 320,
     backgroundColor: panel,
-    shape: const RoundedRectangleBorder(side: BorderSide(color: line)),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
+    ),
     child: SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
         children: [
           const Brand(),
-          const SizedBox(height: 36),
-          const SectionLabel('Profile / Accounts', kanji: '人'),
+          const SizedBox(height: 8),
+          Text('お任せ', style: uiStyle(context, color: muted)),
+          const SizedBox(height: 32),
+          const SectionLabel('Profile / accounts'),
           const SizedBox(height: 16),
           FocusBox(
             onPressed: () {
@@ -293,16 +310,11 @@ class _AppShellState extends State<AppShell> {
                             : store.text('MyAnimeListUsername').isNotEmpty
                             ? store.text('MyAnimeListUsername')
                             : 'Your lists',
-                        style: prose,
+                        style: uiStyle(context),
                       ),
-                      const Text(
-                        'PUBLIC ACCOUNTS · LOCAL PROGRESS',
-                        style: TextStyle(
-                          fontFamily: 'JetBrainsMono',
-                          fontSize: 8,
-                          color: muted,
-                          letterSpacing: .7,
-                        ),
+                      Text(
+                        'Public accounts · Local progress',
+                        style: uiStyle(context, size: 15, color: muted),
                       ),
                     ],
                   ),
@@ -312,11 +324,11 @@ class _AppShellState extends State<AppShell> {
             ),
           ),
           const Divider(height: 48),
-          const SectionLabel('Experimental', kanji: '映'),
+          const SectionLabel('Experimental'),
           const SizedBox(height: 12),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Movies', style: prose),
+            title: Text('Movies', style: uiStyle(context)),
             value: store.flag('ExperimentalMovies'),
             onChanged: (v) => store.set('ExperimentalMovies', v),
           ),
@@ -346,13 +358,13 @@ class _AppShellState extends State<AppShell> {
               children: [
                 const Icon(LucideIcons.settings2, color: muted),
                 const SizedBox(width: 16),
-                const Expanded(child: Text('Settings', style: prose)),
+                Expanded(child: Text('Settings', style: uiStyle(context))),
                 const Icon(LucideIcons.chevronRight, color: muted, size: 16),
               ],
             ),
           ),
           const SizedBox(height: 48),
-          const Text('LEAVE IT TO US.', style: mono),
+          Text('Leave it to us.', style: uiStyle(context, color: muted)),
         ],
       ),
     ),
@@ -436,10 +448,7 @@ class _AppShellState extends State<AppShell> {
                               const Spacer(),
                               Text(
                                 'お任せ',
-                                style: mono.copyWith(
-                                  color: muted,
-                                  fontSize: 10,
-                                ),
+                                style: uiStyle(context, size: 15, color: muted),
                               ),
                             ],
                           ),
@@ -485,7 +494,10 @@ class Brand extends StatelessWidget {
       const SizedBox(width: 12),
       Text(
         'OTAKASE',
-        style: mono.copyWith(color: fg, fontSize: 13, letterSpacing: 3),
+        style: display.copyWith(
+          fontSize: AppLayout.tvOf(context) ? 23 : 19,
+          letterSpacing: .3,
+        ),
       ),
     ],
   );

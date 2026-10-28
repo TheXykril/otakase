@@ -60,11 +60,17 @@ class _OtakaseAppState extends State<OtakaseApp> {
     final traditional =
         FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
     final focusStyle = ButtonStyle(
-      textStyle: WidgetStatePropertyAll(mono.copyWith(color: fg)),
+      textStyle: WidgetStatePropertyAll(
+        TextStyle(
+          fontFamily: 'Inter',
+          fontSize: widget.isTV ? 20 : 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
       foregroundColor: const WidgetStatePropertyAll(fg),
       overlayColor: WidgetStatePropertyAll(shu.withValues(alpha: .08)),
       shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       ),
       side: WidgetStateProperty.resolveWith(
         (s) => BorderSide(
@@ -75,98 +81,151 @@ class _OtakaseAppState extends State<OtakaseApp> {
         ),
       ),
     );
-    return MaterialApp(
-      title: 'Otakase',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        colorScheme: const ColorScheme.dark(
-          primary: shu,
-          onPrimary: fgBright,
-          secondary: shu,
-          surface: panel,
-          outline: line,
-          outlineVariant: line,
-          onSurface: fg,
-          error: warn,
-        ),
-        scaffoldBackgroundColor: bg,
-        canvasColor: bg,
-        fontFamily: 'CormorantGaramond',
-        fontFamilyFallback: const ['NotoSansJP'],
-        textTheme: const TextTheme(
-          bodyMedium: prose,
-          bodyLarge: prose,
-          titleLarge: display,
-          labelLarge: mono,
-          labelMedium: mono,
-          labelSmall: mono,
-        ),
-        focusColor: traditional ? line : Colors.transparent,
-        dividerColor: line,
-        dividerTheme: const DividerThemeData(color: line, thickness: 1),
-        iconTheme: const IconThemeData(color: fg, size: 20),
-        appBarTheme: AppBarTheme(
-          backgroundColor: bg,
-          surfaceTintColor: Colors.transparent,
-          titleTextStyle: mono.copyWith(
-            fontSize: 13,
-            color: fg,
-            letterSpacing: 2,
+    return AppLayout(
+      isTV: widget.isTV,
+      child: MaterialApp(
+        title: 'Otakase',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          brightness: Brightness.dark,
+          colorScheme: const ColorScheme.dark(
+            primary: shu,
+            onPrimary: fgBright,
+            secondary: shu,
+            surface: panel,
+            outline: line,
+            outlineVariant: line,
+            onSurface: fg,
+            error: warn,
+          ),
+          scaffoldBackgroundColor: bg,
+          canvasColor: bg,
+          fontFamily: 'Inter',
+          fontFamilyFallback: const ['NotoSansJP'],
+          textTheme: TextTheme(
+            bodySmall: TextStyle(
+              fontSize: widget.isTV ? 20 : 15,
+              color: muted,
+              height: 1.4,
+            ),
+            bodyMedium: TextStyle(
+              fontSize: widget.isTV ? 20 : 16,
+              color: fg,
+              height: 1.4,
+            ),
+            bodyLarge: TextStyle(
+              fontSize: widget.isTV ? 22 : 16,
+              color: fg,
+              height: 1.4,
+            ),
+            titleSmall: TextStyle(
+              fontSize: widget.isTV ? 20 : 16,
+              fontWeight: FontWeight.w600,
+            ),
+            titleMedium: TextStyle(
+              fontSize: widget.isTV ? 22 : 18,
+              fontWeight: FontWeight.w600,
+            ),
+            titleLarge: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+            ),
+            labelLarge: TextStyle(
+              fontSize: widget.isTV ? 20 : 16,
+              fontWeight: FontWeight.w600,
+            ),
+            labelMedium: TextStyle(fontSize: widget.isTV ? 20 : 15),
+            labelSmall: TextStyle(fontSize: widget.isTV ? 20 : 15),
+          ),
+          focusColor: traditional ? line : Colors.transparent,
+          dividerColor: line,
+          dividerTheme: const DividerThemeData(color: line, thickness: 1),
+          iconTheme: const IconThemeData(color: fg, size: 20),
+          appBarTheme: AppBarTheme(
+            backgroundColor: bg,
+            surfaceTintColor: Colors.transparent,
+            titleTextStyle: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: widget.isTV ? 22 : 20,
+              color: fg,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          bottomSheetTheme: const BottomSheetThemeData(
+            backgroundColor: panel,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+          ),
+          dialogTheme: DialogThemeData(
+            backgroundColor: panel,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+          textButtonTheme: TextButtonThemeData(style: focusStyle),
+          outlinedButtonTheme: OutlinedButtonThemeData(style: focusStyle),
+          iconButtonTheme: IconButtonThemeData(style: focusStyle),
+          listTileTheme: const ListTileThemeData(
+            textColor: fg,
+            iconColor: muted,
+          ),
+          switchTheme: SwitchThemeData(
+            thumbColor: WidgetStateProperty.resolveWith(
+              (s) => s.contains(WidgetState.selected) ? fgBright : muted,
+            ),
+            trackColor: WidgetStateProperty.resolveWith(
+              (s) => s.contains(WidgetState.selected) ? shu : line,
+            ),
+            trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            isDense: true,
+            hintStyle: TextStyle(
+              fontFamily: 'Inter',
+              color: muted,
+              fontSize: widget.isTV ? 20 : 16,
+            ),
+            labelStyle: TextStyle(
+              fontFamily: 'Inter',
+              color: muted,
+              fontSize: widget.isTV ? 20 : 15,
+            ),
+            filled: true,
+            fillColor: fgBright.withValues(alpha: .06),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: line),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: line),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: shu),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              vertical: 16,
+              horizontal: 16,
+            ),
+          ),
+          sliderTheme: SliderThemeData(
+            activeTrackColor: shu,
+            inactiveTrackColor: line,
+            thumbColor: fg,
+            trackHeight: 2,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+            overlayColor: shu.withValues(alpha: .1),
           ),
         ),
-        dialogTheme: DialogThemeData(
-          backgroundColor: panel,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
-            side: const BorderSide(color: line),
-          ),
-        ),
-        textButtonTheme: TextButtonThemeData(style: focusStyle),
-        outlinedButtonTheme: OutlinedButtonThemeData(style: focusStyle),
-        iconButtonTheme: IconButtonThemeData(style: focusStyle),
-        listTileTheme: const ListTileThemeData(textColor: fg, iconColor: muted),
-        switchTheme: SwitchThemeData(
-          thumbColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? shu : muted,
-          ),
-          trackColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected)
-                ? accentDeep.withValues(alpha: .35)
-                : line,
-          ),
-          trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          isDense: true,
-          hintStyle: prose.copyWith(color: muted, fontSize: 18),
-          labelStyle: mono.copyWith(letterSpacing: 1.2),
-          border: const UnderlineInputBorder(
-            borderSide: BorderSide(color: line),
-          ),
-          enabledBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: line),
-          ),
-          focusedBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: shu),
-          ),
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
-        ),
-        sliderTheme: SliderThemeData(
-          activeTrackColor: shu,
-          inactiveTrackColor: line,
-          thumbColor: fg,
-          trackHeight: 2,
-          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-          overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-          overlayColor: shu.withValues(alpha: .1),
-        ),
+        home: widget.splash
+            ? SplashGate(
+                child: AppShell(services: widget.services, isTV: widget.isTV),
+              )
+            : AppShell(services: widget.services, isTV: widget.isTV),
       ),
-      home: widget.splash
-          ? SplashGate(
-              child: AppShell(services: widget.services, isTV: widget.isTV),
-            )
-          : AppShell(services: widget.services, isTV: widget.isTV),
     );
   }
 }
@@ -200,7 +259,7 @@ class _SplashGateState extends State<SplashGate> {
 
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
-    duration: const Duration(milliseconds: 500),
+    duration: const Duration(milliseconds: 300),
     child: done
         ? widget.child
         : Scaffold(
@@ -208,22 +267,18 @@ class _SplashGateState extends State<SplashGate> {
             body: Center(
               child: AnimatedOpacity(
                 opacity: visible ? 1 : 0,
-                duration: const Duration(milliseconds: 600),
+                duration: const Duration(milliseconds: 300),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Image.asset('assets/mark.png', width: 150, height: 150),
                     const SizedBox(height: 32),
-                    Text(
-                      'お任せ',
-                      style: mono.copyWith(
-                        color: fg,
-                        letterSpacing: 5,
-                        fontSize: 14,
-                      ),
-                    ),
+                    Text('お任せ', style: uiStyle(context, size: 20, color: fg)),
                     const SizedBox(height: 12),
-                    const Text('LEAVE IT TO US.', style: mono),
+                    Text(
+                      'Leave it to us.',
+                      style: uiStyle(context, color: muted),
+                    ),
                   ],
                 ),
               ),

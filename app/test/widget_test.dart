@@ -75,9 +75,9 @@ void main() {
     tester,
   ) async {
     await launch(tester);
-    expect(find.text('WATCH NOW'), findsOneWidget);
+    expect(find.text('Watch now'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('section-Continue Watching')),
+      find.byKey(const ValueKey('section-Continue watching')),
       findsNothing,
     );
     await tester.tap(find.byKey(const ValueKey('nav-MyList')));
@@ -92,7 +92,7 @@ void main() {
     expect(find.text('Airing times, not source availability'), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('WATCH NOW'), findsOneWidget);
+    expect(find.text('Watch now'), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.text('Exit Otakase?'), findsOneWidget);
@@ -103,7 +103,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('drawer-settings')));
     await tester.pumpAndSettle();
-    expect(find.text('SUBTITLE & LANGUAGES'), findsOneWidget);
+    expect(find.text('Subtitles & languages'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
   testWidgets(
@@ -137,22 +137,22 @@ void main() {
       expect(FocusManager.instance.primaryFocus?.debugLabel, 'Home navigation');
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
       await tester.pumpAndSettle();
-      expect(find.text('PROFILE / ACCOUNTS'), findsOneWidget);
+      expect(find.text('Profile / accounts'), findsOneWidget);
       for (final name in sourceNames) {
         expect(find.text(name), findsNothing);
       }
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.text('PROFILE / ACCOUNTS'), findsNothing);
+      expect(find.text('Profile / accounts'), findsNothing);
       await tester.pumpWidget(const SizedBox());
     },
   );
   testWidgets('phone Watch Now opens show with resume focus', (tester) async {
     await launch(tester);
-    await tester.tap(find.text('WATCH NOW'));
+    await tester.tap(find.text('Watch now'));
     await tester.pumpAndSettle();
-    expect(find.text('PLAY EPISODE 1'), findsOneWidget);
-    expect(find.text('EPISODES'), findsOneWidget);
+    expect(find.text('Play episode 1'), findsOneWidget);
+    expect(find.text('Episodes'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }

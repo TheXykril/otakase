@@ -252,17 +252,26 @@ Sources are automatic. Source names and health appear only in Settings > Diagnos
 Phone settings are in the drawer; TV retains its gear and Left-to-drawer shortcut.
 Focus outlines follow FocusManager highlight mode, so touch does not leave a ring.
 
-Archivo Black, Cormorant Garamond, JetBrains Mono and Noto Serif JP are bundled
-from google/fonts commit ddf386ba1b9fbc6b2c818f1ddcd9148f54ced94b. Each has its OFL
-license beside it in assets/fonts. Noto Serif JP is subset to the display kanji
-used by the app to avoid loading a full CJK serif family on a weak TV. Japanese
-body/title fallback and original ASS subtitles retain the full Noto Sans JP.
+The v2 direction in otakase-context/docs/mobile-design.md takes precedence over
+its earlier editorial styling. Inter is used for UI text at weights 400/500/600/700;
+Archivo Black is limited to the wordmark and hero, and JetBrains Mono to tiny
+badges/time codes. Inter 4.000 is copied from the repository's existing mpv skin
+and bot font assets, with its SIL OFL in assets/fonts/OFL-Inter.txt. Cormorant
+Garamond is removed. Secondary text is #b3aa9c; UI text is at least 15 sp on phone
+and 20 sp on TV.
+
+Archivo Black, JetBrains Mono and Noto Serif JP are bundled from google/fonts
+commit ddf386ba1b9fbc6b2c818f1ddcd9148f54ced94b with their OFL licenses. Noto Serif
+JP is subset to the app's display kanji. Japanese title fallback and original
+ASS subtitles retain full Noto Sans JP. Cards use 12 px corners, controls use
+pills, and the phone's floating bar uses a clipped blur. Focus handling, automatic
+source selection and the player/subtitle lifecycle are unchanged.
 Lucide 4.0.1 supplies the line icons. Native and Flutter splash screens use the
 existing 任 mark from site/img/mark-256.png.
 
 Phone renders are generated from the real widgets with fixture catalog data,
 bundled fonts and reduced motion. PNG outputs stay outside the source tree;
-they are for the PR description and are not committed. Device playback and
+they are for local inspection only. Do not upload, attach or commit them, including in PR descriptions. Device playback and
 weak-TV performance still require the phone and Sony TV.
 
 To regenerate the phone renders with local fixture art (a landscape banner and
@@ -279,3 +288,13 @@ flutter test --update-goldens \
 The capture test pre-decodes art and loads every bundled font, and asserts that
 images are ready before recording Home, MyList, Search and Settings. Without
 those opt-in paths the four capture cases are skipped; regression tests still run.
+
+To exercise all four screens with bundled fonts/artwork without writing images:
+
+```sh
+flutter test --dart-define=VERIFY_PHONE_SCREENS=true test/phone_screens_test.dart
+```
+
+This mode verifies decoded images and layout; the existing opt-in golden command
+above still renders with your local banner/poster fixtures. No screenshots are
+uploaded, attached or committed.

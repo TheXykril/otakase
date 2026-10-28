@@ -71,7 +71,8 @@ class _HomePageState extends State<HomePage> {
               onOpen: widget.onOpen,
             ),
           PosterRow(
-            title: 'Continue Watching',
+            title: 'Continue watching',
+            landscape: true,
             items: continuing.map((h) => h.anime).toList(),
             isTV: widget.isTV,
             onOpen: widget.onOpen,
@@ -81,11 +82,11 @@ class _HomePageState extends State<HomePage> {
             },
             captions: (a) {
               final e = store.entry(a)!;
-              return '${a.title} · E${e.episode}';
+              return 'EP ${e.episode} · ${((e.duration - e.position).clamp(0, e.duration) / 60).ceil()} min left';
             },
           ),
           PosterRow(
-            title: 'Recently Released',
+            title: 'Recently released',
             items: unique(data.recent),
             isTV: widget.isTV,
             onOpen: widget.onOpen,
@@ -164,8 +165,8 @@ class _HeroCarouselState extends State<HeroCarousel> {
   @override
   Widget build(BuildContext context) {
     final height = (MediaQuery.sizeOf(context).height * .58).clamp(
-          widget.isTV ? 380.0 : 420.0,
-          widget.isTV ? 620.0 : 560.0,
+          widget.isTV ? 460.0 : 500.0,
+          widget.isTV ? 640.0 : 620.0,
         ),
         anime = widget.items[index];
     return Focus(
@@ -195,7 +196,7 @@ class _HeroCarouselState extends State<HeroCarousel> {
             fit: StackFit.expand,
             children: [
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 600),
+                duration: const Duration(milliseconds: 300),
                 child: TweenAnimationBuilder<double>(
                   key: ValueKey(anime.key),
                   tween: Tween(
@@ -215,9 +216,9 @@ class _HeroCarouselState extends State<HeroCarousel> {
                   '今',
                   style: TextStyle(
                     fontFamily: 'NotoSerifJP',
-                    fontSize: 88,
+                    fontSize: 48,
                     fontWeight: FontWeight.w700,
-                    color: fg.withValues(alpha: .08),
+                    color: fg.withValues(alpha: .1),
                   ),
                 ),
               ),
@@ -238,17 +239,8 @@ class _HeroCarouselState extends State<HeroCarousel> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'TONIGHT’S PICK',
-                          style: mono.copyWith(
-                            color: shu,
-                            fontSize: 9,
-                            letterSpacing: 3,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
                         AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 500),
+                          duration: const Duration(milliseconds: 300),
                           child: Align(
                             key: ValueKey(anime.key),
                             alignment: Alignment.centerLeft,
@@ -273,8 +265,8 @@ class _HeroCarouselState extends State<HeroCarousel> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: prose.copyWith(
-                            fontSize: widget.isTV ? 23 : 20,
-                            color: fg.withValues(alpha: .85),
+                            fontSize: widget.isTV ? 20 : 16,
+                            color: fg,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -285,7 +277,7 @@ class _HeroCarouselState extends State<HeroCarousel> {
                           children: [
                             AppButton(
                               key: ValueKey('hero-watch-${anime.id}'),
-                              label: 'Watch Now',
+                              label: 'Watch now',
                               icon: LucideIcons.play,
                               filled: true,
                               isTV: widget.isTV,
@@ -316,9 +308,14 @@ class _HeroCarouselState extends State<HeroCarousel> {
                         onTap: () => setState(() => index = i),
                         child: Container(
                           width: i == index ? 22 : 5,
-                          height: 3,
+                          height: 6,
                           margin: const EdgeInsets.all(4),
-                          color: i == index ? shu : line,
+                          decoration: BoxDecoration(
+                            color: i == index
+                                ? shu
+                                : muted.withValues(alpha: .4),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
                         ),
                       ),
                     ),
@@ -556,7 +553,7 @@ class _SearchPageState extends State<SearchPage> {
               crossAxisCount: columns,
               crossAxisSpacing: 12,
               mainAxisSpacing: 14,
-              mainAxisExtent: width * 1.5 + (widget.isTV ? 24 : 84),
+              mainAxisExtent: width * 1.5 + (widget.isTV ? 24 : 108),
             ),
             itemBuilder: (_, i) => PosterCard(
               key: ValueKey('search-${items[i].key}'),
@@ -731,14 +728,17 @@ class _AccountBlockState extends State<AccountBlock> {
               if (username.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(username, style: prose.copyWith(fontSize: 24)),
+                  child: Text(
+                    username,
+                    style: uiStyle(context, size: 24, weight: FontWeight.w600),
+                  ),
                 ),
               if (username.isEmpty) ...[
                 const SizedBox(height: 16),
                 TextField(
                   key: ValueKey('username-${widget.service}'),
                   controller: usernameInput,
-                  style: prose,
+                  style: uiStyle(context),
                   decoration: InputDecoration(
                     hintText: 'Add ${widget.service} username',
                     suffixIcon: IconButton(
@@ -753,7 +753,7 @@ class _AccountBlockState extends State<AccountBlock> {
                 const SizedBox(height: 12),
                 Text(
                   'Read your public list. Progress stays on this device.',
-                  style: prose.copyWith(color: muted, fontSize: 17),
+                  style: uiStyle(context, color: muted),
                 ),
               ],
             ],
@@ -950,18 +950,14 @@ class _SchedulePageState extends State<SchedulePage> {
               child: Row(
                 children: [
                   SizedBox(
-                    width: 64,
+                    width: widget.isTV ? 88 : 64,
                     child: Text(
                       clockTime(row.at),
-                      style: const TextStyle(
-                        color: muted,
-                        fontFamily: 'JetBrainsMono',
-                        fontSize: 12,
-                      ),
+                      style: uiStyle(context, size: 15, color: muted),
                     ),
                   ),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(7),
+                    borderRadius: BorderRadius.circular(12),
                     child: CoverImage(row.anime.cover, width: 58, height: 84),
                   ),
                   const SizedBox(width: 18),
@@ -973,10 +969,7 @@ class _SchedulePageState extends State<SchedulePage> {
                           row.anime.title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: uiStyle(context, weight: FontWeight.w600),
                         ),
                         const SizedBox(height: 6),
                         Text(

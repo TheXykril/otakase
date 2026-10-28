@@ -19,19 +19,22 @@ Future<void> openSettings(
       barrierDismissible: true,
       barrierLabel: 'Settings',
       barrierColor: const Color(0xb3080707),
-      transitionDuration: const Duration(milliseconds: 180),
+      transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (context, a, b) => Align(
         alignment: Alignment.centerRight,
         child: SizedBox(
           width: (MediaQuery.sizeOf(context).width * .4).clamp(360, 620),
-          child: SettingsPage(services: services, isTV: true),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: SettingsPage(services: services, isTV: true),
+          ),
         ),
       ),
       transitionBuilder: (context, a, b, child) => SlideTransition(
         position: Tween<Offset>(
           begin: const Offset(1, 0),
           end: Offset.zero,
-        ).animate(a),
+        ).animate(CurvedAnimation(parent: a, curve: Curves.easeOut)),
         child: child,
       ),
     );
@@ -189,7 +192,7 @@ class _SettingsPageState extends State<SettingsPage> {
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
     child: FocusBox(
       isTV: widget.isTV,
-      radius: 10,
+      radius: 12,
       onPressed: enabled ? onTap : null,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(
@@ -202,19 +205,10 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 Text(
                   settingLabel(key),
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w500,
+                  style: uiStyle(
+                    context,
+                    weight: FontWeight.w500,
                     color: enabled ? fg : muted,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  description,
-                  style: const TextStyle(
-                    color: muted,
-                    fontSize: 15,
-                    height: 1.5,
                   ),
                 ),
                 if (value != null)
@@ -222,13 +216,19 @@ class _SettingsPageState extends State<SettingsPage> {
                     padding: const EdgeInsets.only(top: 5),
                     child: Text(
                       value,
-                      style: TextStyle(
+                      style: uiStyle(
+                        context,
+                        size: 15,
                         color: enabled ? shu : muted,
-                        fontSize: 12,
-                        fontFamily: 'JetBrainsMono',
+                        weight: FontWeight.w500,
                       ),
                     ),
                   ),
+                const SizedBox(height: 5),
+                Text(
+                  description,
+                  style: uiStyle(context, size: 15, color: muted),
+                ),
               ],
             ),
           ),
@@ -246,7 +246,7 @@ class _SettingsPageState extends State<SettingsPage> {
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
     child: FocusBox(
       isTV: widget.isTV,
-      radius: 10,
+      radius: 12,
       onPressed: () => store.set(key, !store.flag(key)),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
@@ -259,19 +259,12 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 Text(
                   settingLabel(key),
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: uiStyle(context, weight: FontWeight.w500),
                 ),
                 const SizedBox(height: 5),
                 Text(
                   description,
-                  style: const TextStyle(
-                    color: muted,
-                    fontSize: 15,
-                    height: 1.5,
-                  ),
+                  style: uiStyle(context, size: 15, color: muted),
                 ),
               ],
             ),
@@ -280,7 +273,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: IgnorePointer(
               child: Switch(
                 value: store.flag(key),
-                activeThumbColor: shu,
+                activeThumbColor: fgBright,
                 onChanged: (_) {},
               ),
             ),
@@ -294,7 +287,7 @@ class _SettingsPageState extends State<SettingsPage> {
     backgroundColor: panel,
     appBar: AppBar(
       backgroundColor: panel,
-      title: const Text('OTAKASE'),
+      title: const Text('Otakase'),
       leading: IconButton(
         tooltip: 'Back',
         autofocus: true,
@@ -313,7 +306,7 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: EdgeInsets.symmetric(horizontal: 24),
               child: PageHeading('Settings', '設'),
             ),
-            group('Subtitle & Languages', LucideIcons.captions, [
+            group('Subtitles & languages', LucideIcons.captions, [
               row(
                 'SubsLanguage',
                 'Subtitle language priority, comma separated. Use off to disable.',
@@ -597,7 +590,7 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('DIAGNOSTICS'),
+      title: const Text('Diagnostics'),
       leading: IconButton(
         tooltip: 'Back',
         onPressed: () => Navigator.pop(context),
@@ -612,7 +605,7 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
           const PageHeading('Diagnostics', '設'),
           Text(
             'Playback chooses a copy automatically and remembers what worked for each show.',
-            style: prose.copyWith(color: muted),
+            style: uiStyle(context, color: muted),
           ),
           const SizedBox(height: 24),
           AppButton(
@@ -636,14 +629,16 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
               ),
               child: Row(
                 children: [
-                  Text('${i + 1}'.padLeft(2, '0'), style: mono),
-                  const SizedBox(width: 20),
-                  Expanded(child: Text(sources[i], style: prose)),
                   Text(
-                    (widget.services.store.providerHealth[sources[i]] ??
-                            'Not checked')
-                        .toUpperCase(),
-                    style: mono.copyWith(letterSpacing: .5, fontSize: 9),
+                    '${i + 1}'.padLeft(2, '0'),
+                    style: uiStyle(context, color: muted),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(child: Text(sources[i], style: uiStyle(context))),
+                  Text(
+                    widget.services.store.providerHealth[sources[i]] ??
+                        'Not checked',
+                    style: uiStyle(context, size: 15, color: muted),
                   ),
                 ],
               ),
