@@ -196,7 +196,7 @@ server and stays connected to Discord.
 - **Releases:** `/changelog [version] [since]`, `/suggestion-issue` (needs a
   `github_token` that can write issues; closing the issue settles the
   suggestion), `/github` for server admins to start a repository workflow
-  (build, release, dev build, site, wiki, provider check; every build tests
+  (build, release, dev build, site, wiki; every build tests
   the Windows installer and a release also runs winget and the Discord post;
   `githubworkflows.go`), and a "Bot updated" note in the bot log from the embedded
   `CHANGELOG.md` (`botupdate.go`).
