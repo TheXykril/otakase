@@ -113,32 +113,48 @@ class SourceResolver {
   final CoreClient core;
   final AppStore store;
   final Map<String, String> _matches = {};
+  Future<List<String>>? _coreOrder;
+  Future<List<String>> providerOrder() => _coreOrder ??= _loadOrder();
+  Future<List<String>> _loadOrder() async {
+    try {
+      final d = await core.request({'operation': 'providers'});
+      return (d['providers'] as List).cast<String>();
+    } catch (_) {
+      _coreOrder = null;
+      rethrow;
+    }
+  }
+
   Future<PlaybackSource> resolve(
     Anime anime,
     int episode, {
     required RequestScope scope,
     required void Function(String) status,
-    String? source,
+    Set<String> exclude = const {},
     String? mode,
   }) async {
-    final enabled = store.enabledSources;
-    final chosen = source ?? store.activeSource;
+    final order = await providerOrder();
+    scope.check();
+    final remembered = store.preferredSource(anime);
     final providers = [
-      if (enabled.contains(chosen)) chosen,
-      ...enabled.where((s) => s != chosen),
+      if (order.contains(remembered) && !exclude.contains(remembered))
+        remembered!,
+      ...order.where((p) => p != remembered && !exclude.contains(p)),
     ];
     if (providers.isEmpty) {
-      throw const CoreFailure('no_sources', 'Enable a source in Settings.');
+      throw const CoreFailure(
+        'no_stream',
+        'This episode is unavailable. Try another copy.',
+      );
     }
     final modes = [mode ?? store.text('SubOrDub')];
     if (store.flag('AutoAudioFallback')) {
       modes.add(modes.first == 'sub' ? 'dub' : 'sub');
     }
-    for (final provider
-        in store.flag('AutoFallback') ? providers : providers.take(1)) {
+    for (final provider in providers) {
       for (final audio in modes) {
         scope.check();
-        status('Looking on $provider · ${audio.toUpperCase()}');
+        status('Finding a copy · ${audio.toUpperCase()}');
         try {
           final key = '$provider:${anime.key}:$audio';
           var id = _matches[key];
@@ -198,7 +214,7 @@ class SourceResolver {
     }
     throw const CoreFailure(
       'no_stream',
-      'No enabled source could play this episode. Try another audio mode or source.',
+      'This episode is unavailable. Try another copy.',
     );
   }
 

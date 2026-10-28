@@ -63,6 +63,9 @@ Future<void> launch(WidgetTester tester, {bool tv = false}) async {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+  tester.platformDispatcher.accessibilityFeaturesTestValue =
+      FakeAccessibilityFeatures(disableAnimations: true);
+  addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
   await tester.pumpWidget(OtakaseApp(services: await services(), isTV: tv));
   await tester.pumpAndSettle();
 }
@@ -72,12 +75,15 @@ void main() {
     tester,
   ) async {
     await launch(tester);
-    expect(find.text('Watch Now'), findsOneWidget);
-    expect(find.text('Continue Watching'), findsOneWidget);
+    expect(find.text('WATCH NOW'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('section-Continue Watching')),
+      findsNothing,
+    );
     await tester.tap(find.byKey(const ValueKey('nav-MyList')));
     await tester.pumpAndSettle();
-    expect(find.text('Connect AniList'), findsOneWidget);
-    expect(find.text('Connect MAL'), findsOneWidget);
+    expect(find.byKey(const ValueKey('username-AniList')), findsOneWidget);
+    expect(find.byKey(const ValueKey('username-MAL')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('nav-Search')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('catalog-search')), findsOneWidget);
@@ -86,22 +92,25 @@ void main() {
     expect(find.text('Airing times, not source availability'), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('Watch Now'), findsOneWidget);
+    expect(find.text('WATCH NOW'), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.text('Exit Otakase?'), findsOneWidget);
-    await tester.tap(find.text('Stay'));
+    await tester.tap(find.text('STAY'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('nav-Settings')));
+    expect(find.byKey(const Key('nav-Settings')), findsNothing);
+    await tester.tap(find.byKey(const Key('nav-Menu')));
     await tester.pumpAndSettle();
-    expect(find.text('Subtitle & Languages'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('drawer-settings')));
+    await tester.pumpAndSettle();
+    expect(find.text('SUBTITLE & LANGUAGES'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
   testWidgets(
     'TV D-pad moves from nav to visible red focus and OK opens show',
     (tester) async {
       await launch(tester, tv: true);
-      expect(find.text('Otakase'), findsOneWidget);
+      expect(find.text('OTAKASE'), findsOneWidget);
       expect(FocusManager.instance.primaryFocus?.debugLabel, 'Home navigation');
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pumpAndSettle();
@@ -128,19 +137,22 @@ void main() {
       expect(FocusManager.instance.primaryFocus?.debugLabel, 'Home navigation');
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
       await tester.pumpAndSettle();
-      expect(find.text('Sources'), findsOneWidget);
+      expect(find.text('PROFILE / ACCOUNTS'), findsOneWidget);
+      for (final name in sourceNames) {
+        expect(find.text(name), findsNothing);
+      }
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.text('Sources'), findsNothing);
+      expect(find.text('PROFILE / ACCOUNTS'), findsNothing);
       await tester.pumpWidget(const SizedBox());
     },
   );
   testWidgets('phone Watch Now opens show with resume focus', (tester) async {
     await launch(tester);
-    await tester.tap(find.text('Watch Now'));
+    await tester.tap(find.text('WATCH NOW'));
     await tester.pumpAndSettle();
-    expect(find.text('Play episode 1'), findsOneWidget);
-    expect(find.text('Episodes'), findsOneWidget);
+    expect(find.text('PLAY EPISODE 1'), findsOneWidget);
+    expect(find.text('EPISODES'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }

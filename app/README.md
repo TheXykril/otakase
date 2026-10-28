@@ -173,8 +173,8 @@ both declare required=false, with phone and LEANBACK_LAUNCHER entries.
 5. In Settings, enter public AniList and MAL usernames. Check each account's
    status chips, pagination, private/invalid usernames and adult filtering.
    AdultContent defaults off and filters catalog, airing rows, lists and history.
-6. Play sub and dub on all six sources. AutoFallback tries the selected source
-   first, then the other enabled sources; AutoAudioFallback controls whether
+6. Play sub and dub on all six sources. Sources run automatically in core order, with a working choice remembered
+   per show and silent fallback; AutoAudioFallback controls whether
    the opposite audio mode may be tried. Verify provider headers and ASS,
    embedded/provider track selection, preferred language, quality, OP/ED/recap
    marks and auto-skip, next countdown, remote media keys and resume after
@@ -244,3 +244,38 @@ ffmpeg -f lavfi -i testsrc2=size=640x360:rate=24 \
 
 master.m3u8 names variant.m3u8. Synthetic media is about 2 MiB of the APK.
 Noto Sans JP (notofonts/noto-cjk, SubsetOTF) is bundled under the SIL OFL in assets/fonts, so Japanese signs render instead of empty boxes.
+
+## UI assets and visual checks
+
+The app uses the Shu tokens from site/style.css and internal/theme/palette.go.
+Sources are automatic. Source names and health appear only in Settings > Diagnostics.
+Phone settings are in the drawer; TV retains its gear and Left-to-drawer shortcut.
+Focus outlines follow FocusManager highlight mode, so touch does not leave a ring.
+
+Archivo Black, Cormorant Garamond, JetBrains Mono and Noto Serif JP are bundled
+from google/fonts commit ddf386ba1b9fbc6b2c818f1ddcd9148f54ced94b. Each has its OFL
+license beside it in assets/fonts. Noto Serif JP is subset to the display kanji
+used by the app to avoid loading a full CJK serif family on a weak TV. Japanese
+body/title fallback and original ASS subtitles retain the full Noto Sans JP.
+Lucide 4.0.1 supplies the line icons. Native and Flutter splash screens use the
+existing 任 mark from site/img/mark-256.png.
+
+Phone renders are generated from the real widgets with fixture catalog data,
+bundled fonts and reduced motion. PNG outputs stay outside the source tree;
+they are for the PR description and are not committed. Device playback and
+weak-TV performance still require the phone and Sony TV.
+
+To regenerate the phone renders with local fixture art (a landscape banner and
+2:3 poster named banner.jpg and cover.jpg), use an absolute output directory:
+
+```sh
+cd app
+flutter test --update-goldens \
+  --dart-define=PHONE_SCREENSHOTS=/absolute/output/directory \
+  --dart-define=SCREENSHOT_ART=/absolute/fixture/art \
+  test/phone_screens_test.dart
+```
+
+The capture test pre-decodes art and loads every bundled font, and asserts that
+images are ready before recording Home, MyList, Search and Settings. Without
+those opt-in paths the four capture cases are skipped; regression tests still run.

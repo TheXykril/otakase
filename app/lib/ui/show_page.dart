@@ -13,10 +13,12 @@ class ShowPage extends StatefulWidget {
     required this.services,
     required this.anime,
     required this.isTV,
+    this.heroTag,
   });
   final AppServices services;
   final Anime anime;
   final bool isTV;
+  final Object? heroTag;
   @override
   State<ShowPage> createState() => _ShowPageState();
 }
@@ -69,7 +71,7 @@ class _ShowPageState extends State<ShowPage> {
   void play(int episode) {
     Navigator.push(
       context,
-      MaterialPageRoute<void>(
+      OtakaseRoute<void>(
         builder: (_) => PlayerPage(
           services: widget.services,
           anime: anime,
@@ -105,34 +107,23 @@ class _ShowPageState extends State<ShowPage> {
     child: Stack(
       fit: StackFit.expand,
       children: [
-        CoverImage(
-          anime.banner.isEmpty ? anime.cover : anime.banner,
-          width: MediaQuery.sizeOf(context).width,
-          height: 600,
-          banner: true,
-        ),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Colors.black38, Color(0x90000000), Colors.black],
-            ),
-          ),
-        ),
+        if (widget.heroTag != null)
+          Hero(tag: widget.heroTag!, child: HeroArt(anime, height: 600))
+        else
+          HeroArt(anime, height: 600),
         Positioned(
           top: 10,
           left: 14,
           child: IconButton(
             tooltip: 'Back',
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back),
+            icon: const Icon(LucideIcons.arrowLeft),
           ),
         ),
         Align(
           alignment: Alignment.bottomLeft,
           child: Padding(
-            padding: EdgeInsets.all(widget.isTV ? 38 : 22),
+            padding: EdgeInsets.all(widget.isTV ? 48 : 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 850),
               child: Column(
@@ -144,7 +135,9 @@ class _ShowPageState extends State<ShowPage> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: widget.isTV ? 36 : 28,
+                      fontFamily: 'ArchivoBlack',
+                      fontSize: widget.isTV ? 40 : 30,
+                      letterSpacing: -.6,
                       fontWeight: FontWeight.w800,
                       height: 1.2,
                     ),
@@ -158,13 +151,16 @@ class _ShowPageState extends State<ShowPage> {
                         .map(
                           (g) => Text(
                             g,
-                            style: const TextStyle(color: muted, fontSize: 12),
+                            style: mono.copyWith(fontSize: 9, letterSpacing: 1),
                           ),
                         )
                         .toList(),
                   ),
                   if (anime.studio.isNotEmpty)
-                    Text(anime.studio, style: const TextStyle(color: muted)),
+                    Text(
+                      anime.studio.toUpperCase(),
+                      style: mono.copyWith(fontSize: 9),
+                    ),
                   const SizedBox(height: 16),
                   Wrap(
                     spacing: 12,
@@ -175,7 +171,7 @@ class _ShowPageState extends State<ShowPage> {
                         label: position > 0
                             ? 'Resume E$last · ${Duration(seconds: position).inMinutes}m'
                             : 'Play episode $last',
-                        icon: Icons.play_arrow_outlined,
+                        icon: LucideIcons.play,
                         filled: true,
                         isTV: widget.isTV,
                         autofocus: true,
@@ -186,7 +182,7 @@ class _ShowPageState extends State<ShowPage> {
                       ),
                       AppButton(
                         label: '$watched watched · saved locally',
-                        icon: Icons.bookmark_border,
+                        icon: LucideIcons.bookmark,
                         isTV: widget.isTV,
                         onPressed: () => showDialog<void>(
                           context: context,
@@ -223,201 +219,210 @@ class _ShowPageState extends State<ShowPage> {
     ),
   );
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: Colors.black,
-    body: SafeArea(
-      child: ListenableBuilder(
-        listenable: widget.services.store,
-        builder: (context, child) {
-          final store = widget.services.store, history = store.entry(anime);
-          final count = anime.airedEpisodes, last = nextEpisode();
-          final position = history?.episode == last
-              ? history?.position ?? 0
-              : 0;
-          if (!store.visible(anime)) {
-            return Center(
-              child: AppButton(
-                label: 'AdultContent is disabled · Back',
-                onPressed: () => Navigator.pop(context),
-                isTV: widget.isTV,
-              ),
-            );
-          }
-          return CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: header(last, position, history?.watched.length ?? 0),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 14,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (loading) const LinearProgressIndicator(color: shu),
-                      if (error != null)
+  Widget build(BuildContext context) => PosterNavigation(
+    onOpen: (a, tag) => Navigator.push(
+      context,
+      OtakaseRoute<void>(
+        builder: (_) => ShowPage(
+          services: widget.services,
+          anime: a,
+          isTV: widget.isTV,
+          heroTag: tag,
+        ),
+      ),
+    ),
+    child: Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: ListenableBuilder(
+          listenable: widget.services.store,
+          builder: (context, child) {
+            final store = widget.services.store, history = store.entry(anime);
+            final count = anime.airedEpisodes, last = nextEpisode();
+            final position = history?.episode == last
+                ? history?.position ?? 0
+                : 0;
+            if (!store.visible(anime)) {
+              return Center(
+                child: AppButton(
+                  label: 'AdultContent is disabled · Back',
+                  onPressed: () => Navigator.pop(context),
+                  isTV: widget.isTV,
+                ),
+              );
+            }
+            return CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: header(last, position, history?.watched.length ?? 0),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (loading) const SkeletonBlock(height: 3),
+                        if (error != null)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  error!,
+                                  style: const TextStyle(color: muted),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: load,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        Text(
+                          anime.description,
+                          style: prose.copyWith(
+                            color: fg.withValues(alpha: .85),
+                            height: 1.6,
+                            fontSize: 21,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
                         Row(
                           children: [
+                            const Expanded(
+                              child: SectionLabel('Episodes', kanji: '一'),
+                            ),
+                            for (final value in ['sub', 'dub'])
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: AppTab(
+                                  label: value.toUpperCase(),
+                                  selected: mode == value,
+                                  isTV: widget.isTV,
+                                  onPressed: () => setState(() => mode = value),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        if (count == 0)
+                          const Text(
+                            'Episode availability is checked when you press Play.',
+                            style: TextStyle(color: muted),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverList.builder(
+                    itemCount: count.clamp(0, 10000),
+                    itemBuilder: (context, i) {
+                      final ep = i + 1,
+                          watched = history?.watched.contains(i + 1) ?? false;
+                      final resume = history?.episode == ep
+                          ? history?.position ?? 0
+                          : 0;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          children: [
                             Expanded(
-                              child: Text(
-                                error!,
-                                style: const TextStyle(color: muted),
+                              child: FocusBox(
+                                isTV: widget.isTV,
+                                onPressed: () => play(ep),
+                                padding: const EdgeInsets.all(8),
+                                child: Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: CoverImage(
+                                        art(ep)?['thumbnail'] as String? ??
+                                            anime.cover,
+                                        width: 112,
+                                        height: 63,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            art(ep)?['title'] as String? ??
+                                                'Episode $ep',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          if (resume > 0)
+                                            Text(
+                                              'Resume at ${Duration(seconds: resume).inMinutes}m ${resume % 60}s',
+                                              style: const TextStyle(
+                                                color: shu,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(LucideIcons.play),
+                                  ],
+                                ),
                               ),
                             ),
-                            TextButton(
-                              onPressed: load,
-                              child: const Text('Retry'),
+                            IconButton(
+                              tooltip: watched
+                                  ? 'Mark episode $ep unwatched'
+                                  : 'Mark episode $ep watched',
+                              onPressed: () =>
+                                  store.markWatched(anime, ep, !watched),
+                              icon: Icon(
+                                watched
+                                    ? LucideIcons.circleCheck
+                                    : LucideIcons.circle,
+                                color: watched ? shu : muted,
+                              ),
                             ),
                           ],
                         ),
-                      Text(
-                        anime.description,
-                        style: const TextStyle(
-                          color: Color(0xffc5c5c5),
-                          height: 1.6,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          const Expanded(
-                            child: Text(
-                              'Episodes',
-                              style: TextStyle(
-                                fontSize: 23,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          for (final value in ['sub', 'dub'])
-                            Padding(
-                              padding: const EdgeInsets.only(left: 8),
-                              child: AppButton(
-                                label: value.toUpperCase(),
-                                filled: mode == value,
-                                isTV: widget.isTV,
-                                onPressed: () => setState(() => mode = value),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      if (count == 0)
-                        const Text(
-                          'Episode availability is checked when you press Play.',
-                          style: TextStyle(color: muted),
-                        ),
-                    ],
+                      );
+                    },
                   ),
                 ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                sliver: SliverList.builder(
-                  itemCount: count.clamp(0, 10000),
-                  itemBuilder: (context, i) {
-                    final ep = i + 1,
-                        watched = history?.watched.contains(i + 1) ?? false;
-                    final resume = history?.episode == ep
-                        ? history?.position ?? 0
-                        : 0;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: FocusBox(
+                for (final section in {
+                  'Related': anime.related,
+                  'Recommended': anime.recommended,
+                }.entries)
+                  if (section.value.where(store.visible).isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: PosterRow(
+                        title: section.key,
+                        items: section.value.where(store.visible).toList(),
+                        isTV: widget.isTV,
+                        onOpen: (a) => Navigator.push(
+                          context,
+                          OtakaseRoute<void>(
+                            builder: (_) => ShowPage(
+                              services: widget.services,
+                              anime: a,
                               isTV: widget.isTV,
-                              onPressed: () => play(ep),
-                              padding: const EdgeInsets.all(8),
-                              child: Row(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: CoverImage(
-                                      art(ep)?['thumbnail'] as String? ??
-                                          anime.cover,
-                                      width: 112,
-                                      height: 63,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          art(ep)?['title'] as String? ??
-                                              'Episode $ep',
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        if (resume > 0)
-                                          Text(
-                                            'Resume at ${Duration(seconds: resume).inMinutes}m ${resume % 60}s',
-                                            style: const TextStyle(
-                                              color: shu,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                  const Icon(Icons.play_arrow_outlined),
-                                ],
-                              ),
                             ),
-                          ),
-                          IconButton(
-                            tooltip: watched
-                                ? 'Mark episode $ep unwatched'
-                                : 'Mark episode $ep watched',
-                            onPressed: () =>
-                                store.markWatched(anime, ep, !watched),
-                            icon: Icon(
-                              watched
-                                  ? Icons.check_circle
-                                  : Icons.radio_button_unchecked,
-                              color: watched ? shu : muted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-              for (final section in {
-                'Related': anime.related,
-                'Recommended': anime.recommended,
-              }.entries)
-                if (section.value.where(store.visible).isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: PosterRow(
-                      title: section.key,
-                      items: section.value.where(store.visible).toList(),
-                      isTV: widget.isTV,
-                      onOpen: (a) => Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => ShowPage(
-                            services: widget.services,
-                            anime: a,
-                            isTV: widget.isTV,
                           ),
                         ),
                       ),
                     ),
-                  ),
-              const SliverToBoxAdapter(child: SizedBox(height: 40)),
-            ],
-          );
-        },
+                SliverToBoxAdapter(
+                  child: SizedBox(height: contentBottom(context)),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     ),
   );

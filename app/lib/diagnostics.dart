@@ -7,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import 'core.dart';
+import 'ui/components.dart';
 import 'probe.dart';
 
 class DiagnosticsPage extends StatefulWidget {
@@ -33,8 +34,13 @@ class DiagnosticsPageState extends State<DiagnosticsPage> {
   bool firstPosition = false;
   final clock = Stopwatch();
 
+  void highlightChanged(FocusHighlightMode _) {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
+    FocusManager.instance.addHighlightModeListener(highlightChanged);
     super.initState();
     player = Player(
       configuration: const PlayerConfiguration(
@@ -227,6 +233,7 @@ class DiagnosticsPageState extends State<DiagnosticsPage> {
 
   @override
   void dispose() {
+    FocusManager.instance.removeHighlightModeListener(highlightChanged);
     for (final subscription in subscriptions) {
       unawaited(subscription.cancel());
     }
@@ -254,8 +261,11 @@ class DiagnosticsPageState extends State<DiagnosticsPage> {
               child: Container(
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: surface.hasFocus
-                        ? const Color(0xffd84836)
+                    color:
+                        surface.hasFocus &&
+                            FocusManager.instance.highlightMode ==
+                                FocusHighlightMode.traditional
+                        ? shu
                         : Colors.transparent,
                     width: 3,
                   ),

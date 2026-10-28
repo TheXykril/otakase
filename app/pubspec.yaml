@@ -1,12 +1,13 @@
 name: otakase
 description: Otakase Android phone and TV catalog and player.
 publish_to: none
-version: 0.1.0+2
+version: 0.1.0+3
 environment:
   sdk: ^3.13.7
 dependencies:
   flutter:
     sdk: flutter
+  lucide_icons_flutter: 4.0.1
   http: 1.6.0
   html: 0.15.6
   shared_preferences: 2.5.4
@@ -22,10 +23,24 @@ flutter:
   uses-material-design: true
   assets:
     - assets/otakase.png
+    - assets/mark.png
     - assets/probe/
     - assets/spike.ass
-    - assets/fonts/NotoSansJP-Regular.otf
+    - assets/fonts/
   fonts:
+    - family: ArchivoBlack
+      fonts:
+        - asset: assets/fonts/ArchivoBlack-Regular.ttf
+    - family: CormorantGaramond
+      fonts:
+        - asset: assets/fonts/CormorantGaramond.ttf
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono.ttf
+    - family: NotoSerifJP
+      fonts:
+        - asset: assets/fonts/NotoSerifJP.ttf
+          weight: 700
     - family: NotoSansJP
       fonts:
         - asset: assets/fonts/NotoSansJP-Regular.otf

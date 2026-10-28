@@ -35,6 +35,9 @@ class FixtureCore extends CoreClient {
   }) async {
     scope?.check();
     calls.add(input);
+    if (input['operation'] == 'providers') {
+      return {'providers': sourceNames};
+    }
     if (input['provider'] == 'anikoto') {
       throw const CoreFailure('not_found', 'No match');
     }
@@ -191,28 +194,40 @@ void main() {
     await reloaded.progress(a, 2, 1440, 1440, completed: true);
     expect(reloaded.entry(a)!.watched, [1, 2]);
   });
-  test('chosen source is tried first then fallback; headers/subtitles are retained', () async {
+  test('core order falls back silently, remembers a working show copy and keeps hints', () async {
     final s = await store();
-    await s.set('Provider', 'anikoto');
+    await s.set('Provider', 'reanime');
+    await s.set('ProviderOrder', [
+      'reanime',
+      ...sourceNames.where((p) => p != 'reanime'),
+    ]);
     await s.set('AutoAudioFallback', false);
     final c = FixtureCore(), scope = RequestScope();
     final resolved = await SourceResolver(
       c,
       s,
     ).resolve(Anime.fromJson(media(1)), 1, scope: scope, status: (_) {});
-    expect(c.calls.first['provider'], 'anikoto');
+    expect(c.calls.first['operation'], 'providers');
+    expect(
+      c.calls.where((c) => c['operation'] == 'match').first['provider'],
+      'anikoto',
+    );
     expect(resolved.provider, 'megavid');
     expect(resolved.streams.single.headers['Origin'], 'https://source.example');
     expect(resolved.streams.single.subtitles.single['url'], endsWith('.ass'));
-    await s.set('AutoFallback', false);
-    await expectLater(
-      SourceResolver(c, s).resolve(
-        Anime.fromJson(media(1)),
-        1,
-        scope: RequestScope(),
-        status: (_) {},
-      ),
-      throwsA(isA<CoreFailure>()),
+    await s.rememberSource(Anime.fromJson(media(1)), 'megavid');
+    final reloaded = AppStore(s.preferences);
+    final second = FixtureCore();
+    final preferred = await SourceResolver(second, reloaded).resolve(
+      Anime.fromJson(media(1)),
+      1,
+      scope: RequestScope(),
+      status: (_) {},
+    );
+    expect(preferred.provider, 'megavid');
+    expect(
+      second.calls.where((c) => c['operation'] == 'match').first['provider'],
+      'megavid',
     );
     scope.cancel();
     await expectLater(

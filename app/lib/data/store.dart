@@ -77,21 +77,20 @@ class AppStore extends ChangeNotifier {
   int integer(String key) => number(value(key));
   List<String> strings(String key) =>
       (value(key) as List? ?? []).whereType<String>().toList();
-  String get activeSource {
-    final chosen = text('Provider');
-    return sourceNames.contains(chosen) ? chosen : order.first;
+  String? preferredSource(Anime anime) {
+    final choices = value('WorkingSources');
+    return choices is Map ? choices[anime.key] as String? : null;
   }
 
-  List<String> get order {
-    final stored = strings('ProviderOrder');
-    return [
-      ...stored.where(sourceNames.contains),
-      ...sourceNames.where((s) => !stored.contains(s)),
-    ];
+  Future<void> rememberSource(Anime anime, String source) async {
+    if (preferredSource(anime) == source) return;
+    final choices = Map<String, dynamic>.from(
+      value('WorkingSources') as Map? ?? {},
+    );
+    choices[anime.key] = source;
+    await set('WorkingSources', choices);
   }
 
-  List<String> get enabledSources =>
-      order.where((s) => !strings('DisabledProviders').contains(s)).toList();
   bool visible(Anime a) => flag('AdultContent') || !a.isAdult;
   List<WatchEntry> get history =>
       _history.values.where((h) => visible(h.anime)).toList()

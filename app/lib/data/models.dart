@@ -13,6 +13,7 @@ class Anime {
     this.titles = const [],
     this.cover = '',
     this.banner = '',
+    this.coverLarge = '',
     this.description = '',
     this.format = '',
     this.status = '',
@@ -30,7 +31,14 @@ class Anime {
     this.recommended = const [],
   });
   final int id, malId, year, episodes, duration, nextEpisode, nextAiringAt;
-  final String title, cover, banner, description, format, status, studio;
+  final String title,
+      cover,
+      coverLarge,
+      banner,
+      description,
+      format,
+      status,
+      studio;
   final double score;
   final bool isAdult;
   final List<String> titles, genres;
@@ -77,6 +85,7 @@ class Anime {
       title: names.isEmpty ? 'Untitled' : names.first,
       titles: names,
       cover: (cover['large'] ?? cover['extraLarge'] ?? '') as String,
+      coverLarge: (cover['extraLarge'] ?? cover['large'] ?? '') as String,
       banner: (j['bannerImage'] ?? '') as String,
       description: plainText(j['description'] as String?),
       format: j['format'] as String? ?? '',
@@ -142,7 +151,7 @@ class Anime {
       'romaji': titles.length > 1 ? titles[1] : title,
     },
     'synonyms': titles,
-    'coverImage': {'large': cover},
+    'coverImage': {'large': cover, 'extraLarge': coverLarge},
     'bannerImage': banner,
     'description': description,
     'format': format,

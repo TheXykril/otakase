@@ -18,12 +18,12 @@ Future<void> openSettings(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Settings',
-      barrierColor: Colors.black54,
+      barrierColor: const Color(0xb3080707),
       transitionDuration: const Duration(milliseconds: 180),
       pageBuilder: (context, a, b) => Align(
         alignment: Alignment.centerRight,
         child: SizedBox(
-          width: (MediaQuery.sizeOf(context).width * .38).clamp(360, 620),
+          width: (MediaQuery.sizeOf(context).width * .4).clamp(360, 620),
           child: SettingsPage(services: services, isTV: true),
         ),
       ),
@@ -38,7 +38,7 @@ Future<void> openSettings(
   } else {
     await Navigator.push(
       context,
-      MaterialPageRoute<void>(
+      OtakaseRoute<void>(
         builder: (_) => SettingsPage(services: services, isTV: false),
       ),
     );
@@ -126,19 +126,17 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(22, 8, 22, 12),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+          child: Column(
             children: [
-              Icon(icon, color: shu, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+              const Divider(),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(icon, color: muted, size: 18),
+                  const SizedBox(width: 12),
+                  Expanded(child: SectionLabel(title)),
+                ],
               ),
             ],
           ),
@@ -152,7 +150,7 @@ class _SettingsPageState extends State<SettingsPage> {
     String description, {
     VoidCallback? onTap,
     String? value,
-    IconData icon = Icons.tune,
+    IconData icon = LucideIcons.slidersHorizontal,
     bool enabled = true,
   }) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
@@ -163,7 +161,7 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(
         children: [
-          Icon(icon, size: 21, color: enabled ? Colors.white70 : muted),
+          Icon(icon, size: 21, color: enabled ? fg : muted),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -172,9 +170,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 Text(
                   key,
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: enabled ? Colors.white : muted,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w500,
+                    color: enabled ? fg : muted,
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -182,7 +180,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   description,
                   style: const TextStyle(
                     color: muted,
-                    fontSize: 11,
+                    fontSize: 15,
                     height: 1.5,
                   ),
                 ),
@@ -194,6 +192,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       style: TextStyle(
                         color: enabled ? shu : muted,
                         fontSize: 12,
+                        fontFamily: 'JetBrainsMono',
                       ),
                     ),
                   ),
@@ -201,145 +200,73 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           if (onTap != null)
-            const Icon(Icons.chevron_right, size: 18, color: muted),
+            const Icon(LucideIcons.chevronRight, size: 18, color: muted),
         ],
       ),
     ),
   );
-  Widget toggle(String key, String description, {IconData icon = Icons.tune}) =>
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-        child: FocusBox(
-          isTV: widget.isTV,
-          radius: 10,
-          onPressed: () => store.set(key, !store.flag(key)),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            children: [
-              Icon(icon, size: 21, color: Colors.white70),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      key,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      description,
-                      style: const TextStyle(
-                        color: muted,
-                        fontSize: 11,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ExcludeFocus(
-                child: IgnorePointer(
-                  child: Switch(
-                    value: store.flag(key),
-                    activeThumbColor: shu,
-                    onChanged: (_) {},
+  Widget toggle(
+    String key,
+    String description, {
+    IconData icon = LucideIcons.slidersHorizontal,
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+    child: FocusBox(
+      isTV: widget.isTV,
+      radius: 10,
+      onPressed: () => store.set(key, !store.flag(key)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 21, color: fg),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  key,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-      );
-  Future<void> health(String provider) async {
-    store.health(provider, 'Checking');
-    try {
-      await widget.services.core.request(
-        {
-          'operation': 'search',
-          'provider': provider,
-          'mode': store.text('SubOrDub'),
-          'query': 'Frieren',
-        },
-        scope: scope,
-        timeout: const Duration(seconds: 15),
-      );
-      if (mounted) store.health(provider, 'Working');
-    } catch (_) {
-      if (mounted) store.health(provider, 'Unavailable');
-    }
-  }
-
-  Future<void> providerOrder() async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Provider order'),
-        content: SizedBox(
-          width: 440,
-          height: 390,
-          child: ListenableBuilder(
-            listenable: store,
-            builder: (context, child) => ListView(
-              children: store.order.map((provider) {
-                final index = store.order.indexOf(provider);
-                return Row(
-                  children: [
-                    Expanded(child: Text(provider)),
-                    IconButton(
-                      tooltip: 'Move $provider up',
-                      onPressed: index == 0
-                          ? null
-                          : () {
-                              final order = store.order;
-                              order.removeAt(index);
-                              order.insert(index - 1, provider);
-                              unawaited(store.set('ProviderOrder', order));
-                            },
-                      icon: const Icon(Icons.arrow_upward),
-                    ),
-                    IconButton(
-                      tooltip: 'Move $provider down',
-                      onPressed: index == store.order.length - 1
-                          ? null
-                          : () {
-                              final order = store.order;
-                              order.removeAt(index);
-                              order.insert(index + 1, provider);
-                              unawaited(store.set('ProviderOrder', order));
-                            },
-                      icon: const Icon(Icons.arrow_downward),
-                    ),
-                  ],
-                );
-              }).toList(),
+                const SizedBox(height: 5),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    color: muted,
+                    fontSize: 15,
+                    height: 1.5,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Done'),
+          ExcludeFocus(
+            child: IgnorePointer(
+              child: Switch(
+                value: store.flag(key),
+                activeThumbColor: shu,
+                onChanged: (_) {},
+              ),
+            ),
           ),
         ],
       ),
-    );
-  }
-
+    ),
+  );
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: panel,
     appBar: AppBar(
       backgroundColor: panel,
-      title: const Text('Settings'),
+      title: const Text('OTAKASE / PREFERENCES'),
       leading: IconButton(
         tooltip: 'Back',
         autofocus: true,
         onPressed: () => Navigator.pop(context),
-        icon: const Icon(Icons.arrow_back),
+        icon: const Icon(LucideIcons.arrowLeft),
       ),
     ),
     body: SafeArea(
@@ -347,9 +274,13 @@ class _SettingsPageState extends State<SettingsPage> {
       child: ListenableBuilder(
         listenable: store,
         builder: (context, child) => ListView(
-          padding: const EdgeInsets.only(bottom: 35),
+          padding: EdgeInsets.only(bottom: contentBottom(context)),
           children: [
-            group('Subtitle & Languages', Icons.subtitles_outlined, [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: PageHeading('Settings', '設'),
+            ),
+            group('Subtitle & Languages', LucideIcons.captions, [
               row(
                 'SubsLanguage',
                 'Subtitle language priority, comma separated. Use off to disable.',
@@ -441,10 +372,10 @@ class _SettingsPageState extends State<SettingsPage> {
               toggle(
                 'AutoAudioFallback',
                 'Try the other stream when unavailable. Unstable.',
-                icon: Icons.language,
+                icon: LucideIcons.globe,
               ),
             ]),
-            group('Playback', Icons.play_circle_outline, [
+            group('Playback', LucideIcons.circlePlay, [
               toggle(
                 'NextEpisodePrompt',
                 'Ask before the next episode. Off enables the end countdown.',
@@ -485,14 +416,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 ]),
               ),
             ]),
-            group('Accounts', Icons.person_outline, [
+            group('Accounts', LucideIcons.userRound, [
               row(
                 'AniList username',
                 'Read a public list. Login and tracker writes come later.',
                 value: store.text('AniListUsername').isEmpty
                     ? 'Not connected'
                     : store.text('AniListUsername'),
-                icon: Icons.person_outline,
+                icon: LucideIcons.userRound,
                 onTap: () => edit('AniListUsername', title: 'AniList username'),
               ),
               row(
@@ -501,114 +432,42 @@ class _SettingsPageState extends State<SettingsPage> {
                 value: store.text('MyAnimeListUsername').isEmpty
                     ? 'Not connected'
                     : store.text('MyAnimeListUsername'),
-                icon: Icons.person_outline,
+                icon: LucideIcons.userRound,
                 onTap: () => edit('MyAnimeListUsername', title: 'MAL username'),
               ),
               row(
                 'TV login from phone',
                 'Account login is coming later.',
                 enabled: false,
-                icon: Icons.qr_code,
+                icon: LucideIcons.qrCode,
               ),
               row(
                 'Discord link',
                 'Account pairing is coming later.',
                 enabled: false,
-                icon: Icons.link,
+                icon: LucideIcons.link,
               ),
             ]),
-            group('Sources', Icons.dns_outlined, [
-              row(
-                'Provider order',
-                'Try the selected source first.',
-                value: store.order.join(' › '),
-                onTap: providerOrder,
-              ),
-              toggle(
-                'AutoFallback',
-                'Try other enabled sources if matching or resolution fails.',
-              ),
-              for (final provider in store.order)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 22,
-                    vertical: 5,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: FocusBox(
-                          isTV: widget.isTV,
-                          padding: const EdgeInsets.all(10),
-                          onPressed: () {
-                            final disabled = store.strings('DisabledProviders');
-                            if (disabled.contains(provider)) {
-                              disabled.remove(provider);
-                            } else {
-                              disabled.add(provider);
-                            }
-                            unawaited(store.set('DisabledProviders', disabled));
-                          },
-                          child: Row(
-                            children: [
-                              Icon(
-                                store.enabledSources.contains(provider)
-                                    ? Icons.check_box_outlined
-                                    : Icons.check_box_outline_blank,
-                                color: store.enabledSources.contains(provider)
-                                    ? shu
-                                    : muted,
-                              ),
-                              const SizedBox(width: 9),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(provider),
-                                    Text(
-                                      store.providerHealth[provider] ??
-                                          'Not checked',
-                                      style: const TextStyle(
-                                        color: muted,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Check $provider',
-                        onPressed: () => health(provider),
-                        icon: const Icon(Icons.refresh, size: 20),
-                      ),
-                    ],
-                  ),
-                ),
-            ]),
-            group('Content', Icons.shield_outlined, [
+            group('Content', LucideIcons.shield, [
               toggle(
                 'AdultContent',
                 'Show 18+ titles and artwork. Off by default.',
-                icon: Icons.visibility_outlined,
+                icon: LucideIcons.eye,
               ),
               toggle(
                 'ExperimentalMovies',
-                'Show experimental sources in the drawer.',
+                'Show the Movies section in the drawer.',
               ),
               row(
                 'Notifications',
                 'New episode alerts are coming later.',
                 enabled: false,
-                icon: Icons.notifications_none,
+                icon: LucideIcons.bell,
               ),
               toggle(
                 'CheckUpdates',
                 'Check published Android releases.',
-                icon: Icons.system_update_outlined,
+                icon: LucideIcons.download,
               ),
               row(
                 'Updates',
@@ -617,28 +476,152 @@ class _SettingsPageState extends State<SettingsPage> {
                   final message = await widget.services.catalog.updateStatus();
                   if (mounted) setState(() => updateMessage = message);
                 },
-                icon: Icons.update,
+                icon: LucideIcons.refreshCw,
               ),
               row(
                 'Diagnostics',
                 'Header-gated HLS clip and native ASS rendering probe.',
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => const DiagnosticsPage(probe: true),
+                  OtakaseRoute<void>(
+                    builder: (_) => DiagnosticsHub(
+                      services: widget.services,
+                      isTV: widget.isTV,
+                    ),
                   ),
                 ),
-                icon: Icons.science_outlined,
+                icon: LucideIcons.flaskConical,
               ),
               row(
                 'About',
                 'Otakase 0.1.0 · Android phone and TV',
                 value: '任',
-                icon: Icons.info_outline,
+                icon: LucideIcons.info,
               ),
             ]),
           ],
         ),
+      ),
+    ),
+  );
+}
+
+class DiagnosticsHub extends StatefulWidget {
+  const DiagnosticsHub({super.key, required this.services, required this.isTV});
+  final AppServices services;
+  final bool isTV;
+  @override
+  State<DiagnosticsHub> createState() => _DiagnosticsHubState();
+}
+
+class _DiagnosticsHubState extends State<DiagnosticsHub> {
+  final scope = RequestScope();
+  List<String> sources = [];
+  bool checking = false;
+  @override
+  void initState() {
+    super.initState();
+    unawaited(
+      widget.services.resolver
+          .providerOrder()
+          .then((v) {
+            if (mounted) setState(() => sources = v);
+          })
+          .catchError((_) {}),
+    );
+  }
+
+  @override
+  void dispose() {
+    scope.cancel();
+    super.dispose();
+  }
+
+  Future<void> check() async {
+    setState(() => checking = true);
+    for (final provider in sources) {
+      if (scope.cancelled) break;
+      widget.services.store.health(provider, 'Checking');
+      try {
+        await widget.services.core.request(
+          {
+            'operation': 'search',
+            'provider': provider,
+            'mode': widget.services.store.text('SubOrDub'),
+            'query': 'Frieren',
+          },
+          scope: scope,
+          timeout: const Duration(seconds: 15),
+        );
+        widget.services.store.health(provider, 'Working');
+      } catch (_) {
+        widget.services.store.health(provider, 'Unavailable');
+      }
+    }
+    if (mounted) setState(() => checking = false);
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('DIAGNOSTICS'),
+      leading: IconButton(
+        tooltip: 'Back',
+        onPressed: () => Navigator.pop(context),
+        icon: const Icon(LucideIcons.arrowLeft),
+      ),
+    ),
+    body: ListenableBuilder(
+      listenable: widget.services.store,
+      builder: (context, _) => ListView(
+        padding: EdgeInsets.fromLTRB(24, 16, 24, contentBottom(context)),
+        children: [
+          const PageHeading('Diagnostics', '設'),
+          Text(
+            'Playback chooses a copy automatically and remembers what worked for each show.',
+            style: prose.copyWith(color: muted),
+          ),
+          const SizedBox(height: 24),
+          AppButton(
+            label: 'HLS / ASS probe',
+            onPressed: () => Navigator.push(
+              context,
+              OtakaseRoute<void>(
+                builder: (_) => const DiagnosticsPage(probe: true),
+              ),
+            ),
+            isTV: widget.isTV,
+          ),
+          const SizedBox(height: 32),
+          const SectionLabel('Core order'),
+          const SizedBox(height: 12),
+          for (var i = 0; i < sources.length; i++)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: line)),
+              ),
+              child: Row(
+                children: [
+                  Text('${i + 1}'.padLeft(2, '0'), style: mono),
+                  const SizedBox(width: 20),
+                  Expanded(child: Text(sources[i], style: prose)),
+                  Text(
+                    (widget.services.store.providerHealth[sources[i]] ??
+                            'Not checked')
+                        .toUpperCase(),
+                    style: mono.copyWith(letterSpacing: .5, fontSize: 9),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 24),
+          AppButton(
+            label: checking ? 'Checking' : 'Check all',
+            onPressed: checking ? null : check,
+            isTV: widget.isTV,
+          ),
+        ],
       ),
     ),
   );

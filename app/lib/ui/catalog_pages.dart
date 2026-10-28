@@ -47,7 +47,7 @@ class _HomePageState extends State<HomePage> {
         );
       }
       if (!snapshot.hasData) {
-        return const Center(child: CircularProgressIndicator(color: shu));
+        return const PageSkeleton(hero: true);
       }
       final data = snapshot.data!;
       final store = widget.services.store;
@@ -56,8 +56,14 @@ class _HomePageState extends State<HomePage> {
           {for (final e in entries) e.anime.key: e.anime}.values.toList();
       return ListView(
         key: const PageStorageKey('home-scroll'),
-        padding: EdgeInsets.only(bottom: widget.isTV ? 36 : 110),
+        padding: EdgeInsets.only(bottom: contentBottom(context)),
         children: [
+          if (data.trending.isEmpty &&
+              data.season.isEmpty &&
+              data.recent.isEmpty &&
+              data.today.isEmpty &&
+              continuing.isEmpty)
+            const EmptyState(message: 'Tonight is still taking shape.'),
           if (data.trending.isNotEmpty)
             HeroCarousel(
               items: data.trending.take(7).toList(),
@@ -131,118 +137,37 @@ class HeroCarousel extends StatefulWidget {
 }
 
 class _HeroCarouselState extends State<HeroCarousel> {
-  final controller = PageController();
   Timer? timer;
   int index = 0;
   @override
   void initState() {
     super.initState();
     timer = Timer.periodic(const Duration(seconds: 8), (_) {
-      if (mounted && ModalRoute.of(context)?.isCurrent == true) move(1);
+      if (mounted &&
+          ModalRoute.of(context)?.isCurrent == true &&
+          !MediaQuery.disableAnimationsOf(context)) {
+        move(1);
+      }
     });
   }
 
   void move(int delta) {
-    if (controller.hasClients) {
-      unawaited(
-        controller.animateToPage(
-          (index + delta) % widget.items.length,
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeOut,
-        ),
-      );
-    }
+    setState(() => index = (index + delta) % widget.items.length);
   }
 
   @override
   void dispose() {
     timer?.cancel();
-    controller.dispose();
     super.dispose();
   }
 
-  Widget slide(Anime anime, double height) => Stack(
-    fit: StackFit.expand,
-    children: [
-      CoverImage(
-        anime.banner.isEmpty ? anime.cover : anime.banner,
-        width: MediaQuery.sizeOf(context).width,
-        height: height,
-        banner: true,
-      ),
-      const DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.black, Color(0xb0000000), Color(0x10000000)],
-            stops: [0, .45, 1],
-          ),
-        ),
-      ),
-      const DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.transparent, Color(0x30000000), Colors.black],
-            stops: [0, .65, 1],
-          ),
-        ),
-      ),
-      Align(
-        alignment: widget.isTV ? Alignment.centerLeft : Alignment.bottomLeft,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(widget.isTV ? 42 : 22, 20, 20, 40),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: widget.isTV ? 560 : 480),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  anime.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: widget.isTV ? 38 : 30,
-                    height: 1.16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  anime.description,
-                  maxLines: widget.isTV ? 3 : 4,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xffd0d0d0),
-                    height: 1.5,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                AppButton(
-                  key: ValueKey('hero-watch-${anime.id}'),
-                  label: 'Watch Now',
-                  icon: Icons.play_arrow_outlined,
-                  filled: true,
-                  isTV: widget.isTV,
-                  onPressed: () => widget.onOpen(anime),
-                ),
-                const SizedBox(height: 13),
-                MetaLine(anime),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ],
-  );
   @override
   Widget build(BuildContext context) {
-    final height = (MediaQuery.sizeOf(context).height * .6).clamp(
-      widget.isTV ? 330.0 : 360.0,
-      widget.isTV ? 620.0 : 500.0,
-    );
+    final height = (MediaQuery.sizeOf(context).height * .58).clamp(
+          widget.isTV ? 380.0 : 420.0,
+          widget.isTV ? 620.0 : 560.0,
+        ),
+        anime = widget.items[index];
     return Focus(
       skipTraversal: true,
       onKeyEvent: (_, event) {
@@ -258,46 +183,150 @@ class _HeroCarouselState extends State<HeroCarousel> {
         }
         return KeyEventResult.ignored;
       },
-      child: SizedBox(
-        height: height,
-        child: Stack(
-          children: [
-            PageView.builder(
-              controller: controller,
-              itemCount: widget.items.length,
-              onPageChanged: (value) => setState(() => index = value),
-              itemBuilder: (context, i) => slide(widget.items[i], height),
-            ),
-            Positioned(
-              bottom: 16,
-              right: 24,
-              child: Row(
-                children: List.generate(
-                  widget.items.length,
-                  (i) => Semantics(
-                    label: 'Hero page ${i + 1}',
-                    button: true,
-                    child: GestureDetector(
-                      onTap: () => controller.animateToPage(
-                        i,
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeOut,
-                      ),
-                      child: Container(
-                        width: i == index ? 20 : 6,
-                        height: 6,
-                        margin: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: i == index ? shu : Colors.white38,
-                          borderRadius: BorderRadius.circular(6),
+      child: GestureDetector(
+        onHorizontalDragEnd: (d) {
+          if ((d.primaryVelocity ?? 0).abs() > 100) {
+            move(d.primaryVelocity! < 0 ? 1 : -1);
+          }
+        },
+        child: SizedBox(
+          height: height,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 600),
+                child: TweenAnimationBuilder<double>(
+                  key: ValueKey(anime.key),
+                  tween: Tween(
+                    begin: 1,
+                    end: MediaQuery.disableAnimationsOf(context) ? 1 : 1.03,
+                  ),
+                  duration: const Duration(seconds: 8),
+                  builder: (context, value, child) =>
+                      Transform.scale(scale: value, child: child),
+                  child: HeroArt(anime, height: height),
+                ),
+              ),
+              Positioned(
+                right: 24,
+                top: 12,
+                child: Text(
+                  '今',
+                  style: TextStyle(
+                    fontFamily: 'NotoSerifJP',
+                    fontSize: 88,
+                    fontWeight: FontWeight.w700,
+                    color: fg.withValues(alpha: .08),
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    widget.isTV ? 48 : 24,
+                    24,
+                    24,
+                    52,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: widget.isTV ? 600 : 480,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'TONIGHT’S PICK',
+                          style: mono.copyWith(
+                            color: shu,
+                            fontSize: 9,
+                            letterSpacing: 3,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 500),
+                          child: Align(
+                            key: ValueKey(anime.key),
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              anime.title,
+                              maxLines: widget.isTV ? 2 : 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: display.copyWith(
+                                fontSize: widget.isTV
+                                    ? (MediaQuery.sizeOf(context).height < 600
+                                          ? 34
+                                          : 42)
+                                    : 32,
+                                letterSpacing: -.7,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          anime.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: prose.copyWith(
+                            fontSize: widget.isTV ? 23 : 20,
+                            color: fg.withValues(alpha: .85),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        MetaLine(anime),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 12,
+                          children: [
+                            AppButton(
+                              key: ValueKey('hero-watch-${anime.id}'),
+                              label: 'Watch Now',
+                              icon: LucideIcons.play,
+                              filled: true,
+                              isTV: widget.isTV,
+                              onPressed: () => widget.onOpen(anime),
+                            ),
+                            AppButton(
+                              label: 'Details',
+                              isTV: widget.isTV,
+                              onPressed: () => widget.onOpen(anime),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 16,
+                right: 24,
+                child: Row(
+                  children: List.generate(
+                    widget.items.length,
+                    (i) => Semantics(
+                      label: 'Hero page ${i + 1}',
+                      button: true,
+                      child: GestureDetector(
+                        onTap: () => setState(() => index = i),
+                        child: Container(
+                          width: i == index ? 22 : 5,
+                          height: 3,
+                          margin: const EdgeInsets.all(4),
+                          color: i == index ? shu : line,
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -409,27 +438,24 @@ class _SearchPageState extends State<SearchPage> {
   @override
   Widget build(BuildContext context) => ListView(
     padding: EdgeInsets.fromLTRB(
-      widget.isTV ? 38 : 20,
+      widget.isTV ? 48 : 24,
       20,
-      widget.isTV ? 38 : 20,
-      110,
+      widget.isTV ? 48 : 24,
+      contentBottom(context),
     ),
     children: [
-      const Text(
-        'Search',
-        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
-      ),
+      const PageHeading('Search', '探'),
       const SizedBox(height: 18),
       TextField(
         key: const Key('catalog-search'),
         controller: query,
         decoration: InputDecoration(
           hintText: 'Search anime',
-          prefixIcon: const Icon(Icons.search),
+          prefixIcon: const Icon(LucideIcons.search),
           suffixIcon: widget.isTV
               ? IconButton(
                   tooltip: 'Voice search',
-                  icon: const Icon(Icons.mic_none),
+                  icon: const Icon(LucideIcons.mic),
                   onPressed: () async {
                     final text = await widget.onVoice();
                     if (text != null && mounted) {
@@ -452,7 +478,8 @@ class _SearchPageState extends State<SearchPage> {
         spacing: 8,
         runSpacing: 8,
         children: [
-          AppButton(
+          AppTab(
+            selected: format != null,
             label: format ?? 'Format',
             onPressed: () => filter(
               'Format',
@@ -462,7 +489,8 @@ class _SearchPageState extends State<SearchPage> {
             ),
             isTV: widget.isTV,
           ),
-          AppButton(
+          AppTab(
+            selected: season != null,
             label: season ?? 'Season',
             onPressed: () => filter(
               'Season',
@@ -472,7 +500,8 @@ class _SearchPageState extends State<SearchPage> {
             ),
             isTV: widget.isTV,
           ),
-          AppButton(
+          AppTab(
+            selected: year != null,
             label: year?.toString() ?? 'Year',
             onPressed: () => filter(
               'Year',
@@ -482,12 +511,14 @@ class _SearchPageState extends State<SearchPage> {
             ),
             isTV: widget.isTV,
           ),
-          AppButton(
+          AppTab(
+            selected: genre != null,
             label: genre ?? 'Genre',
             onPressed: () => filter('Genre', genres, genre, (v) => genre = v),
             isTV: widget.isTV,
           ),
-          AppButton(
+          AppTab(
+            selected: status != null,
             label: status ?? 'Status',
             onPressed: () => filter(
               'Status',
@@ -506,16 +537,11 @@ class _SearchPageState extends State<SearchPage> {
         ],
       ),
       const SizedBox(height: 22),
-      if (busy) const LinearProgressIndicator(color: shu),
+      if (busy) const SkeletonBlock(height: 180),
       if (error != null)
         FailureView(message: error!, onRetry: () => load(), isTV: widget.isTV),
       if (!busy && items.isEmpty && error == null)
-        const Padding(
-          padding: EdgeInsets.all(40),
-          child: Center(
-            child: Text('Nothing here', style: TextStyle(color: muted)),
-          ),
-        ),
+        const EmptyState(message: 'The next story is waiting to be found.'),
       LayoutBuilder(
         builder: (context, box) {
           final columns = (box.maxWidth / (widget.isTV ? 175 : 130))
@@ -530,9 +556,10 @@ class _SearchPageState extends State<SearchPage> {
               crossAxisCount: columns,
               crossAxisSpacing: 12,
               mainAxisSpacing: 14,
-              mainAxisExtent: width * 1.5 + (widget.isTV ? 8 : 48),
+              mainAxisExtent: width * 1.5 + (widget.isTV ? 24 : 84),
             ),
             itemBuilder: (_, i) => PosterCard(
+              key: ValueKey('search-${items[i].key}'),
               anime: items[i],
               width: width,
               isTV: widget.isTV,
@@ -565,22 +592,18 @@ class MyListPage extends StatelessWidget {
     required this.services,
     required this.isTV,
     required this.onOpen,
-    required this.onSettings,
   });
   final AppServices services;
   final bool isTV;
   final void Function(Anime) onOpen;
-  final VoidCallback onSettings;
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.only(top: 18, bottom: 120),
+    key: const PageStorageKey('mylist-scroll'),
+    padding: EdgeInsets.only(top: 16, bottom: contentBottom(context)),
     children: [
-      const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 28),
-        child: Text(
-          'MyList',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
-        ),
+      Padding(
+        padding: EdgeInsets.symmetric(horizontal: isTV ? 48 : 24),
+        child: const PageHeading('MyList', '録'),
       ),
       for (final service in ['AniList', 'MAL'])
         AccountBlock(
@@ -591,7 +614,6 @@ class MyListPage extends StatelessWidget {
           services: services,
           isTV: isTV,
           onOpen: onOpen,
-          onSettings: onSettings,
         ),
     ],
   );
@@ -604,26 +626,25 @@ class AccountBlock extends StatefulWidget {
     required this.services,
     required this.isTV,
     required this.onOpen,
-    required this.onSettings,
   });
   final String service;
   final AppServices services;
   final bool isTV;
   final void Function(Anime) onOpen;
-  final VoidCallback onSettings;
   @override
   State<AccountBlock> createState() => _AccountBlockState();
 }
 
 class _AccountBlockState extends State<AccountBlock> {
+  final usernameInput = TextEditingController();
   String status = '';
   List<ListEntry> items = [];
   String? error;
   bool busy = false, more = false;
   int page = 1, generation = 0;
-  String get username => widget.services.store
-      .text(widget.service == 'MAL' ? 'MyAnimeListUsername' : 'AniListUsername')
-      .trim();
+  String get setting =>
+      widget.service == 'MAL' ? 'MyAnimeListUsername' : 'AniListUsername';
+  String get username => widget.services.store.text(setting).trim();
   Map<String, String> get statuses => widget.service == 'MAL'
       ? {
           'watching': 'Watching',
@@ -645,6 +666,18 @@ class _AccountBlockState extends State<AccountBlock> {
     super.initState();
     status = statuses.keys.first;
     if (username.isNotEmpty) unawaited(load());
+  }
+
+  @override
+  void dispose() {
+    usernameInput.dispose();
+    super.dispose();
+  }
+
+  Future<void> add() async {
+    final name = usernameInput.text.trim();
+    if (name.isEmpty) return;
+    await widget.services.store.set(setting, name);
   }
 
   Future<void> load({bool append = false}) async {
@@ -683,50 +716,62 @@ class _AccountBlockState extends State<AccountBlock> {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 28, bottom: 16),
+    padding: const EdgeInsets.only(top: 24, bottom: 24),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Text(
-            '${widget.service}${username.isEmpty ? '' : '  $username'}',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-          ),
-        ),
-        const SizedBox(height: 14),
-        if (username.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Connect a public list with your username.',
-                  style: TextStyle(color: muted),
+          padding: EdgeInsets.symmetric(horizontal: widget.isTV ? 48 : 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Divider(),
+              const SizedBox(height: 20),
+              SectionLabel(widget.service),
+              if (username.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(username, style: prose.copyWith(fontSize: 24)),
+                ),
+              if (username.isEmpty) ...[
+                const SizedBox(height: 16),
+                TextField(
+                  key: ValueKey('username-${widget.service}'),
+                  controller: usernameInput,
+                  style: prose,
+                  decoration: InputDecoration(
+                    hintText: 'Add ${widget.service} username',
+                    suffixIcon: IconButton(
+                      tooltip: 'Add ${widget.service} username',
+                      onPressed: add,
+                      icon: const Icon(LucideIcons.arrowRight, size: 18),
+                    ),
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => add(),
                 ),
                 const SizedBox(height: 12),
-                AppButton(
-                  label: 'Connect ${widget.service}',
-                  icon: Icons.person_outline,
-                  onPressed: widget.onSettings,
-                  isTV: widget.isTV,
+                Text(
+                  'Read your public list. Progress stays on this device.',
+                  style: prose.copyWith(color: muted, fontSize: 17),
                 ),
               ],
-            ),
-          )
-        else ...[
+            ],
+          ),
+        ),
+        if (username.isNotEmpty) ...[
+          const SizedBox(height: 16),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 22),
+            padding: EdgeInsets.symmetric(horizontal: widget.isTV ? 42 : 18),
             child: Row(
               children: statuses.entries
                   .map(
                     (e) => Padding(
-                      padding: const EdgeInsets.only(right: 7),
-                      child: AppButton(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: AppTab(
                         label: e.value,
-                        filled: status == e.key,
+                        selected: status == e.key,
                         isTV: widget.isTV,
                         onPressed: () {
                           status = e.key;
@@ -740,8 +785,8 @@ class _AccountBlockState extends State<AccountBlock> {
           ),
           if (busy)
             const Padding(
-              padding: EdgeInsets.all(22),
-              child: LinearProgressIndicator(color: shu),
+              padding: EdgeInsets.all(24),
+              child: SkeletonBlock(height: 180),
             ),
           if (error != null)
             FailureView(
@@ -750,12 +795,7 @@ class _AccountBlockState extends State<AccountBlock> {
               isTV: widget.isTV,
             ),
           if (!busy && items.isEmpty && error == null)
-            const Padding(
-              padding: EdgeInsets.all(50),
-              child: Center(
-                child: Text('Nothing here', style: TextStyle(color: muted)),
-              ),
-            ),
+            const EmptyState(message: 'A little room for the next story.'),
           if (items.isNotEmpty)
             PosterRow(
               title: '${items.length} titles',
@@ -770,7 +810,7 @@ class _AccountBlockState extends State<AccountBlock> {
                 final e = items.firstWhere((e) => e.anime.key == a.key);
                 return a.nextAiringAt > 0
                     ? 'E${a.nextEpisode} in ${countdown(a.nextAiringAt)}'
-                    : '${e.progress} / ${a.episodes > 0 ? a.episodes : '?'} watched';
+                    : '${a.title} · ${e.progress}/${a.episodes > 0 ? a.episodes : '?'}';
               },
             ),
           if (more)
@@ -857,16 +897,13 @@ class _SchedulePageState extends State<SchedulePage> {
     final monday = DateTime(now.year, now.month, now.day - (now.weekday - 1));
     return ListView(
       padding: EdgeInsets.fromLTRB(
-        widget.isTV ? 38 : 20,
+        widget.isTV ? 48 : 24,
         20,
-        widget.isTV ? 38 : 20,
-        110,
+        widget.isTV ? 48 : 24,
+        contentBottom(context),
       ),
       children: [
-        const Text(
-          'Schedule',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
-        ),
+        const PageHeading('Schedule', '暦'),
         const SizedBox(height: 8),
         const Text(
           'Airing times, not source availability',
@@ -880,9 +917,9 @@ class _SchedulePageState extends State<SchedulePage> {
               final date = DateTime(monday.year, monday.month, monday.day + i);
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: AppButton(
+                child: AppTab(
                   label: '${names[i]} ${date.day}',
-                  filled: date == selected,
+                  selected: date == selected,
                   isTV: widget.isTV,
                   onPressed: () {
                     selected = date;
@@ -894,7 +931,7 @@ class _SchedulePageState extends State<SchedulePage> {
           ),
         ),
         const SizedBox(height: 20),
-        if (busy) const LinearProgressIndicator(color: shu),
+        if (busy) const SkeletonBlock(height: 180),
         if (error != null)
           FailureView(
             message: error!,
@@ -902,12 +939,7 @@ class _SchedulePageState extends State<SchedulePage> {
             isTV: widget.isTV,
           ),
         if (!busy && rows.isEmpty && error == null)
-          const Padding(
-            padding: EdgeInsets.all(50),
-            child: Center(
-              child: Text('Nothing here', style: TextStyle(color: muted)),
-            ),
-          ),
+          const EmptyState(message: 'A quiet day on the calendar.'),
         for (final row in rows)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -922,8 +954,9 @@ class _SchedulePageState extends State<SchedulePage> {
                     child: Text(
                       clockTime(row.at),
                       style: const TextStyle(
-                        color: shu,
-                        fontWeight: FontWeight.bold,
+                        color: muted,
+                        fontFamily: 'JetBrainsMono',
+                        fontSize: 12,
                       ),
                     ),
                   ),
@@ -953,7 +986,7 @@ class _SchedulePageState extends State<SchedulePage> {
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: muted),
+                  const Icon(LucideIcons.chevronRight, color: muted),
                 ],
               ),
             ),

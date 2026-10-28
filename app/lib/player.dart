@@ -51,6 +51,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       subSelected = false,
       audioSelected = false;
   String status = 'Finding an episode', error = '';
+  final failedSources = <String>{};
+  bool retrying = false;
   List<SkipSpan> spans = [];
   List<int> episodes = [];
   SkipSpan? active;
@@ -94,11 +96,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         }
       }),
       player.stream.error.listen((_) {
-        if (mounted && !busy) {
-          setState(() {
-            error = 'Playback failed. Try another copy or source.';
-            overlay = true;
-          });
+        if (mounted && !busy && !retrying) {
+          retrying = true;
+          unawaited(
+            tryAnotherCopy(automatic: true)
+                .whenComplete(() => retrying = false),
+          );
         }
       }),
       player.stream.tracks.listen((_) {
@@ -206,7 +209,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> open({String? provider, int? mirror}) async {
+  Future<void> open({int? mirror}) async {
     final g = ++generation;
     scope.cancel();
     scope = RequestScope();
@@ -233,7 +236,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           widget.anime,
           episode,
           scope: scope,
-          source: provider,
+          exclude: failedSources,
           mode: widget.mode,
           status: (s) {
             if (mounted && g == generation) setState(() => status = s);
@@ -273,8 +276,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (mounted && g == generation) {
         setState(() {
           busy = false;
-          error =
-              'Unable to play this episode. Retry or choose another source.';
+          error = 'This episode could not be opened.';
         });
       }
     }
@@ -417,6 +419,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   void tick(Duration p) {
     if (!mounted || busy) return;
+    if (p > Duration.zero && source != null) {
+      unawaited(
+        widget.services.store.rememberSource(widget.anime, source!.provider),
+      );
+    }
     final current = spans
         .where((s) => s.contains(p.inMilliseconds / 1000))
         .firstOrNull;
@@ -528,6 +535,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
     if (!mounted) return;
     episode = target;
+    failedSources.clear();
     await open();
   }
 
@@ -565,7 +573,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             children: [
               const Text('Subtitles', style: TextStyle(color: shu)),
               for (final track in player.state.tracks.subtitle)
-                ListTile(
+                ChoiceRow(
                   autofocus: track == player.state.tracks.subtitle.first,
                   title: Text(
                     track.id == 'no'
@@ -581,7 +589,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   },
                 ),
               for (final track in source?.streams[copy].subtitles ?? <Json>[])
-                ListTile(
+                ChoiceRow(
                   title: Text(
                     '${track['label'] ?? track['language'] ?? 'Provider subtitles'} · provider',
                   ),
@@ -594,7 +602,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               const Divider(),
               const Text('Audio', style: TextStyle(color: shu)),
               for (final track in player.state.tracks.audio)
-                ListTile(
+                ChoiceRow(
                   title: Text(
                     track.title ??
                         track.language ??
@@ -626,21 +634,28 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> sourcePanel() async {
-    panelOpen = true;
-    final chosen = await chooseValue(
-      context,
-      'Source',
-      widget.services.store.enabledSources,
-      selected: source?.provider,
-    );
-    panelOpen = false;
-    if (chosen != null && mounted) {
-      await save();
-      await open(provider: chosen);
-    } else if (mounted) {
-      showControls();
+  Future<void> tryAnotherCopy({bool automatic = false}) async {
+    await save();
+    if (source != null && copy + 1 < source!.streams.length) {
+      await open(mirror: copy + 1);
+      return;
     }
+    if (source != null) failedSources.add(source!.provider);
+    if (failedSources.length >=
+        (await widget.services.resolver.providerOrder()).length) {
+      if (automatic) {
+        if (mounted) {
+          setState(() {
+            busy = false;
+            error = 'This episode could not be played.';
+            overlay = true;
+          });
+        }
+        return;
+      }
+      failedSources.clear();
+    }
+    if (mounted) await open();
   }
 
   Future<void> qualityPanel() async {
@@ -755,8 +770,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
     },
     child: Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: bgDeep,
       body: Focus(
+        skipTraversal: true,
         onKeyEvent: remote,
         child: Stack(
           fit: StackFit.expand,
@@ -776,54 +792,51 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 child: Video(controller: video, controls: NoVideoControls),
               ),
             ),
+            if (!overlay && !busy && duration.inSeconds > 0)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: LinearProgressIndicator(
+                  minHeight: 1,
+                  value: (position.inMilliseconds / duration.inMilliseconds)
+                      .clamp(0, 1),
+                  color: shu,
+                  backgroundColor: line,
+                ),
+              ),
             if (busy)
               Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(color: shu),
-                    const SizedBox(height: 18),
-                    Text(status),
-                    const SizedBox(height: 16),
-                    AppButton(
-                      label: 'Back',
-                      onPressed: () => Navigator.pop(context),
-                      isTV: widget.isTV,
-                    ),
-                  ],
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SkeletonBlock(width: 160, height: 2),
+                      const SizedBox(height: 24),
+                      Text(status.toUpperCase(), style: mono),
+                      const SizedBox(height: 16),
+                      AppButton(
+                        label: 'Back',
+                        onPressed: () => Navigator.pop(context),
+                        isTV: widget.isTV,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             if (error.isNotEmpty)
               Center(
-                child: Container(
-                  color: Colors.black87,
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(error),
-                      const SizedBox(height: 18),
-                      Wrap(
-                        spacing: 12,
-                        children: [
-                          AppButton(
-                            label: 'Retry',
-                            onPressed: () => open(),
-                            isTV: widget.isTV,
-                          ),
-                          AppButton(
-                            label: 'Source',
-                            onPressed: sourcePanel,
-                            isTV: widget.isTV,
-                          ),
-                          AppButton(
-                            label: 'Back',
-                            onPressed: () => Navigator.pop(context),
-                            isTV: widget.isTV,
-                          ),
-                        ],
-                      ),
-                    ],
+                child: ColoredBox(
+                  color: const Color(0xe6080707),
+                  child: EmptyState(
+                    error: true,
+                    message: error,
+                    action: AppButton(
+                      label: 'Try another copy',
+                      onPressed: tryAnotherCopy,
+                      isTV: widget.isTV,
+                    ),
                   ),
                 ),
               ),
@@ -836,7 +849,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [Colors.black87, Colors.transparent],
+                          colors: [bgDeep, Color(0x00080707)],
                         ),
                       ),
                       padding: const EdgeInsets.all(16),
@@ -845,7 +858,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           IconButton(
                             tooltip: 'Back',
                             onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.arrow_back),
+                            icon: const Icon(LucideIcons.arrowLeft),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -856,14 +869,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                   widget.anime.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                  style: display.copyWith(fontSize: 20),
                                 ),
+                                const SizedBox(height: 4),
                                 Text(
-                                  'Episode $episode · ${source?.provider ?? ''} · ${source?.mode.toUpperCase() ?? ''}',
-                                  style: const TextStyle(color: muted),
+                                  'EPISODE $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
+                                  style: mono,
                                 ),
                               ],
                             ),
@@ -878,8 +889,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: AppButton(
-                            label: active!.label,
-                            filled: true,
+                            label: active!.type == 'op'
+                                ? 'Skip opening'
+                                : active!.label,
                             focusNode: skipFocus,
                             onPressed: () {
                               unawaited(
@@ -897,42 +909,95 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                         ),
                       ),
                     if (countdownSeconds > 0)
-                      Container(
-                        color: Colors.black87,
-                        padding: const EdgeInsets.all(12),
-                        child: Wrap(
-                          spacing: 16,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              widget.services.store.flag('NextEpisodePrompt')
-                                  ? 'Play the next episode?'
-                                  : 'Next episode in $countdownSeconds',
-                            ),
-                            AppButton(
-                              label: 'Play next',
-                              onPressed: () => next(),
-                              isTV: widget.isTV,
-                              filled: true,
-                            ),
-                            AppButton(
-                              label: 'Cancel',
-                              onPressed: () {
-                                nextTimer?.cancel();
-                                setState(() => countdownSeconds = 0);
-                              },
-                              isTV: widget.isTV,
-                            ),
-                          ],
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          width: 500,
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 8,
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: panel,
+                            border: Border.all(color: line),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: CoverImage(
+                                  widget.anime.cover,
+                                  width: 54,
+                                  height: 81,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'NEXT · EP ${episode + 1}',
+                                      style: mono.copyWith(color: fg),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      widget.services.store.flag(
+                                            'NextEpisodePrompt',
+                                          )
+                                          ? 'Continue the story?'
+                                          : 'Playing in $countdownSeconds seconds',
+                                      style: prose.copyWith(fontSize: 18),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    LinearProgressIndicator(
+                                      minHeight: 2,
+                                      value: countdownSeconds / 10,
+                                      color: shu,
+                                      backgroundColor: line,
+                                    ),
+                                    Wrap(
+                                      spacing: 8,
+                                      children: [
+                                        AppButton(
+                                          label: 'Play next',
+                                          onPressed: () => next(),
+                                          isTV: widget.isTV,
+                                        ),
+                                        AppButton(
+                                          label: 'Cancel',
+                                          onPressed: () {
+                                            nextTimer?.cancel();
+                                            setState(
+                                              () => countdownSeconds = 0,
+                                            );
+                                          },
+                                          isTV: widget.isTV,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     Container(
-                      color: Colors.black87,
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0x00080707), bgDeep],
+                        ),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
                       child: Column(
                         children: [
                           SizedBox(
-                            height: 44,
+                            height: 36,
                             child: Stack(
                               alignment: Alignment.center,
                               children: [
@@ -941,7 +1006,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                     horizontal: 24,
                                   ),
                                   child: CustomPaint(
-                                    size: const Size(double.infinity, 8),
+                                    size: const Size(double.infinity, 6),
                                     painter: SkipPainter(spans, duration),
                                   ),
                                 ),
@@ -980,21 +1045,26 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           Row(
                             children: [
                               Text(
-                                '${time(position)} / ${time(duration)}',
-                                style: const TextStyle(fontSize: 12),
+                                time(position),
+                                style: mono.copyWith(letterSpacing: 1),
                               ),
                               const Spacer(),
                               if (player.state.buffering)
-                                const Text(
-                                  'Buffering',
-                                  style: TextStyle(color: muted, fontSize: 12),
+                                Text(
+                                  'BUFFERING',
+                                  style: mono.copyWith(fontSize: 8),
                                 ),
+                              const Spacer(),
+                              Text(
+                                '−${time(duration - position)}',
+                                style: mono.copyWith(letterSpacing: 1),
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 4),
                           Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
+                            spacing: 12,
+                            runSpacing: 0,
                             alignment: WrapAlignment.center,
                             children: [
                               AppButton(
@@ -1005,8 +1075,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                               AppButton(
                                 label: player.state.playing ? 'Pause' : 'Play',
                                 icon: player.state.playing
-                                    ? Icons.pause
-                                    : Icons.play_arrow,
+                                    ? LucideIcons.pause
+                                    : LucideIcons.play,
                                 focusNode: playFocus,
                                 onPressed: () {
                                   unawaited(player.playOrPause());
@@ -1020,7 +1090,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                 isTV: widget.isTV,
                               ),
                               AppButton(
-                                label: 'Next episode',
+                                label: 'Next',
                                 onPressed: canNext ? () => next() : null,
                                 isTV: widget.isTV,
                               ),
@@ -1034,24 +1104,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                 onPressed: qualityPanel,
                                 isTV: widget.isTV,
                               ),
-                              AppButton(
-                                label: 'Source',
-                                onPressed: sourcePanel,
-                                isTV: widget.isTV,
-                              ),
-                              if ((source?.streams.length ?? 0) > 1)
-                                AppButton(
-                                  label:
-                                      'Copy ${copy + 1}/${source!.streams.length}',
-                                  onPressed: () async {
-                                    await save();
-                                    await open(
-                                      mirror:
-                                          (copy + 1) % source!.streams.length,
-                                    );
-                                  },
-                                  isTV: widget.isTV,
-                                ),
                             ],
                           ),
                         ],
@@ -1086,7 +1138,7 @@ class SkipPainter extends CustomPainter {
           Rect.fromLTRB(left, 0, right, 8),
           const Radius.circular(3),
         ),
-        Paint()..color = span.type == 'ed' ? Colors.blueAccent : shu,
+        Paint()..color = shu.withValues(alpha: .45),
       );
     }
   }

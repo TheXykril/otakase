@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,21 +20,58 @@ Future<void> main() async {
     OtakaseApp(
       services: AppServices(catalog: Catalog(), store: store, core: core),
       isTV: await core.isTV(),
+      splash: true,
     ),
   );
 }
 
-class OtakaseApp extends StatelessWidget {
-  const OtakaseApp({super.key, required this.services, required this.isTV});
+class OtakaseApp extends StatefulWidget {
+  const OtakaseApp({
+    super.key,
+    required this.services,
+    required this.isTV,
+    this.splash = false,
+  });
   final AppServices services;
-  final bool isTV;
+  final bool isTV, splash;
+  @override
+  State<OtakaseApp> createState() => _OtakaseAppState();
+}
+
+class _OtakaseAppState extends State<OtakaseApp> {
+  void modeChanged(FocusHighlightMode _) {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addHighlightModeListener(modeChanged);
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeHighlightModeListener(modeChanged);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final traditional =
+        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
     final focusStyle = ButtonStyle(
+      textStyle: WidgetStatePropertyAll(mono.copyWith(color: fg)),
+      foregroundColor: const WidgetStatePropertyAll(fg),
+      overlayColor: WidgetStatePropertyAll(shu.withValues(alpha: .08)),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
       side: WidgetStateProperty.resolveWith(
         (s) => BorderSide(
-          color: s.contains(WidgetState.focused) ? shu : Colors.transparent,
-          width: 2.5,
+          color: traditional && s.contains(WidgetState.focused)
+              ? shu
+              : Colors.transparent,
+          width: 2,
         ),
       ),
     );
@@ -41,48 +80,154 @@ class OtakaseApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: shu,
-          brightness: Brightness.dark,
+        colorScheme: const ColorScheme.dark(
           primary: shu,
+          onPrimary: fgBright,
+          secondary: shu,
           surface: panel,
+          outline: line,
+          outlineVariant: line,
+          onSurface: fg,
+          error: warn,
         ),
-        scaffoldBackgroundColor: Colors.black,
-        canvasColor: Colors.black,
-        fontFamily: 'NotoSansJP',
-        focusColor: shu.withValues(alpha: .25),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.black,
+        scaffoldBackgroundColor: bg,
+        canvasColor: bg,
+        fontFamily: 'CormorantGaramond',
+        fontFamilyFallback: const ['NotoSansJP'],
+        textTheme: const TextTheme(
+          bodyMedium: prose,
+          bodyLarge: prose,
+          titleLarge: display,
+          labelLarge: mono,
+          labelMedium: mono,
+          labelSmall: mono,
+        ),
+        focusColor: traditional ? line : Colors.transparent,
+        dividerColor: line,
+        dividerTheme: const DividerThemeData(color: line, thickness: 1),
+        iconTheme: const IconThemeData(color: fg, size: 20),
+        appBarTheme: AppBarTheme(
+          backgroundColor: bg,
           surfaceTintColor: Colors.transparent,
+          titleTextStyle: mono.copyWith(
+            fontSize: 13,
+            color: fg,
+            letterSpacing: 2,
+          ),
         ),
-        dialogTheme: const DialogThemeData(backgroundColor: panel),
+        dialogTheme: DialogThemeData(
+          backgroundColor: panel,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6),
+            side: const BorderSide(color: line),
+          ),
+        ),
         textButtonTheme: TextButtonThemeData(style: focusStyle),
         outlinedButtonTheme: OutlinedButtonThemeData(style: focusStyle),
         iconButtonTheme: IconButtonThemeData(style: focusStyle),
-        listTileTheme: ListTileThemeData(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+        listTileTheme: const ListTileThemeData(textColor: fg, iconColor: muted),
+        switchTheme: SwitchThemeData(
+          thumbColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? shu : muted,
           ),
+          trackColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected)
+                ? accentDeep.withValues(alpha: .35)
+                : line,
+          ),
+          trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
         ),
         inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: panel,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
+          isDense: true,
+          hintStyle: prose.copyWith(color: muted, fontSize: 18),
+          labelStyle: mono.copyWith(letterSpacing: 1.2),
+          border: const UnderlineInputBorder(
+            borderSide: BorderSide(color: line),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: shu, width: 2.5),
+          enabledBorder: const UnderlineInputBorder(
+            borderSide: BorderSide(color: line),
           ),
+          focusedBorder: const UnderlineInputBorder(
+            borderSide: BorderSide(color: shu),
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
-        sliderTheme: const SliderThemeData(
+        sliderTheme: SliderThemeData(
           activeTrackColor: shu,
-          thumbColor: shu,
-          overlayColor: Color(0x40d84836),
+          inactiveTrackColor: line,
+          thumbColor: fg,
+          trackHeight: 2,
+          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+          overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+          overlayColor: shu.withValues(alpha: .1),
         ),
       ),
-      home: AppShell(services: services, isTV: isTV),
+      home: widget.splash
+          ? SplashGate(
+              child: AppShell(services: widget.services, isTV: widget.isTV),
+            )
+          : AppShell(services: widget.services, isTV: widget.isTV),
     );
   }
+}
+
+class SplashGate extends StatefulWidget {
+  const SplashGate({super.key, required this.child});
+  final Widget child;
+  @override
+  State<SplashGate> createState() => _SplashGateState();
+}
+
+class _SplashGateState extends State<SplashGate> {
+  Timer? timer;
+  bool done = false, visible = false;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => visible = true);
+    });
+    timer = Timer(const Duration(milliseconds: 1200), () {
+      if (mounted) setState(() => done = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: const Duration(milliseconds: 500),
+    child: done
+        ? widget.child
+        : Scaffold(
+            key: const ValueKey('splash'),
+            body: Center(
+              child: AnimatedOpacity(
+                opacity: visible ? 1 : 0,
+                duration: const Duration(milliseconds: 600),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset('assets/mark.png', width: 150, height: 150),
+                    const SizedBox(height: 32),
+                    Text(
+                      'お任せ',
+                      style: mono.copyWith(
+                        color: fg,
+                        letterSpacing: 5,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('LEAVE IT TO US.', style: mono),
+                  ],
+                ),
+              ),
+            ),
+          ),
+  );
 }
