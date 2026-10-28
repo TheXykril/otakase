@@ -70,6 +70,7 @@ void main() {
       expect(url.queryParameters['client_id'], anilistId);
       expect(url.queryParameters['response_type'], 'token');
       expect(url.queryParameters.containsKey('code_challenge'), isFalse);
+      expect(url.queryParameters.containsKey('redirect_uri'), isFalse);
       await expectLater(
         auth.accept(
           Uri(
@@ -133,6 +134,7 @@ void main() {
     );
     url = await auth.begin('MAL');
     expect(url.queryParameters['code_challenge_method'], 'plain');
+    expect(url.queryParameters['redirect_uri'], loginRedirect);
     expect(
       url.queryParameters['code_challenge']!.length,
       inInclusiveRange(43, 128),

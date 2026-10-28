@@ -191,7 +191,9 @@ class AuthService extends ChangeNotifier {
       {
         'client_id': service == 'MAL' ? malId : anilistId,
         'response_type': service == 'MAL' ? 'code' : 'token',
-        'redirect_uri': loginRedirect,
+        // AniList's token login only takes the redirect registered for the
+        // client and turns the request down when one is sent.
+        if (service == 'MAL') 'redirect_uri': loginRedirect,
         'state': state,
         if (service == 'MAL') 'code_challenge': verifier,
         if (service == 'MAL') 'code_challenge_method': 'plain',
