@@ -1,10 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- Android: Kage Home, Search and More for phones and TV, automatic playback choices, AniList/MAL login, tracker updates and compatible resume sync.
-- Android: 18+ visibility follows the signed-in AniList preference, with no local switch.
-
 ## 26.7.0 - 2026-10-04
 
 ### Added
