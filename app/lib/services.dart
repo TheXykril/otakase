@@ -8,6 +8,8 @@ import 'data/profiles.dart';
 import 'data/discord.dart';
 import 'data/heritage.dart';
 import 'data/models.dart';
+import 'data/watch_rooms.dart';
+import 'data/tv_remote.dart';
 
 class AppServices {
   AppServices({
@@ -15,6 +17,7 @@ class AppServices {
     required this.store,
     required this.core,
     AuthService? auth,
+    TVRemote? remoteControl,
     this.profiles,
     this.profileId = '1',
   }) : auth = auth ?? AuthService(client: catalog.client) {
@@ -24,6 +27,18 @@ class AppServices {
       store: store,
     );
     heritage = Heritage(store, StatsRepository(this.auth), discord);
+    watchRooms = WatchRooms(discord: discord, store: store);
+    tvRemote =
+        remoteControl ??
+        TVRemote(
+          storage: this.auth.storage,
+          name: profiles?.active.name ?? 'Otakase TV',
+        );
+    tvRemote.command = (action, args) async {
+      await playerCommand?.call(action, args);
+    };
+    tvRemote.status = () =>
+        playerStatus?.call() ?? {'has_player': false, 'playing': false};
     resolver = SourceResolver(core, store, report: discord.reportProvider);
     tracking = TrackingService(this.auth, store: store);
     tracking.onProgressWritten = () => heritage.progressWritten = true;
@@ -44,6 +59,9 @@ class AppServices {
   late final ListSync listSync;
   late final DiscordService discord;
   late final Heritage heritage;
+  late final WatchRooms watchRooms;
+  late final TVRemote tvRemote;
+  Json Function()? playerStatus;
   Future<void> Function(String action, Json args)? playerCommand;
   final ProfileManager? profiles;
   final String profileId;
@@ -53,6 +71,8 @@ class AppServices {
     if (closed) return;
     await stopPlayback?.call();
     heritage.closed = true;
+    await watchRooms.close();
+    await tvRemote.close();
     await discord.close();
     closed = true;
     auth.removeListener(_adultPreference);

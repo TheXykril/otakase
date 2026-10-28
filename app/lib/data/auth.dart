@@ -73,6 +73,7 @@ class Account {
 }
 
 class AuthService extends ChangeNotifier {
+  Future<void> Function(Uri)? remoteLink;
   AuthService({http.Client? client, TokenStore? storage, this.findLanAddress})
     : client = client ?? http.Client(),
       storage = storage ?? SecureTokenStore();
@@ -129,6 +130,11 @@ class AuthService extends ChangeNotifier {
     if (closed) return;
     if (platformCallbacks) {
       platform.setMethodCallHandler((call) async {
+        if (closed) return;
+        if (call.method == 'remote' && call.arguments is String) {
+          await remoteLink?.call(Uri.parse(call.arguments as String));
+          return;
+        }
         if (call.method == 'login' && call.arguments is String) {
           try {
             await accept(Uri.parse(call.arguments as String));

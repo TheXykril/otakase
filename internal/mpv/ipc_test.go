@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
 
@@ -16,11 +18,11 @@ import (
 // event and a reply meant for some other request, as a busy mpv would.
 func fakePlayer(t *testing.T, reply func(id int64, command []any) string) string {
 	t.Helper()
-	socket := filepath.Join(t.TempDir(), "mpv.sock")
-	listener, err := net.Listen("unix", socket)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Skipf("no unix sockets here: %v", err)
+		t.Fatalf("local player fixture: %v", err)
 	}
+	socket := listener.Addr().String()
 	t.Cleanup(func() { listener.Close() })
 	go func() {
 		for {
@@ -52,7 +54,7 @@ func TestCommandMatchesItsOwnReply(t *testing.T) {
 	socket := fakePlayer(t, func(id int64, command []any) string {
 		return fmt.Sprintf(`{"request_id":%d,"error":"success","data":%q}`, id, command[1])
 	})
-	got, err := Command(socket, "get_property", "path")
+	got, err := commandWithDial(socket, dialFakePlayer, "get_property", "path")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +67,7 @@ func TestCommandReturnsMPVErrors(t *testing.T) {
 	socket := fakePlayer(t, func(id int64, _ []any) string {
 		return fmt.Sprintf(`{"request_id":%d,"error":"property unavailable"}`, id)
 	})
-	_, err := Command(socket, "get_property", "time-pos")
+	_, err := commandWithDial(socket, dialFakePlayer, "get_property", "time-pos")
 	var mpvErr Error
 	if !errors.As(err, &mpvErr) || !IsUnavailable(err) {
 		t.Fatalf("got %v, want mpv's own error", err)
@@ -79,7 +81,7 @@ func TestCommandNumbersDecodeAsFloat(t *testing.T) {
 	socket := fakePlayer(t, func(id int64, _ []any) string {
 		return fmt.Sprintf(`{"request_id":%d,"error":"success","data":1440}`, id)
 	})
-	got, err := Command(socket, "get_property", "duration")
+	got, err := commandWithDial(socket, dialFakePlayer, "get_property", "duration")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,8 +94,12 @@ func TestCommandWithoutPlayer(t *testing.T) {
 	if _, err := Command("  ", "quit"); !errors.Is(err, ErrNoSocket) {
 		t.Fatalf("got %v, want ErrNoSocket", err)
 	}
-	_, err := Command(filepath.Join(t.TempDir(), "missing.sock"), "quit")
+	_, err := commandWithDial(filepath.Join(t.TempDir(), "missing.sock"), func(string) (net.Conn, error) {
+		return nil, &net.OpError{Op: "dial", Net: "unix", Err: os.NewSyscallError("connect", syscall.ENOENT)}
+	}, "quit")
 	if !IsGone(err) {
 		t.Fatalf("got %v, want a gone player", err)
 	}
 }
+
+func dialFakePlayer(address string) (net.Conn, error) { return net.Dial("tcp", address) }

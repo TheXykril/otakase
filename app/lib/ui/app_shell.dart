@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +18,8 @@ import 'seal.dart';
 import 'show_page.dart';
 import 'community_page.dart';
 import 'movie_page.dart';
+import 'tv_remote_page.dart';
+import '../data/tv_remote.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.services, required this.isTV});
@@ -29,6 +32,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int selected = 0;
   int? focusedNav;
+  StreamSubscription<String>? remoteEvents;
   final navFocus = List.generate(
     3,
     (i) => FocusNode(
@@ -44,6 +48,11 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     widget.services.selectRoot = choose;
+    widget.services.auth.remoteLink = remoteLink;
+    remoteEvents = widget.services.tvRemote.events.listen((text) {
+      if (mounted) communityMessage(context, text);
+    });
+    unawaited(startRemote());
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await widget.services.discord.initialize();
       if (mounted) await birthdayCapsule(context, widget.services, widget.isTV);
@@ -52,6 +61,8 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    widget.services.auth.remoteLink = null;
+    unawaited(remoteEvents?.cancel() ?? Future<void>.value());
     widget.services.selectRoot = null;
     for (final n in navFocus) {
       n.dispose();
@@ -60,6 +71,46 @@ class _AppShellState extends State<AppShell> {
       s.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> startRemote() async {
+    await widget.services.tvRemote.initialize();
+    if (widget.services.closed) return;
+    if (widget.isTV && Platform.isAndroid) {
+      await widget.services.tvRemote.startTV();
+    }
+    try {
+      final initial = await const MethodChannel('otakase/device')
+          .invokeMethod<String>('initialRemote');
+      if (initial != null && mounted) await remoteLink(Uri.parse(initial));
+    } on MissingPluginException {
+      /* No Android host is attached. */
+    } on PlatformException {
+      /* Pairing is also available through More. */
+    }
+  }
+
+  Future<void> remoteLink(Uri uri) async {
+    if (!mounted || widget.isTV) return;
+    try {
+      await const MethodChannel('otakase/device')
+          .invokeMethod<String>('initialRemote');
+      final code = RemotePairCode.fromUri(uri);
+      if (mounted) {
+        await Navigator.push(
+          context,
+          OtakaseRoute<void>(
+            builder: (_) => TVRemotePage(
+              services: widget.services,
+              isTV: false,
+              pairCode: code,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) communityMessage(context, e.toString());
+    }
   }
 
   void choose(int i) {
@@ -80,12 +131,14 @@ class _AppShellState extends State<AppShell> {
   Future<void> open(Anime a, {Object? heroTag}) => Navigator.push(
     context,
     OtakaseRoute<void>(
-      builder: (_) => ShowPage(
-        services: widget.services,
-        anime: a,
-        isTV: widget.isTV,
-        heroTag: heroTag,
-      ),
+      builder: (_) => isOtakaseMovie(a)
+          ? OtakaseMovie(services: widget.services, isTV: widget.isTV)
+          : ShowPage(
+              services: widget.services,
+              anime: a,
+              isTV: widget.isTV,
+              heroTag: heroTag,
+            ),
     ),
   );
   void resume(WatchEntry h) => Navigator.push(

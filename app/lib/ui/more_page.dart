@@ -14,6 +14,8 @@ import 'settings.dart';
 import 'show_page.dart';
 import 'profiles_page.dart';
 import 'community_page.dart';
+import 'tv_remote_page.dart';
+import 'watch_rooms_page.dart';
 
 Future<void> openAccounts(
   BuildContext context,
@@ -258,6 +260,26 @@ class MorePage extends StatelessWidget {
           () => openDetail(
             context,
             CapsulePage(services: services, isTV: isTV),
+            isTV,
+          ),
+        ),
+        row(
+          'Watch rooms',
+          'Join your Discord community',
+          LucideIcons.users,
+          () => openDetail(
+            context,
+            WatchRoomsPage(services: services, isTV: isTV),
+            isTV,
+          ),
+        ),
+        row(
+          isTV ? 'Phone remote' : 'Control TV',
+          'Pair on your local network',
+          LucideIcons.tv,
+          () => openDetail(
+            context,
+            TVRemotePage(services: services, isTV: isTV),
             isTV,
           ),
         ),

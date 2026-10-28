@@ -163,6 +163,7 @@ class DiscordService extends ChangeNotifier {
     String path, {
     Json? body,
     bool authenticated = true,
+    bool revokeOnUnauthorized = true,
     Duration timeout = const Duration(seconds: 5),
   }) async {
     if (closed) throw StateError('Profile closed');
@@ -186,7 +187,9 @@ class DiscordService extends ChangeNotifier {
     if (closed || authenticated && token != _link['token']) {
       throw StateError('Profile link changed');
     }
-    if (response.statusCode == 401 && token.isNotEmpty) {
+    if (response.statusCode == 401 &&
+        token.isNotEmpty &&
+        revokeOnUnauthorized) {
       _epoch++;
       _inboxTimer?.cancel();
       await _saveLink({'discord_name': name, 'revoked': true});

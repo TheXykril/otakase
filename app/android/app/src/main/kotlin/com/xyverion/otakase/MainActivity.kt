@@ -15,6 +15,7 @@ import android.speech.RecognizerIntent
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
+import android.net.wifi.WifiManager
 import com.xyverion.otakase.mobilecore.Mobilecore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -26,6 +27,11 @@ class MainActivity : FlutterActivity() {
     private var statusEvents: EventChannel.EventSink? = null
     private var statusReceiver: BroadcastReceiver? = null
     private var pendingLogin: String? = null
+    private var pendingRemote: String? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
+    private fun remoteUri(intent: Intent?): String? = intent?.data?.takeIf {
+        it.scheme == "otakase" && it.host == "remote"
+    }?.toString()
     private fun loginUri(intent: Intent?): String? = intent?.data?.takeIf {
         it.scheme == "otakase" && it.host == "login"
     }?.toString()
@@ -47,6 +53,11 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        remoteUri(intent)?.let { uri ->
+            pendingRemote = uri
+            deviceChannel?.invokeMethod("remote", uri)
+            intent.data = null
+        }
         loginUri(intent)?.let { uri ->
             if (deviceChannel != null) deviceChannel!!.invokeMethod("login", uri)
             else pendingLogin = uri
@@ -75,11 +86,23 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         detached = false
         pendingLogin = pendingLogin ?: loginUri(intent)
+        pendingRemote = pendingRemote ?: remoteUri(intent)
         intent.data = null
         deviceChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "otakase/device")
         deviceChannel!!.setMethodCallHandler { call, result ->
             when (call.method) {
                 "initialLogin" -> { result.success(pendingLogin); pendingLogin = null }
+                "initialRemote" -> { result.success(pendingRemote); pendingRemote = null }
+                "localDiscovery" -> try {
+                    if (call.arguments == true && multicastLock == null) {
+                        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                        multicastLock = wifi.createMulticastLock("otakase-discovery").apply { setReferenceCounted(false); acquire() }
+                    } else if (call.arguments != true) {
+                        multicastLock?.let { if (it.isHeld) it.release() }
+                        multicastLock = null
+                    }
+                    result.success(null)
+                } catch (_: Exception) { result.error("unavailable", "Local discovery unavailable", null) }
                 "status" -> result.success(deviceStatus())
                 "launchUri" -> try {
                     val uri = android.net.Uri.parse(call.arguments as String)
@@ -171,6 +194,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        multicastLock?.let { if (it.isHeld) it.release() }
+        multicastLock = null
         voiceResult?.success(null)
         voiceResult = null
         detached = true

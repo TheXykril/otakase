@@ -1367,6 +1367,14 @@ func (b *bot) watchRead(w http.ResponseWriter, r *http.Request) (string, watchIn
 		apiError(w, http.StatusTooManyRequests, "slow down")
 		return "", in, false
 	}
+	if b.acts.user(r) == "" {
+		b.watch.mu.Lock()
+		allowed := b.watchAppAccess(w, r, b.watch.room(in.Room), user)
+		b.watch.mu.Unlock()
+		if !allowed {
+			return "", in, false
+		}
+	}
 	return user, in, true
 }
 
@@ -1413,6 +1421,9 @@ func (b *bot) watchStatus(w http.ResponseWriter, r *http.Request) {
 	open := b.watch.list()
 	for _, cur := range open {
 		card := b.watchCard(cur)
+		if b.acts.user(r) == "" && cur.adult && b.watchAppInChannel(user, cur.channel) {
+			card["id"] = cur.id
+		}
 		if cur.id == room {
 			maps.Copy(out, card)
 			out["here"] = true
@@ -1478,6 +1489,10 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 	now := watchNow()
 	b.watch.mu.Lock()
 	cur := b.watch.room(in.Room)
+	if !b.watchAppAccess(w, r, cur, user) {
+		b.watch.mu.Unlock()
+		return
+	}
 	switch {
 	case cur == nil && len(b.watch.rooms) >= b.settingInt("watch_rooms_max"):
 		n := len(b.watch.rooms)
@@ -1551,6 +1566,10 @@ func (b *bot) watchState(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m, in := cur.members[user]
+		if !b.watchAppAccess(w, r, cur, user) {
+			b.watch.mu.Unlock()
+			return
+		}
 		if !in {
 			b.watch.mu.Unlock()
 			apiError(w, http.StatusForbidden, "you're not in the watch room")

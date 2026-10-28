@@ -44,6 +44,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   bool profileStopped = false;
   late final Future<void> Function() profileStop;
   late final Future<void> Function(String, Json) commandHandler;
+  late final Json Function() statusHandler;
   Timer? discordMeter;
   int savedResume = 0;
   final completedEpisodes = <int>{};
@@ -87,6 +88,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     widget.services.stopPlayback = profileStop;
     commandHandler = control;
     widget.services.playerCommand = commandHandler;
+    statusHandler = remoteStatus;
+    widget.services.playerStatus = statusHandler;
     player = Player(
       configuration: const PlayerConfiguration(
         libass: true,
@@ -646,6 +649,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (mounted) showControls();
   }
 
+  Json remoteStatus() => {
+    'has_player': true,
+    'title': anime.title,
+    'adult': anime.isAdult,
+    'episode': episode,
+    'episodes': anime.airedEpisodes,
+    'position': position.inSeconds,
+    'duration': duration.inSeconds,
+    'playing': player.state.playing,
+    'volume': player.state.volume.round(),
+  };
+
   Future<void> pickEpisode(int target) async {
     if (target < 1 || anime.airedEpisodes > 0 && target > anime.airedEpisodes) {
       return;
@@ -906,6 +921,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (identical(widget.services.playerCommand, commandHandler)) {
       widget.services.playerCommand = null;
     }
+    if (identical(widget.services.playerStatus, statusHandler)) {
+      widget.services.playerStatus = null;
+    }
     for (final subscription in subscriptions) {
       unawaited(subscription.cancel());
     }
@@ -936,6 +954,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await widget.services.discord.stopWatching();
     if (identical(widget.services.playerCommand, commandHandler)) {
       widget.services.playerCommand = null;
+    }
+    if (identical(widget.services.playerStatus, statusHandler)) {
+      widget.services.playerStatus = null;
     }
     generation++;
     scope.cancel();

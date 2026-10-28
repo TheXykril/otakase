@@ -29,6 +29,8 @@ type Server struct {
 	fetched  bool
 }
 
+var serverListen = net.Listen
+
 // NewServer starts serving dir on a free port and returns immediately.
 func NewServer(dir string) (*Server, error) {
 	return NewServerOnPort(dir, 0)
@@ -52,7 +54,7 @@ func NewServerOnPort(dir string, port int) (*Server, error) {
 	// Bound to the one address the device needs, not every interface: this is
 	// a directory listing of the scratch dir for the length of the episode,
 	// and outboundIP already picked the address the device reaches it on.
-	listener, err := net.Listen("tcp", net.JoinHostPort(addr.String(), strconv.Itoa(port)))
+	listener, err := serverListen("tcp", net.JoinHostPort(addr.String(), strconv.Itoa(port)))
 	if err != nil {
 		return nil, fmt.Errorf("cast: could not listen: %w", err)
 	}
@@ -170,7 +172,9 @@ func (s *Server) Close() error {
 // but the kernel picks the source address it would route from, which is the
 // one the cast device can reach back on. Scanning interfaces means guessing
 // between a VPN, a container bridge and the real network.
-func outboundIP() (net.IP, error) {
+var outboundIP = detectOutboundIP
+
+func detectOutboundIP() (net.IP, error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		return nil, fmt.Errorf("cast: could not determine this machine's LAN address: %w", err)

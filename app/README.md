@@ -30,6 +30,21 @@ a letter and stats for April 12, with optional community messages through Discor
 Type on phone opens a temporary page on your local network. Episode milestones and rare
 exit greetings use the same thresholds and badge state as the desktop app.
 
+More > Watch rooms lists rooms your linked Discord account can join. The player follows
+the host, handles ready checks, and lets viewers ask for a pause, jump or next episode.
+The host accepts requests in the player. Room tracking uses the bot's linked trackers.
+This requires the bot from this branch, which accepts linked apps on its existing watch
+routes. Private rooms still require presence in their Discord voice channel and the
+profile's AniList setting must allow them.
+
+On TV, More > Phone remote shows a QR and a ten-minute pairing code. On your phone,
+More > Control TV finds TVs on the same local network. Pair once, then control play,
+pause, ten-second seeks, next episode, episode selection and volume. Pairings belong
+to each profile. Forget a TV on the phone, or forget all paired phones on the TV.
+
+Search `otakase` to find Otakase: The Movie. It animates your stats and AniList
+favourites through four chapters, with remote chapter controls and Back to exit.
+
 Playback chooses a working copy automatically. Change Sub/Dub before playing and choose
 actual audio or subtitle tracks through Tracks. The red episode thread follows your saved
 position and continues through the played part of the timeline.

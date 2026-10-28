@@ -9,6 +9,16 @@ import '../data/models.dart';
 import '../services.dart';
 import 'components.dart';
 
+const otakaseMovieEntry = Anime(
+  id: -1,
+  malId: -1,
+  title: 'Otakase: The Movie',
+  nativeTitle: '終',
+  format: 'SPECIAL',
+  description: 'A short film about your journey through anime.',
+);
+bool isOtakaseMovie(Anime anime) => anime.id == -1 && anime.malId == -1;
+
 class OtakaseMovie extends StatefulWidget {
   const OtakaseMovie({
     super.key,

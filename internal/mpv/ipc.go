@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -45,10 +46,14 @@ type message struct {
 // Command sends one command and returns the data mpv answered with, which is
 // nil for commands that answer with none.
 func Command(path string, command ...any) (any, error) {
+	return commandWithDial(path, Dial, command...)
+}
+
+func commandWithDial(path string, dial func(string) (net.Conn, error), command ...any) (any, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, ErrNoSocket
 	}
-	conn, err := Dial(path)
+	conn, err := dial(path)
 	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
 	}

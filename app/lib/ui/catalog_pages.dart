@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../data/models.dart';
 import '../services.dart';
 import 'components.dart';
+import 'movie_page.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({
@@ -96,6 +97,15 @@ class _SearchPageState extends State<SearchPage> {
       }
     });
     try {
+      if (query.text.trim().toLowerCase() == 'otakase') {
+        if (mounted && g == generation) {
+          setState(() {
+            items = [otakaseMovieEntry];
+            hasMore = false;
+          });
+        }
+        return;
+      }
       final result = await widget.services.catalog.search(
         query.text,
         adult: widget.services.store.flag('AdultContent'),
