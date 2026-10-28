@@ -211,13 +211,107 @@ class ListEntry {
     this.notes = '',
     this.score = 0,
     this.isRepeating = false,
+    this.updatedAt,
+    this.isPrivate = false,
+    this.repeat = 0,
+    this.startedAt = const FuzzyDate(),
+    this.completedAt = const FuzzyDate(),
   });
   final String notes;
   final double score;
   final bool isRepeating;
+  final DateTime? updatedAt;
+  final bool isPrivate;
+  final int repeat;
+  final FuzzyDate startedAt, completedAt;
   final Anime anime;
   final String status;
   final int progress;
+  ListEntry copyWith({
+    Anime? anime,
+    String? status,
+    int? progress,
+    double? score,
+    String? notes,
+    bool? isPrivate,
+    int? repeat,
+    DateTime? updatedAt,
+    FuzzyDate? startedAt,
+    FuzzyDate? completedAt,
+  }) => ListEntry(
+    anime ?? this.anime,
+    status ?? this.status,
+    progress ?? this.progress,
+    score: score ?? this.score,
+    notes: notes ?? this.notes,
+    isRepeating:
+        (status ?? this.status) == 'REPEATING' || status == null && isRepeating,
+    updatedAt: updatedAt ?? this.updatedAt,
+    isPrivate: isPrivate ?? this.isPrivate,
+    repeat: repeat ?? this.repeat,
+    startedAt: startedAt ?? this.startedAt,
+    completedAt: completedAt ?? this.completedAt,
+  );
+  Json toJson() => {
+    'anime': anime.toJson(),
+    'status': status,
+    'progress': progress,
+    'score': score,
+    'notes': notes,
+    'isRepeating': isRepeating,
+    'updatedAt': updatedAt?.toIso8601String(),
+    'private': isPrivate,
+    'repeat': repeat,
+    'startedAt': startedAt.toJson(),
+    'completedAt': completedAt.toJson(),
+  };
+  factory ListEntry.fromJson(Json j) => ListEntry(
+    Anime.fromJson((j['anime'] as Map).cast<String, dynamic>()),
+    j['status'] as String,
+    number(j['progress']),
+    score: (j['score'] as num? ?? 0).toDouble(),
+    notes: j['notes'] as String? ?? '',
+    isRepeating: j['isRepeating'] == true,
+    updatedAt: DateTime.tryParse(j['updatedAt'] as String? ?? ''),
+    isPrivate: j['private'] == true,
+    repeat: number(j['repeat']),
+    startedAt: FuzzyDate.fromJson(j['startedAt']),
+    completedAt: FuzzyDate.fromJson(j['completedAt']),
+  );
+}
+
+class FuzzyDate {
+  const FuzzyDate({this.year = 0, this.month = 0, this.day = 0});
+  final int year, month, day;
+  factory FuzzyDate.fromJson(dynamic value) => value is Map
+      ? FuzzyDate(
+          year: number(value['year']),
+          month: number(value['month']),
+          day: number(value['day']),
+        )
+      : const FuzzyDate();
+  factory FuzzyDate.parse(String? value) {
+    final parts = (value ?? '').split('-');
+    return parts.length == 3
+        ? FuzzyDate(
+            year: int.tryParse(parts[0]) ?? 0,
+            month: int.tryParse(parts[1]) ?? 0,
+            day: int.tryParse(parts[2]) ?? 0,
+          )
+        : const FuzzyDate();
+  }
+  Json toJson() => {'year': year, 'month': month, 'day': day};
+  String get mal => year == 0 || month == 0 || day == 0
+      ? ''
+      : '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
+  @override
+  bool operator ==(Object other) =>
+      other is FuzzyDate &&
+      year == other.year &&
+      month == other.month &&
+      day == other.day;
+  @override
+  int get hashCode => Object.hash(year, month, day);
 }
 
 class AccountPage {

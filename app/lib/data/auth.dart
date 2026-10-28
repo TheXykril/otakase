@@ -27,8 +27,9 @@ class SecureTokenStore implements TokenStore {
 }
 
 class LoginFailure implements Exception {
-  const LoginFailure(this.message);
+  const LoginFailure(this.message, {this.statusCode});
   final String message;
+  final int? statusCode;
   @override
   String toString() => message;
 }
@@ -364,12 +365,14 @@ class AuthService extends ChangeNotifier {
         response.statusCode == 401
             ? 'Login expired. Sign in again from Accounts.'
             : 'Account request failed (${response.statusCode}). Retry shortly.',
+        statusCode: response.statusCode,
       );
     }
     final j = (jsonDecode(response.body) as Map).cast<String, dynamic>();
     if ((j['errors'] as List? ?? []).isNotEmpty) {
-      throw const LoginFailure(
+      throw LoginFailure(
         'Account request failed. Check your login and retry.',
+        statusCode: number((j['errors'] as List).first['status']),
       );
     }
     return j;
@@ -462,6 +465,8 @@ class AuthService extends ChangeNotifier {
       final headers = {'Authorization': 'Bearer $access'};
       return (method == 'GET'
               ? client.get(uri, headers: headers)
+              : method == 'PATCH'
+              ? client.patch(uri, headers: headers, body: fields)
               : client.put(uri, headers: headers, body: fields))
           .timeout(const Duration(seconds: 20));
     }

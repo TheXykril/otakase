@@ -128,9 +128,7 @@ class _ShowPageState extends State<ShowPage> {
   }
 
   Widget actions(int last, int position) {
-    final entry =
-        widget.services.tracking.cached('AniList', anime) ??
-        widget.services.tracking.cached('MAL', anime);
+    final entry = widget.services.tracking.mergedCached(anime);
     final label = entry == null
         ? (widget.services.auth.hasAccounts ? 'Add to list' : 'Local progress')
         : (anilistStatuses[entry.status] ??

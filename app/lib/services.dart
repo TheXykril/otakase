@@ -3,6 +3,7 @@ import 'data/auth.dart';
 import 'data/tracking.dart';
 import 'data/catalog.dart';
 import 'data/store.dart';
+import 'data/list_sync.dart';
 
 class AppServices {
   AppServices({
@@ -13,6 +14,7 @@ class AppServices {
   }) : auth = auth ?? AuthService(client: catalog.client) {
     resolver = SourceResolver(core, store);
     tracking = TrackingService(this.auth);
+    listSync = ListSync(tracking: tracking, store: store);
     this.auth.addListener(_adultPreference);
     _adultPreference();
   }
@@ -23,6 +25,7 @@ class AppServices {
   void Function(int)? selectRoot;
   final AuthService auth;
   late final TrackingService tracking;
+  late final ListSync listSync;
   final Catalog catalog;
   final AppStore store;
   final CoreClient core;

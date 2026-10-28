@@ -203,11 +203,20 @@ AniList supplies the anime catalog, metadata and airing calendar. Public usernam
 without tracker write access. Authenticated requests use the account's token and include
 private lists. MAL list entries resolve to AniList metadata through their MAL identifier.
 With both accounts signed in, Home merges AniList `idMal` with MAL IDs. Progress is the
-maximum, status follows the higher progress with AniList winning ties, and a set AniList
-score takes precedence over MAL. Unmatched titles remain visible. MAL statuses use AniList
+most recently updated entry's value, together with its status, score and dates. An update
+time beats a missing one. Equal times use the CLI freshness score: progress, status, score,
+repeat count and cover presence. Missing metadata is filled from the other tracker, including
+the AniList airing schedule and either side's adult flag. Unmatched titles remain visible. MAL statuses use AniList
 category names in the combined list, including the MAL rewatch flag. Each list loads
 independently so one failure leaves the other available with a retry link. Writes still
 target both accounts, while public usernames and single-account lists retain their own views.
+
+The optional background list sync defaults on in Accounts. It starts after a successful
+combined list load, at most once per 30 minutes or on explicit refresh, without holding up
+Home. It copies one-sided entries and updates differing states, preserving notes/comments.
+AniList-private titles never queue a MAL write. Visibility rules also gate sync. Writes are
+500 ms apart, capped at 100 requests per run, with a stop on 429. Completed MAL rewatches
+use the CLI's completion-then-count sequence. Pending count writes survive a throttled run.
 
 Show artwork uses the AniList banner. Without one, the cover becomes a blurred, darkened
 backdrop beside a sharp 2:3 poster at the hero's full height. Episode titles and thumbnails

@@ -43,9 +43,7 @@ class _StatusEditorState extends State<_StatusEditor> {
       s.tracking.progress(widget.anime),
       s.store.entry(widget.anime)?.watched.fold<int>(0, max) ?? 0,
     );
-    final e =
-        s.tracking.cached('AniList', widget.anime) ??
-        s.tracking.cached('MAL', widget.anime);
+    final e = s.tracking.mergedCached(widget.anime);
     score =
         ((e?.score ?? s.store.integer('LocalScore.${widget.anime.key}') * 10) /
                 10)

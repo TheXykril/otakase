@@ -324,10 +324,28 @@ class _AccountsPageState extends State<AccountsPage> {
     body: SafeArea(
       top: false,
       child: ListenableBuilder(
-        listenable: widget.services.auth,
+        listenable: Listenable.merge([
+          widget.services.auth,
+          widget.services.store,
+          widget.services.listSync,
+        ]),
         builder: (context, _) => ListView(
           padding: const EdgeInsets.all(24),
           children: [
+            SwitchListTile(
+              title: const Text('Sync AniList and MAL'),
+              subtitle: Text(widget.services.listSync.status),
+              value: widget.services.store.flag('SyncAniListMAL'),
+              onChanged: (value) =>
+                  widget.services.store.set('SyncAniListMAL', value),
+            ),
+            if (widget.services.listSync.ready)
+              TextButton(
+                onPressed: widget.services.listSync.running
+                    ? null
+                    : widget.services.listSync.refresh,
+                child: const Text('Sync now'),
+              ),
             if (error != null)
               Text(error!, style: uiStyle(context, color: warn)),
             if (widget.services.auth.lastError != null)

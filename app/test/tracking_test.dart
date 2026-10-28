@@ -42,7 +42,7 @@ void main() {
       final mal = writes.singleWhere(
         (r) => r.url.host == 'api.myanimelist.net',
       );
-      expect(mal.method, 'PUT');
+      expect(mal.method, 'PATCH');
       expect(mal.url.path, '/v2/anime/24/my_list_status');
       expect(Uri.splitQueryString(mal.body), {'num_watched_episodes': '6'});
       expect(tracking.lastError, isNull);
@@ -155,7 +155,7 @@ void main() {
               },
             });
           }
-          if (r.method == 'PUT') malWrites++;
+          if (r.method == 'PATCH') malWrites++;
           return json({});
         }),
       );
@@ -359,10 +359,7 @@ void main() {
           );
           expect(page.entries.first.progress, 5);
           expect(page.entries.first.status, 'PAUSED');
-          expect(
-            page.entries.first.score,
-            failed.contains('AniList') ? 70 : 90,
-          );
+          expect(page.entries.first.score, 70);
           expect(page.entries.last.status, 'REPEATING');
         }
         if (page.entries.isNotEmpty) {

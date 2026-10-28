@@ -222,6 +222,16 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   WatchEntry? focused;
   Timer? artTimer;
+  final blocks = <String, GlobalKey<_AccountBlockState>>{};
+  Future<void> refresh() async {
+    await Future.wait(
+      blocks.values.map(
+        (key) =>
+            key.currentState?.load(forceSync: true) ?? Future<void>.value(),
+      ),
+    );
+  }
+
   void focusEntry(ListEntry entry) {
     artTimer?.cancel();
     artTimer = Timer(
@@ -271,87 +281,115 @@ class _HomePageState extends State<HomePage> {
         .toList();
     final combined = s.auth.signedIn('AniList') && s.auth.signedIn('MAL');
     final lists = combined ? ['AniList'] : configured;
-    return ListView(
-      key: const PageStorageKey('home-scroll'),
-      padding: EdgeInsets.only(bottom: contentBottom(context)),
-      children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            widget.isTV ? 48 : 20,
-            12,
-            widget.isTV ? 48 : 20,
-            16,
-          ),
-          child: const PageHeading('Back to your story', '続'),
-        ),
-        if (stage != null)
-          ResumeCard(
-            entry: stage,
-            isTV: widget.isTV,
-            onResume: () => widget.onResume(stage),
-          ),
-        for (final service in lists)
-          AccountBlock(
-            key: ValueKey('account-${combined ? 'Combined' : service}'),
-            service: service,
-            combineTrackers: combined,
-            services: s,
-            isTV: widget.isTV,
-            onOpen: widget.onOpen,
-            onFocused: focusEntry,
-            autofocus: stage == null && service == lists.first,
-          ),
-        if (continuing.length > 1)
-          PosterRow(
-            title: 'Continue watching',
-            items: continuing.skip(1).map((e) => e.anime).toList(),
-            isTV: widget.isTV,
-            onOpen: widget.onOpen,
-            progress: (a) {
-              final h = store.entry(a)!;
-              return h.duration > 0 ? h.position / h.duration : null;
-            },
-            captions: (a) => 'Episode ${store.entry(a)!.episode}',
-          ),
-        if (configured.isEmpty)
+    return RefreshIndicator(
+      onRefresh: refresh,
+      color: shu,
+      child: ListView(
+        key: const PageStorageKey('home-scroll'),
+        padding: EdgeInsets.only(bottom: contentBottom(context)),
+        children: [
           Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: widget.isTV ? 48 : 20,
-              vertical: 24,
+            padding: EdgeInsets.fromLTRB(
+              widget.isTV ? 48 : 20,
+              12,
+              widget.isTV ? 48 : 20,
+              16,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  'Your lists belong here.',
-                  style: uiStyle(context, size: 21, weight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Sign in to sync your progress, or add a public username through More.',
-                  style: uiStyle(context, color: muted),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  children: [
-                    AppButton(
-                      label: 'Accounts',
-                      isTV: widget.isTV,
-                      onPressed: widget.onAccounts,
+                const Expanded(child: PageHeading('Back to your story', '続')),
+                Tooltip(
+                  message: 'Refresh lists',
+                  child: FocusBox(
+                    key: const Key('home-refresh'),
+                    isTV: widget.isTV,
+                    radius: 999,
+                    onPressed: refresh,
+                    child: Semantics(
+                      label: 'Refresh lists',
+                      button: true,
+                      child: SizedBox.square(
+                        dimension: widget.isTV ? 48 : 44,
+                        child: const Icon(LucideIcons.refreshCw),
+                      ),
                     ),
-                    AppButton(
-                      label: 'Search anime',
-                      isTV: widget.isTV,
-                      autofocus: stage == null,
-                      onPressed: widget.onSearch,
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
           ),
-      ],
+          if (stage != null)
+            ResumeCard(
+              entry: stage,
+              isTV: widget.isTV,
+              onResume: () => widget.onResume(stage),
+            ),
+          for (final service in lists)
+            AccountBlock(
+              key: blocks.putIfAbsent(
+                combined ? 'Combined' : service,
+                () => GlobalKey<_AccountBlockState>(),
+              ),
+              service: service,
+              combineTrackers: combined,
+              services: s,
+              isTV: widget.isTV,
+              onOpen: widget.onOpen,
+              onFocused: focusEntry,
+              autofocus: stage == null && service == lists.first,
+            ),
+          if (continuing.length > 1)
+            PosterRow(
+              title: 'Continue watching',
+              items: continuing.skip(1).map((e) => e.anime).toList(),
+              isTV: widget.isTV,
+              onOpen: widget.onOpen,
+              progress: (a) {
+                final h = store.entry(a)!;
+                return h.duration > 0 ? h.position / h.duration : null;
+              },
+              captions: (a) => 'Episode ${store.entry(a)!.episode}',
+            ),
+          if (configured.isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: widget.isTV ? 48 : 20,
+                vertical: 24,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Your lists belong here.',
+                    style: uiStyle(context, size: 21, weight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sign in to sync your progress, or add a public username through More.',
+                    style: uiStyle(context, color: muted),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    children: [
+                      AppButton(
+                        label: 'Accounts',
+                        isTV: widget.isTV,
+                        onPressed: widget.onAccounts,
+                      ),
+                      AppButton(
+                        label: 'Search anime',
+                        isTV: widget.isTV,
+                        autofocus: stage == null,
+                        onPressed: widget.onSearch,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -420,7 +458,7 @@ class _AccountBlockState extends State<AccountBlock> {
     super.dispose();
   }
 
-  Future<void> load() async {
+  Future<void> load({bool forceSync = false}) async {
     final g = ++generation;
     stamp = signature;
     setState(() {
@@ -438,6 +476,9 @@ class _AccountBlockState extends State<AccountBlock> {
         );
         result = page.entries;
         failed = page.notLoaded;
+        if (mounted && g == generation) {
+          s.listSync.afterLoad(page, force: forceSync);
+        }
       } else if (s.auth.signedIn(widget.service)) {
         result = (await s.tracking.list(
           widget.service,

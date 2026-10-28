@@ -57,6 +57,7 @@ Future<AppServices> launchCombined(
   await fixture.launch(tester, tv: tv);
   await tester.pumpWidget(const SizedBox());
   final base = await fixture.services();
+  await base.store.set('SyncAniListMAL', false);
   final auth = AuthService(
     storage: MemoryTokens(),
     client: MockClient(
@@ -125,7 +126,13 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('5 watched'), findsOneWidget);
-        expect(find.text('MAL title'), findsNothing);
+        expect(
+          find.descendant(
+            of: find.byKey(ValueKey('Combined-ALL-${fixture.anime.key}')),
+            matching: find.text('MAL title'),
+          ),
+          findsOneWidget,
+        );
         await tester.tap(find.text('All titles'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Paused'));

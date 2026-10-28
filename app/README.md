@@ -8,7 +8,9 @@ same app. Back closes menus before leaving a page.
 
 Sign in through More > Accounts to sync AniList or MyAnimeList progress, status, scores and
 resume positions. With both signed in, Home combines your lists and updates both trackers.
-Shared titles use the furthest progress and one category picker. On TV, scan the QR with your phone
+Shared titles use the most recently updated entry and one category picker. Background list
+sync runs at most every 30 minutes, or when you refresh Home. Manage the switch and status
+through More > Accounts. AniList-private entries stay off MAL. On TV, scan the QR with your phone
 and keep both devices on the same home network. Log out of each account separately in Accounts.
 
 A public username reads your list without login. Watched episodes and resume positions stay

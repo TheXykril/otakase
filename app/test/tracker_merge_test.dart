@@ -6,39 +6,38 @@ const ani = Anime(id: 42, malId: 24, title: 'AniList title');
 const mal = Anime(id: 0, malId: 24, title: 'Different MAL title');
 
 void main() {
-  test(
-    'matches idMal, keeps AniList metadata and uses higher MAL progress',
-    () {
-      final rows = mergeTrackerLists(
-        [const ListEntry(ani, 'PLANNING', 3, score: 90, notes: 'keep')],
-        [const ListEntry(mal, 'on_hold', 8, score: 70)],
-      );
-      expect(rows, hasLength(1));
-      final entry = rows.single;
-      expect(entry.anime, same(ani));
-      expect(entry.progress, 8);
-      expect(entry.status, 'PAUSED');
-      expect(entry.score, 90);
-      expect(entry.notes, 'keep');
-    },
-  );
+  test('matches idMal and keeps the winning list state with missing metadata filled', () {
+    final rows = mergeTrackerLists(
+      [const ListEntry(ani, 'PLANNING', 3, score: 90, notes: 'keep')],
+      [const ListEntry(mal, 'on_hold', 8, score: 70)],
+    );
+    expect(rows, hasLength(1));
+    final entry = rows.single;
+    expect(entry.anime.id, ani.id);
+    expect(entry.anime.malId, ani.malId);
+    expect(entry.anime.title, mal.title);
+    expect(entry.progress, 8);
+    expect(entry.status, 'PAUSED');
+    expect(entry.score, 70);
+    expect(entry.notes, '');
+  });
 
-  test('AniList supplies status when ahead or tied on progress', () {
+  test('freshness settles equal timestamps by progress then status', () {
     for (final progress in [7, 8]) {
       final entry = mergeTrackerLists(
         [const ListEntry(ani, 'DROPPED', 8)],
         [ListEntry(mal, 'watching', progress)],
       ).single;
       expect(entry.progress, 8);
-      expect(entry.status, 'DROPPED');
+      expect(entry.status, progress == 7 ? 'DROPPED' : 'CURRENT');
     }
   });
 
-  test('score prefers a set AniList score independently of progress', () {
+  test('the winner keeps its score even when the other side has a score', () {
     for (final scores in [
       (0.0, 80.0, 80.0),
       (0.0, 0.0, 0.0),
-      (50.0, 0.0, 50.0),
+      (50.0, 0.0, 0.0),
     ]) {
       final entry = mergeTrackerLists(
         [ListEntry(ani, 'CURRENT', 8, score: scores.$1)],

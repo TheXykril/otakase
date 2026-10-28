@@ -41,6 +41,7 @@ const settingDefaults = <String, dynamic>{
   'DisabledProviders': <String>[],
   'AutoFallback': true,
   'CheckUpdates': true,
+  'SyncAniListMAL': true,
 };
 
 class AppStore extends ChangeNotifier {
