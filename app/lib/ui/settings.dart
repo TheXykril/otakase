@@ -7,26 +7,34 @@ import '../diagnostics.dart';
 import '../services.dart';
 import '../data/store.dart';
 import 'components.dart';
+import 'device_status.dart';
 
 Future<void> openSettings(
   BuildContext context,
   AppServices services,
-  bool isTV,
-) async {
+  bool isTV, {
+  String? section,
+}) async {
   if (isTV) {
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Settings',
       barrierColor: const Color(0xb3080707),
-      transitionDuration: const Duration(milliseconds: 250),
+      transitionDuration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 240),
       pageBuilder: (context, a, b) => Align(
         alignment: Alignment.centerRight,
         child: SizedBox(
-          width: (MediaQuery.sizeOf(context).width * .4).clamp(360, 620),
+          width: (MediaQuery.sizeOf(context).width * .35).clamp(432, 560),
           child: ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            child: SettingsPage(services: services, isTV: true),
+            child: SettingsPage(
+              services: services,
+              isTV: true,
+              section: section,
+            ),
           ),
         ),
       ),
@@ -42,7 +50,8 @@ Future<void> openSettings(
     await Navigator.push(
       context,
       OtakaseRoute<void>(
-        builder: (_) => SettingsPage(services: services, isTV: false),
+        builder: (_) =>
+            SettingsPage(services: services, isTV: false, section: section),
       ),
     );
   }
@@ -70,8 +79,6 @@ const settingLabels = <String, String>{
   'SkipDelay': 'Skip delay',
   'Quality': 'Quality',
   'PercentageToMarkComplete': 'Mark watched at',
-  'AdultContent': 'AdultContent',
-  'ExperimentalMovies': 'Movies (experimental)',
   'CheckUpdates': 'Check for updates',
   'Notifications': 'Notifications',
   'Updates': 'Updates',
@@ -82,7 +89,13 @@ const settingLabels = <String, String>{
 String settingLabel(String key) => settingLabels[key] ?? key;
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key, required this.services, required this.isTV});
+  const SettingsPage({
+    super.key,
+    required this.services,
+    required this.isTV,
+    this.section,
+  });
+  final String? section;
   final AppServices services;
   final bool isTV;
   @override
@@ -156,31 +169,34 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Widget group(String title, IconData icon, List<Widget> children) => Padding(
-    padding: const EdgeInsets.only(top: 24, bottom: 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+  Widget group(String title, IconData icon, List<Widget> children) =>
+      widget.section != null && widget.section != title
+      ? const SizedBox.shrink()
+      : Padding(
+          padding: const EdgeInsets.only(top: 24, bottom: 8),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Divider(),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Icon(icon, color: muted, size: 18),
-                  const SizedBox(width: 12),
-                  Expanded(child: SectionLabel(title)),
-                ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                child: Column(
+                  children: [
+                    const Divider(),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Icon(icon, color: muted, size: 18),
+                        const SizedBox(width: 12),
+                        Expanded(child: SectionLabel(title)),
+                      ],
+                    ),
+                  ],
+                ),
               ),
+              ...children,
             ],
           ),
-        ),
-        ...children,
-      ],
-    ),
-  );
+        );
   Widget row(
     String key,
     String description, {
@@ -219,7 +235,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       style: uiStyle(
                         context,
                         size: 15,
-                        color: enabled ? shu : muted,
+                        color: enabled ? accentText : muted,
                         weight: FontWeight.w500,
                       ),
                     ),
@@ -287,7 +303,11 @@ class _SettingsPageState extends State<SettingsPage> {
     backgroundColor: panel,
     appBar: AppBar(
       backgroundColor: panel,
-      title: const Text('Otakase'),
+      title: Text(widget.section ?? 'Settings'),
+      actions: [
+        DeviceStatus(isTV: widget.isTV),
+        const SizedBox(width: 24),
+      ],
       leading: IconButton(
         tooltip: 'Back',
         autofocus: true,
@@ -302,10 +322,14 @@ class _SettingsPageState extends State<SettingsPage> {
         builder: (context, child) => ListView(
           padding: EdgeInsets.only(bottom: contentBottom(context)),
           children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24),
-              child: PageHeading('Settings', '設'),
-            ),
+            if (widget.section == null)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: PageHeading('Settings', '設'),
+              ),
+            group('Appearance', LucideIcons.palette, [
+              row('Shu / Dark', 'Warm dark appearance.', value: 'Shu / Dark'),
+            ]),
             group('Subtitles & languages', LucideIcons.captions, [
               row(
                 'SubsLanguage',
@@ -442,54 +466,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ]),
               ),
             ]),
-            group('Accounts', LucideIcons.userRound, [
-              row(
-                'AniList username',
-                'Read a public list. Login and tracker writes come later.',
-                value: store.text('AniListUsername').isEmpty
-                    ? 'Not connected'
-                    : store.text('AniListUsername'),
-                icon: LucideIcons.userRound,
-                onTap: () => edit('AniListUsername', title: 'AniList username'),
-              ),
-              row(
-                'MAL username',
-                'Read a public list. Login and tracker writes come later.',
-                value: store.text('MyAnimeListUsername').isEmpty
-                    ? 'Not connected'
-                    : store.text('MyAnimeListUsername'),
-                icon: LucideIcons.userRound,
-                onTap: () => edit('MyAnimeListUsername', title: 'MAL username'),
-              ),
-              row(
-                'TV login from phone',
-                'Account login is coming later.',
-                enabled: false,
-                icon: LucideIcons.qrCode,
-              ),
-              row(
-                'Discord link',
-                'Account pairing is coming later.',
-                enabled: false,
-                icon: LucideIcons.link,
-              ),
-            ]),
-            group('Content', LucideIcons.shield, [
-              toggle(
-                'AdultContent',
-                'Show 18+ titles and artwork. Off by default.',
-                icon: LucideIcons.eye,
-              ),
-              toggle(
-                'ExperimentalMovies',
-                'Show the Movies section in the drawer.',
-              ),
-              row(
-                'Notifications',
-                'New episode alerts are coming later.',
-                enabled: false,
-                icon: LucideIcons.bell,
-              ),
+            group('About & updates', LucideIcons.shield, [
               toggle(
                 'CheckUpdates',
                 'Check published Android releases.',
@@ -503,20 +480,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   if (mounted) setState(() => updateMessage = message);
                 },
                 icon: LucideIcons.refreshCw,
-              ),
-              row(
-                'Diagnostics',
-                'Header-gated HLS clip and native ASS rendering probe.',
-                onTap: () => Navigator.push(
-                  context,
-                  OtakaseRoute<void>(
-                    builder: (_) => DiagnosticsHub(
-                      services: widget.services,
-                      isTV: widget.isTV,
-                    ),
-                  ),
-                ),
-                icon: LucideIcons.flaskConical,
               ),
               row(
                 'About',

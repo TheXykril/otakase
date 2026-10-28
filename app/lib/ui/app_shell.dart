@@ -1,16 +1,19 @@
 import 'dart:async';
-import 'dart:ui';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core.dart';
 import '../data/models.dart';
-import '../data/store.dart';
+import '../player.dart';
 import '../services.dart';
 import 'catalog_pages.dart';
 import 'components.dart';
-import 'settings.dart';
+import 'device_status.dart';
+import 'home_page.dart';
+import 'more_page.dart';
+import 'seal.dart';
 import 'show_page.dart';
 
 class AppShell extends StatefulWidget {
@@ -22,47 +25,53 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  final scaffold = GlobalKey<ScaffoldState>();
-  final homeFocus = FocusNode(debugLabel: 'Home navigation');
-  final bodyFocus = FocusNode(
-        debugLabel: 'Catalog content',
-        skipTraversal: true,
-      ),
-      topFocus = FocusNode(debugLabel: 'Top navigation', skipTraversal: true);
   int selected = 0;
-  String voiceQuery = '';
-  bool movies = false;
-  Timer? clock;
-  DateTime now = DateTime.now();
-  AppStore get store => widget.services.store;
+  int? focusedNav;
+  final navFocus = List.generate(
+    3,
+    (i) => FocusNode(
+      debugLabel: [
+        'Home navigation',
+        'Search navigation',
+        'More navigation',
+      ][i],
+    ),
+  );
+  final scopes = List.generate(3, (i) => FocusScopeNode(debugLabel: 'Root $i'));
   @override
   void initState() {
     super.initState();
-    clock = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() => now = DateTime.now());
-    });
+    widget.services.selectRoot = choose;
   }
 
   @override
   void dispose() {
-    clock?.cancel();
-    homeFocus.dispose();
-    bodyFocus.dispose();
-    topFocus.dispose();
+    widget.services.selectRoot = null;
+    for (final n in navFocus) {
+      n.dispose();
+    }
+    for (final s in scopes) {
+      s.dispose();
+    }
     super.dispose();
   }
 
-  void choose(int index) {
-    setState(() {
-      selected = index;
-      if (index == 2) {
-        movies = false;
-        voiceQuery = '';
-      }
+  void choose(int i) {
+    setState(() => selected = i);
+    widget.services.root = i;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) focusContent(i);
     });
   }
 
-  void open(Anime a, {Object? heroTag}) => Navigator.push(
+  void focusContent(int index) {
+    final scope = scopes[index];
+    final remembered = scope.focusedChild;
+    scope.requestFocus();
+    if (remembered == null) scope.nextFocus();
+  }
+
+  Future<void> open(Anime a, {Object? heroTag}) => Navigator.push(
     context,
     OtakaseRoute<void>(
       builder: (_) => ShowPage(
@@ -73,43 +82,35 @@ class _AppShellState extends State<AppShell> {
       ),
     ),
   );
-  Future<void> settings() =>
-      openSettings(context, widget.services, widget.isTV);
+  void resume(WatchEntry h) => Navigator.push(
+    context,
+    OtakaseRoute<void>(
+      builder: (_) => PlayerPage(
+        services: widget.services,
+        anime: h.anime,
+        episode: h.episode,
+        isTV: widget.isTV,
+        mode: widget.services.store.text('SubOrDub'),
+      ),
+    ),
+  );
   Future<String?> voice() async {
     try {
       return await CoreClient.channel.invokeMethod<String>('voiceSearch');
     } on PlatformException {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Voice search is unavailable. Use the search field.'),
-          ),
-        );
-      }
       return null;
     } on MissingPluginException {
       return null;
     }
   }
 
-  Future<void> voiceFromNav() async {
-    final q = await voice();
-    if (q != null && mounted) {
-      setState(() {
-        voiceQuery = q;
-        selected = 2;
-      });
-    }
-  }
-
   Future<void> back() async {
-    if (scaffold.currentState?.isDrawerOpen == true) {
-      Navigator.pop(context);
+    if (MediaQuery.viewInsetsOf(context).bottom > 0) {
+      FocusManager.instance.primaryFocus?.unfocus();
       return;
     }
     if (selected != 0) {
-      setState(() => selected = 0);
-      homeFocus.requestFocus();
+      choose(0);
       return;
     }
     final exit = await showDialog<bool>(
@@ -120,11 +121,11 @@ class _AppShellState extends State<AppShell> {
           TextButton(
             autofocus: true,
             onPressed: () => Navigator.pop(c, false),
-            child: const Text('STAY'),
+            child: const Text('Stay'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(c, true),
-            child: const Text('EXIT'),
+            child: const Text('Exit'),
           ),
         ],
       ),
@@ -132,351 +133,258 @@ class _AppShellState extends State<AppShell> {
     if (exit == true) await SystemNavigator.pop();
   }
 
-  Widget nav(String label, IconData icon, int index) => FocusBox(
-    key: ValueKey('nav-$label'),
-    isTV: widget.isTV,
-    focusNode: index == 0 ? homeFocus : null,
-    autofocus: index == 0,
-    radius: 999,
-    scale: 1.02,
-    onPressed: () => choose(index),
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.symmetric(
-        horizontal: widget.isTV ? 16 : 12,
-        vertical: widget.isTV ? 10 : 11,
-      ),
-      decoration: BoxDecoration(
-        color: selected == index
-            ? (widget.isTV ? fg : shu.withValues(alpha: .16))
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: widget.isTV
-          ? Text(
-              label,
-              style: uiStyle(
-                context,
-                weight: FontWeight.w600,
-                color: selected == index ? bg : muted,
-              ),
-            )
-          : Icon(icon, size: 22, color: selected == index ? shu : muted),
-    ),
-  );
-  Widget tvNav() => Focus(
-    focusNode: topFocus,
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(48, 27, 48, 16),
-      child: Row(
-        children: [
-          FocusBox(
-            isTV: true,
-            onPressed: () => scaffold.currentState?.openDrawer(),
-            child: const Brand(),
-          ),
-          const SizedBox(width: 24),
-          IconButton(
-            tooltip: 'Voice search',
-            onPressed: voiceFromNav,
-            icon: const Icon(LucideIcons.mic, size: 18),
-          ),
-          for (final e in [
-            ('Search', LucideIcons.search, 2),
-            ('Home', LucideIcons.house, 0),
-            ('MyList', LucideIcons.bookmark, 1),
-            ('Schedule', LucideIcons.calendarDays, 3),
-          ])
-            nav(e.$1, e.$2, e.$3),
-          const Spacer(),
-          IconButton(
-            key: const Key('nav-Settings'),
-            tooltip: 'Settings',
-            onPressed: settings,
-            icon: const Icon(LucideIcons.settings2, size: 19),
-          ),
-          const SizedBox(width: 16),
-          Text(clockTime(now), style: uiStyle(context, color: muted)),
-        ],
-      ),
-    ),
-  );
-  Widget phoneNav() => SafeArea(
-    top: false,
-    child: Align(
-      alignment: Alignment.bottomCenter,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+  Widget nav(int index) {
+    final label = ['Home', 'Search', 'More'][index];
+    final active = index == selected;
+    return Focus(
+      onKeyEvent: (_, event) {
+        if (widget.isTV &&
+            event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          scopes[selected].requestFocus();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: FocusBox(
+        key: ValueKey('nav-$label'),
+        focusNode: navFocus[index],
+        isTV: widget.isTV,
+        radius: widget.isTV ? 8 : 16,
+        frameGap: widget.isTV ? 5 : 0,
+        onFocusChanged: (value) => setState(
+          () => focusedNav = value
+              ? index
+              : focusedNav == index
+              ? null
+              : focusedNav,
+        ),
+        onPressed: () => choose(index),
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 440),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x40000000),
-                blurRadius: 24,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: Container(
-                key: const Key('phone-bottom-bar'),
-                height: phoneBarHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  color: panel.withValues(alpha: .85),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: fgBright.withValues(alpha: .1)),
-                ),
-                child: Row(
+          constraints: BoxConstraints(minHeight: widget.isTV ? 48 : 50),
+          padding: EdgeInsets.symmetric(horizontal: widget.isTV ? 6 : 4),
+          child: widget.isTV
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: FocusBox(
-                        key: const Key('nav-Menu'),
-                        radius: 999,
-                        onPressed: () => scaffold.currentState?.openDrawer(),
-                        child: const SizedBox(
-                          height: 44,
-                          child: Icon(LucideIcons.menu, size: 22),
-                        ),
+                    Text(
+                      label,
+                      style: uiStyle(
+                        context,
+                        weight: active ? FontWeight.w600 : FontWeight.w500,
+                        color:
+                            focusedNav == index &&
+                                FocusManager.instance.highlightMode ==
+                                    FocusHighlightMode.traditional
+                            ? fgBright
+                            : active
+                            ? fg
+                            : muted,
                       ),
                     ),
-                    for (final e in [
-                      ('Home', LucideIcons.house, 0),
-                      ('Search', LucideIcons.search, 2),
-                      ('MyList', LucideIcons.bookmark, 1),
-                      ('Schedule', LucideIcons.calendarDays, 3),
-                    ])
-                      Expanded(
-                        child: Tooltip(
-                          message: e.$1,
-                          child: nav(e.$1, e.$2, e.$3),
-                        ),
+                    const SizedBox(height: 7),
+                    Container(
+                      width: 36,
+                      height: 3,
+                      color: active ? shu : Colors.transparent,
+                    ),
+                  ],
+                )
+              : Stack(
+                  alignment: Alignment.topCenter,
+                  children: [
+                    if (active) Container(width: 33, height: 3, color: shu),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 7),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            [
+                              LucideIcons.house,
+                              LucideIcons.search,
+                              LucideIcons.ellipsis,
+                            ][index],
+                            size: 22,
+                            color: active ? accentText : muted,
+                          ),
+                          Text(
+                            label,
+                            style: uiStyle(
+                              context,
+                              size: 15,
+                              color:
+                                  focusedNav == index &&
+                                      FocusManager.instance.highlightMode ==
+                                          FocusHighlightMode.traditional
+                                  ? fgBright
+                                  : active
+                                  ? fg
+                                  : muted,
+                              weight: active
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+
+  Widget header() => widget.isTV
+      ? Padding(
+          padding: EdgeInsets.fromLTRB(
+            math.max(48, MediaQuery.paddingOf(context).left),
+            math.max(27, MediaQuery.paddingOf(context).top),
+            48,
+            12,
+          ),
+          child: Row(
+            children: [
+              const Brand(),
+              const SizedBox(width: 28),
+              for (var i = 0; i < 3; i++) ...[
+                nav(i),
+                if (i < 2) const SizedBox(width: 14),
+              ],
+              const Spacer(),
+              const DeviceStatus(isTV: true),
+            ],
+          ),
+        )
+      : Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            math.max(MediaQuery.viewPaddingOf(context).top, 25),
+            20,
+            12,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 38),
+            child: SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                runSpacing: 8,
+                children: const [Brand(), DeviceStatus()],
               ),
             ),
           ),
+        );
+  Widget phoneNav() => Positioned(
+    left: 20,
+    right: 20,
+    bottom:
+        math.max(
+          MediaQuery.viewPaddingOf(context).bottom,
+          MediaQuery.paddingOf(context).bottom,
+        ) +
+        7,
+    child: Center(
+      child: Container(
+        key: const Key('phone-bottom-bar'),
+        width: math.min(292, MediaQuery.sizeOf(context).width - 40),
+        constraints: const BoxConstraints(minHeight: 72),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        decoration: BoxDecoration(
+          color: panel.withValues(alpha: .98),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: line),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x87000000),
+              offset: Offset(0, 12),
+              blurRadius: 35,
+            ),
+          ],
         ),
-      ),
-    ),
-  );
-
-  Widget drawer() => Drawer(
-    width: 320,
-    backgroundColor: panel,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
-    ),
-    child: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
-        children: [
-          const Brand(),
-          const SizedBox(height: 8),
-          Text('お任せ', style: uiStyle(context, color: muted)),
-          const SizedBox(height: 32),
-          const SectionLabel('Profile / accounts'),
-          const SizedBox(height: 16),
-          FocusBox(
-            onPressed: () {
-              Navigator.pop(context);
-              choose(1);
-            },
-            isTV: widget.isTV,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Row(
-              children: [
-                if (store.avatar.isEmpty)
-                  const Icon(LucideIcons.userRound, color: muted)
-                else
-                  ClipOval(
-                    child: CoverImage(store.avatar, width: 32, height: 32),
-                  ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        store.text('AniListUsername').isNotEmpty
-                            ? store.text('AniListUsername')
-                            : store.text('MyAnimeListUsername').isNotEmpty
-                            ? store.text('MyAnimeListUsername')
-                            : 'Your lists',
-                        style: uiStyle(context),
-                      ),
-                      Text(
-                        'Public accounts · Local progress',
-                        style: uiStyle(context, size: 15, color: muted),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(LucideIcons.chevronRight, size: 16, color: muted),
-              ],
-            ),
-          ),
-          const Divider(height: 48),
-          const SectionLabel('Experimental'),
-          const SizedBox(height: 12),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text('Movies', style: uiStyle(context)),
-            value: store.flag('ExperimentalMovies'),
-            onChanged: (v) => store.set('ExperimentalMovies', v),
-          ),
-          if (store.flag('ExperimentalMovies'))
-            AppButton(
-              label: 'Browse movies',
-              onPressed: () {
-                Navigator.pop(context);
-                setState(() {
-                  selected = 2;
-                  voiceQuery = '';
-                  movies = true;
-                });
-              },
-              isTV: widget.isTV,
-            ),
-          const Divider(height: 48),
-          FocusBox(
-            key: const Key('drawer-settings'),
-            onPressed: () {
-              Navigator.pop(context);
-              unawaited(settings());
-            },
-            isTV: widget.isTV,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Row(
-              children: [
-                const Icon(LucideIcons.settings2, color: muted),
-                const SizedBox(width: 16),
-                Expanded(child: Text('Settings', style: uiStyle(context))),
-                const Icon(LucideIcons.chevronRight, color: muted, size: 16),
-              ],
-            ),
-          ),
-          const SizedBox(height: 48),
-          Text('Leave it to us.', style: uiStyle(context, color: muted)),
-        ],
+        child: Row(
+          children: [for (var i = 0; i < 3; i++) Expanded(child: nav(i))],
+        ),
       ),
     ),
   );
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: store,
+    listenable: Listenable.merge([
+      widget.services.store,
+      widget.services.auth,
+      widget.services.tracking,
+    ]),
     builder: (context, _) {
-      final contentKey =
-          '${store.flag('AdultContent')}:${store.text('AniListUsername')}:${store.text('MyAnimeListUsername')}';
-      final Widget page = switch (selected) {
-        1 => MyListPage(
-          key: ValueKey('list-$contentKey'),
+      final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+      final pages = <Widget>[
+        HomePage(
           services: widget.services,
           isTV: widget.isTV,
           onOpen: open,
+          onResume: resume,
+          onSearch: () => choose(1),
+          onAccounts: () => openAccounts(context, widget.services, widget.isTV),
         ),
-        2 => SearchPage(
-          key: ValueKey('search-$contentKey-$voiceQuery-$movies'),
-          initialQuery: voiceQuery,
-          initialFormat: movies ? 'MOVIE' : null,
+        SearchPage(
           services: widget.services,
           isTV: widget.isTV,
           onOpen: open,
           onVoice: voice,
         ),
-        3 => SchedulePage(
-          key: ValueKey('schedule-$contentKey'),
-          services: widget.services,
-          isTV: widget.isTV,
-          onOpen: open,
-        ),
-        _ => HomePage(
-          key: ValueKey('home-$contentKey'),
-          services: widget.services,
-          isTV: widget.isTV,
-          onOpen: open,
-        ),
-      };
+        MorePage(services: widget.services, isTV: widget.isTV, onOpen: open),
+      ];
       return PopScope(
         canPop: false,
         onPopInvokedWithResult: (popped, result) {
           if (!popped) unawaited(back());
         },
-        child: Focus(
-          skipTraversal: true,
-          onKeyEvent: (_, event) {
-            if (widget.isTV &&
-                event is KeyDownEvent &&
-                scaffold.currentState?.isDrawerOpen != true) {
-              if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-                  bodyFocus.hasFocus) {
-                homeFocus.requestFocus();
-                return KeyEventResult.handled;
-              }
-              if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
-                  topFocus.hasFocus) {
-                scaffold.currentState?.openDrawer();
-                return KeyEventResult.handled;
-              }
-            }
-            return KeyEventResult.ignored;
-          },
-          child: Scaffold(
-            key: scaffold,
-            drawer: drawer(),
-            body: SafeArea(
-              bottom: false,
-              child: Stack(
+        child: Scaffold(
+          body: Stack(
+            children: [
+              Column(
                 children: [
-                  Column(
-                    children: [
-                      if (widget.isTV)
-                        tvNav()
-                      else
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
-                          child: Row(
-                            children: [
-                              const Brand(),
-                              const Spacer(),
-                              Text(
-                                'お任せ',
-                                style: uiStyle(context, size: 15, color: muted),
+                  header(),
+                  Expanded(
+                    child: PageInsets(
+                      bottom: widget.isTV
+                          ? math.max(27, MediaQuery.paddingOf(context).bottom)
+                          : keyboard
+                          ? 16
+                          : (72 +
+                                    (MediaQuery.textScalerOf(context).scale(1) -
+                                                1)
+                                            .clamp(0, 2) *
+                                        64) +
+                                7 +
+                                math.max(
+                                  MediaQuery.viewPaddingOf(context).bottom,
+                                  MediaQuery.paddingOf(context).bottom,
+                                ),
+                      child: PosterNavigation(
+                        onOpen: (a, tag) => open(a, heroTag: tag),
+                        child: IndexedStack(
+                          index: selected,
+                          children: [
+                            for (var i = 0; i < pages.length; i++)
+                              ExcludeFocus(
+                                excluding: i != selected,
+                                child: FocusScope(
+                                  node: scopes[i],
+                                  child: FocusTraversalGroup(child: pages[i]),
+                                ),
                               ),
-                            ],
-                          ),
-                        ),
-                      Expanded(
-                        child: PageInsets(
-                          bottom: widget.isTV
-                              ? 27
-                              : phoneBarHeight +
-                                    phoneBarMargin +
-                                    MediaQuery.paddingOf(context).bottom,
-                          child: Focus(
-                            focusNode: bodyFocus,
-                            child: FocusTraversalGroup(
-                              child: PosterNavigation(
-                                onOpen: (a, tag) => open(a, heroTag: tag),
-                                child: page,
-                              ),
-                            ),
-                          ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                  if (!widget.isTV) phoneNav(),
                 ],
               ),
-            ),
+              if (!widget.isTV && !keyboard) phoneNav(),
+            ],
           ),
         ),
       );
@@ -490,13 +398,13 @@ class Brand extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Image.asset('assets/mark.png', width: 34, height: 34),
-      const SizedBox(width: 12),
+      OtakaseSeal(size: AppLayout.tvOf(context) ? 34 : 29),
+      const SizedBox(width: 7),
       Text(
         'OTAKASE',
         style: display.copyWith(
-          fontSize: AppLayout.tvOf(context) ? 23 : 19,
-          letterSpacing: .3,
+          fontSize: AppLayout.tvOf(context) ? 22 : 19,
+          letterSpacing: -.57,
         ),
       ),
     ],

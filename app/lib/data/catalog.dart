@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'models.dart';
+import 'oauth_config.dart';
 
 class CatalogFailure implements Exception {
   const CatalogFailure(this.message);
@@ -141,7 +142,7 @@ class Catalog {
         'season': season,
         'year': year,
         'genre': genre,
-        'status': status,
+        if (status != 'ALL') 'status': status,
       },
     );
     final p = (data['Page'] as Map);
@@ -175,7 +176,7 @@ class Catalog {
     );
     final result = Anime.fromJson((d['Media'] as Map).cast<String, dynamic>());
     if (!adult && result.isAdult) {
-      throw const CatalogFailure('AdultContent is disabled.');
+      throw const CatalogFailure('This title is unavailable.');
     }
     return result;
   }
@@ -217,7 +218,8 @@ class Catalog {
         final row = e as Map;
         if (row['media'] is! Map) continue;
         final a = Anime.fromJson((row['media'] as Map).cast<String, dynamic>());
-        if ((adult || !a.isAdult) && row['status'] == status) {
+        if ((adult || !a.isAdult) &&
+            (status == 'ALL' || row['status'] == status)) {
           all[a.key] = ListEntry(
             a,
             row['status'] as String,
@@ -235,7 +237,6 @@ class Catalog {
     );
   }
 
-  static const malClientId = '46e39244e6635ceac2df59d37dbaa43f';
   Future<AccountPage> _malList(
     String username,
     String status,
@@ -246,7 +247,7 @@ class Catalog {
       'api.myanimelist.net',
       '/v2/users/$username/animelist',
       {
-        'status': status,
+        if (status != 'ALL') 'status': status,
         'sort': 'list_updated_at',
         'limit': '50',
         'offset': '${(page - 1) * 50}',
@@ -259,10 +260,7 @@ class Catalog {
       response = await client
           .get(
             uri,
-            headers: {
-              'X-MAL-CLIENT-ID': malClientId,
-              'Accept': 'application/json',
-            },
+            headers: {'X-MAL-CLIENT-ID': malId, 'Accept': 'application/json'},
           )
           .timeout(const Duration(seconds: 20));
     } catch (_) {

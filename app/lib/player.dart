@@ -10,8 +10,11 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import 'core.dart';
 import 'data/models.dart';
+import 'data/synced_resume.dart';
 import 'services.dart';
 import 'ui/components.dart';
+import 'ui/device_status.dart';
+import 'ui/seal.dart';
 
 class PlayerPage extends StatefulWidget {
   const PlayerPage({
@@ -35,6 +38,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final Player player;
   late final VideoController video;
   late int episode;
+  late Anime anime;
+  late final ResumePusher resumePusher;
+  int savedResume = 0;
+  final completedEpisodes = <int>{};
+  bool nextCancelled = false, scrubbing = false;
   PlaybackSource? source;
   RequestScope scope = RequestScope();
   final subscriptions = <StreamSubscription<dynamic>>[];
@@ -55,17 +63,21 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   bool retrying = false;
   List<SkipSpan> spans = [];
   List<int> episodes = [];
+  List<int> availableQualities = [];
   SkipSpan? active;
   final skipped = <String>{};
   Duration position = Duration.zero, duration = Duration.zero;
   bool get canNext => episodes.isNotEmpty
       ? episodes.any((e) => e > episode)
-      : widget.anime.airedEpisodes > episode;
+      : anime.airedEpisodes > episode;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    anime = widget.anime;
     episode = widget.episode;
+    widget.services.tracking.remember(anime);
+    resumePusher = widget.services.tracking.pusher();
     player = Player(
       configuration: const PlayerConfiguration(
         libass: true,
@@ -89,7 +101,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         if (changed) unawaited(loadSkips(generation));
       }),
       player.stream.completed.listen((done) {
-        if (done && !busy && !finished) {
+        if (done && !busy && !completedEpisodes.contains(episode)) {
           finished = true;
           unawaited(save(completed: true));
           offerNext();
@@ -113,8 +125,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       player.stream.tracks.listen((_) {
         if (!busy) unawaited(preferredTracks(generation));
       }),
-      player.stream.playing.listen((_) {
-        if (mounted) setState(() {});
+      player.stream.playing.listen((playing) {
+        if (mounted) {
+          showControls();
+          if (!playing && !busy) {
+            unawaited(save().then((_) => resumePusher.flush()));
+          }
+        }
       }),
     ]);
     saveTimer = Timer.periodic(
@@ -138,7 +155,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) {
-      unawaited(save());
+      unawaited(save().then((_) => resumePusher.flush()));
       unawaited(player.pause());
     }
   }
@@ -170,11 +187,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final quality = widget.services.store.text('Quality');
     if (quality == 'best' || quality == 'worst') {
       await property('hls-bitrate', quality == 'best' ? 'max' : 'min');
-      return;
     }
     final height = int.tryParse(quality.replaceAll('p', ''));
-    await property('hls-bitrate', 'max');
-    if (height == null || !(stream.hls || stream.url.contains('.m3u8'))) return;
+    if (height != null) await property('hls-bitrate', 'max');
+    availableQualities = [];
+    if (!(stream.hls || stream.url.contains('.m3u8'))) return;
     try {
       final request = http.Request('GET', Uri.parse(stream.url))
         ..headers.addAll(headers);
@@ -203,7 +220,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         if (h != null && b != null) choices.add((height: h, bandwidth: b));
       }
       choices.sort((a, b) => a.height.compareTo(b.height));
-      if (choices.isNotEmpty) {
+      availableQualities = choices.map((c) => c.height).toSet().toList()
+        ..sort((a, b) => b.compareTo(a));
+      if (choices.isNotEmpty && height != null) {
         final fitting = choices.where((c) => c.height <= height).toList();
         await property(
           'hls-bitrate',
@@ -234,12 +253,33 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     skipped.clear();
     subSelected = false;
     audioSelected = false;
+    if (widget.services.auth.accounts.length > 1 &&
+        (anime.id <= 0 || anime.malId <= 0)) {
+      try {
+        anime = await widget.services.catalog
+            .detail(anime, adult: widget.services.store.adultAllowed)
+            .timeout(const Duration(seconds: 4));
+        widget.services.tracking.remember(anime);
+      } catch (_) {
+        widget.services.tracking.lastError = 'Unable to link this title to both trackers. Retry from Show details.';
+      }
+    }
+    final historyBeforeOpen = widget.services.store.entry(anime);
+    savedResume = math.max(
+      savedResume,
+      historyBeforeOpen?.episode == episode
+          ? historyBeforeOpen?.position ?? 0
+          : 0,
+    );
+    final synced = await widget.services.tracking.resume(anime);
+    savedResume = math.max(savedResume, synced.forEpisode(episode));
+    if (!mounted || g != generation) return;
     try {
       await player.stop();
       if (mirror == null) {
         await widget.services.core.stopPlayback();
         source = await widget.services.resolver.resolve(
-          widget.anime,
+          anime,
           episode,
           scope: scope,
           exclude: failedSources,
@@ -272,11 +312,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         }
       }
       if (!mounted || g != generation) return;
-      final history = widget.services.store.entry(widget.anime);
-      if (widget.services.store.flag('ResumePlayback') &&
-          history?.episode == episode &&
-          (history?.position ?? 0) > 0) {
-        await player.seek(Duration(seconds: history!.position));
+      if (widget.services.store.flag('ResumePlayback') && savedResume > 0) {
+        await player.seek(Duration(seconds: savedResume));
       }
       await preferredTracks(g);
       if (!mounted || g != generation) return;
@@ -308,7 +345,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       scope,
     );
     final extra = await widget.services.catalog.skipTimes(
-      widget.anime.malId,
+      anime.malId,
       episode,
       duration.inMilliseconds / 1000,
     );
@@ -346,6 +383,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Future<void> preferredTracks(int g) async {
+    if (player.state.duration <= Duration.zero) return;
     final s = widget.services.store;
     if (!audioSelected) {
       for (final language in s.text('AudioLanguages').split(',')) {
@@ -417,7 +455,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       await player.setSubtitleTrack(
         SubtitleTrack.data(
           utf8.decode(response.bodyBytes, allowMalformed: true),
-          title: track['label'] as String? ?? 'Provider subtitles',
+          title: track['label'] as String? ?? 'Subtitles',
           language: track['language'] as String?,
         ),
       );
@@ -437,9 +475,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   void tick(Duration p) {
     if (!mounted || busy) return;
     if (p > Duration.zero && source != null) {
-      unawaited(
-        widget.services.store.rememberSource(widget.anime, source!.provider),
-      );
+      unawaited(widget.services.store.rememberSource(anime, source!.provider));
     }
     final current = spans
         .where((s) => s.contains(p.inMilliseconds / 1000))
@@ -465,7 +501,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         unawaited(
           player.seek(Duration(milliseconds: (current.end * 1000).round())),
         );
-      } else if (entered && !widget.services.store.flag(setting)) {
+      } else if (entered &&
+          !panelOpen &&
+          !scrubbing &&
+          !widget.services.store.flag(setting)) {
         setState(() => overlay = true);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && active != null) skipFocus.requestFocus();
@@ -475,6 +514,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (duration.inSeconds > 0 &&
         duration.inSeconds - p.inSeconds <= 15 &&
         !finished &&
+        !nextCancelled &&
         canNext) {
       finished = true;
       offerNext();
@@ -487,16 +527,23 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         completed ||
         position.inSeconds / duration.inSeconds * 100 >=
             widget.services.store.integer('PercentageToMarkComplete');
+    if (completed) {
+      if (completedEpisodes.add(episode)) {
+        await resumePusher.episodeDone(anime.key, episode, anime.episodes);
+      }
+    } else {
+      resumePusher.note(anime.key, episode, position.inSeconds);
+    }
     // Keep the resume point even when the watched threshold has been reached.
     await widget.services.store.progress(
-      widget.anime,
+      anime,
       episode,
       position.inSeconds,
       duration.inSeconds,
       completed: completed,
     );
     if (watched && !completed) {
-      await widget.services.store.markWatched(widget.anime, episode, true);
+      await widget.services.store.markWatched(anime, episode, true);
     }
   }
 
@@ -507,6 +554,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     hideTimer = Timer(const Duration(seconds: 5), () {
       if (mounted &&
           !panelOpen &&
+          !scrubbing &&
           active == null &&
           countdownSeconds == 0 &&
           player.state.playing) {
@@ -535,29 +583,28 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     var target = episodes.where((e) => e > episode).firstOrNull ?? episode + 1;
     if (automatic && widget.services.store.flag('SkipFiller')) {
       // A bounded lookup avoids runaway requests when metadata is incomplete.
-      for (var i = 0; i < 12 && target <= widget.anime.airedEpisodes; i++) {
-        if (!await widget.services.catalog.isFiller(
-          widget.anime.malId,
-          target,
-        )) {
+      for (var i = 0; i < 12 && target <= anime.airedEpisodes; i++) {
+        if (!await widget.services.catalog.isFiller(anime.malId, target)) {
           break;
         }
-        await widget.services.store.markWatched(widget.anime, target, true);
+        await widget.services.store.markWatched(anime, target, true);
         target++;
       }
-      if (widget.anime.airedEpisodes > 0 &&
-          target > widget.anime.airedEpisodes) {
+      if (anime.airedEpisodes > 0 && target > anime.airedEpisodes) {
         return;
       }
     }
     if (!mounted) return;
+    await resumePusher.flush();
+    savedResume = 0;
+    nextCancelled = false;
     episode = target;
     failedSources.clear();
     await open();
   }
 
   void offerNext() {
-    if (!canNext || countdownSeconds > 0) return;
+    if (!canNext || nextCancelled || countdownSeconds > 0) return;
     setState(() {
       countdownSeconds = 10;
       overlay = true;
@@ -588,7 +635,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           height: 360,
           child: ListView(
             children: [
-              const Text('Subtitles', style: TextStyle(color: shu)),
+              const Text('Subtitles', style: TextStyle(color: accentText)),
               for (final track in player.state.tracks.subtitle)
                 ChoiceRow(
                   autofocus: track == player.state.tracks.subtitle.first,
@@ -608,7 +655,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               for (final track in source?.streams[copy].subtitles ?? <Json>[])
                 ChoiceRow(
                   title: Text(
-                    '${track['label'] ?? track['language'] ?? 'Provider subtitles'} · provider',
+                    '${track['label'] ?? track['language'] ?? 'Subtitles'}',
                   ),
                   onTap: () {
                     subSelected = true;
@@ -617,7 +664,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   },
                 ),
               const Divider(),
-              const Text('Audio', style: TextStyle(color: shu)),
+              const Text('Audio', style: TextStyle(color: accentText)),
               for (final track in player.state.tracks.audio)
                 ChoiceRow(
                   title: Text(
@@ -676,7 +723,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Future<void> qualityPanel() async {
-    final values = ['best', '1080', '720', '480', '360', 'worst'];
+    final values = [
+      'best',
+      ...availableQualities.map((h) => '$h'),
+      if (availableQualities.length > 1) 'worst',
+    ];
     panelOpen = true;
     final chosen = await chooseValue(
       context,
@@ -762,7 +813,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     hideTimer?.cancel();
     saveTimer?.cancel();
     nextTimer?.cancel();
-    unawaited(save());
+    unawaited(save().then((_) => resumePusher.flush()));
     for (final subscription in subscriptions) {
       unawaited(subscription.cancel());
     }
@@ -772,7 +823,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     unawaited(
       player.dispose().then((_) => widget.services.core.stopPlayback()),
     );
-    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: [SystemUiOverlay.bottom],
+      ),
+    );
     if (!widget.isTV) unawaited(SystemChrome.setPreferredOrientations([]));
     super.dispose();
   }
@@ -809,19 +865,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 child: Video(controller: video, controls: NoVideoControls),
               ),
             ),
-            if (!overlay && !busy && duration.inSeconds > 0)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: LinearProgressIndicator(
-                  minHeight: 1,
-                  value: (position.inMilliseconds / duration.inMilliseconds)
-                      .clamp(0, 1),
-                  color: shu,
-                  backgroundColor: line,
-                ),
-              ),
             if (busy)
               Center(
                 child: Padding(
@@ -829,7 +872,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Image.asset('assets/mark.png', width: 64, height: 64),
+                      OtakaseSeal(size: widget.isTV ? 96 : 64),
                       const SizedBox(height: 24),
                       const SkeletonBlock(width: 160, height: 2),
                       const SizedBox(height: 24),
@@ -885,7 +928,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  widget.anime.title,
+                                  anime.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: uiStyle(
@@ -906,10 +949,49 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                               ],
                             ),
                           ),
+                          DeviceStatus(isTV: widget.isTV),
+                          const SizedBox(width: 12),
+                          const SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: Center(child: OtakaseSeal()),
+                          ),
                         ],
                       ),
                     ),
-                    const Spacer(),
+                    Expanded(
+                      child: Center(
+                        child: Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 24,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            TransportButton(
+                              label: 'Rewind 10 seconds',
+                              text: '−10',
+                              onPressed: () => seek(-10),
+                            ),
+                            TransportButton(
+                              label: player.state.playing ? 'Pause' : 'Play',
+                              icon: player.state.playing
+                                  ? LucideIcons.pause
+                                  : LucideIcons.play,
+                              primary: true,
+                              focusNode: playFocus,
+                              onPressed: () {
+                                unawaited(player.playOrPause());
+                                showControls();
+                              },
+                            ),
+                            TransportButton(
+                              label: 'Forward 10 seconds',
+                              text: '+10',
+                              onPressed: () => seek(10),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                     if (active != null)
                       Align(
                         alignment: Alignment.centerRight,
@@ -955,7 +1037,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
                                 child: CoverImage(
-                                  widget.anime.cover,
+                                  anime.cover,
                                   width: 54,
                                   height: 81,
                                 ),
@@ -1000,6 +1082,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                           label: 'Cancel',
                                           onPressed: () {
                                             nextTimer?.cancel();
+                                            nextCancelled = true;
                                             setState(
                                               () => countdownSeconds = 0,
                                             );
@@ -1027,7 +1110,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                       child: Column(
                         children: [
                           SizedBox(
-                            height: 36,
+                            height: 44,
                             child: Stack(
                               alignment: Alignment.center,
                               children: [
@@ -1051,6 +1134,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                       .max(1, duration.inMilliseconds)
                                       .toDouble(),
                                   onChangeStart: (_) {
+                                    scrubbing = true;
                                     hideTimer?.cancel();
                                   },
                                   onChanged: (v) {
@@ -1061,6 +1145,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                     );
                                   },
                                   onChangeEnd: (v) {
+                                    scrubbing = false;
                                     unawaited(
                                       player.seek(
                                         Duration(milliseconds: v.round()),
@@ -1075,7 +1160,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           Row(
                             children: [
                               Text(
-                                time(position),
+                                '${time(position)} / ${time(duration)}',
                                 style: mono.copyWith(
                                   fontSize: widget.isTV ? 20 : 15,
                                   color: fg,
@@ -1109,28 +1194,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                             runSpacing: 0,
                             alignment: WrapAlignment.center,
                             children: [
-                              AppButton(
-                                label: '−10 s',
-                                onPressed: () => seek(-10),
-                                isTV: widget.isTV,
-                              ),
-                              AppButton(
-                                label: player.state.playing ? 'Pause' : 'Play',
-                                icon: player.state.playing
-                                    ? LucideIcons.pause
-                                    : LucideIcons.play,
-                                focusNode: playFocus,
-                                onPressed: () {
-                                  unawaited(player.playOrPause());
-                                  showControls();
-                                },
-                                isTV: widget.isTV,
-                              ),
-                              AppButton(
-                                label: '+10 s',
-                                onPressed: () => seek(10),
-                                isTV: widget.isTV,
-                              ),
                               AppButton(
                                 label: 'Next',
                                 onPressed: canNext ? () => next() : null,
@@ -1175,13 +1238,22 @@ class SkipPainter extends CustomPainter {
       final right =
           (span.end * 1000 / duration.inMilliseconds).clamp(0.0, 1.0) *
           size.width;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(left, 0, right, 8),
-          const Radius.circular(3),
-        ),
-        Paint()..color = shu.withValues(alpha: .45),
-      );
+      final region = Rect.fromLTRB(left, 0, right, 7);
+      canvas.save();
+      canvas.clipRect(region);
+      canvas.drawRect(region, Paint()..color = const Color(0xff302923));
+      for (double x = left - 7; x < right; x += 10) {
+        canvas.drawPath(
+          Path()
+            ..moveTo(x, 7)
+            ..lineTo(x + 7, 0)
+            ..lineTo(x + 11, 0)
+            ..lineTo(x + 4, 7)
+            ..close(),
+          Paint()..color = fg,
+        );
+      }
+      canvas.restore();
     }
   }
 

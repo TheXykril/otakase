@@ -23,7 +23,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const output = String.fromEnvironment('PHONE_SCREENSHOTS');
 const artwork = String.fromEnvironment('SCREENSHOT_ART');
 const verify = bool.fromEnvironment('VERIFY_PHONE_SCREENS');
-const enabled = verify || output != '';
+const enabled = true;
 const story = Anime(
   id: 154587,
   malId: 52991,
@@ -131,6 +131,16 @@ void main() {
       addTearDown(
         tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
       );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            const MethodChannel('otakase/status'),
+            (_) async => null,
+          );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            const MethodChannel('otakase/device'),
+            (_) async => {'use24Hour': true},
+          );
       SharedPreferences.setMockInitialValues({});
       final store = AppStore(await SharedPreferences.getInstance());
       await store.progress(story, 8, 426, 1440);
@@ -163,13 +173,13 @@ void main() {
       );
       await tester.pumpAndSettle();
       if (screen == 'mylist') {
-        await tester.tap(find.byKey(const ValueKey('nav-MyList')));
+        await tester.tap(find.byKey(const ValueKey('nav-More')));
       } else if (screen == 'search') {
         await tester.tap(find.byKey(const ValueKey('nav-Search')));
       } else if (screen == 'settings') {
-        await tester.tap(find.byKey(const Key('nav-Menu')));
+        await tester.tap(find.byKey(const Key('nav-More')));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const Key('drawer-settings')));
+        await tester.tap(find.byKey(const Key('more-Subtitles & languages')));
       }
       await tester.pumpAndSettle();
       await tester.pumpAndSettle();
@@ -188,6 +198,6 @@ void main() {
         );
       }
       await tester.pumpWidget(const SizedBox());
-    }, skip: !enabled);
+    });
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,19 +11,20 @@ import 'data/store.dart';
 import 'services.dart';
 import 'ui/app_shell.dart';
 import 'ui/components.dart';
+import 'ui/seal.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   final core = CoreClient();
   final store = AppStore(await SharedPreferences.getInstance());
-  runApp(
-    OtakaseApp(
-      services: AppServices(catalog: Catalog(), store: store, core: core),
-      isTV: await core.isTV(),
-      splash: true,
-    ),
+  final services = AppServices(catalog: Catalog(), store: store, core: core);
+  await services.auth.initialize();
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.manual,
+    overlays: [SystemUiOverlay.bottom],
   );
+  runApp(OtakaseApp(services: services, isTV: await core.isTV(), splash: true));
 }
 
 class OtakaseApp extends StatefulWidget {
@@ -90,7 +92,7 @@ class _OtakaseAppState extends State<OtakaseApp> {
           brightness: Brightness.dark,
           colorScheme: const ColorScheme.dark(
             primary: shu,
-            onPrimary: fgBright,
+            onPrimary: bgDeep,
             secondary: shu,
             surface: panel,
             outline: line,
@@ -140,7 +142,7 @@ class _OtakaseAppState extends State<OtakaseApp> {
           focusColor: traditional ? line : Colors.transparent,
           dividerColor: line,
           dividerTheme: const DividerThemeData(color: line, thickness: 1),
-          iconTheme: const IconThemeData(color: fg, size: 20),
+          iconTheme: IconThemeData(color: fg, size: widget.isTV ? 24 : 22),
           appBarTheme: AppBarTheme(
             backgroundColor: bg,
             surfaceTintColor: Colors.transparent,
@@ -194,15 +196,15 @@ class _OtakaseAppState extends State<OtakaseApp> {
             filled: true,
             fillColor: fgBright.withValues(alpha: .06),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: line),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: lineStrong),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: line),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: lineStrong),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: shu),
             ),
             contentPadding: const EdgeInsets.symmetric(
@@ -246,7 +248,7 @@ class _SplashGateState extends State<SplashGate> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() => visible = true);
     });
-    timer = Timer(const Duration(milliseconds: 1200), () {
+    timer = Timer(Duration.zero, () {
       if (mounted) setState(() => done = true);
     });
   }
@@ -271,7 +273,7 @@ class _SplashGateState extends State<SplashGate> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Image.asset('assets/mark.png', width: 150, height: 150),
+                    OtakaseSeal(size: AppLayout.tvOf(context) ? 96 : 64),
                     const SizedBox(height: 32),
                     Text('お任せ', style: uiStyle(context, size: 20, color: fg)),
                     const SizedBox(height: 12),

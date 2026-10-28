@@ -40,8 +40,6 @@ const settingDefaults = <String, dynamic>{
   'ProviderOrder': sourceNames,
   'DisabledProviders': <String>[],
   'AutoFallback': true,
-  'AdultContent': false,
-  'ExperimentalMovies': false,
   'CheckUpdates': true,
 };
 
@@ -55,6 +53,8 @@ class AppStore extends ChangeNotifier {
     } catch (_) {
       /* A damaged preference falls back to defaults. */
     }
+    _values.remove('AdultContent');
+    _values.remove('ContinueWatchingAdult');
     // 'ask' opened a track menu at every episode start; it is gone.
     if (_values['SubStyle'] == 'ask') _values['SubStyle'] = 'soft';
     try {
@@ -74,7 +74,16 @@ class AppStore extends ChangeNotifier {
   final Map<String, String> providerHealth = {};
   String avatar = '';
   dynamic value(String key) => _values[key] ?? settingDefaults[key];
-  bool flag(String key) => value(key) == true;
+  bool _adultAllowed = false;
+  bool get adultAllowed => _adultAllowed;
+  void setAdultAllowed(bool allowed) {
+    if (_adultAllowed == allowed) return;
+    _adultAllowed = allowed;
+    notifyListeners();
+  }
+
+  bool flag(String key) =>
+      key == 'AdultContent' ? _adultAllowed : value(key) == true;
   String text(String key) => value(key)?.toString() ?? '';
   int integer(String key) => number(value(key));
   List<String> strings(String key) =>
@@ -100,7 +109,29 @@ class AppStore extends ChangeNotifier {
   List<WatchEntry> get continuing => history
       .where((h) => h.position > 0 || !h.watched.contains(h.episode))
       .toList();
-  WatchEntry? entry(Anime anime) => _history[anime.key];
+  WatchEntry? entry(Anime anime) =>
+      _history[anime.key] ??
+      _history.values
+          .where(
+            (h) =>
+                anime.id > 0 && h.anime.id == anime.id ||
+                anime.malId > 0 && h.anime.malId == anime.malId,
+          )
+          .firstOrNull;
+  Future<void> setWatchedProgress(Anime anime, int progress) async {
+    final old = entry(anime);
+    _history.remove(old?.anime.key);
+    _history[anime.key] = WatchEntry(
+      anime: anime,
+      episode: progress + 1,
+      position: 0,
+      watched: List.generate(progress, (i) => i + 1),
+      updated: DateTime.now().millisecondsSinceEpoch,
+    );
+    notifyListeners();
+    await _persist();
+  }
+
   Future<void> set(String key, dynamic val) async {
     _values[key] = val;
     notifyListeners();
@@ -120,6 +151,7 @@ class AppStore extends ChangeNotifier {
     bool completed = false,
   }) async {
     final old = entry(anime);
+    _history.remove(old?.anime.key);
     final watched = {...old?.watched ?? <int>[]};
     if (completed) watched.add(episode);
     _history[anime.key] = WatchEntry(

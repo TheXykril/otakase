@@ -2,6 +2,15 @@ package com.xyverion.otakase
 
 import android.app.Activity
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import android.os.BatteryManager
+import android.os.Build
+import android.text.format.DateFormat
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import io.flutter.plugin.common.EventChannel
 import android.speech.RecognizerIntent
 import android.content.pm.PackageManager
 import android.os.Handler
@@ -13,6 +22,47 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
+    private var deviceChannel: MethodChannel? = null
+    private var statusEvents: EventChannel.EventSink? = null
+    private var statusReceiver: BroadcastReceiver? = null
+    private var pendingLogin: String? = null
+    private fun loginUri(intent: Intent?): String? = intent?.data?.takeIf {
+        it.scheme == "otakase" && it.host == "login"
+    }?.toString()
+    private fun deviceStatus(): Map<String, Any> {
+        val battery = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val level = battery?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = battery?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        val state = battery?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val values = mutableMapOf<String, Any>(
+            "use24Hour" to DateFormat.is24HourFormat(this),
+            "voiceAvailable" to (Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).resolveActivity(packageManager) != null)
+        )
+        if (level >= 0 && scale > 0) {
+            values["battery"] = (level * 100 / scale).coerceIn(0, 100)
+            values["charging"] = state == BatteryManager.BATTERY_STATUS_CHARGING || state == BatteryManager.BATTERY_STATUS_FULL
+        }
+        return values
+    }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        loginUri(intent)?.let { uri ->
+            if (deviceChannel != null) deviceChannel!!.invokeMethod("login", uri)
+            else pendingLogin = uri
+            intent.data = null
+        }
+    }
+    override fun onResume() {
+        super.onResume()
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.insetsController?.apply {
+                hide(WindowInsets.Type.statusBars())
+                systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        }
+        statusEvents?.success(deviceStatus())
+    }
     private val core = Mobilecore.newCore()
     private val workers = Executors.newFixedThreadPool(4)
     private val main = Handler(Looper.getMainLooper())
@@ -24,6 +74,43 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         detached = false
+        pendingLogin = pendingLogin ?: loginUri(intent)
+        intent.data = null
+        deviceChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "otakase/device")
+        deviceChannel!!.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "initialLogin" -> { result.success(pendingLogin); pendingLogin = null }
+                "status" -> result.success(deviceStatus())
+                "launchUri" -> try {
+                    val uri = android.net.Uri.parse(call.arguments as String)
+                    require(uri.scheme == "https" && uri.host in listOf("anilist.co", "myanimelist.net"))
+                    startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    result.success(null)
+                } catch (_: Exception) { result.error("unavailable", "Browser unavailable", null) }
+                else -> result.notImplemented()
+            }
+        }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, "otakase/status").setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+                statusEvents = events
+                statusReceiver = object : BroadcastReceiver() {
+                    override fun onReceive(context: Context?, intent: Intent?) { events.success(deviceStatus()) }
+                }
+                val filter = IntentFilter().apply {
+                    addAction(Intent.ACTION_BATTERY_CHANGED)
+                    addAction(Intent.ACTION_TIME_CHANGED)
+                    addAction(Intent.ACTION_TIMEZONE_CHANGED)
+                }
+                if (Build.VERSION.SDK_INT >= 33) registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                else registerReceiver(statusReceiver, filter)
+                events.success(deviceStatus())
+            }
+            override fun onCancel(arguments: Any?) {
+                statusReceiver?.let { unregisterReceiver(it) }
+                statusReceiver = null
+                statusEvents = null
+            }
+        })
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "otakase/core")
         channel!!.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -87,6 +174,11 @@ class MainActivity : FlutterActivity() {
         voiceResult?.success(null)
         voiceResult = null
         detached = true
+        statusReceiver?.let { unregisterReceiver(it) }
+        statusReceiver = null
+        statusEvents = null
+        deviceChannel?.setMethodCallHandler(null)
+        deviceChannel = null
         channel?.setMethodCallHandler(null)
         channel = null
         core.close()

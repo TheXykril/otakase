@@ -10,6 +10,7 @@ class Anime {
     required this.id,
     required this.title,
     this.malId = 0,
+    this.nativeTitle = '',
     this.titles = const [],
     this.cover = '',
     this.banner = '',
@@ -31,6 +32,7 @@ class Anime {
     this.recommended = const [],
   });
   final int id, malId, year, episodes, duration, nextEpisode, nextAiringAt;
+  final String nativeTitle;
   final String title,
       cover,
       coverLarge,
@@ -80,6 +82,7 @@ class Anime {
     final studios = ((j['studios'] as Map?)?['nodes'] as List? ?? [])
         .whereType<Map>();
     return Anime(
+      nativeTitle: t['native'] as String? ?? '',
       id: number(j['id']),
       malId: number(j['idMal']),
       title: names.isEmpty ? 'Untitled' : names.first,
@@ -116,6 +119,7 @@ class Anime {
       ...(alternative['synonyms'] as List? ?? []),
     ].whereType<String>().where((s) => s.isNotEmpty).toSet().toList();
     return Anime(
+      nativeTitle: alternative['ja'] as String? ?? '',
       id: 0,
       malId: number(j['id']),
       title: names.isEmpty ? 'Untitled' : names.first,
@@ -147,6 +151,7 @@ class Anime {
     'id': id,
     'idMal': malId,
     'title': {
+      'native': nativeTitle,
       'english': title,
       'romaji': titles.length > 1 ? titles[1] : title,
     },
@@ -199,7 +204,15 @@ class HomeData {
 }
 
 class ListEntry {
-  const ListEntry(this.anime, this.status, this.progress);
+  const ListEntry(
+    this.anime,
+    this.status,
+    this.progress, {
+    this.notes = '',
+    this.score = 0,
+  });
+  final String notes;
+  final double score;
   final Anime anime;
   final String status;
   final int progress;

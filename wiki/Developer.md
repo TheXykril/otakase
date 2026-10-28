@@ -5,6 +5,8 @@ or use it; that is all in the [README](https://github.com/TheXykril/otakase#read
 
 ## Pages
 
+- **[Android app](Developer-Android-App)**: phone/TV builds, OAuth callbacks, tracker sync and device checks
+
 - **[Providers](Developer-Providers)**: how stream sources are built, registered and turned off, and how to add one
 - **[Casting Verification](Developer-Casting-Verification)**: checking casting against a real Chromecast, DLNA TV or Kodi
 - **[Versions and releases](Developer-Releases)**: the `YY.DROP.HOTFIX` numbering and how a release is cut

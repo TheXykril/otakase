@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:otakase/core.dart';
 import 'package:otakase/data/catalog.dart';
+import 'package:otakase/data/oauth_config.dart';
 import 'package:otakase/data/models.dart';
 import 'package:otakase/data/store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -96,11 +97,11 @@ void main() {
     },
   );
   test(
-    'MAL public list uses CLI client id, status and paging without tokens',
+    'MAL public list uses app client id, status and paging without tokens',
     () async {
       final catalog = Catalog(
         client: MockClient((request) async {
-          expect(request.headers['X-MAL-CLIENT-ID'], Catalog.malClientId);
+          expect(request.headers['X-MAL-CLIENT-ID'], malId);
           expect(request.headers.containsKey('Authorization'), false);
           expect(request.url.queryParameters['status'], 'watching');
           expect(request.url.queryParameters['offset'], '50');
@@ -189,7 +190,7 @@ void main() {
     final adult = Anime.fromJson(media(2, adult: true));
     await reloaded.progress(adult, 1, 10, 100);
     expect(reloaded.history.length, 1);
-    await reloaded.set('AdultContent', true);
+    reloaded.setAdultAllowed(true);
     expect(reloaded.history.length, 2);
     await reloaded.progress(a, 2, 1440, 1440, completed: true);
     expect(reloaded.entry(a)!.watched, [1, 2]);
