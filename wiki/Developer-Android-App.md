@@ -165,8 +165,12 @@ both declare required=false, with phone and LEANBACK_LAUNCHER entries.
 3. Sign in to AniList and MAL separately and together. Verify private list reads, status,
    score and episode updates. Test MAL refresh, individual logout and expired AniList login.
    Complete TV QR pairing from a phone on the same LAN using the deployed callback page.
+   With both signed in, verify one Home list and category picker, including MAL-only titles.
+   Make one tracker unavailable and use its retry link to restore the combined list.
 4. Stop mid-episode, reopen on another device, finish an episode, and finish the final
    episode. Check notes/comments preservation and verify stale polls never replace a done tag.
+   Confirm the episode index thread ends at the real resume episode, without a node for
+   unstarted shows. Check the Shu played timeline and D-pad movement in both episode views.
 5. Verify 18+ filtering for no login, MAL only and both AniList preference values. Remove
    network access at startup and confirm the same account retains its cached preference.
 6. Play real sub/dub HLS, check required request headers, hardware decoding and raw ASS
@@ -198,6 +202,26 @@ The on-device HLS/ASS probe is the playback acceptance test.
 AniList supplies the anime catalog, metadata and airing calendar. Public usernames read lists
 without tracker write access. Authenticated requests use the account's token and include
 private lists. MAL list entries resolve to AniList metadata through their MAL identifier.
+With both accounts signed in, Home merges AniList `idMal` with MAL IDs. Progress is the
+maximum, status follows the higher progress with AniList winning ties, and a set AniList
+score takes precedence over MAL. Unmatched titles remain visible. MAL statuses use AniList
+category names in the combined list, including the MAL rewatch flag. Each list loads
+independently so one failure leaves the other available with a retry link. Writes still
+target both accounts, while public usernames and single-account lists retain their own views.
+
+Show artwork uses the AniList banner. Without one, the cover becomes a blurred, darkened
+backdrop beside a sharp 2:3 poster at the hero's full height. Episode titles and thumbnails
+prefer AniList streaming episodes, with missing fields filled from `api.ani.zip/mappings`
+by AniList ID. The anime episode map key takes precedence over provider episode numbering.
+Successful mappings stay in memory for six hours per show. Failed refreshes retain prior
+episode metadata and wait a minute before another lookup. Unknown images retain the treated
+cover fallback. Mapping data never changes episode availability.
+
+Detail reads retain the null-variable filtering, retry once after 600 ms for 429/5xx, and
+log HTTP status or GraphQL error messages under `otakase.catalog`. Last good details remain
+in memory per show after the ten-minute query cache expires, including when both retry
+attempts fail. Clearing the catalog cache clears these details and episode mappings.
+The recorded JSON tests mock all HTTP calls and download no artwork.
 
 Settings and local history use versioned JSON in shared preferences. OAuth sessions and
 pending PKCE state use secure storage. More owns Accounts, Schedule, Playback, Subtitles &

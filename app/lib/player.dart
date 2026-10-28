@@ -15,6 +15,7 @@ import 'services.dart';
 import 'ui/components.dart';
 import 'ui/device_status.dart';
 import 'ui/seal.dart';
+import 'ui/progress_thread.dart';
 
 class PlayerPage extends StatefulWidget {
   const PlayerPage({
@@ -1123,7 +1124,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                     painter: SkipPainter(spans, duration),
                                   ),
                                 ),
-                                Slider(
+                                KageSeekSlider(
+                                  key: const Key('player-timeline'),
                                   value: position.inMilliseconds
                                       .clamp(
                                         0,

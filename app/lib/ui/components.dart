@@ -587,6 +587,7 @@ class HeroArt extends StatelessWidget {
             CoverImage(anime.banner, width: width, height: height, banner: true)
           else ...[
             ImageFiltered(
+              key: const Key('hero-fallback-backdrop'),
               imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
               child: Opacity(
                 opacity: .45,
@@ -600,14 +601,15 @@ class HeroArt extends StatelessWidget {
             ),
             Align(
               alignment: Alignment.centerRight,
-              child: Opacity(
-                opacity: .6,
+              child: SizedBox(
+                width: height * 2 / 3,
+                height: height,
                 child: CoverImage(
+                  key: const Key('hero-fallback-poster'),
                   cover,
-                  width: width * .62,
+                  width: height * 2 / 3,
                   height: height,
                   fit: BoxFit.contain,
-                  banner: true,
                 ),
               ),
             ),

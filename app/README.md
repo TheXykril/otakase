@@ -7,13 +7,15 @@ Schedule, playback settings, subtitles and diagnostics. Touch and remote control
 same app. Back closes menus before leaving a page.
 
 Sign in through More > Accounts to sync AniList or MyAnimeList progress, status, scores and
-resume positions. Sign in to both to update both trackers. On TV, scan the QR with your phone
+resume positions. With both signed in, Home combines your lists and updates both trackers.
+Shared titles use the furthest progress and one category picker. On TV, scan the QR with your phone
 and keep both devices on the same home network. Log out of each account separately in Accounts.
 
 A public username reads your list without login. Watched episodes and resume positions stay
 on this device until you sign in. The 18+ preference follows your AniList setting.
 
 Playback chooses a working copy automatically. Change Sub/Dub before playing and choose
-actual audio or subtitle tracks through Tracks.
+actual audio or subtitle tracks through Tracks. The red episode thread follows your saved
+position and continues through the played part of the timeline.
 
 [Developer build and testing notes](../wiki/Developer-Android-App.md)

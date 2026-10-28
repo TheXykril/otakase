@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
+import '../data/episode_metadata.dart';
 import '../data/synced_resume.dart';
 import '../data/tracking.dart';
 import '../services.dart';
@@ -13,6 +14,7 @@ import 'components.dart';
 import 'device_status.dart';
 import 'home_page.dart';
 import 'status_editor.dart';
+import 'progress_thread.dart';
 
 class ShowPage extends StatefulWidget {
   const ShowPage({
@@ -46,7 +48,10 @@ class _ShowPageState extends State<ShowPage> {
   }
 
   Future<void> load() async {
-    setState(() => loading = true);
+    setState(() {
+      loading = true;
+      error = null;
+    });
     try {
       final a = await widget.services.catalog.detail(
         widget.anime,
@@ -105,11 +110,7 @@ class _ShowPageState extends State<ShowPage> {
 
   Json? art(int ep) {
     for (final e in anime.episodeArt) {
-      final m = RegExp(
-        r'(?:Episode|E)\s*(\d+)',
-        caseSensitive: false,
-      ).firstMatch(e['title'] as String? ?? '');
-      if (int.tryParse(m?[1] ?? '') == ep) return e;
+      if (episodeNumber(e) == ep) return e;
     }
     return null;
   }
@@ -118,6 +119,14 @@ class _ShowPageState extends State<ShowPage> {
     widget.services.store.entry(anime)?.watched.length ?? 0,
     widget.services.tracking.progress(anime),
   );
+  bool get started {
+    final h = widget.services.store.entry(anime);
+    return (h?.position ?? 0) > 0 ||
+        (h?.watched.isNotEmpty ?? false) ||
+        widget.services.tracking.progress(anime) > 0 ||
+        remote.valid;
+  }
+
   Widget actions(int last, int position) {
     final entry =
         widget.services.tracking.cached('AniList', anime) ??
@@ -276,118 +285,117 @@ class _ShowPageState extends State<ShowPage> {
       h?.episode == ep ? h?.position ?? 0 : 0,
       remote.forEpisode(ep),
     );
-    final current = ep == nextEpisode;
-    return FocusBox(
+    final current = started && ep == nextEpisode;
+    final metadata = art(ep);
+    final thumbnail = metadata?['thumbnail'] as String? ?? '';
+    final airdate = metadata?['airdate'] as String? ?? '';
+    return EpisodeProgressThread(
       key: ValueKey('episode-$ep'),
-      isTV: widget.isTV,
-      radius: card ? 12 : 7,
-      onPressed: () => play(ep),
-      padding: EdgeInsets.all(card ? 14 : 8),
-      child: Container(
-        constraints: BoxConstraints(minHeight: card ? 110 : 78),
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              color: current ? shu : line,
-              width: current ? 3 : 1,
-            ),
-          ),
-        ),
-        padding: const EdgeInsets.only(left: 8),
-        child: Row(
-          children: [
-            if (current)
-              Container(
-                width: 7,
-                height: 7,
-                margin: const EdgeInsets.only(right: 4),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: shu,
-                ),
-              ),
-            SizedBox(
-              width: 24,
-              child: Text(
-                '$ep',
-                style: mono.copyWith(
-                  fontSize: widget.isTV ? 20 : 15,
-                  color: current ? accentText : muted,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(7),
-              child: SizedBox(
-                width: card ? 92 : 73,
-                height: card ? 86 : 47,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CoverImage(
-                      art(ep)?['thumbnail'] as String? ?? anime.cover,
-                      width: card ? 92 : 73,
-                      height: card ? 86 : 47,
+      episode: ep,
+      current: nextEpisode,
+      started: started,
+      x: 7 + (card ? 14 : 8) + 1.5,
+      child: FocusBox(
+        isTV: widget.isTV,
+        radius: card ? 12 : 7,
+        onPressed: () => play(ep),
+        padding: EdgeInsets.all(card ? 14 : 8),
+        child: Container(
+          constraints: BoxConstraints(minHeight: card ? 110 : 78),
+          child: Row(
+            children: [
+              SizedBox(
+                width: max(24, '$ep'.length * (widget.isTV ? 12.2 : 9.2) + 6),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: Text(
+                    '$ep',
+                    textAlign: TextAlign.right,
+                    style: mono.copyWith(
+                      fontSize: widget.isTV ? 20 : 15,
+                      color: current ? accentText : muted,
                     ),
-                    if (seen) ...[
-                      ColoredBox(color: bgDeep.withValues(alpha: .65)),
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: fg),
-                          ),
-                          child: Text('済', style: uiStyle(context, size: 15)),
-                        ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(7),
+                child: SizedBox(
+                  width: card ? 92 : 73,
+                  height: card ? 86 : 47,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CoverImage(
+                        thumbnail.isNotEmpty ? thumbnail : anime.cover,
+                        width: card ? 92 : 73,
+                        height: card ? 86 : 47,
                       ),
+                      if (thumbnail.isEmpty)
+                        ColoredBox(
+                          key: ValueKey('episode-cover-fallback-$ep'),
+                          color: bgDeep.withValues(alpha: .4),
+                        ),
+                      if (seen) ...[
+                        ColoredBox(color: bgDeep.withValues(alpha: .65)),
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: fg),
+                            ),
+                            child: Text('済', style: uiStyle(context, size: 15)),
+                          ),
+                        ),
+                      ],
                     ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      metadata?['title'] as String? ?? 'Episode $ep',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: uiStyle(
+                        context,
+                        size: card ? 22 : 16,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '${seconds > 0
+                          ? 'Resume at ${seconds ~/ 60}m ${seconds % 60}s'
+                          : seen
+                          ? 'Watched'
+                          : 'Not watched'}${airdate.isNotEmpty ? ' · $airdate' : ''}',
+                      maxLines: card ? 1 : null,
+                      overflow: card ? TextOverflow.ellipsis : null,
+                      style: uiStyle(
+                        context,
+                        size: 15,
+                        color: seconds > 0 ? accentText : muted,
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    art(ep)?['title'] as String? ?? 'Episode $ep',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: uiStyle(
-                      context,
-                      size: card ? 22 : 16,
-                      weight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    seconds > 0
-                        ? 'Resume at ${seconds ~/ 60}m ${seconds % 60}s'
-                        : seen
-                        ? 'Watched'
-                        : 'Not watched',
-                    maxLines: card ? 1 : null,
-                    overflow: card ? TextOverflow.ellipsis : null,
-                    style: uiStyle(
-                      context,
-                      size: 15,
-                      color: seconds > 0 ? accentText : muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (!card)
-              const Padding(
-                padding: EdgeInsets.all(8),
-                child: Icon(LucideIcons.play, size: 20),
-              ),
-          ],
+              if (!card)
+                const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(LucideIcons.play, size: 20),
+                ),
+            ],
+          ),
         ),
       ),
     );

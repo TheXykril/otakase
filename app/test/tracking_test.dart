@@ -13,6 +13,43 @@ import 'auth_test.dart' show MemoryTokens, account, json;
 const anime = Anime(id: 42, malId: 24, title: 'Story', episodes: 12);
 void main() {
   test(
+    'a progress-only update is sent once to each signed-in tracker',
+    () async {
+      final writes = <http.Request>[];
+      final auth = AuthService(
+        storage: MemoryTokens(),
+        client: MockClient((r) async {
+          writes.add(r);
+          return r.url.host == 'graphql.anilist.co'
+              ? json({
+                  'data': {
+                    'SaveMediaListEntry': {'id': 1},
+                  },
+                })
+              : json({});
+        }),
+      );
+      auth.accounts.addAll({
+        'AniList': account('AniList'),
+        'MAL': account('MAL'),
+      });
+      final tracking = TrackingService(auth);
+      await tracking.update(anime, progress: 6);
+      expect(writes, hasLength(2));
+      final ani = writes.singleWhere((r) => r.url.host == 'graphql.anilist.co');
+      expect(ani.method, 'POST');
+      expect(jsonDecode(ani.body)['variables'], {'id': 42, 'progress': 6});
+      final mal = writes.singleWhere(
+        (r) => r.url.host == 'api.myanimelist.net',
+      );
+      expect(mal.method, 'PUT');
+      expect(mal.url.path, '/v2/anime/24/my_list_status');
+      expect(Uri.splitQueryString(mal.body), {'num_watched_episodes': '6'});
+      expect(tracking.lastError, isNull);
+      auth.dispose();
+    },
+  );
+  test(
     'both trackers receive progress, status and score using native fields',
     () async {
       final writes = <String, Object>{};
@@ -241,4 +278,107 @@ void main() {
       auth.dispose();
     },
   );
+  for (final failed in [
+    <String>{},
+    {'AniList'},
+    {'MAL'},
+    {'AniList', 'MAL'},
+  ]) {
+    test(
+      'combined list handles unavailable trackers $failed and can retry',
+      () async {
+        var failures = failed;
+        final auth = AuthService(
+          storage: MemoryTokens(),
+          client: MockClient((r) async {
+            final service = r.url.host == 'graphql.anilist.co'
+                ? 'AniList'
+                : 'MAL';
+            if (failures.contains(service)) return http.Response('', 503);
+            if (service == 'AniList') {
+              expect(jsonDecode(r.body)['query'], contains('idMal'));
+              return json({
+                'data': {
+                  'MediaListCollection': {
+                    'lists': [
+                      {
+                        'entries': [
+                          {
+                            'status': 'CURRENT',
+                            'progress': 3,
+                            'score': 90,
+                            'media': anime.toJson(),
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              });
+            }
+            expect(r.url.queryParameters['fields'], contains('is_rewatching'));
+            return json({
+              'data': [
+                {
+                  'node': {'id': 24, 'title': 'Story'},
+                  'list_status': {
+                    'status': 'on_hold',
+                    'num_episodes_watched': 5,
+                    'score': 7,
+                  },
+                },
+                {
+                  'node': {'id': 25, 'title': 'MAL only'},
+                  'list_status': {
+                    'status': 'watching',
+                    'num_episodes_watched': 2,
+                    'is_rewatching': true,
+                  },
+                },
+              ],
+            });
+          }),
+        );
+        auth.accounts.addAll({
+          'AniList': account('AniList'),
+          'MAL': account('MAL'),
+        });
+        final tracking = TrackingService(auth);
+        final page = await tracking.combinedList(adult: false);
+        expect(page.notLoaded, unorderedEquals(failed));
+        if (failed.length == 2) {
+          expect(page.entries, isEmpty);
+        } else if (failed.contains('MAL')) {
+          expect(page.entries.single.progress, 3);
+          expect(page.entries.single.status, 'CURRENT');
+        } else {
+          expect(page.entries, hasLength(2));
+          expect(
+            page.entries.first.anime.key,
+            failed.contains('AniList') ? 'mal:24' : 'al:42',
+          );
+          expect(page.entries.first.progress, 5);
+          expect(page.entries.first.status, 'PAUSED');
+          expect(
+            page.entries.first.score,
+            failed.contains('AniList') ? 70 : 90,
+          );
+          expect(page.entries.last.status, 'REPEATING');
+        }
+        if (page.entries.isNotEmpty) {
+          expect(
+            tracking.progress(page.entries.first.anime),
+            page.entries.first.progress,
+          );
+        }
+        failures = {};
+        final retried = await tracking.combinedList(adult: false);
+        expect(retried.notLoaded, isEmpty);
+        expect(retried.entries, hasLength(2));
+        expect(retried.entries.first.anime.id, 42);
+        expect(retried.entries.first.progress, 5);
+        auth.dispose();
+      },
+    );
+  }
 }

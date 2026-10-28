@@ -36,6 +36,60 @@ String malStatus(String status) =>
     }[status] ??
     status;
 
+String anilistStatus(String status) =>
+    const {
+      'watching': 'CURRENT',
+      'plan_to_watch': 'PLANNING',
+      'completed': 'COMPLETED',
+      'on_hold': 'PAUSED',
+      'dropped': 'DROPPED',
+    }[status] ??
+    status;
+
+List<ListEntry> mergeTrackerLists(
+  List<ListEntry> anilist,
+  List<ListEntry> mal,
+) {
+  final remaining = {for (final e in mal) e.anime.malId: e};
+  final merged = <ListEntry>[];
+  ListEntry normalized(ListEntry e) => ListEntry(
+    e.anime,
+    e.isRepeating ? 'REPEATING' : anilistStatus(e.status),
+    e.progress,
+    notes: e.notes,
+    score: e.score,
+    isRepeating: e.isRepeating,
+  );
+  for (final ani in anilist) {
+    final other = ani.anime.malId > 0
+        ? remaining.remove(ani.anime.malId)
+        : null;
+    if (other == null) {
+      merged.add(ani);
+      continue;
+    }
+    final winner = other.progress > ani.progress ? normalized(other) : ani;
+    merged.add(
+      ListEntry(
+        ani.anime,
+        winner.status,
+        winner.progress,
+        notes: ani.notes,
+        score: ani.score > 0 ? ani.score : other.score,
+        isRepeating: winner.status == 'REPEATING',
+      ),
+    );
+  }
+  merged.addAll(remaining.values.map(normalized));
+  return merged;
+}
+
+class CombinedAccountPage {
+  const CombinedAccountPage(this.entries, {this.notLoaded = const []});
+  final List<ListEntry> entries;
+  final List<String> notLoaded;
+}
+
 class TrackingService extends ChangeNotifier {
   TrackingService(this.auth);
   final AuthService auth;
@@ -44,8 +98,33 @@ class TrackingService extends ChangeNotifier {
   final Map<String, Future<void>> _writes = {};
   final Map<String, Anime> _shows = {};
   final Map<String, ListEntry?> _entries = {};
+  String _entryKey(String service, Anime anime) =>
+      service == 'MAL' ? 'MAL:mal:${anime.malId}' : 'AniList:${anime.key}';
   ListEntry? cached(String service, Anime anime) =>
-      _entries['$service:${anime.key}'];
+      _entries[_entryKey(service, anime)];
+
+  Future<CombinedAccountPage> combinedList({required bool adult}) async {
+    final pages = <String, AccountPage>{};
+    await Future.wait(
+      ['AniList', 'MAL'].map((service) async {
+        try {
+          pages[service] = await list(service, adult: adult);
+        } catch (_) {
+          // Each tracker can still supply the list when the other is down.
+        }
+      }),
+    );
+    return CombinedAccountPage(
+      mergeTrackerLists(
+        pages['AniList']?.entries ?? [],
+        pages['MAL']?.entries ?? [],
+      ),
+      notLoaded: [
+        for (final service in ['AniList', 'MAL'])
+          if (!pages.containsKey(service)) service,
+      ],
+    );
+  }
 
   Future<AccountPage> list(String service, {required bool adult}) async {
     final rows = <String, ListEntry>{};
@@ -68,7 +147,7 @@ class TrackingService extends ChangeNotifier {
             score: (e['score'] as num? ?? 0).toDouble(),
           );
           rows[a.key] = entry;
-          _entries['$service:${a.key}'] = entry;
+          _entries[_entryKey(service, a)] = entry;
         }
       }
     } else {
@@ -78,7 +157,7 @@ class TrackingService extends ChangeNotifier {
           'offset': '$offset',
           'sort': 'list_updated_at',
           'nsfw': '$adult',
-          'fields': 'list_status{comments,score},num_episodes,media_type,mean,average_episode_duration,start_season,nsfw,rating,alternative_titles,synopsis,status,genres',
+          'fields': 'list_status{comments,score,is_rewatching},num_episodes,media_type,mean,average_episode_duration,start_season,nsfw,rating,alternative_titles,synopsis,status,genres',
         });
         for (final e in d['data'] as List? ?? []) {
           final a = Anime.fromMal((e['node'] as Map).cast<String, dynamic>());
@@ -90,9 +169,10 @@ class TrackingService extends ChangeNotifier {
             number(s['num_episodes_watched']),
             notes: s['comments'] as String? ?? '',
             score: number(s['score']) * 10.0,
+            isRepeating: s['is_rewatching'] == true,
           );
           rows[a.key] = entry;
-          _entries['$service:${a.key}'] = entry;
+          _entries[_entryKey(service, a)] = entry;
         }
         if ((d['paging'] as Map?)?['next'] == null) break;
       }
@@ -122,7 +202,7 @@ class TrackingService extends ChangeNotifier {
       }
     } else if (service == 'MAL' && anime.malId > 0) {
       final d = await auth.mal('GET', '/anime/${anime.malId}', {
-        'fields': 'my_list_status{comments,score}',
+        'fields': 'my_list_status{comments,score,is_rewatching}',
       });
       final e = d['my_list_status'] as Map?;
       if (e != null) {
@@ -132,10 +212,11 @@ class TrackingService extends ChangeNotifier {
           number(e['num_episodes_watched']),
           notes: e['comments'] as String? ?? '',
           score: number(e['score']) * 10.0,
+          isRepeating: e['is_rewatching'] == true,
         );
       }
     }
-    _entries['$service:${anime.key}'] = result;
+    _entries[_entryKey(service, anime)] = result;
     return result;
   }
 
@@ -202,7 +283,7 @@ class TrackingService extends ChangeNotifier {
       });
     }
     final previous = cached(service, anime);
-    _entries['$service:${anime.key}'] = ListEntry(
+    _entries[_entryKey(service, anime)] = ListEntry(
       anime,
       status == null
           ? previous?.status ?? (service == 'MAL' ? 'watching' : 'CURRENT')
@@ -212,6 +293,9 @@ class TrackingService extends ChangeNotifier {
       progress ?? previous?.progress ?? 0,
       notes: notes ?? previous?.notes ?? '',
       score: score ?? previous?.score ?? 0,
+      isRepeating: status == null
+          ? previous?.isRepeating ?? false
+          : status == 'REPEATING',
     );
   }
 

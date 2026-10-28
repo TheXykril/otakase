@@ -1,13 +1,20 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:http/http.dart' as http;
 
 import 'models.dart';
 import 'oauth_config.dart';
+import 'episode_metadata.dart';
 
 class CatalogFailure implements Exception {
-  const CatalogFailure(this.message);
+  const CatalogFailure(this.message, {this.statusCode, this.detail});
   final String message;
+  final int? statusCode;
+  final String? detail;
+  bool get retryable =>
+      statusCode == 429 ||
+      (statusCode != null && statusCode! >= 500 && statusCode! < 600);
   @override
   String toString() => message;
 }
@@ -19,10 +26,30 @@ const mediaFields =
   nextAiringEpisode { episode airingAt }''';
 
 class Catalog {
-  Catalog({http.Client? client}) : client = client ?? http.Client();
+  Catalog({
+    http.Client? client,
+    void Function(String)? log,
+    Future<void> Function(Duration)? delay,
+    DateTime Function()? now,
+  }) : client = client ?? http.Client(),
+       log = log ?? _log,
+       delay = delay ?? Future<void>.delayed,
+       now = now ?? DateTime.now;
+  static void _log(String message) =>
+      developer.log(message, name: 'otakase.catalog');
   final http.Client client;
+  final void Function(String) log;
+  final Future<void> Function(Duration) delay;
+  final DateTime Function() now;
   final Map<String, ({DateTime expires, Json data})> _cache = {};
-  void clear() => _cache.clear();
+  final Map<String, Anime> _details = {};
+  late final _episodes = EpisodeMetadata(client: client, log: log, now: now);
+  void clear() {
+    _cache.clear();
+    _details.clear();
+    _episodes.clear();
+  }
+
   Future<Json> graph(
     String query,
     Json variables, {
@@ -30,7 +57,7 @@ class Catalog {
   }) async {
     final key = jsonEncode([query, variables]);
     final cache = _cache[key];
-    if (cache != null && cache.expires.isAfter(DateTime.now())) {
+    if (cache != null && cache.expires.isAfter(now())) {
       return cache.data;
     }
     final http.Response response;
@@ -48,34 +75,44 @@ class Catalog {
             }),
           )
           .timeout(const Duration(seconds: 20));
-    } catch (_) {
-      throw const CatalogFailure(
+    } catch (e) {
+      throw CatalogFailure(
         'Unable to reach AniList. Check your connection and retry.',
+        detail: e.toString(),
       );
     }
     if (response.statusCode == 429) {
       throw const CatalogFailure(
         'AniList is rate limiting requests. Try again shortly.',
+        statusCode: 429,
       );
     }
     if (response.statusCode != 200) {
       throw CatalogFailure(
         'AniList is unavailable (${response.statusCode}). Retry in a moment.',
+        statusCode: response.statusCode,
       );
     }
     final Json body;
     try {
       body = (jsonDecode(response.body) as Map).cast<String, dynamic>();
-    } catch (_) {
-      throw const CatalogFailure('AniList returned an unreadable response.');
+    } catch (e) {
+      throw CatalogFailure(
+        'AniList returned an unreadable response.',
+        statusCode: response.statusCode,
+        detail: e.toString(),
+      );
     }
-    if ((body['errors'] as List? ?? []).isNotEmpty || body['data'] == null) {
-      throw const CatalogFailure(
+    final errors = (body['errors'] as List? ?? []).whereType<Map>().toList();
+    if (errors.isNotEmpty || body['data'] == null) {
+      throw CatalogFailure(
         'This AniList data is unavailable or private.',
+        statusCode: errors.isEmpty ? null : number(errors.first['status']),
+        detail: errors.map((e) => e['message']).whereType<String>().join('; '),
       );
     }
     final data = (body['data'] as Map).cast<String, dynamic>();
-    _cache[key] = (expires: DateTime.now().add(ttl), data: data);
+    _cache[key] = (expires: now().add(ttl), data: data);
     return data;
   }
 
@@ -164,24 +201,57 @@ class Catalog {
   }
 
   Future<Anime> detail(Anime anime, {required bool adult}) async {
-    final d = await graph(
-      '''query(\$id:Int,\$mal:Int,\$adult:Boolean){Media(id:\$id,idMal:\$mal,type:ANIME,isAdult:\$adult){$mediaFields
+    for (var attempt = 0; ; attempt++) {
+      try {
+        final d = await graph(
+          '''query(\$id:Int,\$mal:Int,\$adult:Boolean){Media(id:\$id,idMal:\$mal,type:ANIME,isAdult:\$adult){$mediaFields
       studios(isMain:true){nodes{name}}
       streamingEpisodes{title thumbnail url site}
       relations{edges{relationType node{$mediaFields}}}
       recommendations(perPage:15,sort:RATING_DESC){nodes{mediaRecommendation{$mediaFields}}}
     }}''',
-      {
-        'id': anime.id > 0 ? anime.id : null,
-        'mal': anime.id > 0 ? null : anime.malId,
-        'adult': adult ? null : false,
-      },
-    );
-    final result = Anime.fromJson((d['Media'] as Map).cast<String, dynamic>());
-    if (!adult && result.isAdult) {
-      throw const CatalogFailure('This title is unavailable.');
+          {
+            'id': anime.id > 0 ? anime.id : null,
+            'mal': anime.id > 0 ? null : anime.malId,
+            'adult': adult ? null : false,
+          },
+        );
+        final raw = (d['Media'] as Map).cast<String, dynamic>();
+        var result = Anime.fromJson(raw);
+        if (!adult && result.isAdult) {
+          throw const CatalogFailure(
+            'This title is unavailable.',
+            statusCode: 403,
+          );
+        }
+        final episodes = await _episodes.load(
+          result.id,
+          result.episodeArt,
+          result.airedEpisodes,
+        );
+        result = Anime.fromJson({...raw, 'streamingEpisodes': episodes});
+        _details[anime.key] = result;
+        _details[result.key] = result;
+        if (result.malId > 0) _details['mal:${result.malId}'] = result;
+        return result;
+      } catch (e) {
+        final failure = e is CatalogFailure ? e : null;
+        log(
+          'Show details ${anime.key}, attempt ${attempt + 1}: ${failure?.detail?.isNotEmpty == true ? failure!.detail : e}${failure?.statusCode != null ? ' (HTTP/status ${failure!.statusCode})' : ''}',
+        );
+        if (attempt == 0 && failure?.retryable == true) {
+          await delay(const Duration(milliseconds: 600));
+          continue;
+        }
+        final cached = _details[anime.key];
+        if (failure?.statusCode != 403 &&
+            cached != null &&
+            (adult || !cached.isAdult)) {
+          return cached;
+        }
+        rethrow;
+      }
     }
-    return result;
   }
 
   Future<List<Airing>> schedule(

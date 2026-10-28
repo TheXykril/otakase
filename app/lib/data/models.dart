@@ -210,9 +210,11 @@ class ListEntry {
     this.progress, {
     this.notes = '',
     this.score = 0,
+    this.isRepeating = false,
   });
   final String notes;
   final double score;
+  final bool isRepeating;
   final Anime anime;
   final String status;
   final int progress;

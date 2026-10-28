@@ -269,6 +269,8 @@ class _HomePageState extends State<HomePage> {
                   .isNotEmpty,
         )
         .toList();
+    final combined = s.auth.signedIn('AniList') && s.auth.signedIn('MAL');
+    final lists = combined ? ['AniList'] : configured;
     return ListView(
       key: const PageStorageKey('home-scroll'),
       padding: EdgeInsets.only(bottom: contentBottom(context)),
@@ -288,15 +290,16 @@ class _HomePageState extends State<HomePage> {
             isTV: widget.isTV,
             onResume: () => widget.onResume(stage),
           ),
-        for (final service in configured)
+        for (final service in lists)
           AccountBlock(
-            key: ValueKey('account-$service'),
+            key: ValueKey('account-${combined ? 'Combined' : service}'),
             service: service,
+            combineTrackers: combined,
             services: s,
             isTV: widget.isTV,
             onOpen: widget.onOpen,
             onFocused: focusEntry,
-            autofocus: stage == null && service == configured.first,
+            autofocus: stage == null && service == lists.first,
           ),
         if (continuing.length > 1)
           PosterRow(
@@ -362,10 +365,11 @@ class AccountBlock extends StatefulWidget {
     required this.onOpen,
     this.onFocused,
     this.autofocus = false,
+    this.combineTrackers = false,
   });
   final String service;
   final AppServices services;
-  final bool isTV, autofocus;
+  final bool isTV, autofocus, combineTrackers;
   final void Function(Anime) onOpen;
   final void Function(ListEntry)? onFocused;
   @override
@@ -377,6 +381,7 @@ class _AccountBlockState extends State<AccountBlock> {
   String category = 'CURRENT', stamp = '';
   bool busy = true;
   String? error;
+  List<String> notLoaded = [];
   int generation = 0;
   final trigger = FocusNode(debugLabel: 'List category');
   final scroll = ScrollController();
@@ -388,12 +393,14 @@ class _AccountBlockState extends State<AccountBlock> {
       );
   Map<String, String> get categories =>
       widget.service == 'MAL' ? malStatuses : anilistStatuses;
+  String get listKey => widget.combineTrackers ? 'Combined' : widget.service;
+  String get label => widget.combineTrackers ? 'AniList + MAL' : widget.service;
   String get signature =>
-      '${widget.services.auth.account(widget.service)?.token}:$username:${widget.services.store.flag('AdultContent')}:${widget.services.tracking.revision}';
+      '${widget.services.auth.account(widget.service)?.token}:${widget.combineTrackers ? widget.services.auth.account('MAL')?.token : ''}:$username:${widget.services.store.flag('AdultContent')}:${widget.services.tracking.revision}';
   @override
   void initState() {
     super.initState();
-    category = widget.services.store.text('ListCategory.${widget.service}');
+    category = widget.services.store.text('ListCategory.$listKey');
     if (!categories.containsKey(category)) {
       category = categories.keys.elementAt(1);
     }
@@ -419,11 +426,19 @@ class _AccountBlockState extends State<AccountBlock> {
     setState(() {
       busy = true;
       error = null;
+      notLoaded = [];
     });
     try {
       final s = widget.services;
       List<ListEntry> result;
-      if (s.auth.signedIn(widget.service)) {
+      List<String> failed = [];
+      if (widget.combineTrackers) {
+        final page = await s.tracking.combinedList(
+          adult: s.store.flag('AdultContent'),
+        );
+        result = page.entries;
+        failed = page.notLoaded;
+      } else if (s.auth.signedIn(widget.service)) {
         result = (await s.tracking.list(
           widget.service,
           adult: s.store.flag('AdultContent'),
@@ -446,7 +461,10 @@ class _AccountBlockState extends State<AccountBlock> {
         result = all.values.toList();
       }
       if (mounted && g == generation) {
-        setState(() => entries = result);
+        setState(() {
+          entries = result;
+          notLoaded = failed;
+        });
         if (widget.isTV && result.isNotEmpty && widget.autofocus) {
           widget.onFocused?.call(result.first);
         }
@@ -484,35 +502,38 @@ class _AccountBlockState extends State<AccountBlock> {
             (e) => PopupMenuItem<String>(
               value: e.key,
               height: widget.isTV ? 56 : 44,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      e.value,
-                      style: uiStyle(
-                        context,
-                        weight: category == e.key
-                            ? FontWeight.w600
-                            : FontWeight.w400,
+              child: _CategoryInitialFocus(
+                selected: category == e.key,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        e.value,
+                        style: uiStyle(
+                          context,
+                          weight: category == e.key
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
                       ),
                     ),
-                  ),
-                  Text(
-                    '${entries.where((v) => e.key == 'ALL' || v.status == e.key).length}',
-                    style: mono.copyWith(fontSize: widget.isTV ? 20 : 15),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 19,
-                    child: category == e.key
-                        ? const Icon(
-                            LucideIcons.check,
-                            color: accentText,
-                            size: 19,
-                          )
-                        : null,
-                  ),
-                ],
+                    Text(
+                      '${entries.where((v) => e.key == 'ALL' || v.status == e.key).length}',
+                      style: mono.copyWith(fontSize: widget.isTV ? 20 : 15),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 19,
+                      child: category == e.key
+                          ? const Icon(
+                              LucideIcons.check,
+                              color: accentText,
+                              size: 19,
+                            )
+                          : null,
+                    ),
+                  ],
+                ),
               ),
             ),
           )
@@ -520,9 +541,7 @@ class _AccountBlockState extends State<AccountBlock> {
     );
     if (selected != null && mounted) {
       setState(() => category = selected);
-      unawaited(
-        widget.services.store.set('ListCategory.${widget.service}', selected),
-      );
+      unawaited(widget.services.store.set('ListCategory.$listKey', selected));
     }
     if (mounted) trigger.requestFocus();
   }
@@ -552,9 +571,18 @@ class _AccountBlockState extends State<AccountBlock> {
                   ),
                 ),
                 Text(
-                  '${widget.service} · $username${widget.services.auth.signedIn(widget.service) ? '' : ' · Public, read only'}',
+                  '$label · $username${widget.services.auth.signedIn(widget.service) ? '' : ' · Public, read only'}',
                   style: uiStyle(context, size: 15, color: muted),
                 ),
+                for (final service in notLoaded)
+                  TextButton(
+                    key: ValueKey('retry-$service'),
+                    onPressed: busy ? null : load,
+                    child: Text(
+                      '$service not loaded, retry',
+                      style: uiStyle(context, size: 15, color: muted),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: widget.isTV ? 232 : double.infinity,
@@ -612,7 +640,7 @@ class _AccountBlockState extends State<AccountBlock> {
             ),
           if (error != null)
             FailureView(message: error!, onRetry: load, isTV: widget.isTV),
-          if (!busy && error == null && shown.isEmpty)
+          if (!busy && error == null && notLoaded.length < 2 && shown.isEmpty)
             Padding(
               padding: EdgeInsets.symmetric(horizontal: side, vertical: 12),
               child: Column(
@@ -635,7 +663,7 @@ class _AccountBlockState extends State<AccountBlock> {
                   (widget.isTV ? 194 : 184) +
                   126 * MediaQuery.textScalerOf(context).scale(1),
               child: ListView.separated(
-                key: PageStorageKey('${widget.service}-$category'),
+                key: PageStorageKey('$listKey-$category'),
                 controller: scroll,
                 scrollDirection: Axis.horizontal,
                 clipBehavior: Clip.none,
@@ -646,7 +674,7 @@ class _AccountBlockState extends State<AccountBlock> {
                 itemBuilder: (_, i) {
                   final e = shown[i];
                   return PosterCard(
-                    key: ValueKey('${widget.service}-$category-${e.anime.key}'),
+                    key: ValueKey('$listKey-$category-${e.anime.key}'),
                     anime: e.anime,
                     cropped: true,
                     width: widget.isTV ? 143 : 132,
@@ -669,4 +697,27 @@ class _AccountBlockState extends State<AccountBlock> {
       ),
     );
   }
+}
+
+class _CategoryInitialFocus extends StatefulWidget {
+  const _CategoryInitialFocus({required this.selected, required this.child});
+  final bool selected;
+  final Widget child;
+  @override
+  State<_CategoryInitialFocus> createState() => _CategoryInitialFocusState();
+}
+
+class _CategoryInitialFocusState extends State<_CategoryInitialFocus> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.selected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Focus.of(context).requestFocus();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
