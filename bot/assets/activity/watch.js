@@ -1196,6 +1196,10 @@ function wBar() {
         <label>Colour<select id="wsubcolor">${wOptions(WSUB_COLORS, wSubLook.color)}</select></label>
         <label>Background<select id="wsubback">${wOptions(WSUB_BACKS, wSubLook.back)}</select></label>
       </div>
+      <div class="wsublook">
+        <span class="wskiptitle">Sound · only you</span>
+        <label>Even out volume<select id="wlevel" title="Raise quiet dialogue and soften loud effects">${wOptions([["on", "On"], ["off", "Off"]], wLevel ? "on" : "off")}</select></label>
+      </div>
       <div class="wskipsettings">
         <span class="wskiptitle">Automatic skips · everyone in this room</span>
         <div class="wskiptoggles">
@@ -1265,6 +1269,11 @@ function wBar() {
     wQuality = +e.target.value;
     if (wHls) wHls.currentLevel = wQuality;
     wQualityDraw();
+  };
+  document.getElementById("wlevel").onchange = (e) => {
+    wLevel = e.target.value === "on";
+    wLevelSave();
+    wVolumeApply(vid);
   };
   for (const [id, key] of [["wsubsize", "size"], ["wsubcolor", "color"], ["wsubback", "back"]]) {
     document.getElementById(id).onchange = (e) => {
@@ -1649,6 +1658,22 @@ let wVol = wVolumeLoad();
 let wMuted = false;
 let wAudioCtx = null;
 const wGains = new WeakMap();
+// wLevel evens out loudness for this viewer: quiet dialogue comes up and loud
+// effects come down, like the app's NormalizeVolume. On by default.
+let wLevel = wLevelLoad();
+
+function wLevelLoad() {
+  try {
+    return localStorage.getItem("otakase-watch-level") !== "off";
+  } catch (e) {}
+  return true;
+}
+
+function wLevelSave() {
+  try {
+    localStorage.setItem("otakase-watch-level", wLevel ? "on" : "off");
+  } catch (e) {}
+}
 
 function wVolumeLoad() {
   try {
@@ -1664,30 +1689,69 @@ function wVolumeSave() {
   } catch (e) {}
 }
 
+// wBoost routes the video's sound through Web Audio, for volume over 100%
+// and the leveller: source → (compressor → make-up gain) → gain → speakers.
 function wBoost(vid) {
   if (wGains.has(vid)) return wGains.get(vid);
+  // Native HLS sound can come out silent through Web Audio (WebKit and some
+  // WebViews), so such players keep plain volume without the leveller.
+  if (!wHls && /\.m3u8(?:$|\?)/i.test(vid.currentSrc || vid.src || "")) return null;
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return null;
   try {
     wAudioCtx = wAudioCtx || new Ctx();
-    const gain = wAudioCtx.createGain();
-    wAudioCtx.createMediaElementSource(vid).connect(gain);
-    gain.connect(wAudioCtx.destination);
-    wGains.set(vid, gain);
-    return gain;
+    const ctx = wAudioCtx;
+    const node = {
+      src: ctx.createMediaElementSource(vid),
+      comp: ctx.createDynamicsCompressor(),
+      makeup: ctx.createGain(),
+      gain: ctx.createGain(),
+      level: null,
+    };
+    node.comp.threshold.value = -32;
+    node.comp.knee.value = 18;
+    node.comp.ratio.value = 4;
+    node.comp.attack.value = 0.01;
+    node.comp.release.value = 0.3;
+    node.makeup.gain.value = 2;
+    node.comp.connect(node.makeup);
+    node.makeup.connect(node.gain);
+    node.gain.connect(ctx.destination);
+    wGains.set(vid, node);
+    return node;
   } catch (e) {
     return null;
   }
 }
 
+function wLevelWire(node) {
+  if (node.level === wLevel) return;
+  node.src.disconnect();
+  node.src.connect(wLevel ? node.comp : node.gain);
+  node.level = wLevel;
+}
+
+// Browsers start Web Audio paused until the viewer interacts; any tap or key
+// wakes it so routed sound never stays silent.
+function wAudioWake() {
+  if (wAudioCtx && wAudioCtx.state === "suspended") wAudioCtx.resume().catch(() => {});
+}
+document.addEventListener("pointerdown", wAudioWake, true);
+document.addEventListener("keydown", wAudioWake, true);
+
 function wVolumeApply(vid) {
   if (!vid) return;
   vid.volume = Math.max(0, Math.min(1, wVol));
   vid.muted = wMuted || wVol === 0;
-  const gain = wVol > 1 ? wBoost(vid) : wGains.get(vid);
-  if (gain) {
-    gain.gain.value = Math.max(1, wVol);
-    if (wAudioCtx && wAudioCtx.state === "suspended") wAudioCtx.resume().catch(() => {});
+  const node = wVol > 1 || wLevel ? wBoost(vid) : wGains.get(vid);
+  if (node) {
+    wLevelWire(node);
+    node.gain.gain.value = Math.max(1, wVol);
+    wAudioWake();
+    if (!vid.dataset.wwake) {
+      vid.dataset.wwake = "1";
+      vid.addEventListener("play", wAudioWake);
+    }
   }
   const vol = document.getElementById("wvol");
   if (vol) vol.value = vid.muted ? 0 : wVol;

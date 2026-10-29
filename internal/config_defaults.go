@@ -14,6 +14,7 @@ func defaultConfigMap() map[string]string {
 		"PercentageToMarkComplete": "85",
 		"NextEpisodePrompt":        "false",
 		"Quality":                  "best",
+		"NormalizeVolume":          "true",
 
 		// Audio and subtitles. A show that only exists in the other language
 		// plays rather than asking a question with one useful answer.

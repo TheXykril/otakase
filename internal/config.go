@@ -38,7 +38,10 @@ type Config struct {
 	SkipFiller               bool     `config:"SkipFiller"`
 	ImagePreview             bool     `config:"ImagePreview"`
 	SkipRecap                bool     `config:"SkipRecap"`
-	RofiSelection            bool     `config:"RofiSelection"`
+	// NormalizeVolume evens out loudness in mpv: quiet dialogue comes up and
+	// loud effects come down. Left alone when MpvArgs set audio filters.
+	NormalizeVolume bool `config:"NormalizeVolume"`
+	RofiSelection   bool `config:"RofiSelection"`
 	// SubOrDubFlag records that -sub or -dub was given for this run, which
 	// outranks the audio remembered for a show. Not a setting either.
 	SubOrDubFlag        bool   `config:"-"`

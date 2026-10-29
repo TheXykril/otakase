@@ -8,6 +8,10 @@
 - Watch room page no longer carries source names; staff still see the source hint from the server.
 - Log reader and FAQ answers no longer point at the removed source settings.
 
+## 1.30.80
+
+- Watch room: new Settings → Sound → Even out volume (on by default, only you). Quiet dialogue comes up and loud effects come down. Players on native HLS keep plain volume.
+
 ## 1.30.79
 
 - `/github` no longer offers the provider check: the scheduled provider check workflow is gone. Run `otakase -provider-status` locally instead.

@@ -3,6 +3,7 @@ package internal
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -69,5 +70,23 @@ func TestBuildPlaybackArgsLeavesTheUsersReferrerAndSubtitles(t *testing.T) {
 	own := buildPlaybackArgs(&Config{MpvArgs: []string{"--referrer=mine.example.test", "--sub-file=mine.srt"}}, anime, "https://cdn.example.test/1.m3u8", nil)
 	if own.referrer != "" || own.subtitleURL != "" || !own.ownSubtitles {
 		t.Fatalf("expected the user's own referrer and subtitles to win, got %+v", own)
+	}
+}
+
+func TestBuildPlaybackArgsEvensOutVolumeUnlessTheUserSetFilters(t *testing.T) {
+	link := "https://cdn.example.test/1.m3u8"
+	on := buildPlaybackArgs(&Config{NormalizeVolume: true}, &Anime{}, link, nil)
+	if !slices.Contains(on.args, "--af-append="+volumeLevellerFilter) {
+		t.Fatalf("expected the volume leveller in %q", on.args)
+	}
+	off := buildPlaybackArgs(&Config{}, &Anime{}, link, nil)
+	if slices.ContainsFunc(off.args, func(a string) bool { return strings.HasPrefix(a, "--af") }) {
+		t.Fatalf("leveller added while off: %q", off.args)
+	}
+	for _, own := range []string{"--af=lavfi=[loudnorm]", "--af-add=scaletempo2"} {
+		p := buildPlaybackArgs(&Config{NormalizeVolume: true, MpvArgs: []string{own}}, &Anime{}, link, nil)
+		if slices.Contains(p.args, "--af-append="+volumeLevellerFilter) {
+			t.Fatalf("leveller added on top of the user's %s: %q", own, p.args)
+		}
 	}
 }
