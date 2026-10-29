@@ -3,15 +3,19 @@
 package internal
 
 import (
+	"net"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
-// The polling loops must recognize dial errors through every wrapper.
+// The polling loops decide whether to keep going by asking MPVConnectionGone.
+// Classifying a real dead-socket error as merely transient is what let them spin
+// forever, logging the same failure every iteration, so this
+// exercises the errors the real code path actually produces rather than
+// hand-written strings.
 func TestDeadSocketErrorsAreClassifiedAsGone(t *testing.T) {
 	dir := t.TempDir()
-	mockMissingPlayer(t)
 
 	t.Run("socket never existed", func(t *testing.T) {
 		socket := filepath.Join(dir, "never-created.sock")
@@ -27,8 +31,14 @@ func TestDeadSocketErrorsAreClassifiedAsGone(t *testing.T) {
 
 	t.Run("socket closed after MPV exits", func(t *testing.T) {
 		socket := filepath.Join(dir, "closed.sock")
+		listener, err := net.Listen("unix", socket)
+		if err != nil {
+			t.Skipf("cannot create a unix socket here: %v", err)
+		}
+		// Stand in for MPV exiting mid-playback.
+		listener.Close()
 
-		_, err := MPVSendCommand(socket, []interface{}{"get_property", "time-pos"})
+		_, err = MPVSendCommand(socket, []interface{}{"get_property", "time-pos"})
 		if err == nil {
 			t.Fatal("expected an error after the socket closed")
 		}

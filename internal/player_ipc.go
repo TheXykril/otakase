@@ -19,8 +19,6 @@ const (
 // like a closed connection: MPV is not reachable, so polling must stop.
 var ErrMPVNoSocket = mpv.ErrNoSocket
 
-var mpvCommand = mpv.Command
-
 // MPVSendCommand sends one command to mpv, trying again a couple of times when
 // the socket hiccups. An empty socket path and an unavailable property are
 // answers, not hiccups, and return at once: retrying an empty path is what
@@ -29,7 +27,7 @@ func MPVSendCommand(socket string, command []interface{}) (interface{}, error) {
 	var err error
 	for attempt := 1; attempt <= mpvCommandAttempts; attempt++ {
 		var data interface{}
-		if data, err = mpvCommand(socket, command...); err == nil {
+		if data, err = mpv.Command(socket, command...); err == nil {
 			return data, nil
 		}
 		if errors.Is(err, mpv.ErrNoSocket) || mpv.IsUnavailable(err) {

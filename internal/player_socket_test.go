@@ -2,11 +2,7 @@ package internal
 
 import (
 	"errors"
-	"net"
-	"os"
-	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -56,7 +52,6 @@ func TestIsMPVConnectionGoneErrorTreatsMissingSocketAsGone(t *testing.T) {
 // WaitForMPVPlaybackStart must give up immediately rather than spin to its
 // deadline when MPV never produced a socket.
 func TestWaitForMPVPlaybackStartStopsWhenSocketMissing(t *testing.T) {
-	mockMissingPlayer(t)
 	start := time.Now()
 	if WaitForMPVPlaybackStart("/tmp/otakase-nonexistent-socket-for-test", 2*time.Second) {
 		t.Fatal("expected playback start to fail for a socket that does not exist")
@@ -64,17 +59,4 @@ func TestWaitForMPVPlaybackStartStopsWhenSocketMissing(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Fatalf("expected an early exit, took %s", elapsed)
 	}
-}
-
-func mockMissingPlayer(t *testing.T) {
-	t.Helper()
-	previous := mpvCommand
-	mpvCommand = func(path string, _ ...any) (any, error) {
-		cause := syscall.ENOENT
-		if filepath.Base(path) == "closed.sock" {
-			cause = syscall.ECONNREFUSED
-		}
-		return nil, &net.OpError{Op: "dial", Net: "unix", Addr: &net.UnixAddr{Name: path, Net: "unix"}, Err: os.NewSyscallError("connect", cause)}
-	}
-	t.Cleanup(func() { mpvCommand = previous })
 }
