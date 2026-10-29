@@ -226,6 +226,26 @@ func buildPlaybackArgs(config *Config, anime *Anime, link string, callerArgs []s
 	if p.subtitleURL != "" {
 		args = append(args, "--sub-file="+p.subtitleURL)
 	}
+	if config.NormalizeVolume && !hasMPVAudioFilterArg(args) {
+		args = append(args, "--af-append="+volumeLevellerFilter)
+	}
 	p.args = normalizeReferrerArgs(args)
 	return p
+}
+
+// volumeLevellerFilter evens out loudness while playing: quiet dialogue comes
+// up and loud effects come down. ffmpeg's dynaudnorm with about a 3 s window
+// and at most 10x gain; the Android app uses the same filter.
+const volumeLevellerFilter = "lavfi=[dynaudnorm=f=200:g=15:p=0.95:m=10]"
+
+// hasMPVAudioFilterArg reports whether the arguments already set audio
+// filters (--af, --af-append, --af-add and the rest), which are left to win.
+func hasMPVAudioFilterArg(args []string) bool {
+	for _, arg := range args {
+		arg = strings.TrimSpace(arg)
+		if arg == "--af" || strings.HasPrefix(arg, "--af=") || strings.HasPrefix(arg, "--af-") {
+			return true
+		}
+	}
+	return false
 }

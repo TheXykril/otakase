@@ -46,6 +46,7 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `ContributeSkipTimes` | Boolean | `true`, `false` | Bind the player keys for marking, submitting and voting on skip times. See [Fixing the times yourself](Skip-Times#fixing-the-times-yourself). |
 | `IntroDBSkipTimes` | Boolean | `true`, `false` | Ask theintrodb for openings and endings the other sources do not know. Downloads a public id mapping in the background the first time it is needed. |
 | `AnimeSkipClientID` | String | `auto`, or an Anime-Skip client id | Adds Anime-Skip as a source of skip timings. See [Adding Anime-Skip](Skip-Times#adding-anime-skip). `auto` uses the public shared id. Empty by default. |
+| `NormalizeVolume` | Boolean | `true`, `false` | Even out loudness in mpv, so quiet dialogue comes up and loud effects come down (ffmpeg `dynaudnorm`). Default `true`. Left alone when `MpvArgs` sets its own audio filters (`--af...`). |
 | `SkipFiller` / `SkipRecap` | Boolean | `true`, `false` | Skip filler episodes and recap sections. `SkipRecap` also skips a "previously on" stretch inside an episode when AniSkip has one on file. |
 | `DiscordPresence` | Boolean | `true`, `false` | Discord Rich Presence. |
 | `DiscordClientId` | String | Discord application id | Application Rich Presence reports as. |

@@ -165,6 +165,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"CastBrowser":          "26.9.0",
 		"CastBrowserPort":      "26.9.0",
 		"CastBrowserSubtitles": "26.9.0",
+		// 26.9.0 — even out loud effects and quiet dialogue
+		"NormalizeVolume": "26.9.0",
 	}
 }
 
