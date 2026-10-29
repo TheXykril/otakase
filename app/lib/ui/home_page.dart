@@ -810,12 +810,15 @@ class _AccountBlockState extends State<AccountBlock> {
                     onFocused: () {
                       widget.onFocused?.call(e);
                     },
-                    caption: e.progress > 0
-                        ? '${e.progress} watched'
-                        : 'Not started',
-                    progress: e.progress > 0 && e.anime.episodes > 0
-                        ? e.progress / e.anime.episodes
-                        : null,
+                    caption: e.progress <= 0
+                        ? 'Not started'
+                        : e.anime.episodes > 0
+                        ? '${e.progress}/${e.anime.episodes}'
+                        : '${e.progress} watched',
+                    progress: episodeProgress(
+                      widget.services.store.entry(e.anime),
+                      watched: e.progress,
+                    ),
                   );
                 },
               ),
@@ -848,3 +851,15 @@ class _CategoryInitialFocusState extends State<_CategoryInitialFocus> {
   @override
   Widget build(BuildContext context) => widget.child;
 }
+
+/// How far into the episode in progress the viewer is, or null when nothing is
+/// half watched: a finished episode (the store clears its position) or one the
+/// tracker already counts as watched has no line.
+double? episodeProgress(WatchEntry? h, {int watched = 0}) =>
+    h == null ||
+        h.episode <= watched ||
+        h.position <= 0 ||
+        h.duration <= 0 ||
+        h.watched.contains(h.episode)
+    ? null
+    : (h.position / h.duration).clamp(0.0, 1.0);
