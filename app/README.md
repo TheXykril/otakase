@@ -19,8 +19,8 @@ sync runs at most every 30 minutes, or when you refresh Home. Manage the switch 
 through More > Accounts. AniList-private entries stay off MAL. On TV, scan the QR with your phone
 and keep both devices on the same home network. Log out of each account separately in Accounts.
 
-A public username reads your list without login. Watched episodes and resume positions stay
-on this device until you sign in. The 18+ preference follows your AniList setting.
+Watched episodes and resume positions stay on this device until you sign in. The 18+
+preference follows your AniList setting.
 
 Caught-up airing shows move from Continue to Up next, with the next episode’s countdown.
 More > Discord links each profile with the bot’s `/link-app` command. It receives queued
@@ -42,11 +42,9 @@ More > Control TV finds TVs on the same local network. Pair once, then control p
 pause, ten-second seeks, next episode, episode selection and volume. Pairings belong
 to each profile. Forget a TV on the phone, or forget all paired phones on the TV.
 
-Search `otakase` to find Otakase: The Movie. It animates your stats and AniList
-favourites through four chapters, with remote chapter controls and Back to exit.
-
 Playback chooses a working copy automatically. Change Sub/Dub before playing and choose
 actual audio or subtitle tracks through Tracks. The red episode thread follows your saved
-position and continues through the played part of the timeline.
+position and continues through the played part of the timeline. Even out volume (on by
+default, in Playback settings) raises quiet dialogue and softens loud effects.
 
 [Developer build and testing notes](../wiki/Developer-Android-App.md)

@@ -13,6 +13,14 @@ const sourceNames = [
   'anizone',
   'reanime',
 ];
+// Evens out loudness while playing: quiet dialogue comes up and loud effects
+// come down. Uses ffmpeg's dynaudnorm (about a 3 s window, at most 10x gain).
+const volumeLeveller = 'lavfi=[dynaudnorm=f=200:g=15:p=0.95:m=10]';
+
+/// The mpv `af` value for the viewer's NormalizeVolume setting.
+String audioFilter(AppStore store) =>
+    store.flag('NormalizeVolume') ? volumeLeveller : '';
+
 const settingDefaults = <String, dynamic>{
   'AniListUsername': '',
   'MyAnimeListUsername': '',
@@ -31,6 +39,7 @@ const settingDefaults = <String, dynamic>{
   'SkipOp': true,
   'SkipEd': true,
   'SkipRecap': true,
+  'NormalizeVolume': true,
   'SkipFiller': true,
   'SkipDelay': 0,
   'Quality': 'best',
