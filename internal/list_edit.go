@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/pkg/browser"
 
@@ -440,31 +439,4 @@ func getEntriesByCategory(list AnimeList, category string) []Entry {
 		entries = append(entries, bucket...)
 	}
 	return dedupeEntriesByMediaID(entries)
-}
-
-// ChangeProvider lets the viewer pick the provider episodes come from, and
-// saves the choice to the config file.
-func ChangeProvider(userConfig *Config) {
-	options := providerSelectionOptions()
-	if len(options) == 0 {
-		Out("\nNo providers are currently enabled.\n")
-		return
-	}
-	picked, err := DynamicSelect(options)
-	if err != nil || picked.Key == "-1" || picked.Key == "-2" {
-		return
-	}
-
-	provider := canonicalProviderConfigValue(picked.Key)
-	userConfig.Provider = provider
-	// Dropped so the next lookup builds the provider just chosen.
-	CurrentProvider = nil
-	if values, err := LoadConfigFromFile(ConfigFilePath); err == nil {
-		values["Provider"] = provider
-		SaveConfigToFile(ConfigFilePath, values)
-	}
-
-	Out(fmt.Sprintf("\nProvider successfully changed to %s.\n", providerConfigDisplayLabel(userConfig.Provider)))
-	// Long enough to read before the menu redraws over it.
-	time.Sleep(time.Second)
 }

@@ -149,7 +149,6 @@ list under rofi. Escape quits.
 | `^g` | Surprise | A random show from Plan to Watch, with Reroll; starting it offers to move it to Watching |
 | `^s` | Stats | Your watch totals and recent history ([more](https://github.com/TheXykril/otakase/wiki/Stats)) |
 | `^t` | Tracker | Switch between local, AniList, MyAnimeList or both |
-| `^o` | Provider | Pick which sources are searched, and in what order |
 | `^r` | Remap | Fix a show that plays the wrong anime, by picking the right match (add `REMAP_PROVIDER` to `MenuActions`) |
 | `^l` | Continue | Pick up a show you played recently (terminal) |
 

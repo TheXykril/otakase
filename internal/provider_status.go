@@ -153,3 +153,40 @@ func FormatProviderStatus(report []ProviderHealth, query string) string {
 
 	return b.String()
 }
+
+// ProviderStatusDetailsEnv set to 1 makes -provider-status print every
+// source by name, for the Discord bot and debugging. Viewers otherwise see
+// counts only.
+const ProviderStatusDetailsEnv = "OTAKASE_PROVIDER_STATUS_DETAILS"
+
+// FormatProviderStatusSummary is the health report as viewers see it: how
+// many sources work, never which. 18+ sources get their own count, shown
+// only with adult on.
+func FormatProviderStatusSummary(report []ProviderHealth, adult bool) string {
+	var working, total, adultWorking, adultTotal int
+	for _, health := range report {
+		if isAdultProvider(health.Name) {
+			adultTotal++
+			if health.OK() {
+				adultWorking++
+			}
+			continue
+		}
+		total++
+		if health.OK() {
+			working++
+		}
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Sources: %d of %d working.\n", working, total)
+	if adult && adultTotal > 0 {
+		fmt.Fprintf(&b, "18+ sources: %d of %d working.\n", adultWorking, adultTotal)
+	}
+	switch {
+	case working == 0:
+		b.WriteString("No source answered. Check your network, or try again later.\n")
+	case working < total:
+		b.WriteString("Some are down; otakase tries the others by itself.\n")
+	}
+	return b.String()
+}

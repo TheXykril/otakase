@@ -169,7 +169,7 @@ func TestMoviesRofiToolbar(t *testing.T) {
 	lib := &movieLibrary{config: config}
 	bar := mainRofiToolbar(config, []Tab{{Key: movieContinueKey}, {Key: movieWatchlistKey}}, movieActions(config, lib))
 	bar.back = true
-	want := map[string]string{movieSearchKey: "Control+f", movieProviderKey: "Control+o", movieCastKey: "Control+k", movieTraktKey: "Control+t"}
+	want := map[string]string{movieSearchKey: "Control+f", movieCastKey: "Control+k", movieTraktKey: "Control+t"}
 	for _, button := range bar.buttons {
 		if binding, ok := want[button.Key]; ok {
 			if button.Binding != binding {

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/thexykril/otakase/internal/icons"
 	"github.com/thexykril/otakase/internal/movies"
 	"github.com/thexykril/otakase/internal/providers"
 )
@@ -117,15 +116,6 @@ func (l *movieLibrary) searchesAll(config *Config) bool {
 	}
 	_, err := l.provider(name)
 	return err != nil
-}
-
-// searching names where searches go, for the menus: "all" or a provider.
-func (l *movieLibrary) searching(config *Config) (name, label string) {
-	if l.searchesAll(config) {
-		return allProviders, "All providers"
-	}
-	provider, _ := l.provider(config.MovieProvider)
-	return provider.Name(), provider.Label()
 }
 
 // search asks the chosen provider, or every provider at once, for a title.
@@ -249,45 +239,4 @@ func (l *movieLibrary) openEpisode(show movies.Movie, episode movies.Episode) ([
 		return nil, fmt.Errorf("no servers for %s", episode.Label())
 	}
 	return sources, nil
-}
-
-// pickMovieProvider lets the viewer choose where movies are searched, and
-// keeps the choice in the config.
-func pickMovieProvider(config *Config, lib *movieLibrary) {
-	current, _ := lib.searching(config)
-	options := []SelectionOption{{Key: allProviders, Label: "All providers", Icon: icons.Provider}}
-	if current == allProviders {
-		options[0].Icon = icons.Yes
-	}
-	for _, name := range movies.ProviderNames {
-		provider, err := lib.provider(name)
-		if err != nil {
-			continue
-		}
-		icon := icons.Provider
-		if name == current {
-			icon = icons.Yes
-		}
-		options = append(options, SelectionOption{Key: name, Label: provider.Label(), Icon: icon})
-	}
-	picked, ok := pickMovieOption(options)
-	if !ok || picked.Key == current {
-		return
-	}
-	config.MovieProvider = picked.Key
-	if err := persistMovieProvider(config); err != nil {
-		Log(fmt.Sprintf("movies: could not save MovieProvider: %v", err))
-	}
-}
-
-func persistMovieProvider(config *Config) error {
-	if config == nil || ConfigFilePath == "" {
-		return nil
-	}
-	configMap, err := LoadConfigFromFile(ConfigFilePath)
-	if err != nil {
-		return err
-	}
-	configMap["MovieProvider"] = config.MovieProvider
-	return SaveConfigToFile(ConfigFilePath, configMap)
 }

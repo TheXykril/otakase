@@ -122,19 +122,6 @@ func defaultEnabledProviderStack() []string {
 	return filterEnabledProviders(stack)
 }
 
-// providerSelectionOptions is the Provider setting's menu: the default stack,
-// then each enabled provider on its own.
-func providerSelectionOptions() []SelectionOption {
-	stack := defaultEnabledProviderStack()
-	menu := make([]SelectionOption, 0, len(stack)+1)
-	menu = append(menu, SelectionOption{Key: stackedProviderConfigValue, Label: providerConfigDisplayLabel(stackedProviderConfigValue)})
-	for _, name := range stack {
-		single := formatProviderConfigValue([]string{name})
-		menu = append(menu, SelectionOption{Key: single, Label: name})
-	}
-	return menu
-}
-
 // firstEnabledProviderName is the provider to fall back to when nothing
 // configured is usable.
 func firstEnabledProviderName() string {

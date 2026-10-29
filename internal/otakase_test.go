@@ -260,7 +260,7 @@ func TestLastEpisodeCompletionIgnoresOtherEpisodes(t *testing.T) {
 // and no sign of what went wrong.
 func TestEveryMenuActionHasAHandler(t *testing.T) {
 	_, footer := SplitMenuOrder(
-		"CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER")
+		"CURRENT,ALL,PLANNING,PAUSED,DROPPED,REWATCHING,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,STATS")
 	if len(footer) != 6 {
 		t.Fatalf("expected six actions, got %d", len(footer))
 	}

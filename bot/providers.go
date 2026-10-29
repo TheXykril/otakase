@@ -28,20 +28,11 @@ type providerResult struct {
 
 var (
 	providerLineRe = regexp.MustCompile(`^\s+([✓✗])\s+(\S+)\s+\[([^\]]*)\]`)
-	resultsRe      = regexp.MustCompile(`^(\d+) result\(s\) in (.+)$`)
 )
 
-// adultProviders only serve 18+ titles. They are listed only to members
-// whose linked AniList shows adult content, under a discreet name.
+// adultProviders only serve 18+ titles. They are counted only for members
+// whose linked AniList shows adult content.
 var adultProviders = map[string]string{"sukebei": "nyaa 18+"}
-
-// providerDisplayName is the name members see for a source.
-func providerDisplayName(name string) string {
-	if n, ok := adultProviders[name]; ok {
-		return n
-	}
-	return name
-}
 
 // parseProviderStatus reads the CLI's report.
 func parseProviderStatus(out string) []providerResult {
@@ -82,52 +73,45 @@ func visibleProviders(list []providerResult, adult bool) []providerResult {
 	return out
 }
 
-func providerLine(p providerResult) string {
-	icon := "🟢"
-	detail := p.Detail
-	if m := resultsRe.FindStringSubmatch(detail); m != nil {
-		detail = m[2]
-	}
-	if !p.OK {
-		icon = "🔴"
-		if i := strings.Index(detail, ": "); i >= 0 && strings.HasPrefix(detail, "FAILED") {
-			detail = detail[i+2:]
-		}
-		detail = clip(detail, 80)
-		if p.adult {
-			// The error can name the 18+ host; keep it discreet.
-			detail = "not answering"
-		}
-	}
-	state := ""
-	switch {
-	case !p.Enabled && p.adult:
-		state = " · needs AdultContent"
-	case !p.Enabled:
-		state = " · off by default"
-	}
-	return fmt.Sprintf("%s **%s** · %s%s", icon, providerDisplayName(p.Name), detail, state)
-}
-
+// providerEmbed is the source check by count only: members see how many
+// sources work, never which. The 18+ ones are counted on a line of their
+// own, and only for members whose AniList allows adult content.
 func providerEmbed(list []providerResult, version string, adult bool) *discordgo.MessageEmbed {
-	list = visibleProviders(list, adult)
-	working := 0
-	var lines []string
-	for _, p := range list {
-		if p.OK {
-			working++
+	count := func(adultOnes bool) (working, total int) {
+		for _, p := range list {
+			if p.adult != adultOnes {
+				continue
+			}
+			total++
+			if p.OK {
+				working++
+			}
 		}
-		lines = append(lines, providerLine(p))
+		return working, total
 	}
-	e := &discordgo.MessageEmbed{
-		Title:       fmt.Sprintf("Sources: %d of %d working", working, len(list)),
-		Description: strings.Join(lines, "\n"),
-		Color:       shu,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Checked with " + version + " · run otakase -provider-status to compare with yours"},
-		Timestamp:   time.Now().Format(time.RFC3339),
+	working, total := count(false)
+	var desc string
+	switch {
+	case total == 0:
+		desc = "No sources were checked."
+	case working == total:
+		desc = "Everything should play."
+	case working > 0:
+		desc = "Some sources are down. The app tries the others by itself."
+	default:
+		desc = "No source answers right now. Try again later."
 	}
 	if adult {
-		e.Footer.Text += " · 18+ sources shown because your AniList allows adult content"
+		if w, t := count(true); t > 0 {
+			desc += fmt.Sprintf("\n18+ sources: %d of %d working", w, t)
+		}
+	}
+	e := &discordgo.MessageEmbed{
+		Title:       fmt.Sprintf("Sources: %d of %d working", working, total),
+		Description: desc,
+		Color:       shu,
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Checked with " + version},
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 	if working == 0 {
 		e.Color = 0x8A8276
@@ -215,7 +199,8 @@ func (b *bot) checkProviders() (list []providerResult, version string, fail *dis
 	defer os.RemoveAll(home)
 	run := func(args ...string) (string, error) {
 		cmd := exec.CommandContext(ctx, b.cfg.OtakaseCLI, args...)
-		cmd.Env = append(os.Environ(), "HOME="+home, "XDG_CONFIG_HOME="+home)
+		// The bot reads every source's line; members are shown counts only.
+		cmd.Env = append(os.Environ(), "HOME="+home, "XDG_CONFIG_HOME="+home, "OTAKASE_PROVIDER_STATUS_DETAILS=1")
 		out, err := cmd.CombinedOutput()
 		return string(out), err
 	}

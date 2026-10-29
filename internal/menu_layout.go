@@ -372,7 +372,6 @@ var menuActions = map[string]FooterAction{
 	"UPDATE":         {Key: "UPDATE", Label: "update", Hint: "ctrl+e"},
 	"REMAP_PROVIDER": {Key: "REMAP_PROVIDER", Label: "remap", Hint: "ctrl+r"},
 	"TRACKER":        {Key: "TRACKER", Label: "tracker", Hint: "ctrl+t"},
-	"PROVIDER":       {Key: "PROVIDER", Label: "provider", Hint: "ctrl+o"},
 	// The label here is a placeholder: CAST reports whether it is on, so its
 	// text is replaced with the live state by applyDynamicActionLabels before
 	// either menu renders it.

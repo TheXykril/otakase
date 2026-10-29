@@ -1545,10 +1545,8 @@ function wUpdateOrigin() {
     indicator.hidden = true;
     return;
   }
-  const names = { anikoto: "Anikoto", megavid: "Megavid", kickassanime: "KickAssAnime",
-    anizone: "AniZone", nyaa: "Nyaa", sukebei: "Sukebei" };
-  const provider = names[String(origin.provider || "").toLowerCase()]
-    || origin.provider || "Unknown";
+  // Names come from the server, for staff only; the page itself names no site.
+  const provider = origin.provider || "Unknown";
   indicator.hidden = false;
   indicator.textContent = "via " + provider + (origin.link ? " · #" + origin.link : "");
   indicator.title = provider + (origin.host ? " · " + origin.host : "")

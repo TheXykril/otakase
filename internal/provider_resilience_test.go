@@ -258,7 +258,7 @@ func TestSearchAnimeWithProvidersDoesNotWaitOnStragglers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("search failed: %v", err)
 	}
-	if len(results) != 1 || results[0].Label != "Fast [anizone]" {
+	if len(results) != 1 || results[0].Label != "Fast "+sourceTag("anizone") {
 		t.Fatalf("expected the fast provider's result, got %v", results)
 	}
 	if elapsed > providerSearchGrace+2*time.Second {

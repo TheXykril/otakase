@@ -14,7 +14,7 @@ func TestKnownConfigKeysCoversTheStruct(t *testing.T) {
 	if len(keys) < 20 {
 		t.Fatalf("expected the full config surface, got %d keys", len(keys))
 	}
-	for _, want := range []string{"Player", "Provider", "SkipOp", "MyAnimeListClientID", "Theme", "DownloadDir"} {
+	for _, want := range []string{"Player", "SubOrDub", "SkipOp", "MyAnimeListClientID", "Theme", "DownloadDir"} {
 		found := false
 		for _, key := range keys {
 			if key == want {

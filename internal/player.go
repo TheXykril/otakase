@@ -303,7 +303,7 @@ func StartVideoWithProviderFallback(config *Config, anime *Anime, title string) 
 		badLinks := slices.Clone(anime.Ep.Links)
 		Log(fmt.Sprintf("Playback did not start with provider %s/%s within %s", bad, audio, wait))
 		noteProviderResult(bad, "playback", fmt.Errorf("playback did not start within %s", wait))
-		Out(fmt.Sprintf("Playback failed to start with %s. Trying another provider...", bad))
+		Out("Playback failed to start. Trying another copy...")
 		if socket != "" {
 			ExitMPV(socket)
 		}
@@ -314,7 +314,7 @@ func StartVideoWithProviderFallback(config *Config, anime *Anime, title string) 
 		if err == nil && len(alt.Links) > 0 {
 			useFallbackLinks(anime, alt)
 			Log(fmt.Sprintf("Retrying playback with %s/%s: %+v", alt.ProviderName, alt.Mode, alt.Links))
-			Out(fmt.Sprintf("Retrying with %s...", alt.ProviderName))
+			Out("Retrying with another copy...")
 			continue
 		}
 
@@ -330,7 +330,7 @@ func StartVideoWithProviderFallback(config *Config, anime *Anime, title string) 
 				anime.Ep.Mode = alt.Mode
 				useFallbackLinks(anime, alt)
 				Log(fmt.Sprintf("Retrying playback with %s/%s after audio fallback: %+v", alt.ProviderName, alt.Mode, alt.Links))
-				Out(fmt.Sprintf("Retrying with %s (%s)...", alt.ProviderName, alt.Mode))
+				Out(fmt.Sprintf("Retrying with another copy (%s)...", alt.Mode))
 				continue
 			}
 		}
@@ -339,7 +339,7 @@ func StartVideoWithProviderFallback(config *Config, anime *Anime, title string) 
 		if err != nil {
 			reason = "Provider fallback failed: " + err.Error()
 		}
-		giveUp(reason, "No alternative provider could start playback for this episode.")
+		giveUp(reason, "No other copy could start playback for this episode.")
 	}
 }
 

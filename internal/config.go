@@ -44,23 +44,27 @@ type Config struct {
 	RofiSelection   bool `config:"RofiSelection"`
 	// SubOrDubFlag records that -sub or -dub was given for this run, which
 	// outranks the audio remembered for a show. Not a setting either.
-	SubOrDubFlag               bool   `config:"-"`
-	ScoreOnCompletion          bool   `config:"ScoreOnCompletion"`
-	SaveMpvSpeed               bool   `config:"SaveMpvSpeed"`
-	AddMissingOptions          bool   `config:"AddMissingOptions"`
-	AlternateScreen            bool   `config:"AlternateScreen"`
-	DiscordPresence            bool   `config:"DiscordPresence"`
-	DiscordClientId            string `config:"DiscordClientId"`
-	VimKeys                    bool   `config:"VimKeys"`
-	AnimeSkipClientID          string `config:"AnimeSkipClientID"`
-	ContributeSkipTimes        bool   `config:"ContributeSkipTimes"`
-	IntroDBSkipTimes           bool   `config:"IntroDBSkipTimes"`
-	CheckUpdates               bool   `config:"CheckUpdates"`
-	DevBuilds                  bool   `config:"DevBuilds"`
-	MpvEpisodePlaylist         bool   `config:"MpvEpisodePlaylist"`
-	Provider                   string `config:"Provider"`
-	DisabledProviders          string `config:"DisabledProviders"`
-	ManualProviderSearch       bool   `config:"ManualProviderSearch"`
+	SubOrDubFlag        bool   `config:"-"`
+	ScoreOnCompletion   bool   `config:"ScoreOnCompletion"`
+	SaveMpvSpeed        bool   `config:"SaveMpvSpeed"`
+	AddMissingOptions   bool   `config:"AddMissingOptions"`
+	AlternateScreen     bool   `config:"AlternateScreen"`
+	DiscordPresence     bool   `config:"DiscordPresence"`
+	DiscordClientId     string `config:"DiscordClientId"`
+	VimKeys             bool   `config:"VimKeys"`
+	AnimeSkipClientID   string `config:"AnimeSkipClientID"`
+	ContributeSkipTimes bool   `config:"ContributeSkipTimes"`
+	IntroDBSkipTimes    bool   `config:"IntroDBSkipTimes"`
+	CheckUpdates        bool   `config:"CheckUpdates"`
+	DevBuilds           bool   `config:"DevBuilds"`
+	MpvEpisodePlaylist  bool   `config:"MpvEpisodePlaylist"`
+	// Provider, DisabledProviders and ManualProviderSearch are no longer
+	// settings: sources are always picked automatically from the whole stack
+	// and never named to the viewer. PopulateConfig fixes their values; tests
+	// and debugging may still set them in code.
+	Provider                   string `config:"-"`
+	DisabledProviders          string `config:"-"`
+	ManualProviderSearch       bool   `config:"-"`
 	TrackingLocal              bool   `config:"TrackingLocal"`
 	TrackingRemote             string `config:"TrackingRemote"`
 	TrackingConfigured         bool   `config:"TrackingConfigured"`
@@ -158,10 +162,9 @@ type Config struct {
 	// site outside AniList and MyAnimeList, tracked locally only. Off by
 	// default while it is experimental.
 	ExperimentalMovies bool `config:"ExperimentalMovies"`
-	// MovieProvider is where movies are searched: all (every provider at
-	// once), vidsrc (English), 8filmai or filmukas (Lithuanian). Changed from
-	// the Movies menu.
-	MovieProvider string `config:"MovieProvider"`
+	// MovieProvider is where movies are searched. No longer a setting:
+	// PopulateConfig always sets "all" (every provider at once).
+	MovieProvider string `config:"-"`
 	// TraktClientID and TraktClientSecret name another Trakt app to sync
 	// movies through than otakase's own, which is used when they are empty.
 	TraktClientID     string `config:"TraktClientID"`
@@ -291,8 +294,6 @@ func categoryIcon(key string) icons.Icon {
 		return icons.Rewatching
 	case "TRACKER":
 		return icons.Tracker
-	case "PROVIDER":
-		return icons.Provider
 	case "CAST":
 		return icons.Cast
 	case "STATS":

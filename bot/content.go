@@ -44,7 +44,7 @@ type faqEntry struct {
 var faqs = []faqEntry{
 	{"install", "How do I install or update?", "Install steps for every system are on the [website](" + siteURL + ") and in `/install`. Update with `otakase -u`."},
 	{"mpv", "Playback never starts", "Otakase needs mpv installed and on your PATH. See [Troubleshooting](" + wikiURL + "/Troubleshooting)."},
-	{"nothing-found", "Nothing is found for a show", "Run `otakase -provider-status` to see which sources respond, then share the output in the support forum."},
+	{"nothing-found", "Nothing is found for a show", "Run `/provider-status` or `otakase -provider-status` to see how many sources respond, then share the output in the support forum."},
 	{"icons", "Menu icons show as boxes", "On Linux Otakase installs a small icon font by itself. Otherwise use a Nerd Font, or set `Icons=false` in the config (`otakase -e`)."},
 	{"sync", "My progress didn't sync", "See [Tracking](" + wikiURL + "/Tracking). `otakase -change-token` signs you in again."},
 	{"cast", "Casting can't find my TV", "Run `otakase -cast-setup`, then see [Casting Problems](" + wikiURL + "/Casting-Problems)."},
