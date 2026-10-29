@@ -190,7 +190,9 @@ class _AppShellState extends State<AppShell> {
       ),
     );
     if (exit == true && mounted) {
-      final milestone = await widget.services.heritage.milestoneOnExit();
+      final milestone = otakaseMovieEnabled
+          ? await widget.services.heritage.milestoneOnExit()
+          : 0;
       if (!mounted) return;
       if (milestone > 0) {
         await Navigator.push(

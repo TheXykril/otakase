@@ -111,9 +111,8 @@ class AppStore extends ChangeNotifier {
   List<WatchEntry> get history =>
       _history.values.where((h) => visible(h.anime)).toList()
         ..sort((a, b) => b.updated.compareTo(a.updated));
-  List<WatchEntry> get continuing => history
-      .where((h) => h.position > 0 || !h.watched.contains(h.episode))
-      .toList();
+  List<WatchEntry> get continuing =>
+      history.where((h) => !h.watched.contains(h.episode)).toList();
   WatchEntry? entry(Anime anime) =>
       _history[anime.key] ??
       _history.values

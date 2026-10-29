@@ -435,7 +435,8 @@ class TVRemote extends ChangeNotifier {
         return;
       }
       final seen = _connected[key];
-      if (seen == null || now().difference(seen) > const Duration(seconds: 30)) {
+      if (seen == null ||
+          now().difference(seen) > const Duration(seconds: 30)) {
         _events.add('${saved['name']} connected');
       }
       _connected[key] = now();

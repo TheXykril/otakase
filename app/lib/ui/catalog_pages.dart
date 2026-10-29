@@ -97,7 +97,7 @@ class _SearchPageState extends State<SearchPage> {
       }
     });
     try {
-      if (query.text.trim().toLowerCase() == 'otakase') {
+      if (otakaseMovieEnabled && query.text.trim().toLowerCase() == 'otakase') {
         if (mounted && g == generation) {
           setState(() {
             items = [otakaseMovieEntry];

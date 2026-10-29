@@ -14,6 +14,9 @@ import 'package:otakase/ui/home_page.dart';
 import 'auth_test.dart' show MemoryTokens, account, json;
 import 'widget_test.dart' as fixture;
 
+String watchedCaption(int n) =>
+    fixture.anime.episodes > 0 ? '$n/${fixture.anime.episodes}' : '$n watched';
+
 http.Response listResponse(http.Request request) {
   if (request.url.host == 'graphql.anilist.co') {
     expect(jsonDecode(request.body)['query'], contains('idMal'));
@@ -125,7 +128,7 @@ void main() {
           find.byKey(const ValueKey('Combined-ALL-mal:25')),
           findsOneWidget,
         );
-        expect(find.text('5 watched'), findsOneWidget);
+        expect(find.text(watchedCaption(5)), findsOneWidget);
         expect(
           find.descendant(
             of: find.byKey(ValueKey('Combined-ALL-${fixture.anime.key}')),
@@ -170,7 +173,7 @@ void main() {
       find.byKey(ValueKey('Combined-CURRENT-${fixture.anime.key}')),
       findsOneWidget,
     );
-    expect(find.text('3 watched'), findsOneWidget);
+    expect(find.text(watchedCaption(3)), findsOneWidget);
     unavailable = false;
     Focus.of(tester.element(find.text('MAL not loaded, retry'))).requestFocus();
     await tester.pump();
@@ -186,7 +189,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('Combined-ALL-mal:25')), findsOneWidget);
-    expect(find.text('5 watched'), findsOneWidget);
+    expect(find.text(watchedCaption(5)), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
@@ -205,7 +208,7 @@ void main() {
           find.byKey(ValueKey('AniList-CURRENT-${fixture.anime.key}')),
           findsOneWidget,
         );
-        expect(find.text('3 watched'), findsOneWidget);
+        expect(find.text(watchedCaption(3)), findsOneWidget);
       } else {
         await tester.tap(find.text('Watching'));
         await tester.pumpAndSettle();

@@ -305,6 +305,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     );
     final synced = await widget.services.tracking.resume(anime);
     savedResume = math.max(savedResume, synced.forEpisode(episode));
+    if ((historyBeforeOpen?.watched.contains(episode) ?? false) ||
+        episode <= widget.services.tracking.progress(anime)) {
+      savedResume = 0;
+    }
     if (!mounted || g != generation) return;
     try {
       await player.stop();
@@ -570,18 +574,19 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         completed ||
         position.inSeconds / duration.inSeconds * 100 >=
             widget.services.store.integer('PercentageToMarkComplete');
-    if (completed) {
+    if (watched) {
       if (completedEpisodes.add(episode)) {
         await resumePusher.episodeDone(anime.key, episode, anime.episodes);
       }
     } else {
       resumePusher.note(anime.key, episode, position.inSeconds);
     }
-    // Keep the resume point even when the watched threshold has been reached.
+    // Past the watched threshold the episode counts as seen: no resume point,
+    // so it reads "Watched" and opens from the start next time.
     await widget.services.store.progress(
       anime,
       episode,
-      position.inSeconds,
+      watched ? 0 : position.inSeconds,
       duration.inSeconds,
       completed: completed,
     );

@@ -9,6 +9,10 @@ import '../data/models.dart';
 import '../services.dart';
 import 'components.dart';
 
+/// The film is switched off until it plays reliably; searching "otakase" and
+/// the milestone showing are both behind this.
+bool otakaseMovieEnabled = false;
+
 const otakaseMovieEntry = Anime(
   id: -1,
   malId: -1,

@@ -97,8 +97,6 @@ class _ShowPageState extends State<ShowPage> {
     final h = widget.services.store.entry(anime);
     var ep = h == null
         ? widget.services.tracking.progress(anime) + 1
-        : h.position > 0
-        ? h.episode
         : h.watched.contains(h.episode)
         ? h.episode + 1
         : h.episode;
@@ -279,10 +277,9 @@ class _ShowPageState extends State<ShowPage> {
     final seen =
         (h?.watched.contains(ep) ?? false) ||
         ep <= widget.services.tracking.progress(anime);
-    final seconds = max(
-      h?.episode == ep ? h?.position ?? 0 : 0,
-      remote.forEpisode(ep),
-    );
+    final seconds = seen
+        ? 0
+        : max(h?.episode == ep ? h?.position ?? 0 : 0, remote.forEpisode(ep));
     final current = started && ep == nextEpisode;
     final metadata = art(ep);
     final thumbnail = metadata?['thumbnail'] as String? ?? '';
@@ -371,17 +368,17 @@ class _ShowPageState extends State<ShowPage> {
                       ),
                     ),
                     Text(
-                      '${seconds > 0
-                          ? 'Resume at ${seconds ~/ 60}m ${seconds % 60}s'
-                          : seen
+                      '${seen
                           ? 'Watched'
+                          : seconds > 0
+                          ? 'Resume at ${seconds ~/ 60}m ${seconds % 60}s'
                           : 'Not watched'}${airdate.isNotEmpty ? ' · $airdate' : ''}',
                       maxLines: card ? 1 : null,
                       overflow: card ? TextOverflow.ellipsis : null,
                       style: uiStyle(
                         context,
                         size: 15,
-                        color: seconds > 0 ? accentText : muted,
+                        color: !seen && seconds > 0 ? accentText : muted,
                       ),
                     ),
                   ],

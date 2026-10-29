@@ -104,9 +104,23 @@ Widget page(Widget home, {bool tv = false}) => AppLayout(
   child: MaterialApp(theme: ThemeData.dark(), home: home),
 );
 void main() {
+  testWidgets('the film stays hidden from Search while switched off', (
+    tester,
+  ) async {
+    await fixture.launch(tester, tv: true);
+    await tester.tap(find.byKey(const Key('nav-Search')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('catalog-search')), 'Otakase');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+    expect(find.text('Otakase: The Movie'), findsNothing);
+  });
+
   testWidgets('searching otakase opens the film and Back returns to Search', (
     tester,
   ) async {
+    otakaseMovieEnabled = true;
+    addTearDown(() => otakaseMovieEnabled = false);
     await fixture.launch(tester, tv: true);
     await tester.tap(find.byKey(const Key('nav-Search')));
     await tester.pumpAndSettle();
