@@ -77,6 +77,8 @@ func TestStreamForBotLocalSwarm(t *testing.T) {
 	old := publicTrackers
 	publicTrackers = []string{tracker.URL}
 	defer func() { publicTrackers = old }()
+	botNoDHT = true
+	defer func() { botNoDHT = false }()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	dir := t.TempDir()
