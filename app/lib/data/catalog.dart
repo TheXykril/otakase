@@ -414,31 +414,4 @@ class Catalog {
       return false;
     }
   }
-
-  Future<String> updateStatus() async {
-    try {
-      final r = await client
-          .get(
-            Uri.https(
-              'api.github.com',
-              '/repos/TheXykril/otakase/releases/latest',
-            ),
-            headers: {'Accept': 'application/vnd.github+json'},
-          )
-          .timeout(const Duration(seconds: 10));
-      if (r.statusCode == 404) {
-        return 'No Android release has been published yet.';
-      }
-      if (r.statusCode != 200) return 'Unable to check releases right now.';
-      final j = jsonDecode(r.body) as Map;
-      final apk = (j['assets'] as List? ?? []).where(
-        (a) => (a['name'] as String).endsWith('.apk'),
-      );
-      return apk.isEmpty
-          ? 'No Android APK in the latest release.'
-          : 'Android release available: ${j['tag_name']}. Visit the Otakase repository to install.';
-    } catch (_) {
-      return 'Unable to check releases while offline.';
-    }
-  }
 }
