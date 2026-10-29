@@ -1,6 +1,6 @@
 # Android app development
 
-Developer notes for the Android phone and TV app. Kage uses personal Home, Search and More on touch devices and Android TV. AniList and MAL login support real lists, status, progress, score and synced resume. Playback chooses sources automatically through mobilecore. Downloads, torrents, casting and background playback are outside this change. Android 7.0 (API 24) or newer is required. The CLI version and CLI/bot behavior are unchanged.
+Developer notes for the Android phone and TV app. Kage uses personal Home, Search and More on touch devices and Android TV. AniList and MAL login support real lists, status, progress, score and synced resume. Public usernames remain read only. Playback chooses sources automatically through mobilecore. Downloads, torrents, casting and background playback are outside this change. Android 7.0 (API 24) or newer is required. The CLI version and CLI/bot behavior are unchanged.
 
 ## Pinned toolchain
 
@@ -15,10 +15,6 @@ Developer notes for the Android phone and TV app. Kage uses personal Home, Searc
 - Gradle 9.3.1, Android Gradle Plugin 9.1.0, Kotlin plugin 2.4.0.
 - media_kit 1.2.6, media_kit_video 2.0.1, media_kit_libs_video 1.0.7.
   Transitive media_kit_libs_android_video 1.3.8 is locked in pubspec.lock.
-- Its libmpv has no audio filters, so the Gradle build swaps in the full
-  ffmpeg/mpv libraries from mpv-android's F-Droid APK (versionCode 48, pinned
-  by SHA-256 in app/android/app/build.gradle.kts, cached in the Gradle home).
-  The first build downloads about 120 MB. Even out volume uses its dynaudnorm.
 
 ## Build from a fresh checkout
 

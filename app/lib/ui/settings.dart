@@ -75,7 +75,6 @@ const settingLabels = <String, String>{
   'SkipOp': 'Skip openings',
   'SkipEd': 'Skip endings',
   'SkipRecap': 'Skip recaps',
-  'NormalizeVolume': 'Even out volume',
   'SkipFiller': 'Skip filler episodes',
   'SkipDelay': 'Skip delay',
   'Quality': 'Quality',
@@ -434,11 +433,6 @@ class _SettingsPageState extends State<SettingsPage> {
               toggle('SkipOp', 'Automatically skip verified intro ranges.'),
               toggle('SkipEd', 'Automatically skip verified ending ranges.'),
               toggle('SkipRecap', 'Automatically skip verified recap ranges.'),
-              toggle(
-                'NormalizeVolume',
-                'Raise quiet dialogue and soften loud effects.',
-                icon: LucideIcons.audioLines,
-              ),
               row(
                 'SkipDelay',
                 'Wait this many seconds before an automatic skip.',

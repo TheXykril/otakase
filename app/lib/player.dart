@@ -10,7 +10,6 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import 'core.dart';
 import 'data/models.dart';
-import 'data/store.dart';
 import 'data/synced_resume.dart';
 import 'services.dart';
 import 'ui/components.dart';
@@ -205,7 +204,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await property('sub-back-color', s.text('SubtitleBackground'));
     await property('sub-border-size', s.integer('SubtitleOutline').toString());
     await property('sub-pos', s.integer('SubtitlePosition').toString());
-    await property('af', audioFilter(s));
     // Soft tracks keep their ASS styling. Never rasterize or convert them.
     await property(
       'sub-ass-override',
