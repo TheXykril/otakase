@@ -85,6 +85,23 @@ machine), so every APK given to anyone must use the release key. Keep the
 keystore and its passwords backed up offline. Losing them means installed apps
 can only be replaced by uninstalling first.
 
+### In the Build and release workflow
+
+Every run of **Build and release** also builds the APK (job `android`) and
+keeps it as the `otakase-android` artifact for 7 days; a release attaches it
+as `otakase-android.apk`. It is signed with the release key from four
+repository secrets:
+
+| Secret | Value |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | the keystore, `base64 -w0 otakase-release.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | `storePassword` |
+| `ANDROID_KEY_ALIAS` | `keyAlias` |
+| `ANDROID_KEY_PASSWORD` | `keyPassword` |
+
+A run for a PR (`pr_number` set) never reads them and signs with the debug
+key, as does any run while `ANDROID_KEYSTORE_BASE64` is unset.
+
 ## Core boundary
 
 mobilecore/ is public because gomobile builds a generated wrapper module which
