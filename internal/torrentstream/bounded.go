@@ -102,6 +102,10 @@ type BotStream struct {
 // configured size limit. ctx bounds the wait for the torrent's file list;
 // meanwhile waiting, when set, hears every few seconds how many peers are
 // connected and how many are known.
+// botNoDHT keeps the client off the public DHT; tests set it so they stay
+// on loopback.
+var botNoDHT = false
+
 func StreamForBot(ctx context.Context, hash, dir string, waiting func(connected, known int)) (_ *BotStream, err error) {
 	limits := readBotTorrentLimits(os.Getenv)
 	s := &BotStream{cache: filepath.Join(dir, "pieces")}
@@ -121,6 +125,7 @@ func StreamForBot(ctx context.Context, hash, dir string, waiting func(connected,
 	cfg.DataDir = s.cache
 	cfg.ListenPort = 0
 	cfg.NoDefaultPortForwarding = true
+	cfg.NoDHT = botNoDHT
 	cfg.DefaultStorage = boundedStorage{ClientImpl: s.disk, rejected: rejected, limit: limits.torrent}
 	cfg.NoUpload, cfg.Seed = true, false
 	cfg.EstablishedConnsPerTorrent = 16

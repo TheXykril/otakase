@@ -19,6 +19,7 @@ require (
 	golang.org/x/crypto v0.55.0
 	golang.org/x/term v0.46.0
 	golang.org/x/time v0.14.0
+	rsc.io/qr v0.2.0
 )
 
 require (
@@ -33,7 +34,6 @@ require (
 	github.com/sergeymakinen/go-bmp v1.0.0 // indirect
 	github.com/sergeymakinen/go-ico v1.0.0-beta.0 // indirect
 	golang.org/x/mobile v0.0.0-20260821190718-4776eadac327 // indirect
-	rsc.io/qr v0.2.0 // indirect
 )
 
 require (
