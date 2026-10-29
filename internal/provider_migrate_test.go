@@ -10,67 +10,6 @@ import (
 	_ "github.com/thexykril/otakase/internal/loadproviders"
 )
 
-func TestProviderMenuOffersTheStackThenEachProvider(t *testing.T) {
-	withAllProvidersEnabledForTest(t)
-
-	menu := providerSelectionOptions()
-	if len(menu) != len(fullTestStack)+1 {
-		t.Fatalf("%d entries, want the stack plus one per provider", len(menu))
-	}
-	if menu[0].Key != "stacked" || !strings.HasPrefix(menu[0].Label, "Default with fallback (anikoto → ") {
-		t.Fatalf("first entry %+v, want the stack", menu[0])
-	}
-	for i, name := range fullTestStack {
-		if entry := menu[i+1]; entry.Key != `["`+name+`"]` || entry.Label != name {
-			t.Errorf("entry %d is %+v, want %s alone", i+1, entry, name)
-		}
-	}
-}
-
-func TestMigrateProviderConfig(t *testing.T) {
-	withAllProvidersEnabledForTest(t)
-
-	type migration struct {
-		name, raw, want string
-		changed         bool
-	}
-	for _, tc := range []migration{
-		{"legacy senshi default", `["senshi"]`, "stacked", true},
-		{"legacy allanime default", `["allanime"]`, "stacked", true},
-		{"shut-down anipub", `["anipub"]`, "stacked", true},
-		{"shut-down anineko and anidb", `["anineko","anidb"]`, "stacked", true},
-		{"removed provider beside a working one", `["senshi","anizone"]`, "stacked", true},
-		{"empty", "", "stacked", true},
-		{"stack alias", "stack", "stacked", true},
-		{"already stacked", "stacked", "stacked", false},
-		{"padded stacked", " stacked ", "stacked", false},
-		{"single anizone", `["anizone"]`, `["anizone"]`, false},
-		{"single bare name", "anizone", `["anizone"]`, true},
-		{"alias spelling", `["Kick-Ass Anime"]`, `["kickassanime"]`, true},
-		{"own list", `["kickassanime","anizone"]`, "stacked", true},
-	} {
-		value, changed := migrateProviderConfig(tc.raw)
-		if value != tc.want || changed != tc.changed {
-			t.Errorf("%s: %q migrates to (%q, %v), want (%q, %v)", tc.name, tc.raw, value, changed, tc.want, tc.changed)
-		}
-	}
-}
-
-func TestIsFactoryDefaultProvider(t *testing.T) {
-	withDisabledProvidersForTest(t, "nyaa")
-	for raw, want := range map[string]bool{
-		"":                        true,
-		"auto":                    true,
-		`["nyaa"]`:                true,
-		`["kickassanime"]`:        false,
-		`["kickassanime","nyaa"]`: false,
-	} {
-		if got := isFactoryDefaultProvider(raw); got != want {
-			t.Errorf("%q: got %v, want %v", raw, got, want)
-		}
-	}
-}
-
 func TestParseConfigBool(t *testing.T) {
 	for _, yes := range []string{"true", " YES ", "1", "y", "On"} {
 		if got, err := parseConfigBool(yes); err != nil || !got {
@@ -87,14 +26,6 @@ func TestParseConfigBool(t *testing.T) {
 	}
 }
 
-func TestMigrateProviderConfigReplacesASingleDisabledProvider(t *testing.T) {
-	withDisabledProvidersForTest(t, "nyaa")
-
-	if got, changed := migrateProviderConfig(`["nyaa"]`); got != "stacked" || !changed {
-		t.Fatalf("got (%q, %v), want the stack", got, changed)
-	}
-}
-
 func TestIsStackedProviderConfig(t *testing.T) {
 	for _, raw := range []string{"stacked", "Stack", " auto ", "ALL"} {
 		if !isStackedProviderConfig(raw) {
@@ -105,20 +36,6 @@ func TestIsStackedProviderConfig(t *testing.T) {
 		if isStackedProviderConfig(raw) {
 			t.Errorf("%q should not read as the stack", raw)
 		}
-	}
-}
-
-func TestProviderConfigDisplayLabel(t *testing.T) {
-	withAllProvidersEnabledForTest(t)
-
-	if got := providerConfigDisplayLabel(`["anizone","kickassanime"]`); got != "anizone → kickassanime" {
-		t.Errorf("list: got %q", got)
-	}
-	if got := providerConfigDisplayLabel(`["kickassanime"]`); got != "kickassanime" {
-		t.Errorf("single: got %q", got)
-	}
-	if got := providerConfigDisplayLabel("auto"); got != "Default with fallback ("+strings.Join(fullTestStack, " → ")+")" {
-		t.Errorf("stack: got %q", got)
 	}
 }
 
@@ -156,16 +73,7 @@ func TestAppendConfigKeysLeavesExistingLinesAlone(t *testing.T) {
 	}
 }
 
-func TestCanonicalProviderConfigValuePrefersStackedToken(t *testing.T) {
-	withAllProvidersEnabledForTest(t)
-	for _, raw := range []string{"stacked", ""} {
-		if got := canonicalProviderConfigValue(raw); got != "stacked" {
-			t.Errorf("%q: got %q, want stacked", raw, got)
-		}
-	}
-}
-
-func TestUpgradeMovesAnOwnListToTheStackAndRecordsTheVersion(t *testing.T) {
+func TestUpgradeRecordsTheVersionWithoutWritingASourceSetting(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 	dir := t.TempDir()
 	confPath, share := filepath.Join(dir, "otakase.conf"), filepath.Join(dir, "share")
@@ -177,41 +85,31 @@ func TestUpgradeMovesAnOwnListToTheStackAndRecordsTheVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if conf.Provider != `["anizone","nyaa"]` {
-		t.Fatalf("loading alone changed the provider to %q", conf.Provider)
-	}
-
-	changed, err := MigrateOnVersionUpgrade(confPath, &conf, "2.1.0")
-	if err != nil || !changed {
-		t.Fatalf("first run of 2.1.0: (%v, %v), want a change", changed, err)
-	}
 	if conf.Provider != "stacked" {
-		t.Fatalf("provider %q after the upgrade, want stacked", conf.Provider)
+		t.Fatalf("provider %q, want the automatic stack", conf.Provider)
+	}
+	if _, err := MigrateOnVersionUpgrade(confPath, &conf, "2.1.0"); err != nil {
+		t.Fatalf("first run of 2.1.0: %v", err)
 	}
 	if v := readStoredVersion(share); v != "2.1.0" {
 		t.Fatalf("recorded version %q", v)
 	}
-	onDisk, err := os.ReadFile(confPath)
-	if err != nil {
-		t.Fatalf("reading the config back: %v", err)
+	if text := readConfigText(t, confPath); strings.Contains(text, "Provider=") {
+		t.Fatalf("the upgrade wrote a Provider line back:\n%s", text)
 	}
-	if !strings.Contains(string(onDisk), "Provider=stacked") {
-		t.Fatalf("the file kept the old provider:\n%s", onDisk)
-	}
-
 	if changed, err := MigrateOnVersionUpgrade(confPath, &conf, "2.1.0"); err != nil || changed {
 		t.Fatalf("second run of 2.1.0: (%v, %v), want nothing to do", changed, err)
 	}
 }
 
-func TestMigrateOnVersionUpgradeWithoutAConfigFileMigratesInMemory(t *testing.T) {
+func TestMigrateOnVersionUpgradeWithoutAConfigFileRecordsTheVersion(t *testing.T) {
 	withAllProvidersEnabledForTest(t)
 	storagePath := filepath.Join(t.TempDir(), "share")
-	config := Config{StoragePath: storagePath, Provider: "auto"}
+	config := Config{StoragePath: storagePath, Provider: "stacked"}
 
 	updated, err := MigrateOnVersionUpgrade("", &config, "26.8.0")
-	if err != nil || !updated || config.Provider != "stacked" {
-		t.Fatalf("got (%v, %v) provider %q, want an in-memory migration to stacked", updated, err, config.Provider)
+	if err != nil || updated || config.Provider != "stacked" {
+		t.Fatalf("got (%v, %v) provider %q, want nothing changed", updated, err, config.Provider)
 	}
 	if got := readStoredVersion(storagePath); got != "26.8.0" {
 		t.Fatalf("stored version = %q", got)

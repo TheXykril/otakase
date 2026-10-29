@@ -320,9 +320,6 @@ var homeMenuActions = map[string]func(m *homeMenu) menuOutcome{
 		m.active = nextList(m.config, m.active)
 		return menuStay
 	},
-	"PROVIDER": func(m *homeMenu) menuOutcome {
-		return openPage(func() { ChangeProvider(m.config) })
-	},
 	"TRACKER": func(m *homeMenu) menuOutcome {
 		return openPage(func() { ChangeTracker(m.config, m.user) })
 	},
@@ -805,19 +802,19 @@ func settleEpisodeCount(userConfig *Config, anime *Anime, user *User, query stri
 	}
 
 	if anime.TotalEpisodes == 0 {
-		Out("AniList/MAL did not return total episodes. Attempting to retrieve from provider episode list.")
+		Out("AniList/MAL did not return total episodes. Reading them from the source.")
 		providerName, providerID := AnimeProviderID(anime)
 		total, err := GetProviderTotalEpisodes(QualifyProviderID(providerName, providerID), userConfig.SubOrDub)
 		if err != nil {
 			Log(fmt.Sprintf("Failed to retrieve total episodes from provider episode list: %v", err))
 		} else {
 			anime.TotalEpisodes = total
-			Out(fmt.Sprintf("Retrieved total episodes from provider: %d", anime.TotalEpisodes))
+			Out(fmt.Sprintf("Total episodes from the source: %d", anime.TotalEpisodes))
 		}
 	}
 
 	if anime.TotalEpisodes == 0 {
-		Out("Attempting to determine total episodes from the full provider stack.")
+		Out("Reading total episodes from every source.")
 		stackQuery := animeSearchTitle(anime)
 		if strings.TrimSpace(stackQuery) == "" {
 			stackQuery = query
@@ -827,7 +824,7 @@ func settleEpisodeCount(userConfig *Config, anime *Anime, user *User, query stri
 			Log(fmt.Sprintf("Failed to determine total episodes from provider stack: %v", err))
 		} else {
 			anime.TotalEpisodes = total
-			Out(fmt.Sprintf("Retrieved total episodes from provider stack: %d", anime.TotalEpisodes))
+			Out(fmt.Sprintf("Total episodes from the sources: %d", anime.TotalEpisodes))
 		}
 	}
 

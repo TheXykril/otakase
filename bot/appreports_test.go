@@ -89,18 +89,19 @@ func TestProviderReports(t *testing.T) {
 
 	lines := providerReportLines(providerTallies(now, false), now)
 	want := []string{
-		"🟠 **allanime** failing for 2 members, working for 2 (latest 10 min ago)",
-		"🟢 **anikoto** working for 1 member",
+		"🟢 1 source working for members",
+		"🟠 1 source failing for some members",
+		"Latest failure 10 min ago",
 	}
 	if strings.Join(lines, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("lines:\n%s", strings.Join(lines, "\n"))
 	}
 	adult := providerReportLines(providerTallies(now, true), now)
-	if len(adult) != 3 || !strings.Contains(strings.Join(adult, "\n"), "🔴 **nyaa 18+** failing for 1 member") {
+	if !strings.Contains(strings.Join(adult, "\n"), "🔴 1 source failing for everyone who tried") {
 		t.Fatalf("18+ lines:\n%s", strings.Join(adult, "\n"))
 	}
 	e := withAppReports(&discordgo.MessageEmbed{Title: "Sources"}, now, false)
-	if len(e.Fields) != 1 || !strings.Contains(e.Fields[0].Value, "allanime") {
+	if len(e.Fields) != 1 || !strings.Contains(e.Fields[0].Value, "1 source failing") || strings.Contains(e.Fields[0].Value, "allanime") {
 		t.Fatalf("embed: %+v", e.Fields)
 	}
 	if strings.Contains(e.Fields[0].Value, "u1") {

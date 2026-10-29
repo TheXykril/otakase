@@ -165,14 +165,11 @@ func TestParseProviderStatus(t *testing.T) {
 	if len(list) != 2 {
 		t.Fatalf("got %d providers, want 2 (adult one hidden): %+v", len(list), list)
 	}
-	if list[0].Name != "anidb" || list[0].OK || list[0].Enabled {
+	if list[0].Name != "anidb" || list[0].OK || list[0].Enabled || !strings.Contains(list[0].Detail, "under maintenance") {
 		t.Errorf("anidb parsed wrong: %+v", list[0])
 	}
-	if list[1].Name != "anikoto" || !list[1].OK || !strings.Contains(providerLine(list[1]), "1.595s") {
-		t.Errorf("anikoto parsed wrong: %+v / %s", list[1], providerLine(list[1]))
-	}
-	if !strings.Contains(providerLine(list[0]), "under maintenance") {
-		t.Errorf("failure detail missing: %s", providerLine(list[0]))
+	if list[1].Name != "anikoto" || !list[1].OK || !strings.Contains(list[1].Detail, "1.595s") {
+		t.Errorf("anikoto parsed wrong: %+v", list[1])
 	}
 }
 
@@ -183,11 +180,17 @@ func TestProviderEmbedAdult(t *testing.T) {
 		t.Errorf("18+ source shown to everyone: %s / %s", hidden.Title, hidden.Description)
 	}
 	shown := providerEmbed(all, "otakase 1", true)
-	if shown.Title != "Sources: 1 of 3 working" || !strings.Contains(shown.Description, "**nyaa 18+** · not answering · needs AdultContent") {
-		t.Errorf("18+ source missing: %s / %s", shown.Title, shown.Description)
+	if shown.Title != "Sources: 1 of 2 working" || !strings.Contains(shown.Description, "18+ sources: 0 of 1 working") {
+		t.Errorf("18+ count missing: %s / %s", shown.Title, shown.Description)
 	}
-	if strings.Contains(strings.ToLower(shown.Description+shown.Footer.Text), "sukebei") {
-		t.Errorf("host name leaked: %s", shown.Description)
+	// Members see counts only, never which site.
+	for _, e := range []*discordgo.MessageEmbed{hidden, shown} {
+		text := strings.ToLower(e.Title + e.Description + e.Footer.Text)
+		for _, p := range all {
+			if strings.Contains(text, p.Name) {
+				t.Errorf("source %s named: %s / %s", p.Name, e.Title, e.Description)
+			}
+		}
 	}
 }
 

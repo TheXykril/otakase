@@ -104,7 +104,7 @@ func parseFlags(cfg *internal.Config) *cliFlags {
 	flag.Bool("diag", false, "Print version, system, mpv and the end of the log to paste in a support post")
 	flag.BoolVar(&f.download, "download", false, "Download episodes instead of playing them (requires ffmpeg)")
 	flag.StringVar(&f.downloadEpisodes, "episodes", "", "Episodes to download, e.g. 5 or 1-12 (default: the selected episode)")
-	flag.BoolVar(&f.providerStatus, "provider-status", false, "Probe every provider and report which ones work")
+	flag.BoolVar(&f.providerStatus, "provider-status", false, "Check the sources and report how many work")
 	flag.StringVar(&f.providerStatusQuery, "provider-status-query", internal.DefaultStatusQuery, "Search query used by -provider-status")
 	flag.StringVar(&f.providerStatusAdult, "provider-status-adult-query", internal.DefaultAdultStatusQuery, "Search query -provider-status uses for 18+ providers")
 	flag.StringVar(&f.streamInfo, "stream-info", "", "Print an episode's stream links as JSON without asking anything, e.g. 154587:1 (AniList id:episode)")

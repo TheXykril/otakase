@@ -100,28 +100,12 @@ func TestConfiguredProviderNamesAcceptsOrderedLists(t *testing.T) {
 	}
 }
 
-func TestCanonicalProviderConfigValueMigratesLegacyValues(t *testing.T) {
-	withAllProvidersEnabledForTest(t)
-
-	for _, tc := range []struct{ raw, want string }{
-		{raw: "anikoto", want: `["anikoto"]`},
-		{raw: "anizone", want: `["anizone"]`},
-		{raw: "anizone,anikoto", want: `["anizone","anikoto"]`},
-		{raw: "", want: "stacked"},
-		{raw: "STACK", want: "stacked"},
-		{raw: strings.Join(fullTestStack, ","), want: "stacked"},
-		{raw: `["kickassanime","senshi"]`, want: "stacked"},
-	} {
-		got := canonicalProviderConfigValue(tc.raw)
-		if got != tc.want {
-			t.Errorf("%q: got %s, want %s", tc.raw, got, tc.want)
-		}
-	}
-}
-
-func TestLoadConfigMigratesLegacyProviderToList(t *testing.T) {
+// Sources are always picked automatically: the old settings that chose,
+// turned off or hand-searched them are dropped from the file and ignored.
+func TestLoadConfigRetiresTheSourceSettings(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "otakase.conf")
-	if err := os.WriteFile(path, []byte("Provider=anikoto\nAddMissingOptions=true\n"), 0644); err != nil {
+	old := "Provider=anikoto\nDisabledProviders=[\"nyaa\"]\nManualProviderSearch=true\nMovieProvider=vidsrc\nAddMissingOptions=true\n"
+	if err := os.WriteFile(path, []byte(old), 0644); err != nil {
 		t.Fatalf("seeding the config: %v", err)
 	}
 
@@ -129,19 +113,19 @@ func TestLoadConfigMigratesLegacyProviderToList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if loaded.Provider != `["anikoto"]` {
-		t.Fatalf("got provider %s, want [\"anikoto\"]", loaded.Provider)
+	if loaded.Provider != "stacked" || loaded.DisabledProviders != "[]" || loaded.ManualProviderSearch || loaded.MovieProvider != "all" {
+		t.Fatalf("got Provider=%q DisabledProviders=%q ManualProviderSearch=%v MovieProvider=%q, want automatic",
+			loaded.Provider, loaded.DisabledProviders, loaded.ManualProviderSearch, loaded.MovieProvider)
 	}
 
 	saved, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("reading the config back: %v", err)
 	}
-	if !strings.Contains(string(saved), `Provider=["anikoto"]`) {
-		t.Fatalf("config file was not migrated to anikoto-only list:\n%s", saved)
-	}
-	if strings.Contains(string(saved), "anizone") {
-		t.Fatalf("migration added anizone without consent:\n%s", saved)
+	for _, key := range []string{"Provider=", "DisabledProviders=", "ManualProviderSearch=", "MovieProvider="} {
+		if strings.Contains(string(saved), key) {
+			t.Fatalf("%s left in the file:\n%s", key, saved)
+		}
 	}
 }
 
@@ -189,12 +173,17 @@ func TestProviderIDForAnimePrefersTheQualifiedID(t *testing.T) {
 }
 
 func TestQualifySelectionOptionTagsTheLabelOnce(t *testing.T) {
+	withAllProvidersEnabledForTest(t)
+	tag := sourceTag("kickassanime")
+	if !strings.HasPrefix(tag, "[source ") || strings.Contains(tag, "kickass") {
+		t.Fatalf("tag %q names the site or has no number", tag)
+	}
 	got := qualifySelectionOption("kickassanime", SelectionOption{Key: "7", Label: "Show"})
-	if got.Key != "kickassanime::7" || got.Label != "Show [kickassanime]" {
+	if got.Key != "kickassanime::7" || got.Label != "Show "+tag {
 		t.Fatalf("got %+v", got)
 	}
 	again := qualifySelectionOption("kickassanime", got)
-	if again.Key != "kickassanime::7" || again.Label != "Show [kickassanime]" {
+	if again.Key != "kickassanime::7" || again.Label != "Show "+tag {
 		t.Fatalf("qualifying twice changed the option: %+v", again)
 	}
 }
@@ -225,8 +214,8 @@ func TestSearchAnimeReturnsProviderQualifiedStackResultsInOrder(t *testing.T) {
 	if want := []string{"anikoto::anikoto-id", "anizone::pahe-id"}; !slices.Equal(keys, want) {
 		t.Fatalf("keys %v, want %v (qualified, stack order, repeats dropped)", keys, want)
 	}
-	if got[1].Label != "Second [anizone]" {
-		t.Fatalf("label does not name the provider: %q", got[1].Label)
+	if got[1].Label != "Second "+sourceTag("anizone") {
+		t.Fatalf("label does not carry the source tag: %q", got[1].Label)
 	}
 }
 

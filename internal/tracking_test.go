@@ -67,7 +67,7 @@ func TestMainMenuHidesRemoteOnlyEntriesForLocalTracking(t *testing.T) {
 
 	cfg := &Config{
 		MenuOrder:      "CURRENT,PLANNING,ALL",
-		MenuActions:    "UPDATE,PROVIDER",
+		MenuActions:    "UPDATE,STATS",
 		TrackingLocal:  true,
 		TrackingRemote: TrackingRemoteNone,
 	}
@@ -82,7 +82,7 @@ func TestMainMenuHidesRemoteOnlyEntriesForLocalTracking(t *testing.T) {
 	if !slices.Equal(tabKeys, []string{"CURRENT", "ALL"}) {
 		t.Errorf("tabs = %v", tabKeys)
 	}
-	if !slices.Equal(actionKeys, []string{"PROVIDER", "TRACKER"}) {
+	if !slices.Equal(actionKeys, []string{"STATS", "TRACKER"}) {
 		t.Errorf("actions = %v", actionKeys)
 	}
 }

@@ -229,7 +229,11 @@ func runCommandAndExit(f *cliFlags, cfg *internal.Config) {
 
 	if f.providerStatus {
 		report := internal.CheckProviders(cfg, f.providerStatusQuery, f.providerStatusAdult)
-		fmt.Print(internal.FormatProviderStatus(report, f.providerStatusQuery))
+		if os.Getenv(internal.ProviderStatusDetailsEnv) == "1" {
+			fmt.Print(internal.FormatProviderStatus(report, f.providerStatusQuery))
+		} else {
+			fmt.Print(internal.FormatProviderStatusSummary(report, cfg.AdultContent))
+		}
 		// Success as long as anything can be watched at all.
 		for _, health := range report {
 			if health.OK() {

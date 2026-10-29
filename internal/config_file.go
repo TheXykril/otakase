@@ -60,22 +60,18 @@ var retiredConfigKeys = []string{
 	// The 8Filmai address now lives in the code: the site is found through
 	// it and then remembered in movies.json, so there was nothing to set.
 	"MovieSite",
+	// Sources are always picked automatically and never named to the viewer,
+	// so there is nothing to choose, turn off or search by hand.
+	"Provider", "DisabledProviders", "ManualProviderSearch", "MovieProvider",
 }
 
-// upgradeStoredValues rewrites settings saved in an old form: a provider
-// under an old spelling, the retired MyAnimeList client and settings that
-// are gone. It reports whether anything changed.
+// upgradeStoredValues rewrites settings saved in an old form: the retired
+// MyAnimeList client and settings that are gone. It reports whether anything changed.
 func upgradeStoredValues(onDisk map[string]string) bool {
 	changed := false
 	for _, key := range retiredConfigKeys {
 		if _, ok := onDisk[key]; ok {
 			delete(onDisk, key)
-			changed = true
-		}
-	}
-	if value, ok := onDisk["Provider"]; ok {
-		if canonical := canonicalProviderConfigValue(value); canonical != value {
-			onDisk["Provider"] = canonical
 			changed = true
 		}
 	}
@@ -176,6 +172,10 @@ func PopulateConfig(values map[string]string) Config {
 		}
 	}
 
+	config.Provider = stackedProviderConfigValue
+	config.DisabledProviders = "[]"
+	config.ManualProviderSearch = false
+	config.MovieProvider = allProviders
 	config.PercentageToMarkComplete = clamp(config.PercentageToMarkComplete, 0, 100)
 	if config.MpvPlaybackStartTimeout <= 0 {
 		config.MpvPlaybackStartTimeout = MpvStartWaitSeconds

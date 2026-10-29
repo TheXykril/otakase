@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.30.81
+
+- `/provider-status` and the "is it down?" reply show how many sources work, never which. 18+ sources are a separate count for members whose AniList allows adult content. App reports are counts too.
+- Watch room page no longer carries source names; staff still see the source hint from the server.
+- Log reader and FAQ answers no longer point at the removed source settings.
+
 ## 1.30.79
 
 - `/github` no longer offers the provider check: the scheduled provider check workflow is gone. Run `otakase -provider-status` locally instead.

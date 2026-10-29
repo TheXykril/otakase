@@ -200,12 +200,10 @@ var toolbarButtonLabels = map[string]string{
 	"CONTINUE_LAST":  "Continue",
 	"SURPRISE":       "Surprise",
 	"TRACKER":        "Tracker",
-	"PROVIDER":       "Provider",
 	"STATS":          "Stats",
 	"MOVIES":         "Movies (exp.)",
 	"COMMUNITY":      "Community",
 	movieSearchKey:   "Search",
-	movieProviderKey: "Provider",
 	movieTraktKey:    "Trakt",
 }
 
@@ -219,8 +217,6 @@ func toolbarButtonIcon(key string, config *Config) icons.Icon {
 		return castMenuIcon(config)
 	case movieSearchKey:
 		return icons.Search
-	case movieProviderKey:
-		return icons.Provider
 	case movieTraktKey:
 		return icons.Tracker
 	}

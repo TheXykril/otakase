@@ -2,6 +2,8 @@
 
 Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 
+Sources are always picked automatically: otakase searches all of them and falls back to the next when one fails. The old `Provider`, `DisabledProviders`, `ManualProviderSearch` and `MovieProvider` settings are removed from the file on the next start.
+
 | Option | Type | Values | Description |
 |---|---|---|---|
 | `Player` | String | any mpv-compatible binary | Playback binary. Falls back to `mpv` if missing. |
@@ -59,21 +61,17 @@ Edit with `otakase -e`. The file lives at `~/.config/otakase/otakase.conf`.
 | `VimKeys` | Boolean | `true`, `false` | `j`/`k`/`h`/`l` to move and `/` to search in menus, instead of type-to-filter. |
 | `AlternateScreen` | Boolean | `true`, `false` | Use an alternate screen buffer for a cleaner terminal. |
 | `MenuOrder` | String | comma-separated | Which lists you can switch between, and in what order: tabs in the terminal, the Lists button and Tab in rofi. otakase opens on `CURRENT` (Watching), or the first list named if it is left out. Choose from `CURRENT`, `ALL`, `PLANNING`, `COMPLETED`, `PAUSED`, `DROPPED`, `REWATCHING`. Default `CURRENT,PLANNING,ALL`. |
-| `MenuActions` | String | comma-separated | Which actions sit beside the list, and in what order: the bottom bar in the terminal, the buttons above the list in rofi. Choose from `CONTINUE_LAST`, `UNTRACKED`, `UPDATE`, `CAST`, `SURPRISE`, `STATS`, `TRACKER`, `PROVIDER`, `REMAP_PROVIDER`. `CONTINUE_LAST` puts your recently played shows at the top of Watching (with `ContinueWatchingRows=0`, a Continue button for the last show instead). `TRACKER` is always added if left out. Default `CONTINUE_LAST,UNTRACKED,UPDATE,CAST,SURPRISE,STATS,TRACKER,PROVIDER`. Configs from before this setting keep their menu: the actions move here on upgrade, and an unchanged default menu becomes the new one. |
+| `MenuActions` | String | comma-separated | Which actions sit beside the list, and in what order: the bottom bar in the terminal, the buttons above the list in rofi. Choose from `CONTINUE_LAST`, `UNTRACKED`, `UPDATE`, `CAST`, `SURPRISE`, `STATS`, `TRACKER`, `REMAP_PROVIDER`. `CONTINUE_LAST` puts your recently played shows at the top of Watching (with `ContinueWatchingRows=0`, a Continue button for the last show instead). `TRACKER` is always added if left out. Default `CONTINUE_LAST,UNTRACKED,UPDATE,CAST,SURPRISE,STATS,TRACKER`. Configs from before this setting keep their menu: the actions move here on upgrade, and an unchanged default menu becomes the new one. |
 | `ContinueWatchingRows` | Integer | `0` or more | How many recently played shows lead the Watching list, when `MenuActions` has `CONTINUE_LAST`. Default `5`; `0` hides them. |
-| `Provider` | List | `stacked`, or a single-entry list | Which sources to search and in what order. `stacked` (the default) uses the preferred order with fallback; naming one restricts the search to it. |
-| `DisabledProviders` | List | provider names, e.g. `["nyaa"]` | Sources never searched, even under `stacked`. |
-| `ManualProviderSearch` | Boolean | `true`, `false` | Always choose the match yourself instead of matching automatically. |
 | `TrackingRemote` | Enum | `none`, `anilist`, `myanimelist`, `anilist+myanimelist` | Which tracker to sync with. |
 | `MyAnimeListClientID` | String | MAL OAuth client ID | Used for MyAnimeList sign-in. |
 | `MyAnimeListClientSecret` | String | MAL OAuth secret | Optional; used for sign-in and token refresh. |
 | `CheckUpdates` | Boolean | `true`, `false` | Check for a newer release in the background at launch, and offer it before the first menu. Default `true`. |
 | `DevBuilds` | Boolean | `true`, `false` | Also offer dev builds (the `dev` pre-release on GitHub, built from unreleased work on `main`) when one is newer than the latest release, in the update check and in `-u`. They can be broken. Default `false`. |
-| `ExperimentalMovies` | Boolean | `true`, `false` | **Experimental.** Adds a Movies entry to the main menu (`^x`) for watching non-anime movies and series, which AniList and MyAnimeList do not list. They are searched on their own providers and tracked on this computer, and on Trakt once signed in from the Movies menu. It may break when the site or its video hosts change. Default `false`. |
-| `MovieProvider` | String | `all`, `vidsrc`, `8filmai`, `filmukas` | Where the Movies menu searches: `all` (every provider at once, each result tagged with its provider), `vidsrc` (English), `8filmai` (Lithuanian) or `filmukas` (Lithuanian family and animated films). Also changed with `^o` in the Movies menu. Default `all`. |
+| `ExperimentalMovies` | Boolean | `true`, `false` | **Experimental.** Adds a Movies entry to the main menu (`^x`) for watching non-anime movies and series, which AniList and MyAnimeList do not list. They are searched on their own sources and tracked on this computer, and on Trakt once signed in from the Movies menu. It may break when the site or its video hosts change. Default `false`. |
 | `TraktClientID` | String | Client ID | **Experimental.** Another Trakt app to sync movies through. Leave empty to use otakase's own app; sign in from the Movies menu (`^t`). Default empty. |
 | `TraktClientSecret` | String | Client secret | That app's Client Secret, if it has one. Default empty. |
-| `AdultContent` | Boolean | `true`, `false` | Show 18+ titles (AniList "adult", MyAnimeList rated explicit) in your lists, Surprise Me and AniList search (continue-watching rows only with `ContinueWatchingAdult`). When `false` they are hidden but stay on your tracker and keep syncing. Provider search when watching untracked is not filtered. Default `false`. |
+| `AdultContent` | Boolean | `true`, `false` | Show 18+ titles (AniList "adult", MyAnimeList rated explicit) in your lists, Surprise Me and AniList search (continue-watching rows only with `ContinueWatchingAdult`). When `false` they are hidden but stay on your tracker and keep syncing. Search when watching untracked is not filtered. Default `false`. |
 | `ContinueWatchingAdult` | Boolean | `true`, `false` | Show 18+ titles in the continue-watching rows that open the menu. Needs `AdultContent=true`. Default `false`, so they stay off the first screen. |
 | `AddMissingOptions` | Boolean | `true`, `false` | On a version upgrade, append newly added options to your config file. Default `true`. |
 

@@ -112,7 +112,7 @@ type mpvSkinChip struct {
 }
 
 // mpvSkinChips are the chips under the player's top bar: where progress is
-// tracked and which source is playing. Icon names are Material Icons ligatures.
+// tracked. Sources are picked automatically and never named. Icon names are Material Icons ligatures.
 func mpvSkinChips(config *Config, anime *Anime) []mpvSkinChip {
 	var chips []mpvSkinChip
 	switch {
@@ -125,9 +125,6 @@ func mpvSkinChips(config *Config, anime *Anime) []mpvSkinChip {
 	}
 	if anime != nil && anime.SkipRemoteSync {
 		chips = nil
-	}
-	if provider := strings.TrimSpace(CurrentAnimeProviderName(anime)); provider != "" && !isAdultProvider(provider) {
-		chips = append(chips, mpvSkinChip{"dns", provider})
 	}
 	return chips
 }

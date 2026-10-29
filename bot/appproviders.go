@@ -152,23 +152,36 @@ func providerTallies(now time.Time, adult bool) []providerTally {
 	return list
 }
 
-// providerReportLines are the apps' side for the source check: one line
-// per source, by count only.
+// providerReportLines are the apps' side for the source check, by count
+// only: sources are never named to members.
 func providerReportLines(list []providerTally, now time.Time) []string {
-	var lines []string
+	var works, mixed, failing int
+	var latest time.Time
 	for _, t := range list {
-		name := providerDisplayName(t.Name)
 		switch {
 		case t.Failing > 0 && t.Works > 0:
-			lines = append(lines, fmt.Sprintf("🟠 **%s** failing for %s, working for %d (latest %s)", name, dashPlural(t.Failing, "member"), t.Works, agoText(now.Sub(t.Recent))))
+			mixed++
 		case t.Failing > 0:
-			lines = append(lines, fmt.Sprintf("🔴 **%s** failing for %s (latest %s)", name, dashPlural(t.Failing, "member"), agoText(now.Sub(t.Recent))))
+			failing++
 		default:
-			lines = append(lines, fmt.Sprintf("🟢 **%s** working for %s", name, dashPlural(t.Works, "member")))
+			works++
 		}
-		if len(lines) == 10 {
-			break
+		if t.Recent.After(latest) {
+			latest = t.Recent
 		}
+	}
+	var lines []string
+	if works > 0 {
+		lines = append(lines, fmt.Sprintf("🟢 %s working for members", dashPlural(works, "source")))
+	}
+	if mixed > 0 {
+		lines = append(lines, fmt.Sprintf("🟠 %s failing for some members", dashPlural(mixed, "source")))
+	}
+	if failing > 0 {
+		lines = append(lines, fmt.Sprintf("🔴 %s failing for everyone who tried", dashPlural(failing, "source")))
+	}
+	if !latest.IsZero() {
+		lines = append(lines, "Latest failure "+agoText(now.Sub(latest)))
 	}
 	return lines
 }

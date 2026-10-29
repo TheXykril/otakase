@@ -35,7 +35,6 @@ const (
 	movieWatchedKey   = "MOVIE:WATCHED"
 	movieUnwatchedKey = "MOVIE:UNWATCHED"
 	movieRateKey      = "MOVIE:RATE"
-	movieProviderKey  = "MOVIE:PROVIDER"
 	movieTraktKey     = "MOVIE:TRAKT"
 	movieSubsKey      = "MOVIE:SUBTITLES"
 	movieBackKey      = "back"
@@ -82,8 +81,6 @@ func WatchMovies(config *Config) {
 			searchMovies(config, store, lib)
 		case movieCastKey:
 			toggleCastToDevice(config)
-		case movieProviderKey:
-			pickMovieProvider(config, lib)
 		case movieTraktKey:
 			manageMovieTrakt(config, lib)
 		case movieContinueKey:
@@ -120,10 +117,8 @@ func movieLists(store *movies.Store) []struct {
 // movieActions are the Movies menu's keys: the terminal's footer, rofi's
 // toolbar.
 func movieActions(config *Config, lib *movieLibrary) []FooterAction {
-	searching, _ := lib.searching(config)
 	return []FooterAction{
 		{Key: movieSearchKey, Label: "search", Hint: "ctrl+f"},
-		{Key: movieProviderKey, Label: "provider: " + searching, Hint: "ctrl+o"},
 		{Key: movieCastKey, Label: castActionCheckbox(config), Hint: "ctrl+k"},
 		{Key: movieTraktKey, Label: traktActionLabel(lib.trakt), Hint: "ctrl+t"},
 	}
@@ -386,24 +381,21 @@ func movieRow(movie movies.Movie, store *movies.Store) SelectionOption {
 			label += fmt.Sprintf(" · %d/10", entry.Rating)
 		}
 	}
-	// Where it is from, since the same film can be on several providers.
+	// The same film can come from several sources; their language tells
+	// them apart.
 	entry, _ := store.Get(movie.Key())
 	entry.Movie = movie
 	label += " · " + movieSourceLabel(entry)
 	return SelectionOption{Key: moviePathPrefix + movie.Key(), Label: label, Title: movie.Title, Thumbnail: movie.Poster, Icon: icon}
 }
 
-// movieSourceLabel names a remembered movie's provider and, when it played,
-// the server: "vidsrc 2", "8filmai, imgsto.re".
+// movieSourceLabel tells copies of the same film apart without naming where
+// they come from: by the language they are in.
 func movieSourceLabel(entry movies.Entry) string {
-	provider := cmp.Or(entry.Provider, movies.FilmaiName)
-	switch {
-	case entry.Server == "":
-		return provider
-	case strings.HasPrefix(strings.ToLower(entry.Server), provider):
-		return entry.Server
+	if cmp.Or(entry.Provider, movies.FilmaiName) == movies.VidsrcName {
+		return "English"
 	}
-	return provider + ", " + entry.Server
+	return "Lithuanian"
 }
 
 // pickMovieRows shows a list of movies, with their posters in rofi when

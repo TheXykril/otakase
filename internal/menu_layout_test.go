@@ -180,7 +180,7 @@ func TestTruncateCountsCharactersNotBytes(t *testing.T) {
 // MenuOrder is read as both settings at once, so a config written before tabs
 // existed produces a sensible tab bar and footer without being touched.
 func TestSplitMenuOrderReadsTheDefaultConfig(t *testing.T) {
-	tabs, actions := SplitMenuOrder("CURRENT,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,PROVIDER")
+	tabs, actions := SplitMenuOrder("CURRENT,ALL,UNTRACKED,UPDATE,REMAP_PROVIDER,CONTINUE_LAST,TRACKER,STATS")
 
 	// UNTRACKED is not here: it reads like a list but runs a search flow.
 	wantTabs := []string{"CURRENT", "ALL"}
@@ -193,7 +193,7 @@ func TestSplitMenuOrderReadsTheDefaultConfig(t *testing.T) {
 		}
 	}
 
-	wantActions := []string{"UNTRACKED", "UPDATE", "REMAP_PROVIDER", "CONTINUE_LAST", "TRACKER", "PROVIDER"}
+	wantActions := []string{"UNTRACKED", "UPDATE", "REMAP_PROVIDER", "CONTINUE_LAST", "TRACKER", "STATS"}
 	if len(actions) != len(wantActions) {
 		t.Fatalf("expected %d actions, got %d: %+v", len(wantActions), len(actions), actions)
 	}
@@ -206,12 +206,24 @@ func TestSplitMenuOrderReadsTheDefaultConfig(t *testing.T) {
 
 // The order written in the config is the order shown, for both groups.
 func TestSplitMenuOrderKeepsTheUsersOrder(t *testing.T) {
-	tabs, actions := SplitMenuOrder("COMPLETED,PROVIDER,PLANNING,CONTINUE_LAST,CURRENT")
+	tabs, actions := SplitMenuOrder("COMPLETED,STATS,PLANNING,CONTINUE_LAST,CURRENT")
 	if got := []string{tabs[0].Key, tabs[1].Key, tabs[2].Key}; got[0] != "COMPLETED" || got[1] != "PLANNING" || got[2] != "CURRENT" {
 		t.Errorf("tab order was not preserved: %v", got)
 	}
-	if actions[0].Key != "PROVIDER" || actions[1].Key != "CONTINUE_LAST" {
+	if actions[0].Key != "STATS" || actions[1].Key != "CONTINUE_LAST" {
 		t.Errorf("action order was not preserved: %+v", actions)
+	}
+}
+
+// Sources are picked automatically, so a config still listing the old
+// PROVIDER action shows no button for it.
+func TestSplitMenuOrderDropsTheRetiredProviderAction(t *testing.T) {
+	_, actions := SplitMenuOrder("CURRENT,UPDATE,PROVIDER,TRACKER")
+	if len(actions) != 2 || actions[0].Key != "UPDATE" || actions[1].Key != "TRACKER" {
+		t.Errorf("actions = %+v", actions)
+	}
+	if isMenuActionKey("PROVIDER") {
+		t.Error("PROVIDER is still an action")
 	}
 }
 

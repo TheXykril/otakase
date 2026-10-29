@@ -91,3 +91,23 @@ func TestFormatProviderStatusShowsOwnQuery(t *testing.T) {
 		t.Fatalf("main query repeated on rows:\n%s", out)
 	}
 }
+
+func TestProviderStatusSummaryCountsWithoutNamingSources(t *testing.T) {
+	report := []ProviderHealth{
+		{Name: "anizone", Enabled: true, Results: 3},
+		{Name: "kickassanime", Enabled: true, Err: errors.New("timeout")},
+		{Name: "sukebei", Enabled: true, Results: 1},
+	}
+	out := FormatProviderStatusSummary(report, false)
+	if !strings.Contains(out, "Sources: 1 of 2 working.") || strings.Contains(out, "18+") {
+		t.Fatalf("summary:\n%s", out)
+	}
+	for _, health := range report {
+		if strings.Contains(out, health.Name) {
+			t.Fatalf("%s named:\n%s", health.Name, out)
+		}
+	}
+	if adult := FormatProviderStatusSummary(report, true); !strings.Contains(adult, "18+ sources: 1 of 1 working.") {
+		t.Fatalf("adult summary:\n%s", adult)
+	}
+}
