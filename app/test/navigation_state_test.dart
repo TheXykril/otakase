@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:otakase/data/auth.dart';
 import 'package:otakase/data/models.dart';
 import 'package:otakase/main.dart';
@@ -8,7 +12,7 @@ import 'package:otakase/services.dart';
 import 'package:otakase/ui/components.dart';
 import 'package:otakase/ui/home_page.dart';
 
-import 'auth_test.dart' show MemoryTokens;
+import 'auth_test.dart' show MemoryTokens, account;
 import 'widget_test.dart' as fixture;
 import 'phone_screens_test.dart' as screen;
 
@@ -30,14 +34,72 @@ class PreferenceCatalog extends fixture.TestCatalog {
 }
 
 void main() {
+  testWidgets('a stored public username no longer shows a list', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    final home = tester.widget<HomePage>(find.byType(HomePage));
+    await home.services.store.set('AniListUsername', 'viewer');
+    await tester.pumpAndSettle();
+    expect(find.byType(AccountBlock), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets(
     'account category has seven real groups and survives navigation',
     (tester) async {
       await fixture.launch(tester);
-      final home = tester.widget<HomePage>(find.byType(HomePage));
-      await home.services.store.set('AniListUsername', 'viewer');
+      await tester.pumpWidget(const SizedBox());
+      final base = await fixture.services();
+      final auth = AuthService(
+        storage: MemoryTokens(),
+        client: MockClient(
+          (r) async => http.Response(
+            jsonEncode({
+              'data': {
+                'MediaListCollection': {
+                  'lists': [
+                    {
+                      'entries': [
+                        {
+                          'status': 'CURRENT',
+                          'progress': 3,
+                          'media': fixture.anime.toJson(),
+                        },
+                        {
+                          'status': 'PLANNING',
+                          'progress': 0,
+                          'media': const Anime(
+                            id: 2,
+                            title: 'Planned story',
+                            episodes: 12,
+                          ).toJson(),
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+            }),
+            200,
+          ),
+        ),
+      );
+      auth.accounts['AniList'] = account('AniList');
+      addTearDown(auth.dispose);
+      await tester.pumpWidget(
+        OtakaseApp(
+          services: AppServices(
+            catalog: base.catalog,
+            store: base.store,
+            core: base.core,
+            auth: auth,
+          ),
+          isTV: false,
+        ),
+      );
       await tester.pumpAndSettle();
-      expect(find.text('AniList · viewer · Public, read only'), findsOneWidget);
+      final home = tester.widget<HomePage>(find.byType(HomePage));
+      expect(find.text('AniList · viewer'), findsOneWidget);
       await tester.tap(find.text('Watching'));
       await tester.pumpAndSettle();
       for (final label in [

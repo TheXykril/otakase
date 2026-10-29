@@ -296,20 +296,7 @@ class _HomePageState extends State<HomePage> {
         widget.isTV && focused != null && store.visible(focused!.anime)
         ? focused
         : resume;
-    final configured = ['AniList', 'MAL']
-        .where(
-          (service) =>
-              s.auth.signedIn(service) ||
-              store
-                  .text(
-                    service == 'MAL'
-                        ? 'MyAnimeListUsername'
-                        : 'AniListUsername',
-                  )
-                  .trim()
-                  .isNotEmpty,
-        )
-        .toList();
+    final configured = ['AniList', 'MAL'].where(s.auth.signedIn).toList();
     final combined = s.auth.signedIn('AniList') && s.auth.signedIn('MAL');
     final lists = combined ? ['AniList'] : configured;
     return RefreshIndicator(
@@ -414,7 +401,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Sign in to sync your progress, or add a public username through More.',
+                    'Sign in to AniList or MAL in More to see your lists and sync your progress.',
                     style: uiStyle(context, color: muted),
                   ),
                   const SizedBox(height: 12),

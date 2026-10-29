@@ -62,10 +62,7 @@ class MorePage extends StatelessWidget {
     final accounts = services.auth.accounts.values;
     final identity = accounts.isNotEmpty
         ? accounts.map((a) => a.username).join(' · ')
-        : [
-            services.store.text('AniListUsername'),
-            services.store.text('MyAnimeListUsername'),
-          ].where((s) => s.isNotEmpty).join(' · ');
+        : '';
     Widget row(
       String title,
       String value,
@@ -322,26 +319,6 @@ class AccountsPage extends StatefulWidget {
 
 class _AccountsPageState extends State<AccountsPage> {
   String? error;
-  final inputs = <String, TextEditingController>{};
-  @override
-  void initState() {
-    super.initState();
-    for (final service in ['AniList', 'MAL']) {
-      inputs[service] = TextEditingController(
-        text: widget.services.store.text(
-          service == 'MAL' ? 'MyAnimeListUsername' : 'AniListUsername',
-        ),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    for (final c in inputs.values) {
-      c.dispose();
-    }
-    super.dispose();
-  }
 
   Future<void> login(String service) async {
     setState(() => error = null);
@@ -458,27 +435,6 @@ class _AccountsPageState extends State<AccountsPage> {
                   filled: true,
                   onPressed: () => login(service),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  'Or read a public list. Public usernames do not enable tracker writes.',
-                  style: uiStyle(context, size: 15, color: muted),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  key: ValueKey('username-$service'),
-                  controller: inputs[service],
-                  style: uiStyle(context),
-                  decoration: InputDecoration(
-                    labelText: '$service public username',
-                  ),
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => saveUsername(service),
-                ),
-                AppButton(
-                  label: 'Save $service username',
-                  isTV: widget.isTV,
-                  onPressed: () => saveUsername(service),
-                ),
               ],
               const Divider(height: 40),
             ],
@@ -486,10 +442,6 @@ class _AccountsPageState extends State<AccountsPage> {
         ),
       ),
     ),
-  );
-  Future<void> saveUsername(String service) => widget.services.store.set(
-    service == 'MAL' ? 'MyAnimeListUsername' : 'AniListUsername',
-    inputs[service]!.text.trim(),
   );
 }
 

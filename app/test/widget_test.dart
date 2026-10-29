@@ -109,9 +109,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('more-Accounts')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('username-AniList')), findsOneWidget);
-      await tester.ensureVisible(find.byKey(const ValueKey('username-MAL')));
-      expect(find.byKey(const ValueKey('username-MAL')), findsOneWidget);
+      expect(find.text('Sign in to AniList'), findsOneWidget);
+      await tester.ensureVisible(find.text('Sign in to MAL'));
+      expect(find.text('Sign in to MAL'), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('more-Schedule')));
