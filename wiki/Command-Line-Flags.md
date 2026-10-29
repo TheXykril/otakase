@@ -36,7 +36,7 @@ Every flag works with `otakase` or `otk`. A flag always wins over the same setti
 | `-remove-keybind` | Undo `-install-keybind` | |
 | `-force-keybind` | Let `-install-keybind` take a key something else uses | |
 | `-refresh-keybind` | Update an existing binding, adding nothing if absent | |
-| `-provider-status` | Probe each configured source and report which respond | |
+| `-provider-status` | Check the sources and report how many respond | |
 | `-provider-status-query` | Search term `-provider-status` probes with | `one piece` |
 | `-stream-info` | Print an episode's stream links as JSON without asking anything, as `<AniList id>:<episode>` (used by the Discord bot's watch room) | |
 | `-stream-adult` | Let `-stream-info` use the 18+ sources for 18+ titles | |

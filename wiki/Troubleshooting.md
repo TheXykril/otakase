@@ -4,13 +4,9 @@ For casting-specific issues, see [Casting Problems](Casting-Problems) instead.
 
 ## Nothing is found for a show
 
-Titles differ between your tracker and the sources otakase searches. Two
-fixes:
-
-- Set `ManualProviderSearch=true` (`otakase -e`) to pick the match yourself
-  next time.
-- Use the **Remap** action (`^r` in the terminal list, or a menu entry under
-  rofi) to correct a bad match permanently for that show.
+Titles differ between your tracker and the sources otakase searches. Use the
+**Remap** action (`^r` in the terminal list, or a menu entry under rofi) to
+correct a bad match permanently for that show.
 
 ## Playback never starts (local, not casting)
 
@@ -20,7 +16,7 @@ Run:
 otakase -provider-status
 ```
 
-This checks every provider and reports which ones are actually responding.
+This checks the sources and reports how many are actually responding.
 Streaming hosts go down or change constantly, and it's usually not otakase's
 fault. Also check `otakase-debug.log`, and raise `MpvPlaybackStartTimeout` if
 your connection is slow to open a stream.

@@ -62,8 +62,8 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      # -short skips the live provider tests; those hit real hosts and run
-      # in provider-canary.yml instead.
+      # -short skips the live provider tests; those hit real hosts, so run
+      # them by hand on your own machine (see the wiki's Providers page).
       - name: Test
         run: go test -short -race ./...
 

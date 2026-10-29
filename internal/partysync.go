@@ -301,7 +301,7 @@ func startPartyEpisode(config *Config, anime *Anime, episode int) (string, bool)
 	anime.Ep.SkipTimes = SkipTimes{}
 	result, ok := resolveEpisodeLinksWithRecovery(config, anime, nil)
 	if !ok || len(result.Links) == 0 {
-		Out(fmt.Sprintf("Couldn't find episode %d on your providers.", episode))
+		Out(fmt.Sprintf("Couldn't find episode %d on any source.", episode))
 		return "", false
 	}
 	anime.Ep.Links = result.Links

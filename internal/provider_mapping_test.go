@@ -3,6 +3,7 @@ package internal
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	_ "github.com/thexykril/otakase/internal/loadproviders"
@@ -32,7 +33,7 @@ func TestSearchStateWalksTheStack(t *testing.T) {
 		if got := state.nextProviderLabel(); got != "anizone" {
 			t.Fatalf("next provider %q, want anizone", got)
 		}
-		if got := state.currentProviderLabel(); got != "all configured providers" {
+		if got := state.currentProviderLabel(); got != "every source" {
 			t.Fatalf("scope label %q", got)
 		}
 		if got := state.activeProviders(); !slices.Equal(got, state.allProviders) {
@@ -52,7 +53,7 @@ func TestSearchStateWalksTheStack(t *testing.T) {
 			if got := state.activeProviders(); !slices.Equal(got, []string{name}) {
 				t.Fatalf("after advance %d searching %v, want %s", i+1, got, name)
 			}
-			if got := state.currentProviderLabel(); got != name {
+			if got := state.currentProviderLabel(); got != strings.Trim(sourceTag(name), "[]") || strings.Contains(got, name) {
 				t.Fatalf("after advance %d the scope reads %q", i+1, got)
 			}
 		}

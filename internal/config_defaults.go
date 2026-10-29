@@ -14,6 +14,7 @@ func defaultConfigMap() map[string]string {
 		"PercentageToMarkComplete": "85",
 		"NextEpisodePrompt":        "false",
 		"Quality":                  "best",
+		"NormalizeVolume":          "true",
 
 		// Audio and subtitles. A show that only exists in the other language
 		// plays rather than asking a question with one useful answer.
@@ -34,7 +35,7 @@ func defaultConfigMap() map[string]string {
 		// Menus and look. The home menu is kept short: every entry is a rofi
 		// row, and the lists left out are a tab away in Show All.
 		"MenuOrder":            "CURRENT,PLANNING,ALL",
-		"MenuActions":          "CONTINUE_LAST,UNTRACKED,UPDATE,CAST,SURPRISE,STATS,TRACKER,PROVIDER",
+		"MenuActions":          "CONTINUE_LAST,UNTRACKED,UPDATE,CAST,SURPRISE,STATS,TRACKER",
 		"ContinueWatchingRows": "5",
 		"AnimeNameLanguage":    "english",
 		"RofiSelection":        "false",
@@ -59,9 +60,6 @@ func defaultConfigMap() map[string]string {
 		"MyAnimeListImportDismissed": "false",
 
 		// Providers
-		"Provider":              "stacked",
-		"DisabledProviders":     "[]",
-		"ManualProviderSearch":  "false",
 		"AdultContent":          "false",
 		"ContinueWatchingAdult": "false",
 
@@ -102,7 +100,6 @@ func defaultConfigMap() map[string]string {
 
 		// Movies
 		"ExperimentalMovies": "false",
-		"MovieProvider":      "all",
 		"TraktClientID":      "",
 		"TraktClientSecret":  "",
 	}

@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -184,33 +183,6 @@ func ConfiguredProviderNames(config *Config) []string {
 	return configuredProviderNames(config)
 }
 
-// canonicalProviderConfigValue is the form a Provider value is saved in: the
-// stack as "stacked", anything else as a JSON list of canonical names.
-func canonicalProviderConfigValue(raw string) string {
-	value := strings.TrimSpace(raw)
-	// A list naming a provider this build no longer has is not a list to tidy
-	// up -- it is one to replace. Canonicalising it would quietly rewrite the
-	// user's choice as whichever provider happens to head the stack.
-	replace := isStackedProviderConfig(value) || (value != "" && namesRemovedProvider(value))
-	if !replace {
-		// A list that is exactly the default stack is saved as the stack, so
-		// it keeps following the default when that changes.
-		if names := parseProviderConfig(value); !slices.Equal(names, defaultEnabledProviderStack()) {
-			return formatProviderConfigValue(names)
-		}
-	}
-	return stackedProviderConfigValue
-}
-
-// formatProviderConfigValue writes names as the JSON list the config holds.
-func formatProviderConfigValue(names []string) string {
-	quoted := make([]string, len(names))
-	for i, name := range names {
-		quoted[i] = strconv.Quote(name)
-	}
-	return "[" + strings.Join(quoted, ",") + "]"
-}
-
 // ProviderStackContains reports whether the configured stack includes the
 // named provider.
 func ProviderStackContains(config *Config, providerName string) bool {
@@ -341,12 +313,24 @@ func uniqueProviderNamesKeepingOrder(names []string) []string {
 // the key so it can be resolved later and in the label so the user can tell
 // two hosts' copies of a show apart.
 func qualifySelectionOption(providerName string, opt SelectionOption) SelectionOption {
-	tag := "[" + providerName + "]"
+	tag := sourceTag(providerName)
 	opt.Key = QualifyProviderID(providerName, opt.Key)
-	if !strings.Contains(strings.ToLower(opt.Label), tag) {
+	if !strings.Contains(opt.Label, tag) {
 		opt.Label += " " + tag
 	}
 	return opt
+}
+
+// sourceTag tells results from different sources apart without naming the
+// site: "[source 2]" for the second provider in the default stack.
+func sourceTag(providerName string) string {
+	name := normalizeProviderName(providerName)
+	for i, known := range defaultEnabledProviderStack() {
+		if known == name {
+			return fmt.Sprintf("[source %d]", i+1)
+		}
+	}
+	return "[source]"
 }
 
 // SearchAnime searches every configured provider.

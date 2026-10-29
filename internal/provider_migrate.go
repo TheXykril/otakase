@@ -24,51 +24,6 @@ func isStackedProviderConfig(value string) bool {
 	return slices.Contains(stackedProviderSpellings, strings.ToLower(strings.TrimSpace(value)))
 }
 
-// isFactoryDefaultProvider reports whether a Provider value is one the user
-// never really chose: empty, the stack, or a single provider that can no
-// longer be used. Each of these is migrated to the current stack.
-func isFactoryDefaultProvider(value string) bool {
-	v := strings.TrimSpace(value)
-	if v == "" || isStackedProviderConfig(v) {
-		return true
-	}
-	names := parseProviderConfig(v)
-	return len(names) == 0 || (len(names) == 1 && !ProviderEnabled(names[0]))
-}
-
-// namesRemovedProvider reports whether a config names something this build no
-// longer has.
-//
-// parseProviderConfig cannot answer this: when nothing in a config resolves it
-// substitutes the head of the stack, so a config naming only removed providers
-// comes back looking like a deliberate choice of whatever that happens to be.
-func namesRemovedProvider(raw string) bool {
-	return slices.ContainsFunc(parseProviderConfigParts(raw), func(part string) bool {
-		blank := strings.TrimSpace(strings.Trim(strings.TrimSpace(part), "\"'[]")) == ""
-		return !blank && normalizeProviderName(part) == ""
-	})
-}
-
-// migrateProviderConfig returns the Provider value an upgraded config should
-// hold, and whether that differs from raw. A single provider the user picked
-// is kept; anything else becomes the stack.
-func migrateProviderConfig(value string) (string, bool) {
-	v := strings.TrimSpace(value)
-
-	// A list naming a provider that has since been removed is no longer the
-	// list the user chose. Quietly dropping the dead name would leave them on
-	// a shorter stack they never picked, so hand back the current default.
-	if v != "" && !isStackedProviderConfig(v) && namesRemovedProvider(v) {
-		return stackedProviderConfigValue, true
-	}
-
-	if isFactoryDefaultProvider(v) || len(parseProviderConfig(v)) > 1 {
-		return stackedProviderConfigValue, v != stackedProviderConfigValue
-	}
-	tidy := canonicalProviderConfigValue(v)
-	return tidy, tidy != v
-}
-
 // readStoredVersion is the release that last ran against this storage, or ""
 // before any has.
 func readStoredVersion(storagePath string) string {
@@ -148,7 +103,6 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"ThemeFile": "26.7.0",
 		// 26.7.0 — movies, experimental and off by default
 		"ExperimentalMovies": "26.7.0",
-		"MovieProvider":      "26.7.0",
 		"TraktClientID":      "26.7.0",
 		"TraktClientSecret":  "26.7.0",
 		// 26.8.0 — the app linked to the Otakase Discord
@@ -165,6 +119,8 @@ func configOptionsIntroducedInVersion() map[string]string {
 		"CastBrowser":          "26.9.0",
 		"CastBrowserPort":      "26.9.0",
 		"CastBrowserSubtitles": "26.9.0",
+		// 26.9.0 — even out loud effects and quiet dialogue
+		"NormalizeVolume": "26.9.0",
 	}
 }
 
@@ -180,7 +136,6 @@ func baselineConfigOptions() map[string]bool {
 		"RofiSelection": true, "ImagePreview": true, "ScoreOnCompletion": true,
 		"SaveMpvSpeed": true, "AddMissingOptions": true, "AlternateScreen": true,
 		"DiscordPresence": true, "DiscordClientId": true,
-		"Provider": true, "DisabledProviders": true, "ManualProviderSearch": true,
 		"TrackingLocal": true, "TrackingRemote": true, "TrackingConfigured": true,
 		"MyAnimeListClientID": true, "MyAnimeListClientSecret": true,
 		"MyAnimeListImported": true, "MyAnimeListImportDismissed": true,
@@ -399,11 +354,7 @@ func MigrateOnVersionUpgrade(configPath string, config *Config, appVersion strin
 	switch {
 	case storedVersion == appVersion:
 	case strings.TrimSpace(configPath) == "":
-		// Nothing on disk to update; the provider still migrates in memory.
-		if migrated, changed := migrateProviderConfig(config.Provider); changed {
-			config.Provider = migrated
-			configUpdated = true
-		}
+		// Nothing on disk to update.
 	default:
 		var err error
 		configUpdated, err = migrateConfigFile(configPath, config, storedVersion, appVersion)
@@ -477,15 +428,6 @@ func migrateConfigFile(configPath string, config *Config, fromVersion, toVersion
 		}
 	}
 
-	if migrated, changed := migrateProviderConfig(configMap["Provider"]); changed {
-		configMap["Provider"] = migrated
-		// Provider is already in the file, so the whole file is rewritten.
-		if err := SaveConfigToFile(configPath, configMap); err != nil {
-			return updated, err
-		}
-		updated = true
-	}
-
 	// Reload, so options added just now apply to this run.
 	next := PopulateConfig(configMap)
 	normalizeTrackingConfig(&next)
@@ -505,20 +447,4 @@ func parseConfigBool(text string) (bool, error) {
 		return b, nil
 	}
 	return false, fmt.Errorf("invalid bool %q", text)
-}
-
-// providerConfigDisplayLabel is how a Provider value reads in menus and
-// messages: the providers it stands for, in the order they are tried.
-func providerConfigDisplayLabel(value string) string {
-	const stackLabel = "Default with fallback"
-	if !isStackedProviderConfig(value) {
-		if names := parseProviderConfig(value); len(names) > 0 {
-			return strings.Join(names, " → ")
-		}
-		return value
-	}
-	if stack := defaultEnabledProviderStack(); len(stack) > 0 {
-		return stackLabel + " (" + strings.Join(stack, " → ") + ")"
-	}
-	return stackLabel
 }

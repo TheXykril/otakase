@@ -111,7 +111,7 @@ func TestMovieTabsOpenOnAFilledList(t *testing.T) {
 	if !ok || active != movieWatchlistKey || picked.Key != moviePathPrefix+"8filmai:/filmas/a/" {
 		t.Fatalf("picked %+v ok=%v active=%q", picked, ok, active)
 	}
-	if shown[0].Key != movieSearchKey || len(seen.Categories) != 2 || len(seen.Actions) != 4 {
+	if shown[0].Key != movieSearchKey || len(seen.Categories) != 2 || len(seen.Actions) != 3 {
 		t.Errorf("rows %+v, tabs %d, actions %d", shown, len(seen.Categories), len(seen.Actions))
 	}
 }
@@ -161,9 +161,10 @@ func TestMovieSourceLabel(t *testing.T) {
 		entry movies.Entry
 		want  string
 	}{
-		{movies.Entry{Movie: movies.Movie{Provider: "vidsrc"}, Server: "vidsrc 2"}, "vidsrc 2"},
-		{movies.Entry{Movie: movies.Movie{Provider: "8filmai"}, Server: "imgsto.re"}, "8filmai, imgsto.re"},
-		{movies.Entry{Movie: movies.Movie{Provider: "filmukas"}}, "filmukas"},
+		{movies.Entry{Movie: movies.Movie{Provider: "vidsrc"}, Server: "vidsrc 2"}, "English"},
+		{movies.Entry{Movie: movies.Movie{Provider: "8filmai"}, Server: "imgsto.re"}, "Lithuanian"},
+		{movies.Entry{Movie: movies.Movie{Provider: "filmukas"}}, "Lithuanian"},
+		{movies.Entry{}, "Lithuanian"},
 	} {
 		if got := movieSourceLabel(c.entry); got != c.want {
 			t.Errorf("%+v: %q, want %q", c.entry, got, c.want)

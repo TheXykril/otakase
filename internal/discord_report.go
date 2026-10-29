@@ -140,8 +140,8 @@ func fallbackDiagnosticsText(config *Config, logPath string) string {
 		if config.RofiSelection {
 			menus = "rofi"
 		}
-		fmt.Fprintf(&b, "Player: %s · Provider: %s · Tracker: %s · Menus: %s\n",
-			config.Player, config.Provider, config.TrackingRemote, menus)
+		fmt.Fprintf(&b, "Player: %s · Tracker: %s · Menus: %s\n",
+			config.Player, config.TrackingRemote, menus)
 		fmt.Fprintf(&b, "Sub/dub: %s · Quality: %s · Cast: %t\n", config.SubOrDub, config.Quality, config.CastToDevice)
 	}
 	if logPath != "" {

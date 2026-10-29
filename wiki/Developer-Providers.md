@@ -257,8 +257,8 @@ how reliably it resolves streams and how cheaply.
   `testdata/`. No unit test may reach the real host.
 - Live tests go in `live_test.go`, skipped unless an environment variable is
   set (`OTAKASE_LIVE_ANIZONE=1` and so on). Run them by hand before sending
-  the change. The weekly canary workflow only runs `-provider-status` and a
-  couple of stack-level live tests in `internal/`.
+  the change. Nothing runs them automatically; `otakase -provider-status`
+  gives a quick health check of every provider from your own machine.
 - To stub a provider in app-level tests, use
   `providers.SetFactoryForTest(name, factory)` and defer the restore it
   returns.

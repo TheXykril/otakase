@@ -66,12 +66,16 @@ func (st *providerMappingSearchState) activeProviders() []string {
 	return st.allProviders
 }
 
-// currentProviderLabel names the search scope in prompts and logs.
+// currentProviderLabel names the search scope in prompts: "every source" or
+// "source 2", never the site.
 func (st *providerMappingSearchState) currentProviderLabel() string {
 	if st.sequential {
-		return st.currentProvider()
+		if name := st.currentProvider(); name != "" {
+			return strings.Trim(sourceTag(name), "[]")
+		}
+		return ""
 	}
-	return "all configured providers"
+	return "every source"
 }
 
 // nextProviderLabel names the provider "try next provider" would search, or
@@ -172,7 +176,7 @@ func optionDisplayName(option SelectionOption) string {
 // manually" -- is a menu that cannot be shown, which would end the episode
 // instead. See wiki/Developer-Cast-Window-Prompts.md.
 func confirmProviderMatch(config *Config, option SelectionOption, reason string) bool {
-	Out(fmt.Sprintf("Provider match found by %s: %s", reason, optionDisplayName(option)))
+	Out(fmt.Sprintf("Match found by %s: %s", reason, optionDisplayName(option)))
 	if castWindowNonInteractive() {
 		Out("Using it -- there is no one at the keyboard to confirm.")
 		return true
@@ -318,7 +322,7 @@ func nextProviderOption(state *providerMappingSearchState) []SelectionOption {
 	if next == "" {
 		return nil
 	}
-	return []SelectionOption{{Key: "next_provider", Label: fmt.Sprintf("Try next provider (%s)", next), Icon: icons.Skip}}
+	return []SelectionOption{{Key: "next_provider", Label: fmt.Sprintf("Try next source (%s)", strings.Trim(sourceTag(next), "[]")), Icon: icons.Skip}}
 }
 
 // recoveryAction reads a recovery menu's answer, folding the menu's own exit
@@ -347,13 +351,13 @@ func promptProviderSearchRecovery(config *Config, state *providerMappingSearchSt
 	if headline == "" {
 		headline = fmt.Sprintf("No results found for '%s' on %s.", state.query, state.currentProviderLabel())
 	}
-	picked, menuErr := selectWithOptionalMessage(config, options, "Provider search", headline)
+	picked, menuErr := selectWithOptionalMessage(config, options, "Search", headline)
 	if menuErr != nil {
 		return "", menuErr
 	}
 	action = recoveryAction(picked)
 	if action == askServerKey {
-		askServerWhereToWatch(config, state.query, 0, headline+"\nSources: "+strings.Join(state.allProviders, ", "))
+		askServerWhereToWatch(config, state.query, 0, headline+fmt.Sprintf("\nSources searched: %d", len(state.allProviders)))
 		return promptProviderSearchRecovery(config, state, reason)
 	}
 	return action, nil
@@ -368,7 +372,7 @@ func promptProviderMatchRecovery(config *Config, state *providerMappingSearchSta
 	}, nextProviderOption(state)...)
 	options = append(options, SelectionOption{Key: "back", Label: "Back to menu", Icon: icons.Back})
 
-	picked, menuErr := selectWithOptionalMessage(config, options, "Provider match", "We didn't find an automatic provider match.")
+	picked, menuErr := selectWithOptionalMessage(config, options, "Match", "We didn't find an automatic match.")
 	if menuErr != nil {
 		return "", menuErr
 	}
@@ -463,7 +467,7 @@ func applySelectedProviderMapping(config *Config, state *providerMappingSearchSt
 // it was rather than run it again for nothing.
 func promptCustomProviderSearchQuery(config *Config, currentQuery, hint string) (string, bool, error) {
 	return customProviderQueryFromAnswer(currentQuery, func() (string, bool, error) {
-		return promptCancelableWithDefault(config, "Provider", "Search providers under a different name", hint, currentQuery)
+		return promptCancelableWithDefault(config, "Search", "Search under a different name", hint, currentQuery)
 	})
 }
 
@@ -525,7 +529,7 @@ func runMappingSearch(config *Config, search *providerMappingSearchState, anime 
 		reason := ""
 		if searchErr != nil {
 			Log(fmt.Sprintf("Provider search failed: %v", searchErr))
-			reason = fmt.Sprintf("Provider search failed for '%s': %v", search.query, searchErr)
+			reason = fmt.Sprintf("Search failed for '%s': %v", search.query, searchErr)
 		}
 		action, menuErr := promptProviderSearchRecovery(config, search, reason)
 		if menuErr != nil {
@@ -609,9 +613,9 @@ func RemapProviderAnime(userConfig *Config, user *User, databaseAnimes *[]Anime)
 	if databaseAnimes != nil {
 		saved := LocalFindAnime(*databaseAnimes, entry.Media.ID, "")
 		if saved == nil {
-			Out("No saved provider mapping in local history yet.")
+			Out("No saved match yet.")
 		} else {
-			Out(fmt.Sprintf("Current provider mapping: %s (%s)", CurrentAnimeProviderName(saved), saved.ProviderId))
+			Out("Current match: " + sourceTag(CurrentAnimeProviderName(saved)))
 		}
 	}
 
@@ -631,7 +635,7 @@ func RemapProviderAnime(userConfig *Config, user *User, databaseAnimes *[]Anime)
 	switch {
 	case err != nil:
 		Log(fmt.Sprintf("Provider remap failed: %v", err))
-		Out("Failed to update provider mapping.")
+		Out("Failed to update the match.")
 		return
 	case outcome != ProviderMappingOK:
 		return
@@ -639,10 +643,10 @@ func RemapProviderAnime(userConfig *Config, user *User, databaseAnimes *[]Anime)
 	historyPath := HistoryFile(userConfig.StoragePath)
 	if err := persistRemappedProvider(historyPath, databaseAnimes, entry, &anime, query); err != nil {
 		Log(fmt.Sprintf("Failed to save remapped provider: %v", err))
-		Out("Provider selected, but failed to save mapping to local history.")
+		Out("Match picked, but it could not be saved.")
 		return
 	}
-	Out(fmt.Sprintf("Updated provider mapping to %s (%s).", anime.ProviderName, anime.ProviderId))
+	Out("Match updated: " + sourceTag(anime.ProviderName))
 }
 
 // pickListEntryToRemap has the user pick a show from a freshly synced copy
@@ -757,8 +761,8 @@ func searchNextProvider(config *Config, state *providerMappingSearchState, defau
 	if state.advanceToNextProvider() {
 		return ProviderMappingOK, true, nil
 	}
-	Out("No more providers left to try.")
-	action, err := promptProviderSearchRecovery(config, state, "No more providers left to try.")
+	Out("No more sources left to try.")
+	action, err := promptProviderSearchRecovery(config, state, "No more sources left to try.")
 	if err != nil {
 		return ProviderMappingQuit, false, err
 	}
@@ -969,7 +973,7 @@ func (r *episodeRecovery) changeEpisode() {
 	if name, id := AnimeProviderID(r.anime); id != "" {
 		listed, err := EpisodesList(QualifyProviderID(name, id), r.config.SubOrDub)
 		if err == nil && len(listed) > 0 {
-			hint = fmt.Sprintf("the provider lists up to %v · esc to go back", listed[len(listed)-1])
+			hint = fmt.Sprintf("the source lists up to %v · esc to go back", listed[len(listed)-1])
 		}
 	}
 	number, cancelled, err := promptEpisodeCancelable(r.config, "Episode",
@@ -1053,7 +1057,7 @@ func ResolveUntrackedProviderSearch(config *Config, initialQuery string) (provid
 		switch {
 		case searchErr != nil:
 			Log(fmt.Sprintf("Untracked provider search failed: %v", searchErr))
-			searchAgain, back, err = afterMenu(promptProviderSearchRecovery(config, search, fmt.Sprintf("Provider search failed for '%s': %v", search.query, searchErr)))
+			searchAgain, back, err = afterMenu(promptProviderSearchRecovery(config, search, fmt.Sprintf("Search failed for '%s': %v", search.query, searchErr)))
 		case len(results) == 0:
 			searchAgain, back, err = afterMenu(promptProviderSearchRecovery(config, search, ""))
 		default:
