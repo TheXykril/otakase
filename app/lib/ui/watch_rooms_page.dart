@@ -7,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../data/models.dart';
+import '../data/store.dart';
 import '../data/watch_rooms.dart';
 import '../services.dart';
 import 'components.dart';
@@ -347,6 +348,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
       'sub-border-size': '${s.integer('SubtitleOutline')}',
       'sub-pos': '${s.integer('SubtitlePosition')}',
       'sub-ass-override': s.text('SubStyle') == 'soft' ? 'no' : 'yes',
+      'af': audioFilter(s),
     }.entries) {
       await native.setProperty(entry.key, entry.value);
     }

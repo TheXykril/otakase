@@ -68,6 +68,17 @@ class FixtureCore extends CoreClient {
 
 void main() {
   test(
+    'volume leveller is on by default and clears when switched off',
+    () async {
+      final s = await store();
+      expect(audioFilter(s), volumeLeveller);
+      expect(volumeLeveller, contains('dynaudnorm'));
+      await s.set('NormalizeVolume', false);
+      expect(audioFilter(s), '');
+    },
+  );
+
+  test(
     'AniList adult opt-in and catalog response filtering, cached queries',
     () async {
       var count = 0;
