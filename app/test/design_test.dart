@@ -71,8 +71,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('more-Diagnostics')));
       await tester.pumpAndSettle();
+      for (var i = 0; i < sourceNames.length; i++) {
+        expect(find.text('Source ${i + 1}'), findsOneWidget);
+      }
       for (final source in sourceNames) {
-        expect(find.text(source), findsOneWidget);
+        expect(find.textContaining(source), findsNothing);
       }
       await tester.pumpWidget(const SizedBox());
     },

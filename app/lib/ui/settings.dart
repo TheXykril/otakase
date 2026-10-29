@@ -573,7 +573,7 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
         children: [
           const PageHeading('Diagnostics', '設'),
           Text(
-            'Playback chooses a copy automatically and remembers what worked for each show.',
+            'Playback chooses a source automatically and remembers what worked for each show.',
             style: uiStyle(context, color: muted),
           ),
           const SizedBox(height: 24),
@@ -588,7 +588,7 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
             isTV: widget.isTV,
           ),
           const SizedBox(height: 32),
-          const SectionLabel('Core order'),
+          const SectionLabel('Sources'),
           const SizedBox(height: 12),
           for (var i = 0; i < sources.length; i++)
             Container(
@@ -603,7 +603,10 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
                     style: uiStyle(context, color: muted),
                   ),
                   const SizedBox(width: 20),
-                  Expanded(child: Text(sources[i], style: uiStyle(context))),
+                  // Sources are never named to the viewer.
+                  Expanded(
+                    child: Text('Source ${i + 1}', style: uiStyle(context)),
+                  ),
                   Text(
                     widget.services.store.providerHealth[sources[i]] ??
                         'Not checked',
