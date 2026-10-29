@@ -35,6 +35,9 @@ Json details({bool complete = false, bool adult = false}) => {
   },
 };
 
+http.Response utf8Json(Object body) =>
+    http.Response.bytes(utf8.encode(jsonEncode(body)), 200);
+
 void main() {
   test(
     'recorded ani.zip fills missing episode art and preserves AniList first',
@@ -49,6 +52,8 @@ void main() {
             expect(jsonDecode(r.body)['variables'], {'id': 1, 'adult': false});
             return json(details());
           }
+          // Sources that do not know the show answer 404.
+          if (r.url.host != 'api.ani.zip') return http.Response('', 404);
           expect(r.url.toString(), 'https://api.ani.zip/mappings?anilist_id=1');
           zipCalls++;
           return http.Response(
@@ -111,7 +116,8 @@ void main() {
       expect(result.episodeArt, hasLength(2));
       expect(result.episodeArt.first['thumbnail'], 'anilist-1.jpg');
       expect(result.episodeArt.last.containsKey('thumbnail'), isFalse);
-      expect(logs.single, contains('HTTP 503'));
+      expect(logs, hasLength(4));
+      expect(logs, everyElement(contains('HTTP 503')));
     },
   );
 
@@ -215,4 +221,76 @@ void main() {
       );
     },
   );
+
+  test('sources fill gaps in the watch room order', () async {
+    final catalog = Catalog(
+      client: MockClient((r) async {
+        switch (r.url.host) {
+          case 'graphql.anilist.co':
+            return json(details());
+          case 'api.tenrai.org':
+            return json({
+              'data': [
+                {
+                  'mal_id': 2,
+                  'title': 'Tenrai two',
+                  'images': {
+                    'jpg': {
+                      'image_url': 'https://img1.ak.crunchyroll.com/2.jpg',
+                    },
+                  },
+                },
+              ],
+              'pagination': {'has_next_page': false},
+            });
+          case 'animap.id':
+            if (r.url.path == '/api/map/mal/1') {
+              return json([
+                {
+                  'kitsu_id': [9],
+                },
+              ]);
+            }
+            expect(r.url.path, '/api/kitsu/9/episodes');
+            return json({
+              'episodes': [
+                {
+                  'number': 2,
+                  'title_en_us': null,
+                  'canonical_title': 'Kitsu two',
+                  'thumbnail': 'https://media.kitsu.app/k2.png',
+                },
+                {
+                  'number': 3,
+                  'title_en_us': null,
+                  'canonical_title': 'Kitsu three',
+                  'thumbnail': 'http://insecure.example/k3.png',
+                },
+              ],
+            });
+          case 'api.jikan.moe':
+            return utf8Json({
+              'data': [
+                {'mal_id': 3, 'title': 'Jikan three'},
+                {'mal_id': 4, 'title': '', 'title_japanese': '第四話'},
+              ],
+              'pagination': {'has_next_page': false},
+            });
+          default:
+            return http.Response('', 404);
+        }
+      }),
+    );
+    final result = await catalog.detail(
+      const Anime(id: 1, title: 'Cowboy Bebop', episodes: 4),
+      adult: false,
+    );
+    final rows = {for (final e in result.episodeArt) episodeNumber(e): e};
+    expect(rows[1]!['thumbnail'], 'anilist-1.jpg');
+    expect(rows[2]!['title'], 'Episode 2 - AniList title');
+    expect(rows[2]!['thumbnail'], 'https://img1.ak.crunchyroll.com/2.jpg');
+    expect(rows[3]!['title'], 'Kitsu three');
+    expect(rows[3]!.containsKey('thumbnail'), isFalse);
+    expect(rows[4]!['title'], '第四話');
+  });
 }

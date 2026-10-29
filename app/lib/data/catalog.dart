@@ -228,6 +228,7 @@ class Catalog {
           result.id,
           result.episodeArt,
           result.airedEpisodes,
+          malId: result.malId,
         );
         result = Anime.fromJson({...raw, 'streamingEpisodes': episodes});
         _details[anime.key] = result;
