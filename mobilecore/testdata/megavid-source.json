@@ -1,0 +1,71 @@
+{
+  "status": "ok",
+  "source": "http://127.0.0.1/megavid/master.m3u8",
+  "tracks": [
+    {
+      "file": "http://127.0.0.1/subtitle-0.vtt",
+      "label": "Arabic",
+      "kind": "captions",
+      "default": false
+    },
+    {
+      "file": "http://127.0.0.1/subtitle-1.vtt",
+      "label": "English",
+      "kind": "captions",
+      "default": true
+    },
+    {
+      "file": "http://127.0.0.1/subtitle-2.vtt",
+      "label": "French",
+      "kind": "captions",
+      "default": false
+    },
+    {
+      "file": "http://127.0.0.1/subtitle-3.vtt",
+      "label": "German",
+      "kind": "captions",
+      "default": false
+    },
+    {
+      "file": "http://127.0.0.1/subtitle-4.vtt",
+      "label": "Italian",
+      "kind": "captions",
+      "default": false
+    },
+    {
+      "file": "http://127.0.0.1/subtitle-5.vtt",
+      "label": "Portuguese (- Portuguese(Brazil))",
+      "kind": "captions",
+      "default": false
+    },
+    {
+      "file": "http://127.0.0.1/subtitle-6.vtt",
+      "label": "Russian",
+      "kind": "captions",
+      "default": false
+    },
+    {
+      "file": "http://127.0.0.1/subtitle-7.vtt",
+      "label": "Spanish",
+      "kind": "captions",
+      "default": false
+    },
+    {
+      "file": "http://127.0.0.1/subtitle-8.vtt",
+      "label": "Spanish (- Spanish(Latin America))",
+      "kind": "captions",
+      "default": false
+    },
+    {
+      "file": "http://127.0.0.1/subtitle-9.vtt",
+      "label": "",
+      "kind": "captions",
+      "default": false
+    }
+  ],
+  "mega": true,
+  "animex": false,
+  "providers": [],
+  "chapters": [],
+  "type": "hls"
+}

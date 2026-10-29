@@ -32,6 +32,7 @@ require (
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/sergeymakinen/go-bmp v1.0.0 // indirect
 	github.com/sergeymakinen/go-ico v1.0.0-beta.0 // indirect
+	golang.org/x/mobile v0.0.0-20260821190718-4776eadac327 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )
 
@@ -148,3 +149,5 @@ require (
 	modernc.org/sqlite v1.21.1 // indirect
 	zombiezen.com/go/sqlite v0.13.1 // indirect
 )
+
+tool golang.org/x/mobile/cmd/gobind

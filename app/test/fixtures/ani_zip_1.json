@@ -1,0 +1,76 @@
+{
+  "mappings": {
+    "animeplanet_id": "cowboy-bebop",
+    "kitsu_id": 1,
+    "mal_id": 1,
+    "type": "TV",
+    "anilist_id": 1,
+    "anisearch_id": 1572,
+    "anidb_id": 23,
+    "notifymoe_id": null,
+    "livechart_id": 3418,
+    "thetvdb_id": 76885,
+    "imdb_id": "tt0213338",
+    "themoviedb_id": "30991"
+  },
+  "episodes": {
+    "1": {
+      "episodeNumber": 14,
+      "title": {
+        "ja": "アステロイド・ブルース",
+        "en": "Asteroid Blues",
+        "de": "Der tödliche Deal",
+        "es": "Canción Triste para un Asteroide",
+        "pl": "Asteroidalny blues",
+        "es-CA": "El Blues de l`Asteroide",
+        "hu": "Bolygóközi blues",
+        "x-jat": "Asteroid Blues"
+      },
+      "image": "https://artworks.thetvdb.com/banners/episodes/76885/219123.jpg",
+      "episode": "1",
+      "airdate": "1998-10-24"
+    },
+    "2": {
+      "episodeNumber": 1,
+      "title": {
+        "ja": "野良犬のストラット",
+        "en": "Stray Dog Strut",
+        "de": "Ein tierisches Geschäft",
+        "es": "Strut Perro Callejero",
+        "pl": "Zbłąkany pies",
+        "es-CA": "El Gos de Carrer",
+        "hu": "Kincs ez a kutya",
+        "x-jat": "Norainu no Strut"
+      },
+      "image": "https://artworks.thetvdb.com/banners/episodes/76885/219121.jpg",
+      "episode": "2",
+      "airdate": "1998-04-03"
+    },
+    "3": {
+      "episodeNumber": 2,
+      "title": {
+        "ja": "ホンキィ・トンク・ウィメン",
+        "en": "Honky Tonk Women",
+        "de": "Zickenalarm",
+        "es": "La Jugadora",
+        "pl": "Honky-tonk women",
+        "es-CA": "La Jugadora",
+        "hu": "Nő a baj",
+        "x-jat": "Honky Tonk Women"
+      },
+      "image": "https://artworks.thetvdb.com/banners/episodes/76885/219122.jpg",
+      "episode": "3",
+      "airdate": "1998-04-10"
+    },
+    "S1": {
+      "episodeNumber": 1,
+      "title": {
+        "ja": "よせあつめブルース",
+        "en": "Session XX: Mish-Mash Blues",
+        "x-jat": "Yoseatsume Blues"
+      },
+      "episode": "S1",
+      "airdate": "1998-06-26"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "ver": 7, "room": "room-1", "me": "viewer", "host": "host", "is_host": false,
+  "phase": "play",
+  "show": {"id": 42, "mal_id": 24, "title": "Shared story", "episodes": 12, "adult": false},
+  "ep": 4, "last_ep": 12, "media": "api/watch/media/test/index.m3u8", "hls": true,
+  "playing": true, "pos": 30, "dur": 1200, "skip_seq": 0, "hold": 0,
+  "sync": true, "linked": ["AniList", "MAL"], "members": [], "asks": [],
+  "subs": [{"label": "English", "lang": "en", "url": "api/watch/media/test/sub.vtt"}]
+}

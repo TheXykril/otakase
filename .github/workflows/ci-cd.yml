@@ -1,8 +1,8 @@
 name: Build and release
 
 # Runs only when started by hand: the Actions tab ("Run workflow") or the
-# Discord bot's /github command. Each run vets, tests and builds for Linux
-# and tests the Windows installer.
+# Discord bot's /github command. Each run vets, tests and builds for Linux,
+# builds the Android APK and tests the Windows installer.
 # With "release" ticked it also builds macOS and Windows and publishes
 # v<VERSION.txt> from main as a GitHub release.
 
@@ -117,8 +117,79 @@ jobs:
     with:
       ref: ${{ (inputs.pr_number && format('refs/pull/{0}/head', inputs.pr_number)) || github.sha }}
 
+  # The Android app (phones and Android TV): one APK with both ARM runtimes.
+  # Signed with the release key from the ANDROID_* secrets on main; a PR build
+  # runs untrusted code, so it never sees them and gets the debug key, which
+  # cannot update an installed release.
+  android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.8"
+          channel: stable
+
+      - name: Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      - name: Signing key
+        if: inputs.pr_number == ''
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; the APK is signed with the debug key"
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/otakase-release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/otakase-release.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > app/android/key.properties
+
+      - name: Build APK
+        run: |
+          app/scripts/build-apk.sh
+          mkdir -p release/android
+          cp app/build/app/outputs/flutter-apk/app-release.apk release/android/otakase-android.apk
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f app/android/key.properties "$RUNNER_TEMP/otakase-release.jks"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: otakase-android
+          path: release/android/otakase-android.apk
+          retention-days: 7
+          if-no-files-found: error
+
   release:
-    needs: [build, installer]
+    needs: [build, installer, android]
     if: inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
     permissions:
@@ -174,6 +245,11 @@ jobs:
         with:
           name: otakase-binaries
           path: Build
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: otakase-android
+          path: Build/Output
 
       # The installer script reads the exe from releases/otakase-<version>/windows.
       - name: Lay out release files
@@ -236,6 +312,7 @@ jobs:
             releases/otakase-${{ env.OTAKASE_VERSION }}/windows/otakase-windows-x86_64.exe
             Build/Output/otakase-windows-installer.exe
             Build/Output/otakase-icons.zip
+            Build/Output/otakase-android.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

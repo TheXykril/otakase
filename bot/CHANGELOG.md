@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.82
+
+- Watch room: members signed in on the Otakase Android app (phone or TV) can join a running room from the app. 18+ rooms only let them in while they sit in the room's voice channel.
+
 ## 1.30.81
 
 - `/provider-status` and the "is it down?" reply show how many sources work, never which. 18+ sources are a separate count for members whose AniList allows adult content. App reports are counts too.

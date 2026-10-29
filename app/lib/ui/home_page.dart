@@ -1,0 +1,852 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+
+import '../data/models.dart';
+import '../data/continuation.dart';
+import '../data/tracking.dart';
+import '../services.dart';
+import 'components.dart';
+
+class NativeTitle extends StatelessWidget {
+  const NativeTitle(this.title, {super.key, required this.isTV});
+  final String title;
+  final bool isTV;
+  @override
+  Widget build(BuildContext context) => title.trim().isEmpty
+      ? const SizedBox.shrink()
+      : ExcludeSemantics(
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isTV ? 6 : 4,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              color: bgDeep.withValues(alpha: .94),
+              borderRadius: BorderRadius.circular(isTV ? 5 : 4),
+            ),
+            child: Text(
+              title.characters.join('\n'),
+              maxLines: isTV ? 8 : 9,
+              overflow: TextOverflow.clip,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'NotoSansJP',
+                fontSize: isTV ? 20 : 15,
+                height: isTV ? 1.2 : 1.3,
+                color: fgBright,
+              ),
+            ),
+          ),
+        );
+}
+
+class ResumeCard extends StatelessWidget {
+  const ResumeCard({
+    super.key,
+    required this.entry,
+    required this.isTV,
+    required this.onResume,
+    this.autofocus = true,
+  });
+  final WatchEntry entry;
+  final bool isTV, autofocus;
+  final VoidCallback onResume;
+  @override
+  Widget build(BuildContext context) {
+    final anime = entry.anime;
+    final scaled = MediaQuery.textScalerOf(context).scale(1);
+    final knownDuration = entry.duration > 0;
+    final height = isTV
+        ? math.max(292.0, 292 * scaled)
+        : math.max(
+            MediaQuery.sizeOf(context).height < 800 ? 244.0 : 292.0,
+            292 * scaled,
+          );
+    final titleStyle = anime.title.length > 38
+        ? uiStyle(
+            context,
+            size: isTV ? 36 : 28,
+            weight: FontWeight.w700,
+            height: 1.2,
+          )
+        : display.copyWith(
+            fontSize: isTV ? 45 : 33,
+            height: isTV ? 49 / 45 : 1,
+          );
+    return Container(
+      key: const Key('resume-card'),
+      height: height,
+      margin: EdgeInsets.symmetric(horizontal: isTV ? 0 : 20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: isTV ? null : Border.all(color: const Color(0xff4a342a)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(isTV ? 0 : 16),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            HeroArt(anime, height: height),
+            Positioned(
+              top: 13,
+              left: isTV ? 48 : 14,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                color: bgDeep.withValues(alpha: .95),
+                child: Text(
+                  entry.position > 0
+                      ? 'Continue watching'
+                      : 'Your next episode',
+                  style: uiStyle(context, size: 15),
+                ),
+              ),
+            ),
+            if (anime.nativeTitle.isNotEmpty)
+              Positioned(
+                right: isTV ? 48 : 10,
+                top: 16,
+                child: NativeTitle(anime.nativeTitle, isTV: isTV),
+              ),
+            if (isTV)
+              Positioned(
+                right: 100,
+                bottom: 36,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: bgDeep.withValues(alpha: .9),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    entry.episode.toString().padLeft(2, '0'),
+                    style: display.copyWith(fontSize: 54),
+                  ),
+                ),
+              ),
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  isTV ? 48 : 18,
+                  48,
+                  isTV ? 300 : 42,
+                  20,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'EP ${entry.episode.toString().padLeft(2, '0')}',
+                      style: mono.copyWith(fontSize: isTV ? 20 : 15, color: fg),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      anime.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: titleStyle,
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 12,
+                      runSpacing: 4,
+                      children: [
+                        AppButton(
+                          key: const Key('home-resume'),
+                          label: entry.position > 0 ? 'Resume' : 'Play',
+                          icon: LucideIcons.play,
+                          filled: true,
+                          isTV: isTV,
+                          autofocus: autofocus,
+                          onPressed: onResume,
+                        ),
+                        if (knownDuration && entry.position > 0)
+                          Container(
+                            color: bgDeep.withValues(alpha: .95),
+                            padding: const EdgeInsets.all(4),
+                            child: Text(
+                              '${((entry.duration - entry.position).clamp(0, entry.duration) / 60).ceil()} min left',
+                              style: uiStyle(context, size: 15),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (knownDuration && entry.position > 0)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: LinearProgressIndicator(
+                  value: (entry.position / entry.duration).clamp(0, 1),
+                  minHeight: 3,
+                  color: shu,
+                  backgroundColor: line,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({
+    super.key,
+    required this.services,
+    required this.isTV,
+    required this.onOpen,
+    required this.onResume,
+    required this.onSearch,
+    required this.onAccounts,
+  });
+  final AppServices services;
+  final bool isTV;
+  final void Function(Anime) onOpen;
+  final void Function(WatchEntry) onResume;
+  final VoidCallback onSearch, onAccounts;
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  WatchEntry? focused;
+  Timer? artTimer;
+  Timer? clock;
+  String identity = '';
+  final snapshots = <String, List<ListEntry>>{};
+  final blocks = <String, GlobalKey<_AccountBlockState>>{};
+  @override
+  void initState() {
+    super.initState();
+    clock = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  Future<void> refresh() async {
+    await Future.wait(
+      blocks.values.map(
+        (key) =>
+            key.currentState?.load(forceSync: true) ?? Future<void>.value(),
+      ),
+    );
+  }
+
+  void focusEntry(ListEntry entry) {
+    artTimer?.cancel();
+    artTimer = Timer(
+      MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      () {
+        if (!mounted) return;
+        if (entry.anime.airedEpisodes > 0 &&
+            entry.progress >= entry.anime.airedEpisodes) {
+          setState(() => focused = null);
+          return;
+        }
+        setState(
+          () => focused = WatchEntry(
+            anime: entry.anime,
+            episode: entry.progress + 1,
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    artTimer?.cancel();
+    clock?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.services, store = s.store;
+    final stamp =
+        '${s.auth.accounts.values.map((a) => '${a.service}:${a.userId}').join(',')}:${store.text('AniListUsername')}:${store.text('MyAnimeListUsername')}:${store.adultAllowed}';
+    if (identity != stamp) {
+      identity = stamp;
+      snapshots.clear();
+      focused = null;
+    }
+    final continuation = buildContinuation(
+      snapshots.values.expand((e) => e).toList(),
+      store.history,
+      adult: store.adultAllowed,
+      now: DateTime.now(),
+    );
+    final continuing = continuation.continueWatching;
+    final resume = continuing.firstOrNull;
+    final stage =
+        widget.isTV && focused != null && store.visible(focused!.anime)
+        ? focused
+        : resume;
+    final configured = ['AniList', 'MAL'].where(s.auth.signedIn).toList();
+    final combined = s.auth.signedIn('AniList') && s.auth.signedIn('MAL');
+    final lists = combined ? ['AniList'] : configured;
+    return RefreshIndicator(
+      onRefresh: refresh,
+      color: shu,
+      child: ListView(
+        key: const PageStorageKey('home-scroll'),
+        padding: EdgeInsets.only(bottom: contentBottom(context)),
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              widget.isTV ? 48 : 20,
+              12,
+              widget.isTV ? 48 : 20,
+              16,
+            ),
+            child: Row(
+              children: [
+                const Expanded(child: PageHeading('Back to your story', '続')),
+                Tooltip(
+                  message: 'Refresh lists',
+                  child: FocusBox(
+                    key: const Key('home-refresh'),
+                    isTV: widget.isTV,
+                    radius: 999,
+                    onPressed: refresh,
+                    child: Semantics(
+                      label: 'Refresh lists',
+                      button: true,
+                      child: SizedBox.square(
+                        dimension: widget.isTV ? 48 : 44,
+                        child: const Icon(LucideIcons.refreshCw),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (stage != null)
+            ResumeCard(
+              entry: stage,
+              isTV: widget.isTV,
+              onResume: () => widget.onResume(stage),
+            ),
+          for (final service in lists)
+            AccountBlock(
+              key: blocks.putIfAbsent(
+                combined ? 'Combined' : service,
+                () => GlobalKey<_AccountBlockState>(),
+              ),
+              service: service,
+              combineTrackers: combined,
+              services: s,
+              isTV: widget.isTV,
+              onOpen: widget.onOpen,
+              onFocused: focusEntry,
+              onLoaded: (entries) {
+                if (mounted) {
+                  setState(
+                    () => snapshots[combined ? 'Combined' : service] = entries,
+                  );
+                }
+              },
+              autofocus: stage == null && service == lists.first,
+            ),
+          if (continuing.length > 1)
+            PosterRow(
+              title: 'Continue watching',
+              items: continuing.skip(1).map((e) => e.anime).toList(),
+              isTV: widget.isTV,
+              onOpen: widget.onOpen,
+              progress: (a) {
+                final h = continuing.firstWhere((e) => e.anime.key == a.key);
+                return h.duration > 0 ? h.position / h.duration : null;
+              },
+              captions: (a) =>
+                  'Episode ${continuing.firstWhere((e) => e.anime.key == a.key).episode}',
+            ),
+          if (continuation.upNext.isNotEmpty)
+            PosterRow(
+              title: 'Up next',
+              items: continuation.upNext.map((e) => e.anime).toList(),
+              isTV: widget.isTV,
+              onOpen: widget.onOpen,
+              captions: (a) => continuation.upNext
+                  .firstWhere((e) => e.anime.key == a.key)
+                  .caption(DateTime.now()),
+            ),
+          if (configured.isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: widget.isTV ? 48 : 20,
+                vertical: 24,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Your lists belong here.',
+                    style: uiStyle(context, size: 21, weight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Sign in to AniList or MAL in More to see your lists and sync your progress.',
+                    style: uiStyle(context, color: muted),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    children: [
+                      AppButton(
+                        label: 'Accounts',
+                        isTV: widget.isTV,
+                        onPressed: widget.onAccounts,
+                      ),
+                      AppButton(
+                        label: 'Search anime',
+                        isTV: widget.isTV,
+                        autofocus: stage == null,
+                        onPressed: widget.onSearch,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class AccountBlock extends StatefulWidget {
+  const AccountBlock({
+    super.key,
+    required this.service,
+    required this.services,
+    required this.isTV,
+    required this.onOpen,
+    this.onFocused,
+    this.onLoaded,
+    this.autofocus = false,
+    this.combineTrackers = false,
+  });
+  final String service;
+  final AppServices services;
+  final bool isTV, autofocus, combineTrackers;
+  final void Function(Anime) onOpen;
+  final void Function(ListEntry)? onFocused;
+  final void Function(List<ListEntry>)? onLoaded;
+  @override
+  State<AccountBlock> createState() => _AccountBlockState();
+}
+
+class _AccountBlockState extends State<AccountBlock> {
+  List<ListEntry> entries = [];
+  String category = 'CURRENT', stamp = '';
+  bool busy = true;
+  String? error;
+  List<String> notLoaded = [];
+  int generation = 0;
+  final trigger = FocusNode(debugLabel: 'List category');
+  final scroll = ScrollController();
+  final triggerKey = GlobalKey();
+  String get username =>
+      widget.services.auth.account(widget.service)?.username ??
+      widget.services.store.text(
+        widget.service == 'MAL' ? 'MyAnimeListUsername' : 'AniListUsername',
+      );
+  Map<String, String> get categories =>
+      widget.service == 'MAL' ? malStatuses : anilistStatuses;
+  String get listKey => widget.combineTrackers ? 'Combined' : widget.service;
+  String get label => widget.combineTrackers ? 'AniList + MAL' : widget.service;
+  String get signature =>
+      '${widget.services.auth.account(widget.service)?.token}:${widget.combineTrackers ? widget.services.auth.account('MAL')?.token : ''}:$username:${widget.services.store.flag('AdultContent')}:${widget.services.tracking.revision}';
+  @override
+  void initState() {
+    super.initState();
+    category = widget.services.store.text('ListCategory.$listKey');
+    if (!categories.containsKey(category)) {
+      category = categories.keys.elementAt(1);
+    }
+    unawaited(load());
+  }
+
+  @override
+  void didUpdateWidget(AccountBlock old) {
+    super.didUpdateWidget(old);
+    if (stamp != signature) unawaited(load());
+  }
+
+  @override
+  void dispose() {
+    trigger.dispose();
+    scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> load({bool forceSync = false}) async {
+    final g = ++generation;
+    stamp = signature;
+    setState(() {
+      busy = true;
+      error = null;
+      notLoaded = [];
+    });
+    try {
+      final s = widget.services;
+      List<ListEntry> result;
+      List<String> failed = [];
+      if (widget.combineTrackers) {
+        final page = await s.tracking.combinedList(
+          adult: s.store.flag('AdultContent'),
+        );
+        result = page.entries;
+        failed = page.notLoaded;
+        if (mounted && g == generation) {
+          s.listSync.afterLoad(page, force: forceSync);
+        }
+      } else if (s.auth.signedIn(widget.service)) {
+        final page = await s.tracking.list(
+          widget.service,
+          adult: s.store.flag('AdultContent'),
+        );
+        result = page.entries;
+        if (page.fromCache) failed = [widget.service];
+      } else {
+        final requestedUsername = username;
+        final all = <String, ListEntry>{};
+        for (var p = 1; ; p++) {
+          final r = await s.catalog.publicList(
+            widget.service,
+            username,
+            'ALL',
+            adult: s.store.flag('AdultContent'),
+            page: p,
+          );
+          for (final e in r.entries) {
+            all[e.anime.key] = e;
+          }
+          if (!r.hasMore) break;
+        }
+        result = all.values.toList();
+        if (mounted && g == generation && username == requestedUsername) {
+          await s.store.set('PublicListCache.${widget.service}', {
+            'username': requestedUsername,
+            'entries': result.map((e) => e.toJson()).toList(),
+          });
+        }
+      }
+      if (mounted && g == generation) {
+        setState(() {
+          entries = result;
+          notLoaded = failed;
+        });
+        widget.onLoaded?.call(result);
+        if (widget.isTV && result.isNotEmpty && widget.autofocus) {
+          widget.onFocused?.call(result.first);
+        }
+      }
+    } catch (e) {
+      if (mounted && g == generation) {
+        final cached = widget.services.store.value(
+          'PublicListCache.${widget.service}',
+        );
+        if (!widget.services.auth.signedIn(widget.service) &&
+            cached is Map &&
+            cached['username'] == username) {
+          try {
+            final rows = (cached['entries'] as List)
+                .map(
+                  (e) => ListEntry.fromJson((e as Map).cast<String, dynamic>()),
+                )
+                .where((e) => widget.services.store.visible(e.anime))
+                .toList();
+            setState(() {
+              entries = rows;
+              notLoaded = [widget.service];
+            });
+            widget.onLoaded?.call(rows);
+          } catch (_) {
+            setState(() => error = e.toString());
+          }
+        } else {
+          setState(() => error = e.toString());
+        }
+      }
+    } finally {
+      if (mounted && g == generation) setState(() => busy = false);
+    }
+  }
+
+  Future<void> pick(BuildContext anchor) async {
+    final box =
+        (triggerKey.currentContext ?? anchor).findRenderObject()! as RenderBox;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final rect = box.localToGlobal(Offset.zero, ancestor: overlay) & box.size;
+    final selected = await showMenu<String>(
+      context: context,
+      requestFocus: true,
+      initialValue: category,
+      color: panel,
+      constraints: BoxConstraints(
+        minWidth: widget.isTV ? 286 : 260,
+        maxWidth: widget.isTV ? 286 : 260,
+        maxHeight:
+            MediaQuery.sizeOf(context).height -
+            MediaQuery.paddingOf(context).vertical -
+            32,
+      ),
+      position: RelativeRect.fromRect(rect, Offset.zero & overlay.size),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+      items: categories.entries
+          .map(
+            (e) => PopupMenuItem<String>(
+              value: e.key,
+              height: widget.isTV ? 56 : 44,
+              child: _CategoryInitialFocus(
+                selected: category == e.key,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        e.value,
+                        style: uiStyle(
+                          context,
+                          weight: category == e.key
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${entries.where((v) => e.key == 'ALL' || v.status == e.key).length}',
+                      style: mono.copyWith(fontSize: widget.isTV ? 20 : 15),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 19,
+                      child: category == e.key
+                          ? const Icon(
+                              LucideIcons.check,
+                              color: accentText,
+                              size: 19,
+                            )
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+          .toList(),
+    );
+    if (selected != null && mounted) {
+      setState(() => category = selected);
+      unawaited(widget.services.store.set('ListCategory.$listKey', selected));
+    }
+    if (mounted) trigger.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = entries
+        .where((e) => category == 'ALL' || e.status == category)
+        .toList();
+    final side = widget.isTV ? 48.0 : 20.0;
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: side),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your list',
+                  style: uiStyle(
+                    context,
+                    size: widget.isTV ? 26 : 21,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  '$label · $username${widget.services.auth.signedIn(widget.service) ? '' : ' · Public, read only'}',
+                  style: uiStyle(context, size: 15, color: muted),
+                ),
+                for (final service in notLoaded)
+                  TextButton(
+                    key: ValueKey('retry-$service'),
+                    onPressed: busy ? null : load,
+                    child: Text(
+                      '$service not loaded, retry',
+                      style: uiStyle(context, size: 15, color: muted),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: widget.isTV ? 232 : double.infinity,
+                  child: Builder(
+                    builder: (anchor) => FocusBox(
+                      key: triggerKey,
+                      focusNode: trigger,
+                      autofocus: widget.autofocus,
+                      isTV: widget.isTV,
+                      onPressed: () => pick(anchor),
+                      radius: 9,
+                      child: Container(
+                        constraints: BoxConstraints(
+                          minHeight: widget.isTV ? 48 : 44,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 13),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: line),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(width: 3, height: 19, color: shu),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                categories[category]!,
+                                style: uiStyle(
+                                  context,
+                                  weight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${shown.length}',
+                              style: mono.copyWith(
+                                fontSize: widget.isTV ? 20 : 15,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(LucideIcons.chevronDown, size: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (busy && entries.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: SkeletonBlock(height: 184),
+            ),
+          if (error != null)
+            FailureView(message: error!, onRetry: load, isTV: widget.isTV),
+          if (!busy && error == null && notLoaded.length < 2 && shown.isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: side, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'No ${categories[category]!.toLowerCase()} titles.',
+                    style: uiStyle(context, color: muted),
+                  ),
+                  TextButton(
+                    onPressed: () => pick(context),
+                    child: const Text('Choose category'),
+                  ),
+                ],
+              ),
+            ),
+          if (shown.isNotEmpty)
+            SizedBox(
+              height:
+                  (widget.isTV ? 194 : 184) +
+                  126 * MediaQuery.textScalerOf(context).scale(1),
+              child: ListView.separated(
+                key: PageStorageKey('$listKey-$category'),
+                controller: scroll,
+                scrollDirection: Axis.horizontal,
+                clipBehavior: Clip.none,
+                padding: EdgeInsets.fromLTRB(side - 7, 15, side, 8),
+                itemCount: shown.length,
+                separatorBuilder: (_, i) =>
+                    SizedBox(width: widget.isTV ? 26 : 12),
+                itemBuilder: (_, i) {
+                  final e = shown[i];
+                  return PosterCard(
+                    key: ValueKey('$listKey-$category-${e.anime.key}'),
+                    anime: e.anime,
+                    cropped: true,
+                    width: widget.isTV ? 143 : 132,
+                    isTV: widget.isTV,
+                    onOpen: () => widget.onOpen(e.anime),
+                    onFocused: () {
+                      widget.onFocused?.call(e);
+                    },
+                    caption: e.progress <= 0
+                        ? 'Not started'
+                        : e.anime.episodes > 0
+                        ? '${e.progress}/${e.anime.episodes}'
+                        : '${e.progress} watched',
+                    progress: episodeProgress(
+                      widget.services.store.entry(e.anime),
+                      watched: e.progress,
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryInitialFocus extends StatefulWidget {
+  const _CategoryInitialFocus({required this.selected, required this.child});
+  final bool selected;
+  final Widget child;
+  @override
+  State<_CategoryInitialFocus> createState() => _CategoryInitialFocusState();
+}
+
+class _CategoryInitialFocusState extends State<_CategoryInitialFocus> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.selected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Focus.of(context).requestFocus();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// How far into the episode in progress the viewer is, or null when nothing is
+/// half watched: a finished episode (the store clears its position) or one the
+/// tracker already counts as watched has no line.
+double? episodeProgress(WatchEntry? h, {int watched = 0}) =>
+    h == null ||
+        h.episode <= watched ||
+        h.position <= 0 ||
+        h.duration <= 0 ||
+        h.watched.contains(h.episode)
+    ? null
+    : (h.position / h.duration).clamp(0.0, 1.0);

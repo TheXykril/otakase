@@ -215,6 +215,9 @@ func init() {
 // actUser is the signed-in member, answering 401 when there is none.
 func (b *bot) actUser(w http.ResponseWriter, r *http.Request) string {
 	u := b.acts.user(r)
+	if u == "" && watchAppRoute(r) {
+		u, _ = b.appUser(r)
+	}
 	if u == "" {
 		apiError(w, http.StatusUnauthorized, "sign in again")
 		return ""
