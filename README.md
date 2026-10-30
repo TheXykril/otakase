@@ -52,6 +52,14 @@ theme.
 > menus, `libnotify` for desktop notifications, `xdg-utils` to open the
 > browser for sign-in, and `ffmpeg` for saving and casting episodes.
 
+### Android phone and TV
+
+Install [the Android APK](https://github.com/TheXykril/otakase/releases/latest/download/otakase-android.apk)
+on your phone or Android TV. The app includes its player.
+For later updates, open **More > About & updates**, choose **Download update**,
+then **Install update**. Approve Android's installation prompt. If Android asks,
+allow Otakase to install updates. Your profiles and progress stay in place.
+
 ### Arch Linux / Manjaro
 
 Build from source with the bundled PKGBUILD, so pacman tracks it like any

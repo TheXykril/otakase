@@ -23,6 +23,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
+    private var appUpdates: AppUpdates? = null
     private var deviceChannel: MethodChannel? = null
     private var statusEvents: EventChannel.EventSink? = null
     private var statusReceiver: BroadcastReceiver? = null
@@ -85,6 +86,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         detached = false
+        appUpdates = AppUpdates(this, flutterEngine.dartExecutor.binaryMessenger)
         pendingLogin = pendingLogin ?: loginUri(intent)
         pendingRemote = pendingRemote ?: remoteUri(intent)
         intent.data = null
@@ -194,6 +196,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        appUpdates?.close()
+        appUpdates = null
         multicastLock?.let { if (it.isHeld) it.release() }
         multicastLock = null
         voiceResult?.success(null)

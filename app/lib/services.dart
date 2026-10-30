@@ -10,6 +10,7 @@ import 'data/heritage.dart';
 import 'data/models.dart';
 import 'data/watch_rooms.dart';
 import 'data/tv_remote.dart';
+import 'data/app_updates.dart';
 
 class AppServices {
   AppServices({
@@ -18,9 +19,11 @@ class AppServices {
     required this.core,
     AuthService? auth,
     TVRemote? remoteControl,
+    AppUpdates? appUpdates,
     this.profiles,
     this.profileId = '1',
   }) : auth = auth ?? AuthService(client: catalog.client) {
+    updates = appUpdates ?? AppUpdates();
     discord = DiscordService(
       client: catalog.client,
       storage: this.auth.storage,
@@ -61,6 +64,7 @@ class AppServices {
   late final Heritage heritage;
   late final WatchRooms watchRooms;
   late final TVRemote tvRemote;
+  late final AppUpdates updates;
   Json Function()? playerStatus;
   Future<void> Function(String action, Json args)? playerCommand;
   final ProfileManager? profiles;
@@ -75,6 +79,7 @@ class AppServices {
     await tvRemote.close();
     await discord.close();
     closed = true;
+    updates.dispose();
     auth.removeListener(_adultPreference);
     listSync.dispose();
     await auth.cancelLogin();

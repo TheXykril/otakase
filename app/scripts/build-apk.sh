@@ -6,6 +6,7 @@ cd "$app_dir"
 flutter pub get
 flutter analyze
 flutter test
+python3 -m unittest discover -s scripts -p '*_test.py'
 # The app carries the CLI's version (VERSION.txt, or OTAKASE_VERSION when set).
 # Android only installs an update with an equal or higher versionCode, so the
 # code is the version as one number: 26.7.0 -> 26007000.
@@ -17,6 +18,10 @@ build_args=(--release --target-platform android-arm,android-arm64
 echo "Otakase app $version (versionCode $code)"
 # One phone + TV APK, with both ARM runtimes.
 flutter build apk "${build_args[@]}"
+python3 scripts/update-manifest.py \
+  --apk build/app/outputs/flutter-apk/app-release.apk \
+  --name "$version" --code "$code" \
+  --output build/app/outputs/flutter-apk/otakase-android.json
 # Optional smaller downloads, built from exactly the same app.
 flutter build apk "${build_args[@]}" --split-per-abi
 python3 - <<'PY'

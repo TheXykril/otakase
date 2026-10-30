@@ -105,7 +105,52 @@ repository secrets:
 | `ANDROID_KEY_PASSWORD` | `keyPassword` |
 
 A run for a PR (`pr_number` set) never reads them and signs with the debug
-key, as does any run while `ANDROID_KEYSTORE_BASE64` is unset.
+key. Non-release runs also use the debug key when `ANDROID_KEYSTORE_BASE64` is
+unset. Publishing a release requires the release signing key.
+
+## In-app updates
+
+More > About & updates checks the latest stable GitHub release, downloads the
+universal APK in private cache storage, and opens Android's installer. The
+Check for updates setting enables a startup check. Checks do not download or
+install anything automatically. More shows an available-update indicator.
+Android 8+ requires the viewer to allow Otakase as an installation source.
+Returning after permission approval resumes installation. Cancelling the
+installer keeps the verified package available for another attempt.
+
+Publish `otakase-android.apk` and `otakase-android.json` together. The build script
+writes the JSON with the exact Android version name, version code, APK size and
+SHA-256, using the same version and version code as the APK (the CLI version,
+26.7.0 becoming 26007000; see above), and the release workflow carries both
+files through the same artifact. Each release therefore needs a higher CLI
+version than the last for the app to offer it. Publishing fails when the release signing
+key is missing. PR and non-release builds retain the debug-key fallback.
+
+The app rejects incomplete metadata, different release tags, unexpected asset
+addresses, wrong size/digest, and codes no newer than the installed version.
+After downloading, the Android host checks the APK package ID, version code,
+minimum SDK and current signing certificates before opening the installer.
+It verifies the checksum again before each install attempt. The system installer
+also verifies the APK signature. No account credentials are sent to GitHub.
+Existing releases without the JSON show no install offer. Older app builds need
+one manual upgrade to a build containing this updater. Updates preserve app data
+when the package and signing key match. Signing-key rotation is not supported
+by this updater's conservative signer comparison.
+
+Update tests:
+
+```sh
+cd app
+flutter test test/app_updates_test.dart test/app_updates_widget_test.dart
+python3 -m unittest discover -s scripts -p '*_test.py'
+```
+
+On a phone and Sony TV, install an older signed build, publish a newer signed
+APK plus its JSON, then test the entire flow using touch and D-pad. Include
+permission denial/approval, installer cancellation, offline/retry, interrupted
+download, insufficient storage and a mismatched-key APK. Confirm profiles,
+tracker credentials and watch progress survive installation. Do not uninstall
+to work around a signing mismatch, since uninstalling removes local data.
 
 ## Core boundary
 

@@ -8,6 +8,7 @@ import '../services.dart';
 import '../data/store.dart';
 import 'components.dart';
 import 'device_status.dart';
+import 'app_updates.dart';
 
 Future<void> openSettings(
   BuildContext context,
@@ -105,7 +106,6 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final scope = RequestScope();
-  String? updateMessage;
   AppStore get store => widget.services.store;
   @override
   void dispose() {
@@ -475,23 +475,13 @@ class _SettingsPageState extends State<SettingsPage> {
             group('About & updates', LucideIcons.shield, [
               toggle(
                 'CheckUpdates',
-                'Check published Android releases.',
+                'Check for app updates at startup.',
                 icon: LucideIcons.download,
               ),
-              row(
-                'Updates',
-                updateMessage ?? 'Check for a published Android APK.',
-                onTap: () async {
-                  final message = await widget.services.catalog.updateStatus();
-                  if (mounted) setState(() => updateMessage = message);
-                },
-                icon: LucideIcons.refreshCw,
-              ),
-              row(
-                'About',
-                'Otakase 0.1.0 · Android phone and TV',
-                value: '任',
-                icon: LucideIcons.info,
+              AppUpdatePanel(
+                updates: widget.services.updates,
+                isTV: widget.isTV,
+                autoCheck: store.flag('CheckUpdates'),
               ),
             ]),
           ],

@@ -286,12 +286,21 @@ class MorePage extends StatelessWidget {
           LucideIcons.palette,
           () => openSettings(context, services, isTV, section: 'Appearance'),
         ),
-        row(
-          'About & updates',
-          'Otakase · Android phone and TV',
-          LucideIcons.info,
-          () =>
-              openSettings(context, services, isTV, section: 'About & updates'),
+        ListenableBuilder(
+          listenable: services.updates,
+          builder: (context, _) => row(
+            'About & updates',
+            services.updates.available
+                ? 'Update available · ${services.updates.update!.label}'
+                : 'Otakase · Android phone and TV',
+            LucideIcons.info,
+            () => openSettings(
+              context,
+              services,
+              isTV,
+              section: 'About & updates',
+            ),
+          ),
         ),
         row(
           'Diagnostics',

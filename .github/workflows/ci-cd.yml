@@ -158,8 +158,13 @@ jobs:
           STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          PUBLISHING: ${{ inputs.release }}
         run: |
           if [ -z "$KEYSTORE" ]; then
+            if [ "$PUBLISHING" = "true" ]; then
+              echo "::error::Android release signing key is required to publish app updates"
+              exit 1
+            fi
             echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; the APK is signed with the debug key"
             exit 0
           fi
@@ -176,6 +181,7 @@ jobs:
           app/scripts/build-apk.sh
           mkdir -p release/android
           cp app/build/app/outputs/flutter-apk/app-release.apk release/android/otakase-android.apk
+          cp app/build/app/outputs/flutter-apk/otakase-android.json release/android/
 
       - name: Remove signing key
         if: always()
@@ -184,7 +190,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: otakase-android
-          path: release/android/otakase-android.apk
+          path: |
+            release/android/otakase-android.apk
+            release/android/otakase-android.json
           retention-days: 7
           if-no-files-found: error
 
@@ -302,6 +310,7 @@ jobs:
             releases/otakase-${{ env.OTAKASE_VERSION }}/windows/otakase-windows-x86_64.exe
             Build/Output/otakase-windows-installer.exe
             Build/Output/otakase-android.apk
+            Build/Output/otakase-android.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
