@@ -328,6 +328,13 @@ class AccountsPage extends StatefulWidget {
 
 class _AccountsPageState extends State<AccountsPage> {
   String? error;
+  final backFocus = FocusNode(debugLabel: 'Accounts back');
+
+  @override
+  void dispose() {
+    backFocus.dispose();
+    super.dispose();
+  }
 
   Future<void> login(String service) async {
     setState(() => error = null);
@@ -352,6 +359,14 @@ class _AccountsPageState extends State<AccountsPage> {
       await auth.cancelLogin();
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted && widget.isTV) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && ModalRoute.isCurrentOf(context) == true) {
+            backFocus.requestFocus();
+          }
+        });
+      }
     }
   }
 
@@ -360,7 +375,14 @@ class _AccountsPageState extends State<AccountsPage> {
     backgroundColor: panel,
     appBar: AppBar(
       title: const Text('Accounts'),
-      leading: const BackButton(),
+      leading: widget.isTV
+          ? IconButton(
+              focusNode: backFocus,
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              icon: const BackButtonIcon(),
+              onPressed: () => Navigator.maybePop(context),
+            )
+          : const BackButton(),
       actions: [
         DeviceStatus(isTV: widget.isTV),
         const SizedBox(width: 24),

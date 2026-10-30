@@ -32,6 +32,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int selected = 0;
   int? focusedNav;
+  bool rootIsCurrent = true;
   StreamSubscription<String>? remoteEvents;
   final navFocus = List.generate(
     3,
@@ -44,6 +45,21 @@ class _AppShellState extends State<AppShell> {
     ),
   );
   final scopes = List.generate(3, (i) => FocusScopeNode(debugLabel: 'Root $i'));
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final current = ModalRoute.isCurrentOf(context) ?? true;
+    if (widget.isTV && current && !rootIsCurrent) {
+      // The route can request focus before its children have been re-enabled.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !navFocus.any((node) => node.hasFocus)) {
+          focusContent(selected);
+        }
+      });
+    }
+    rootIsCurrent = current;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -116,19 +132,46 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  void choose(int i) {
+  void choose(int i, {bool focusNavigation = false}) {
     setState(() => selected = i);
     widget.services.root = i;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) focusContent(i);
+      if (!mounted ||
+          selected != i ||
+          ModalRoute.isCurrentOf(context) == false) {
+        return;
+      }
+      if (widget.isTV && focusNavigation) {
+        navFocus[i].requestFocus();
+      } else {
+        focusContent(i);
+      }
     });
   }
 
   void focusContent(int index) {
+    if (ModalRoute.isCurrentOf(context) == false || selected != index) return;
     final scope = scopes[index];
     final remembered = scope.focusedChild;
     scope.requestFocus();
     if (remembered == null) scope.nextFocus();
+  }
+
+  KeyEventResult contentKey(FocusNode node, KeyEvent event) {
+    if (!widget.isTV ||
+        ModalRoute.isCurrentOf(context) == false ||
+        (event is! KeyDownEvent && event is! KeyRepeatEvent) ||
+        event.logicalKey != LogicalKeyboardKey.arrowUp) {
+      return KeyEventResult.ignored;
+    }
+    final current = FocusManager.instance.primaryFocus;
+    if (current == null || !scopes[selected].hasFocus) {
+      return KeyEventResult.ignored;
+    }
+    if (!current.focusInDirection(TraversalDirection.up)) {
+      navFocus[selected].requestFocus();
+    }
+    return KeyEventResult.handled;
   }
 
   Future<void> open(Anime a, {Object? heroTag}) => Navigator.push(
@@ -171,8 +214,12 @@ class _AppShellState extends State<AppShell> {
       FocusManager.instance.primaryFocus?.unfocus();
       return;
     }
+    if (widget.isTV && scopes[selected].hasFocus) {
+      navFocus[selected].requestFocus();
+      return;
+    }
     if (selected != 0) {
-      choose(0);
+      choose(0, focusNavigation: widget.isTV);
       return;
     }
     final exit = await showDialog<bool>(
@@ -238,7 +285,11 @@ class _AppShellState extends State<AppShell> {
         if (widget.isTV &&
             event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.arrowDown) {
-          scopes[selected].requestFocus();
+          if (index != selected) {
+            choose(index);
+          } else {
+            focusContent(index);
+          }
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
@@ -434,55 +485,65 @@ class _AppShellState extends State<AppShell> {
         ),
         MorePage(services: widget.services, isTV: widget.isTV, onOpen: open),
       ];
-      return PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (popped, result) {
-          if (!popped) unawaited(back());
-        },
-        child: Scaffold(
-          body: Stack(
-            children: [
-              Column(
-                children: [
-                  header(),
-                  Expanded(
-                    child: PageInsets(
-                      bottom: widget.isTV
-                          ? math.max(27, MediaQuery.paddingOf(context).bottom)
-                          : keyboard
-                          ? 16
-                          : (72 +
-                                    (MediaQuery.textScalerOf(context).scale(1) -
-                                                1)
-                                            .clamp(0, 2) *
-                                        64) +
-                                7 +
-                                math.max(
-                                  MediaQuery.viewPaddingOf(context).bottom,
-                                  MediaQuery.paddingOf(context).bottom,
-                                ),
-                      child: PosterNavigation(
-                        onOpen: (a, tag) => open(a, heroTag: tag),
-                        child: IndexedStack(
-                          index: selected,
-                          children: [
-                            for (var i = 0; i < pages.length; i++)
-                              ExcludeFocus(
-                                excluding: i != selected,
-                                child: FocusScope(
-                                  node: scopes[i],
-                                  child: FocusTraversalGroup(child: pages[i]),
-                                ),
-                              ),
-                          ],
+      return ExcludeFocus(
+        excluding: widget.isTV && !rootIsCurrent,
+        child: PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (popped, result) {
+            if (!popped) unawaited(back());
+          },
+          child: Scaffold(
+            body: Stack(
+              children: [
+                Column(
+                  children: [
+                    header(),
+                    Expanded(
+                      child: PageInsets(
+                        bottom: widget.isTV
+                            ? math.max(27, MediaQuery.paddingOf(context).bottom)
+                            : keyboard
+                            ? 16
+                            : (72 +
+                                      (MediaQuery.textScalerOf(context)
+                                                      .scale(1) -
+                                                  1)
+                                              .clamp(0, 2) *
+                                          64) +
+                                  7 +
+                                  math.max(
+                                    MediaQuery.viewPaddingOf(context).bottom,
+                                    MediaQuery.paddingOf(context).bottom,
+                                  ),
+                        child: PosterNavigation(
+                          onOpen: (a, tag) => open(a, heroTag: tag),
+                          child: Focus(
+                            canRequestFocus: false,
+                            onKeyEvent: contentKey,
+                            child: IndexedStack(
+                              index: selected,
+                              children: [
+                                for (var i = 0; i < pages.length; i++)
+                                  ExcludeFocus(
+                                    excluding: i != selected,
+                                    child: FocusScope(
+                                      node: scopes[i],
+                                      child: FocusTraversalGroup(
+                                        child: pages[i],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              if (!widget.isTV && !keyboard) phoneNav(),
-            ],
+                  ],
+                ),
+                if (!widget.isTV && !keyboard) phoneNav(),
+              ],
+            ),
           ),
         ),
       );

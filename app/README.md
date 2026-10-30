@@ -6,6 +6,10 @@ Home holds your saved episodes and personal lists. Search browses anime. More ho
 Schedule, playback settings, subtitles and diagnostics. Touch and remote controls share the
 same app. Back closes menus before leaving a page.
 
+On TV, Up from the top of a page returns to the Home, Search and More tabs.
+Left and Right move between tabs, OK opens a tab, and Down returns to its page.
+Back from a root page first focuses its tab.
+
 More > Profiles manages up to six profiles. Each keeps its own accounts, history, lists and
 playback settings. Switch profiles there without restarting. TV asks who is watching when
 more than one profile exists. Change Ask on start in Profiles. A direction code uses 4–8
