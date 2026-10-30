@@ -6,7 +6,7 @@ Developer notes for the Android phone and TV app. Kage uses personal Home, Searc
 
 - Flutter 3.47.8, framework 737ba8f885dc774b53b442759999a312c9461e4e.
 - Dart 3.13.7, bundled with that Flutter release.
-- Go 1.26.0.
+- Go 1.26.10. Android binding builds require at least Go 1.26.3.
 - gomobile and gobind: golang.org/x/mobile v0.0.0-20260821190718-4776eadac327.
 - JDK 17, built with Eclipse Temurin 17.0.21+9.
 - Android command-line tools 19.0 (archive commandlinetools-linux-13114758_latest.zip).
@@ -22,8 +22,12 @@ Developer notes for the Android phone and TV app. Kage uses personal Home, Searc
 
 ## Build from a fresh checkout
 
-Install Git, Python 3, JDK 17, Go 1.26.0, Flutter 3.47.8 and the Android SDK
+Install Git, Python 3, JDK 17, Go 1.26.10, Flutter 3.47.8 and the Android SDK
 command-line tools. Keep the Flutter checkout outside this repository.
+
+The binding script rejects Go versions older than 1.26.3. Go 1.26.0 through
+1.26.2 probe a syscall blocked on older 32-bit Android devices, which can stop
+the app during native runtime startup. See the [upstream runtime fix](https://github.com/golang/go/issues/77931).
 
 ```sh
 git clone --branch 3.47.8 --depth 1 https://github.com/flutter/flutter.git "$HOME/flutter"
