@@ -20,7 +20,7 @@ otakase's `go.mod`. It writes:
 |---|---|
 | `cmd/otakase/rsrc_windows_*.syso` | `otakase.exe`'s icon. `go build` links a `.syso` beside `main.go` by its `_windows_<arch>` suffix, so other platforms never see it |
 | `Build/app-icon/otakase.ico` | The Windows installer (`SetupIconFile`) |
-| `Build/app-icon/png/otakase-<size>.png` | The PKGBUILD's hicolor icons and the release icon pack |
+| `Build/app-icon/png/otakase-<size>.png` | The PKGBUILD's hicolor icons |
 | `Build/app-icon/otakase.icns` | The macOS app bundle (below) |
 | `internal/appicon/otakase.png`, `otakase-menu.png`, `otakase.svg` | Embedded in the binary |
 | `internal/mpvskin/assets/logo/otakase.ass` | The player's loading logo |
@@ -61,8 +61,7 @@ and `site/img/release-banner.png`, are renders like the site's other PNGs.
 - **rofi**: the full icon, at 56 px, sits in front of the search box. It is written
   beside the rofi themes as `otakase-icon.png`.
 - **README, releases and link previews**: the README header, a banner at the
-  top of each release's notes, `otakase-icons.zip` among the release files,
-  and the site's `og:image`. The repository's own social preview is set by
+  top of each release's notes, and the site's `og:image`. The repository's own social preview is set by
   hand: Settings → General → Social preview, upload
   `site/img/social-preview.png`.
 

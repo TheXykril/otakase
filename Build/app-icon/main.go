@@ -8,7 +8,7 @@
 // It is its own module so its dependencies stay out of otakase's vendor tree.
 // The two SVGs are the source; everything below is written from them:
 //
-//   - Build/app-icon/png/otakase-<size>.png, the sizes Linux and the icon pack use
+//   - Build/app-icon/png/otakase-<size>.png, the sizes Linux uses
 //   - Build/app-icon/otakase.ico, the installer's icon
 //   - Build/app-icon/otakase.icns, kept ready for a macOS app bundle
 //   - cmd/otakase/rsrc_windows_*.syso, which gives otakase.exe its icon
