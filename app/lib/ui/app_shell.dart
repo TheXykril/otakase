@@ -286,7 +286,17 @@ class _AppShellState extends State<AppShell> {
     return Focus(
       onKeyEvent: (_, event) {
         if (widget.isTV &&
-            event is KeyDownEvent &&
+            (event is KeyDownEvent || event is KeyRepeatEvent) &&
+            (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+                event.logicalKey == LogicalKeyboardKey.arrowRight)) {
+          final step = event.logicalKey == LogicalKeyboardKey.arrowLeft
+              ? -1
+              : 1;
+          navFocus[(index + step).clamp(0, navFocus.length - 1)].requestFocus();
+          return KeyEventResult.handled;
+        }
+        if (widget.isTV &&
+            (event is KeyDownEvent || event is KeyRepeatEvent) &&
             event.logicalKey == LogicalKeyboardKey.arrowDown) {
           if (index != selected) {
             choose(index);
@@ -485,6 +495,7 @@ class _AppShellState extends State<AppShell> {
           isTV: widget.isTV,
           onOpen: open,
           onVoice: voice,
+          onNavigateUp: () => navFocus[1].requestFocus(),
         ),
         MorePage(services: widget.services, isTV: widget.isTV, onOpen: open),
       ];

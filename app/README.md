@@ -9,6 +9,9 @@ same app. Back closes menus before leaving a page.
 On TV, Up from the top of a page returns to the Home, Search and More tabs.
 Left and Right move between tabs, OK opens a tab, and Down returns to its page.
 Back from a root page first focuses its tab.
+In TV text fields, Up and Down move to neighbouring controls. Submitting Search
+moves to the next control, and Down reaches the results. Multiline messages keep arrow-key
+editing while the on-screen keyboard is open; close the keyboard to navigate.
 On Home's tab, Back opens the exit prompt with Exit selected. Press OK to leave,
 or choose Stay or press Back to cancel. TV has no second farewell prompt.
 

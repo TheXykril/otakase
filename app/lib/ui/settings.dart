@@ -119,11 +119,15 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title ?? settingLabel(key)),
-        content: TextField(
-          autofocus: true,
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'Enter a value'),
-          onSubmitted: (v) => Navigator.pop(context, v),
+        content: RemoteTextInput(
+          isTV: widget.isTV,
+          builder: (focus) => TextField(
+            focusNode: focus,
+            autofocus: true,
+            controller: controller,
+            decoration: const InputDecoration(hintText: 'Enter a value'),
+            onSubmitted: (v) => Navigator.pop(context, v),
+          ),
         ),
         actions: [
           TextButton(

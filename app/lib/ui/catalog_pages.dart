@@ -15,6 +15,7 @@ class SearchPage extends StatefulWidget {
     required this.isTV,
     required this.onOpen,
     required this.onVoice,
+    this.onNavigateUp,
     this.initialQuery = '',
     this.initialFormat,
   });
@@ -22,6 +23,7 @@ class SearchPage extends StatefulWidget {
   final bool isTV;
   final void Function(Anime) onOpen;
   final Future<String?> Function() onVoice;
+  final VoidCallback? onNavigateUp;
   final String initialQuery;
   final String? initialFormat;
   @override
@@ -163,32 +165,41 @@ class _SearchPageState extends State<SearchPage> {
     children: [
       const PageHeading('Search', '探'),
       const SizedBox(height: 18),
-      TextField(
-        key: const Key('catalog-search'),
-        controller: query,
-        decoration: InputDecoration(
-          hintText: 'Search anime',
-          prefixIcon: const Icon(LucideIcons.search),
-          suffixIcon: widget.isTV && voiceAvailable
-              ? IconButton(
-                  tooltip: 'Voice search',
-                  icon: const Icon(LucideIcons.mic),
-                  onPressed: () async {
-                    final text = await widget.onVoice();
-                    if (text != null && mounted) {
-                      query.text = text;
-                      await load();
-                    }
-                  },
-                )
-              : null,
+      RemoteTextInput(
+        isTV: widget.isTV,
+        onUp: widget.onNavigateUp,
+        builder: (focus) => TextField(
+          focusNode: focus,
+          key: const Key('catalog-search'),
+          controller: query,
+          decoration: InputDecoration(
+            hintText: 'Search anime',
+            prefixIcon: const Icon(LucideIcons.search),
+            suffixIcon: widget.isTV && voiceAvailable
+                ? IconButton(
+                    tooltip: 'Voice search',
+                    icon: const Icon(LucideIcons.mic),
+                    onPressed: () async {
+                      final text = await widget.onVoice();
+                      if (text != null && mounted) {
+                        query.text = text;
+                        await load();
+                      }
+                    },
+                  )
+                : null,
+          ),
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) {
+            debounce?.cancel();
+            unawaited(load());
+            if (widget.isTV) focus.nextFocus();
+          },
+          onChanged: (_) {
+            debounce?.cancel();
+            debounce = Timer(const Duration(milliseconds: 450), () => load());
+          },
         ),
-        textInputAction: TextInputAction.search,
-        onSubmitted: (_) => load(),
-        onChanged: (_) {
-          debounce?.cancel();
-          debounce = Timer(const Duration(milliseconds: 450), () => load());
-        },
       ),
       const SizedBox(height: 14),
       Wrap(

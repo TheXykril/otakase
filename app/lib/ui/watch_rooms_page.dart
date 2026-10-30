@@ -69,6 +69,14 @@ class _WatchRoomsPageState extends State<WatchRoomsPage> {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Watch rooms'),
+          leading: widget.isTV
+              ? IconButton(
+                  autofocus: !widget.services.discord.linked,
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                  icon: const BackButtonIcon(),
+                  onPressed: () => Navigator.maybePop(context),
+                )
+              : null,
           actions: [
             DeviceStatus(isTV: widget.isTV),
             const SizedBox(width: 16),

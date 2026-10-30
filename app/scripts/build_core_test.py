@@ -7,7 +7,7 @@ import unittest
 
 
 class BuildCoreTest(unittest.TestCase):
-    def build(self, version):
+    def build(self, version, *args):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             script = root / "app/scripts/build-core.sh"
@@ -43,7 +43,7 @@ printf '%s\\n' "$*" >> "$TEST_GO_CALLS"
                 "TEST_GO_PATH": str(root / "gopath"),
                 "TEST_GO_CALLS": str(calls),
             }
-            result = subprocess.run([str(script)], env=env, capture_output=True, text=True)
+            result = subprocess.run([str(script), *args], env=env, capture_output=True, text=True)
             return result, calls.read_text() if calls.exists() else ""
 
     def test_rejects_older_toolchains_before_building_the_core(self):
@@ -67,6 +67,17 @@ printf '%s\\n' "$*" >> "$TEST_GO_CALLS"
         result, calls = self.build("devel unknown")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Go 1.26.3 or newer", result.stderr)
+        self.assertEqual(calls, "")
+
+    def test_emulator_build_adds_x64_without_removing_arm_support(self):
+        result, calls = self.build("go1.26.10", "--emulator")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("bind -target=android/arm64,android/arm,android/amd64 -androidapi 23", calls)
+
+    def test_rejects_unknown_arguments_before_installing_generators(self):
+        result, calls = self.build("go1.26.10", "--unknown")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("Usage:", result.stderr)
         self.assertEqual(calls, "")
 
 

@@ -483,14 +483,19 @@ class _CommunityTextDialogState extends State<CommunityTextDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              key: const Key('capsule-text'),
-              controller: text,
-              minLines: 3,
-              maxLines: 8,
-              maxLength: widget.maxLength,
-              decoration: const InputDecoration(labelText: 'Your message'),
-              onChanged: (_) => setState(() {}),
+            RemoteTextInput(
+              isTV: widget.isTV,
+              multiline: true,
+              builder: (focus) => TextField(
+                focusNode: focus,
+                key: const Key('capsule-text'),
+                controller: text,
+                minLines: 3,
+                maxLines: 8,
+                maxLength: widget.maxLength,
+                decoration: const InputDecoration(labelText: 'Your message'),
+                onChanged: (_) => setState(() {}),
+              ),
             ),
             if (widget.isTV)
               AppButton(

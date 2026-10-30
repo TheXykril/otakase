@@ -24,11 +24,14 @@ class _AppUpdatePanelState extends State<AppUpdatePanel>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (widget.autoCheck && widget.updates.phase == UpdatePhase.idle) {
-      unawaited(widget.updates.check());
-    } else if (widget.updates.installed == null) {
-      unawaited(widget.updates.loadInstalled());
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.autoCheck && widget.updates.phase == UpdatePhase.idle) {
+        unawaited(widget.updates.check());
+      } else if (widget.updates.installed == null) {
+        unawaited(widget.updates.loadInstalled());
+      }
+    });
   }
 
   @override

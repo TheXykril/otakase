@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../data/models.dart';
@@ -196,6 +197,55 @@ class _FocusBoxState extends State<FocusBox> {
       child: interaction,
     );
   }
+}
+
+// Single-line text editing consumes vertical arrows before normal traversal.
+class RemoteTextInput extends StatefulWidget {
+  const RemoteTextInput({
+    super.key,
+    required this.isTV,
+    required this.builder,
+    this.onUp,
+    this.multiline = false,
+  });
+  final bool isTV, multiline;
+  final Widget Function(FocusNode) builder;
+  final VoidCallback? onUp;
+  @override
+  State<RemoteTextInput> createState() => _RemoteTextInputState();
+}
+
+class _RemoteTextInputState extends State<RemoteTextInput> {
+  late final focus = FocusNode(debugLabel: 'Text input', onKeyEvent: key);
+  KeyEventResult key(FocusNode node, KeyEvent event) {
+    if (!widget.isTV ||
+        (event is! KeyDownEvent && event is! KeyRepeatEvent) ||
+        widget.multiline && View.of(context).viewInsets.bottom > 0) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      node.nextFocus();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      if (widget.onUp case final up?) {
+        up();
+      } else {
+        node.previousFocus();
+      }
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  void dispose() {
+    focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(focus);
 }
 
 class AppButton extends StatelessWidget {
@@ -1061,21 +1111,24 @@ Future<String?> chooseValue(
     content: SizedBox(
       width: 460,
       height: (values.length * 56.0).clamp(80, 420),
-      child: ListView(
-        children: values
-            .map(
-              (value) => ChoiceRow(
-                autofocus:
-                    value == selected ||
-                    selected == null && value == values.first,
-                title: Text(value, style: uiStyle(context)),
-                trailing: value == selected
-                    ? const Icon(LucideIcons.check, color: shu)
-                    : null,
-                onTap: () => Navigator.pop(context, value),
-              ),
-            )
-            .toList(),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: values
+              .map(
+                (value) => ChoiceRow(
+                  autofocus:
+                      value ==
+                      (values.contains(selected) ? selected : values.first),
+                  title: Text(value, style: uiStyle(context)),
+                  trailing: value == selected
+                      ? const Icon(LucideIcons.check, color: shu)
+                      : null,
+                  onTap: () => Navigator.pop(context, value),
+                ),
+              )
+              .toList(),
+        ),
       ),
     ),
     actions: [

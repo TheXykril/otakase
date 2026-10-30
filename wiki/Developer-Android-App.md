@@ -194,6 +194,64 @@ explicit selection_required error for prompts. No CLI init/config is imported.
 The providers and their dependency tree build with CGO_ENABLED=0. gomobile
 itself uses Android JNI/cgo glue, with no third-party cgo or torrent packages.
 
+## Local Android TV testing on Linux
+
+Use Android Studio's Device Manager to create a **TV** virtual device with the
+**Android 16 / API 36 Android TV x86_64** system image. Pick a TV profile, rather
+than a phone in landscape, so Android reports the leanback capability and the
+app selects its TV layout. On an Intel/AMD Linux laptop, enable CPU virtualization
+and KVM. Check acceleration with `emulator -accel-check` from the SDK's emulator
+directory. Android Studio installs the emulator and selected image.
+
+For a supplied x86_64 test APK, start the TV emulator and install it by dragging
+the APK onto the emulator window, or run:
+
+```sh
+adb devices
+adb -s emulator-5554 install -r otakase-tv-focus-emulator-x64.apk
+```
+
+Use arrow keys and Enter for D-pad/OK. Use the emulator's Back control, or send
+Back directly with `adb -s emulator-5554 shell input keyevent 4`. For repeatable
+input, key codes 19/20/21/22 are Up/Down/Left/Right and 23 is D-pad Center.
+Codes 85, 126, 127, 89 and 90 are Play/Pause, Play, Pause, Rewind and Fast-forward.
+
+To build and run from source with hot reload, configure the normal Android/Go/
+Flutter toolchains above, then run from the repository root:
+
+```sh
+app/scripts/build-core.sh --emulator
+cd app
+flutter pub get
+flutter devices
+flutter run -d emulator-5554
+```
+
+Replace the device ID with the emulator shown by `adb devices` or `flutter devices`.
+`--emulator` adds the x86_64 Go library while retaining both ARM libraries. An
+explicit `android-x64` Flutter target selects x86_64 packaging. Normal release
+builds continue to package both ARM ABIs. The usual Sony APK contains ARM native
+libraries and is not the x86_64 emulator build.
+
+Build a standalone emulator APK with:
+
+```sh
+flutter build apk --debug --target-platform android-x64
+```
+
+The emulator supports quick menu, focus, keyboard and Back checks at your desk.
+Real Sony hardware is still needed for its decoder, physical media buttons and
+phone-to-TV LAN pairing. The emulator's private network changes the pairing path.
+
+Run the automated TV navigation checks without starting an emulator:
+
+```sh
+flutter test test/tv_navigation_audit_test.dart test/tv_focus_test.dart test/exit_test.dart
+```
+
+References: [virtual devices](https://developer.android.com/studio/run/managing-avds),
+[Linux acceleration](https://developer.android.com/studio/run/emulator-acceleration).
+
 ## Phone installation
 
 Enable Developer options and USB debugging, connect the phone, then:
