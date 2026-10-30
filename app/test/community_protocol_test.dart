@@ -114,7 +114,7 @@ void main() {
     await f.discord.heartbeat(show, 3, -2);
     expect(bodies.single, {
       'version': appVersion,
-      'dev_build': false,
+      'dev_build': appVersion.contains('-dev'),
       'os': 'android',
       'share_watching': false,
       'watching': null,
