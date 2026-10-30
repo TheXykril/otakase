@@ -105,10 +105,13 @@ class FocusBox extends StatefulWidget {
     this.scale = 1.00,
     this.onFocused,
     this.outsideFrame = false,
+    this.showFocusBorder = true,
+    this.focusFill = bg,
     this.onFocusChanged,
   });
   final Widget child;
-  final bool outsideFrame;
+  final bool outsideFrame, showFocusBorder;
+  final Color focusFill;
   final ValueChanged<bool>? onFocusChanged;
   final VoidCallback? onPressed, onFocused;
   final bool isTV, autofocus;
@@ -190,9 +193,12 @@ class _FocusBoxState extends State<FocusBox> {
       curve: Curves.easeOut,
       padding: EdgeInsets.all(widget.frameGap),
       decoration: BoxDecoration(
-        color: visible ? bg : Colors.transparent,
+        color: visible ? widget.focusFill : Colors.transparent,
         borderRadius: BorderRadius.circular(widget.radius + 7),
-        border: Border.all(color: visible ? shu : Colors.transparent, width: 2),
+        border: Border.all(
+          color: visible && widget.showFocusBorder ? shu : Colors.transparent,
+          width: 2,
+        ),
       ),
       child: interaction,
     );
@@ -880,17 +886,6 @@ class _SplitFrame extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
-    if (tv) {
-      canvas.drawRect(
-        Rect.fromLTWH(
-          0,
-          radius,
-          4,
-          (size.height - 2 * radius).clamp(0, size.height),
-        ),
-        Paint()..color = shu,
-      );
-    }
   }
 
   @override

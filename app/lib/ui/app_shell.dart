@@ -45,6 +45,10 @@ class _AppShellState extends State<AppShell> {
     ),
   );
   final scopes = List.generate(3, (i) => FocusScopeNode(debugLabel: 'Root $i'));
+  void modeChanged(FocusHighlightMode _) {
+    if (mounted) setState(() {});
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -63,6 +67,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    FocusManager.instance.addHighlightModeListener(modeChanged);
     widget.services.selectRoot = choose;
     widget.services.auth.remoteLink = remoteLink;
     remoteEvents = widget.services.tvRemote.events.listen((text) {
@@ -80,6 +85,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    FocusManager.instance.removeHighlightModeListener(modeChanged);
     widget.services.auth.remoteLink = null;
     unawaited(remoteEvents?.cancel() ?? Future<void>.value());
     widget.services.selectRoot = null;
@@ -311,8 +317,10 @@ class _AppShellState extends State<AppShell> {
         key: ValueKey('nav-$label'),
         focusNode: navFocus[index],
         isTV: widget.isTV,
-        radius: widget.isTV ? 8 : 16,
+        radius: widget.isTV ? 999 : 16,
         frameGap: widget.isTV ? 5 : 0,
+        showFocusBorder: !widget.isTV,
+        focusFill: widget.isTV ? fg : bg,
         onFocusChanged: (value) => setState(
           () => focusedNav = value
               ? index
@@ -337,7 +345,7 @@ class _AppShellState extends State<AppShell> {
                             focusedNav == index &&
                                 FocusManager.instance.highlightMode ==
                                     FocusHighlightMode.traditional
-                            ? fgBright
+                            ? bg
                             : active
                             ? fg
                             : muted,
