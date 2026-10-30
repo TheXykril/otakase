@@ -842,6 +842,53 @@ class CoverImage extends StatelessWidget {
   }
 }
 
+// Keep the overlay clearance equal to the TV header's measured type and frame.
+double tvHeaderExtent(BuildContext context) =>
+    math.max(27, MediaQuery.paddingOf(context).top) +
+    math.max(48, MediaQuery.textScalerOf(context).scale(20) * 1.4 + 10) +
+    14 +
+    12;
+
+class TVHomeHero extends StatelessWidget {
+  const TVHomeHero({super.key, this.anime, required this.child});
+  final Anime? anime;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => Stack(
+    children: [
+      if (anime != null)
+        Positioned.fill(
+          child: IgnorePointer(
+            child: LayoutBuilder(
+              builder: (context, box) => Stack(
+                fit: StackFit.expand,
+                children: [
+                  HeroArt(anime!, height: box.maxHeight),
+                  const DecoratedBox(
+                    key: Key('home-top-vignette'),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xd90e0d0c),
+                          Color(0x400e0d0c),
+                          Color(0x000e0d0c),
+                        ],
+                        stops: [0, .38, .7],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      child,
+    ],
+  );
+}
+
 class HeroArt extends StatelessWidget {
   const HeroArt(this.anime, {super.key, required this.height});
   final Anime anime;

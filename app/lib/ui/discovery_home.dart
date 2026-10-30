@@ -16,9 +16,11 @@ class DiscoveryHome extends StatefulWidget {
     required this.onOpen,
     required this.onSearch,
     required this.onAccounts,
+    this.topInset = 0,
   });
   final AppServices services;
   final bool isTV, hasResume;
+  final double topInset;
   final ValueChanged<Anime> onOpen;
   final VoidCallback onSearch, onAccounts;
   @override
@@ -71,9 +73,10 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
     }
     final featured = trending.firstOrNull ?? seasonal.firstOrNull;
     final side = widget.isTV ? 48.0 : 20.0;
-    return Column(
+    final introduction = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        SizedBox(height: widget.topInset),
         Padding(
           padding: EdgeInsets.fromLTRB(
             side,
@@ -121,8 +124,22 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
           _FeaturedAnime(
             anime: featured,
             isTV: widget.isTV,
+            showArtwork: !widget.isTV,
             onOpen: () => widget.onOpen(featured),
           ),
+      ],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.isTV && !widget.hasResume)
+          TVHomeHero(
+            key: const Key('tv-home-hero'),
+            anime: featured,
+            child: introduction,
+          )
+        else
+          introduction,
         if (error != null)
           FailureView(
             message: error!,
@@ -166,9 +183,10 @@ class _FeaturedAnime extends StatelessWidget {
     required this.anime,
     required this.isTV,
     required this.onOpen,
+    this.showArtwork = true,
   });
   final Anime anime;
-  final bool isTV;
+  final bool isTV, showArtwork;
   final VoidCallback onOpen;
 
   @override
@@ -186,7 +204,7 @@ class _FeaturedAnime extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            HeroArt(anime, height: height),
+            if (showArtwork) HeroArt(anime, height: height),
             Align(
               alignment: Alignment.bottomLeft,
               child: Padding(

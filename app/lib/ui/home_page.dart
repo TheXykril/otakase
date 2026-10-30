@@ -50,9 +50,10 @@ class ResumeCard extends StatelessWidget {
     required this.isTV,
     required this.onResume,
     this.autofocus = true,
+    this.showArtwork = true,
   });
   final WatchEntry entry;
-  final bool isTV, autofocus;
+  final bool isTV, autofocus, showArtwork;
   final VoidCallback onResume;
   @override
   Widget build(BuildContext context) {
@@ -89,7 +90,7 @@ class ResumeCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            HeroArt(anime, height: height),
+            if (showArtwork) HeroArt(anime, height: height),
             Positioned(
               top: 13,
               left: isTV ? 48 : 14,
@@ -212,9 +213,11 @@ class HomePage extends StatefulWidget {
     required this.onSearch,
     required this.onAccounts,
     this.active = true,
+    this.topInset = 0,
   });
   final AppServices services;
   final bool isTV, active;
+  final double topInset;
   final void Function(Anime) onOpen;
   final void Function(WatchEntry) onResume;
   final VoidCallback onSearch, onAccounts;
@@ -329,7 +332,29 @@ class _HomePageState extends State<HomePage> {
         key: const PageStorageKey('home-scroll'),
         padding: EdgeInsets.only(bottom: contentBottom(context)),
         children: [
-          if (stage != null || configured.isNotEmpty)
+          if (widget.isTV && (stage != null || configured.isNotEmpty))
+            TVHomeHero(
+              key: const Key('tv-home-hero'),
+              anime: stage?.anime,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: widget.topInset),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(48, 12, 48, 16),
+                    child: PageHeading('Back to your story', '続'),
+                  ),
+                  if (stage != null)
+                    ResumeCard(
+                      entry: stage,
+                      isTV: true,
+                      showArtwork: false,
+                      onResume: () => widget.onResume(stage),
+                    ),
+                ],
+              ),
+            ),
+          if (!widget.isTV && (stage != null || configured.isNotEmpty))
             Padding(
               padding: EdgeInsets.fromLTRB(
                 widget.isTV ? 48 : 20,
@@ -339,7 +364,7 @@ class _HomePageState extends State<HomePage> {
               ),
               child: const PageHeading('Back to your story', '続'),
             ),
-          if (stage != null)
+          if (!widget.isTV && stage != null)
             ResumeCard(
               entry: stage,
               isTV: widget.isTV,
@@ -396,6 +421,7 @@ class _HomePageState extends State<HomePage> {
               services: s,
               isTV: widget.isTV,
               hasResume: stage != null,
+              topInset: stage == null ? widget.topInset : 0,
               onOpen: widget.onOpen,
               onSearch: widget.onSearch,
               onAccounts: widget.onAccounts,

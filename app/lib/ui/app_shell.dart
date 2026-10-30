@@ -504,6 +504,7 @@ class _AppShellState extends State<AppShell> {
           services: widget.services,
           isTV: widget.isTV,
           active: selected == 0 && rootIsCurrent,
+          topInset: widget.isTV ? tvHeaderExtent(context) : 0,
           onOpen: open,
           onResume: resume,
           onSearch: () => choose(1),
@@ -530,7 +531,7 @@ class _AppShellState extends State<AppShell> {
               children: [
                 Column(
                   children: [
-                    header(),
+                    if (!widget.isTV) header(),
                     Expanded(
                       child: PageInsets(
                         bottom: widget.isTV
@@ -562,7 +563,14 @@ class _AppShellState extends State<AppShell> {
                                     child: FocusScope(
                                       node: scopes[i],
                                       child: FocusTraversalGroup(
-                                        child: pages[i],
+                                        child: widget.isTV && i != 0
+                                            ? Padding(
+                                                padding: EdgeInsets.only(
+                                                  top: tvHeaderExtent(context),
+                                                ),
+                                                child: pages[i],
+                                              )
+                                            : pages[i],
                                       ),
                                     ),
                                   ),
@@ -574,6 +582,31 @@ class _AppShellState extends State<AppShell> {
                     ),
                   ],
                 ),
+                if (widget.isTV)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: SizedBox(
+                      height: tvHeaderExtent(context),
+                      child: DecoratedBox(
+                        key: const Key('tv-header-scrim'),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Color(0xf00e0d0c),
+                              Color(0xc00e0d0c),
+                              Color(0x000e0d0c),
+                            ],
+                            stops: [0, .75, 1],
+                          ),
+                        ),
+                        child: header(),
+                      ),
+                    ),
+                  ),
                 if (!widget.isTV && !keyboard) phoneNav(),
               ],
             ),
