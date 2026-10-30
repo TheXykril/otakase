@@ -228,11 +228,12 @@ class _AppShellState extends State<AppShell> {
         title: const Text('Exit Otakase?'),
         actions: [
           TextButton(
-            autofocus: true,
+            autofocus: !widget.isTV,
             onPressed: () => Navigator.pop(c, false),
             child: const Text('Stay'),
           ),
           TextButton(
+            autofocus: widget.isTV,
             onPressed: () => Navigator.pop(c, true),
             child: const Text('Exit'),
           ),
@@ -259,19 +260,21 @@ class _AppShellState extends State<AppShell> {
       if (!mounted) return;
       final greeting = await widget.services.discord.exitGreeting();
       if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (c) => AlertDialog(
-          content: Text(greeting),
-          actions: [
-            TextButton(
-              autofocus: true,
-              onPressed: () => Navigator.pop(c),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
+      if (!widget.isTV) {
+        await showDialog<void>(
+          context: context,
+          builder: (c) => AlertDialog(
+            content: Text(greeting),
+            actions: [
+              TextButton(
+                autofocus: true,
+                onPressed: () => Navigator.pop(c),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
       await widget.services.discord.stopWatching();
       await SystemNavigator.pop();
     }

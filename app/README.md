@@ -9,6 +9,8 @@ same app. Back closes menus before leaving a page.
 On TV, Up from the top of a page returns to the Home, Search and More tabs.
 Left and Right move between tabs, OK opens a tab, and Down returns to its page.
 Back from a root page first focuses its tab.
+On Home's tab, Back opens the exit prompt with Exit selected. Press OK to leave,
+or choose Stay or press Back to cancel. TV has no second farewell prompt.
 
 More > Profiles manages up to six profiles. Each keeps its own accounts, history, lists and
 playback settings. Switch profiles there without restarting. TV asks who is watching when
