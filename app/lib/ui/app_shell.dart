@@ -503,6 +503,7 @@ class _AppShellState extends State<AppShell> {
         HomePage(
           services: widget.services,
           isTV: widget.isTV,
+          active: selected == 0 && rootIsCurrent,
           onOpen: open,
           onResume: resume,
           onSearch: () => choose(1),

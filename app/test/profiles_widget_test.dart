@@ -65,7 +65,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.select);
       await tester.pumpAndSettle();
       expect(startup.activeId, second.id);
-      expect(find.text('Back to your story'), findsOneWidget);
+      expect(find.text('Find your next story'), findsOneWidget);
       expect(startup.session!.auth.accounts, isEmpty);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
@@ -145,7 +145,7 @@ void main() {
       await tester.tap(find.byKey(ValueKey('profile-${second.id}')));
       await tester.pumpAndSettle();
       expect(m.activeId, second.id);
-      expect(find.text('Back to your story'), findsOneWidget);
+      expect(find.text('Find your next story'), findsOneWidget);
       expect(find.text('old-viewer'), findsNothing);
       expect(find.text('Private history'), findsNothing);
       expect(m.session!.store.history, isEmpty);

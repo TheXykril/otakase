@@ -28,7 +28,7 @@ void main() {
     await key(tester, LogicalKeyboardKey.arrowLeft);
     expect(find.byKey(const Key('catalog-search')), findsOneWidget);
     await key(tester, LogicalKeyboardKey.arrowLeft);
-    expect(find.text('Back to your story'), findsOneWidget);
+    expect(find.text('Find your next story'), findsOneWidget);
     expect(services.root, 0);
     expect(navigation(tester, 'Home').hasPrimaryFocus, isTrue);
     await key(tester, LogicalKeyboardKey.arrowDown);

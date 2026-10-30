@@ -39,6 +39,7 @@ class _ShowPageState extends State<ShowPage> {
   String? error;
   SyncedResume remote = noResume;
   final playFocus = FocusNode(debugLabel: 'Resume or Play');
+  final episodeScroll = ScrollController();
   @override
   void initState() {
     super.initState();
@@ -78,6 +79,7 @@ class _ShowPageState extends State<ShowPage> {
   @override
   void dispose() {
     playFocus.dispose();
+    episodeScroll.dispose();
     super.dispose();
   }
 
@@ -519,18 +521,30 @@ class _ShowPageState extends State<ShowPage> {
                             builder: (context, box) {
                               final width = ((box.maxWidth - 96 - 44) / 3)
                                   .clamp(360.0, 600.0);
-                              return ListView.separated(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 41,
-                                  vertical: 8,
-                                ),
+                              return RemoteFocusRow(
+                                isTV: true,
+                                controller: episodeScroll,
                                 itemCount: anime.airedEpisodes,
-                                separatorBuilder: (_, i) =>
-                                    const SizedBox(width: 22),
-                                itemBuilder: (_, i) => SizedBox(
-                                  width: width,
-                                  child: episodeRow(i + 1, card: true),
+                                itemWidth: width,
+                                spacing: 22,
+                                padding: 41,
+                                child: ListView.separated(
+                                  controller: episodeScroll,
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 41,
+                                    vertical: 8,
+                                  ),
+                                  itemCount: anime.airedEpisodes,
+                                  separatorBuilder: (_, i) =>
+                                      const SizedBox(width: 22),
+                                  itemBuilder: (_, i) => RemoteFocusItem(
+                                    index: i,
+                                    child: SizedBox(
+                                      width: width,
+                                      child: episodeRow(i + 1, card: true),
+                                    ),
+                                  ),
                                 ),
                               );
                             },

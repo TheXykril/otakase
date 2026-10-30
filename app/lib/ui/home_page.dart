@@ -8,6 +8,7 @@ import '../data/continuation.dart';
 import '../data/tracking.dart';
 import '../services.dart';
 import 'components.dart';
+import 'discovery_home.dart';
 
 class NativeTitle extends StatelessWidget {
   const NativeTitle(this.title, {super.key, required this.isTV});
@@ -210,9 +211,10 @@ class HomePage extends StatefulWidget {
     required this.onResume,
     required this.onSearch,
     required this.onAccounts,
+    this.active = true,
   });
   final AppServices services;
-  final bool isTV;
+  final bool isTV, active;
   final void Function(Anime) onOpen;
   final void Function(WatchEntry) onResume;
   final VoidCallback onSearch, onAccounts;
@@ -227,6 +229,8 @@ class _HomePageState extends State<HomePage> {
   String identity = '';
   final snapshots = <String, List<ListEntry>>{};
   final blocks = <String, GlobalKey<_AccountBlockState>>{};
+  final discovery = GlobalKey<DiscoveryHomeState>();
+  bool refreshScheduled = false;
   @override
   void initState() {
     super.initState();
@@ -235,13 +239,32 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  Future<void> refresh() async {
-    await Future.wait(
-      blocks.values.map(
+  @override
+  void didUpdateWidget(HomePage old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) {
+      scheduleRefresh();
+    }
+  }
+
+  void scheduleRefresh() {
+    if (refreshScheduled) return;
+    refreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      refreshScheduled = false;
+      if (mounted && widget.active) unawaited(refresh());
+    });
+  }
+
+  Future<void> refresh({bool forceSync = false}) async {
+    await Future.wait([
+      if (discovery.currentState case final page?) page.load(refresh: true),
+      ...blocks.values.map(
         (key) =>
-            key.currentState?.load(forceSync: true) ?? Future<void>.value(),
+            key.currentState?.load(forceSync: forceSync) ??
+            Future<void>.value(),
       ),
-    );
+    ]);
   }
 
   void focusEntry(ListEntry entry) {
@@ -300,42 +323,22 @@ class _HomePageState extends State<HomePage> {
     final combined = s.auth.signedIn('AniList') && s.auth.signedIn('MAL');
     final lists = combined ? ['AniList'] : configured;
     return RefreshIndicator(
-      onRefresh: refresh,
+      onRefresh: () => refresh(forceSync: true),
       color: shu,
       child: ListView(
         key: const PageStorageKey('home-scroll'),
         padding: EdgeInsets.only(bottom: contentBottom(context)),
         children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              widget.isTV ? 48 : 20,
-              12,
-              widget.isTV ? 48 : 20,
-              16,
+          if (stage != null || configured.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                widget.isTV ? 48 : 20,
+                12,
+                widget.isTV ? 48 : 20,
+                16,
+              ),
+              child: const PageHeading('Back to your story', '続'),
             ),
-            child: Row(
-              children: [
-                const Expanded(child: PageHeading('Back to your story', '続')),
-                Tooltip(
-                  message: 'Refresh lists',
-                  child: FocusBox(
-                    key: const Key('home-refresh'),
-                    isTV: widget.isTV,
-                    radius: 999,
-                    onPressed: refresh,
-                    child: Semantics(
-                      label: 'Refresh lists',
-                      button: true,
-                      child: SizedBox.square(
-                        dimension: widget.isTV ? 48 : 44,
-                        child: const Icon(LucideIcons.refreshCw),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           if (stage != null)
             ResumeCard(
               entry: stage,
@@ -354,6 +357,7 @@ class _HomePageState extends State<HomePage> {
               isTV: widget.isTV,
               onOpen: widget.onOpen,
               onFocused: focusEntry,
+              onCategoryChanged: scheduleRefresh,
               onLoaded: (entries) {
                 if (mounted) {
                   setState(
@@ -387,42 +391,14 @@ class _HomePageState extends State<HomePage> {
                   .caption(DateTime.now()),
             ),
           if (configured.isEmpty)
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: widget.isTV ? 48 : 20,
-                vertical: 24,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Your lists belong here.',
-                    style: uiStyle(context, size: 21, weight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Sign in to AniList or MAL in More to see your lists and sync your progress.',
-                    style: uiStyle(context, color: muted),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    children: [
-                      AppButton(
-                        label: 'Accounts',
-                        isTV: widget.isTV,
-                        onPressed: widget.onAccounts,
-                      ),
-                      AppButton(
-                        label: 'Search anime',
-                        isTV: widget.isTV,
-                        autofocus: stage == null,
-                        onPressed: widget.onSearch,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            DiscoveryHome(
+              key: discovery,
+              services: s,
+              isTV: widget.isTV,
+              hasResume: stage != null,
+              onOpen: widget.onOpen,
+              onSearch: widget.onSearch,
+              onAccounts: widget.onAccounts,
             ),
         ],
       ),
@@ -439,6 +415,7 @@ class AccountBlock extends StatefulWidget {
     required this.onOpen,
     this.onFocused,
     this.onLoaded,
+    this.onCategoryChanged,
     this.autofocus = false,
     this.combineTrackers = false,
   });
@@ -448,6 +425,7 @@ class AccountBlock extends StatefulWidget {
   final void Function(Anime) onOpen;
   final void Function(ListEntry)? onFocused;
   final void Function(List<ListEntry>)? onLoaded;
+  final VoidCallback? onCategoryChanged;
   @override
   State<AccountBlock> createState() => _AccountBlockState();
 }
@@ -653,9 +631,10 @@ class _AccountBlockState extends State<AccountBlock> {
           )
           .toList(),
     );
-    if (selected != null && mounted) {
+    if (selected != null && selected != category && mounted) {
       setState(() => category = selected);
       unawaited(widget.services.store.set('ListCategory.$listKey', selected));
+      widget.onCategoryChanged?.call();
     }
     if (mounted) trigger.requestFocus();
   }
@@ -776,38 +755,57 @@ class _AccountBlockState extends State<AccountBlock> {
               height:
                   (widget.isTV ? 194 : 184) +
                   126 * MediaQuery.textScalerOf(context).scale(1),
-              child: ListView.separated(
-                key: PageStorageKey('$listKey-$category'),
+              child: RemoteFocusRow(
+                isTV: widget.isTV,
                 controller: scroll,
-                scrollDirection: Axis.horizontal,
-                clipBehavior: Clip.none,
-                padding: EdgeInsets.fromLTRB(side - 7, 15, side, 8),
                 itemCount: shown.length,
-                separatorBuilder: (_, i) =>
-                    SizedBox(width: widget.isTV ? 26 : 12),
-                itemBuilder: (_, i) {
-                  final e = shown[i];
-                  return PosterCard(
-                    key: ValueKey('$listKey-$category-${e.anime.key}'),
-                    anime: e.anime,
-                    cropped: true,
-                    width: widget.isTV ? 143 : 132,
-                    isTV: widget.isTV,
-                    onOpen: () => widget.onOpen(e.anime),
-                    onFocused: () {
-                      widget.onFocused?.call(e);
-                    },
-                    caption: e.progress <= 0
-                        ? 'Not started'
-                        : e.anime.episodes > 0
-                        ? '${e.progress}/${e.anime.episodes}'
-                        : '${e.progress} watched',
-                    progress: episodeProgress(
-                      widget.services.store.entry(e.anime),
-                      watched: e.progress,
-                    ),
-                  );
-                },
+                itemWidth: widget.isTV ? 143 : 132,
+                spacing: widget.isTV ? 26 : 12,
+                padding: side - 7,
+                onUp: trigger.requestFocus,
+                child: ListView.separated(
+                  key: PageStorageKey('$listKey-$category'),
+                  controller: scroll,
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  padding: EdgeInsets.fromLTRB(side - 7, 15, side, 8),
+                  itemCount: shown.length,
+                  findItemIndexCallback: (key) {
+                    final index = shown.indexWhere(
+                      (entry) => ValueKey('shelf-${entry.anime.key}') == key,
+                    );
+                    return index < 0 ? null : index;
+                  },
+                  separatorBuilder: (_, i) =>
+                      SizedBox(width: widget.isTV ? 26 : 12),
+                  itemBuilder: (_, i) {
+                    final e = shown[i];
+                    return RemoteFocusItem(
+                      key: ValueKey('shelf-${e.anime.key}'),
+                      index: i,
+                      child: PosterCard(
+                        key: ValueKey('$listKey-$category-${e.anime.key}'),
+                        anime: e.anime,
+                        cropped: true,
+                        width: widget.isTV ? 143 : 132,
+                        isTV: widget.isTV,
+                        onOpen: () => widget.onOpen(e.anime),
+                        onFocused: () {
+                          widget.onFocused?.call(e);
+                        },
+                        caption: e.progress <= 0
+                            ? 'Not started'
+                            : e.anime.episodes > 0
+                            ? '${e.progress}/${e.anime.episodes}'
+                            : '${e.progress} watched',
+                        progress: episodeProgress(
+                          widget.services.store.entry(e.anime),
+                          watched: e.progress,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
         ],

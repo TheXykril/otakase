@@ -90,7 +90,7 @@ Future<void> home(WidgetTester tester) async {
   }
   expect(navigation(tester, 'Home').hasPrimaryFocus, isTrue);
   await key(tester, LogicalKeyboardKey.arrowDown);
-  expect(find.text('Back to your story'), findsOneWidget);
+  expect(find.text('Find your next story'), findsOneWidget);
 }
 
 Future<void> moreRow(WidgetTester tester, String title) async {
@@ -139,7 +139,7 @@ void main() {
     await key(tester, LogicalKeyboardKey.arrowLeft);
     expect(navigation(tester, 'Home').hasPrimaryFocus, isTrue);
     await key(tester, LogicalKeyboardKey.select);
-    expect(find.text('Back to your story'), findsOneWidget);
+    expect(find.text('Find your next story'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -147,7 +147,7 @@ void main() {
     tester,
   ) async {
     await launchAudit(tester);
-    final context = tester.element(find.text('Back to your story'));
+    final context = tester.element(find.text('Find your next story'));
     final result = chooseValue(
       context,
       'Year',
@@ -171,7 +171,7 @@ void main() {
     tester,
   ) async {
     await launchAudit(tester);
-    final context = tester.element(find.text('Back to your story'));
+    final context = tester.element(find.text('Find your next story'));
     final result = communityText(context, title: 'Your letter', isTV: true);
     await tester.pumpAndSettle();
     final field = find.byKey(const Key('capsule-text'));

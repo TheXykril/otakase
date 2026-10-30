@@ -2,7 +2,8 @@
 
 One app for Android phones and Android TV, running Android 7.0 or newer.
 
-Home holds your saved episodes and personal lists. Search browses anime. More holds Accounts,
+Home holds your saved episodes and personal lists. Without linked accounts, it shows featured,
+trending, seasonal and recently aired anime alongside local Continue Watching. Search browses anime. More holds Accounts,
 Schedule, playback settings, subtitles and diagnostics. Touch and remote controls share the
 same app. Back closes menus before leaving a page.
 
@@ -10,6 +11,8 @@ On TV, Up from the top of a page returns to the Home, Search and More tabs.
 Left and Right switch pages immediately, with a red underline beneath the selected
 tab. Hovering over a tab also switches pages. Down or OK enters the page.
 Back from a root page first focuses its tab.
+Left and Right stay inside a cover or episode shelf, stopping at either end.
+Only offscreen items scroll into view, and Back from a title restores the same cover.
 Search keeps the keyboard closed while you move through the page. Press OK on the
 search field to type, then submit Search to continue to the filters and results.
 In TV text fields, Up and Down move to neighbouring controls. Submitting Search
@@ -30,7 +33,9 @@ Five wrong codes pause attempts for 30 seconds. Existing data moves into Profile
 Sign in through More > Accounts to sync AniList or MyAnimeList progress, status, scores and
 resume positions. With both signed in, Home combines your lists and updates both trackers.
 Shared titles use the most recently updated entry and one category picker. Background list
-sync runs at most every 30 minutes, or when you refresh Home. Manage the switch and status
+sync runs at most every 30 minutes, or after a pull-to-refresh. Home reloads automatically
+when you return from another page or change a list category. The selected category and focus
+stay in place. There is no refresh button. Manage the sync switch and status
 through More > Accounts. AniList-private entries stay off MAL. On TV, scan the QR with your phone
 and keep both devices on the same home network. Log out of each account separately in Accounts.
 

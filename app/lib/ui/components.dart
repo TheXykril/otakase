@@ -170,6 +170,7 @@ class FocusBox extends StatefulWidget {
 
 class _FocusBoxState extends State<FocusBox> {
   bool focused = false;
+  bool revealScheduled = false;
   void modeChanged(FocusHighlightMode _) {
     if (mounted) setState(() {});
   }
@@ -184,6 +185,45 @@ class _FocusBoxState extends State<FocusBox> {
   void dispose() {
     FocusManager.instance.removeHighlightModeListener(modeChanged);
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(FocusBox old) {
+    super.didUpdateWidget(old);
+    if (focused) scheduleReveal();
+  }
+
+  void scheduleReveal() {
+    if (revealScheduled) return;
+    revealScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      revealScheduled = false;
+      unawaited(reveal());
+    });
+  }
+
+  Future<void> reveal() async {
+    if (!mounted || !focused || Scrollable.maybeOf(context) == null) return;
+    final row = context.findAncestorStateOfType<_RemoteFocusRowState>();
+    final item = context.getInheritedWidgetOfExactType<RemoteFocusItem>();
+    if (row != null && item != null) {
+      if (!await row.reveal(item.index) || !mounted || !focused) return;
+    }
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+    // Keep visible controls still. Only scroll the edge outside the viewport.
+    await Scrollable.ensureVisible(
+      context,
+      duration: duration,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+    );
+    if (!mounted || !focused) return;
+    await Scrollable.ensureVisible(
+      context,
+      duration: duration,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+    );
   }
 
   @override
@@ -207,19 +247,7 @@ class _FocusBoxState extends State<FocusBox> {
           widget.onFocusChanged?.call(value);
           if (value) {
             widget.onFocused?.call();
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && Scrollable.maybeOf(context) != null) {
-                unawaited(
-                  Scrollable.ensureVisible(
-                    context,
-                    duration: MediaQuery.disableAnimationsOf(context)
-                        ? Duration.zero
-                        : const Duration(milliseconds: 180),
-                    alignment: .15,
-                  ),
-                );
-              }
-            });
+            scheduleReveal();
           }
         },
         child: Padding(padding: widget.padding, child: widget.child),
@@ -250,6 +278,129 @@ class _FocusBoxState extends State<FocusBox> {
       child: interaction,
     );
   }
+}
+
+// Horizontal shelves clamp at their ends instead of reaching another shelf.
+// Vertical movement still follows the surrounding page's traversal policy.
+class RemoteFocusRow extends StatefulWidget {
+  const RemoteFocusRow({
+    super.key,
+    required this.isTV,
+    required this.child,
+    required this.controller,
+    required this.itemCount,
+    required this.itemWidth,
+    required this.spacing,
+    required this.padding,
+    this.onUp,
+  });
+  final bool isTV;
+  final Widget child;
+  final ScrollController controller;
+  final int itemCount;
+  final double itemWidth, spacing, padding;
+  final VoidCallback? onUp;
+  @override
+  State<RemoteFocusRow> createState() => _RemoteFocusRowState();
+}
+
+class _RemoteFocusRowState extends State<RemoteFocusRow> {
+  final region = FocusNode(canRequestFocus: false, debugLabel: 'Shelf');
+  int? pendingIndex;
+  int movement = 0;
+  @override
+  void dispose() {
+    region.dispose();
+    super.dispose();
+  }
+
+  bool scrollTo(int index) {
+    if (!widget.controller.hasClients) return false;
+    final position = widget.controller.position;
+    final start = widget.padding + index * (widget.itemWidth + widget.spacing);
+    final end = start + widget.itemWidth;
+    final target = start < position.pixels + 7
+        ? start - 7
+        : end > position.pixels + position.viewportDimension - 7
+        ? end - position.viewportDimension + 7
+        : position.pixels;
+    final offset = target.clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((offset - position.pixels).abs() < .5) return false;
+    widget.controller.jumpTo(offset);
+    return true;
+  }
+
+  Future<bool> reveal(int index) async {
+    if (pendingIndex != null && pendingIndex != index) return false;
+    if (scrollTo(index)) await WidgetsBinding.instance.endOfFrame;
+    return mounted;
+  }
+
+  FocusNode? itemFocus(int index) => region.traversalDescendants
+      .where(
+        (focus) =>
+            focus.context
+                ?.getInheritedWidgetOfExactType<RemoteFocusItem>()
+                ?.index ==
+            index,
+      )
+      .firstOrNull;
+
+  KeyEventResult key(FocusNode node, KeyEvent event) {
+    if (!widget.isTV || (event is! KeyDownEvent && event is! KeyRepeatEvent)) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp && widget.onUp != null) {
+      widget.onUp!();
+      return KeyEventResult.handled;
+    }
+    final step = switch (event.logicalKey) {
+      LogicalKeyboardKey.arrowLeft => -1,
+      LogicalKeyboardKey.arrowRight => 1,
+      _ => 0,
+    };
+    if (step == 0) return KeyEventResult.ignored;
+    final current = FocusManager.instance.primaryFocus;
+    if (current == null) return KeyEventResult.ignored;
+    final item = current.context
+        ?.getInheritedWidgetOfExactType<RemoteFocusItem>();
+    if (item == null || widget.itemCount == 0) return KeyEventResult.ignored;
+    final index = ((pendingIndex ?? item.index) + step).clamp(
+      0,
+      widget.itemCount - 1,
+    );
+    pendingIndex = index;
+    final request = ++movement;
+    FocusTraversalGroup.maybeOf(current.context!)
+        ?.invalidateScopeData(current.nearestScope!);
+    scrollTo(index);
+    itemFocus(index)?.requestFocus();
+    // A held arrow can reach a title beyond the list's current lazy children.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || request != movement) return;
+      if (region.hasFocus) itemFocus(index)?.requestFocus();
+      pendingIndex = null;
+    });
+    return KeyEventResult.handled;
+  }
+
+  @override
+  Widget build(BuildContext context) => Focus(
+    focusNode: region,
+    canRequestFocus: false,
+    onKeyEvent: key,
+    child: widget.child,
+  );
+}
+
+class RemoteFocusItem extends InheritedWidget {
+  const RemoteFocusItem({super.key, required this.index, required super.child});
+  final int index;
+  @override
+  bool updateShouldNotify(RemoteFocusItem old) => old.index != index;
 }
 
 // Single-line text editing consumes vertical arrows before normal traversal.
@@ -981,25 +1132,11 @@ class PosterRow extends StatefulWidget {
 }
 
 class _PosterRowState extends State<PosterRow> {
-  int focused = 0;
   final scroll = ScrollController();
   @override
   void dispose() {
     scroll.dispose();
     super.dispose();
-  }
-
-  void focus(int i, double width) {
-    setState(() => focused = i);
-    if (widget.isTV && scroll.hasClients) {
-      unawaited(
-        scroll.animateTo(
-          ((i - 1) * (width + 12)).clamp(0, scroll.position.maxScrollExtent),
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-        ),
-      );
-    }
   }
 
   @override
@@ -1031,29 +1168,46 @@ class _PosterRowState extends State<PosterRow> {
                     : (widget.isTV ? 194 : 184)) +
                 (widget.isTV ? 108 : 120) *
                     MediaQuery.textScalerOf(context).scale(1),
-            child: ListView.separated(
+            child: RemoteFocusRow(
+              isTV: widget.isTV,
               controller: scroll,
-              key: PageStorageKey('row-${widget.title}'),
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.symmetric(
-                horizontal: widget.isTV ? 41 : 13,
-                vertical: 8,
-              ),
-              clipBehavior: Clip.none,
               itemCount: widget.items.length,
-              separatorBuilder: (_, i) =>
-                  SizedBox(width: widget.isTV ? 26 : 12),
-              itemBuilder: (_, i) => PosterCard(
-                key: ValueKey('${widget.title}-${widget.items[i].key}'),
-                anime: widget.items[i],
-                onOpen: () => widget.onOpen(widget.items[i]),
-                onFocused: () => focus(i, width),
-                isTV: widget.isTV,
-                width: width,
-                landscape: widget.landscape,
-                cropped: !widget.landscape,
-                progress: widget.progress?.call(widget.items[i]),
-                caption: widget.captions?.call(widget.items[i]),
+              itemWidth: width,
+              spacing: widget.isTV ? 26 : 12,
+              padding: widget.isTV ? 41 : 13,
+              child: ListView.separated(
+                controller: scroll,
+                key: PageStorageKey('row-${widget.title}'),
+                scrollDirection: Axis.horizontal,
+                padding: EdgeInsets.symmetric(
+                  horizontal: widget.isTV ? 41 : 13,
+                  vertical: 8,
+                ),
+                clipBehavior: Clip.none,
+                itemCount: widget.items.length,
+                findItemIndexCallback: (key) {
+                  final index = widget.items.indexWhere(
+                    (anime) => ValueKey('shelf-${anime.key}') == key,
+                  );
+                  return index < 0 ? null : index;
+                },
+                separatorBuilder: (_, i) =>
+                    SizedBox(width: widget.isTV ? 26 : 12),
+                itemBuilder: (_, i) => RemoteFocusItem(
+                  key: ValueKey('shelf-${widget.items[i].key}'),
+                  index: i,
+                  child: PosterCard(
+                    key: ValueKey('${widget.title}-${widget.items[i].key}'),
+                    anime: widget.items[i],
+                    onOpen: () => widget.onOpen(widget.items[i]),
+                    isTV: widget.isTV,
+                    width: width,
+                    landscape: widget.landscape,
+                    cropped: !widget.landscape,
+                    progress: widget.progress?.call(widget.items[i]),
+                    caption: widget.captions?.call(widget.items[i]),
+                  ),
+                ),
               ),
             ),
           ),

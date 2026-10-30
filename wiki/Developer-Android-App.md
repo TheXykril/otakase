@@ -248,6 +248,10 @@ flutter run -d emulator-5554
 ```
 
 Replace the device ID with the emulator shown by `adb devices` or `flutter devices`.
+In VS Code, open the repository's `app/` folder with the Flutter extension installed.
+Start the TV AVD, select it in the bottom device selector, then press F5. The first
+run still requires `build-core.sh --emulator` from the repository root. Dart changes
+support hot reload. Rebuild the binding after changes to the Go core.
 `--emulator` adds the x86_64 Go library while retaining both ARM libraries. An
 explicit `android-x64` Flutter target selects x86_64 packaging. Normal release
 builds continue to package both ARM ABIs. The usual Sony APK contains ARM native
@@ -266,7 +270,7 @@ phone-to-TV LAN pairing. The emulator's private network changes the pairing path
 Run the automated TV navigation checks without starting an emulator:
 
 ```sh
-flutter test test/tv_navigation_audit_test.dart test/tv_focus_test.dart test/exit_test.dart
+flutter test test/tv_navigation_audit_test.dart test/tv_content_navigation_test.dart test/home_discovery_test.dart test/tv_focus_test.dart test/exit_test.dart
 ```
 
 References: [virtual devices](https://developer.android.com/studio/run/managing-avds),
