@@ -47,6 +47,11 @@ app/android/app/libs/mobilecore.aar, runs Flutter checks, and builds both the
 universal APK and the optional ABI splits. The AAR and build outputs are ignored
 by Git. The Go core stays in the existing module, not a separate app module.
 
+The app's version is the CLI's: the script reads `VERSION.txt` (or
+`OTAKASE_VERSION` when set) and makes the versionCode from it, 26.7.0 becoming
+26007000, so each release installs over the last one. A plain `flutter build`
+or `flutter run` shows 0.0.0 and reports a dev build to the bot.
+
 Equivalent binding command, run from the repository root:
 
 ```sh

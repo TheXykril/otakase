@@ -11,7 +11,12 @@ import 'store.dart';
 
 const discordBotUrl = 'https://bot.xyverion.com';
 const discordInviteUrl = 'https://otakase.xyverion.com/discord/';
-const appVersion = '0.1.0';
+// The CLI version, passed in by scripts/build-apk.sh. Other builds report a
+// dev build.
+const appVersion = String.fromEnvironment(
+  'OTAKASE_VERSION',
+  defaultValue: '0.0.0-dev',
+);
 
 class BotFailure implements Exception {
   const BotFailure(this.status, this.message);
