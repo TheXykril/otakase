@@ -250,6 +250,8 @@ void main() {
     await key(tester, LogicalKeyboardKey.arrowDown);
     final query = find.byKey(const Key('catalog-search'));
     expect(focusedWithin(query), isTrue);
+    await key(tester, LogicalKeyboardKey.select);
+    expect(tester.testTextInput.isVisible, isTrue);
     await tester.enterText(query, 'Frieren');
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();

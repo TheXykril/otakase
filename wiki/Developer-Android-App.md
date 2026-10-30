@@ -216,6 +216,26 @@ Back directly with `adb -s emulator-5554 shell input keyevent 4`. For repeatable
 input, key codes 19/20/21/22 are Up/Down/Left/Right and 23 is D-pad Center.
 Codes 85, 126, 127, 89 and 90 are Play/Pause, Play, Pause, Rewind and Fast-forward.
 
+Root tabs switch pages on D-pad focus or pointer hover, without OK. The selected
+tab uses a red underline with no pill or enclosing focus border. Down/OK enters
+content. Search remains read-only while browsing, then OK/Enter on the field opens
+editing and the keyboard. Submission advances focus, and leaving the field resets
+the activation requirement. Phone text input keeps its existing behavior.
+
+TV scaling uses a 1600 x 900 reference canvas through `TVViewport` above the whole
+Navigator, including profile selection, pushed pages, dialogs and player controls.
+The viewport computes `min(availableWidth / 1600, availableHeight / 900)` and maps
+layout, pixel ratio and all inset edges consistently. System text enlargement is
+preserved. This handles Android TVs reporting 960 x 540, 1280 x 720 or 1920 x 1080
+logical windows for the same 4K output, without guessing physical screen size or
+adding a setting. The 16:9 layout is 20% smaller than the earlier 1280 x 720
+composition and fits eight Search covers per row instead of six. Phone layout
+does not use this mapping.
+
+Widget checks cover 720p, 1080p and 4K with device pixel ratios 1, 1.5, 2, 3 and 4,
+scaled pointer hit testing, remote navigation, text enlargement and safe/keyboard
+insets. Verify legibility at the actual viewing distance on the Sony separately.
+
 To build and run from source with hot reload, configure the normal Android/Go/
 Flutter toolchains above, then run from the repository root:
 

@@ -62,6 +62,48 @@ class AppLayout extends InheritedWidget {
   bool updateShouldNotify(AppLayout old) => old.isTV != isTV;
 }
 
+// Android TVs report different densities for the same output resolution.
+// A 1600 x 900 canvas gives every 16:9 TV the same compact composition.
+// Scale the whole Navigator so routes, focus frames and hit testing agree.
+class TVViewport extends StatelessWidget {
+  const TVViewport({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final scale = math.min(
+        constraints.maxWidth / 1600,
+        constraints.maxHeight / 900,
+      );
+      if (!scale.isFinite || scale <= 0) return child;
+      final size = Size(
+        constraints.maxWidth / scale,
+        constraints.maxHeight / scale,
+      );
+      final media = MediaQuery.of(context);
+      return FittedBox(
+        alignment: Alignment.topLeft,
+        fit: BoxFit.contain,
+        child: SizedBox(
+          width: size.width,
+          height: size.height,
+          child: MediaQuery(
+            data: media.copyWith(
+              size: size,
+              devicePixelRatio: media.devicePixelRatio * scale,
+              padding: media.padding / scale,
+              viewPadding: media.viewPadding / scale,
+              viewInsets: media.viewInsets / scale,
+              systemGestureInsets: media.systemGestureInsets / scale,
+            ),
+            child: child,
+          ),
+        ),
+      );
+    },
+  );
+}
+
 TextStyle uiStyle(
   BuildContext context, {
   double size = 16,
@@ -107,11 +149,15 @@ class FocusBox extends StatefulWidget {
     this.outsideFrame = false,
     this.showFocusBorder = true,
     this.focusFill = bg,
+    this.hoverColor,
+    this.onHover,
     this.onFocusChanged,
   });
   final Widget child;
   final bool outsideFrame, showFocusBorder;
   final Color focusFill;
+  final Color? hoverColor;
+  final ValueChanged<bool>? onHover;
   final ValueChanged<bool>? onFocusChanged;
   final VoidCallback? onPressed, onFocused;
   final bool isTV, autofocus;
@@ -152,7 +198,8 @@ class _FocusBoxState extends State<FocusBox> {
         focusNode: widget.focusNode,
         onTap: widget.onPressed,
         focusColor: Colors.transparent,
-        hoverColor: line.withValues(alpha: .4),
+        hoverColor: widget.hoverColor ?? line.withValues(alpha: .4),
+        onHover: widget.onHover,
         splashColor: accentDeep.withValues(alpha: .2),
         borderRadius: BorderRadius.circular(widget.radius),
         onFocusChange: (value) {
@@ -212,22 +259,40 @@ class RemoteTextInput extends StatefulWidget {
     required this.isTV,
     required this.builder,
     this.onUp,
+    this.onActivate,
+    this.onFocusChanged,
     this.multiline = false,
   });
   final bool isTV, multiline;
   final Widget Function(FocusNode) builder;
   final VoidCallback? onUp;
+  final ValueChanged<FocusNode>? onActivate;
+  final ValueChanged<bool>? onFocusChanged;
   @override
   State<RemoteTextInput> createState() => _RemoteTextInputState();
 }
 
 class _RemoteTextInputState extends State<RemoteTextInput> {
   late final focus = FocusNode(debugLabel: 'Text input', onKeyEvent: key);
+  @override
+  void initState() {
+    super.initState();
+    focus.addListener(() => widget.onFocusChanged?.call(focus.hasFocus));
+  }
+
   KeyEventResult key(FocusNode node, KeyEvent event) {
     if (!widget.isTV ||
         (event is! KeyDownEvent && event is! KeyRepeatEvent) ||
         widget.multiline && View.of(context).viewInsets.bottom > 0) {
       return KeyEventResult.ignored;
+    }
+    if (widget.onActivate case final activate?) {
+      if (event.logicalKey == LogicalKeyboardKey.select ||
+          event.logicalKey == LogicalKeyboardKey.enter ||
+          event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+        if (event is KeyDownEvent) activate(node);
+        return KeyEventResult.handled;
+      }
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       node.nextFocus();

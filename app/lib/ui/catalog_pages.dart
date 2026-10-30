@@ -38,6 +38,7 @@ class _SearchPageState extends State<SearchPage> {
   int? year;
   int page = 1, generation = 0;
   bool busy = true, hasMore = false, voiceAvailable = false;
+  bool editing = false;
   List<String> genres = [];
   late bool adultSeen;
   @override
@@ -147,6 +148,18 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
+  void editQuery(FocusNode focus) {
+    if (!widget.isTV) return;
+    setState(() => editing = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && focus.hasFocus && editing) {
+        focus.context
+            ?.findAncestorStateOfType<EditableTextState>()
+            ?.requestKeyboard();
+      }
+    });
+  }
+
   @override
   void dispose() {
     debounce?.cancel();
@@ -168,8 +181,14 @@ class _SearchPageState extends State<SearchPage> {
       RemoteTextInput(
         isTV: widget.isTV,
         onUp: widget.onNavigateUp,
+        onActivate: widget.isTV ? editQuery : null,
+        onFocusChanged: (focused) {
+          if (mounted && !focused && editing) setState(() => editing = false);
+        },
         builder: (focus) => TextField(
           focusNode: focus,
+          readOnly: widget.isTV && !editing,
+          onTap: widget.isTV ? () => editQuery(focus) : null,
           key: const Key('catalog-search'),
           controller: query,
           decoration: InputDecoration(
@@ -190,10 +209,14 @@ class _SearchPageState extends State<SearchPage> {
                 : null,
           ),
           textInputAction: TextInputAction.search,
+          onEditingComplete: widget.isTV ? () {} : null,
           onSubmitted: (_) {
             debounce?.cancel();
             unawaited(load());
-            if (widget.isTV) focus.nextFocus();
+            if (widget.isTV) {
+              setState(() => editing = false);
+              focus.nextFocus();
+            }
           },
           onChanged: (_) {
             debounce?.cancel();

@@ -317,17 +317,27 @@ class _AppShellState extends State<AppShell> {
         key: ValueKey('nav-$label'),
         focusNode: navFocus[index],
         isTV: widget.isTV,
-        radius: widget.isTV ? 999 : 16,
+        radius: 16,
         frameGap: widget.isTV ? 5 : 0,
         showFocusBorder: !widget.isTV,
-        focusFill: widget.isTV ? fg : bg,
-        onFocusChanged: (value) => setState(
-          () => focusedNav = value
+        focusFill: widget.isTV ? Colors.transparent : bg,
+        hoverColor: widget.isTV ? Colors.transparent : null,
+        onHover: widget.isTV
+            ? (hovered) {
+                if (hovered) navFocus[index].requestFocus();
+              }
+            : null,
+        onFocusChanged: (value) => setState(() {
+          focusedNav = value
               ? index
               : focusedNav == index
               ? null
-              : focusedNav,
-        ),
+              : focusedNav;
+          if (widget.isTV && value) {
+            selected = index;
+            widget.services.root = index;
+          }
+        }),
         onPressed: () => choose(index),
         child: Container(
           constraints: BoxConstraints(minHeight: widget.isTV ? 48 : 50),
@@ -345,7 +355,7 @@ class _AppShellState extends State<AppShell> {
                             focusedNav == index &&
                                 FocusManager.instance.highlightMode ==
                                     FocusHighlightMode.traditional
-                            ? bg
+                            ? fgBright
                             : active
                             ? fg
                             : muted,

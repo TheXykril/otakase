@@ -119,7 +119,8 @@ void main() {
     expect(find.byKey(const Key('catalog-search')), findsOneWidget);
 
     // Up must also leave a single-line search field, with the keyboard open.
-    await tester.showKeyboard(find.byKey(const Key('catalog-search')));
+    await key(tester, LogicalKeyboardKey.select);
+    expect(tester.testTextInput.isVisible, isTrue);
     await key(tester, LogicalKeyboardKey.arrowUp);
     expect(navigation(tester, 'Search').hasPrimaryFocus, isTrue);
     await key(tester, LogicalKeyboardKey.arrowRight);

@@ -7,13 +7,19 @@ Schedule, playback settings, subtitles and diagnostics. Touch and remote control
 same app. Back closes menus before leaving a page.
 
 On TV, Up from the top of a page returns to the Home, Search and More tabs.
-Left and Right move between tabs, OK opens a tab, and Down returns to its page.
+Left and Right switch pages immediately, with a red underline beneath the selected
+tab. Hovering over a tab also switches pages. Down or OK enters the page.
 Back from a root page first focuses its tab.
+Search keeps the keyboard closed while you move through the page. Press OK on the
+search field to type, then submit Search to continue to the filters and results.
 In TV text fields, Up and Down move to neighbouring controls. Submitting Search
 moves to the next control, and Down reaches the results. Multiline messages keep arrow-key
 editing while the on-screen keyboard is open; close the keyboard to navigate.
 On Home's tab, Back opens the exit prompt with Exit selected. Press OK to leave,
 or choose Stay or press Back to cancel. TV has no second farewell prompt.
+
+TV menus and covers use a compact layout that scales automatically for your screen.
+Android's larger-text preference still applies. Phone sizing is unchanged.
 
 More > Profiles manages up to six profiles. Each keeps its own accounts, history, lists and
 playback settings. Switch profiles there without restarting. TV asks who is watching when
