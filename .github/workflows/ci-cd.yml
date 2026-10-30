@@ -178,7 +178,6 @@ jobs:
 
       - name: Build APK
         run: |
-          export OTAKASE_ANDROID_BUILD_NUMBER=$((1000 + GITHUB_RUN_NUMBER))
           app/scripts/build-apk.sh
           mkdir -p release/android
           cp app/build/app/outputs/flutter-apk/app-release.apk release/android/otakase-android.apk
@@ -284,16 +283,6 @@ jobs:
           (Get-Content $iss) -replace '^AppVersion=.*', "AppVersion=$env:OTAKASE_VERSION" | Set-Content $iss
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "Build\otakase-windows-build.iss"
 
-      # Every size and format of the app icon, for packagers and themers.
-      - name: Icon pack
-        shell: pwsh
-        run: |
-          $pack = "Build/Output/otakase-icons"
-          New-Item -ItemType Directory -Force -Path "$pack/png" | Out-Null
-          Copy-Item "Build/app-icon/png/*.png" "$pack/png/"
-          Copy-Item "internal/appicon/otakase.svg", "Build/app-icon/otakase.ico", "Build/app-icon/otakase.icns" "$pack/"
-          Compress-Archive -Path "$pack/*" -DestinationPath "Build/Output/otakase-icons.zip" -Force
-
       # Commits pushed straight to main, which GitHub's generated notes
       # (pull requests only) leave out.
       - name: Release notes
@@ -320,7 +309,6 @@ jobs:
             releases/otakase-${{ env.OTAKASE_VERSION }}/macos/otakase-macos-universal
             releases/otakase-${{ env.OTAKASE_VERSION }}/windows/otakase-windows-x86_64.exe
             Build/Output/otakase-windows-installer.exe
-            Build/Output/otakase-icons.zip
             Build/Output/otakase-android.apk
             Build/Output/otakase-android.json
         env:

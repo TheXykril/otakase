@@ -1,7 +1,8 @@
 name: otakase
 description: Otakase Android phone and TV catalog and player.
 publish_to: none
-version: 0.1.0+3
+# Release builds take the CLI's version instead; see scripts/build-apk.sh.
+version: 0.0.0+1
 environment:
   sdk: ^3.13.7
 dependencies:

@@ -47,6 +47,11 @@ app/android/app/libs/mobilecore.aar, runs Flutter checks, and builds both the
 universal APK and the optional ABI splits. The AAR and build outputs are ignored
 by Git. The Go core stays in the existing module, not a separate app module.
 
+The app's version is the CLI's: the script reads `VERSION.txt` (or
+`OTAKASE_VERSION` when set) and makes the versionCode from it, 26.7.0 becoming
+26007000, so each release installs over the last one. A plain `flutter build`
+or `flutter run` shows 0.0.0 and reports a dev build to the bot.
+
 Equivalent binding command, run from the repository root:
 
 ```sh
@@ -115,12 +120,10 @@ installer keeps the verified package available for another attempt.
 
 Publish `otakase-android.apk` and `otakase-android.json` together. The build script
 writes the JSON with the exact Android version name, version code, APK size and
-SHA-256. The release workflow gives every build `1000 + GITHUB_RUN_NUMBER` as its
-Android version code and carries both files through the same artifact. Reruns
-of the same workflow run keep their version code. Preserve this increasing
-sequence if the workflow is replaced. Local builds use the pubspec code unless
-`OTAKASE_ANDROID_BUILD_NUMBER` is supplied. The CLI release tag/version is not
-used to compare Android versions. Publishing fails when the release signing
+SHA-256, using the same version and version code as the APK (the CLI version,
+26.7.0 becoming 26007000; see above), and the release workflow carries both
+files through the same artifact. Each release therefore needs a higher CLI
+version than the last for the app to offer it. Publishing fails when the release signing
 key is missing. PR and non-release builds retain the debug-key fallback.
 
 The app rejects incomplete metadata, different release tags, unexpected asset
