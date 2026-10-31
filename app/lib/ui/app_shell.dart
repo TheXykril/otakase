@@ -343,31 +343,69 @@ class _AppShellState extends State<AppShell> {
           constraints: BoxConstraints(minHeight: widget.isTV ? 48 : 50),
           padding: EdgeInsets.symmetric(horizontal: widget.isTV ? 6 : 4),
           child: widget.isTV
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      label,
-                      style: uiStyle(
-                        context,
-                        weight: active ? FontWeight.w600 : FontWeight.w500,
-                        color:
-                            focusedNav == index &&
-                                FocusManager.instance.highlightMode ==
-                                    FocusHighlightMode.traditional
-                            ? fgBright
-                            : active
-                            ? fg
-                            : muted,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Container(
-                      width: 36,
-                      height: 3,
-                      color: active ? shu : Colors.transparent,
-                    ),
-                  ],
+              ? Builder(
+                  builder: (context) {
+                    final remote =
+                        FocusManager.instance.highlightMode ==
+                        FocusHighlightMode.traditional;
+                    final focused = remote && focusedNav == index;
+                    // While the header has focus, the focused tab grows and
+                    // glows and the others fade, without a frame or pill.
+                    final faded = remote && focusedNav != null && !focused;
+                    final motion = MediaQuery.disableAnimationsOf(context)
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180);
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedOpacity(
+                          duration: motion,
+                          opacity: faded ? .4 : 1,
+                          child: AnimatedScale(
+                            duration: motion,
+                            curve: Curves.easeOut,
+                            scale: focused ? 1.15 : 1,
+                            child: Text(
+                              label,
+                              style:
+                                  uiStyle(
+                                    context,
+                                    weight: focused
+                                        ? FontWeight.w700
+                                        : active
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                    color: focused
+                                        ? fgBright
+                                        : active
+                                        ? fg
+                                        : muted,
+                                  ).copyWith(
+                                    shadows: focused
+                                        ? [
+                                            Shadow(
+                                              color: shu.withValues(alpha: .8),
+                                              blurRadius: 10,
+                                            ),
+                                            Shadow(
+                                              color: shu.withValues(alpha: .5),
+                                              blurRadius: 28,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Container(
+                          width: 36,
+                          height: 3,
+                          color: active ? shu : Colors.transparent,
+                        ),
+                      ],
+                    );
+                  },
                 )
               : Stack(
                   alignment: Alignment.topCenter,
