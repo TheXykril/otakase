@@ -145,6 +145,8 @@ class _SearchPageState extends State<SearchPage> {
       initial: filters,
       genres: genres,
       isTV: widget.isTV,
+      // TV applies each choice at once; phones confirm with Apply filters.
+      onChanged: widget.isTV ? apply : null,
     );
     final result = widget.isTV
         ? await showGeneralDialog<SearchFilters>(
@@ -171,13 +173,16 @@ class _SearchPageState extends State<SearchPage> {
             backgroundColor: panel,
             builder: (context) => SafeArea(child: sheet),
           );
-    if (result == null || !mounted) return;
+    if (result != null && mounted) await apply(result);
+  }
+
+  Future<void> apply(SearchFilters next) async {
     setState(() {
-      format = result.format;
-      season = result.season;
-      year = result.year;
-      genre = result.genre;
-      status = result.status;
+      format = next.format;
+      season = next.season;
+      year = next.year;
+      genre = next.genre;
+      status = next.status;
     });
     await load();
   }
@@ -620,18 +625,20 @@ class FilterButton extends StatelessWidget {
   );
 }
 
-/// Format, season, year, genre and status for Search, edited together and
-/// applied at once.
+/// Format, season, year, genre and status for Search. With [onChanged] each
+/// choice applies at once and there is no Apply button.
 class SearchFilterSheet extends StatefulWidget {
   const SearchFilterSheet({
     super.key,
     required this.initial,
     required this.genres,
     this.isTV = false,
+    this.onChanged,
   });
   final SearchFilters initial;
   final List<String> genres;
   final bool isTV;
+  final ValueChanged<SearchFilters>? onChanged;
   @override
   State<SearchFilterSheet> createState() => _SearchFilterSheetState();
 }
@@ -643,8 +650,21 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
       status = widget.initial.status;
   late int? year = widget.initial.year;
 
+  SearchFilters get current => SearchFilters(
+    format: format,
+    season: season,
+    year: year,
+    genre: genre,
+    status: status,
+  );
+
+  void change(VoidCallback update) {
+    setState(update);
+    widget.onChanged?.call(current);
+  }
+
   Widget section(String title, Widget child) => Padding(
-    padding: const EdgeInsets.only(top: 18),
+    padding: const EdgeInsets.only(top: 20),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -662,26 +682,26 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
     bool any = false,
     bool autofocus = false,
   }) => Wrap(
-    spacing: 8,
-    runSpacing: 8,
+    spacing: widget.isTV ? 12 : 8,
+    runSpacing: widget.isTV ? 12 : 8,
     children: [
       if (any)
-        AppTab(
+        FilterPill(
           label: 'Any',
           selected: selected == null,
           isTV: widget.isTV,
           autofocus: autofocus,
-          onPressed: () => setState(() => choose(null)),
+          onPressed: () => change(() => choose(null)),
         ),
       for (final (i, entry) in values.entries.indexed)
-        AppTab(
+        FilterPill(
           label: entry.value,
           selected: selected == entry.key,
           isTV: widget.isTV,
           autofocus: autofocus && !any && i == 0,
           // Choosing the selected value again clears it.
           onPressed: () =>
-              setState(() => choose(selected == entry.key ? null : entry.key)),
+              change(() => choose(selected == entry.key ? null : entry.key)),
         ),
     ],
   );
@@ -690,12 +710,14 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
     isTV: widget.isTV,
     onPressed: onPressed,
     radius: 12,
+    outsideFrame: true,
     child: Container(
       constraints: BoxConstraints(minHeight: widget.isTV ? 52 : 48),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
+        color: fgBright.withValues(alpha: .06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: line),
+        border: Border.all(color: lineStrong),
       ),
       child: Row(
         children: [
@@ -718,7 +740,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
       ...values.values,
     ], selected: values[selected] ?? any);
     if (value == null || !mounted) return;
-    setState(
+    change(
       () => choose(
         values.entries.where((e) => e.value == value).firstOrNull?.key,
       ),
@@ -746,12 +768,12 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
               Expanded(
                 child: Text(
                   'Filters',
-                  style: uiStyle(context, size: 26, weight: FontWeight.w700),
+                  style: uiStyle(context, size: 28, weight: FontWeight.w700),
                 ),
               ),
               TextButton(
                 key: const Key('filters-reset'),
-                onPressed: () => setState(() {
+                onPressed: () => change(() {
                   format = season = genre = status = null;
                   year = null;
                 }),
@@ -810,25 +832,85 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
               ),
             ),
           ),
-          const SizedBox(height: 24),
-          AppButton(
-            key: const Key('filters-apply'),
-            label: 'Apply filters',
-            filled: true,
-            isTV: widget.isTV,
-            onPressed: () => Navigator.pop(
-              context,
-              SearchFilters(
-                format: format,
-                season: season,
-                year: year,
-                genre: genre,
-                status: status,
+          if (widget.onChanged == null) ...[
+            const SizedBox(height: 24),
+            FocusBox(
+              key: const Key('filters-apply'),
+              isTV: widget.isTV,
+              radius: 14,
+              outsideFrame: true,
+              onPressed: () => Navigator.pop(context, current),
+              child: Container(
+                height: 52,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: shu,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  'Apply filters',
+                  style: uiStyle(
+                    context,
+                    color: bgDeep,
+                    weight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
   }
+}
+
+/// One choice in the Search filter sheet: a quiet pill, outlined in the
+/// accent colour while chosen.
+class FilterPill extends StatelessWidget {
+  const FilterPill({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+    this.isTV = false,
+    this.autofocus = false,
+  });
+  final String label;
+  final bool selected, isTV, autofocus;
+  final VoidCallback onPressed;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    selected: selected,
+    child: FocusBox(
+      isTV: isTV,
+      autofocus: autofocus,
+      onPressed: onPressed,
+      radius: 999,
+      outsideFrame: true,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.symmetric(horizontal: isTV ? 18 : 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected
+              ? shu.withValues(alpha: .12)
+              : fgBright.withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? shu : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          label,
+          style: uiStyle(
+            context,
+            size: isTV ? 17 : 14,
+            color: selected ? fgBright : fg,
+            weight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    ),
+  );
 }

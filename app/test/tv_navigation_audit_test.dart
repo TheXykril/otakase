@@ -120,25 +120,26 @@ void main() {
     final filters = find.byKey(const Key('search-filters'));
     final apply = find.byKey(const Key('filters-apply'));
     expect(focusedWithin(filters), isTrue);
+    final count = find.byKey(const Key('search-filters-count'));
     await key(tester, LogicalKeyboardKey.select);
-    expect(apply, findsOneWidget);
+    expect(find.text('Format'), findsOneWidget);
+    // TV applies each choice at once, so there is no Apply button.
+    expect(apply, findsNothing);
     expect(focusedWithin(find.text('TV')), isTrue);
     await key(tester, LogicalKeyboardKey.arrowRight);
     expect(focusedWithin(find.text('Movie')), isTrue);
     await key(tester, LogicalKeyboardKey.select);
-    for (var i = 0; i < 40 && !focusedWithin(apply); i++) {
-      await key(tester, LogicalKeyboardKey.arrowDown);
-    }
-    expect(focusedWithin(apply), isTrue);
-    await key(tester, LogicalKeyboardKey.select);
-    expect(apply, findsNothing);
     expect(
-      find.descendant(
-        of: find.byKey(const Key('search-filters-count')),
-        matching: find.text('1'),
-      ),
+      find.descendant(of: count, matching: find.text('1')),
       findsOneWidget,
     );
+    await key(tester, LogicalKeyboardKey.arrowUp);
+    expect(focusedWithin(find.byKey(const Key('filters-reset'))), isTrue);
+    await key(tester, LogicalKeyboardKey.select);
+    expect(count, findsNothing);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Format'), findsNothing);
     expect(focusedWithin(filters), isTrue);
     await key(tester, LogicalKeyboardKey.arrowLeft);
     expect(focusedWithin(find.byTooltip('Voice search')), isTrue);
