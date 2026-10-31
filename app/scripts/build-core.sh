@@ -16,7 +16,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 # Go 1.26.0-1.26.2 probes a syscall blocked on older 32-bit Android.
 # Require the runtime fix backported in golang/go#77931.
 go_version=$(go env GOVERSION)
-if [[ ! $go_version =~ ^go([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] ||
+if [[ ! $go_version =~ ^go([0-9]+)\.([0-9]+)\.([0-9]+)([^0-9].*)?$ ]] ||
   (( BASH_REMATCH[1] < 1 ||
      BASH_REMATCH[1] == 1 && (BASH_REMATCH[2] < 26 ||
      BASH_REMATCH[2] == 26 && BASH_REMATCH[3] < 3) )); then
