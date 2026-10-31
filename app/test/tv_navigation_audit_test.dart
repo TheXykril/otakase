@@ -132,7 +132,13 @@ void main() {
     expect(focusedWithin(apply), isTrue);
     await key(tester, LogicalKeyboardKey.select);
     expect(apply, findsNothing);
-    expect(find.text('Filters · 1'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('search-filters-count')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
     expect(focusedWithin(filters), isTrue);
     await key(tester, LogicalKeyboardKey.arrowLeft);
     expect(focusedWithin(find.byTooltip('Voice search')), isTrue);

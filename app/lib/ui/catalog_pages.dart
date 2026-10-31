@@ -212,70 +212,73 @@ class _SearchPageState extends State<SearchPage> {
     children: [
       const PageHeading('Search', '探'),
       const SizedBox(height: 18),
-      Row(
-        children: [
-          Expanded(
-            child: RemoteTextInput(
-              isTV: widget.isTV,
-              onUp: widget.onNavigateUp,
-              onActivate: widget.isTV ? editQuery : null,
-              onFocusChanged: (focused) {
-                if (mounted && !focused && editing) {
-                  setState(() => editing = false);
-                }
-              },
-              builder: (focus) => TextField(
-                focusNode: focus,
-                readOnly: widget.isTV && !editing,
-                onTap: widget.isTV ? () => editQuery(focus) : null,
-                key: const Key('catalog-search'),
-                controller: query,
-                decoration: InputDecoration(
-                  hintText: 'Search anime',
-                  prefixIcon: const Icon(LucideIcons.search),
-                  suffixIcon: widget.isTV && voiceAvailable
-                      ? IconButton(
-                          tooltip: 'Voice search',
-                          icon: const Icon(LucideIcons.mic),
-                          onPressed: () async {
-                            final text = await widget.onVoice();
-                            if (text != null && mounted) {
-                              query.text = text;
-                              await load();
-                            }
-                          },
-                        )
-                      : null,
-                ),
-                textInputAction: TextInputAction.search,
-                onEditingComplete: widget.isTV ? () {} : null,
-                onSubmitted: (_) {
-                  debounce?.cancel();
-                  unawaited(load());
-                  if (widget.isTV) {
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: RemoteTextInput(
+                isTV: widget.isTV,
+                onUp: widget.onNavigateUp,
+                onActivate: widget.isTV ? editQuery : null,
+                onFocusChanged: (focused) {
+                  if (mounted && !focused && editing) {
                     setState(() => editing = false);
-                    if (!focus.focusInDirection(TraversalDirection.down)) {
-                      focus.nextFocus();
-                    }
                   }
                 },
-                onChanged: (_) {
-                  debounce?.cancel();
-                  debounce = Timer(
-                    const Duration(milliseconds: 450),
-                    () => load(),
-                  );
-                },
+                builder: (focus) => TextField(
+                  focusNode: focus,
+                  readOnly: widget.isTV && !editing,
+                  onTap: widget.isTV ? () => editQuery(focus) : null,
+                  key: const Key('catalog-search'),
+                  controller: query,
+                  decoration: InputDecoration(
+                    hintText: 'Search anime',
+                    prefixIcon: const Icon(LucideIcons.search),
+                    suffixIcon: widget.isTV && voiceAvailable
+                        ? IconButton(
+                            tooltip: 'Voice search',
+                            icon: const Icon(LucideIcons.mic),
+                            onPressed: () async {
+                              final text = await widget.onVoice();
+                              if (text != null && mounted) {
+                                query.text = text;
+                                await load();
+                              }
+                            },
+                          )
+                        : null,
+                  ),
+                  textInputAction: TextInputAction.search,
+                  onEditingComplete: widget.isTV ? () {} : null,
+                  onSubmitted: (_) {
+                    debounce?.cancel();
+                    unawaited(load());
+                    if (widget.isTV) {
+                      setState(() => editing = false);
+                      if (!focus.focusInDirection(TraversalDirection.down)) {
+                        focus.nextFocus();
+                      }
+                    }
+                  },
+                  onChanged: (_) {
+                    debounce?.cancel();
+                    debounce = Timer(
+                      const Duration(milliseconds: 450),
+                      () => load(),
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-          SizedBox(width: widget.isTV ? 14 : 10),
-          FilterButton(
-            count: filters.count,
-            isTV: widget.isTV,
-            onPressed: openFilters,
-          ),
-        ],
+            SizedBox(width: widget.isTV ? 14 : 10),
+            FilterButton(
+              count: filters.count,
+              isTV: widget.isTV,
+              onPressed: openFilters,
+            ),
+          ],
+        ),
       ),
       const SizedBox(height: 22),
       if (busy) const SkeletonBlock(height: 180),
@@ -575,22 +578,42 @@ class FilterButton extends StatelessWidget {
     isTV: isTV,
     onPressed: onPressed,
     radius: 12,
+    outsideFrame: true,
+    // Same surface as the search field beside it.
     child: Container(
       constraints: BoxConstraints(minHeight: isTV ? 52 : 48),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
+        color: fgBright.withValues(alpha: .06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: count > 0 ? shu : line, width: 1.5),
+        border: Border.all(color: lineStrong),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(LucideIcons.slidersHorizontal, size: isTV ? 22 : 20),
           const SizedBox(width: 8),
-          Text(
-            count > 0 ? 'Filters · $count' : 'Filters',
-            style: uiStyle(context, weight: FontWeight.w600),
-          ),
+          Text('Filters', style: uiStyle(context, weight: FontWeight.w600)),
+          if (count > 0) ...[
+            const SizedBox(width: 8),
+            Container(
+              key: const Key('search-filters-count'),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+              decoration: BoxDecoration(
+                color: shu,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '$count',
+                style: uiStyle(
+                  context,
+                  size: 14,
+                  color: bgDeep,
+                  weight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     ),

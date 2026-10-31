@@ -177,7 +177,20 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('filters-apply')));
     await tester.tap(find.byKey(const Key('filters-apply')));
     await tester.pumpAndSettle();
-    expect(find.text('Filters · 2'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('search-filters-count')),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(button).height,
+      closeTo(
+        tester.getSize(find.byKey(const Key('catalog-search'))).height,
+        .5,
+      ),
+    );
     await tester.tap(button);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('filters-reset')));
@@ -185,7 +198,7 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('filters-apply')));
     await tester.tap(find.byKey(const Key('filters-apply')));
     await tester.pumpAndSettle();
-    expect(find.text('Filters'), findsOneWidget);
+    expect(find.byKey(const Key('search-filters-count')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 }
