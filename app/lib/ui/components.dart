@@ -726,13 +726,15 @@ class AppTab extends StatelessWidget {
     required this.selected,
     required this.onPressed,
     this.isTV = false,
+    this.autofocus = false,
   });
   final String label;
-  final bool selected, isTV;
+  final bool selected, isTV, autofocus;
   final VoidCallback onPressed;
   @override
   Widget build(BuildContext context) => FocusBox(
     isTV: isTV,
+    autofocus: autofocus,
     onPressed: onPressed,
     radius: 999,
     scale: 1.02,

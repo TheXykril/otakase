@@ -9,6 +9,11 @@ import 'tv_focus_test.dart' show key, navigation;
 import 'tv_navigation_audit_test.dart' show focusedWithin, launchAudit;
 import 'widget_test.dart' as fixture;
 
+bool inResults() =>
+    FocusManager.instance.primaryFocus?.context
+        ?.findAncestorWidgetOfExactType<PosterCard>() !=
+    null;
+
 void main() {
   testWidgets('TV header focus switches pages without OK and stays in header', (
     tester,
@@ -82,7 +87,7 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
       expect(focusedWithin(field), isFalse);
-      expect(focusedWithin(find.text('Format')), isTrue);
+      expect(inResults(), isTrue);
       expect(tester.testTextInput.isVisible, isFalse);
       await key(tester, LogicalKeyboardKey.arrowUp);
       expect(focusedWithin(field), isTrue);
@@ -104,11 +109,7 @@ void main() {
     await key(tester, LogicalKeyboardKey.arrowRight);
     expect(focusedWithin(find.byTooltip('Voice search')), isTrue);
     await key(tester, LogicalKeyboardKey.arrowDown);
-    expect(
-      FocusManager.instance.primaryFocus?.context
-          ?.findAncestorWidgetOfExactType<AppTab>(),
-      isNotNull,
-    );
+    expect(inResults(), isTrue);
     expect(tester.testTextInput.isVisible, isFalse);
     expect(
       tester.testTextInput.log.where((c) => c.method == 'TextInput.show'),
@@ -135,7 +136,7 @@ void main() {
     expect(tester.testTextInput.isVisible, isTrue);
     expect(focusedWithin(field), isTrue);
     await key(tester, LogicalKeyboardKey.arrowDown);
-    expect(focusedWithin(find.text('Format')), isTrue);
+    expect(inResults(), isTrue);
     expect(tester.testTextInput.isVisible, isFalse);
     await key(tester, LogicalKeyboardKey.arrowUp);
     expect(focusedWithin(field), isTrue);
@@ -152,6 +153,39 @@ void main() {
     await tester.tap(find.byKey(const Key('catalog-search')));
     await tester.pumpAndSettle();
     expect(tester.testTextInput.isVisible, isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('phone Search filters open from the button beside the field', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    await tester.tap(find.byKey(const ValueKey('nav-Search')));
+    await tester.pumpAndSettle();
+    tester.testTextInput.hide();
+    final button = find.byKey(const Key('search-filters'));
+    expect(
+      tester.getCenter(button).dy,
+      closeTo(tester.getCenter(find.byKey(const Key('catalog-search'))).dy, 4),
+    );
+    expect(find.text('Season'), findsNothing);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Movie'));
+    await tester.tap(find.text('Fall'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('filters-apply')));
+    await tester.tap(find.byKey(const Key('filters-apply')));
+    await tester.pumpAndSettle();
+    expect(find.text('Filters · 2'), findsOneWidget);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('filters-reset')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('filters-apply')));
+    await tester.tap(find.byKey(const Key('filters-apply')));
+    await tester.pumpAndSettle();
+    expect(find.text('Filters'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }

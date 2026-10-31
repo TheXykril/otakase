@@ -106,24 +106,38 @@ Future<void> moreRow(WidgetTester tester, String title) async {
 }
 
 void main() {
-  testWidgets('TV Search voice control and filters remain reachable', (
+  testWidgets('TV Search voice control and filters sit beside the field', (
     tester,
   ) async {
     await launchAudit(tester, voice: true);
     await key(tester, LogicalKeyboardKey.arrowRight);
     await key(tester, LogicalKeyboardKey.arrowDown);
-    expect(focusedWithin(find.byKey(const Key('catalog-search'))), isTrue);
-    await key(tester, LogicalKeyboardKey.arrowDown);
-    expect(focusedWithin(find.text('Format')), isTrue);
-    await key(tester, LogicalKeyboardKey.arrowUp);
+    final query = find.byKey(const Key('catalog-search'));
+    expect(focusedWithin(query), isTrue);
     await key(tester, LogicalKeyboardKey.arrowRight);
     expect(focusedWithin(find.byTooltip('Voice search')), isTrue);
-    await key(tester, LogicalKeyboardKey.arrowDown);
-    expect(
-      FocusManager.instance.primaryFocus?.context
-          ?.findAncestorWidgetOfExactType<AppTab>(),
-      isNotNull,
-    );
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    final filters = find.byKey(const Key('search-filters'));
+    final apply = find.byKey(const Key('filters-apply'));
+    expect(focusedWithin(filters), isTrue);
+    await key(tester, LogicalKeyboardKey.select);
+    expect(apply, findsOneWidget);
+    expect(focusedWithin(find.text('TV')), isTrue);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(focusedWithin(find.text('Movie')), isTrue);
+    await key(tester, LogicalKeyboardKey.select);
+    for (var i = 0; i < 40 && !focusedWithin(apply); i++) {
+      await key(tester, LogicalKeyboardKey.arrowDown);
+    }
+    expect(focusedWithin(apply), isTrue);
+    await key(tester, LogicalKeyboardKey.select);
+    expect(apply, findsNothing);
+    expect(find.text('Filters · 1'), findsOneWidget);
+    expect(focusedWithin(filters), isTrue);
+    await key(tester, LogicalKeyboardKey.arrowLeft);
+    expect(focusedWithin(find.byTooltip('Voice search')), isTrue);
+    await key(tester, LogicalKeyboardKey.arrowLeft);
+    expect(focusedWithin(query), isTrue);
     await home(tester);
     await tester.pumpWidget(const SizedBox());
   });
@@ -245,9 +259,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('TV Search Down leaves text input for filters and results', (
-    tester,
-  ) async {
+  testWidgets('TV Search Down leaves text input for results', (tester) async {
     await launchAudit(tester);
     await key(tester, LogicalKeyboardKey.arrowRight);
     await key(tester, LogicalKeyboardKey.arrowDown);
@@ -260,8 +272,6 @@ void main() {
     await tester.pumpAndSettle();
     await key(tester, LogicalKeyboardKey.arrowDown);
     expect(focusedWithin(query), isFalse);
-    expect(focusedWithin(find.text('Format')), isTrue);
-    await key(tester, LogicalKeyboardKey.arrowDown);
     expect(
       FocusManager.instance.primaryFocus?.context
           ?.findAncestorWidgetOfExactType<PosterCard>(),
