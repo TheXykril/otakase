@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otakase/data/models.dart';
 import 'package:otakase/ui/components.dart';
 
 import 'home_discovery_test.dart' show HomeCatalog, launchHome;
-import 'tv_focus_test.dart' show key, navigation;
+import 'tv_focus_test.dart' show focusPoster, key, navigation;
+import 'tv_navigation_audit_test.dart' show focusedWithin;
 import 'widget_test.dart' as fixture;
 
 void main() {
@@ -76,6 +78,42 @@ void main() {
       greaterThan(tester.getRect(find.byKey(const Key('nav-Search'))).bottom),
     );
     expect(tester.takeException(), isNull);
+  });
+  testWidgets('TV guest Home moves Up through the featured title to the top', (
+    tester,
+  ) async {
+    final catalog = HomeCatalog()
+      ..data = HomeData(
+        trending: [
+          for (var i = 1; i <= 8; i++)
+            Anime(id: 100 + i, title: 'Trending $i', episodes: 12),
+        ],
+        season: [
+          for (var i = 1; i <= 8; i++)
+            Anime(id: 200 + i, title: 'Season $i', episodes: 12),
+        ],
+      );
+    await launchHome(tester, tv: true, catalog: catalog);
+    Finder poster(String title) =>
+        find.ancestor(of: find.text(title), matching: find.byType(PosterCard));
+    final open = find.byKey(const Key('discovery-open'));
+    final page = Scrollable.of(tester.element(open)).position;
+    await focusPoster(tester, poster('Season 2'));
+    expect(page.pixels, greaterThan(0));
+    await key(tester, LogicalKeyboardKey.arrowUp);
+    expect(focusedWithin(poster('Trending 2')), isTrue);
+    await key(tester, LogicalKeyboardKey.arrowUp);
+    expect(focusedWithin(open), isTrue);
+    expect(page.pixels, 0);
+    expect(
+      tester.getRect(find.text('Find your next story')).top,
+      greaterThan(tester.getRect(find.byKey(const Key('nav-Home'))).bottom),
+    );
+    await key(tester, LogicalKeyboardKey.arrowUp);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(focusedWithin(find.text('Accounts')), isTrue);
+    await key(tester, LogicalKeyboardKey.arrowDown);
+    expect(focusedWithin(open), isTrue);
   });
   testWidgets('phone keeps artwork within its card', (tester) async {
     await launchHome(tester, catalog: HomeCatalog());

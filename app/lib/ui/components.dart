@@ -68,39 +68,43 @@ class AppLayout extends InheritedWidget {
 class TVViewport extends StatelessWidget {
   const TVViewport({super.key, required this.child});
   final Widget child;
+  static final traversal = RemoteTraversalPolicy();
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final scale = math.min(
-        constraints.maxWidth / 1600,
-        constraints.maxHeight / 900,
-      );
-      if (!scale.isFinite || scale <= 0) return child;
-      final size = Size(
-        constraints.maxWidth / scale,
-        constraints.maxHeight / scale,
-      );
-      final media = MediaQuery.of(context);
-      return FittedBox(
-        alignment: Alignment.topLeft,
-        fit: BoxFit.contain,
-        child: SizedBox(
-          width: size.width,
-          height: size.height,
-          child: MediaQuery(
-            data: media.copyWith(
-              size: size,
-              devicePixelRatio: media.devicePixelRatio * scale,
-              padding: media.padding / scale,
-              viewPadding: media.viewPadding / scale,
-              viewInsets: media.viewInsets / scale,
-              systemGestureInsets: media.systemGestureInsets / scale,
+  Widget build(BuildContext context) => FocusTraversalGroup(
+    policy: traversal,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = math.min(
+          constraints.maxWidth / 1600,
+          constraints.maxHeight / 900,
+        );
+        if (!scale.isFinite || scale <= 0) return child;
+        final size = Size(
+          constraints.maxWidth / scale,
+          constraints.maxHeight / scale,
+        );
+        final media = MediaQuery.of(context);
+        return FittedBox(
+          alignment: Alignment.topLeft,
+          fit: BoxFit.contain,
+          child: SizedBox(
+            width: size.width,
+            height: size.height,
+            child: MediaQuery(
+              data: media.copyWith(
+                size: size,
+                devicePixelRatio: media.devicePixelRatio * scale,
+                padding: media.padding / scale,
+                viewPadding: media.viewPadding / scale,
+                viewInsets: media.viewInsets / scale,
+                systemGestureInsets: media.systemGestureInsets / scale,
+              ),
+              child: child,
             ),
-            child: child,
           ),
-        ),
-      );
-    },
+        );
+      },
+    ),
   );
 }
 
@@ -209,21 +213,7 @@ class _FocusBoxState extends State<FocusBox> {
     if (row != null && item != null) {
       if (!await row.reveal(item.index) || !mounted || !focused) return;
     }
-    final duration = MediaQuery.disableAnimationsOf(context)
-        ? Duration.zero
-        : const Duration(milliseconds: 180);
-    // Keep visible controls still. Only scroll the edge outside the viewport.
-    await Scrollable.ensureVisible(
-      context,
-      duration: duration,
-      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-    );
-    if (!mounted || !focused) return;
-    await Scrollable.ensureVisible(
-      context,
-      duration: duration,
-      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
-    );
+    await revealFocus(context, stillFocused: () => mounted && focused);
   }
 
   @override
@@ -277,6 +267,156 @@ class _FocusBoxState extends State<FocusBox> {
       ),
       child: interaction,
     );
+  }
+}
+
+/// Height of anything painted over the top of the page's scroll view, such as
+/// the TV header that floats above Home.
+class ScrollClearance extends InheritedWidget {
+  const ScrollClearance({super.key, required this.top, required super.child});
+  final double top;
+  static double topOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ScrollClearance>()?.top ?? 0;
+  @override
+  bool updateShouldNotify(ScrollClearance old) => old.top != top;
+}
+
+ScrollableState? _verticalScrollable(BuildContext context) {
+  var scrollable = Scrollable.maybeOf(context);
+  while (scrollable != null && scrollable.axisDirection != AxisDirection.down) {
+    scrollable = Scrollable.maybeOf(scrollable.context);
+  }
+  return scrollable;
+}
+
+/// Scrolls a focused control into view. A control that fits on the page's
+/// first screen brings the page back to its top, so headings above it show
+/// again, and nothing ends up under [ScrollClearance].
+Future<void> revealFocus(
+  BuildContext context, {
+  bool Function()? stillFocused,
+}) async {
+  bool live() => stillFocused?.call() ?? true;
+  final duration = MediaQuery.disableAnimationsOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 180);
+  final page = _verticalScrollable(context);
+  final box = context.findRenderObject();
+  final viewport = page?.context.findRenderObject();
+  if (AppLayout.tvOf(context) &&
+      page != null &&
+      box is RenderBox &&
+      box.attached &&
+      viewport is RenderBox &&
+      page.position.hasContentDimensions) {
+    final position = page.position;
+    final top = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+    final bottom = top + box.size.height;
+    final clearance = ScrollClearance.topOf(context);
+    final double target =
+        bottom + position.pixels - position.minScrollExtent <=
+            position.viewportDimension
+        ? position.minScrollExtent
+        : top < clearance
+        ? math.max(position.minScrollExtent, position.pixels + top - clearance)
+        : position.pixels;
+    if ((target - position.pixels).abs() > .5) {
+      if (duration == Duration.zero) {
+        position.jumpTo(target);
+      } else {
+        await position.animateTo(
+          target,
+          duration: duration,
+          curve: Curves.ease,
+        );
+        // Another reveal took over the scroll.
+        if ((position.pixels - target).abs() > .5) return;
+      }
+    }
+  }
+  if (!context.mounted || !live()) return;
+  // Keep visible controls still. Only scroll the edge outside the viewport.
+  await Scrollable.ensureVisible(
+    context,
+    duration: duration,
+    alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+  );
+  if (!context.mounted || !live()) return;
+  await Scrollable.ensureVisible(
+    context,
+    duration: duration,
+    alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+  );
+}
+
+/// Remote traversal for TV. Up and down weigh distance the way Android's own
+/// focus search does: a control in line with the current one wins only when
+/// it is not further away than the whole of a closer one, so a narrow button
+/// right above is never skipped for a wider one further up.
+class RemoteTraversalPolicy extends ReadingOrderTraversalPolicy {
+  RemoteTraversalPolicy()
+    : super(
+        requestFocusCallback:
+            (node, {alignment, alignmentPolicy, curve, duration}) {
+              node.requestFocus();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final context = node.context;
+                // A FocusBox reveals itself when it gains focus.
+                if (context != null &&
+                    node.hasPrimaryFocus &&
+                    context.findAncestorStateOfType<_FocusBoxState>() == null) {
+                  unawaited(
+                    revealFocus(context, stillFocused: () => node.hasFocus),
+                  );
+                }
+              });
+            },
+      );
+
+  @override
+  bool inDirection(FocusNode currentNode, TraversalDirection direction) {
+    final up = direction == TraversalDirection.up;
+    final scope = currentNode.nearestScope;
+    if ((!up && direction != TraversalDirection.down) || scope == null) {
+      return super.inDirection(currentNode, direction);
+    }
+    final from = currentNode.rect;
+    double gap(Rect rect) =>
+        up ? from.top - rect.bottom : rect.top - from.bottom;
+    final candidates = scope.traversalDescendants
+        .where(
+          (node) =>
+              node != currentNode &&
+              !node.rect.isEmpty &&
+              gap(node.rect) > -1 &&
+              !currentNode.ancestors.contains(node) &&
+              !node.ancestors.contains(currentNode),
+        )
+        .toList();
+    if (candidates.isEmpty) return super.inDirection(currentNode, direction);
+    double far(Rect rect) =>
+        up ? from.top - rect.top : rect.bottom - from.bottom;
+    bool inLine(Rect rect) => rect.right > from.left && rect.left < from.right;
+    double score(Rect rect) {
+      final major = math.max(0.0, gap(rect));
+      // Centres line up a grid; left edges line up a wide control with the
+      // first of several narrower ones.
+      final minor = math.min(
+        (rect.center.dx - from.center.dx).abs(),
+        (rect.left - from.left).abs(),
+      );
+      return 13 * major * major + minor * minor;
+    }
+
+    bool beats(Rect a, Rect b) {
+      if (inLine(a) && !inLine(b) && gap(a) < far(b)) return true;
+      if (inLine(b) && !inLine(a) && gap(b) < far(a)) return false;
+      return score(a) < score(b);
+    }
+
+    final target = candidates.reduce((a, b) => beats(b.rect, a.rect) ? b : a);
+    requestFocusCallback(target);
+    return true;
   }
 }
 

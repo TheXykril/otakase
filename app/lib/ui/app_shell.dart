@@ -563,14 +563,22 @@ class _AppShellState extends State<AppShell> {
                                     child: FocusScope(
                                       node: scopes[i],
                                       child: FocusTraversalGroup(
-                                        child: widget.isTV && i != 0
-                                            ? Padding(
+                                        policy: widget.isTV
+                                            ? TVViewport.traversal
+                                            : null,
+                                        child: !widget.isTV
+                                            ? pages[i]
+                                            : i == 0
+                                            ? ScrollClearance(
+                                                top: tvHeaderExtent(context),
+                                                child: pages[i],
+                                              )
+                                            : Padding(
                                                 padding: EdgeInsets.only(
                                                   top: tvHeaderExtent(context),
                                                 ),
                                                 child: pages[i],
-                                              )
-                                            : pages[i],
+                                              ),
                                       ),
                                     ),
                                   ),
