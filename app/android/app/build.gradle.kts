@@ -33,7 +33,12 @@ android {
         if (project.findProperty("split-per-abi")?.toString() != "true") {
             ndk {
                 abiFilters.clear()
-                abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
+                // flutter run selects this target on an Intel TV emulator.
+                if (project.findProperty("target-platform")?.toString() == "android-x64") {
+                    abiFilters.add("x86_64")
+                } else {
+                    abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
+                }
             }
         }
     }

@@ -141,8 +141,8 @@ void main() {
       );
       expect(home.style!.fontSize, 15);
       expect(home.style!.fontFamily, 'Inter');
-      expect(find.text('Trending'), findsNothing);
-      expect(find.text('Back to your story'), findsOneWidget);
+      expect(find.text('Trending'), findsOneWidget);
+      expect(find.text('Find your next story'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
   );

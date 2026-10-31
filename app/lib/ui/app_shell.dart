@@ -32,6 +32,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int selected = 0;
   int? focusedNav;
+  bool rootIsCurrent = true;
   StreamSubscription<String>? remoteEvents;
   final navFocus = List.generate(
     3,
@@ -44,9 +45,29 @@ class _AppShellState extends State<AppShell> {
     ),
   );
   final scopes = List.generate(3, (i) => FocusScopeNode(debugLabel: 'Root $i'));
+  void modeChanged(FocusHighlightMode _) {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final current = ModalRoute.isCurrentOf(context) ?? true;
+    if (widget.isTV && current && !rootIsCurrent) {
+      // The route can request focus before its children have been re-enabled.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !navFocus.any((node) => node.hasFocus)) {
+          focusContent(selected);
+        }
+      });
+    }
+    rootIsCurrent = current;
+  }
+
   @override
   void initState() {
     super.initState();
+    FocusManager.instance.addHighlightModeListener(modeChanged);
     widget.services.selectRoot = choose;
     widget.services.auth.remoteLink = remoteLink;
     remoteEvents = widget.services.tvRemote.events.listen((text) {
@@ -64,6 +85,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    FocusManager.instance.removeHighlightModeListener(modeChanged);
     widget.services.auth.remoteLink = null;
     unawaited(remoteEvents?.cancel() ?? Future<void>.value());
     widget.services.selectRoot = null;
@@ -116,19 +138,46 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  void choose(int i) {
+  void choose(int i, {bool focusNavigation = false}) {
     setState(() => selected = i);
     widget.services.root = i;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) focusContent(i);
+      if (!mounted ||
+          selected != i ||
+          ModalRoute.isCurrentOf(context) == false) {
+        return;
+      }
+      if (widget.isTV && focusNavigation) {
+        navFocus[i].requestFocus();
+      } else {
+        focusContent(i);
+      }
     });
   }
 
   void focusContent(int index) {
+    if (ModalRoute.isCurrentOf(context) == false || selected != index) return;
     final scope = scopes[index];
     final remembered = scope.focusedChild;
     scope.requestFocus();
     if (remembered == null) scope.nextFocus();
+  }
+
+  KeyEventResult contentKey(FocusNode node, KeyEvent event) {
+    if (!widget.isTV ||
+        ModalRoute.isCurrentOf(context) == false ||
+        (event is! KeyDownEvent && event is! KeyRepeatEvent) ||
+        event.logicalKey != LogicalKeyboardKey.arrowUp) {
+      return KeyEventResult.ignored;
+    }
+    final current = FocusManager.instance.primaryFocus;
+    if (current == null || !scopes[selected].hasFocus) {
+      return KeyEventResult.ignored;
+    }
+    if (!current.focusInDirection(TraversalDirection.up)) {
+      navFocus[selected].requestFocus();
+    }
+    return KeyEventResult.handled;
   }
 
   Future<void> open(Anime a, {Object? heroTag}) => Navigator.push(
@@ -171,8 +220,12 @@ class _AppShellState extends State<AppShell> {
       FocusManager.instance.primaryFocus?.unfocus();
       return;
     }
+    if (widget.isTV && scopes[selected].hasFocus) {
+      navFocus[selected].requestFocus();
+      return;
+    }
     if (selected != 0) {
-      choose(0);
+      choose(0, focusNavigation: widget.isTV);
       return;
     }
     final exit = await showDialog<bool>(
@@ -181,11 +234,12 @@ class _AppShellState extends State<AppShell> {
         title: const Text('Exit Otakase?'),
         actions: [
           TextButton(
-            autofocus: true,
+            autofocus: !widget.isTV,
             onPressed: () => Navigator.pop(c, false),
             child: const Text('Stay'),
           ),
           TextButton(
+            autofocus: widget.isTV,
             onPressed: () => Navigator.pop(c, true),
             child: const Text('Exit'),
           ),
@@ -212,19 +266,21 @@ class _AppShellState extends State<AppShell> {
       if (!mounted) return;
       final greeting = await widget.services.discord.exitGreeting();
       if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (c) => AlertDialog(
-          content: Text(greeting),
-          actions: [
-            TextButton(
-              autofocus: true,
-              onPressed: () => Navigator.pop(c),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
+      if (!widget.isTV) {
+        await showDialog<void>(
+          context: context,
+          builder: (c) => AlertDialog(
+            content: Text(greeting),
+            actions: [
+              TextButton(
+                autofocus: true,
+                onPressed: () => Navigator.pop(c),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
       await widget.services.discord.stopWatching();
       await SystemNavigator.pop();
     }
@@ -236,9 +292,23 @@ class _AppShellState extends State<AppShell> {
     return Focus(
       onKeyEvent: (_, event) {
         if (widget.isTV &&
-            event is KeyDownEvent &&
+            (event is KeyDownEvent || event is KeyRepeatEvent) &&
+            (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+                event.logicalKey == LogicalKeyboardKey.arrowRight)) {
+          final step = event.logicalKey == LogicalKeyboardKey.arrowLeft
+              ? -1
+              : 1;
+          navFocus[(index + step).clamp(0, navFocus.length - 1)].requestFocus();
+          return KeyEventResult.handled;
+        }
+        if (widget.isTV &&
+            (event is KeyDownEvent || event is KeyRepeatEvent) &&
             event.logicalKey == LogicalKeyboardKey.arrowDown) {
-          scopes[selected].requestFocus();
+          if (index != selected) {
+            choose(index);
+          } else {
+            focusContent(index);
+          }
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
@@ -247,45 +317,95 @@ class _AppShellState extends State<AppShell> {
         key: ValueKey('nav-$label'),
         focusNode: navFocus[index],
         isTV: widget.isTV,
-        radius: widget.isTV ? 8 : 16,
+        radius: 16,
         frameGap: widget.isTV ? 5 : 0,
-        onFocusChanged: (value) => setState(
-          () => focusedNav = value
+        showFocusBorder: !widget.isTV,
+        focusFill: widget.isTV ? Colors.transparent : bg,
+        hoverColor: widget.isTV ? Colors.transparent : null,
+        onHover: widget.isTV
+            ? (hovered) {
+                if (hovered) navFocus[index].requestFocus();
+              }
+            : null,
+        onFocusChanged: (value) => setState(() {
+          focusedNav = value
               ? index
               : focusedNav == index
               ? null
-              : focusedNav,
-        ),
+              : focusedNav;
+          if (widget.isTV && value) {
+            selected = index;
+            widget.services.root = index;
+          }
+        }),
         onPressed: () => choose(index),
         child: Container(
           constraints: BoxConstraints(minHeight: widget.isTV ? 48 : 50),
           padding: EdgeInsets.symmetric(horizontal: widget.isTV ? 6 : 4),
           child: widget.isTV
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      label,
-                      style: uiStyle(
-                        context,
-                        weight: active ? FontWeight.w600 : FontWeight.w500,
-                        color:
-                            focusedNav == index &&
-                                FocusManager.instance.highlightMode ==
-                                    FocusHighlightMode.traditional
-                            ? fgBright
-                            : active
-                            ? fg
-                            : muted,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Container(
-                      width: 36,
-                      height: 3,
-                      color: active ? shu : Colors.transparent,
-                    ),
-                  ],
+              ? Builder(
+                  builder: (context) {
+                    final remote =
+                        FocusManager.instance.highlightMode ==
+                        FocusHighlightMode.traditional;
+                    final focused = remote && focusedNav == index;
+                    // While the header has focus, the focused tab grows and
+                    // glows and the others fade, without a frame or pill.
+                    final faded = remote && focusedNav != null && !focused;
+                    final motion = MediaQuery.disableAnimationsOf(context)
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180);
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedOpacity(
+                          duration: motion,
+                          opacity: faded ? .4 : 1,
+                          child: AnimatedScale(
+                            duration: motion,
+                            curve: Curves.easeOut,
+                            scale: focused ? 1.15 : 1,
+                            child: Text(
+                              label,
+                              style:
+                                  uiStyle(
+                                    context,
+                                    weight: focused
+                                        ? FontWeight.w700
+                                        : active
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                    color: focused
+                                        ? fgBright
+                                        : active
+                                        ? fg
+                                        : muted,
+                                  ).copyWith(
+                                    shadows: focused
+                                        ? [
+                                            Shadow(
+                                              color: shu.withValues(alpha: .8),
+                                              blurRadius: 10,
+                                            ),
+                                            Shadow(
+                                              color: shu.withValues(alpha: .5),
+                                              blurRadius: 28,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Container(
+                          width: 36,
+                          height: 3,
+                          color: active ? shu : Colors.transparent,
+                        ),
+                      ],
+                    );
+                  },
                 )
               : Stack(
                   alignment: Alignment.topCenter,
@@ -421,6 +541,8 @@ class _AppShellState extends State<AppShell> {
         HomePage(
           services: widget.services,
           isTV: widget.isTV,
+          active: selected == 0 && rootIsCurrent,
+          topInset: widget.isTV ? tvHeaderExtent(context) : 0,
           onOpen: open,
           onResume: resume,
           onSearch: () => choose(1),
@@ -431,58 +553,109 @@ class _AppShellState extends State<AppShell> {
           isTV: widget.isTV,
           onOpen: open,
           onVoice: voice,
+          onNavigateUp: () => navFocus[1].requestFocus(),
         ),
         MorePage(services: widget.services, isTV: widget.isTV, onOpen: open),
       ];
-      return PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (popped, result) {
-          if (!popped) unawaited(back());
-        },
-        child: Scaffold(
-          body: Stack(
-            children: [
-              Column(
-                children: [
-                  header(),
-                  Expanded(
-                    child: PageInsets(
-                      bottom: widget.isTV
-                          ? math.max(27, MediaQuery.paddingOf(context).bottom)
-                          : keyboard
-                          ? 16
-                          : (72 +
-                                    (MediaQuery.textScalerOf(context).scale(1) -
-                                                1)
-                                            .clamp(0, 2) *
-                                        64) +
-                                7 +
-                                math.max(
-                                  MediaQuery.viewPaddingOf(context).bottom,
-                                  MediaQuery.paddingOf(context).bottom,
-                                ),
-                      child: PosterNavigation(
-                        onOpen: (a, tag) => open(a, heroTag: tag),
-                        child: IndexedStack(
-                          index: selected,
-                          children: [
-                            for (var i = 0; i < pages.length; i++)
-                              ExcludeFocus(
-                                excluding: i != selected,
-                                child: FocusScope(
-                                  node: scopes[i],
-                                  child: FocusTraversalGroup(child: pages[i]),
-                                ),
-                              ),
-                          ],
+      return ExcludeFocus(
+        excluding: widget.isTV && !rootIsCurrent,
+        child: PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (popped, result) {
+            if (!popped) unawaited(back());
+          },
+          child: Scaffold(
+            body: Stack(
+              children: [
+                Column(
+                  children: [
+                    if (!widget.isTV) header(),
+                    Expanded(
+                      child: PageInsets(
+                        bottom: widget.isTV
+                            ? math.max(27, MediaQuery.paddingOf(context).bottom)
+                            : keyboard
+                            ? 16
+                            : (72 +
+                                      (MediaQuery.textScalerOf(context)
+                                                      .scale(1) -
+                                                  1)
+                                              .clamp(0, 2) *
+                                          64) +
+                                  7 +
+                                  math.max(
+                                    MediaQuery.viewPaddingOf(context).bottom,
+                                    MediaQuery.paddingOf(context).bottom,
+                                  ),
+                        child: PosterNavigation(
+                          onOpen: (a, tag) => open(a, heroTag: tag),
+                          child: Focus(
+                            canRequestFocus: false,
+                            onKeyEvent: contentKey,
+                            child: IndexedStack(
+                              index: selected,
+                              children: [
+                                for (var i = 0; i < pages.length; i++)
+                                  ExcludeFocus(
+                                    excluding: i != selected,
+                                    child: FocusScope(
+                                      node: scopes[i],
+                                      child: FocusTraversalGroup(
+                                        policy: widget.isTV
+                                            ? TVViewport.traversal
+                                            : null,
+                                        child: !widget.isTV
+                                            ? pages[i]
+                                            : i == 0
+                                            ? ScrollClearance(
+                                                top: tvHeaderExtent(context),
+                                                child: pages[i],
+                                              )
+                                            : Padding(
+                                                padding: EdgeInsets.only(
+                                                  top: tvHeaderExtent(context),
+                                                ),
+                                                child: pages[i],
+                                              ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
+                  ],
+                ),
+                if (widget.isTV)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: SizedBox(
+                      height: tvHeaderExtent(context),
+                      child: DecoratedBox(
+                        key: const Key('tv-header-scrim'),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Color(0xf00e0d0c),
+                              Color(0xc00e0d0c),
+                              Color(0x000e0d0c),
+                            ],
+                            stops: [0, .75, 1],
+                          ),
+                        ),
+                        child: header(),
+                      ),
+                    ),
                   ),
-                ],
-              ),
-              if (!widget.isTV && !keyboard) phoneNav(),
-            ],
+                if (!widget.isTV && !keyboard) phoneNav(),
+              ],
+            ),
           ),
         ),
       );

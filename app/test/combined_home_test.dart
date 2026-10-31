@@ -153,6 +153,17 @@ void main() {
         await tester.pumpAndSettle();
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
+        if (tv) {
+          expect(
+            tester
+                .widget<FocusBox>(find.byKey(const Key('nav-More')))
+                .focusNode!
+                .hasPrimaryFocus,
+            isTrue,
+          );
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+        }
         expect(find.text('Paused'), findsOneWidget);
         expect(find.byType(AccountBlock), findsOneWidget);
         expect(tester.takeException(), isNull);

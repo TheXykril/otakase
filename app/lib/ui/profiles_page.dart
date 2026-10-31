@@ -424,11 +424,15 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          TextField(
-            controller: name,
-            maxLength: 32,
-            autofocus: !widget.isTV,
-            decoration: const InputDecoration(labelText: 'Profile name'),
+          RemoteTextInput(
+            isTV: widget.isTV,
+            builder: (focus) => TextField(
+              focusNode: focus,
+              controller: name,
+              maxLength: 32,
+              autofocus: !widget.isTV,
+              decoration: const InputDecoration(labelText: 'Profile name'),
+            ),
           ),
           const SizedBox(height: 12),
           Wrap(

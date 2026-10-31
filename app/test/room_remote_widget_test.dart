@@ -110,6 +110,9 @@ void main() {
     await fixture.launch(tester, tv: true);
     await tester.tap(find.byKey(const Key('nav-Search')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('catalog-search')));
+    await tester.pumpAndSettle();
+    expect(tester.testTextInput.isVisible, isTrue);
     await tester.enterText(find.byKey(const Key('catalog-search')), 'Otakase');
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
@@ -124,6 +127,9 @@ void main() {
     await fixture.launch(tester, tv: true);
     await tester.tap(find.byKey(const Key('nav-Search')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('catalog-search')));
+    await tester.pumpAndSettle();
+    expect(tester.testTextInput.isVisible, isTrue);
     await tester.enterText(find.byKey(const Key('catalog-search')), 'Otakase');
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();

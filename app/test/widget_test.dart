@@ -102,8 +102,8 @@ void main() {
     'phone personal Home, More accounts and Schedule, Back and exit',
     (tester) async {
       await launch(tester);
-      expect(find.text('Back to your story'), findsOneWidget);
-      expect(find.text('Trending'), findsNothing);
+      expect(find.text('Find your next story'), findsOneWidget);
+      expect(find.text('Trending'), findsOneWidget);
       expect(find.byKey(const Key('resume-card')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('nav-More')));
       await tester.pumpAndSettle();
@@ -126,7 +126,7 @@ void main() {
       expect(find.byKey(const Key('more-Schedule')), findsOneWidget);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.text('Back to your story'), findsOneWidget);
+      expect(find.text('Find your next story'), findsOneWidget);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(find.text('Exit Otakase?'), findsOneWidget);

@@ -15,6 +15,7 @@ class SearchPage extends StatefulWidget {
     required this.isTV,
     required this.onOpen,
     required this.onVoice,
+    this.onNavigateUp,
     this.initialQuery = '',
     this.initialFormat,
   });
@@ -22,6 +23,7 @@ class SearchPage extends StatefulWidget {
   final bool isTV;
   final void Function(Anime) onOpen;
   final Future<String?> Function() onVoice;
+  final VoidCallback? onNavigateUp;
   final String initialQuery;
   final String? initialFormat;
   @override
@@ -36,6 +38,7 @@ class _SearchPageState extends State<SearchPage> {
   int? year;
   int page = 1, generation = 0;
   bool busy = true, hasMore = false, voiceAvailable = false;
+  bool editing = false;
   List<String> genres = [];
   late bool adultSeen;
   @override
@@ -129,20 +132,71 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
-  Future<void> filter(
-    String title,
-    List<String> values,
-    String? selected,
-    void Function(String?) setValue,
-  ) async {
-    final value = await chooseValue(context, title, [
-      'Any',
-      ...values,
-    ], selected: selected ?? 'Any');
-    if (value != null && mounted) {
-      setValue(value == 'Any' ? null : value);
-      await load();
-    }
+  SearchFilters get filters => SearchFilters(
+    format: format,
+    season: season,
+    year: year,
+    genre: genre,
+    status: status,
+  );
+
+  Future<void> openFilters() async {
+    final sheet = SearchFilterSheet(
+      initial: filters,
+      genres: genres,
+      isTV: widget.isTV,
+      // TV applies each choice at once; phones confirm with Apply filters.
+      onChanged: widget.isTV ? apply : null,
+    );
+    final result = widget.isTV
+        ? await showGeneralDialog<SearchFilters>(
+            context: context,
+            barrierDismissible: true,
+            barrierLabel: 'Close filters',
+            barrierColor: Colors.black54,
+            pageBuilder: (context, _, _) => Align(
+              alignment: Alignment.centerRight,
+              child: Material(
+                color: panel,
+                child: SizedBox(
+                  width: 560,
+                  height: double.infinity,
+                  child: SafeArea(child: sheet),
+                ),
+              ),
+            ),
+          )
+        : await showModalBottomSheet<SearchFilters>(
+            context: context,
+            isScrollControlled: true,
+            showDragHandle: true,
+            backgroundColor: panel,
+            builder: (context) => SafeArea(child: sheet),
+          );
+    if (result != null && mounted) await apply(result);
+  }
+
+  Future<void> apply(SearchFilters next) async {
+    setState(() {
+      format = next.format;
+      season = next.season;
+      year = next.year;
+      genre = next.genre;
+      status = next.status;
+    });
+    await load();
+  }
+
+  void editQuery(FocusNode focus) {
+    if (!widget.isTV) return;
+    setState(() => editing = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && focus.hasFocus && editing) {
+        focus.context
+            ?.findAncestorStateOfType<EditableTextState>()
+            ?.requestKeyboard();
+      }
+    });
   }
 
   @override
@@ -163,95 +217,73 @@ class _SearchPageState extends State<SearchPage> {
     children: [
       const PageHeading('Search', '探'),
       const SizedBox(height: 18),
-      TextField(
-        key: const Key('catalog-search'),
-        controller: query,
-        decoration: InputDecoration(
-          hintText: 'Search anime',
-          prefixIcon: const Icon(LucideIcons.search),
-          suffixIcon: widget.isTV && voiceAvailable
-              ? IconButton(
-                  tooltip: 'Voice search',
-                  icon: const Icon(LucideIcons.mic),
-                  onPressed: () async {
-                    final text = await widget.onVoice();
-                    if (text != null && mounted) {
-                      query.text = text;
-                      await load();
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: RemoteTextInput(
+                isTV: widget.isTV,
+                onUp: widget.onNavigateUp,
+                onActivate: widget.isTV ? editQuery : null,
+                onFocusChanged: (focused) {
+                  if (mounted && !focused && editing) {
+                    setState(() => editing = false);
+                  }
+                },
+                builder: (focus) => TextField(
+                  focusNode: focus,
+                  readOnly: widget.isTV && !editing,
+                  onTap: widget.isTV ? () => editQuery(focus) : null,
+                  key: const Key('catalog-search'),
+                  controller: query,
+                  decoration: InputDecoration(
+                    hintText: 'Search anime',
+                    prefixIcon: const Icon(LucideIcons.search),
+                    suffixIcon: widget.isTV && voiceAvailable
+                        ? IconButton(
+                            tooltip: 'Voice search',
+                            icon: const Icon(LucideIcons.mic),
+                            onPressed: () async {
+                              final text = await widget.onVoice();
+                              if (text != null && mounted) {
+                                query.text = text;
+                                await load();
+                              }
+                            },
+                          )
+                        : null,
+                  ),
+                  textInputAction: TextInputAction.search,
+                  onEditingComplete: widget.isTV ? () {} : null,
+                  onSubmitted: (_) {
+                    debounce?.cancel();
+                    unawaited(load());
+                    if (widget.isTV) {
+                      setState(() => editing = false);
+                      if (!focus.focusInDirection(TraversalDirection.down)) {
+                        focus.nextFocus();
+                      }
                     }
                   },
-                )
-              : null,
+                  onChanged: (_) {
+                    debounce?.cancel();
+                    debounce = Timer(
+                      const Duration(milliseconds: 450),
+                      () => load(),
+                    );
+                  },
+                ),
+              ),
+            ),
+            SizedBox(width: widget.isTV ? 14 : 10),
+            FilterButton(
+              count: filters.count,
+              isTV: widget.isTV,
+              onPressed: openFilters,
+            ),
+          ],
         ),
-        textInputAction: TextInputAction.search,
-        onSubmitted: (_) => load(),
-        onChanged: (_) {
-          debounce?.cancel();
-          debounce = Timer(const Duration(milliseconds: 450), () => load());
-        },
-      ),
-      const SizedBox(height: 14),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          AppTab(
-            selected: format != null,
-            label: format ?? 'Format',
-            onPressed: () => filter(
-              'Format',
-              ['TV', 'MOVIE', 'ONA', 'OVA', 'SPECIAL', 'TV_SHORT', 'MUSIC'],
-              format,
-              (v) => format = v,
-            ),
-            isTV: widget.isTV,
-          ),
-          AppTab(
-            selected: season != null,
-            label: season ?? 'Season',
-            onPressed: () => filter(
-              'Season',
-              ['WINTER', 'SPRING', 'SUMMER', 'FALL'],
-              season,
-              (v) => season = v,
-            ),
-            isTV: widget.isTV,
-          ),
-          AppTab(
-            selected: year != null,
-            label: year?.toString() ?? 'Year',
-            onPressed: () => filter(
-              'Year',
-              List.generate(50, (i) => '${DateTime.now().year + 1 - i}'),
-              year?.toString(),
-              (v) => year = int.tryParse(v ?? ''),
-            ),
-            isTV: widget.isTV,
-          ),
-          AppTab(
-            selected: genre != null,
-            label: genre ?? 'Genre',
-            onPressed: () => filter('Genre', genres, genre, (v) => genre = v),
-            isTV: widget.isTV,
-          ),
-          AppTab(
-            selected: status != null,
-            label: status ?? 'Status',
-            onPressed: () => filter(
-              'Status',
-              [
-                'RELEASING',
-                'FINISHED',
-                'NOT_YET_RELEASED',
-                'HIATUS',
-                'CANCELLED',
-              ],
-              status,
-              (v) => status = v,
-            ),
-            isTV: widget.isTV,
-          ),
-        ],
       ),
       const SizedBox(height: 22),
       if (busy) const SkeletonBlock(height: 180),
@@ -491,4 +523,394 @@ class _SchedulePageState extends State<SchedulePage> {
       ],
     );
   }
+}
+
+const _formats = {
+  'TV': 'TV',
+  'MOVIE': 'Movie',
+  'OVA': 'OVA',
+  'ONA': 'ONA',
+  'SPECIAL': 'Special',
+  'TV_SHORT': 'TV short',
+  'MUSIC': 'Music',
+};
+const _seasons = {
+  'WINTER': 'Winter',
+  'SPRING': 'Spring',
+  'SUMMER': 'Summer',
+  'FALL': 'Fall',
+};
+const _statuses = {
+  'RELEASING': 'Releasing',
+  'FINISHED': 'Finished',
+  'NOT_YET_RELEASED': 'Not yet released',
+  'HIATUS': 'Hiatus',
+  'CANCELLED': 'Cancelled',
+};
+
+class SearchFilters {
+  const SearchFilters({
+    this.format,
+    this.season,
+    this.year,
+    this.genre,
+    this.status,
+  });
+  final String? format, season, genre, status;
+  final int? year;
+  int get count => [
+    format,
+    season,
+    year,
+    genre,
+    status,
+  ].where((value) => value != null).length;
+}
+
+class FilterButton extends StatelessWidget {
+  const FilterButton({
+    super.key,
+    required this.count,
+    required this.onPressed,
+    this.isTV = false,
+  });
+  final int count;
+  final bool isTV;
+  final VoidCallback onPressed;
+  @override
+  Widget build(BuildContext context) => FocusBox(
+    key: const Key('search-filters'),
+    isTV: isTV,
+    onPressed: onPressed,
+    radius: 12,
+    outsideFrame: true,
+    // Same surface as the search field beside it.
+    child: Container(
+      constraints: BoxConstraints(minHeight: isTV ? 52 : 48),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: fgBright.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: lineStrong),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.slidersHorizontal, size: isTV ? 22 : 20),
+          const SizedBox(width: 8),
+          Text('Filters', style: uiStyle(context, weight: FontWeight.w600)),
+          if (count > 0) ...[
+            const SizedBox(width: 8),
+            Container(
+              key: const Key('search-filters-count'),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+              decoration: BoxDecoration(
+                color: shu,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '$count',
+                style: uiStyle(
+                  context,
+                  size: 14,
+                  color: bgDeep,
+                  weight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+/// Format, season, year, genre and status for Search. With [onChanged] each
+/// choice applies at once and there is no Apply button.
+class SearchFilterSheet extends StatefulWidget {
+  const SearchFilterSheet({
+    super.key,
+    required this.initial,
+    required this.genres,
+    this.isTV = false,
+    this.onChanged,
+  });
+  final SearchFilters initial;
+  final List<String> genres;
+  final bool isTV;
+  final ValueChanged<SearchFilters>? onChanged;
+  @override
+  State<SearchFilterSheet> createState() => _SearchFilterSheetState();
+}
+
+class _SearchFilterSheetState extends State<SearchFilterSheet> {
+  late String? format = widget.initial.format,
+      season = widget.initial.season,
+      genre = widget.initial.genre,
+      status = widget.initial.status;
+  late int? year = widget.initial.year;
+
+  SearchFilters get current => SearchFilters(
+    format: format,
+    season: season,
+    year: year,
+    genre: genre,
+    status: status,
+  );
+
+  void change(VoidCallback update) {
+    setState(update);
+    widget.onChanged?.call(current);
+  }
+
+  Widget section(String title, Widget child) => Padding(
+    padding: const EdgeInsets.only(top: 20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: uiStyle(context, weight: FontWeight.w600)),
+        const SizedBox(height: 10),
+        child,
+      ],
+    ),
+  );
+
+  Widget chips(
+    Map<String, String> values,
+    String? selected,
+    ValueChanged<String?> choose, {
+    bool any = false,
+    bool autofocus = false,
+  }) => Wrap(
+    spacing: widget.isTV ? 12 : 8,
+    runSpacing: widget.isTV ? 12 : 8,
+    children: [
+      if (any)
+        FilterPill(
+          label: 'Any',
+          selected: selected == null,
+          isTV: widget.isTV,
+          autofocus: autofocus,
+          onPressed: () => change(() => choose(null)),
+        ),
+      for (final (i, entry) in values.entries.indexed)
+        FilterPill(
+          label: entry.value,
+          selected: selected == entry.key,
+          isTV: widget.isTV,
+          autofocus: autofocus && !any && i == 0,
+          // Choosing the selected value again clears it.
+          onPressed: () =>
+              change(() => choose(selected == entry.key ? null : entry.key)),
+        ),
+    ],
+  );
+
+  Widget picker(String label, VoidCallback onPressed) => FocusBox(
+    isTV: widget.isTV,
+    onPressed: onPressed,
+    radius: 12,
+    outsideFrame: true,
+    child: Container(
+      constraints: BoxConstraints(minHeight: widget.isTV ? 52 : 48),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: fgBright.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: lineStrong),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: uiStyle(context))),
+          const Icon(LucideIcons.chevronDown, size: 20),
+        ],
+      ),
+    ),
+  );
+
+  Future<void> pick(
+    String title,
+    Map<String, String> values,
+    String? selected,
+    String any,
+    ValueChanged<String?> choose,
+  ) async {
+    final value = await chooseValue(context, title, [
+      any,
+      ...values.values,
+    ], selected: values[selected] ?? any);
+    if (value == null || !mounted) return;
+    change(
+      () => choose(
+        values.entries.where((e) => e.value == value).firstOrNull?.key,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now().year;
+    final years = {
+      for (var i = 0; i < 50; i++) '${now + 1 - i}': '${now + 1 - i}',
+    };
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        widget.isTV ? 32 : 20,
+        widget.isTV ? 28 : 0,
+        widget.isTV ? 32 : 20,
+        24,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Filters',
+                  style: uiStyle(context, size: 28, weight: FontWeight.w700),
+                ),
+              ),
+              TextButton(
+                key: const Key('filters-reset'),
+                onPressed: () => change(() {
+                  format = season = genre = status = null;
+                  year = null;
+                }),
+                child: Text(
+                  'Reset',
+                  style: uiStyle(context, color: shu, weight: FontWeight.w600),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Close',
+                icon: const Icon(LucideIcons.x),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          section(
+            'Format',
+            chips(_formats, format, (v) => format = v, autofocus: widget.isTV),
+          ),
+          section(
+            'Season',
+            chips(_seasons, season, (v) => season = v, any: true),
+          ),
+          section(
+            'Year',
+            picker(
+              year?.toString() ?? 'Any year',
+              () => pick(
+                'Year',
+                years,
+                year?.toString(),
+                'Any year',
+                (v) => year = int.tryParse(v ?? ''),
+              ),
+            ),
+          ),
+          if (widget.genres.isNotEmpty)
+            section(
+              'Genres',
+              chips(
+                {for (final g in widget.genres) g: g},
+                genre,
+                (v) => genre = v,
+              ),
+            ),
+          section(
+            'Status',
+            picker(
+              _statuses[status] ?? 'Any status',
+              () => pick(
+                'Status',
+                _statuses,
+                status,
+                'Any status',
+                (v) => status = v,
+              ),
+            ),
+          ),
+          if (widget.onChanged == null) ...[
+            const SizedBox(height: 24),
+            FocusBox(
+              key: const Key('filters-apply'),
+              isTV: widget.isTV,
+              radius: 14,
+              outsideFrame: true,
+              onPressed: () => Navigator.pop(context, current),
+              child: Container(
+                height: 52,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: shu,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  'Apply filters',
+                  style: uiStyle(
+                    context,
+                    color: bgDeep,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One choice in the Search filter sheet: a quiet pill, outlined in the
+/// accent colour while chosen.
+class FilterPill extends StatelessWidget {
+  const FilterPill({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+    this.isTV = false,
+    this.autofocus = false,
+  });
+  final String label;
+  final bool selected, isTV, autofocus;
+  final VoidCallback onPressed;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    selected: selected,
+    child: FocusBox(
+      isTV: isTV,
+      autofocus: autofocus,
+      onPressed: onPressed,
+      radius: 999,
+      outsideFrame: true,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.symmetric(horizontal: isTV ? 18 : 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected
+              ? shu.withValues(alpha: .12)
+              : fgBright.withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? shu : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          label,
+          style: uiStyle(
+            context,
+            size: isTV ? 17 : 14,
+            color: selected ? fgBright : fg,
+            weight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    ),
+  );
 }

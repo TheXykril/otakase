@@ -177,6 +177,14 @@ class _TVRemotePageState extends State<TVRemotePage> {
       return Scaffold(
         appBar: AppBar(
           title: Text(widget.isTV ? 'Phone remote' : 'Control TV'),
+          leading: widget.isTV
+              ? IconButton(
+                  autofocus: true,
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                  icon: const BackButtonIcon(),
+                  onPressed: () => Navigator.maybePop(context),
+                )
+              : null,
           actions: [
             DeviceStatus(isTV: widget.isTV),
             const SizedBox(width: 16),
@@ -425,18 +433,22 @@ class _PairDialogState extends State<_PairDialog> {
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: Text('Pair with ${widget.name}'),
-    content: TextField(
-      key: const Key('tv-pair-code'),
-      controller: text,
-      autofocus: true,
-      maxLength: 6,
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      decoration: const InputDecoration(labelText: 'Code shown on TV'),
-      onChanged: (_) => setState(() {}),
-      onSubmitted: (v) {
-        if (v.length == 6) Navigator.pop(context, v);
-      },
+    content: RemoteTextInput(
+      isTV: AppLayout.tvOf(context),
+      builder: (focus) => TextField(
+        focusNode: focus,
+        key: const Key('tv-pair-code'),
+        controller: text,
+        autofocus: true,
+        maxLength: 6,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: const InputDecoration(labelText: 'Code shown on TV'),
+        onChanged: (_) => setState(() {}),
+        onSubmitted: (v) {
+          if (v.length == 6) Navigator.pop(context, v);
+        },
+      ),
     ),
     actions: [
       TextButton(

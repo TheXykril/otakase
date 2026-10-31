@@ -6,7 +6,7 @@ Developer notes for the Android phone and TV app. Kage uses personal Home, Searc
 
 - Flutter 3.47.8, framework 737ba8f885dc774b53b442759999a312c9461e4e.
 - Dart 3.13.7, bundled with that Flutter release.
-- Go 1.26.0.
+- Go 1.26.10. Android binding builds require at least Go 1.26.3.
 - gomobile and gobind: golang.org/x/mobile v0.0.0-20260821190718-4776eadac327.
 - JDK 17, built with Eclipse Temurin 17.0.21+9.
 - Android command-line tools 19.0 (archive commandlinetools-linux-13114758_latest.zip).
@@ -22,8 +22,12 @@ Developer notes for the Android phone and TV app. Kage uses personal Home, Searc
 
 ## Build from a fresh checkout
 
-Install Git, Python 3, JDK 17, Go 1.26.0, Flutter 3.47.8 and the Android SDK
+Install Git, Python 3, JDK 17, Go 1.26.10, Flutter 3.47.8 and the Android SDK
 command-line tools. Keep the Flutter checkout outside this repository.
+
+The binding script rejects Go versions older than 1.26.3. Go 1.26.0 through
+1.26.2 probe a syscall blocked on older 32-bit Android devices, which can stop
+the app during native runtime startup. See the [upstream runtime fix](https://github.com/golang/go/issues/77931).
 
 ```sh
 git clone --branch 3.47.8 --depth 1 https://github.com/flutter/flutter.git "$HOME/flutter"
@@ -189,6 +193,88 @@ explicit selection_required error for prompts. No CLI init/config is imported.
 
 The providers and their dependency tree build with CGO_ENABLED=0. gomobile
 itself uses Android JNI/cgo glue, with no third-party cgo or torrent packages.
+
+## Local Android TV testing on Linux
+
+Use Android Studio's Device Manager to create a **TV** virtual device with the
+**Android 16 / API 36 Android TV x86_64** system image. Pick a TV profile, rather
+than a phone in landscape, so Android reports the leanback capability and the
+app selects its TV layout. On an Intel/AMD Linux laptop, enable CPU virtualization
+and KVM. Check acceleration with `emulator -accel-check` from the SDK's emulator
+directory. Android Studio installs the emulator and selected image.
+
+For a supplied x86_64 test APK, start the TV emulator and install it by dragging
+the APK onto the emulator window, or run:
+
+```sh
+adb devices
+adb -s emulator-5554 install -r otakase-tv-focus-emulator-x64.apk
+```
+
+Use arrow keys and Enter for D-pad/OK. Use the emulator's Back control, or send
+Back directly with `adb -s emulator-5554 shell input keyevent 4`. For repeatable
+input, key codes 19/20/21/22 are Up/Down/Left/Right and 23 is D-pad Center.
+Codes 85, 126, 127, 89 and 90 are Play/Pause, Play, Pause, Rewind and Fast-forward.
+
+Root tabs switch pages on D-pad focus or pointer hover, without OK. The selected
+tab uses a red underline with no pill or enclosing focus border. Down/OK enters
+content. Search remains read-only while browsing, then OK/Enter on the field opens
+editing and the keyboard. Submission advances focus, and leaving the field resets
+the activation requirement. Phone text input keeps its existing behavior.
+
+TV scaling uses a 1600 x 900 reference canvas through `TVViewport` above the whole
+Navigator, including profile selection, pushed pages, dialogs and player controls.
+The viewport computes `min(availableWidth / 1600, availableHeight / 900)` and maps
+layout, pixel ratio and all inset edges consistently. System text enlargement is
+preserved. This handles Android TVs reporting 960 x 540, 1280 x 720 or 1920 x 1080
+logical windows for the same 4K output, without guessing physical screen size or
+adding a setting. The 16:9 layout is 20% smaller than the earlier 1280 x 720
+composition and fits eight Search covers per row instead of six. Phone layout
+does not use this mapping.
+
+Widget checks cover 720p, 1080p and 4K with device pixel ratios 1, 1.5, 2, 3 and 4,
+scaled pointer hit testing, remote navigation, text enlargement and safe/keyboard
+insets. Verify legibility at the actual viewing distance on the Sony separately.
+
+To build and run from source with hot reload, configure the normal Android/Go/
+Flutter toolchains above, then run from the repository root:
+
+```sh
+app/scripts/build-core.sh --emulator
+cd app
+flutter pub get
+flutter devices
+flutter run -d emulator-5554
+```
+
+Replace the device ID with the emulator shown by `adb devices` or `flutter devices`.
+In VS Code, open the repository's `app/` folder with the Flutter extension installed.
+Start the TV AVD, select it in the bottom device selector, then press F5. The first
+run still requires `build-core.sh --emulator` from the repository root. Dart changes
+support hot reload. Rebuild the binding after changes to the Go core.
+`--emulator` adds the x86_64 Go library while retaining both ARM libraries. An
+explicit `android-x64` Flutter target selects x86_64 packaging. Normal release
+builds continue to package both ARM ABIs. The usual Sony APK contains ARM native
+libraries and is not the x86_64 emulator build.
+
+Build a standalone emulator APK with:
+
+```sh
+flutter build apk --debug --target-platform android-x64
+```
+
+The emulator supports quick menu, focus, keyboard and Back checks at your desk.
+Real Sony hardware is still needed for its decoder, physical media buttons and
+phone-to-TV LAN pairing. The emulator's private network changes the pairing path.
+
+Run the automated TV navigation checks without starting an emulator:
+
+```sh
+flutter test test/tv_navigation_audit_test.dart test/tv_content_navigation_test.dart test/home_discovery_test.dart test/tv_focus_test.dart test/exit_test.dart
+```
+
+References: [virtual devices](https://developer.android.com/studio/run/managing-avds),
+[Linux acceleration](https://developer.android.com/studio/run/emulator-acceleration).
 
 ## Phone installation
 
