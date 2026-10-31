@@ -101,7 +101,7 @@ void main() {
     await key(tester, LogicalKeyboardKey.arrowRight);
     await key(tester, LogicalKeyboardKey.arrowDown);
     expect(focusedWithin(find.byKey(const Key('catalog-search'))), isTrue);
-    await key(tester, LogicalKeyboardKey.arrowDown);
+    await key(tester, LogicalKeyboardKey.arrowRight);
     expect(focusedWithin(find.byTooltip('Voice search')), isTrue);
     await key(tester, LogicalKeyboardKey.arrowDown);
     expect(

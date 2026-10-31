@@ -97,14 +97,15 @@ void main() {
     Finder poster(String title) =>
         find.ancestor(of: find.text(title), matching: find.byType(PosterCard));
     final open = find.byKey(const Key('discovery-open'));
-    final page = Scrollable.of(tester.element(open)).position;
+    // Scrollable replaces its position when its dependencies change.
+    ScrollPosition page() => Scrollable.of(tester.element(open)).position;
     await focusPoster(tester, poster('Season 2'));
-    expect(page.pixels, greaterThan(0));
+    expect(page().pixels, greaterThan(0));
     await key(tester, LogicalKeyboardKey.arrowUp);
     expect(focusedWithin(poster('Trending 2')), isTrue);
     await key(tester, LogicalKeyboardKey.arrowUp);
     expect(focusedWithin(open), isTrue);
-    expect(page.pixels, 0);
+    expect(page().pixels, 0);
     expect(
       tester.getRect(find.text('Find your next story')).top,
       greaterThan(tester.getRect(find.byKey(const Key('nav-Home'))).bottom),
@@ -114,6 +115,35 @@ void main() {
     expect(focusedWithin(find.text('Accounts')), isTrue);
     await key(tester, LogicalKeyboardKey.arrowDown);
     expect(focusedWithin(open), isTrue);
+  });
+  testWidgets('TV guest Home shows the whole last row with its titles', (
+    tester,
+  ) async {
+    final catalog = HomeCatalog()
+      ..data = HomeData(
+        trending: [
+          for (var i = 1; i <= 8; i++)
+            Anime(id: 100 + i, title: 'Trending $i', episodes: 12),
+        ],
+        season: [
+          for (var i = 1; i <= 8; i++)
+            Anime(id: 200 + i, title: 'Season $i', episodes: 12),
+        ],
+      );
+    await launchHome(tester, tv: true, catalog: catalog);
+    final open = find.byKey(const Key('discovery-open'));
+    for (var i = 0; i < 8 && !focusedWithin(open); i++) {
+      await key(tester, LogicalKeyboardKey.arrowDown);
+    }
+    await key(tester, LogicalKeyboardKey.arrowDown);
+    await key(tester, LogicalKeyboardKey.arrowDown);
+    final card = find.ancestor(
+      of: find.text('Season 1'),
+      matching: find.byType(PosterCard),
+    );
+    expect(focusedWithin(card), isTrue);
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    expect(tester.getRect(card).bottom, lessThanOrEqualTo(screen.height));
   });
   testWidgets('phone keeps artwork within its card', (tester) async {
     await launchHome(tester, catalog: HomeCatalog());

@@ -281,6 +281,28 @@ class ScrollClearance extends InheritedWidget {
   bool updateShouldNotify(ScrollClearance old) => old.top != top;
 }
 
+/// Marks the whole of a card, label included, as what a focused control
+/// inside it scrolls into view.
+class RevealArea extends StatelessWidget {
+  const RevealArea({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => child;
+}
+
+BuildContext _revealArea(BuildContext context) {
+  BuildContext? area;
+  context.visitAncestorElements((element) {
+    if (element.widget is Scrollable) return false;
+    if (element.widget is RevealArea) {
+      area = element;
+      return false;
+    }
+    return true;
+  });
+  return area ?? context;
+}
+
 ScrollableState? _verticalScrollable(BuildContext context) {
   var scrollable = Scrollable.maybeOf(context);
   while (scrollable != null && scrollable.axisDirection != AxisDirection.down) {
@@ -293,9 +315,10 @@ ScrollableState? _verticalScrollable(BuildContext context) {
 /// first screen brings the page back to its top, so headings above it show
 /// again, and nothing ends up under [ScrollClearance].
 Future<void> revealFocus(
-  BuildContext context, {
+  BuildContext focused, {
   bool Function()? stillFocused,
 }) async {
+  final context = _revealArea(focused);
   bool live() => stillFocused?.call() ?? true;
   final duration = MediaQuery.disableAnimationsOf(context)
       ? Duration.zero
@@ -399,12 +422,11 @@ class RemoteTraversalPolicy extends ReadingOrderTraversalPolicy {
     bool inLine(Rect rect) => rect.right > from.left && rect.left < from.right;
     double score(Rect rect) {
       final major = math.max(0.0, gap(rect));
-      // Centres line up a grid; left edges line up a wide control with the
-      // first of several narrower ones.
-      final minor = math.min(
-        (rect.center.dx - from.center.dx).abs(),
-        (rect.left - from.left).abs(),
-      );
+      // Centres line up a grid. From a much wider control, such as a text
+      // field, the first of the narrower ones below it lines up by its left.
+      final minor = from.width > rect.width * 1.5
+          ? (rect.left - from.left).abs()
+          : (rect.center.dx - from.center.dx).abs();
       return 13 * major * major + minor * minor;
     }
 
@@ -585,14 +607,29 @@ class _RemoteTextInputState extends State<RemoteTextInput> {
         return KeyEventResult.handled;
       }
     }
+    // Move by position, so a button beside the field is not taken for the
+    // control below or above it.
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      node.nextFocus();
+      if (!node.focusInDirection(TraversalDirection.down)) node.nextFocus();
       return KeyEventResult.handled;
+    }
+    // Past the end of the text, Right reaches a button beside the field.
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      final value = node.context
+          ?.findAncestorStateOfType<EditableTextState>()
+          ?.textEditingValue;
+      if (value != null &&
+          value.selection.isCollapsed &&
+          value.selection.baseOffset >= value.text.length &&
+          node.focusInDirection(TraversalDirection.right)) {
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       if (widget.onUp case final up?) {
         up();
-      } else {
+      } else if (!node.focusInDirection(TraversalDirection.up)) {
         node.previousFocus();
       }
       return KeyEventResult.handled;
@@ -1171,86 +1208,90 @@ class _PosterCardState extends State<PosterCard> {
   @override
   Widget build(BuildContext context) {
     final a = widget.anime;
-    return SizedBox(
-      width: widget.width,
-      child: Semantics(
-        label: a.title,
-        button: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FocusBox(
-              isTV: widget.isTV,
-              autofocus: widget.autofocus,
-              outsideFrame: true,
-              radius: widget.cropped ? 14 : 10,
-              onPressed: open,
-              onFocused: widget.onFocused,
-              onFocusChanged: (value) => setState(() => focused = value),
-              child: Hero(
-                tag: 'poster-${widget.key ?? a.key}',
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(widget.cropped ? 14 : 10),
-                  child: AspectRatio(
-                    aspectRatio: widget.landscape
-                        ? 16 / 9
-                        : widget.cropped
-                        ? (widget.isTV ? 143 / 194 : 132 / 184)
-                        : 2 / 3,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        CoverImage(
-                          widget.landscape && a.banner.isNotEmpty
-                              ? a.banner
-                              : a.cover,
-                          width: widget.width,
-                          height: widget.width * 1.5,
-                        ),
-                        if (widget.progress != null && widget.progress! > 0)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: LinearProgressIndicator(
-                              value: widget.progress!.clamp(0, 1),
-                              minHeight: 3,
-                              color: shu,
-                              backgroundColor: line,
-                            ),
+    return RevealArea(
+      child: SizedBox(
+        width: widget.width,
+        child: Semantics(
+          label: a.title,
+          button: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FocusBox(
+                isTV: widget.isTV,
+                autofocus: widget.autofocus,
+                outsideFrame: true,
+                radius: widget.cropped ? 14 : 10,
+                onPressed: open,
+                onFocused: widget.onFocused,
+                onFocusChanged: (value) => setState(() => focused = value),
+                child: Hero(
+                  tag: 'poster-${widget.key ?? a.key}',
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      widget.cropped ? 14 : 10,
+                    ),
+                    child: AspectRatio(
+                      aspectRatio: widget.landscape
+                          ? 16 / 9
+                          : widget.cropped
+                          ? (widget.isTV ? 143 / 194 : 132 / 184)
+                          : 2 / 3,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          CoverImage(
+                            widget.landscape && a.banner.isNotEmpty
+                                ? a.banner
+                                : a.cover,
+                            width: widget.width,
+                            height: widget.width * 1.5,
                           ),
-                      ],
+                          if (widget.progress != null && widget.progress! > 0)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: LinearProgressIndicator(
+                                value: widget.progress!.clamp(0, 1),
+                                minHeight: 3,
+                                color: shu,
+                                backgroundColor: line,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 7),
-            GestureDetector(
-              onTap: open,
-              child: Text(
-                a.title,
-                maxLines: widget.isTV ? 1 : 2,
-                overflow: TextOverflow.ellipsis,
-                style: uiStyle(
-                  context,
-                  size: 16,
-                  weight: FontWeight.w500,
-                  color: focused ? fgBright : fg,
-                  height: 1.3,
+              const SizedBox(height: 7),
+              GestureDetector(
+                onTap: open,
+                child: Text(
+                  a.title,
+                  maxLines: widget.isTV ? 1 : 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: uiStyle(
+                    context,
+                    size: 16,
+                    weight: FontWeight.w500,
+                    color: focused ? fgBright : fg,
+                    height: 1.3,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              widget.caption ??
-                  '${a.formatLabel}${a.year > 0 ? ' · ${a.year}' : ''}',
-              maxLines: widget.isTV ? 1 : 2,
-              overflow: TextOverflow.ellipsis,
-              style: uiStyle(context, size: 15, color: muted),
-            ),
-          ],
+              const SizedBox(height: 5),
+              Text(
+                widget.caption ??
+                    '${a.formatLabel}${a.year > 0 ? ' · ${a.year}' : ''}',
+                maxLines: widget.isTV ? 1 : 2,
+                overflow: TextOverflow.ellipsis,
+                style: uiStyle(context, size: 15, color: muted),
+              ),
+            ],
+          ),
         ),
       ),
     );
