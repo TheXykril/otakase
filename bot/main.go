@@ -44,7 +44,7 @@ type config struct {
 	LoungeChannel      string // default watch party voice channel
 	DailyAiring        bool
 	AiringHour         int    // UTC hour the airing post goes out
-	OtakaseCLI         string // otakase binary used by /provider-status
+	OtakaseHelper      string // otakase-helper binary: watch room lookups, /provider-status
 	OllamaURL          string // Ollama for matching questions by meaning, empty = off
 	EmbedModel         string
 	AIThreshold        float64
@@ -153,7 +153,7 @@ func loadConfig() config {
 		LoungeChannel:      os.Getenv("OTAKASE_LOUNGE_CHANNEL"),
 		DailyAiring:        os.Getenv("OTAKASE_DAILY_AIRING") != "false",
 		AiringHour:         6,
-		OtakaseCLI:         os.Getenv("OTAKASE_CLI"),
+		OtakaseHelper:      os.Getenv("OTAKASE_HELPER"),
 		CreateRoom:         os.Getenv("OTAKASE_CREATE_ROOM"),
 		SuggestionsChannel: os.Getenv("OTAKASE_SUGGESTIONS_CHANNEL"),
 		AniListClientID:    strings.TrimSpace(os.Getenv("OTAKASE_ANILIST_CLIENT_ID")),
@@ -182,8 +182,8 @@ func loadConfig() config {
 	if t, err := strconv.ParseFloat(os.Getenv("OTAKASE_AI_THRESHOLD"), 64); err == nil && t > 0 && t < 1 {
 		c.AIThreshold = t
 	}
-	if c.OtakaseCLI == "" {
-		c.OtakaseCLI = "otakase"
+	if c.OtakaseHelper == "" {
+		c.OtakaseHelper = "otakase-helper"
 	}
 	if c.Token == "" || c.GuildID == "" {
 		log.Fatal("DISCORD_BOT_TOKEN and OTAKASE_GUILD_ID must be set")
@@ -303,7 +303,7 @@ func main() {
 	go b.keepRunning("Join verification", b.verifyLoop)
 	log.Print("running")
 	// Which app build the add-on carries, e.g. v0.0.0-20261025144152-f226cba84c4b.
-	if v, err := os.ReadFile("/usr/local/share/otakase/cli-version"); err == nil {
+	if v, err := os.ReadFile("/usr/local/share/otakase/helper-version"); err == nil {
 		log.Printf("app helper %s", strings.TrimSpace(string(v)))
 	}
 
