@@ -549,6 +549,20 @@ class _LoginDialogState extends State<_LoginDialog> {
                   backgroundColor: Colors.white,
                 ),
               ),
+            if (widget.isTV && widget.auth.loginCode != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Check code ${widget.auth.loginCode}',
+                key: const Key('login-check-code'),
+                style: mono.copyWith(fontSize: 26, color: fgBright),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Only finish on your phone if its page shows this same code.',
+                style: uiStyle(context, size: 15, color: muted),
+              ),
+              const SizedBox(height: 8),
+            ],
             Text(
               widget.isTV
                   ? 'Scan with your phone. Keep both devices on the same home network, then finish sign in on the page.'

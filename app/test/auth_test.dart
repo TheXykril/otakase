@@ -273,6 +273,8 @@ void main() {
         utf8.decode(base64Url.decode(base64Url.normalize(encoded))),
       ) as Map;
       expect(AuthService.privateIPv4(state['host'] as String), isTrue);
+      expect(state['check'], true);
+      expect(auth.loginCode, AuthService.checkCode(state['nonce'] as String));
       final response = await http.get(
         Uri(
           scheme: 'http',
@@ -322,13 +324,17 @@ void main() {
     final state = jsonDecode(
       utf8.decode(base64Url.decode(base64Url.normalize(encoded))),
     ) as Map;
-    expect(state['host'], '127.0.0.1');
+    // The page decides where to send the login; the state cannot.
+    expect(state['desktop'], true);
+    expect(state.containsKey('host'), isFalse);
+    expect(state.containsKey('port'), isFalse);
+    expect(auth.loginCode, isNull);
     final completed = auth.completed.first;
     final response = await http.get(
       Uri(
         scheme: 'http',
         host: '127.0.0.1',
-        port: state['port'] as int,
+        port: AuthService.desktopLoginPort,
         path: '/login',
         queryParameters: {'state': encoded, 'access_token': 'token'},
       ),
@@ -338,6 +344,10 @@ void main() {
     expect(await completed, 'AniList');
     expect(auth.account('AniList')!.username, 'viewer');
     auth.dispose();
+  });
+  test('TV check code matches the sign-in page rule', () {
+    expect(AuthService.checkCode('a-b_cdEFgh'), 'ABCD');
+    expect(AuthService.checkCode('x'), 'X000');
   });
   test('logout wins over a refresh already writing secure storage', () async {
     final storage = DelayedTokens();

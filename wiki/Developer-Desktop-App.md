@@ -75,7 +75,7 @@ Playing from the launcher grows the window to 1280×760 for the player. Code: `a
 
 ## Sign-in
 
-AniList and MAL sign-in opens the default browser (`xdg-open`, `open` or `rundll32`, http/https links only). The app listens on a random port on `127.0.0.1` and puts it in the sign-in state; the site's callback page (`site/app-login/callback.js`) sends the browser back to `http://127.0.0.1:<port>/login`. The callback page change only works once the site is deployed from main.
+AniList and MAL sign-in opens the default browser (`xdg-open`, `open` or `rundll32`, http/https links only). The app listens on `127.0.0.1:47613` (`AuthService.desktopLoginPort`) and marks the sign-in state `desktop: true`; the site's callback page (`site/app-login/callback.js`) sends the browser back to that fixed address. The state never carries a desktop host or port, so a crafted sign-in link cannot send the login anywhere else. TV sign-ins show a four-letter check code beside the QR code and the phone page shows the same code (`check: true` in the state), so the viewer can see the page belongs to their own TV. The callback page change only works once the site is deployed from main.
 
 ## Player
 

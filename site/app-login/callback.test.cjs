@@ -31,12 +31,16 @@ test('invalid state, public address, metadata host and missing response never na
 test('declined login never forwards a token or code',()=>{
   const r=run(`?error=access_denied&state=${state({})}`);assert.equal(r.navigations.length,0);assert.equal(r.elements.continue.hidden,true);
 });
-test('desktop hands the login back to the app on this computer at once',()=>{
-  const s=state({host:'127.0.0.1',port:50002});const r=run('',`#access_token=token&state=${s}`);
-  assert.deepEqual(r.order,['erase','navigate']);const url=new URL(r.navigations[0]);assert.equal(url.origin,'http://127.0.0.1:50002');assert.equal(url.pathname,'/login');assert.equal(url.searchParams.get('access_token'),'token');
+test('desktop hands the login back to the fixed app port at once',()=>{
+  const s=state({desktop:true});const r=run('',`#access_token=token&state=${s}`);
+  assert.deepEqual(r.order,['erase','navigate']);const url=new URL(r.navigations[0]);assert.equal(url.origin,'http://127.0.0.1:47613');assert.equal(url.pathname,'/login');assert.equal(url.searchParams.get('access_token'),'token');
 });
-test('desktop rejects privileged or missing ports',()=>{
-  for(const s of [state({host:'127.0.0.1',port:80}),state({host:'127.0.0.1'}),state({host:'127.0.0.1',port:'50002'})]){
+test('a crafted state cannot pick a local address or port',()=>{
+  for(const s of [state({host:'127.0.0.1',port:50002}),state({desktop:true,host:'192.168.1.7',port:50001}),state({desktop:'yes'}),state({host:'localhost',port:50002})]){
     const r=run(`?access_token=token&state=${s}`);assert.equal(r.navigations.length,0);assert.equal(r.elements.continue.hidden,true);
   }
+});
+test('TV page shows the check code the TV shows',()=>{
+  const s=Buffer.from(JSON.stringify({nonce:'a-b_cdEFgh'+'x'.repeat(40),service:'AniList',host:'192.168.1.7',port:50001,check:true})).toString('base64url');
+  const r=run('',`#access_token=token&state=${s}`);assert.match(r.elements.message.textContent,/Check code ABCD\./);assert.doesNotMatch(run('',`#access_token=token&state=${state({host:'192.168.1.7',port:50001})}`).elements.message.textContent,/Check code/);
 });

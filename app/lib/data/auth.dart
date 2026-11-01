@@ -160,6 +160,24 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The one port the desktop app takes sign-ins on. The sign-in page only
+  /// ever hands a desktop login to this port on 127.0.0.1, so a crafted
+  /// sign-in link cannot send it anywhere else. Keep it in step with
+  /// site/app-login/callback.js.
+  static const desktopLoginPort = 47613;
+
+  /// Short code a TV shows next to its QR code. The phone's sign-in page
+  /// shows the same code, so the viewer can see the page belongs to their
+  /// own TV before the login goes anywhere. Same rule as callback.js.
+  static String checkCode(String nonce) => nonce
+      .replaceAll(RegExp('[^A-Za-z0-9]'), '')
+      .toUpperCase()
+      .padRight(4, '0')
+      .substring(0, 4);
+
+  /// The check code of the TV sign-in in progress, if any.
+  String? get loginCode => _pending?['code'] as String?;
+
   String _random() =>
       base64UrlEncode(List.generate(48, (_) => Random.secure().nextInt(256)))
           .replaceAll('=', '');
@@ -178,8 +196,16 @@ class AuthService extends ChangeNotifier {
     }
     String? host;
     if (desktop) {
-      host = '127.0.0.1';
-      _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      try {
+        _server = await HttpServer.bind(
+          InternetAddress.loopbackIPv4,
+          desktopLoginPort,
+        );
+      } on SocketException {
+        throw const LoginFailure(
+          'Another sign-in is still open. Close it and try again.',
+        );
+      }
       _server!.listen(_receive, onError: (_) {});
     } else if (tv) {
       host = await (findLanAddress?.call() ?? _findLanAddress());
@@ -191,11 +217,14 @@ class AuthService extends ChangeNotifier {
       _server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
       _server!.listen(_receive, onError: (_) {});
     }
+    final nonce = _random();
     final stateData = {
-      'nonce': _random(),
+      'nonce': nonce,
       'service': service,
       'host': ?host,
       if (host != null) 'port': _server!.port,
+      if (desktop) 'desktop': true,
+      if (tv && host != null) 'check': true,
     };
     final state = base64UrlEncode(utf8.encode(jsonEncode(stateData)))
         .replaceAll('=', '');
@@ -204,6 +233,7 @@ class AuthService extends ChangeNotifier {
       'state': state,
       'service': service,
       'verifier': verifier,
+      if (tv && host != null) 'code': checkCode(nonce),
       'expires': DateTime.now()
           .add(const Duration(minutes: 10))
           .millisecondsSinceEpoch,
