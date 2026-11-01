@@ -60,6 +60,18 @@ For later updates, open **More > About & updates**, choose **Download update**,
 then **Install update**. Approve Android's installation prompt. If Android asks,
 allow Otakase to install updates. Your profiles and progress stay in place.
 
+### Samsung smart TV
+
+Samsung TVs from 2021 or newer (Tizen 6.0+) can run the TV app. Samsung's
+store does not carry it, so you install it once from a computer on the same
+network. Download
+[otakase-samsung-tv.zip](https://github.com/TheXykril/otakase/releases/latest/download/otakase-samsung-tv.zip),
+unpack it and follow its `README.txt`: install Tizen Studio, turn on Developer
+Mode on the TV, create a free Samsung certificate for your TV, then run
+`install.sh` (Linux/macOS) or `install.bat` (Windows). To update, run the
+installer again with a newer release. Subtitles on Samsung TVs are plain text
+(no ASS styling).
+
 ### Arch Linux / Manjaro
 
 Build from source with the bundled PKGBUILD, so pacman tracks it like any

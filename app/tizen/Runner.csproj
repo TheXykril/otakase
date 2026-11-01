@@ -1,0 +1,23 @@
+<Project Sdk="Tizen.NET.Sdk/1.1.7">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>tizen80</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(FlutterEmbeddingPath)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The Go core, built by scripts/build-tpk.sh. -->
+    <TizenTpkUserIncludeFiles Include="lib\*.so">
+      <TizenTpkSubDir>lib</TizenTpkSubDir>
+    </TizenTpkUserIncludeFiles>
+    <FlutterEphemeral Include="flutter\ephemeral\**\*" />
+    <TizenTpkUserIncludeFiles Include="@(FlutterEphemeral)">
+      <TizenTpkSubDir>%(RecursiveDir)</TizenTpkSubDir>
+    </TizenTpkUserIncludeFiles>
+  </ItemGroup>
+
+</Project>

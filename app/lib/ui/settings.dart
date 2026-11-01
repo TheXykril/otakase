@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core.dart';
 import '../diagnostics.dart';
+import '../playback/platform.dart';
 import '../services.dart';
 import '../data/store.dart';
 import 'components.dart';
@@ -477,16 +478,25 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ]),
             group('About & updates', LucideIcons.shield, [
-              toggle(
-                'CheckUpdates',
-                'Check for app updates at startup.',
-                icon: LucideIcons.download,
-              ),
-              AppUpdatePanel(
-                updates: widget.services.updates,
-                isTV: widget.isTV,
-                autoCheck: store.flag('CheckUpdates'),
-              ),
+              // Samsung TVs cannot install packages from inside an app.
+              if (isTizen)
+                Text(
+                  'To update on a Samsung TV, run the Otakase TV installer '
+                  'again from a computer.',
+                  style: uiStyle(context, color: muted),
+                )
+              else ...[
+                toggle(
+                  'CheckUpdates',
+                  'Check for app updates at startup.',
+                  icon: LucideIcons.download,
+                ),
+                AppUpdatePanel(
+                  updates: widget.services.updates,
+                  isTV: widget.isTV,
+                  autoCheck: store.flag('CheckUpdates'),
+                ),
+              ],
             ]),
           ],
         ),
@@ -571,16 +581,18 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
             style: uiStyle(context, color: muted),
           ),
           const SizedBox(height: 24),
-          AppButton(
-            label: 'HLS / ASS probe',
-            onPressed: () => Navigator.push(
-              context,
-              OtakaseRoute<void>(
-                builder: (_) => const DiagnosticsPage(probe: true),
+          // The probe tests mpv and libass, which Samsung TVs do not use.
+          if (!isTizen)
+            AppButton(
+              label: 'HLS / ASS probe',
+              onPressed: () => Navigator.push(
+                context,
+                OtakaseRoute<void>(
+                  builder: (_) => const DiagnosticsPage(probe: true),
+                ),
               ),
+              isTV: widget.isTV,
             ),
-            isTV: widget.isTV,
-          ),
           const SizedBox(height: 32),
           const SectionLabel('Sources'),
           const SizedBox(height: 12),

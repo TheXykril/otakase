@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core.dart';
 import 'data/auth.dart';
 import 'data/profiles.dart';
+import 'playback/platform.dart';
 import 'services.dart';
 import 'ui/app_shell.dart';
 import 'ui/components.dart';
@@ -16,7 +17,7 @@ import 'ui/profiles_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  MediaKit.ensureInitialized();
+  if (!isTizen) MediaKit.ensureInitialized();
   final core = CoreClient();
   final profiles = ProfileManager(
     preferences: await SharedPreferences.getInstance(),

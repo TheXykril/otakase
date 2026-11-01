@@ -4,7 +4,7 @@ publish_to: none
 # Release builds take the CLI's version instead; see scripts/build-apk.sh.
 version: 0.0.0+1
 environment:
-  sdk: ^3.13.7
+  sdk: ^3.13.4
 dependencies:
   flutter:
     sdk: flutter
@@ -19,6 +19,13 @@ dependencies:
   media_kit: 1.2.6
   media_kit_video: 2.0.1
   media_kit_libs_video: 1.0.7
+  ffi: ^2.1.4
+  # Samsung TV (Tizen) only; Android ignores these.
+  video_player_avplay: 0.8.22
+  shared_preferences_tizen: 2.3.5
+  flutter_secure_storage_tizen: 0.1.6
+  path_provider_tizen: 2.3.3
+  sqflite_tizen: 0.1.6
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../core.dart';
 import '../data/models.dart';
 import '../player.dart';
+import '../playback/platform.dart';
 import '../services.dart';
 import 'catalog_pages.dart';
 import 'components.dart';
@@ -101,7 +102,7 @@ class _AppShellState extends State<AppShell> {
   Future<void> startRemote() async {
     await widget.services.tvRemote.initialize();
     if (widget.services.closed) return;
-    if (widget.isTV && Platform.isAndroid) {
+    if (widget.isTV && (Platform.isAndroid || isTizen)) {
       await widget.services.tvRemote.startTV();
     }
     try {

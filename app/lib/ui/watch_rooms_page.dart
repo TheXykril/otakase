@@ -3,12 +3,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 
 import '../data/models.dart';
 import '../data/store.dart';
 import '../data/watch_rooms.dart';
+import '../playback/engine.dart';
 import '../services.dart';
 import '../tls_ca.dart';
 import 'components.dart';
@@ -183,8 +182,7 @@ class WatchRoomPlayer extends StatefulWidget {
 class _WatchRoomPlayerState extends State<WatchRoomPlayer>
     with WidgetsBindingObserver {
   WatchRooms get rooms => widget.services.watchRooms;
-  late final Player player;
-  late final VideoController video;
+  late final PlaybackEngine player;
   late final Future<void> Function() stopHandler;
   late final Future<void> Function(String, Json) commandHandler;
   late final Json Function() statusHandler;
@@ -208,20 +206,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    player = Player(
-      configuration: const PlayerConfiguration(
-        libass: true,
-        libassAndroidFont: 'assets/fonts/NotoSansJP-Regular.otf',
-        libassAndroidFontName: 'Noto Sans JP',
-      ),
-    );
-    video = VideoController(
-      player,
-      configuration: const VideoControllerConfiguration(
-        hwdec: 'mediacodec',
-        enableHardwareAcceleration: true,
-      ),
-    );
+    player = PlaybackEngine.create();
     stopHandler = stopForProfile;
     commandHandler = control;
     statusHandler = status;
@@ -346,8 +331,6 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
   }
 
   Future<void> configure() async {
-    final native = player.platform;
-    if (native is! NativePlayer) return;
     final s = widget.services.store;
     for (final entry in {
       'sub-font': s.text('SubtitleFont'),
@@ -360,7 +343,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
       'af': audioFilter(s),
       ...await tlsOptions(),
     }.entries) {
-      await native.setProperty(entry.key, entry.value);
+      await player.setProperty(entry.key, entry.value);
     }
   }
 
@@ -377,7 +360,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
     if (mounted) setState(() {});
     try {
       await configure();
-      await player.open(Media(rooms.mediaUri(desired).toString()), play: false);
+      await player.open(rooms.mediaUri(desired).toString(), play: false);
       if (player.state.duration <= Duration.zero) {
         await player.stream.duration
             .firstWhere((d) => d > Duration.zero)
@@ -419,14 +402,14 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
       widget.services.store.text('SubsLanguage'),
     );
     if (track == null) {
-      await player.setSubtitleTrack(SubtitleTrack.no());
+      await player.setSubtitleTrack(EngineTrack.no);
       subSelected = true;
       return;
     }
 
     try {
       await player.setSubtitleTrack(
-        SubtitleTrack.uri(
+        EngineTrack.uri(
           rooms.mediaUri(track['url'] as String).toString(),
           title: track['label'] as String? ?? '',
           language: track['lang'] as String? ?? '',
@@ -601,13 +584,13 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
     if (choice == null || ending) return;
     manualSubs = true;
     if (choice == 'Off') {
-      await player.setSubtitleTrack(SubtitleTrack.no());
+      await player.setSubtitleTrack(EngineTrack.no);
       subSelected = true;
     } else {
       final t = tracks.firstWhere((t) => t['label'] == choice);
       if (player.state.duration > Duration.zero) {
         await player.setSubtitleTrack(
-          SubtitleTrack.uri(
+          EngineTrack.uri(
             rooms.mediaUri(t['url'] as String).toString(),
             title: choice,
           ),
@@ -727,7 +710,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Video(controller: video, controls: NoVideoControls),
+                player.view(),
                 if (busy)
                   const Center(child: CircularProgressIndicator(color: shu)),
                 if (overlay || busy || error != null || behind > 0)
