@@ -10,6 +10,9 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import 'core.dart';
 import 'data/models.dart';
+import 'desktop/desktop_core.dart';
+import 'desktop/player_bar.dart';
+import 'desktop/window_frame.dart';
 import 'data/store.dart';
 import 'data/synced_resume.dart';
 import 'services.dart';
@@ -60,6 +63,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Timer? hideTimer, saveTimer, nextTimer, loadingTimer;
   int copy = 0, generation = 0, countdownSeconds = 0;
   bool overlay = true,
+      fullscreen = false,
       busy = true,
       panelOpen = false,
       skipRequested = false,
@@ -193,6 +197,19 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
   }
 
+  bool? subsLifted;
+
+  /// Moves subtitles above the desktop control bar while it shows, like the
+  /// CLI mpv skin does.
+  void liftSubtitles(bool up) {
+    if (!isDesktop || subsLifted == up) return;
+    subsLifted = up;
+    final base = widget.services.store.integer('SubtitlePosition');
+    unawaited(
+      property('sub-pos', (up ? math.max(0, base - 16) : base).toString()),
+    );
+  }
+
   Future<void> property(String name, String value) async {
     final native = player.platform;
     if (native is NativePlayer) await native.setProperty(name, value);
@@ -206,6 +223,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await property('sub-back-color', s.text('SubtitleBackground'));
     await property('sub-border-size', s.integer('SubtitleOutline').toString());
     await property('sub-pos', s.integer('SubtitlePosition').toString());
+    subsLifted = null;
     await property('af', audioFilter(s));
     for (final e in (await tlsOptions()).entries) {
       await property(e.key, e.value);
@@ -901,6 +919,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       unawaited(next());
       return KeyEventResult.handled;
     }
+    if (isDesktop && key == LogicalKeyboardKey.keyF) {
+      unawaited(toggleFullscreen());
+      return KeyEventResult.handled;
+    }
+    if (isDesktop && key == LogicalKeyboardKey.keyM) {
+      toggleMute();
+      return KeyEventResult.handled;
+    }
     if (key == LogicalKeyboardKey.mediaRewind) {
       unawaited(seek(-10));
       return KeyEventResult.handled;
@@ -957,6 +983,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     for (final subscription in subscriptions) {
       unawaited(subscription.cancel());
     }
+    if (fullscreen) unawaited(setDesktopFullScreen(false));
     surface.dispose();
     playFocus.dispose();
     skipFocus.dispose();
@@ -1002,6 +1029,168 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await widget.services.core.stopPlayback();
   }
 
+  double lastVolume = 100;
+
+  void toggleMute() {
+    final volume = player.state.volume;
+    if (volume > 0) lastVolume = volume;
+    unawaited(player.setVolume(volume > 0 ? 0 : lastVolume));
+    showControls();
+  }
+
+  Future<void> toggleFullscreen() async {
+    final on = await setDesktopFullScreen(!fullscreen);
+    if (mounted) setState(() => fullscreen = on);
+    showControls();
+  }
+
+  /// The desktop controls: the CLI mpv skin look, with the skip button and
+  /// next-episode card above the bar.
+  Widget desktopControls(BuildContext context) {
+    liftSubtitles(true);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DesktopPlayerBar(
+          title: anime.title,
+          subtitle:
+              'Ep $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
+          position: position,
+          duration: duration,
+          buffered: player.state.buffer,
+          playing: player.state.playing,
+          buffering: player.state.buffering,
+          silent: player.state.volume == 0,
+          fullscreen: fullscreen,
+          trackLabel: source?.mode.toUpperCase() ?? widget.mode.toUpperCase(),
+          centerLabel: 'Episode $episode',
+          stripes: spans,
+          playFocus: playFocus,
+          onBack: () => Navigator.pop(context),
+          onPlayPause: () {
+            unawaited(player.playOrPause());
+            showControls();
+          },
+          onSeekBy: (seconds) => unawaited(seek(seconds)),
+          onSeekStart: (_) {
+            scrubbing = true;
+            hideTimer?.cancel();
+          },
+          onSeekChanged: (v) =>
+              setState(() => position = Duration(milliseconds: v.round())),
+          onSeekEnd: (v) {
+            scrubbing = false;
+            unawaited(player.seek(Duration(milliseconds: v.round())));
+            showControls();
+          },
+          onNext: canNext ? () => unawaited(next()) : null,
+          onMute: toggleMute,
+          onTracks: () => unawaited(trackPanel()),
+          onQuality: () => unawaited(qualityPanel()),
+          onFullscreen: () => unawaited(toggleFullscreen()),
+        ),
+        Positioned(
+          right: 40,
+          bottom: 170,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (active != null) skipButton(),
+              if (countdownSeconds > 0) nextCard(context),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget skipButton() => Align(
+    alignment: Alignment.centerRight,
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: AppButton(
+        label: active!.type == 'op' ? 'Skip opening' : active!.label,
+        focusNode: skipFocus,
+        onPressed: () {
+          unawaited(
+            player.seek(Duration(milliseconds: (active!.end * 1000).round())),
+          );
+          playFocus.requestFocus();
+          showControls();
+        },
+        isTV: widget.isTV,
+      ),
+    ),
+  );
+
+  Widget nextCard(BuildContext context) => Align(
+    alignment: Alignment.centerRight,
+    child: Container(
+      width: 500,
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: panel,
+        border: Border.all(color: line),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: CoverImage(anime.cover, width: 54, height: 81),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Next · Episode ${episode + 1}',
+                  style: uiStyle(context, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  widget.services.store.flag('NextEpisodePrompt')
+                      ? 'Continue the story?'
+                      : 'Playing in $countdownSeconds seconds',
+                  style: uiStyle(context),
+                ),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  minHeight: 2,
+                  value: countdownSeconds / 10,
+                  color: shu,
+                  backgroundColor: line,
+                ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    AppButton(
+                      label: 'Play next',
+                      onPressed: () => next(),
+                      isTV: widget.isTV,
+                    ),
+                    AppButton(
+                      label: 'Cancel',
+                      onPressed: () {
+                        nextTimer?.cancel();
+                        nextCancelled = true;
+                        setState(() => countdownSeconds = 0);
+                      },
+                      isTV: widget.isTV,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !overlay || busy || error.isNotEmpty,
@@ -1016,378 +1205,291 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       body: Focus(
         skipTraversal: true,
         onKeyEvent: remote,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            GestureDetector(
-              onTap: () {
-                if (overlay) {
-                  setState(() => overlay = false);
-                  surface.requestFocus();
-                } else {
-                  showControls();
-                }
-              },
-              child: Focus(
-                focusNode: surface,
-                autofocus: true,
-                child: Video(controller: video, controls: NoVideoControls),
+        // With a mouse, moving it brings the controls back and keeps them up,
+        // and the pointer hides with them.
+        child: MouseRegion(
+          onHover: isDesktop ? (_) => showControls() : null,
+          cursor: isDesktop && !overlay && !busy && error.isEmpty
+              ? SystemMouseCursors.none
+              : MouseCursor.defer,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  if (overlay) {
+                    setState(() => overlay = false);
+                    surface.requestFocus();
+                  } else {
+                    showControls();
+                  }
+                },
+                child: Focus(
+                  focusNode: surface,
+                  autofocus: true,
+                  child: Video(controller: video, controls: NoVideoControls),
+                ),
               ),
-            ),
-            if (busy)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      OtakaseSeal(size: widget.isTV ? 96 : 64),
-                      const SizedBox(height: 24),
-                      const SkeletonBlock(width: 160, height: 2),
-                      const SizedBox(height: 24),
-                      Text(status, style: uiStyle(context)),
-                      const SizedBox(height: 16),
-                      AppButton(
-                        label: 'Back',
-                        onPressed: () => Navigator.pop(context),
+              if (busy)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        OtakaseSeal(size: widget.isTV ? 96 : 64),
+                        const SizedBox(height: 24),
+                        const SkeletonBlock(width: 160, height: 2),
+                        const SizedBox(height: 24),
+                        Text(status, style: uiStyle(context)),
+                        const SizedBox(height: 16),
+                        AppButton(
+                          label: 'Back',
+                          onPressed: () => Navigator.pop(context),
+                          isTV: widget.isTV,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (error.isNotEmpty)
+                Center(
+                  child: ColoredBox(
+                    color: const Color(0xe6080707),
+                    child: EmptyState(
+                      error: true,
+                      message: error,
+                      action: AppButton(
+                        label: 'Try another copy',
+                        onPressed: tryAnotherCopy,
                         isTV: widget.isTV,
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            if (error.isNotEmpty)
-              Center(
-                child: ColoredBox(
-                  color: const Color(0xe6080707),
-                  child: EmptyState(
-                    error: true,
-                    message: error,
-                    action: AppButton(
-                      label: 'Try another copy',
-                      onPressed: tryAnotherCopy,
-                      isTV: widget.isTV,
                     ),
                   ),
                 ),
-              ),
-            if (overlay && !busy && error.isEmpty)
-              SafeArea(
-                child: Column(
-                  children: [
-                    Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [bgDeep, Color(0x00080707)],
+              if (overlay && !busy && error.isEmpty && isDesktop)
+                desktopControls(context)
+              else if (isDesktop)
+                Builder(
+                  builder: (_) {
+                    liftSubtitles(false);
+                    return const SizedBox.shrink();
+                  },
+                ),
+              if (overlay && !busy && error.isEmpty && !isDesktop)
+                SafeArea(
+                  child: Column(
+                    children: [
+                      Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [bgDeep, Color(0x00080707)],
+                          ),
                         ),
-                      ),
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            tooltip: 'Back',
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(LucideIcons.arrowLeft),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  anime.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: uiStyle(
-                                    context,
-                                    size: 20,
-                                    weight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'EPISODE $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
-                                  style: uiStyle(
-                                    context,
-                                    size: 15,
-                                    color: muted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          DeviceStatus(isTV: widget.isTV),
-                          const SizedBox(width: 12),
-                          const SizedBox(
-                            width: 48,
-                            height: 48,
-                            child: Center(child: OtakaseSeal()),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Center(
-                        child: Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: 24,
-                          crossAxisAlignment: WrapCrossAlignment.center,
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
                           children: [
-                            TransportButton(
-                              label: 'Rewind 10 seconds',
-                              text: '−10',
-                              onPressed: () => seek(-10),
+                            IconButton(
+                              tooltip: 'Back',
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(LucideIcons.arrowLeft),
                             ),
-                            TransportButton(
-                              label: player.state.playing ? 'Pause' : 'Play',
-                              icon: player.state.playing
-                                  ? LucideIcons.pause
-                                  : LucideIcons.play,
-                              primary: true,
-                              focusNode: playFocus,
-                              onPressed: () {
-                                unawaited(player.playOrPause());
-                                showControls();
-                              },
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    anime.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: uiStyle(
+                                      context,
+                                      size: 20,
+                                      weight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'EPISODE $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
+                                    style: uiStyle(
+                                      context,
+                                      size: 15,
+                                      color: muted,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            TransportButton(
-                              label: 'Forward 10 seconds',
-                              text: '+10',
-                              onPressed: () => seek(10),
+                            DeviceStatus(isTV: widget.isTV),
+                            const SizedBox(width: 12),
+                            const SizedBox(
+                              width: 48,
+                              height: 48,
+                              child: Center(child: OtakaseSeal()),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    if (active != null)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: AppButton(
-                            label: active!.type == 'op'
-                                ? 'Skip opening'
-                                : active!.label,
-                            focusNode: skipFocus,
-                            onPressed: () {
-                              unawaited(
-                                player.seek(
-                                  Duration(
-                                    milliseconds: (active!.end * 1000).round(),
-                                  ),
-                                ),
-                              );
-                              playFocus.requestFocus();
-                              showControls();
-                            },
-                            isTV: widget.isTV,
-                          ),
-                        ),
-                      ),
-                    if (countdownSeconds > 0)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Container(
-                          width: 500,
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 8,
-                          ),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: panel,
-                            border: Border.all(color: line),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
+                      Expanded(
+                        child: Center(
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 24,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: CoverImage(
-                                  anime.cover,
-                                  width: 54,
-                                  height: 81,
-                                ),
+                              TransportButton(
+                                label: 'Rewind 10 seconds',
+                                text: '−10',
+                                onPressed: () => seek(-10),
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Next · Episode ${episode + 1}',
-                                      style: uiStyle(
-                                        context,
-                                        weight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      widget.services.store.flag(
-                                            'NextEpisodePrompt',
-                                          )
-                                          ? 'Continue the story?'
-                                          : 'Playing in $countdownSeconds seconds',
-                                      style: uiStyle(context),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    LinearProgressIndicator(
-                                      minHeight: 2,
-                                      value: countdownSeconds / 10,
-                                      color: shu,
-                                      backgroundColor: line,
-                                    ),
-                                    Wrap(
-                                      spacing: 8,
-                                      children: [
-                                        AppButton(
-                                          label: 'Play next',
-                                          onPressed: () => next(),
-                                          isTV: widget.isTV,
-                                        ),
-                                        AppButton(
-                                          label: 'Cancel',
-                                          onPressed: () {
-                                            nextTimer?.cancel();
-                                            nextCancelled = true;
-                                            setState(
-                                              () => countdownSeconds = 0,
-                                            );
-                                          },
-                                          isTV: widget.isTV,
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
+                              TransportButton(
+                                label: player.state.playing ? 'Pause' : 'Play',
+                                icon: player.state.playing
+                                    ? LucideIcons.pause
+                                    : LucideIcons.play,
+                                primary: true,
+                                focusNode: playFocus,
+                                onPressed: () {
+                                  unawaited(player.playOrPause());
+                                  showControls();
+                                },
+                              ),
+                              TransportButton(
+                                label: 'Forward 10 seconds',
+                                text: '+10',
+                                onPressed: () => seek(10),
                               ),
                             ],
                           ),
                         ),
                       ),
-                    Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0x00080707), bgDeep],
+                      if (active != null) skipButton(),
+                      if (countdownSeconds > 0) nextCard(context),
+                      Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0x00080707), bgDeep],
+                          ),
                         ),
-                      ),
-                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                      child: Column(
-                        children: [
-                          SizedBox(
-                            height: 44,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: 44,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                    ),
+                                    child: CustomPaint(
+                                      size: const Size(double.infinity, 6),
+                                      painter: SkipPainter(spans, duration),
+                                    ),
                                   ),
-                                  child: CustomPaint(
-                                    size: const Size(double.infinity, 6),
-                                    painter: SkipPainter(spans, duration),
+                                  KageSeekSlider(
+                                    key: const Key('player-timeline'),
+                                    value: position.inMilliseconds
+                                        .clamp(
+                                          0,
+                                          math.max(1, duration.inMilliseconds),
+                                        )
+                                        .toDouble(),
+                                    max: math
+                                        .max(1, duration.inMilliseconds)
+                                        .toDouble(),
+                                    onChangeStart: (_) {
+                                      scrubbing = true;
+                                      hideTimer?.cancel();
+                                    },
+                                    onChanged: (v) {
+                                      setState(
+                                        () => position = Duration(
+                                          milliseconds: v.round(),
+                                        ),
+                                      );
+                                    },
+                                    onChangeEnd: (v) {
+                                      scrubbing = false;
+                                      unawaited(
+                                        player.seek(
+                                          Duration(milliseconds: v.round()),
+                                        ),
+                                      );
+                                      showControls();
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                Text(
+                                  '${time(position)} / ${time(duration)}',
+                                  style: mono.copyWith(
+                                    fontSize: widget.isTV ? 20 : 15,
+                                    color: fg,
+                                    letterSpacing: 0,
                                   ),
                                 ),
-                                KageSeekSlider(
-                                  key: const Key('player-timeline'),
-                                  value: position.inMilliseconds
-                                      .clamp(
-                                        0,
-                                        math.max(1, duration.inMilliseconds),
-                                      )
-                                      .toDouble(),
-                                  max: math
-                                      .max(1, duration.inMilliseconds)
-                                      .toDouble(),
-                                  onChangeStart: (_) {
-                                    scrubbing = true;
-                                    hideTimer?.cancel();
-                                  },
-                                  onChanged: (v) {
-                                    setState(
-                                      () => position = Duration(
-                                        milliseconds: v.round(),
-                                      ),
-                                    );
-                                  },
-                                  onChangeEnd: (v) {
-                                    scrubbing = false;
-                                    unawaited(
-                                      player.seek(
-                                        Duration(milliseconds: v.round()),
-                                      ),
-                                    );
-                                    showControls();
-                                  },
+                                const Spacer(),
+                                if (player.state.buffering)
+                                  Text(
+                                    'Buffering',
+                                    style: uiStyle(
+                                      context,
+                                      size: 15,
+                                      color: muted,
+                                    ),
+                                  ),
+                                const Spacer(),
+                                Text(
+                                  '−${time(duration - position)}',
+                                  style: mono.copyWith(
+                                    fontSize: widget.isTV ? 20 : 15,
+                                    color: fg,
+                                    letterSpacing: 0,
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                          Row(
-                            children: [
-                              Text(
-                                '${time(position)} / ${time(duration)}',
-                                style: mono.copyWith(
-                                  fontSize: widget.isTV ? 20 : 15,
-                                  color: fg,
-                                  letterSpacing: 0,
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 0,
+                              alignment: WrapAlignment.center,
+                              children: [
+                                AppButton(
+                                  label: 'Next',
+                                  onPressed: canNext ? () => next() : null,
+                                  isTV: widget.isTV,
                                 ),
-                              ),
-                              const Spacer(),
-                              if (player.state.buffering)
-                                Text(
-                                  'Buffering',
-                                  style: uiStyle(
-                                    context,
-                                    size: 15,
-                                    color: muted,
-                                  ),
+                                AppButton(
+                                  label: 'Tracks',
+                                  onPressed: trackPanel,
+                                  isTV: widget.isTV,
                                 ),
-                              const Spacer(),
-                              Text(
-                                '−${time(duration - position)}',
-                                style: mono.copyWith(
-                                  fontSize: widget.isTV ? 20 : 15,
-                                  color: fg,
-                                  letterSpacing: 0,
+                                AppButton(
+                                  label: 'Quality',
+                                  onPressed: qualityPanel,
+                                  isTV: widget.isTV,
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 0,
-                            alignment: WrapAlignment.center,
-                            children: [
-                              AppButton(
-                                label: 'Next',
-                                onPressed: canNext ? () => next() : null,
-                                isTV: widget.isTV,
-                              ),
-                              AppButton(
-                                label: 'Tracks',
-                                onPressed: trackPanel,
-                                isTV: widget.isTV,
-                              ),
-                              AppButton(
-                                label: 'Quality',
-                                onPressed: qualityPanel,
-                                isTV: widget.isTV,
-                              ),
-                            ],
-                          ),
-                        ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     ),

@@ -20,6 +20,14 @@ import 'community_page.dart';
 import 'movie_page.dart';
 import 'tv_remote_page.dart';
 import '../data/tv_remote.dart';
+import '../desktop/desktop_core.dart';
+import '../desktop/top_bar.dart';
+import '../desktop/window_frame.dart';
+
+/// The top-level pages. Desktop has room for Schedule as its own tab.
+List<String> get rootTabs => isDesktop
+    ? const ['Home', 'Search', 'Schedule', 'More']
+    : const ['Home', 'Search', 'More'];
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.services, required this.isTV});
@@ -34,17 +42,14 @@ class _AppShellState extends State<AppShell> {
   int? focusedNav;
   bool rootIsCurrent = true;
   StreamSubscription<String>? remoteEvents;
-  final navFocus = List.generate(
-    3,
-    (i) => FocusNode(
-      debugLabel: [
-        'Home navigation',
-        'Search navigation',
-        'More navigation',
-      ][i],
-    ),
+  final navFocus = [
+    for (final tab in rootTabs) FocusNode(debugLabel: '$tab navigation'),
+  ];
+  final scopes = List.generate(
+    rootTabs.length,
+    (i) => FocusScopeNode(debugLabel: 'Root $i'),
   );
-  final scopes = List.generate(3, (i) => FocusScopeNode(debugLabel: 'Root $i'));
+  final searchField = FocusNode(debugLabel: 'Search field');
   void modeChanged(FocusHighlightMode _) {
     if (mounted) setState(() {});
   }
@@ -69,12 +74,14 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     FocusManager.instance.addHighlightModeListener(modeChanged);
     widget.services.selectRoot = choose;
+    desktopCloseHook = closeWindow;
     widget.services.auth.remoteLink = remoteLink;
     remoteEvents = widget.services.tvRemote.events.listen((text) {
       if (mounted) communityMessage(context, text);
     });
     unawaited(startRemote());
-    if (Platform.isAndroid && widget.services.store.flag('CheckUpdates')) {
+    if ((Platform.isAndroid || isDesktop) &&
+        widget.services.store.flag('CheckUpdates')) {
       unawaited(widget.services.updates.check());
     }
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -89,12 +96,14 @@ class _AppShellState extends State<AppShell> {
     widget.services.auth.remoteLink = null;
     unawaited(remoteEvents?.cancel() ?? Future<void>.value());
     widget.services.selectRoot = null;
+    if (desktopCloseHook == closeWindow) desktopCloseHook = null;
     for (final n in navFocus) {
       n.dispose();
     }
     for (final s in scopes) {
       s.dispose();
     }
+    searchField.dispose();
     super.dispose();
   }
 
@@ -157,6 +166,11 @@ class _AppShellState extends State<AppShell> {
 
   void focusContent(int index) {
     if (ModalRoute.isCurrentOf(context) == false || selected != index) return;
+    // On desktop, Search starts in the field so typing searches at once.
+    if (isDesktop && index == 1) {
+      searchField.requestFocus();
+      return;
+    }
     final scope = scopes[index];
     final remembered = scope.focusedChild;
     scope.requestFocus();
@@ -228,6 +242,8 @@ class _AppShellState extends State<AppShell> {
       choose(0, focusNavigation: widget.isTV);
       return;
     }
+    // Esc on Home leaves the window open; the close button closes it.
+    if (isDesktop) return;
     final exit = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -286,8 +302,19 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  /// The desktop close button: no "Exit Otakase?" question, the click is
+  /// the answer.
+  /// Saves playback, signs out of Discord presence and closes the window.
+  Future<void> closeWindow() async {
+    await widget.services.close().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {},
+    );
+    await closeDesktopWindow();
+  }
+
   Widget nav(int index) {
-    final label = ['Home', 'Search', 'More'][index];
+    final label = rootTabs[index];
     final active = index == selected;
     return Focus(
       onKeyEvent: (_, event) {
@@ -453,7 +480,26 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget header() => widget.isTV
+  /// Desktop top bar: tabs in the middle on every system. Windows and Linux
+  /// put the logo on the left and the window buttons on the right; macOS has
+  /// its own buttons on the left, so the logo moves to the right there. A
+  /// future account button goes beside the window buttons.
+  Widget desktopHeader() => DesktopTopBar(
+    brand: const Brand(),
+    tabs: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < rootTabs.length; i++) ...[
+          nav(i),
+          if (i < rootTabs.length - 1) const SizedBox(width: 14),
+        ],
+      ],
+    ),
+  );
+
+  Widget header() => isDesktop
+      ? desktopHeader()
+      : widget.isTV
       ? Padding(
           padding: EdgeInsets.fromLTRB(
             math.max(48, MediaQuery.paddingOf(context).left),
@@ -465,9 +511,9 @@ class _AppShellState extends State<AppShell> {
             children: [
               const Brand(),
               const SizedBox(width: 28),
-              for (var i = 0; i < 3; i++) ...[
+              for (var i = 0; i < rootTabs.length; i++) ...[
                 nav(i),
-                if (i < 2) const SizedBox(width: 14),
+                if (i < rootTabs.length - 1) const SizedBox(width: 14),
               ],
               const Spacer(),
               const DeviceStatus(isTV: true),
@@ -522,7 +568,9 @@ class _AppShellState extends State<AppShell> {
           ],
         ),
         child: Row(
-          children: [for (var i = 0; i < 3; i++) Expanded(child: nav(i))],
+          children: [
+            for (var i = 0; i < rootTabs.length; i++) Expanded(child: nav(i)),
+          ],
         ),
       ),
     ),
@@ -553,8 +601,15 @@ class _AppShellState extends State<AppShell> {
           isTV: widget.isTV,
           onOpen: open,
           onVoice: voice,
+          fieldFocus: searchField,
           onNavigateUp: () => navFocus[1].requestFocus(),
         ),
+        if (isDesktop)
+          SchedulePage(
+            services: widget.services,
+            isTV: widget.isTV,
+            onOpen: open,
+          ),
         MorePage(services: widget.services, isTV: widget.isTV, onOpen: open),
       ];
       return ExcludeFocus(
@@ -637,19 +692,21 @@ class _AppShellState extends State<AppShell> {
                       height: tvHeaderExtent(context),
                       child: DecoratedBox(
                         key: const Key('tv-header-scrim'),
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Color(0xf00e0d0c),
-                              Color(0xc00e0d0c),
-                              Color(0x000e0d0c),
-                            ],
-                            stops: [0, .75, 1],
-                          ),
-                        ),
-                        child: header(),
+                        decoration: isDesktop
+                            ? const BoxDecoration()
+                            : const BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Color(0xf00e0d0c),
+                                    Color(0xc00e0d0c),
+                                    Color(0x000e0d0c),
+                                  ],
+                                  stops: [0, .75, 1],
+                                ),
+                              ),
+                        child: WindowDragArea(child: header()),
                       ),
                     ),
                   ),

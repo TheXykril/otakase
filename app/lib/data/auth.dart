@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
+import '../desktop/desktop_core.dart';
+import '../desktop/open_link.dart';
 import 'models.dart';
 import 'oauth_config.dart';
 
@@ -158,17 +160,54 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The one port the desktop app takes sign-ins on. The sign-in page only
+  /// ever hands a desktop login to this port on 127.0.0.1, so a crafted
+  /// sign-in link cannot send it anywhere else. Keep it in step with
+  /// site/app-login/callback.js.
+  static const desktopLoginPort = 47613;
+
+  /// Short code a TV shows next to its QR code. The phone's sign-in page
+  /// shows the same code, so the viewer can see the page belongs to their
+  /// own TV before the login goes anywhere. Same rule as callback.js.
+  static String checkCode(String nonce) => nonce
+      .replaceAll(RegExp('[^A-Za-z0-9]'), '')
+      .toUpperCase()
+      .padRight(4, '0')
+      .substring(0, 4);
+
+  /// The check code of the TV sign-in in progress, if any.
+  String? get loginCode => _pending?['code'] as String?;
+
   String _random() =>
       base64UrlEncode(List.generate(48, (_) => Random.secure().nextInt(256)))
           .replaceAll('=', '');
 
-  Future<Uri> begin(String service, {bool tv = false}) async {
+  /// Starts a login. A TV listens on the home network for the phone that
+  /// signs in; the desktop app ([desktop]) listens on this computer only and
+  /// the browser hands the login straight back.
+  Future<Uri> begin(
+    String service, {
+    bool tv = false,
+    bool desktop = false,
+  }) async {
     await cancelLogin();
     if (!['AniList', 'MAL'].contains(service)) {
       throw const LoginFailure('Unknown account.');
     }
     String? host;
-    if (tv) {
+    if (desktop) {
+      try {
+        _server = await HttpServer.bind(
+          InternetAddress.loopbackIPv4,
+          desktopLoginPort,
+        );
+      } on SocketException {
+        throw const LoginFailure(
+          'Another sign-in is still open. Close it and try again.',
+        );
+      }
+      _server!.listen(_receive, onError: (_) {});
+    } else if (tv) {
       host = await (findLanAddress?.call() ?? _findLanAddress());
       if (host == null || !privateIPv4(host)) {
         throw const LoginFailure(
@@ -178,11 +217,14 @@ class AuthService extends ChangeNotifier {
       _server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
       _server!.listen(_receive, onError: (_) {});
     }
+    final nonce = _random();
     final stateData = {
-      'nonce': _random(),
+      'nonce': nonce,
       'service': service,
       'host': ?host,
       if (host != null) 'port': _server!.port,
+      if (desktop) 'desktop': true,
+      if (tv && host != null) 'check': true,
     };
     final state = base64UrlEncode(utf8.encode(jsonEncode(stateData)))
         .replaceAll('=', '');
@@ -191,6 +233,7 @@ class AuthService extends ChangeNotifier {
       'state': state,
       'service': service,
       'verifier': verifier,
+      if (tv && host != null) 'code': checkCode(nonce),
       'expires': DateTime.now()
           .add(const Duration(minutes: 10))
           .millisecondsSinceEpoch,
@@ -243,6 +286,7 @@ class AuthService extends ChangeNotifier {
     request.response.headers.contentType = ContentType.html;
     var success = false;
     final service = _pending?['service'] as String?;
+    final device = _server?.address.isLoopback == true ? 'Otakase' : 'your TV';
     try {
       if (request.method != 'GET' || request.uri.path != '/login') {
         request.response.statusCode = HttpStatus.notFound;
@@ -257,13 +301,13 @@ class AuthService extends ChangeNotifier {
         );
         success = true;
         request.response.write(
-          '<!doctype html><meta name="viewport" content="width=device-width"><title>Otakase</title><p>Signed in. Return to your TV.</p>',
+          '<!doctype html><meta name="viewport" content="width=device-width"><title>Otakase</title><p>Signed in. Return to $device.</p>',
         );
       }
     } catch (_) {
       request.response.statusCode = HttpStatus.badRequest;
       request.response.write(
-        '<!doctype html><title>Otakase</title><p>Login expired or unsuccessful. Start again on your TV.</p>',
+        '<!doctype html><title>Otakase</title><p>Login expired or unsuccessful. Start again in $device.</p>',
       );
     } finally {
       await request.response.close();
@@ -275,6 +319,12 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> launch(Uri uri) async {
+    if (isDesktop) {
+      if (!await openInBrowser(uri)) {
+        throw const LoginFailure('No browser is available.');
+      }
+      return;
+    }
     try {
       await platform.invokeMethod<void>('launchUri', uri.toString());
     } on PlatformException {

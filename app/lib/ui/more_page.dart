@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../data/auth.dart';
+import '../desktop/desktop_core.dart';
 import '../data/models.dart';
 import '../services.dart';
 import 'catalog_pages.dart';
@@ -59,6 +60,7 @@ class MorePage extends StatelessWidget {
   final void Function(Anime) onOpen;
   @override
   Widget build(BuildContext context) {
+    if (isDesktop) return DesktopMore(services: services, onOpen: onOpen);
     final accounts = services.auth.accounts.values;
     final identity = accounts.isNotEmpty
         ? accounts.map((a) => a.username).join(' · ')
@@ -321,6 +323,221 @@ class MorePage extends StatelessWidget {
   }
 }
 
+/// Desktop settings: sections in a sidebar, the chosen settings section
+/// beside it as grouped cards. Pages that are more than settings, such as
+/// Discord or Watch rooms, still open on their own.
+class DesktopMore extends StatefulWidget {
+  const DesktopMore({super.key, required this.services, required this.onOpen});
+  final AppServices services;
+  final void Function(Anime) onOpen;
+  @override
+  State<DesktopMore> createState() => _DesktopMoreState();
+}
+
+class _DesktopMoreState extends State<DesktopMore> {
+  String section = 'Playback';
+
+  AppServices get services => widget.services;
+
+  Widget item(String title, IconData icon, {VoidCallback? open}) {
+    final selected = open == null && section == title;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: FocusBox(
+        key: ValueKey('more-$title'),
+        isTV: true,
+        radius: 12,
+        onPressed: open ?? () => setState(() => section = title),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? selectedPanel : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border(
+              left: BorderSide(
+                color: selected ? shu : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: selected ? fgBright : muted),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  title,
+                  style: uiStyle(
+                    context,
+                    weight: selected ? FontWeight.w600 : FontWeight.w500,
+                    color: selected ? fgBright : fg,
+                  ),
+                ),
+              ),
+              if (open != null)
+                const Icon(LucideIcons.arrowUpRight, size: 18, color: muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accounts = services.auth.accounts.values;
+    final identity = accounts.map((a) => a.username).join(' · ');
+    void detail(Widget page) => unawaited(openDetail(context, page, true));
+    final sidebar = ListView(
+      padding: EdgeInsets.fromLTRB(48, 16, 0, contentBottom(context)),
+      children: [
+        Row(
+          children: [
+            Text(
+              'Settings',
+              style: uiStyle(context, size: 32, weight: FontWeight.w700),
+            ),
+            const SizedBox(width: 12),
+            const ExcludeSemantics(
+              child: Text(
+                '設',
+                style: TextStyle(
+                  fontFamily: 'NotoSansJP',
+                  fontSize: 26,
+                  color: accentText,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        FocusBox(
+          key: const Key('more-Accounts'),
+          isTV: true,
+          radius: 14,
+          onPressed: () => openAccounts(context, services, true),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: panel,
+              border: Border.all(color: line),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                if (services.profiles case final manager?)
+                  ProfileAvatar(manager.active, size: 38)
+                else
+                  const OtakaseSeal(size: 38),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        identity.isEmpty ? 'Your accounts' : identity,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: uiStyle(context, weight: FontWeight.w600),
+                      ),
+                      Text(
+                        accounts.isNotEmpty
+                            ? 'Tracker sync${accounts.any((a) => a.expired) ? ' · Login needs attention' : ''}'
+                            : 'Local progress',
+                        style: uiStyle(context, size: 15, color: muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        item('Playback', LucideIcons.circlePlay),
+        item('Subtitles & languages', LucideIcons.captions),
+        item('Appearance', LucideIcons.palette),
+        item('About & updates', LucideIcons.info),
+        const Divider(height: 28),
+        if (services.profiles case final manager?)
+          item(
+            'Profiles',
+            LucideIcons.users,
+            open: () => Navigator.push(
+              context,
+              OtakaseRoute<void>(
+                builder: (_) => ProfilesPage(manager: manager),
+              ),
+            ),
+          ),
+        item(
+          'Discord',
+          LucideIcons.messagesSquare,
+          open: () => detail(DiscordPage(services: services, isTV: true)),
+        ),
+        item(
+          'Watch rooms',
+          LucideIcons.users,
+          open: () => detail(WatchRoomsPage(services: services, isTV: true)),
+        ),
+        item(
+          'Time capsule',
+          LucideIcons.mail,
+          open: () => detail(CapsulePage(services: services, isTV: true)),
+        ),
+        item(
+          'Phone remote',
+          LucideIcons.tv,
+          open: () => detail(TVRemotePage(services: services, isTV: true)),
+        ),
+        item(
+          'Diagnostics',
+          LucideIcons.activity,
+          open: () => Navigator.push(
+            context,
+            OtakaseRoute<void>(
+              builder: (_) => DiagnosticsHub(services: services, isTV: true),
+            ),
+          ),
+        ),
+        if (services.tracking.lastError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(
+              'Progress is saved locally. ${services.tracking.lastError}',
+              style: uiStyle(context, size: 15, color: warn),
+            ),
+          ),
+      ],
+    );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 400, child: sidebar),
+        const SizedBox(width: 48),
+        Expanded(
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1400),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 72, right: 48),
+                child: SettingsPage(
+                  key: ValueKey('desktop-settings-$section'),
+                  services: services,
+                  isTV: true,
+                  section: section,
+                  embedded: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class AccountsPage extends StatefulWidget {
   const AccountsPage({super.key, required this.services, required this.isTV});
   final AppServices services;
@@ -362,21 +579,20 @@ class _AccountsPageState extends State<AccountsPage> {
     setState(() => error = null);
     try {
       final auth = widget.services.auth;
-      final url = await auth.begin(service, tv: widget.isTV);
+      // Desktop signs in through the browser on the same computer; only a
+      // real TV needs a phone.
+      final phone = widget.isTV && !isDesktop;
+      final url = await auth.begin(service, tv: phone, desktop: isDesktop);
       if (!mounted) {
         await auth.cancelLogin();
         return;
       }
-      if (!widget.isTV) await auth.launch(url);
+      if (!phone) await auth.launch(url);
       if (!mounted) return;
       await showDialog<void>(
         context: context,
-        builder: (context) => _LoginDialog(
-          auth: auth,
-          url: url,
-          service: service,
-          isTV: widget.isTV,
-        ),
+        builder: (context) =>
+            _LoginDialog(auth: auth, url: url, service: service, isTV: phone),
       );
       await auth.cancelLogin();
     } catch (e) {
@@ -552,6 +768,20 @@ class _LoginDialogState extends State<_LoginDialog> {
                   backgroundColor: Colors.white,
                 ),
               ),
+            if (widget.isTV && widget.auth.loginCode != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Check code ${widget.auth.loginCode}',
+                key: const Key('login-check-code'),
+                style: mono.copyWith(fontSize: 26, color: fgBright),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Only finish on your phone if its page shows this same code.',
+                style: uiStyle(context, size: 15, color: muted),
+              ),
+              const SizedBox(height: 8),
+            ],
             Text(
               widget.isTV
                   ? 'Scan with your phone. Keep both devices on the same home network, then finish sign in on the page.'

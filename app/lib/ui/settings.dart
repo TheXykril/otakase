@@ -84,6 +84,7 @@ const settingLabels = <String, String>{
   'TorrentSources': 'Torrent sources',
   'TorrentOnMobileData': 'Torrents on mobile data',
   'PercentageToMarkComplete': 'Mark watched at',
+  'ResumePlayback': 'Resume where you left off',
   'CheckUpdates': 'Check for updates',
   'Notifications': 'Notifications',
   'Updates': 'Updates',
@@ -99,8 +100,13 @@ class SettingsPage extends StatefulWidget {
     required this.services,
     required this.isTV,
     this.section,
+    this.embedded = false,
   });
   final String? section;
+
+  /// Shown inside the desktop settings page: no app bar, each group drawn
+  /// as one card of rows.
+  final bool embedded;
   final AppServices services;
   final bool isTV;
   @override
@@ -180,6 +186,40 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget group(String title, IconData icon, List<Widget> children) =>
       widget.section != null && widget.section != title
       ? const SizedBox.shrink()
+      : widget.embedded
+      ? Padding(
+          padding: const EdgeInsets.only(bottom: 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 10),
+                child: Text(
+                  title.toUpperCase(),
+                  style: mono.copyWith(fontSize: 15, letterSpacing: 2.5),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: panel,
+                  border: Border.all(color: line),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < children.length; i++) ...[
+                      if (i > 0)
+                        const Divider(height: 1, indent: 16, endIndent: 16),
+                      children[i],
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        )
       : Padding(
           padding: const EdgeInsets.only(top: 24, bottom: 8),
           child: Column(
@@ -307,205 +347,203 @@ class _SettingsPageState extends State<SettingsPage> {
     ),
   );
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: panel,
-    appBar: AppBar(
-      backgroundColor: panel,
-      title: Text(widget.section ?? 'Settings'),
-      actions: [
-        DeviceStatus(isTV: widget.isTV),
-        const SizedBox(width: 24),
-      ],
-      leading: IconButton(
-        tooltip: 'Back',
-        autofocus: true,
-        onPressed: () => Navigator.pop(context),
-        icon: const Icon(LucideIcons.arrowLeft),
-      ),
-    ),
-    body: SafeArea(
-      top: false,
-      child: ListenableBuilder(
-        listenable: store,
-        builder: (context, child) => ListView(
-          padding: EdgeInsets.only(bottom: contentBottom(context)),
-          children: [
-            if (widget.section == null)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24),
-                child: PageHeading('Settings', '設'),
-              ),
-            group('Appearance', LucideIcons.palette, [
-              row('Shu / Dark', 'Warm dark appearance.', value: 'Shu / Dark'),
-            ]),
-            group('Subtitles & languages', LucideIcons.captions, [
-              row(
-                'SubsLanguage',
-                'Subtitle language priority, comma separated. Use off to disable.',
-                value: store.text('SubsLanguage'),
-                onTap: () => edit('SubsLanguage'),
-              ),
-              row(
-                'AudioLanguages',
-                'Preferred audio language order.',
-                value: store.text('AudioLanguages'),
-                onTap: () => edit('AudioLanguages'),
-              ),
-              row(
-                'SubtitleFont',
-                'Bundled font for Japanese text and ASS signs.',
-                value: store.text('SubtitleFont'),
-              ),
-              row(
-                'SubtitleSize',
-                'Size for subtitle text.',
-                value: store.text('SubtitleSize'),
-                onTap: () => numberChoice('SubtitleSize', [
-                  24,
-                  30,
-                  36,
-                  40,
-                  44,
-                  48,
-                  54,
-                  60,
-                  72,
-                ]),
-              ),
-              row(
-                'SubtitleColour',
-                'Text colour.',
-                value: store.text('SubtitleColour'),
-                onTap: () => choose('SubtitleColour', [
-                  '#FFFFFF',
-                  '#FFFFCC',
-                  '#FFF3A3',
-                  '#D84836',
-                  '#A6E3FF',
-                ]),
-              ),
-              row(
-                'SubtitleBackground',
-                'Subtitle background colour.',
-                value: store.text('SubtitleBackground'),
-                onTap: () => choose('SubtitleBackground', [
-                  '#00000000',
-                  '#80000000',
-                  '#CC000000',
-                ]),
-              ),
-              row(
-                'SubtitleOutline',
-                'Outline thickness.',
-                value: store.text('SubtitleOutline'),
-                onTap: () =>
-                    numberChoice('SubtitleOutline', [0, 1, 2, 3, 4, 5]),
-              ),
-              row(
-                'SubtitlePosition',
-                'Vertical placement, higher values move text down.',
-                value: store.text('SubtitlePosition'),
-                onTap: () => numberChoice('SubtitlePosition', [
-                  10,
-                  25,
-                  50,
-                  75,
-                  90,
-                  95,
-                  100,
-                ]),
-              ),
-              row(
-                'SubStyle',
-                'soft keeps the release styling (ASS signs); plain uses the subtitle settings below.',
-                value: store.text('SubStyle'),
-                onTap: () => choose('SubStyle', ['soft', 'plain']),
-              ),
-              row(
-                'SubOrDub',
-                'Preferred stream.',
-                value: store.text('SubOrDub').toUpperCase(),
-                onTap: () => choose('SubOrDub', ['sub', 'dub']),
-              ),
-              toggle(
-                'AutoAudioFallback',
-                'Try the other stream when unavailable. Unstable.',
-                icon: LucideIcons.globe,
-              ),
-            ]),
-            group('Playback', LucideIcons.circlePlay, [
-              toggle(
-                'NextEpisodePrompt',
-                'Ask before the next episode. Off enables the end countdown.',
-              ),
-              toggle('SkipOp', 'Automatically skip verified intro ranges.'),
-              toggle('SkipEd', 'Automatically skip verified ending ranges.'),
-              toggle('SkipRecap', 'Automatically skip verified recap ranges.'),
-              toggle(
-                'NormalizeVolume',
-                'Raise quiet dialogue and soften loud effects.',
-                icon: LucideIcons.audioLines,
-              ),
-              row(
-                'SkipDelay',
-                'Wait this many seconds before an automatic skip.',
-                value: '${store.integer('SkipDelay')} s',
-                onTap: () => numberChoice('SkipDelay', [0, 1, 2, 3, 5, 10]),
-              ),
-              toggle(
-                'SkipFiller',
-                'Skip verified filler when advancing automatically.',
-              ),
-              row(
-                'Quality',
-                'Default video height, or best.',
-                value: store.text('Quality'),
-                onTap: () =>
-                    choose('Quality', ['best', '1080', '720', '480', '360']),
-              ),
-              toggle(
-                'TorrentSources',
-                'Play from other viewers when no site has the episode. '
-                    'They can see your IP address.',
-                icon: LucideIcons.share2,
-              ),
-              toggle(
-                'TorrentOnMobileData',
-                'Torrents download the whole episode. Off waits for Wi-Fi.',
-                icon: LucideIcons.signal,
-              ),
-              toggle('ResumePlayback', 'Resume locally saved positions.'),
-              row(
-                'PercentageToMarkComplete',
-                'Mark an episode watched on stop after this percentage.',
-                value: '${store.integer('PercentageToMarkComplete')}%',
-                onTap: () => numberChoice('PercentageToMarkComplete', [
-                  70,
-                  75,
-                  80,
-                  85,
-                  90,
-                  95,
-                  100,
-                ]),
-              ),
-            ]),
-            group('About & updates', LucideIcons.shield, [
-              toggle(
-                'CheckUpdates',
-                'Check for app updates at startup.',
-                icon: LucideIcons.download,
-              ),
-              AppUpdatePanel(
-                updates: widget.services.updates,
-                isTV: widget.isTV,
-                autoCheck: store.flag('CheckUpdates'),
-              ),
-            ]),
-          ],
+  Widget build(BuildContext context) => widget.embedded
+      ? ListenableBuilder(
+          listenable: store,
+          builder: (context, _) => content(context),
+        )
+      : Scaffold(
+          backgroundColor: panel,
+          appBar: AppBar(
+            backgroundColor: panel,
+            title: Text(widget.section ?? 'Settings'),
+            actions: [
+              DeviceStatus(isTV: widget.isTV),
+              const SizedBox(width: 24),
+            ],
+            leading: IconButton(
+              tooltip: 'Back',
+              autofocus: true,
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(LucideIcons.arrowLeft),
+            ),
+          ),
+          body: SafeArea(
+            top: false,
+            child: ListenableBuilder(
+              listenable: store,
+              builder: (context, child) => content(context),
+            ),
+          ),
+        );
+
+  Widget content(BuildContext context) => ListView(
+    padding: EdgeInsets.only(bottom: contentBottom(context)),
+    children: [
+      if (widget.section == null && !widget.embedded)
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: PageHeading('Settings', '設'),
         ),
-      ),
-    ),
+      group('Appearance', LucideIcons.palette, [
+        row('Theme', 'Warm dark appearance.', value: 'Shu / Dark'),
+      ]),
+      group('Subtitles & languages', LucideIcons.captions, [
+        row(
+          'SubsLanguage',
+          'Subtitle language priority, comma separated. Use off to disable.',
+          value: store.text('SubsLanguage'),
+          onTap: () => edit('SubsLanguage'),
+        ),
+        row(
+          'AudioLanguages',
+          'Preferred audio language order.',
+          value: store.text('AudioLanguages'),
+          onTap: () => edit('AudioLanguages'),
+        ),
+        row(
+          'SubtitleFont',
+          'Bundled font for Japanese text and ASS signs.',
+          value: store.text('SubtitleFont'),
+        ),
+        row(
+          'SubtitleSize',
+          'Size for subtitle text.',
+          value: store.text('SubtitleSize'),
+          onTap: () => numberChoice('SubtitleSize', [
+            24,
+            30,
+            36,
+            40,
+            44,
+            48,
+            54,
+            60,
+            72,
+          ]),
+        ),
+        row(
+          'SubtitleColour',
+          'Text colour.',
+          value: store.text('SubtitleColour'),
+          onTap: () => choose('SubtitleColour', [
+            '#FFFFFF',
+            '#FFFFCC',
+            '#FFF3A3',
+            '#D84836',
+            '#A6E3FF',
+          ]),
+        ),
+        row(
+          'SubtitleBackground',
+          'Subtitle background colour.',
+          value: store.text('SubtitleBackground'),
+          onTap: () => choose('SubtitleBackground', [
+            '#00000000',
+            '#80000000',
+            '#CC000000',
+          ]),
+        ),
+        row(
+          'SubtitleOutline',
+          'Outline thickness.',
+          value: store.text('SubtitleOutline'),
+          onTap: () => numberChoice('SubtitleOutline', [0, 1, 2, 3, 4, 5]),
+        ),
+        row(
+          'SubtitlePosition',
+          'Vertical placement, higher values move text down.',
+          value: store.text('SubtitlePosition'),
+          onTap: () =>
+              numberChoice('SubtitlePosition', [10, 25, 50, 75, 90, 95, 100]),
+        ),
+        row(
+          'SubStyle',
+          'soft keeps the release styling (ASS signs); plain uses the subtitle settings below.',
+          value: store.text('SubStyle'),
+          onTap: () => choose('SubStyle', ['soft', 'plain']),
+        ),
+        row(
+          'SubOrDub',
+          'Preferred stream.',
+          value: store.text('SubOrDub').toUpperCase(),
+          onTap: () => choose('SubOrDub', ['sub', 'dub']),
+        ),
+        toggle(
+          'AutoAudioFallback',
+          'Try the other stream when unavailable. Unstable.',
+          icon: LucideIcons.globe,
+        ),
+      ]),
+      group('Playback', LucideIcons.circlePlay, [
+        toggle(
+          'NextEpisodePrompt',
+          'Ask before the next episode. Off enables the end countdown.',
+        ),
+        toggle('SkipOp', 'Automatically skip verified intro ranges.'),
+        toggle('SkipEd', 'Automatically skip verified ending ranges.'),
+        toggle('SkipRecap', 'Automatically skip verified recap ranges.'),
+        toggle(
+          'NormalizeVolume',
+          'Raise quiet dialogue and soften loud effects.',
+          icon: LucideIcons.audioLines,
+        ),
+        row(
+          'SkipDelay',
+          'Wait this many seconds before an automatic skip.',
+          value: '${store.integer('SkipDelay')} s',
+          onTap: () => numberChoice('SkipDelay', [0, 1, 2, 3, 5, 10]),
+        ),
+        toggle(
+          'SkipFiller',
+          'Skip verified filler when advancing automatically.',
+        ),
+        row(
+          'Quality',
+          'Default video height, or best.',
+          value: store.text('Quality'),
+          onTap: () => choose('Quality', ['best', '1080', '720', '480', '360']),
+        ),
+        toggle(
+          'TorrentSources',
+          'Play from other viewers when no site has the episode. '
+              'They can see your IP address.',
+          icon: LucideIcons.share2,
+        ),
+        toggle(
+          'TorrentOnMobileData',
+          'Torrents download the whole episode. Off waits for Wi-Fi.',
+          icon: LucideIcons.signal,
+        ),
+        toggle('ResumePlayback', 'Resume locally saved positions.'),
+        row(
+          'PercentageToMarkComplete',
+          'Mark an episode watched on stop after this percentage.',
+          value: '${store.integer('PercentageToMarkComplete')}%',
+          onTap: () => numberChoice('PercentageToMarkComplete', [
+            70,
+            75,
+            80,
+            85,
+            90,
+            95,
+            100,
+          ]),
+        ),
+      ]),
+      group('About & updates', LucideIcons.shield, [
+        toggle(
+          'CheckUpdates',
+          'Check for app updates at startup.',
+          icon: LucideIcons.download,
+        ),
+        AppUpdatePanel(
+          updates: widget.services.updates,
+          isTV: widget.isTV,
+          autoCheck: store.flag('CheckUpdates'),
+        ),
+      ]),
+    ],
   );
 }
 

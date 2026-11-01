@@ -8,31 +8,42 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core.dart';
 import 'data/auth.dart';
 import 'data/profiles.dart';
+import 'desktop/desktop_core.dart';
+import 'desktop/launcher.dart';
+import 'desktop/window_frame.dart';
 import 'services.dart';
 import 'ui/app_shell.dart';
 import 'ui/components.dart';
 import 'ui/seal.dart';
 import 'ui/profiles_page.dart';
 
-Future<void> main() async {
+Future<void> main([List<String> args = const []]) async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  if (isDesktop) {
+    readDesktopArguments(args);
+    await setUpDesktopWindow(launcher: desktopLauncher.value);
+  }
   final core = CoreClient();
   final profiles = ProfileManager(
     preferences: await SharedPreferences.getInstance(),
     tokens: SecureTokenStore(),
     core: core,
-    isTV: await core.isTV(),
+    // Desktop starts from the wide TV layout (shelves, top navigation) and
+    // adds mouse and window controls on top.
+    isTV: isDesktop || await core.isTV(),
   );
   try {
     await profiles.initialize();
   } catch (e) {
     profiles.error = e.toString();
   }
-  await SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.manual,
-    overlays: [SystemUiOverlay.bottom],
-  );
+  if (!isDesktop) {
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: [SystemUiOverlay.bottom],
+    );
+  }
   runApp(ProfileHost(manager: profiles));
 }
 
@@ -52,7 +63,7 @@ class _ProfileHostState extends State<ProfileHost> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.manager,
+    listenable: Listenable.merge([widget.manager, desktopLauncher]),
     builder: (context, _) {
       final services = widget.manager.session;
       if (services != null) {
@@ -62,7 +73,7 @@ class _ProfileHostState extends State<ProfileHost> {
             children: [
               OtakaseApp(
                 key: ValueKey(
-                  'session-${widget.manager.activeId}-${widget.manager.generation}',
+                  'session-${widget.manager.activeId}-${widget.manager.generation}-${desktopLauncher.value}',
                 ),
                 services: services,
                 isTV: widget.manager.isTV,
@@ -82,8 +93,9 @@ class _ProfileHostState extends State<ProfileHost> {
         isTV: widget.manager.isTV,
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
-          builder: (context, child) =>
-              widget.manager.isTV ? TVViewport(child: child!) : child!,
+          builder: (context, child) => DesktopFrame(
+            child: widget.manager.isTV ? TVViewport(child: child!) : child!,
+          ),
           theme: ThemeData(
             brightness: Brightness.dark,
             fontFamily: 'Inter',
@@ -154,6 +166,11 @@ class OtakaseApp extends StatefulWidget {
 }
 
 class _OtakaseAppState extends State<OtakaseApp> {
+  Future<void> openFullApp() async {
+    await resizeDesktopWindow(launcher: false);
+    desktopLauncher.value = false;
+  }
+
   void modeChanged(FocusHighlightMode _) {
     if (mounted) setState(() {});
   }
@@ -201,8 +218,11 @@ class _OtakaseAppState extends State<OtakaseApp> {
       child: MaterialApp(
         title: 'Otakase',
         debugShowCheckedModeBanner: false,
-        builder: (context, child) =>
-            widget.isTV ? TVViewport(child: child!) : child!,
+        builder: (context, child) => DesktopFrame(
+          child: widget.isTV && !desktopLauncher.value
+              ? TVViewport(child: child!)
+              : child!,
+        ),
         theme: ThemeData(
           brightness: Brightness.dark,
           colorScheme: const ColorScheme.dark(
@@ -337,7 +357,9 @@ class _OtakaseAppState extends State<OtakaseApp> {
             overlayColor: shu.withValues(alpha: .1),
           ),
         ),
-        home: widget.splash
+        home: desktopLauncher.value
+            ? LauncherPage(services: widget.services, onOpenApp: openFullApp)
+            : widget.splash
             ? SplashGate(
                 child: AppShell(services: widget.services, isTV: widget.isTV),
               )

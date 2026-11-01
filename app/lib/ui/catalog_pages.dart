@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
+import '../desktop/desktop_core.dart';
 import '../services.dart';
 import 'components.dart';
 import 'movie_page.dart';
@@ -18,7 +19,11 @@ class SearchPage extends StatefulWidget {
     this.onNavigateUp,
     this.initialQuery = '',
     this.initialFormat,
+    this.fieldFocus,
   });
+
+  /// Focus of the search field, so the shell can move into it.
+  final FocusNode? fieldFocus;
   final AppServices services;
   final bool isTV;
   final void Function(Anime) onOpen;
@@ -148,7 +153,46 @@ class _SearchPageState extends State<SearchPage> {
       // TV applies each choice at once; phones confirm with Apply filters.
       onChanged: widget.isTV ? apply : null,
     );
-    final result = widget.isTV
+    final result = isDesktop
+        ? await showGeneralDialog<SearchFilters>(
+            context: context,
+            barrierDismissible: true,
+            barrierLabel: 'Close filters',
+            barrierColor: Colors.black38,
+            transitionDuration: const Duration(milliseconds: 160),
+            transitionBuilder: (context, animation, _, child) =>
+                FadeTransition(opacity: animation, child: child),
+            // A menu under the Filters button instead of a full-height panel.
+            pageBuilder: (context, _, _) => Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  top: tvHeaderExtent(context) + 96,
+                  right: 48,
+                ),
+                child: Material(
+                  key: const Key('search-filter-menu'),
+                  color: panel,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    side: const BorderSide(color: line),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: 680,
+                      maxHeight:
+                          MediaQuery.sizeOf(context).height -
+                          tvHeaderExtent(context) -
+                          140,
+                    ),
+                    child: sheet,
+                  ),
+                ),
+              ),
+            ),
+          )
+        : widget.isTV
         ? await showGeneralDialog<SearchFilters>(
             context: context,
             barrierDismissible: true,
@@ -206,17 +250,68 @@ class _SearchPageState extends State<SearchPage> {
     super.dispose();
   }
 
+  /// The chosen filters as removable chips under the desktop search field.
+  Widget activeFilters() {
+    final active = <(String, VoidCallback)>[
+      if (format != null) (_formats[format] ?? format!, () => format = null),
+      if (status != null) (_statuses[status] ?? status!, () => status = null),
+      if (genre != null) (genre!, () => genre = null),
+      if (season != null) (_seasons[season] ?? season!, () => season = null),
+      if (year != null) ('$year', () => year = null),
+    ];
+    if (active.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text('Active:', style: uiStyle(context, size: 17, color: muted)),
+          for (final (label, clear) in active)
+            FocusBox(
+              key: ValueKey('active-filter-$label'),
+              isTV: true,
+              radius: 999,
+              outsideFrame: true,
+              onPressed: () {
+                setState(clear);
+                unawaited(load());
+              },
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 4, 10, 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: lineStrong),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(label, style: uiStyle(context, size: 17)),
+                    const SizedBox(width: 6),
+                    const Icon(LucideIcons.x, size: 16, color: muted),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ListView(
     padding: EdgeInsets.fromLTRB(
       widget.isTV ? 48 : 20,
-      20,
+      isDesktop ? 16 : 20,
       widget.isTV ? 48 : 20,
       contentBottom(context),
     ),
     children: [
-      const PageHeading('Search', '探'),
-      const SizedBox(height: 18),
+      if (!isDesktop) ...[
+        const PageHeading('Search', '探'),
+        const SizedBox(height: 18),
+      ],
       IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -224,8 +319,9 @@ class _SearchPageState extends State<SearchPage> {
             Expanded(
               child: RemoteTextInput(
                 isTV: widget.isTV,
+                focusNode: widget.fieldFocus,
                 onUp: widget.onNavigateUp,
-                onActivate: widget.isTV ? editQuery : null,
+                onActivate: widget.isTV && !isDesktop ? editQuery : null,
                 onFocusChanged: (focused) {
                   if (mounted && !focused && editing) {
                     setState(() => editing = false);
@@ -233,8 +329,11 @@ class _SearchPageState extends State<SearchPage> {
                 },
                 builder: (focus) => TextField(
                   focusNode: focus,
-                  readOnly: widget.isTV && !editing,
-                  onTap: widget.isTV ? () => editQuery(focus) : null,
+                  // Desktop has a keyboard, so the field is always editable.
+                  readOnly: widget.isTV && !isDesktop && !editing,
+                  onTap: widget.isTV && !isDesktop
+                      ? () => editQuery(focus)
+                      : null,
                   key: const Key('catalog-search'),
                   controller: query,
                   decoration: InputDecoration(
@@ -285,6 +384,7 @@ class _SearchPageState extends State<SearchPage> {
           ],
         ),
       ),
+      if (isDesktop) activeFilters(),
       const SizedBox(height: 22),
       if (busy) const SkeletonBlock(height: 180),
       if (error != null)
@@ -307,24 +407,27 @@ class _SearchPageState extends State<SearchPage> {
         ),
       LayoutBuilder(
         builder: (context, box) {
+          final gap = isDesktop ? 26.0 : 12.0;
           final columns =
               (box.maxWidth /
-                      (widget.isTV
+                      (isDesktop
+                          ? 226
+                          : widget.isTV
                           ? 180
                           : (MediaQuery.textScalerOf(context).scale(1) > 1.2
                                 ? 150
                                 : 116)))
                   .floor()
                   .clamp(2, 9);
-          final width = (box.maxWidth - (columns - 1) * 12) / columns;
+          final width = (box.maxWidth - (columns - 1) * gap) / columns;
           return GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: items.length,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: columns,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 14,
+              crossAxisSpacing: gap,
+              mainAxisSpacing: isDesktop ? 26 : 14,
               mainAxisExtent:
                   width * 1.5 +
                   (widget.isTV ? 108 : 108) *
@@ -380,11 +483,283 @@ class _SchedulePageState extends State<SchedulePage> {
   bool busy = true;
   int generation = 0, page = 1;
   bool more = false;
+  // Desktop shows the whole week at once.
+  int week = 0;
+  bool mineOnly = false;
+  Map<int, List<Airing>> days = {};
+
   @override
   void initState() {
     super.initState();
     selected = DateTime(now.year, now.month, now.day);
-    unawaited(load());
+    unawaited(isDesktop ? loadWeek() : load());
+  }
+
+  DateTime get monday =>
+      DateTime(now.year, now.month, now.day - (now.weekday - 1) + week * 7);
+
+  Future<void> loadWeek() async {
+    final g = ++generation;
+    final start = monday;
+    setState(() {
+      busy = true;
+      error = null;
+      days = {};
+    });
+    try {
+      final adult = widget.services.store.flag('AdultContent');
+      final result = await Future.wait([
+        for (var i = 0; i < 7; i++)
+          widget.services.catalog.schedule(
+            DateTime(start.year, start.month, start.day + i),
+            adult: adult,
+          ),
+      ]);
+      if (mounted && generation == g) {
+        setState(() => days = {for (var i = 0; i < 7; i++) i: result[i]});
+      }
+    } catch (e) {
+      if (mounted && generation == g) setState(() => error = e.toString());
+    } finally {
+      if (mounted && generation == g) setState(() => busy = false);
+    }
+  }
+
+  bool onList(Anime anime) =>
+      widget.services.store.entry(anime) != null ||
+      widget.services.tracking.mergedCached(anime) != null;
+
+  Widget weekItem(Airing row) {
+    final mine = onList(row.anime);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: FocusBox(
+        key: ValueKey('week-${row.anime.key}-${row.episode}'),
+        isTV: true,
+        radius: 12,
+        outsideFrame: true,
+        onPressed: () => widget.onOpen(row.anime),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: mine ? selectedPanel : panel,
+            border: Border.all(color: mine ? shu : line),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CoverImage(row.anime.cover, width: 56, height: 80),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${clockTime(row.at)}${mine ? ' · ON YOUR LIST' : ''}',
+                      style: mono.copyWith(
+                        fontSize: 14,
+                        color: mine ? accentText : muted,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      row.anime.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: uiStyle(
+                        context,
+                        size: 17,
+                        weight: FontWeight.w600,
+                        color: fgBright,
+                        height: 1.25,
+                      ),
+                    ),
+                    Text(
+                      'Episode ${row.episode}',
+                      style: uiStyle(context, size: 15, color: muted),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget desktopWeek() {
+    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final start = monday, end = start.add(const Duration(days: 6));
+    final today = DateTime(now.year, now.month, now.day);
+    String day(DateTime d) => '${months[d.month - 1]} ${d.day}';
+    Widget toggle(String label, bool on, VoidCallback onPressed) =>
+        AppTab(label: label, selected: on, isTV: true, onPressed: onPressed);
+    Widget arrow(IconData icon, String tip, int step) => IconButton(
+      tooltip: tip,
+      onPressed: () {
+        setState(() => week += step);
+        unawaited(loadWeek());
+      },
+      style: IconButton.styleFrom(
+        backgroundColor: fgBright.withValues(alpha: .08),
+      ),
+      icon: Icon(icon, size: 20),
+    );
+    return ListView(
+      padding: EdgeInsets.fromLTRB(48, 16, 48, contentBottom(context)),
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              week == 0
+                  ? 'This week'
+                  : week == 1
+                  ? 'Next week'
+                  : week == -1
+                  ? 'Last week'
+                  : 'Week of ${day(start)}',
+              style: uiStyle(context, size: 32, weight: FontWeight.w700),
+            ),
+            const SizedBox(width: 12),
+            const ExcludeSemantics(
+              child: Text(
+                '暦',
+                style: TextStyle(
+                  fontFamily: 'NotoSansJP',
+                  fontSize: 26,
+                  color: accentText,
+                ),
+              ),
+            ),
+            const SizedBox(width: 20),
+            Text(
+              '${day(start)} – ${day(end)}',
+              style: uiStyle(context, size: 17, color: muted),
+            ),
+            const Spacer(),
+            toggle(
+              'My list only',
+              mineOnly,
+              () => setState(() => mineOnly = true),
+            ),
+            const SizedBox(width: 10),
+            toggle(
+              'Everything',
+              !mineOnly,
+              () => setState(() => mineOnly = false),
+            ),
+            const SizedBox(width: 16),
+            arrow(LucideIcons.chevronLeft, 'Previous week', -1),
+            const SizedBox(width: 8),
+            arrow(LucideIcons.chevronRight, 'Next week', 1),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Airing times, not source availability',
+          style: uiStyle(context, size: 15, color: muted),
+        ),
+        const SizedBox(height: 22),
+        if (error != null)
+          FailureView(message: error!, onRetry: loadWeek, isTV: true),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < 7; i++) ...[
+              if (i > 0) const SizedBox(width: 16),
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final date = DateTime(
+                      start.year,
+                      start.month,
+                      start.day + i,
+                    );
+                    final isToday = date == today;
+                    final rows = (days[i] ?? const <Airing>[])
+                        .where((r) => widget.services.store.visible(r.anime))
+                        .where((r) => !mineOnly || onList(r.anime))
+                        .toList();
+                    return Column(
+                      key: ValueKey('week-day-$i'),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+                          margin: const EdgeInsets.only(bottom: 14),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: isToday ? shu : line,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${names[i]} ${date.day}',
+                                  style: uiStyle(
+                                    context,
+                                    weight: FontWeight.w700,
+                                    color: isToday ? fgBright : fg,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                isToday
+                                    ? 'TODAY'
+                                    : busy
+                                    ? ''
+                                    : '${rows.length} eps',
+                                style: mono.copyWith(
+                                  fontSize: 14,
+                                  color: isToday ? accentText : muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (busy && days.isEmpty)
+                          const SkeletonBlock(height: 100)
+                        else if (rows.isEmpty)
+                          Text(
+                            mineOnly ? 'Nothing from your list' : 'Quiet day',
+                            style: uiStyle(context, size: 15, color: muted),
+                          ),
+                        for (final row in rows) weekItem(row),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
   }
 
   Future<void> load({bool append = false}) async {
@@ -418,6 +793,7 @@ class _SchedulePageState extends State<SchedulePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (isDesktop) return desktopWeek();
     const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final monday = DateTime(now.year, now.month, now.day - (now.weekday - 1));
     return ListView(

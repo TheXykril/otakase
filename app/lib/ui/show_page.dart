@@ -9,12 +9,15 @@ import '../data/synced_resume.dart';
 import '../data/tracking.dart';
 import '../services.dart';
 import '../player.dart';
-import 'app_shell.dart' show Brand;
+import 'app_shell.dart' show Brand, rootTabs;
 import 'components.dart';
 import 'device_status.dart';
 import 'home_page.dart';
 import 'status_editor.dart';
 import 'progress_thread.dart';
+import '../desktop/desktop_core.dart';
+import '../desktop/top_bar.dart';
+import '../desktop/window_frame.dart';
 
 class ShowPage extends StatefulWidget {
   const ShowPage({
@@ -39,6 +42,9 @@ class _ShowPageState extends State<ShowPage> {
   String? error;
   SyncedResume remote = noResume;
   final playFocus = FocusNode(debugLabel: 'Resume or Play');
+
+  /// Which block of 50 episodes the desktop grid shows.
+  int? range;
   final episodeScroll = ScrollController();
   @override
   void initState() {
@@ -404,19 +410,629 @@ class _ShowPageState extends State<ShowPage> {
       children: [
         const Brand(),
         const SizedBox(width: 28),
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < rootTabs.length; i++)
           TextButton(
             onPressed: () {
               Navigator.popUntil(context, (r) => r.isFirst);
               widget.services.selectRoot?.call(i);
             },
-            child: Text(['Home', 'Search', 'More'][i]),
+            child: Text(rootTabs[i]),
           ),
         const Spacer(),
         const DeviceStatus(isTV: true),
       ],
     ),
   );
+
+  // ---------------------------------------------------------------- desktop
+
+  Widget desktopTopBar() => WindowDragArea(
+    child: DesktopTopBar(
+      leading: IconButton(
+        key: const Key('show-back'),
+        tooltip: 'Back',
+        onPressed: () => Navigator.pop(context),
+        icon: const Icon(LucideIcons.arrowLeft, color: fgBright),
+      ),
+      brand: const Brand(),
+      tabs: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < rootTabs.length; i++) ...[
+            DesktopTab(
+              key: ValueKey('show-nav-${rootTabs[i]}'),
+              label: rootTabs[i],
+              selected: widget.services.root == i,
+              onPressed: () {
+                Navigator.popUntil(context, (r) => r.isFirst);
+                widget.services.selectRoot?.call(i);
+              },
+            ),
+            if (i < rootTabs.length - 1) const SizedBox(width: 14),
+          ],
+        ],
+      ),
+    ),
+  );
+
+  static String titleCase(String value) => value
+      .split('_')
+      .where((w) => w.isNotEmpty)
+      .map((w) => w[0] + w.substring(1).toLowerCase())
+      .join(' ');
+
+  Widget chip(String label, {IconData? icon}) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+    decoration: BoxDecoration(
+      color: bgDeep.withValues(alpha: .45),
+      border: Border.all(color: fgBright.withValues(alpha: .22)),
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 16, color: warn),
+          const SizedBox(width: 6),
+        ],
+        Text(label, style: uiStyle(context, size: 17)),
+      ],
+    ),
+  );
+
+  Widget desktopHeader(int last, int position) {
+    const height = 600.0;
+    final cover = anime.coverLarge.isNotEmpty ? anime.coverLarge : anime.cover;
+    final facts = [
+      if (anime.format.isNotEmpty) anime.formatLabel,
+      if (anime.year > 0) '${anime.year}',
+      if (anime.episodes > 0) '${anime.episodes} episodes',
+      if (anime.status.isNotEmpty) titleCase(anime.status),
+    ];
+    return SizedBox(
+      height: height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (widget.heroTag != null)
+            Hero(
+              tag: widget.heroTag!,
+              child: HeroArt(anime, height: height),
+            )
+          else
+            HeroArt(anime, height: height),
+          Positioned(
+            left: 48,
+            right: 48,
+            bottom: 36,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  width: 260,
+                  height: 370,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x99000000),
+                        blurRadius: 30,
+                        offset: Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: CoverImage(cover, width: 260, height: 370),
+                  ),
+                ),
+                const SizedBox(width: 40),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        facts.join(' · ').toUpperCase(),
+                        style: mono.copyWith(
+                          fontSize: 17,
+                          color: muted,
+                          letterSpacing: 3,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        anime.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: display.copyWith(
+                          fontSize: anime.title.length > 38 ? 44 : 56,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: [
+                          if (anime.score > 0)
+                            chip(
+                              anime.score.toStringAsFixed(1),
+                              icon: LucideIcons.star,
+                            ),
+                          for (final g in anime.genres.take(4)) chip(g),
+                          if (anime.studio.isNotEmpty) chip(anime.studio),
+                        ],
+                      ),
+                      if (anime.description.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 900),
+                          child: Text(
+                            anime.description,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: uiStyle(context, color: muted),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 22),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          actions(last, position),
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: fgBright.withValues(alpha: .08),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (final value in ['sub', 'dub'])
+                                  AppTab(
+                                    key: ValueKey('show-mode-$value'),
+                                    label: value == 'sub' ? 'Sub' : 'Dub',
+                                    selected: mode == value,
+                                    isTV: true,
+                                    onPressed: () =>
+                                        setState(() => mode = value),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget episodeCard(int ep, double width) {
+    final h = widget.services.store.entry(anime);
+    final seen =
+        (h?.watched.contains(ep) ?? false) ||
+        ep <= widget.services.tracking.progress(anime);
+    final seconds = seen
+        ? 0
+        : max(h?.episode == ep ? h?.position ?? 0 : 0, remote.forEpisode(ep));
+    final length = h?.episode == ep && (h?.duration ?? 0) > 0
+        ? h!.duration
+        : anime.duration * 60;
+    final current = started && ep == nextEpisode;
+    final metadata = art(ep);
+    final thumbnail = metadata?['thumbnail'] as String? ?? '';
+    final image = thumbnail.isNotEmpty
+        ? thumbnail
+        : anime.banner.isNotEmpty
+        ? anime.banner
+        : anime.cover;
+    final title = metadata?['title'] as String?;
+    final height = width * 9 / 16;
+    String clock(int s) =>
+        '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
+    return SizedBox(
+      key: ValueKey('episode-$ep'),
+      width: width,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FocusBox(
+            isTV: true,
+            outsideFrame: true,
+            radius: 12,
+            onPressed: () => play(ep),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: width,
+                height: height,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CoverImage(
+                      image,
+                      width: width,
+                      height: height,
+                      banner: thumbnail.isEmpty && anime.banner.isNotEmpty,
+                    ),
+                    if (seen) ColoredBox(color: bgDeep.withValues(alpha: .35)),
+                    if (length > 0)
+                      Positioned(
+                        left: 12,
+                        bottom: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: bgDeep.withValues(alpha: .8),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            clock(length),
+                            style: mono.copyWith(fontSize: 15, color: fgBright),
+                          ),
+                        ),
+                      ),
+                    if (seen)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: const BoxDecoration(
+                            color: ok,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            LucideIcons.check,
+                            size: 17,
+                            color: bgDeep,
+                          ),
+                        ),
+                      ),
+                    if (current)
+                      Center(
+                        child: Container(
+                          width: 56,
+                          height: 56,
+                          decoration: const BoxDecoration(
+                            color: shu,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            LucideIcons.play,
+                            size: 24,
+                            color: bgDeep,
+                          ),
+                        ),
+                      ),
+                    if (seconds > 0 && length > 0)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: LinearProgressIndicator(
+                          value: (seconds / length).clamp(0.0, 1.0),
+                          minHeight: 4,
+                          color: shu,
+                          backgroundColor: fgBright.withValues(alpha: .18),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title == null ? 'Episode $ep' : '$ep. $title',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: uiStyle(
+              context,
+              weight: FontWeight.w600,
+              color: current ? fgBright : fg,
+            ),
+          ),
+          Text(
+            seen
+                ? 'Watched'
+                : seconds > 0
+                ? '${max(1, (length - seconds) ~/ 60)} min left'
+                : 'Not watched',
+            style: uiStyle(
+              context,
+              size: 17,
+              color: !seen && seconds > 0 ? accentText : muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String rangeLabel(int block, int total) =>
+      '${block * 50 + 1}–${min(total, block * 50 + 50)}';
+
+  Widget desktopEpisodes() {
+    final total = anime.airedEpisodes;
+    final blocks = (total / 50).ceil();
+    final block = (range ?? ((nextEpisode - 1) ~/ 50))
+        .clamp(0, max(0, blocks - 1))
+        .toInt();
+    final first = block * 50 + 1, end = min(total, first + 49);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Episodes',
+              style: uiStyle(context, size: 28, weight: FontWeight.w700),
+            ),
+            const SizedBox(width: 20),
+            if (blocks > 1 && blocks <= 4) ...[
+              for (var b = 0; b < blocks; b++) ...[
+                AppTab(
+                  key: ValueKey('episode-range-$b'),
+                  label: rangeLabel(b, total),
+                  selected: b == block,
+                  isTV: true,
+                  onPressed: () => setState(() => range = b),
+                ),
+                const SizedBox(width: 10),
+              ],
+              const Spacer(),
+            ] else if (blocks > 4) ...[
+              // Long shows get one menu of ranges instead of a wall of
+              // buttons, with arrows for the block before and after.
+              IconButton(
+                key: const Key('episode-range-previous'),
+                tooltip: 'Previous episodes',
+                onPressed: block > 0
+                    ? () => setState(() => range = block - 1)
+                    : null,
+                icon: const Icon(LucideIcons.chevronLeft, size: 20),
+              ),
+              PopupMenuButton<int>(
+                key: const Key('episode-range-menu'),
+                tooltip: 'Choose episodes',
+                initialValue: block,
+                color: panelRaised,
+                constraints: const BoxConstraints(maxHeight: 520),
+                position: PopupMenuPosition.under,
+                onSelected: (b) => setState(() => range = b),
+                itemBuilder: (_) => [
+                  for (var b = 0; b < blocks; b++)
+                    PopupMenuItem(
+                      value: b,
+                      child: Text(
+                        'Episodes ${rangeLabel(b, total)}',
+                        style: uiStyle(
+                          context,
+                          size: 17,
+                          color: b == block ? accentText : fg,
+                          weight: b == block
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: fgBright.withValues(alpha: .08),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        rangeLabel(block, total),
+                        style: uiStyle(context, weight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(LucideIcons.chevronDown, size: 18),
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                key: const Key('episode-range-next'),
+                tooltip: 'Next episodes',
+                onPressed: block < blocks - 1
+                    ? () => setState(() => range = block + 1)
+                    : null,
+                icon: const Icon(LucideIcons.chevronRight, size: 20),
+              ),
+              const Spacer(),
+            ] else
+              const Spacer(),
+            const SizedBox(width: 16),
+            Text(
+              '$watched watched',
+              style: uiStyle(context, size: 17, color: muted),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        if (total == 0)
+          Text(
+            'Episode availability is checked when you press Play.',
+            style: uiStyle(context, color: muted),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, box) {
+              const gap = 22.0;
+              final width = fittedCardWidth(
+                box.maxWidth,
+                300,
+                padding: 0,
+                gap: gap,
+              );
+              return Wrap(
+                spacing: gap,
+                runSpacing: 26,
+                children: [
+                  for (var ep = first; ep <= end; ep++) episodeCard(ep, width),
+                ],
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget desktopSidebar() {
+    final also = anime.titles.where((t) => t != anime.title).take(2).toList();
+    final related = anime.related.where(widget.services.store.visible).take(6);
+    Widget fact(String label, String value) => Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: mono.copyWith(fontSize: 15, letterSpacing: 2),
+          ),
+          const SizedBox(height: 2),
+          Text(value, style: uiStyle(context, color: fgBright)),
+        ],
+      ),
+    );
+    return Container(
+      key: const Key('show-sidebar'),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+      decoration: BoxDecoration(
+        color: panel,
+        border: Border.all(color: line),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (anime.studio.isNotEmpty) fact('Studio', anime.studio),
+          if (anime.format.isNotEmpty) fact('Format', anime.formatLabel),
+          if (anime.status.isNotEmpty) fact('Status', titleCase(anime.status)),
+          if (anime.year > 0) fact('Year', '${anime.year}'),
+          if (anime.duration > 0)
+            fact('Length', '${anime.duration} min per episode'),
+          if (anime.genres.isNotEmpty) fact('Genres', anime.genres.join(', ')),
+          if (also.isNotEmpty) fact('Also known as', also.join('\n')),
+          if (related.isNotEmpty) ...[
+            Divider(color: line, height: 12),
+            const SizedBox(height: 12),
+            Text(
+              'RELATED',
+              style: mono.copyWith(fontSize: 15, letterSpacing: 2),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final a in related)
+                  Tooltip(
+                    message: a.title,
+                    child: FocusBox(
+                      isTV: true,
+                      outsideFrame: true,
+                      radius: 8,
+                      onPressed: () => Navigator.push(
+                        context,
+                        OtakaseRoute<void>(
+                          builder: (_) => ShowPage(
+                            services: widget.services,
+                            anime: a,
+                            isTV: widget.isTV,
+                          ),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: CoverImage(a.cover, width: 92, height: 130),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget desktopBody(int last, int position) => Stack(
+    children: [
+      CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(child: desktopHeader(last, position)),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(48, 12, 48, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (loading) const SkeletonBlock(height: 3),
+                  if (error != null)
+                    Text(error!, style: uiStyle(context, color: muted)),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: desktopEpisodes()),
+                      const SizedBox(width: 40),
+                      SizedBox(width: 380, child: desktopSidebar()),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (anime.recommended.where(widget.services.store.visible).isNotEmpty)
+            SliverToBoxAdapter(
+              child: PosterRow(
+                title: 'Recommended',
+                items: anime.recommended
+                    .where(widget.services.store.visible)
+                    .toList(),
+                isTV: true,
+                onOpen: (a) => Navigator.push(
+                  context,
+                  OtakaseRoute<void>(
+                    builder: (_) => ShowPage(
+                      services: widget.services,
+                      anime: a,
+                      isTV: widget.isTV,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          const SliverToBoxAdapter(child: SizedBox(height: 40)),
+        ],
+      ),
+      Positioned(top: 0, left: 0, right: 0, child: desktopTopBar()),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) => PosterNavigation(
     onOpen: (a, tag) => Navigator.push(
@@ -453,6 +1069,7 @@ class _ShowPageState extends State<ShowPage> {
               ),
             );
           }
+          if (isDesktop) return desktopBody(last, position);
           return Column(
             children: [
               if (widget.isTV) tvNavigation(),

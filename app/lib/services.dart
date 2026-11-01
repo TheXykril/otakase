@@ -11,6 +11,8 @@ import 'data/models.dart';
 import 'data/watch_rooms.dart';
 import 'data/tv_remote.dart';
 import 'data/app_updates.dart';
+import 'desktop/desktop_core.dart';
+import 'desktop/desktop_updates.dart';
 
 class AppServices {
   AppServices({
@@ -23,7 +25,9 @@ class AppServices {
     this.profiles,
     this.profileId = '1',
   }) : auth = auth ?? AuthService(client: catalog.client) {
-    updates = appUpdates ?? AppUpdates();
+    updates =
+        appUpdates ??
+        AppUpdates(platform: isDesktop ? DesktopUpdatePlatform() : null);
     discord = DiscordService(
       client: catalog.client,
       storage: this.auth.storage,

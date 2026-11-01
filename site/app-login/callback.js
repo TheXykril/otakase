@@ -21,8 +21,15 @@
       if (params.has(key)) transfer.set(key, params.get(key));
     }
     let target = 'otakase://login?' + transfer.toString();
+    // The desktop app takes sign-ins on one fixed port of this computer
+    // (AuthService.desktopLoginPort), so the state cannot pick the address.
+    const desktop = state.desktop === true && !Object.hasOwn(state, 'host');
     const tv = Object.hasOwn(state, 'host');
-    if (tv) {
+    if (state.desktop !== undefined && !desktop) throw new Error();
+    const code = state.nonce.replace(/[^A-Za-z0-9]/g, '').toUpperCase().padEnd(4, '0').slice(0, 4);
+    if (desktop) {
+      target = 'http://127.0.0.1:47613/login?' + transfer.toString();
+    } else if (tv) {
       const parts = typeof state.host === 'string' ? state.host.split('.').map(Number) : [];
       const privateIP = parts.length === 4 && parts.every(p => Number.isInteger(p) && p >= 0 && p <= 255) &&
         (parts[0] === 10 || (parts[0] === 192 && parts[1] === 168) || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31));
@@ -30,10 +37,16 @@
       target = 'http://' + state.host + ':' + state.port + '/login?' + transfer.toString();
     }
     button.hidden = false;
-    button.textContent = tv ? 'Finish sign in on your TV' : 'Open Otakase';
+    // TVs that show a check code next to their QR code send check: true.
+    const check = tv && state.check === true;
+    button.textContent = check ? 'Codes match, finish on my TV' : tv ? 'Finish sign in on your TV' : 'Open Otakase';
     button.onclick = () => location.assign(target);
-    message.textContent = tv
+    message.textContent = check
+      ? 'Check code ' + code + '. Only continue if your TV shows this same code. Keep your phone and TV on the same home network.'
+      : tv
       ? 'Keep your phone and TV on the same home network. Tap below to finish sign in on your TV.'
+      : desktop
+      ? 'Returning to Otakase. You can close this tab afterwards.'
       : 'Opening Otakase. Tap below if your browser asks you to continue.';
     if (!tv) location.assign(target);
   } catch (_) {

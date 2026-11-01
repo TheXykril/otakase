@@ -87,15 +87,20 @@ class KageSeekSlider extends StatelessWidget {
     required this.onChanged,
     required this.onChangeStart,
     required this.onChangeEnd,
+    this.inactiveColor = const Color(0xff5a5148),
   });
   final double value, max;
+
+  /// Colour of the rail after the thumb. The desktop player paints its own
+  /// rail under the slider and passes a clear colour here.
+  final Color inactiveColor;
   final ValueChanged<double> onChanged, onChangeStart, onChangeEnd;
   @override
   Widget build(BuildContext context) => SliderTheme(
     data: SliderTheme.of(context).copyWith(
       trackHeight: 5,
       activeTrackColor: shu,
-      inactiveTrackColor: const Color(0xff5a5148),
+      inactiveTrackColor: inactiveColor,
       thumbShape: const _ThreadThumb(),
     ),
     child: Slider(

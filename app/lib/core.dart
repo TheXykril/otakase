@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'data/models.dart';
 import 'data/store.dart';
+import 'desktop/desktop_core.dart';
 
 class CoreFailure implements Exception {
   const CoreFailure(this.code, this.message);
@@ -19,7 +20,7 @@ class RequestScope {
   void cancel() {
     cancelled = true;
     for (final id in handles.toList()) {
-      unawaited(CoreClient.channel.invokeMethod<void>('cancel', id));
+      unawaited(CoreClient.cancelHandle(id));
     }
   }
 
@@ -30,8 +31,12 @@ class RequestScope {
 
 class CoreClient {
   static const channel = MethodChannel('otakase/core');
+  // Desktop has no Android host; the core runs as the otakase-core helper.
+  static Future<void> cancelHandle(int id) => isDesktop
+      ? DesktopCore.instance.cancel(id)
+      : channel.invokeMethod<void>('cancel', id);
   Future<bool> isTV() async =>
-      await channel.invokeMethod<bool>('device') ?? false;
+      !isDesktop && (await channel.invokeMethod<bool>('device') ?? false);
   Future<Json> request(
     Json input, {
     void Function(int)? onHandle,
@@ -39,10 +44,10 @@ class CoreClient {
     Duration timeout = const Duration(seconds: 40),
   }) async {
     scope?.check();
-    final id = await channel.invokeMethod<int>(
-      'start',
-      jsonEncode({'version': 1, ...input}),
-    );
+    final json = jsonEncode({'version': 1, ...input});
+    final id = isDesktop
+        ? await DesktopCore.instance.start(json)
+        : await channel.invokeMethod<int>('start', json);
     if (id == null) {
       throw const CoreFailure('invalid_handle', 'No request handle.');
     }
@@ -50,15 +55,20 @@ class CoreClient {
     onHandle?.call(id);
     if (scope?.cancelled == true) await cancel(id);
     try {
-      final raw = await channel
-          .invokeMethod<String>('result', id)
-          .timeout(
-            timeout,
-            onTimeout: () {
-              unawaited(cancel(id));
-              throw const CoreFailure('timeout', 'Source request timed out.');
-            },
-          );
+      final raw =
+          await (isDesktop
+                  ? DesktopCore.instance.result(id)
+                  : channel.invokeMethod<String>('result', id))
+              .timeout(
+                timeout,
+                onTimeout: () {
+                  unawaited(cancel(id));
+                  throw const CoreFailure(
+                    'timeout',
+                    'Source request timed out.',
+                  );
+                },
+              );
       scope?.check();
       final response = (jsonDecode(raw!) as Map).cast<String, dynamic>();
       if (response['error'] case final Map error) {
@@ -70,7 +80,7 @@ class CoreClient {
     }
   }
 
-  Future<void> cancel(int id) => channel.invokeMethod<void>('cancel', id);
+  Future<void> cancel(int id) => cancelHandle(id);
   Future<void> stopPlayback() async {
     await request({'operation': 'stop'});
   }

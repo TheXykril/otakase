@@ -7,6 +7,8 @@ import '../data/models.dart';
 import '../data/continuation.dart';
 import '../data/tracking.dart';
 import '../services.dart';
+import '../desktop/desktop_core.dart';
+import '../desktop/desktop_home.dart';
 import 'components.dart';
 import 'discovery_home.dart';
 
@@ -234,9 +236,11 @@ class _HomePageState extends State<HomePage> {
   final blocks = <String, GlobalKey<_AccountBlockState>>{};
   final discovery = GlobalKey<DiscoveryHomeState>();
   bool refreshScheduled = false;
+  HomeData? featured;
   @override
   void initState() {
     super.initState();
+    if (isDesktop) unawaited(loadFeatured());
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -259,7 +263,56 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Trending picks for the desktop hero.
+  Future<void> loadFeatured() async {
+    try {
+      final data = await widget.services.catalog.home(
+        adult: widget.services.store.adultAllowed,
+      );
+      if (mounted) setState(() => featured = data);
+    } catch (_) {
+      // The hero falls back to what you are watching.
+    }
+  }
+
+  List<HeroPick> heroPicks(List<WatchEntry> continuing) {
+    final picks = <HeroPick>[];
+    for (final e in continuing.take(2)) {
+      final left = e.duration > 0 ? ((e.duration - e.position) / 60).ceil() : 0;
+      picks.add(
+        HeroPick(
+          anime: e.anime,
+          kicker:
+              'Continue · Ep ${e.episode}${left > 0 && e.position > 0 ? ' · $left min left' : ''}',
+          action: e.position > 0
+              ? 'Resume episode ${e.episode}'
+              : 'Play episode ${e.episode}',
+          onPlay: () => widget.onResume(e),
+          onDetails: () => widget.onOpen(e.anime),
+        ),
+      );
+    }
+    final seen = picks.map((p) => p.anime.key).toSet();
+    var rank = 0;
+    for (final a in featured?.trending ?? const <Anime>[]) {
+      rank++;
+      if (picks.length >= 5) break;
+      if (!widget.services.store.visible(a) || !seen.add(a.key)) continue;
+      picks.add(
+        HeroPick(
+          anime: a,
+          kicker: 'Trending #$rank',
+          action: 'Play episode 1',
+          onPlay: () => widget.onResume(WatchEntry(anime: a)),
+          onDetails: () => widget.onOpen(a),
+        ),
+      );
+    }
+    return picks;
+  }
+
   Future<void> refresh({bool forceSync = false}) async {
+    if (isDesktop) unawaited(loadFeatured());
     await Future.wait([
       if (discovery.currentState case final page?) page.load(refresh: true),
       ...blocks.values.map(
@@ -332,7 +385,16 @@ class _HomePageState extends State<HomePage> {
         key: const PageStorageKey('home-scroll'),
         padding: EdgeInsets.only(bottom: contentBottom(context)),
         children: [
-          if (widget.isTV && (stage != null || configured.isNotEmpty))
+          if (isDesktop) ...[
+            DesktopHero(
+              picks: heroPicks(continuing),
+              topInset: widget.topInset,
+            ),
+            DesktopContinueRow(entries: continuing, onResume: widget.onResume),
+          ],
+          if (!isDesktop &&
+              widget.isTV &&
+              (stage != null || configured.isNotEmpty))
             TVHomeHero(
               key: const Key('tv-home-hero'),
               anime: stage?.anime,
@@ -392,7 +454,7 @@ class _HomePageState extends State<HomePage> {
               },
               autofocus: stage == null && service == lists.first,
             ),
-          if (continuing.length > 1)
+          if (!isDesktop && continuing.length > 1)
             PosterRow(
               title: 'Continue watching',
               items: continuing.skip(1).map((e) => e.anime).toList(),
@@ -421,7 +483,8 @@ class _HomePageState extends State<HomePage> {
               services: s,
               isTV: widget.isTV,
               hasResume: stage != null,
-              topInset: stage == null ? widget.topInset : 0,
+              showIntro: !isDesktop,
+              topInset: stage == null && !isDesktop ? widget.topInset : 0,
               onOpen: widget.onOpen,
               onSearch: widget.onSearch,
               onAccounts: widget.onAccounts,
@@ -777,67 +840,91 @@ class _AccountBlockState extends State<AccountBlock> {
               ),
             ),
           if (shown.isNotEmpty)
-            SizedBox(
-              height:
-                  (widget.isTV ? 194 : 184) +
-                  126 * MediaQuery.textScalerOf(context).scale(1),
-              child: RemoteFocusRow(
-                isTV: widget.isTV,
-                controller: scroll,
-                itemCount: shown.length,
-                itemWidth: widget.isTV ? 143 : 132,
-                spacing: widget.isTV ? 26 : 12,
-                padding: side - 7,
-                onUp: trigger.requestFocus,
-                child: ListView.separated(
-                  key: PageStorageKey('$listKey-$category'),
-                  controller: scroll,
-                  scrollDirection: Axis.horizontal,
-                  clipBehavior: Clip.none,
-                  padding: EdgeInsets.fromLTRB(side - 7, 15, side, 8),
-                  itemCount: shown.length,
-                  findItemIndexCallback: (key) {
-                    final index = shown.indexWhere(
-                      (entry) => ValueKey('shelf-${entry.anime.key}') == key,
-                    );
-                    return index < 0 ? null : index;
-                  },
-                  separatorBuilder: (_, i) =>
-                      SizedBox(width: widget.isTV ? 26 : 12),
-                  itemBuilder: (_, i) {
-                    final e = shown[i];
-                    return RemoteFocusItem(
-                      key: ValueKey('shelf-${e.anime.key}'),
-                      index: i,
-                      child: PosterCard(
-                        key: ValueKey('$listKey-$category-${e.anime.key}'),
-                        anime: e.anime,
-                        cropped: true,
-                        width: widget.isTV ? 143 : 132,
-                        isTV: widget.isTV,
-                        onOpen: () => widget.onOpen(e.anime),
-                        onFocused: () {
-                          widget.onFocused?.call(e);
-                        },
-                        caption: e.progress <= 0
-                            ? 'Not started'
-                            : e.anime.episodes > 0
-                            ? '${e.progress}/${e.anime.episodes}'
-                            : '${e.progress} watched',
-                        progress: episodeProgress(
-                          widget.services.store.entry(e.anime),
-                          watched: e.progress,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+            LayoutBuilder(
+              builder: (context, box) {
+                final cardWidth = isDesktop
+                    ? fittedCardWidth(
+                        box.maxWidth,
+                        200,
+                        padding: side - 7,
+                        gap: 26,
+                      )
+                    : widget.isTV
+                    ? 143.0
+                    : 132.0;
+                return shelf(context, shown, cardWidth, side);
+              },
             ),
         ],
       ),
     );
   }
+
+  Widget shelf(
+    BuildContext context,
+    List<ListEntry> shown,
+    double cardWidth,
+    double side,
+  ) => SizedBox(
+    height:
+        (isDesktop
+            ? cardWidth * 194 / 143
+            : widget.isTV
+            ? 194
+            : 184) +
+        126 * MediaQuery.textScalerOf(context).scale(1),
+    child: RemoteFocusRow(
+      isTV: widget.isTV,
+      controller: scroll,
+      itemCount: shown.length,
+      itemWidth: cardWidth,
+      spacing: widget.isTV ? 26 : 12,
+      padding: side - 7,
+      onUp: trigger.requestFocus,
+      child: ListView.separated(
+        key: PageStorageKey('$listKey-$category'),
+        controller: scroll,
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        padding: EdgeInsets.fromLTRB(side - 7, 15, side, 8),
+        itemCount: shown.length,
+        findItemIndexCallback: (key) {
+          final index = shown.indexWhere(
+            (entry) => ValueKey('shelf-${entry.anime.key}') == key,
+          );
+          return index < 0 ? null : index;
+        },
+        separatorBuilder: (_, i) => SizedBox(width: widget.isTV ? 26 : 12),
+        itemBuilder: (_, i) {
+          final e = shown[i];
+          return RemoteFocusItem(
+            key: ValueKey('shelf-${e.anime.key}'),
+            index: i,
+            child: PosterCard(
+              key: ValueKey('$listKey-$category-${e.anime.key}'),
+              anime: e.anime,
+              cropped: true,
+              width: cardWidth,
+              isTV: widget.isTV,
+              onOpen: () => widget.onOpen(e.anime),
+              onFocused: () {
+                widget.onFocused?.call(e);
+              },
+              caption: e.progress <= 0
+                  ? 'Not started'
+                  : e.anime.episodes > 0
+                  ? '${e.progress}/${e.anime.episodes}'
+                  : '${e.progress} watched',
+              progress: episodeProgress(
+                widget.services.store.entry(e.anime),
+                watched: e.progress,
+              ),
+            ),
+          );
+        },
+      ),
+    ),
+  );
 }
 
 class _CategoryInitialFocus extends StatefulWidget {

@@ -17,9 +17,13 @@ class DiscoveryHome extends StatefulWidget {
     required this.onSearch,
     required this.onAccounts,
     this.topInset = 0,
+    this.showIntro = true,
   });
   final AppServices services;
   final bool isTV, hasResume;
+
+  /// False on desktop, where the home hero already features a show.
+  final bool showIntro;
   final double topInset;
   final ValueChanged<Anime> onOpen;
   final VoidCallback onSearch, onAccounts;
@@ -132,7 +136,9 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (widget.isTV && !widget.hasResume)
+        if (!widget.showIntro)
+          const SizedBox.shrink()
+        else if (widget.isTV && !widget.hasResume)
           TVHomeHero(
             key: const Key('tv-home-hero'),
             anime: featured,
