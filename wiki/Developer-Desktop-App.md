@@ -57,6 +57,30 @@ cd app && OTAKASE_CORE=/tmp/otakase-core flutter run -d linux
 
 `flutter test` runs on a desktop host but exercises the Android paths: `isDesktop` is false under `flutter test` unless a test sets `debugDesktopOverride`. `test/desktop_core_test.dart` checks the app side against a fake helper; `go test ./mobilecore/stdio` checks the server, including one request through the real core.
 
+## Window
+
+There is no system title bar on any OS (`window_manager`, `TitleBarStyle.hidden`; on Linux the GTK runner turns decorations off). The app draws its own top bar: the empty part of a page header moves the window and a double click maximises it (`WindowDragArea`), minimise, maximise and close sit at the top right (`WindowButtons`), and a 10 px strip along the top edge moves the window on every page. macOS keeps its traffic-light buttons over the top-left corner. Esc goes back one page. Code: `app/lib/desktop/window_frame.dart`.
+
+The desktop window uses the wide TV layout, drawn on a 1920×1080 canvas and scaled to the window (never below 0.7), with a Schedule tab next to Home, Search and More. The mouse works everywhere; arrow keys and Enter still work too.
+
+## Launcher
+
+`otakase --launcher` opens a small always-on-top window that works like the CLI's rofi menus: type to filter, arrows or PageUp/PageDown to move, Enter to pick, Esc to clear the text, go back, then close.
+
+- Main menu: Continue, the Watching list, history, Search anime, Open full app, Quit. Typing anything adds a "Search for" row.
+- Show menu: Play next, Choose episode… (type a number), Replay, Open in full app.
+- Ctrl+W or Open full app turns the same window into the full app.
+
+Playing from the launcher grows the window to 1280×760 for the player. Code: `app/lib/desktop/launcher.dart`.
+
+## Sign-in
+
+AniList and MAL sign-in opens the default browser (`xdg-open`, `open` or `rundll32`, http/https links only). The app listens on a random port on `127.0.0.1` and puts it in the sign-in state; the site's callback page (`site/app-login/callback.js`) sends the browser back to `http://127.0.0.1:<port>/login`. The callback page change only works once the site is deployed from main.
+
+## Player
+
+The desktop player looks like the CLI's mpv skin (see [Player Look](Developer-Player-Look)): a title line with the window buttons at the top and one floating bar at the bottom with times, a seek rail (buffered part, opening and ending stripes) and small icon buttons for back/forward 10 s, play, next episode, mute, audio and subtitles, quality and full screen. Moving the mouse shows the controls; they and the pointer hide after 5 seconds. Keys: Space play/pause, Left/Right 10 s, F full screen, M mute. Code: `app/lib/desktop/player_bar.dart`.
+
 ## Not done yet
 
-The device features the Android host provides (`otakase/device` channel: login redirect, opening links, status) have no desktop implementation yet, and the layout is still the phone layout. The plan covers the desktop window layout, a launcher mode like the CLI's rofi menus, external mpv, cast, torrents and packaging.
+External mpv, cast, torrents, Discord-style device features and packaging (installers, signing) are still to do. Windows and macOS builds have not been tried on real machines.
