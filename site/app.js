@@ -126,3 +126,15 @@ function visitorOS() {
   if (/Mac|iPhone|iPad|iPod/i.test(platform) || /Macintosh|iPhone|iPad/i.test(ua)) return 'macos';
   return 'linux';
 }
+
+// ---- screenshots: one device at a time, the visitor's own first
+(() => {
+  const buttons = [...document.querySelectorAll('.os-pick button')];
+  const shots = [...document.querySelectorAll('.os-shot')];
+  const show = (name) => {
+    buttons.forEach((b) => b.setAttribute('aria-pressed', b.dataset.shot === name));
+    shots.forEach((s) => { s.hidden = s.dataset.shot !== name; });
+  };
+  buttons.forEach((b) => b.addEventListener('click', () => show(b.dataset.shot)));
+  show(visitorOS() === 'android' ? 'phone' : 'computer');
+})();
