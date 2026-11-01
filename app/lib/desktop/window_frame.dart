@@ -30,7 +30,15 @@ Future<void> setUpDesktopWindow({bool launcher = false}) async {
 }
 
 /// Space the macOS traffic lights take at the left of the top bar.
-double get windowButtonsLeading => isDesktop && Platform.isMacOS ? 78 : 0;
+/// Set by tests to draw the macOS layout on another OS.
+@visibleForTesting
+bool? debugMacLayout;
+
+/// True when the window uses the macOS layout: Apple's own buttons on the
+/// left, nothing drawn by the app for them.
+bool get macWindowLayout => debugMacLayout ?? Platform.isMacOS;
+
+double get windowButtonsLeading => isDesktop && macWindowLayout ? 78 : 0;
 
 /// Lets the user drag the window by the empty parts of [child] and maximise
 /// it with a double click there. Buttons in [child] still get every click
@@ -179,7 +187,7 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
   @override
   void initState() {
     super.initState();
-    if (!isDesktop || Platform.isMacOS) return;
+    if (!isDesktop || macWindowLayout) return;
     windowManager.addListener(this);
     // Wayland compositors report tiled windows as maximised, so Linux always
     // shows the plain maximise icon.
@@ -193,7 +201,7 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
 
   @override
   void dispose() {
-    if (isDesktop && !Platform.isMacOS) windowManager.removeListener(this);
+    if (isDesktop && !macWindowLayout) windowManager.removeListener(this);
     super.dispose();
   }
 
@@ -207,7 +215,7 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    if (!isDesktop || Platform.isMacOS) return const SizedBox.shrink();
+    if (!isDesktop || macWindowLayout) return const SizedBox.shrink();
     final style = windowButtonStyle;
     final tiling = style == WindowButtonStyle.tiling || tilingWindowManager;
     final kde = style == WindowButtonStyle.kde;

@@ -483,7 +483,7 @@ class _AppShellState extends State<AppShell> {
   /// its own buttons on the left, so the logo moves to the right there. A
   /// future account button goes beside the window buttons.
   Widget desktopHeader() {
-    final mac = Platform.isMacOS;
+    final mac = macWindowLayout;
     final flush = windowButtonStyle == WindowButtonStyle.windows;
     return SizedBox(
       height: 84,

@@ -217,6 +217,44 @@ void main() {
     });
   }
 
+  testWidgets('desktop render: top bar macos', (tester) async {
+    setUpScreen(tester, const Size(1440, 900));
+    debugMacLayout = true;
+    addTearDown(() => debugMacLayout = null);
+    // macOS draws its own traffic lights over the window; stand-ins here.
+    Widget light(int color) => Container(
+      width: 12,
+      height: 12,
+      margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(color: Color(color), shape: BoxShape.circle),
+    );
+    await tester.pumpWidget(
+      art(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Stack(
+            children: [
+              OtakaseApp(services: await services(), isTV: true),
+              Positioned(
+                left: 20,
+                top: 20,
+                child: Row(
+                  children: [
+                    light(0xffff5f57),
+                    light(0xfffebc2e),
+                    light(0xff28c840),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await capture(tester, 'home-macos');
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('desktop render: launcher', (tester) async {
     setUpScreen(tester, launcherSize);
     await tester.pumpWidget(
