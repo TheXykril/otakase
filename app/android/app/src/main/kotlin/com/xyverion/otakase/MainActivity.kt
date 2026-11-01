@@ -112,7 +112,7 @@ class MainActivity : FlutterActivity() {
                 "status" -> result.success(deviceStatus())
                 "launchUri" -> try {
                     val uri = android.net.Uri.parse(call.arguments as String)
-                    require(uri.scheme == "https" && uri.host in listOf("anilist.co", "myanimelist.net", "otakase.xyverion.com", "bot.xyverion.com", "discord.com", "discord.gg"))
+                    require(uri.scheme == "https" && uri.host in listOf("anilist.co", "myanimelist.net", "otakase.xyverion.com", "bot.xyverion.com", "discord.com", "discord.gg", "trakt.tv"))
                     startActivity(Intent(Intent.ACTION_VIEW, uri))
                     result.success(null)
                 } catch (_: Exception) { result.error("unavailable", "Browser unavailable", null) }
@@ -146,6 +146,11 @@ class MainActivity : FlutterActivity() {
                 "device" -> result.success(
                     packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
                         !packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
+                )
+                // Downloads for watching offline. The app's own folder needs
+                // no storage permission and is removed with the app.
+                "downloadsDir" -> result.success(
+                    (getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES) ?: java.io.File(filesDir, "downloads")).absolutePath
                 )
                 "metered" -> result.success(
                     (getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager)

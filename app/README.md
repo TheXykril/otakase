@@ -24,6 +24,19 @@ or choose Stay or press Back to cancel. TV has no second farewell prompt.
 TV menus and covers use a compact layout that scales automatically for your screen.
 Android's larger-text preference still applies. Phone sizing is unchanged.
 
+More > Movies & shows chooses what each profile shows: anime only (the default), movies
+and series only, or both. With both, a Movies tab sits next to Search; with movies only,
+Home and Search hold films and series. Titles come from Trakt. Playing one picks a source by
+itself, like anime: Source languages sets the order (vidsrc is English, 8Filmai and
+Filmukas are Lithuanian), and each source can be switched off. Sign in to Trakt there to
+keep your watchlist, watched films and episodes, and where you stopped in sync; Trakt shows
+a short code to enter at trakt.tv/activate.
+
+Download on a show, film or episode saves it for watching offline (phones and computers).
+More > Downloads lists the files, plays them and deletes them. On a computer, files go to
+Videos/Otakase (Movies/Otakase on macOS); with ffmpeg installed, streams with separate
+sound tracks download too. Torrent copies cannot be downloaded yet.
+
 More > Profiles manages up to six profiles. Each keeps its own accounts, history, lists and
 playback settings. Switch profiles there without restarting. TV asks who is watching when
 more than one profile exists. Change Ask on start in Profiles. A direction code uses 4–8

@@ -1,0 +1,654 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import 'auth.dart';
+import 'models.dart';
+
+/// Otakase's own Trakt app. It has no secret, so its id is public by design:
+/// the id alone cannot be turned into anyone's session.
+const traktClientId = 'zbSBzFuTMKrNfuZyM5LawZUh-9BiKXsTyQWbbRTT9SA';
+const traktRedirectUri = 'https://thexykril.github.io/otakase/';
+const traktTokenKey = 'trakt_token';
+
+class TraktFailure implements Exception {
+  const TraktFailure(this.message, {this.status = 0});
+  final String message;
+  final int status;
+  @override
+  String toString() => message;
+}
+
+/// A film or a series from Trakt.
+class MediaTitle {
+  const MediaTitle({
+    required this.kind,
+    required this.trakt,
+    required this.title,
+    this.imdb = '',
+    this.tmdb = 0,
+    this.slug = '',
+    this.year = 0,
+    this.original = '',
+    this.overview = '',
+    this.tagline = '',
+    this.poster = '',
+    this.fanart = '',
+    this.runtime = 0,
+    this.genres = const [],
+    this.rating = 0,
+    this.certification = '',
+    this.status = '',
+    this.network = '',
+    this.airedEpisodes = 0,
+    this.language = '',
+  });
+
+  /// movie or show.
+  final String kind;
+  final int trakt, tmdb, year, runtime, airedEpisodes;
+  final String title,
+      imdb,
+      slug,
+      original,
+      overview,
+      tagline,
+      poster,
+      fanart,
+      certification,
+      status,
+      network,
+      language;
+  final List<String> genres;
+  final double rating;
+  bool get isShow => kind == 'show';
+  String get key => '$kind:$trakt';
+  String get label => year > 0 ? '$title ($year)' : title;
+
+  static String _image(Json? images, String name) {
+    final list = images?[name];
+    if (list is List && list.isNotEmpty && list.first is String) {
+      final path = list.first as String;
+      return path.startsWith('http') ? path : 'https://$path';
+    }
+    return '';
+  }
+
+  factory MediaTitle.fromTrakt(Json json, String kind) {
+    final ids = (json['ids'] as Map? ?? {}).cast<String, dynamic>();
+    final images = (json['images'] as Map?)?.cast<String, dynamic>();
+    return MediaTitle(
+      kind: kind,
+      trakt: number(ids['trakt']),
+      imdb: ids['imdb'] as String? ?? '',
+      tmdb: number(ids['tmdb']),
+      slug: ids['slug'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      year: number(json['year']),
+      original: json['original_title'] as String? ?? '',
+      overview: json['overview'] as String? ?? '',
+      tagline: json['tagline'] as String? ?? '',
+      poster: _image(images, 'poster'),
+      fanart: _image(images, 'fanart'),
+      runtime: number(json['runtime']),
+      genres: (json['genres'] as List? ?? []).whereType<String>().toList(),
+      rating: (json['rating'] as num?)?.toDouble() ?? 0,
+      certification: json['certification'] as String? ?? '',
+      status: json['status'] as String? ?? '',
+      network: json['network'] as String? ?? '',
+      airedEpisodes: number(json['aired_episodes']),
+      language: json['language'] as String? ?? '',
+    );
+  }
+
+  factory MediaTitle.fromJson(Json json) => MediaTitle(
+    kind: json['kind'] as String? ?? 'movie',
+    trakt: number(json['trakt']),
+    imdb: json['imdb'] as String? ?? '',
+    tmdb: number(json['tmdb']),
+    slug: json['slug'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    year: number(json['year']),
+    original: json['original'] as String? ?? '',
+    overview: json['overview'] as String? ?? '',
+    tagline: json['tagline'] as String? ?? '',
+    poster: json['poster'] as String? ?? '',
+    fanart: json['fanart'] as String? ?? '',
+    runtime: number(json['runtime']),
+    genres: (json['genres'] as List? ?? []).whereType<String>().toList(),
+    rating: (json['rating'] as num?)?.toDouble() ?? 0,
+    certification: json['certification'] as String? ?? '',
+    status: json['status'] as String? ?? '',
+    network: json['network'] as String? ?? '',
+    airedEpisodes: number(json['aired_episodes']),
+    language: json['language'] as String? ?? '',
+  );
+
+  Json toJson() => {
+    'kind': kind,
+    'trakt': trakt,
+    'imdb': imdb,
+    'tmdb': tmdb,
+    'slug': slug,
+    'title': title,
+    'year': year,
+    if (original.isNotEmpty) 'original': original,
+    if (overview.isNotEmpty) 'overview': overview,
+    if (tagline.isNotEmpty) 'tagline': tagline,
+    'poster': poster,
+    'fanart': fanart,
+    'runtime': runtime,
+    'genres': genres,
+    'rating': rating,
+    'certification': certification,
+    'status': status,
+    'network': network,
+    'aired_episodes': airedEpisodes,
+    'language': language,
+  };
+
+  /// The ids Trakt matches a title by.
+  Json get ids => {
+    'trakt': trakt,
+    if (imdb.isNotEmpty) 'imdb': imdb,
+    if (tmdb > 0) 'tmdb': tmdb,
+    if (slug.isNotEmpty) 'slug': slug,
+  };
+}
+
+class TitleEpisode {
+  const TitleEpisode({
+    required this.season,
+    required this.number,
+    this.title = '',
+    this.overview = '',
+    this.aired,
+    this.runtime = 0,
+  });
+  final int season, number, runtime;
+  final String title, overview;
+  final DateTime? aired;
+  String get code => 'S${season}E$number';
+  String get label => title.isEmpty ? code : '$code · $title';
+}
+
+class TraktDeviceCode {
+  TraktDeviceCode.fromJson(Json json)
+    : deviceCode = json['device_code'] as String? ?? '',
+      userCode = json['user_code'] as String? ?? '',
+      verificationUrl =
+          json['verification_url'] as String? ?? 'https://trakt.tv/activate',
+      expiresIn = number(json['expires_in']),
+      interval = number(json['interval']);
+  final String deviceCode, userCode, verificationUrl;
+  final int expiresIn, interval;
+}
+
+/// What Trakt holds for the signed-in viewer.
+class TraktLibrary {
+  TraktLibrary({
+    this.watchlist = const [],
+    this.watchedMovies = const {},
+    this.watchedEpisodes = const {},
+    this.playback = const [],
+  });
+  final List<MediaTitle> watchlist;
+
+  /// Watched films by key.
+  final Map<String, MediaTitle> watchedMovies;
+
+  /// Watched episodes by show key, as S/E codes.
+  final Map<String, ({MediaTitle title, Set<String> codes})> watchedEpisodes;
+  final List<TraktPaused> playback;
+}
+
+class TraktPaused {
+  const TraktPaused(
+    this.title,
+    this.progress, {
+    this.season = 0,
+    this.episode = 0,
+  });
+  final MediaTitle title;
+  final double progress;
+  final int season, episode;
+}
+
+/// Trakt for one profile: the public catalog, the device sign-in, and the
+/// viewer's watchlist, history and progress. The token is kept with the
+/// profile's other sign-ins.
+class Trakt extends ChangeNotifier {
+  Trakt({required this.client, required this.storage, DateTime Function()? now})
+    : now = now ?? DateTime.now;
+  final http.Client client;
+  final TokenStore storage;
+  final DateTime Function() now;
+  static const api = 'https://api.trakt.tv';
+  Json? _token;
+  String username = '';
+  bool _loaded = false;
+  bool disposed = false;
+  String? lastError;
+  bool get signedIn => _token != null;
+
+  Future<void> load() async {
+    if (_loaded) return;
+    _loaded = true;
+    try {
+      final raw = await storage.read(traktTokenKey);
+      if (raw != null && raw.isNotEmpty) {
+        _token = (jsonDecode(raw) as Map).cast<String, dynamic>();
+        username = _token?['username'] as String? ?? '';
+      }
+    } catch (_) {
+      _token = null;
+    }
+    _notify();
+  }
+
+  void _notify() {
+    if (!disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    disposed = true;
+    super.dispose();
+  }
+
+  Map<String, String> _headers([String? bearer]) => {
+    'Content-Type': 'application/json',
+    'trakt-api-version': '2',
+    'trakt-api-key': traktClientId,
+    if (bearer != null) 'Authorization': 'Bearer $bearer',
+  };
+
+  Future<http.Response> _send(
+    String method,
+    String path, {
+    Object? body,
+    bool auth = false,
+  }) async {
+    final bearer = auth ? await _bearer() : null;
+    final request = http.Request(method, Uri.parse('$api$path'))
+      ..headers.addAll(_headers(bearer));
+    if (body != null) request.body = jsonEncode(body);
+    final response = await http.Response.fromStream(
+      await client.send(request).timeout(const Duration(seconds: 20)),
+    );
+    if (response.statusCode == 401 && auth) {
+      // The session was revoked on trakt.tv.
+      await signOut();
+      throw const TraktFailure(
+        'Trakt sign-in expired. Sign in again.',
+        status: 401,
+      );
+    }
+    if (response.statusCode >= 400) {
+      throw TraktFailure(
+        'Trakt answered ${response.statusCode}.',
+        status: response.statusCode,
+      );
+    }
+    return response;
+  }
+
+  Future<dynamic> _get(String path, {bool auth = false}) async {
+    final response = await _send('GET', path, auth: auth);
+    return response.bodyBytes.isEmpty
+        ? null
+        : jsonDecode(utf8.decode(response.bodyBytes, allowMalformed: true));
+  }
+
+  Future<String> _bearer() async {
+    await load();
+    final token = _token;
+    if (token == null) throw const TraktFailure('Not signed in to Trakt.');
+    final created = number(token['created_at']);
+    final expires = number(token['expires_in']);
+    if (expires > 0 &&
+        now().millisecondsSinceEpoch ~/ 1000 > created + expires - 60) {
+      final response = await client
+          .post(
+            Uri.parse('$api/oauth/token'),
+            headers: _headers(),
+            body: jsonEncode({
+              'refresh_token': token['refresh_token'],
+              'client_id': traktClientId,
+              'redirect_uri': traktRedirectUri,
+              'grant_type': 'refresh_token',
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200) {
+        await signOut();
+        throw const TraktFailure('Trakt sign-in expired. Sign in again.');
+      }
+      await _save((jsonDecode(response.body) as Map).cast<String, dynamic>());
+    }
+    return _token!['access_token'] as String;
+  }
+
+  Future<void> _save(Json token) async {
+    token['username'] = username;
+    _token = token;
+    await storage.write(traktTokenKey, jsonEncode(token));
+    _notify();
+  }
+
+  Future<TraktDeviceCode> startSignIn() async {
+    final response = await _send(
+      'POST',
+      '/oauth/device/code',
+      body: {'client_id': traktClientId},
+    );
+    return TraktDeviceCode.fromJson(
+      (jsonDecode(response.body) as Map).cast<String, dynamic>(),
+    );
+  }
+
+  /// Polls until the viewer enters the code at trakt.tv/activate. Returns
+  /// false when it expired, was denied or [cancelled] turned true.
+  Future<bool> finishSignIn(
+    TraktDeviceCode code, {
+    required bool Function() cancelled,
+    Duration? interval,
+  }) async {
+    var wait = interval ?? Duration(seconds: code.interval.clamp(5, 30));
+    final deadline = now().add(
+      Duration(seconds: code.expiresIn.clamp(60, 1800)),
+    );
+    while (now().isBefore(deadline) && !cancelled()) {
+      await Future<void>.delayed(wait);
+      if (cancelled()) return false;
+      http.Response response;
+      try {
+        response = await client
+            .post(
+              Uri.parse('$api/oauth/device/token'),
+              headers: _headers(),
+              body: jsonEncode({
+                'code': code.deviceCode,
+                'client_id': traktClientId,
+              }),
+            )
+            .timeout(const Duration(seconds: 20));
+      } catch (_) {
+        continue;
+      }
+      switch (response.statusCode) {
+        case 200:
+          final token = (jsonDecode(response.body) as Map)
+              .cast<String, dynamic>();
+          _token = token;
+          try {
+            final settings = await _get('/users/settings', auth: true) as Map;
+            username =
+                ((settings['user'] as Map?)?['username'] as String?) ?? '';
+          } catch (_) {
+            username = '';
+          }
+          await _save(token);
+          return true;
+        case 400:
+          continue;
+        case 429:
+          wait += const Duration(seconds: 1);
+          continue;
+        default:
+          return false;
+      }
+    }
+    return false;
+  }
+
+  Future<void> signOut() async {
+    _token = null;
+    username = '';
+    await storage.write(traktTokenKey, null);
+    _notify();
+  }
+
+  // ------------------------------------------------------------- catalog
+
+  static String _plural(String kind) => kind == 'show' ? 'shows' : 'movies';
+
+  List<MediaTitle> _titles(dynamic rows, String kind) => [
+    for (final row in (rows as List? ?? []).whereType<Map>())
+      if ((row[kind] ?? row) case final Map item)
+        MediaTitle.fromTrakt(item.cast<String, dynamic>(), kind),
+  ].where((t) => t.trakt > 0 && t.title.isNotEmpty).toList();
+
+  /// trending, popular, anticipated or watched (this week).
+  Future<List<MediaTitle>> list(
+    String kind,
+    String list, {
+    int limit = 20,
+  }) async {
+    final path = list == 'watched' ? 'watched/weekly' : list;
+    return _titles(
+      await _get('/${_plural(kind)}/$path?extended=full,images&limit=$limit'),
+      kind,
+    );
+  }
+
+  Future<List<MediaTitle>> search(
+    String query, {
+    String kinds = 'movie,show',
+  }) async {
+    final rows =
+        await _get(
+          '/search/$kinds?query=${Uri.encodeQueryComponent(query)}&extended=full,images&limit=30',
+        ) as List? ??
+        [];
+    return [
+      for (final row in rows.whereType<Map>())
+        if (row[row['type']] case final Map item)
+          MediaTitle.fromTrakt(
+            item.cast<String, dynamic>(),
+            row['type'] as String,
+          ),
+    ].where((t) => t.trakt > 0).toList();
+  }
+
+  Future<MediaTitle> details(MediaTitle title) async {
+    final json = await _get(
+      '/${_plural(title.kind)}/${title.trakt}?extended=full,images',
+    );
+    return MediaTitle.fromTrakt(
+      (json as Map).cast<String, dynamic>(),
+      title.kind,
+    );
+  }
+
+  Future<List<MediaTitle>> related(MediaTitle title) async => _titles(
+    await _get(
+      '/${_plural(title.kind)}/${title.trakt}/related?extended=full,images&limit=12',
+    ),
+    title.kind,
+  );
+
+  /// The title in another language, such as lt, or '' when Trakt has none.
+  Future<String> translation(MediaTitle title, String language) async {
+    try {
+      final rows =
+          await _get(
+            '/${_plural(title.kind)}/${title.trakt}/translations/$language',
+          ) as List? ??
+          [];
+      for (final row in rows.whereType<Map>()) {
+        final t = (row['title'] as String? ?? '').trim();
+        if (t.isNotEmpty) return t;
+      }
+    } catch (_) {
+      /* A missing translation only means fewer titles to search by. */
+    }
+    return '';
+  }
+
+  /// A series' aired episodes by season, specials left out.
+  Future<List<TitleEpisode>> episodes(MediaTitle show) async {
+    final seasons =
+        await _get('/shows/${show.trakt}/seasons?extended=full,episodes')
+            as List? ??
+        [];
+    final today = now();
+    final out = <TitleEpisode>[];
+    for (final season in seasons.whereType<Map>()) {
+      final n = number(season['number']);
+      if (n == 0) continue;
+      for (final e in (season['episodes'] as List? ?? []).whereType<Map>()) {
+        final aired = DateTime.tryParse(e['first_aired'] as String? ?? '');
+        if (aired == null || aired.isAfter(today)) continue;
+        out.add(
+          TitleEpisode(
+            season: n,
+            number: number(e['number']),
+            title: e['title'] as String? ?? '',
+            overview: e['overview'] as String? ?? '',
+            aired: aired,
+            runtime: number(e['runtime']),
+          ),
+        );
+      }
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- sync
+
+  Future<TraktLibrary> library() async {
+    final results = await Future.wait([
+      _get('/sync/watchlist/movies?extended=full,images', auth: true),
+      _get('/sync/watchlist/shows?extended=full,images', auth: true),
+      _get('/sync/watched/movies', auth: true),
+      _get('/sync/watched/shows', auth: true),
+      _get('/sync/playback?extended=full,images', auth: true),
+    ]);
+    final watchlist = [
+      ..._titles(results[0], 'movie'),
+      ..._titles(results[1], 'show'),
+    ];
+    final movies = <String, MediaTitle>{
+      for (final t in _titles(results[2], 'movie')) t.key: t,
+    };
+    final episodes = <String, ({MediaTitle title, Set<String> codes})>{};
+    for (final row in (results[3] as List? ?? []).whereType<Map>()) {
+      final show = row['show'];
+      if (show is! Map) continue;
+      final title = MediaTitle.fromTrakt(show.cast<String, dynamic>(), 'show');
+      final seen = episodes
+          .putIfAbsent(title.key, () => (title: title, codes: <String>{}))
+          .codes;
+      for (final s in (row['seasons'] as List? ?? []).whereType<Map>()) {
+        for (final e in (s['episodes'] as List? ?? []).whereType<Map>()) {
+          seen.add('S${number(s['number'])}E${number(e['number'])}');
+        }
+      }
+    }
+    final playback = <TraktPaused>[];
+    for (final row in (results[4] as List? ?? []).whereType<Map>()) {
+      final progress = (row['progress'] as num?)?.toDouble() ?? 0;
+      if (row['type'] == 'movie' && row['movie'] is Map) {
+        playback.add(
+          TraktPaused(
+            MediaTitle.fromTrakt(
+              (row['movie'] as Map).cast<String, dynamic>(),
+              'movie',
+            ),
+            progress,
+          ),
+        );
+      } else if (row['type'] == 'episode' &&
+          row['show'] is Map &&
+          row['episode'] is Map) {
+        final e = row['episode'] as Map;
+        playback.add(
+          TraktPaused(
+            MediaTitle.fromTrakt(
+              (row['show'] as Map).cast<String, dynamic>(),
+              'show',
+            ),
+            progress,
+            season: number(e['season']),
+            episode: number(e['number']),
+          ),
+        );
+      }
+    }
+    return TraktLibrary(
+      watchlist: watchlist,
+      watchedMovies: movies,
+      watchedEpisodes: episodes,
+      playback: playback,
+    );
+  }
+
+  Json _item(MediaTitle title, {int season = 0, int episode = 0}) =>
+      title.isShow
+      ? {
+          'shows': [
+            {
+              'ids': title.ids,
+              if (season > 0)
+                'seasons': [
+                  {
+                    'number': season,
+                    if (episode > 0)
+                      'episodes': [
+                        {'number': episode},
+                      ],
+                  },
+                ],
+            },
+          ],
+        }
+      : {
+          'movies': [
+            {'ids': title.ids},
+          ],
+        };
+
+  Future<void> setWatchlist(MediaTitle title, bool on) => _send(
+    'POST',
+    on ? '/sync/watchlist' : '/sync/watchlist/remove',
+    body: _item(title),
+    auth: true,
+  );
+
+  Future<void> setWatched(
+    MediaTitle title,
+    bool watched, {
+    int season = 0,
+    int episode = 0,
+  }) => _send(
+    'POST',
+    watched ? '/sync/history' : '/sync/history/remove',
+    body: _item(title, season: season, episode: episode),
+    auth: true,
+  );
+
+  /// Tells Trakt what is playing: start, pause or stop. Stop at 80% or more
+  /// marks it watched there.
+  Future<void> scrobble(
+    String action,
+    MediaTitle title,
+    double progress, {
+    int season = 0,
+    int episode = 0,
+  }) => _send(
+    'POST',
+    '/scrobble/$action',
+    body: {
+      if (title.isShow) ...{
+        'show': {'ids': title.ids},
+        'episode': {'season': season, 'number': episode},
+      } else
+        'movie': {'ids': title.ids},
+      'progress': double.parse(progress.clamp(0, 100).toStringAsFixed(2)),
+    },
+    auth: true,
+  );
+}

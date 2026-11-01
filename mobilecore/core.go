@@ -56,6 +56,8 @@ type Core struct {
 	// cacheDir holds torrent downloads; empty means the system temp dir.
 	cacheDir string
 	torrent  *torrentstream.BotStream
+	// downloads are the files being saved for watching offline.
+	downloads downloadSet
 }
 
 type task struct {
@@ -206,6 +208,7 @@ func (c *Core) Close() {
 	for _, stop := range stops {
 		stop()
 	}
+	c.downloads.cancelAll()
 }
 
 // StopPlayback releases loopback relays after a player stops or changes source.
@@ -259,6 +262,9 @@ func encode(value response) string {
 func (c *Core) execute(ctx context.Context, input string) string {
 	if len(input) > 16<<10 {
 		return failure("invalid_request", "Request exceeds 16 KiB.", false)
+	}
+	if isExtraOperation(peekOperation(input)) {
+		return c.executeExtra(ctx, input)
 	}
 	var req request
 	dec := json.NewDecoder(strings.NewReader(input))

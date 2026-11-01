@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import '../core.dart';
 import '../diagnostics.dart';
 import '../services.dart';
+import '../data/movies.dart';
 import '../data/store.dart';
+import 'movies_pages.dart';
 import 'components.dart';
 import 'device_status.dart';
 import 'app_updates.dart';
@@ -90,6 +92,8 @@ const settingLabels = <String, String>{
   'Updates': 'Updates',
   'Diagnostics': 'Diagnostics',
   'About': 'About',
+  'Content': 'Shows on this profile',
+  'MovieLanguages': 'Source languages',
 };
 
 String settingLabel(String key) => settingLabels[key] ?? key;
@@ -181,6 +185,45 @@ class _SettingsPageState extends State<SettingsPage> {
     if (result != null) {
       await store.set(key, int.parse(result));
     }
+  }
+
+  Future<void> chooseContent() async {
+    final labels = contentLabels.values.toList();
+    final result = await chooseValue(
+      context,
+      settingLabel('Content'),
+      labels,
+      selected: contentLabels[store.text('Content')] ?? '',
+    );
+    if (result == null) return;
+    final key = contentLabels.entries.firstWhere((e) => e.value == result).key;
+    await store.set('Content', key);
+  }
+
+  Future<void> chooseMovieLanguages() async {
+    final names = movieLanguageNames.values.toList();
+    final orders = [
+      for (final first in names) [first, ...names.where((n) => n != first)],
+    ];
+    String label(List<String> order) =>
+        order.map(languageTitle).join(', then ');
+    final result = await chooseValue(
+      context,
+      settingLabel('MovieLanguages'),
+      orders.map(label).toList(),
+      selected: label(widget.services.movies.languages),
+    );
+    if (result == null) return;
+    await store.set(
+      'MovieLanguages',
+      orders.firstWhere((o) => label(o) == result),
+    );
+  }
+
+  Future<void> toggleMovieSource(String name) async {
+    final off = {...store.strings('DisabledMovieSources')};
+    if (!off.remove(name)) off.add(name);
+    await store.set('DisabledMovieSources', off.toList()..sort());
   }
 
   Widget group(String title, IconData icon, List<Widget> children) =>
@@ -473,6 +516,93 @@ class _SettingsPageState extends State<SettingsPage> {
           'AutoAudioFallback',
           'Try the other stream when unavailable. Unstable.',
           icon: LucideIcons.globe,
+        ),
+      ]),
+      group('Movies & shows', LucideIcons.clapperboard, [
+        row(
+          'Content',
+          'Each profile keeps its own choice, so one can show only movies '
+              'and another only anime.',
+          value: contentLabels[store.text('Content')] ?? store.text('Content'),
+          icon: LucideIcons.users,
+          onTap: chooseContent,
+        ),
+        row(
+          'MovieLanguages',
+          'A film or episode is looked for in the first language, then the '
+              'next. vidsrc is English; 8Filmai and Filmukas are Lithuanian.',
+          value: widget.services.movies.languages
+              .map(languageTitle)
+              .join(', then '),
+          icon: LucideIcons.languages,
+          onTap: chooseMovieLanguages,
+        ),
+        FutureBuilder(
+          // Asked only while this group shows; the core lists the sources.
+          future: widget.section == null || widget.section == 'Movies & shows'
+              ? widget.services.movies.sources().catchError(
+                  (_) => knownMovieSources,
+                )
+              : null,
+          initialData: knownMovieSources,
+          builder: (context, snap) => Column(
+            children: [
+              for (final source in snap.data ?? knownMovieSources)
+                row(
+                  source.label,
+                  [
+                    languageTitle(source.languageName),
+                    source.series ? 'movies and series' : 'movies',
+                    ?store.providerHealth['movie:${source.name}'],
+                  ].join(' · '),
+                  value: widget.services.movies.sourceEnabled(source.name)
+                      ? 'On'
+                      : 'Off',
+                  icon: LucideIcons.server,
+                  onTap: () => toggleMovieSource(source.name),
+                ),
+            ],
+          ),
+        ),
+        ListenableBuilder(
+          listenable: widget.services.trakt,
+          builder: (context, _) {
+            final trakt = widget.services.trakt;
+            return row(
+              'Trakt',
+              trakt.signedIn
+                  ? 'Watchlist, watched and progress sync. Tap to sign out.'
+                  : 'Sign in to sync your watchlist, what you watched and where you stopped.',
+              value: trakt.signedIn
+                  ? (trakt.username.isEmpty ? 'Signed in' : trakt.username)
+                  : 'Not signed in',
+              icon: LucideIcons.listVideo,
+              onTap: () async {
+                if (!trakt.signedIn) {
+                  await traktSignIn(context, widget.services, widget.isTV);
+                  return;
+                }
+                final yes = await showDialog<bool>(
+                  context: context,
+                  builder: (c) => AlertDialog(
+                    title: const Text('Sign out of Trakt?'),
+                    actions: [
+                      TextButton(
+                        autofocus: true,
+                        onPressed: () => Navigator.pop(c, false),
+                        child: const Text('Stay'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(c, true),
+                        child: const Text('Sign out'),
+                      ),
+                    ],
+                  ),
+                );
+                if (yes == true) await trakt.signOut();
+              },
+            );
+          },
         ),
       ]),
       group('Playback', LucideIcons.circlePlay, [

@@ -11,6 +11,9 @@ import 'data/models.dart';
 import 'data/watch_rooms.dart';
 import 'data/tv_remote.dart';
 import 'data/app_updates.dart';
+import 'data/downloads.dart';
+import 'data/movies.dart';
+import 'data/trakt.dart';
 import 'desktop/desktop_core.dart';
 import 'desktop/desktop_updates.dart';
 
@@ -53,6 +56,13 @@ class AppServices {
       await playerCommand?.call(action, args);
     };
     listSync = ListSync(tracking: tracking, store: store);
+    trakt = Trakt(client: catalog.client, storage: this.auth.storage);
+    movies = MovieService(trakt: trakt, core: core, store: store);
+    downloads = DownloadManager(
+      core: core,
+      preferences: store.preferences,
+      client: catalog.client,
+    );
     this.auth.addListener(_adultPreference);
     _adultPreference();
   }
@@ -64,6 +74,9 @@ class AppServices {
   final AuthService auth;
   late final TrackingService tracking;
   late final ListSync listSync;
+  late final Trakt trakt;
+  late final MovieService movies;
+  late final DownloadManager downloads;
   late final DiscordService discord;
   late final Heritage heritage;
   late final WatchRooms watchRooms;
@@ -86,6 +99,9 @@ class AppServices {
     updates.dispose();
     auth.removeListener(_adultPreference);
     listSync.dispose();
+    movies.dispose();
+    trakt.dispose();
+    downloads.dispose();
     await auth.cancelLogin();
     auth.dispose();
     if (auth.storage case final ProfileTokens scoped) await scoped.deactivate();

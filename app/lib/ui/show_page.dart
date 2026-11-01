@@ -11,6 +11,7 @@ import '../services.dart';
 import '../player.dart';
 import 'app_shell.dart' show Brand, rootTabs;
 import 'components.dart';
+import 'downloads_page.dart';
 import 'device_status.dart';
 import 'home_page.dart';
 import 'status_editor.dart';
@@ -158,12 +159,34 @@ class _ShowPageState extends State<ShowPage> {
         onPressed: () =>
             editListStatus(context, widget.services, anime, widget.isTV),
       ),
+      // Downloads are for phones and computers; a TV streams.
+      if (!widget.isTV || isDesktop)
+        AppButton(
+          key: const Key('show-download'),
+          label: 'Download',
+          icon: LucideIcons.download,
+          isTV: widget.isTV,
+          onPressed: anime.status == 'NOT_YET_RELEASED'
+              ? null
+              : () => downloadAnimeEpisode(
+                  context,
+                  widget.services,
+                  anime,
+                  last,
+                  mode,
+                ),
+        ),
     ];
     return widget.isTV
         ? Wrap(spacing: 12, runSpacing: 8, children: buttons)
         : Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [buttons.first, const SizedBox(height: 6), buttons.last],
+            children: [
+              for (var i = 0; i < buttons.length; i++) ...[
+                if (i > 0) const SizedBox(height: 6),
+                buttons[i],
+              ],
+            ],
           );
   }
 

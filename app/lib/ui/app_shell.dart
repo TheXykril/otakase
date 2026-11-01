@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core.dart';
 import '../data/models.dart';
+import '../data/movies.dart';
 import '../player.dart';
 import '../services.dart';
 import 'catalog_pages.dart';
@@ -18,16 +20,41 @@ import 'seal.dart';
 import 'show_page.dart';
 import 'community_page.dart';
 import 'movie_page.dart';
+import 'movies_pages.dart';
 import 'tv_remote_page.dart';
 import '../data/tv_remote.dart';
 import '../desktop/desktop_core.dart';
 import '../desktop/top_bar.dart';
 import '../desktop/window_frame.dart';
 
-/// The top-level pages. Desktop has room for Schedule as its own tab.
-List<String> get rootTabs => isDesktop
-    ? const ['Home', 'Search', 'Schedule', 'More']
-    : const ['Home', 'Search', 'More'];
+/// What the active profile shows; the shell sets it as it builds.
+ContentMode shellContent = ContentMode.anime;
+
+/// The top-level pages. Desktop has room for Schedule as its own tab. A
+/// profile with films and series as well as anime gets a Movies tab; one
+/// with only films and series has them on Home and Search.
+List<String> get rootTabs => switch (shellContent) {
+  ContentMode.movies => const ['Home', 'Search', 'More'],
+  ContentMode.both =>
+    isDesktop
+        ? const ['Home', 'Search', 'Movies', 'Schedule', 'More']
+        : const ['Home', 'Search', 'Movies', 'More'],
+  ContentMode.anime =>
+    isDesktop
+        ? const ['Home', 'Search', 'Schedule', 'More']
+        : const ['Home', 'Search', 'More'],
+};
+
+const _tabIcons = {
+  'Home': LucideIcons.house,
+  'Search': LucideIcons.search,
+  'Movies': LucideIcons.clapperboard,
+  'Schedule': LucideIcons.calendarDays,
+  'More': LucideIcons.ellipsis,
+};
+
+/// Most tabs any content setting gives.
+const _maxTabs = 5;
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.services, required this.isTV});
@@ -42,13 +69,15 @@ class _AppShellState extends State<AppShell> {
   int? focusedNav;
   bool rootIsCurrent = true;
   StreamSubscription<String>? remoteEvents;
-  final navFocus = [
-    for (final tab in rootTabs) FocusNode(debugLabel: '$tab navigation'),
-  ];
+  final navFocus = List.generate(
+    _maxTabs,
+    (i) => FocusNode(debugLabel: 'Tab $i navigation'),
+  );
   final scopes = List.generate(
-    rootTabs.length,
+    _maxTabs,
     (i) => FocusScopeNode(debugLabel: 'Root $i'),
   );
+  List<String> shownTabs = const [];
   final searchField = FocusNode(debugLabel: 'Search field');
   void modeChanged(FocusHighlightMode _) {
     if (mounted) setState(() {});
@@ -325,7 +354,7 @@ class _AppShellState extends State<AppShell> {
           final step = event.logicalKey == LogicalKeyboardKey.arrowLeft
               ? -1
               : 1;
-          navFocus[(index + step).clamp(0, navFocus.length - 1)].requestFocus();
+          navFocus[(index + step).clamp(0, rootTabs.length - 1)].requestFocus();
           return KeyEventResult.handled;
         }
         if (widget.isTV &&
@@ -444,11 +473,7 @@ class _AppShellState extends State<AppShell> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            [
-                              LucideIcons.house,
-                              LucideIcons.search,
-                              LucideIcons.ellipsis,
-                            ][index],
+                            _tabIcons[label] ?? LucideIcons.circle,
                             size: 22,
                             color: active ? accentText : muted,
                           ),
@@ -585,26 +610,54 @@ class _AppShellState extends State<AppShell> {
     ]),
     builder: (context, _) {
       final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+      shellContent = contentModeOf(widget.services.store);
+      final tabs = rootTabs;
+      if (!listEquals(tabs, shownTabs)) {
+        // The content setting changed: stay on the same tab where it still
+        // exists, so changing it from More stays in More.
+        final was = shownTabs.isEmpty ? 'Home' : shownTabs[selected];
+        selected = math.max(0, tabs.indexOf(was));
+        widget.services.root = selected;
+        shownTabs = tabs;
+      }
+      final moviesOnly = shellContent == ContentMode.movies;
       final pages = <Widget>[
-        HomePage(
-          services: widget.services,
-          isTV: widget.isTV,
-          active: selected == 0 && rootIsCurrent,
-          topInset: widget.isTV ? tvHeaderExtent(context) : 0,
-          onOpen: open,
-          onResume: resume,
-          onSearch: () => choose(1),
-          onAccounts: () => openAccounts(context, widget.services, widget.isTV),
-        ),
-        SearchPage(
-          services: widget.services,
-          isTV: widget.isTV,
-          onOpen: open,
-          onVoice: voice,
-          fieldFocus: searchField,
-          onNavigateUp: () => navFocus[1].requestFocus(),
-        ),
-        if (isDesktop)
+        if (moviesOnly)
+          MoviesHome(
+            services: widget.services,
+            isTV: widget.isTV,
+            searchButton: false,
+          )
+        else
+          HomePage(
+            services: widget.services,
+            isTV: widget.isTV,
+            active: selected == 0 && rootIsCurrent,
+            topInset: widget.isTV ? tvHeaderExtent(context) : 0,
+            onOpen: open,
+            onResume: resume,
+            onSearch: () => choose(1),
+            onAccounts: () =>
+                openAccounts(context, widget.services, widget.isTV),
+          ),
+        if (moviesOnly)
+          MovieSearchPage(
+            services: widget.services,
+            isTV: widget.isTV,
+            fieldFocus: isDesktop ? searchField : null,
+          )
+        else
+          SearchPage(
+            services: widget.services,
+            isTV: widget.isTV,
+            onOpen: open,
+            onVoice: voice,
+            fieldFocus: searchField,
+            onNavigateUp: () => navFocus[1].requestFocus(),
+          ),
+        if (shellContent == ContentMode.both)
+          MoviesHome(services: widget.services, isTV: widget.isTV),
+        if (isDesktop && !moviesOnly)
           SchedulePage(
             services: widget.services,
             isTV: widget.isTV,
