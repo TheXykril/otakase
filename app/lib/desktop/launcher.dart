@@ -474,6 +474,8 @@ class LauncherPageState extends State<LauncherPage> {
                         menu.detail,
                         style: mono.copyWith(fontSize: 12, color: muted),
                       ),
+                    const SizedBox(width: 8),
+                    const WindowButtons(),
                   ],
                 ),
               ),
