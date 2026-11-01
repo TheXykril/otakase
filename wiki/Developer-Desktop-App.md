@@ -63,6 +63,8 @@ There is no system title bar on any OS (`window_manager`, `TitleBarStyle.hidden`
 
 The top bar has the tabs in the middle on every system. Windows and Linux put the logo on the left and the window buttons on the right; macOS keeps its own buttons on the left, so the logo sits on the right there. The window buttons are drawn like the system's own (`WindowButtonStyle`): square full-height buttons on Windows, round grey ones on GNOME and other Linux desktops, Breeze arrows on KDE, only close on tiling window managers. A future account button goes beside the window buttons (on macOS beside the coloured dots), with a thin line between.
 
+There is no full-width bar behind the top bar. Each group sits on its own soft dark island instead (`HeaderIsland` in `app/lib/desktop/header_island.dart`): the logo and the window buttons grow out of the top corners, and the tabs hang from the middle of the top edge. The islands are sized to what they hold, curve into the top edge, and have blurred edges so they fade into the art with no hard line.
+
 The desktop window uses the wide TV layout, drawn on a 1920×1080 canvas and scaled to the window (never below 0.7), with a Schedule tab next to Home, Search and More. The mouse works everywhere; arrow keys and Enter still work too.
 
 ## Launcher

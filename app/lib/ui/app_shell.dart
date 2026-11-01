@@ -21,6 +21,7 @@ import 'movie_page.dart';
 import 'tv_remote_page.dart';
 import '../data/tv_remote.dart';
 import '../desktop/desktop_core.dart';
+import '../desktop/header_island.dart';
 import '../desktop/window_frame.dart';
 
 /// The top-level pages. Desktop has room for Schedule as its own tab.
@@ -485,45 +486,68 @@ class _AppShellState extends State<AppShell> {
   Widget desktopHeader() {
     final mac = macWindowLayout;
     final flush = windowButtonStyle == WindowButtonStyle.windows;
+    const islandHeight = 66.0;
+    Widget island(
+      IslandSide side,
+      Widget child,
+      EdgeInsets padding, {
+      AlignmentGeometry align = Alignment.center,
+    }) => HeaderIsland(
+      side: side,
+      padding: padding,
+      child: SizedBox(
+        height: islandHeight,
+        child: Align(alignment: align, widthFactor: 1, child: child),
+      ),
+    );
     return SizedBox(
       height: 84,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Positioned.fill(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                mac ? windowButtonsLeading + 24 : 48,
-                18,
-                24,
-                12,
-              ),
-              child: Row(
-                children: [
-                  if (!mac) const Brand(),
-                  const Spacer(),
-                  if (mac) const Brand() else if (!flush) const WindowButtons(),
-                ],
-              ),
+          Positioned(
+            top: 0,
+            left: 0,
+            child: island(
+              IslandSide.left,
+              mac ? SizedBox(width: windowButtonsLeading) : const Brand(),
+              EdgeInsets.fromLTRB(mac ? 0 : 40, 0, mac ? 8 : 28, 0),
             ),
           ),
           // The tab underline sits below the label, so the row starts a
           // little lower to line the labels up with the logo.
-          Positioned.fill(
-            top: 26,
-            bottom: 4,
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
             child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var i = 0; i < rootTabs.length; i++) ...[
-                    nav(i),
-                    if (i < rootTabs.length - 1) const SizedBox(width: 14),
+              child: island(
+                IslandSide.center,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < rootTabs.length; i++) ...[
+                      nav(i),
+                      if (i < rootTabs.length - 1) const SizedBox(width: 14),
+                    ],
                   ],
-                ],
+                ),
+                const EdgeInsets.fromLTRB(22, 6, 22, 0),
               ),
             ),
           ),
-          if (flush) const Positioned(top: 0, right: 0, child: WindowButtons()),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: island(
+              IslandSide.right,
+              mac ? const Brand() : const WindowButtons(),
+              flush
+                  ? const EdgeInsets.only(left: 18)
+                  : const EdgeInsets.fromLTRB(26, 0, 24, 0),
+              align: flush ? Alignment.topCenter : Alignment.center,
+            ),
+          ),
         ],
       ),
     );
@@ -724,18 +748,20 @@ class _AppShellState extends State<AppShell> {
                       height: tvHeaderExtent(context),
                       child: DecoratedBox(
                         key: const Key('tv-header-scrim'),
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Color(0xf00e0d0c),
-                              Color(0xc00e0d0c),
-                              Color(0x000e0d0c),
-                            ],
-                            stops: [0, .75, 1],
-                          ),
-                        ),
+                        decoration: isDesktop
+                            ? const BoxDecoration()
+                            : const BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Color(0xf00e0d0c),
+                                    Color(0xc00e0d0c),
+                                    Color(0x000e0d0c),
+                                  ],
+                                  stops: [0, .75, 1],
+                                ),
+                              ),
                         child: WindowDragArea(child: header()),
                       ),
                     ),
