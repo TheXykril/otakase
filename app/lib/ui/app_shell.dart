@@ -20,6 +20,8 @@ import 'community_page.dart';
 import 'movie_page.dart';
 import 'tv_remote_page.dart';
 import '../data/tv_remote.dart';
+import '../desktop/desktop_core.dart';
+import '../desktop/window_frame.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.services, required this.isTV});
@@ -228,6 +230,8 @@ class _AppShellState extends State<AppShell> {
       choose(0, focusNavigation: widget.isTV);
       return;
     }
+    // Esc on Home leaves the window open; the close button closes it.
+    if (isDesktop) return;
     final exit = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -284,6 +288,13 @@ class _AppShellState extends State<AppShell> {
       await widget.services.discord.stopWatching();
       await SystemNavigator.pop();
     }
+  }
+
+  /// The desktop close button: no "Exit Otakase?" question, the click is
+  /// the answer.
+  Future<void> closeWindow() async {
+    await widget.services.discord.stopWatching();
+    await closeDesktopWindow();
   }
 
   Widget nav(int index) {
@@ -455,12 +466,14 @@ class _AppShellState extends State<AppShell> {
 
   Widget header() => widget.isTV
       ? Padding(
-          padding: EdgeInsets.fromLTRB(
-            math.max(48, MediaQuery.paddingOf(context).left),
-            math.max(27, MediaQuery.paddingOf(context).top),
-            48,
-            12,
-          ),
+          padding: isDesktop
+              ? EdgeInsets.fromLTRB(48 + windowButtonsLeading, 18, 24, 12)
+              : EdgeInsets.fromLTRB(
+                  math.max(48, MediaQuery.paddingOf(context).left),
+                  math.max(27, MediaQuery.paddingOf(context).top),
+                  48,
+                  12,
+                ),
           child: Row(
             children: [
               const Brand(),
@@ -470,7 +483,10 @@ class _AppShellState extends State<AppShell> {
                 if (i < 2) const SizedBox(width: 14),
               ],
               const Spacer(),
-              const DeviceStatus(isTV: true),
+              if (isDesktop)
+                WindowButtons(onClose: closeWindow)
+              else
+                const DeviceStatus(isTV: true),
             ],
           ),
         )
@@ -649,7 +665,7 @@ class _AppShellState extends State<AppShell> {
                             stops: [0, .75, 1],
                           ),
                         ),
-                        child: header(),
+                        child: WindowDragArea(child: header()),
                       ),
                     ),
                   ),

@@ -4,6 +4,9 @@ import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
+import '../desktop/desktop_core.dart';
+
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -168,10 +171,21 @@ class _TVViewportState extends State<TVViewport> {
     policy: TVViewport.traversal,
     child: LayoutBuilder(
       builder: (context, constraints) {
-        final scale = math.min(
-          constraints.maxWidth / 1600,
-          constraints.maxHeight / 900,
-        );
+        // Desktop windows are closer to the screen than a TV and can be any
+        // size, so they use a larger canvas and never shrink text below
+        // a readable size.
+        final scale = isDesktop
+            ? math.max(
+                .7,
+                math.min(
+                  constraints.maxWidth / 1920,
+                  constraints.maxHeight / 1080,
+                ),
+              )
+            : math.min(
+                constraints.maxWidth / 1600,
+                constraints.maxHeight / 900,
+              );
         if (!scale.isFinite || scale <= 0) return widget.child;
         final size = Size(
           constraints.maxWidth / scale,

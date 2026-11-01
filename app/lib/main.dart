@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core.dart';
 import 'data/auth.dart';
 import 'data/profiles.dart';
+import 'desktop/desktop_core.dart';
+import 'desktop/window_frame.dart';
 import 'services.dart';
 import 'ui/app_shell.dart';
 import 'ui/components.dart';
@@ -17,22 +19,27 @@ import 'ui/profiles_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  if (isDesktop) await setUpDesktopWindow();
   final core = CoreClient();
   final profiles = ProfileManager(
     preferences: await SharedPreferences.getInstance(),
     tokens: SecureTokenStore(),
     core: core,
-    isTV: await core.isTV(),
+    // Desktop starts from the wide TV layout (shelves, top navigation) and
+    // adds mouse and window controls on top.
+    isTV: isDesktop || await core.isTV(),
   );
   try {
     await profiles.initialize();
   } catch (e) {
     profiles.error = e.toString();
   }
-  await SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.manual,
-    overlays: [SystemUiOverlay.bottom],
-  );
+  if (!isDesktop) {
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: [SystemUiOverlay.bottom],
+    );
+  }
   runApp(ProfileHost(manager: profiles));
 }
 
