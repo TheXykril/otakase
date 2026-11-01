@@ -41,36 +41,40 @@ offers.
 
 Push that commit, then start the **Build and release** workflow with
 *release* ticked (Actions tab, or `/github workflow:build release:true` in
-Discord). It builds every platform from `main`, tags `vYY.DROP.HOTFIX`,
-publishes the GitHub release and builds the Windows installer with that
-version, then submits it to winget and posts it in Discord. Workflows never run on a push or pull request by themselves.
+Discord). It runs `app-build.yml` from `main`: Go vet and tests, Flutter
+analysis and tests, the signed Android APK and the desktop app on one runner
+per OS. Then it tags `vYY.DROP.HOTFIX`, publishes the GitHub release and posts
+it in Discord. Workflows never run on a push or pull request by themselves.
+
+A release carries these files; the names are what the in-app updaters look
+for:
+
+| File | What |
+| --- | --- |
+| `otakase-android.apk` + `.json` | Phones and Android TV |
+| `otakase-app-windows-setup.exe` + `otakase-app-windows.json` | Windows (per-user installer) |
+| `otakase-app-macos.zip` + `.json` | macOS (universal `Otakase.app`, ad hoc signed) |
+| `otakase-app-linux-x86_64.AppImage` + `otakase-app-linux-x86_64.json` | Linux (bundles libmpv) |
+
+The **Dev Build** workflow builds the same files from `main` with the version
+`<version>-dev.<run number>` and replaces the `dev` pre-release. The apps never
+offer a pre-release as an update.
 
 ## winget
 
-After a release, CI submits the Windows installer to winget
-(`microsoft/winget-pkgs`) through the `Winget` workflow, using
-[komac](https://github.com/russellbanks/Komac). It opens a pull request there
-from the owner's fork; winget's moderators merge it, usually within a few
-days, and then `winget install TheXykril.Otakase` and `winget upgrade` see the
-new version.
+Off for now: releases do not call the `Winget` workflow. It still submits the
+old command-line installer, so before turning it back on, point it at
+`otakase-app-windows-setup.exe` (the package id `TheXykril.Otakase` can stay).
+How it works when on:
 
+- It uses [komac](https://github.com/russellbanks/Komac) to open a pull
+  request on `microsoft/winget-pkgs` from the owner's fork; winget's moderators
+  merge it, usually within a few days.
 - It needs a `WINGET_TOKEN` repository secret: a classic personal access
-  token of the repo owner with the `public_repo` scope. Without it the
-  workflow does nothing and says so in a notice.
-- The first submission, while the package is not in winget yet, is built from
-  the manifests in `Build/winget/`. After that each release uses
-  `komac update`, which copies the last accepted manifest and changes only the
-  version, URL and hash. To change the package's description or tags, edit it
-  in a winget-pkgs pull request, not in `Build/winget/`.
-- To submit a release again (or the first one by hand), run the `Winget`
-  workflow from the Actions tab; leave the version empty for the latest
-  release.
-
-The installer adds its folder to the user's PATH (a task in
-`Build/otakase-windows-build.iss`, checked by default, so a silent winget
-install gets it too) and takes it out again on uninstall. The
-`Windows installer check` builds, installs, runs and uninstalls it in every
-Build and release run, and a release only publishes once it passes.
+  token of the repo owner with the `public_repo` scope.
+- The first submission is built from the manifests in `Build/winget/`. After
+  that each release uses `komac update`, which copies the last accepted
+  manifest and changes only the version, URL and hash.
 
 ## Discord
 
@@ -104,5 +108,4 @@ the changelog and the website.
 
 ## Where users see the version
 
-The running version is at the right of the menu header in the terminal and of
-the search bar in rofi, and `otakase -v` prints it.
+In the app, under About & updates.
