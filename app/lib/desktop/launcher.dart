@@ -97,9 +97,20 @@ class LauncherPageState extends State<LauncherPage> {
   AppServices get services => widget.services;
   bool get adult => services.store.adultAllowed;
 
+  /// Saves playback and closes the window. The full app's shell replaces
+  /// this hook once the launcher turns into the full app.
+  Future<void> quit() async {
+    await services.close().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {},
+    );
+    await closeDesktopWindow();
+  }
+
   @override
   void initState() {
     super.initState();
+    desktopCloseHook = quit;
     menus.add(mainMenu());
     query.addListener(() => setState(() => selected = 0));
     unawaited(loadLists());
@@ -107,6 +118,7 @@ class LauncherPageState extends State<LauncherPage> {
 
   @override
   void dispose() {
+    if (desktopCloseHook == quit) desktopCloseHook = null;
     query.dispose();
     input.dispose();
     scroll.dispose();
@@ -173,11 +185,7 @@ class LauncherPageState extends State<LauncherPage> {
           detail: 'Ctrl+W',
           onSelect: () => widget.onOpenApp?.call(),
         ),
-        LauncherItem(
-          'Quit',
-          icon: LucideIcons.x,
-          onSelect: () => closeDesktopWindow(),
-        ),
+        LauncherItem('Quit', icon: LucideIcons.x, onSelect: quit),
       ],
       typed: (q) => LauncherItem(
         'Search for “$q”',
@@ -239,6 +247,11 @@ class LauncherPageState extends State<LauncherPage> {
   }
 
   void openShow(Anime anime, int progress) {
+    final saved = services.store.continuing
+        .where((c) => c.anime.key == anime.key)
+        .firstOrNull;
+    // A search result knows nothing about progress; the history does.
+    if (saved != null) progress = math.max(progress, saved.episode - 1);
     final next = progress + 1;
     final total = anime.episodes;
     final finished = total > 0 && progress >= total;
@@ -246,7 +259,9 @@ class LauncherPageState extends State<LauncherPage> {
       LauncherMenu(anime.title, [
         if (!finished)
           LauncherItem(
-            'Play episode $next',
+            saved != null && saved.episode == next
+                ? 'Play next: resume episode $next'
+                : 'Play next: episode $next',
             icon: LucideIcons.play,
             onSelect: () => play(anime, next),
           ),
@@ -352,7 +367,14 @@ class LauncherPageState extends State<LauncherPage> {
               )
               .toList();
     final extra = q.isEmpty ? null : menu.typed?.call(q);
-    return [...rows, ?extra];
+    if (extra == null) return rows;
+    // Enter after typing runs the typed row (search, episode number) unless
+    // a row's name starts with the typed text, like rofi's best match.
+    final lower = q.toLowerCase();
+    final match = rows.any(
+      (i) => !i.keepWhenFiltering && i.label.toLowerCase().startsWith(lower),
+    );
+    return match ? [...rows, extra] : [extra, ...rows];
   }
 
   void move(int by, int count) {
@@ -391,7 +413,7 @@ class LauncherPageState extends State<LauncherPage> {
         unawaited(Future.sync(rows[selected].onSelect));
       }
     } else if (k == LogicalKeyboardKey.escape) {
-      if (event is KeyDownEvent && !back()) unawaited(closeDesktopWindow());
+      if (event is KeyDownEvent && !back()) unawaited(quit());
     } else if (k == LogicalKeyboardKey.keyW &&
         HardwareKeyboard.instance.isControlPressed) {
       widget.onOpenApp?.call();
@@ -542,7 +564,7 @@ class _LauncherRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MouseRegion(
     cursor: SystemMouseCursors.click,
-    onEnter: (_) => onHover(),
+    onHover: (_) => onHover(),
     child: GestureDetector(
       onTap: onTap,
       child: Container(

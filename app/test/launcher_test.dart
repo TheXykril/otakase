@@ -33,20 +33,33 @@ void main() {
     expect(find.text('Open full app'), findsOneWidget);
     expect(find.text('Continue: Frieren · Ep 3'), findsNothing);
     expect(find.text('Search for “full”'), findsOneWidget);
+    // "Open full app" does not start with "full", so search is on top.
+    await press(tester, LogicalKeyboardKey.enter);
+    expect(find.text('Search'), findsOneWidget);
+  });
+
+  testWidgets('a row whose name starts with the text stays first', (
+    tester,
+  ) async {
+    var opened = 0;
+    await pumpLauncher(tester, onOpen: () => opened++);
+    await tester.enterText(find.byKey(const Key('launcher-input')), 'open');
+    await tester.pumpAndSettle();
+    await press(tester, LogicalKeyboardKey.enter);
+    expect(opened, 1);
   });
 
   testWidgets('search, show menu, episode menu and back', (tester) async {
     await pumpLauncher(tester);
     await tester.enterText(find.byKey(const Key('launcher-input')), 'frier');
     await tester.pumpAndSettle();
-    // The Continue row matches too; the search row is last.
-    await press(tester, LogicalKeyboardKey.arrowDown);
+    // No row starts with the typed text, so Enter searches straight away.
     await press(tester, LogicalKeyboardKey.enter);
     expect(find.text('Search'), findsOneWidget);
     expect(find.text('Frieren'), findsOneWidget);
 
     await press(tester, LogicalKeyboardKey.enter);
-    expect(find.text('Play episode 1'), findsOneWidget);
+    expect(find.text('Play next: resume episode 3'), findsOneWidget);
     expect(find.text('Choose episode…'), findsOneWidget);
 
     await press(tester, LogicalKeyboardKey.arrowDown);
@@ -61,7 +74,7 @@ void main() {
     await press(tester, LogicalKeyboardKey.escape);
     expect(find.text('Episode 1'), findsOneWidget);
     await press(tester, LogicalKeyboardKey.escape);
-    expect(find.text('Play episode 1'), findsOneWidget);
+    expect(find.text('Play next: resume episode 3'), findsOneWidget);
     await press(tester, LogicalKeyboardKey.escape);
     await press(tester, LogicalKeyboardKey.escape);
     expect(find.text('Continue: Frieren · Ep 3'), findsOneWidget);

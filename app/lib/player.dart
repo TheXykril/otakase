@@ -197,6 +197,19 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
   }
 
+  bool? subsLifted;
+
+  /// Moves subtitles above the desktop control bar while it shows, like the
+  /// CLI mpv skin does.
+  void liftSubtitles(bool up) {
+    if (!isDesktop || subsLifted == up) return;
+    subsLifted = up;
+    final base = widget.services.store.integer('SubtitlePosition');
+    unawaited(
+      property('sub-pos', (up ? math.max(0, base - 16) : base).toString()),
+    );
+  }
+
   Future<void> property(String name, String value) async {
     final native = player.platform;
     if (native is NativePlayer) await native.setProperty(name, value);
@@ -210,6 +223,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await property('sub-back-color', s.text('SubtitleBackground'));
     await property('sub-border-size', s.integer('SubtitleOutline').toString());
     await property('sub-pos', s.integer('SubtitlePosition').toString());
+    subsLifted = null;
     await property('af', audioFilter(s));
     for (final e in (await tlsOptions()).entries) {
       await property(e.key, e.value);
@@ -1012,60 +1026,64 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   /// The desktop controls: the CLI mpv skin look, with the skip button and
   /// next-episode card above the bar.
-  Widget desktopControls(BuildContext context) => Stack(
-    fit: StackFit.expand,
-    children: [
-      DesktopPlayerBar(
-        title: anime.title,
-        subtitle:
-            'Ep $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
-        position: position,
-        duration: duration,
-        buffered: player.state.buffer,
-        playing: player.state.playing,
-        buffering: player.state.buffering,
-        silent: player.state.volume == 0,
-        fullscreen: fullscreen,
-        trackLabel: source?.mode.toUpperCase() ?? widget.mode.toUpperCase(),
-        stripes: spans,
-        playFocus: playFocus,
-        onBack: () => Navigator.pop(context),
-        onPlayPause: () {
-          unawaited(player.playOrPause());
-          showControls();
-        },
-        onSeekBy: (seconds) => unawaited(seek(seconds)),
-        onSeekStart: (_) {
-          scrubbing = true;
-          hideTimer?.cancel();
-        },
-        onSeekChanged: (v) =>
-            setState(() => position = Duration(milliseconds: v.round())),
-        onSeekEnd: (v) {
-          scrubbing = false;
-          unawaited(player.seek(Duration(milliseconds: v.round())));
-          showControls();
-        },
-        onNext: canNext ? () => unawaited(next()) : null,
-        onMute: toggleMute,
-        onTracks: () => unawaited(trackPanel()),
-        onQuality: () => unawaited(qualityPanel()),
-        onFullscreen: () => unawaited(toggleFullscreen()),
-      ),
-      Positioned(
-        right: 40,
-        bottom: 170,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            if (active != null) skipButton(),
-            if (countdownSeconds > 0) nextCard(context),
-          ],
+  Widget desktopControls(BuildContext context) {
+    liftSubtitles(true);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DesktopPlayerBar(
+          title: anime.title,
+          subtitle:
+              'Ep $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
+          position: position,
+          duration: duration,
+          buffered: player.state.buffer,
+          playing: player.state.playing,
+          buffering: player.state.buffering,
+          silent: player.state.volume == 0,
+          fullscreen: fullscreen,
+          trackLabel: source?.mode.toUpperCase() ?? widget.mode.toUpperCase(),
+          centerLabel: 'Episode $episode',
+          stripes: spans,
+          playFocus: playFocus,
+          onBack: () => Navigator.pop(context),
+          onPlayPause: () {
+            unawaited(player.playOrPause());
+            showControls();
+          },
+          onSeekBy: (seconds) => unawaited(seek(seconds)),
+          onSeekStart: (_) {
+            scrubbing = true;
+            hideTimer?.cancel();
+          },
+          onSeekChanged: (v) =>
+              setState(() => position = Duration(milliseconds: v.round())),
+          onSeekEnd: (v) {
+            scrubbing = false;
+            unawaited(player.seek(Duration(milliseconds: v.round())));
+            showControls();
+          },
+          onNext: canNext ? () => unawaited(next()) : null,
+          onMute: toggleMute,
+          onTracks: () => unawaited(trackPanel()),
+          onQuality: () => unawaited(qualityPanel()),
+          onFullscreen: () => unawaited(toggleFullscreen()),
         ),
-      ),
-    ],
-  );
+        Positioned(
+          right: 40,
+          bottom: 170,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (active != null) skipButton(),
+              if (countdownSeconds > 0) nextCard(context),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget skipButton() => Align(
     alignment: Alignment.centerRight,
@@ -1230,7 +1248,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   ),
                 ),
               if (overlay && !busy && error.isEmpty && isDesktop)
-                desktopControls(context),
+                desktopControls(context)
+              else if (isDesktop)
+                Builder(
+                  builder: (_) {
+                    liftSubtitles(false);
+                    return const SizedBox.shrink();
+                  },
+                ),
               if (overlay && !busy && error.isEmpty && !isDesktop)
                 SafeArea(
                   child: Column(

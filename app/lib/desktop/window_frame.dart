@@ -139,8 +139,7 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
           tooltip: 'Close',
           danger: true,
           onPressed: () => unawaited(
-            (widget.onClose ?? desktopCloseHook)?.call() ??
-                closeDesktopWindow(),
+            widget.onClose != null ? widget.onClose!() : quitDesktopApp(),
           ),
         ),
       ],
@@ -194,8 +193,18 @@ class _WindowButtonState extends State<_WindowButton> {
 /// can stop Discord presence first. It must close the window itself.
 Future<void> Function()? desktopCloseHook;
 
-/// Closes the window and ends the app.
-Future<void> closeDesktopWindow() => windowManager.destroy();
+/// Closes the window and ends the app. The process exits right away instead
+/// of tearing the Flutter view down: on Linux that teardown can crash while
+/// the player's video texture is still alive. Callers save their state first
+/// (see [quitDesktopApp]).
+Future<void> closeDesktopWindow() async {
+  await windowManager.hide();
+  exit(0);
+}
+
+/// Saves and stops everything through [desktopCloseHook], then closes.
+Future<void> quitDesktopApp() async =>
+    await (desktopCloseHook ?? closeDesktopWindow)();
 
 /// Wraps every desktop route: Esc goes back one page, and a thin strip
 /// along the top edge moves the window on pages whose header is not a

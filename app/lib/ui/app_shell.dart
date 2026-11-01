@@ -302,8 +302,12 @@ class _AppShellState extends State<AppShell> {
 
   /// The desktop close button: no "Exit Otakase?" question, the click is
   /// the answer.
+  /// Saves playback, signs out of Discord presence and closes the window.
   Future<void> closeWindow() async {
-    await widget.services.discord.stopWatching();
+    await widget.services.close().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {},
+    );
     await closeDesktopWindow();
   }
 

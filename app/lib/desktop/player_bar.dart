@@ -24,6 +24,7 @@ class DesktopPlayerBar extends StatelessWidget {
     required this.silent,
     required this.fullscreen,
     required this.trackLabel,
+    this.centerLabel = '',
     required this.stripes,
     required this.onBack,
     required this.onPlayPause,
@@ -39,7 +40,7 @@ class DesktopPlayerBar extends StatelessWidget {
     this.playFocus,
   });
 
-  final String title, subtitle, trackLabel;
+  final String title, subtitle, trackLabel, centerLabel;
   final Duration position, duration, buffered;
   final bool playing, buffering, silent, fullscreen;
   final List<SkipSpan> stripes;
@@ -151,7 +152,7 @@ class DesktopPlayerBar extends StatelessWidget {
                     children: [
                       Text(time(position), style: small),
                       const Spacer(),
-                      Text(buffering ? 'Buffering' : 'Otakase', style: small),
+                      Text(buffering ? 'Buffering' : centerLabel, style: small),
                       const Spacer(),
                       Text('-${time(duration - position)}', style: small),
                     ],
