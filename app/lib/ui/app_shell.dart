@@ -506,9 +506,11 @@ class _AppShellState extends State<AppShell> {
               ),
             ),
           ),
+          // The tab underline sits below the label, so the row starts a
+          // little lower to line the labels up with the logo.
           Positioned.fill(
-            top: 18,
-            bottom: 12,
+            top: 26,
+            bottom: 4,
             child: Center(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
