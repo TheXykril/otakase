@@ -83,4 +83,4 @@ The desktop player looks like the CLI's mpv skin (see [Player Look](Developer-Pl
 
 ## Not done yet
 
-External mpv, cast, torrents, Discord-style device features and packaging (installers, signing) are still to do. Windows and macOS builds have not been tried on real machines.
+External mpv, cast, torrents and packaging (installers, signing) are still to do. Windows and macOS builds have not been tried on real machines.
