@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../core.dart';
@@ -80,6 +81,8 @@ const settingLabels = <String, String>{
   'SkipFiller': 'Skip filler episodes',
   'SkipDelay': 'Skip delay',
   'Quality': 'Quality',
+  'TorrentSources': 'Torrent sources',
+  'TorrentOnMobileData': 'Torrents on mobile data',
   'PercentageToMarkComplete': 'Mark watched at',
   'ResumePlayback': 'Resume where you left off',
   'CheckUpdates': 'Check for updates',
@@ -501,6 +504,17 @@ class _SettingsPageState extends State<SettingsPage> {
           value: store.text('Quality'),
           onTap: () => choose('Quality', ['best', '1080', '720', '480', '360']),
         ),
+        toggle(
+          'TorrentSources',
+          'Play from other viewers when no site has the episode. '
+              'They can see your IP address.',
+          icon: LucideIcons.share2,
+        ),
+        toggle(
+          'TorrentOnMobileData',
+          'Torrents download the whole episode. Off waits for Wi-Fi.',
+          icon: LucideIcons.signal,
+        ),
         toggle('ResumePlayback', 'Resume locally saved positions.'),
         row(
           'PercentageToMarkComplete',
@@ -544,10 +558,13 @@ class DiagnosticsHub extends StatefulWidget {
 class _DiagnosticsHubState extends State<DiagnosticsHub> {
   final scope = RequestScope();
   List<String> sources = [];
+  // Shown only while the viewer's AniList allows 18+ content.
+  List<String> adultSources = [];
   bool checking = false;
   @override
   void initState() {
     super.initState();
+    widget.services.store.addListener(loadAdult);
     unawaited(
       widget.services.resolver
           .providerOrder()
@@ -556,17 +573,33 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
           })
           .catchError((_) {}),
     );
+    loadAdult();
+  }
+
+  void loadAdult() {
+    unawaited(
+      widget.services.resolver
+          .adultOrder()
+          .then((v) {
+            if (mounted && !listEquals(v, adultSources)) {
+              setState(() => adultSources = v);
+            }
+          })
+          .catchError((_) {}),
+    );
   }
 
   @override
   void dispose() {
+    widget.services.store.removeListener(loadAdult);
     scope.cancel();
     super.dispose();
   }
 
   Future<void> check() async {
     setState(() => checking = true);
-    for (final provider in sources) {
+    final adult = widget.services.store.adultAllowed ? adultSources : [];
+    for (final provider in [...sources, ...adult]) {
       if (scope.cancelled) break;
       widget.services.store.health(provider, 'Checking');
       try {
@@ -575,7 +608,8 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
             'operation': 'search',
             'provider': provider,
             'mode': widget.services.store.text('SubOrDub'),
-            'query': 'Frieren',
+            // A title each kind of source is sure to carry.
+            'query': adult.contains(provider) ? 'Overflow' : 'Frieren',
           },
           scope: scope,
           timeout: const Duration(seconds: 15),
@@ -647,6 +681,28 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
                 ],
               ),
             ),
+          if (widget.services.store.adultAllowed)
+            for (final source in adultSources)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: line)),
+                ),
+                child: Row(
+                  children: [
+                    Text('18', style: uiStyle(context, color: muted)),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Text('18+ source', style: uiStyle(context)),
+                    ),
+                    Text(
+                      widget.services.store.providerHealth[source] ??
+                          'Not checked',
+                      style: uiStyle(context, size: 15, color: muted),
+                    ),
+                  ],
+                ),
+              ),
           const SizedBox(height: 24),
           AppButton(
             label: checking ? 'Checking' : 'Check all',

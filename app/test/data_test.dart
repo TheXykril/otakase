@@ -250,4 +250,82 @@ void main() {
       throwsA(isA<CoreFailure>()),
     );
   });
+  test(
+    '18+ shows reach only the 18+ source, and torrents follow settings',
+    () async {
+      final s = await store();
+      final c = RoutingCore();
+      final r = SourceResolver(c, s);
+      final general = Anime.fromJson(media(1));
+      final adult = Anime.fromJson({...media(2), 'isAdult': true});
+      expect(await r.sourcesFor(general), [...sourceNames]);
+      // Without AniList's 18+ permission an 18+ show is never sent to the
+      // 18+ source and the source is not listed at all.
+      expect(await r.sourcesFor(adult), [...sourceNames]);
+      expect(await r.adultOrder(), isEmpty);
+      s.setAdultAllowed(true);
+      expect(await r.sourcesFor(adult), ['sukebei']);
+      expect(await r.sourcesFor(general), [...sourceNames]);
+      c.isMetered = true;
+      expect(await r.sourcesFor(general), isNot(contains('nyaa')));
+      expect(await r.sourcesFor(adult), isEmpty);
+      await s.set('TorrentOnMobileData', true);
+      expect(await r.sourcesFor(general), contains('nyaa'));
+      await s.set('TorrentSources', false);
+      expect(await r.sourcesFor(general), isNot(contains('nyaa')));
+    },
+  );
+  test(
+    'torrent resolve asks for the quality setting and waits longer',
+    () async {
+      final s = await store();
+      await s.set('Quality', '720');
+      await s.set('AutoAudioFallback', false);
+      final c = RoutingCore();
+      final resolved = await SourceResolver(c, s).resolve(
+        Anime.fromJson(media(1)),
+        3,
+        scope: RequestScope(),
+        status: (_) {},
+        exclude: sourceNames.where((p) => p != 'nyaa').toSet(),
+      );
+      expect(resolved.provider, 'nyaa');
+      expect(resolved.streams.single.torrent, isTrue);
+      final resolve = c.calls.lastWhere((c) => c['operation'] == 'resolve');
+      expect(resolve['quality'], 720);
+      expect(c.timeouts.last, greaterThan(const Duration(minutes: 3)));
+    },
+  );
+}
+
+class RoutingCore extends CoreClient {
+  bool isMetered = false;
+  final calls = <Json>[];
+  final timeouts = <Duration>[];
+  @override
+  Future<bool> metered() async => isMetered;
+  @override
+  Future<Json> request(
+    Json input, {
+    void Function(int)? onHandle,
+    RequestScope? scope,
+    Duration timeout = const Duration(seconds: 40),
+  }) async {
+    calls.add(input);
+    timeouts.add(timeout);
+    return switch (input['operation']) {
+      'providers' => {
+        'providers': sourceNames,
+        'adult': ['sukebei'],
+      },
+      'match' => {
+        'show': {'id': 'Show'},
+      },
+      _ => {
+        'streams': [
+          {'url': 'http://127.0.0.1:1/source.mkv', 'torrent': true},
+        ],
+      },
+    };
+  }
 }

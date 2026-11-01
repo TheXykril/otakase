@@ -1,6 +1,6 @@
 # Android app development
 
-Developer notes for the Android phone and TV app. Kage uses personal Home, Search and More on touch devices and Android TV. AniList and MAL login support real lists, status, progress, score and synced resume. Playback chooses sources automatically through mobilecore. Downloads, torrents, casting and background playback are outside this change. Android 7.0 (API 24) or newer is required. The CLI version and CLI/bot behavior are unchanged.
+Developer notes for the Android phone and TV app. Kage uses personal Home, Search and More on touch devices and Android TV. AniList and MAL login support real lists, status, progress, score and synced resume. Playback chooses sources automatically through mobilecore. Downloads, casting and background playback are outside this change; torrent sources play while they download (see Torrent sources below). Android 7.0 (API 24) or newer is required. The CLI version and CLI/bot behavior are unchanged.
 
 ## Pinned toolchain
 
@@ -161,7 +161,9 @@ to work around a signing mismatch, since uninstalling removes local data.
 mobilecore/ is public because gomobile builds a generated wrapper module which
 cannot import an internal package. The core itself belongs to the existing
 module and imports internal/providers and internal/providerhost directly.
-The six sources are anikoto, megavid, animex, kickassanime, anizone and reanime.
+The general sources are anikoto, megavid, animex, kickassanime, anizone, reanime
+and nyaa (torrent, tried last). sukebei is the 18+ source; the providers
+operation lists it under adult, apart from the others.
 Client injection remains isolated from registry factories.
 The registry factories and CLI/bot paths are unchanged. Root go.mod adds the
 pinned gobind tool without upgrading existing runtime dependencies.
@@ -192,7 +194,32 @@ providerhost hooks are set by NewCore, quiet output, soft subtitles and an
 explicit selection_required error for prompts. No CLI init/config is imported.
 
 The providers and their dependency tree build with CGO_ENABLED=0. gomobile
-itself uses Android JNI/cgo glue, with no third-party cgo or torrent packages.
+itself uses Android JNI/cgo glue. build-core.sh binds with the tags
+disable_libutp,nosqlite so the torrent client uses its pure Go uTP and piece
+database instead of C code.
+
+## Torrent sources
+
+nyaa, and for 18+ shows sukebei, resolve through the core's own torrent client
+(internal/torrentstream StreamForBot): one torrent at a time, no uploading,
+stored under the cache directory Kotlin passes to SetCacheDir (Go's temp
+directory is not writable for Android apps), at most 4 GiB, and deleted when
+playback stops or switches. Leftovers from a killed app are removed at the
+next start. A resolve tries the best three releases, giving each 40 seconds to
+name its files, and has three minutes in all. The request's quality (from the
+Quality setting) moves releases of that height to the front. The stream is a
+loopback HTTP URL marked torrent:true; the torrent operation reports
+completed, length, ahead and peers for the loading screen.
+
+The app routes like the CLI: with the viewer's AniList allowing 18+ content, an
+18+ show goes to the 18+ source alone; every other show never reaches it.
+Without that permission (guests, MAL only, setting off) nothing in the app
+mentions 18+ at all, and Diagnostics does not list the 18+ source.
+
+Settings: TorrentSources (on) and TorrentOnMobileData (off). On a metered
+connection (Android's isActiveNetworkMetered) torrent sources are skipped
+unless TorrentOnMobileData is on. Hosts without the metered call count as
+unmetered.
 
 ## Local Android TV testing on Linux
 
