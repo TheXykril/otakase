@@ -2,13 +2,13 @@ name: Dev Build
 
 # Publishes what is on main as the "dev" pre-release, for trying unreleased
 # work before a real release is cut. Run it by hand from the Actions tab.
-# The app reads the version from the release title, so keep it
-# "Otakase <version>".
+# It builds the same files as a release (app-build.yml): the Android APK and
+# the desktop app for Windows, macOS and Linux.
 #
-# The release is marked pre-release and never "latest", so the in-app update
-# check ignores it unless DevBuilds=true. Each run
-# replaces the previous dev release and moves the "dev" tag; the tag does not
-# start with "v", so the release job's changelog range skips it.
+# The release is marked pre-release and never "latest", so the apps' update
+# checks never offer it; install it by hand. Each run replaces the previous
+# dev release and moves the "dev" tag; the tag does not start with "v", so
+# the release job's changelog range skips it.
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ on:
       version:
         description: "Version the dev build is heading to (shown as <version>-dev.<run number>)"
         required: true
-        default: "26.1.0"
+        default: "26.8.0"
         type: string
 
 concurrency:
@@ -24,12 +24,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Dev version
+        id: version
+        env:
+          BASE_VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "version must look like 26.8.0, got '$BASE_VERSION'" >&2
+            exit 1
+          fi
+          echo "version=${BASE_VERSION}-dev.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    permissions:
+      contents: read
+    uses: ./.github/workflows/app-build.yml
+    with:
+      ref: ${{ github.sha }}
+      version: ${{ needs.version.outputs.version }}
+      signed: true
+    secrets: inherit
+
   dev-build:
+    needs: [version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     env:
       DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+      DEV_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -39,41 +70,16 @@ jobs:
           # History back to the last release commit, for the Discord post.
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
+      - uses: actions/download-artifact@v8
         with:
-          go-version: "1.26"
-          cache: false
+          name: otakase-android
+          path: dist
 
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test -short ./...
-
-      - name: Set dev version
-        env:
-          BASE_VERSION: ${{ inputs.version }}
-        run: |
-          if ! [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "version must look like 26.1.0, got '$BASE_VERSION'" >&2
-            exit 1
-          fi
-          # The Build/ scripts read VERSION.txt; this change stays in the runner.
-          # The run number only goes up, so the update check (DevBuilds=true)
-          # can tell a newer dev build from an older one.
-          dev_version="${BASE_VERSION}-dev.${GITHUB_RUN_NUMBER}"
-          echo "$dev_version" > VERSION.txt
-          echo "DEV_VERSION=$dev_version" >> "$GITHUB_ENV"
-
-      - name: Build binaries
-        run: |
-          ./Build/buildlinux
-          ./Build/buildmac-x86_64
-          ./Build/buildmac-arm64
-          ./Build/buildwindows-x86_64
-          mkdir -p dist
-          mv otakase-linux-x86_64 otakase-linux-arm64 otakase-macos-x86_64 otakase-macos-arm64 otakase-windows-x86_64.exe dist/
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: otakase-app-*
+          path: dist
+          merge-multiple: true
 
       - name: Replace the dev release
         env:
@@ -84,11 +90,10 @@ jobs:
           cat > notes.md <<EOF
           Development build of \`main\` at ${GITHUB_SHA::7}, version \`$DEV_VERSION\`.
 
-          Not a release: it can be broken, and it is replaced by the next dev build. The app offers it only with \`DevBuilds=true\` in the config.
-
-          Windows: this is the bare \`.exe\` without the installer, so it needs \`mpv\` on your PATH.
+          Not a release: it can be broken, and it is replaced by the next dev build. The apps never offer it as an update; install it by hand.
           EOF
-          gh release create dev dist/* \
+          gh release create dev dist/otakase-android.apk dist/otakase-app-windows-setup.exe \
+            dist/otakase-app-macos.zip dist/otakase-app-linux-x86_64.AppImage \
             --target "$GITHUB_SHA" \
             --title "Otakase $DEV_VERSION" \
             --notes-file notes.md \

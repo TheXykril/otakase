@@ -3,8 +3,10 @@ name: Winget
 # Submits a release's Windows installer to winget (microsoft/winget-pkgs), so
 # `winget install TheXykril.Otakase` and `winget upgrade` pick it up.
 #
-# ci-cd.yml calls this after it publishes a release. Run it by hand from the
-# Actions tab to submit a release again, or the first one.
+# Off for now: releases no longer call it, and it still points at the old
+# command-line installer (otakase-windows-installer.exe), which releases no
+# longer carry. Before running it by hand again, point it at
+# otakase-app-windows-setup.exe.
 #
 # It needs a WINGET_TOKEN secret: a classic personal access token of the repo
 # owner with the `public_repo` scope. komac uses it to fork winget-pkgs and

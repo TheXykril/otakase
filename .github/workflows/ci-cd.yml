@@ -1,12 +1,11 @@
 name: Build and release
 
 # Runs only when started by hand: the Actions tab ("Run workflow") or the
-# Discord bot's /github command. Each run vets, tests and builds for Linux,
-# builds the Android APK and tests the Windows installer.
-# With "desktop" ticked it also builds the desktop app for Windows, macOS
-# and Linux (macOS runners cost more minutes, so it is off by default).
-# With "release" ticked it builds everything and publishes v<VERSION.txt>
-# from main as a GitHub release.
+# Discord bot's /github command. Each run checks the Go core and the app and
+# builds the Android APK and the desktop app for Windows, macOS and Linux
+# (app-build.yml); the files are on the run's page under Artifacts.
+# With "release" ticked it publishes v<VERSION.txt> from main as a GitHub
+# release.
 
 on:
   workflow_dispatch:
@@ -20,252 +19,56 @@ on:
         required: false
         type: boolean
         default: false
-      desktop:
-        description: Also build the desktop app (always on for a release)
-        required: false
-        type: boolean
-        default: false
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
-    # This job can run a PR's code (a dispatch with pr_number), so its token
-    # can only read. The repo is private, so checkout needs that much.
-    permissions:
-      contents: read
-    env:
-      # Same condition as the release job's `if`. The Build/ scripts upx the
-      # binaries when COMPRESS is true.
-      COMPRESS: ${{ inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main' }}
-
+    permissions: {}
+    outputs:
+      ref: ${{ steps.ref.outputs.ref }}
+      publish: ${{ steps.ref.outputs.publish }}
     steps:
-      - name: Check pr_number
-        if: github.event.inputs.pr_number != ''
+      - name: Pick what to build
+        id: ref
         env:
-          PR_NUMBER: ${{ github.event.inputs.pr_number }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          RELEASE: ${{ inputs.release }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
         run: |
-          [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] && exit 0
-          echo "::error::pr_number must be a positive integer, got: $PR_NUMBER"
-          exit 1
-
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          ref: ${{ (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
-          persist-credentials: false
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version: "1.26"
-          # Module cache keyed on go.sum. Not for a dispatched PR build: that
-          # runs untrusted code under main's cache scope, and whatever it saved
-          # would be restored by later runs on main. A pull_request run gets
-          # its own scope, so it can't poison main's.
-          cache: ${{ inputs.pr_number == '' }}
-
-      - name: Download modules
-        run: go mod tidy
-
-      - name: Vet
-        run: go vet ./...
-
-      # -short skips the live provider tests; those hit real hosts, so run
-      # them by hand on your own machine (see the wiki's Providers page).
-      - name: Test
-        run: go test -short -race ./...
-
-      - name: Build Linux
-        run: |
-          ./Build/buildlinux
-          mkdir -p release/linux
-          mv otakase-linux-x86_64 otakase-linux-arm64 release/linux/
-
-      # Every run builds all platforms (plain Go cross-compiles on this
-      # runner), so a pull request's build can be downloaded and tried.
-      - name: Build macOS
-        run: |
-          ./Build/buildmac-x86_64
-          ./Build/buildmac-arm64
-          sudo apt-get update
-          sudo apt-get install -y llvm
-          lipo=$(find /usr/bin -name 'llvm-lipo*' | head -n 1)
-          echo "using $lipo"
-          "$lipo" -create otakase-macos-x86_64 otakase-macos-arm64 -output otakase-macos-universal
-          mkdir -p release/macos
-          mv otakase-macos-x86_64 otakase-macos-arm64 otakase-macos-universal release/macos/
-
-      - name: Build Windows
-        run: |
-          ./Build/buildwindows
-          mkdir -p release/windows
-          mv otakase-windows-x86_64.exe release/windows/
-          cp Build/HOW-TO-TEST.txt release/
-
-      # The release job uses this, and it is the download for trying a
-      # build: the run's page lists it under Artifacts.
-      - uses: actions/upload-artifact@v7
-        with:
-          name: otakase-binaries
-          path: |
-            release/linux/otakase-linux-x86_64
-            release/linux/otakase-linux-arm64
-            release/macos/otakase-macos-*
-            release/windows/otakase-windows-x86_64.exe
-            release/HOW-TO-TEST.txt
-          retention-days: 7
-          if-no-files-found: error
-
-  # Installs and uninstalls the Windows installer (built from stand-in
-  # binaries) and checks PATH, so a broken installer never gets released.
-  installer:
-    permissions:
-      contents: read
-    uses: ./.github/workflows/installer-check.yml
-    with:
-      ref: ${{ (inputs.pr_number && format('refs/pull/{0}/head', inputs.pr_number)) || github.sha }}
-
-  # The Android app (phones and Android TV): one APK with both ARM runtimes.
-  # Signed with the release key from the ANDROID_* secrets on main; a PR build
-  # runs untrusted code, so it never sees them and gets the debug key, which
-  # cannot update an installed release.
-  android:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
-          persist-credentials: false
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version: "1.26"
-          cache: false
-
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.47.8"
-          channel: stable
-
-      - name: Android NDK
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" > /dev/null
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
-
-      - name: Signing key
-        if: inputs.pr_number == ''
-        env:
-          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          PUBLISHING: ${{ inputs.release }}
-        run: |
-          if [ -z "$KEYSTORE" ]; then
-            if [ "$PUBLISHING" = "true" ]; then
-              echo "::error::Android release signing key is required to publish app updates"
+          if [ -n "$PR_NUMBER" ]; then
+            if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+              echo "::error::pr_number must be a positive integer, got: $PR_NUMBER"
               exit 1
             fi
-            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; the APK is signed with the debug key"
+            echo "ref=refs/pull/$PR_NUMBER/head" >> "$GITHUB_OUTPUT"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/otakase-release.jks"
-          {
-            echo "storeFile=$RUNNER_TEMP/otakase-release.jks"
-            echo "storePassword=$STORE_PASSWORD"
-            echo "keyAlias=$KEY_ALIAS"
-            echo "keyPassword=$KEY_PASSWORD"
-          } > app/android/key.properties
+          echo "ref=$SHA" >> "$GITHUB_OUTPUT"
+          if [ "$RELEASE" = "true" ] && [ "$REF" = "refs/heads/main" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Build APK
-        run: |
-          app/scripts/build-apk.sh
-          mkdir -p release/android
-          cp app/build/app/outputs/flutter-apk/app-release.apk release/android/otakase-android.apk
-          cp app/build/app/outputs/flutter-apk/otakase-android.json release/android/
-
-      - name: Remove signing key
-        if: always()
-        run: rm -f app/android/key.properties "$RUNNER_TEMP/otakase-release.jks"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: otakase-android
-          path: |
-            release/android/otakase-android.apk
-            release/android/otakase-android.json
-          retention-days: 7
-          if-no-files-found: error
-
-  # The desktop app, one runner per OS (Flutter cannot cross-compile it).
-  # Each makes the release file the in-app updater installs and its metadata
-  # (app/scripts/package-desktop.sh).
-  desktop:
-    if: inputs.desktop || inputs.release
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: linux
-            runner: ubuntu-24.04
-          - os: macos
-            runner: macos-latest
-          - os: windows
-            runner: windows-latest
-    runs-on: ${{ matrix.runner }}
+  # Pinned to the commit this run started on, so a push to main while it runs
+  # never ends up in the release.
+  build:
+    needs: check
     permissions:
       contents: read
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
-          persist-credentials: false
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version: "1.26"
-          cache: false
-
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.47.8"
-          channel: stable
-
-      - name: Linux build tools
-        if: matrix.os == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config \
-            libgtk-3-dev libsecret-1-dev libmpv-dev patchelf
-
-      - name: Build
-        working-directory: app
-        run: scripts/build-desktop.sh release
-
-      - name: Package
-        working-directory: app
-        run: scripts/package-desktop.sh
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: otakase-app-${{ matrix.os }}
-          path: app/build/desktop-release/*
-          retention-days: 7
-          if-no-files-found: error
+    uses: ./.github/workflows/app-build.yml
+    with:
+      ref: ${{ needs.check.outputs.ref }}
+      # Only main gets the release signing key; PR code never sees it.
+      signed: ${{ inputs.pr_number == '' }}
+    secrets: inherit
 
   release:
-    needs: [build, installer, android, desktop]
-    if: inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main'
-    runs-on: windows-latest
+    needs: [check, build]
+    if: needs.check.outputs.publish == 'true'
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       actions: read
@@ -273,9 +76,6 @@ jobs:
       version: ${{ steps.version.outputs.version }}
 
     steps:
-      # Pinned to the release commit. Without a ref this checks out whatever
-      # main is at by the time build finishes, and a push in between ends up
-      # tagged instead (that's what happened to v2.0.1).
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -283,86 +83,32 @@ jobs:
 
       - name: Version
         id: version
-        shell: pwsh
         run: |
-          $version = Get-Content VERSION.txt
-          "OTAKASE_VERSION=$version" >> $env:GITHUB_ENV
-          "version=$version" >> $env:GITHUB_OUTPUT
-
-      # mpv.exe for the installer lives on its own branch to keep it out of
-      # main's history.
-      - name: Fetch mpv
-        uses: actions/checkout@v7
-        with:
-          ref: mpv-binaries
-          path: mpv-temp
-          sparse-checkout: |
-            Build/mpv.exe.gz
-            Build/mpv.zip
-
-      - name: Unpack mpv
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path Build\mpv | Out-Null
-          $gz = "Build\mpv\mpv.exe.gz"
-          if (Test-Path "mpv-temp/Build/mpv.exe.gz") {
-            Copy-Item "mpv-temp/Build/mpv.exe.gz" $gz
-          } else {
-            Write-Host "Warning: no mpv.exe.gz on the mpv-binaries branch, trying main"
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/$env:GITHUB_REPOSITORY/main/Build/mpv.exe.gz" -OutFile $gz
-          }
-          7z x $gz -o"Build\mpv"
-          Remove-Item $gz
-          Remove-Item -Recurse -Force mpv-temp -ErrorAction SilentlyContinue
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: otakase-binaries
-          path: Build
+          version=$(tr -d '[:space:]' < VERSION.txt)
+          echo "OTAKASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v8
         with:
           name: otakase-android
-          path: Build/Output
+          path: dist
 
       - uses: actions/download-artifact@v8
         with:
           pattern: otakase-app-*
-          path: Build/Output
+          path: dist
           merge-multiple: true
-
-      # The installer script reads the exe from releases/otakase-<version>/windows.
-      - name: Lay out release files
-        shell: pwsh
-        run: |
-          $dir = "releases/otakase-$env:OTAKASE_VERSION"
-          foreach ($os in "windows", "macos", "linux") {
-            New-Item -ItemType Directory -Force -Path "$dir/$os" | Out-Null
-          }
-          Get-ChildItem -Path Build -Recurse | Select-Object -ExpandProperty FullName
-          Move-Item "Build/windows/otakase-windows-x86_64.exe" "$dir/windows/"
-          Move-Item "Build/macos/otakase-macos-universal" "$dir/macos/"
-          Move-Item "Build/macos/otakase-macos-x86_64" "$dir/macos/"
-          Move-Item "Build/macos/otakase-macos-arm64" "$dir/macos/"
-          Move-Item "Build/linux/otakase-linux-x86_64" "$dir/linux/"
-          Move-Item "Build/linux/otakase-linux-arm64" "$dir/linux/"
-          Copy-Item "Build/mpv/mpv.exe" "$dir/windows/"
-
-      - name: Windows installer
-        shell: pwsh
-        run: |
-          $iss = "Build/otakase-windows-build.iss"
-          (Get-Content $iss) -replace '^AppVersion=.*', "AppVersion=$env:OTAKASE_VERSION" | Set-Content $iss
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "Build\otakase-windows-build.iss"
 
       # Commits pushed straight to main, which GitHub's generated notes
       # (pull requests only) leave out.
       - name: Release notes
-        shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python .github/release_notes.py Build/release-notes-extra.md
+        run: python3 .github/release_notes.py dist/release-notes-extra.md
 
+      # Asset names are what the in-app updaters download: otakase-android.*
+      # (app/lib/data/app_updates.dart) and otakase-app-<os>.*
+      # (app/lib/desktop/desktop_updates.dart).
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: "v${{ env.OTAKASE_VERSION }}"
@@ -370,39 +116,22 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          body_path: Build/release-notes-extra.md
-          # Asset names are what the in-app updater downloads; see
-          # releaseAssetName in internal/update_release.go.
+          body_path: dist/release-notes-extra.md
           files: |
-            releases/otakase-${{ env.OTAKASE_VERSION }}/linux/otakase-linux-x86_64
-            releases/otakase-${{ env.OTAKASE_VERSION }}/linux/otakase-linux-arm64
-            releases/otakase-${{ env.OTAKASE_VERSION }}/macos/otakase-macos-x86_64
-            releases/otakase-${{ env.OTAKASE_VERSION }}/macos/otakase-macos-arm64
-            releases/otakase-${{ env.OTAKASE_VERSION }}/macos/otakase-macos-universal
-            releases/otakase-${{ env.OTAKASE_VERSION }}/windows/otakase-windows-x86_64.exe
-            Build/Output/otakase-windows-installer.exe
-            Build/Output/otakase-android.apk
-            Build/Output/otakase-android.json
-            Build/Output/otakase-app-windows-setup.exe
-            Build/Output/otakase-app-windows.json
-            Build/Output/otakase-app-macos.zip
-            Build/Output/otakase-app-macos.json
-            Build/Output/otakase-app-linux-x86_64.AppImage
-            Build/Output/otakase-app-linux-x86_64.json
+            dist/otakase-android.apk
+            dist/otakase-android.json
+            dist/otakase-app-windows-setup.exe
+            dist/otakase-app-windows.json
+            dist/otakase-app-macos.zip
+            dist/otakase-app-macos.json
+            dist/otakase-app-linux-x86_64.AppImage
+            dist/otakase-app-linux-x86_64.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # A release published with GITHUB_TOKEN doesn't trigger other workflows, so
-  # winget and Discord are called from here.
-  winget:
-    needs: release
-    permissions:
-      contents: read
-    uses: ./.github/workflows/winget.yml
-    with:
-      version: ${{ needs.release.outputs.version }}
-    secrets: inherit
-
+  # Discord is called from here. winget is off for now (winget.yml is only
+  # run by hand).
   discord:
     needs: release
     permissions:
