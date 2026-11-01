@@ -46,7 +46,6 @@ bool usable(FocusNode node) =>
 
 /// Walks every arrow move from the focused control and returns the controls
 /// in the same focus scope that no chain of arrow presses can reach.
-bool trace = false;
 Future<List<String>> unreachable(WidgetTester tester) async {
   final start = FocusManager.instance.primaryFocus!;
   final scope = start.nearestScope!;
@@ -66,12 +65,6 @@ Future<List<String>> unreachable(WidgetTester tester) async {
           ?.invalidateScopeData(node.nearestScope!);
       await key(tester, arrow);
       final next = FocusManager.instance.primaryFocus;
-      if (trace) {
-        // ignore: avoid_print
-        print(
-          '${describe(node)} --$arrow--> ${next == null ? null : describe(next)}',
-        );
-      }
       if (next != null && next.nearestScope == scope && seen.add(next)) {
         reached.add(describe(next));
         queue.add(next);
