@@ -15,6 +15,7 @@ import android.speech.RecognizerIntent
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
+import android.net.ConnectivityManager
 import android.net.wifi.WifiManager
 import com.xyverion.otakase.mobilecore.Mobilecore
 import io.flutter.embedding.android.FlutterActivity
@@ -86,6 +87,9 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         detached = false
+        // Torrent sources keep the episode being played here; Go's default
+        // temp directory is not writable for apps.
+        core.setCacheDir(cacheDir.absolutePath)
         appUpdates = AppUpdates(this, flutterEngine.dartExecutor.binaryMessenger)
         pendingLogin = pendingLogin ?: loginUri(intent)
         pendingRemote = pendingRemote ?: remoteUri(intent)
@@ -142,6 +146,10 @@ class MainActivity : FlutterActivity() {
                 "device" -> result.success(
                     packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
                         !packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
+                )
+                "metered" -> result.success(
+                    (getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager)
+                        ?.isActiveNetworkMetered ?: false
                 )
                 "voiceSearch" -> {
                     if (voiceResult != null) result.error("busy", "Voice search already open", null)

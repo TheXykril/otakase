@@ -492,3 +492,24 @@ func (p *Provider) ResolveProviderID(providerID, query string) (string, error) {
 	}
 	return options[0].Key, nil
 }
+
+// EpisodeReleases is every release of episode epNo in mode, best first, with
+// releases of quality moved to the front when quality is set. Apps that run
+// their own torrent client use it instead of GetEpisodeURLForMode, which
+// starts the CLI's shared one.
+func (p *Provider) EpisodeReleases(id string, epNo int, mode string, quality int) ([]Release, error) {
+	candidates, err := p.episodeCandidates(id, epNo, mode)
+	if err != nil {
+		return nil, err
+	}
+	if len(candidates) == 0 {
+		if providers.NormalizeTranslationType(mode) == "dub" {
+			return nil, fmt.Errorf("no dub release indexed for episode %d", epNo)
+		}
+		return nil, fmt.Errorf("no release indexed for episode %d", epNo)
+	}
+	if quality > 0 {
+		candidates = preferQuality(candidates, quality)
+	}
+	return candidates, nil
+}

@@ -61,7 +61,7 @@ printf '%s\\n' "$*" >> "$TEST_GO_CALLS"
                 result, calls = self.build(version)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(calls.count("install "), 2)
-                self.assertIn("bind -target=android/arm64,android/arm -androidapi 23", calls)
+                self.assertIn("bind -target=android/arm64,android/arm -androidapi 23 -tags disable_libutp,nosqlite", calls)
 
     def test_rejects_unrecognised_toolchains_before_installing_generators(self):
         result, calls = self.build("devel unknown")

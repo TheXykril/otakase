@@ -167,11 +167,14 @@ class MorePage extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        Text(
-          '18+ follows your AniList setting',
-          style: uiStyle(context, size: 15, color: muted),
-        ),
+        // Nothing mentions 18+ unless the viewer's AniList allows it.
+        if (services.store.adultAllowed) ...[
+          const SizedBox(height: 12),
+          Text(
+            '18+ follows your AniList setting',
+            style: uiStyle(context, size: 15, color: muted),
+          ),
+        ],
         if (services.tracking.lastError != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),

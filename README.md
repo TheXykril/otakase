@@ -60,6 +60,11 @@ For later updates, open **More > About & updates**, choose **Download update**,
 then **Install update**. Approve Android's installation prompt. If Android asks,
 allow Otakase to install updates. Your profiles and progress stay in place.
 
+When no site has an episode, the app plays it from a torrent while it
+downloads, like the CLI does. Nothing is shared back, and the file is deleted
+when you stop. Turn this off, or allow it on mobile data, under
+**Settings > Playback** (**Torrent sources**, **Torrents on mobile data**).
+
 ### Arch Linux / Manjaro
 
 Build from source with the bundled PKGBUILD, so pacman tracks it like any

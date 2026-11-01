@@ -18,7 +18,10 @@ class DiagnosticCore extends CoreClient {
     void Function(int)? onHandle,
     RequestScope? scope,
     Duration timeout = const Duration(seconds: 40),
-  }) async => {'providers': sourceNames};
+  }) async => {
+    'providers': sourceNames,
+    'adult': ['sukebei'],
+  };
 }
 
 Finder rings() => find.byWidgetPredicate(
@@ -39,7 +42,8 @@ void main() {
       expect(find.byKey(const Key('nav-Menu')), findsNothing);
       await tester.tap(find.byKey(const Key('nav-More')));
       await tester.pumpAndSettle();
-      expect(find.text('18+ follows your AniList setting'), findsOneWidget);
+      // Nothing mentions 18+ unless the viewer's AniList allows it.
+      expect(find.textContaining('18+'), findsNothing);
       for (final source in sourceNames) {
         expect(find.text(source), findsNothing);
       }
@@ -77,6 +81,14 @@ void main() {
       for (final source in sourceNames) {
         expect(find.textContaining(source), findsNothing);
       }
+      expect(find.textContaining('18+'), findsNothing);
+      services.store.setAdultAllowed(true);
+      await tester.pumpAndSettle();
+      expect(find.text('18+ source'), findsOneWidget);
+      expect(find.textContaining('sukebei'), findsNothing);
+      services.store.setAdultAllowed(false);
+      await tester.pumpAndSettle();
+      expect(find.text('18+ source'), findsNothing);
       await tester.pumpWidget(const SizedBox());
     },
   );
