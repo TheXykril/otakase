@@ -383,7 +383,7 @@ class _SettingsPageState extends State<SettingsPage> {
           child: PageHeading('Settings', '設'),
         ),
       group('Appearance', LucideIcons.palette, [
-        row('Shu / Dark', 'Warm dark appearance.', value: 'Shu / Dark'),
+        row('Theme', 'Warm dark appearance.', value: 'Shu / Dark'),
       ]),
       group('Subtitles & languages', LucideIcons.captions, [
         row(

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../desktop/desktop_core.dart';
@@ -68,6 +69,36 @@ class AppLayout extends InheritedWidget {
 // Android TVs report different densities for the same output resolution.
 // A 1600 x 900 canvas gives every 16:9 TV the same compact composition.
 // Scale the whole Navigator so routes, focus frames and hit testing agree.
+/// Whether the desktop viewer is moving around with the keyboard (arrow keys
+/// or Tab) rather than the mouse.
+abstract final class DesktopInput {
+  static bool keyboard = false;
+  static bool _listening = false;
+
+  static void listen() {
+    if (_listening) return;
+    _listening = true;
+    HardwareKeyboard.instance.addHandler((event) {
+      if (event is KeyDownEvent &&
+          {
+            LogicalKeyboardKey.arrowUp,
+            LogicalKeyboardKey.arrowDown,
+            LogicalKeyboardKey.arrowLeft,
+            LogicalKeyboardKey.arrowRight,
+            LogicalKeyboardKey.tab,
+          }.contains(event.logicalKey)) {
+        keyboard = true;
+      }
+      return false;
+    });
+    GestureBinding.instance.pointerRouter.addGlobalRoute((event) {
+      if (event is PointerDownEvent || event is PointerScrollEvent) {
+        keyboard = false;
+      }
+    });
+  }
+}
+
 class TVViewport extends StatefulWidget {
   const TVViewport({super.key, required this.child});
   final Widget child;
@@ -83,6 +114,7 @@ class _TVViewportState extends State<TVViewport> {
   void initState() {
     super.initState();
     FocusManager.instance.addListener(focusChanged);
+    if (isDesktop) DesktopInput.listen();
   }
 
   @override
@@ -302,7 +334,7 @@ class _FocusBoxState extends State<FocusBox> {
   @override
   void didUpdateWidget(FocusBox old) {
     super.didUpdateWidget(old);
-    if (focused) scheduleReveal();
+    if (focused && !isDesktop) scheduleReveal();
   }
 
   void scheduleReveal() {
@@ -316,6 +348,9 @@ class _FocusBoxState extends State<FocusBox> {
 
   Future<void> reveal() async {
     if (!mounted || !focused || Scrollable.maybeOf(context) == null) return;
+    // With a mouse the page stays where the viewer scrolled it; only arrow
+    // keys and Tab scroll the focused control into view.
+    if (isDesktop && !DesktopInput.keyboard) return;
     final row = context.findAncestorStateOfType<_RemoteFocusRowState>();
     final item = context.getInheritedWidgetOfExactType<RemoteFocusItem>();
     if (row != null && item != null) {
@@ -1183,9 +1218,18 @@ class TVHomeHero extends StatelessWidget {
 }
 
 class HeroArt extends StatelessWidget {
-  const HeroArt(this.anime, {super.key, required this.height});
+  const HeroArt(
+    this.anime, {
+    super.key,
+    required this.height,
+    this.posterPadding = EdgeInsets.zero,
+  });
   final Anime anime;
   final double height;
+
+  /// Space kept around the poster shown when there is no banner, so it stays
+  /// clear of anything drawn over the art.
+  final EdgeInsets posterPadding;
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
@@ -1211,17 +1255,25 @@ class HeroArt extends StatelessWidget {
                 ),
               ),
             ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: SizedBox(
-                width: height * 2 / 3,
-                height: height,
-                child: CoverImage(
-                  key: const Key('hero-fallback-poster'),
-                  cover,
-                  width: height * 2 / 3,
-                  height: height,
-                  fit: BoxFit.contain,
+            Padding(
+              padding: posterPadding,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox(
+                  width: (height - posterPadding.vertical) * 2 / 3,
+                  height: height - posterPadding.vertical,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      posterPadding == EdgeInsets.zero ? 0 : 14,
+                    ),
+                    child: CoverImage(
+                      key: const Key('hero-fallback-poster'),
+                      cover,
+                      width: (height - posterPadding.vertical) * 2 / 3,
+                      height: height - posterPadding.vertical,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
               ),
             ),

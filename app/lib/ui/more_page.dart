@@ -516,7 +516,7 @@ class _DesktopMoreState extends State<DesktopMore> {
           child: Align(
             alignment: Alignment.topLeft,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1000),
+              constraints: const BoxConstraints(maxWidth: 1400),
               child: Padding(
                 padding: const EdgeInsets.only(top: 72, right: 48),
                 child: SettingsPage(

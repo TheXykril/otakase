@@ -99,7 +99,7 @@ class ScreenCatalog extends Catalog {
   ];
   @override
   Future<Anime> detail(Anime anime, {required bool adult}) async => Anime(
-    id: story.id,
+    id: anime.id == 21 ? 21 : story.id,
     malId: story.malId,
     title: story.title,
     nativeTitle: '葬送のフリーレン',
@@ -111,7 +111,7 @@ class ScreenCatalog extends Catalog {
     format: 'TV',
     status: 'FINISHED',
     year: 2023,
-    episodes: 28,
+    episodes: anime.id == 21 ? 1180 : 28,
     duration: 24,
     score: 9.2,
     genres: const ['Adventure', 'Drama', 'Fantasy'],
@@ -253,7 +253,14 @@ void main() {
     }
   });
 
-  for (final screen in ['home', 'search', 'schedule', 'show', 'settings']) {
+  for (final screen in [
+    'home',
+    'search',
+    'schedule',
+    'show',
+    'show-long',
+    'settings',
+  ]) {
     testWidgets('desktop render: $screen', (tester) async {
       setUpScreen(tester, const Size(1440, 900));
       final app = await services();
@@ -276,6 +283,25 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('nav-More')));
       } else if (screen == 'schedule') {
         await tester.tap(find.byKey(const ValueKey('nav-Schedule')));
+      } else if (screen == 'show-long') {
+        unawaited(
+          tester
+              .state<NavigatorState>(find.byType(Navigator).first)
+              .push(
+                OtakaseRoute<void>(
+                  builder: (_) => ShowPage(
+                    services: app,
+                    anime: const Anime(id: 21, title: 'A very long show'),
+                    isTV: true,
+                  ),
+                ),
+              ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('episode-range-next')));
+        await tester.pumpAndSettle();
+        expect(find.text('51–100'), findsOneWidget);
+        expect(find.byKey(const Key('episode-range-3')), findsNothing);
       } else if (screen == 'show') {
         unawaited(
           tester

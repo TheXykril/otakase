@@ -763,6 +763,9 @@ class _ShowPageState extends State<ShowPage> {
     );
   }
 
+  static String rangeLabel(int block, int total) =>
+      '${block * 50 + 1}–${min(total, block * 50 + 50)}';
+
   Widget desktopEpisodes() {
     final total = anime.airedEpisodes;
     final blocks = (total / 50).ceil();
@@ -780,25 +783,88 @@ class _ShowPageState extends State<ShowPage> {
               style: uiStyle(context, size: 28, weight: FontWeight.w700),
             ),
             const SizedBox(width: 20),
-            if (blocks > 1)
-              Expanded(
-                child: Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    for (var b = 0; b < blocks; b++)
-                      AppTab(
-                        key: ValueKey('episode-range-$b'),
-                        label: '${b * 50 + 1}–${min(total, b * 50 + 50)}',
-                        selected: b == block,
-                        isTV: true,
-                        onPressed: () => setState(() => range = b),
-                      ),
-                  ],
+            if (blocks > 1 && blocks <= 4) ...[
+              for (var b = 0; b < blocks; b++) ...[
+                AppTab(
+                  key: ValueKey('episode-range-$b'),
+                  label: rangeLabel(b, total),
+                  selected: b == block,
+                  isTV: true,
+                  onPressed: () => setState(() => range = b),
                 ),
-              )
-            else
+                const SizedBox(width: 10),
+              ],
               const Spacer(),
+            ] else if (blocks > 4) ...[
+              // Long shows get one menu of ranges instead of a wall of
+              // buttons, with arrows for the block before and after.
+              IconButton(
+                key: const Key('episode-range-previous'),
+                tooltip: 'Previous episodes',
+                onPressed: block > 0
+                    ? () => setState(() => range = block - 1)
+                    : null,
+                icon: const Icon(LucideIcons.chevronLeft, size: 20),
+              ),
+              PopupMenuButton<int>(
+                key: const Key('episode-range-menu'),
+                tooltip: 'Choose episodes',
+                initialValue: block,
+                color: panelRaised,
+                constraints: const BoxConstraints(maxHeight: 520),
+                position: PopupMenuPosition.under,
+                onSelected: (b) => setState(() => range = b),
+                itemBuilder: (_) => [
+                  for (var b = 0; b < blocks; b++)
+                    PopupMenuItem(
+                      value: b,
+                      child: Text(
+                        'Episodes ${rangeLabel(b, total)}',
+                        style: uiStyle(
+                          context,
+                          size: 17,
+                          color: b == block ? accentText : fg,
+                          weight: b == block
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                ],
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: fgBright.withValues(alpha: .08),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        rangeLabel(block, total),
+                        style: uiStyle(context, weight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(LucideIcons.chevronDown, size: 18),
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                key: const Key('episode-range-next'),
+                tooltip: 'Next episodes',
+                onPressed: block < blocks - 1
+                    ? () => setState(() => range = block + 1)
+                    : null,
+                icon: const Icon(LucideIcons.chevronRight, size: 20),
+              ),
+              const Spacer(),
+            ] else
+              const Spacer(),
+            const SizedBox(width: 16),
             Text(
               '$watched watched',
               style: uiStyle(context, size: 17, color: muted),
