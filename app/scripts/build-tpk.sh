@@ -36,9 +36,9 @@ if [[ -n ${TIZEN_EMULATOR:-} ]]; then
   arch_flags=(--target-arch x64)
   goarch=(GOARCH=amd64)
   rootstrap="$tizen_sdk/platforms/tizen-10.0/tizen/rootstraps/tizen-10.0-emulator64.core"
-  # Tizen's gcc 9.2 linker can't read the 10.0 rootstrap's packed relocations;
-  # the host's x86_64 gcc links against the same sysroot instead.
-  gcc=${TIZEN_EMULATOR_CC:-/usr/bin/gcc}
+  # Tizen's gcc 9.2 linker can't read the 10.0 rootstrap's packed
+  # relocations; its gcc 14.2 (installed with the 10.0 rootstrap) can.
+  gcc="$tizen_sdk/tools/x86_64-linux-gnu-gcc-14.2/bin/x86_64-linux-gnu-gcc"
   host=x86_64-linux-gnu
 else
   # Go core for 32-bit ARM, the userland of every Samsung TV. Linking against

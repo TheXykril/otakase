@@ -124,9 +124,9 @@ KVM, runs on Ubuntu). `TIZEN_EMULATOR=1 app/scripts/build-tpk.sh` builds one
 Tizen 10.0 x64 TPK plus its brain into `app/build/samsung-tv-emulator/`.
 AVPlay has no emulator libraries, so that build swaps in the plugin's Dart
 side only (`pubspec_overrides.yaml`, removed afterwards): menus, D-pad,
-sign-in, sources and the updater work, video playback does not. The Go core
-for the emulator is linked with the host's gcc because Tizen's gcc 9.2 can't
-read the 10.0 emulator rootstrap.
+sign-in, sources and the updater work, video playback does not. The emulator
+build uses Tizen's gcc 14.2 (installed with the 10.0 rootstrap) because gcc 9.2
+can't read the 10.0 emulator rootstrap.
 
 ## Installing on a TV
 

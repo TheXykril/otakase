@@ -55,6 +55,7 @@ fi
 for path in \
   tools/tizen-core/tz \
   tools/arm-linux-gnueabi-gcc-9.2/bin/arm-linux-gnueabi-gcc \
+  tools/x86_64-linux-gnu-gcc-14.2/bin/x86_64-linux-gnu-gcc \
   platforms/tizen-6.0/iot-headed/rootstraps/iot-headed-6.0-device.core \
   platforms/tizen-6.5/iot-headed/rootstraps/iot-headed-6.5-device.core \
   platforms/tizen-10.0/tizen/rootstraps; do
