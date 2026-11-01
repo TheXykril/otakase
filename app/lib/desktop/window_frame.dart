@@ -11,16 +11,17 @@ import 'desktop_core.dart';
 /// Opens the desktop window without a system title bar. The app's own top
 /// bar moves the window and holds the window buttons. macOS keeps its
 /// traffic-light buttons, drawn over the top-left corner of the app.
-Future<void> setUpDesktopWindow() async {
+Future<void> setUpDesktopWindow({bool launcher = false}) async {
   await windowManager.ensureInitialized();
-  const options = WindowOptions(
-    title: 'Otakase',
-    size: Size(1440, 900),
-    minimumSize: Size(960, 600),
+  final options = WindowOptions(
+    title: launcher ? 'Otakase Launcher' : 'Otakase',
+    size: launcher ? const Size(680, 560) : const Size(1440, 900),
+    minimumSize: launcher ? const Size(480, 360) : const Size(960, 600),
     center: true,
+    alwaysOnTop: launcher,
     backgroundColor: bg,
     titleBarStyle: TitleBarStyle.hidden,
-    windowButtonVisibility: true,
+    windowButtonVisibility: !launcher,
   );
   await windowManager.waitUntilReadyToShow(options, () async {
     await windowManager.show();
