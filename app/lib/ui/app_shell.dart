@@ -23,6 +23,11 @@ import '../data/tv_remote.dart';
 import '../desktop/desktop_core.dart';
 import '../desktop/window_frame.dart';
 
+/// The top-level pages. Desktop has room for Schedule as its own tab.
+List<String> get rootTabs => isDesktop
+    ? const ['Home', 'Search', 'Schedule', 'More']
+    : const ['Home', 'Search', 'More'];
+
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.services, required this.isTV});
   final AppServices services;
@@ -36,17 +41,13 @@ class _AppShellState extends State<AppShell> {
   int? focusedNav;
   bool rootIsCurrent = true;
   StreamSubscription<String>? remoteEvents;
-  final navFocus = List.generate(
-    3,
-    (i) => FocusNode(
-      debugLabel: [
-        'Home navigation',
-        'Search navigation',
-        'More navigation',
-      ][i],
-    ),
+  final navFocus = [
+    for (final tab in rootTabs) FocusNode(debugLabel: '$tab navigation'),
+  ];
+  final scopes = List.generate(
+    rootTabs.length,
+    (i) => FocusScopeNode(debugLabel: 'Root $i'),
   );
-  final scopes = List.generate(3, (i) => FocusScopeNode(debugLabel: 'Root $i'));
   final searchField = FocusNode(debugLabel: 'Search field');
   void modeChanged(FocusHighlightMode _) {
     if (mounted) setState(() {});
@@ -307,7 +308,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget nav(int index) {
-    final label = ['Home', 'Search', 'More'][index];
+    final label = rootTabs[index];
     final active = index == selected;
     return Focus(
       onKeyEvent: (_, event) {
@@ -487,9 +488,9 @@ class _AppShellState extends State<AppShell> {
             children: [
               const Brand(),
               const SizedBox(width: 28),
-              for (var i = 0; i < 3; i++) ...[
+              for (var i = 0; i < rootTabs.length; i++) ...[
                 nav(i),
-                if (i < 2) const SizedBox(width: 14),
+                if (i < rootTabs.length - 1) const SizedBox(width: 14),
               ],
               const Spacer(),
               const DeviceStatus(isTV: true),
@@ -544,7 +545,9 @@ class _AppShellState extends State<AppShell> {
           ],
         ),
         child: Row(
-          children: [for (var i = 0; i < 3; i++) Expanded(child: nav(i))],
+          children: [
+            for (var i = 0; i < rootTabs.length; i++) Expanded(child: nav(i)),
+          ],
         ),
       ),
     ),
@@ -578,6 +581,12 @@ class _AppShellState extends State<AppShell> {
           fieldFocus: searchField,
           onNavigateUp: () => navFocus[1].requestFocus(),
         ),
+        if (isDesktop)
+          SchedulePage(
+            services: widget.services,
+            isTV: widget.isTV,
+            onOpen: open,
+          ),
         MorePage(services: widget.services, isTV: widget.isTV, onOpen: open),
       ];
       return ExcludeFocus(

@@ -302,6 +302,43 @@ void main() {
       auth.dispose();
     },
   );
+  test('desktop login listens on this computer only and says so', () async {
+    final auth = AuthService(
+      storage: MemoryTokens(),
+      client: MockClient(
+        (r) async => json({
+          'data': {
+            'Viewer': {
+              'id': 7,
+              'name': 'viewer',
+              'options': {'displayAdultContent': false},
+            },
+          },
+        }),
+      ),
+    );
+    final authorize = await auth.begin('AniList', desktop: true);
+    final encoded = authorize.queryParameters['state']!;
+    final state = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(encoded))),
+    ) as Map;
+    expect(state['host'], '127.0.0.1');
+    final completed = auth.completed.first;
+    final response = await http.get(
+      Uri(
+        scheme: 'http',
+        host: '127.0.0.1',
+        port: state['port'] as int,
+        path: '/login',
+        queryParameters: {'state': encoded, 'access_token': 'token'},
+      ),
+    );
+    expect(response.statusCode, 200);
+    expect(response.body, contains('Return to Otakase'));
+    expect(await completed, 'AniList');
+    expect(auth.account('AniList')!.username, 'viewer');
+    auth.dispose();
+  });
   test('logout wins over a refresh already writing secure storage', () async {
     final storage = DelayedTokens();
     final auth = AuthService(

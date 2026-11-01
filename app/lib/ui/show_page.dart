@@ -9,7 +9,7 @@ import '../data/synced_resume.dart';
 import '../data/tracking.dart';
 import '../services.dart';
 import '../player.dart';
-import 'app_shell.dart' show Brand;
+import 'app_shell.dart' show Brand, rootTabs;
 import 'components.dart';
 import 'device_status.dart';
 import 'home_page.dart';
@@ -404,13 +404,13 @@ class _ShowPageState extends State<ShowPage> {
       children: [
         const Brand(),
         const SizedBox(width: 28),
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < rootTabs.length; i++)
           TextButton(
             onPressed: () {
               Navigator.popUntil(context, (r) => r.isFirst);
               widget.services.selectRoot?.call(i);
             },
-            child: Text(['Home', 'Search', 'More'][i]),
+            child: Text(rootTabs[i]),
           ),
         const Spacer(),
         const DeviceStatus(isTV: true),

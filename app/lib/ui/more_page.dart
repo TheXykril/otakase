@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../data/auth.dart';
+import '../desktop/desktop_core.dart';
 import '../data/models.dart';
 import '../services.dart';
 import 'catalog_pages.dart';
@@ -359,21 +360,20 @@ class _AccountsPageState extends State<AccountsPage> {
     setState(() => error = null);
     try {
       final auth = widget.services.auth;
-      final url = await auth.begin(service, tv: widget.isTV);
+      // Desktop signs in through the browser on the same computer; only a
+      // real TV needs a phone.
+      final phone = widget.isTV && !isDesktop;
+      final url = await auth.begin(service, tv: phone, desktop: isDesktop);
       if (!mounted) {
         await auth.cancelLogin();
         return;
       }
-      if (!widget.isTV) await auth.launch(url);
+      if (!phone) await auth.launch(url);
       if (!mounted) return;
       await showDialog<void>(
         context: context,
-        builder: (context) => _LoginDialog(
-          auth: auth,
-          url: url,
-          service: service,
-          isTV: widget.isTV,
-        ),
+        builder: (context) =>
+            _LoginDialog(auth: auth, url: url, service: service, isTV: phone),
       );
       await auth.cancelLogin();
     } catch (e) {

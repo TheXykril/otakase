@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
+import '../desktop/desktop_core.dart';
+import '../desktop/open_link.dart';
 import 'models.dart';
 import 'oauth_config.dart';
 
@@ -162,13 +164,24 @@ class AuthService extends ChangeNotifier {
       base64UrlEncode(List.generate(48, (_) => Random.secure().nextInt(256)))
           .replaceAll('=', '');
 
-  Future<Uri> begin(String service, {bool tv = false}) async {
+  /// Starts a login. A TV listens on the home network for the phone that
+  /// signs in; the desktop app ([desktop]) listens on this computer only and
+  /// the browser hands the login straight back.
+  Future<Uri> begin(
+    String service, {
+    bool tv = false,
+    bool desktop = false,
+  }) async {
     await cancelLogin();
     if (!['AniList', 'MAL'].contains(service)) {
       throw const LoginFailure('Unknown account.');
     }
     String? host;
-    if (tv) {
+    if (desktop) {
+      host = '127.0.0.1';
+      _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      _server!.listen(_receive, onError: (_) {});
+    } else if (tv) {
       host = await (findLanAddress?.call() ?? _findLanAddress());
       if (host == null || !privateIPv4(host)) {
         throw const LoginFailure(
@@ -243,6 +256,7 @@ class AuthService extends ChangeNotifier {
     request.response.headers.contentType = ContentType.html;
     var success = false;
     final service = _pending?['service'] as String?;
+    final device = _server?.address.isLoopback == true ? 'Otakase' : 'your TV';
     try {
       if (request.method != 'GET' || request.uri.path != '/login') {
         request.response.statusCode = HttpStatus.notFound;
@@ -257,13 +271,13 @@ class AuthService extends ChangeNotifier {
         );
         success = true;
         request.response.write(
-          '<!doctype html><meta name="viewport" content="width=device-width"><title>Otakase</title><p>Signed in. Return to your TV.</p>',
+          '<!doctype html><meta name="viewport" content="width=device-width"><title>Otakase</title><p>Signed in. Return to $device.</p>',
         );
       }
     } catch (_) {
       request.response.statusCode = HttpStatus.badRequest;
       request.response.write(
-        '<!doctype html><title>Otakase</title><p>Login expired or unsuccessful. Start again on your TV.</p>',
+        '<!doctype html><title>Otakase</title><p>Login expired or unsuccessful. Start again in $device.</p>',
       );
     } finally {
       await request.response.close();
@@ -275,6 +289,12 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> launch(Uri uri) async {
+    if (isDesktop) {
+      if (!await openInBrowser(uri)) {
+        throw const LoginFailure('No browser is available.');
+      }
+      return;
+    }
     try {
       await platform.invokeMethod<void>('launchUri', uri.toString());
     } on PlatformException {

@@ -22,8 +22,11 @@ class LoginAuth extends AuthService {
   LoginAuth({required super.client}) : super(storage: MemoryTokens());
   Uri? authorization;
   @override
-  Future<Uri> begin(String service, {bool tv = false}) async =>
-      authorization = await super.begin(service);
+  Future<Uri> begin(
+    String service, {
+    bool tv = false,
+    bool desktop = false,
+  }) async => authorization = await super.begin(service);
 }
 
 http.Response listResponse() => http.Response(

@@ -31,3 +31,12 @@ test('invalid state, public address, metadata host and missing response never na
 test('declined login never forwards a token or code',()=>{
   const r=run(`?error=access_denied&state=${state({})}`);assert.equal(r.navigations.length,0);assert.equal(r.elements.continue.hidden,true);
 });
+test('desktop hands the login back to the app on this computer at once',()=>{
+  const s=state({host:'127.0.0.1',port:50002});const r=run('',`#access_token=token&state=${s}`);
+  assert.deepEqual(r.order,['erase','navigate']);const url=new URL(r.navigations[0]);assert.equal(url.origin,'http://127.0.0.1:50002');assert.equal(url.pathname,'/login');assert.equal(url.searchParams.get('access_token'),'token');
+});
+test('desktop rejects privileged or missing ports',()=>{
+  for(const s of [state({host:'127.0.0.1',port:80}),state({host:'127.0.0.1'}),state({host:'127.0.0.1',port:'50002'})]){
+    const r=run(`?access_token=token&state=${s}`);assert.equal(r.navigations.length,0);assert.equal(r.elements.continue.hidden,true);
+  }
+});

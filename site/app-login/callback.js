@@ -21,8 +21,14 @@
       if (params.has(key)) transfer.set(key, params.get(key));
     }
     let target = 'otakase://login?' + transfer.toString();
-    const tv = Object.hasOwn(state, 'host');
-    if (tv) {
+    // The desktop app listens on its own machine, so the browser can hand
+    // the login straight back without a button.
+    const desktop = state.host === '127.0.0.1';
+    const tv = Object.hasOwn(state, 'host') && !desktop;
+    if (desktop) {
+      if (!Number.isInteger(state.port) || state.port < 1024 || state.port > 65535) throw new Error();
+      target = 'http://127.0.0.1:' + state.port + '/login?' + transfer.toString();
+    } else if (tv) {
       const parts = typeof state.host === 'string' ? state.host.split('.').map(Number) : [];
       const privateIP = parts.length === 4 && parts.every(p => Number.isInteger(p) && p >= 0 && p <= 255) &&
         (parts[0] === 10 || (parts[0] === 192 && parts[1] === 168) || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31));
@@ -34,6 +40,8 @@
     button.onclick = () => location.assign(target);
     message.textContent = tv
       ? 'Keep your phone and TV on the same home network. Tap below to finish sign in on your TV.'
+      : desktop
+      ? 'Returning to Otakase. You can close this tab afterwards.'
       : 'Opening Otakase. Tap below if your browser asks you to continue.';
     if (!tv) location.assign(target);
   } catch (_) {
