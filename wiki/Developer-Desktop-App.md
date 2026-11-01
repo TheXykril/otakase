@@ -89,6 +89,10 @@ The desktop pages share the phone and TV data but have their own layout, picked 
 
 Playing from the launcher grows the window to 1280×760 for the player. Code: `app/lib/desktop/launcher.dart`.
 
+### Launcher shortcut
+
+Settings > Playback > Launcher shortcut replaces the CLI's Super+Shift+A rofi binding (`app/lib/desktop/launcher_shortcut.dart`). On Hyprland (`HYPRLAND_INSTANCE_SIGNATURE` set) it writes a managed block into `~/.config/hypr/bindings.lua` (Omarchy) or `hyprland.conf`, backs the file up first, replaces an old CLI block, never takes a key another line binds, and runs `hyprctl reload`. Elsewhere it shows the command (`<app> --launcher`, the AppImage path when run from one) with steps for Windows, macOS, KDE and GNOME. A real in-app global hotkey would need a native plugin per OS; this keeps the app free of one.
+
 ## Sign-in
 
 AniList and MAL sign-in opens the default browser (`xdg-open`, `open` or `rundll32`, http/https links only). The app listens on `127.0.0.1:47613` (`AuthService.desktopLoginPort`) and marks the sign-in state `desktop: true`; the site's callback page (`site/app-login/callback.js`) sends the browser back to that fixed address. The state never carries a desktop host or port, so a crafted sign-in link cannot send the login anywhere else. TV sign-ins show a four-letter check code beside the QR code and the phone page shows the same code (`check: true` in the state), so the viewer can see the page belongs to their own TV. The callback page change only works once the site is deployed from main.
@@ -96,6 +100,20 @@ AniList and MAL sign-in opens the default browser (`xdg-open`, `open` or `rundll
 ## Player
 
 The desktop player looks like the CLI's mpv skin (see [Player Look](Developer-Player-Look)): a title line with the window buttons at the top and one floating bar at the bottom with times, a seek rail (buffered part, opening and ending stripes) and small icon buttons for back/forward 10 s, play, next episode, mute, audio and subtitles, quality and full screen. Moving the mouse shows the controls; they and the pointer hide after 5 seconds. Keys: Space play/pause, Left/Right 10 s, F full screen, M mute. Code: `app/lib/desktop/player_bar.dart`.
+
+### External mpv
+
+With **Play in my own mpv** (`ExternalMpv`, desktop only; `MpvPath` picks the program) every player route goes through `playerFor` in `app/lib/desktop/external_mpv.dart`, which opens `ExternalPlayerPage` instead of the built-in player. It resolves the stream the usual way, then starts mpv with the URL, `--referrer`, one `--http-header-fields-append` per header, matching external subtitles as `--sub-file`, `--slang`/`--alang`, the volume leveller and `--start` for resume. The viewer's mpv.conf, scripts and bindings apply.
+
+The app talks to mpv through a small Lua script it writes to a temp folder (`--script`): every 0.5 s the script prints `otakase-status <pos> <duration> <paused>` on stdout and runs any new lines the app appended to a commands file (`--script-opts=otakase-commands=<file>`). That works the same on Linux, macOS and Windows, with no IPC socket or named pipe. Position drives saving, tracker sync, skips (sent as `seek <end> absolute`), Discord sharing and watch parties; closing mpv near the end plays the next episode unless "Ask before next episode" is on. If mpv closes before playing, that source is skipped on **Play again**.
+
+## Watch parties
+
+`app/lib/data/watch_party.dart` is the CLI's synced watch party client (`internal/partysync*.go`) in Dart: `GET /v1/parties` and `POST /v1/party/{id}/rsvp` for the planned list, `GET /v1/party/{id}/ws` (dart:io `WebSocket`, bearer token) for the sync protocol in `bot/partysync.go`. The decisions (`decidePartySync`, `partyShouldSend`, `PartyClock`, `partyBackoff`, `parsePartyId`) are the CLI's, unit tested in `test/watch_party_test.dart`. It reads the player through `AppServices.playerStatus` (`anilist_id`, `episode`, `loaded`, `position_ms`, `playing`) and drives it through `playerCommand` (`pause`, `play`, `seek_to`, `episode`, `party_skip`, `next`, `stop`), so the built-in player and external mpv both work. A member whose player is on another show gets the host's show opened by `AppShell.partyOpen`. Watch with me (`DiscordWatchWithMe`) starts a party with `POST /v1/party/start` while something plays, never for 18+ shows, and ends it 90 s after playback stops. Chat, reactions and votes show over the player (`PartyOverlay` in `app/lib/ui/watch_party_page.dart`); Alt+K / Alt+N vote to skip / for the next episode.
+
+## Community extras
+
+`app/lib/data/community_extras.dart` ports the rest of the CLI's Community menu: the server club (`GET /v1/club`, cached 3 hours, shown in More while it runs), settings backup (`/v1/backup`, `Key=value` lines like the CLI config so backups move between the two; private keys and AdultContent switches stay out), the cheat code hunt (`/v1/cheat`, `/v1/cheat/answer`; ↑↑↓↓←→←→BA anywhere outside the player, ↑↑↓↓←→←→ then Select twice on a remote, or `uuddlrlrba` typed into Search) and Report a problem (multipart `POST /v1/report` with app details instead of a log). Pages: `app/lib/ui/community_extras_page.dart`.
 
 ## Packaging and updates
 
@@ -113,8 +131,8 @@ The check, download and checksum are shared with Android (`AppUpdates`); only fi
 
 Every desktop download carries mpv, so nobody installs it separately. Windows and macOS get libmpv from media_kit's bundled libraries. The AppImage copies the build machine's `libmpv.so.2` and the libraries it needs into `usr/lib/otakase/lib` (`bundle_libmpv` in `package-desktop.sh`), points them at each other with `patchelf --add-rpath '$ORIGIN'`, and `AppRun` sets `LIBMPV_LIBRARY_PATH` so media_kit loads that copy. Libraries that must match the running system (glibc, the C++ runtime, GL/Vulkan drivers, X11/Wayland, sound servers, GTK, fontconfig) come from the system. Ubuntu's libmpv pulls in a lot, so the AppImage is around 90 MB. macOS turns the app sandbox off: the app runs mpv's library, a helper process and replaces itself, none of which a sandboxed app outside the App Store may do.
 
-CI: the `desktop` job in `ci-cd.yml` builds and packs on one runner per OS. It runs for every release, or for a normal run with **desktop** ticked (macOS runners use more Actions minutes). The release job attaches all six files.
+CI: the `desktop` job in `ci-cd.yml` builds and packs on one runner per OS on every run; the Linux runner also runs `flutter analyze` and `flutter test`. The release job attaches all six files. The **Dev Build** workflow builds the same three plus the APK and puts them on the `dev` pre-release (without the update metadata, so installed apps never update to a dev build by themselves).
 
 ## Not done yet
 
-External mpv, cast, torrents, deb/rpm packages and signing (Windows, Apple) are still to do. Windows and macOS builds have not been tried on real machines.
+Cast, deb/rpm packages and signing (Windows, Apple) are still to do. `otakase://party/<id>` links (the site's Join in Otakase button) are not registered by the app yet; paste the link into Watch parties instead. Windows and macOS builds have not been tried on real machines.

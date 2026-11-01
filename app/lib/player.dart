@@ -21,6 +21,7 @@ import 'ui/components.dart';
 import 'ui/device_status.dart';
 import 'ui/seal.dart';
 import 'ui/progress_thread.dart';
+import 'ui/watch_party_page.dart';
 
 class PlayerPage extends StatefulWidget {
   const PlayerPage({
@@ -112,6 +113,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     );
     discordMeter = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!profileStopped && !busy && duration > Duration.zero) {
+        unawaited(widget.services.party.playing(anime, episode));
         widget.services.discord.observe(
           anime,
           episode,
@@ -679,6 +681,26 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         await seek(85);
       case 'seek':
         await seek(number(args['seconds']).clamp(-86400, 86400));
+      case 'seek_to':
+        // A watch party follows the host: an absolute position.
+        final to = (args['position'] as num?)?.toDouble() ?? 0;
+        await player.seek(
+          Duration(
+            milliseconds: (to * 1000).round().clamp(
+              0,
+              math.max(0, duration.inMilliseconds),
+            ),
+          ),
+        );
+      case 'party_skip':
+        // What a party voted to skip: the opening or ending when it is on,
+        // else 85 s, as in the CLI.
+        final span = active;
+        if (span != null) {
+          await player.seek(Duration(milliseconds: (span.end * 1000).round()));
+        } else {
+          await seek(85);
+        }
       case 'volume':
         await player.setVolume(number(args['volume']).clamp(0, 100).toDouble());
       case 'next':
@@ -698,6 +720,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Json remoteStatus() => {
     'has_player': true,
+    'anilist_id': anime.id,
+    'loaded': !busy && duration > Duration.zero,
+    'position_ms': player.state.position.inMilliseconds,
     'title': anime.title,
     'adult': anime.isAdult,
     'episode': episode,
@@ -917,6 +942,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
     if (key == LogicalKeyboardKey.mediaTrackNext) {
       unawaited(next());
+      return KeyEventResult.handled;
+    }
+    if (widget.services.party.active &&
+        HardwareKeyboard.instance.isAltPressed &&
+        (key == LogicalKeyboardKey.keyK || key == LogicalKeyboardKey.keyN)) {
+      widget.services.party.vote(
+        key == LogicalKeyboardKey.keyN ? 'next' : 'skip',
+      );
       return KeyEventResult.handled;
     }
     if (isDesktop && key == LogicalKeyboardKey.keyF) {
@@ -1229,6 +1262,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   autofocus: true,
                   child: Video(controller: video, controls: NoVideoControls),
                 ),
+              ),
+              PartyOverlay(
+                party: widget.services.party,
+                controls: overlay && !busy,
+                isTV: widget.isTV,
               ),
               if (busy)
                 Center(

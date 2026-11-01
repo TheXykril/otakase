@@ -1,7 +1,8 @@
 name: Dev Build
 
 # Publishes what is on main as the "dev" pre-release, for trying unreleased
-# work before a real release is cut. Run it by hand from the Actions tab.
+# work before a real release is cut: the app for Windows, macOS, Linux and
+# Android, plus the command-line binaries. Run it by hand from the Actions tab.
 # The app reads the version from the release title, so keep it
 # "Otakase <version>".
 #
@@ -24,7 +25,156 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        env:
+          BASE_VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "version must look like 26.1.0, got '$BASE_VERSION'" >&2
+            exit 1
+          fi
+          # The run number only goes up, so a newer dev build can be told
+          # from an older one.
+          echo "version=${BASE_VERSION}-dev.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+  # The desktop app, one runner per OS (Flutter cannot cross-compile it).
+  desktop:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-24.04
+          - os: macos
+            runner: macos-latest
+          - os: windows
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      OTAKASE_VERSION: ${{ needs.version.outputs.version }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.8"
+          channel: stable
+
+      - name: Linux build tools
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config \
+            libgtk-3-dev libsecret-1-dev libmpv-dev patchelf
+
+      - name: Build
+        working-directory: app
+        run: scripts/build-desktop.sh release
+
+      - name: Package
+        working-directory: app
+        run: scripts/package-desktop.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dev-app-${{ matrix.os }}
+          path: app/build/desktop-release/otakase-app-*
+          retention-days: 3
+          if-no-files-found: error
+
+  # The Android app, signed with the release key so it updates an installed
+  # copy (this workflow only ever builds main).
+  android:
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      OTAKASE_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.8"
+          channel: stable
+
+      - name: Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      - name: Signing key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; the APK is signed with the debug key"
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/otakase-release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/otakase-release.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > app/android/key.properties
+
+      - name: Build APK
+        run: |
+          app/scripts/build-apk.sh
+          mkdir -p release
+          cp app/build/app/outputs/flutter-apk/app-release.apk release/otakase-android.apk
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f app/android/key.properties "$RUNNER_TEMP/otakase-release.jks"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dev-android
+          path: release/otakase-android.apk
+          retention-days: 3
+          if-no-files-found: error
+
   dev-build:
+    needs: [version, desktop, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -53,18 +203,12 @@ jobs:
 
       - name: Set dev version
         env:
-          BASE_VERSION: ${{ inputs.version }}
+          DEV_VERSION: ${{ needs.version.outputs.version }}
         run: |
-          if ! [[ "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "version must look like 26.1.0, got '$BASE_VERSION'" >&2
-            exit 1
-          fi
           # The Build/ scripts read VERSION.txt; this change stays in the runner.
-          # The run number only goes up, so the update check (DevBuilds=true)
-          # can tell a newer dev build from an older one.
-          dev_version="${BASE_VERSION}-dev.${GITHUB_RUN_NUMBER}"
-          echo "$dev_version" > VERSION.txt
-          echo "DEV_VERSION=$dev_version" >> "$GITHUB_ENV"
+          # The update check (DevBuilds=true) compares these versions.
+          echo "$DEV_VERSION" > VERSION.txt
+          echo "DEV_VERSION=$DEV_VERSION" >> "$GITHUB_ENV"
 
       - name: Build binaries
         run: |
@@ -74,6 +218,17 @@ jobs:
           ./Build/buildwindows-x86_64
           mkdir -p dist
           mv otakase-linux-x86_64 otakase-linux-arm64 otakase-macos-x86_64 otakase-macos-arm64 otakase-windows-x86_64.exe dist/
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dev-*
+          path: dist
+          merge-multiple: true
+
+      # The update metadata belongs to real releases; the dev release only
+      # offers the files.
+      - name: Drop app update metadata
+        run: rm -f dist/*.json && ls -l dist
 
       - name: Replace the dev release
         env:
@@ -86,7 +241,9 @@ jobs:
 
           Not a release: it can be broken, and it is replaced by the next dev build. The app offers it only with \`DevBuilds=true\` in the config.
 
-          Windows: this is the bare \`.exe\` without the installer, so it needs \`mpv\` on your PATH.
+          The app: \`otakase-app-windows-setup.exe\` (Windows), \`otakase-app-macos.zip\` (macOS, unsigned), \`otakase-app-linux-x86_64.AppImage\` (Linux) and \`otakase-android.apk\` (phone and Android TV).
+
+          Command line (being retired): the Windows one is the bare \`.exe\` without the installer, so it needs \`mpv\` on your PATH.
           EOF
           gh release create dev dist/* \
             --target "$GITHUB_SHA" \

@@ -56,6 +56,9 @@ const settingDefaults = <String, dynamic>{
   'SyncAniListMAL': true,
   'DiscordShareWatching': false,
   'DiscordShareRatings': 'ask',
+  'DiscordWatchWithMe': false,
+  'ExternalMpv': false,
+  'MpvPath': 'mpv',
 };
 
 class AppStore extends ChangeNotifier {
