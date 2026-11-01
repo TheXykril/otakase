@@ -65,6 +65,12 @@ Future<void> toggleMaximized() async {
   }
 }
 
+/// Turns full screen on or off and returns the new state.
+Future<bool> setDesktopFullScreen(bool on) async {
+  await windowManager.setFullScreen(on);
+  return on;
+}
+
 /// Minimise, maximise and close for Windows and Linux. macOS uses its own
 /// buttons, so this is empty there.
 class WindowButtons extends StatefulWidget {

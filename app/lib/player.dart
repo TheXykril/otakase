@@ -11,6 +11,8 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'core.dart';
 import 'data/models.dart';
 import 'desktop/desktop_core.dart';
+import 'desktop/player_bar.dart';
+import 'desktop/window_frame.dart';
 import 'data/store.dart';
 import 'data/synced_resume.dart';
 import 'services.dart';
@@ -61,6 +63,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Timer? hideTimer, saveTimer, nextTimer;
   int copy = 0, generation = 0, countdownSeconds = 0;
   bool overlay = true,
+      fullscreen = false,
       busy = true,
       panelOpen = false,
       skipRequested = false,
@@ -884,6 +887,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       unawaited(next());
       return KeyEventResult.handled;
     }
+    if (isDesktop && key == LogicalKeyboardKey.keyF) {
+      unawaited(toggleFullscreen());
+      return KeyEventResult.handled;
+    }
+    if (isDesktop && key == LogicalKeyboardKey.keyM) {
+      toggleMute();
+      return KeyEventResult.handled;
+    }
     if (key == LogicalKeyboardKey.mediaRewind) {
       unawaited(seek(-10));
       return KeyEventResult.handled;
@@ -939,6 +950,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     for (final subscription in subscriptions) {
       unawaited(subscription.cancel());
     }
+    if (fullscreen) unawaited(setDesktopFullScreen(false));
     surface.dispose();
     playFocus.dispose();
     skipFocus.dispose();
@@ -982,6 +994,164 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await player.stop();
     await widget.services.core.stopPlayback();
   }
+
+  double lastVolume = 100;
+
+  void toggleMute() {
+    final volume = player.state.volume;
+    if (volume > 0) lastVolume = volume;
+    unawaited(player.setVolume(volume > 0 ? 0 : lastVolume));
+    showControls();
+  }
+
+  Future<void> toggleFullscreen() async {
+    final on = await setDesktopFullScreen(!fullscreen);
+    if (mounted) setState(() => fullscreen = on);
+    showControls();
+  }
+
+  /// The desktop controls: the CLI mpv skin look, with the skip button and
+  /// next-episode card above the bar.
+  Widget desktopControls(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      DesktopPlayerBar(
+        title: anime.title,
+        subtitle:
+            'Ep $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
+        position: position,
+        duration: duration,
+        buffered: player.state.buffer,
+        playing: player.state.playing,
+        buffering: player.state.buffering,
+        silent: player.state.volume == 0,
+        fullscreen: fullscreen,
+        trackLabel: source?.mode.toUpperCase() ?? widget.mode.toUpperCase(),
+        stripes: spans,
+        playFocus: playFocus,
+        onBack: () => Navigator.pop(context),
+        onPlayPause: () {
+          unawaited(player.playOrPause());
+          showControls();
+        },
+        onSeekBy: (seconds) => unawaited(seek(seconds)),
+        onSeekStart: (_) {
+          scrubbing = true;
+          hideTimer?.cancel();
+        },
+        onSeekChanged: (v) =>
+            setState(() => position = Duration(milliseconds: v.round())),
+        onSeekEnd: (v) {
+          scrubbing = false;
+          unawaited(player.seek(Duration(milliseconds: v.round())));
+          showControls();
+        },
+        onNext: canNext ? () => unawaited(next()) : null,
+        onMute: toggleMute,
+        onTracks: () => unawaited(trackPanel()),
+        onQuality: () => unawaited(qualityPanel()),
+        onFullscreen: () => unawaited(toggleFullscreen()),
+      ),
+      Positioned(
+        right: 40,
+        bottom: 170,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (active != null) skipButton(),
+            if (countdownSeconds > 0) nextCard(context),
+          ],
+        ),
+      ),
+    ],
+  );
+
+  Widget skipButton() => Align(
+    alignment: Alignment.centerRight,
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: AppButton(
+        label: active!.type == 'op' ? 'Skip opening' : active!.label,
+        focusNode: skipFocus,
+        onPressed: () {
+          unawaited(
+            player.seek(Duration(milliseconds: (active!.end * 1000).round())),
+          );
+          playFocus.requestFocus();
+          showControls();
+        },
+        isTV: widget.isTV,
+      ),
+    ),
+  );
+
+  Widget nextCard(BuildContext context) => Align(
+    alignment: Alignment.centerRight,
+    child: Container(
+      width: 500,
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: panel,
+        border: Border.all(color: line),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: CoverImage(anime.cover, width: 54, height: 81),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Next · Episode ${episode + 1}',
+                  style: uiStyle(context, weight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  widget.services.store.flag('NextEpisodePrompt')
+                      ? 'Continue the story?'
+                      : 'Playing in $countdownSeconds seconds',
+                  style: uiStyle(context),
+                ),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  minHeight: 2,
+                  value: countdownSeconds / 10,
+                  color: shu,
+                  backgroundColor: line,
+                ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    AppButton(
+                      label: 'Play next',
+                      onPressed: () => next(),
+                      isTV: widget.isTV,
+                    ),
+                    AppButton(
+                      label: 'Cancel',
+                      onPressed: () {
+                        nextTimer?.cancel();
+                        nextCancelled = true;
+                        setState(() => countdownSeconds = 0);
+                      },
+                      isTV: widget.isTV,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => PopScope(
@@ -1059,7 +1229,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
-              if (overlay && !busy && error.isEmpty)
+              if (overlay && !busy && error.isEmpty && isDesktop)
+                desktopControls(context),
+              if (overlay && !busy && error.isEmpty && !isDesktop)
                 SafeArea(
                   child: Column(
                     children: [
@@ -1149,114 +1321,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           ),
                         ),
                       ),
-                      if (active != null)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: AppButton(
-                              label: active!.type == 'op'
-                                  ? 'Skip opening'
-                                  : active!.label,
-                              focusNode: skipFocus,
-                              onPressed: () {
-                                unawaited(
-                                  player.seek(
-                                    Duration(
-                                      milliseconds: (active!.end * 1000)
-                                          .round(),
-                                    ),
-                                  ),
-                                );
-                                playFocus.requestFocus();
-                                showControls();
-                              },
-                              isTV: widget.isTV,
-                            ),
-                          ),
-                        ),
-                      if (countdownSeconds > 0)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Container(
-                            width: 500,
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 8,
-                            ),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: panel,
-                              border: Border.all(color: line),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: CoverImage(
-                                    anime.cover,
-                                    width: 54,
-                                    height: 81,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Next · Episode ${episode + 1}',
-                                        style: uiStyle(
-                                          context,
-                                          weight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        widget.services.store.flag(
-                                              'NextEpisodePrompt',
-                                            )
-                                            ? 'Continue the story?'
-                                            : 'Playing in $countdownSeconds seconds',
-                                        style: uiStyle(context),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      LinearProgressIndicator(
-                                        minHeight: 2,
-                                        value: countdownSeconds / 10,
-                                        color: shu,
-                                        backgroundColor: line,
-                                      ),
-                                      Wrap(
-                                        spacing: 8,
-                                        children: [
-                                          AppButton(
-                                            label: 'Play next',
-                                            onPressed: () => next(),
-                                            isTV: widget.isTV,
-                                          ),
-                                          AppButton(
-                                            label: 'Cancel',
-                                            onPressed: () {
-                                              nextTimer?.cancel();
-                                              nextCancelled = true;
-                                              setState(
-                                                () => countdownSeconds = 0,
-                                              );
-                                            },
-                                            isTV: widget.isTV,
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                      if (active != null) skipButton(),
+                      if (countdownSeconds > 0) nextCard(context),
                       Container(
                         decoration: const BoxDecoration(
                           gradient: LinearGradient(
