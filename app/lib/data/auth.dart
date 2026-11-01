@@ -409,6 +409,8 @@ class AuthService extends ChangeNotifier {
       return a.token;
     }
     if (service != 'MAL' || a.refresh.isEmpty) {
+      // Callers may ask during a build; tell listeners after it.
+      await Future<void>.value();
       notifyListeners();
       throw const LoginFailure('Login expired. Sign in again from Accounts.');
     }

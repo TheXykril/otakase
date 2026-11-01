@@ -65,20 +65,114 @@ class AppLayout extends InheritedWidget {
 // Android TVs report different densities for the same output resolution.
 // A 1600 x 900 canvas gives every 16:9 TV the same compact composition.
 // Scale the whole Navigator so routes, focus frames and hit testing agree.
-class TVViewport extends StatelessWidget {
+class TVViewport extends StatefulWidget {
   const TVViewport({super.key, required this.child});
   final Widget child;
   static final traversal = RemoteTraversalPolicy();
   @override
+  State<TVViewport> createState() => _TVViewportState();
+}
+
+class _TVViewportState extends State<TVViewport> {
+  bool checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addListener(focusChanged);
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeListener(focusChanged);
+    super.dispose();
+  }
+
+  // A remote has no pointer to pick a control with. When focus ends up
+  // parked on a scope, or behind the page on top (a page that opens with
+  // nothing autofocused, or a focused button that disappears), move it to a
+  // control on the top page once autofocus and the page's own requests have
+  // had their turn.
+  void focusChanged() {
+    if (checking || strandedIn() == null) return;
+    checking = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      scheduleMicrotask(() {
+        checking = false;
+        if (!mounted) return;
+        final scope = strandedIn();
+        if (scope != null) landFocus(scope);
+      });
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  /// The scope focus should move into, or null when focus is on a control of
+  /// the top page.
+  static FocusScopeNode? strandedIn() {
+    final primary = FocusManager.instance.primaryFocus;
+    final context = primary?.context;
+    if (primary == null || context == null || !context.mounted) return null;
+    final navigator = Navigator.maybeOf(context, rootNavigator: true);
+    if (navigator == null) return null;
+    Route<dynamic>? top;
+    navigator.popUntil((route) {
+      top = route;
+      return true;
+    });
+    final page = top is ModalRoute ? (top as ModalRoute).subtreeContext : null;
+    if (page == null || !page.mounted) return null;
+    final scope = FocusScope.of(page);
+    final inside = primary == scope || primary.ancestors.contains(scope);
+    if (inside && primary is! FocusScopeNode) return null;
+    if (inside && primary is FocusScopeNode && hasControl(primary)) {
+      return primary;
+    }
+    return hasControl(scope) ? scope : null;
+  }
+
+  static Iterable<FocusNode> controls(FocusScopeNode scope) =>
+      scope.traversalDescendants.where(
+        (node) =>
+            node is! FocusScopeNode &&
+            node.context != null &&
+            node.canRequestFocus &&
+            !node.skipTraversal &&
+            !node.rect.isEmpty,
+      );
+
+  static bool hasControl(FocusScopeNode scope) => controls(scope).isNotEmpty;
+
+  /// Focuses the control nearest the top left of the visible page.
+  static void landFocus(FocusScopeNode scope) {
+    final remembered = scope.focusedChild;
+    if (remembered != null &&
+        remembered is! FocusScopeNode &&
+        remembered.canRequestFocus &&
+        remembered.context != null) {
+      remembered.requestFocus();
+      return;
+    }
+    final all = controls(scope).toList();
+    final visible = all.where((node) => node.rect.bottom > 0).toList();
+    final pool = visible.isEmpty ? all : visible;
+    pool.sort((a, b) {
+      final row = a.rect.top.round().compareTo(b.rect.top.round());
+      return row != 0 ? row : a.rect.left.compareTo(b.rect.left);
+    });
+    pool.first.requestFocus();
+  }
+
+  @override
   Widget build(BuildContext context) => FocusTraversalGroup(
-    policy: traversal,
+    policy: TVViewport.traversal,
     child: LayoutBuilder(
       builder: (context, constraints) {
         final scale = math.min(
           constraints.maxWidth / 1600,
           constraints.maxHeight / 900,
         );
-        if (!scale.isFinite || scale <= 0) return child;
+        if (!scale.isFinite || scale <= 0) return widget.child;
         final size = Size(
           constraints.maxWidth / scale,
           constraints.maxHeight / scale,
@@ -99,7 +193,7 @@ class TVViewport extends StatelessWidget {
                 viewInsets: media.viewInsets / scale,
                 systemGestureInsets: media.systemGestureInsets / scale,
               ),
-              child: child,
+              child: widget.child,
             ),
           ),
         );
