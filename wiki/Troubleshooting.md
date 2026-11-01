@@ -1,51 +1,35 @@
 # Troubleshooting
 
-For casting-specific issues, see [Casting Problems](Casting-Problems) instead.
+## Nothing is found for a show, or playback never starts
 
-## Nothing is found for a show
+Otakase tries the sources one after another and remembers which one worked
+for each show. Streaming sites go down or change all the time, so when nothing
+works it is usually them. **Diagnostics** (in More or Settings) shows which
+sources answer right now; the Otakase Discord bot's `/provider-status` shows
+the same from its side.
 
-Titles differ between your tracker and the sources otakase searches. Use the
-**Remap** action (`^r` in the terminal list, or a menu entry under rofi) to
-correct a bad match permanently for that show.
-
-## Playback never starts (local, not casting)
-
-Run:
-
-```bash
-otakase -provider-status
-```
-
-This checks the sources and reports how many are actually responding.
-Streaming hosts go down or change constantly, and it's usually not otakase's
-fault. Also check `otakase-debug.log`, and raise `MpvPlaybackStartTimeout` if
-your connection is slow to open a stream.
-
-## The rofi menus look wrong
-
-Themes are rewritten at every launch, so a stale or broken theme fixes itself
-on the next run. If it's still wrong, confirm `rofi` is installed and
-`RofiSelection=true` in your config.
+When no site has an episode, Otakase can play it from a torrent while it
+downloads. That needs **Torrent sources** on under Settings > Playback, and
+**Torrents on mobile data** if you are not on Wi-Fi.
 
 ## Progress didn't update on AniList / MyAnimeList
 
-Tracker writes are paced to stay inside API rate limits and happen in the
-background, so they may take a moment. Check `otakase-debug.log` for the write
-attempt, and confirm `TrackingRemote` is set to what you expect (`anilist`,
-`myanimelist`, or `both`).
+Writes to the trackers are paced to stay inside their limits and happen in the
+background, so they can take a moment. Check that the account is still signed
+in under Accounts: a tracker that rejects the sign-in shows it there, and
+signing in again fixes it.
 
-## Where to find things
+## The TV can't finish signing in
 
-| What | Where |
-|---|---|
-| Debug log | `<StoragePath>/otakase-debug.log` |
-| Watch history | `<StoragePath>/history.txt` |
-| Config file | edit with `otakase -e` |
+Phone and TV need to be on the same home network, and guest Wi-Fi often keeps
+devices apart. Check that the code on the phone matches the one on the TV.
 
-`StoragePath` is set in your config; the default is documented in the
-[README](https://github.com/TheXykril/otakase#readme).
+## The desktop app doesn't open on macOS
+
+It is not signed by Apple yet. Right-click Otakase in Applications and choose
+**Open** the first time.
 
 ---
 
-Still stuck? [Open an issue](https://github.com/TheXykril/otakase/issues) with
-the relevant lines from `otakase-debug.log`.
+Still stuck? Ask on [Discord](https://otakase.xyverion.com/discord/) or
+[open an issue](https://github.com/TheXykril/otakase/issues).
