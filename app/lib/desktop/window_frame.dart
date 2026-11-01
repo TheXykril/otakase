@@ -58,6 +58,7 @@ class WindowDragArea extends StatelessWidget {
 }
 
 Future<void> toggleMaximized() async {
+  if (tilingWindowManager) return;
   if (await windowManager.isMaximized()) {
     await windowManager.unmaximize();
   } else {
@@ -71,7 +72,50 @@ Future<bool> setDesktopFullScreen(bool on) async {
   return on;
 }
 
-/// Minimise, maximise and close for Windows and Linux. macOS uses its own
+/// Tiling window managers place every window themselves and have no
+/// minimised state, so minimise and maximise do nothing there. Spotted from
+/// the environment the compositor sets for its apps.
+bool isTilingWindowManager(Map<String, String> env) {
+  const sockets = [
+    'HYPRLAND_INSTANCE_SIGNATURE',
+    'SWAYSOCK',
+    'I3SOCK',
+    'NIRI_SOCKET',
+  ];
+  if (sockets.any(env.containsKey)) return true;
+  const tiling = {
+    'hyprland',
+    'sway',
+    'i3',
+    'niri',
+    'river',
+    'bspwm',
+    'dwm',
+    'qtile',
+    'xmonad',
+    'herbstluftwm',
+    'awesome',
+    'leftwm',
+    'spectrwm',
+  };
+  final desktops = [
+    ...(env['XDG_CURRENT_DESKTOP'] ?? '').split(':'),
+    env['XDG_SESSION_DESKTOP'] ?? '',
+    env['DESKTOP_SESSION'] ?? '',
+  ].map((d) => d.trim().toLowerCase());
+  return desktops.any(tiling.contains);
+}
+
+/// Set by tests in place of reading the real environment.
+@visibleForTesting
+bool? debugTilingOverride;
+
+bool get tilingWindowManager =>
+    debugTilingOverride ??
+    (Platform.isLinux && isTilingWindowManager(Platform.environment));
+
+/// Minimise, maximise and close for Windows and Linux. Tiling window
+/// managers only get close. macOS uses its own
 /// buttons, so this is empty there.
 class WindowButtons extends StatefulWidget {
   const WindowButtons({super.key, this.onClose});
@@ -118,21 +162,24 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
   @override
   Widget build(BuildContext context) {
     if (!isDesktop || Platform.isMacOS) return const SizedBox.shrink();
+    final tiling = tilingWindowManager;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _WindowButton(
-          key: const Key('window-minimize'),
-          icon: LucideIcons.minus,
-          tooltip: 'Minimize',
-          onPressed: () => unawaited(windowManager.minimize()),
-        ),
-        _WindowButton(
-          key: const Key('window-maximize'),
-          icon: maximized ? LucideIcons.copy : LucideIcons.square,
-          tooltip: maximized ? 'Restore' : 'Maximize',
-          onPressed: () => unawaited(toggleMaximized()),
-        ),
+        if (!tiling)
+          _WindowButton(
+            key: const Key('window-minimize'),
+            icon: LucideIcons.minus,
+            tooltip: 'Minimize',
+            onPressed: () => unawaited(windowManager.minimize()),
+          ),
+        if (!tiling)
+          _WindowButton(
+            key: const Key('window-maximize'),
+            icon: maximized ? LucideIcons.copy : LucideIcons.square,
+            tooltip: maximized ? 'Restore' : 'Maximize',
+            onPressed: () => unawaited(toggleMaximized()),
+          ),
         _WindowButton(
           key: const Key('window-close'),
           icon: LucideIcons.x,

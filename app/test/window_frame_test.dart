@@ -11,6 +11,7 @@ void main() {
   setUp(() {
     calls.clear();
     maximized = false;
+    debugTilingOverride = false;
     debugDesktopOverride = true;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('window_manager'), (
@@ -31,6 +32,7 @@ void main() {
 
   tearDown(() {
     debugDesktopOverride = null;
+    debugTilingOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
   });
@@ -60,6 +62,29 @@ void main() {
     await tester.tap(find.byKey(const Key('window-close')));
     expect(closed, 1);
     expect(calls, isNot(contains('close')));
+  });
+
+  test('tiling window managers are spotted from the environment', () {
+    expect(isTilingWindowManager({'HYPRLAND_INSTANCE_SIGNATURE': 'x'}), isTrue);
+    expect(isTilingWindowManager({'SWAYSOCK': '/run/sway'}), isTrue);
+    expect(isTilingWindowManager({'XDG_CURRENT_DESKTOP': 'niri'}), isTrue);
+    expect(isTilingWindowManager({'DESKTOP_SESSION': 'i3'}), isTrue);
+    expect(isTilingWindowManager({'XDG_CURRENT_DESKTOP': 'KDE'}), isFalse);
+    expect(
+      isTilingWindowManager({'XDG_CURRENT_DESKTOP': 'ubuntu:GNOME'}),
+      isFalse,
+    );
+    expect(isTilingWindowManager({}), isFalse);
+  });
+
+  testWidgets('tiling window managers only get close', (tester) async {
+    debugTilingOverride = true;
+    addTearDown(() => debugTilingOverride = null);
+    await tester.pumpWidget(frame());
+    await tester.pump();
+    expect(find.byKey(const Key('window-minimize')), findsNothing);
+    expect(find.byKey(const Key('window-maximize')), findsNothing);
+    expect(find.byKey(const Key('window-close')), findsOneWidget);
   });
 
   testWidgets('dragging empty space moves the window', (tester) async {
