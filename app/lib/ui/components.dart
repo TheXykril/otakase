@@ -1452,6 +1452,20 @@ class _SplitFrame extends CustomPainter {
   bool shouldRepaint(_SplitFrame old) => old.radius != radius || old.tv != tv;
 }
 
+/// The card width that fills a row of [available] width exactly, with
+/// [padding] at both ends and [gap] between cards no narrower than
+/// [minWidth], so a desktop shelf never ends in empty space.
+double fittedCardWidth(
+  double available,
+  double minWidth, {
+  required double padding,
+  required double gap,
+}) {
+  final room = available - padding * 2;
+  final count = math.max(1, ((room + gap) / (minWidth + gap)).floor());
+  return (room - gap * (count - 1)) / count;
+}
+
 class PosterRow extends StatefulWidget {
   const PosterRow({
     super.key,
@@ -1486,9 +1500,34 @@ class _PosterRowState extends State<PosterRow> {
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) return const SizedBox.shrink();
-    final width = widget.landscape
-        ? (widget.isTV ? 340.0 : 264.0)
-        : (widget.isTV ? 143.0 : 132.0);
+    if (isDesktop) {
+      // Desktop rows size the cards so they fill the window edge to edge.
+      return LayoutBuilder(
+        builder: (context, box) => row(
+          context,
+          fittedCardWidth(
+            box.maxWidth,
+            widget.landscape ? 380 : 200,
+            padding: widget.isTV ? 41 : 13,
+            gap: widget.isTV ? 26 : 12,
+          ),
+        ),
+      );
+    }
+    return row(
+      context,
+      widget.landscape
+          ? (widget.isTV ? 340.0 : 264.0)
+          : (widget.isTV ? 143.0 : 132.0),
+    );
+  }
+
+  Widget row(BuildContext context, double width) {
+    final artHeight = widget.landscape
+        ? width * 9 / 16
+        : isDesktop
+        ? width * 194 / 143
+        : (widget.isTV ? 194.0 : 184.0);
     return Padding(
       key: ValueKey('section-${widget.title}'),
       padding: const EdgeInsets.only(top: 28, bottom: 4),
@@ -1507,9 +1546,7 @@ class _PosterRowState extends State<PosterRow> {
           const SizedBox(height: 14),
           SizedBox(
             height:
-                (widget.landscape
-                    ? width * 9 / 16
-                    : (widget.isTV ? 194 : 184)) +
+                artHeight +
                 (widget.isTV ? 108 : 120) *
                     MediaQuery.textScalerOf(context).scale(1),
             child: RemoteFocusRow(

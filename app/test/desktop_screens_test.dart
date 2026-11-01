@@ -42,12 +42,44 @@ const story = Anime(
   score: 9.2,
 );
 
+/// More shows for fuller renders, read from gallery.json next to the art
+/// (index, title, genres, studio, score; c<i>.jpg covers, b<i>.jpg banners).
+final gallery = <Anime>[];
+
+void loadGallery() {
+  final file = File('$artwork/gallery.json');
+  if (artwork.isEmpty || !file.existsSync()) return;
+  for (final item in jsonDecode(file.readAsStringSync()) as List) {
+    final i = item['i'] as int;
+    gallery.add(
+      Anime(
+        id: 900000 + i,
+        title: item['t'] as String,
+        cover: 'https://fixture.invalid/c$i.jpg',
+        coverLarge: 'https://fixture.invalid/c$i.jpg',
+        banner: item['banner'] == true ? 'https://fixture.invalid/b$i.jpg' : '',
+        format: item['f'] as String? ?? 'TV',
+        year: item['y'] as int? ?? 0,
+        episodes: item['ep'] as int? ?? 12,
+        duration: 24,
+        score: ((item['score'] as int?) ?? 0) / 10,
+        genres: (item['g'] as List).cast<String>(),
+        studio: item['studio'] as String? ?? '',
+        description: 'A new season picks up right where the last one ended, with old rivals and new friends.',
+      ),
+    );
+  }
+}
+
 class ScreenCatalog extends Catalog {
   @override
   Future<HomeData> home({required bool adult}) async => HomeData(
-    trending: [story],
-    season: [story],
-    recent: [Airing(story, 8, DateTime(2026, 10, 28, 19, 30))],
+    trending: [story, ...gallery.where((a) => a.banner.isNotEmpty)],
+    season: [...gallery.reversed, story],
+    recent: [
+      Airing(story, 8, DateTime(2026, 10, 28, 19, 30)),
+      for (final a in gallery.take(12)) Airing(a, 5, DateTime(2026, 10, 28)),
+    ],
   );
   @override
   Future<CatalogPage> search(
@@ -66,13 +98,42 @@ class ScreenCatalog extends Catalog {
     'Fantasy',
   ];
   @override
-  Future<Anime> detail(Anime anime, {required bool adult}) async => story;
+  Future<Anime> detail(Anime anime, {required bool adult}) async => Anime(
+    id: story.id,
+    malId: story.malId,
+    title: story.title,
+    nativeTitle: '葬送のフリーレン',
+    titles: const ['Sousou no Frieren', '葬送のフリーレン'],
+    cover: story.cover,
+    coverLarge: story.coverLarge,
+    banner: story.banner,
+    description: story.description,
+    format: 'TV',
+    status: 'FINISHED',
+    year: 2023,
+    episodes: 28,
+    duration: 24,
+    score: 9.2,
+    genres: const ['Adventure', 'Drama', 'Fantasy'],
+    studio: 'Madhouse',
+    related: gallery.take(3).toList(),
+    recommended: gallery.skip(3).toList(),
+  );
   @override
   Future<List<Airing>> schedule(
     DateTime day, {
     required bool adult,
     int page = 1,
-  }) async => [Airing(story, 8, day)];
+  }) async => [
+    Airing(story, 8, DateTime(day.year, day.month, day.day, 17, 30)),
+    for (var i = 0; i < gallery.length; i++)
+      if ((i + day.weekday) % 6 == 0)
+        Airing(
+          gallery[i],
+          2 + i % 11,
+          DateTime(day.year, day.month, day.day, 19 + i % 4, i.isEven ? 0 : 30),
+        ),
+  ];
 }
 
 final images = <String, ui.Image>{};
@@ -108,6 +169,12 @@ Future<AppServices> services() async {
   SharedPreferences.setMockInitialValues({});
   final store = AppStore(await SharedPreferences.getInstance());
   await store.progress(story, 8, 426, 1440);
+  final watching = gallery.where((a) => a.banner.isNotEmpty).take(4);
+  var n = 0;
+  for (final a in watching) {
+    n++;
+    await store.progress(a, 3 + n * 7, 200 + n * 180, 1440);
+  }
   return AppServices(
     catalog: ScreenCatalog(),
     store: store,
@@ -149,7 +216,7 @@ void setUpScreen(WidgetTester tester, Size size) {
   );
   messenger.setMockMethodCallHandler(
     const MethodChannel('otakase/device'),
-    (_) async => {'use24Hour': true},
+    (call) async => call.method == 'status' ? {'use24Hour': true} : null,
   );
 }
 
@@ -166,7 +233,15 @@ void main() {
   setUpAll(() async {
     if (output.isNotEmpty) await Directory(output).create(recursive: true);
     await fonts();
-    for (final name in ['cover.jpg', 'banner.jpg']) {
+    loadGallery();
+    final names = ['cover.jpg', 'banner.jpg'];
+    if (gallery.isNotEmpty) {
+      for (final f in Directory(artwork).listSync()) {
+        final name = f.uri.pathSegments.last;
+        if (name.endsWith('.jpg') && !names.contains(name)) names.add(name);
+      }
+    }
+    for (final name in names) {
       final codec = await ui.instantiateImageCodec(
         artwork.isNotEmpty
             ? File('$artwork/$name').readAsBytesSync()
@@ -178,7 +253,7 @@ void main() {
     }
   });
 
-  for (final screen in ['home', 'search', 'schedule', 'show']) {
+  for (final screen in ['home', 'search', 'schedule', 'show', 'settings']) {
     testWidgets('desktop render: $screen', (tester) async {
       setUpScreen(tester, const Size(1440, 900));
       final app = await services();
@@ -188,15 +263,29 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('nav-Search')));
         await tester.pumpAndSettle();
         await tester.enterText(find.byType(TextField).first, 'frieren');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('search-filters')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('TV').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Fantasy').last);
+        await tester.pumpAndSettle();
+        await capture(tester, 'search-filters');
+        await tester.tapAt(const Offset(200, 600));
+      } else if (screen == 'settings') {
+        await tester.tap(find.byKey(const ValueKey('nav-More')));
       } else if (screen == 'schedule') {
         await tester.tap(find.byKey(const ValueKey('nav-Schedule')));
       } else if (screen == 'show') {
         unawaited(
-          Navigator.of(tester.element(find.text('Trending'))).push(
-            OtakaseRoute<void>(
-              builder: (_) => ShowPage(services: app, anime: story, isTV: true),
-            ),
-          ),
+          tester
+              .state<NavigatorState>(find.byType(Navigator).first)
+              .push(
+                OtakaseRoute<void>(
+                  builder: (_) =>
+                      ShowPage(services: app, anime: story, isTV: true),
+                ),
+              ),
         );
       }
       await capture(tester, screen);

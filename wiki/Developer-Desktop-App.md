@@ -57,6 +57,8 @@ cd app && OTAKASE_CORE=/tmp/otakase-core flutter run -d linux
 
 `flutter test` runs on a desktop host but exercises the Android paths: `isDesktop` is false under `flutter test` unless a test sets `debugDesktopOverride`. `test/desktop_core_test.dart` checks the app side against a fake helper; `go test ./mobilecore/stdio` checks the server, including one request through the real core.
 
+To look at the desktop pages without a desktop, `flutter test test/desktop_screens_test.dart --update-goldens --dart-define=DESKTOP_SCREENSHOTS=<out dir> --dart-define=SCREENSHOT_ART=<art dir>` writes PNGs of each page. The art folder needs `cover.jpg` and `banner.jpg`; for fuller pages add `gallery.json` (a list of `{i, t, g, studio, score, f, y, ep, banner}`) with `c<i>.jpg` covers and `b<i>.jpg` banners. The images stay out of Git.
+
 ## Window
 
 There is no system title bar on any OS (`window_manager`, `TitleBarStyle.hidden`; on Linux the GTK runner turns decorations off). The app draws its own top bar: the empty part of a page header moves the window and a double click maximises it (`WindowDragArea`), minimise, maximise and close sit at the top right (`WindowButtons`; tiling window managers such as Hyprland, sway, i3 and niri, spotted from their environment variables, only get close because they have no minimised or maximised state), and a 10 px strip along the top edge moves the window on every page. macOS keeps its traffic-light buttons over the top-left corner. Esc goes back one page. Code: `app/lib/desktop/window_frame.dart`.
@@ -66,6 +68,16 @@ The top bar has the tabs in the middle on every system. Windows and Linux put th
 There is no full-width bar behind the top bar. Each group sits on its own soft dark island instead (`HeaderIsland` in `app/lib/desktop/header_island.dart`): the logo and the window buttons grow out of the top corners, and the tabs hang from the middle of the top edge. The islands are sized to what they hold, curve into the top edge, and have blurred edges so they fade into the art with no hard line.
 
 The desktop window uses the wide TV layout, drawn on a 1920×1080 canvas and scaled to the window (never below 0.7), with a Schedule tab next to Home, Search and More. The mouse works everywhere; arrow keys and Enter still work too.
+
+## Pages
+
+The desktop pages share the phone and TV data but have their own layout, picked with `isDesktop`:
+
+- **Home** (`desktop/desktop_home.dart`): a big hero that starts with the shows you are watching and then trending picks, changing every 9 seconds unless the pointer rests on it; wide Continue watching cards (up to four across, fewer shows stretch to fill the row); shelves whose cards are sized so the row always ends at the window edge (`fittedCardWidth` in `ui/components.dart`).
+- **Show page**: cover and details over the banner, Sub/Dub beside the play button, an episode thumbnail grid in blocks of 50, and an info sidebar with studio, format, status, length, other titles and related shows. Pages pushed over the tabs use the same top bar (`DesktopTopBar` in `desktop/top_bar.dart`) with a back button by the logo.
+- **Search**: no page heading; Filters opens a menu under the button that applies each choice at once, and chosen filters show as chips with a × under the search field.
+- **Schedule**: the whole week in seven columns, shows on your list or in your history outlined, My list only / Everything, and arrows for other weeks.
+- **More**: settings sections in a sidebar with the chosen section beside it as grouped cards (`SettingsPage(embedded: true)`); Discord, Watch rooms and the rest still open on their own.
 
 ## Launcher
 
