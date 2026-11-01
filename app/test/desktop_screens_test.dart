@@ -16,6 +16,7 @@ import 'package:otakase/ui/show_page.dart';
 import 'package:otakase/desktop/desktop_core.dart';
 import 'package:otakase/desktop/launcher.dart';
 import 'package:otakase/desktop/player_bar.dart';
+import 'package:otakase/desktop/window_frame.dart';
 import 'package:otakase/ui/components.dart';
 import 'package:otakase/services.dart';
 import 'package:otakase/data/catalog.dart';
@@ -199,6 +200,19 @@ void main() {
         );
       }
       await capture(tester, screen);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  for (final style in WindowButtonStyle.values) {
+    testWidgets('desktop render: top bar ${style.name}', (tester) async {
+      setUpScreen(tester, const Size(1440, 900));
+      debugWindowButtonStyle = style;
+      addTearDown(() => debugWindowButtonStyle = null);
+      await tester.pumpWidget(
+        art(OtakaseApp(services: await services(), isTV: true)),
+      );
+      await capture(tester, 'home-${style.name}');
       await tester.pumpWidget(const SizedBox());
     });
   }

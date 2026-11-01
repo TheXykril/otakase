@@ -478,16 +478,65 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget header() => widget.isTV
+  /// Desktop top bar: tabs in the middle on every system. Windows and Linux
+  /// put the logo on the left and the window buttons on the right; macOS has
+  /// its own buttons on the left, so the logo moves to the right there. A
+  /// future account button goes beside the window buttons.
+  Widget desktopHeader() {
+    final mac = Platform.isMacOS;
+    final flush = windowButtonStyle == WindowButtonStyle.windows;
+    return SizedBox(
+      height: 84,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                mac ? windowButtonsLeading + 24 : 48,
+                18,
+                24,
+                12,
+              ),
+              child: Row(
+                children: [
+                  if (!mac) const Brand(),
+                  const Spacer(),
+                  if (mac) const Brand() else if (!flush) const WindowButtons(),
+                ],
+              ),
+            ),
+          ),
+          Positioned.fill(
+            top: 18,
+            bottom: 12,
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < rootTabs.length; i++) ...[
+                    nav(i),
+                    if (i < rootTabs.length - 1) const SizedBox(width: 14),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (flush) const Positioned(top: 0, right: 0, child: WindowButtons()),
+        ],
+      ),
+    );
+  }
+
+  Widget header() => isDesktop
+      ? desktopHeader()
+      : widget.isTV
       ? Padding(
-          padding: isDesktop
-              ? EdgeInsets.fromLTRB(48 + windowButtonsLeading, 18, 24, 12)
-              : EdgeInsets.fromLTRB(
-                  math.max(48, MediaQuery.paddingOf(context).left),
-                  math.max(27, MediaQuery.paddingOf(context).top),
-                  48,
-                  12,
-                ),
+          padding: EdgeInsets.fromLTRB(
+            math.max(48, MediaQuery.paddingOf(context).left),
+            math.max(27, MediaQuery.paddingOf(context).top),
+            48,
+            12,
+          ),
           child: Row(
             children: [
               const Brand(),

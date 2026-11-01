@@ -61,6 +61,8 @@ cd app && OTAKASE_CORE=/tmp/otakase-core flutter run -d linux
 
 There is no system title bar on any OS (`window_manager`, `TitleBarStyle.hidden`; on Linux the GTK runner turns decorations off). The app draws its own top bar: the empty part of a page header moves the window and a double click maximises it (`WindowDragArea`), minimise, maximise and close sit at the top right (`WindowButtons`; tiling window managers such as Hyprland, sway, i3 and niri, spotted from their environment variables, only get close because they have no minimised or maximised state), and a 10 px strip along the top edge moves the window on every page. macOS keeps its traffic-light buttons over the top-left corner. Esc goes back one page. Code: `app/lib/desktop/window_frame.dart`.
 
+The top bar has the tabs in the middle on every system. Windows and Linux put the logo on the left and the window buttons on the right; macOS keeps its own buttons on the left, so the logo sits on the right there. The window buttons are drawn like the system's own (`WindowButtonStyle`): square full-height buttons on Windows, round grey ones on GNOME and other Linux desktops, Breeze arrows on KDE, only close on tiling window managers. A future account button goes beside the window buttons (on macOS beside the coloured dots), with a thin line between.
+
 The desktop window uses the wide TV layout, drawn on a 1920×1080 canvas and scaled to the window (never below 0.7), with a Schedule tab next to Home, Search and More. The mouse works everywhere; arrow keys and Enter still work too.
 
 ## Launcher

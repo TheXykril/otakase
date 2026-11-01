@@ -114,8 +114,54 @@ bool get tilingWindowManager =>
     debugTilingOverride ??
     (Platform.isLinux && isTilingWindowManager(Platform.environment));
 
-/// Minimise, maximise and close for Windows and Linux. Tiling window
-/// managers only get close. macOS uses its own
+/// How the window buttons are drawn: like the system the app runs on.
+enum WindowButtonStyle {
+  /// Windows 10/11: square, full height, close turns red.
+  windows,
+
+  /// GNOME and most other Linux desktops: small round grey buttons.
+  gnome,
+
+  /// KDE Plasma (Breeze): arrows for minimise and maximise, red close circle.
+  kde,
+
+  /// Tiling window managers: only Otakase's own close button.
+  tiling,
+}
+
+/// Picks the button style from the OS and, on Linux, the desktop.
+WindowButtonStyle windowButtonStyleFor({
+  required bool windows,
+  required Map<String, String> env,
+}) {
+  if (windows) return WindowButtonStyle.windows;
+  if (isTilingWindowManager(env)) return WindowButtonStyle.tiling;
+  final desktop = [
+    env['XDG_CURRENT_DESKTOP'] ?? '',
+    env['XDG_SESSION_DESKTOP'] ?? '',
+    env['DESKTOP_SESSION'] ?? '',
+  ].join(':').toLowerCase();
+  if (desktop.contains('kde') || desktop.contains('plasma')) {
+    return WindowButtonStyle.kde;
+  }
+  return WindowButtonStyle.gnome;
+}
+
+/// Set by tests in place of reading the real system.
+@visibleForTesting
+WindowButtonStyle? debugWindowButtonStyle;
+
+WindowButtonStyle get windowButtonStyle =>
+    debugWindowButtonStyle ??
+    (debugTilingOverride == true
+        ? WindowButtonStyle.tiling
+        : windowButtonStyleFor(
+            windows: Platform.isWindows,
+            env: Platform.environment,
+          ));
+
+/// Minimise, maximise and close for Windows and Linux, drawn like the
+/// system's own buttons. Tiling window managers only get close. macOS uses its own
 /// buttons, so this is empty there.
 class WindowButtons extends StatefulWidget {
   const WindowButtons({super.key, this.onClose});
@@ -162,26 +208,42 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
   @override
   Widget build(BuildContext context) {
     if (!isDesktop || Platform.isMacOS) return const SizedBox.shrink();
-    final tiling = tilingWindowManager;
+    final style = windowButtonStyle;
+    final tiling = style == WindowButtonStyle.tiling || tilingWindowManager;
+    final kde = style == WindowButtonStyle.kde;
     return Row(
       mainAxisSize: MainAxisSize.min,
+      spacing: switch (style) {
+        WindowButtonStyle.gnome => 10,
+        WindowButtonStyle.kde => 8,
+        _ => 0,
+      },
       children: [
         if (!tiling)
           _WindowButton(
             key: const Key('window-minimize'),
-            icon: LucideIcons.minus,
+            style: style,
+            icon: kde ? LucideIcons.chevronDown : LucideIcons.minus,
             tooltip: 'Minimize',
             onPressed: () => unawaited(windowManager.minimize()),
           ),
         if (!tiling)
           _WindowButton(
             key: const Key('window-maximize'),
-            icon: maximized ? LucideIcons.copy : LucideIcons.square,
+            style: style,
+            icon: kde
+                ? (maximized
+                      ? LucideIcons.chevronsDownUp
+                      : LucideIcons.chevronUp)
+                : maximized
+                ? LucideIcons.copy
+                : LucideIcons.square,
             tooltip: maximized ? 'Restore' : 'Maximize',
             onPressed: () => unawaited(toggleMaximized()),
           ),
         _WindowButton(
           key: const Key('window-close'),
+          style: tiling ? WindowButtonStyle.tiling : style,
           icon: LucideIcons.x,
           tooltip: 'Close',
           danger: true,
@@ -197,11 +259,13 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
 class _WindowButton extends StatefulWidget {
   const _WindowButton({
     super.key,
+    required this.style,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
     this.danger = false,
   });
+  final WindowButtonStyle style;
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
@@ -212,26 +276,61 @@ class _WindowButton extends StatefulWidget {
 
 class _WindowButtonState extends State<_WindowButton> {
   bool hovered = false;
+
+  Widget face() {
+    final danger = widget.danger;
+    switch (widget.style) {
+      case WindowButtonStyle.windows:
+        return Container(
+          width: 46,
+          height: 36,
+          color: hovered
+              ? (danger ? const Color(0xffc42b1c) : const Color(0x1affffff))
+              : Colors.transparent,
+          child: Icon(widget.icon, size: 15, color: fgBright),
+        );
+      case WindowButtonStyle.gnome:
+        return Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: hovered ? const Color(0x33ffffff) : const Color(0x1affffff),
+          ),
+          child: Icon(widget.icon, size: 13, color: fgBright),
+        );
+      case WindowButtonStyle.kde:
+        return Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: danger
+                ? (hovered ? const Color(0xffda4453) : const Color(0x00000000))
+                : (hovered ? const Color(0x33ffffff) : const Color(0x00000000)),
+          ),
+          child: Icon(widget.icon, size: 13, color: const Color(0xffeff0f1)),
+        );
+      case WindowButtonStyle.tiling:
+        return Container(
+          width: 46,
+          height: 34,
+          decoration: BoxDecoration(
+            color: hovered ? (danger ? shu : panelRaised) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(widget.icon, size: 16, color: hovered ? fgBright : muted),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Tooltip(
     message: widget.tooltip,
     child: MouseRegion(
       onEnter: (_) => setState(() => hovered = true),
       onExit: (_) => setState(() => hovered = false),
-      child: GestureDetector(
-        onTap: widget.onPressed,
-        child: Container(
-          width: 46,
-          height: 34,
-          decoration: BoxDecoration(
-            color: hovered
-                ? (widget.danger ? shu : panelRaised)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(widget.icon, size: 16, color: hovered ? fgBright : muted),
-        ),
-      ),
+      child: GestureDetector(onTap: widget.onPressed, child: face()),
     ),
   );
 }

@@ -77,6 +77,31 @@ void main() {
     expect(isTilingWindowManager({}), isFalse);
   });
 
+  test('window buttons follow the system', () {
+    expect(
+      windowButtonStyleFor(windows: true, env: {}),
+      WindowButtonStyle.windows,
+    );
+    expect(
+      windowButtonStyleFor(windows: false, env: {'XDG_CURRENT_DESKTOP': 'KDE'}),
+      WindowButtonStyle.kde,
+    );
+    expect(
+      windowButtonStyleFor(
+        windows: false,
+        env: {'XDG_CURRENT_DESKTOP': 'ubuntu:GNOME'},
+      ),
+      WindowButtonStyle.gnome,
+    );
+    expect(
+      windowButtonStyleFor(
+        windows: false,
+        env: {'HYPRLAND_INSTANCE_SIGNATURE': 'x'},
+      ),
+      WindowButtonStyle.tiling,
+    );
+  });
+
   testWidgets('tiling window managers only get close', (tester) async {
     debugTilingOverride = true;
     addTearDown(() => debugTilingOverride = null);
