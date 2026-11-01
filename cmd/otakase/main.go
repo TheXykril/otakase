@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"strings"
 
 	"github.com/thexykril/otakase/internal"
 	"github.com/thexykril/otakase/internal/appicon"
@@ -28,20 +27,6 @@ func buildVersion() string {
 }
 
 func main() {
-	if len(os.Args) == 4 && os.Args[1] == "-torrent-serve" {
-		if err := serveTorrentForBot(os.Args[2], os.Args[3]); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		return
-	}
-	if len(os.Args) == 3 && os.Args[1] == "-movie-serve" {
-		if err := serveMovieForBot(os.Args[2]); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		return
-	}
 	anime, user := new(internal.Anime), new(internal.User)
 	internal.SetGlobalAnime(anime)
 	internal.SetGlobalUser(user)
@@ -243,38 +228,6 @@ func runCommandAndExit(f *cliFlags, cfg *internal.Config) {
 		os.Exit(1)
 	}
 
-	if f.streamInfo != "" {
-		anilistID, episode, err := internal.ParseStreamInfoArg(f.streamInfo)
-		if err == nil {
-			// The audio flags are applied after the one-job commands, so
-			// this one applies them itself.
-			applyAudioFlags(cfg, f)
-			cfg.AdultContent = f.streamAdult
-			var info internal.StreamInfo
-			if f.streamInfoFast {
-				info, err = internal.ResolveStreamInfoFast(*cfg, anilistID, episode)
-			} else {
-				info, err = internal.ResolveStreamInfo(*cfg, anilistID, episode)
-			}
-			if err == nil {
-				fmt.Println(internal.FormatStreamInfo(info))
-				os.Exit(0)
-			}
-		}
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
-	if f.streamLangs != "" {
-		info, err := streamLanguages(f.streamLangs)
-		if err == nil {
-			fmt.Println(internal.FormatStreamInfo(info))
-			os.Exit(0)
-		}
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
 	if f.discordLink || f.discordUnlink || f.report {
 		var err error
 		switch {
@@ -291,21 +244,6 @@ func runCommandAndExit(f *cliFlags, cfg *internal.Config) {
 		}
 		os.Exit(0)
 	}
-}
-
-// streamLanguages answers -stream-languages provider:id:episode. The id
-// may itself contain colons, so the provider and episode are cut off the ends.
-func streamLanguages(arg string) (internal.StreamInfo, error) {
-	provider, rest, ok := strings.Cut(arg, ":")
-	cut := strings.LastIndex(rest, ":")
-	if !ok || cut <= 0 {
-		return internal.StreamInfo{}, fmt.Errorf("-stream-languages wants provider:id:episode, got %q", arg)
-	}
-	episode, err := strconv.Atoi(rest[cut+1:])
-	if err != nil {
-		return internal.StreamInfo{}, fmt.Errorf("-stream-languages wants provider:id:episode, got %q", arg)
-	}
-	return internal.ResolveStreamLanguages(provider, rest[:cut], episode)
 }
 
 // runKeybindCommand installs, removes or refreshes the Hyprland binding and

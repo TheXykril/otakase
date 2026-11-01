@@ -559,7 +559,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool, start 
 		m.watched, m.counted, m.asked, m.from = 0, false, false, 0
 	}
 	r.gen++
-	gen, adult, cli := r.gen, r.adult && show.Adult, b.cfg.OtakaseCLI
+	gen, adult, cli := r.gen, r.adult && show.Adult, b.cfg.OtakaseHelper
 	r.changed()
 	ctx, cancel := context.WithCancel(context.Background())
 	r.torrentCancel = cancel

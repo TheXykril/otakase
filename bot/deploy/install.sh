@@ -36,7 +36,7 @@ fi
 
 # Build the helper from the same checkout as the bot.
 install -d /usr/local/libexec
-(cd "$SRC" && CGO_ENABLED=0 GOFLAGS=-trimpath /usr/local/go/bin/go build -o /usr/local/libexec/otakase ./cmd/otakase)
+(cd "$SRC" && CGO_ENABLED=0 GOFLAGS=-trimpath /usr/local/go/bin/go build -o /usr/local/libexec/otakase-helper ./cmd/otakase-helper)
 
 [ -f /etc/otakase-bot.env ] || install -m 600 "$SRC/bot/deploy/otakase-bot.env" /etc/otakase-bot.env
 install -m 644 "$SRC/bot/deploy/otakase-bot.service" /etc/systemd/system/otakase-bot.service

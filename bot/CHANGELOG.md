@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.83
+
+- The add-on now ships a small `otakase-helper` program for the watch room and `/provider-status` instead of the full command-line app. Nothing changes for members.
+
 ## 1.30.82
 
 - Watch room: members signed in on the Otakase Android app (phone or TV) can join a running room from the app. 18+ rooms only let them in while they sit in the room's voice channel.

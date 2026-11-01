@@ -198,7 +198,7 @@ func (b *bot) checkProviders() (list []providerResult, version string, fail *dis
 	home, _ := os.MkdirTemp("", "otakase-status")
 	defer os.RemoveAll(home)
 	run := func(args ...string) (string, error) {
-		cmd := exec.CommandContext(ctx, b.cfg.OtakaseCLI, args...)
+		cmd := exec.CommandContext(ctx, b.cfg.OtakaseHelper, args...)
 		// The bot reads every source's line; members are shown counts only.
 		cmd.Env = append(os.Environ(), "HOME="+home, "XDG_CONFIG_HOME="+home, "OTAKASE_PROVIDER_STATUS_DETAILS=1")
 		out, err := cmd.CombinedOutput()
@@ -235,8 +235,8 @@ var downRe = regexp.MustCompile(`(?i)\b(is|are)\s+(it|otakase|the\s+\w+|any\s+\w
 // downCheck answers a "is it down?" message with the source check, at most
 // once per channel every ten minutes.
 func (b *bot) downCheck(m *discordgo.MessageCreate) {
-	// Without the CLI there's nothing useful to answer with.
-	if _, err := exec.LookPath(b.cfg.OtakaseCLI); err != nil {
+	// Without the helper there's nothing useful to answer with.
+	if _, err := exec.LookPath(b.cfg.OtakaseHelper); err != nil {
 		return
 	}
 	if !b.issues.allowKey(m.ChannelID + "/down") {
