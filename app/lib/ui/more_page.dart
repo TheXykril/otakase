@@ -329,11 +329,30 @@ class AccountsPage extends StatefulWidget {
 class _AccountsPageState extends State<AccountsPage> {
   String? error;
   final backFocus = FocusNode(debugLabel: 'Accounts back');
+  // The first button of each tracker, kept across sign in and log out so the
+  // remote stays on that tracker when its buttons change.
+  final serviceFocus = {
+    for (final service in ['AniList', 'MAL'])
+      service: FocusNode(debugLabel: 'Accounts $service'),
+  };
 
   @override
   void dispose() {
     backFocus.dispose();
+    for (final node in serviceFocus.values) {
+      node.dispose();
+    }
     super.dispose();
+  }
+
+  Future<void> logout(String service) async {
+    await widget.services.auth.logout(service);
+    if (!mounted || !widget.isTV) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ModalRoute.isCurrentOf(context) == true) {
+        serviceFocus[service]!.requestFocus();
+      }
+    });
   }
 
   Future<void> login(String service) async {
@@ -442,18 +461,21 @@ class _AccountsPageState extends State<AccountsPage> {
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 12,
+                  runSpacing: 12,
                   children: [
                     if (account.expired)
                       AppButton(
                         label: 'Sign in again',
+                        focusNode: serviceFocus[service],
+                        autofocus: service == 'AniList',
                         onPressed: () => login(service),
                         isTV: widget.isTV,
                       ),
                     AppButton(
                       label: 'Log out of $service',
-                      onPressed: () async {
-                        await widget.services.auth.logout(service);
-                      },
+                      focusNode: account.expired ? null : serviceFocus[service],
+                      autofocus: !account.expired && service == 'AniList',
+                      onPressed: () => logout(service),
                       isTV: widget.isTV,
                     ),
                   ],
@@ -461,6 +483,7 @@ class _AccountsPageState extends State<AccountsPage> {
               ] else ...[
                 AppButton(
                   label: 'Sign in to $service',
+                  focusNode: serviceFocus[service],
                   isTV: widget.isTV,
                   autofocus: service == 'AniList',
                   filled: true,
