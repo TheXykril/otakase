@@ -80,7 +80,8 @@ class _AppShellState extends State<AppShell> {
       if (mounted) communityMessage(context, text);
     });
     unawaited(startRemote());
-    if (Platform.isAndroid && widget.services.store.flag('CheckUpdates')) {
+    if ((Platform.isAndroid || isDesktop) &&
+        widget.services.store.flag('CheckUpdates')) {
       unawaited(widget.services.updates.check());
     }
     WidgetsBinding.instance.addPostFrameCallback((_) async {

@@ -41,7 +41,7 @@ class UpdateHost extends AndroidUpdatePlatform {
     '${directory.path}/download-${DateTime.now().microsecondsSinceEpoch}.apk',
   ).create();
   @override
-  Future<void> validate(File file, AndroidUpdate update) async {
+  Future<void> validate(File file, AppUpdate update) async {
     if (reject) {
       throw PlatformException(
         code: 'invalid_update',
@@ -52,7 +52,7 @@ class UpdateHost extends AndroidUpdatePlatform {
   }
 
   @override
-  Future<bool> install(File file, AndroidUpdate update) async {
+  Future<bool> install(File file, AppUpdate update) async {
     installs++;
     return allowed;
   }
@@ -343,7 +343,7 @@ void main() {
     final platform = AndroidUpdatePlatform();
     expect((await platform.installed()).code, 3);
     final file = await platform.createDownload();
-    final candidate = AndroidUpdate.parse(manifest(), asset(androidApk));
+    final candidate = AppUpdate.parse(manifest(), asset(androidApk), platform);
     await platform.validate(file, candidate);
     expect(await platform.install(file, candidate), isFalse);
     expect(await platform.channelAllowed(), isTrue);

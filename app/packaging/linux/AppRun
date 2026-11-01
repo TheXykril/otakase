@@ -1,0 +1,5 @@
+#!/bin/sh
+# Starts the app inside the AppImage. libmpv comes from the system (the mpv
+# package), like GTK.
+here=$(dirname "$(readlink -f "$0")")
+exec "$here/usr/lib/otakase/otakase" "$@"

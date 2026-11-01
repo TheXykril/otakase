@@ -85,6 +85,24 @@ AniList and MAL sign-in opens the default browser (`xdg-open`, `open` or `rundll
 
 The desktop player looks like the CLI's mpv skin (see [Player Look](Developer-Player-Look)): a title line with the window buttons at the top and one floating bar at the bottom with times, a seek rail (buffered part, opening and ending stripes) and small icon buttons for back/forward 10 s, play, next episode, mute, audio and subtitles, quality and full screen. Moving the mouse shows the controls; they and the pointer hide after 5 seconds. Keys: Space play/pause, Left/Right 10 s, F full screen, M mute. Code: `app/lib/desktop/player_bar.dart`.
 
+## Packaging and updates
+
+`app/scripts/package-desktop.sh` turns a release build from `build-desktop.sh` into the file the release offers, plus a metadata file with its version, size and SHA-256 (`scripts/update-manifest.py`, the same format as the Android `otakase-android.json` but with `file` instead of `apk`). Output goes to `app/build/desktop-release/`.
+
+| OS | Release file | How the app updates |
+| --- | --- | --- |
+| Windows | `otakase-app-windows-setup.exe` (Inno Setup, per user, `app/packaging/windows/otakase-app.iss`) | Runs the new installer with `/VERYSILENT /WAITPID=<pid>` and quits. Setup waits for the app to exit, installs over the same folder and opens it again. |
+| macOS | `otakase-app-macos.zip` (universal, ad hoc signed) | Unpacks next to `Otakase.app`, swaps the two folders, opens the new one once the old process has exited. |
+| Linux | `otakase-app-linux-x86_64.AppImage` (`app/packaging/linux/`) | Downloads next to the running AppImage (`$APPIMAGE`), renames it over the old file and starts it once the old process has exited. |
+
+The version is VERSION.txt (or `OTAKASE_VERSION`), passed in as `--dart-define OTAKASE_VERSION` and compared as the same number Android uses (26.7.0 -> 26007000, `versionCode` in `app/lib/data/app_updates.dart`). A build without it counts as older than every release.
+
+The check, download and checksum are shared with Android (`AppUpdates`); only finding the files and installing differ (`DesktopUpdatePlatform` in `app/lib/desktop/desktop_updates.dart`). A copy that cannot replace itself gets an **Open download page** button instead: a Windows folder not made by the installer (no `unins000.exe`), an app in a folder the user cannot write to, a Linux install that is not an AppImage (a package manager updates those). Settings > About & updates shows it, and the check runs at startup when "Check for app updates at startup" is on.
+
+The AppImage uses the system's libmpv and GTK, so Linux users need the `mpv` package. macOS turns the app sandbox off: the app runs mpv's library, a helper process and replaces itself, none of which a sandboxed app outside the App Store may do.
+
+CI: the `desktop` job in `ci-cd.yml` builds and packs on one runner per OS. It runs for every release, or for a normal run with **desktop** ticked (macOS runners use more Actions minutes). The release job attaches all six files.
+
 ## Not done yet
 
-External mpv, cast, torrents and packaging (installers, signing) are still to do. Windows and macOS builds have not been tried on real machines.
+External mpv, cast, torrents, deb/rpm packages and signing (Windows, Apple) are still to do. Windows and macOS builds have not been tried on real machines.
