@@ -17,13 +17,15 @@ studio=6.1
 # and the bundled clang still links libtinfo.so.5.
 missing=()
 for pkg in python3.8 libpython3.8 libkf5itemmodels5 libkf5kiowidgets5 libkchart2; do
-  dpkg -s "$pkg" > /dev/null 2>&1 || missing+=("$pkg")
+  [[ $(dpkg-query -W -f='${Status}' "$pkg" 2> /dev/null) == "install ok installed" ]] ||
+    missing+=("$pkg")
 done
 if ((${#missing[@]})) || [[ ! -e /usr/lib/x86_64-linux-gnu/libtinfo.so.5 ]]; then
   work=$(mktemp -d)
   for pkg in "${missing[@]}"; do
     mkdir -p "$work/$pkg/DEBIAN"
-    printf 'Package: %s\nVersion: 0\nArchitecture: all\nMaintainer: none <none@localhost>\nDescription: placeholder for the Tizen package manager\n' \
+    # A high version: Ubuntu 22.04's libc6-dev breaks python3.8 << 3.8.2.
+    printf 'Package: %s\nVersion: 99\nArchitecture: all\nMaintainer: none <none@localhost>\nDescription: placeholder for the Tizen package manager\n' \
       "$pkg" > "$work/$pkg/DEBIAN/control"
     dpkg-deb -b "$work/$pkg" "$work/$pkg.deb" > /dev/null
     sudo dpkg -i "$work/$pkg.deb" > /dev/null
@@ -60,6 +62,12 @@ for path in \
     echo "Tizen SDK install incomplete: $tizen_sdk/$path is missing." >&2
     exit 1
   fi
+done
+
+# Adding packages to an existing install can drop the CLI's own copies of
+# these jars ("NoClassDefFoundError: ...SBIPluginManager" from build-native).
+for jar in "$tizen_sdk"/tools/lib/*.jar; do
+  [[ -e $tizen_sdk/tools/ide/lib-ncli/${jar##*/} ]] || cp "$jar" "$tizen_sdk/tools/ide/lib-ncli/"
 done
 
 if [[ ! -d $flutter_tizen/.git ]]; then
