@@ -89,8 +89,9 @@ class _ProfileHostState extends State<ProfileHost> {
         isTV: widget.manager.isTV,
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
-          builder: (context, child) =>
-              widget.manager.isTV ? TVViewport(child: child!) : child!,
+          builder: (context, child) => DesktopFrame(
+            child: widget.manager.isTV ? TVViewport(child: child!) : child!,
+          ),
           theme: ThemeData(
             brightness: Brightness.dark,
             fontFamily: 'Inter',
@@ -208,8 +209,9 @@ class _OtakaseAppState extends State<OtakaseApp> {
       child: MaterialApp(
         title: 'Otakase',
         debugShowCheckedModeBanner: false,
-        builder: (context, child) =>
-            widget.isTV ? TVViewport(child: child!) : child!,
+        builder: (context, child) => DesktopFrame(
+          child: widget.isTV ? TVViewport(child: child!) : child!,
+        ),
         theme: ThemeData(
           brightness: Brightness.dark,
           colorScheme: const ColorScheme.dark(

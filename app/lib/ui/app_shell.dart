@@ -47,6 +47,7 @@ class _AppShellState extends State<AppShell> {
     ),
   );
   final scopes = List.generate(3, (i) => FocusScopeNode(debugLabel: 'Root $i'));
+  final searchField = FocusNode(debugLabel: 'Search field');
   void modeChanged(FocusHighlightMode _) {
     if (mounted) setState(() {});
   }
@@ -71,6 +72,7 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     FocusManager.instance.addHighlightModeListener(modeChanged);
     widget.services.selectRoot = choose;
+    desktopCloseHook = closeWindow;
     widget.services.auth.remoteLink = remoteLink;
     remoteEvents = widget.services.tvRemote.events.listen((text) {
       if (mounted) communityMessage(context, text);
@@ -91,12 +93,14 @@ class _AppShellState extends State<AppShell> {
     widget.services.auth.remoteLink = null;
     unawaited(remoteEvents?.cancel() ?? Future<void>.value());
     widget.services.selectRoot = null;
+    if (desktopCloseHook == closeWindow) desktopCloseHook = null;
     for (final n in navFocus) {
       n.dispose();
     }
     for (final s in scopes) {
       s.dispose();
     }
+    searchField.dispose();
     super.dispose();
   }
 
@@ -159,6 +163,11 @@ class _AppShellState extends State<AppShell> {
 
   void focusContent(int index) {
     if (ModalRoute.isCurrentOf(context) == false || selected != index) return;
+    // On desktop, Search starts in the field so typing searches at once.
+    if (isDesktop && index == 1) {
+      searchField.requestFocus();
+      return;
+    }
     final scope = scopes[index];
     final remembered = scope.focusedChild;
     scope.requestFocus();
@@ -483,10 +492,7 @@ class _AppShellState extends State<AppShell> {
                 if (i < 2) const SizedBox(width: 14),
               ],
               const Spacer(),
-              if (isDesktop)
-                WindowButtons(onClose: closeWindow)
-              else
-                const DeviceStatus(isTV: true),
+              const DeviceStatus(isTV: true),
             ],
           ),
         )
@@ -569,6 +575,7 @@ class _AppShellState extends State<AppShell> {
           isTV: widget.isTV,
           onOpen: open,
           onVoice: voice,
+          fieldFocus: searchField,
           onNavigateUp: () => navFocus[1].requestFocus(),
         ),
         MorePage(services: widget.services, isTV: widget.isTV, onOpen: open),

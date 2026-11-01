@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
+import '../desktop/desktop_core.dart';
 import '../services.dart';
 import 'components.dart';
 import 'movie_page.dart';
@@ -18,7 +19,11 @@ class SearchPage extends StatefulWidget {
     this.onNavigateUp,
     this.initialQuery = '',
     this.initialFormat,
+    this.fieldFocus,
   });
+
+  /// Focus of the search field, so the shell can move into it.
+  final FocusNode? fieldFocus;
   final AppServices services;
   final bool isTV;
   final void Function(Anime) onOpen;
@@ -224,8 +229,9 @@ class _SearchPageState extends State<SearchPage> {
             Expanded(
               child: RemoteTextInput(
                 isTV: widget.isTV,
+                focusNode: widget.fieldFocus,
                 onUp: widget.onNavigateUp,
-                onActivate: widget.isTV ? editQuery : null,
+                onActivate: widget.isTV && !isDesktop ? editQuery : null,
                 onFocusChanged: (focused) {
                   if (mounted && !focused && editing) {
                     setState(() => editing = false);
@@ -233,8 +239,11 @@ class _SearchPageState extends State<SearchPage> {
                 },
                 builder: (focus) => TextField(
                   focusNode: focus,
-                  readOnly: widget.isTV && !editing,
-                  onTap: widget.isTV ? () => editQuery(focus) : null,
+                  // Desktop has a keyboard, so the field is always editable.
+                  readOnly: widget.isTV && !isDesktop && !editing,
+                  onTap: widget.isTV && !isDesktop
+                      ? () => editQuery(focus)
+                      : null,
                   key: const Key('catalog-search'),
                   controller: query,
                   decoration: InputDecoration(

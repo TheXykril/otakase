@@ -683,9 +683,13 @@ class RemoteTextInput extends StatefulWidget {
     this.onActivate,
     this.onFocusChanged,
     this.multiline = false,
+    this.focusNode,
   });
   final bool isTV, multiline;
   final Widget Function(FocusNode) builder;
+
+  /// Lets the owner move focus into the field. Its key handler is replaced.
+  final FocusNode? focusNode;
   final VoidCallback? onUp;
   final ValueChanged<FocusNode>? onActivate;
   final ValueChanged<bool>? onFocusChanged;
@@ -694,12 +698,15 @@ class RemoteTextInput extends StatefulWidget {
 }
 
 class _RemoteTextInputState extends State<RemoteTextInput> {
-  late final focus = FocusNode(debugLabel: 'Text input', onKeyEvent: key);
+  late final focus = (widget.focusNode ?? FocusNode(debugLabel: 'Text input'))
+    ..onKeyEvent = key;
   @override
   void initState() {
     super.initState();
-    focus.addListener(() => widget.onFocusChanged?.call(focus.hasFocus));
+    focus.addListener(focusChanged);
   }
+
+  void focusChanged() => widget.onFocusChanged?.call(focus.hasFocus);
 
   KeyEventResult key(FocusNode node, KeyEvent event) {
     if (!widget.isTV ||
@@ -747,7 +754,8 @@ class _RemoteTextInputState extends State<RemoteTextInput> {
 
   @override
   void dispose() {
-    focus.dispose();
+    focus.removeListener(focusChanged);
+    if (widget.focusNode == null) focus.dispose();
     super.dispose();
   }
 

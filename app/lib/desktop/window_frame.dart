@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../ui/components.dart';
@@ -83,6 +84,9 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
     super.initState();
     if (!isDesktop || Platform.isMacOS) return;
     windowManager.addListener(this);
+    // Wayland compositors report tiled windows as maximised, so Linux always
+    // shows the plain maximise icon.
+    if (Platform.isLinux) return;
     unawaited(
       windowManager.isMaximized().then((value) {
         if (mounted) setState(() => maximized = value);
@@ -97,7 +101,10 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
   }
 
   @override
-  void onWindowMaximize() => setState(() => maximized = true);
+  void onWindowMaximize() {
+    if (!Platform.isLinux) setState(() => maximized = true);
+  }
+
   @override
   void onWindowUnmaximize() => setState(() => maximized = false);
 
@@ -124,8 +131,10 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
           icon: LucideIcons.x,
           tooltip: 'Close',
           danger: true,
-          onPressed: () =>
-              unawaited(widget.onClose?.call() ?? windowManager.close()),
+          onPressed: () => unawaited(
+            (widget.onClose ?? desktopCloseHook)?.call() ??
+                closeDesktopWindow(),
+          ),
         ),
       ],
     );
@@ -174,5 +183,47 @@ class _WindowButtonState extends State<_WindowButton> {
   );
 }
 
+/// Runs when a window close button is pressed, set by the app shell so it
+/// can stop Discord presence first. It must close the window itself.
+Future<void> Function()? desktopCloseHook;
+
 /// Closes the window and ends the app.
 Future<void> closeDesktopWindow() => windowManager.destroy();
+
+/// Wraps every desktop route: Esc goes back one page, and a thin strip
+/// along the top edge moves the window on pages whose header is not a
+/// drag area.
+class DesktopFrame extends StatelessWidget {
+  const DesktopFrame({super.key, required this.child});
+  final Widget child;
+
+  static void back() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    if (context != null) unawaited(Navigator.maybeOf(context)?.maybePop());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isDesktop) return child;
+    return CallbackShortcuts(
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): back},
+      child: Stack(
+        children: [
+          child,
+          Positioned(
+            top: 0,
+            left: windowButtonsLeading,
+            right: 160,
+            height: 10,
+            child: GestureDetector(
+              key: const Key('window-edge-drag'),
+              behavior: HitTestBehavior.opaque,
+              onPanStart: (_) => unawaited(windowManager.startDragging()),
+              onDoubleTap: () => unawaited(toggleMaximized()),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../desktop/desktop_core.dart';
+import '../desktop/window_frame.dart';
 import 'components.dart';
 
 class DeviceStatus extends StatefulWidget {
@@ -87,6 +88,8 @@ class _DeviceStatusState extends State<DeviceStatus>
 
   @override
   Widget build(BuildContext context) {
+    // Desktop pages show the window buttons where Android shows the clock.
+    if (isDesktop) return const WindowButtons();
     final time = TimeOfDay.fromDateTime(now).format(context);
     final use24 =
         data['use24Hour'] as bool? ??

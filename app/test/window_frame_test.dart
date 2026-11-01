@@ -51,7 +51,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('window-maximize')));
     await tester.pumpAndSettle();
-    expect(calls, ['isMaximized', 'minimize', 'isMaximized', 'maximize']);
+    expect(calls, containsAllInOrder(['minimize', 'isMaximized', 'maximize']));
 
     await tester.tap(find.byKey(const Key('window-maximize')));
     await tester.pumpAndSettle();
@@ -90,5 +90,34 @@ void main() {
     await tester.pumpWidget(frame());
     expect(find.byKey(const Key('window-close')), findsNothing);
     expect(calls, isEmpty);
+  });
+
+  testWidgets('Esc goes back one page on desktop', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => DesktopFrame(child: child!),
+        home: Builder(
+          builder: (context) => TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (_) => const Scaffold(
+                  body: Focus(autofocus: true, child: Text('show page')),
+                ),
+              ),
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('show page'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('show page'), findsNothing);
+    expect(find.text('open'), findsOneWidget);
   });
 }
