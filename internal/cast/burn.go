@@ -237,7 +237,7 @@ func ProbeEncoder(ffmpegPath string, enc Encoder) error {
 	}
 	args = append(args, "-c:v", enc.Name, "-frames:v", "1", "-f", "null", "-")
 
-	out, err := exec.Command(ffmpegPath, args...).CombinedOutput()
+	out, err := quiet(exec.Command(ffmpegPath, args...)).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
 	}

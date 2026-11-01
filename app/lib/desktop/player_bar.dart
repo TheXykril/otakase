@@ -38,6 +38,8 @@ class DesktopPlayerBar extends StatelessWidget {
     required this.onQuality,
     required this.onFullscreen,
     this.playFocus,
+    this.casting = false,
+    this.onCast,
   });
 
   final String title, subtitle, trackLabel, centerLabel;
@@ -47,6 +49,10 @@ class DesktopPlayerBar extends StatelessWidget {
   final VoidCallback onBack, onPlayPause, onMute, onTracks, onQuality;
   final VoidCallback onFullscreen;
   final VoidCallback? onNext;
+
+  /// Opens the cast picker; null hides the button.
+  final VoidCallback? onCast;
+  final bool casting;
   final ValueChanged<int> onSeekBy;
   final ValueChanged<double> onSeekStart, onSeekChanged, onSeekEnd;
   final FocusNode? playFocus;
@@ -253,6 +259,14 @@ class DesktopPlayerBar extends StatelessWidget {
                         tooltip: 'Quality',
                         onPressed: onQuality,
                       ),
+                      if (onCast != null)
+                        _BarIcon(
+                          key: const Key('player-cast'),
+                          icon: LucideIcons.cast,
+                          tooltip: casting ? 'Casting' : 'Cast to a TV',
+                          onPressed: onCast!,
+                          active: casting,
+                        ),
                       _BarIcon(
                         key: const Key('player-fullscreen'),
                         icon: fullscreen
@@ -282,7 +296,9 @@ class _BarIcon extends StatelessWidget {
     required this.tooltip,
     required this.onPressed,
     this.focusNode,
+    this.active = false,
   });
+  final bool active;
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
@@ -293,7 +309,7 @@ class _BarIcon extends StatelessWidget {
     focusNode: focusNode,
     onPressed: onPressed,
     iconSize: 20,
-    color: fg,
+    color: active ? accentText : fg,
     disabledColor: line,
     hoverColor: panelRaised,
     focusColor: panelRaised,

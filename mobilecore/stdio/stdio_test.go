@@ -54,9 +54,14 @@ func (f *fakeCore) Result(id int64) string {
 func (f *fakeCore) Cancel(id int64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// The channel stays in the map once closed: Result may not have read it
+	// yet, and a missing one would leave it waiting forever.
 	if c, ok := f.cancels[id]; ok {
-		close(c)
-		delete(f.cancels, id)
+		select {
+		case <-c:
+		default:
+			close(c)
+		}
 	}
 }
 

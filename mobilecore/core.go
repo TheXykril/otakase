@@ -56,6 +56,8 @@ type Core struct {
 	// cacheDir holds torrent downloads; empty means the system temp dir.
 	cacheDir string
 	torrent  *torrentstream.BotStream
+	// caster runs the cast_* operations; see cast.go.
+	caster caster
 }
 
 type task struct {
@@ -82,6 +84,8 @@ type request struct {
 	// Quality is the resolution a torrent source tries first, e.g. 720.
 	// Zero takes the best release.
 	Quality int `json:"quality"`
+	// Cast describes a cast_* operation.
+	Cast *castRequest `json:"cast"`
 }
 
 type apiError struct {
@@ -206,6 +210,7 @@ func (c *Core) Close() {
 	for _, stop := range stops {
 		stop()
 	}
+	c.caster.closeCast()
 }
 
 // StopPlayback releases loopback relays after a player stops or changes source.
@@ -275,6 +280,9 @@ func (c *Core) execute(ctx context.Context, input string) string {
 	if req.Operation == "stop" {
 		c.StopPlayback()
 		return encode(response{Version: 1, Data: map[string]bool{"stopped": true}})
+	}
+	if strings.HasPrefix(req.Operation, "cast_") {
+		return c.castOperation(ctx, req)
 	}
 	if req.Operation == "providers" {
 		return encode(response{Version: 1, Data: map[string]any{"providers": providerNames, "adult": adultProviderNames}})

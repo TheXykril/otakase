@@ -119,7 +119,7 @@ func StartFFmpeg(ffmpegPath string, args []string, outDir string) (*Remux, error
 	}
 
 	remux := &Remux{done: make(chan struct{})}
-	remux.cmd = exec.Command(ffmpegPath, args...)
+	remux.cmd = quiet(exec.Command(ffmpegPath, args...))
 	remux.cmd.Stderr = &remux.stderr
 
 	if err := remux.cmd.Start(); err != nil {

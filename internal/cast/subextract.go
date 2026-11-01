@@ -120,7 +120,7 @@ func StartSubtitleReader(ctx context.Context, ffmpegPath, streamURL, referrer st
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, ffmpegPath, BuildSubtitleExtractArgs(streamURL, referrer, headers, track, fonts, r.fontsDir, r.path, from)...)
+	cmd := quiet(exec.CommandContext(ctx, ffmpegPath, BuildSubtitleExtractArgs(streamURL, referrer, headers, track, fonts, r.fontsDir, r.path, from)...))
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	progress, err := cmd.StdoutPipe()
