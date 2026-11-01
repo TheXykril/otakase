@@ -15,6 +15,8 @@ import 'settings.dart';
 import 'show_page.dart';
 import 'profiles_page.dart';
 import 'community_page.dart';
+import 'community_extras_page.dart';
+import 'watch_party_page.dart';
 import 'tv_remote_page.dart';
 import 'watch_rooms_page.dart';
 
@@ -276,6 +278,54 @@ class MorePage extends StatelessWidget {
           ),
         ),
         row(
+          'Watch parties',
+          services.party.active
+              ? 'In ${services.party.show}'
+              : 'Planned in the Discord · watch in sync',
+          LucideIcons.partyPopper,
+          () => openDetail(
+            context,
+            WatchPartiesPage(services: services, isTV: isTV),
+            isTV,
+          ),
+        ),
+        if (services.extras.club case final club?)
+          row(
+            'Server club',
+            clubLabel(club),
+            LucideIcons.flag,
+            () => Navigator.push(
+              context,
+              OtakaseRoute<void>(
+                builder: (_) => ShowPage(
+                  services: services,
+                  anime: Anime(id: club.anilistId, title: club.title),
+                  isTV: isTV,
+                ),
+              ),
+            ),
+          ),
+        row(
+          'Settings backup',
+          'Keep your settings with the Discord bot',
+          LucideIcons.cloudUpload,
+          () => openDetail(
+            context,
+            BackupPage(services: services, isTV: isTV),
+            isTV,
+          ),
+        ),
+        row(
+          'Report a problem',
+          'Post to the support forum',
+          LucideIcons.lifeBuoy,
+          () => openDetail(
+            context,
+            ReportPage(services: services, isTV: isTV),
+            isTV,
+          ),
+        ),
+        row(
           isTV ? 'Phone remote' : 'Control TV',
           'Pair on your local network',
           LucideIcons.tv,
@@ -481,9 +531,31 @@ class _DesktopMoreState extends State<DesktopMore> {
           open: () => detail(WatchRoomsPage(services: services, isTV: true)),
         ),
         item(
+          'Watch parties',
+          LucideIcons.partyPopper,
+          open: () => detail(WatchPartiesPage(services: services, isTV: true)),
+        ),
+        if (services.extras.club case final club?)
+          item(
+            'Server club · ${clubLabel(club)}',
+            LucideIcons.flag,
+            open: () =>
+                widget.onOpen(Anime(id: club.anilistId, title: club.title)),
+          ),
+        item(
           'Time capsule',
           LucideIcons.mail,
           open: () => detail(CapsulePage(services: services, isTV: true)),
+        ),
+        item(
+          'Settings backup',
+          LucideIcons.cloudUpload,
+          open: () => detail(BackupPage(services: services, isTV: true)),
+        ),
+        item(
+          'Report a problem',
+          LucideIcons.lifeBuoy,
+          open: () => detail(ReportPage(services: services, isTV: true)),
         ),
         item(
           'Phone remote',

@@ -6,12 +6,12 @@ import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../data/models.dart';
-import '../player.dart';
 import '../services.dart';
 import '../ui/components.dart';
 import '../ui/seal.dart';
 import 'desktop_core.dart';
 import 'window_frame.dart';
+import 'external_mpv.dart';
 
 /// True while the app shows the launcher instead of the full window. Set by
 /// `otakase --launcher`; "Open full app" turns it off in the same process.
@@ -331,7 +331,7 @@ class LauncherPageState extends State<LauncherPage> {
       context,
       OtakaseRoute<void>(
         builder: (_) => TVViewport(
-          child: PlayerPage(
+          child: playerFor(
             services: services,
             anime: anime,
             episode: episode,
