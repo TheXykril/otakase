@@ -131,7 +131,7 @@ The check, download and checksum are shared with Android (`AppUpdates`); only fi
 
 Every desktop download carries mpv, so nobody installs it separately. Windows and macOS get libmpv from media_kit's bundled libraries. The AppImage copies the build machine's `libmpv.so.2` and the libraries it needs into `usr/lib/otakase/lib` (`bundle_libmpv` in `package-desktop.sh`), points them at each other with `patchelf --add-rpath '$ORIGIN'`, and `AppRun` sets `LIBMPV_LIBRARY_PATH` so media_kit loads that copy. Libraries that must match the running system (glibc, the C++ runtime, GL/Vulkan drivers, X11/Wayland, sound servers, GTK, fontconfig) come from the system. Ubuntu's libmpv pulls in a lot, so the AppImage is around 90 MB. macOS turns the app sandbox off: the app runs mpv's library, a helper process and replaces itself, none of which a sandboxed app outside the App Store may do.
 
-CI: the `desktop` job in `ci-cd.yml` builds and packs on one runner per OS on every run; the Linux runner also runs `flutter analyze` and `flutter test`. The release job attaches all six files. The **Dev Build** workflow builds the same three plus the APK and puts them on the `dev` pre-release (without the update metadata, so installed apps never update to a dev build by themselves).
+CI: the `desktop` job in `ci-cd.yml` builds and packs on one runner per OS. It runs for every release, or for a normal run with **desktop** ticked (macOS runners use more Actions minutes). The release job attaches all six files.
 
 ## Not done yet
 
