@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../desktop/desktop_core.dart';
 import 'components.dart';
 
 class DeviceStatus extends StatefulWidget {
@@ -25,6 +26,9 @@ class _DeviceStatusState extends State<DeviceStatus>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    minute();
+    // Battery and network come from the Android host; desktop has none.
+    if (isDesktop) return;
     subscription = events.listen((event) {
       if (mounted && event is Map) {
         setState(() {
@@ -34,7 +38,6 @@ class _DeviceStatusState extends State<DeviceStatus>
       }
     }, onError: (_) {});
     refresh();
-    minute();
   }
 
   void minute() {
@@ -52,6 +55,7 @@ class _DeviceStatusState extends State<DeviceStatus>
   }
 
   Future<void> refresh() async {
+    if (isDesktop) return;
     try {
       final status = await const MethodChannel('otakase/device')
           .invokeMapMethod<dynamic, dynamic>('status');

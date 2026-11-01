@@ -44,7 +44,7 @@ scripts/build-desktop.sh debug
 
 The script runs `flutter build <os>` and builds `otakase-core` into the bundle.
 
-Linux needs clang, cmake, ninja, `libgtk-3-dev`, `libsecret-1-dev` and `libmpv-dev`. media_kit downloads mimalloc from GitHub during the first CMake run.
+Linux needs clang, cmake, ninja (Arch: `ninja`), `libgtk-3-dev`, `libsecret-1-dev` and `libmpv-dev`. media_kit downloads mimalloc from GitHub during the first CMake run.
 
 To run from source:
 
