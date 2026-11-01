@@ -163,7 +163,7 @@ func TestValidationAndTypedErrors(t *testing.T) {
 		{`{"version":1,"mode":"sub"} {}`, "invalid_request"},
 		{`{"version":2,"mode":"sub"}`, "invalid_request"},
 		{`{"version":1,"mode":"raw"}`, "invalid_request"},
-		{requestJSON("search", "nyaa", ""), "unsupported_provider"},
+		{requestJSON("search", "anidb", ""), "unsupported_provider"},
 		{requestJSON("download", "megavid", "1"), "invalid_request"},
 		{requestJSON("episodes", "megavid", ""), "invalid_request"},
 		{strings.Repeat(" ", 17<<10), "invalid_request"},
@@ -277,15 +277,19 @@ func TestProvidersOperationListsEverySource(t *testing.T) {
 	var resp struct {
 		Data struct {
 			Providers []string `json:"providers"`
+			Adult     []string `json:"adult"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(out), &resp); err != nil {
 		t.Fatal(err)
 	}
-	if len(resp.Data.Providers) != 6 {
+	if len(resp.Data.Providers) != 7 || resp.Data.Providers[6] != "nyaa" {
 		t.Fatalf("providers = %v", resp.Data.Providers)
 	}
-	for _, name := range resp.Data.Providers {
+	if len(resp.Data.Adult) != 1 || resp.Data.Adult[0] != "sukebei" {
+		t.Fatalf("adult providers = %v", resp.Data.Adult)
+	}
+	for _, name := range append(resp.Data.Providers, resp.Data.Adult...) {
 		if _, ok := newProvider(name, http.DefaultClient); !ok {
 			t.Errorf("%s has no constructor", name)
 		}

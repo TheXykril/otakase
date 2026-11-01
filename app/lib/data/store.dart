@@ -12,6 +12,7 @@ const sourceNames = [
   'kickassanime',
   'anizone',
   'reanime',
+  'nyaa',
 ];
 // Evens out loudness while playing: quiet dialogue comes up and loud effects
 // come down. Uses ffmpeg's dynaudnorm (about a 3 s window, at most 10x gain).
@@ -49,6 +50,8 @@ const settingDefaults = <String, dynamic>{
   'ProviderOrder': sourceNames,
   'DisabledProviders': <String>[],
   'AutoFallback': true,
+  'TorrentSources': true,
+  'TorrentOnMobileData': false,
   'CheckUpdates': true,
   'SyncAniListMAL': true,
   'DiscordShareWatching': false,

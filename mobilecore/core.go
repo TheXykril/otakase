@@ -23,12 +23,18 @@ import (
 	"github.com/thexykril/otakase/internal/providers/anizone"
 	"github.com/thexykril/otakase/internal/providers/kickassanime"
 	"github.com/thexykril/otakase/internal/providers/megavid"
+	"github.com/thexykril/otakase/internal/providers/nyaa"
 	"github.com/thexykril/otakase/internal/providers/reanime"
+	"github.com/thexykril/otakase/internal/torrentstream"
 )
 
-// providerNames is the order sources are offered in. Torrent sources are not
-// part of the app yet.
-var providerNames = []string{"anikoto", "megavid", "animex", "kickassanime", "anizone", "reanime"}
+// providerNames is the order sources are offered in. The torrent source comes
+// last, as in the CLI: it needs peers before the first frame.
+var providerNames = []string{"anikoto", "megavid", "animex", "kickassanime", "anizone", "reanime", "nyaa"}
+
+// adultProviderNames carry only 18+ titles. The app asks them for an 18+ show
+// when the viewer's AniList allows 18+ content, and never otherwise.
+var adultProviderNames = []string{"sukebei"}
 
 const requestTimeout = 90 * time.Second
 const maxRequests = 16
@@ -47,6 +53,9 @@ type Core struct {
 	tasks     map[int64]*task
 	transport http.RoundTripper
 	timeout   time.Duration
+	// cacheDir holds torrent downloads; empty means the system temp dir.
+	cacheDir string
+	torrent  *torrentstream.BotStream
 }
 
 type task struct {
@@ -70,6 +79,9 @@ type request struct {
 	MalID     int      `json:"mal_id"`
 	AnilistID int      `json:"anilist_id"`
 	Episodes  int      `json:"episodes"`
+	// Quality is the resolution a torrent source tries first, e.g. 720.
+	// Zero takes the best release.
+	Quality int `json:"quality"`
 }
 
 type apiError struct {
@@ -103,6 +115,9 @@ type stream struct {
 	HLS       bool              `json:"hls"`
 	Subtitle  string            `json:"subtitle"`
 	Subtitles []subtitle        `json:"subtitles"`
+	// Torrent marks a stream that downloads while it plays; its progress
+	// is available from the torrent operation.
+	Torrent bool `json:"torrent,omitempty"`
 }
 
 // NewCore sets non-interactive, quiet providerhost hooks once. No provider
@@ -132,7 +147,11 @@ func (c *Core) Start(input string) int64 {
 	}
 	c.next++
 	id := c.next
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	timeout := c.timeout
+	if isTorrentResolve(input) {
+		timeout = max(timeout, torrentRequestTimeout)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	t := &task{ctx: ctx, cancel: cancel, result: make(chan string, 1)}
 	c.tasks[id] = t
 	go func() {
@@ -258,7 +277,10 @@ func (c *Core) execute(ctx context.Context, input string) string {
 		return encode(response{Version: 1, Data: map[string]bool{"stopped": true}})
 	}
 	if req.Operation == "providers" {
-		return encode(response{Version: 1, Data: map[string]any{"providers": providerNames}})
+		return encode(response{Version: 1, Data: map[string]any{"providers": providerNames, "adult": adultProviderNames}})
+	}
+	if req.Operation == "torrent" {
+		return encode(response{Version: 1, Data: c.torrentProgress()})
 	}
 	if req.Mode != "sub" && req.Mode != "dub" {
 		return failure("invalid_request", "Use mode sub or dub.", false)
@@ -269,8 +291,9 @@ func (c *Core) execute(ctx context.Context, input string) string {
 	if !ok {
 		return failure("unsupported_provider", "Unknown source.", false)
 	}
-	p, ok := searcher.(providers.HintResolver)
-	if !ok {
+	p, hints := searcher.(providers.HintResolver)
+	torrentSource, isTorrent := searcher.(*nyaa.Provider)
+	if !hints && !isTorrent {
 		return failure("unsupported_provider", "Source cannot resolve streams.", false)
 	}
 	var data any
@@ -297,6 +320,15 @@ func (c *Core) execute(ctx context.Context, input string) string {
 	case "resolve":
 		if !validShowID(req.ShowID) || req.Episode <= 0 || req.Episode > 10000 {
 			return failure("invalid_request", "A show id and positive episode are required.", false)
+		}
+		if isTorrent {
+			var streams []stream
+			streams, err = c.resolveTorrent(ctx, torrentSource, req)
+			if errors.Is(err, errPlaybackClosed) {
+				return failure("cancelled", "Playback closed.", false)
+			}
+			data = map[string]any{"streams": streams}
+			break
 		}
 		var urls []string
 		var hints map[string]providers.StreamPlaybackHint
@@ -403,6 +435,10 @@ func newProvider(name string, client *http.Client) (providers.Provider, bool) {
 		return reanime.NewWithHTTPClient(client), true
 	case "anizone":
 		return &anizone.Provider{}, true
+	case "nyaa":
+		return nyaa.New(), true
+	case "sukebei":
+		return nyaa.NewSukebei(), true
 	case "kickassanime":
 		return &kickassanime.Provider{}, true
 	}

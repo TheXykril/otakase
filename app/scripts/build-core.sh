@@ -30,5 +30,7 @@ GOBIN="$tools_dir" go install "golang.org/x/mobile/cmd/gomobile@$mobile_version"
 GOBIN="$tools_dir" go install "golang.org/x/mobile/cmd/gobind@$mobile_version"
 export PATH="$tools_dir:$PATH"
 mkdir -p app/android/app/libs
-gomobile bind -target="$targets" -androidapi 23 \
+# The torrent client's uTP and piece database have C versions; the pure Go
+# ones keep the NDK build simple and the library smaller.
+gomobile bind -target="$targets" -androidapi 23 -tags disable_libutp,nosqlite \
   -javapkg com.xyverion.otakase -o app/android/app/libs/mobilecore.aar ./mobilecore

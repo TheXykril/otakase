@@ -57,7 +57,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   final surface = FocusNode(debugLabel: 'Playback surface');
   final playFocus = FocusNode(debugLabel: 'Play pause');
   final skipFocus = FocusNode(debugLabel: 'Skip segment');
-  Timer? hideTimer, saveTimer, nextTimer;
+  Timer? hideTimer, saveTimer, nextTimer, loadingTimer;
   int copy = 0, generation = 0, countdownSeconds = 0;
   bool overlay = true,
       busy = true,
@@ -271,6 +271,23 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
   }
 
+  /// Shows how much of a torrent copy has arrived while the player waits for
+  /// its first frames.
+  void watchLoading(int g) {
+    loadingTimer?.cancel();
+    setState(() => status = 'Loading');
+    loadingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (!mounted || g != generation || !busy) {
+        timer.cancel();
+        return;
+      }
+      final p = await widget.services.core.torrentProgress();
+      if (p == null || !mounted || g != generation || !busy) return;
+      final mb = p.completed ~/ (1 << 20);
+      setState(() => status = mb > 0 ? 'Loading · $mb MB' : 'Loading');
+    });
+  }
+
   Future<void> open({int? mirror}) async {
     if (profileStopped) return;
     final g = ++generation;
@@ -336,6 +353,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
       if (!mounted || g != generation) return;
       final stream = source!.streams[copy];
+      if (stream.torrent) watchLoading(g);
       final headers = Map<String, String>.of(stream.headers);
       if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
       await configure();
@@ -816,7 +834,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
     if (source != null) failedSources.add(source!.provider);
     if (failedSources.length >=
-        (await widget.services.resolver.providerOrder()).length) {
+        (await widget.services.resolver.sourcesFor(anime)).length) {
       if (automatic) {
         if (mounted) {
           setState(() {
@@ -925,6 +943,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     hideTimer?.cancel();
     saveTimer?.cancel();
     nextTimer?.cancel();
+    loadingTimer?.cancel();
     if (!profileStopped) unawaited(save().then((_) => resumePusher.flush()));
     if (identical(widget.services.stopPlayback, profileStop)) {
       widget.services.stopPlayback = null;
@@ -961,6 +980,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     hideTimer?.cancel();
     saveTimer?.cancel();
     nextTimer?.cancel();
+    loadingTimer?.cancel();
     discordMeter?.cancel();
     await widget.services.discord.stopWatching();
     if (identical(widget.services.playerCommand, commandHandler)) {

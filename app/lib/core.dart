@@ -74,7 +74,40 @@ class CoreClient {
   Future<void> stopPlayback() async {
     await request({'operation': 'stop'});
   }
+
+  /// Whether the device is on a metered connection such as mobile data.
+  /// Hosts that cannot tell say no.
+  Future<bool> metered() async {
+    try {
+      return await channel.invokeMethod<bool>('metered') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Progress of the torrent being played, or null when none is.
+  Future<TorrentProgress?> torrentProgress() async {
+    try {
+      final d = await request({
+        'operation': 'torrent',
+      }, timeout: const Duration(seconds: 5));
+      return d['active'] == true ? TorrentProgress.fromJson(d) : null;
+    } catch (_) {
+      return null;
+    }
+  }
 }
+
+class TorrentProgress {
+  TorrentProgress.fromJson(Json json)
+    : completed = number(json['completed']),
+      length = number(json['length']),
+      peers = number(json['peers']);
+  final int completed, length, peers;
+}
+
+/// Sources that download the episode from other viewers while it plays.
+const torrentSources = {'nyaa', 'sukebei'};
 
 class ResolvedStream {
   ResolvedStream.fromJson(Json json)
@@ -83,12 +116,13 @@ class ResolvedStream {
       headers = Map<String, String>.from(json['headers'] as Map? ?? {}),
       referrer = json['referrer'] as String? ?? '',
       subtitle = json['subtitle'] as String? ?? '',
+      torrent = json['torrent'] == true,
       subtitles = (json['subtitles'] as List? ?? [])
           .whereType<Map>()
           .map((m) => m.cast<String, dynamic>())
           .toList();
   final String url, referrer, subtitle;
-  final bool hls;
+  final bool hls, torrent;
   final Map<String, String> headers;
   final List<Json> subtitles;
 }
@@ -120,16 +154,42 @@ class SourceResolver {
   final CoreClient core;
   final AppStore store;
   final Map<String, String> _matches = {};
-  Future<List<String>>? _coreOrder;
-  Future<List<String>> providerOrder() => _coreOrder ??= _loadOrder();
-  Future<List<String>> _loadOrder() async {
+  Future<Json>? _coreOrder;
+  Future<Json> _sources() => _coreOrder ??= _loadOrder();
+  Future<Json> _loadOrder() async {
     try {
-      final d = await core.request({'operation': 'providers'});
-      return (d['providers'] as List).cast<String>();
+      return await core.request({'operation': 'providers'});
     } catch (_) {
       _coreOrder = null;
       rethrow;
     }
+  }
+
+  /// Every general source, in the order they are tried.
+  Future<List<String>> providerOrder() async =>
+      ((await _sources())['providers'] as List).cast<String>();
+
+  /// Sources that carry only 18+ titles. Empty unless the viewer's AniList
+  /// allows 18+ content.
+  Future<List<String>> adultOrder() async {
+    if (!store.adultAllowed) return [];
+    return ((await _sources())['adult'] as List? ?? []).cast<String>();
+  }
+
+  /// The sources tried for a show. An 18+ show is only carried by the 18+
+  /// sources, so with 18+ allowed it goes to those alone, as in the CLI;
+  /// every other show never reaches them. Torrent sources follow the
+  /// viewer's settings and connection.
+  Future<List<String>> sourcesFor(Anime anime) async {
+    final adult = anime.isAdult ? await adultOrder() : const <String>[];
+    final order = adult.isNotEmpty ? adult : await providerOrder();
+    if (!order.any(torrentSources.contains)) return order;
+    final allowed =
+        store.flag('TorrentSources') &&
+        (store.flag('TorrentOnMobileData') || !await core.metered());
+    return allowed
+        ? order
+        : order.where((p) => !torrentSources.contains(p)).toList();
   }
 
   Future<PlaybackSource> resolve(
@@ -140,7 +200,7 @@ class SourceResolver {
     Set<String> exclude = const {},
     String? mode,
   }) async {
-    final order = await providerOrder();
+    final order = await sourcesFor(anime);
     scope.check();
     final remembered = store.preferredSource(anime);
     final providers = [
@@ -188,13 +248,23 @@ class SourceResolver {
             unawaited(report?.call(provider, true, kind, '') ?? Future.value());
           }
           kind = 'episode';
-          final data = await core.request({
-            'operation': 'resolve',
-            'provider': provider,
-            'mode': audio,
-            'show_id': id,
-            'episode': episode,
-          }, scope: scope);
+          final torrent = torrentSources.contains(provider);
+          final data = await core.request(
+            {
+              'operation': 'resolve',
+              'provider': provider,
+              'mode': audio,
+              'show_id': id,
+              'episode': episode,
+              if (torrent) 'quality': int.tryParse(store.text('Quality')) ?? 0,
+            },
+            scope: scope,
+            // A torrent waits for other viewers to answer, release by
+            // release; the core gives up on its own first.
+            timeout: torrent
+                ? const Duration(minutes: 3, seconds: 10)
+                : const Duration(seconds: 40),
+          );
           final streams = (data['streams'] as List? ?? [])
               .whereType<Map>()
               .map((m) => ResolvedStream.fromJson(m.cast<String, dynamic>()))
