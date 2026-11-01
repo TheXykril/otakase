@@ -85,12 +85,13 @@ trap cleanup EXIT
 if [[ -n ${TIZEN_AUTHOR_P12:-} ]]; then
   : "${TIZEN_AUTHOR_PASSWORD:?Set TIZEN_AUTHOR_PASSWORD for TIZEN_AUTHOR_P12}"
   dist="$tizen_sdk/tools/certificate-generator/certificates/distributor"
+  # The original public distributor signer expired in 2022; TVs reject it.
   tz="$tizen_sdk/tools/tizen-core/tz"
   "$tz" security-profiles remove otakase-build > /dev/null 2>&1 || true
   "$tz" security-profiles add -n otakase-build -A \
     -a "$TIZEN_AUTHOR_P12" -p "$TIZEN_AUTHOR_PASSWORD" \
-    -d "$dist/tizen-distributor-signer.p12" -P tizenpkcs12passfordsigner \
-    -C "$dist/tizen-distributor-ca.cer" > /dev/null
+    -d "$dist/tizen-distributor-signer-new.p12" -P tizenpkcs12passfordsigner \
+    -C "$dist/tizen-distributor-ca-new.cer" > /dev/null
   export TIZEN_DISTRIBUTOR_PASSWORD=${TIZEN_DISTRIBUTOR_PASSWORD:-tizenpkcs12passfordsigner}
 fi
 if [[ -n ${TIZEN_AUTHOR_PASSWORD:-} ]]; then
