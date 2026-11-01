@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Otakase
+Comment=Watch and track anime
+Exec=otakase
+Icon=otakase
+Categories=AudioVideo;Video;Player;
+Terminal=false
+StartupWMClass=com.xyverion.otakase

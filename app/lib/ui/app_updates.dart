@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../data/app_updates.dart';
+import '../desktop/desktop_updates.dart';
+import '../desktop/open_link.dart';
 import 'components.dart';
 
 class AppUpdatePanel extends StatefulWidget {
@@ -54,16 +56,19 @@ class _AppUpdatePanelState extends State<AppUpdatePanel>
       final updates = widget.updates;
       final phase = updates.phase;
       final candidate = updates.update;
+      final platform = updates.platform;
       final message = switch (phase) {
-        UpdatePhase.idle => 'Check for a new Android app version.',
+        UpdatePhase.idle => platform.idleText,
         UpdatePhase.checking => 'Checking for updates…',
         UpdatePhase.current => 'Your app is up to date.',
         UpdatePhase.unpublished => 'No in-app update has been published yet.',
         UpdatePhase.available => 'An Otakase update is available.',
         UpdatePhase.downloading => 'Downloading and verifying the update…',
-        UpdatePhase.ready => 'Update verified. Ready to install.',
+        UpdatePhase.ready => platform.readyText,
         UpdatePhase.permission => 'Allow Otakase to install updates in Android settings, then return here.',
         UpdatePhase.installer => 'Confirm the update in the Android installer.',
+        UpdatePhase.manual =>
+          'An Otakase update is available. ${updates.manualReason ?? ''}',
         UpdatePhase.failed => updates.error ?? 'Update failed. Please retry.',
       };
       return Padding(
@@ -105,7 +110,18 @@ class _AppUpdatePanelState extends State<AppUpdatePanel>
               spacing: 12,
               runSpacing: 12,
               children: [
-                if (!updates.busy && updates.available)
+                if (phase == UpdatePhase.manual)
+                  OutlinedButton.icon(
+                    key: const Key('open-update-page'),
+                    autofocus: widget.isTV,
+                    onPressed: () =>
+                        openInBrowser(DesktopUpdatePlatform.downloadPage),
+                    icon: const Icon(LucideIcons.externalLink),
+                    label: const Text('Open download page'),
+                  ),
+                if (!updates.busy &&
+                    updates.available &&
+                    phase != UpdatePhase.manual)
                   OutlinedButton.icon(
                     key: const Key('install-update'),
                     autofocus: widget.isTV,
@@ -118,7 +134,9 @@ class _AppUpdatePanelState extends State<AppUpdatePanel>
                           : LucideIcons.download,
                     ),
                     label: Text(
-                      updates.downloaded ? 'Install update' : 'Download update',
+                      updates.downloaded
+                          ? platform.installLabel
+                          : 'Download update',
                     ),
                   ),
                 if (!updates.busy && !updates.downloaded)
@@ -141,7 +159,7 @@ class _AppUpdatePanelState extends State<AppUpdatePanel>
             ),
             const SizedBox(height: 12),
             Text(
-              'Your profiles, accounts and watch progress stay on this device. Android asks you to approve installation.',
+              platform.footnote,
               style: uiStyle(context, size: 15, color: muted),
             ),
           ],

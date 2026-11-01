@@ -21,6 +21,7 @@ enum UpdatePhase {
   ready,
   permission,
   installer,
+  manual,
   failed,
 }
 
@@ -31,8 +32,20 @@ class InstalledApp {
   String get label => '$name (build $code)';
 }
 
-class AndroidUpdate {
-  const AndroidUpdate({
+/// Turns a release version into one number that only grows:
+/// 26.7.0 -> 26007000. Android installs an update only with a higher
+/// versionCode, and every platform compares updates the same way.
+int versionCode(String version) {
+  final parts = version.split('-').first.split('.');
+  if (parts.length < 2 || parts.length > 3) return 0;
+  final numbers = parts.map(int.tryParse).toList();
+  if (numbers.any((n) => n == null || n < 0 || n > 999)) return 0;
+  final [year, drop, ...rest] = numbers.cast<int>();
+  return year * 1000000 + drop * 1000 + (rest.isEmpty ? 0 : rest.first);
+}
+
+class AppUpdate {
+  const AppUpdate({
     required this.name,
     required this.code,
     required this.url,
@@ -44,14 +57,18 @@ class AndroidUpdate {
   final Uri url;
   String get label => '$name (build $code)';
 
-  factory AndroidUpdate.parse(Map<String, dynamic> data, Map asset) {
+  factory AppUpdate.parse(
+    Map<String, dynamic> data,
+    Map asset,
+    UpdatePlatform platform,
+  ) {
     final name = data['version_name'];
     final code = data['version_code'];
     final size = data['size'];
     final checksum = data['sha256'];
     if (data['schema'] != 1 ||
         data['package_name'] != androidPackage ||
-        data['apk'] != androidApk ||
+        data[platform.fileKey] != platform.fileName ||
         name is! String ||
         name.isEmpty ||
         name.length > 80 ||
@@ -65,12 +82,12 @@ class AndroidUpdate {
         checksum is! String ||
         !RegExp(r'^[a-f0-9]{64}$').hasMatch(checksum) ||
         (asset['digest'] != null && asset['digest'] != 'sha256:$checksum')) {
-      throw const FormatException('Invalid Android update metadata.');
+      throw const FormatException('Invalid update metadata.');
     }
-    return AndroidUpdate(
+    return AppUpdate(
       name: name,
       code: code,
-      url: releaseAssetUri(asset['browser_download_url'], androidApk),
+      url: releaseAssetUri(asset['browser_download_url'], platform.fileName),
       size: size,
       checksum: checksum,
     );
@@ -94,33 +111,82 @@ Uri releaseAssetUri(dynamic value, String filename) {
       parts[3] != 'download' ||
       parts[4].isEmpty ||
       parts[5] != filename) {
-    throw const FormatException('Invalid Android release address.');
+    throw const FormatException('Invalid release address.');
   }
   return uri;
 }
 
-class AndroidUpdatePlatform {
+/// Where an update comes from and how it is installed on this kind of
+/// device. The release check, download and checksum are shared.
+abstract class UpdatePlatform {
+  /// The metadata file on the release, and the key in it naming [fileName].
+  String get manifestName;
+  String get fileKey;
+
+  /// The release file this device installs.
+  String get fileName;
+
+  /// Shown above the update buttons.
+  String get idleText;
+  String get readyText;
+  String get installLabel;
+  String get footnote;
+
+  Future<InstalledApp> installed();
+
+  /// Why this copy cannot update itself, or null when it can. Updates for
+  /// such a copy are offered as a link to the download page.
+  Future<String?> manualReason() async => null;
+
+  Future<File> createDownload();
+  Future<bool> channelAllowed();
+  Future<void> validate(File file, AppUpdate update);
+  Future<bool> install(File file, AppUpdate update);
+}
+
+class AndroidUpdatePlatform extends UpdatePlatform {
   static const channel = MethodChannel('otakase/updates');
 
+  @override
+  String get manifestName => androidManifest;
+  @override
+  String get fileKey => 'apk';
+  @override
+  String get fileName => androidApk;
+  @override
+  String get idleText => 'Check for a new Android app version.';
+  @override
+  String get readyText => 'Update verified. Ready to install.';
+  @override
+  String get installLabel => 'Install update';
+  @override
+  String get footnote =>
+      'Your profiles, accounts and watch progress stay on this device. Android asks you to approve installation.';
+
+  @override
   Future<InstalledApp> installed() async {
     final data = await channel.invokeMapMethod<String, dynamic>('installed');
     return InstalledApp(data!['name'] as String, data['code'] as int);
   }
 
+  @override
   Future<File> createDownload() async =>
       File((await channel.invokeMethod<String>('createDownload'))!);
 
+  @override
   Future<bool> channelAllowed() async =>
       await channel.invokeMethod<bool>('installationAllowed') ?? false;
 
-  Future<void> validate(File file, AndroidUpdate update) =>
+  @override
+  Future<void> validate(File file, AppUpdate update) =>
       channel.invokeMethod<void>('validate', {
         'path': file.path,
         'code': update.code,
         'sha256': update.checksum,
       });
 
-  Future<bool> install(File file, AndroidUpdate update) async =>
+  @override
+  Future<bool> install(File file, AppUpdate update) async =>
       await channel.invokeMethod<bool>('install', {
         'path': file.path,
         'code': update.code,
@@ -130,16 +196,20 @@ class AndroidUpdatePlatform {
 }
 
 class AppUpdates extends ChangeNotifier {
-  AppUpdates({AndroidUpdatePlatform? platform, http.Client Function()? client})
+  AppUpdates({UpdatePlatform? platform, http.Client Function()? client})
     : platform = platform ?? AndroidUpdatePlatform(),
       _newClient = client ?? http.Client.new;
 
-  final AndroidUpdatePlatform platform;
+  final UpdatePlatform platform;
   final http.Client Function() _newClient;
   UpdatePhase phase = UpdatePhase.idle;
   InstalledApp? installed;
-  AndroidUpdate? update;
+  AppUpdate? update;
   String? error;
+
+  /// Set when this copy cannot install updates itself (see
+  /// [UpdatePlatform.manualReason]).
+  String? manualReason;
   int received = 0;
   File? _download;
   http.Client? _client;
@@ -181,7 +251,7 @@ class AppUpdates extends ChangeNotifier {
       ..headers['Accept'] = uri.host == 'api.github.com'
           ? 'application/vnd.github+json'
           : 'application/octet-stream'
-      ..headers['User-Agent'] = 'Otakase-Android';
+      ..headers['User-Agent'] = 'Otakase-App';
     final response = await client
         .send(request)
         .timeout(const Duration(seconds: 30));
@@ -237,28 +307,36 @@ class AppUpdates extends ChangeNotifier {
         return;
       }
       final assets = (release['assets'] as List? ?? []).whereType<Map>();
-      final manifests = assets.where((a) => a['name'] == androidManifest);
-      final apks = assets.where((a) => a['name'] == androidApk);
-      if (manifests.length != 1 || apks.length != 1) {
+      final manifests = assets.where((a) => a['name'] == platform.manifestName);
+      final files = assets.where((a) => a['name'] == platform.fileName);
+      if (manifests.length != 1 || files.length != 1) {
         _emit(UpdatePhase.unpublished);
         return;
       }
       final uri = releaseAssetUri(
         manifests.single['browser_download_url'],
-        androidManifest,
+        platform.manifestName,
       );
       final manifest = await _get(client, uri);
       if (manifest.statusCode != 200) {
-        throw const FormatException('Android update metadata is unavailable.');
+        throw const FormatException('Update metadata is unavailable.');
       }
       final data = await _json(manifest, 16 * 1024);
       if (!_active(generation)) return;
-      final candidate = AndroidUpdate.parse(data, apks.single);
+      final candidate = AppUpdate.parse(data, files.single, platform);
       if (candidate.url.pathSegments[4] != uri.pathSegments[4]) {
-        throw const FormatException('Android release files do not match.');
+        throw const FormatException('Release files do not match.');
       }
       update = candidate;
-      _emit(available ? UpdatePhase.available : UpdatePhase.current);
+      manualReason = available ? await platform.manualReason() : null;
+      if (!_active(generation)) return;
+      _emit(
+        !available
+            ? UpdatePhase.current
+            : manualReason != null
+            ? UpdatePhase.manual
+            : UpdatePhase.available,
+      );
     } catch (e) {
       if (_active(generation)) {
         error = switch (e) {
@@ -277,7 +355,9 @@ class AppUpdates extends ChangeNotifier {
   }
 
   Future<void> download() async {
-    if (busy || _closed || !available || downloaded) return;
+    if (busy || _closed || !available || downloaded || manualReason != null) {
+      return;
+    }
     final candidate = update!;
     final generation = ++_generation;
     final client = _client = _newClient();
@@ -293,7 +373,7 @@ class AppUpdates extends ChangeNotifier {
       if (response.statusCode != 200 ||
           (response.contentLength != null &&
               response.contentLength != candidate.size)) {
-        throw const FormatException('Android download size does not match.');
+        throw const FormatException('Download size does not match.');
       }
       sink = await file.open(mode: FileMode.write);
       await for (final chunk in response.stream.timeout(
@@ -302,7 +382,7 @@ class AppUpdates extends ChangeNotifier {
         if (!_active(generation)) return;
         received += chunk.length;
         if (received > candidate.size) {
-          throw const FormatException('Android download is too large.');
+          throw const FormatException('Download is too large.');
         }
         await sink.writeFrom(chunk);
         if (!_active(generation)) return;
@@ -315,7 +395,7 @@ class AppUpdates extends ChangeNotifier {
       final checksum = await sha256.bind(file.openRead()).first;
       if (received != candidate.size ||
           checksum.toString() != candidate.checksum) {
-        throw const FormatException('Android download verification failed.');
+        throw const FormatException('Download verification failed.');
       }
       await platform.validate(file, candidate);
       if (!_active(generation)) return;
@@ -350,7 +430,7 @@ class AppUpdates extends ChangeNotifier {
       }
     } on PlatformException catch (e) {
       if (_active(generation)) {
-        error = e.message ?? 'Unable to open the Android installer.';
+        error = e.message ?? 'Unable to start the update.';
         if (e.code == 'invalid_update') {
           final file = _download;
           _download = null;
