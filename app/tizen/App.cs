@@ -1,0 +1,18 @@
+namespace Runner
+{
+    public class App : OtakaseApplication
+    {
+        protected override void OnCreate()
+        {
+            base.OnCreate();
+
+            GeneratedPluginRegistrant.RegisterPlugins(this);
+        }
+
+        static void Main(string[] args)
+        {
+            var app = new App();
+            app.Run(args);
+        }
+    }
+}

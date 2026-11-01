@@ -27,3 +27,4 @@
 - [App Icon](Developer-App-Icon)
 - [Discord Bot](Developer-Discord-Bot)
 - [App Link](Developer-App-Link)
+- [Samsung TV App](Developer-Samsung-TV)

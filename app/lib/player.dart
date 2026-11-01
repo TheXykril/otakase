@@ -5,13 +5,12 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 
 import 'core.dart';
 import 'data/models.dart';
 import 'data/store.dart';
 import 'data/synced_resume.dart';
+import 'playback/engine.dart';
 import 'services.dart';
 import 'tls_ca.dart';
 import 'ui/components.dart';
@@ -38,8 +37,7 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
-  late final Player player;
-  late final VideoController video;
+  late final PlaybackEngine player;
   late int episode;
   late Anime anime;
   late final ResumePusher resumePusher;
@@ -92,20 +90,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     widget.services.playerCommand = commandHandler;
     statusHandler = remoteStatus;
     widget.services.playerStatus = statusHandler;
-    player = Player(
-      configuration: const PlayerConfiguration(
-        libass: true,
-        libassAndroidFont: 'assets/fonts/NotoSansJP-Regular.otf',
-        libassAndroidFontName: 'Noto Sans JP',
-      ),
-    );
-    video = VideoController(
-      player,
-      configuration: const VideoControllerConfiguration(
-        hwdec: 'mediacodec',
-        enableHardwareAcceleration: true,
-      ),
-    );
+    player = PlaybackEngine.create();
     discordMeter = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!profileStopped && !busy && duration > Duration.zero) {
         widget.services.discord.observe(
@@ -193,10 +178,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> property(String name, String value) async {
-    final native = player.platform;
-    if (native is NativePlayer) await native.setProperty(name, value);
-  }
+  Future<void> property(String name, String value) =>
+      player.setProperty(name, value);
 
   Future<void> configure() async {
     final s = widget.services.store;
@@ -340,7 +323,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
       await configure();
       await configureQuality(stream, headers);
-      await player.open(Media(stream.url, httpHeaders: headers), play: false);
+      await player.open(stream.url, headers: headers, play: false);
       if (!mounted || g != generation) return;
       // Seeking and adding subtitles before mpv has loaded the file fails, so
       // wait until it reports a duration (a live stream may never do so).
@@ -452,7 +435,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     for (final preferred in preferences) {
       if (preferred == 'none' || preferred == 'off') {
         subSelected = true;
-        await player.setSubtitleTrack(SubtitleTrack.no());
+        await player.setSubtitleTrack(EngineTrack.no);
         return;
       }
       final embedded = player.state.tracks.subtitle.where(
@@ -493,9 +476,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           .timeout(const Duration(seconds: 15));
       if (!mounted || g != generation) return false;
       if (response.statusCode != 200) throw const FormatException();
-      // libass receives the original text, including ASS positions and styles.
       await player.setSubtitleTrack(
-        SubtitleTrack.data(
+        EngineTrack.data(
           utf8.decode(response.bodyBytes, allowMalformed: true),
           title: track['label'] as String? ?? 'Subtitles',
           language: track['language'] as String?,
@@ -1011,7 +993,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               child: Focus(
                 focusNode: surface,
                 autofocus: true,
-                child: Video(controller: video, controls: NoVideoControls),
+                child: player.view(),
               ),
             ),
             if (busy)

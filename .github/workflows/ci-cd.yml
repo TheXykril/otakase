@@ -2,7 +2,8 @@ name: Build and release
 
 # Runs only when started by hand: the Actions tab ("Run workflow") or the
 # Discord bot's /github command. Each run vets, tests and builds for Linux,
-# builds the Android APK and tests the Windows installer.
+# builds the Android APK and the Samsung TV app and tests the Windows
+# installer.
 # With "release" ticked it also builds macOS and Windows and publishes
 # v<VERSION.txt> from main as a GitHub release.
 
@@ -196,8 +197,81 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  # The Samsung TV app: one TPK per TizenOS group in otakase-samsung-tv.zip,
+  # with the install scripts. Signed with the author certificate from the
+  # TIZEN_AUTHOR_* secrets on main (users re-sign with their Samsung
+  # certificate when installing); a PR build gets a throwaway certificate.
+  # Installed TVs update themselves from the signed otakase-samsung-tv.json
+  # and the brain zips (TV_UPDATE_KEY_PEM secret, main only).
+  samsung-tv:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ (github.event.inputs.pr_number && format('refs/pull/{0}/head', github.event.inputs.pr_number)) || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Tizen SDK and flutter-tizen
+        run: |
+          app/scripts/setup-tizen-sdk.sh "$HOME/tizen-studio"
+          echo "TIZEN_SDK=$HOME/tizen-studio" >> "$GITHUB_ENV"
+          echo "$HOME/flutter-tizen/bin" >> "$GITHUB_PATH"
+
+      - name: Signing certificate
+        env:
+          AUTHOR_P12: ${{ inputs.pr_number == '' && secrets.TIZEN_AUTHOR_P12_BASE64 || '' }}
+          AUTHOR_PASSWORD: ${{ inputs.pr_number == '' && secrets.TIZEN_AUTHOR_PASSWORD || '' }}
+        run: |
+          if [ -n "$AUTHOR_P12" ]; then
+            printf '%s' "$AUTHOR_P12" | base64 -d > "$RUNNER_TEMP/author.p12"
+            password=$AUTHOR_PASSWORD
+          else
+            echo "::warning::TIZEN_AUTHOR_P12_BASE64 is not set; the TPKs use a throwaway author certificate"
+            password=$(openssl rand -hex 16)
+            "$TIZEN_SDK/tools/tizen-core/tz" cert -n otakase -p "$password" -f otakase-ci > /dev/null
+            cp "$HOME/tizen-studio-data/keystore/author/otakase-ci.p12" "$RUNNER_TEMP/author.p12"
+          fi
+          echo "::add-mask::$password"
+          echo "TIZEN_AUTHOR_P12=$RUNNER_TEMP/author.p12" >> "$GITHUB_ENV"
+          echo "TIZEN_AUTHOR_PASSWORD=$password" >> "$GITHUB_ENV"
+
+      - name: Build TPKs
+        env:
+          UPDATE_KEY: ${{ inputs.pr_number == '' && secrets.TV_UPDATE_KEY_PEM || '' }}
+        run: |
+          if [ -n "$UPDATE_KEY" ]; then
+            printf '%s\n' "$UPDATE_KEY" > "$RUNNER_TEMP/tv-update-key.pem"
+            export TV_UPDATE_KEY=$RUNNER_TEMP/tv-update-key.pem
+          fi
+          app/scripts/build-tpk.sh
+
+      - name: Remove signing keys
+        if: always()
+        run: rm -f "$RUNNER_TEMP/author.p12" "$RUNNER_TEMP/tv-update-key.pem"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: otakase-samsung-tv
+          path: |
+            app/build/otakase-samsung-tv.zip
+            app/build/samsung-tv/otakase-samsung-tv-brain-*.zip
+            app/build/samsung-tv/otakase-samsung-tv.json*
+          retention-days: 7
+          if-no-files-found: error
+
   release:
-    needs: [build, installer, android]
+    needs: [build, installer, android, samsung-tv]
     if: inputs.release && inputs.pr_number == '' && github.ref == 'refs/heads/main'
     runs-on: windows-latest
     permissions:
@@ -259,6 +333,11 @@ jobs:
           name: otakase-android
           path: Build/Output
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: otakase-samsung-tv
+          path: Build/Output
+
       # The installer script reads the exe from releases/otakase-<version>/windows.
       - name: Lay out release files
         shell: pwsh
@@ -311,6 +390,10 @@ jobs:
             Build/Output/otakase-windows-installer.exe
             Build/Output/otakase-android.apk
             Build/Output/otakase-android.json
+            Build/Output/otakase-samsung-tv.zip
+            Build/Output/samsung-tv/otakase-samsung-tv-brain-*.zip
+            Build/Output/samsung-tv/otakase-samsung-tv.json
+            Build/Output/samsung-tv/otakase-samsung-tv.json.sig
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
