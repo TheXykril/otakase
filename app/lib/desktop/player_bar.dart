@@ -106,25 +106,27 @@ class DesktopPlayerBar extends StatelessWidget {
                   const SizedBox(width: 8),
                   const OtakaseSeal(size: 26),
                   const SizedBox(width: 12),
-                  Flexible(
-                    child: Text(
-                      title,
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        text: title,
+                        style: uiStyle(
+                          context,
+                          size: 18,
+                          weight: FontWeight.w600,
+                          color: fgBright,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: '   $subtitle',
+                            style: uiStyle(context, size: 15, color: muted),
+                          ),
+                        ],
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: uiStyle(
-                        context,
-                        size: 18,
-                        weight: FontWeight.w600,
-                        color: fgBright,
-                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    subtitle,
-                    style: uiStyle(context, size: 15, color: muted),
-                  ),
-                  const Spacer(),
                   const WindowButtons(),
                 ],
               ),
@@ -183,6 +185,22 @@ class DesktopPlayerBar extends StatelessWidget {
                           onChangeStart: onSeekStart,
                           onChanged: onSeekChanged,
                           onChangeEnd: onSeekEnd,
+                        ),
+                        // Opening and ending stripes stay visible over the
+                        // played part, like the CLI skin.
+                        IgnorePointer(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: CustomPaint(
+                              size: const Size(double.infinity, 5),
+                              painter: SeekRailPainter(
+                                stripes: stripes,
+                                buffered: 0,
+                                seconds: total / 1000,
+                                rail: false,
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -291,26 +309,32 @@ class SeekRailPainter extends CustomPainter {
     required this.stripes,
     required this.buffered,
     required this.seconds,
+    this.rail = true,
   });
   final List<SkipSpan> stripes;
   final double buffered, seconds;
+
+  /// Paints the rail and buffered part; false paints only the stripes.
+  final bool rail;
 
   @override
   void paint(Canvas canvas, Size size) {
     final h = size.height;
     final top = (size.height - h) / 2;
-    canvas.drawRRect(
-      RRect.fromLTRBR(0, top, size.width, top + h, const Radius.circular(3)),
-      Paint()..color = const Color(0xff5a5148),
-    );
-    final b = buffered.clamp(0.0, 1.0) * size.width;
+    if (rail) {
+      canvas.drawRRect(
+        RRect.fromLTRBR(0, top, size.width, top + h, const Radius.circular(3)),
+        Paint()..color = const Color(0xff5a5148),
+      );
+    }
+    final b = rail ? buffered.clamp(0.0, 1.0) * size.width : 0.0;
     if (b > 0) {
       canvas.drawRRect(
         RRect.fromLTRBR(0, top, b, top + h, const Radius.circular(3)),
         Paint()..color = const Color(0xffa09282),
       );
     }
-    if (seconds <= 0) return;
+    if (seconds <= 0 || rail) return;
     for (final s in stripes) {
       final left = (s.start / seconds).clamp(0.0, 1.0) * size.width;
       final right = (s.end / seconds).clamp(0.0, 1.0) * size.width;
@@ -331,6 +355,7 @@ class SeekRailPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(SeekRailPainter old) =>
+      old.rail != rail ||
       old.buffered != buffered ||
       old.seconds != seconds ||
       old.stripes.length != stripes.length;

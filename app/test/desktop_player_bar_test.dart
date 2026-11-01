@@ -65,7 +65,7 @@ void main() {
     await tester.pumpWidget(bar(calls));
     await tester.pump();
 
-    expect(find.text('Frieren'), findsOneWidget);
+    expect(find.textContaining('Frieren'), findsOneWidget);
     expect(find.text('07:12'), findsOneWidget);
     expect(find.text('-16:48'), findsOneWidget);
     expect(find.byKey(const Key('window-close')), findsOneWidget);
