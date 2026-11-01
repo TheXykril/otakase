@@ -1,4 +1,4 @@
-// otakase site: install tabs, latest version, and the cover art shown through the hero letters.
+// Otakase site: install tabs, latest version, and the cover art shown through the hero letters.
 (() => {
   'use strict';
 
@@ -22,21 +22,8 @@
       next.focus();
     });
   });
-  // Open on the visitor's own system; picking a system here also switches
-  // the menu shots to it.
-  const tabFor = { linux: 't-linux', arch: 't-arch', macos: 't-macos', windows: 't-windows' };
-  tabs.forEach((t) => t.addEventListener('click', () => {
-    const os = Object.keys(tabFor).find((k) => tabFor[k] === t.id);
-    document.dispatchEvent(new CustomEvent('otakase-os', { detail: os === 'arch' ? 'linux' : os }));
-  }));
-  document.addEventListener('otakase-shot', (e) => {
-    const os = e.detail === 'rofi' ? 'linux' : e.detail;
-    const current = tabs.find((t) => t.getAttribute('aria-selected') === 'true');
-    // Arch is Linux too: leave it open when Linux is picked.
-    if (os === 'linux' && current && current.id === tabFor.arch) return;
-    select(document.getElementById(tabFor[os]));
-  });
-  const own = document.getElementById(tabFor[visitorOS()]);
+  // Open on the visitor's own system.
+  const own = document.getElementById('t-' + visitorOS());
   if (own) select(own);
 
   // ---- latest version
@@ -129,17 +116,18 @@
     .catch(() => run(FALLBACK));
 })();
 
-// visitorOS guesses the visitor's system: windows, macos or linux. Phones get
-// the desktop they are most likely to install on: an iPhone a Mac, Android Linux.
+// visitorOS guesses the visitor's system: android, windows, macos or linux.
+// An iPhone gets the Mac, the closest thing there is.
 function visitorOS() {
   const ua = navigator.userAgent || '';
   const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+  if (/Android/i.test(platform) || /Android/i.test(ua)) return 'android';
   if (/Win/i.test(platform) || /Windows/i.test(ua)) return 'windows';
   if (/Mac|iPhone|iPad|iPod/i.test(platform) || /Macintosh|iPhone|iPad/i.test(ua)) return 'macos';
   return 'linux';
 }
 
-// ---- menu shots: one system at a time
+// ---- screenshots: one device at a time, the visitor's own first
 (() => {
   const buttons = [...document.querySelectorAll('.os-pick button')];
   const shots = [...document.querySelectorAll('.os-shot')];
@@ -147,10 +135,6 @@ function visitorOS() {
     buttons.forEach((b) => b.setAttribute('aria-pressed', b.dataset.shot === name));
     shots.forEach((s) => { s.hidden = s.dataset.shot !== name; });
   };
-  buttons.forEach((b) => b.addEventListener('click', () => {
-    show(b.dataset.shot);
-    document.dispatchEvent(new CustomEvent('otakase-shot', { detail: b.dataset.shot }));
-  }));
-  document.addEventListener('otakase-os', (e) => show(e.detail));
-  show(visitorOS());
+  buttons.forEach((b) => b.addEventListener('click', () => show(b.dataset.shot)));
+  show(visitorOS() === 'android' ? 'phone' : 'computer');
 })();
