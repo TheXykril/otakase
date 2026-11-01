@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otakase/playback/ass_overlay.dart';
 import 'package:otakase/playback/subtitle_cues.dart';
 
 void main() {
@@ -46,5 +47,15 @@ Hour
       'First\nline two\nOverlap',
     );
     expect(srt.at(const Duration(milliseconds: 6500)), 'Overlap');
+  });
+
+  test('ASS files are told apart from SRT and VTT', () {
+    expect(looksLikeAss('[Script Info]\nTitle: x\n'), isTrue);
+    expect(
+      looksLikeAss('\ufeff\n[V4+ Styles]\n[Events]\nDialogue: 0,0:00:01.00'),
+      isTrue,
+    );
+    expect(looksLikeAss('WEBVTT\n\n00:01.000 --> 00:02.000\nHi'), isFalse);
+    expect(looksLikeAss('1\n00:00:01,000 --> 00:00:02,000\nHi'), isFalse);
   });
 }

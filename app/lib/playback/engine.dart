@@ -58,8 +58,7 @@ abstract class EngineStreams {
 /// The video player behind the player pages. Android uses libmpv through
 /// media_kit; Samsung TVs use the TV's own AVPlay player.
 abstract class PlaybackEngine {
-  factory PlaybackEngine.create() =>
-      isTizen ? TizenEngine() : MediaKitEngine();
+  factory PlaybackEngine.create() => isTizen ? TizenEngine() : MediaKitEngine();
   EngineState get state;
   EngineStreams get stream;
   Future<void> open(

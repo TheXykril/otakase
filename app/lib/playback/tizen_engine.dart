@@ -1,15 +1,19 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_player_avplay/video_player.dart';
 
+import 'ass_overlay.dart';
 import 'engine.dart';
 import 'subtitle_cues.dart';
+import 'tizen_core.dart';
 
 /// Samsung TV playback through the TV's AVPlay player. AVPlay draws video
-/// under the Flutter layer, so [view] punches a hole for it. Subtitles are
-/// shown as plain text: there is no libass on the TV.
+/// under the Flutter layer, so [view] punches a hole for it. ASS subtitle
+/// files are drawn by libass ([AssOverlay]); other subtitles and AVPlay's
+/// embedded captions are shown as plain text.
 class TizenEngine implements PlaybackEngine {
   final _controller = ValueNotifier<VideoPlayerController?>(null);
   final _subtitle = ValueNotifier<String>('');
@@ -24,6 +28,12 @@ class TizenEngine implements PlaybackEngine {
   var _audio = <AudioTrack>[];
   var _text = <TextTrack>[];
   SubtitleCues? _cues;
+  final _ass = ValueNotifier<AssOverlay?>(null);
+  Timer? _assTimer;
+  // Last position AVPlay reported and when, to move ASS frames smoothly
+  // between its updates.
+  Duration _reported = Duration.zero;
+  final _sinceReport = Stopwatch();
   // Embedded subtitles come from AVPlay captions; null shows none.
   bool _embedded = false;
   double _volume = 100, _rate = 1;
@@ -45,10 +55,7 @@ class TizenEngine implements PlaybackEngine {
   }) async {
     await stop();
     final g = ++_generation;
-    final controller = VideoPlayerController.network(
-      url,
-      httpHeaders: headers,
-    );
+    final controller = VideoPlayerController.network(url, httpHeaders: headers);
     _controller.value = controller;
     controller.addListener(() => _changed(controller));
     try {
@@ -77,6 +84,10 @@ class TizenEngine implements PlaybackEngine {
       _error.add(value.errorDescription!);
     }
     if (value.position != last?.position) {
+      _reported = value.position;
+      _sinceReport
+        ..reset()
+        ..start();
       _position.add(value.position);
       final cues = _cues;
       if (cues != null) {
@@ -102,8 +113,7 @@ class TizenEngine implements PlaybackEngine {
   @override
   Future<void> pause() async => _controller.value?.pause();
   @override
-  Future<void> playOrPause() async =>
-      state.playing ? pause() : play();
+  Future<void> playOrPause() async => state.playing ? pause() : play();
   @override
   Future<void> seek(Duration position) async =>
       _controller.value?.seekTo(position);
@@ -116,9 +126,7 @@ class TizenEngine implements PlaybackEngine {
     _last = null;
     _audio = [];
     _text = [];
-    _cues = null;
-    _embedded = false;
-    _subtitle.value = '';
+    _clearSubtitles();
     await old?.dispose();
   }
 
@@ -144,20 +152,58 @@ class TizenEngine implements PlaybackEngine {
     }
   }
 
-  @override
-  Future<void> setSubtitleTrack(EngineTrack track) async {
+  void _clearSubtitles() {
     _cues = null;
     _embedded = false;
     _subtitle.value = '';
+    _assTimer?.cancel();
+    _assTimer = null;
+    _ass.value?.dispose();
+    _ass.value = null;
+  }
+
+  Duration get _assPosition {
+    final value = _value;
+    if (value == null || !value.isPlaying) return _reported;
+    final moved = _sinceReport.elapsedMicroseconds * _rate;
+    // Never run more than a second ahead of a stalled report.
+    return _reported + Duration(microseconds: moved.clamp(0, 1000000).round());
+  }
+
+  Future<void> _showFile(String text, int generation) async {
+    if (looksLikeAss(text)) {
+      final overlay = await AssOverlay.create(
+        tizenLibrary('libotakase_ass.so'),
+        text,
+      );
+      if (generation != _generation || _ass.value != null || _cues != null) {
+        overlay?.dispose();
+        return;
+      }
+      if (overlay != null) {
+        _ass.value = overlay;
+        _assTimer = Timer.periodic(
+          const Duration(milliseconds: 40),
+          (_) => overlay.show(_assPosition),
+        );
+        return;
+      }
+    }
+    if (generation == _generation) _cues = SubtitleCues.parse(text);
+  }
+
+  @override
+  Future<void> setSubtitleTrack(EngineTrack track) async {
+    _clearSubtitles();
+    final g = _generation;
     switch (track.id) {
       case 'no':
         return;
       case 'auto':
         _embedded = _text.isNotEmpty;
       case 'data':
-        _cues = SubtitleCues.parse(track.data!);
+        await _showFile(track.data!, g);
       case 'uri':
-        final g = _generation;
         final response = await http
             .get(Uri.parse(track.uri!))
             .timeout(const Duration(seconds: 15));
@@ -165,7 +211,10 @@ class TizenEngine implements PlaybackEngine {
         if (response.statusCode != 200) {
           throw StateError('Subtitle download failed');
         }
-        _cues = SubtitleCues.parse(response.body);
+        await _showFile(
+          utf8.decode(response.bodyBytes, allowMalformed: true),
+          g,
+        );
       default:
         for (final t in _text) {
           if ('${t.trackId}' == track.id) {
@@ -221,7 +270,18 @@ class TizenEngine implements PlaybackEngine {
                   aspectRatio: value.isInitialized && value.aspectRatio > 0
                       ? value.aspectRatio
                       : 16 / 9,
-                  child: VideoPlayer(controller, scale: scale),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      VideoPlayer(controller, scale: scale),
+                      ValueListenableBuilder<AssOverlay?>(
+                        valueListenable: _ass,
+                        builder: (context, overlay, _) => overlay == null
+                            ? const SizedBox.shrink()
+                            : AssLayer(overlay),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );

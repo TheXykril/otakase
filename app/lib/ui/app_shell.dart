@@ -9,6 +9,7 @@ import '../core.dart';
 import '../data/models.dart';
 import '../player.dart';
 import '../playback/platform.dart';
+import '../playback/tizen_updates.dart';
 import '../services.dart';
 import 'catalog_pages.dart';
 import 'components.dart';
@@ -35,6 +36,7 @@ class _AppShellState extends State<AppShell> {
   int? focusedNav;
   bool rootIsCurrent = true;
   StreamSubscription<String>? remoteEvents;
+  TizenUpdater? tizenUpdates;
   final navFocus = List.generate(
     3,
     (i) => FocusNode(
@@ -78,6 +80,13 @@ class _AppShellState extends State<AppShell> {
     if (Platform.isAndroid && widget.services.store.flag('CheckUpdates')) {
       unawaited(widget.services.updates.check());
     }
+    if (isTizen) {
+      tizenUpdates = TizenUpdater(
+        notify: (text) {
+          if (mounted) communityMessage(context, text);
+        },
+      )..start();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await widget.services.discord.initialize();
       if (mounted) await birthdayCapsule(context, widget.services, widget.isTV);
@@ -86,6 +95,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    tizenUpdates?.stop();
     FocusManager.instance.removeHighlightModeListener(modeChanged);
     widget.services.auth.remoteLink = null;
     unawaited(remoteEvents?.cancel() ?? Future<void>.value());

@@ -40,6 +40,8 @@ Files
    Without SAMSUNG_PROFILE the app is installed as built; some TVs accept
    that, most need the Samsung certificate.
 
-Open Otakase from Apps on the TV. To update, download the new release and
-run the installer again with the same profile; your sign-ins stay.
+Open Otakase from Apps on the TV. Updates download by themselves: when one
+is ready the app says so, and it is used the next time Otakase is opened.
+Only when the app says it needs to be installed again, run the installer
+with a new release and the same profile; your sign-ins stay.
 Developer Mode can be switched off again after installing.

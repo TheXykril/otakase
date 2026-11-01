@@ -13,3 +13,4 @@ tizen_dotnet_project.yaml
 
 # Built by scripts/build-tpk.sh
 lib/
+shell-id

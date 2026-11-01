@@ -1,8 +1,6 @@
-using Tizen.Flutter.Embedding;
-
 namespace Runner
 {
-    public class App : FlutterApplication
+    public class App : OtakaseApplication
     {
         protected override void OnCreate()
         {

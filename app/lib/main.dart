@@ -15,7 +15,8 @@ import 'ui/components.dart';
 import 'ui/seal.dart';
 import 'ui/profiles_page.dart';
 
-Future<void> main() async {
+Future<void> main([List<String> args = const []]) async {
+  readTizenArguments(args);
   WidgetsFlutterBinding.ensureInitialized();
   if (!isTizen) MediaKit.ensureInitialized();
   final core = CoreClient();

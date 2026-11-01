@@ -5,6 +5,10 @@
     <TargetFramework>tizen80</TargetFramework>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(TizenCoreEnabled)' == 'true'">
+    <DefineConstants>$(DefineConstants);TIZEN_CORE</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="$(FlutterEmbeddingPath)" />
   </ItemGroup>
@@ -13,6 +17,10 @@
     <!-- The Go core, built by scripts/build-tpk.sh. -->
     <TizenTpkUserIncludeFiles Include="lib\*.so">
       <TizenTpkSubDir>lib</TizenTpkSubDir>
+    </TizenTpkUserIncludeFiles>
+    <!-- Which shell an update must match; written by scripts/build-tpk.sh. -->
+    <TizenTpkUserIncludeFiles Include="shell-id" Condition="Exists('shell-id')">
+      <TizenTpkSubDir>res</TizenTpkSubDir>
     </TizenTpkUserIncludeFiles>
     <FlutterEphemeral Include="flutter\ephemeral\**\*" />
     <TizenTpkUserIncludeFiles Include="@(FlutterEphemeral)">

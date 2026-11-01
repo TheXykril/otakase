@@ -68,9 +68,10 @@ network. Download
 [otakase-samsung-tv.zip](https://github.com/TheXykril/otakase/releases/latest/download/otakase-samsung-tv.zip),
 unpack it and follow its `README.txt`: install Tizen Studio, turn on Developer
 Mode on the TV, create a free Samsung certificate for your TV, then run
-`install.sh` (Linux/macOS) or `install.bat` (Windows). To update, run the
-installer again with a newer release. Subtitles on Samsung TVs are plain text
-(no ASS styling).
+`install.sh` (Linux/macOS) or `install.bat` (Windows). After that the app
+updates itself; only when it asks to be installed again, run the installer
+with a newer release. ASS subtitles keep their styling on Samsung TVs too;
+the TV's own embedded subtitle tracks show as plain text.
 
 ### Arch Linux / Manjaro
 

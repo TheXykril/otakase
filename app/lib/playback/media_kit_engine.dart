@@ -48,13 +48,12 @@ class MediaKitEngine implements PlaybackEngine {
   @override
   Future<void> setRate(double rate) => player.setRate(rate);
   @override
-  Future<void> setAudioTrack(EngineTrack track) => player.setAudioTrack(
-    switch (track.id) {
-      'auto' => AudioTrack.auto(),
-      'no' => AudioTrack.no(),
-      _ => AudioTrack(track.id, track.title, track.language),
-    },
-  );
+  Future<void> setAudioTrack(EngineTrack track) =>
+      player.setAudioTrack(switch (track.id) {
+        'auto' => AudioTrack.auto(),
+        'no' => AudioTrack.no(),
+        _ => AudioTrack(track.id, track.title, track.language),
+      });
   @override
   Future<void> setSubtitleTrack(EngineTrack track) => player.setSubtitleTrack(
     switch (track.id) {

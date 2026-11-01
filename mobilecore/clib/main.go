@@ -11,10 +11,15 @@ package main
 import "C"
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/thexykril/otakase/mobilecore"
+	"github.com/thexykril/otakase/mobilecore/tvupdate"
 )
 
 var (
@@ -56,6 +61,34 @@ func otakase_core_stop_playback() {
 //export otakase_core_free
 func otakase_core_free(value *C.char) {
 	C.free(unsafe.Pointer(value))
+}
+
+// otakase_tv_update checks for and installs a signed app update (see
+// package tvupdate). It blocks; the caller frees the JSON result
+// ({"data": ...} or {"error": "..."}) with otakase_core_free.
+//
+//export otakase_tv_update
+func otakase_tv_update(input *C.char) *C.char {
+	return C.CString(tvUpdate(C.GoString(input)))
+}
+
+func tvUpdate(input string) string {
+	var req tvupdate.Request
+	out := map[string]any{}
+	if err := json.Unmarshal([]byte(input), &req); err != nil {
+		out["error"] = "invalid request"
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+		client := &http.Client{Timeout: 15 * time.Minute}
+		if res, err := tvupdate.Run(ctx, client, req, tvupdate.PublicKey); err != nil {
+			out["error"] = err.Error()
+		} else {
+			out["data"] = res
+		}
+	}
+	b, _ := json.Marshal(out)
+	return string(b)
 }
 
 func main() {}

@@ -61,7 +61,9 @@ class SubtitleCues {
       final end = _clock(parts[endIndex]);
       final rawText = parts.sublist(textIndex).join(',');
       // \p1..\p4 draw vector shapes; they are not readable text.
-      if (start == null || end == null || RegExp(r'\\p[1-9]').hasMatch(rawText)) {
+      if (start == null ||
+          end == null ||
+          RegExp(r'\\p[1-9]').hasMatch(rawText)) {
         continue;
       }
       final text = rawText
@@ -104,9 +106,8 @@ class SubtitleCues {
   /// Reads h:mm:ss.cc (ASS), hh:mm:ss.mmm / mm:ss.mmm (VTT) and
   /// hh:mm:ss,mmm (SRT).
   static Duration? _clock(String value) {
-    final match = RegExp(
-      r'^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:[.,](\d{1,3}))?$',
-    ).firstMatch(value.trim());
+    final match = RegExp(r'^(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:[.,](\d{1,3}))?$')
+        .firstMatch(value.trim());
     if (match == null) return null;
     final fraction = match.group(4) ?? '0';
     return Duration(

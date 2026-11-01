@@ -201,6 +201,8 @@ jobs:
   # with the install scripts. Signed with the author certificate from the
   # TIZEN_AUTHOR_* secrets on main (users re-sign with their Samsung
   # certificate when installing); a PR build gets a throwaway certificate.
+  # Installed TVs update themselves from the signed otakase-samsung-tv.json
+  # and the brain zips (TV_UPDATE_KEY_PEM secret, main only).
   samsung-tv:
     runs-on: ubuntu-latest
     permissions:
@@ -245,16 +247,26 @@ jobs:
           echo "TIZEN_AUTHOR_PASSWORD=$password" >> "$GITHUB_ENV"
 
       - name: Build TPKs
-        run: app/scripts/build-tpk.sh
+        env:
+          UPDATE_KEY: ${{ inputs.pr_number == '' && secrets.TV_UPDATE_KEY_PEM || '' }}
+        run: |
+          if [ -n "$UPDATE_KEY" ]; then
+            printf '%s\n' "$UPDATE_KEY" > "$RUNNER_TEMP/tv-update-key.pem"
+            export TV_UPDATE_KEY=$RUNNER_TEMP/tv-update-key.pem
+          fi
+          app/scripts/build-tpk.sh
 
-      - name: Remove signing certificate
+      - name: Remove signing keys
         if: always()
-        run: rm -f "$RUNNER_TEMP/author.p12"
+        run: rm -f "$RUNNER_TEMP/author.p12" "$RUNNER_TEMP/tv-update-key.pem"
 
       - uses: actions/upload-artifact@v7
         with:
           name: otakase-samsung-tv
-          path: app/build/otakase-samsung-tv.zip
+          path: |
+            app/build/otakase-samsung-tv.zip
+            app/build/samsung-tv/otakase-samsung-tv-brain-*.zip
+            app/build/samsung-tv/otakase-samsung-tv.json*
           retention-days: 7
           if-no-files-found: error
 
@@ -379,6 +391,9 @@ jobs:
             Build/Output/otakase-android.apk
             Build/Output/otakase-android.json
             Build/Output/otakase-samsung-tv.zip
+            Build/Output/samsung-tv/otakase-samsung-tv-brain-*.zip
+            Build/Output/samsung-tv/otakase-samsung-tv.json
+            Build/Output/samsung-tv/otakase-samsung-tv.json.sig
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
