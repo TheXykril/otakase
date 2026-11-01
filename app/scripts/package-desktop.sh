@@ -21,6 +21,28 @@ out=build/desktop-release
 rm -rf "$out"
 mkdir -p "$out"
 
+# Copies the system libmpv and every library it needs into dir, so the
+# AppImage plays video without mpv installed. Libraries every desktop has
+# and that must match the running system (glibc, the C++ runtime, graphics
+# drivers, X11/Wayland, sound servers, GTK and friends) stay out. Each copy
+# and the app's own plugins look in their own folder first ($ORIGIN).
+bundle_libmpv() {
+  local dir=$1 lib name
+  lib=$(ldconfig -p | awk '/libmpv\.so\.2 .*x86-64/ {print $NF; exit}')
+  [[ -n $lib ]] || { echo "libmpv.so.2 not found; install libmpv-dev" >&2; exit 1; }
+  local keep='^(ld-linux|libc\.|libm\.|libdl\.|libpthread\.|librt\.|libresolv\.|libutil\.|libstdc\+\+|libgcc_s|libGL|libEGL|libOpenGL|libdrm|libgbm|libvulkan|libX|libxcb|libwayland|libasound|libpulse|libpipewire|libjack|libfontconfig|libfreetype|libharfbuzz|libglib-|libgobject-|libgio-|libgmodule-|libgtk|libgdk|libcairo|libpango|libz\.|libexpat|libdbus-|libsystemd|libudev|libselinux)'
+  cp -L "$lib" "$dir/libmpv.so.2"
+  ldd "$lib" | awk '/=> \// {print $3}' | while read -r dep; do
+    name=$(basename "$dep")
+    [[ $name =~ $keep ]] && continue
+    [[ -e $dir/$name ]] || cp -L "$dep" "$dir/$name"
+  done
+  for lib in "$dir"/*.so*; do
+    patchelf --add-rpath '$ORIGIN' "$lib"
+  done
+  echo "bundled libmpv with $(ls "$dir" | wc -l) libraries in $dir"
+}
+
 case "$(uname -s)" in
   Linux)
     asset=otakase-app-linux-x86_64.AppImage
@@ -29,6 +51,7 @@ case "$(uname -s)" in
     rm -rf "$appdir"
     mkdir -p "$appdir/usr/lib/otakase"
     cp -a build/linux/x64/release/bundle/. "$appdir/usr/lib/otakase/"
+    bundle_libmpv "$appdir/usr/lib/otakase/lib"
     cp packaging/linux/AppRun "$appdir/AppRun"
     chmod 755 "$appdir/AppRun"
     cp packaging/linux/otakase.desktop "$appdir/otakase.desktop"
