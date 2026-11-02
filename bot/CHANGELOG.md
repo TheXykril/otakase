@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.87
+
+- The welcome post header shows the new name styling and the "Leave it to Otakase." tagline.
+
 ## 1.30.86
 
 - Log hints for errors from the old command-line app now point at the app, and casting help links to the new Casting wiki page.
