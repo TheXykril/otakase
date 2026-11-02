@@ -18,10 +18,6 @@ build_args=(--release --target-platform android-arm,android-arm64
 echo "Otakase app $version (versionCode $code)"
 # One phone + TV APK, with both ARM runtimes.
 flutter build apk "${build_args[@]}"
-python3 scripts/update-manifest.py \
-  --apk build/app/outputs/flutter-apk/app-release.apk \
-  --name "$version" --code "$code" \
-  --output build/app/outputs/flutter-apk/otakase-android.json
 python3 - <<'PY'
 from pathlib import Path
 for path in sorted(Path('build/app/outputs/flutter-apk').glob('*release.apk')):

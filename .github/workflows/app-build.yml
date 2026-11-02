@@ -132,7 +132,6 @@ jobs:
           app/scripts/build-apk.sh
           mkdir -p release/android
           cp app/build/app/outputs/flutter-apk/app-release.apk release/android/otakase-android.apk
-          cp app/build/app/outputs/flutter-apk/otakase-android.json release/android/
 
       - name: Remove signing key
         if: always()
@@ -143,7 +142,6 @@ jobs:
           name: otakase-android
           path: |
             release/android/otakase-android.apk
-            release/android/otakase-android.json
           retention-days: 7
           if-no-files-found: error
 

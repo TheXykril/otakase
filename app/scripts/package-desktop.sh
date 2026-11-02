@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Packs a release build from build-desktop.sh into the file the release
-# offers for this OS, with the metadata the in-app updater reads:
+# offers for this OS, in build/desktop-release/:
 #
 #   Windows  otakase-app-windows-setup.exe      (per-user installer)
 #   macOS    otakase-app-macos.zip              (universal Otakase.app)
 #   Linux    otakase-app-linux-x86_64.AppImage
 #
-# plus otakase-app-<os>.json beside each, all in build/desktop-release/.
+# The in-app updater reads the version from the release tag and the size
+# and checksum GitHub records for the file.
 # Run build-desktop.sh release first, on the same OS.
 #
 # Windows needs Inno Setup 6 (ISCC). Linux downloads appimagetool unless
@@ -46,7 +47,6 @@ bundle_libmpv() {
 case "$(uname -s)" in
   Linux)
     asset=otakase-app-linux-x86_64.AppImage
-    manifest=otakase-app-linux-x86_64.json
     appdir=build/Otakase.AppDir
     rm -rf "$appdir"
     mkdir -p "$appdir/usr/lib/otakase"
@@ -68,7 +68,6 @@ case "$(uname -s)" in
     ;;
   Darwin)
     asset=otakase-app-macos.zip
-    manifest=otakase-app-macos.json
     app=build/macos/Build/Products/Release/Otakase.app
     # The helper was added after Flutter signed the app; sign it all again
     # (ad hoc, there is no Apple developer account) so macOS accepts it.
@@ -77,7 +76,6 @@ case "$(uname -s)" in
     ;;
   MINGW* | MSYS* | CYGWIN*)
     asset=otakase-app-windows-setup.exe
-    manifest=otakase-app-windows.json
     iscc=${ISCC:-"/c/Program Files (x86)/Inno Setup 6/ISCC.exe"}
     # Git Bash would turn /DAppVersion into a path without the exclusion.
     MSYS2_ARG_CONV_EXCL='*' "$iscc" "/DAppVersion=$version" packaging/windows/otakase-app.iss
@@ -88,7 +86,4 @@ case "$(uname -s)" in
     ;;
 esac
 
-py=$(command -v python3 || command -v python)
-"$py" scripts/update-manifest.py --file "$out/$asset" --asset "$asset" \
-  --name "$version" --code "$code" --output "$out/$manifest"
 echo "packed $out/$asset ($version, $code)"

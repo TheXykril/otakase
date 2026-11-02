@@ -10,7 +10,7 @@ import 'package:otakase/data/app_updates.dart';
 import 'package:otakase/ui/app_updates.dart';
 import 'package:otakase/ui/components.dart';
 
-import 'app_updates_test.dart' show UpdateHost, manifest, asset, apkBytes;
+import 'app_updates_test.dart' show UpdateHost, asset, apkBytes;
 
 void main() {
   for (final tv in [false, true]) {
@@ -27,13 +27,11 @@ void main() {
             if (request.url.host == 'api.github.com') {
               return http.Response(
                 jsonEncode({
-                  'assets': [asset(androidApk), asset(androidManifest)],
+                  'tag_name': 'v26.7.0',
+                  'assets': [asset(androidApk)],
                 }),
                 200,
               );
-            }
-            if (request.url.path.endsWith('.json')) {
-              return http.Response(jsonEncode(manifest()), 200);
             }
             return http.Response.bytes(apkBytes, 200);
           }),

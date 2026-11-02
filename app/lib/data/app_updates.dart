@@ -9,7 +9,6 @@ import 'package:http/http.dart' as http;
 
 const androidPackage = 'com.xyverion.otakase';
 const androidApk = 'otakase-android.apk';
-const androidManifest = 'otakase-android.json';
 
 enum UpdatePhase {
   idle,
@@ -57,37 +56,42 @@ class AppUpdate {
   final Uri url;
   String get label => '$name (build $code)';
 
-  factory AppUpdate.parse(
-    Map<String, dynamic> data,
-    Map asset,
-    UpdatePlatform platform,
-  ) {
-    final name = data['version_name'];
-    final code = data['version_code'];
-    final size = data['size'];
-    final checksum = data['sha256'];
-    if (data['schema'] != 1 ||
-        data['package_name'] != androidPackage ||
-        data[platform.fileKey] != platform.fileName ||
-        name is! String ||
-        name.isEmpty ||
-        name.length > 80 ||
-        code is! int ||
+  /// Reads an update straight from GitHub's release data: the version from
+  /// the tag (v26.1.0), and the size and SHA-256 checksum GitHub records for
+  /// the uploaded file.
+  factory AppUpdate.parse(Map release, Map asset, UpdatePlatform platform) {
+    final tag = release['tag_name'];
+    final match = tag is String
+        ? RegExp(r'^v(\d{1,3}\.\d{1,3}(?:\.\d{1,3})?)$').firstMatch(tag)
+        : null;
+    final name = match?.group(1);
+    final code = name == null ? 0 : versionCode(name);
+    final size = asset['size'];
+    final digest = asset['digest'];
+    final checksum = digest is String && digest.startsWith('sha256:')
+        ? digest.substring(7)
+        : null;
+    if (name == null ||
         code < 1 ||
-        code > 2100000000 ||
+        asset['name'] != platform.fileName ||
         size is! int ||
         size < 1 ||
         size > 512 * 1024 * 1024 ||
-        size != asset['size'] ||
-        checksum is! String ||
-        !RegExp(r'^[a-f0-9]{64}$').hasMatch(checksum) ||
-        (asset['digest'] != null && asset['digest'] != 'sha256:$checksum')) {
+        checksum == null ||
+        !RegExp(r'^[a-f0-9]{64}$').hasMatch(checksum)) {
       throw const FormatException('Invalid update metadata.');
+    }
+    final url = releaseAssetUri(
+      asset['browser_download_url'],
+      platform.fileName,
+    );
+    if (url.pathSegments[4] != tag) {
+      throw const FormatException('Release files do not match.');
     }
     return AppUpdate(
       name: name,
       code: code,
-      url: releaseAssetUri(asset['browser_download_url'], platform.fileName),
+      url: url,
       size: size,
       checksum: checksum,
     );
@@ -119,10 +123,6 @@ Uri releaseAssetUri(dynamic value, String filename) {
 /// Where an update comes from and how it is installed on this kind of
 /// device. The release check, download and checksum are shared.
 abstract class UpdatePlatform {
-  /// The metadata file on the release, and the key in it naming [fileName].
-  String get manifestName;
-  String get fileKey;
-
   /// The release file this device installs.
   String get fileName;
 
@@ -147,10 +147,6 @@ abstract class UpdatePlatform {
 class AndroidUpdatePlatform extends UpdatePlatform {
   static const channel = MethodChannel('otakase/updates');
 
-  @override
-  String get manifestName => androidManifest;
-  @override
-  String get fileKey => 'apk';
   @override
   String get fileName => androidApk;
   @override
@@ -307,26 +303,12 @@ class AppUpdates extends ChangeNotifier {
         return;
       }
       final assets = (release['assets'] as List? ?? []).whereType<Map>();
-      final manifests = assets.where((a) => a['name'] == platform.manifestName);
       final files = assets.where((a) => a['name'] == platform.fileName);
-      if (manifests.length != 1 || files.length != 1) {
+      if (files.length != 1) {
         _emit(UpdatePhase.unpublished);
         return;
       }
-      final uri = releaseAssetUri(
-        manifests.single['browser_download_url'],
-        platform.manifestName,
-      );
-      final manifest = await _get(client, uri);
-      if (manifest.statusCode != 200) {
-        throw const FormatException('Update metadata is unavailable.');
-      }
-      final data = await _json(manifest, 16 * 1024);
-      if (!_active(generation)) return;
-      final candidate = AppUpdate.parse(data, files.single, platform);
-      if (candidate.url.pathSegments[4] != uri.pathSegments[4]) {
-        throw const FormatException('Release files do not match.');
-      }
+      final candidate = AppUpdate.parse(release, files.single, platform);
       update = candidate;
       manualReason = available ? await platform.manualReason() : null;
       if (!_active(generation)) return;
