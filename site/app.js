@@ -9,6 +9,13 @@
   const toTop = () => window.scrollTo(0, 0);
   toTop();
   addEventListener('pageshow', (e) => { if (e.persisted) toTop(); });
+  // Fonts and pictures arriving can still move things; until the visitor
+  // scrolls on purpose, keep the page at the top.
+  let moved = false;
+  for (const ev of ['wheel', 'touchstart', 'keydown', 'pointerdown']) addEventListener(ev, () => { moved = true; }, { once: true, passive: true });
+  const settle = () => { if (!moved) toTop(); };
+  addEventListener('load', settle);
+  if (document.fonts) document.fonts.ready.then(settle);
   const pin = $('top'), stage = $('stage'), hero = $('hero');
   const els = { tv: $('tv'), pc: $('pc'), ph: $('ph') };
   // height / width of each device frame
@@ -22,14 +29,10 @@
   const ease = (t) => t * t * (3 - 2 * t);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-  // One snap point per scene, so every scroll lands on a whole scene.
-  const snaps = [];
-  for (let i = 0; i < N; i++) {
-    const s = document.createElement('div');
-    s.className = 'snap';
-    pin.appendChild(s);
-    snaps.push(s);
-  }
+  // One snap point per scene, so every scroll lands on a whole scene. They
+  // are in the page from the start (style.css places them), so the browser
+  // never sees them move while the page loads and re-snaps further down.
+  const snaps = [...pin.querySelectorAll('.snap')];
 
   // Size a device to fit a box, keeping its shape.
   function fit(k, box, share = 1) {
