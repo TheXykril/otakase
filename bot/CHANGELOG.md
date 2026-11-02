@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.30.85
+
+- New staff command `/post-info` posts the welcome, rules and FAQ messages again with the current text (all three, or one). It replaces `/post-welcome`.
+- Texts now describe the Otakase app instead of the command-line app: the welcome, rules and FAQ posts, `/install` (Android phone and TV, Windows, macOS, Linux), `/faq`, `/diagnose`, the welcome DM, the support post greeting, update hints, and the "link the app" hints, which now point at More → Discord in the app.
+- FAQ: dropped the menu icons and test-build config answers; added TV sign-in, opening the app on macOS, and linking the app to Discord.
+
 ## 1.30.84
 
 - Watch room episode picker: episode pictures and titles also come from ani.zip (TVDB stills), so more episodes have a picture, as in the app.

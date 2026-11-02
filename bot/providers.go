@@ -208,12 +208,12 @@ func (b *bot) checkProviders() (list []providerResult, version string, fail *dis
 	list = parseProviderStatus(out)
 	if len(visibleProviders(list, false)) == 0 {
 		if errors.Is(err, exec.ErrNotFound) {
-			return nil, "", errorEmbed("The source check isn't available on this bot right now. Run `otakase -provider-status` yourself instead.")
+			return nil, "", errorEmbed("The source check isn't available on this bot right now. Open **Diagnostics** in the app instead.")
 		}
 		if err != nil {
-			return nil, "", errorEmbed("Couldn't run the source check here (%v). Run `otakase -provider-status` yourself instead.", err)
+			return nil, "", errorEmbed("Couldn't run the source check here (%v). Open **Diagnostics** in the app instead.", err)
 		}
-		return nil, "", errorEmbed("The source check gave no results. Run `otakase -provider-status` yourself instead.")
+		return nil, "", errorEmbed("The source check gave no results. Open **Diagnostics** in the app instead.")
 	}
 	version = "otakase"
 	if v, err := run("-v"); err == nil {

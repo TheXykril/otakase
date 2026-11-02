@@ -15,9 +15,6 @@ import (
 // ghRepoAPI is a variable so tests can point it at a fake server.
 var ghRepoAPI = "https://api.github.com/repos/TheXykril/otakase"
 
-// updateHowTo is the same advice the version check gives.
-const updateHowTo = "Update with `otakase -u` (or `/install` for other ways), then check `otakase -v` and try again."
-
 // ghIssueFull is an issue with the dates and body the support features need.
 type ghIssueFull struct {
 	ghIssue

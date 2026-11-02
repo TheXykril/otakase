@@ -277,7 +277,7 @@ func (b *bot) queueButton(i *discordgo.InteractionCreate, arg string) {
 		return
 	}
 	if !b.hasApp(u.ID) {
-		b.respond(i, true, errorEmbed("Link the Otakase app first: run `otakase -discord-link` (or Community → Link to Discord in the app), then press this again."))
+		b.respond(i, true, errorEmbed("Link the Otakase app first with **More → Discord** in the app, then press this again."))
 		return
 	}
 	info, ok := appShowInfo(id)

@@ -11,11 +11,9 @@ import (
 var zero = 0.0
 
 func (b *bot) registerCommands() error {
-	osChoices := []*discordgo.ApplicationCommandOptionChoice{
-		{Name: "Debian / Ubuntu / other Linux", Value: "linux"},
-		{Name: "Arch / Manjaro", Value: "arch"},
-		{Name: "Windows", Value: "windows"},
-		{Name: "macOS", Value: "mac"},
+	var osChoices []*discordgo.ApplicationCommandOptionChoice
+	for _, s := range installSystems {
+		osChoices = append(osChoices, &discordgo.ApplicationCommandOptionChoice{Name: s.Name, Value: s.Key})
 	}
 	var faqChoices []*discordgo.ApplicationCommandOptionChoice
 	for _, f := range faqs {
@@ -49,7 +47,7 @@ func (b *bot) registerCommands() error {
 	}
 	cmds = append(cmds, modCommands()...)
 	cmds = append(cmds, roomCommands()...)
-	cmds = append(cmds, welcomeCommand())
+	cmds = append(cmds, infoPostCommand())
 	cmds = append(cmds, suggestionCommands()...)
 	cmds = append(cmds, followCommands()...)
 	cmds = append(cmds, anilistCommands()...)
@@ -110,7 +108,7 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 		case "install":
 			g := installGuides[opt("system")]
 			b.respond(i, onlyAsker(i), &discordgo.MessageEmbed{Title: "Install on " + g.Title, Description: g.Body, Color: shu,
-				Footer: &discordgo.MessageEmbedFooter{Text: "Otakase needs mpv · more on the website"}})
+				Footer: &discordgo.MessageEmbedFooter{Text: "Nothing else to install · the app updates itself"}})
 		case "faq":
 			f, _ := faqByKey(opt("topic"))
 			b.respond(i, onlyAsker(i), &discordgo.MessageEmbed{Title: f.Question, Description: b.faqAnswer(f).Answer, Color: shu})
@@ -142,8 +140,8 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			b.verification(i)
 		case "room":
 			b.roomCommand(i)
-		case "post-welcome":
-			b.postWelcome(i)
+		case "post-info":
+			b.postInfo(i)
 		case "room-invite":
 			b.roomInvite(i)
 		case "suggest":

@@ -508,7 +508,7 @@ func (b *bot) apiLinkedRoleCallback(w http.ResponseWriter, r *http.Request) {
 	log.Printf("linked role connected for member %s", user)
 	text := fmt.Sprintf("Otakase is connected: your profile shows %d hours watched", want.Hours)
 	if !want.App {
-		text += ". Link the app with otakase -discord-link so your hours count"
+		text += ". Link the app with More → Discord so your hours count"
 	}
 	linkedRolePage(w, http.StatusOK, "Done", text+". Go back to Discord.")
 }
@@ -548,7 +548,7 @@ func linkedRoleView(connected bool, m linkedRoleMeta) *discordgo.MessageEmbed {
 		}
 		lines = append(lines, fmt.Sprintf("Connected: your profile shows **%d h** watched, app linked: **%s**. It updates within an hour as you watch.", m.Hours, app))
 	} else {
-		lines = append(lines, "Not connected yet. Hours count once you link the app with `otakase -discord-link`.")
+		lines = append(lines, "Not connected yet. Hours count once you link the app with **More → Discord** in the app.")
 	}
 	return &discordgo.MessageEmbed{Title: "Linked role", Color: shu, Description: strings.Join(lines, "\n"),
 		Footer: &discordgo.MessageEmbedFooter{Text: "Remove it any time under User Settings → Authorized Apps"}}

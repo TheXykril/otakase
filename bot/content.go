@@ -14,41 +14,51 @@ type installGuide struct {
 
 // installGuides mirror the README's Install section.
 var installGuides = map[string]installGuide{
-	"arch": {"Arch Linux / Manjaro", "Build with the bundled PKGBUILD:\n```bash\n" +
-		"sudo pacman -S --needed go git mpv\n" +
-		"git clone https://github.com/TheXykril/otakase.git\n" +
-		"cd otakase\nmakepkg -si\n```\nOr the prebuilt binary:\n```bash\n" +
-		"sudo pacman -S --needed mpv\n" +
-		"curl -Lo otakase " + dlURL + "otakase-linux-x86_64\n" +
-		"chmod +x otakase\nsudo install -Dm755 otakase /usr/bin/otakase\nsudo ln -sf otakase /usr/bin/otk\n```"},
-	"linux": {"Debian / Ubuntu and other Linux", "```bash\n" +
-		"sudo apt update\nsudo apt install mpv curl rofi libnotify-bin xdg-utils\n\n" +
-		"# x86_64\ncurl -Lo otakase " + dlURL + "otakase-linux-x86_64\n" +
-		"# ARM64\ncurl -Lo otakase " + dlURL + "otakase-linux-arm64\n\n" +
-		"chmod +x otakase\nsudo install -Dm755 otakase /usr/bin/otakase\nsudo ln -sf otakase /usr/bin/otk\n```"},
-	"mac": {"macOS", "```bash\nbrew install mpv curl\n\n" +
-		"# Apple Silicon\ncurl -Lo otakase " + dlURL + "otakase-macos-arm64\n" +
-		"# Intel\ncurl -Lo otakase " + dlURL + "otakase-macos-x86_64\n\n" +
-		"chmod +x otakase\nsudo mv otakase /usr/local/bin/\nsudo ln -sf otakase /usr/local/bin/otk\n```"},
-	"windows": {"Windows", "Run the [installer](" + dlURL + "otakase-windows-installer.exe). " +
-		"It comes with mpv and adds `otakase` and `otk` to your PATH.\n\n" +
-		"Or with winget:\n```powershell\nwinget install TheXykril.Otakase\n```\n" +
-		"The standalone [otakase-windows-x86_64.exe](" + dlURL + "otakase-windows-x86_64.exe) needs mpv installed separately."},
+	"android": {"Android phone and Android TV", "Install [otakase-android.apk](" + dlURL + "otakase-android.apk) (Android 7.0 or newer). " +
+		"Android asks once to allow installing apps from your browser or file manager.\n\n" +
+		"On a TV, open the link in a browser app or a file manager, or send the file over with an app like *Send files to TV*."},
+	"windows": {"Windows", "Run [otakase-app-windows-setup.exe](" + dlURL + "otakase-app-windows-setup.exe). " +
+		"It installs for your user only, so it needs no administrator rights, and adds Otakase to the Start menu."},
+	"mac": {"macOS", "Download [otakase-app-macos.zip](" + dlURL + "otakase-app-macos.zip), unzip it and move **Otakase** to Applications. " +
+		"It works on Apple Silicon and Intel. The app is not signed by Apple yet, so the first time, right-click it and choose **Open**."},
+	"linux": {"Linux", "Download [otakase-app-linux-x86_64.AppImage](" + dlURL + "otakase-app-linux-x86_64.AppImage), make it executable and run it:\n```bash\n" +
+		"chmod +x otakase-app-linux-x86_64.AppImage\n./otakase-app-linux-x86_64.AppImage\n```"},
 }
+
+// installSystems are the /install choices, in menu order.
+var installSystems = []struct{ Name, Key string }{
+	{"Android phone / Android TV", "android"},
+	{"Windows", "windows"},
+	{"macOS", "mac"},
+	{"Linux", "linux"},
+}
+
+// updateHowTo is how members update, for every system.
+const updateHowTo = "The app updates itself: it offers new releases when it starts, or check under **About & updates** (in More or Settings), then try again."
 
 type faqEntry struct {
 	Key, Question, Answer string
 }
 
-// faqs match the #faq channel post.
+// faqs are the #faq channel post (`/post-info`) and the `/faq` answers.
 var faqs = []faqEntry{
-	{"install", "How do I install or update?", "Install steps for every system are on the [website](" + siteURL + ") and in `/install`. Update with `otakase -u`."},
-	{"mpv", "Playback never starts", "Otakase needs mpv installed and on your PATH. See [Troubleshooting](" + wikiURL + "/Troubleshooting)."},
-	{"nothing-found", "Nothing is found for a show", "Run `/provider-status` or `otakase -provider-status` to see how many sources respond, then share the output in the support forum."},
-	{"icons", "Menu icons show as boxes", "On Linux Otakase installs a small icon font by itself. Otherwise use a Nerd Font, or set `Icons=false` in the config (`otakase -e`)."},
-	{"sync", "My progress didn't sync", "See [Tracking](" + wikiURL + "/Tracking). `otakase -change-token` signs you in again."},
-	{"cast", "Casting can't find my TV", "Run `otakase -cast-setup`, then see [Casting Problems](" + wikiURL + "/Casting-Problems)."},
-	{"dev-builds", "Can I try new features early?", "Set `DevBuilds=true` in the config (`otakase -e`). Test builds are posted in the test-builds channel."},
+	{"install", "How do I install or update?", "`/install` shows the download for your system, and the [website](" + siteURL + ") has them all. " +
+		"The app updates itself: it offers new releases when it starts, or check under **About & updates** (in More or Settings)."},
+	{"mpv", "An episode doesn't play", "The app has its own player, so there is nothing else to install. Usually the streaming site is down: " +
+		"open **Diagnostics** (in More or Settings) to see which sources answer, or try the next source. " +
+		"See [Troubleshooting](" + wikiURL + "/Troubleshooting)."},
+	{"nothing-found", "Nothing is found for a show", "Streaming sites change and go down often. Check **Diagnostics** in the app or `/provider-status` here. " +
+		"With **Torrent sources** on (Settings → Playback) the app can also play from a torrent. Still nothing? Share what Diagnostics shows in the support forum."},
+	{"tv", "My TV can't finish signing in", "Phone and TV need to be on the same home network, and guest Wi-Fi often keeps devices apart. " +
+		"Check that the code on the phone matches the one on the TV. See [Android TV](" + wikiURL + "/Android-TV)."},
+	{"sync", "My progress didn't sync", "Writes to AniList and MyAnimeList happen in the background and can take a moment. " +
+		"Check the account under **Accounts**: one that needs signing in again shows it there. See [Tracking](" + wikiURL + "/Tracking)."},
+	{"cast", "Casting can't find my TV", "Phone or computer and TV need to be on the same network. On a computer, a firewall often drops the TV's answer. " +
+		"See [Casting Problems](" + wikiURL + "/Casting-Problems)."},
+	{"mac", "macOS says the app can't be opened", "It is not signed by Apple yet. Right-click **Otakase** in Applications and choose **Open** the first time."},
+	{"discord", "How do I link the app to Discord?", "Open **More → Discord** in the app and follow it, or run `/link-app` here. " +
+		"Linking lets you join watch rooms, follow shows and report problems straight from the app."},
+	{"dev-builds", "Can I try new features early?", "Test builds are posted in the test-builds channel. They may break, so keep the normal release if you want things to just work."},
 }
 
 func faqByKey(k string) (faqEntry, bool) {
@@ -61,19 +71,19 @@ func faqByKey(k string) (faqEntry, bool) {
 }
 
 const supportChecklist = "Thanks for the post! To help us help you, please add:\n" +
-	"- Your Otakase version (`otakase -v`)\n" +
-	"- Your system (Linux distro / Windows / macOS)\n" +
-	"- The command you ran and what happened\n" +
-	"- For *nothing found* problems: the output of `otakase -provider-status`\n\n" +
+	"- Your Otakase version (**About & updates** in More or Settings)\n" +
+	"- Your device (Android phone, Android TV, Windows, macOS or Linux)\n" +
+	"- The show and episode, what you did and what happened\n" +
+	"- For playback or *nothing found* problems: what **Diagnostics** shows\n\n" +
 	"When it's fixed, press **Mark solved** below."
 
 // welcomeDMText is the card in the DM new members get, under the header
 // picture.
 const welcomeDMText = "## Welcome to Otakase!\n" +
-	"Watch anime from the command line, with your list kept in sync. Glad you're here."
+	"Watch anime on your phone, TV and computer, with your list kept in sync. Glad you're here."
 
 var welcomeDMSteps = []string{
-	"**Install** · `/install` shows the command for your system",
+	"**Install** · `/install` shows the download for your system",
 	"**Rules and roles** · read the rules, then pick your system and notifications in **Channels & Roles**",
 	"**Help** · `/faq` answers common questions; for anything else, one post per problem in the support forum",
 	"**New episodes** · `/follow` a show and I'll DM you when the next episode is out",

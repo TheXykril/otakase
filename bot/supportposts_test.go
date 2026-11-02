@@ -50,7 +50,7 @@ func TestKnownIssuesText(t *testing.T) {
 	}
 	got := knownIssuesText(issues, testStableReleases)
 	for _, want := range []string{"[#5 Issue 5]", "#6 Issue 6](", "being worked on", "reported <t:",
-		"**Fixed in the latest release (26.6.0)**\n- [#3 Issue 3]", "otakase -u", "**Fixed, coming in the next release**\n- [#4 Issue 4]"} {
+		"**Fixed in the latest release (26.6.0)**\n- [#3 Issue 3]", "About & updates", "**Fixed, coming in the next release**\n- [#4 Issue 4]"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
@@ -142,7 +142,7 @@ func TestBugOutcome(t *testing.T) {
 func TestBugFollowMessage(t *testing.T) {
 	is := issueAt(9, "closed", "completed", tptr(day(15)))
 	m := bugFollowMessage(bugFixed, "42", is, testStableReleases[0])
-	if m.Content != "<@42>" || m.Embeds[0].Title != "Fixed in 26.6.0" || !strings.Contains(m.Embeds[0].Description, "otakase -u") {
+	if m.Content != "<@42>" || m.Embeds[0].Title != "Fixed in 26.6.0" || !strings.Contains(m.Embeds[0].Description, "About & updates") {
 		t.Errorf("fixed message: %+v %+v", m, m.Embeds[0])
 	}
 	m = bugFollowMessage(bugNotPlanned, "42", is, ghRelease{})
