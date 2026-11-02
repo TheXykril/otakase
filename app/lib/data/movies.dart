@@ -205,6 +205,16 @@ class MovieService extends ChangeNotifier {
 
   MovieEntry? entry(MediaTitle title) => _entries[title.key];
 
+  int _lastStamp = 0;
+
+  /// A time for an update that sorts after every earlier one, even when two
+  /// updates land in the same millisecond.
+  int _stamp() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _lastStamp = now > _lastStamp ? now : _lastStamp + 1;
+    return _lastStamp;
+  }
+
   List<MovieEntry> get continuing =>
       _entries.values
           .where(
@@ -306,7 +316,7 @@ class MovieService extends ChangeNotifier {
           ? 0
           : null,
       percent: on ? 0 : null,
-      updated: DateTime.now().millisecondsSinceEpoch,
+      updated: _stamp(),
     );
     _notify();
     await _persist();
@@ -341,7 +351,7 @@ class MovieService extends ChangeNotifier {
       duration: duration,
       percent: 0,
       watched: watched,
-      updated: DateTime.now().millisecondsSinceEpoch,
+      updated: _stamp(),
     );
     _notify();
     await _persist();
