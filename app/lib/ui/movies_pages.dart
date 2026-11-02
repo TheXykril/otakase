@@ -978,15 +978,15 @@ Future<void> traktSignIn(
               code.userCode,
               style: display.copyWith(letterSpacing: 4),
             ),
-            const SizedBox(height: 16),
-            Container(
-              color: fgBright,
-              padding: const EdgeInsets.all(8),
-              child: QrImageView(
-                data: code.verificationUrl,
-                size: isTV ? 180 : 140,
+            // A TV shows the page as a QR code for a phone; a phone opens it.
+            if (isTV) ...[
+              const SizedBox(height: 16),
+              Container(
+                color: fgBright,
+                padding: const EdgeInsets.all(8),
+                child: QrImageView(data: code.verificationUrl, size: 180),
               ),
-            ),
+            ],
             const SizedBox(height: 12),
             Text(
               'Waiting for Trakt…',
@@ -1000,7 +1000,15 @@ Future<void> traktSignIn(
               onPressed: () => unawaited(
                 services.auth
                     .launch(Uri.parse(code.verificationUrl))
-                    .catchError((_) {}),
+                    .catchError((_) {
+                      if (dialog.mounted) {
+                        ScaffoldMessenger.of(dialog).showSnackBar(
+                          const SnackBar(
+                            content: Text('No browser could open Trakt.'),
+                          ),
+                        );
+                      }
+                    }),
               ),
               child: const Text('Open Trakt'),
             ),

@@ -13,6 +13,8 @@
   longer sign out after a restart or an update. If you were signed out,
   sign in once more. Desktops without a keyring keep sign-ins in a private
   file instead.
+- **Open Trakt works on phones.** The button opens Trakt's code page
+  again, and phones no longer show a QR code for it; TVs still do.
 
 ## 26.1.2 - 2026-11-02
 
