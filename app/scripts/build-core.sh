@@ -32,5 +32,10 @@ export PATH="$tools_dir:$PATH"
 mkdir -p app/android/app/libs
 # The torrent client's uTP and piece database have C versions; the pure Go
 # ones keep the NDK build simple and the library smaller.
+#
+# The torrent client's WebRTC stack reads Android network interfaces through
+# github.com/wlynxg/anet, which links to a private net symbol; Go refuses that
+# unless the linker check is off.
 gomobile bind -target="$targets" -androidapi 23 -tags disable_libutp,nosqlite \
+  -ldflags=-checklinkname=0 \
   -javapkg com.xyverion.otakase -o app/android/app/libs/mobilecore.aar ./mobilecore

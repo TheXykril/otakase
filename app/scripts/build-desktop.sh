@@ -29,7 +29,9 @@ flutter build "$os" "--$mode" --build-name "$version" --build-number "$code" \
 
 core=otakase-core
 [[ $os == windows ]] && core=otakase-core.exe
-mode_dir=${mode^}
+# Capitalised folder name (Release, Debug); macOS ships bash 3.2, which has
+# no ${mode^}.
+mode_dir=$(printf '%s' "${mode:0:1}" | tr '[:lower:]' '[:upper:]')${mode:1}
 
 case $os in
   linux)
