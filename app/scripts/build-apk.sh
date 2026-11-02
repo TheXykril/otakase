@@ -22,8 +22,6 @@ python3 scripts/update-manifest.py \
   --apk build/app/outputs/flutter-apk/app-release.apk \
   --name "$version" --code "$code" \
   --output build/app/outputs/flutter-apk/otakase-android.json
-# Optional smaller downloads, built from exactly the same app.
-flutter build apk "${build_args[@]}" --split-per-abi
 python3 - <<'PY'
 from pathlib import Path
 for path in sorted(Path('build/app/outputs/flutter-apk').glob('*release.apk')):
