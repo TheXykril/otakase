@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import 'cast/cast.dart';
 import 'core.dart';
+import 'data/hls_quality.dart';
 import 'data/models.dart';
 import 'desktop/desktop_core.dart';
 import 'desktop/player_bar.dart';
@@ -290,45 +290,15 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (height != null) await property('hls-bitrate', 'max');
     availableQualities = [];
     if (!(stream.hls || stream.url.contains('.m3u8'))) return;
-    try {
-      final request = http.Request('GET', Uri.parse(stream.url))
-        ..headers.addAll(headers);
-      final response = await widget.services.catalog.client
-          .send(request)
-          .timeout(const Duration(seconds: 8));
-      var length = 0;
-      final data = <int>[];
-      await for (final chunk in response.stream.timeout(
-        const Duration(seconds: 8),
-      )) {
-        length += chunk.length;
-        if (length > 1024 * 1024) break;
-        data.addAll(chunk);
-      }
-      final text = utf8.decode(data);
-      final choices = <({int height, int bandwidth})>[];
-      for (final line
-          in text
-              .split('\n')
-              .where((s) => s.startsWith('#EXT-X-STREAM-INF:'))) {
-        final resolution = RegExp(r'RESOLUTION=\d+x(\d+)').firstMatch(line);
-        final bandwidth = RegExp(r'(?:^|[,:])BANDWIDTH=(\d+)').firstMatch(line);
-        final h = int.tryParse(resolution?.group(1) ?? ''),
-            b = int.tryParse(bandwidth?.group(1) ?? '');
-        if (h != null && b != null) choices.add((height: h, bandwidth: b));
-      }
-      choices.sort((a, b) => a.height.compareTo(b.height));
-      availableQualities = choices.map((c) => c.height).toSet().toList()
-        ..sort((a, b) => b.compareTo(a));
-      if (choices.isNotEmpty && height != null) {
-        final fitting = choices.where((c) => c.height <= height).toList();
-        await property(
-          'hls-bitrate',
-          '${(fitting.isEmpty ? choices.first : fitting.last).bandwidth}',
-        );
-      }
-    } catch (_) {
-      /* The original master remains playable at its default quality. */
+    final choices = await fetchHlsVariants(
+      widget.services.catalog.client,
+      stream.url,
+      headers,
+    );
+    availableQualities = hlsHeights(choices);
+    // Without a readable master the default quality stays.
+    if (choices.isNotEmpty && height != null) {
+      await property('hls-bitrate', hlsBitrate(quality, choices));
     }
   }
 

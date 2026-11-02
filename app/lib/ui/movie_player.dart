@@ -9,6 +9,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../core.dart';
+import '../data/hls_quality.dart';
 import '../data/models.dart';
 import '../data/store.dart';
 import '../desktop/desktop_core.dart';
@@ -255,8 +256,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     );
     await property('sub-pos', store.integer('SubtitlePosition').toString());
     await property('af', audioFilter(store));
-    final quality = store.text('Quality');
-    await property('hls-bitrate', quality == 'worst' ? 'min' : 'max');
+    await property('hls-bitrate', hlsBitrate(store.text('Quality'), variants));
     for (final e in (await tlsOptions()).entries) {
       await property(e.key, e.value);
     }
@@ -285,6 +285,14 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
       if (!mounted || g != generation) return;
       media = found;
       setState(() => status = 'Loading');
+      variants = found.url.contains('.m3u8')
+          ? await fetchHlsVariants(
+              widget.services.catalog.client,
+              found.url,
+              found.headers,
+            )
+          : <HlsVariant>[];
+      if (!mounted || g != generation) return;
       await configure();
       final local = !found.url.startsWith('http');
       await player.open(
@@ -462,6 +470,61 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     request = next;
     failed.clear();
     await open();
+  }
+
+  /// The picture sizes the copy offers (HLS only).
+  List<HlsVariant> variants = [];
+
+  /// The quality list: Best, each size the copy has, Worst, and another
+  /// copy of the title (a different source or server).
+  Future<void> qualityPanel() async {
+    hideTimer?.cancel();
+    const another = 'Try another copy';
+    final heights = hlsHeights(variants);
+    final labels = {
+      'Best': 'best',
+      for (final h in heights) '${h}p': '$h',
+      if (heights.length > 1 || variants.isEmpty) 'Worst': 'worst',
+    };
+    final current = store.text('Quality');
+    final chosen = await chooseValue(
+      context,
+      'Quality',
+      [...labels.keys, another],
+      selected: labels.entries
+          .where((e) => e.value == current)
+          .firstOrNull
+          ?.key,
+    );
+    if (!mounted || chosen == null) {
+      if (mounted) showControls();
+      return;
+    }
+    if (chosen == another) return anotherCopy();
+    final quality = labels[chosen]!;
+    await store.set('Quality', quality);
+    if (!mounted || busy || media == null) return;
+    // mpv picks the HLS variant when it opens the stream, so open the same
+    // copy again at the same spot.
+    final at = player.state.position;
+    final playing = player.state.playing;
+    await property('hls-bitrate', hlsBitrate(quality, variants));
+    final m = media!;
+    final local = !m.url.startsWith('http');
+    await player.open(
+      Media(local ? Uri.file(m.url).toString() : m.url, httpHeaders: m.headers),
+      play: false,
+    );
+    try {
+      await player.stream.duration
+          .firstWhere((d) => d > Duration.zero)
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      /* Seek anyway. */
+    }
+    await player.seek(at);
+    if (playing) await player.play();
+    if (mounted) showControls();
   }
 
   Future<void> anotherCopy() async {
@@ -953,7 +1016,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     onMute: () =>
         unawaited(player.setVolume(player.state.volume == 0 ? 100 : 0)),
     onTracks: () => unawaited(trackPanel()),
-    onQuality: () => unawaited(anotherCopy()),
+    onQuality: () => unawaited(qualityPanel()),
     onFullscreen: () => unawaited(toggleFullscreen()),
   );
 
