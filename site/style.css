@@ -8,7 +8,10 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-html.home{scroll-snap-type:y mandatory;scrollbar-width:none}
+html.home{scrollbar-width:none;overflow-anchor:none}
+/* app.js turns snapping on once the page has loaded and sits at the top:
+   snapping while the page is still settling can carry it down a scene */
+html.home.snapping{scroll-snap-type:y mandatory}
 html.home::-webkit-scrollbar,html.home body::-webkit-scrollbar{display:none}
 .snap{position:absolute;left:0;width:1px;height:1px;scroll-snap-align:start;scroll-snap-stop:always}
 /* where app.js puts them too: scene i at i quarters of the pinned scroll */
