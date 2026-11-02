@@ -58,24 +58,31 @@ browser or file manager.
 
 Run [otakase-app-windows-setup.exe](https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-windows-setup.exe).
 It installs for your user only, so it needs no administrator rights, and adds
-Otakase to the Start menu.
+Otakase to the Start menu and the `otakase` command to your terminal.
 
 ### macOS
 
 Download [otakase-app-macos.zip](https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-macos.zip),
 unzip it and move **Otakase** to Applications. It works on Apple Silicon and
 Intel. The app is not signed by Apple yet, so the first time, right-click it
-and choose **Open**.
+and choose **Open**. For the `otakase` terminal command, choose **Settings >
+Add to apps and terminal** in the app.
 
 ### Linux
 
-Download [otakase-app-linux-x86_64.AppImage](https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-linux-x86_64.AppImage),
-make it executable and run it:
+Download [otakase-app-linux-x86_64.AppImage](https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-linux-x86_64.AppImage)
+and install it:
 
 ```bash
 chmod +x otakase-app-linux-x86_64.AppImage
-./otakase-app-linux-x86_64.AppImage
+./otakase-app-linux-x86_64.AppImage --install
 ```
+
+That puts Otakase in your app menu and the `otakase` command in
+`~/.local/bin`, for your user only; afterwards you can delete the download.
+Running the AppImage without `--install` also works, and the app offers to
+install itself the first time. `otakase --uninstall` removes it again and
+keeps your profiles and progress.
 
 ### Updates
 

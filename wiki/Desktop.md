@@ -3,6 +3,25 @@
 The desktop app runs on Windows, macOS and Linux. Install links are in the
 [README](https://github.com/TheXykril/otakase#install).
 
+## Opening it
+
+Once installed, Otakase is in your app menu (the Start menu, Launchpad or
+your Linux launcher) and `otakase` opens it from a terminal; `otakase
+--launcher` opens the launcher.
+
+- **Windows:** the installer does both, and adds **Otakase Launcher** to the
+  Start menu.
+- **macOS:** with Otakase in Applications, choose **Settings > Add to apps and
+  terminal** for the command. macOS asks for your password when
+  `/usr/local/bin` needs it.
+- **Linux:** run the AppImage with `--install`, or accept the offer the app
+  makes on its first start (also under **Settings > Add to apps and
+  terminal**). It moves to `~/.local/share/otakase-app`, links
+  `~/.local/bin/otakase` and adds the app menu entry and icon. If your
+  terminal cannot find `otakase`, add `~/.local/bin` to your `PATH`.
+  `otakase --uninstall` takes it all out again and keeps your profiles and
+  progress.
+
 ## The window
 
 The pages sit in a bar at the top, with the window buttons in the style of
@@ -20,7 +39,7 @@ Bind it to a keyboard shortcut in your desktop's settings to open Otakase
 from anywhere. On Hyprland, for example:
 
 ```
-bind = SUPER SHIFT, A, exec, ~/Applications/otakase-app-linux-x86_64.AppImage --launcher
+bind = SUPER SHIFT, A, exec, ~/.local/bin/otakase --launcher
 ```
 
 ## Discord status
@@ -38,6 +57,7 @@ The app checks for new releases and installs them:
 - **Windows:** runs the new installer silently.
 - **macOS:** swaps in the new app. It is not signed by Apple yet, so the
   first start needs right-click > Open.
-- **Linux:** replaces the AppImage it was started from. A copy it cannot
+- **Linux:** replaces the AppImage it was started from (the installed one
+  after `--install`, so the menu entry and `otakase` stay the same). A copy it cannot
   replace (installed by a package manager, for example) gets a link to the
   download page instead.
