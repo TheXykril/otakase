@@ -92,9 +92,6 @@ const (
 	syncedResumeMinSeconds = 10
 	// syncedResumeMinChange is the smallest move worth a write.
 	syncedResumeMinChange = 5
-	// syncedResumeFetchTimeout bounds the lookup made before playback starts.
-	// A slow tracker costs the synced position, never the episode.
-	syncedResumeFetchTimeout = 4 * time.Second
 )
 
 type syncedResume struct {
@@ -108,20 +105,6 @@ func (p syncedResume) valid() bool {
 
 func formatSyncedResumeTag(p syncedResume) string {
 	return fmt.Sprintf("[otakase:%d@%d]", p.Episode, p.Seconds)
-}
-
-func parseSyncedResumeTag(notes string) (syncedResume, bool) {
-	match := syncedResumeTagPattern.FindStringSubmatch(notes)
-	if match == nil {
-		return syncedResume{}, false
-	}
-	episode, errEp := strconv.Atoi(match[1])
-	seconds, errSec := strconv.Atoi(match[2])
-	p := syncedResume{Episode: episode, Seconds: seconds}
-	if errEp != nil || errSec != nil || !p.valid() {
-		return syncedResume{}, false
-	}
-	return p, true
 }
 
 // withSyncedResumeTag returns notes with the tag set to p. An existing tag is
@@ -166,27 +149,6 @@ func syncedResumeAfterEpisode(notes string, finished, total int) string {
 	return withSyncedResumeTag(notes, syncedResume{Episode: finished + 1})
 }
 
-// laterSyncedResume picks the position further into the show, which is the
-// one to trust when two trackers disagree.
-func laterSyncedResume(a, b syncedResume) syncedResume {
-	if !a.valid() {
-		return b
-	}
-	if !b.valid() {
-		return a
-	}
-	if a.Episode != b.Episode {
-		if a.Episode > b.Episode {
-			return a
-		}
-		return b
-	}
-	if a.Seconds >= b.Seconds {
-		return a
-	}
-	return b
-}
-
 // syncedResumeWorthPushing answers whether next is far enough from what the
 // trackers already hold to be worth a write.
 func syncedResumeWorthPushing(pushed, next syncedResume) bool {
@@ -203,81 +165,12 @@ func syncedResumeWorthPushing(pushed, next syncedResume) bool {
 	return diff >= syncedResumeMinChange
 }
 
-// ApplySyncedResume looks up the position another device left for this show
-// and uses it when it is for the episode about to play and further in than
-// what this device has.
-func ApplySyncedResume(config *Config, anime *Anime) {
-	if anime == nil || anime.Untracked || anime.AnilistId == 0 || !UsesRemoteTracking(config) {
-		return
-	}
-	endBusy := BeginBusy(config, "Checking where you left off")
-	remote, ok := fetchSyncedResume(config, anime.AnilistId)
-	endBusy()
-	if !ok || remote.Episode != anime.Ep.Number {
-		return
-	}
-	anime.syncedResume = remote
-	if remote.Seconds > anime.Ep.Player.PlaybackTime {
-		Log(fmt.Sprintf("Synced resume: episode %d from %ds (local %ds)", remote.Episode, remote.Seconds, anime.Ep.Player.PlaybackTime))
-		anime.Ep.Player.PlaybackTime = remote.Seconds
-		anime.Ep.Resume = true
-	}
-}
-
 // syncedResumeFor is the synced position for the episode anime is on, or zero.
 func syncedResumeFor(anime *Anime) int {
 	if anime == nil || anime.syncedResume.Episode != anime.Ep.Number {
 		return 0
 	}
 	return anime.syncedResume.Seconds
-}
-
-func fetchSyncedResume(config *Config, anilistID int) (syncedResume, bool) {
-	type result struct {
-		p  syncedResume
-		ok bool
-	}
-	results := make(chan result, 2)
-	pending := 0
-
-	lookup := func(name string, fetch func() (string, bool, error)) {
-		pending++
-		go func() {
-			notes, onList, err := fetch()
-			if err != nil {
-				Log(fmt.Sprintf("Synced resume: %s lookup failed: %v", name, err))
-			}
-			p, ok := parseSyncedResumeTag(notes)
-			results <- result{p: p, ok: err == nil && onList && ok}
-		}()
-	}
-	if UsesAniListTracking(config) {
-		lookup("AniList", func() (string, bool, error) { return fetchAniListEntryNotes(anilistID) })
-	}
-	if UsesMyAnimeListTracking(config) {
-		lookup("MyAnimeList", func() (string, bool, error) {
-			malID, err := resolveMyAnimeListID(anilistID)
-			if err != nil {
-				return "", false, err
-			}
-			return fetchMyAnimeListEntryComments(config, malID)
-		})
-	}
-
-	var best syncedResume
-	timeout := time.After(syncedResumeFetchTimeout)
-	for ; pending > 0; pending-- {
-		select {
-		case r := <-results:
-			if r.ok {
-				best = laterSyncedResume(best, r.p)
-			}
-		case <-timeout:
-			Log("Synced resume: tracker lookup timed out")
-			return best, best.valid()
-		}
-	}
-	return best, best.valid()
 }
 
 // pushSyncedResume writes p into every configured tracker's entry for the
@@ -437,14 +330,6 @@ type resumePusher struct {
 }
 
 var syncedResumePusher = &resumePusher{now: time.Now, push: pushSyncedResume, finish: pushEpisodeFinished}
-
-// NoteSyncedResume records where anime is, for the trackers.
-func NoteSyncedResume(config *Config, anime *Anime) {
-	if anime == nil || anime.Untracked || !ShouldWriteRemoteTracking(config, anime) {
-		return
-	}
-	syncedResumePusher.note(config, anime.AnilistId, anime.Ep.Number, anime.Ep.Player.PlaybackTime)
-}
 
 // noteEpisodeFinished moves the tag past an episode whose progress was just
 // written, when it is the show now playing.

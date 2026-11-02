@@ -16,23 +16,6 @@ func fastMovieCastWait(t *testing.T) {
 	t.Cleanup(func() { movieCastPoll, movieCastStale, movieCastStartup = poll, stale, startup })
 }
 
-// fakeCastWindow stands in for the terminal: it reads the handoff file as the
-// window would and plays the movie through window.
-func fakeCastWindow(t *testing.T, window func(session *castSessionFile, report *movieCastReporter)) {
-	t.Helper()
-	open := openCastWindow
-	openCastWindow = func(config *Config, path string) (*exec.Cmd, error) {
-		session, err := readCastSession(path)
-		if err != nil {
-			t.Fatalf("readCastSession: %v", err)
-		}
-		go window(session, newMovieCastReporter(session.Movie.Report))
-		command := exec.Command("true")
-		return command, command.Start()
-	}
-	t.Cleanup(func() { openCastWindow = open })
-}
-
 type movieProgressCall struct {
 	position float64
 	duration int
@@ -47,66 +30,6 @@ func testMovieCastAnime(calls *[]movieProgressCall) *Anime {
 		*calls = append(*calls, movieProgressCall{position, duration, watched})
 	}}
 	return anime
-}
-
-// Under rofi a movie is cast from a terminal window, as an episode is, and
-// where it got to comes back to the process keeping the movie history.
-func TestMovieCastWindowReportsWhereItGot(t *testing.T) {
-	fastMovieCastWait(t)
-	config := testCastConfig(t)
-	config.CastDevice = "Office TV"
-	fakeCastWindow(t, func(session *castSessionFile, report *movieCastReporter) {
-		anime := castSessionToAnime(session)
-		if anime.Movie == nil || anime.Movie.Start != 120 || !anime.Untracked || session.Device != "Office TV" {
-			t.Errorf("the window got %+v, device %q", anime.Movie, session.Device)
-		}
-		report.progress(600, 7000, false)
-		report.finish(nil)
-	})
-
-	var calls []movieProgressCall
-	done, err := castMovieInWindow(config, testMovieCastAnime(&calls))
-	if err != nil || !done {
-		t.Fatalf("done = %v, err = %v", done, err)
-	}
-	if len(calls) != 1 || calls[0] != (movieProgressCall{600, 7000, false}) {
-		t.Errorf("progress = %+v", calls)
-	}
-}
-
-// A server the device could not play leaves the next one to try.
-func TestMovieCastWindowFailureTriesTheNextServer(t *testing.T) {
-	fastMovieCastWait(t)
-	config := testCastConfig(t)
-	config.CastDevice = "Office TV"
-	fakeCastWindow(t, func(_ *castSessionFile, report *movieCastReporter) {
-		report.finish(errors.New("ffmpeg could not open the stream"))
-	})
-
-	var calls []movieProgressCall
-	done, err := castMovieInWindow(config, testMovieCastAnime(&calls))
-	if err != nil || done {
-		t.Fatalf("done = %v, err = %v", done, err)
-	}
-	if len(calls) != 0 {
-		t.Errorf("progress saved for a movie that never played: %+v", calls)
-	}
-}
-
-// Closing the window mid-movie still keeps where it got to.
-func TestMovieCastWindowClosedKeepsThePosition(t *testing.T) {
-	fastMovieCastWait(t)
-	config := testCastConfig(t)
-	config.CastDevice = "Office TV"
-	fakeCastWindow(t, func(_ *castSessionFile, report *movieCastReporter) {
-		report.progress(1500, 7000, false)
-	})
-
-	var calls []movieProgressCall
-	done, err := castMovieInWindow(config, testMovieCastAnime(&calls))
-	if err != nil || !done || len(calls) != 1 || calls[0].position != 1500 {
-		t.Fatalf("done = %v, err = %v, progress = %+v", done, err, calls)
-	}
 }
 
 // A window that never opens leaves the movie to be cast from here.

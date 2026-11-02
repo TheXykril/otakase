@@ -388,13 +388,6 @@ func (r *castRemuxSwitch) Done() <-chan struct{} {
 	return r.current.Done()
 }
 
-// seeked reports whether any seek has happened.
-func (r *castRemuxSwitch) seeked() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.swapped
-}
-
 // castSeekingSession is the device, seen in episode time.
 type castSeekingSession struct {
 	inner castSession

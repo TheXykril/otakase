@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,8 +8,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
 
 func TestPartyOverlayASS(t *testing.T) {
@@ -86,96 +83,6 @@ func TestPartyFXMessagesAndKeys(t *testing.T) {
 	}
 	if !fx.chatOff {
 		t.Error("Alt+c should hide the chat")
-	}
-}
-
-// fakeWatchWithMeBot answers /v1/party/start and hosts the party's
-// WebSocket, recording what the app sends.
-func fakeWatchWithMeBot(t *testing.T, got chan<- map[string]any) *httptest.Server {
-	t.Helper()
-	up := websocket.Upgrader{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer good" {
-			http.Error(w, `{"error":"link"}`, http.StatusUnauthorized)
-			return
-		}
-		switch r.URL.Path {
-		case "/v1/party/start":
-			body, _ := io.ReadAll(r.Body)
-			var in map[string]any
-			json.Unmarshal(body, &in)
-			if in["anilist_id"] != 154587.0 || in["episode"] != 3.0 {
-				t.Errorf("start: %s", body)
-			}
-			w.Write([]byte(`{"id":"4821093371526630","join_url":"https://otakase.xyverion.com/open/?party=4821093371526630"}`))
-		case "/v1/party/4821093371526630/ws":
-			ws, err := up.Upgrade(w, r, nil)
-			if err != nil {
-				return
-			}
-			defer ws.Close()
-			ws.WriteJSON(map[string]any{"type": "welcome", "host": true, "show": "Frieren", "server_at": time.Now().UnixMilli()})
-			for {
-				var m map[string]any
-				if err := ws.ReadJSON(&m); err != nil {
-					return
-				}
-				select {
-				case got <- m:
-				default:
-				}
-			}
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(srv.Close)
-	return srv
-}
-
-func TestWatchWithMeHostsAndEndsWhenIdle(t *testing.T) {
-	got := make(chan map[string]any, 100)
-	srv := fakeWatchWithMeBot(t, got)
-	config := newDiscordTestConfig(t, srv.URL)
-	if err := saveDiscordLink(config, discordLink{Token: "good"}); err != nil {
-		t.Fatal(err)
-	}
-	oldIdle, oldPoll := watchWithMeIdle, watchWithMePoll
-	watchWithMeIdle, watchWithMePoll = 300*time.Millisecond, 50*time.Millisecond
-	t.Cleanup(func() { watchWithMeIdle, watchWithMePoll = oldIdle, oldPoll })
-
-	anime := &Anime{AnilistId: 154587}
-	anime.Ep.Number = 3
-	startWatchWithMe(config, anime, "/nonexistent/mpv.sock") // off: nothing happens
-	if watchWithMeURL() != "" {
-		t.Fatal("started with the option off")
-	}
-	config.DiscordWatchWithMe = true
-	startWatchWithMe(config, anime, "/nonexistent/mpv.sock")
-	deadline := time.Now().Add(5 * time.Second)
-	for watchWithMeURL() == "" && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if u := watchWithMeURL(); u != "https://otakase.xyverion.com/open/?party=4821093371526630" {
-		t.Fatalf("join link: %q", u)
-	}
-	// Nothing plays, so the party ends for everyone a moment later.
-	timeout := time.After(5 * time.Second)
-	for {
-		select {
-		case m := <-got:
-			if m["type"] == "end" {
-				for watchWithMeURL() != "" && time.Now().Before(deadline) {
-					time.Sleep(10 * time.Millisecond)
-				}
-				if watchWithMeURL() != "" {
-					t.Error("the button should go with the party")
-				}
-				return
-			}
-		case <-timeout:
-			t.Fatal("no end sent")
-		}
 	}
 }
 

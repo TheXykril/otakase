@@ -41,7 +41,6 @@ func (w dualSyncWrites) count() int {
 var (
 	dualSyncMu      sync.Mutex
 	dualSyncRunning bool
-	dualSyncDone    chan struct{}
 )
 
 // startDualSyncWrites performs the queued writes in the background. A second
@@ -61,7 +60,7 @@ func startDualSyncWrites(config *Config, writes dualSyncWrites) {
 	}
 	dualSyncRunning = true
 	done := make(chan struct{})
-	dualSyncDone = done
+
 	dualSyncMu.Unlock()
 
 	Log(fmt.Sprintf("Dual sync: writing %d update(s) in the background", writes.count()))
@@ -75,18 +74,6 @@ func startDualSyncWrites(config *Config, writes dualSyncWrites) {
 		}()
 		runDualSyncWrites(config, writes)
 	}()
-}
-
-// WaitForDualSyncWrites blocks until any in-flight background sync has
-// finished. Only tests need this; playback never waits on it.
-func WaitForDualSyncWrites() {
-	dualSyncMu.Lock()
-	done := dualSyncDone
-	running := dualSyncRunning
-	dualSyncMu.Unlock()
-	if running && done != nil {
-		<-done
-	}
 }
 
 func runDualSyncWrites(config *Config, writes dualSyncWrites) {

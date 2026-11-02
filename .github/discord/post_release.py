@@ -142,7 +142,7 @@ def dev_payload(version, changes, role, has_image):
     if not changes:
         card.append(text("Internal changes only."))
     card += [SEP, text("-# Can be broken and is replaced by the next test build. "
-                       "Set `DevBuilds=true` in the config to get it with `otakase -u`. "
+                       "Install it by hand over your current app. "
                        "Report problems in the support forum.")]
     return message(card, [("Download", f"{REPO}/releases/tag/dev"),
                           ("Changes on main", f"{REPO}/commits/main")], role, has_image)
@@ -166,7 +166,7 @@ def payload(version, date, groups, role, has_image):
         if len(entries) > MAX_ITEMS:
             lines.append(f"- *and {len(entries) - MAX_ITEMS} more*")
         card.append(text(f"### {title}\n" + "\n".join(lines)))
-    card += [SEP, text("-# Update with `otakase -u`")]
+    card += [SEP, text("-# The app offers the update itself (on Android: More > About & updates)")]
     tag = f"v{version}"
     return message(card, [("Download", f"{REPO}/releases/tag/{tag}"),
                           ("Full changelog", f"{REPO}/blob/{tag}/CHANGELOG.md"),

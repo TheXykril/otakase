@@ -216,35 +216,6 @@ func TestHistoryRewriteKeepsModeAndLeavesNoTemporaryFile(t *testing.T) {
 	}
 }
 
-func TestLocalDeleteAnimeLeavesOtherRowsAsWritten(t *testing.T) {
-	path := writeHistoryFixture(t, "x,bad,1,1,1\n"+mixedHistory)
-
-	LocalDeleteAnime(path, 2, "def")
-	LocalDeleteAnime(path, 4, "jkl") // the file has it qualified
-	LocalDeleteAnime(path, 3, "other-provider")
-
-	// Old short rows stay short, and the unreadable row goes.
-	want := "1,abc,3,100,5\n" +
-		"3,ghi,5,300,1400,Six Col\n"
-	if got := readHistoryFile(t, path); got != want {
-		t.Fatalf("history after delete:\n%s\nwant:\n%s", got, want)
-	}
-
-	LocalDeleteAnime(path, 1, "abc")
-	LocalDeleteAnime(path, 3, "ghi")
-	if got := readHistoryFile(t, path); got != "" {
-		t.Fatalf("deleting every row should leave an empty file, got %q", got)
-	}
-}
-
-func TestLocalDeleteAnimeOnAMissingFileCreatesNothing(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history.csv")
-	LocalDeleteAnime(path, 1, "abc")
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("delete created a history file: %v", err)
-	}
-}
-
 func TestLocalRemapAnimeProviderMovesEveryRowOfTheShow(t *testing.T) {
 	path := writeHistoryFixture(t, "7,old,2,90,1400,anikoto,Seven\n"+
 		"7,old,1,30,1400,anikoto,Seven\n"+

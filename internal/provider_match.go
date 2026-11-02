@@ -138,15 +138,6 @@ func rankProviderSearchOptions(options []SelectionOption, anime *Anime, query st
 	return bestIndex, bestScore, runnerUp
 }
 
-// selectBestProviderSearchResult picks the likeliest result, however weak.
-func selectBestProviderSearchResult(options []SelectionOption, anime *Anime, query string) (SelectionOption, bool) {
-	if len(options) == 0 {
-		return SelectionOption{}, false
-	}
-	best, _, _ := rankProviderSearchOptions(options, anime, query)
-	return options[best], true
-}
-
 // confidentProviderSearchMatch picks a result only when the scoring leaves no
 // doubt: the cover names the AniList id, or one exact title clearly beats the
 // rest. That is what lets an AniList romaji title match a host that lists

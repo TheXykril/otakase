@@ -44,7 +44,7 @@ const (
 // refuses private network addresses; see watchguard.go.
 var watchUpstream = newWatchUpstream()
 
-// streamLink is one link from `otakase -stream-info`.
+// streamLink is one link from `otakase-helper -stream-info`.
 type streamLink struct {
 	URL          string            `json:"url"`
 	Referrer     string            `json:"referrer,omitempty"`

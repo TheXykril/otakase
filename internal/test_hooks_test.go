@@ -48,45 +48,6 @@ func captureStdout(t *testing.T, fn func()) string {
 	return string(out)
 }
 
-// scriptedProvider serves canned episode lists and stream links per audio
-// mode and records which modes were asked for.
-type scriptedProvider struct {
-	episodes    map[string][]string
-	episodeErrs map[string]error
-	links       map[string][]string
-	linkErrs    map[string]error
-
-	episodeCalls []string
-	linkCalls    []string
-}
-
-func (s *scriptedProvider) Name() string { return "scripted" }
-
-func (s *scriptedProvider) SearchAnime(string, string) ([]SelectionOption, error) {
-	return nil, nil
-}
-
-func (s *scriptedProvider) EpisodesList(_ string, mode string) ([]string, error) {
-	mode = normalizeTranslationType(mode)
-	s.episodeCalls = append(s.episodeCalls, mode)
-	if err, ok := s.episodeErrs[mode]; ok && err != nil {
-		return nil, err
-	}
-	if eps, ok := s.episodes[mode]; ok {
-		return eps, nil
-	}
-	return []string{"1"}, nil
-}
-
-func (s *scriptedProvider) GetEpisodeURL(cfg Config, _ string, _ int) ([]string, error) {
-	mode := normalizeTranslationType(cfg.SubOrDub)
-	s.linkCalls = append(s.linkCalls, mode)
-	if err, ok := s.linkErrs[mode]; ok && err != nil {
-		return nil, err
-	}
-	return s.links[mode], nil
-}
-
 func useProvider(t *testing.T, p Provider) {
 	t.Helper()
 	saved := CurrentProvider

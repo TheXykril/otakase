@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something in otakase is broken or behaves wrong
+about: Something in Otakase is broken or behaves wrong
 title: ''
 labels: bug
 assignees: TheXykril
@@ -17,26 +17,23 @@ assignees: TheXykril
 2.
 3.
 
-<!-- The anime, episode and provider involved, if it's about playback or search. -->
+<!-- The show and episode involved, if it is about playback or search. -->
 
 ### Setup
 
-Paste the output of `otakase -diag` here. It has the version, OS, mpv and the
-end of the log.
-
-```
-```
-
-- Installed with: <!-- PKGBUILD, release binary, winget/installer, from source -->
-- Menus: <!-- terminal or rofi -->
+- Version: <!-- under About & updates in the app -->
+- Device: <!-- Android phone, Android TV, Windows, macOS, Linux -->
 - Tracker: <!-- AniList, MyAnimeList, or none -->
 
-### Log
+### Diagnostics
 
-If `-diag` didn't cover it, attach `otakase-debug.log` from the storage
-directory (`~/.local/share/otakase` unless you changed `StoragePath`).
-Run with the problem reproduced first so it's in there.
+If you can, send the report from the app instead (**More > Report a
+problem**): it adds the version, device, playback settings and how the
+sources are doing. Otherwise paste what **Diagnostics** in the app shows.
+
+```
+```
 
 ### Anything else
 
-<!-- Screenshots, config changes you made, whether it used to work. -->
+<!-- Screenshots, settings you changed, whether it used to work. -->

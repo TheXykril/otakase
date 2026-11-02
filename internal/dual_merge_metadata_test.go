@@ -77,22 +77,3 @@ func TestDualMergeKeepsTheScheduleWhicheverSideWins(t *testing.T) {
 		t.Fatal("schedule lost when MyAnimeList wins")
 	}
 }
-
-// The whole point: a dual-tracking user must get the same "caught up" answer a
-// single-tracker user gets.
-func TestCaughtUpIsDetectedAfterADualMerge(t *testing.T) {
-	airing := &NextAiringEpisodeInfo{Episode: 11, TimeUntilAiring: 211519}
-	merged := mergeAnimeEntries(
-		Entry{Media: Media{ID: 201514, Status: "RELEASING", NextAiringEpisode: airing}, UpdatedAt: time.Now().Add(-time.Hour)},
-		Entry{Media: Media{ID: 201514, MalID: 62876}, UpdatedAt: time.Now()},
-	)
-
-	withTrackedAnime(t, merged)
-	got := nextEpisodeAiring(&Anime{AnilistId: 201514, TotalEpisodes: 12}, 11)
-	if got.Aired {
-		t.Fatal("episode 11 should read as unaired for a dual-tracking user too")
-	}
-	if got.Delay != "2d" {
-		t.Errorf("expected a countdown, got %q", got.Delay)
-	}
-}

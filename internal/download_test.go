@@ -1,8 +1,6 @@
 package internal
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -23,78 +21,6 @@ func TestSanitizeFilename(t *testing.T) {
 	for input, want := range cases {
 		if got := SanitizeFilename(input); got != want {
 			t.Fatalf("SanitizeFilename(%q) = %q, want %q", input, got, want)
-		}
-	}
-}
-
-// A path separator smuggled in via the title would write outside the download
-// directory.
-func TestDownloadPathStaysInsideDir(t *testing.T) {
-	for _, hostile := range []string{"../../etc/passwd", "..", "/etc/shadow", `..\..\windows`} {
-		path := DownloadPath("/tmp/dl", hostile, 1, "sub", DownloadFormatMKV)
-		if filepath.Dir(path) != "/tmp/dl" {
-			t.Fatalf("%q escaped the download directory: %q", hostile, path)
-		}
-		// Separators are stripped, so the result is always a flat filename.
-		if strings.ContainsAny(filepath.Base(path), `/\`) {
-			t.Fatalf("%q produced a path separator: %q", hostile, path)
-		}
-	}
-}
-
-func TestDownloadPathFormat(t *testing.T) {
-	got := DownloadPath("/tmp/dl", "One Piece", 7, "dub", DownloadFormatMKV)
-	want := filepath.Join("/tmp/dl", "One Piece - Episode 07 (dub).mkv")
-	if got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-	if got := DownloadPath("/tmp/dl", "One Piece", 7, "dub", DownloadFormatMP4); !strings.HasSuffix(got, "(dub).mp4") {
-		t.Fatalf("expected an MP4 name, got %q", got)
-	}
-	// Anything unrecognised is MKV, never a path with a stray extension.
-	if got := DownloadPath("/tmp/dl", "X", 1, "sub", "../evil"); !strings.HasSuffix(got, "(sub).mkv") {
-		t.Fatalf("expected an MKV name, got %q", got)
-	}
-	// Episode numbers are zero-padded so a directory listing sorts correctly.
-	if !strings.Contains(DownloadPath("/tmp", "X", 3, "sub", DownloadFormatMKV), "Episode 03") {
-		t.Fatal("expected zero-padded episode numbers")
-	}
-	if !strings.Contains(DownloadPath("/tmp", "X", 123, "sub", DownloadFormatMKV), "Episode 123") {
-		t.Fatal("expected long episode numbers to be kept intact")
-	}
-}
-
-func TestParseEpisodeRange(t *testing.T) {
-	cases := []struct {
-		raw      string
-		fallback int
-		from, to int
-		wantErr  bool
-	}{
-		{raw: "", fallback: 4, from: 4, to: 4},
-		{raw: "7", fallback: 1, from: 7, to: 7},
-		{raw: "1-12", fallback: 1, from: 1, to: 12},
-		{raw: " 3 - 5 ", fallback: 1, from: 3, to: 5},
-		{raw: "9-4", fallback: 1, from: 4, to: 9},
-		{raw: "", fallback: 0, wantErr: true},
-		{raw: "abc", fallback: 1, wantErr: true},
-		{raw: "0", fallback: 1, wantErr: true},
-		{raw: "1-x", fallback: 1, wantErr: true},
-	}
-
-	for _, tc := range cases {
-		from, to, err := ParseEpisodeRange(tc.raw, tc.fallback)
-		if tc.wantErr {
-			if err == nil {
-				t.Fatalf("ParseEpisodeRange(%q, %d) should have failed", tc.raw, tc.fallback)
-			}
-			continue
-		}
-		if err != nil {
-			t.Fatalf("ParseEpisodeRange(%q, %d): %v", tc.raw, tc.fallback, err)
-		}
-		if from != tc.from || to != tc.to {
-			t.Fatalf("ParseEpisodeRange(%q, %d) = %d-%d, want %d-%d", tc.raw, tc.fallback, from, to, tc.from, tc.to)
 		}
 	}
 }
@@ -204,65 +130,6 @@ func TestBuildFFmpegArgsMuxesSubtitles(t *testing.T) {
 	}
 }
 
-func TestDownloadEpisodeRejectsBadInput(t *testing.T) {
-	if _, err := DownloadEpisode(Config{}, nil, 1, t.TempDir()); err == nil {
-		t.Fatal("expected an error for a nil anime")
-	}
-	if _, err := DownloadEpisode(Config{}, &Anime{}, 0, t.TempDir()); err == nil {
-		t.Fatal("expected an error for episode 0")
-	}
-}
-
-// A completed download must not be repeated on a later run.
-func TestDownloadEpisodeSkipsExistingFile(t *testing.T) {
-	if _, err := ffmpegPath(); err != nil {
-		t.Skip("ffmpeg is not installed")
-	}
-
-	dir := t.TempDir()
-	anime := &Anime{Title: AnimeTitle{English: "Demo Show"}, ProviderName: "kickassanime", ProviderId: "1"}
-	path := DownloadPath(dir, GetAnimeName(*anime), 1, "sub", DownloadFormatMKV)
-	if err := os.WriteFile(path, []byte("already downloaded"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := DownloadEpisode(Config{SubOrDub: "sub"}, anime, 1, dir)
-	if err != nil {
-		t.Fatalf("expected the existing file to be reused, got %v", err)
-	}
-	if got != path {
-		t.Fatalf("got %q, want %q", got, path)
-	}
-	// Untouched.
-	raw, _ := os.ReadFile(path)
-	if string(raw) != "already downloaded" {
-		t.Fatal("the existing download was overwritten")
-	}
-}
-
-// An episode saved as MP4 before the default became MKV is still a finished
-// download.
-func TestDownloadEpisodeSkipsExistingFileInOtherFormat(t *testing.T) {
-	if _, err := ffmpegPath(); err != nil {
-		t.Skip("ffmpeg is not installed")
-	}
-
-	dir := t.TempDir()
-	anime := &Anime{Title: AnimeTitle{English: "Demo Show"}, ProviderName: "kickassanime", ProviderId: "1"}
-	path := DownloadPath(dir, GetAnimeName(*anime), 2, "sub", DownloadFormatMP4)
-	if err := os.WriteFile(path, []byte("already downloaded"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := DownloadEpisode(Config{SubOrDub: "sub", DownloadFormat: "mkv"}, anime, 2, dir)
-	if err != nil {
-		t.Fatalf("expected the existing file to be reused, got %v", err)
-	}
-	if got != path {
-		t.Fatalf("got %q, want %q", got, path)
-	}
-}
-
 func TestDownloadFormat(t *testing.T) {
 	cases := map[string]string{"": "mkv", "mkv": "mkv", "MP4": "mp4", " mp4 ": "mp4", "avi": "mkv"}
 	for raw, want := range cases {
@@ -360,40 +227,5 @@ func TestBuildFFmpegArgsSendsProviderHeaders(t *testing.T) {
 	}
 	if count != 2 {
 		t.Fatalf("expected headers before both inputs, got %d", count)
-	}
-}
-
-func TestDownloadInfoRoundTrip(t *testing.T) {
-	previous := downloadSkipTimes
-	downloadSkipTimes = func(Config, *Anime, int, string) SkipTimes {
-		return SkipTimes{Op: Skip{Start: 90, End: 180}, Ed: Skip{Start: 1300, End: 1390}}
-	}
-	t.Cleanup(func() { downloadSkipTimes = previous })
-
-	video := filepath.Join(t.TempDir(), "Demo Show - Episode 03 (sub).mkv")
-	anime := &Anime{Title: AnimeTitle{English: "Demo Show"}, AnilistId: 21, MalId: 20, TotalEpisodes: 12, ProviderName: "kickassanime", ProviderId: "77"}
-	writeDownloadInfo(Config{}, anime, 3, "sub", "kickassanime", video)
-
-	if DownloadInfoPath(video) != strings.TrimSuffix(video, ".mkv")+".otakase.json" {
-		t.Fatalf("unexpected info path %q", DownloadInfoPath(video))
-	}
-	info, err := ReadDownloadInfo(video)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.AnilistID != 21 || info.MalID != 20 || info.Episode != 3 || info.Mode != "sub" || info.TotalEpisodes != 12 {
-		t.Fatalf("unexpected info %+v", info)
-	}
-	if info.Provider != "kickassanime" || info.ProviderID != "77" || info.File != filepath.Base(video) {
-		t.Fatalf("unexpected source %+v", info)
-	}
-	if info.SkipTimes.Op.End != 180 || info.SkipTimes.Ed.Start != 1300 {
-		t.Fatalf("skip times not kept: %+v", info.SkipTimes)
-	}
-
-	// The id is the show's id on its own provider, meaningless on a fallback.
-	writeDownloadInfo(Config{}, anime, 3, "sub", "anizone", video)
-	if info, _ := ReadDownloadInfo(video); info.ProviderID != "" {
-		t.Fatalf("a fallback provider must not carry the stored id, got %q", info.ProviderID)
 	}
 }

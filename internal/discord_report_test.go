@@ -235,38 +235,6 @@ func TestReportFieldsAreClipped(t *testing.T) {
 	}
 }
 
-func TestCLIReportUI(t *testing.T) {
-	lines := []string{"  My title \n", "\n", "2\n", "9\n"}
-	var out bytes.Buffer
-	ui := cliReportUI{
-		in: func() (string, error) {
-			if len(lines) == 0 {
-				return "", io.EOF
-			}
-			line := lines[0]
-			lines = lines[1:]
-			return line, nil
-		},
-		out: &out,
-	}
-	if got, ok := ui.ask("Title?", "hint"); !ok || got != "My title" {
-		t.Errorf("ask = %q, %v", got, ok)
-	}
-	if _, ok := ui.ask("Again?", ""); ok {
-		t.Error("an empty answer did not cancel")
-	}
-	options := []SelectionOption{{Key: "a", Label: "A"}, {Key: "b", Label: "B"}}
-	if got := ui.choose("Pick", options); got != "b" {
-		t.Errorf("choose = %q", got)
-	}
-	if got := ui.choose("Pick", options); got != "" {
-		t.Errorf("out of range choice = %q", got)
-	}
-	if !strings.Contains(out.String(), "2) B") {
-		t.Errorf("output = %q", out.String())
-	}
-}
-
 func TestReadFileTailStartsAtALine(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "log")
 	os.WriteFile(path, []byte("first line\nsecond line\nthird\n"), 0o644)
@@ -280,34 +248,5 @@ func TestReadFileTailStartsAtALine(t *testing.T) {
 	whole, _ := readFileTail(path, 1000)
 	if !strings.HasPrefix(string(whole), "first line") {
 		t.Errorf("whole = %q", whole)
-	}
-}
-
-func TestPreservePreviousLog(t *testing.T) {
-	dir := t.TempDir()
-	logPath := filepath.Join(dir, LogFileName)
-	os.WriteFile(logPath, []byte("from the last run\n"), 0o644)
-	PreservePreviousLog(logPath)
-	data, err := os.ReadFile(filepath.Join(dir, previousLogFileName))
-	if err != nil || string(data) != "from the last run\n" {
-		t.Fatalf("previous log = %q, %v", data, err)
-	}
-
-	previous := GetGlobalLogFile()
-	t.Cleanup(func() { SetGlobalLogFile(previous) })
-	SetGlobalLogFile(logPath)
-	if got := reportLogPath(true); got != filepath.Join(dir, previousLogFileName) {
-		t.Errorf("-report log = %q", got)
-	}
-	if got := reportLogPath(false); got != logPath {
-		t.Errorf("menu report log = %q", got)
-	}
-
-	// An empty log does not replace the kept one.
-	os.WriteFile(logPath, nil, 0o644)
-	PreservePreviousLog(logPath)
-	data, _ = os.ReadFile(filepath.Join(dir, previousLogFileName))
-	if string(data) != "from the last run\n" {
-		t.Errorf("previous log replaced by an empty one: %q", data)
 	}
 }

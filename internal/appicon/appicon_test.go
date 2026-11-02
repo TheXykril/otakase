@@ -1,10 +1,8 @@
 package appicon
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -116,27 +114,5 @@ func TestInstallLinuxDropsStaleUserCopies(t *testing.T) {
 	installLinux()
 	if !fileExists(filepath.Join(apps, "otakase.desktop")) {
 		t.Fatal("removed a menu entry that does not claim the links")
-	}
-}
-
-func TestDesktopEntry(t *testing.T) {
-	entry := string(desktopEntry)
-	for _, line := range []string{"Icon=" + Name, "Exec=otakase", "Terminal=true", "StartupWMClass=" + Name} {
-		if !strings.Contains(entry, "\n"+line+"\n") {
-			t.Fatalf("desktop entry is missing %q", line)
-		}
-	}
-	// Links open in their own entry, without a terminal.
-	if strings.Contains(entry, "MimeType=") {
-		t.Fatal("the app-menu entry still claims otakase:// links")
-	}
-	link := string(linkEntry)
-	for _, line := range []string{"Icon=" + Name, "Exec=otakase -rofi %u", "Terminal=false", "NoDisplay=true", "MimeType=" + SchemeMime + ";", "StartupWMClass=" + Name} {
-		if !strings.Contains(link, "\n"+line+"\n") {
-			t.Fatalf("link entry is missing %q", line)
-		}
-	}
-	if !bytes.HasPrefix(pngData, []byte("\x89PNG")) || !bytes.HasPrefix(menuData, []byte("\x89PNG")) {
-		t.Fatal("embedded icons are not PNGs")
 	}
 }

@@ -6,25 +6,6 @@ import (
 	"time"
 )
 
-func TestTheSyncedResumeTagRoundTrips(t *testing.T) {
-	tag := formatSyncedResumeTag(syncedResume{Episode: 5, Seconds: 754})
-	if tag != "[otakase:5@754]" {
-		t.Fatalf("tag = %q, want [otakase:5@754]", tag)
-	}
-	p, ok := parseSyncedResumeTag("rewatch with friends\n" + tag)
-	if !ok || p != (syncedResume{Episode: 5, Seconds: 754}) {
-		t.Fatalf("parsed %+v (ok=%t) from a note holding %s", p, ok, tag)
-	}
-}
-
-func TestANoteWithoutATagHasNoSyncedResume(t *testing.T) {
-	for _, notes := range []string{"", "great show", "[otakase:0@754]", "[otakase:5@0]", "[otakase:x@1]"} {
-		if p, ok := parseSyncedResumeTag(notes); ok {
-			t.Fatalf("%q parsed as %+v", notes, p)
-		}
-	}
-}
-
 func TestSettingTheTagKeepsWhatTheViewerWrote(t *testing.T) {
 	cases := []struct {
 		notes string
@@ -40,21 +21,6 @@ func TestSettingTheTagKeepsWhatTheViewerWrote(t *testing.T) {
 		if got := withSyncedResumeTag(c.notes, syncedResume{Episode: 6, Seconds: 90}); got != c.want {
 			t.Errorf("withSyncedResumeTag(%q) = %q, want %q", c.notes, got, c.want)
 		}
-	}
-}
-
-func TestTheTrackerFurtherIntoTheShowWins(t *testing.T) {
-	a := syncedResume{Episode: 5, Seconds: 900}
-	b := syncedResume{Episode: 6, Seconds: 30}
-	if got := laterSyncedResume(a, b); got != b {
-		t.Fatalf("got %+v, want the later episode", got)
-	}
-	c := syncedResume{Episode: 5, Seconds: 1000}
-	if got := laterSyncedResume(a, c); got != c {
-		t.Fatalf("got %+v, want the later second", got)
-	}
-	if got := laterSyncedResume(syncedResume{}, a); got != a {
-		t.Fatalf("got %+v, want the only valid one", got)
 	}
 }
 
@@ -157,42 +123,6 @@ func TestTheFirstPollsBeforeAResumeSeekAreIgnored(t *testing.T) {
 	r.flush()
 	if fake.count() != 0 {
 		t.Fatalf("a position of 1s replaced whatever the trackers held")
-	}
-}
-
-func TestTheTagMovesPastAFinishedEpisode(t *testing.T) {
-	old := syncedDoneLine
-	syncedDoneLine = func() string { return "The Voices" }
-	t.Cleanup(func() { syncedDoneLine = old })
-	cases := []struct {
-		in              string
-		finished, total int
-		want            string
-	}{
-		{"", 5, 12, "[otakase:6@0]"},
-		{"loved it", 5, 12, "loved it\n[otakase:6@0]"},
-		{"loved it\n[otakase:5@1300]", 5, 12, "loved it\n[otakase:6@0]"},
-		{"[otakase:5@1300]", 5, 0, "[otakase:6@0]"},
-		// The last episode is marked done.
-		{"loved it\n[otakase:12@1300]", 12, 12, "loved it\n[otakase:12@done] The Voices"},
-		{"[otakase:11@done] Counting the Stars", 12, 12, "[otakase:12@done] The Voices"},
-		// Watching an earlier episode again leaves a tag further on alone.
-		{"[otakase:9@300]", 5, 12, "[otakase:9@300]"},
-	}
-	for _, c := range cases {
-		if got := syncedResumeAfterEpisode(c.in, c.finished, c.total); got != c.want {
-			t.Errorf("syncedResumeAfterEpisode(%q, %d, %d) = %q, want %q", c.in, c.finished, c.total, got, c.want)
-		}
-	}
-	// The start of an episode, or a finished show, is not a place to seek to.
-	for _, tag := range []string{"[otakase:6@0]", "[otakase:12@done] The Voices"} {
-		if p, ok := parseSyncedResumeTag(tag); ok {
-			t.Fatalf("%s read as %+v", tag, p)
-		}
-	}
-	// Watching again replaces the done mark.
-	if got := withSyncedResumeTag("[otakase:12@done] The Voices\nmy note", syncedResume{Episode: 1, Seconds: 30}); got != "[otakase:1@30]\nmy note" {
-		t.Fatalf("rewatch tag %q", got)
 	}
 }
 

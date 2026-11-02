@@ -32,11 +32,6 @@ func parsePositiveIntInput(text, what string) (int, error) {
 	return n, err
 }
 
-func isAffirmativeAnswer(reply string) bool {
-	reply = strings.ToLower(strings.TrimSpace(reply))
-	return reply == "y" || reply == "yes"
-}
-
 // renderPrompt draws a question in the same frame the menus use, so stepping
 // from a list into a prompt does not look like leaving the program.
 func renderPrompt(section, question, hint string) string {

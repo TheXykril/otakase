@@ -1,12 +1,10 @@
 package internal
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/thexykril/otakase/internal/mpvskin"
 	"github.com/thexykril/otakase/internal/theme"
@@ -98,81 +96,6 @@ func markMPVSkinSocket(socket string) {
 	mpvSkinSocketsMu.Lock()
 	mpvSkinSockets[socket] = true
 	mpvSkinSocketsMu.Unlock()
-}
-
-func mpvSkinActive(socket string) bool {
-	mpvSkinSocketsMu.Lock()
-	defer mpvSkinSocketsMu.Unlock()
-	return mpvSkinSockets[socket]
-}
-
-type mpvSkinChip struct {
-	Icon string `json:"icon"`
-	Text string `json:"text"`
-}
-
-// mpvSkinChips are the chips under the player's top bar: where progress is
-// tracked. Sources are picked automatically and never named. Icon names are Material Icons ligatures.
-func mpvSkinChips(config *Config, anime *Anime) []mpvSkinChip {
-	var chips []mpvSkinChip
-	switch {
-	case UsesAniListTracking(config) && UsesMyAnimeListTracking(config):
-		chips = append(chips, mpvSkinChip{"sync", "AniList + MAL"})
-	case UsesAniListTracking(config):
-		chips = append(chips, mpvSkinChip{"sync", "AniList"})
-	case UsesMyAnimeListTracking(config):
-		chips = append(chips, mpvSkinChip{"sync", "MyAnimeList"})
-	}
-	if anime != nil && anime.SkipRemoteSync {
-		chips = nil
-	}
-	return chips
-}
-
-// mpvSkinEpisodeTitle is the episode's own name for the top bar, from Jikan:
-// English when it has one, else romaji.
-func mpvSkinEpisodeTitle(anime *Anime) string {
-	if anime == nil {
-		return ""
-	}
-	if title := strings.TrimSpace(anime.Ep.Title.English); title != "" {
-		return title
-	}
-	return strings.TrimSpace(anime.Ep.Title.Romaji)
-}
-
-// SendMPVSkinState tells the skin in the player at socket what it shows that
-// only otakase knows. Players without the skin are skipped. withTitle sends
-// the episode title too; leave it off when anime.Ep may still describe the
-// previous episode, so the skin keeps what it has rather than show a stale one.
-func SendMPVSkinState(config *Config, anime *Anime, socket string, withTitle bool) {
-	if socket == "" || !mpvSkinActive(socket) {
-		return
-	}
-	state := struct {
-		Chips        []mpvSkinChip `json:"chips"`
-		EpisodeTitle *string       `json:"episode_title,omitempty"`
-	}{Chips: mpvSkinChips(config, anime)}
-	if withTitle {
-		title := mpvSkinEpisodeTitle(anime)
-		state.EpisodeTitle = &title
-	}
-	payload, err := json.Marshal(state)
-	if err != nil {
-		return
-	}
-	// Right after mpv starts the script may not have registered yet, and a
-	// message to a client mpv does not know yet is refused.
-	var sendErr error
-	for attempt := 0; attempt < 6; attempt++ {
-		if attempt > 0 {
-			time.Sleep(500 * time.Millisecond)
-		}
-		if _, sendErr = MPVSendCommand(socket, []interface{}{"script-message-to", mpvskin.ScriptName, "otakase-state", string(payload)}); sendErr == nil {
-			return
-		}
-	}
-	Log(fmt.Sprintf("mpv skin: could not send its state: %v", sendErr))
 }
 
 func samePath(a, b string) bool {

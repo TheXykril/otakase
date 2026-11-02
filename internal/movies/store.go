@@ -356,8 +356,3 @@ func (s *Store) Continue() []Entry {
 func (s *Store) Watchlist() []Entry {
 	return s.List(func(e Entry) bool { return e.Watchlist })
 }
-
-// History is every movie played, finished or not.
-func (s *Store) History() []Entry {
-	return s.List(func(e Entry) bool { return e.Watched || e.Started() })
-}

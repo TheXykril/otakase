@@ -5,13 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/pkg/browser"
-
 	"github.com/thexykril/otakase/internal/icons"
 )
-
-// backOption is what the list flows hand back when the viewer went back.
-var backOption = SelectionOption{Key: "-2", Label: "Back"}
 
 // listStatusOptions are the tracker lists a show can be put on, keyed by
 // AniList's status names.
@@ -35,23 +30,6 @@ func statusLabel(options []SelectionOption, status string) string {
 		}
 	}
 	return "None"
-}
-
-// aniListPage is a show's page on AniList.
-func aniListPage(id int) string {
-	return fmt.Sprintf("https://anilist.co/anime/%d", id)
-}
-
-// openInDefaultBrowser opens url, saying so first, and reports whether it
-// worked.
-func openInDefaultBrowser(url string) bool {
-	Out(fmt.Sprintf("Opening %s", url))
-	if err := browser.OpenURL(url); err != nil {
-		Log(fmt.Sprintf("Error opening browser: %v", err))
-		Out("Failed to open browser.")
-		return false
-	}
-	return true
 }
 
 // entryUpdate is what happens after one change to a list entry.
@@ -257,158 +235,6 @@ func applyEntryUpdate(userConfig *Config, user *User, action string, animeID int
 		return entryLeave
 	}
 	return entryChanged
-}
-
-// AddNewAnime searches AniList and puts the show picked on one of the
-// tracker's lists. It returns the show, or backOption when the viewer went
-// back at any point.
-func AddNewAnime(userConfig *Config, anime *Anime, user *User, databaseAnimes *[]Anime) SelectionOption {
-	// Backing out of the question, or a search that fails, returns to the list
-	// this was opened from. Both used to close the program, which made opening
-	// this by accident expensive and a dropped connection fatal.
-	query, cancelled, err := promptCancelable(userConfig, "Add",
-		"Search AniList for an anime",
-		"enter to search · esc to go back")
-	if err != nil {
-		Log("Error getting user input: " + err.Error())
-		return backOption
-	}
-	if cancelled {
-		return backOption
-	}
-
-	// Searching for otakase itself finds one extra result, listed first. The
-	// image grid has no cover for it, so this search uses the plain list.
-	movie := isOtakaseMovieQuery(query)
-	preview := userConfig.RofiSelection && userConfig.ImagePreview && !movie
-	var options []SelectionOption
-	var previews map[string]RofiSelectPreview
-	endBusy := BeginBusy(userConfig, "Searching AniList")
-	if preview {
-		previews, err = SearchAnimeAnilistPreview(query, user.Token)
-	} else {
-		options, err = SearchAnimeAnilist(query, user.Token)
-	}
-	endBusy()
-	if err != nil && movie {
-		// The movie needs no AniList to be found.
-		Log(fmt.Sprintf("Failed to search anime: %v", err))
-		options, err = nil, nil
-	}
-	if err != nil {
-		Log(fmt.Sprintf("Failed to search anime: %v", err))
-		Out(fmt.Sprintf("Could not search for %q: %v", query, err))
-		return backOption
-	}
-
-	if movie {
-		options = append([]SelectionOption{otakaseMovieOption()}, options...)
-	}
-
-	var show SelectionOption
-	if preview {
-		show, err = DynamicSelectPreview(previews, false)
-	} else {
-		show, err = DynamicSelect(options)
-	}
-	if err != nil {
-		Log(fmt.Sprintf("No anime available: %v", err))
-		Exit(fmt.Errorf("No anime available"))
-	}
-	switch show.Key {
-	case "-1":
-		Exit(nil)
-	case "-2":
-		return backOption
-	case otakaseMovieKey:
-		PlayOtakaseMovie(userConfig, user, 0)
-		return backOption
-	}
-
-	animeID, err := strconv.Atoi(show.Key)
-	if err != nil {
-		Log(fmt.Sprintf("Failed to convert anime ID to integer: %v", err))
-		Exit(fmt.Errorf("Failed to convert anime ID to integer"))
-	}
-	if !UsesRemoteTracking(userConfig) {
-		return show
-	}
-
-	EnterAppScreen()
-	Out("Select which list to add the anime to:")
-	lists := append(listStatusOptions(),
-		SelectionOption{Key: watchedElsewhereKey, Label: "Already watched some elsewhere", Icon: icons.Counter})
-	list, err := DynamicSelect(lists)
-	if err != nil {
-		Log(fmt.Sprintf("Failed to select category: %v", err))
-		Exit(fmt.Errorf("Failed to select category"))
-	}
-	switch list.Key {
-	case "-1":
-		Exit(nil)
-	case "-2":
-		return backOption
-	case watchedElsewhereKey:
-		return addWatchedElsewhere(userConfig, user, animeID, show)
-	}
-
-	if err := UpdateAnimeStatus(user.Token, animeID, list.Key); err != nil {
-		Log(fmt.Sprintf("Failed to add anime to list: %v", err))
-		Exit(fmt.Errorf("Failed to add anime to list"))
-	}
-	if err := RefreshUserAnimeList(userConfig, user); err != nil {
-		Log(fmt.Sprintf("Failed to refresh anime list: %v", err))
-		Exit(fmt.Errorf("Failed to refresh anime list"))
-	}
-	return show
-}
-
-// handleUnreleasedAnime is what picking a show that has not started airing
-// leads to: there is nothing to play, so it offers to plan it instead.
-func handleUnreleasedAnime(userConfig *Config, user *User, anime *Anime, entry Entry) {
-	// Whatever happens, the next turn shows the menu rather than coming
-	// straight back here.
-	defer func() { anime.Ep.ContinueLast = false }()
-
-	title := entry.Media.Title.Romaji
-	if userConfig != nil && userConfig.AnimeNameLanguage == "english" && entry.Media.Title.English != "" {
-		title = entry.Media.Title.English
-	}
-	if title == "" {
-		title = strconv.Itoa(entry.Media.ID)
-	}
-	Out(fmt.Sprintf("%s is not released yet.", title))
-
-	var options []SelectionOption
-	if UsesRemoteTracking(userConfig) {
-		options = append(options, SelectionOption{Key: "planning", Label: "Add to Plan to Watch", Icon: icons.Planning})
-	}
-	options = append(options,
-		SelectionOption{Key: "details", Label: "Open AniList details", Icon: icons.Info},
-		SelectionOption{Key: "back", Label: "Back to list", Icon: icons.Back},
-	)
-	picked, err := promptSelect(options)
-	if err != nil {
-		Log(fmt.Sprintf("Error in unreleased anime prompt: %v", err))
-		return
-	}
-
-	switch picked.Key {
-	case "planning":
-		if err := AddAnimeToList(entry.Media.ID, "PLANNING", user.Token); err != nil {
-			Log(fmt.Sprintf("Error adding unreleased anime to planning: %v", err))
-			Out("Failed to add to Plan to Watch.")
-			return
-		}
-		Out("Added to Plan to Watch.")
-		if err := RefreshUserAnimeList(userConfig, user); err != nil {
-			Log("Error refreshing anime list: " + err.Error())
-		}
-	case "details":
-		openInDefaultBrowser(aniListPage(entry.Media.ID))
-	case "-1":
-		Exit(nil)
-	}
 }
 
 // getEntriesByCategory is the entries a list key stands for, each show once.

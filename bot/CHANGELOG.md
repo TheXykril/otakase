@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.85
+
+- Help texts now talk about the Otakase app instead of the old command line: `/install` has Android, Windows, macOS and Linux app steps, `/diagnose` points at **Report a problem** in the app, and update, version and app link hints name the app's own menus.
+
 ## 1.30.84
 
 - Watch room episode picker: episode pictures and titles also come from ani.zip (TVDB stills), so more episodes have a picture, as in the app.

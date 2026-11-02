@@ -78,11 +78,6 @@ func (p EpisodeProgress) Summary() string {
 	}
 }
 
-// WithEpisodeCounts appends the counts to a list row's title.
-func WithEpisodeCounts(title string, entry Entry) string {
-	return WithEpisodeCountsAndNote(title, entry, "")
-}
-
 // WithEpisodeCountsAndNote appends the counts and, when there is one, a single
 // status note: a resume point, or how long until the next episode airs.
 func WithEpisodeCountsAndNote(title string, entry Entry, resume string) string {

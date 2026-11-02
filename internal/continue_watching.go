@@ -22,10 +22,6 @@ import (
 // recentShowsFile lists recently played shows, newest first.
 const recentShowsFile = "recent.json"
 
-// recentShowsKept is how many shows the file remembers. More than any menu
-// shows, so lowering ContinueWatchingRows and raising it again loses nothing.
-const recentShowsKept = 20
-
 // resumeRowPrefix marks a home menu key as a continue-watching row. It cannot
 // collide with a category or action key, which are all plain words.
 const resumeRowPrefix = "RESUME:"
@@ -60,40 +56,6 @@ func loadRecentShows(storagePath string) []recentShow {
 		return nil
 	}
 	return shows
-}
-
-// noteRecentShow moves a show to the front of the recent list, marked 18+ or
-// not so the rows can leave it out.
-func noteRecentShow(storagePath string, anilistID int, adult bool, now time.Time) {
-	path := recentShowsPath(storagePath)
-	if path == "" || anilistID <= 0 {
-		return
-	}
-	shows := []recentShow{{AnilistID: anilistID, PlayedAt: now.UTC(), Adult: adult}}
-	for _, show := range loadRecentShows(storagePath) {
-		if show.AnilistID != anilistID && show.AnilistID > 0 && len(shows) < recentShowsKept {
-			shows = append(shows, show)
-		}
-	}
-	raw, err := json.MarshalIndent(shows, "", "  ")
-	if err != nil {
-		return
-	}
-	// Written whole and renamed into place: the file is read on every menu,
-	// and a half-written one would empty the rows.
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		Log(fmt.Sprintf("Continue watching: %v", err))
-		return
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o644); err != nil {
-		Log(fmt.Sprintf("Continue watching: %v", err))
-		return
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		Log(fmt.Sprintf("Continue watching: %v", err))
-	}
 }
 
 // continueWatchingRows builds the home menu rows for the recent shows that

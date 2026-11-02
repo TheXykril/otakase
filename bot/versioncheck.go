@@ -13,7 +13,7 @@ import (
 )
 
 // versionRe finds an otakase version someone mentions, like the line
-// `otakase -v` prints ("Otakase version: 26.5.0") or "I'm on v2.2.1". A
+// the old command line printed ("Otakase version: 26.5.0") or "I'm on v2.2.1". A
 // keyword must come first so mpv or OS versions are not picked up.
 var versionRe = regexp.MustCompile(`(?i)\b(?:otakase(?:\s+version)?|version|ver|on)\s*[:=]?\s*v?(\d{1,2}\.\d{1,3}\.\d{1,3})\b`)
 
@@ -77,7 +77,7 @@ func outdatedEmbed(have, latest string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title: "Your Otakase is out of date",
 		Description: fmt.Sprintf("You're on **%s**, the latest is **%s**. Many problems are already fixed there.\n\n"+
-			"Update with `otakase -u` (or `/install` for other ways), then check `otakase -v` and try again.", have, latest),
+			"Update from **About & updates** in the app (or see `/install`), then try again.", have, latest),
 		Color: shu,
 	}
 }

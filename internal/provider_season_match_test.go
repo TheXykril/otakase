@@ -18,25 +18,6 @@ func TestNormalizeSearchTitleSeasons(t *testing.T) {
 	}
 }
 
-// A search for a sequel also finds the first season, and the first season's
-// name matches the broader title variants exactly. The sequel must still win,
-// and the first season must win for the first season.
-func TestSeasonDecidesBetweenSeasons(t *testing.T) {
-	options := []SelectionOption{
-		{Key: "Dandadan", Title: "Dandadan"},
-		{Key: "Dandadan S2", Title: "Dandadan S2"},
-	}
-	sequel := &Anime{Title: AnimeTitle{Romaji: "Dandadan 2nd Season", English: "DAN DA DAN Season 2"}}
-	if best, _ := selectBestProviderSearchResult(options, sequel, "Dandadan"); best.Key != "Dandadan S2" {
-		t.Errorf("sequel mapped to %q", best.Key)
-	}
-	first := &Anime{Title: AnimeTitle{Romaji: "Dandadan", English: "DAN DA DAN"}}
-	reversed := []SelectionOption{options[1], options[0]}
-	if best, _ := selectBestProviderSearchResult(reversed, first, "Dandadan"); best.Key != "Dandadan" {
-		t.Errorf("first season mapped to %q", best.Key)
-	}
-}
-
 type looseSearchProvider struct{ results map[string][]SelectionOption }
 
 func (p looseSearchProvider) Name() string { return "loose" }

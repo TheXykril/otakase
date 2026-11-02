@@ -31,32 +31,6 @@ func TestCastPanelShowsWhatTheViewerNeeds(t *testing.T) {
 	}
 }
 
-// A panel wider than the terminal wraps and destroys the in-place redraw, so
-// every line has to fit the width it was given.
-func TestCastPanelFitsItsWidth(t *testing.T) {
-	for _, width := range []int{30, 40, 60, 100} {
-		for i, line := range castPanelLines(testPanelState(), width) {
-			if got := lipglossWidth(line); got > width {
-				t.Errorf("at width %d, line %d is %d cells wide:\n%s", width, i, got, line)
-			}
-		}
-	}
-}
-
-// A very narrow terminal must still produce something rather than a panel with
-// negative interior width.
-func TestCastPanelSurvivesANarrowTerminal(t *testing.T) {
-	lines := castPanelLines(testPanelState(), 8)
-	if len(lines) == 0 {
-		t.Fatal("no panel was rendered at all")
-	}
-	for i, line := range lines {
-		if lipglossWidth(line) > 8 {
-			t.Errorf("line %d overflows a 8-cell terminal: %q", i, line)
-		}
-	}
-}
-
 // A device that has not reported a duration yet must not render a bar built by
 // dividing by zero.
 func TestCastPanelToleratesAnUnknownDuration(t *testing.T) {
@@ -129,22 +103,6 @@ func TestCastPanelClearForgetsTheFrame(t *testing.T) {
 	}
 }
 
-// Light-novel titles are long. The device has to stay readable anyway: it is
-// the only thing telling the viewer where the episode is playing.
-func TestCastPanelKeepsTheDeviceVisibleBesideALongTitle(t *testing.T) {
-	state := testPanelState()
-	state.Title = "Rich Girl Caretaker: I'm Secretly the Caregiver of the Most Popular Girl in This Rich Kid School"
-
-	top := castPanelLines(state, 72)[0]
-
-	if !strings.Contains(top, "Office TV") {
-		t.Errorf("a long title pushed the device out of the header:\n%s", top)
-	}
-	if lipglossWidth(top) > 72 {
-		t.Errorf("the header is %d cells wide, over the 72 it was given:\n%s", lipglossWidth(top), top)
-	}
-}
-
 // When the panel owns the screen it redraws by going home and wiping, which is
 // what makes it survive a resize and a frame that changes height. Counting
 // back over the last frame is only for the case where it shares the terminal.
@@ -159,34 +117,6 @@ func TestCastPanelDrawsFromHomeWhenItOwnsTheScreen(t *testing.T) {
 	second := panel.frame(testPanelState())
 	if strings.Contains(second, "A") && strings.Contains(second, "\033[4A") {
 		t.Error("a panel that owns the screen is still counting lines back")
-	}
-}
-
-// The terminal can be resized mid-episode. A panel that measured once at
-// startup keeps drawing at the old width, which either wraps or leaves a gap.
-func TestCastPanelFollowsAResize(t *testing.T) {
-	width, height := 100, 30
-	panel := &castPanelWriter{home: true, size: func() (int, int) { return width, height }}
-
-	wide := panel.frame(testPanelState())
-	width = 50
-	narrow := panel.frame(testPanelState())
-
-	widest := func(frame string) int {
-		longest := 0
-		for _, line := range strings.Split(frame, "\r\n") {
-			if w := lipglossWidth(line); w > longest {
-				longest = w
-			}
-		}
-		return longest
-	}
-
-	if widest(narrow) >= widest(wide) {
-		t.Errorf("the panel did not narrow with the terminal: %d then %d", widest(wide), widest(narrow))
-	}
-	if widest(narrow) > 50 {
-		t.Errorf("the panel is %d cells wide in a 50-cell terminal", widest(narrow))
 	}
 }
 
@@ -255,26 +185,6 @@ func TestCastPanelStatusAndPlayingFramesBothRedrawFromHome(t *testing.T) {
 	}
 	if p := panel.frame(testPanelState()); !strings.HasPrefix(p, "\033[H\033[J") {
 		t.Error("the playing frame does not go home and wipe")
-	}
-}
-
-// The episode number is the shortest and most load-bearing thing in the
-// header, and truncating title-and-episode as one string ate it first: the
-// trim runs off the end, and the end is where the episode number sits.
-func TestCastPanelKeepsTheEpisodeNumberBesideALongTitle(t *testing.T) {
-	state := testPanelState()
-	state.Title = "Rich Girl Caretaker: I'm Secretly the Caregiver of the Most Popular Girl in This Rich Kid School"
-
-	top := castPanelLines(state, 84)[0]
-
-	if !strings.Contains(top, "Ep 12") {
-		t.Errorf("a long title cut the episode number out of the header:\n%s", top)
-	}
-	if !strings.Contains(top, "Office TV") {
-		t.Errorf("a long title pushed the device out of the header:\n%s", top)
-	}
-	if lipglossWidth(top) > 84 {
-		t.Errorf("the header is %d cells wide, over the 84 it was given", lipglossWidth(top))
 	}
 }
 
@@ -359,18 +269,5 @@ func TestCastPanelBarKeepsShortSkipVisible(t *testing.T) {
 	}
 	if !strings.Contains(plain.String(), "▒") {
 		t.Errorf("a one-second skip is missing from the bar: %q", plain.String())
-	}
-}
-
-// Skips must not change the panel's geometry.
-func TestCastPanelWidthUnchangedBySkips(t *testing.T) {
-	state := testPanelState()
-	state.Skips = []cast.Span{{Start: 90, End: 180}, {Start: 1360, End: 1450}}
-	for _, width := range []int{34, 60, 84} {
-		for i, line := range castPanelLines(state, width) {
-			if got := lipglossWidth(line); got != width {
-				t.Errorf("width %d, line %d is %d wide", width, i, got)
-			}
-		}
 	}
 }

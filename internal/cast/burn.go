@@ -32,16 +32,6 @@ func (e Encoder) Hardware() bool { return e.Device != "" }
 // afterwards the way the copy path has to.
 const castBurnLevel = "4.1"
 
-// BuildBurnArgs is the ffmpeg command that draws subtitles into the video and
-// segments the result for the device.
-//
-// It mirrors BuildRemuxArgs everywhere the stream is concerned -- the same
-// referrer handling, the same tolerance for disguised segments, the same event
-// playlist -- and differs only in re-encoding the video instead of copying it.
-func BuildBurnArgs(streamURL, referrer, subtitlePath, outDir string, enc Encoder) []string {
-	return BuildBurnArgsFrom(streamURL, referrer, subtitlePath, outDir, enc, 0, nil, nil)
-}
-
 // BuildBurnArgsFrom is BuildBurnArgs starting the stream at an offset.
 //
 // The subtitle file passed here must already be shifted by the same offset --
@@ -193,10 +183,6 @@ func escapeFilterPath(path string) string {
 	)
 	return "'" + replacer.Replace(path) + "'"
 }
-
-// errWorkingProbe is only used by tests, to stand in for an encoder that will
-// not run on this machine.
-var errWorkingProbe = fmt.Errorf("cast: probe failed")
 
 // ChooseEncoder picks how to re-encode, preferring the GPU when it actually
 // works.

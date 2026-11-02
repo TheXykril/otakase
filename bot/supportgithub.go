@@ -16,7 +16,7 @@ import (
 var ghRepoAPI = "https://api.github.com/repos/TheXykril/otakase"
 
 // updateHowTo is the same advice the version check gives.
-const updateHowTo = "Update with `otakase -u` (or `/install` for other ways), then check `otakase -v` and try again."
+const updateHowTo = "Update from **About & updates** in the app (or see `/install`), then try again."
 
 // ghIssueFull is an issue with the dates and body the support features need.
 type ghIssueFull struct {

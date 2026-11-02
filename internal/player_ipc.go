@@ -76,15 +76,6 @@ func ExitMPV(socket string) error {
 	return err
 }
 
-func GetMPVPausedStatus(socket string) (bool, error) {
-	value, err := MPVSendCommand(socket, []interface{}{"get_property", "pause"})
-	if err != nil {
-		return false, err
-	}
-	paused, _ := value.(bool)
-	return paused, nil
-}
-
 func GetMPVPlaybackSpeed(socket string) (float64, error) {
 	value, err := MPVSendCommand(socket, []interface{}{"get_property", "speed"})
 	if err != nil {
@@ -100,19 +91,6 @@ func PercentageWatched(position, duration int) float64 {
 		return 0
 	}
 	return float64(position) / float64(duration) * 100
-}
-
-// HasActivePlayback reports whether mpv has a file playing. An unavailable
-// time-pos means nothing is loaded, which is an answer rather than an error.
-func HasActivePlayback(socket string) (bool, error) {
-	position, err := MPVSendCommand(socket, []interface{}{"get_property", "time-pos"})
-	if mpv.IsUnavailable(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("failed to check playback status: %w", err)
-	}
-	return position != nil, nil
 }
 
 // IsMPVRunning reports whether an mpv answers on the socket.

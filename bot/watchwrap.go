@@ -101,7 +101,7 @@ func (b *bot) wrapCommand(i *discordgo.InteractionCreate) {
 func wrapView(user string, self bool, year int, w yearWrap, now time.Time, lookup func(int) (airingShowInfo, bool)) *discordgo.MessageEmbed {
 	if w.Seconds < 60 {
 		if self {
-			return errorEmbed("Nothing in %d yet. Link Otakase with `otakase -discord-link` and what you play counts here.", year)
+			return errorEmbed("Nothing in %d yet. Link the app (**More → Discord**) and what you play counts here.", year)
 		}
 		return errorEmbed("<@%s> has nothing in Otakase for %d.", user, year)
 	}

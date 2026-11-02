@@ -94,48 +94,6 @@ func TestMPVSkinArgsLeaveTheUsersOSDFont(t *testing.T) {
 	}
 }
 
-func TestMPVSkinChips(t *testing.T) {
-	anime := &Anime{}
-	chips := mpvSkinChips(&Config{TrackingRemote: TrackingRemoteAniList}, anime)
-	if len(chips) == 0 || chips[0].Text != "AniList" {
-		t.Errorf("AniList tracking chip missing: %+v", chips)
-	}
-	chips = mpvSkinChips(&Config{TrackingRemote: TrackingRemoteBoth}, anime)
-	if len(chips) == 0 || chips[0].Text != "AniList + MAL" {
-		t.Errorf("both trackers chip missing: %+v", chips)
-	}
-	chips = mpvSkinChips(&Config{TrackingRemote: TrackingRemoteNone}, anime)
-	for _, chip := range chips {
-		if chip.Icon == "sync" {
-			t.Errorf("no tracker, yet a tracker chip: %+v", chips)
-		}
-	}
-	untracked := &Anime{SkipRemoteSync: true}
-	for _, chip := range mpvSkinChips(&Config{TrackingRemote: TrackingRemoteAniList}, untracked) {
-		if chip.Icon == "sync" {
-			t.Errorf("a show kept off the tracker shows a tracker chip: %+v", chip)
-		}
-	}
-}
-
-func TestMPVSkinEpisodeTitle(t *testing.T) {
-	anime := &Anime{}
-	if got := mpvSkinEpisodeTitle(anime); got != "" {
-		t.Errorf("no title known = %q, want empty", got)
-	}
-	anime.Ep.Title = AnimeTitle{Romaji: "Doukyou no Kyoudai", English: " Aversion Between Same-Sex Siblings "}
-	if got := mpvSkinEpisodeTitle(anime); got != "Aversion Between Same-Sex Siblings" {
-		t.Errorf("English title = %q", got)
-	}
-	anime.Ep.Title.English = ""
-	if got := mpvSkinEpisodeTitle(anime); got != "Doukyou no Kyoudai" {
-		t.Errorf("romaji fallback = %q", got)
-	}
-	if got := mpvSkinEpisodeTitle(nil); got != "" {
-		t.Errorf("nil anime = %q", got)
-	}
-}
-
 // Films and series have no skip times: the skin offers no skip times menu and
 // lists none of their keys, whatever ContributeSkipTimes says.
 func TestMPVSkinArgsWithoutSkipTimes(t *testing.T) {

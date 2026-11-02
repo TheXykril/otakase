@@ -31,9 +31,6 @@ var intentExamples = map[string][]string{
 		"no episodes found for this show", "the show I want isn't there",
 		"can't find one piece", "searching for a show gives nothing",
 	},
-	"icons": {
-		"menu icons show as boxes", "weird squares instead of icons", "icons look broken in the menu",
-	},
 	"sync": {
 		"my anilist progress didn't update", "episodes aren't tracked on myanimelist",
 		"watch progress doesn't sync", "anilist login stopped working",

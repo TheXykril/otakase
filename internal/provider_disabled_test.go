@@ -45,40 +45,6 @@ func TestRemovedProvidersAreGone(t *testing.T) {
 	}
 }
 
-func TestConfiguredStackLeavesOutDisabledProviders(t *testing.T) {
-	// Configs that name only disabled providers fall back to the head of the
-	// stack. Which provider that is changes as the stack is reordered, and
-	// that reordering should not fail a test about fallback.
-	stackHead := defaultEnabledProviderStack()[0]
-	enabledStack := []string{"anikoto", "megavid", "kickassanime", "anizone", "animex", "reanime", "nyaa"}
-
-	for _, tc := range []struct {
-		name string // what the config holds
-		cfg  *Config
-		want []string // the stack it resolves to
-	}{
-		{name: "empty", cfg: &Config{}, want: enabledStack},
-		{name: "json list", cfg: &Config{Provider: `["allanime","animepahe"]`}, want: []string{stackHead}},
-		{name: "animepahe only", cfg: &Config{Provider: `["animepahe"]`}, want: []string{stackHead}},
-		{name: "allanime only", cfg: &Config{Provider: `["allanime"]`}, want: []string{stackHead}},
-		{name: "legacy alias", cfg: &Config{Provider: "stacked"}, want: enabledStack},
-	} {
-		got := ConfiguredProviderNames(tc.cfg)
-		if !slices.Equal(got, tc.want) {
-			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
-		}
-	}
-}
-
-func TestConfiguredStackKeepsProvidersOnceEnabled(t *testing.T) {
-	withAllProvidersEnabledForTest(t)
-
-	got := ConfiguredProviderNames(&Config{Provider: `["sukebei","nyaa"]`})
-	if want := []string{"sukebei", "nyaa"}; !slices.Equal(got, want) {
-		t.Fatalf("got %v, want %v", got, want)
-	}
-}
-
 func TestProviderByNameFollowsTheDisabledList(t *testing.T) {
 	withGlobalConfig(t, &Config{})
 	if _, err := ProviderByName("sukebei"); err == nil {

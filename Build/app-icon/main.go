@@ -11,7 +11,6 @@
 //   - Build/app-icon/png/otakase-<size>.png, the sizes Linux uses
 //   - Build/app-icon/otakase.ico, the installer's icon
 //   - Build/app-icon/otakase.icns, kept ready for a macOS app bundle
-//   - cmd/otakase/rsrc_windows_*.syso, which gives otakase.exe its icon
 //   - internal/appicon/otakase.png, otakase-menu.png and otakase.svg, embedded
 //     in the binary
 //   - internal/mpvskin/assets/logo/otakase.ass, the player's loading logo
@@ -35,7 +34,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tc-hib/winres"
 	"golang.org/x/image/vector"
 )
 
@@ -78,11 +76,6 @@ func main() {
 	copyFile(filepath.Join(root, "site/img/icon.svg"), filepath.Join(root, "internal/appicon/otakase.svg"))
 	write(filepath.Join(root, "internal/mpvskin/assets/logo/otakase.ass"), []byte(full.ass()))
 
-	var exeIcons []image.Image
-	for _, size := range []int{16, 24, 32, 48, 64, 128, 256} {
-		exeIcons = append(exeIcons, images[size])
-	}
-	writeSyso(filepath.Join(root, "cmd/otakase"), exeIcons)
 }
 
 type shape struct {
@@ -407,30 +400,6 @@ func buildICNS(renders map[int][]byte) []byte {
 	_ = binary.Write(&out, binary.BigEndian, uint32(8+body.Len()))
 	out.Write(body.Bytes())
 	return out.Bytes()
-}
-
-// writeSyso writes the resource objects the Go linker folds into otakase.exe.
-// go build picks a .syso up by its _windows_<arch> suffix, so other platforms
-// never see them.
-func writeSyso(dir string, images []image.Image) {
-	ico, err := winres.NewIconFromImages(images)
-	if err != nil {
-		log.Fatal(err)
-	}
-	rs := winres.ResourceSet{}
-	if err := rs.SetIcon(winres.Name("APPICON"), ico); err != nil {
-		log.Fatal(err)
-	}
-	for _, arch := range []struct {
-		name string
-		arch winres.Arch
-	}{{"amd64", winres.ArchAMD64}, {"arm64", winres.ArchARM64}} {
-		var buf bytes.Buffer
-		if err := rs.WriteObject(&buf, arch.arch); err != nil {
-			log.Fatal(err)
-		}
-		write(filepath.Join(dir, "rsrc_windows_"+arch.name+".syso"), buf.Bytes())
-	}
 }
 
 func write(path string, data []byte) {

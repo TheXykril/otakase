@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/thexykril/otakase/internal/icons"
@@ -38,115 +37,6 @@ func EpisodesList(showID, mode string) ([]string, error) {
 	return provider.EpisodesList(rawID, mode)
 }
 
-// GetProviderTotalEpisodes is the highest episode number a show's provider
-// lists in either audio.
-func GetProviderTotalEpisodes(showID, mode string) (int, error) {
-	provider, rawID, err := providerForID(showID)
-	if err != nil {
-		return 0, err
-	}
-	return getProviderTotalEpisodes(provider, rawID, mode)
-}
-
-// getProviderTotalEpisodes checks both audios, since a dub that is still
-// airing lists fewer episodes than the sub.
-func getProviderTotalEpisodes(provider Provider, showID, mode string) (int, error) {
-	if provider == nil {
-		return 0, fmt.Errorf("provider is not configured")
-	}
-	if strings.TrimSpace(showID) == "" {
-		return 0, fmt.Errorf("provider id is empty")
-	}
-
-	preferred := normalizeTranslationType(mode)
-	total := 0
-	var failures []string
-	for _, lookupMode := range []string{preferred, alternateTranslationType(preferred)} {
-		episodes, err := provider.EpisodesList(showID, lookupMode)
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("%s: %v", lookupMode, err))
-			continue
-		}
-		total = max(total, inferTotalEpisodesFromEpisodeList(episodes))
-	}
-
-	switch {
-	case total > 0:
-		return total, nil
-	case len(failures) > 0:
-		return 0, fmt.Errorf("provider episode list lookup failed: %s", strings.Join(failures, "; "))
-	}
-	return 0, fmt.Errorf("provider returned no usable episode numbers")
-}
-
-// determineProviderTotalEpisodes finds how many episodes a show has from the
-// providers, for a show the tracker has no count for. The stored mapping is
-// asked first; failing that, each configured provider is searched in turn,
-// so one host being down or not having the show yet does not leave the
-// total unknown. An anime played straight from a tracker list has no
-// mapping at all.
-func determineProviderTotalEpisodes(config *Config, query string, anime *Anime, mode string) (int, error) {
-	if anime == nil {
-		return 0, fmt.Errorf("missing anime")
-	}
-
-	if providerName, providerID := AnimeProviderID(anime); providerID != "" {
-		if provider, err := ProviderByName(providerName); err == nil {
-			if total, err := getProviderTotalEpisodes(provider, providerID, mode); err == nil && total > 0 {
-				return total, nil
-			}
-		}
-	}
-
-	scoringQuery := strings.TrimSpace(query)
-	if scoringQuery == "" {
-		scoringQuery = animeSearchTitle(anime)
-	}
-	var failures []string
-	for _, providerName := range configuredProviderNames(config) {
-		provider, err := ProviderByName(providerName)
-		if err != nil {
-			continue
-		}
-		options, err := provider.SearchAnime(query, mode)
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("%s search: %v", providerName, err))
-			continue
-		}
-		option, ok := selectBestProviderSearchResult(options, anime, scoringQuery)
-		if !ok {
-			continue
-		}
-		providerID := option.Key
-		if _, rawID, qualified := ParseProviderQualifiedID(option.Key); qualified {
-			providerID = rawID
-		}
-		if strings.TrimSpace(providerID) == "" {
-			continue
-		}
-		if total, err := getProviderTotalEpisodes(provider, providerID, mode); err == nil && total > 0 {
-			return total, nil
-		}
-	}
-
-	if len(failures) > 0 {
-		return 0, fmt.Errorf("could not determine total episodes from any provider: %s", strings.Join(failures, "; "))
-	}
-	return 0, fmt.Errorf("could not determine total episodes from any provider")
-}
-
-// inferTotalEpisodesFromEpisodeList is the highest whole episode number in a
-// provider's list. Specials such as "12.5" count as the episode they follow.
-func inferTotalEpisodesFromEpisodeList(episodes []string) int {
-	total := 0
-	for _, episode := range episodes {
-		if number, err := strconv.ParseFloat(strings.TrimSpace(episode), 64); err == nil && number > 0 {
-			total = max(total, int(number))
-		}
-	}
-	return total
-}
-
 // GetEpisodeURL resolves an episode of a show by id, in config.SubOrDub.
 func GetEpisodeURL(config Config, id string, epNo int) ([]string, error) {
 	provider, rawID, err := providerForID(id)
@@ -154,48 +44,6 @@ func GetEpisodeURL(config Config, id string, epNo int) ([]string, error) {
 		return nil, err
 	}
 	return getProviderEpisodeURLForMode(provider, config, rawID, epNo, config.SubOrDub)
-}
-
-// GetEpisodeURLForPlayback is GetEpisodeURL with the audio fallback: when the
-// preferred audio has nothing, the other is offered, or taken outright with
-// AutoAudioFallback on. It returns the audio the links are in.
-func GetEpisodeURLForPlayback(config Config, id string, epNo int) ([]string, string, error) {
-	preferredMode := normalizeTranslationType(config.SubOrDub)
-	links, preferredErr := GetEpisodeURL(config, id, epNo)
-	if preferredErr == nil && len(links) > 0 {
-		return links, preferredMode, nil
-	}
-
-	fallbackMode := alternateTranslationType(preferredMode)
-	fallbackConfig := config
-	fallbackConfig.SubOrDub = fallbackMode
-	fallbackLinks, fallbackErr := GetEpisodeURL(fallbackConfig, id, epNo)
-	if fallbackErr != nil || len(fallbackLinks) == 0 {
-		if preferredErr != nil {
-			return nil, preferredMode, preferredErr
-		}
-		return nil, preferredMode, fallbackErr
-	}
-
-	// Like every other fallback, this one asks only when AutoAudioFallback is
-	// off. It used to ask regardless, so the next episode of a show with no
-	// dub stopped on a question with one useful answer.
-	if !config.AutoAudioFallback {
-		Out(audioFallbackPrompt(preferredMode, fallbackMode))
-		selected, selectErr := promptSelect([]SelectionOption{
-			{Key: "play", Label: "Play " + fallbackMode, Icon: icons.Audio},
-			{Key: "cancel", Label: "Cancel", Icon: icons.No},
-		})
-		if selectErr != nil {
-			return nil, preferredMode, selectErr
-		}
-		if selected.Key != "play" {
-			return nil, preferredMode, preferredErr
-		}
-	} else {
-		Out(fmt.Sprintf("No %s for episode %d — playing %s.", preferredMode, epNo, fallbackMode))
-	}
-	return fallbackLinks, fallbackMode, nil
 }
 
 func getProviderEpisodeURLForModeWithHints(provider Provider, config Config, id string, epNo int, mode string) ([]string, map[string]StreamPlaybackHint, error) {

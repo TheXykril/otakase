@@ -12,10 +12,10 @@ var zero = 0.0
 
 func (b *bot) registerCommands() error {
 	osChoices := []*discordgo.ApplicationCommandOptionChoice{
-		{Name: "Debian / Ubuntu / other Linux", Value: "linux"},
-		{Name: "Arch / Manjaro", Value: "arch"},
+		{Name: "Android phone or TV", Value: "android"},
 		{Name: "Windows", Value: "windows"},
 		{Name: "macOS", Value: "mac"},
+		{Name: "Linux", Value: "linux"},
 	}
 	var faqChoices []*discordgo.ApplicationCommandOptionChoice
 	for _, f := range faqs {
@@ -305,7 +305,7 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 
 func helpEmbed() *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{Title: "Otakase bot", Color: shu, Description: strings.Join(append([]string{
-		"`/install` how to install on your system",
+		"`/install` how to install on your device",
 		"`/faq` answers to common questions",
 		"`/latest` the newest release",
 		"`/changelog` what changed in a release, or `since:` your version for everything newer",

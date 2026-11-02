@@ -104,7 +104,7 @@ func partyPost(eventID string, p watchParty) (*discordgo.MessageEmbed, []discord
 	}
 	if p.Sync {
 		e.Description += "\n\nEveryone watches in their own Otakase, synced to the host. Press **Join in Otakase** " +
-			"(link the app first with `otakase -discord-link`)."
+			"(link the app first under **More → Discord**)."
 	}
 	if p.Image != "" {
 		e.Image = &discordgo.MessageEmbedImage{URL: p.Image}

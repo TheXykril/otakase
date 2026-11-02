@@ -51,9 +51,3 @@ func MonospaceFont() string {
 	})
 	return monoName
 }
-
-// resetMonospaceForTest clears the cached lookup.
-func resetMonospaceForTest() {
-	monoOnce = sync.Once{}
-	monoName = ""
-}

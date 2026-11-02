@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/thexykril/otakase/internal/cast"
-	"github.com/thexykril/otakase/internal/providers"
 )
 
 // Providers hand back HLS master playlists, which ffmpeg
@@ -64,41 +63,12 @@ const (
 	DownloadFormatMP4 = "mp4"
 )
 
-// downloadFormats lists every container a download may have been saved in, the
-// default first.
-var downloadFormats = []string{DownloadFormatMKV, DownloadFormatMP4}
-
 // DownloadFormat reads the configured container, defaulting to MKV.
 func DownloadFormat(config *Config) string {
 	if config != nil && strings.EqualFold(strings.TrimSpace(config.DownloadFormat), DownloadFormatMP4) {
 		return DownloadFormatMP4
 	}
 	return DownloadFormatMKV
-}
-
-// DownloadPath builds the output file path for one episode.
-func DownloadPath(dir, title string, episode int, mode, format string) string {
-	title = SanitizeFilename(title)
-	mode = strings.ToLower(strings.TrimSpace(mode))
-	if mode == "" {
-		mode = "sub"
-	}
-	if format != DownloadFormatMP4 {
-		format = DownloadFormatMKV
-	}
-	return filepath.Join(dir, fmt.Sprintf("%s - Episode %02d (%s).%s", title, episode, mode, format))
-}
-
-// existingDownload finds a finished download of an episode in any container,
-// so switching DownloadFormat does not fetch every episode again.
-func existingDownload(dir, title string, episode int, mode string) (string, bool) {
-	for _, format := range downloadFormats {
-		file := DownloadPath(dir, title, episode, mode, format)
-		if info, err := os.Stat(file); err == nil && info.Size() > 0 {
-			return file, true
-		}
-	}
-	return "", false
 }
 
 // ResolveDownloadDir expands the configured download directory, defaulting to
@@ -295,162 +265,4 @@ func runFFmpeg(binary string, args []string, onProgress func(elapsed time.Durati
 		return fmt.Errorf("ffmpeg failed: %w", err)
 	}
 	return nil
-}
-
-// DownloadEpisode fetches one episode to dir and returns the file written.
-func DownloadEpisode(config Config, anime *Anime, episode int, dir string) (string, error) {
-	binary, err := ffmpegPath()
-	if err != nil {
-		return "", err
-	}
-	if anime == nil {
-		return "", fmt.Errorf("no anime selected")
-	}
-	if episode <= 0 {
-		return "", fmt.Errorf("invalid episode number %d", episode)
-	}
-
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("create download directory: %w", err)
-	}
-
-	title := GetAnimeName(*anime)
-
-	// Check for a finished download before touching the network: an episode
-	// already on disk should not cost a provider round trip.
-	configuredMode := normalizeTranslationType(config.SubOrDub)
-	if existing, found := existingDownload(dir, title, episode, configuredMode); found {
-		Out(fmt.Sprintf("Episode %d already downloaded: %s", episode, existing))
-		return existing, nil
-	}
-
-	// ResolveEpisodeURLForPlayback rather than GetEpisodeURLForPlayback: it walks
-	// the whole provider stack with sub/dub fallback and, crucially, returns the
-	// per-stream hints. anime.Ep.SubtitleURL is only populated during playback, so
-	// reading it here would silently skip subtitles on every download.
-	result, err := ResolveEpisodeURLForPlayback(config, anime, episode)
-	if err != nil {
-		return "", err
-	}
-	if len(result.Links) == 0 {
-		return "", fmt.Errorf("no links found for episode %d", episode)
-	}
-
-	mode := result.Mode
-	streamURL := BestLink(result.Links)
-	hint := result.LinkHints[streamURL]
-	output := DownloadPath(dir, title, episode, mode, DownloadFormat(&config))
-
-	// The resolved mode can differ from the configured one when otakase falls back
-	// between sub and dub, so re-check under the name actually being written.
-	if mode != configuredMode {
-		if existing, found := existingDownload(dir, title, episode, mode); found {
-			Out(fmt.Sprintf("Episode %d already downloaded: %s", episode, existing))
-			return existing, nil
-		}
-	}
-
-	providerName := result.ProviderName
-	if providerName == "" {
-		providerName = providerNameForAnime(anime)
-	}
-	referrer := hint.Referrer
-	if referrer == "" {
-		referrer = providers.Referrer(providerName)
-	}
-	job := ffmpegJob{
-		Stream:   streamURL,
-		Referrer: referrer,
-		Headers:  hint.Headers,
-		// The same language the player would show, not only the provider's default.
-		Subtitle: pickSubtitleForHint(&config, anime, hint),
-		Output:   output,
-	}
-
-	Out(fmt.Sprintf("Downloading episode %d (%s)...", episode, mode))
-	Log(fmt.Sprintf("Downloading episode %d from %s to %s", episode, streamURL, output))
-
-	lastReport := time.Now()
-	onProgress := func(elapsed time.Duration) {
-		// ffmpeg emits progress every second; throttle the user-facing line so a
-		// long download does not flood the terminal.
-		if time.Since(lastReport) < 5*time.Second {
-			return
-		}
-		lastReport = time.Now()
-		Out(fmt.Sprintf("  episode %d: %s downloaded", episode, elapsed.Round(time.Second)))
-	}
-
-	progressErr := runFFmpeg(binary, job.args(), onProgress)
-	if progressErr != nil && job.Subtitle != "" {
-		// A subtitle track is a nicety; losing the episode over one is not. Retry
-		// without it rather than failing the download outright.
-		Log(fmt.Sprintf("Episode %d failed with subtitles (%v); retrying without them", episode, progressErr))
-		Out(fmt.Sprintf("  episode %d: subtitles unavailable, downloading video only", episode))
-		lastReport = time.Now()
-		job.Subtitle = ""
-		progressErr = runFFmpeg(binary, job.args(), onProgress)
-	}
-
-	if progressErr != nil {
-		// A partial file is worse than none: it would be mistaken for a completed
-		// download on the next run.
-		os.Remove(output)
-		return "", progressErr
-	}
-
-	writeDownloadInfo(config, anime, episode, mode, providerName, output)
-	Out(fmt.Sprintf("Saved %s", output))
-	return output, nil
-}
-
-// DownloadEpisodes fetches an inclusive range of episodes, continuing past a
-// failure so one missing episode does not abandon the rest.
-func DownloadEpisodes(config Config, anime *Anime, from, to int, dir string) []DownloadResult {
-	if to < from {
-		from, to = to, from
-	}
-
-	results := make([]DownloadResult, 0, to-from+1)
-	for episode := from; episode <= to; episode++ {
-		path, err := DownloadEpisode(config, anime, episode, dir)
-		results = append(results, DownloadResult{Episode: episode, Path: path, Err: err})
-		if err != nil {
-			Out(fmt.Sprintf("Episode %d failed: %v", episode, err))
-			Log(fmt.Sprintf("Download of episode %d failed: %v", episode, err))
-			if err == ErrFFmpegMissing {
-				break
-			}
-		}
-	}
-	return results
-}
-
-// ParseEpisodeRange reads "5" or "1-12" into an inclusive range.
-func ParseEpisodeRange(raw string, fallback int) (from, to int, err error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		if fallback <= 0 {
-			return 0, 0, fmt.Errorf("no episode selected")
-		}
-		return fallback, fallback, nil
-	}
-
-	first, second, found := strings.Cut(raw, "-")
-	from, err = strconv.Atoi(strings.TrimSpace(first))
-	if err != nil || from <= 0 {
-		return 0, 0, fmt.Errorf("invalid episode range %q", raw)
-	}
-	if !found {
-		return from, from, nil
-	}
-
-	to, err = strconv.Atoi(strings.TrimSpace(second))
-	if err != nil || to <= 0 {
-		return 0, 0, fmt.Errorf("invalid episode range %q", raw)
-	}
-	if to < from {
-		from, to = to, from
-	}
-	return from, to, nil
 }

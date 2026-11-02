@@ -122,6 +122,6 @@ func (b *bot) reportBug(i *discordgo.InteractionCreate) {
 	post := fmt.Sprintf("https://discord.com/channels/%s/%s", b.cfg.GuildID, th.ID)
 	b.rememberBugReport(th)
 	b.respond(i, true, &discordgo.MessageEmbed{Color: shu,
-		Description: "This opens a GitHub issue filled in from this post. Add your version (`otakase -v`) and system, then submit it."},
+		Description: "This opens a GitHub issue filled in from this post. Add your version (**About & updates** in the app) and device, then submit it."},
 		linkButtons("Open GitHub issue", bugReportURL(th.Name, question, post))...)
 }

@@ -21,7 +21,6 @@ import (
 func TestAutoRules(t *testing.T) {
 	cases := map[string]string{
 		"it says mpv not found when I play":                 "mpv",
-		"the menu icons are boxes for me":                   "icons",
 		"nothing found when I search for frieren":           "nothing-found",
 		"my anilist progress doesn't update after watching": "sync",
 		"chromecast not showing up at all":                  "cast",
@@ -56,7 +55,7 @@ func TestRulesPointAtFAQ(t *testing.T) {
 			t.Errorf("rule points at missing FAQ %q", r.faq)
 		}
 	}
-	for _, k := range []string{"linux", "arch", "windows", "mac"} {
+	for _, k := range []string{"android", "linux", "windows", "mac"} {
 		if installGuides[k].Body == "" {
 			t.Errorf("no install guide for %s", k)
 		}

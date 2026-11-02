@@ -15,7 +15,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// /provider-status runs `otakase -provider-status` (the add-on image ships
+// /provider-status runs `otakase-helper -provider-status` (the add-on image ships
 // the latest release) and shows which sources answer from here.
 
 type providerResult struct {
@@ -208,12 +208,12 @@ func (b *bot) checkProviders() (list []providerResult, version string, fail *dis
 	list = parseProviderStatus(out)
 	if len(visibleProviders(list, false)) == 0 {
 		if errors.Is(err, exec.ErrNotFound) {
-			return nil, "", errorEmbed("The source check isn't available on this bot right now. Run `otakase -provider-status` yourself instead.")
+			return nil, "", errorEmbed("The source check isn't available on this bot right now. **Diagnostics** in the app shows which sources answer for you.")
 		}
 		if err != nil {
-			return nil, "", errorEmbed("Couldn't run the source check here (%v). Run `otakase -provider-status` yourself instead.", err)
+			return nil, "", errorEmbed("Couldn't run the source check here (%v). **Diagnostics** in the app shows which sources answer for you.", err)
 		}
-		return nil, "", errorEmbed("The source check gave no results. Run `otakase -provider-status` yourself instead.")
+		return nil, "", errorEmbed("The source check gave no results. **Diagnostics** in the app shows which sources answer for you.")
 	}
 	version = "otakase"
 	if v, err := run("-v"); err == nil {

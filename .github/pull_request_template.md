@@ -10,7 +10,7 @@
 
 - [ ] `go vet ./...`
 - [ ] `go test -short -race ./...`
-- [ ] Tried it for real (mpv / cast / rofi): <!-- what you ran, or why not -->
+- [ ] Tried it for real (phone / TV / computer / cast): <!-- what you ran, or why not -->
 
 ## Checklist
 

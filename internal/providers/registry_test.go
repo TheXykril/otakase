@@ -2,7 +2,6 @@ package providers
 
 import (
 	"slices"
-	"strings"
 	"testing"
 )
 
@@ -64,28 +63,6 @@ func TestMetaForAndReferrer(t *testing.T) {
 	}
 	if got := Referrer("nothost"); got != "" {
 		t.Fatalf("Referrer of an unknown provider = %q", got)
-	}
-}
-
-func TestNewAndSetFactoryForTest(t *testing.T) {
-	provider, err := New("rt alias")
-	if err != nil || provider.Name() != "testhost" {
-		t.Fatalf("New = (%v, %v)", provider, err)
-	}
-	if _, err := New("nothost"); err == nil || !strings.Contains(err.Error(), `"nothost"`) {
-		t.Fatalf("New of an unknown provider: %v", err)
-	}
-
-	restore := SetFactoryForTest("Test Host", func() Provider { return fakeProvider{name: "swapped"} })
-	if provider, _ := New("testhost"); provider.Name() != "swapped" {
-		t.Fatalf("factory not swapped, got %q", provider.Name())
-	}
-	if meta, _ := MetaFor("testhost"); meta.Referrer != "https://test.example/" {
-		t.Fatal("swapping the factory lost the registration")
-	}
-	restore()
-	if provider, _ := New("testhost"); provider.Name() != "testhost" {
-		t.Fatalf("factory not restored, got %q", provider.Name())
 	}
 }
 

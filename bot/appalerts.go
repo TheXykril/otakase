@@ -81,7 +81,7 @@ func (b *bot) onSupportReply(s *discordgo.Session, m *discordgo.MessageCreate) {
 func fixedNotice(is ghIssueFull, rel ghRelease) inboxItem {
 	v := rel.version()
 	return inboxItem{Kind: "notice", Title: "Fixed in v" + v,
-		Text: fmt.Sprintf("Your report “%s” (#%d) is fixed. Update with otakase -u.", clip(cleanText(is.Title, false), 80), is.Number),
+		Text: fmt.Sprintf("Your report “%s” (#%d) is fixed. Update from About & updates in the app.", clip(cleanText(is.Title, false), 80), is.Number),
 		URL:  rel.HTMLURL}
 }
 

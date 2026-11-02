@@ -86,36 +86,6 @@ func sameHistoryRow(row Anime, anilistID int, providerID string) bool {
 	return row.AnilistId == anilistID && localProviderID(row.ProviderId) == providerID
 }
 
-// LocalDeleteAnime removes the rows of one show under one provider id.
-func LocalDeleteAnime(databaseFile string, anilistID int, providerID string) {
-	data, readErr := os.ReadFile(databaseFile)
-	if readErr != nil {
-		Out(fmt.Sprintf("Error opening file: %v", readErr))
-		return
-	}
-	rows, parseErr := readHistoryRows(bytes.NewReader(data))
-	if parseErr != nil {
-		Out(fmt.Sprintf("Error reading file: %v", parseErr))
-		return
-	}
-
-	target := localProviderID(providerID)
-	// Survivors are written back exactly as read, so an old short row is not
-	// upgraded as a side effect of deleting something else.
-	survivors := slices.DeleteFunc(rows, func(row []string) bool {
-		parsed := parseAnimeRow(row)
-		if parsed == nil {
-			Out(fmt.Sprintf("Skipping invalid local history row: %v", row))
-			return true
-		}
-		return sameHistoryRow(*parsed, anilistID, target)
-	})
-
-	if writeErr := writeHistoryRows(databaseFile, survivors); writeErr != nil {
-		Out(fmt.Sprintf("Error writing to file: %v", writeErr))
-	}
-}
-
 // openHistory reads the rows of the history file, creating it (and its
 // directory) empty when it is missing: the rest of the history code expects
 // the file to be there after the first read. Failures are reported to the

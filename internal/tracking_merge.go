@@ -4,16 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"time"
 )
 
 // Reconciling the AniList and MyAnimeList lists when both are tracked.
-
-// currentFuzzyDate is today in the trackers' date form.
-func currentFuzzyDate() FuzzyDate {
-	now := time.Now()
-	return FuzzyDate{Year: now.Year(), Month: int(now.Month()), Day: now.Day()}
-}
 
 // statusWeight ranks statuses by how far along they are, for entryFreshnessScore.
 var statusWeight = map[string]int{
@@ -99,18 +92,6 @@ func mergeAnimeEntries(existing, incoming Entry) Entry {
 		newer, older = incoming, existing
 	}
 	return mergeEntryMetadata(newer, older)
-}
-
-// mergeAnimeLists merges two lists show by show, the newer entry winning.
-func mergeAnimeLists(primary, secondary AnimeList) AnimeList {
-	combined := mapEntriesByMediaID(primary)
-	for id, incoming := range mapEntriesByMediaID(secondary) {
-		if current, both := combined[id]; both {
-			incoming = mergeAnimeEntries(current, incoming)
-		}
-		combined[id] = incoming
-	}
-	return animeListFromEntryMap(combined)
 }
 
 // mapEntriesByMediaID indexes a list by AniList ID. Entries without one have
@@ -279,129 +260,6 @@ func bothTrackerTokens(config *Config, stage func()) (aniListToken, myAnimeListT
 		return "", "", err
 	}
 	return aniListToken, myAnimeListToken, nil
-}
-
-// InitializeCombinedRemoteAnimeList starts a dual-tracking session: both
-// lists from cache, reconciled, with the merge redone once the background
-// refreshes land.
-func InitializeCombinedRemoteAnimeList(config *Config, user *User) error {
-	aniListToken, myAnimeListToken, tokenErr := bothTrackerTokens(config, func() {
-		StartupStage("Signing in to MyAnimeList")
-	})
-	if tokenErr != nil {
-		return tokenErr
-	}
-
-	StartupStage("Reading your AniList list")
-	aniListUser := &User{Token: aniListToken}
-	if loadErr := InitializeAniListUserAnimeList(config, aniListUser); loadErr != nil {
-		return loadErr
-	}
-	StartupStage("Reading your MyAnimeList list")
-	myAnimeListUser := &User{Token: myAnimeListToken}
-	if loadErr := InitializeMyAnimeListUserAnimeList(config, myAnimeListUser); loadErr != nil {
-		return loadErr
-	}
-
-	StartupStage("Checking MyAnimeList import")
-	if importErr := maybeImportAniListToMyAnimeList(config, myAnimeListUser); importErr != nil {
-		return importErr
-	}
-
-	StartupStage("Reconciling both trackers")
-	merged, syncErr := syncDualRemoteTrackers(config, aniListToken, aniListUser, myAnimeListUser)
-	if syncErr != nil {
-		return syncErr
-	}
-
-	StartupStage("Building the menu")
-	user.Token = aniListToken
-	user.AnimeList = merged
-	user.ListSync = NewAnimeListSync(merged)
-
-	// That merge came from two caches, since both trackers answer from cache
-	// and refresh behind us. Leaving it there would run the whole session on
-	// stale data -- an episode out an hour ago still unreleased, yesterday's
-	// progress -- while the refreshes arrive in the two sub-lists that nothing
-	// reads any more.
-	//
-	// So merge again when they land, and only then call the launch refreshed.
-	// Playback waits on that (briefly, with its own timeout), just as it
-	// always has with a single tracker.
-	go refreshCombinedRemoteAnimeList(config, user, aniListUser, myAnimeListUser)
-	return nil
-}
-
-// combinedRefreshDeadline bounds the wait for both trackers. A refresh that
-// never answers must not leave the list permanently marked "refreshing", since
-// callers block on that.
-const combinedRefreshDeadline = 20 * time.Second
-
-// combinedRefreshDeadlineForTest lets a test exercise the give-up path without
-// spending the real deadline waiting for it.
-var combinedRefreshDeadlineForTest = combinedRefreshDeadline
-
-// awaitTrackerRefreshes waits for each source's refresh to finish, and
-// reports false if the deadline passes first.
-func awaitTrackerRefreshes(sources []*User, limit time.Duration) bool {
-	timeout := time.After(limit)
-	for _, source := range sources {
-		if source == nil || source.ListSync == nil {
-			continue
-		}
-		select {
-		case <-source.ListSync.RefreshDone():
-		case <-timeout:
-			return false
-		}
-	}
-	return true
-}
-
-// queueRefreshSyncWrites writes what the refreshed lists still disagree on,
-// after the launch's own writes finish. It never holds up the refresh, which
-// playback waits on.
-var queueRefreshSyncWrites = func(config *Config, writes dualSyncWrites) {
-	if writes.count() == 0 {
-		return
-	}
-	Log(fmt.Sprintf("Combined refresh: %d AniList and %d MyAnimeList update(s) queued",
-		len(writes.aniList), len(writes.myAnimeList)))
-	go func() {
-		WaitForDualSyncWrites()
-		startDualSyncWrites(config, writes)
-	}()
-}
-
-func refreshCombinedRemoteAnimeList(config *Config, user, aniListUser, myAnimeListUser *User) {
-	defer user.ListSync.MarkRefreshDone()
-
-	if !awaitTrackerRefreshes([]*User{aniListUser, myAnimeListUser}, combinedRefreshDeadlineForTest) {
-		Log("Combined refresh: a tracker did not answer in time; keeping the cached merge")
-		return
-	}
-
-	again := buildDualRemoteSyncPlan(aniListUser.ListSync.Current(), myAnimeListUser.ListSync.Current())
-	// The launch only wrote what the two caches disagreed on, so a change
-	// made on a tracker's site since the last run reached the merged list
-	// but not the other tracker until the next launch. Moving a show to
-	// Watching on AniList left it in Planning on MyAnimeList, and anything
-	// reading MyAnimeList (the Discord watch room) saw the old status.
-	queueRefreshSyncWrites(config, dualSyncWrites{
-		aniListToken: user.Token,
-		aniList:      again.AniListUpdates,
-		myAnimeList:  again.MyAnimeListUpdates,
-	})
-	if animeListEqual(user.ListSync.Current(), again.Merged) {
-		return
-	}
-
-	// Published through ListSync only: writing user.AnimeList here would race
-	// with the launch reading it, and readers go through ListSync.Current()
-	// anyway. The notify makes menus already on screen redraw.
-	user.ListSync.Replace(again.Merged, true)
-	Log("Combined refresh: merged list updated from both trackers")
-	saveMergedListCaches(config, aniListUser, myAnimeListUser, again.Merged, "Combined refresh")
 }
 
 // refreshOrInitialize refreshes a tracker's list, and loads it from scratch

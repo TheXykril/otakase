@@ -149,17 +149,6 @@ func TestAssColorIsBlueGreenRed(t *testing.T) {
 	}
 }
 
-// A title longer than its half of the screen is cut, not run off the edge.
-func TestLongTitlesAreClipped(t *testing.T) {
-	long := strings.Repeat("x", 80)
-	if got := []rune(ellipsize(long, movieValueRunes)); len(got) != movieValueRunes || got[len(got)-1] != '…' {
-		t.Fatalf("clipped to %q", string(got))
-	}
-	if ellipsize("Frieren", movieValueRunes) != "Frieren" {
-		t.Fatal("a short title was changed")
-	}
-}
-
 // The soundtrack is a valid WAV of the asked length.
 func TestTheSoundtrackIsAWav(t *testing.T) {
 	wav := movieSoundtrack(movieScore{Length: 2, Cues: []movieCue{{At: 0.5, Kind: cueBell}, {At: 1, Kind: cueWhoosh, Length: 0.6}}})

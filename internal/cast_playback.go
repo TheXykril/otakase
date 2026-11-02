@@ -266,27 +266,6 @@ func ApplyCastSubStyle(config *Config, explicitlyAskedSoft bool) {
 // returns, and pressing q would start the next episode.
 var ErrCastStopped = errors.New("cast: stopped by the viewer")
 
-// castSocketSentinel is what StartPlayback hands back for a cast that played
-// an episode through.
-//
-// It follows the android-intent sentinel already in cmd/otakase/main.go: a
-// player that ran somewhere else and is now finished, whose caller should carry
-// on rather than poll a socket that will never exist.
-const castSocketSentinel = "cast"
-
-// castOutcome turns a cast's error into the socket path StartPlayback returns
-// and whether the failure is worth reporting to the viewer.
-func castOutcome(err error) (socket string, report bool) {
-	switch {
-	case err == nil:
-		return castSocketSentinel, false
-	case errors.Is(err, ErrCastStopped):
-		return "", false
-	default:
-		return "", true
-	}
-}
-
 // CastEpisode plays the already-resolved episode on a Chromecast instead of in
 // mpv, and keeps tracking it while it plays.
 func CastEpisode(config *Config, anime *Anime) error {
@@ -816,12 +795,6 @@ func castEpisodeOnce(config *Config, anime *Anime, reuse *cast.Device) error {
 		return ErrCastStopped
 	}
 	return nil
-}
-
-// watchCast follows the episode while the device plays it.
-// watchCast follows the episode while the device plays it, with no controls.
-func watchCast(config *Config, anime *Anime, session castSession, server castServer, remux castRemux, device cast.Device, durationEstimated bool) error {
-	return watchCastWithControls(config, anime, session, server, remux, device, nil, durationEstimated)
 }
 
 // watchCastWithControls is watchCast with a channel of viewer commands. A nil

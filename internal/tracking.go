@@ -68,10 +68,6 @@ func UsesMyAnimeListTracking(cfg *Config) bool {
 	return remoteTrackerIs(cfg, TrackingRemoteMyAnimeList, TrackingRemoteBoth)
 }
 
-func UsesDualRemoteTracking(cfg *Config) bool {
-	return remoteTrackerIs(cfg, TrackingRemoteBoth)
-}
-
 // remoteOnlyCategories are the menu entries that only make sense with a
 // remote list behind them.
 var remoteOnlyCategories = map[string]bool{
@@ -126,32 +122,6 @@ func setTracker(cfg *Config, remote string) error {
 	cfg.TrackingLocal, cfg.TrackingConfigured = true, true
 	normalizeTrackingConfig(cfg)
 	return persistTrackingConfig(cfg)
-}
-
-// EnsureTrackingConfigured asks for a tracking mode the first time round.
-// Afterwards there is nothing to do; saving only happens on a change.
-func EnsureTrackingConfigured(cfg *Config) error {
-	if cfg == nil {
-		return errors.New("missing config")
-	}
-	normalizeTrackingConfig(cfg)
-	if cfg.TrackingConfigured {
-		return nil
-	}
-
-	Out("Choose tracking mode. Local history stays enabled in every mode.")
-	picked, selectErr := DynamicSelect(trackerChoices())
-	switch {
-	case selectErr != nil:
-		return selectErr
-	case selectionCancelled(picked):
-		return errors.New("tracking setup cancelled")
-	}
-	mode := canonicalTrackerName(picked.Key)
-	if mode == "" {
-		return fmt.Errorf("unsupported tracking selection: %s", picked.Key)
-	}
-	return setTracker(cfg, mode)
 }
 
 // persistTrackingConfig writes the tracking settings into the config file,
@@ -337,16 +307,6 @@ func BuildLocalAnimeList(storageDir string) AnimeList {
 	return localAnimeListFromHistory(history)
 }
 
-// hasAnyEntries is true when any status bucket of list holds a show.
-func hasAnyEntries(list AnimeList) bool {
-	for _, bucket := range [][]Entry{list.Watching, list.Completed, list.Paused, list.Dropped, list.Planning, list.Rewatching} {
-		if len(bucket) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // countEntries counts the entries of list that match, each show once.
 func countEntries(list AnimeList, match func(Entry) bool) int {
 	matched := 0
@@ -373,34 +333,6 @@ func publishAnimeList(user *User, list AnimeList) {
 		user.ListSync = NewAnimeListSync(list)
 	}
 	user.ListSync.MarkRefreshDone()
-}
-
-// InitializeUserAnimeList loads the list for the configured tracker. Local
-// tracking builds it from history, which is never stale.
-func InitializeUserAnimeList(cfg *Config, user *User) error {
-	if cfg == nil || user == nil {
-		return errors.New("missing user or config")
-	}
-
-	var loadErr error
-	switch remoteTracker(cfg) {
-	case TrackingRemoteAniList:
-		return InitializeAniListUserAnimeList(cfg, user)
-	case TrackingRemoteMyAnimeList:
-		loadErr = InitializeMyAnimeListUserAnimeList(cfg, user)
-	case TrackingRemoteBoth:
-		loadErr = InitializeCombinedRemoteAnimeList(cfg, user)
-	default:
-		history := BuildLocalAnimeList(cfg.StoragePath)
-		user.AnimeList = history
-		user.ListSync = settledAnimeListSync(history)
-		return nil
-	}
-	if loadErr != nil {
-		return loadErr
-	}
-	// Either MyAnimeList mode may start empty with an AniList list to bring.
-	return maybeImportAniListToMyAnimeList(cfg, user)
 }
 
 // RefreshUserAnimeList reloads the list for the configured tracker.
@@ -457,27 +389,6 @@ func exitOnError(err error) {
 		return
 	}
 	Exit(err)
-}
-
-// ChangeTrackingToken signs in again to the configured trackers.
-func ChangeTrackingToken(cfg *Config, user *User) {
-	if !UsesAniListTracking(cfg) && !UsesMyAnimeListTracking(cfg) {
-		Out("Remote tracking is disabled.")
-		return
-	}
-	mode := remoteTracker(cfg)
-	if mode == TrackingRemoteBoth {
-		exitOnError(ensureMyAnimeListCredentialsConfigured(cfg))
-	}
-	if mode != TrackingRemoteMyAnimeList {
-		ChangeToken(cfg, user)
-	}
-	if mode != TrackingRemoteAniList {
-		exitOnError(ChangeMyAnimeListToken(cfg, user))
-	}
-	if mode == TrackingRemoteBoth {
-		exitOnError(LoadTokenForConfiguredTracking(cfg, user))
-	}
 }
 
 // RemoteTrackingDisplayName names the configured tracker for messages.

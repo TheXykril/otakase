@@ -1,9 +1,7 @@
 package internal
 
 import (
-	"errors"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -59,42 +57,5 @@ func TestRemoteCommand(t *testing.T) {
 	}
 	if _, _, ok := remoteCommand("loadfile"); ok {
 		t.Error("an unknown action was accepted")
-	}
-}
-
-func TestApplyDiscordRemote(t *testing.T) {
-	var sent [][]interface{}
-	previous := mpvRemoteSend
-	mpvRemoteSend = func(socket string, command []interface{}) (interface{}, error) {
-		if socket != "/tmp/mpv-test" {
-			return nil, errors.New("wrong socket " + socket)
-		}
-		sent = append(sent, command)
-		return nil, nil
-	}
-	t.Cleanup(func() { mpvRemoteSend = previous; untrackRemotePlayer("/tmp/mpv-test") })
-
-	applyDiscordRemote(nil, discordInboxItem{Kind: "remote", Key: "pause"})
-	if len(sent) != 0 {
-		t.Fatal("sent while nothing plays")
-	}
-	trackRemotePlayer("/tmp/mpv-test")
-	applyDiscordRemote(nil, discordInboxItem{Kind: "remote", Key: "pause"})
-	applyDiscordRemote(nil, discordInboxItem{Kind: "remote", Key: "stop"})
-	applyDiscordRemote(nil, discordInboxItem{Kind: "remote", Key: "eject"})
-	if len(sent) != 3 || sent[0][0] != "show-text" || !strings.Contains(sent[0][1].(string), "Paused") ||
-		!reflect.DeepEqual(sent[1], []interface{}{"set_property", "pause", true}) || !reflect.DeepEqual(sent[2], []interface{}{"quit"}) {
-		t.Errorf("sent %v", sent)
-	}
-
-	// A playback that ended does not forget the one after it.
-	trackRemotePlayer("/tmp/mpv-next")
-	untrackRemotePlayer("/tmp/mpv-test")
-	if currentRemotePlayer() != "/tmp/mpv-next" {
-		t.Error("the newer playback was forgotten")
-	}
-	untrackRemotePlayer("/tmp/mpv-next")
-	if currentRemotePlayer() != "" {
-		t.Error("ended playback still tracked")
 	}
 }

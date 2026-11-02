@@ -12,9 +12,9 @@ import (
 )
 
 // A log or error pasted or attached in a support post is scanned for errors
-// the otakase CLI is known to print, and the post gets the matching fixes.
-// The patterns are the CLI's own wording, so plain questions are left to the
-// FAQ replies.
+// otakase is known to print, and the post gets the matching fixes. Several
+// patterns are the retired command-line otakase's own wording; those answers
+// point people at the app. Plain questions are left to the FAQ replies.
 
 type logHint struct {
 	Key   string
@@ -25,40 +25,40 @@ type logHint struct {
 
 var logHints = []logHint{
 	{"mpv", "mpv is missing",
-		"otakase plays through mpv and couldn't find it. Linux: install `mpv` from your package manager. macOS: `brew install mpv`. Windows: run the installer again, it puts mpv next to otakase. If `Player` is set in your config (`otakase -e`), check the name or path.",
+		"This log is from the old command-line otakase, which is no longer updated. Switch to the app (`/install`): it has its own player and needs nothing else.",
 		regexp.MustCompile(`(?i)exec: \\?"mpv(\.exe)?\\?": executable file not found|fallback to mpv failed|Failed to resolve media player|(?m:^mpv: not found\s*$)`)},
 	{"mpv-socket", "mpv started but otakase couldn't talk to it",
-		"Update mpv, and check your `mpv.conf` doesn't set `input-ipc-server`. On a slow connection raise `MpvPlaybackStartTimeout` (`otakase -e`).",
+		"This log is from the old command-line otakase, which is no longer updated. Switch to the app (`/install`): it has its own player and needs nothing else.",
 		regexp.MustCompile(`(?i)Failed to connect to MPV socket|Failed to start mpv|timed out waiting for mpv response`)},
 	{"no-providers", "No sources are enabled",
-		"This otakase is old enough to let sources be turned off. Update with `otakase -u`: newer versions always use every source automatically.",
+		"This log is from the old command-line otakase, which is no longer updated. Switch to the app (`/install`): it has its own player and needs nothing else. The app always uses every source.",
 		regexp.MustCompile(`(?i)No providers are currently enabled`)},
 	{"blocked", "A source blocked or rate-limited you",
-		"The site answered with a block (Cloudflare, DDoS-Guard or too many requests). Wait a few minutes and try again; otakase falls back to other sources. A VPN can also trip this.",
+		"The site answered with a block (Cloudflare, DDoS-Guard or too many requests). Wait a few minutes and try again; Otakase falls back to other sources. A VPN can also trip this.",
 		regexp.MustCompile(`(?i)Cloudflare challenge|Too many requests|failed with status (429|403)\b|DDoS-Guard`)},
 	{"no-stream", "No source gave a playable stream",
-		"Streaming sites change and go down often. Run `/provider-status` here or `otakase -provider-status` to see how many answer, then try again later.",
+		"Streaming sites change and go down often. Run `/provider-status` here to see how many answer, try another copy or source from the player, or try again later.",
 		regexp.MustCompile(`(?i)No episode links found|failed to get episode links|No alternative provider could start playback|No other copy could start playback|No more (providers|sources) left to try|Playback failed to start( with|\. Trying another copy)|None of the servers for .* could be played`)},
 	{"network", "Network problem reaching a source",
-		"otakase couldn't connect. Check your internet and DNS, and turn off any proxy or VPN to test. A certificate error usually means a wrong system clock or a filtering antivirus.",
+		"Otakase couldn't connect. Check your internet and DNS, and turn off any proxy or VPN to test. A certificate error usually means a wrong system clock or a filtering antivirus.",
 		regexp.MustCompile(`(?i)\bno such host\b|dial tcp [^\n]*(i/o timeout|connection refused|network is unreachable)|TLS handshake timeout|x509: certificate|context deadline exceeded`)},
 	{"anilist-token", "AniList sign-in expired",
-		"Run `otakase -change-token` and sign in to AniList again.",
+		"Sign in to AniList again under **Accounts** in the app.",
 		regexp.MustCompile(`(?i)invalid[ _]token|AniList token invalid|Failed to get user data`)},
 	{"mal-credentials", "MyAnimeList isn't set up",
 		"MyAnimeList sync needs your own MAL app credentials. The steps are on the wiki's Tracking page: " + wikiURL + "/Tracking",
 		regexp.MustCompile(`(?i)MyAnimeList sync needs MAL application credentials`)},
 	{"wrong-match", "The show wasn't found or matched wrong",
-		"Titles differ between your tracker and the sources. Use **Remap** (`^r` in the list) to pick the right match.",
+		"Titles differ between your tracker and the sources. Use **Wrong show?** on the show's page in the app to pick the right match.",
 		regexp.MustCompile(`(?i)Could not find the selected anime|Wrong match is common|Failed to update (provider mapping|the match)`)},
 	{"rofi", "rofi is missing",
-		"Install `rofi`, or set `RofiSelection=false` (`otakase -e`) to use the terminal menus.",
+		"This log is from the old command-line otakase, which is no longer updated. Switch to the app (`/install`): it has its own player and needs nothing else.",
 		regexp.MustCompile(`(?i)exec: \\?"rofi\\?": executable file not found|failed to run Rofi`)},
 	{"ffmpeg", "ffmpeg is missing",
-		"Downloading and casting with subtitles need `ffmpeg`. Install it from your package manager (Windows: `winget install ffmpeg`).",
+		"Downloading and casting with subtitles on a computer need `ffmpeg`. Install it from your package manager (Windows: `winget install ffmpeg`).",
 		regexp.MustCompile(`(?i)Downloading needs ffmpeg|exec: \\?"ffmpeg(\.exe)?\\?": executable file not found|cast: ffmpeg failed`)},
 	{"cast", "No cast device answered",
-		"Usually the firewall drops the TV's reply. Run `otakase -cast-setup`, and see " + wikiURL + "/Casting-Problems",
+		"Usually the computer's firewall drops the TV's reply. See " + wikiURL + "/Casting",
 		regexp.MustCompile(`(?i)No cast devices found|cast: discovery failed|cast: cannot reach Kodi`)},
 }
 

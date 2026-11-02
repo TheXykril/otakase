@@ -43,8 +43,7 @@ type menuLayout struct {
 	pane      bool
 }
 
-func (l menuLayout) hasTabs() bool   { return len(l.tabs) > 0 }
-func (l menuLayout) hasFooter() bool { return len(l.footer) > 0 }
+func (l menuLayout) hasTabs() bool { return len(l.tabs) > 0 }
 
 // activeTabKey is what the caller needs to know to load the right list.
 func (l menuLayout) activeTabKey() string {
@@ -69,11 +68,11 @@ var (
 	tabActiveStyle   lipgloss.Style
 	tabInactiveStyle lipgloss.Style
 	tabBarStyle      lipgloss.Style
-	footerKeyStyle   lipgloss.Style
-	footerTextStyle  lipgloss.Style
-	paneBorderStyle  lipgloss.Style
-	paneTitleStyle   lipgloss.Style
-	paneMetaStyle    lipgloss.Style
+
+	footerTextStyle lipgloss.Style
+	paneBorderStyle lipgloss.Style
+	paneTitleStyle  lipgloss.Style
+	paneMetaStyle   lipgloss.Style
 
 	crumbAppStyle  lipgloss.Style
 	crumbSepStyle  lipgloss.Style
@@ -102,10 +101,6 @@ func applyLayoutTheme(palette theme.Palette) {
 	// No border of its own: the frame draws one rule, under the header, and a
 	// second one here would sit at a different width and read as a mistake.
 	tabBarStyle = lipgloss.NewStyle()
-
-	footerKeyStyle = lipgloss.NewStyle().
-		Foreground(color(palette.Accent)).
-		Bold(true)
 
 	footerTextStyle = lipgloss.NewStyle().
 		Foreground(color(palette.Muted))
@@ -255,22 +250,6 @@ func renderTabBar(layout menuLayout, width int) string {
 	return tabBarStyle.Render(bar)
 }
 
-// renderFooter draws the actions bar: "↵ play  / search  c continue".
-func renderFooter(layout menuLayout) string {
-	if !layout.hasFooter() {
-		return ""
-	}
-	parts := make([]string, 0, len(layout.footer))
-	for _, action := range layout.footer {
-		hint := action.Hint
-		if hint == "" {
-			hint = "·"
-		}
-		parts = append(parts, footerKeyStyle.Render(hint)+" "+footerTextStyle.Render(action.Label))
-	}
-	return strings.Join(parts, footerTextStyle.Render("   "))
-}
-
 // renderSidePane draws the detail column for the highlighted entry: its poster
 // when the terminal can draw one, then the title and whatever else is known.
 //
@@ -385,27 +364,6 @@ var menuActions = map[string]FooterAction{
 	// News, the Discord link and reports. Offered whenever DiscordBotURL is
 	// set; ctrl+y is bound to nothing in rofi's defaults.
 	"COMMUNITY": {Key: "COMMUNITY", Label: "community", Hint: "ctrl+y"},
-}
-
-// applyDynamicActionLabels replaces the labels of actions that report state
-// rather than naming a destination.
-//
-// CAST is the only one: it is a toggle, and a toggle whose entry does not say
-// which way it is set is a toggle a viewer has to guess at.
-func applyDynamicActionLabels(actions []FooterAction, config *Config, terminal bool) []FooterAction {
-	out := make([]FooterAction, len(actions))
-	copy(out, actions)
-	for i := range out {
-		if out[i].Key != "CAST" {
-			continue
-		}
-		if terminal {
-			out[i].Label = castActionCheckbox(config)
-			continue
-		}
-		out[i].Label = castActionLabel(config)
-	}
-	return out
 }
 
 // actionForKey finds the action a keypress triggers, if any.

@@ -267,7 +267,7 @@ func TestDiagnosticsBlockIsRead(t *testing.T) {
 
 func TestDiagnoseEmbed(t *testing.T) {
 	e := diagnoseEmbed()
-	if len(e.Fields) != 3 || !strings.Contains(e.Fields[2].Value, "otakase -diag | clip") {
-		t.Fatalf("%+v", e.Fields)
+	if !strings.Contains(e.Description, "Report a problem") || !strings.Contains(e.Description, "/link-app") {
+		t.Fatalf("%s", e.Description)
 	}
 }

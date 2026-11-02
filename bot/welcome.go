@@ -65,12 +65,12 @@ func welcomePayload(chans []*discordgo.Channel) map[string]any {
 		"components": []map[string]any{
 			{"type": 12, "items": []map[string]any{{"media": map[string]any{"url": "attachment://welcome-header.png"}}}},
 			{"type": 17, "accent_color": shu, "components": []map[string]any{
-				text("## Welcome to Otakase\nWatch anime from the command line, with your list kept in sync. Otakase finds the episode, " +
-					"plays it in mpv or casts it to your TV, skips openings, endings, filler and recaps, and updates AniList or MyAnimeList when you're done."),
+				text("## Welcome to Otakase\nAnime, movies and shows, served on every screen you own. Otakase finds the episode, " +
+					"plays it or casts it to your TV, skips openings, endings and recaps, and updates AniList or MyAnimeList when you're done."),
 				sep,
 				text("### Start here\n" + strings.Join(lines, "\n")),
 				sep,
-				text("-# Pick your system and notifications in **Channels & Roles** at the top of the channel list. Type `/help` to see what the bot can do."),
+				text("-# Pick your device and notifications in **Channels & Roles** at the top of the channel list. Type `/help` to see what the bot can do."),
 			}},
 			{"type": 1, "components": []map[string]any{
 				button("Website", siteURL), button("Download", repoURL+"/releases/latest"), button("Wiki", wikiURL), button("GitHub", repoURL),

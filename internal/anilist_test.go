@@ -60,26 +60,6 @@ func answerAlways(body string) func(aniListCall, int) (int, string) {
 	return func(aniListCall, int) (int, string) { return http.StatusOK, body }
 }
 
-func TestLevenshtein(t *testing.T) {
-	cases := []struct {
-		a, b string
-		want int
-	}{
-		{"", "", 0},
-		{"", "abc", 3},
-		{"abc", "", 3},
-		{"kitten", "sitting", 3},
-		{"Frieren", "frieren", 0},
-		{"flaw", "lawn", 2},
-		{"日本", "日本語", 1},
-	}
-	for _, c := range cases {
-		if got := levenshtein(c.a, c.b); got != c.want {
-			t.Errorf("levenshtein(%q, %q) = %d, want %d", c.a, c.b, got, c.want)
-		}
-	}
-}
-
 func TestMediaDisplayTitleFallsBackToID(t *testing.T) {
 	title := mediaDisplayTitle(Media{ID: 42}, &Config{AnimeNameLanguage: "english"})
 	if title != "42" {
@@ -260,23 +240,6 @@ func TestFindAnimeByAnilistID(t *testing.T) {
 	}
 }
 
-func TestFindSequelInAnimeList(t *testing.T) {
-	list := AnimeList{
-		Planning:   []Entry{{Media: Media{ID: 1}}},
-		Rewatching: []Entry{{Media: Media{ID: 2}}},
-	}
-	if status, ok := FindSequelInAnimeList(list, 1); !ok || status != "PLANNING" {
-		t.Fatalf("got %q %v", status, ok)
-	}
-	// The sequel prompt names this list REWATCHING, not AniList's REPEATING.
-	if status, ok := FindSequelInAnimeList(list, 2); !ok || status != "REWATCHING" {
-		t.Fatalf("got %q %v", status, ok)
-	}
-	if _, ok := FindSequelInAnimeList(list, 3); ok {
-		t.Fatal("found a sequel that is not on the list")
-	}
-}
-
 func TestAniListRetryDelay(t *testing.T) {
 	withHeader := &http.Response{Header: http.Header{"Retry-After": {" 9 "}}}
 	if got := aniListRetryDelay(withHeader, 0); got != 9*time.Second {
@@ -327,14 +290,6 @@ func TestAniListRequestGivesUpAfterFiveRateLimits(t *testing.T) {
 	}
 }
 
-func TestAniListSearchKeepsItsStatusWording(t *testing.T) {
-	fakeAniList(t, func(aniListCall, int) (int, string) { return http.StatusInternalServerError, "boom" })
-	_, err := SearchAnimeAnilist("x", "")
-	if err == nil || err.Error() != "failed to search for anime. Status Code: 500, Response: boom" {
-		t.Fatalf("err = %v", err)
-	}
-}
-
 func TestAniListGraphQLErrorsAreErrors(t *testing.T) {
 	calls := fakeAniList(t, answerAlways(`{"errors":[{"message":"Not Found.","status":404}],"data":{"Media":null}}`))
 	_, err := GetAnimeMalID(1)
@@ -365,43 +320,6 @@ func TestMakePostRequestDecodesIntoAMap(t *testing.T) {
 	}
 }
 
-func TestSearchAnimeAnilistRanksByTitleDistance(t *testing.T) {
-	var media []string
-	for i := 1; i <= 12; i++ {
-		media = append(media, fmt.Sprintf(`{"id":%d,"episodes":%d,"title":{"english":"%s"}}`, i, i, strings.Repeat("z", i+3)))
-	}
-	media = append(media, `{"id":99,"episodes":12,"title":{"english":"","romaji":"Frieren"},"coverImage":{"large":"c.jpg"}}`)
-	calls := fakeAniList(t, answerAlways(`{"data":{"Page":{"media":[`+strings.Join(media, ",")+`]}}}`))
-
-	options, err := SearchAnimeAnilist("frieren", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(options) != 10 {
-		t.Fatalf("got %d options, want the closest 10", len(options))
-	}
-	if options[0].Key != "99" || options[0].Title != "Frieren" {
-		t.Fatalf("closest match is not first: %#v", options[0])
-	}
-	if strings.Contains((*calls)[0].Query, "coverImage") {
-		t.Fatal("the list search asked for covers it does not show")
-	}
-	if (*calls)[0].Variables["search"] != "frieren" {
-		t.Fatalf("variables = %#v", (*calls)[0].Variables)
-	}
-
-	previews, err := SearchAnimeAnilistPreview("frieren", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(previews) != 10 || previews["99"].CoverImage != "c.jpg" {
-		t.Fatalf("previews = %#v", previews)
-	}
-	if !strings.Contains((*calls)[1].Query, "coverImage") {
-		t.Fatal("the preview search did not ask for covers")
-	}
-}
-
 func TestGetAnilistUserIDRejectsIncompleteViewer(t *testing.T) {
 	cases := map[string]string{
 		`{}`:                               "data field missing",
@@ -414,22 +332,6 @@ func TestGetAnilistUserIDRejectsIncompleteViewer(t *testing.T) {
 		if _, _, err := GetAnilistUserID("tok"); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("answer %s: err = %v, want %q", answer, err, want)
 		}
-	}
-}
-
-func TestGetAnimeMalIDAndImage(t *testing.T) {
-	fakeAniList(t, answerAlways(`{"data":{"Media":{"idMal":null,"coverImage":{"large":"x.jpg"}}}}`))
-	if _, err := GetAnimeMalID(3); err == nil || err.Error() != "AniList media 3 has no MyAnimeList ID" {
-		t.Fatalf("err = %v", err)
-	}
-	malID, image, err := GetAnimeIDAndImage(3)
-	if err != nil || malID != 0 || image != "x.jpg" {
-		t.Fatalf("malID=%d image=%q err=%v", malID, image, err)
-	}
-
-	fakeAniList(t, answerAlways(`{"data":{"Media":null}}`))
-	if _, _, err := GetAnimeIDAndImage(3); err == nil || err.Error() != "AniList media 3 not found" {
-		t.Fatalf("err = %v", err)
 	}
 }
 
@@ -452,28 +354,6 @@ func TestGetAnimeDataByID(t *testing.T) {
 	}
 }
 
-func TestGetAnimeSequelKeepsOnlySequels(t *testing.T) {
-	fakeAniList(t, answerAlways(`{"data":{"Media":{"relations":{"edges":[
-		{"relationType":"PREQUEL","node":{"id":1}},
-		{"relationType":"SEQUEL","node":{"id":2,"title":{"romaji":"Ni","english":"Two"},
-			"coverImage":{"large":"2.jpg"},"episodes":12,"status":"FINISHED","siteUrl":"https://anilist.co/anime/2"}},
-		{"relationType":"SEQUEL","node":null}]}}}}`))
-	sequels, err := GetAnimeSequel(1, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := SequelInfo{ID: 2, Title: AnimeTitle{Romaji: "Ni", English: "Two"}, CoverImage: "2.jpg",
-		Episodes: 12, Status: "FINISHED", SiteURL: "https://anilist.co/anime/2"}
-	if len(sequels) != 1 || sequels[0] != want {
-		t.Fatalf("sequels = %#v", sequels)
-	}
-
-	fakeAniList(t, answerAlways(`{"data":{"Media":{"relations":{"edges":[]}}}}`))
-	if sequels, err := GetAnimeSequel(1, ""); err != nil || sequels != nil {
-		t.Fatalf("no sequels: %#v %v", sequels, err)
-	}
-}
-
 func TestSaveAniListAnimeListEntrySendsOnlyGivenFields(t *testing.T) {
 	calls := fakeAniList(t, answerAlways(`{"data":{"SaveMediaListEntry":{"id":1}}}`))
 	progress := 4
@@ -488,34 +368,6 @@ func TestSaveAniListAnimeListEntrySendsOnlyGivenFields(t *testing.T) {
 	// A zero date is an explicit null, which clears it on AniList.
 	if value, ok := vars["startedAt"]; !ok || value != nil {
 		t.Fatalf("startedAt = %#v (present %v)", value, ok)
-	}
-}
-
-func TestCompleteAniListAnimeRewatchSendsTheRewatch(t *testing.T) {
-	calls := fakeAniList(t, answerAlways(`{"data":{"SaveMediaListEntry":{"id":1}}}`))
-	anime := Anime{AnilistId: 8, Repeat: 1, StartedAt: FuzzyDate{Year: 2025, Month: 1, Day: 2}}
-	anime.Ep.Number = 12
-	if err := CompleteAniListAnimeRewatch("tok", anime); err != nil {
-		t.Fatal(err)
-	}
-	vars := (*calls)[0].Variables
-	started, _ := json.Marshal(vars["startedAt"])
-	if vars["status"] != "COMPLETED" || vars["progress"] != float64(12) || vars["repeat"] != float64(2) ||
-		string(started) != `{"day":2,"month":1,"year":2025}` || vars["completedAt"] == nil {
-		t.Fatalf("variables = %#v", vars)
-	}
-}
-
-func TestListMutationsUseTheStatusVariable(t *testing.T) {
-	calls := fakeAniList(t, answerAlways(`{"data":{"SaveMediaListEntry":{"id":1}}}`))
-	if err := AddAniListAnimeToWatchingList(3, "tok"); err != nil {
-		t.Fatal(err)
-	}
-	if err := AddAniListAnimeToList(3, "PLANNING", "tok"); err != nil {
-		t.Fatal(err)
-	}
-	if (*calls)[0].Variables["status"] != "CURRENT" || (*calls)[1].Variables["status"] != "PLANNING" {
-		t.Fatalf("calls = %#v", *calls)
 	}
 }
 

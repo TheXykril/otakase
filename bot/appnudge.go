@@ -55,13 +55,13 @@ func planNudge(d *storeData, user, hash, latest string) (notice, dm bool) {
 // updateNotice is the inbox item for an app on an older version.
 func updateNotice(have, latest string) inboxItem {
 	return inboxItem{Kind: "notice", Title: "Otakase " + latest + " is out",
-		Text: fmt.Sprintf("You have %s. Update with otakase -u.", have), URL: releaseURL(latest)}
+		Text: fmt.Sprintf("You have %s. Update from About & updates in the app.", have), URL: releaseURL(latest)}
 }
 
 func updateDM(have, latest string) *discordgo.MessageSend {
 	return &discordgo.MessageSend{
 		Embeds: []*discordgo.MessageEmbed{{Title: "Otakase " + latest + " is out", Color: shu,
-			Description: fmt.Sprintf("Your linked Otakase app is on **%s**. Update with `otakase -u` (or `/install` in the server for other ways).", have),
+			Description: fmt.Sprintf("Your linked Otakase app is on **%s**. Update from **About & updates** in the app (or see `/install`).", have),
 			Footer:      &discordgo.MessageEmbedFooter{Text: "One message per release · development builds are never nudged"}}},
 		Components: linkButtons("Changelog", fmt.Sprintf("%s/blob/v%s/CHANGELOG.md", repoURL, latest), "Release", releaseURL(latest)),
 	}

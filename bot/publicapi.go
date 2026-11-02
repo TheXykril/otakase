@@ -190,7 +190,7 @@ func (b *bot) appUser(r *http.Request) (string, error) {
 func (b *bot) requireApp(w http.ResponseWriter, r *http.Request) string {
 	u, err := b.appUser(r)
 	if err != nil {
-		apiError(w, http.StatusUnauthorized, "link this app with otakase -discord-link first")
+		apiError(w, http.StatusUnauthorized, "link this app under More, then Discord first")
 		return ""
 	}
 	return u

@@ -14,26 +14,14 @@ type installGuide struct {
 
 // installGuides mirror the README's Install section.
 var installGuides = map[string]installGuide{
-	"arch": {"Arch Linux / Manjaro", "Build with the bundled PKGBUILD:\n```bash\n" +
-		"sudo pacman -S --needed go git mpv\n" +
-		"git clone https://github.com/TheXykril/otakase.git\n" +
-		"cd otakase\nmakepkg -si\n```\nOr the prebuilt binary:\n```bash\n" +
-		"sudo pacman -S --needed mpv\n" +
-		"curl -Lo otakase " + dlURL + "otakase-linux-x86_64\n" +
-		"chmod +x otakase\nsudo install -Dm755 otakase /usr/bin/otakase\nsudo ln -sf otakase /usr/bin/otk\n```"},
-	"linux": {"Debian / Ubuntu and other Linux", "```bash\n" +
-		"sudo apt update\nsudo apt install mpv curl rofi libnotify-bin xdg-utils\n\n" +
-		"# x86_64\ncurl -Lo otakase " + dlURL + "otakase-linux-x86_64\n" +
-		"# ARM64\ncurl -Lo otakase " + dlURL + "otakase-linux-arm64\n\n" +
-		"chmod +x otakase\nsudo install -Dm755 otakase /usr/bin/otakase\nsudo ln -sf otakase /usr/bin/otk\n```"},
-	"mac": {"macOS", "```bash\nbrew install mpv curl\n\n" +
-		"# Apple Silicon\ncurl -Lo otakase " + dlURL + "otakase-macos-arm64\n" +
-		"# Intel\ncurl -Lo otakase " + dlURL + "otakase-macos-x86_64\n\n" +
-		"chmod +x otakase\nsudo mv otakase /usr/local/bin/\nsudo ln -sf otakase /usr/local/bin/otk\n```"},
-	"windows": {"Windows", "Run the [installer](" + dlURL + "otakase-windows-installer.exe). " +
-		"It comes with mpv and adds `otakase` and `otk` to your PATH.\n\n" +
-		"Or with winget:\n```powershell\nwinget install TheXykril.Otakase\n```\n" +
-		"The standalone [otakase-windows-x86_64.exe](" + dlURL + "otakase-windows-x86_64.exe) needs mpv installed separately."},
+	"android": {"Android phone and Android TV", "Install [otakase-android.apk](" + dlURL + "otakase-android.apk) (Android 7.0 or newer). " +
+		"Android asks once to allow installing apps from your browser or file manager. One app works on phones and on Android TV."},
+	"windows": {"Windows", "Run [otakase-app-windows-setup.exe](" + dlURL + "otakase-app-windows-setup.exe). " +
+		"It installs for your user only, needs no administrator rights and adds Otakase to the Start menu."},
+	"mac": {"macOS", "Download [otakase-app-macos.zip](" + dlURL + "otakase-app-macos.zip), unzip it and move **Otakase** to Applications. " +
+		"It works on Apple Silicon and Intel. It is not signed by Apple yet, so the first time, right-click it and choose **Open**."},
+	"linux": {"Linux", "Download [otakase-app-linux-x86_64.AppImage](" + dlURL + "otakase-app-linux-x86_64.AppImage), then:\n```bash\n" +
+		"chmod +x otakase-app-linux-x86_64.AppImage\n./otakase-app-linux-x86_64.AppImage\n```\nThe player is inside, so there is nothing else to install."},
 }
 
 type faqEntry struct {
@@ -42,13 +30,12 @@ type faqEntry struct {
 
 // faqs match the #faq channel post.
 var faqs = []faqEntry{
-	{"install", "How do I install or update?", "Install steps for every system are on the [website](" + siteURL + ") and in `/install`. Update with `otakase -u`."},
-	{"mpv", "Playback never starts", "Otakase needs mpv installed and on your PATH. See [Troubleshooting](" + wikiURL + "/Troubleshooting)."},
-	{"nothing-found", "Nothing is found for a show", "Run `/provider-status` or `otakase -provider-status` to see how many sources respond, then share the output in the support forum."},
-	{"icons", "Menu icons show as boxes", "On Linux Otakase installs a small icon font by itself. Otherwise use a Nerd Font, or set `Icons=false` in the config (`otakase -e`)."},
-	{"sync", "My progress didn't sync", "See [Tracking](" + wikiURL + "/Tracking). `otakase -change-token` signs you in again."},
-	{"cast", "Casting can't find my TV", "Run `otakase -cast-setup`, then see [Casting Problems](" + wikiURL + "/Casting-Problems)."},
-	{"dev-builds", "Can I try new features early?", "Set `DevBuilds=true` in the config (`otakase -e`). Test builds are posted in the test-builds channel."},
+	{"install", "How do I install or update?", "Install steps for every system are on the [website](" + siteURL + ") and in `/install`. The app checks for updates itself; on Android use **More → About & updates**."},
+	{"mpv", "Playback never starts", "Try another copy or source from the player, then see [Troubleshooting](" + wikiURL + "/Troubleshooting). **Diagnostics** in the app shows which sources answer."},
+	{"nothing-found", "Nothing is found for a show", "Run `/provider-status` to see how many sources respond. If the show itself is wrong, use **Wrong show?** on its page. Then share what you see in the support forum."},
+	{"sync", "My progress didn't sync", "See [Tracking](" + wikiURL + "/Tracking). Signing in again under **Accounts** fixes an expired sign-in."},
+	{"cast", "Casting can't find my TV", "Usually a firewall on the computer. See [Casting](" + wikiURL + "/Casting)."},
+	{"dev-builds", "Can I try new features early?", "Test builds are posted in the test-builds channel. Install them by hand over your current app."},
 }
 
 func faqByKey(k string) (faqEntry, bool) {
@@ -61,19 +48,19 @@ func faqByKey(k string) (faqEntry, bool) {
 }
 
 const supportChecklist = "Thanks for the post! To help us help you, please add:\n" +
-	"- Your Otakase version (`otakase -v`)\n" +
-	"- Your system (Linux distro / Windows / macOS)\n" +
-	"- The command you ran and what happened\n" +
-	"- For *nothing found* problems: the output of `otakase -provider-status`\n\n" +
+	"- Your Otakase version (under **About & updates** in the app)\n" +
+	"- Your device (Android phone or TV, Windows, macOS, Linux)\n" +
+	"- What you did and what happened\n" +
+	"- For *nothing found* problems: what `/provider-status` says\n\n" +
 	"When it's fixed, press **Mark solved** below."
 
 // welcomeDMText is the card in the DM new members get, under the header
 // picture.
 const welcomeDMText = "## Welcome to Otakase!\n" +
-	"Watch anime from the command line, with your list kept in sync. Glad you're here."
+	"Anime, movies and shows on every screen you own, with your list kept in sync. Glad you're here."
 
 var welcomeDMSteps = []string{
-	"**Install** · `/install` shows the command for your system",
+	"**Install** · `/install` shows how for your device",
 	"**Rules and roles** · read the rules, then pick your system and notifications in **Channels & Roles**",
 	"**Help** · `/faq` answers common questions; for anything else, one post per problem in the support forum",
 	"**New episodes** · `/follow` a show and I'll DM you when the next episode is out",

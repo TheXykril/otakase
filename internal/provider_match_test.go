@@ -18,14 +18,6 @@ func marchComesInLikeALion() (*Anime, []SelectionOption) {
 	return anime, options
 }
 
-func TestSelectBestProviderSearchResultMarchComesInLikeALion(t *testing.T) {
-	anime, options := marchComesInLikeALion()
-	best, ok := selectBestProviderSearchResult(options, anime, "3-gatsu no Lion")
-	if !ok || best.Key != "s1" {
-		t.Fatalf("got %q (%v), want season 1", best.Key, ok)
-	}
-}
-
 func TestConfidentProviderSearchMatchMarchComesInLikeALion(t *testing.T) {
 	anime, options := marchComesInLikeALion()
 	best, ok := confidentProviderSearchMatch(options, anime, "3-gatsu no Lion")
@@ -62,17 +54,6 @@ func TestConfidentProviderSearchMatchNeedsAClearWinner(t *testing.T) {
 	}
 	if _, ok := confidentProviderSearchMatch(nil, anime, "Frieren"); ok {
 		t.Fatal("matched among no results")
-	}
-}
-
-func TestSelectBestProviderSearchResultKeepsTheHostsOrderOnATie(t *testing.T) {
-	anime := &Anime{}
-	options := []SelectionOption{{Key: "first", Title: "x"}, {Key: "second", Title: "y"}}
-	if best, _ := selectBestProviderSearchResult(options, anime, "unrelated"); best.Key != "first" {
-		t.Fatalf("got %q, want the host's first result", best.Key)
-	}
-	if _, ok := selectBestProviderSearchResult(nil, anime, "x"); ok {
-		t.Fatal("picked from no results")
 	}
 }
 

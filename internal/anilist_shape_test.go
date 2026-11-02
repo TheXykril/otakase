@@ -2,7 +2,6 @@ package internal
 
 import (
 	"encoding/json"
-	"net/http"
 	"strings"
 	"testing"
 )
@@ -27,46 +26,6 @@ func TestGetAnilistUserIDNamesTheMissingField(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), wantErr) {
 			t.Errorf("%s: err = %v, want it to mention %q", answer, err, wantErr)
 		}
-	}
-}
-
-func TestGetAnimeSequelShapeErrors(t *testing.T) {
-	for answer, wantErr := range map[string]string{
-		`{}`:                                    "data field missing",
-		`{"data":{}}`:                           "Media field missing",
-		`{"data":{"Media":{"relations":null}}}`: "",
-	} {
-		fakeAniList(t, answerAlways(answer))
-		sequels, err := GetAnimeSequel(1, "")
-		if wantErr == "" {
-			if err != nil || sequels != nil {
-				t.Errorf("%s: got (%v, %v), want no sequels and no error", answer, sequels, err)
-			}
-			continue
-		}
-		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("%s: err = %v, want %q", answer, err, wantErr)
-		}
-	}
-}
-
-func TestAddAniListAnimeToListSendsTheStatus(t *testing.T) {
-	calls := fakeAniList(t, answerAlways(`{"data":{"SaveMediaListEntry":{"id":1}}}`))
-	if err := AddAniListAnimeToList(12, "PLANNING", "token"); err != nil {
-		t.Fatalf("AddAniListAnimeToList: %v", err)
-	}
-	if len(*calls) != 1 {
-		t.Fatalf("%d requests, want 1", len(*calls))
-	}
-	vars := (*calls)[0].Variables
-	if vars["status"] != "PLANNING" || vars["mediaId"] != float64(12) {
-		t.Errorf("variables = %v", vars)
-	}
-
-	fakeAniList(t, func(aniListCall, int) (int, string) { return http.StatusInternalServerError, "down" })
-	err := AddAniListAnimeToWatchingList(12, "token")
-	if err == nil || !strings.HasPrefix(err.Error(), "failed to add anime: ") {
-		t.Errorf("err = %v, want the add-anime prefix", err)
 	}
 }
 

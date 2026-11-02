@@ -39,18 +39,6 @@ func mainLists(config *Config) []Tab {
 	return out
 }
 
-// launchList is the list otakase opens on: Watching, or the first list
-// MenuOrder names when it leaves Watching out.
-func launchList(config *Config) string {
-	lists := mainLists(config)
-	for _, tab := range lists {
-		if tab.Key == "CURRENT" {
-			return "CURRENT"
-		}
-	}
-	return lists[0].Key
-}
-
 // nextList is the list after current, wrapping round, which is what Tab moves
 // to in rofi as it does between the terminal's tabs.
 func nextList(config *Config, current string) string {
@@ -121,45 +109,6 @@ func continueRowsOn(config *Config) bool {
 		}
 	}
 	return false
-}
-
-// buildMainListOptions is a list's rows, led on Watching by the shows to
-// continue.
-func buildMainListOptions(config *Config, list AnimeList, key string) []SelectionOption {
-	options := buildCategorySelectionOptions(list, key)
-	if key != "CURRENT" || !continueRowsOn(config) {
-		return options
-	}
-	return append(continueWatchingRows(config, &list), options...)
-}
-
-// buildMainPreviewOptions is the poster grid's version of buildMainListOptions.
-// The grid is a map ordered by rank, so the continue rows take ranks below the
-// list's, which starts at zero.
-func buildMainPreviewOptions(config *Config, list AnimeList, key string) map[string]RofiSelectPreview {
-	options := buildCategoryPreviewOptions(list, key)
-	if key != "CURRENT" || !continueRowsOn(config) {
-		return options
-	}
-	rows := continueWatchingRows(config, &list)
-	for i, row := range rows {
-		options[row.Key] = RofiSelectPreview{
-			Title:      icons.Label(icons.Play, row.Label),
-			CoverImage: row.Thumbnail,
-			Rank:       i - len(rows),
-		}
-	}
-	return options
-}
-
-// isMainMenuKey reports whether a choice from the main list is answered by the
-// dispatch in front of it rather than by playing a show from the list.
-func isMainMenuKey(key string) bool {
-	if isMenuActionKey(key) || key == listsMenuKey || key == nextListKey || key == cheatCodeKey {
-		return true
-	}
-	_, isRow := resumeRowAnilistID(key)
-	return isRow
 }
 
 // pickList asks which list to show, for rofi's Lists button. It reports false

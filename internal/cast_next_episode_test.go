@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -90,58 +89,6 @@ func TestCastCountdownMessage(t *testing.T) {
 	}
 }
 
-// Review Focus 1. A provider link that has rotted fails every episode in
-// seconds. A loop that advances on failure marks a whole season watched in
-// about a minute, and the viewer finds out from their tracker.
-func TestCastLoopStopsOnFailure(t *testing.T) {
-	episodes := 0
-	cast := func() error {
-		episodes++
-		return errors.New("cast: no episode links")
-	}
-	advanced := 0
-	advance := func() bool {
-		advanced++
-		return true
-	}
-
-	runCastLoop(cast, advance)
-
-	if episodes != 1 {
-		t.Errorf("a failing cast was attempted %d times, want 1", episodes)
-	}
-	if advanced != 0 {
-		t.Errorf("the loop advanced %d times past an episode that never played", advanced)
-	}
-}
-
-// Stopping is not completing: the viewer asked for this to end.
-func TestCastLoopStopsWhenTheViewerStops(t *testing.T) {
-	advanced := 0
-	runCastLoop(
-		func() error { return ErrCastStopped },
-		func() bool { advanced++; return true },
-	)
-
-	if advanced != 0 {
-		t.Errorf("pressing q advanced %d times", advanced)
-	}
-}
-
-// The ordinary case: episodes play until there is no next one.
-func TestCastLoopRunsUntilThereIsNoNextEpisode(t *testing.T) {
-	episodes := 0
-	remaining := 3
-	runCastLoop(
-		func() error { episodes++; return nil },
-		func() bool { remaining--; return remaining > 0 },
-	)
-
-	if episodes != 3 {
-		t.Errorf("played %d episodes, want 3", episodes)
-	}
-}
-
 // Important 3. On the last episode of a season the countdown used to promise
 // an episode that does not exist -- "Episode 12 watched · Episode 13 in 10s"
 // -- for ten seconds, and only then did AdvanceAfterEpisode decline and run
@@ -167,31 +114,6 @@ func TestCastAwaitSkipsTheCountdownAtTheEndOfASeason(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("the countdown ran on the last episode of the season")
-	}
-}
-
-// castSeasonFinished must agree with advanceDecision's atEnd: a countdown that
-// promises an episode the advance then declines to play is the bug.
-func TestCastSeasonFinishedAgreesWithAdvanceDecision(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		total   int
-		episode int
-	}{
-		{"mid season", 12, 5},
-		{"last episode", 12, 12},
-		{"past the end", 12, 13},
-		{"unknown length", 0, 400},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			anime := &Anime{TotalEpisodes: tc.total}
-			anime.Ep.Number = tc.episode
-
-			wantEnd := advanceDecision(anime, true).SeriesFinished
-			if got := castSeasonFinished(anime); got != wantEnd {
-				t.Errorf("castSeasonFinished = %v, advanceDecision's atEnd = %v", got, wantEnd)
-			}
-		})
 	}
 }
 

@@ -193,7 +193,7 @@ func releaseEmbed(r ghRelease) *discordgo.MessageEmbed {
 		URL:         r.HTMLURL,
 		Description: fitText(notes, embedTextLimit, fmt.Sprintf("[More on GitHub](%s)", r.HTMLURL)),
 		Color:       shu,
-		Footer:      &discordgo.MessageEmbedFooter{Text: "Update with otakase -u"},
+		Footer:      &discordgo.MessageEmbedFooter{Text: "Update from About & updates in the app"},
 		Timestamp:   r.PublishedAt.Format(time.RFC3339),
 	}
 }
@@ -228,7 +228,7 @@ func sinceEmbed(newer []ghRelease, since string) *discordgo.MessageEmbed {
 		URL:         repoURL + "/releases",
 		Description: text,
 		Color:       shu,
-		Footer:      &discordgo.MessageEmbedFooter{Text: newerCount(len(newer)) + " · update with otakase -u"},
+		Footer:      &discordgo.MessageEmbedFooter{Text: newerCount(len(newer)) + " · update from About & updates in the app"},
 	}
 }
 
@@ -243,7 +243,7 @@ func changelogCommand() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{Name: "changelog", Description: "What changed in an Otakase release",
 		Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionString, Name: "version", Description: "Release to show (default: the latest)", Autocomplete: true},
-			{Type: discordgo.ApplicationCommandOptionString, Name: "since", Description: "Your version: show everything newer than it (otakase -v)", Autocomplete: true},
+			{Type: discordgo.ApplicationCommandOptionString, Name: "since", Description: "Your version: show everything newer than it (About & updates in the app)", Autocomplete: true},
 		}}
 }
 
@@ -270,7 +270,7 @@ func changelogAnswer(token, version, since string) (*discordgo.MessageEmbed, []d
 	}
 	if since != "" {
 		if _, ok := parseVersion(since); !ok {
-			return errorEmbed("**%s** doesn't look like a version. Run `otakase -v` to see yours, e.g. 26.5.0.", clip(since, 40)), nil
+			return errorEmbed("**%s** doesn't look like a version. **About & updates** in the app shows yours, e.g. 26.7.0.", clip(since, 40)), nil
 		}
 		newer := newerReleases(list, since)
 		if len(newer) == 0 {
