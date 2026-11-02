@@ -192,6 +192,10 @@ class _ShowPageState extends State<ShowPage> {
 
   Widget header(int last, int position) {
     final tv = widget.isTV;
+    // On TV the poster stays left of the episode badge and native title.
+    final heroPoster = tv
+        ? const EdgeInsets.fromLTRB(0, 28, 240, 28)
+        : EdgeInsets.zero;
     final scale = MediaQuery.textScalerOf(context).scale(1);
     final height = (tv ? 310.0 : 346.0) * max(1.0, scale);
     final titleStyle = anime.title.length > 38
@@ -210,10 +214,10 @@ class _ShowPageState extends State<ShowPage> {
           if (widget.heroTag != null)
             Hero(
               tag: widget.heroTag!,
-              child: HeroArt(anime, height: height),
+              child: HeroArt(anime, height: height, posterPadding: heroPoster),
             )
           else
-            HeroArt(anime, height: height),
+            HeroArt(anime, height: height, posterPadding: heroPoster),
           Positioned(
             top: tv ? 0 : max(25, MediaQuery.viewPaddingOf(context).top),
             left: tv ? 41 : 14,
@@ -353,15 +357,19 @@ class _ShowPageState extends State<ShowPage> {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      CoverImage(
-                        thumbnail.isNotEmpty ? thumbnail : anime.cover,
-                        width: card ? 92 : 73,
-                        height: card ? 86 : 47,
-                      ),
-                      if (thumbnail.isEmpty)
-                        ColoredBox(
+                      if (thumbnail.isNotEmpty)
+                        CoverImage(
+                          thumbnail,
+                          width: card ? 92 : 73,
+                          height: card ? 86 : 47,
+                        )
+                      else
+                        EpisodeArtFallback(
                           key: ValueKey('episode-cover-fallback-$ep'),
-                          color: bgDeep.withValues(alpha: .4),
+                          anime.cover,
+                          ep,
+                          width: card ? 92 : 73,
+                          height: card ? 86 : 47,
                         ),
                       if (seen) ...[
                         ColoredBox(color: bgDeep.withValues(alpha: .65)),
@@ -520,10 +528,10 @@ class _ShowPageState extends State<ShowPage> {
           if (widget.heroTag != null)
             Hero(
               tag: widget.heroTag!,
-              child: HeroArt(anime, height: height),
+              child: HeroArt(anime, height: height, poster: false),
             )
           else
-            HeroArt(anime, height: height),
+            HeroArt(anime, height: height, poster: false),
           Positioned(
             left: 48,
             right: 48,
@@ -681,12 +689,22 @@ class _ShowPageState extends State<ShowPage> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    CoverImage(
-                      image,
-                      width: width,
-                      height: height,
-                      banner: thumbnail.isEmpty && anime.banner.isNotEmpty,
-                    ),
+                    if (thumbnail.isEmpty && anime.banner.isEmpty)
+                      EpisodeArtFallback(
+                        anime.coverLarge.isNotEmpty
+                            ? anime.coverLarge
+                            : anime.cover,
+                        ep,
+                        width: width,
+                        height: height,
+                      )
+                    else
+                      CoverImage(
+                        image,
+                        width: width,
+                        height: height,
+                        banner: thumbnail.isEmpty && anime.banner.isNotEmpty,
+                      ),
                     if (seen) ColoredBox(color: bgDeep.withValues(alpha: .35)),
                     if (length > 0)
                       Positioned(

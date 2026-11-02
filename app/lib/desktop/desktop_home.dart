@@ -361,16 +361,19 @@ class _ContinueCardState extends State<_ContinueCard> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    CoverImage(
-                      a.banner.isNotEmpty
-                          ? a.banner
-                          : a.coverLarge.isNotEmpty
-                          ? a.coverLarge
-                          : a.cover,
-                      width: widget.width,
-                      height: height,
-                      banner: a.banner.isNotEmpty,
-                    ),
+                    if (a.banner.isNotEmpty)
+                      CoverImage(
+                        a.banner,
+                        width: widget.width,
+                        height: height,
+                        banner: true,
+                      )
+                    else
+                      WideCoverArt(
+                        a.coverLarge.isNotEmpty ? a.coverLarge : a.cover,
+                        width: widget.width,
+                        height: height,
+                      ),
                     const DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
