@@ -40,6 +40,7 @@ class DesktopPlayerBar extends StatelessWidget {
     this.playFocus,
     this.casting = false,
     this.onCast,
+    this.onSkipTimes,
   });
 
   final String title, subtitle, trackLabel, centerLabel;
@@ -52,6 +53,9 @@ class DesktopPlayerBar extends StatelessWidget {
 
   /// Opens the cast picker; null hides the button.
   final VoidCallback? onCast;
+
+  /// Opens the skip times panel; the anime player only.
+  final VoidCallback? onSkipTimes;
   final bool casting;
   final ValueChanged<int> onSeekBy;
   final ValueChanged<double> onSeekStart, onSeekChanged, onSeekEnd;
@@ -259,6 +263,13 @@ class DesktopPlayerBar extends StatelessWidget {
                         tooltip: 'Quality',
                         onPressed: onQuality,
                       ),
+                      if (onSkipTimes != null)
+                        _BarIcon(
+                          key: const Key('player-skip-times'),
+                          icon: LucideIcons.flag,
+                          tooltip: 'Skip times',
+                          onPressed: onSkipTimes!,
+                        ),
                       if (onCast != null)
                         _BarIcon(
                           key: const Key('player-cast'),

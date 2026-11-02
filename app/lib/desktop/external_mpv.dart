@@ -11,6 +11,7 @@ import '../data/store.dart';
 import '../player.dart';
 import '../services.dart';
 import '../ui/components.dart';
+import '../ui/rate_prompt.dart';
 import '../ui/seal.dart';
 import 'desktop_core.dart';
 
@@ -395,10 +396,11 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
       await Future<void>.delayed(const Duration(seconds: 1));
       if (!mounted || g != generation) return;
     }
-    final extra = await widget.services.catalog.skipTimes(
-      anime.malId,
+    final extra = await widget.services.skipTimes.lookup(
+      anime,
       episode,
       last?.duration ?? 0,
+      scope: scope,
     );
     if (!mounted || g != generation) return;
     setState(
@@ -427,6 +429,18 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
       unawaited(widget.services.store.rememberSource(anime, source!.provider));
     }
     widget.services.discord.observe(anime, episode, s.position);
+    unawaited(
+      widget.services.presence.episode(
+        anime,
+        episode,
+        paused: s.paused,
+        position: s.position,
+        duration: s.duration,
+        joinUrl: widget.services.party.watchWithMe
+            ? widget.services.party.joinUrl ?? ''
+            : '',
+      ),
+    );
     unawaited(widget.services.party.playing(anime, episode));
     final store = widget.services.store;
     for (final span in spans) {
@@ -463,6 +477,9 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
     if (s == null || !s.loaded) return;
     final done = watched;
     if (done) {
+      if (finishesShow(widget.services, anime, episode)) {
+        widget.services.ratingDue = anime;
+      }
       await resumePusher.episodeDone(anime.key, episode, anime.episodes);
     } else {
       resumePusher.note(anime.key, episode, s.position.floor());

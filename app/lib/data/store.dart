@@ -43,6 +43,10 @@ const settingDefaults = <String, dynamic>{
   'NormalizeVolume': true,
   'SkipFiller': true,
   'SkipDelay': 0,
+  'IntroDBSkipTimes': true,
+  'AnimeSkipTimes': true,
+  'ScoreOnCompletion': true,
+  'DiscordPresence': true,
   'Quality': 'best',
   'ResumePlayback': true,
   'PercentageToMarkComplete': 85,
@@ -125,6 +129,27 @@ class AppStore extends ChangeNotifier {
     );
     choices[anime.key] = source;
     await set('WorkingSources', choices);
+  }
+
+  /// The copy the viewer picked with their own search, used before any
+  /// automatic match: provider, id, mode and title.
+  Map<String, String>? manualMatch(Anime anime) {
+    final all = value('ManualMatches');
+    final m = all is Map ? all[anime.key] : null;
+    if (m is! Map || m['provider'] is! String || m['id'] is! String) {
+      return null;
+    }
+    return m.map((k, v) => MapEntry('$k', '$v'));
+  }
+
+  Future<void> setManualMatch(Anime anime, Map<String, String>? match) async {
+    final all = Map<String, dynamic>.from(value('ManualMatches') as Map? ?? {});
+    if (match == null) {
+      all.remove(anime.key);
+    } else {
+      all[anime.key] = match;
+    }
+    await set('ManualMatches', all);
   }
 
   bool visible(Anime a) => flag('AdultContent') || !a.isAdult;

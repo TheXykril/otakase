@@ -60,6 +60,8 @@ type Core struct {
 	caster caster
 	// downloads are the files being saved for watching offline.
 	downloads downloadSet
+	// presence is the viewer's Discord status on desktop.
+	presence presence
 }
 
 type task struct {
@@ -214,6 +216,7 @@ func (c *Core) Close() {
 	}
 	c.caster.closeCast()
 	c.downloads.cancelAll()
+	c.presence.clear()
 }
 
 // StopPlayback releases loopback relays after a player stops or changes source.
@@ -268,8 +271,10 @@ func (c *Core) execute(ctx context.Context, input string) string {
 	if len(input) > 16<<10 {
 		return failure("invalid_request", "Request exceeds 16 KiB.", false)
 	}
-	if isExtraOperation(peekOperation(input)) {
+	if op := peekOperation(input); isExtraOperation(op) {
 		return c.executeExtra(ctx, input)
+	} else if isExtrasOperation(op) {
+		return c.executeExtras(ctx, input)
 	}
 	var req request
 	dec := json.NewDecoder(strings.NewReader(input))
