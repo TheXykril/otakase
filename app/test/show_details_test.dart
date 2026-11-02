@@ -186,7 +186,7 @@ void main() {
 
   for (final tv in [false, true]) {
     testWidgets(
-      'hero uses banner or a sharp 2:3 poster and blurred backdrop on ${tv ? 'TV' : 'phone'}',
+      'hero uses the banner, or the cover made to fit, on ${tv ? 'TV' : 'phone'}',
       (tester) async {
         tester.view.physicalSize = tv
             ? const Size(1280, 720)
@@ -214,15 +214,27 @@ void main() {
 
         await art(const Anime(id: 1, title: 'Story', cover: 'portrait.jpg'));
         final poster = find.byKey(const Key('hero-fallback-poster'));
-        expect(find.byKey(const Key('hero-fallback-backdrop')), findsOneWidget);
-        expect(find.byType(ImageFiltered), findsOneWidget);
-        expect(
-          find.ancestor(of: poster, matching: find.byType(Opacity)),
-          findsNothing,
-        );
-        expect(tester.getSize(poster).height, height);
-        expect(tester.getSize(poster).width / height, closeTo(2 / 3, .001));
-        expect(tester.widget<CoverImage>(poster).fit, BoxFit.contain);
+        if (tv) {
+          // Wide: a soft wash of the cover with the sharp cover framed in it.
+          expect(
+            find.byKey(const Key('hero-fallback-backdrop')),
+            findsOneWidget,
+          );
+          expect(
+            find.ancestor(of: poster, matching: find.byType(Opacity)),
+            findsNothing,
+          );
+          expect(tester.getSize(poster).height, closeTo(height * .74, .01));
+          expect(
+            tester.getSize(poster).width / tester.getSize(poster).height,
+            closeTo(2 / 3, .001),
+          );
+        } else {
+          // A phone is about as wide as the cover: it fills the header.
+          expect(find.byKey(const Key('hero-fallback-cover')), findsOneWidget);
+          expect(find.byType(ImageFiltered), findsNothing);
+          expect(poster, findsNothing);
+        }
         await art(
           const Anime(
             id: 1,
