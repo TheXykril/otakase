@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 26.1.2 - 2026-11-02
+
+The desktop player takes mpv's keys again, the launcher carries your movies
+and shows, and desktop and TV now look and feel the same.
 
 ### Added
 
@@ -11,6 +14,16 @@
 - **Movies and shows in the launcher.** With Movies & shows on for your
   profile, the launcher carries on your films and series, shows your Trakt
   watchlist and trending titles, and searches them with anime.
+- **Quality list for movies and shows.** The quality button opens a list
+  of the sizes on offer.
+
+### Changed
+
+- **Same look on desktop and TV.** Trakt sits in Accounts next to AniList
+  and MyAnimeList. The TV uses the desktop's top bar and episode cards, and
+  More on phone and TV follows the desktop sidebar order.
+- **Desktop tabs open on click** instead of on hover, and covers lift when
+  you point at them.
 
 ### Fixed
 
