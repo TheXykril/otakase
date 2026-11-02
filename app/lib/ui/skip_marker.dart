@@ -222,10 +222,10 @@ class SkipMarkerCard extends StatefulWidget {
   /// The span being fixed, when there is one.
   final SkipSpan? existing;
   @override
-  State<SkipMarkerCard> createState() => _SkipMarkerCardState();
+  State<SkipMarkerCard> createState() => SkipMarkerCardState();
 }
 
-class _SkipMarkerCardState extends State<SkipMarkerCard> {
+class SkipMarkerCardState extends State<SkipMarkerCard> {
   late double start, end;
   bool sending = false;
   String note = '', error = '';

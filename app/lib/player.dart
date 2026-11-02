@@ -23,6 +23,7 @@ import 'ui/device_status.dart';
 import 'ui/find_show.dart';
 import 'ui/seal.dart';
 import 'ui/skip_marker.dart';
+import 'ui/player_keys.dart';
 import 'ui/progress_thread.dart';
 import 'ui/rate_prompt.dart';
 import 'ui/watch_party_page.dart';
@@ -1135,6 +1136,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     switch (choice) {
       case MarkSpan(:final type):
         setState(() {
+          markerKey = GlobalKey();
           marking = type;
           markingExisting = spans.where((s) => s.type == type).firstOrNull;
         });
@@ -1188,7 +1190,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Widget markerCard() => SkipMarkerCard(
-    key: ValueKey('marker-$marking-$episode'),
+    key: markerKey,
     type: marking!,
     existing: markingExisting,
     position: () => position.inMilliseconds / 1000,
@@ -1272,6 +1274,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
+    if (isDesktop) {
+      final action = playerActionForEvent(event);
+      if (action != null && desktopKey(action, event is KeyRepeatEvent)) {
+        return KeyEventResult.handled;
+      }
+    }
     final key = event.logicalKey;
     if ([
       LogicalKeyboardKey.mediaPlayPause,
@@ -1342,11 +1350,218 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     return KeyEventResult.ignored;
   }
 
+  final flash = FlashText();
+  GlobalKey<SkipMarkerCardState> markerKey = GlobalKey();
+
+  static const _repeatable = {
+    PlayerAction.seekBack,
+    PlayerAction.seekForward,
+    PlayerAction.stepBack,
+    PlayerAction.stepForward,
+    PlayerAction.volumeUp,
+    PlayerAction.volumeDown,
+    PlayerAction.volumeUpSmall,
+    PlayerAction.volumeDownSmall,
+    PlayerAction.frameBack,
+    PlayerAction.frameForward,
+    PlayerAction.slower,
+    PlayerAction.faster,
+    PlayerAction.subtitleEarlier,
+    PlayerAction.subtitleLater,
+  };
+
+  /// Runs a desktop key (the old mpv keys); false lets the key go on to
+  /// the focused button or the remote handling below.
+  bool desktopKey(PlayerAction action, bool repeat) {
+    if (repeat && !_repeatable.contains(action)) return true;
+    switch (action) {
+      case PlayerAction.fullscreen:
+        unawaited(toggleFullscreen());
+        return true;
+      case PlayerAction.leaveFullscreen:
+        if (!fullscreen) return false;
+        unawaited(toggleFullscreen());
+        return true;
+      case PlayerAction.quit:
+        unawaited(control('stop', {}));
+        return true;
+      case PlayerAction.keys:
+        unawaited(keysPanel());
+        return true;
+      default:
+    }
+    if (busy || error.isNotEmpty) return false;
+    switch (action) {
+      case PlayerAction.playPause:
+        unawaited(playPause());
+        showControls();
+      case PlayerAction.seekBack || PlayerAction.seekForward:
+        unawaited(seek(action == PlayerAction.seekBack ? -5 : 5));
+      case PlayerAction.stepBack || PlayerAction.stepForward:
+        unawaited(seek(action == PlayerAction.stepBack ? -1 : 1));
+      case PlayerAction.volumeUp ||
+          PlayerAction.volumeDown ||
+          PlayerAction.volumeUpSmall ||
+          PlayerAction.volumeDownSmall:
+        final step = switch (action) {
+          PlayerAction.volumeUp => 5,
+          PlayerAction.volumeDown => -5,
+          PlayerAction.volumeUpSmall => 2,
+          _ => -2,
+        };
+        final now = casting
+            ? (castStatus?.volume ?? 1) * 100
+            : player.state.volume;
+        final level = (now + step).clamp(0, 100).round();
+        unawaited(control('volume', {'volume': level}));
+        flash.show('Volume $level%');
+      case PlayerAction.mute:
+        toggleMute();
+        flash.show(player.state.volume > 0 ? 'Muted' : 'Sound on');
+      case PlayerAction.skipSegment:
+        final span = active;
+        if (span == null) return false;
+        unawaited(seekTo(Duration(milliseconds: (span.end * 1000).round())));
+        showControls();
+      case PlayerAction.previousEpisode:
+        if (episode <= 1) {
+          flash.show('This is the first episode');
+        } else {
+          unawaited(control('previous', {}));
+        }
+      case PlayerAction.nextEpisode:
+        if (!canNext) {
+          flash.show('No next episode yet');
+        } else {
+          unawaited(control('next', {}));
+        }
+      case PlayerAction.markOpening || PlayerAction.markEnding:
+        markKey(action == PlayerAction.markOpening ? 'op' : 'ed');
+      case PlayerAction.sendMarks:
+        final card = markerKey.currentState;
+        if (marking == null || card == null) {
+          flash.show('Mark the opening (Alt+O) or ending (Alt+E) first');
+        } else {
+          unawaited(card.submit());
+        }
+      case PlayerAction.forgetMarks:
+        if (marking != null) {
+          closeMarker();
+          flash.show('Marks forgotten');
+        }
+      case PlayerAction.upvoteSkip || PlayerAction.downvoteSkip:
+        unawaited(voteKey(up: action == PlayerAction.upvoteSkip));
+      case PlayerAction.partySkip || PlayerAction.partyNext:
+        if (!widget.services.party.active) return false;
+        widget.services.party.vote(
+          action == PlayerAction.partyNext ? 'next' : 'skip',
+        );
+        flash.show(
+          action == PlayerAction.partyNext ? 'Voted next' : 'Voted skip',
+        );
+      default:
+        if (casting) {
+          flash.show('Not while casting');
+          return true;
+        }
+        unawaited(mediaKey(action));
+    }
+    return true;
+  }
+
+  /// Keys that work on the picture or sound itself (this screen only).
+  Future<void> mediaKey(PlayerAction action) async {
+    final note = switch (action) {
+      PlayerAction.nextSubtitle => await player.cycleSubtitles(),
+      PlayerAction.previousSubtitle => await player.cycleSubtitles(back: true),
+      PlayerAction.toggleSubtitles => await player.toggleSubtitles(),
+      PlayerAction.nextAudio => await player.cycleAudio(),
+      PlayerAction.subtitleEarlier => await player.shiftSubtitles(-.1),
+      PlayerAction.subtitleLater => await player.shiftSubtitles(.1),
+      PlayerAction.slower ||
+      PlayerAction.faster ||
+      PlayerAction.halfSpeed ||
+      PlayerAction.doubleSpeed ||
+      PlayerAction.normalSpeed => await player.changeSpeed(action),
+      PlayerAction.screenshot => await player.saveScreenshot(
+        '${anime.title} E$episode',
+      ),
+      _ => '',
+    };
+    switch (action) {
+      case PlayerAction.nextSubtitle ||
+          PlayerAction.previousSubtitle ||
+          PlayerAction.toggleSubtitles:
+        subSelected = true;
+      case PlayerAction.nextAudio:
+        audioSelected = true;
+      case PlayerAction.frameBack || PlayerAction.frameForward:
+        await player.stepFrame(back: action == PlayerAction.frameBack);
+      case PlayerAction.previousChapter || PlayerAction.nextChapter:
+        await player.stepChapter(
+          action == PlayerAction.previousChapter ? -1 : 1,
+        );
+      default:
+    }
+    if (note.isNotEmpty && mounted) flash.show(note);
+  }
+
+  /// Alt+O / Alt+E: the first press marks where the span starts, the next
+  /// one where it ends, as in the old mpv player.
+  void markKey(String type) {
+    if (anime.malId <= 0 || duration <= Duration.zero) {
+      flash.show('Skip times cannot be sent for this show');
+      return;
+    }
+    if (marking == type) {
+      markerKey.currentState?.setEnd(position.inMilliseconds / 1000);
+      flash.show('${skipKindName(type)} ends here');
+      return;
+    }
+    setState(() {
+      markerKey = GlobalKey();
+      marking = type;
+      markingExisting = null;
+    });
+    flash.show('${skipKindName(type)} starts here');
+    showControls();
+  }
+
+  /// Alt+U / Alt+D: votes on the skip playing now, else the episode's
+  /// first AniSkip time.
+  Future<void> voteKey({required bool up}) async {
+    final span =
+        (active != null && active!.id.isNotEmpty ? active : null) ??
+        spans.where((s) => s.id.isNotEmpty).firstOrNull;
+    if (span == null) {
+      flash.show('No AniSkip time to vote on');
+      return;
+    }
+    if (widget.services.skipTimes.voted(span)) {
+      flash.show('You already voted on this one');
+      return;
+    }
+    try {
+      await widget.services.skipTimes.vote(span, up: up);
+      flash.show('Thanks, your vote is in');
+    } catch (_) {
+      flash.show('AniSkip could not be reached');
+    }
+  }
+
+  Future<void> keysPanel() async {
+    panelOpen = true;
+    await showPlayerKeys(context, party: widget.services.party.active);
+    panelOpen = false;
+    if (mounted) showControls();
+  }
+
   String time(Duration d) =>
       '${d.inMinutes.toString().padLeft(2, '0')}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    flash.dispose();
     discordMeter?.cancel();
     unawaited(widget.services.discord.stopWatching());
     unawaited(widget.services.presence.clear());
@@ -1645,6 +1860,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 party: widget.services.party,
                 controls: overlay && !busy,
                 isTV: widget.isTV,
+              ),
+              ValueListenableBuilder<String>(
+                valueListenable: flash,
+                builder: (_, text, _) => PlayerFlash(text: text),
               ),
               if (busy)
                 Center(

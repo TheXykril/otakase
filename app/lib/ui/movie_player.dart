@@ -17,6 +17,7 @@ import '../desktop/window_frame.dart';
 import '../services.dart';
 import '../tls_ca.dart';
 import 'components.dart';
+import 'player_keys.dart';
 import 'seal.dart';
 
 /// Something to play: a stream found by a source, or a downloaded file.
@@ -219,6 +220,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     if (fullscreen) unawaited(setDesktopFullScreen(false));
     surface.dispose();
     playFocus.dispose();
+    flash.dispose();
     super.dispose();
   }
 
@@ -582,6 +584,12 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
+    if (isDesktop) {
+      final action = playerActionForEvent(event);
+      if (action != null && desktopKey(action, event is KeyRepeatEvent)) {
+        return KeyEventResult.handled;
+      }
+    }
     final k = event.logicalKey;
     final onSurface = surface.hasPrimaryFocus || !overlay;
     if (k == LogicalKeyboardKey.escape && fullscreen) {
@@ -617,6 +625,134 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     }
     showControls();
     return KeyEventResult.ignored;
+  }
+
+  final flash = FlashText();
+  double lastVolume = 100;
+
+  static const _repeatable = {
+    PlayerAction.seekBack,
+    PlayerAction.seekForward,
+    PlayerAction.stepBack,
+    PlayerAction.stepForward,
+    PlayerAction.volumeUp,
+    PlayerAction.volumeDown,
+    PlayerAction.volumeUpSmall,
+    PlayerAction.volumeDownSmall,
+    PlayerAction.frameBack,
+    PlayerAction.frameForward,
+    PlayerAction.slower,
+    PlayerAction.faster,
+    PlayerAction.subtitleEarlier,
+    PlayerAction.subtitleLater,
+  };
+
+  /// The old mpv keys on desktop; false passes the key on.
+  bool desktopKey(PlayerAction action, bool repeat) {
+    if (repeat && !_repeatable.contains(action)) return true;
+    switch (action) {
+      case PlayerAction.fullscreen:
+        unawaited(toggleFullscreen());
+        return true;
+      case PlayerAction.leaveFullscreen:
+        if (!fullscreen) return false;
+        unawaited(toggleFullscreen());
+        return true;
+      case PlayerAction.quit:
+        Navigator.maybePop(context);
+        return true;
+      case PlayerAction.keys:
+        unawaited(keysPanel());
+        return true;
+      default:
+    }
+    if (busy || error.isNotEmpty) return false;
+    switch (action) {
+      case PlayerAction.playPause:
+        unawaited(player.playOrPause());
+        showControls();
+      case PlayerAction.seekBack || PlayerAction.seekForward:
+        unawaited(seekBy(action == PlayerAction.seekBack ? -5 : 5));
+      case PlayerAction.stepBack || PlayerAction.stepForward:
+        unawaited(seekBy(action == PlayerAction.stepBack ? -1 : 1));
+      case PlayerAction.volumeUp ||
+          PlayerAction.volumeDown ||
+          PlayerAction.volumeUpSmall ||
+          PlayerAction.volumeDownSmall:
+        final step = switch (action) {
+          PlayerAction.volumeUp => 5,
+          PlayerAction.volumeDown => -5,
+          PlayerAction.volumeUpSmall => 2,
+          _ => -2,
+        };
+        final level = (player.state.volume + step).clamp(0, 100).round();
+        unawaited(player.setVolume(level.toDouble()));
+        flash.show('Volume $level%');
+      case PlayerAction.mute:
+        final volume = player.state.volume;
+        if (volume > 0) lastVolume = volume;
+        unawaited(player.setVolume(volume > 0 ? 0 : lastVolume));
+        flash.show(volume > 0 ? 'Muted' : 'Sound on');
+      case PlayerAction.nextEpisode:
+        if (request.next == null) {
+          flash.show('Nothing plays next');
+        } else {
+          unawaited(playNext());
+        }
+      // Films have no skip times, episode list or party here.
+      case PlayerAction.skipSegment ||
+          PlayerAction.previousEpisode ||
+          PlayerAction.markOpening ||
+          PlayerAction.markEnding ||
+          PlayerAction.sendMarks ||
+          PlayerAction.forgetMarks ||
+          PlayerAction.upvoteSkip ||
+          PlayerAction.downvoteSkip ||
+          PlayerAction.partySkip ||
+          PlayerAction.partyNext:
+        return false;
+      default:
+        unawaited(mediaKey(action));
+    }
+    return true;
+  }
+
+  Future<void> mediaKey(PlayerAction action) async {
+    final note = switch (action) {
+      PlayerAction.nextSubtitle => await player.cycleSubtitles(),
+      PlayerAction.previousSubtitle => await player.cycleSubtitles(back: true),
+      PlayerAction.toggleSubtitles => await player.toggleSubtitles(),
+      PlayerAction.nextAudio => await player.cycleAudio(),
+      PlayerAction.subtitleEarlier => await player.shiftSubtitles(-.1),
+      PlayerAction.subtitleLater => await player.shiftSubtitles(.1),
+      PlayerAction.slower ||
+      PlayerAction.faster ||
+      PlayerAction.halfSpeed ||
+      PlayerAction.doubleSpeed ||
+      PlayerAction.normalSpeed => await player.changeSpeed(action),
+      PlayerAction.screenshot => await player.saveScreenshot(request.title),
+      _ => '',
+    };
+    switch (action) {
+      case PlayerAction.nextSubtitle ||
+          PlayerAction.previousSubtitle ||
+          PlayerAction.toggleSubtitles:
+        subPicked = true;
+      case PlayerAction.frameBack || PlayerAction.frameForward:
+        await player.stepFrame(back: action == PlayerAction.frameBack);
+      case PlayerAction.previousChapter || PlayerAction.nextChapter:
+        await player.stepChapter(
+          action == PlayerAction.previousChapter ? -1 : 1,
+        );
+      default:
+    }
+    if (note.isNotEmpty && mounted) flash.show(note);
+  }
+
+  Future<void> keysPanel() async {
+    hideTimer?.cancel();
+    await showPlayerKeys(context, episodes: false);
+    if (mounted) showControls();
   }
 
   String time(Duration d) => DesktopPlayerBar.time(d);
@@ -912,6 +1048,10 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
               FocusTraversalGroup(
                 child: isDesktop ? desktopControls() : mobileControls(context),
               ),
+            ValueListenableBuilder<String>(
+              valueListenable: flash,
+              builder: (_, text, _) => PlayerFlash(text: text),
+            ),
           ],
         ),
       ),
