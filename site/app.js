@@ -14,8 +14,17 @@
   let moved = false;
   for (const ev of ['wheel', 'touchstart', 'keydown', 'pointerdown']) addEventListener(ev, () => { moved = true; }, { once: true, passive: true });
   const settle = () => { if (!moved) toTop(); };
-  addEventListener('load', settle);
-  if (document.fonts) document.fonts.ready.then(settle);
+  const loaded = new Promise((done) => {
+    if (document.readyState === 'complete') done(); else addEventListener('load', done, { once: true });
+  });
+  const fonts = document.fonts ? document.fonts.ready : Promise.resolve();
+  Promise.race([Promise.all([loaded, fonts]), new Promise((done) => setTimeout(done, 4000))]).then(() => {
+    settle();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      settle();
+      document.documentElement.classList.add('snapping');
+    }));
+  });
   const pin = $('top'), stage = $('stage'), hero = $('hero');
   const els = { tv: $('tv'), pc: $('pc'), ph: $('ph') };
   // height / width of each device frame
