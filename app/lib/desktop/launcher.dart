@@ -6,12 +6,17 @@ import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../data/models.dart';
+import '../data/movies.dart';
+import '../data/trakt.dart';
 import '../services.dart';
 import '../ui/components.dart';
+import '../ui/movie_player.dart';
+import '../ui/movies_pages.dart';
 import '../ui/seal.dart';
 import 'desktop_core.dart';
 import 'window_frame.dart';
 import 'external_mpv.dart';
+import 'tiling.dart';
 
 /// True while the app shows the launcher instead of the full window. Set by
 /// `otakase --launcher`; "Open full app" turns it off in the same process.
@@ -39,7 +44,15 @@ Future<void> resizeDesktopWindow({required bool launcher}) async {
   );
   await windowManager.setSize(launcher ? launcherSize : const Size(1440, 900));
   await windowManager.center();
+  // Tiling compositors ignore the size: float the launcher like the old
+  // rofi popup, and put the full app back in the layout.
+  launcherPlaced = DateTime.now();
+  await placeOnTiler(size: launcher ? launcherSize : null);
 }
+
+/// When the window was last floated or resized; focus changes around that
+/// time come from the compositor, not from the viewer leaving.
+DateTime launcherPlaced = DateTime(0);
 
 /// One row of a launcher menu.
 class LauncherItem {
@@ -85,7 +98,7 @@ class LauncherPage extends StatefulWidget {
   State<LauncherPage> createState() => LauncherPageState();
 }
 
-class LauncherPageState extends State<LauncherPage> {
+class LauncherPageState extends State<LauncherPage> with WindowListener {
   final query = TextEditingController();
   final input = FocusNode(debugLabel: 'Launcher input');
   final scroll = ScrollController();
@@ -96,6 +109,13 @@ class LauncherPageState extends State<LauncherPage> {
 
   AppServices get services => widget.services;
   bool get adult => services.store.adultAllowed;
+  ContentMode get content => contentModeOf(services.store);
+
+  /// The profile shows anime (Content: anime or both).
+  bool get showsAnime => content != ContentMode.movies;
+
+  /// The profile shows films and series (Content: movies or both).
+  bool get showsTitles => content != ContentMode.anime;
 
   /// Saves playback and closes the window. The full app's shell replaces
   /// this hook once the launcher turns into the full app.
@@ -107,9 +127,37 @@ class LauncherPageState extends State<LauncherPage> {
     await closeDesktopWindow();
   }
 
+  /// True while a player runs from the launcher.
+  bool playing = false;
+
+  /// Like rofi, the launcher goes away when another window takes focus,
+  /// but not while it plays or right after the compositor moved it.
+  @override
+  void onWindowBlur() {
+    if (playing || !desktopLauncher.value || !mounted) return;
+    if (DateTime.now().difference(launcherPlaced) <
+        const Duration(seconds: 2)) {
+      return;
+    }
+    if (ModalRoute.of(context)?.isCurrent == false) return;
+    unawaited(quit());
+  }
+
   @override
   void initState() {
     super.initState();
+    if (isDesktop) {
+      windowManager.addListener(this);
+      launcherPlaced = DateTime.now();
+      // On a tiling compositor the window opened as a tile: float it.
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => unawaited(
+          placeOnTiler(size: launcherSize, attempts: 10).then((_) {
+            launcherPlaced = DateTime.now();
+          }),
+        ),
+      );
+    }
     desktopCloseHook = quit;
     menus.add(mainMenu());
     query.addListener(() => setState(() => selected = 0));
@@ -118,6 +166,7 @@ class LauncherPageState extends State<LauncherPage> {
 
   @override
   void dispose() {
+    if (isDesktop) windowManager.removeListener(this);
     if (desktopCloseHook == quit) desktopCloseHook = null;
     query.dispose();
     input.dispose();
@@ -126,7 +175,8 @@ class LauncherPageState extends State<LauncherPage> {
   }
 
   Future<void> loadLists() async {
-    if (!services.auth.hasAccounts) return;
+    if (showsTitles) unawaited(loadTitles());
+    if (!showsAnime || !services.auth.hasAccounts) return;
     menus.first.loading = true;
     try {
       final page = await services.tracking.combinedList(adult: adult);
@@ -140,12 +190,31 @@ class LauncherPageState extends State<LauncherPage> {
     });
   }
 
+  /// Trakt's watchlist and progress, when signed in.
+  Future<void> loadTitles() async {
+    try {
+      await services.movies.sync();
+    } catch (_) {
+      /* The saved lists still show. */
+    }
+    if (!mounted || menus.isEmpty) return;
+    setState(() => menus[0] = mainMenu());
+  }
+
   LauncherMenu mainMenu() {
-    final last = services.store.continuing.firstOrNull;
+    final last = showsAnime ? services.store.continuing.firstOrNull : null;
     final listed = {for (final e in watching) e.anime.key};
+    final movies = services.movies;
+    final continuing = showsTitles ? movies.continuing : <MovieEntry>[];
+    final continued = {for (final e in continuing) e.title.key};
+    // The newest thing watched comes first, anime or not.
+    final titleFirst =
+        continuing.isNotEmpty &&
+        (last == null || continuing.first.updated >= last.updated);
     return LauncherMenu(
       'Otakase',
       [
+        if (titleFirst) continueTitle(continuing.first, detail: 'Enter'),
         if (last != null)
           LauncherItem(
             'Continue: ${last.anime.title} · Ep ${last.episode}',
@@ -153,6 +222,7 @@ class LauncherPageState extends State<LauncherPage> {
             detail: 'Enter',
             onSelect: () => play(last.anime, last.episode),
           ),
+        for (final e in continuing.skip(titleFirst ? 1 : 0)) continueTitle(e),
         for (final e in watching)
           LauncherItem(
             e.anime.title,
@@ -162,16 +232,29 @@ class LauncherPageState extends State<LauncherPage> {
                 : '${e.progress}',
             onSelect: () => openShow(e.anime, e.progress),
           ),
-        for (final h in services.store.continuing.skip(1))
-          if (!listed.contains(h.anime.key))
+        if (showsAnime)
+          for (final h in services.store.continuing.skip(1))
+            if (!listed.contains(h.anime.key))
+              LauncherItem(
+                h.anime.title,
+                icon: LucideIcons.history,
+                detail: 'Ep ${h.episode}',
+                onSelect: () => openShow(h.anime, math.max(0, h.episode - 1)),
+              ),
+        for (final t in movies.watchlist)
+          if (showsTitles && !continued.contains(t.key))
             LauncherItem(
-              h.anime.title,
-              icon: LucideIcons.history,
-              detail: 'Ep ${h.episode}',
-              onSelect: () => openShow(h.anime, math.max(0, h.episode - 1)),
+              t.title,
+              icon: t.isShow ? LucideIcons.tv : LucideIcons.clapperboard,
+              detail: 'Watchlist',
+              onSelect: () => openTitle(t),
             ),
         LauncherItem(
-          'Search anime',
+          switch (content) {
+            ContentMode.anime => 'Search anime',
+            ContentMode.movies => 'Search movies & shows',
+            ContentMode.both => 'Search anime, movies & shows',
+          },
           icon: LucideIcons.search,
           detail: 'type a title',
           onSelect: () {
@@ -179,6 +262,12 @@ class LauncherPageState extends State<LauncherPage> {
             setState(() => message = 'Type a title, then Enter.');
           },
         ),
+        if (showsTitles)
+          LauncherItem(
+            'Trending movies & shows',
+            icon: LucideIcons.flame,
+            onSelect: trending,
+          ),
         LauncherItem(
           'Open full app',
           icon: LucideIcons.appWindow,
@@ -214,6 +303,8 @@ class LauncherPageState extends State<LauncherPage> {
     if (menus.length > 1) {
       setState(() {
         menus.removeLast();
+        // The main menu shows what changed meanwhile (watchlist, progress).
+        if (menus.length == 1) menus[0] = mainMenu();
         selected = 0;
         message = null;
       });
@@ -225,26 +316,217 @@ class LauncherPageState extends State<LauncherPage> {
   Future<void> search(String q) async {
     final menu = LauncherMenu('Search', [], detail: q, loading: true);
     push(menu);
-    try {
-      final page = await services.catalog.search(q, adult: adult);
-      menu.items.addAll([
-        for (final a in page.items)
-          LauncherItem(
-            a.title,
-            icon: LucideIcons.tv,
-            detail: [
-              if (a.year > 0) '${a.year}',
-              if (a.episodes > 0) '${a.episodes} eps',
-            ].join(' · '),
-            onSelect: () => openShow(a, 0),
-          ),
-      ]);
-      if (menu.items.isEmpty) message = 'No matching anime.';
-    } catch (e) {
-      message = 'Search failed: $e';
+    final failures = <String>[];
+    // Anime and Trakt are asked together; each shows what it found.
+    final found = await Future.wait([
+      if (showsAnime)
+        services.catalog
+            .search(q, adult: adult)
+            .then<List<LauncherItem>>(
+              (page) => [
+                for (final a in page.items)
+                  LauncherItem(
+                    a.title,
+                    icon: LucideIcons.tv,
+                    detail: [
+                      if (showsTitles) 'Anime',
+                      if (a.year > 0) '${a.year}',
+                      if (a.episodes > 0) '${a.episodes} eps',
+                    ].join(' · '),
+                    onSelect: () => openShow(a, 0),
+                  ),
+              ],
+            )
+            .catchError((Object e) {
+              failures.add('Anime search failed: $e');
+              return <LauncherItem>[];
+            }),
+      if (showsTitles)
+        services.trakt
+            .search(q)
+            .then<List<LauncherItem>>(
+              (titles) => [for (final t in titles) titleRow(t)],
+            )
+            .catchError((Object e) {
+              failures.add('Movie search failed: $e');
+              return <LauncherItem>[];
+            }),
+    ]);
+    menu.items.addAll(found.expand((rows) => rows));
+    if (failures.isNotEmpty) {
+      message = failures.join('\n');
+    } else if (menu.items.isEmpty) {
+      message = showsTitles ? 'Nothing matches.' : 'No matching anime.';
     }
     if (mounted) setState(() => menu.loading = false);
   }
+
+  LauncherItem titleRow(MediaTitle t) => LauncherItem(
+    t.title,
+    icon: t.isShow ? LucideIcons.tv : LucideIcons.clapperboard,
+    detail: [
+      t.isShow ? 'Series' : 'Movie',
+      if (t.year > 0) '${t.year}',
+    ].join(' · '),
+    onSelect: () => openTitle(t),
+  );
+
+  /// What is trending and popular on Trakt, films and series mixed.
+  Future<void> trending() async {
+    final menu = LauncherMenu('Trending movies & shows', [], loading: true);
+    push(menu);
+    try {
+      final rows = await shelvesOf(services).load();
+      final seen = <String>{};
+      for (final list in rows.values) {
+        for (final t in list) {
+          if (seen.add(t.key)) menu.items.add(titleRow(t));
+        }
+      }
+    } catch (e) {
+      message = 'Trakt could not be reached.';
+    }
+    if (mounted) setState(() => menu.loading = false);
+  }
+
+  /// A Continue row for a film or series in progress.
+  LauncherItem continueTitle(MovieEntry e, {String? detail}) => LauncherItem(
+    e.title.isShow
+        ? 'Continue: ${e.title.title} · ${e.code}'
+        : 'Continue: ${e.title.title}',
+    icon: LucideIcons.rotateCcw,
+    detail: detail ?? (e.title.isShow ? 'Series' : 'Movie'),
+    onSelect: () async {
+      if (!e.title.isShow) return playTitle(e.title);
+      final list = await episodesOf(e.title);
+      final at = list
+          .where((x) => x.season == e.season && x.number == e.episode)
+          .firstOrNull;
+      await playTitle(
+        e.title,
+        episode: at ?? TitleEpisode(season: e.season, number: e.episode),
+        episodes: list,
+      );
+    },
+  );
+
+  Future<List<TitleEpisode>> episodesOf(MediaTitle t) async {
+    try {
+      return await services.trakt.episodes(t);
+    } catch (_) {
+      if (mounted) setState(() => message = 'Episodes could not be loaded.');
+      return [];
+    }
+  }
+
+  /// A film's or series' menu: play or carry on, pick an episode, keep it on
+  /// the watchlist.
+  Future<void> openTitle(MediaTitle t) async {
+    final movies = services.movies;
+    final menu = LauncherMenu(
+      t.title,
+      [],
+      detail: [
+        t.isShow ? 'Series' : 'Movie',
+        if (t.year > 0) '${t.year}',
+      ].join(' · '),
+      loading: t.isShow,
+    );
+    LauncherItem watchlistRow() {
+      final on = movies.onWatchlist(t);
+      return LauncherItem(
+        on ? 'Remove from watchlist' : 'Add to watchlist',
+        icon: on ? LucideIcons.bookmarkMinus : LucideIcons.bookmarkPlus,
+        onSelect: () async {
+          await movies.setWatchlist(t, !on);
+          if (!mounted) return;
+          setState(() {
+            final i = menu.items.indexWhere(
+              (r) => r.label.endsWith('watchlist'),
+            );
+            if (i >= 0) menu.items[i] = watchlistRow();
+            message = on ? 'Removed from the watchlist.' : 'On the watchlist.';
+          });
+        },
+      );
+    }
+
+    final open = LauncherItem(
+      'Open in full app',
+      icon: LucideIcons.externalLink,
+      onSelect: () => widget.onOpenApp?.call(),
+    );
+    if (!t.isShow) {
+      final e = movies.entry(t);
+      menu.items.addAll([
+        LauncherItem(
+          e != null && e.started && !e.finished ? 'Resume' : 'Play',
+          icon: LucideIcons.play,
+          onSelect: () => playTitle(t),
+        ),
+        watchlistRow(),
+        open,
+      ]);
+      push(menu);
+      return;
+    }
+    push(menu);
+    final list = await episodesOf(t);
+    final next = nextTitleEpisode(movies, t, list);
+    menu.items.addAll([
+      if (next != null)
+        LauncherItem(
+          'Play next: ${next.label}',
+          icon: LucideIcons.play,
+          onSelect: () => playTitle(t, episode: next, episodes: list),
+        ),
+      if (list.isNotEmpty)
+        LauncherItem(
+          'Choose episode…',
+          icon: LucideIcons.list,
+          detail: '${list.length} episodes',
+          onSelect: () => chooseTitleEpisode(t, list, next),
+        ),
+      watchlistRow(),
+      open,
+    ]);
+    if (mounted) setState(() => menu.loading = false);
+  }
+
+  void chooseTitleEpisode(
+    MediaTitle t,
+    List<TitleEpisode> list,
+    TitleEpisode? next,
+  ) {
+    final movies = services.movies;
+    push(
+      LauncherMenu(t.title, [
+        for (final x in list)
+          LauncherItem(
+            x.label,
+            icon: movies.watched(t, season: x.season, episode: x.number)
+                ? LucideIcons.check
+                : LucideIcons.play,
+            detail: identical(x, next) ? 'next' : '',
+            onSelect: () => playTitle(t, episode: x, episodes: list),
+          ),
+      ], detail: 'Choose episode'),
+    );
+    final at = next == null ? -1 : list.indexOf(next);
+    if (at > 0) setState(() => selected = at);
+  }
+
+  Future<void> playTitle(
+    MediaTitle t, {
+    TitleEpisode? episode,
+    List<TitleEpisode> episodes = const [],
+  }) => runPlayer(
+    MoviePlayerPage(
+      services: services,
+      isTV: true,
+      request: titlePlay(services, t, episode: episode, episodes: episodes),
+    ),
+  );
 
   void openShow(Anime anime, int progress) {
     final saved = services.store.continuing
@@ -320,28 +602,32 @@ class LauncherPageState extends State<LauncherPage> {
     setState(() => selected = math.min(progress, total - 1));
   }
 
-  Future<void> play(Anime anime, int episode) async {
+  Future<void> play(Anime anime, int episode) => runPlayer(
+    playerFor(
+      services: services,
+      anime: anime,
+      episode: episode,
+      isTV: true,
+      mode: services.store.text('SubOrDub'),
+    ),
+  );
+
+  /// Grows the window to a player, plays, then comes back to the menu.
+  Future<void> runPlayer(Widget player) async {
+    playing = true;
     if (isDesktop) {
       await windowManager.setAlwaysOnTop(false);
       await windowManager.setSize(launcherPlayerSize);
       await windowManager.center();
+      await placeOnTiler(size: launcherPlayerSize);
     }
     if (!mounted) return;
     await Navigator.push(
       context,
-      OtakaseRoute<void>(
-        builder: (_) => TVViewport(
-          child: playerFor(
-            services: services,
-            anime: anime,
-            episode: episode,
-            isTV: true,
-            mode: services.store.text('SubOrDub'),
-          ),
-        ),
-      ),
+      OtakaseRoute<void>(builder: (_) => TVViewport(child: player)),
     );
     if (isDesktop) await resizeDesktopWindow(launcher: true);
+    playing = false;
     if (!mounted) return;
     // Progress moved on; rebuild the lists from the new state.
     setState(() {
@@ -602,5 +888,31 @@ class _LauncherRow extends StatelessWidget {
         ),
       ),
     ),
+  );
+}
+
+/// The series episode to carry on with: the one stopped in, else the one
+/// after the last watched, else the first not watched.
+TitleEpisode? nextTitleEpisode(
+  MovieService movies,
+  MediaTitle title,
+  List<TitleEpisode> episodes,
+) {
+  if (episodes.isEmpty) return null;
+  final e = movies.entry(title);
+  if (e != null && e.episode > 0) {
+    final i = episodes.indexWhere(
+      (x) => x.season == e.season && x.number == e.episode,
+    );
+    if (i >= 0) {
+      if (!movies.watched(title, season: e.season, episode: e.episode)) {
+        return episodes[i];
+      }
+      if (i + 1 < episodes.length) return episodes[i + 1];
+    }
+  }
+  return episodes.firstWhere(
+    (x) => !movies.watched(title, season: x.season, episode: x.number),
+    orElse: () => episodes.first,
   );
 }

@@ -9,6 +9,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../core.dart';
+import '../data/hls_quality.dart';
 import '../data/models.dart';
 import '../data/store.dart';
 import '../desktop/desktop_core.dart';
@@ -17,6 +18,7 @@ import '../desktop/window_frame.dart';
 import '../services.dart';
 import '../tls_ca.dart';
 import 'components.dart';
+import 'player_keys.dart';
 import 'seal.dart';
 
 /// Something to play: a stream found by a source, or a downloaded file.
@@ -219,6 +221,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     if (fullscreen) unawaited(setDesktopFullScreen(false));
     surface.dispose();
     playFocus.dispose();
+    flash.dispose();
     super.dispose();
   }
 
@@ -253,8 +256,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     );
     await property('sub-pos', store.integer('SubtitlePosition').toString());
     await property('af', audioFilter(store));
-    final quality = store.text('Quality');
-    await property('hls-bitrate', quality == 'worst' ? 'min' : 'max');
+    await property('hls-bitrate', hlsBitrate(store.text('Quality'), variants));
     for (final e in (await tlsOptions()).entries) {
       await property(e.key, e.value);
     }
@@ -283,6 +285,14 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
       if (!mounted || g != generation) return;
       media = found;
       setState(() => status = 'Loading');
+      variants = found.url.contains('.m3u8')
+          ? await fetchHlsVariants(
+              widget.services.catalog.client,
+              found.url,
+              found.headers,
+            )
+          : <HlsVariant>[];
+      if (!mounted || g != generation) return;
       await configure();
       final local = !found.url.startsWith('http');
       await player.open(
@@ -462,6 +472,61 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     await open();
   }
 
+  /// The picture sizes the copy offers (HLS only).
+  List<HlsVariant> variants = [];
+
+  /// The quality list: Best, each size the copy has, Worst, and another
+  /// copy of the title (a different source or server).
+  Future<void> qualityPanel() async {
+    hideTimer?.cancel();
+    const another = 'Try another copy';
+    final heights = hlsHeights(variants);
+    final labels = {
+      'Best': 'best',
+      for (final h in heights) '${h}p': '$h',
+      if (heights.length > 1 || variants.isEmpty) 'Worst': 'worst',
+    };
+    final current = store.text('Quality');
+    final chosen = await chooseValue(
+      context,
+      'Quality',
+      [...labels.keys, another],
+      selected: labels.entries
+          .where((e) => e.value == current)
+          .firstOrNull
+          ?.key,
+    );
+    if (!mounted || chosen == null) {
+      if (mounted) showControls();
+      return;
+    }
+    if (chosen == another) return anotherCopy();
+    final quality = labels[chosen]!;
+    await store.set('Quality', quality);
+    if (!mounted || busy || media == null) return;
+    // mpv picks the HLS variant when it opens the stream, so open the same
+    // copy again at the same spot.
+    final at = player.state.position;
+    final playing = player.state.playing;
+    await property('hls-bitrate', hlsBitrate(quality, variants));
+    final m = media!;
+    final local = !m.url.startsWith('http');
+    await player.open(
+      Media(local ? Uri.file(m.url).toString() : m.url, httpHeaders: m.headers),
+      play: false,
+    );
+    try {
+      await player.stream.duration
+          .firstWhere((d) => d > Duration.zero)
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      /* Seek anyway. */
+    }
+    await player.seek(at);
+    if (playing) await player.play();
+    if (mounted) showControls();
+  }
+
   Future<void> anotherCopy() async {
     final copy = media?.copy ?? '';
     if (copy.isEmpty) {
@@ -582,6 +647,12 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
+    if (isDesktop) {
+      final action = playerActionForEvent(event);
+      if (action != null && desktopKey(action, event is KeyRepeatEvent)) {
+        return KeyEventResult.handled;
+      }
+    }
     final k = event.logicalKey;
     final onSurface = surface.hasPrimaryFocus || !overlay;
     if (k == LogicalKeyboardKey.escape && fullscreen) {
@@ -617,6 +688,134 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     }
     showControls();
     return KeyEventResult.ignored;
+  }
+
+  final flash = FlashText();
+  double lastVolume = 100;
+
+  static const _repeatable = {
+    PlayerAction.seekBack,
+    PlayerAction.seekForward,
+    PlayerAction.stepBack,
+    PlayerAction.stepForward,
+    PlayerAction.volumeUp,
+    PlayerAction.volumeDown,
+    PlayerAction.volumeUpSmall,
+    PlayerAction.volumeDownSmall,
+    PlayerAction.frameBack,
+    PlayerAction.frameForward,
+    PlayerAction.slower,
+    PlayerAction.faster,
+    PlayerAction.subtitleEarlier,
+    PlayerAction.subtitleLater,
+  };
+
+  /// The old mpv keys on desktop; false passes the key on.
+  bool desktopKey(PlayerAction action, bool repeat) {
+    if (repeat && !_repeatable.contains(action)) return true;
+    switch (action) {
+      case PlayerAction.fullscreen:
+        unawaited(toggleFullscreen());
+        return true;
+      case PlayerAction.leaveFullscreen:
+        if (!fullscreen) return false;
+        unawaited(toggleFullscreen());
+        return true;
+      case PlayerAction.quit:
+        Navigator.maybePop(context);
+        return true;
+      case PlayerAction.keys:
+        unawaited(keysPanel());
+        return true;
+      default:
+    }
+    if (busy || error.isNotEmpty) return false;
+    switch (action) {
+      case PlayerAction.playPause:
+        unawaited(player.playOrPause());
+        showControls();
+      case PlayerAction.seekBack || PlayerAction.seekForward:
+        unawaited(seekBy(action == PlayerAction.seekBack ? -5 : 5));
+      case PlayerAction.stepBack || PlayerAction.stepForward:
+        unawaited(seekBy(action == PlayerAction.stepBack ? -1 : 1));
+      case PlayerAction.volumeUp ||
+          PlayerAction.volumeDown ||
+          PlayerAction.volumeUpSmall ||
+          PlayerAction.volumeDownSmall:
+        final step = switch (action) {
+          PlayerAction.volumeUp => 5,
+          PlayerAction.volumeDown => -5,
+          PlayerAction.volumeUpSmall => 2,
+          _ => -2,
+        };
+        final level = (player.state.volume + step).clamp(0, 100).round();
+        unawaited(player.setVolume(level.toDouble()));
+        flash.show('Volume $level%');
+      case PlayerAction.mute:
+        final volume = player.state.volume;
+        if (volume > 0) lastVolume = volume;
+        unawaited(player.setVolume(volume > 0 ? 0 : lastVolume));
+        flash.show(volume > 0 ? 'Muted' : 'Sound on');
+      case PlayerAction.nextEpisode:
+        if (request.next == null) {
+          flash.show('Nothing plays next');
+        } else {
+          unawaited(playNext());
+        }
+      // Films have no skip times, episode list or party here.
+      case PlayerAction.skipSegment ||
+          PlayerAction.previousEpisode ||
+          PlayerAction.markOpening ||
+          PlayerAction.markEnding ||
+          PlayerAction.sendMarks ||
+          PlayerAction.forgetMarks ||
+          PlayerAction.upvoteSkip ||
+          PlayerAction.downvoteSkip ||
+          PlayerAction.partySkip ||
+          PlayerAction.partyNext:
+        return false;
+      default:
+        unawaited(mediaKey(action));
+    }
+    return true;
+  }
+
+  Future<void> mediaKey(PlayerAction action) async {
+    final note = switch (action) {
+      PlayerAction.nextSubtitle => await player.cycleSubtitles(),
+      PlayerAction.previousSubtitle => await player.cycleSubtitles(back: true),
+      PlayerAction.toggleSubtitles => await player.toggleSubtitles(),
+      PlayerAction.nextAudio => await player.cycleAudio(),
+      PlayerAction.subtitleEarlier => await player.shiftSubtitles(-.1),
+      PlayerAction.subtitleLater => await player.shiftSubtitles(.1),
+      PlayerAction.slower ||
+      PlayerAction.faster ||
+      PlayerAction.halfSpeed ||
+      PlayerAction.doubleSpeed ||
+      PlayerAction.normalSpeed => await player.changeSpeed(action),
+      PlayerAction.screenshot => await player.saveScreenshot(request.title),
+      _ => '',
+    };
+    switch (action) {
+      case PlayerAction.nextSubtitle ||
+          PlayerAction.previousSubtitle ||
+          PlayerAction.toggleSubtitles:
+        subPicked = true;
+      case PlayerAction.frameBack || PlayerAction.frameForward:
+        await player.stepFrame(back: action == PlayerAction.frameBack);
+      case PlayerAction.previousChapter || PlayerAction.nextChapter:
+        await player.stepChapter(
+          action == PlayerAction.previousChapter ? -1 : 1,
+        );
+      default:
+    }
+    if (note.isNotEmpty && mounted) flash.show(note);
+  }
+
+  Future<void> keysPanel() async {
+    hideTimer?.cancel();
+    await showPlayerKeys(context, episodes: false);
+    if (mounted) showControls();
   }
 
   String time(Duration d) => DesktopPlayerBar.time(d);
@@ -817,7 +1016,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     onMute: () =>
         unawaited(player.setVolume(player.state.volume == 0 ? 100 : 0)),
     onTracks: () => unawaited(trackPanel()),
-    onQuality: () => unawaited(anotherCopy()),
+    onQuality: () => unawaited(qualityPanel()),
     onFullscreen: () => unawaited(toggleFullscreen()),
   );
 
@@ -912,6 +1111,10 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
               FocusTraversalGroup(
                 child: isDesktop ? desktopControls() : mobileControls(context),
               ),
+            ValueListenableBuilder<String>(
+              valueListenable: flash,
+              builder: (_, text, _) => PlayerFlash(text: text),
+            ),
           ],
         ),
       ),
