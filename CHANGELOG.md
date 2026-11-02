@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 26.1.1 - 2026-11-02
+
+The desktop app now installs like any other app, so it opens from your app
+menu and as `otakase` in a terminal.
 
 ### Added
 
