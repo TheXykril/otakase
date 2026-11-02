@@ -28,12 +28,48 @@ The pages sit in a bar at the top, with the window buttons in the style of
 your system. **Esc** goes back. Moving the mouse over the
 player shows its controls.
 
+## Player keys
+
+The player takes mpv's keys. **?** shows this list in the player.
+
+| Key | Does |
+| --- | --- |
+| Space / P | Play / pause |
+| ← / → | Seek 5 seconds (Shift: 1 second) |
+| ↑ / ↓ | Volume (9 / 0 for small steps) |
+| M | Mute |
+| F | Fullscreen (Esc leaves it) |
+| Enter | Skip the opening or ending |
+| < / > | Previous / next episode |
+| PgUp / PgDn | Previous / next chapter |
+| J / Shift+J | Next / previous subtitles |
+| V | Subtitles on / off |
+| Z / X | Subtitles earlier / later |
+| # | Next audio track |
+| [ / ] | Slower / faster ({ / } halve or double, Backspace back to normal) |
+| , / . | Frame back / forward |
+| S | Screenshot, saved in Pictures/Otakase |
+| Q | Leave the player |
+| Alt+O / Alt+E | Mark the opening / ending; press again where it ends |
+| Alt+S | Send your marks to AniSkip |
+| Alt+R | Forget your marks |
+| Alt+U / Alt+D | The skip you got is right / wrong |
+| Alt+K / Alt+N | In a watch party: vote to skip / for the next episode |
+
 ## The launcher
 
 Starting the app with `--launcher` opens a small window that stays on top, for when you
 only want to pick something and watch: type to filter, arrows or
 PageUp/PageDown to move, **Enter** to pick, **Esc** to clear the text, go back,
-then close. Playing an episode grows it to fit the player.
+then close. Playing an episode grows it to fit the player. Like a popup, it
+closes when you click into another window.
+
+With **Movies & shows** on for your profile, the launcher lists the films
+and series you are watching and your Trakt watchlist, searches them along
+with anime, and has a **Trending movies & shows** list.
+
+On Hyprland, sway and i3 the launcher floats in the middle of the screen
+instead of opening as a tile; nothing needs adding to your config for it.
 
 Bind it to a keyboard shortcut in your desktop's settings to open Otakase
 from anywhere. On Hyprland, for example:
