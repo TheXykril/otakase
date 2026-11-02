@@ -1,5 +1,14 @@
 (() => {
   const $ = (id) => document.getElementById(id);
+
+  // Always open at the start of the story. Browsers otherwise put a reload
+  // back where the last visit stopped, and a #download left in the address by
+  // the Download button reopens the page down at the downloads.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  const toTop = () => window.scrollTo(0, 0);
+  toTop();
+  addEventListener('pageshow', (e) => { if (e.persisted) toTop(); });
   const pin = $('top'), stage = $('stage'), hero = $('hero');
   const els = { tv: $('tv'), pc: $('pc'), ph: $('ph') };
   // height / width of each device frame
@@ -233,4 +242,9 @@
   pick(os);
   const names = { android: 'Android', windows: 'Windows', macos: 'macOS', linux: 'Linux' };
   $('hero-dl').querySelector('span').textContent = 'Download for ' + names[os];
+  // Go to the downloads without writing #download into the address.
+  $('hero-dl').addEventListener('click', (e) => {
+    e.preventDefault();
+    window.scrollTo({ top: $('download').offsetTop, behavior: 'smooth' });
+  });
 })();
