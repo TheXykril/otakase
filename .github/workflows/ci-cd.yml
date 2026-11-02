@@ -99,8 +99,8 @@ jobs:
           path: dist
           merge-multiple: true
 
-      # Commits pushed straight to main, which GitHub's generated notes
-      # (pull requests only) leave out.
+      # GitHub's generated notes without the release pull request, plus
+      # commits pushed straight to main, which those notes leave out.
       - name: Release notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -115,7 +115,6 @@ jobs:
           name: "Otakase v${{ env.OTAKASE_VERSION }}"
           draft: false
           prerelease: false
-          generate_release_notes: true
           body_path: dist/release-notes-extra.md
           files: |
             dist/otakase-android.apk

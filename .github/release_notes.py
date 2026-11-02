@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Write the changelog block that goes above GitHub's generated release notes.
+"""Write the release notes: GitHub's generated notes plus direct commits.
 
-GitHub's notes list merged pull requests. Commits pushed straight to main
-don't show up there, so this lists them, sorted by their subject prefix,
-with the author's GitHub account where one can be found.
+GitHub's notes list merged pull requests. The release pull request itself
+("release: 26.1.2") is dropped from them, since it only bumps the version.
+Commits pushed straight to main don't show up there, so this lists them
+above, sorted by their subject prefix, with the author's GitHub account
+where one can be found.
 
     release_notes.py OUT.md
 
@@ -33,14 +35,29 @@ def git(*args):
                           text=True, encoding="utf-8").stdout
 
 
-def api_get(path, token):
-    req = urllib.request.Request(API + path, headers={
+def api_get(path, token, body=None):
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(API + path, data=data, headers={
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
     })
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.load(resp)
+
+
+RELEASE_PR = re.compile(r"^\*\s*release:", re.I)
+
+
+def generated_notes(repo, tag, prev, token):
+    # GitHub's own notes (merged pull requests, honouring .github/release.yml),
+    # without the release pull request.
+    body = {"tag_name": tag, "target_commitish": git("rev-parse", "HEAD").strip()}
+    if prev:
+        body["previous_tag_name"] = prev
+    notes = api_get(f"/repos/{repo}/releases/generate-notes", token, body)["body"]
+    return "\n".join(l for l in notes.splitlines() if not RELEASE_PR.match(l.strip()))
 
 
 def previous_tag(current):
@@ -119,6 +136,8 @@ def main():
         if prev:
             lines += ["", "---",
                       f"_Diff range: [{prev}..{tag}](https://github.com/{repo}/compare/{prev}...{tag})_"]
+
+    lines += ["", generated_notes(repo, tag, prev, token)]
 
     with open(out, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
