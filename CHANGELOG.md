@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Trakt signs in through your browser on a computer**, like AniList and
+  MyAnimeList, instead of with a code. Phones and TVs keep the code.
+
+### Fixed
+
+- **Sign-ins stay saved on Linux.** AniList, MyAnimeList and Trakt no
+  longer sign out after a restart or an update. If you were signed out,
+  sign in once more. Desktops without a keyring keep sign-ins in a private
+  file instead.
+- **Open Trakt works on phones.** The button opens Trakt's code page
+  again, and phones no longer show a QR code for it; TVs still do.
+
 ## 26.1.2 - 2026-11-02
 
 The desktop player takes mpv's keys again, the launcher carries your movies

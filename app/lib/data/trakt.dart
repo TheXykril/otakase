@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'auth.dart';
 import 'models.dart';
+import 'oauth_config.dart';
 
 /// Otakase's own Trakt app. It has no secret, so its id is public by design:
 /// the id alone cannot be turned into anyone's session.
@@ -255,6 +259,7 @@ class Trakt extends ChangeNotifier {
   @override
   void dispose() {
     disposed = true;
+    unawaited(cancelBrowserSignIn());
     super.dispose();
   }
 
@@ -317,7 +322,7 @@ class Trakt extends ChangeNotifier {
             body: jsonEncode({
               'refresh_token': token['refresh_token'],
               'client_id': traktClientId,
-              'redirect_uri': traktRedirectUri,
+              'redirect_uri': _redirect(token),
               'grant_type': 'refresh_token',
             }),
           )
@@ -326,7 +331,11 @@ class Trakt extends ChangeNotifier {
         await signOut();
         throw const TraktFailure('Trakt sign-in expired. Sign in again.');
       }
-      await _save((jsonDecode(response.body) as Map).cast<String, dynamic>());
+      final fresh = (jsonDecode(response.body) as Map).cast<String, dynamic>();
+      if (token['redirect_uri'] case final String redirect) {
+        fresh['redirect_uri'] = redirect;
+      }
+      await _save(fresh);
     }
     return _token!['access_token'] as String;
   }
@@ -336,6 +345,148 @@ class Trakt extends ChangeNotifier {
     _token = token;
     await storage.write(traktTokenKey, jsonEncode(token));
     _notify();
+  }
+
+  /// The redirect a token was issued with; refreshes must send the same one.
+  static String _redirect(Json token) =>
+      token['redirect_uri'] as String? ?? traktRedirectUri;
+
+  HttpServer? _server;
+  Completer<bool>? _browser;
+  String? _browserState, _verifier;
+  Timer? _browserExpiry;
+
+  /// Starts the desktop sign-in: Trakt's page opens in the browser on this
+  /// computer, and the sign-in page hands the approval back to the app on
+  /// 127.0.0.1 ([AuthService.desktopLoginPort]). PKCE, so no client secret.
+  /// [browserSignIn] completes when it finishes.
+  Future<Uri> beginBrowserSignIn({
+    int port = AuthService.desktopLoginPort,
+  }) async {
+    await cancelBrowserSignIn();
+    final server = await () async {
+      try {
+        return await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+      } on SocketException {
+        throw const TraktFailure(
+          'Another sign-in is still open. Close it and try again.',
+        );
+      }
+    }();
+    _server = server;
+    final done = _browser = Completer<bool>();
+    String random() =>
+        base64UrlEncode(List.generate(48, (_) => Random.secure().nextInt(256)))
+            .replaceAll('=', '');
+    final verifier = _verifier = random();
+    final state = _browserState = base64UrlEncode(
+      utf8.encode(
+        jsonEncode({'nonce': random(), 'service': 'Trakt', 'desktop': true}),
+      ),
+    ).replaceAll('=', '');
+    server.listen(_receive, onError: (_) {});
+    _browserExpiry = Timer(const Duration(minutes: 10), () {
+      if (_browser == done) unawaited(cancelBrowserSignIn());
+    });
+    return Uri.https('trakt.tv', '/oauth/authorize', {
+      'response_type': 'code',
+      'client_id': traktClientId,
+      'redirect_uri': loginRedirect,
+      'state': state,
+      'code_challenge': base64UrlEncode(
+        sha256.convert(ascii.encode(verifier)).bytes,
+      ).replaceAll('=', ''),
+      'code_challenge_method': 'S256',
+    });
+  }
+
+  /// True once the browser sign-in saved a token; false when it was
+  /// cancelled, declined or expired.
+  Future<bool> get browserSignIn => _browser?.future ?? Future.value(false);
+
+  Future<void> cancelBrowserSignIn() async {
+    _browserExpiry?.cancel();
+    _browserExpiry = null;
+    final done = _browser;
+    _browser = null;
+    _browserState = null;
+    _verifier = null;
+    final server = _server;
+    _server = null;
+    await server?.close(force: true);
+    if (done != null && !done.isCompleted) done.complete(false);
+  }
+
+  Future<void> _receive(HttpRequest request) async {
+    request.response.headers.set('Cache-Control', 'no-store');
+    request.response.headers.set('Referrer-Policy', 'no-referrer');
+    request.response.headers.contentType = ContentType.html;
+    final q = request.uri.queryParameters;
+    final done = _browser;
+    final verifier = _verifier;
+    var success = false;
+    try {
+      if (request.method != 'GET' || request.uri.path != '/login') {
+        request.response.statusCode = HttpStatus.notFound;
+        return;
+      }
+      if (done == null ||
+          verifier == null ||
+          q['state'] != _browserState ||
+          (q['code'] ?? '').isEmpty) {
+        throw const TraktFailure('Login expired.');
+      }
+      // One code per sign-in: a second request with the same state fails.
+      _browserState = null;
+      final response = await client
+          .post(
+            Uri.parse('$api/oauth/token'),
+            headers: _headers(),
+            body: jsonEncode({
+              'code': q['code'],
+              'client_id': traktClientId,
+              'redirect_uri': loginRedirect,
+              'grant_type': 'authorization_code',
+              'code_verifier': verifier,
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200) {
+        throw TraktFailure('Trakt answered ${response.statusCode}.');
+      }
+      final token = (jsonDecode(response.body) as Map).cast<String, dynamic>()
+        ..['redirect_uri'] = loginRedirect;
+      if (_browser != done) throw const TraktFailure('Login cancelled.');
+      await _signedIn(token);
+      success = true;
+      request.response.write(
+        '<!doctype html><meta name="viewport" content="width=device-width"><title>Otakase</title><p>Signed in to Trakt. Return to Otakase.</p>',
+      );
+    } catch (_) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.write(
+        '<!doctype html><title>Otakase</title><p>Login expired or unsuccessful. Start again in Otakase.</p>',
+      );
+    } finally {
+      await request.response.close();
+      if (success && done != null) {
+        if (!done.isCompleted) done.complete(true);
+        if (_browser == done) await cancelBrowserSignIn();
+      }
+    }
+  }
+
+  /// Keeps a fresh token and looks up whose it is.
+  Future<void> _signedIn(Json token) async {
+    await load();
+    _token = token;
+    try {
+      final settings = await _get('/users/settings', auth: true) as Map;
+      username = ((settings['user'] as Map?)?['username'] as String?) ?? '';
+    } catch (_) {
+      username = '';
+    }
+    await _save(token);
   }
 
   Future<TraktDeviceCode> startSignIn() async {
@@ -380,17 +531,9 @@ class Trakt extends ChangeNotifier {
       }
       switch (response.statusCode) {
         case 200:
-          final token = (jsonDecode(response.body) as Map)
-              .cast<String, dynamic>();
-          _token = token;
-          try {
-            final settings = await _get('/users/settings', auth: true) as Map;
-            username =
-                ((settings['user'] as Map?)?['username'] as String?) ?? '';
-          } catch (_) {
-            username = '';
-          }
-          await _save(token);
+          await _signedIn(
+            (jsonDecode(response.body) as Map).cast<String, dynamic>(),
+          );
           return true;
         case 400:
           continue;

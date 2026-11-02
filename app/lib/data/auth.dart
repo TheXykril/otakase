@@ -28,6 +28,67 @@ class SecureTokenStore implements TokenStore {
       : storage.write(key: key, value: value);
 }
 
+/// The token store for this platform. Linux keeps tokens in the desktop
+/// keyring itself (linux/runner/token_store.cc); other systems use the
+/// secure storage plugin.
+TokenStore platformTokenStore() =>
+    !kIsWeb && Platform.isLinux ? LinuxTokenStore() : SecureTokenStore();
+
+/// Tokens in the Linux desktop keyring, one keyring item per key, or in
+/// private files when the desktop has no keyring service.
+class LinuxTokenStore implements TokenStore {
+  LinuxTokenStore({MethodChannel? channel})
+    : channel = channel ?? const MethodChannel('otakase/tokens');
+  final MethodChannel channel;
+  Future<void>? _migrated;
+
+  /// Moves sign-ins out of the single item the old keyring plugin kept, once.
+  Future<void> _migrate() => _migrated ??= () async {
+    try {
+      final raw = await channel.invokeMethod<String>('legacy');
+      if (raw == null) return;
+      if (raw.isNotEmpty) {
+        final old = jsonDecode(raw);
+        if (old is Map) {
+          for (final MapEntry(:key, :value) in old.entries) {
+            if (key is! String || value is! String || value.isEmpty) continue;
+            final current = await channel.invokeMethod<String>('read', {
+              'key': key,
+            });
+            if (current == null) {
+              await channel.invokeMethod<void>('write', {
+                'key': key,
+                'value': value,
+              });
+            }
+          }
+        }
+      }
+      await channel.invokeMethod<void>('clearLegacy');
+    } on MissingPluginException {
+      /* Tests have no Linux host. */
+    } catch (_) {
+      // A damaged or locked old item stays where it is; new sign-ins still
+      // save normally.
+    }
+  }();
+
+  @override
+  Future<String?> read(String key) async {
+    await _migrate();
+    return channel.invokeMethod<String>('read', {'key': key});
+  }
+
+  @override
+  Future<void> write(String key, String? value) async {
+    await _migrate();
+    await channel.invokeMethod<void>(value == null ? 'delete' : 'write', {
+      'key': key,
+      'value': ?value,
+    });
+  }
+}
+
 class LoginFailure implements Exception {
   const LoginFailure(this.message, {this.statusCode});
   final String message;
@@ -78,7 +139,7 @@ class AuthService extends ChangeNotifier {
   Future<void> Function(Uri)? remoteLink;
   AuthService({http.Client? client, TokenStore? storage, this.findLanAddress})
     : client = client ?? http.Client(),
-      storage = storage ?? SecureTokenStore();
+      storage = storage ?? platformTokenStore();
   static const platform = MethodChannel('otakase/device');
   final Future<String?> Function()? findLanAddress;
   final http.Client client;
