@@ -44,3 +44,10 @@ test('TV page shows the check code the TV shows',()=>{
   const s=Buffer.from(JSON.stringify({nonce:'a-b_cdEFgh'+'x'.repeat(40),service:'AniList',host:'192.168.1.7',port:50001,check:true})).toString('base64url');
   const r=run('',`#access_token=token&state=${s}`);assert.match(r.elements.message.textContent,/Check code ABCD\./);assert.doesNotMatch(run('',`#access_token=token&state=${state({host:'192.168.1.7',port:50001})}`).elements.message.textContent,/Check code/);
 });
+test('Trakt code goes back to the desktop app only',()=>{
+  const s=state({service:'Trakt',desktop:true});const r=run(`?code=approved&state=${s}`);
+  const url=new URL(r.navigations[0]);assert.equal(url.origin,'http://127.0.0.1:47613');assert.equal(url.searchParams.get('code'),'approved');
+  for(const bad of [state({service:'Trakt'}),state({service:'Trakt',host:'192.168.1.7',port:50001})]){
+    assert.equal(run(`?code=approved&state=${bad}`).navigations.length,0);
+  }
+});

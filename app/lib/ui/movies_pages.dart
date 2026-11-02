@@ -932,13 +932,15 @@ class _TitlePageState extends State<TitlePage> {
   }
 }
 
-/// Trakt's device sign-in: a short code to enter at trakt.tv/activate, from
-/// this device or a phone.
+/// Trakt sign-in. A computer opens Trakt in its browser and gets the
+/// approval straight back, like AniList and MAL; phones and TVs use Trakt's
+/// device sign-in: a short code to enter at trakt.tv/activate.
 Future<void> traktSignIn(
   BuildContext context,
   AppServices services,
   bool isTV,
 ) async {
+  if (isDesktop) return _traktBrowserSignIn(context, services);
   final trakt = services.trakt;
   TraktDeviceCode code;
   try {
@@ -1012,6 +1014,84 @@ Future<void> traktSignIn(
     },
   );
   cancelled = ok != true;
+  if (ok == true && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Signed in to Trakt${trakt.username.isEmpty ? '' : ' as ${trakt.username}'}.',
+        ),
+      ),
+    );
+    unawaited(services.movies.sync());
+  }
+}
+
+Future<void> _traktBrowserSignIn(
+  BuildContext context,
+  AppServices services,
+) async {
+  final trakt = services.trakt;
+  Uri url;
+  try {
+    url = await trakt.beginBrowserSignIn();
+    await services.auth.launch(url);
+  } catch (e) {
+    await trakt.cancelBrowserSignIn();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e is TraktFailure ? e.message : 'Trakt could not be opened.',
+          ),
+        ),
+      );
+    }
+    return;
+  }
+  if (!context.mounted) {
+    await trakt.cancelBrowserSignIn();
+    return;
+  }
+  final done = trakt.browserSignIn;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dialog) {
+      unawaited(
+        done.then((v) {
+          if (v && dialog.mounted) Navigator.pop(dialog, true);
+        }),
+      );
+      return AlertDialog(
+        title: const Text('Sign in to Trakt'),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Finish sign in in your browser. Return here after approval.',
+                style: uiStyle(dialog),
+              ),
+              TextButton(
+                onPressed: () =>
+                    unawaited(services.auth.launch(url).catchError((_) {})),
+                child: const Text('Open browser'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Cancel'),
+          ),
+        ],
+      );
+    },
+  );
+  await trakt.cancelBrowserSignIn();
   if (ok == true && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

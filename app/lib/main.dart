@@ -28,7 +28,7 @@ Future<void> main([List<String> args = const []]) async {
   final core = CoreClient();
   final profiles = ProfileManager(
     preferences: await SharedPreferences.getInstance(),
-    tokens: SecureTokenStore(),
+    tokens: platformTokenStore(),
     core: core,
     // Desktop starts from the wide TV layout (shelves, top navigation) and
     // adds mouse and window controls on top.

@@ -692,8 +692,8 @@ class _AccountsPageState extends State<AccountsPage> {
     });
   }
 
-  /// Trakt signs in with a code entered at trakt.tv on any device, so the
-  /// TV, phone and computer all use the same dialog.
+  /// Trakt signs in through the browser on a computer and with a code
+  /// entered at trakt.tv on phones and TVs.
   Future<void> traktLogin() async {
     await traktSignIn(context, widget.services, widget.isTV);
     if (!mounted || !widget.isTV) return;

@@ -10,7 +10,9 @@
     if (!rawState || rawState.length > 4096) throw new Error();
     const encoded = rawState.replace(/-/g, '+').replace(/_/g, '/');
     const state = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, '=')));
-    if (!['AniList', 'MAL'].includes(state.service) || typeof state.nonce !== 'string' || state.nonce.length < 32) throw new Error();
+    if (!['AniList', 'MAL', 'Trakt'].includes(state.service) || typeof state.nonce !== 'string' || state.nonce.length < 32) throw new Error();
+    // Only the desktop app signs in to Trakt here; phones and TVs use Trakt's own code page.
+    if (state.service === 'Trakt' && !(state.desktop === true && !Object.hasOwn(state, 'host'))) throw new Error();
     if (params.has('error')) {
       message.textContent = 'Login was declined. Start again from Accounts in Otakase.';
       return;
