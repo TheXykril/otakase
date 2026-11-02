@@ -14,6 +14,7 @@ import 'seal.dart';
 import 'settings.dart';
 import 'downloads_page.dart';
 import '../data/movies.dart';
+import 'movies_pages.dart' show traktSignIn;
 import 'show_page.dart';
 import 'profiles_page.dart';
 import 'community_page.dart';
@@ -27,6 +28,14 @@ Future<void> openAccounts(
   AppServices services,
   bool isTV,
 ) => openDetail(context, AccountsPage(services: services, isTV: isTV), isTV);
+
+/// The names of every signed-in tracker: AniList, MAL, then Trakt.
+List<String> accountNames(AppServices services) => [
+  for (final a in services.auth.accounts.values) a.username,
+  if (services.trakt.signedIn)
+    services.trakt.username.isEmpty ? 'Trakt' : services.trakt.username,
+];
+
 Future<void> openDetail(BuildContext context, Widget page, bool isTV) async {
   if (!isTV) {
     await Navigator.push(context, OtakaseRoute<void>(builder: (_) => page));
@@ -66,9 +75,7 @@ class MorePage extends StatelessWidget {
   Widget build(BuildContext context) {
     if (isDesktop) return DesktopMore(services: services, onOpen: onOpen);
     final accounts = services.auth.accounts.values;
-    final identity = accounts.isNotEmpty
-        ? accounts.map((a) => a.username).join(' · ')
-        : '';
+    final identity = accountNames(services).join(' · ');
     Widget row(
       String title,
       String value,
@@ -155,11 +162,9 @@ class MorePage extends StatelessWidget {
                         style: uiStyle(context, weight: FontWeight.w600),
                       ),
                       Text(
-                        accounts.isNotEmpty
+                        identity.isNotEmpty
                             ? 'Tracker sync${accounts.any((a) => a.expired) ? ' · Login needs attention' : ''}'
-                            : identity.isEmpty
-                            ? 'Local progress'
-                            : 'Public lists, read only',
+                            : 'Local progress',
                         style: uiStyle(context, size: 15, color: muted),
                       ),
                     ],
@@ -190,18 +195,8 @@ class MorePage extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 20),
-        if (services.profiles case final manager?)
-          row(
-            'Profiles',
-            manager.active.name,
-            LucideIcons.users,
-            () => Navigator.push(
-              context,
-              OtakaseRoute<void>(
-                builder: (_) => ProfilesPage(manager: manager),
-              ),
-            ),
-          ),
+        // Same order as the desktop settings sidebar: settings first,
+        // then the community and tools.
         row(
           'Playback',
           'Resume, skips & quality',
@@ -219,6 +214,54 @@ class MorePage extends StatelessWidget {
             section: 'Subtitles & languages',
           ),
         ),
+        row(
+          'Movies & shows',
+          contentLabels[services.store.text('Content')] ?? '',
+          LucideIcons.clapperboard,
+          () =>
+              openSettings(context, services, isTV, section: 'Movies & shows'),
+        ),
+        if (!isTV)
+          row(
+            'Downloads',
+            'Watch offline',
+            LucideIcons.download,
+            () => openDownloads(context, services, isTV),
+          ),
+        row(
+          'Appearance',
+          'Shu / Dark',
+          LucideIcons.palette,
+          () => openSettings(context, services, isTV, section: 'Appearance'),
+        ),
+        ListenableBuilder(
+          listenable: services.updates,
+          builder: (context, _) => row(
+            'About & updates',
+            services.updates.available
+                ? 'Update available · ${services.updates.update!.label}'
+                : 'Otakase · Android phone and TV',
+            LucideIcons.info,
+            () => openSettings(
+              context,
+              services,
+              isTV,
+              section: 'About & updates',
+            ),
+          ),
+        ),
+        if (services.profiles case final manager?)
+          row(
+            'Profiles',
+            manager.active.name,
+            LucideIcons.users,
+            () => Navigator.push(
+              context,
+              OtakaseRoute<void>(
+                builder: (_) => ProfilesPage(manager: manager),
+              ),
+            ),
+          ),
         row(
           'Schedule',
           'This week · ${DateTime.now().timeZoneName}',
@@ -250,36 +293,12 @@ class MorePage extends StatelessWidget {
           ),
         ),
         row(
-          'Movies & shows',
-          '${contentLabels[services.store.text('Content')] ?? ''}${services.trakt.signedIn ? ' · Trakt' : ''}',
-          LucideIcons.clapperboard,
-          () =>
-              openSettings(context, services, isTV, section: 'Movies & shows'),
-        ),
-        if (!isTV)
-          row(
-            'Downloads',
-            'Watch offline',
-            LucideIcons.download,
-            () => openDownloads(context, services, isTV),
-          ),
-        row(
           'Discord',
           services.discord.linked ? services.discord.name : 'Link this profile',
           LucideIcons.messagesSquare,
           () => openDetail(
             context,
             DiscordPage(services: services, isTV: isTV),
-            isTV,
-          ),
-        ),
-        row(
-          'Time capsule',
-          'Opens April 12',
-          LucideIcons.mail,
-          () => openDetail(
-            context,
-            CapsulePage(services: services, isTV: isTV),
             isTV,
           ),
         ),
@@ -322,6 +341,16 @@ class MorePage extends StatelessWidget {
             ),
           ),
         row(
+          'Time capsule',
+          'Opens April 12',
+          LucideIcons.mail,
+          () => openDetail(
+            context,
+            CapsulePage(services: services, isTV: isTV),
+            isTV,
+          ),
+        ),
+        row(
           'Settings backup',
           'Keep your settings with the Discord bot',
           LucideIcons.cloudUpload,
@@ -349,28 +378,6 @@ class MorePage extends StatelessWidget {
             context,
             TVRemotePage(services: services, isTV: isTV),
             isTV,
-          ),
-        ),
-        row(
-          'Appearance',
-          'Shu / Dark',
-          LucideIcons.palette,
-          () => openSettings(context, services, isTV, section: 'Appearance'),
-        ),
-        ListenableBuilder(
-          listenable: services.updates,
-          builder: (context, _) => row(
-            'About & updates',
-            services.updates.available
-                ? 'Update available · ${services.updates.update!.label}'
-                : 'Otakase · Android phone and TV',
-            LucideIcons.info,
-            () => openSettings(
-              context,
-              services,
-              isTV,
-              section: 'About & updates',
-            ),
           ),
         ),
         row(
@@ -452,7 +459,7 @@ class _DesktopMoreState extends State<DesktopMore> {
   @override
   Widget build(BuildContext context) {
     final accounts = services.auth.accounts.values;
-    final identity = accounts.map((a) => a.username).join(' · ');
+    final identity = accountNames(services).join(' · ');
     void detail(Widget page) => unawaited(openDetail(context, page, true));
     final sidebar = ListView(
       padding: EdgeInsets.fromLTRB(48, 16, 0, contentBottom(context)),
@@ -507,7 +514,7 @@ class _DesktopMoreState extends State<DesktopMore> {
                         style: uiStyle(context, weight: FontWeight.w600),
                       ),
                       Text(
-                        accounts.isNotEmpty
+                        identity.isNotEmpty
                             ? 'Tracker sync${accounts.any((a) => a.expired) ? ' · Login needs attention' : ''}'
                             : 'Local progress',
                         style: uiStyle(context, size: 15, color: muted),
@@ -646,9 +653,15 @@ class _AccountsPageState extends State<AccountsPage> {
   // The first button of each tracker, kept across sign in and log out so the
   // remote stays on that tracker when its buttons change.
   final serviceFocus = {
-    for (final service in ['AniList', 'MAL'])
+    for (final service in ['AniList', 'MAL', 'Trakt'])
       service: FocusNode(debugLabel: 'Accounts $service'),
   };
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.services.trakt.load());
+  }
 
   @override
   void dispose() {
@@ -665,6 +678,28 @@ class _AccountsPageState extends State<AccountsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && ModalRoute.isCurrentOf(context) == true) {
         serviceFocus[service]!.requestFocus();
+      }
+    });
+  }
+
+  Future<void> traktLogout() async {
+    await widget.services.trakt.signOut();
+    if (!mounted || !widget.isTV) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ModalRoute.isCurrentOf(context) == true) {
+        serviceFocus['Trakt']!.requestFocus();
+      }
+    });
+  }
+
+  /// Trakt signs in with a code entered at trakt.tv on any device, so the
+  /// TV, phone and computer all use the same dialog.
+  Future<void> traktLogin() async {
+    await traktSignIn(context, widget.services, widget.isTV);
+    if (!mounted || !widget.isTV) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && ModalRoute.isCurrentOf(context) == true) {
+        serviceFocus['Trakt']!.requestFocus();
       }
     });
   }
@@ -702,6 +737,56 @@ class _AccountsPageState extends State<AccountsPage> {
     }
   }
 
+  /// Trakt keeps films and series in sync, laid out like AniList and MAL.
+  Widget traktSection() {
+    final trakt = widget.services.trakt;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Trakt',
+          style: uiStyle(context, size: 21, weight: FontWeight.w600),
+        ),
+        const SizedBox(height: 12),
+        if (trakt.signedIn) ...[
+          if (trakt.username.isNotEmpty)
+            Text(trakt.username, style: uiStyle(context)),
+          Text(
+            'Signed in · Movies and shows sync',
+            style: uiStyle(context, size: 15, color: ok),
+          ),
+          const SizedBox(height: 12),
+          AppButton(
+            key: const Key('accounts-trakt'),
+            label: 'Log out of Trakt',
+            focusNode: serviceFocus['Trakt'],
+            onPressed: traktLogout,
+            isTV: widget.isTV,
+          ),
+        ] else ...[
+          Text(
+            'Keeps your movie and show watchlist, what you watched and where '
+            'you stopped in sync.',
+            style: uiStyle(context, size: 15, color: muted),
+          ),
+          const SizedBox(height: 12),
+          AppButton(
+            key: const Key('accounts-trakt'),
+            label: 'Sign in to Trakt',
+            focusNode: serviceFocus['Trakt'],
+            isTV: widget.isTV,
+            filled: true,
+            onPressed: traktLogin,
+          ),
+        ],
+        if (trakt.lastError case final message?) ...[
+          const SizedBox(height: 8),
+          Text(message, style: uiStyle(context, size: 15, color: warn)),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: panel,
@@ -727,6 +812,7 @@ class _AccountsPageState extends State<AccountsPage> {
           widget.services.auth,
           widget.services.store,
           widget.services.listSync,
+          widget.services.trakt,
         ]),
         builder: (context, _) => ListView(
           padding: const EdgeInsets.all(24),
@@ -805,6 +891,7 @@ class _AccountsPageState extends State<AccountsPage> {
               ],
               const Divider(height: 40),
             ],
+            traktSection(),
           ],
         ),
       ),

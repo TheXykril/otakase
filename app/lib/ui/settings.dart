@@ -9,7 +9,6 @@ import '../diagnostics.dart';
 import '../services.dart';
 import '../data/movies.dart';
 import '../data/store.dart';
-import 'movies_pages.dart';
 import 'components.dart';
 import 'device_status.dart';
 import 'app_updates.dart';
@@ -575,46 +574,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
             ],
           ),
-        ),
-        ListenableBuilder(
-          listenable: widget.services.trakt,
-          builder: (context, _) {
-            final trakt = widget.services.trakt;
-            return row(
-              'Trakt',
-              trakt.signedIn
-                  ? 'Watchlist, watched and progress sync. Tap to sign out.'
-                  : 'Sign in to sync your watchlist, what you watched and where you stopped.',
-              value: trakt.signedIn
-                  ? (trakt.username.isEmpty ? 'Signed in' : trakt.username)
-                  : 'Not signed in',
-              icon: LucideIcons.listVideo,
-              onTap: () async {
-                if (!trakt.signedIn) {
-                  await traktSignIn(context, widget.services, widget.isTV);
-                  return;
-                }
-                final yes = await showDialog<bool>(
-                  context: context,
-                  builder: (c) => AlertDialog(
-                    title: const Text('Sign out of Trakt?'),
-                    actions: [
-                      TextButton(
-                        autofocus: true,
-                        onPressed: () => Navigator.pop(c, false),
-                        child: const Text('Stay'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(c, true),
-                        child: const Text('Sign out'),
-                      ),
-                    ],
-                  ),
-                );
-                if (yes == true) await trakt.signOut();
-              },
-            );
-          },
         ),
       ]),
       group('Playback', LucideIcons.circlePlay, [

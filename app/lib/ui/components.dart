@@ -296,9 +296,14 @@ class FocusBox extends StatefulWidget {
     this.hoverColor,
     this.onHover,
     this.onFocusChanged,
+    this.lift = false,
   });
   final Widget child;
   final bool outsideFrame, showFocusBorder;
+
+  /// Cover art: on a computer it rises a little, with a deeper shadow and a
+  /// touch of light, while the mouse is over it.
+  final bool lift;
   final Color focusFill;
   final Color? hoverColor;
   final ValueChanged<bool>? onHover;
@@ -314,6 +319,7 @@ class FocusBox extends StatefulWidget {
 
 class _FocusBoxState extends State<FocusBox> {
   bool focused = false;
+  bool hovered = false;
   bool revealScheduled = false;
   void modeChanged(FocusHighlightMode _) {
     if (mounted) setState(() {});
@@ -372,7 +378,12 @@ class _FocusBoxState extends State<FocusBox> {
         onTap: widget.onPressed,
         focusColor: Colors.transparent,
         hoverColor: widget.hoverColor ?? line.withValues(alpha: .4),
-        onHover: widget.onHover,
+        onHover: (value) {
+          if (widget.lift && isDesktop && hovered != value) {
+            setState(() => hovered = value);
+          }
+          widget.onHover?.call(value);
+        },
         splashColor: accentDeep.withValues(alpha: .2),
         borderRadius: BorderRadius.circular(widget.radius),
         onFocusChange: (value) {
@@ -387,11 +398,39 @@ class _FocusBoxState extends State<FocusBox> {
       ),
     );
     if (widget.outsideFrame) {
-      return CustomPaint(
+      final framed = CustomPaint(
         foregroundPainter: visible
             ? _SplitFrame(widget.radius, widget.isTV)
             : null,
         child: interaction,
+      );
+      if (!widget.lift || !isDesktop) return framed;
+      final motion = MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 160);
+      return AnimatedScale(
+        duration: motion,
+        curve: Curves.easeOut,
+        scale: hovered ? 1.04 : 1,
+        child: AnimatedContainer(
+          duration: motion,
+          curve: Curves.easeOut,
+          foregroundDecoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: hovered ? .06 : 0),
+            borderRadius: BorderRadius.circular(widget.radius),
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(widget.radius),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: hovered ? .55 : 0),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: framed,
+        ),
       );
     }
     return AnimatedContainer(
@@ -1527,6 +1566,7 @@ class _PosterCardState extends State<PosterCard> {
                 isTV: widget.isTV,
                 autofocus: widget.autofocus,
                 outsideFrame: true,
+                lift: true,
                 radius: widget.cropped ? 14 : 10,
                 onPressed: open,
                 onFocused: widget.onFocused,

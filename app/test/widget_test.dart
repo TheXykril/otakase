@@ -115,6 +115,21 @@ void main() {
       expect(find.byType(TextField), findsNothing);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('more-Schedule')),
+        150,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const PageStorageKey('more-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const Key('more-Schedule'))),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('more-Schedule')));
       await tester.pumpAndSettle();
       expect(

@@ -90,7 +90,53 @@ Future<void> openShow(
 }
 
 void main() {
-  for (final tv in [false, true]) {
+  testWidgets('TV episodes are the computer cards, in a remote grid', (
+    tester,
+  ) async {
+    await openShow(tester, tv: true, resumed: true);
+    final fourth = find.byKey(const ValueKey('episode-4'));
+    await tester.ensureVisible(fourth);
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: fourth, matching: find.textContaining('min left')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('episode-2')),
+        matching: find.text('Watched'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter is EpisodeThreadPainter,
+      ),
+      findsNothing,
+    );
+    Focus.of(
+      tester.element(
+        find.descendant(of: fourth, matching: find.byType(ClipRRect)).first,
+      ),
+    ).requestFocus();
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    final eighth = find.byKey(const ValueKey('episode-8'));
+    expect(
+      Focus.of(
+        tester.element(
+          find.descendant(of: eighth, matching: find.byType(ClipRRect)).first,
+        ),
+      ).hasFocus,
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  // TV shows episodes as cards; the thread is the phone's episode list.
+  for (final tv in [false]) {
     testWidgets(
       'thread node follows the real remote resume episode on ${tv ? 'TV' : 'phone'}',
       (tester) async {

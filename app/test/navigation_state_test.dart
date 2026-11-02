@@ -191,7 +191,8 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.select);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('more-Accounts')), findsOneWidget);
-      for (var i = 0; i < 3; i++) {
+      // Playback, Subtitles, Movies & shows, Appearance, About, Schedule.
+      for (var i = 0; i < 6; i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
         await tester.pumpAndSettle();
       }
