@@ -55,7 +55,7 @@ func TestRulesPointAtFAQ(t *testing.T) {
 			t.Errorf("rule points at missing FAQ %q", r.faq)
 		}
 	}
-	for _, k := range []string{"android", "linux", "windows", "mac"} {
+	for _, k := range []string{"android", "windows", "mac", "linux"} {
 		if installGuides[k].Body == "" {
 			t.Errorf("no install guide for %s", k)
 		}
@@ -760,8 +760,58 @@ func TestWelcomePayload(t *testing.T) {
 	if strings.Contains(s, "<#4>") || strings.Contains(s, "faq") {
 		t.Error("linked a category or a missing channel")
 	}
-	if len(welcomeHeader) == 0 {
+	if len(welcomeHeader) == 0 || len(rulesHeader) == 0 || len(faqHeader) == 0 {
 		t.Error("header image not embedded")
+	}
+}
+
+func TestRulesAndFAQPayloads(t *testing.T) {
+	encode := func(v any) string {
+		var buf strings.Builder
+		enc := json.NewEncoder(&buf)
+		enc.SetEscapeHTML(false)
+		enc.Encode(v)
+		return buf.String()
+	}
+	rules := encode(rulesPayload([]*discordgo.Channel{{ID: "7", Name: "助・support", Type: discordgo.ChannelTypeGuildForum}}))
+	for _, want := range []string{"**1. Be respectful**", "go in <#7>, one post", "attachment://rules-header.png"} {
+		if !strings.Contains(rules, want) {
+			t.Errorf("rules miss %q", want)
+		}
+	}
+	if !strings.Contains(encode(rulesPayload(nil)), "go in the support forum") || strings.Contains(rules, "{support}") {
+		t.Error("support placeholder not filled")
+	}
+	faq := encode(faqPayload([]faqEntry{{"a", "First?", "Yes."}, {"b", "Second?", "Staff text"}}))
+	for _, want := range []string{"### First?\\nYes.", "### Second?\\nStaff text", "attachment://faq-header.png", "Open an issue"} {
+		if !strings.Contains(faq, want) {
+			t.Errorf("faq miss %q", want)
+		}
+	}
+}
+
+// The info posts are about the app; command-line instructions must not
+// come back in them or in the answers members get.
+func TestMemberTextsAreAboutTheApp(t *testing.T) {
+	texts := []string{welcomeIntro, supportChecklist, welcomeDMText, updateHowTo, diagnoseEmbed().Description}
+	for _, f := range faqs {
+		texts = append(texts, f.Answer)
+	}
+	for _, g := range installGuides {
+		texts = append(texts, g.Body)
+	}
+	for _, r := range rulesList {
+		texts = append(texts, r.text)
+	}
+	for _, s := range texts {
+		if strings.Contains(s, "otakase -") || strings.Contains(s, "mpv") || strings.Contains(s, "command line") {
+			t.Errorf("command-line text left: %q", s)
+		}
+	}
+	for _, s := range installSystems {
+		if installGuides[s.Key].Body == "" {
+			t.Errorf("no install guide for %s", s.Key)
+		}
 	}
 }
 

@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+## 1.30.86
+
+- Log hints for errors from the old command-line app now point at the app, and casting help links to the new Casting wiki page.
+
 ## 1.30.85
 
-- Help texts now talk about the Otakase app instead of the old command line: `/install` has Android, Windows, macOS and Linux app steps, `/diagnose` points at **Report a problem** in the app, and update, version and app link hints name the app's own menus.
+- New staff command `/post-info` posts the welcome, rules and FAQ messages again with the current text (all three, or one). It replaces `/post-welcome`.
+- Texts now describe the Otakase app instead of the command-line app: the welcome, rules and FAQ posts, `/install` (Android phone and TV, Windows, macOS, Linux), `/faq`, `/diagnose`, the welcome DM, the support post greeting, update hints, and the "link the app" hints, which now point at More → Discord in the app.
+- FAQ: dropped the menu icons and test-build config answers; added TV sign-in, opening the app on macOS, and linking the app to Discord.
 
 ## 1.30.84
 

@@ -237,7 +237,7 @@ func (b *bot) apiHeartbeat(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 	if !linked {
-		apiError(w, http.StatusUnauthorized, "link this app under More, then Discord first")
+		apiError(w, http.StatusUnauthorized, "link this app to Discord first (More → Discord)")
 		return
 	}
 	show := cleanShow(hb.Watching)
@@ -446,7 +446,7 @@ func (b *bot) watchTimeEmbed(user string, self bool) *discordgo.MessageEmbed {
 func watchTimeView(user string, self bool, st appStats, now time.Time) *discordgo.MessageEmbed {
 	if st.Seconds < 60 {
 		if self {
-			return errorEmbed("Nothing yet. Link the app (**More → Discord**) and what you play counts here.")
+			return errorEmbed("Nothing yet. Link the app with **More → Discord** in the app and what you play counts here.")
 		}
 		return errorEmbed("<@%s> hasn't watched anything in Otakase with a linked app yet.", user)
 	}

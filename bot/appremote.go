@@ -68,7 +68,7 @@ func (b *bot) remoteCommand(i *discordgo.InteractionCreate) {
 		b.respond(i, true, errorEmbed("Pick an action from the list."))
 		return
 	case !b.hasApp(user):
-		b.respond(i, true, errorEmbed("Link the Otakase app first (**More → Discord** in the app)."))
+		b.respond(i, true, errorEmbed("Link the Otakase app first with **More → Discord** in the app."))
 		return
 	case !remoteLimit.allow(user, appNow()):
 		b.respond(i, true, errorEmbed("That's a lot of button pressing. Wait a moment."))

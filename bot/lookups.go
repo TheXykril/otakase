@@ -50,7 +50,7 @@ func latestRelease(token string) (*discordgo.MessageEmbed, []discordgo.MessageCo
 	return &discordgo.MessageEmbed{
 			Title:       "Otakase " + v,
 			URL:         r.HTMLURL,
-			Description: fmt.Sprintf("Released <t:%d:D>. Update from **About & updates** in the app, or see `/install`.", r.PublishedAt.Unix()),
+			Description: fmt.Sprintf("Released <t:%d:D>. The app offers the update; new here? See `/install`.", r.PublishedAt.Unix()),
 			Color:       shu,
 		}, linkButtons("Download", r.HTMLURL, "Changelog",
 			fmt.Sprintf("%s/blob/%s/CHANGELOG.md", repoURL, r.TagName))

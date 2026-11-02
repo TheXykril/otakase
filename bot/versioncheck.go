@@ -77,7 +77,7 @@ func outdatedEmbed(have, latest string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title: "Your Otakase is out of date",
 		Description: fmt.Sprintf("You're on **%s**, the latest is **%s**. Many problems are already fixed there.\n\n"+
-			"Update from **About & updates** in the app (or see `/install`), then try again.", have, latest),
+			"%s", have, latest, updateHowTo),
 		Color: shu,
 	}
 }

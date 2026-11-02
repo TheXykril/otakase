@@ -334,7 +334,7 @@ func (b *bot) appCommand(i *discordgo.InteractionCreate) {
 		case errLinkTooMany:
 			b.respond(i, true, errorEmbed("Too many wrong codes. Wait a few minutes and start the link again in Otakase."))
 		default:
-			b.respond(i, true, errorEmbed("That code is wrong or expired. Codes last 10 minutes; get a new one under **More → Discord** in the app."))
+			b.respond(i, true, errorEmbed("That code is wrong or expired. Codes last 10 minutes; start again from **More → Discord** in the app for a new one."))
 		}
 	case "unlink-app":
 		if n := b.unlinkAll(user); n == 0 {
