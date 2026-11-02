@@ -5,7 +5,10 @@ Posts are sent by the Otakase bot (DISCORD_BOT_TOKEN), so they carry its
 profile.
 
 A release card reads the version's section from CHANGELOG.md: a header image,
-the bold lead of each changelog entry and buttons to the release. It goes to
+the bold lead of each changelog entry and buttons to the release. Its date is
+RELEASE_PUBLISHED (when the GitHub release went out, as an ISO timestamp) and
+falls back to the date in the changelog heading, which is when the release
+was prepared and can be days earlier. It goes to
 the DISCORD_RELEASE_CHANNEL channel, pinging DISCORD_RELEASE_ROLE if set, and
 is published to servers following that channel when it is an announcement
 channel.
@@ -69,18 +72,27 @@ def lead(entry):
     return s if len(s) <= 110 else s[:107].rstrip() + "…"
 
 
-def subtitle(date):
-    if not date:
+def released(changelog_date):
+    """When the release went out, as an aware datetime, or None."""
+    published = os.environ.get("RELEASE_PUBLISHED", "").strip()
+    if published:
+        return datetime.datetime.fromisoformat(published.replace("Z", "+00:00"))
+    if changelog_date:
+        return datetime.datetime.fromisoformat(changelog_date).replace(tzinfo=datetime.timezone.utc)
+    return None
+
+
+def subtitle(when):
+    if not when:
         return "a new release"
-    d = datetime.date.fromisoformat(date)
-    return f"released {d.strftime('%B')} {d.day}, {d.year}"
+    return f"released {when.strftime('%B')} {when.day}, {when.year}"
 
 
 def render(version, out, dev=False):
     if dev:
         kana, sub = "試作", "test build · may be broken"
     else:
-        kana, sub = "新版", subtitle(changelog_section(version)[0])
+        kana, sub = "新版", subtitle(released(changelog_section(version)[0]))
     page = open(os.path.join(HERE, "release-header.html"), encoding="utf-8").read()
     for k, v in (("{{KANA}}", kana), ("{{VERSION}}", version), ("{{SUBTITLE}}", sub)):
         page = page.replace(k, html.escape(v))
@@ -148,14 +160,13 @@ def dev_payload(version, changes, role, has_image):
                           ("Changes on main", f"{REPO}/commits/main")], role, has_image)
 
 
-def payload(version, date, groups, role, has_image):
-    head = f"## otakase {version} is out"
+def payload(version, when, groups, role, has_image):
+    head = f"## Otakase {version} is out"
     meta = []
     if role:
         meta.append(f"<@&{role}>")
-    if date:
-        ts = int(datetime.datetime.fromisoformat(date).replace(tzinfo=datetime.timezone.utc).timestamp())
-        meta.append(f"<t:{ts}:D>")
+    if when:
+        meta.append(f"<t:{int(when.timestamp())}:D>")
     if meta:
         head += "\n" + "  ·  ".join(meta)
     card = [text(head), SEP]
@@ -220,7 +231,7 @@ def post(version, header, dev=False):
         body = dev_payload(version, dev_changes(), role, has_image)
     else:
         date, groups = changelog_section(version)
-        body = payload(version, date, groups, role, has_image)
+        body = payload(version, released(date), groups, role, has_image)
     body = json.dumps(body).encode()
 
     boundary = uuid.uuid4().hex

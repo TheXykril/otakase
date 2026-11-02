@@ -61,6 +61,16 @@ jobs:
             CHANGELOG.md
             .github/discord
 
+      - name: Find when the release went out
+        if: steps.hook.outputs.set == 'true'
+        # The changelog heading holds the day the release was prepared, which
+        # can be days before it is published, so the card uses the release.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          published=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$VERSION" --jq .published_at || true)
+          echo "RELEASE_PUBLISHED=$published" >> "$GITHUB_ENV"
+
       - name: Render the header image
         if: steps.hook.outputs.set == 'true'
         # Uses the runner's own Chrome, so no browser download. A header that

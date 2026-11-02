@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="home">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Otakase · leave it to Otakase</title>
-<meta name="description" content="Anime, movies and shows, served on every screen you own. One app that plays whatever you want, remembers every episode and picks up wherever you are. You pick, Otakase handles the rest. Free and open source for Android, Android TV, Windows, macOS and Linux.">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Otakase · Leave it to Otakase</title>
+<meta name="description" content="Anime, movies and shows, served on every screen you own. One app that plays whatever you want, remembers every episode and picks up wherever you are. You pick, Otakase handles the rest. Free for Android, Android TV, Windows, macOS and Linux.">
 <meta name="theme-color" content="#0e0d0c">
 <meta property="og:title" content="Otakase">
 <meta property="og:description" content="Anime, movies and shows, served on every screen you own. One app that plays whatever you want, remembers every episode and picks up wherever you are. You pick, Otakase handles the rest.">
@@ -17,127 +17,82 @@
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Cormorant+Garamond:wght@500&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Archivo+Black&family=JetBrains+Mono&display=swap">
 <!-- only the kanji the page uses, so the Japanese font stays a few kilobytes -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700;900&text=%E4%BB%BB%E3%81%8A%E3%81%9B%E5%86%8D%E9%A3%9B%E5%90%8C%E6%98%A0%E7%B6%9A%E5%BD%A9%E4%B8%80%E4%BA%8C%E4%B8%89%E7%94%BB%E7%AE%B1&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700;900&text=%E4%BB%BB%E7%B6%9A%E9%A3%9B%E6%98%A0%E5%90%8C%E3%81%8A%E3%81%9B&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="w">
-  <nav class="mono">
-    <a class="brand" href="./"><img src="img/favicon.svg" alt="" width="22" height="22">OTAKASE</a>
-    <span class="sp"></span>
-    <a href="#features">WAY</a>
-    <a href="#tour-h">LOOK</a>
-    <a href="#install">INSTALL</a>
-    <a href="https://github.com/TheXykril/otakase/wiki">WIKI</a>
-    <a href="discord/">DISCORD</a>
-    <a href="https://github.com/TheXykril/otakase">GITHUB</a>
-  </nav>
+<section class="pin" id="top" aria-label="What Otakase does">
+  <div class="stage" id="stage">
+    <div class="glow" id="glow"></div>
 
-  <header class="hero">
-    <div class="fill k" aria-hidden="true"><span class="ghost">任</span><span class="l on">任</span><span class="l">任</span></div>
-    <div class="rt">
-      <p class="mono tag">お任せ · <span id="ver">LATEST RELEASE</span></p>
-      <h1 class="fill big"><span class="ghost">LEAVE IT<br>TO<br>OTAKASE.</span><span class="l on" aria-hidden="true">LEAVE IT<br>TO<br>OTAKASE.</span><span class="l" aria-hidden="true">LEAVE IT<br>TO<br>OTAKASE.</span></h1>
-      <p class="lede">Anime, movies and shows, served on every screen you own. One app that plays whatever you want, remembers every episode and picks up wherever you are. You pick, Otakase handles the rest. Free and open source.</p>
-      <a class="dl" href="#install">DOWNLOAD →</a>
-      <p class="mono now" id="now" aria-live="off"></p>
-    </div>
-  </header>
+    <div class="dev tv" id="tv" role="img" aria-label="Otakase on a TV: a show page laid out for the remote"><div class="panel-tv"><div class="scr" data-w="1600"><img class="shot" id="img-tv" alt=""></div><div class="chin"><i></i></div></div><div class="neck"></div><div class="foot"></div></div>
+    <div class="dev pc" id="pc" role="img" aria-label="Otakase on a computer: a show page, and the player skipping the opening"><div class="lid"><div class="scr" data-w="1440"><img class="shot" id="img-pc" alt=""><img class="shot alt" id="img-play" alt=""></div></div><div class="base"></div></div>
+    <div class="dev ph" id="ph" role="img" aria-label="Otakase on a phone: Back to your story with Resume"><div class="body"><div class="scr" data-w="412"><img class="shot" id="img-ph" alt=""></div></div></div>
 
-  <section class="list" id="features" aria-label="Features">
-    <div class="it"><span class="kj" aria-hidden="true">再</span><div><h3>Just plays</h3><p>It tries the sources for you and remembers what worked. No site hopping, nothing else to install.</p></div></div>
-    <div class="it"><span class="kj" aria-hidden="true">飛</span><div><h3>Skips intros</h3><p>Openings and endings skipped automatically or one press away, and filler episodes left out.</p></div></div>
-    <div class="it"><span class="kj" aria-hidden="true">同</span><div><h3>Syncs your list</h3><p>AniList, MyAnimeList or both. Your progress updates when the episode ends.</p></div></div>
-    <div class="it"><span class="kj" aria-hidden="true">映</span><div><h3>Made for the TV</h3><p>Android TV with the remote, sign-in with your phone, and your phone as a remote.</p></div></div>
-    <div class="it"><span class="kj" aria-hidden="true">続</span><div><h3>Resumes anywhere</h3><p>Stop on the phone, carry on mid-episode on the TV or the computer.</p></div></div>
-    <div class="it"><span class="kj" aria-hidden="true">彩</span><div><h3>Shu</h3><p>Dressed in the vermilion of a torii gate, with Continue Watching, Up next and the week's schedule up front.</p></div></div>
-  </section>
+    <header class="hero" id="hero">
+      <div class="seal" aria-hidden="true">任</div>
+      <h1>Leave it to Otakase.</h1>
+      <p>Anime, movies and shows, served on every screen you own. One app that plays whatever you want, remembers every episode and picks up wherever you are. You pick, Otakase handles the rest.</p>
+      <div class="row"><a class="pill p" href="#download" id="hero-dl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg><span>Download</span></a></div>
+      <p class="mono">Free · Open source · No ads</p>
+    </header>
 
-  <section class="sec how" aria-labelledby="how-h">
-    <p class="mono tag">How it works</p>
-    <h2 id="how-h">Three steps, then the episode.</h2>
-    <ol class="steps">
-      <li><span class="n">一</span><h3>Pick</h3><p>Your list opens first, with the show you stopped halfway at the top. Or type to search any title.</p></li>
-      <li><span class="n">二</span><h3>Play</h3><p>Otakase finds a working source, picks sub or dub, and starts the episode where you left it.</p></li>
-      <li><span class="n">三</span><h3>Done</h3><p>When the credits roll your list is updated, and the next episode is one click away.</p></li>
-    </ol>
-  </section>
+    <div class="cap" data-i="1"><span class="kj" aria-hidden="true">続</span><h2>Back to your story.</h2><p>Open Otakase and the show you stopped halfway is waiting at the top. One tap and it plays from the minute you left.</p></div>
+    <div class="cap" data-i="2"><span class="kj" aria-hidden="true">飛</span><h2>Straight to the good part.</h2><p>Openings and endings are marked on the timeline and skipped for you. The next episode is already lined up.</p></div>
+    <div class="cap" data-i="3"><span class="kj" aria-hidden="true">映</span><h2>Made for the couch.</h2><p>On Android TV every button is in reach of the remote. Sign in by scanning a code with your phone, no typing on the TV.</p></div>
+    <div class="cap" data-i="4"><span class="kj" aria-hidden="true">同</span><h2>One list, every screen.</h2><p>Stop on the phone, finish on the TV. Your list and your place in the episode come along, and your progress updates when the credits roll.</p><div class="chips"><span class="chip">AniList</span><span class="chip">MyAnimeList</span><span class="chip">Trakt</span></div></div>
 
-  <section class="sec tour" aria-labelledby="tour-h">
-    <p class="mono tag">A look inside</p>
-    <h2 id="tour-h">Same Otakase, every screen.</h2>
-    <div class="os-pick mono" role="group" aria-label="Show Otakase on">
-      <button type="button" data-shot="computer" aria-pressed="true">COMPUTER</button>
-      <button type="button" data-shot="tv" aria-pressed="false">TV</button>
-      <button type="button" data-shot="phone" aria-pressed="false">PHONE</button>
-    </div>
-    <figure class="shot os-shot big-shot" data-shot="computer"><img src="img/app-desktop.jpg" alt="Otakase on the computer: a show page with its banner, Resume episode 8, the episode grid and details" width="1440" height="900" loading="lazy"><figcaption class="mono">Windows, macOS and Linux. Pick up exactly where you stopped.</figcaption></figure>
-    <figure class="shot os-shot big-shot" data-shot="tv" hidden><img src="img/app-tv.jpg" alt="Otakase on Android TV: a show page laid out for the remote" width="1440" height="810" loading="lazy"><figcaption class="mono">Android TV. Every button in reach of the remote.</figcaption></figure>
-    <figure class="shot os-shot big-shot" data-shot="phone" hidden><img src="img/app-phone.jpg" alt="Otakase on a phone: Home with Continue watching, and a show page" width="1440" height="900" loading="lazy"><figcaption class="mono">Phone. Your story first, the rest a swipe away.</figcaption></figure>
-    <div class="pair">
-      <figure class="shot"><img src="img/app-player.jpg" alt="The player with skip marks on the timeline" width="1440" height="810" loading="lazy"><figcaption class="mono">Openings and endings marked on the timeline.</figcaption></figure>
-      <figure class="shot"><img src="img/app-launcher.jpg" alt="The keyboard launcher filtering shows as you type" width="680" height="560" loading="lazy"><figcaption class="mono">The launcher: type, Enter, watch.</figcaption></figure>
-    </div>
-  </section>
+    <div class="dots" id="dots" aria-label="Jump to part"></div>
+    <div class="hint mono" id="hint">Scroll<i></i></div>
+  </div>
+</section>
 
-  <section class="sec cast" aria-labelledby="where-h">
-    <div>
-      <p class="mono tag">Everywhere</p>
-      <h2 id="where-h">Wherever you watch.</h2>
-      <p class="lede">The same Otakase on each of them, with your list, your place in the episode and your settings. It updates itself.</p>
-    </div>
-    <ul class="devices">
-      <li><span class="kj" aria-hidden="true">画</span><b>Phone</b><span class="mono">Android 7 and newer</span></li>
-      <li><span class="kj" aria-hidden="true">映</span><b>TV</b><span class="mono">Android TV and Google TV</span></li>
-      <li><span class="kj" aria-hidden="true">箱</span><b>Computer</b><span class="mono">Windows, macOS and Linux</span></li>
-    </ul>
-  </section>
-
-  <section class="sec faq" aria-labelledby="faq-h">
-    <p class="mono tag">Questions</p>
-    <h2 id="faq-h">Before you ask.</h2>
-    <details><summary>Is it free?</summary><p>Yes. Otakase is open source under the GPL-3.0, with no ads, no accounts of its own and nothing to pay for.</p></details>
-    <details><summary>Does Otakase host any video?</summary><p>No. It is a player front end: it finds episodes that are already public on the web and plays them. Nothing is uploaded or stored by the project.</p></details>
-    <details><summary>Do I need an AniList or MyAnimeList account?</summary><p>No. Without one your progress stays on the device. You can sign in to AniList, MyAnimeList or both whenever you like.</p></details>
-    <details><summary>What else do I need?</summary><p>Nothing. The app brings its own player on every system.</p></details>
-    <details><summary>Can I keep watching on another device?</summary><p>Yes. With AniList or MyAnimeList, Otakase keeps the minute you stopped at with your list, so another device picks up mid-episode.</p></details>
-    <details><summary>What happened to the command-line otakase?</summary><p>It has been replaced by the app; v26.7.0 was its last release. Your list and watch positions carry over by themselves.</p></details>
-  </section>
-
-  <section class="inst" id="install" aria-labelledby="inst-h">
-    <h2 id="inst-h">Install in a minute.</h2>
-    <div class="inst-body">
-      <div class="tabs mono" role="tablist" aria-label="Device">
-        <button role="tab" id="t-android" aria-controls="p-android" aria-selected="true">ANDROID</button>
-        <button role="tab" id="t-windows" aria-controls="p-windows" aria-selected="false">WINDOWS</button>
-        <button role="tab" id="t-macos" aria-controls="p-macos" aria-selected="false">MACOS</button>
-        <button role="tab" id="t-linux" aria-controls="p-linux" aria-selected="false">LINUX</button>
+<section class="dl wrap after" id="download" aria-labelledby="dl-h">
+  <div class="dlgrid">
+    <div style="min-width:0">
+      <div class="sh"><h2 id="dl-h">Get Otakase</h2><span class="kj" aria-hidden="true">任</span></div>
+      <div class="tabs" role="tablist" aria-label="Device">
+        <button role="tab" id="t-android" aria-selected="true" aria-controls="panel">Android &amp; TV</button>
+        <button role="tab" id="t-windows" aria-selected="false" aria-controls="panel">Windows</button>
+        <button role="tab" id="t-macos" aria-selected="false" aria-controls="panel">macOS</button>
+        <button role="tab" id="t-linux" aria-selected="false" aria-controls="panel">Linux</button>
       </div>
-      <div role="tabpanel" id="p-android" aria-labelledby="t-android">
-        <p><a class="dl" href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-android.apk">GET THE APK →</a></p>
-        <p class="hint">One app for phones and Android TV, Android 7.0 or newer. Android asks once to allow installing apps from your browser or file manager. Later updates install from More &gt; About &amp; updates.</p>
+      <div class="panel" id="panel" role="tabpanel">
+        <div><h3 id="p-h"></h3><p id="p-t"></p></div>
+        <a class="pill p" id="p-a" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg><span id="p-b"></span></a>
       </div>
-      <div role="tabpanel" id="p-windows" aria-labelledby="t-windows" hidden>
-        <p><a class="dl" href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-windows-setup.exe">GET THE INSTALLER →</a></p>
-        <p class="hint">Installs for your user only, no administrator needed, and adds Otakase to the Start menu.</p>
-      </div>
-      <div role="tabpanel" id="p-macos" aria-labelledby="t-macos" hidden>
-        <p><a class="dl" href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-macos.zip">GET THE APP →</a></p>
-        <p class="hint">Unzip and move Otakase to Applications; it runs on Apple Silicon and Intel. It is not signed by Apple yet, so the first time, right-click it and choose Open.</p>
-      </div>
-      <div role="tabpanel" id="p-linux" aria-labelledby="t-linux" hidden>
-        <p><a class="dl" href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-linux-x86_64.AppImage">GET THE APPIMAGE →</a></p>
-<pre><code>chmod +x otakase-app-linux-x86_64.AppImage
-./otakase-app-linux-x86_64.AppImage</code></pre>
-        <p class="hint">Runs on any x86_64 distribution, with its player inside. Start it with <code>--launcher</code> for a small keyboard menu you can bind to a shortcut.</p>
-      </div>
+      <ul class="facts">
+        <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C9 3 12 8 12 8s3-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg></span><b>Free</b><span>Nothing to pay, ever</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></span><b>No ads</b><span>Just your shows</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></span><b>Updates itself</b><span>One tap in the app</span></li>
+        <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h.01M3 12h.01M3 19h.01M8 5h13M8 12h13M8 19h13"/></svg></span><b>Your list</b><span>AniList, MAL, Trakt</span></li>
+      </ul>
     </div>
-  </section>
+    <div class="show" aria-hidden="true">
+      <div class="mini pc" id="mini-pc"><div class="lid"><div class="scr"><img class="shot" id="img-mpc" alt=""></div></div><div class="base"></div></div>
+      <div class="mini ph" id="mini-ph"><div class="body"><div class="scr"><img class="shot" id="img-mph" alt=""></div></div></div>
+    </div>
+  </div>
+</section>
 
-  <footer class="mono">お任せ · Otakase is a free, open-source player front end. It does not host, upload or store any video. GPL-3.0. Cover art via AniList.</footer>
+<div class="endpage after">
+<section class="club wrap" aria-labelledby="club-h">
+  <div class="card">
+    <div class="txt"><span class="mono">お任せ community</span><h2 id="club-h">Watch with friends.</h2><p>Join the Otakase Discord. Start a room and watch an episode together in sync, play anime games between episodes, and get help from people who use Otakase every day.</p>
+      <div class="acts"><a class="pill p" href="https://otakase.xyverion.com/discord/">Join the Discord</a><a class="pill" href="https://github.com/TheXykril/otakase/wiki">Read the help</a></div></div>
+    <img class="cover" src="img/activity.webp" alt="Otakase Activity on Discord: watch anime together, play games and more" width="1280" height="720" loading="lazy">
+  </div>
+  <ul class="perks">
+    <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><div><b>Watch rooms</b><span>Everyone on the same second, with chat beside the video.</span></div></li>
+    <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg></span><div><b>Anime games</b><span>Guess the cover, quiz shows and party games with friends.</span></div></li>
+    <li><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg></span><div><b>Help and news</b><span>Ask anything and hear first when a new version lands.</span></div></li>
+  </ul>
+</section>
+
+<div class="wrap"><footer><span>お任せ · Otakase · GPL-3.0 · Otakase does not host or upload any video.</span><nav><a href="https://github.com/TheXykril/otakase/wiki">Help</a><a href="https://otakase.xyverion.com/discord/">Discord</a><a href="https://github.com/TheXykril/otakase">GitHub</a></nav></footer></div>
 </div>
-<script src="app.js" defer></script>
+<script src="app.js"></script>
 </body>
 </html>
