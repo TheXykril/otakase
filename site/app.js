@@ -29,11 +29,22 @@
   }
   const centre = (box) => ({ x: box.x + box.w / 2, y: box.y + box.h / 2 });
 
+  // On a phone a wide screen at full width leaves the bottom empty, so in
+  // those scenes the screen sits in the middle and the words go under it.
+  function below(s, k, i, W, H) {
+    const cap = caps[i - 1];
+    const w = W - 24, h = w * ASPECT[k], gap = 28;
+    const y0 = Math.max(24, (H - h - gap - cap.offsetHeight) / 2);
+    cap.style.top = (y0 + h + gap) + 'px';
+    s[k] = { x: W / 2, y: y0 + h / 2, w, o: 1 };
+  }
+
   let S = []; // per scene: { pc:{x,y,w,o}, ... } with x,y = centre in px
   function layout() {
     measure();
     const W = stage.clientWidth, H = stage.clientHeight;
     const narrow = W < 760;
+    caps.forEach((c) => { c.style.top = ''; });
     const top = narrow ? 24 : 48;
     const span = pin.offsetHeight - H;
     snaps.forEach((s, i) => { s.style.top = (i * span / (N - 1)) + 'px'; });
@@ -65,11 +76,13 @@
         s.pc = hidden(b, 'pc'); s.tv = hidden(b, 'tv');
       } else if (i === 2) {
         const f = fit('pc', b);
-        s.pc = { x: c.x, y: narrow ? b.y + f.h / 2 : c.y, w: f.w, o: 1 };
+        if (narrow) below(s, 'pc', i, W, H);
+        else s.pc = { x: c.x, y: c.y, w: f.w, o: 1 };
         s.ph = hidden(b, 'ph'); s.tv = hidden(b, 'tv');
       } else if (i === 3) {
         const f = fit('tv', b);
-        s.tv = { x: c.x, y: narrow ? b.y + f.h / 2 : c.y, w: f.w, o: 1 };
+        if (narrow) below(s, 'tv', i, W, H);
+        else s.tv = { x: c.x, y: c.y, w: f.w, o: 1 };
         s.pc = hidden(b, 'pc'); s.ph = hidden(b, 'ph');
       } else if (narrow || b.h > b.w * .7) {
         // TV on top, computer and phone side by side under it
