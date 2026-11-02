@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -346,14 +345,6 @@ func pickMode(kind cast.Kind, req castRequest, ffmpeg string) string {
 		return castProgressive
 	}
 	return castRelay
-}
-
-func findFFmpeg() string {
-	path, err := exec.LookPath("ffmpeg")
-	if err != nil {
-		return ""
-	}
-	return path
 }
 
 // play starts req on the device at start seconds.

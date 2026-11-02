@@ -437,9 +437,44 @@ The recorded JSON tests mock all HTTP calls and download no artwork.
 
 Settings and local history use versioned JSON in shared preferences. OAuth sessions and
 pending PKCE state use secure storage. More owns Accounts, Schedule, Playback, Subtitles &
-languages, Appearance, About & updates and Diagnostics. There is no drawer or movie mode.
+languages, Movies & shows, Appearance, About & updates and Diagnostics. There is no drawer.
 Provider names and health appear only in Diagnostics. Normal playback calls the core match
 operation and silently reuses a working source or falls back.
+
+## Movies, series and downloads
+
+The profile's Content setting (anime, movies or both, default anime) picks the root tabs:
+both adds Movies after Search, movies puts films and series on Home and Search. Titles,
+episodes, translations and the viewer's lists come from Trakt in Dart (`lib/data/trakt.dart`),
+with the public client id and the device sign-in; the token lives in the profile's token
+store under `trakt_token`. `MovieService` keeps the local history (`movies.v1` in the
+profile's preferences), pulls Trakt on open (Trakt wins) and sends scrobble start, pause and
+stop from the player.
+
+The core serves the sources with operations that do not take a mode:
+
+```json
+{"version":1,"operation":"movie_providers"}
+{"version":1,"operation":"movie_match","provider":"8filmai","titles":["Tarp žvaigždžių","Interstellar"],"year":2014,"imdb":"tt0816692","series":false,"season":0}
+{"version":1,"operation":"movie_resolve","movie":{"provider":"8filmai","path":"/filmas/..."},"season":0,"episode":0,"subtitles":"lithuanian","skip":["server 3"]}
+```
+
+movie_providers lists each source with its language (en or lt) and whether it has series.
+vidsrc matches by IMDb id without a request; 8Filmai and Filmukas are searched by the
+Lithuanian title (from Trakt's translations), then the English and original ones, and a
+result must have the same title and year (a year apart is allowed); 8Filmai pages also carry
+the IMDb id, which must agree. Series on 8Filmai match the season's own page. resolve tries
+the title's servers in order, skipping those in skip, and returns one stream with its server
+and audio_language. The app tries sources by the MovieLanguages order, then the core's order,
+with the source that last played the title first; DisabledMovieSources leaves sources out.
+
+Downloads use download_start (url, headers, hls, path without extension, quality),
+download_status (one id or all), download_cancel and download_forget. A whole file resumes a
+.part file with a Range request. HLS goes to ffmpeg on a desktop that has it (Matroska output,
+copies every stream); otherwise the core fetches the variant nearest Quality, decrypts
+AES-128 segments and joins them into .ts (or .mp4 with an init segment). A playlist with a
+separate audio rendition needs ffmpeg. Android passes `downloadsDir` (the app's external
+Movies folder); desktop uses Videos/Otakase. At most four downloads run at once.
 
 ## Fixture regeneration
 

@@ -58,6 +58,8 @@ type Core struct {
 	torrent  *torrentstream.BotStream
 	// caster runs the cast_* operations; see cast.go.
 	caster caster
+	// downloads are the files being saved for watching offline.
+	downloads downloadSet
 }
 
 type task struct {
@@ -211,6 +213,7 @@ func (c *Core) Close() {
 		stop()
 	}
 	c.caster.closeCast()
+	c.downloads.cancelAll()
 }
 
 // StopPlayback releases loopback relays after a player stops or changes source.
@@ -264,6 +267,9 @@ func encode(value response) string {
 func (c *Core) execute(ctx context.Context, input string) string {
 	if len(input) > 16<<10 {
 		return failure("invalid_request", "Request exceeds 16 KiB.", false)
+	}
+	if isExtraOperation(peekOperation(input)) {
+		return c.executeExtra(ctx, input)
 	}
 	var req request
 	dec := json.NewDecoder(strings.NewReader(input))
