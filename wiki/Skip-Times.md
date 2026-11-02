@@ -1,7 +1,7 @@
 # Skip times
 
 Openings, endings and recaps are skipped using whichever service knows them.
-All are asked at once: the source playing the episode,
+All are asked at once: the episode's own skip data,
 [AniSkip](https://api.aniskip.com/api-docs), [TheIntroDB](https://theintrodb.org)
 and [Anime-Skip](https://anime-skip.com). For each kind, the first one in that
 order with a usable answer wins. None of them needs setup.

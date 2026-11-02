@@ -2,15 +2,10 @@
 
 ## Nothing is found for a show, or playback never starts
 
-Otakase tries the sources one after another and remembers which one worked
-for each show. Streaming sites go down or change all the time, so when nothing
-works it is usually them. **Diagnostics** (in More or Settings) shows which
-sources answer right now; the Otakase Discord bot's `/provider-status` shows
-the same from its side.
-
-When no site has an episode, Otakase can play it from a torrent while it
-downloads. That needs **Torrent sources** on under Settings > Playback, and
-**Torrents on mobile data** if you are not on Wi-Fi.
+Otakase keeps trying until the episode plays and remembers what worked for
+each show. When nothing works, the problem is usually on the other end and
+passes on its own, so try again a little later. **Diagnostics** (in More or
+Settings) shows what went wrong.
 
 ## Progress didn't update on AniList / MyAnimeList
 
