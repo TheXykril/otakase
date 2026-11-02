@@ -8,7 +8,6 @@ import '../data/episode_metadata.dart';
 import '../data/synced_resume.dart';
 import '../data/tracking.dart';
 import '../services.dart';
-import '../player.dart';
 import 'app_shell.dart' show Brand, rootTabs;
 import 'components.dart';
 import 'downloads_page.dart';
@@ -19,6 +18,7 @@ import 'progress_thread.dart';
 import '../desktop/desktop_core.dart';
 import '../desktop/top_bar.dart';
 import '../desktop/window_frame.dart';
+import '../desktop/external_mpv.dart';
 
 class ShowPage extends StatefulWidget {
   const ShowPage({
@@ -93,7 +93,7 @@ class _ShowPageState extends State<ShowPage> {
   Future<void> play(int ep) => Navigator.push(
     context,
     OtakaseRoute<void>(
-      builder: (_) => PlayerPage(
+      builder: (_) => playerFor(
         services: widget.services,
         anime: anime,
         episode: ep,

@@ -9,6 +9,8 @@ import 'data/discord.dart';
 import 'data/heritage.dart';
 import 'data/models.dart';
 import 'data/watch_rooms.dart';
+import 'data/watch_party.dart';
+import 'data/community_extras.dart';
 import 'data/tv_remote.dart';
 import 'data/app_updates.dart';
 import 'data/downloads.dart';
@@ -38,6 +40,12 @@ class AppServices {
     );
     heritage = Heritage(store, StatsRepository(this.auth), discord);
     watchRooms = WatchRooms(discord: discord, store: store);
+    party = WatchParties(discord: discord, store: store);
+    party.status = () => playerStatus?.call();
+    party.command = (action, args) async {
+      await playerCommand?.call(action, args);
+    };
+    extras = CommunityExtras(discord: discord, store: store);
     tvRemote =
         remoteControl ??
         TVRemote(
@@ -80,6 +88,8 @@ class AppServices {
   late final DiscordService discord;
   late final Heritage heritage;
   late final WatchRooms watchRooms;
+  late final WatchParties party;
+  late final CommunityExtras extras;
   late final TVRemote tvRemote;
   late final AppUpdates updates;
   Json Function()? playerStatus;
@@ -93,6 +103,8 @@ class AppServices {
     await stopPlayback?.call();
     heritage.closed = true;
     await watchRooms.close();
+    await party.close();
+    extras.dispose();
     await tvRemote.close();
     await discord.close();
     closed = true;

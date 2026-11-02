@@ -114,6 +114,10 @@ class DiscordService extends ChangeNotifier {
   bool get linked =>
       !closed && (_link['token'] as String? ?? '').trim().isNotEmpty;
   String get name => _link['discord_name'] as String? ?? '';
+
+  /// The link's bearer token, for requests [request] can't make (WebSockets,
+  /// uploads).
+  String get linkToken => _link['token'] as String? ?? '';
   bool get revoked => _link['revoked'] == true;
   List<Json> get inbox => (store.value('DiscordInbox') as List? ?? [])
       .whereType<Map>()

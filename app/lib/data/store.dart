@@ -61,6 +61,9 @@ const settingDefaults = <String, dynamic>{
   'Content': 'anime',
   'MovieLanguages': ['english', 'lithuanian'],
   'DisabledMovieSources': <String>[],
+  'DiscordWatchWithMe': false,
+  'ExternalMpv': false,
+  'MpvPath': 'mpv',
 };
 
 class AppStore extends ChangeNotifier {
