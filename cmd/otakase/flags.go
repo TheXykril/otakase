@@ -39,11 +39,6 @@ type cliFlags struct {
 	providerStatusQuery string
 	providerStatusAdult string
 
-	streamInfo     string
-	streamInfoFast bool
-	streamAdult    bool
-	streamLangs    string
-
 	installKeybind bool
 	removeKeybind  bool
 	refreshKeybind bool
@@ -107,10 +102,6 @@ func parseFlags(cfg *internal.Config) *cliFlags {
 	flag.BoolVar(&f.providerStatus, "provider-status", false, "Check the sources and report how many work")
 	flag.StringVar(&f.providerStatusQuery, "provider-status-query", internal.DefaultStatusQuery, "Search query used by -provider-status")
 	flag.StringVar(&f.providerStatusAdult, "provider-status-adult-query", internal.DefaultAdultStatusQuery, "Search query -provider-status uses for 18+ providers")
-	flag.StringVar(&f.streamInfo, "stream-info", "", "Print an episode's stream links as JSON without asking anything, e.g. 154587:1 (AniList id:episode)")
-	flag.BoolVar(&f.streamInfoFast, "stream-info-fast", false, "Skip optional audio-release discovery for -stream-info")
-	flag.BoolVar(&f.streamAdult, "stream-adult", false, "Let -stream-info use the 18+ sources for 18+ titles")
-	flag.StringVar(&f.streamLangs, "stream-languages", "", "Print the other audio-language releases of an episode -stream-info found, as JSON, e.g. kickassanime:<provider id>:1")
 	flag.BoolVar(&f.installKeybind, "install-keybind", false, "Add a Super+Shift+A Hyprland binding that opens the rofi menu")
 	flag.BoolVar(&f.removeKeybind, "remove-keybind", false, "Remove the Hyprland binding added by -install-keybind")
 	flag.BoolVar(&f.refreshKeybind, "refresh-keybind", false, "Update an existing Hyprland binding, adding nothing if absent")

@@ -1,39 +1,35 @@
 # Tracking
 
-On first start Otakase asks how you want to track: **local**, **anilist**,
-**myanimelist**, or **anilist + myanimelist**. Local history stays on in every
-mode, so you can always resume.
+Sign in under **Accounts** (More > Accounts on phone and TV) to AniList,
+MyAnimeList, or both. Sign-in opens the tracker's own page in the browser; on
+a TV you scan a QR code with your phone instead, with both on the same home
+network. Each account logs out separately.
 
-In dual mode, Otakase compares the last update time for each show and pushes
-the newer status, progress and category to whichever tracker is behind, so the
-two converge on their own. You can change your mind later from the **Change
-Tracker** menu, which can merge both lists or let one replace the other.
+Without an account, watched episodes and resume positions stay on the device.
 
-MyAnimeList sign-in needs your own MAL application credentials, set in the
-config file or the environment:
+## Both at once
 
-```bash
-OTAKASE_MAL_CLIENT_ID=your_client_id
-OTAKASE_MAL_CLIENT_SECRET=your_client_secret
-```
+With both signed in, Home combines your lists and every change goes to both
+trackers. When a show is on both, the most recently updated entry wins.
+Entries you made private on AniList are never copied to MyAnimeList.
 
-If the browser reaches the localhost callback page but Otakase does not
-continue, run the command again and paste the full callback URL when prompted.
+Lists sync in the background at most every 30 minutes, or straight away when
+you pull to refresh.
 
 ## Resuming on another device
 
-With AniList or MyAnimeList on, your place in an episode is kept in the show's
-AniList note or MyAnimeList comment as a short tag like `[otakase:5@754]`
-(episode 5, 754 seconds in), next to anything else you wrote there. Another
-computer running otakase picks it up and resumes from there.
+Your place in an episode is kept in the show's AniList note or MyAnimeList
+comment as a short tag like `[otakase:5@754]` (episode 5, 754 seconds in),
+next to anything else you wrote there. Otakase on any of your devices picks it
+up and resumes from there.
 
-## Adding shows and fixing progress
+## Profiles
 
-**Add new anime**, at the end of a list, searches AniList and asks which list
-to put the show on. *Already watched some elsewhere* asks how many episodes
-you have seen, records them, and starts at the next one; all of them marks the
-show completed. Progress set this way, with Update, or on another device is
-followed next time you play the show, rather than an older local position.
+Up to six profiles (More > Profiles), each with its own accounts, history,
+lists and playback settings. A TV asks who is watching when there is more than
+one. A profile can be locked with a direction code of 4 to 8 arrows.
 
-The Watching list opens with the shows you played last, newest first, while `MenuActions` has `CONTINUE_LAST`. `ContinueWatchingRows` sets how many are shown; `0` hides them.
+## 18+ titles
 
+Whether 18+ titles show up follows the adult content setting of your AniList
+account.

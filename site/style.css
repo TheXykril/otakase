@@ -153,7 +153,7 @@ code { font: 0.85em var(--mono); color: var(--fg); }
 .os-pick { display: flex; gap: 26px; flex-wrap: wrap; margin-bottom: 22px; }
 .os-pick button { font: inherit; letter-spacing: inherit; color: var(--muted); background: none; border: 0; border-bottom: 1px solid transparent; padding-bottom: 4px; cursor: pointer; }
 .os-pick button[aria-pressed="true"] { color: var(--fg); border-bottom-color: var(--accent); }
-.os-shot img { border: 0; }
+.os-shot img { border: 1px solid var(--line); }
 .tour .hint { margin-top: 14px; }
 
 /* Install, kept short */
