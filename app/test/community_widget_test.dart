@@ -122,6 +122,16 @@ void main() {
     await tester.tap(find.byKey(const Key('nav-More')));
     await tester.pumpAndSettle();
     final row = find.byKey(const Key('more-Discord'));
+    await tester.scrollUntilVisible(
+      row,
+      150,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const PageStorageKey('more-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.ensureVisible(row);
     final node = Focus.of(tester.element(row), scopeOk: true);
     node.requestFocus();

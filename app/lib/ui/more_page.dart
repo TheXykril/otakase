@@ -195,18 +195,8 @@ class MorePage extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 20),
-        if (services.profiles case final manager?)
-          row(
-            'Profiles',
-            manager.active.name,
-            LucideIcons.users,
-            () => Navigator.push(
-              context,
-              OtakaseRoute<void>(
-                builder: (_) => ProfilesPage(manager: manager),
-              ),
-            ),
-          ),
+        // Same order as the desktop settings sidebar: settings first,
+        // then the community and tools.
         row(
           'Playback',
           'Resume, skips & quality',
@@ -224,6 +214,54 @@ class MorePage extends StatelessWidget {
             section: 'Subtitles & languages',
           ),
         ),
+        row(
+          'Movies & shows',
+          contentLabels[services.store.text('Content')] ?? '',
+          LucideIcons.clapperboard,
+          () =>
+              openSettings(context, services, isTV, section: 'Movies & shows'),
+        ),
+        if (!isTV)
+          row(
+            'Downloads',
+            'Watch offline',
+            LucideIcons.download,
+            () => openDownloads(context, services, isTV),
+          ),
+        row(
+          'Appearance',
+          'Shu / Dark',
+          LucideIcons.palette,
+          () => openSettings(context, services, isTV, section: 'Appearance'),
+        ),
+        ListenableBuilder(
+          listenable: services.updates,
+          builder: (context, _) => row(
+            'About & updates',
+            services.updates.available
+                ? 'Update available · ${services.updates.update!.label}'
+                : 'Otakase · Android phone and TV',
+            LucideIcons.info,
+            () => openSettings(
+              context,
+              services,
+              isTV,
+              section: 'About & updates',
+            ),
+          ),
+        ),
+        if (services.profiles case final manager?)
+          row(
+            'Profiles',
+            manager.active.name,
+            LucideIcons.users,
+            () => Navigator.push(
+              context,
+              OtakaseRoute<void>(
+                builder: (_) => ProfilesPage(manager: manager),
+              ),
+            ),
+          ),
         row(
           'Schedule',
           'This week · ${DateTime.now().timeZoneName}',
@@ -255,36 +293,12 @@ class MorePage extends StatelessWidget {
           ),
         ),
         row(
-          'Movies & shows',
-          contentLabels[services.store.text('Content')] ?? '',
-          LucideIcons.clapperboard,
-          () =>
-              openSettings(context, services, isTV, section: 'Movies & shows'),
-        ),
-        if (!isTV)
-          row(
-            'Downloads',
-            'Watch offline',
-            LucideIcons.download,
-            () => openDownloads(context, services, isTV),
-          ),
-        row(
           'Discord',
           services.discord.linked ? services.discord.name : 'Link this profile',
           LucideIcons.messagesSquare,
           () => openDetail(
             context,
             DiscordPage(services: services, isTV: isTV),
-            isTV,
-          ),
-        ),
-        row(
-          'Time capsule',
-          'Opens April 12',
-          LucideIcons.mail,
-          () => openDetail(
-            context,
-            CapsulePage(services: services, isTV: isTV),
             isTV,
           ),
         ),
@@ -327,6 +341,16 @@ class MorePage extends StatelessWidget {
             ),
           ),
         row(
+          'Time capsule',
+          'Opens April 12',
+          LucideIcons.mail,
+          () => openDetail(
+            context,
+            CapsulePage(services: services, isTV: isTV),
+            isTV,
+          ),
+        ),
+        row(
           'Settings backup',
           'Keep your settings with the Discord bot',
           LucideIcons.cloudUpload,
@@ -354,28 +378,6 @@ class MorePage extends StatelessWidget {
             context,
             TVRemotePage(services: services, isTV: isTV),
             isTV,
-          ),
-        ),
-        row(
-          'Appearance',
-          'Shu / Dark',
-          LucideIcons.palette,
-          () => openSettings(context, services, isTV, section: 'Appearance'),
-        ),
-        ListenableBuilder(
-          listenable: services.updates,
-          builder: (context, _) => row(
-            'About & updates',
-            services.updates.available
-                ? 'Update available · ${services.updates.update!.label}'
-                : 'Otakase · Android phone and TV',
-            LucideIcons.info,
-            () => openSettings(
-              context,
-              services,
-              isTV,
-              section: 'About & updates',
-            ),
           ),
         ),
         row(

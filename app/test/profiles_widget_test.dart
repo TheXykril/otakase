@@ -80,7 +80,21 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('nav-More')));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byKey(const ValueKey('more-Profiles')));
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('more-Profiles')),
+        150,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const PageStorageKey('more-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const ValueKey('more-Profiles'))),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('more-Profiles')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('lock-profile-1')));
@@ -137,7 +151,21 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('nav-More')));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byKey(const ValueKey('more-Profiles')));
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('more-Profiles')),
+        150,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const PageStorageKey('more-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const ValueKey('more-Profiles'))),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('more-Profiles')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Switch profile'));
