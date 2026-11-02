@@ -70,7 +70,7 @@ func probeHLSExtensionPicky() bool {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, binary, "-hide_banner", "-h", "demuxer=hls").Output()
+	out, err := quiet(exec.CommandContext(ctx, binary, "-hide_banner", "-h", "demuxer=hls")).Output()
 	if err != nil || !strings.Contains(string(out), "allowed_extensions") {
 		return true
 	}

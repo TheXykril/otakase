@@ -520,6 +520,7 @@ func (p *BrowserPlayer) PlayFrom(url string, start float64) error {
 		"load":     h.load,
 		"url":      url,
 		"ts":       strings.TrimSuffix(url, PlaylistName) + ProgressiveName,
+		"file":     !strings.HasSuffix(strings.SplitN(url, "?", 2)[0], ".m3u8"),
 		"start":    start,
 		"title":    p.media.Title,
 		"duration": p.media.Duration,

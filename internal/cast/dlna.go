@@ -503,15 +503,18 @@ func (p *dlnaPlayer) av(action string, args ...[2]string) (map[string]string, er
 }
 
 func (p *dlnaPlayer) Play(streamURL string) error {
-	streamURL = progressiveURL(streamURL)
+	return p.playURI(progressiveURL(streamURL), dlnaProtocolInfo, "otakase")
+}
+
+func (p *dlnaPlayer) playURI(streamURL, protocolInfo, title string) error {
 	p.mu.Lock()
 	p.playing = false
 	p.resetClock()
 	p.mu.Unlock()
 
 	metadata := `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">` +
-		`<item id="0" parentID="-1" restricted="1"><dc:title>otakase</dc:title><upnp:class>object.item.videoItem</upnp:class>` +
-		`<res protocolInfo="` + dlnaProtocolInfo + `">` + html.EscapeString(streamURL) + `</res></item></DIDL-Lite>`
+		`<item id="0" parentID="-1" restricted="1"><dc:title>` + html.EscapeString(title) + `</dc:title><upnp:class>object.item.videoItem</upnp:class>` +
+		`<res protocolInfo="` + html.EscapeString(protocolInfo) + `">` + html.EscapeString(streamURL) + `</res></item></DIDL-Lite>`
 
 	set := func() error {
 		_, err := p.av("SetAVTransportURI", [2]string{"CurrentURI", streamURL}, [2]string{"CurrentURIMetaData", metadata})

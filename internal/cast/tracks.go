@@ -166,7 +166,7 @@ func ParseProbedStream(output []byte) (StreamInfo, error) {
 func ProbeStream(ffprobePath, streamURL, referrer string, headers map[string]string) (StreamInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ProbeTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, ffprobePath, ProbeStreamArgs(streamURL, referrer, headers)...).Output()
+	out, err := quiet(exec.CommandContext(ctx, ffprobePath, ProbeStreamArgs(streamURL, referrer, headers)...)).Output()
 	if ctx.Err() != nil {
 		return StreamInfo{}, fmt.Errorf("cast: the stream sent nothing to read in %s: %w", ProbeTimeout, ErrProbeTimeout)
 	}

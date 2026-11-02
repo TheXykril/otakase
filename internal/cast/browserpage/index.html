@@ -297,7 +297,17 @@
     setWaiting("");
     var at = msg.at || 0;
 
-    if (window.Hls && Hls.isSupported()) {
+    if (msg.file) {
+      // A whole file, not a playlist: the browser plays it on its own.
+      player = "file";
+      video.src = msg.url;
+      if (at > 0) {
+        video.addEventListener("loadedmetadata", function once() {
+          video.removeEventListener("loadedmetadata", once);
+          video.currentTime = at;
+        });
+      }
+    } else if (window.Hls && Hls.isSupported()) {
       player = "hls.js";
       hls = new Hls({ startPosition: at, maxBufferLength: 60, backBufferLength: 90, enableWorker: true });
       hls.on(Hls.Events.ERROR, function (event, data) {

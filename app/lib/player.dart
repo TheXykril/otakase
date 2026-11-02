@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import 'cast/cast.dart';
 import 'core.dart';
 import 'data/models.dart';
 import 'desktop/desktop_core.dart';
@@ -80,6 +81,20 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   SkipSpan? active;
   final skipped = <String>{};
   Duration position = Duration.zero, duration = Duration.zero;
+  late final CastClient caster = CastClient(widget.services.core);
+
+  /// The device the episode plays on instead of this screen, or null.
+  CastDevice? castDevice;
+  CastStatus? castStatus;
+  Timer? castTimer;
+  int castEnded = -1;
+  bool castPolling = false;
+
+  /// The external subtitle track last picked, which a cast takes along.
+  Json? externalTrack;
+  bool get casting => castDevice != null;
+  bool get isPlaying =>
+      casting ? castStatus?.paused != true : player.state.playing;
   bool get canNext => episodes.isNotEmpty
       ? episodes.any((e) => e > episode)
       : anime.airedEpisodes > episode;
@@ -117,20 +132,22 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         widget.services.discord.observe(
           anime,
           episode,
-          player.state.position.inMilliseconds / 1000,
+          (casting ? position : player.state.position).inMilliseconds / 1000,
         );
       }
     });
     subscriptions.addAll([
-      player.stream.position.listen(tick),
+      player.stream.position.listen((p) {
+        if (!casting) tick(p);
+      }),
       player.stream.duration.listen((d) {
-        if (!mounted || d <= Duration.zero) return;
+        if (!mounted || d <= Duration.zero || casting) return;
         final changed = duration == Duration.zero;
         setState(() => duration = d);
         if (changed) unawaited(loadSkips(generation));
       }),
       player.stream.completed.listen((done) {
-        if (done && !busy && !completedEpisodes.contains(episode)) {
+        if (done && !busy && !casting && !completedEpisodes.contains(episode)) {
           finished = true;
           unawaited(save(completed: true));
           offerNext();
@@ -139,7 +156,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       player.stream.error.listen((message) {
         // A subtitle or track error must not throw away a playing copy; only
         // a file that never loaded counts as a broken stream.
-        if (message.toLowerCase().contains('sub') ||
+        if (casting ||
+            message.toLowerCase().contains('sub') ||
             player.state.duration > Duration.zero) {
           return;
         }
@@ -167,7 +185,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       player.stream.playing.listen((playing) {
         if (mounted) {
           showControls();
-          if (!playing && !busy) {
+          if (!playing && !busy && !casting) {
             unawaited(save().then((_) => resumePusher.flush()));
           }
         }
@@ -195,7 +213,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) {
       unawaited(save().then((_) => resumePusher.flush()));
-      unawaited(player.pause());
+      // A cast plays on with this screen off.
+      if (!casting) unawaited(player.pause());
     }
   }
 
@@ -374,6 +393,22 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (!mounted || g != generation) return;
       final stream = source!.streams[copy];
       if (stream.torrent) watchLoading(g);
+      if (casting) {
+        if (externalTrack != null &&
+            !stream.subtitles.any((t) => t['url'] == externalTrack!['url'])) {
+          externalTrack = null;
+        }
+        await castCurrent(
+          start: widget.services.store.flag('ResumePlayback')
+              ? savedResume.toDouble()
+              : 0,
+        );
+        if (!mounted || g != generation) return;
+        setState(() => busy = false);
+        unawaited(loadEpisodes(g));
+        showControls();
+        return;
+      }
       final headers = Map<String, String>.of(stream.headers);
       if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
       await configure();
@@ -522,6 +557,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Future<bool> externalSubtitle(Json track, int g, {bool manual = true}) async {
+    externalTrack = track;
+    if (casting) {
+      if (manual) unawaited(castCurrent(start: position.inSeconds.toDouble()));
+      return true;
+    }
     try {
       final stream = source!.streams[copy];
       final headers = Map<String, String>.of(stream.headers);
@@ -588,9 +628,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           p.inMilliseconds / 1000 >=
               current.start + widget.services.store.integer('SkipDelay')) {
         skipped.add(key);
-        unawaited(
-          player.seek(Duration(milliseconds: (current.end * 1000).round())),
-        );
+        unawaited(seekTo(Duration(milliseconds: (current.end * 1000).round())));
       } else if (entered &&
           !panelOpen &&
           !scrubbing &&
@@ -649,6 +687,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           !scrubbing &&
           active == null &&
           countdownSeconds == 0 &&
+          !casting &&
           player.state.playing) {
         setState(() => overlay = false);
         surface.requestFocus();
@@ -658,7 +697,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Future<void> seek(int seconds) async {
     showControls();
-    await player.seek(
+    await seekTo(
       Duration(
         milliseconds: (position.inMilliseconds + seconds * 1000).clamp(
           0,
@@ -668,15 +707,191 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> playPause() => isPlaying ? pausePlayback() : resumePlayback();
+
+  Future<void> pausePlayback() async {
+    if (!casting) return player.pause();
+    await castControl('pause');
+  }
+
+  Future<void> resumePlayback() async {
+    if (!casting) return player.play();
+    await castControl('play');
+  }
+
+  /// Moves playback here or on the cast device.
+  Future<void> seekTo(Duration target) async {
+    if (!casting) return player.seek(target);
+    setState(() => position = target);
+    await castControl('seek', target.inMilliseconds / 1000);
+  }
+
+  Future<void> castControl(String action, [double value = 0]) async {
+    try {
+      await caster.control(action, value);
+      await pollCast();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('The cast device did not answer.')),
+        );
+      }
+    }
+  }
+
+  /// Picks a device and moves the episode there, or offers to stop.
+  Future<void> castMenu() async {
+    panelOpen = true;
+    showControls();
+    final device = await pickCastDevice(context, caster);
+    panelOpen = false;
+    if (device == null || !mounted) return;
+    await startCast(device);
+  }
+
+  Future<void> startCast(CastDevice device) async {
+    final at = position.inSeconds.toDouble();
+    await save();
+    castDevice = device;
+    castStatus = null;
+    castEnded = -1;
+    await player.pause();
+    if (!mounted) return;
+    setState(() => overlay = true);
+    if (source == null || busy) return; // open() casts once it resolves.
+    await castCurrent(start: at);
+  }
+
+  /// The subtitles a cast takes: the external track picked, or the first one
+  /// matching the subtitle languages.
+  String castSubtitle(ResolvedStream stream) {
+    if (externalTrack case final Json track) {
+      return track['url'] as String? ?? '';
+    }
+    if ((source?.mode ?? widget.mode) == 'dub') return '';
+    final preferences = widget.services.store
+        .text('SubsLanguage')
+        .toLowerCase()
+        .split(',')
+        .map((v) => v.trim())
+        .where((v) => v.isNotEmpty);
+    for (final preferred in preferences) {
+      if (preferred == 'none' || preferred == 'off') return '';
+      for (final t in stream.subtitles) {
+        if (languageMatches(
+          t['language'] as String?,
+          t['label'] as String?,
+          preferred,
+        )) {
+          return t['url'] as String? ?? '';
+        }
+      }
+    }
+    if (stream.subtitles.isNotEmpty) {
+      return stream.subtitles.first['url'] as String? ?? '';
+    }
+    return stream.subtitle.startsWith('http') ? stream.subtitle : '';
+  }
+
+  /// Sends the current copy of the episode to the cast device.
+  Future<void> castCurrent({double start = 0}) async {
+    final device = castDevice;
+    if (device == null || source == null) return;
+    final stream = source!.streams[copy];
+    try {
+      await caster.start(
+        device: device,
+        stream: stream,
+        title: '${anime.title} · Episode $episode',
+        subtitle: castSubtitle(stream),
+        start: start,
+        duration: duration.inMilliseconds / 1000,
+      );
+    } on CoreFailure catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+      castDevice = null;
+      setState(() {});
+      return;
+    }
+    castTimer?.cancel();
+    castTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => unawaited(pollCast()),
+    );
+  }
+
+  Future<void> pollCast() async {
+    if (!casting || castPolling || !mounted) return;
+    castPolling = true;
+    try {
+      final s = await caster.status();
+      if (!mounted || !casting) return;
+      if (!s.active) {
+        // Stopped from the browser page.
+        await stopCast(remote: true);
+        return;
+      }
+      final hadDuration = duration > Duration.zero;
+      setState(() {
+        castStatus = s;
+        if (s.duration > 0) {
+          duration = Duration(milliseconds: (s.duration * 1000).round());
+        }
+      });
+      if (!hadDuration && duration > Duration.zero) {
+        unawaited(loadSkips(generation));
+      }
+      if (busy) return;
+      if (s.state == 'playing' || s.state == 'paused') {
+        tick(Duration(milliseconds: (s.position * 1000).round()));
+      }
+      if (s.state == 'ended' && castEnded != s.load) {
+        castEnded = s.load;
+        if (!completedEpisodes.contains(episode)) {
+          finished = true;
+          await save(completed: true);
+          offerNext();
+        }
+      }
+    } catch (_) {
+      // A missed poll is retried in a second.
+    } finally {
+      castPolling = false;
+    }
+  }
+
+  /// Ends the cast. Unless the screen is being left, the episode carries on
+  /// here from where the device was.
+  Future<void> stopCast({bool resumeHere = true, bool remote = false}) async {
+    castTimer?.cancel();
+    castTimer = null;
+    if (!remote) {
+      try {
+        await caster.control('stop');
+      } catch (_) {
+        /* The device may already be gone. */
+      }
+    }
+    castDevice = null;
+    castStatus = null;
+    if (!resumeHere || !mounted) return;
+    await save();
+    savedResume = position.inSeconds;
+    setState(() {});
+    if (source != null) await open(mirror: copy);
+  }
+
   Future<void> control(String action, Json args) async {
     if (!mounted || profileStopped) return;
     switch (action) {
       case 'pause':
-        await player.pause();
+        await pausePlayback();
       case 'play':
-        await player.play();
+        await resumePlayback();
       case 'toggle':
-        await player.playOrPause();
+        await playPause();
       case 'skip':
         await seek(85);
       case 'seek':
@@ -684,7 +899,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       case 'seek_to':
         // A watch party follows the host: an absolute position.
         final to = (args['position'] as num?)?.toDouble() ?? 0;
-        await player.seek(
+        await seekTo(
           Duration(
             milliseconds: (to * 1000).round().clamp(
               0,
@@ -697,12 +912,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         // else 85 s, as in the CLI.
         final span = active;
         if (span != null) {
-          await player.seek(Duration(milliseconds: (span.end * 1000).round()));
+          await seekTo(Duration(milliseconds: (span.end * 1000).round()));
         } else {
           await seek(85);
         }
       case 'volume':
-        await player.setVolume(number(args['volume']).clamp(0, 100).toDouble());
+        final level = number(args['volume']).clamp(0, 100).toDouble();
+        if (casting) {
+          await castControl('volume', level / 100);
+        } else {
+          await player.setVolume(level);
+        }
       case 'next':
         if (!busy) await next();
       case 'previous':
@@ -712,6 +932,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       case 'stop':
         await save();
         await resumePusher.flush();
+        if (casting) await stopCast(resumeHere: false);
         await player.stop();
         if (mounted) Navigator.pop(context);
     }
@@ -722,15 +943,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     'has_player': true,
     'anilist_id': anime.id,
     'loaded': !busy && duration > Duration.zero,
-    'position_ms': player.state.position.inMilliseconds,
+    'position_ms': (casting ? position : player.state.position).inMilliseconds,
     'title': anime.title,
     'adult': anime.isAdult,
     'episode': episode,
     'episodes': anime.airedEpisodes,
     'position': position.inSeconds,
     'duration': duration.inSeconds,
-    'playing': player.state.playing,
-    'volume': player.state.volume.round(),
+    'playing': isPlaying,
+    'volume': casting
+        ? ((castStatus?.volume ?? 1) * 100).round()
+        : player.state.volume.round(),
   };
 
   Future<void> pickEpisode(int target) async {
@@ -925,18 +1148,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       LogicalKeyboardKey.mediaPlayPause,
       LogicalKeyboardKey.space,
     ].contains(key)) {
-      unawaited(player.playOrPause());
+      unawaited(playPause());
       showControls();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.mediaPlay) {
-      unawaited(player.play());
+      unawaited(resumePlayback());
       showControls();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.mediaPause ||
         key == LogicalKeyboardKey.mediaStop) {
-      unawaited(player.pause());
+      unawaited(pausePlayback());
       showControls();
       return KeyEventResult.handled;
     }
@@ -975,7 +1198,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         return KeyEventResult.handled;
       }
       if ([LogicalKeyboardKey.select, LogicalKeyboardKey.enter].contains(key)) {
-        unawaited(player.playOrPause());
+        unawaited(playPause());
         showControls();
         return KeyEventResult.handled;
       }
@@ -1003,6 +1226,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     saveTimer?.cancel();
     nextTimer?.cancel();
     loadingTimer?.cancel();
+    castTimer?.cancel();
+    if (casting) unawaited(caster.control('stop').catchError((_) {}));
     if (!profileStopped) unawaited(save().then((_) => resumePusher.flush()));
     if (identical(widget.services.stopPlayback, profileStop)) {
       widget.services.stopPlayback = null;
@@ -1052,6 +1277,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     generation++;
     scope.cancel();
     await player.pause();
+    if (casting) await stopCast(resumeHere: false);
     await save();
     await resumePusher.flush().timeout(
       const Duration(seconds: 5),
@@ -1091,8 +1317,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           position: position,
           duration: duration,
           buffered: player.state.buffer,
-          playing: player.state.playing,
-          buffering: player.state.buffering,
+          playing: isPlaying,
+          buffering: casting
+              ? castStatus?.state == 'buffering' ||
+                    castStatus?.state == 'loading'
+              : player.state.buffering,
           silent: player.state.volume == 0,
           fullscreen: fullscreen,
           trackLabel: source?.mode.toUpperCase() ?? widget.mode.toUpperCase(),
@@ -1101,9 +1330,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           playFocus: playFocus,
           onBack: () => Navigator.pop(context),
           onPlayPause: () {
-            unawaited(player.playOrPause());
+            unawaited(playPause());
             showControls();
           },
+          casting: casting,
+          onCast: () => unawaited(castMenu()),
           onSeekBy: (seconds) => unawaited(seek(seconds)),
           onSeekStart: (_) {
             scrubbing = true;
@@ -1113,7 +1344,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               setState(() => position = Duration(milliseconds: v.round())),
           onSeekEnd: (v) {
             scrubbing = false;
-            unawaited(player.seek(Duration(milliseconds: v.round())));
+            unawaited(seekTo(Duration(milliseconds: v.round())));
             showControls();
           },
           onNext: canNext ? () => unawaited(next()) : null,
@@ -1147,7 +1378,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         focusNode: skipFocus,
         onPressed: () {
           unawaited(
-            player.seek(Duration(milliseconds: (active!.end * 1000).round())),
+            seekTo(Duration(milliseconds: (active!.end * 1000).round())),
           );
           playFocus.requestFocus();
           showControls();
@@ -1263,6 +1494,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   child: Video(controller: video, controls: NoVideoControls),
                 ),
               ),
+              if (casting && !busy && error.isEmpty)
+                CastPanel(
+                  status: castStatus,
+                  deviceName: castDevice!.name,
+                  isTV: widget.isTV,
+                  onStop: () => unawaited(stopCast()),
+                ),
               PartyOverlay(
                 party: widget.services.party,
                 controls: overlay && !busy,
@@ -1361,6 +1599,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                 ],
                               ),
                             ),
+                            if (!widget.isTV)
+                              IconButton(
+                                key: const Key('player-cast'),
+                                tooltip: casting ? 'Casting' : 'Cast',
+                                onPressed: () => unawaited(castMenu()),
+                                icon: Icon(
+                                  LucideIcons.cast,
+                                  color: casting ? accentText : null,
+                                ),
+                              ),
                             DeviceStatus(isTV: widget.isTV),
                             const SizedBox(width: 12),
                             const SizedBox(
@@ -1384,14 +1632,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                 onPressed: () => seek(-10),
                               ),
                               TransportButton(
-                                label: player.state.playing ? 'Pause' : 'Play',
-                                icon: player.state.playing
+                                label: isPlaying ? 'Pause' : 'Play',
+                                icon: isPlaying
                                     ? LucideIcons.pause
                                     : LucideIcons.play,
                                 primary: true,
                                 focusNode: playFocus,
                                 onPressed: () {
-                                  unawaited(player.playOrPause());
+                                  unawaited(playPause());
                                   showControls();
                                 },
                               ),
@@ -1456,7 +1704,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                     onChangeEnd: (v) {
                                       scrubbing = false;
                                       unawaited(
-                                        player.seek(
+                                        seekTo(
                                           Duration(milliseconds: v.round()),
                                         ),
                                       );
@@ -1477,7 +1725,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                   ),
                                 ),
                                 const Spacer(),
-                                if (player.state.buffering)
+                                if (casting
+                                    ? castStatus?.state == 'buffering'
+                                    : player.state.buffering)
                                   Text(
                                     'Buffering',
                                     style: uiStyle(
