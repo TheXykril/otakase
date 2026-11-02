@@ -2,6 +2,13 @@
 # Starts the app inside the AppImage. libmpv and its libraries are bundled
 # in usr/lib/otakase/lib (package-desktop.sh); GTK comes from the system.
 here=$(dirname "$(readlink -f "$0")")
+export APPDIR="${APPDIR:-$here}"
+case "${1:-}" in
+  # Adds or removes the app menu entry and the otakase command.
+  --install | --uninstall) exec sh "$here/usr/share/otakase/install.sh" "$1" ;;
+esac
+# An installed copy keeps its menu entry and icon current after updates.
+sh "$here/usr/share/otakase/install.sh" --refresh > /dev/null 2>&1 || true
 # media_kit loads this exact libmpv instead of searching the system.
 export LIBMPV_LIBRARY_PATH="$here/usr/lib/otakase/lib/libmpv.so.2"
 exec "$here/usr/lib/otakase/otakase" "$@"

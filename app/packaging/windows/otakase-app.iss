@@ -5,6 +5,9 @@
 ; app updates itself by running the next release's installer with
 ; /VERYSILENT /WAITPID=<its process id>: setup waits for the app to quit,
 ; replaces the files and opens the app again.
+;
+; Setup also puts the otakase command on the user's PATH (bin\otakase.cmd,
+; so the app's DLLs stay off PATH) and registers otakase.exe for Win+R.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -34,6 +37,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; Files still in use after the wait are closed rather than failing setup.
 CloseApplications=force
 RestartApplications=no
+; PATH changes reach new terminals without signing out.
+ChangesEnvironment=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional Options"; Flags: unchecked
@@ -41,6 +46,7 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 [Files]
 ; Everything flutter build windows made, plus otakase-core.exe beside it.
 Source: "..\..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "otakase.cmd"; DestDir: "{app}\bin"; Flags: ignoreversion
 
 [InstallDelete]
 ; Files a newer version no longer has (old Flutter assets) go first.
@@ -48,7 +54,15 @@ Type: filesandordirs; Name: "{app}\data"
 
 [Icons]
 Name: "{group}\Otakase"; Filename: "{app}\otakase.exe"
+Name: "{group}\Otakase Launcher"; Filename: "{app}\otakase.exe"; Parameters: "--launcher"; Comment: "The quick launcher: type, pick, watch"
 Name: "{userdesktop}\Otakase"; Filename: "{app}\otakase.exe"; Tasks: desktopicon
+
+[Registry]
+; Win+R otakase
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\otakase.exe"; ValueType: string; ValueName: ""; ValueData: "{app}\otakase.exe"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\App Paths\otakase.exe"; ValueType: string; ValueName: "Path"; ValueData: "{app}"
+; The otakase command in terminals
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}\bin"; Check: NeedsPath(ExpandConstant('{app}\bin'))
 
 [Run]
 ; Shown as a checkbox after a normal install. A silent update (the app's own
@@ -84,4 +98,40 @@ begin
     end;
   end;
   Result := True;
+end;
+
+// True when dir is not on the user's PATH yet, so updates add it only once.
+function NeedsPath(Dir: String): Boolean;
+var
+  Path: String;
+begin
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', Path) then
+  begin
+    Result := True;
+    exit;
+  end;
+  Result := Pos(';' + Uppercase(Dir) + ';', ';' + Uppercase(Path) + ';') = 0;
+end;
+
+// Takes the bin folder back off the user's PATH on uninstall.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Path, Dir: String;
+  P: Integer;
+begin
+  if CurUninstallStep <> usPostUninstall then
+    exit;
+  if not RegQueryStringValue(HKCU, 'Environment', 'Path', Path) then
+    exit;
+  Dir := ExpandConstant('{app}\bin');
+  P := Pos(';' + Uppercase(Dir) + ';', ';' + Uppercase(Path) + ';');
+  if P = 0 then
+    exit;
+  // P points at the leading ';' added above, which is the entry's own
+  // separator (or nothing, for the first entry).
+  if P = 1 then
+    Delete(Path, 1, Length(Dir) + 1)
+  else
+    Delete(Path, P - 1, Length(Dir) + 1);
+  RegWriteExpandStringValue(HKCU, 'Environment', 'Path', Path);
 end;

@@ -4,7 +4,8 @@
 #
 #   Windows  otakase-app-windows-setup.exe      (per-user installer)
 #   macOS    otakase-app-macos.zip              (universal Otakase.app)
-#   Linux    otakase-app-linux-x86_64.AppImage
+#   Linux    otakase-app-linux-x86_64.AppImage  (--install adds it to the
+#            app menu and the otakase command)
 #
 # The in-app updater reads the version from the release tag and the size
 # and checksum GitHub records for the file.
@@ -56,6 +57,13 @@ case "$(uname -s)" in
     chmod 755 "$appdir/AppRun"
     cp packaging/linux/otakase.desktop "$appdir/otakase.desktop"
     cp ../Build/app-icon/png/otakase-256.png "$appdir/otakase.png"
+    # --install (packaging/linux/install.sh) copies these into the user's
+    # app menu and icon theme.
+    install -Dm755 packaging/linux/install.sh "$appdir/usr/share/otakase/install.sh"
+    for size in 128 256 512; do
+      install -Dm644 "../Build/app-icon/png/otakase-$size.png" \
+        "$appdir/usr/share/icons/hicolor/${size}x${size}/apps/otakase.png"
+    done
     tool=${APPIMAGETOOL:-}
     if [[ -z $tool ]]; then
       tool=build/appimagetool

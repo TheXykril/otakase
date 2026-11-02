@@ -28,6 +28,8 @@ import '../desktop/desktop_core.dart';
 import '../desktop/top_bar.dart';
 import '../desktop/window_frame.dart';
 import '../desktop/external_mpv.dart';
+import '../desktop/launcher.dart';
+import '../desktop/system_install.dart';
 
 /// What the active profile shows; the shell sets it as it builds.
 ContentMode shellContent = ContentMode.anime;
@@ -121,6 +123,9 @@ class _AppShellState extends State<AppShell> {
       await widget.services.discord.initialize();
       unawaited(widget.services.extras.refreshClub());
       if (mounted) await birthdayCapsule(context, widget.services, widget.isTV);
+      if (mounted && isDesktop && !desktopLauncher.value) {
+        await offerSystemInstall(context, widget.services.store.preferences);
+      }
     });
   }
 

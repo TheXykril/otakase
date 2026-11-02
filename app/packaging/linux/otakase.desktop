@@ -1,9 +1,16 @@
 [Desktop Entry]
 Type=Application
 Name=Otakase
-Comment=Watch and track anime
+GenericName=Video Player
+Comment=Anime, movies and shows, with your list kept in sync
 Exec=otakase
 Icon=otakase
 Categories=AudioVideo;Video;Player;
+Keywords=anime;anilist;myanimelist;trakt;movies;
 Terminal=false
 StartupWMClass=com.xyverion.otakase
+Actions=launcher;
+
+[Desktop Action launcher]
+Name=Quick launcher
+Exec=otakase --launcher

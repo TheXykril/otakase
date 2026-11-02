@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -14,6 +15,7 @@ import 'device_status.dart';
 import 'app_updates.dart';
 import '../desktop/desktop_core.dart';
 import '../desktop/launcher_shortcut.dart';
+import '../desktop/system_install.dart';
 
 Future<void> openSettings(
   BuildContext context,
@@ -127,6 +129,7 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  final systemInstall = SystemInstall();
   final scope = RequestScope();
   AppStore get store => widget.services.store;
   @override
@@ -690,6 +693,22 @@ class _SettingsPageState extends State<SettingsPage> {
               'The mpv to run: a name on PATH or a full path.',
               value: store.text('MpvPath'),
               onTap: () => edit('MpvPath'),
+            ),
+          if (systemInstall.available)
+            FutureBuilder<bool>(
+              future: systemInstall.installed(),
+              builder: (context, done) => row(
+                'Add to apps and terminal',
+                Platform.isMacOS
+                    ? 'Adds the otakase command to your terminal.'
+                    : 'Adds Otakase to your app menu and the otakase command to your terminal.',
+                value: done.data == true ? 'Added' : '',
+                icon: LucideIcons.squareTerminal,
+                onTap: () async {
+                  await runSystemInstall(context, systemInstall);
+                  if (mounted) setState(() {});
+                },
+              ),
             ),
           row(
             'Launcher shortcut',
