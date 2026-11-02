@@ -12,6 +12,8 @@ import 'components.dart';
 import 'device_status.dart';
 import 'seal.dart';
 import 'settings.dart';
+import 'downloads_page.dart';
+import '../data/movies.dart';
 import 'show_page.dart';
 import 'profiles_page.dart';
 import 'community_page.dart';
@@ -247,6 +249,20 @@ class MorePage extends StatelessWidget {
             ),
           ),
         ),
+        row(
+          'Movies & shows',
+          '${contentLabels[services.store.text('Content')] ?? ''}${services.trakt.signedIn ? ' · Trakt' : ''}',
+          LucideIcons.clapperboard,
+          () =>
+              openSettings(context, services, isTV, section: 'Movies & shows'),
+        ),
+        if (!isTV)
+          row(
+            'Downloads',
+            'Watch offline',
+            LucideIcons.download,
+            () => openDownloads(context, services, isTV),
+          ),
         row(
           'Discord',
           services.discord.linked ? services.discord.name : 'Link this profile',
@@ -506,6 +522,12 @@ class _DesktopMoreState extends State<DesktopMore> {
         const SizedBox(height: 20),
         item('Playback', LucideIcons.circlePlay),
         item('Subtitles & languages', LucideIcons.captions),
+        item('Movies & shows', LucideIcons.clapperboard),
+        item(
+          'Downloads',
+          LucideIcons.download,
+          open: () => openDownloads(context, services, true),
+        ),
         item('Appearance', LucideIcons.palette),
         item('About & updates', LucideIcons.info),
         const Divider(height: 28),
