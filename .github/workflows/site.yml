@@ -26,6 +26,37 @@ jobs:
 
       - uses: actions/configure-pages@v5
 
+      # The app screens on the site are rendered from the app's own widgets
+      # (app/test/site_screens_test.dart), so they always match the app at
+      # this commit. Show art comes from app/test/fixtures/site; nothing is
+      # downloaded.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.8"
+          channel: stable
+
+      - name: Render app screens
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter test test/site_screens_test.dart --update-goldens \
+            --dart-define=SITE_SHOTS="$RUNNER_TEMP/shots"
+
+      - name: Use the new screens
+        run: |
+          sudo apt-get install -y -qq python3-pil > /dev/null
+          rm -f site/img/shots/*.webp
+          python3 - "$RUNNER_TEMP/shots" site/img/shots <<'PY'
+          import pathlib, sys
+          from PIL import Image
+          src, dst = map(pathlib.Path, sys.argv[1:])
+          for png in sorted(src.glob('*.png')):
+              Image.open(png).convert('RGB').save(dst / f'{png.stem}.webp', 'WEBP', quality=80, method=6)
+          PY
+          ids=$(python3 -c "import json; print(', '.join(str(s['id']) for s in json.load(open('app/test/fixtures/site/shows.json'))))")
+          sed -i "s/const SHOTS = \[.*\];/const SHOTS = [$ids];/" site/app.js
+          ls site/img/shots
+
       # Browsers keep app.js and style.css for hours, so each deploy gives
       # them a new address and a reload always gets the matching files.
       - name: Stamp asset versions
