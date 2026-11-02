@@ -1190,16 +1190,22 @@ class _ShowPageState extends State<ShowPage> {
                             ),
                           ),
                           if (widget.isTV)
+                            // The same episode cards as on a computer, in a
+                            // row the remote moves along.
                             SliverToBoxAdapter(
-                              child: SizedBox(
-                                height:
-                                    170 *
-                                    MediaQuery.textScalerOf(context).scale(1),
-                                child: LayoutBuilder(
-                                  builder: (context, box) {
-                                    final width = ((box.maxWidth - 96 - 44) / 3)
-                                        .clamp(360.0, 600.0);
-                                    return RemoteFocusRow(
+                              child: LayoutBuilder(
+                                builder: (context, box) {
+                                  final width = ((box.maxWidth - 82 - 66) / 4)
+                                      .clamp(280.0, 440.0);
+                                  final text = MediaQuery.textScalerOf(context);
+                                  final height =
+                                      width * 9 / 16 +
+                                      10 +
+                                      (text.scale(20) + text.scale(17)) * 1.4 +
+                                      24;
+                                  return SizedBox(
+                                    height: height,
+                                    child: RemoteFocusRow(
                                       isTV: true,
                                       controller: episodeScroll,
                                       itemCount: anime.airedEpisodes,
@@ -1218,18 +1224,12 @@ class _ShowPageState extends State<ShowPage> {
                                             const SizedBox(width: 22),
                                         itemBuilder: (_, i) => RemoteFocusItem(
                                           index: i,
-                                          child: SizedBox(
-                                            width: width,
-                                            child: episodeRow(
-                                              i + 1,
-                                              card: true,
-                                            ),
-                                          ),
+                                          child: episodeCard(i + 1, width),
                                         ),
                                       ),
-                                    );
-                                  },
-                                ),
+                                    ),
+                                  );
+                                },
                               ),
                             )
                           else
@@ -1259,16 +1259,42 @@ class _ShowPageState extends State<ShowPage> {
                                           title: const Text('All episodes'),
                                           leading: const BackButton(),
                                         ),
-                                        body: ListView.builder(
-                                          padding: const EdgeInsets.fromLTRB(
-                                            48,
-                                            8,
-                                            48,
-                                            27,
-                                          ),
-                                          itemCount: anime.airedEpisodes,
-                                          itemBuilder: (_, i) =>
-                                              episodeRow(i + 1),
+                                        body: LayoutBuilder(
+                                          builder: (context, box) {
+                                            final width =
+                                                (box.maxWidth - 96 - 66) / 4;
+                                            final text =
+                                                MediaQuery.textScalerOf(
+                                                  context,
+                                                );
+                                            return GridView.builder(
+                                              padding:
+                                                  const EdgeInsets.fromLTRB(
+                                                    48,
+                                                    8,
+                                                    48,
+                                                    27,
+                                                  ),
+                                              gridDelegate:
+                                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                                    crossAxisCount: 4,
+                                                    crossAxisSpacing: 22,
+                                                    mainAxisSpacing: 26,
+                                                    mainAxisExtent:
+                                                        width * 9 / 16 +
+                                                        10 +
+                                                        (text.scale(20) +
+                                                                text.scale(
+                                                                  17,
+                                                                )) *
+                                                            1.4 +
+                                                        8,
+                                                  ),
+                                              itemCount: anime.airedEpisodes,
+                                              itemBuilder: (_, i) =>
+                                                  episodeCard(i + 1, width),
+                                            );
+                                          },
                                         ),
                                       ),
                                     ),
