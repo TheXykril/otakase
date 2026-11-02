@@ -334,7 +334,7 @@ func (b *bot) appCommand(i *discordgo.InteractionCreate) {
 		case errLinkTooMany:
 			b.respond(i, true, errorEmbed("Too many wrong codes. Wait a few minutes and start the link again in Otakase."))
 		default:
-			b.respond(i, true, errorEmbed("That code is wrong or expired. Codes last 10 minutes; run `otakase -discord-link` for a new one."))
+			b.respond(i, true, errorEmbed("That code is wrong or expired. Codes last 10 minutes; start again from **More → Discord** in the app for a new one."))
 		}
 	case "unlink-app":
 		if n := b.unlinkAll(user); n == 0 {
@@ -434,7 +434,7 @@ func osLabel(goos string) string {
 // linkedAppsView lists a member's apps with an unlink button each.
 func linkedAppsView(apps []memberApp) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 	if len(apps) == 0 {
-		return &discordgo.MessageEmbed{Color: shu, Description: "No Otakase app is linked. Run `otakase -discord-link` (or **Discord** in the app's menu) and follow it."},
+		return &discordgo.MessageEmbed{Color: shu, Description: "No Otakase app is linked. Open **More → Discord** in the app and follow it."},
 			[]discordgo.MessageComponent{}
 	}
 	var lines []string

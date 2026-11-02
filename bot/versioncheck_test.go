@@ -68,7 +68,7 @@ func TestLatestVersion(t *testing.T) {
 		t.Errorf("GitHub asked %d times, want 1 (cached)", calls)
 	}
 	e := outdatedEmbed("26.5.0", "26.6.0")
-	if !strings.Contains(e.Description, "26.5.0") || !strings.Contains(e.Description, "otakase -u") {
+	if !strings.Contains(e.Description, "26.5.0") || !strings.Contains(e.Description, "About & updates") {
 		t.Errorf("embed misses version or update command: %q", e.Description)
 	}
 }

@@ -164,13 +164,16 @@ server and stays connected to Discord.
 - **/purge** (manage messages) deletes up to 100 recent messages, optionally
   one member's, skipping ones older than 14 days. **/slowmode** (manage
   channels) sets a channel's slowmode.
-- **/post-welcome** (manage server) deletes the bot's posts in the welcome
-  channel and posts the welcome message again, linking channels found by
-  name, so renamed or new channels are right. The text is in `welcome.go`,
-  the header image in `assets/`.
+- **/post-info** (staff) posts the welcome, rules and FAQ messages again,
+  all three or the one picked in `post`. For each it deletes the bot's
+  recent posts in that channel (posts by other accounts stay) and posts the
+  current one, linking channels found by name, so renamed or new channels
+  are right. The FAQ post uses the answers as staff left them on the
+  dashboard. Texts are in `infoposts.go` and `content.go`, header images in
+  `assets/`.
 - **Status:** Do Not Disturb, cycling every two minutes through the custom
   statuses "Watching anime · /help", "Otakase <latest release> is out", "Get
-  it: otakase.xyverion.com", "Anime in your terminal" and "/suggest an idea"
+  it: otakase.xyverion.com", "Anime on phone, TV and PC" and "/suggest an idea"
   (`presence.go`). Custom statuses
   because the member list hides a bot's "Playing ..." text. Bots can't show
   rich presence images or buttons.

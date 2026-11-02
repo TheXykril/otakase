@@ -414,7 +414,7 @@ func TestWatchTime(t *testing.T) {
 	if !strings.Contains(e.Description, "**2 h**") || !strings.Contains(e.Description, "This week: 1 h") || !strings.Contains(e.Description, "Last week: 30 min") {
 		t.Errorf("view: %s", e.Description)
 	}
-	if e := watchTimeView("u1", true, appStats{}, now); !strings.Contains(e.Description, "otakase -discord-link") {
+	if e := watchTimeView("u1", true, appStats{}, now); !strings.Contains(e.Description, "More → Discord") {
 		t.Errorf("empty self: %s", e.Description)
 	}
 	b := appTestBot(t)

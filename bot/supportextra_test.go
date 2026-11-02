@@ -151,7 +151,7 @@ func TestPruneAnswers(t *testing.T) {
 
 func TestAnswerLabels(t *testing.T) {
 	cases := map[string]string{
-		"faq:mpv":                      "FAQ: Playback never starts",
+		"faq:mpv":                      "FAQ: An episode doesn't play",
 		"log:mpv":                      "Log fix: mpv is missing",
 		"wiki:Troubleshooting#mpv-fix": "Wiki: Troubleshooting › mpv fix",
 		"version":                      "Update reminder",
@@ -267,7 +267,9 @@ func TestDiagnosticsBlockIsRead(t *testing.T) {
 
 func TestDiagnoseEmbed(t *testing.T) {
 	e := diagnoseEmbed()
-	if len(e.Fields) != 3 || !strings.Contains(e.Fields[2].Value, "otakase -diag | clip") {
-		t.Fatalf("%+v", e.Fields)
+	for _, want := range []string{"Report a problem", "About & updates", "Diagnostics"} {
+		if !strings.Contains(e.Description, want) {
+			t.Errorf("missing %q: %s", want, e.Description)
+		}
 	}
 }

@@ -31,8 +31,15 @@ var intentExamples = map[string][]string{
 		"no episodes found for this show", "the show I want isn't there",
 		"can't find one piece", "searching for a show gives nothing",
 	},
-	"icons": {
-		"menu icons show as boxes", "weird squares instead of icons", "icons look broken in the menu",
+	"tv": {
+		"my tv can't sign in", "the tv login code doesn't work", "tv stuck on the qr code",
+		"can't log in on android tv",
+	},
+	"mac": {
+		"mac says the app is damaged", "can't open the app on macos", "macos won't open otakase",
+	},
+	"discord": {
+		"how do I link the app to discord", "how to connect otakase to discord", "link my discord account",
 	},
 	"sync": {
 		"my anilist progress didn't update", "episodes aren't tracked on myanimelist",

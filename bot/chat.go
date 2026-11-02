@@ -118,7 +118,6 @@ type autoRule struct {
 
 var autoRules = []autoRule{
 	{regexp.MustCompile(`(?i)\bmpv\b.*\b(not found|missing|not installed|isn'?t installed|no such file)|(not found|missing).*\bmpv\b`), "mpv"},
-	{regexp.MustCompile(`(?i)\bicons?\b.*\b(boxes|squares|question marks|broken|weird)\b`), "icons"},
 	{regexp.MustCompile(`(?i)\b(nothing|no results?|no anime|can'?t find any)\b.*\b(found|show|search|anime)\b`), "nothing-found"},
 	{regexp.MustCompile(`(?i)\b(anilist|mal|myanimelist|progress)\b.*\b(not|doesn'?t|didn'?t|won'?t)\b.*\b(sync|updat|track)`), "sync"},
 	{regexp.MustCompile(`(?i)\b(cast|chromecast|tv|kodi|dlna)\b.*\b(not found|can'?t find|doesn'?t (show|find)|not showing)\b`), "cast"},

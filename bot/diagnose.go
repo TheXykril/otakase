@@ -6,24 +6,23 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// /diagnose tells members how to get `otakase -diag` output for their post.
-// The log reader and version check read the pasted block like any log.
+// /diagnose tells members how to share what the app knows about their
+// problem in their support post.
 
 func diagnoseEmbed() *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title: "Share your diagnostics",
 		Color: shu,
 		Description: strings.Join([]string{
-			"`otakase -diag` prints your version, system, mpv, where your config and log are, and the end of the log from your last run. Tokens and passwords are hidden.",
+			"The easiest way is **More → Report a problem** in the app. It posts to the support forum for you, " +
+				"with your version, device and the app's details attached. It needs the app linked to Discord (**More → Discord**).",
 			"",
-			"Run otakase once and let the problem happen, then run the command below and paste the whole block (with the ``` lines) in your support post.",
+			"Otherwise, add to your post:",
+			"- Your version, from **About & updates** (in More or Settings)",
+			"- Your device: Android phone, Android TV, Windows, macOS or Linux",
+			"- A screenshot of **Diagnostics** (in More or Settings), which shows which sources answer",
 		}, "\n"),
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Linux", Value: "```sh\notakase -diag\n```Copy it straight away with `otakase -diag | wl-copy` (Wayland) or `otakase -diag | xclip -sel clip` (X11)."},
-			{Name: "macOS", Value: "```sh\notakase -diag | pbcopy\n```Then paste it in your post."},
-			{Name: "Windows", Value: "In PowerShell or Command Prompt:\n```powershell\notakase -diag | clip\n```Then paste it in your post."},
-		},
-		Footer: &discordgo.MessageEmbedFooter{Text: "Says the flag is unknown? Update first with otakase -u"},
+		Footer: &discordgo.MessageEmbedFooter{Text: "Tokens and passwords are never included"},
 	}
 }
 
