@@ -212,7 +212,15 @@ class SourceResolver {
   }) async {
     final order = await sourcesFor(anime);
     scope.check();
-    final remembered = store.preferredSource(anime);
+    final manual = store.manualMatch(anime);
+    if (manual != null) {
+      // The viewer's own pick: tried first, with the show they chose.
+      _matches['${manual['provider']}:${anime.key}:${manual['mode']}'] =
+          manual['id']!;
+    }
+    final remembered = manual != null && order.contains(manual['provider'])
+        ? manual['provider']
+        : store.preferredSource(anime);
     final providers = [
       if (order.contains(remembered) && !exclude.contains(remembered))
         remembered!,
@@ -321,6 +329,54 @@ class SourceResolver {
     );
   }
 
+  /// Drops the matches remembered for a show, so the next play matches it
+  /// again.
+  void forget(Anime anime) =>
+      _matches.removeWhere((k, _) => k.contains(':${anime.key}:'));
+
+  /// The viewer's own search, in every source this show may play from at
+  /// once. Each result keeps its source's place in the order, which is how
+  /// sources are named to the viewer.
+  Future<List<FoundShow>> searchAll(
+    Anime anime,
+    String query,
+    String mode,
+    RequestScope scope,
+  ) async {
+    final order = await sourcesFor(anime);
+    final found = await Future.wait(
+      order.map((provider) async {
+        try {
+          final d = await core.request(
+            {
+              'operation': 'search',
+              'provider': provider,
+              'mode': mode,
+              'query': query,
+            },
+            scope: scope,
+            timeout: const Duration(seconds: 30),
+          );
+          return [
+            for (final v in (d['shows'] as List? ?? []).whereType<Map>())
+              if ('${v['id'] ?? ''}'.isNotEmpty)
+                FoundShow(
+                  provider: provider,
+                  place: order.indexOf(provider) + 1,
+                  id: '${v['id']}',
+                  title: '${v['title'] ?? v['label'] ?? ''}',
+                  label: '${v['label'] ?? ''}',
+                ),
+          ];
+        } catch (_) {
+          scope.check();
+          return <FoundShow>[];
+        }
+      }),
+    );
+    return [for (final list in found) ...list.take(12)];
+  }
+
   Future<List<SkipSpan>> skips(
     PlaybackSource source,
     int episode,
@@ -372,4 +428,19 @@ class SourceResolver {
       return [];
     }
   }
+}
+
+/// One result of the viewer's own search.
+class FoundShow {
+  const FoundShow({
+    required this.provider,
+    required this.place,
+    required this.id,
+    required this.title,
+    required this.label,
+  });
+  final String provider, id, title, label;
+
+  /// The source's place in the order, from 1.
+  final int place;
 }

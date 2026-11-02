@@ -12,6 +12,7 @@ import 'desktop/desktop_core.dart';
 import 'desktop/launcher.dart';
 import 'desktop/window_frame.dart';
 import 'services.dart';
+import 'ui/rate_prompt.dart';
 import 'ui/app_shell.dart';
 import 'ui/components.dart';
 import 'ui/seal.dart';
@@ -166,6 +167,7 @@ class OtakaseApp extends StatefulWidget {
 }
 
 class _OtakaseAppState extends State<OtakaseApp> {
+  late final ratingPrompt = RatingPrompt(widget.services, isTV: widget.isTV);
   Future<void> openFullApp() async {
     await resizeDesktopWindow(launcher: false);
     desktopLauncher.value = false;
@@ -217,6 +219,7 @@ class _OtakaseAppState extends State<OtakaseApp> {
       isTV: widget.isTV,
       child: MaterialApp(
         title: 'Otakase',
+        navigatorObservers: [ratingPrompt],
         debugShowCheckedModeBanner: false,
         builder: (context, child) => DesktopFrame(
           child: widget.isTV && !desktopLauncher.value

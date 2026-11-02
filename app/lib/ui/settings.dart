@@ -83,6 +83,10 @@ const settingLabels = <String, String>{
   'SkipRecap': 'Skip recaps',
   'NormalizeVolume': 'Even out volume',
   'SkipFiller': 'Skip filler episodes',
+  'IntroDBSkipTimes': 'TheIntroDB skip times',
+  'AnimeSkipTimes': 'Anime-Skip skip times',
+  'ScoreOnCompletion': 'Rate when I finish a show',
+  'DiscordPresence': 'Show what I watch in Discord',
   'SkipDelay': 'Skip delay',
   'Quality': 'Quality',
   'TorrentSources': 'Torrent sources',
@@ -633,6 +637,29 @@ class _SettingsPageState extends State<SettingsPage> {
           'SkipFiller',
           'Skip verified filler when advancing automatically.',
         ),
+        toggle(
+          'IntroDBSkipTimes',
+          'Also look skip times up in TheIntroDB. AniSkip is always asked.',
+          icon: LucideIcons.flag,
+        ),
+        toggle(
+          'AnimeSkipTimes',
+          'Also look skip times up in Anime-Skip.',
+          icon: LucideIcons.flag,
+        ),
+        toggle(
+          'ScoreOnCompletion',
+          'Ask for a score after the last episode of a finished show.',
+          icon: LucideIcons.star,
+        ),
+        if (isDesktop)
+          toggle(
+            'DiscordPresence',
+            store.adultAllowed
+                ? 'Your Discord status shows the show and episode playing. 18+ titles never show.'
+                : 'Your Discord status shows the show and episode playing.',
+            icon: LucideIcons.messageCircle,
+          ),
         row(
           'Quality',
           'Default video height, or best.',

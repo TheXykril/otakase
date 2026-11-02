@@ -28,7 +28,7 @@ import (
 // The page signs in with the Embedded App SDK: Discord gives it a code,
 // the bot trades the code for the member's id with the app's client
 // secret and hands the page its own session token. Set-up is in
-// wiki/Developer-Discord-Bot.md (Activity).
+// the bot dev notes (Activity).
 
 //go:embed assets/activity
 var activityFiles embed.FS
@@ -451,7 +451,7 @@ func (b *bot) activityCover(w http.ResponseWriter, r *http.Request) {
 
 // proxyAniList passes a picture on AniList's image host through.
 func proxyAniList(w http.ResponseWriter, r *http.Request, src string) {
-	if !strings.HasPrefix(src, "https://media.kitsu.io/") && !strings.HasPrefix(src, "https://s4.anilist.co/") && !strings.HasPrefix(src, "https://img1.ak.crunchyroll.com/") && !strings.HasPrefix(src, "https://static.crunchyroll.com/") {
+	if !strings.HasPrefix(src, "https://media.kitsu.io/") && !strings.HasPrefix(src, "https://s4.anilist.co/") && !strings.HasPrefix(src, "https://img1.ak.crunchyroll.com/") && !strings.HasPrefix(src, "https://static.crunchyroll.com/") && !strings.HasPrefix(src, "https://artworks.thetvdb.com/") {
 		http.NotFound(w, r)
 		return
 	}

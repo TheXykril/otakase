@@ -1120,11 +1120,13 @@ class CoverImage extends StatelessWidget {
     required this.height,
     this.banner = false,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
   });
   final String url;
   final double width, height;
   final bool banner;
   final BoxFit fit;
+  final Alignment alignment;
   @override
   Widget build(BuildContext context) {
     final pixels =
@@ -1147,6 +1149,7 @@ class CoverImage extends StatelessWidget {
           width: width,
           height: height,
           fit: fit,
+          alignment: alignment,
         ),
       );
     }
@@ -1156,6 +1159,7 @@ class CoverImage extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
+        alignment: alignment,
         memCacheWidth: pixels,
         maxWidthDiskCache: pixels,
         fadeInDuration: const Duration(milliseconds: 180),
@@ -1217,12 +1221,107 @@ class TVHomeHero extends StatelessWidget {
   );
 }
 
+/// Art for an episode with no still of its own and a show with no banner:
+/// the cover as a soft colour wash with the episode number on it, so a row
+/// of episodes doesn't repeat one cropped poster.
+class EpisodeArtFallback extends StatelessWidget {
+  const EpisodeArtFallback(
+    this.cover,
+    this.episode, {
+    super.key,
+    required this.width,
+    required this.height,
+  });
+  final String cover;
+  final int episode;
+  final double width, height;
+  @override
+  Widget build(BuildContext context) => ClipRect(
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        const ColoredBox(color: panelRaised),
+        ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Opacity(
+            opacity: .55,
+            child: Transform.scale(
+              scale: 1.3,
+              child: CoverImage(cover, width: width, height: height),
+            ),
+          ),
+        ),
+        Center(
+          child: Text(
+            episode.toString().padLeft(2, '0'),
+            style: display.copyWith(
+              fontSize: height * .42,
+              height: 1,
+              color: fgBright.withValues(alpha: .92),
+              shadows: const [Shadow(color: Color(0x99000000), blurRadius: 12)],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// A show without a banner in a wide slot: the cover as a colour wash with
+/// the sharp cover set into it, instead of a cropped, enlarged poster.
+class WideCoverArt extends StatelessWidget {
+  const WideCoverArt(
+    this.cover, {
+    super.key,
+    required this.width,
+    required this.height,
+  });
+  final String cover;
+  final double width, height;
+  @override
+  Widget build(BuildContext context) {
+    final inset = height * .1;
+    final posterHeight = height - inset * 2;
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const ColoredBox(color: panelRaised),
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Opacity(
+              opacity: .55,
+              child: Transform.scale(
+                scale: 1.3,
+                child: CoverImage(cover, width: width, height: height),
+              ),
+            ),
+          ),
+          Positioned(
+            left: inset * 1.4,
+            top: inset,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: CoverImage(
+                cover,
+                width: posterHeight * 2 / 3,
+                height: posterHeight,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class HeroArt extends StatelessWidget {
   const HeroArt(
     this.anime, {
     super.key,
     required this.height,
     this.posterPadding = EdgeInsets.zero,
+    this.poster = true,
   });
   final Anime anime;
   final double height;
@@ -1230,10 +1329,24 @@ class HeroArt extends StatelessWidget {
   /// Space kept around the poster shown when there is no banner, so it stays
   /// clear of anything drawn over the art.
   final EdgeInsets posterPadding;
+
+  /// Whether a wide screen without a banner shows the cover as a poster.
+  /// Off where the page draws its own poster.
+  final bool poster;
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final cover = anime.coverLarge.isNotEmpty ? anime.coverLarge : anime.cover;
+    // A phone is about as wide as the cover: it fills the header, cropped
+    // to the upper part where faces usually are. Wider screens would blow
+    // the cover up past its resolution, so it becomes a soft colour wash
+    // with the cover itself shown as a framed poster.
+    final narrow = width < 700;
+    final framed = poster && !narrow;
+    final posterHeight = posterPadding == EdgeInsets.zero
+        ? height * .74
+        : height - posterPadding.vertical;
     return ClipRect(
       child: Stack(
         fit: StackFit.expand,
@@ -1241,42 +1354,66 @@ class HeroArt extends StatelessWidget {
           const ColoredBox(color: bgDeep),
           if (anime.banner.isNotEmpty)
             CoverImage(anime.banner, width: width, height: height, banner: true)
+          else if (narrow)
+            CoverImage(
+              key: const Key('hero-fallback-cover'),
+              cover,
+              width: width,
+              height: height,
+              banner: true,
+              alignment: const Alignment(0, -.45),
+            )
           else ...[
             ImageFiltered(
               key: const Key('hero-fallback-backdrop'),
-              imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+              imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
               child: Opacity(
-                opacity: .45,
-                child: CoverImage(
-                  cover,
-                  width: width,
-                  height: height,
-                  banner: true,
-                ),
-              ),
-            ),
-            Padding(
-              padding: posterPadding,
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: SizedBox(
-                  width: (height - posterPadding.vertical) * 2 / 3,
-                  height: height - posterPadding.vertical,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(
-                      posterPadding == EdgeInsets.zero ? 0 : 14,
-                    ),
-                    child: CoverImage(
-                      key: const Key('hero-fallback-poster'),
-                      cover,
-                      width: (height - posterPadding.vertical) * 2 / 3,
-                      height: height - posterPadding.vertical,
-                      fit: BoxFit.contain,
-                    ),
+                opacity: .5,
+                child: Transform.scale(
+                  scale: 1.2,
+                  child: CoverImage(
+                    cover,
+                    width: width,
+                    height: height,
+                    alignment: const Alignment(0, -.3),
                   ),
                 ),
               ),
             ),
+            if (framed)
+              Padding(
+                padding: posterPadding == EdgeInsets.zero
+                    ? EdgeInsets.fromLTRB(0, height * .13, width * .08, 0)
+                    : posterPadding,
+                child: Align(
+                  alignment: posterPadding == EdgeInsets.zero
+                      ? Alignment.topRight
+                      : Alignment.centerRight,
+                  child: Container(
+                    width: posterHeight * 2 / 3,
+                    height: posterHeight,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x99000000),
+                          blurRadius: 30,
+                          offset: Offset(0, 14),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: CoverImage(
+                        key: const Key('hero-fallback-poster'),
+                        cover,
+                        width: posterHeight * 2 / 3,
+                        height: posterHeight,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
           const DecoratedBox(
             decoration: BoxDecoration(
@@ -1409,13 +1546,18 @@ class _PosterCardState extends State<PosterCard> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          CoverImage(
-                            widget.landscape && a.banner.isNotEmpty
-                                ? a.banner
-                                : a.cover,
-                            width: widget.width,
-                            height: widget.width * 1.5,
-                          ),
+                          if (widget.landscape && a.banner.isEmpty)
+                            WideCoverArt(
+                              a.cover,
+                              width: widget.width,
+                              height: widget.width * 9 / 16,
+                            )
+                          else
+                            CoverImage(
+                              widget.landscape ? a.banner : a.cover,
+                              width: widget.width,
+                              height: widget.width * 1.5,
+                            ),
                           if (widget.progress != null && widget.progress! > 0)
                             Positioned(
                               left: 0,

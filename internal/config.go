@@ -156,7 +156,7 @@ type Config struct {
 	// menu: the process-global cast reader is parked in os.Stdin.Read for the
 	// whole run and would split the keystrokes with a Bubble Tea reader on the
 	// same descriptor, and a menu nobody is at blocks the season outright.
-	// See wiki/Developer-Cast-Window-Prompts.md.
+	// See the cast window prompts dev notes.
 	CastNonInteractive bool `config:"-"`
 	// ExperimentalMovies turns on the Movies menu: non-anime movies from a
 	// site outside AniList and MyAnimeList, tracked locally only. Off by

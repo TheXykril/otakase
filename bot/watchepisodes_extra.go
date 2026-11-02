@@ -37,7 +37,7 @@ func episodeImage(src string) string {
 		return ""
 	}
 	switch u.Hostname() {
-	case "media.kitsu.io", "s4.anilist.co", "img1.ak.crunchyroll.com", "static.crunchyroll.com":
+	case "media.kitsu.io", "s4.anilist.co", "img1.ak.crunchyroll.com", "static.crunchyroll.com", "artworks.thetvdb.com":
 		return "api/watch/cover?u=" + url.QueryEscape(src)
 	}
 	return ""
@@ -96,4 +96,31 @@ func extraEpisodePreviews(ctx context.Context, show watchShow, result map[int]wa
 		}
 	}
 
+}
+
+// aniZipEpisodePreviews reads ani.zip, which is keyed by the AniList id and
+// carries TVDB episode stills and English titles.
+func aniZipEpisodePreviews(ctx context.Context, show watchShow, result map[int]watchEpisodePreview) {
+	if show.ID < 1 {
+		return
+	}
+	var payload struct {
+		Episodes map[string]struct {
+			Title struct {
+				En string `json:"en"`
+			} `json:"title"`
+			Image string `json:"image"`
+		} `json:"episodes"`
+	}
+	if !episodeJSON(ctx, fmt.Sprintf("https://api.ani.zip/mappings?anilist_id=%d", show.ID), &payload) {
+		return
+	}
+	max := show.lastEpisode()
+	for key, ep := range payload.Episodes {
+		var number int
+		if _, err := fmt.Sscanf(key, "%d", &number); err != nil || fmt.Sprint(number) != key {
+			continue
+		}
+		fillEpisode(result, number, max, ep.Title.En, ep.Image)
+	}
 }

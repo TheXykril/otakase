@@ -492,7 +492,7 @@ func prepareCastSession(config *Config, session *castSessionFile) (*Anime, strin
 	// The viewer is across the room. A menu opened here blocks the season on an
 	// answer nobody is there to give, and its keystrokes would be split with the
 	// process-global cast reader anyway. Prompts on this path take a declared
-	// default and report it -- see wiki/Developer-Cast-Window-Prompts.md.
+	// default and report it -- see the cast window prompts dev notes.
 	config.CastNonInteractive = true
 	if session.Device != "" {
 		config.CastDevice = session.Device

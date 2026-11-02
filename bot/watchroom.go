@@ -1731,8 +1731,9 @@ func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
 	tenrai := make(map[int]watchEpisodePreview)
 	jikan := make(map[int]watchEpisodePreview)
 	kitsu := make(map[int]watchEpisodePreview)
+	anizip := make(map[int]watchEpisodePreview)
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
 	go func() {
 		defer wg.Done()
 		if show.MalID > 0 {
@@ -1857,10 +1858,25 @@ func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 		extraEpisodePreviews(ctx, show, kitsu)
 	}()
+	go func() {
+		defer wg.Done()
+		aniZipEpisodePreviews(ctx, show, anizip)
+	}()
 	wg.Wait()
 	result := make(map[int]watchEpisodePreview)
 	for ep, v := range kitsu {
 		result[ep] = v
+	}
+	// ani.zip fills what Kitsu left empty, as in the app.
+	for ep, v := range anizip {
+		old := result[ep]
+		if old.Title == "" {
+			old.Title = v.Title
+		}
+		if old.Thumbnail == "" {
+			old.Thumbnail = v.Thumbnail
+		}
+		result[ep] = old
 	}
 	for ep, v := range jikan {
 		old := result[ep]

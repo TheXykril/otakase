@@ -20,8 +20,11 @@ import 'services.dart';
 import 'tls_ca.dart';
 import 'ui/components.dart';
 import 'ui/device_status.dart';
+import 'ui/find_show.dart';
 import 'ui/seal.dart';
+import 'ui/skip_marker.dart';
 import 'ui/progress_thread.dart';
+import 'ui/rate_prompt.dart';
 import 'ui/watch_party_page.dart';
 
 class PlayerPage extends StatefulWidget {
@@ -80,6 +83,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   List<int> availableQualities = [];
   SkipSpan? active;
   final skipped = <String>{};
+
+  /// The kind of span the viewer is marking, or null.
+  String? marking;
+  SkipSpan? markingExisting;
   Duration position = Duration.zero, duration = Duration.zero;
   late final CastClient caster = CastClient(widget.services.core);
 
@@ -133,6 +140,20 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           anime,
           episode,
           (casting ? position : player.state.position).inMilliseconds / 1000,
+        );
+        unawaited(
+          widget.services.presence.episode(
+            anime,
+            episode,
+            paused: !isPlaying,
+            position:
+                (casting ? position : player.state.position).inMilliseconds /
+                1000,
+            duration: duration.inMilliseconds / 1000,
+            joinUrl: widget.services.party.watchWithMe
+                ? widget.services.party.joinUrl ?? ''
+                : '',
+          ),
         );
       }
     });
@@ -328,6 +349,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Future<void> open({int? mirror}) async {
+    marking = null;
     if (profileStopped) return;
     final g = ++generation;
     scope.cancel();
@@ -459,10 +481,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       episode,
       scope,
     );
-    final extra = await widget.services.catalog.skipTimes(
-      anime.malId,
+    final extra = await widget.services.skipTimes.lookup(
+      anime,
       episode,
       duration.inMilliseconds / 1000,
+      scope: scope,
     );
     if (!mounted || g != generation) return;
     final merged = [
@@ -658,6 +681,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             widget.services.store.integer('PercentageToMarkComplete');
     if (watched) {
       if (completedEpisodes.add(episode)) {
+        if (finishesShow(widget.services, anime, episode)) {
+          widget.services.ratingDue = anime;
+        }
         await resumePusher.episodeDone(anime.key, episode, anime.episodes);
       }
     } else {
@@ -687,6 +713,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           !scrubbing &&
           active == null &&
           countdownSeconds == 0 &&
+          marking == null &&
           !casting &&
           player.state.playing) {
         setState(() => overlay = false);
@@ -1092,6 +1119,108 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
   }
 
+  /// The skip times panel: where each span came from, votes, marking.
+  Future<void> skipPanel() async {
+    panelOpen = true;
+    showControls();
+    final choice = await showSkipTimesPanel(
+      context,
+      spans: spans,
+      skipTimes: widget.services.skipTimes,
+      canSubmit: anime.malId > 0 && duration > Duration.zero,
+      isTV: widget.isTV,
+    );
+    panelOpen = false;
+    if (!mounted) return;
+    switch (choice) {
+      case MarkSpan(:final type):
+        setState(() {
+          marking = type;
+          markingExisting = spans.where((s) => s.type == type).firstOrNull;
+        });
+      case WatchSpan(:final span):
+        await seekTo(
+          Duration(milliseconds: (math.max(0, span.start - 2) * 1000).round()),
+        );
+        // Watching a span on purpose: don't skip it.
+        skipped.add('${span.type}:${span.start}');
+      case null:
+        playFocus.requestFocus();
+    }
+    showControls();
+  }
+
+  Future<String?> sendSpan(double start, double end) async {
+    final type = marking;
+    if (type == null) return 'Nothing is being marked.';
+    try {
+      final id = await widget.services.skipTimes.submit(
+        anime,
+        episode,
+        type,
+        start,
+        end,
+        duration.inMilliseconds / 1000,
+      );
+      if (mounted) {
+        setState(() {
+          spans = [
+            ...spans.where((s) => s.type != type),
+            SkipSpan(type, start, end, source: 'aniskip', id: id),
+          ]..sort((a, b) => a.start.compareTo(b.start));
+        });
+      }
+      return null;
+    } on CoreFailure catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'AniSkip could not be reached. Try again later.';
+    }
+  }
+
+  void closeMarker() {
+    setState(() {
+      marking = null;
+      markingExisting = null;
+    });
+    playFocus.requestFocus();
+    showControls();
+  }
+
+  Widget markerCard() => SkipMarkerCard(
+    key: ValueKey('marker-$marking-$episode'),
+    type: marking!,
+    existing: markingExisting,
+    position: () => position.inMilliseconds / 1000,
+    duration: duration.inMilliseconds / 1000,
+    seekTo: (seconds) async {
+      skipped.addAll(spans.map((s) => '${s.type}:${s.start}'));
+      await seekTo(Duration(milliseconds: (seconds * 1000).round()));
+      if (!isPlaying) await resumePlayback();
+    },
+    send: sendSpan,
+    onClose: closeMarker,
+    isTV: widget.isTV,
+  );
+
+  /// The viewer's own search, when the automatic match is wrong or found
+  /// nothing; playback starts again from the pick.
+  Future<void> findMyself() async {
+    panelOpen = true;
+    final picked = await findShowMyself(
+      context,
+      widget.services,
+      anime,
+      widget.isTV,
+    );
+    panelOpen = false;
+    if (!picked || !mounted) return;
+    await save();
+    failedSources.clear();
+    setState(() => error = '');
+    await open();
+  }
+
   Future<void> tryAnotherCopy({bool automatic = false}) async {
     await save();
     if (source != null && copy + 1 < source!.streams.length) {
@@ -1220,6 +1349,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     discordMeter?.cancel();
     unawaited(widget.services.discord.stopWatching());
+    unawaited(widget.services.presence.clear());
     generation++;
     scope.cancel();
     hideTimer?.cancel();
@@ -1351,6 +1481,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           onMute: toggleMute,
           onTracks: () => unawaited(trackPanel()),
           onQuality: () => unawaited(qualityPanel()),
+          onSkipTimes: () => unawaited(skipPanel()),
           onFullscreen: () => unawaited(toggleFullscreen()),
         ),
         Positioned(
@@ -1457,9 +1588,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) => PopScope(
-    canPop: !overlay || busy || error.isNotEmpty,
+    canPop: marking == null && (!overlay || busy || error.isNotEmpty),
     onPopInvokedWithResult: (popped, result) {
-      if (!popped) {
+      if (!popped && marking != null) {
+        closeMarker();
+      } else if (!popped) {
         setState(() => overlay = false);
         surface.requestFocus();
       }
@@ -1501,6 +1634,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   isTV: widget.isTV,
                   onStop: () => unawaited(stopCast()),
                 ),
+              if (marking != null && !busy && error.isEmpty)
+                Positioned(
+                  top: isDesktop ? 72 : 88,
+                  right: 24,
+                  left: widget.isTV || isDesktop ? null : 16,
+                  child: SafeArea(child: markerCard()),
+                ),
               PartyOverlay(
                 party: widget.services.party,
                 controls: overlay && !busy,
@@ -1535,10 +1675,23 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     child: EmptyState(
                       error: true,
                       message: error,
-                      action: AppButton(
-                        label: 'Try another copy',
-                        onPressed: tryAnotherCopy,
-                        isTV: widget.isTV,
+                      action: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          AppButton(
+                            label: 'Try another copy',
+                            onPressed: tryAnotherCopy,
+                            isTV: widget.isTV,
+                          ),
+                          AppButton(
+                            label: 'Find it myself',
+                            icon: LucideIcons.search,
+                            onPressed: findMyself,
+                            isTV: widget.isTV,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1766,6 +1919,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                 AppButton(
                                   label: 'Quality',
                                   onPressed: qualityPanel,
+                                  isTV: widget.isTV,
+                                ),
+                                AppButton(
+                                  label: 'Skip times',
+                                  onPressed: skipPanel,
                                   isTV: widget.isTV,
                                 ),
                               ],

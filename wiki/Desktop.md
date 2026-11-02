@@ -23,6 +23,14 @@ from anywhere. On Hyprland, for example:
 bind = SUPER SHIFT, A, exec, ~/Applications/otakase-app-linux-x86_64.AppImage --launcher
 ```
 
+## Discord status
+
+With the Discord app open on the same computer, your Discord status shows
+what is playing: the show, the episode, its cover and the time left, with
+links to AniList and MyAnimeList (or a *Watch with me* button while Watch with
+me is on). Films and series show too. Turn it off under **Settings →
+Playback → Show what I watch in Discord**.
+
 ## Updates
 
 The app checks for new releases and installs them:

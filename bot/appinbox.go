@@ -20,7 +20,7 @@ import (
 //
 // The heartbeat's answer also carries "inbox": n, the number waiting.
 // Item kinds are the app's to understand; one it doesn't know it acks and
-// drops. See wiki/Developer-App-Link.md for the kinds.
+// drops.
 
 const (
 	maxInboxItems = 50

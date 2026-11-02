@@ -358,9 +358,22 @@ class WatchEntry {
 }
 
 class SkipSpan {
-  const SkipSpan(this.type, this.start, this.end);
+  const SkipSpan(
+    this.type,
+    this.start,
+    this.end, {
+    this.source = '',
+    this.id = '',
+  });
   final String type;
   final double start, end;
+
+  /// Where the times came from: a skip time service, or empty for the
+  /// source playing the episode.
+  final String source;
+
+  /// The AniSkip id a vote names; empty for other services.
+  final String id;
   bool contains(double seconds) => seconds >= start && seconds < end;
   String get label => switch (type) {
     'op' => 'Skip Intro',

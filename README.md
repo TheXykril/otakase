@@ -129,7 +129,6 @@ numbers from [Jikan](https://jikan.moe/). The app's icons are [Lucide](https://l
 
 Pull requests are open to the project's collaborators only. Bug reports are
 welcome as issues, and ideas on [Discord](https://otakase.xyverion.com/discord/).
-See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

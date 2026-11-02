@@ -1,5 +1,5 @@
 // Edge cache for the watch room's video segments, a Cloudflare Worker.
-// Setup: wiki/Developer-Discord-Bot.md, "Watch room edge cache".
+// Setup: the bot dev notes, "Watch room edge cache".
 //
 // It passes on only watch room segments (/activity/api/watch/media/<key>/<n>.ts)
 // from the bot and keeps each one in Cloudflare's cache for six hours, so

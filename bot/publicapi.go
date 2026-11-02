@@ -19,7 +19,7 @@ import (
 // The public API is what the Otakase app talks to. It listens on its own
 // port (8100 by default as a Home Assistant add-on), reached from the
 // internet through a Cloudflare Tunnel, and never shares a port with the
-// ingress-only dashboard. See wiki/Developer-App-Link.md for the protocol.
+// ingress-only dashboard.
 
 // appLink is one linked Otakase app, stored by the hash of its token.
 type appLink struct {
