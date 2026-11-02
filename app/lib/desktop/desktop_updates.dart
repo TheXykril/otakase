@@ -5,14 +5,14 @@ import 'package:flutter/services.dart';
 import '../data/app_updates.dart';
 import 'window_frame.dart';
 
-/// Which desktop build this is. Each has its own release file and metadata.
+/// Which desktop build this is. Each has its own release file.
 enum DesktopTarget {
-  windows('otakase-app-windows-setup.exe', 'otakase-app-windows.json'),
-  macos('otakase-app-macos.zip', 'otakase-app-macos.json'),
-  linux('otakase-app-linux-x86_64.AppImage', 'otakase-app-linux-x86_64.json');
+  windows('otakase-app-windows-setup.exe'),
+  macos('otakase-app-macos.zip'),
+  linux('otakase-app-linux-x86_64.AppImage');
 
-  const DesktopTarget(this.fileName, this.manifestName);
-  final String fileName, manifestName;
+  const DesktopTarget(this.fileName);
+  final String fileName;
 
   static DesktopTarget get current => Platform.isWindows
       ? windows
@@ -66,10 +66,6 @@ class DesktopUpdatePlatform extends UpdatePlatform {
   final Future<void> Function() _quit;
   final int processId;
 
-  @override
-  String get manifestName => target.manifestName;
-  @override
-  String get fileKey => 'file';
   @override
   String get fileName => target.fileName;
   @override

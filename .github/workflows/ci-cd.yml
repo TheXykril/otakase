@@ -106,9 +106,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 .github/release_notes.py dist/release-notes-extra.md
 
-      # Asset names are what the in-app updaters download: otakase-android.*
-      # (app/lib/data/app_updates.dart) and otakase-app-<os>.*
-      # (app/lib/desktop/desktop_updates.dart).
+      # Asset names are what the in-app updaters download
+      # (app/lib/data/app_updates.dart, app/lib/desktop/desktop_updates.dart);
+      # they read the version from the tag and size and checksum from GitHub.
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: "v${{ env.OTAKASE_VERSION }}"
@@ -119,13 +119,9 @@ jobs:
           body_path: dist/release-notes-extra.md
           files: |
             dist/otakase-android.apk
-            dist/otakase-android.json
             dist/otakase-app-windows-setup.exe
-            dist/otakase-app-windows.json
             dist/otakase-app-macos.zip
-            dist/otakase-app-macos.json
             dist/otakase-app-linux-x86_64.AppImage
-            dist/otakase-app-linux-x86_64.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

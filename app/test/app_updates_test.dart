@@ -13,15 +13,6 @@ final apkBytes = List<int>.generate(1024, (i) => i % 256);
 final checksum = sha256.convert(apkBytes).toString();
 const base = 'https://github.com/TheXykril/otakase/releases/download/v26.7.0';
 
-Map<String, dynamic> manifest({int code = 1025}) => {
-  'schema': 1,
-  'package_name': androidPackage,
-  'version_name': '0.1.0',
-  'version_code': code,
-  'apk': androidApk,
-  'size': apkBytes.length,
-  'sha256': checksum,
-};
 Map<String, dynamic> asset(String name) => {
   'name': name,
   'size': apkBytes.length,
@@ -120,21 +111,20 @@ void main() {
   late Directory directory;
   late UpdateHost host;
   late AppUpdates updates;
-  late Map<String, dynamic> release, metadata;
+  late Map<String, dynamic> release;
   late List<int> download;
   var status = 200;
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('otakase-updates-');
     host = UpdateHost(directory);
-    metadata = manifest();
     download = apkBytes;
     status = 200;
     release = {
       'tag_name': 'v26.7.0',
       'draft': false,
       'prerelease': false,
-      'assets': [asset(androidManifest), asset(androidApk)],
+      'assets': [asset(androidApk)],
     };
     updates = AppUpdates(
       platform: host,
@@ -142,9 +132,7 @@ void main() {
         if (request.url.host == 'api.github.com') {
           return http.Response(jsonEncode(release), status);
         }
-        if (request.url.path.endsWith('.json')) {
-          return http.Response(jsonEncode(metadata), 200);
-        }
+        expect(request.url.pathSegments.last, androidApk);
         return http.Response.bytes(download, 200);
       }),
     );
@@ -155,13 +143,15 @@ void main() {
   });
 
   test(
-    'uses the Android code, ignoring the unrelated CLI tag and equal app names',
+    'reads the version from the release tag and offers only newer builds',
     () async {
       await updates.check();
       expect(updates.phase, UpdatePhase.available);
       expect(updates.installed!.code, 3);
-      expect(updates.update!.code, 1025);
-      for (final installed in [1025, 1026]) {
+      expect(updates.update!.code, 26007000);
+      expect(updates.update!.name, '26.7.0');
+      expect(updates.update!.checksum, checksum);
+      for (final installed in [26007000, 26007001]) {
         host.code = installed;
         await updates.check();
         expect(updates.phase, UpdatePhase.current);
@@ -175,15 +165,15 @@ void main() {
     () async {
       for (final assets in [
         <Map>[],
-        [asset(androidApk)],
-        [asset(androidManifest)],
+        [asset('otakase-app-macos.zip')],
+        [asset(androidApk), asset(androidApk)],
       ]) {
         release['assets'] = assets;
         await updates.check();
         expect(updates.phase, UpdatePhase.unpublished);
         expect(updates.available, isFalse);
       }
-      release['assets'] = [asset(androidManifest), asset(androidApk)];
+      release['assets'] = [asset(androidApk)];
       for (final field in ['draft', 'prerelease']) {
         release[field] = true;
         await updates.check();
@@ -199,29 +189,44 @@ void main() {
     },
   );
 
-  test('rejects invalid metadata, other repositories, mismatched assets and release tags', () async {
-    for (final entry in <String, dynamic>{
-      'schema': 2,
-      'package_name': 'other.app',
-      'version_code': -1,
-      'size': apkBytes.length + 1,
-      'sha256': '0' * 64,
-    }.entries) {
-      metadata = manifest()..[entry.key] = entry.value;
+  test('rejects invalid tags and file data, other repositories and mismatched assets', () async {
+    for (final tag in [
+      '26.7.0',
+      'v26',
+      'v26.7.0.1',
+      'v1000.1.0',
+      'dev',
+      null,
+    ]) {
+      release['tag_name'] = tag;
       await updates.check();
-      expect(updates.phase, UpdatePhase.failed, reason: entry.key);
+      expect(updates.phase, UpdatePhase.failed, reason: '$tag');
     }
+    release['tag_name'] = 'v26.7.0';
+    for (final size in [0, -1, '1024', 600 * 1024 * 1024]) {
+      release['assets'] = [asset(androidApk)..['size'] = size];
+      await updates.check();
+      expect(updates.phase, UpdatePhase.failed, reason: '$size');
+    }
+    for (final digest in [null, 'sha1:$checksum', 'sha256:${'g' * 64}']) {
+      release['assets'] = [asset(androidApk)..['digest'] = digest];
+      await updates.check();
+      expect(updates.phase, UpdatePhase.failed, reason: '$digest');
+    }
+    // A checksum that does not match the download never gets installed.
+    release['assets'] = [asset(androidApk)..['digest'] = 'sha256:${'0' * 64}'];
+    await updates.check();
+    await updates.download();
+    expect(updates.phase, UpdatePhase.failed);
+    expect(updates.downloaded, isFalse);
+    expect(host.validated, 0);
     for (final url in [
       'http://github.com/TheXykril/otakase/releases/download/v26.7.0/$androidApk',
       'https://github.com/other/otakase/releases/download/v26.7.0/$androidApk',
       'https://evil.example/TheXykril/otakase/releases/download/v26.7.0/$androidApk',
       'https://github.com/TheXykril/otakase/releases/download/v26.8.0/$androidApk',
     ]) {
-      metadata = manifest();
-      release['assets'] = [
-        asset(androidManifest),
-        asset(androidApk)..['browser_download_url'] = url,
-      ];
+      release['assets'] = [asset(androidApk)..['browser_download_url'] = url];
       await updates.check();
       expect(updates.phase, UpdatePhase.failed, reason: url);
     }
@@ -292,10 +297,7 @@ void main() {
       );
       final slowHost = SlowUpdateHost(directory, file);
       final first = MockClient(
-        (request) async => http.Response(
-          jsonEncode(request.url.host == 'api.github.com' ? release : metadata),
-          200,
-        ),
+        (request) async => http.Response(jsonEncode(release), 200),
       );
       var calls = 0;
       final cancellable = AppUpdates(
@@ -343,13 +345,13 @@ void main() {
     final platform = AndroidUpdatePlatform();
     expect((await platform.installed()).code, 3);
     final file = await platform.createDownload();
-    final candidate = AppUpdate.parse(manifest(), asset(androidApk), platform);
+    final candidate = AppUpdate.parse(release, asset(androidApk), platform);
     await platform.validate(file, candidate);
     expect(await platform.install(file, candidate), isFalse);
     expect(await platform.channelAllowed(), isTrue);
     expect(calls.where((call) => call.method == 'validate').single.arguments, {
       'path': file.path,
-      'code': 1025,
+      'code': 26007000,
       'sha256': checksum,
     });
   });

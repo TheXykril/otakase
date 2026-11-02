@@ -50,6 +50,7 @@ void main() {
     Map asset(String name) => {
       'name': name,
       'size': bytes.length,
+      'digest': 'sha256:$checksum',
       'browser_download_url': '$base/$name',
     };
     final release = {
@@ -57,31 +58,18 @@ void main() {
       'draft': false,
       'prerelease': false,
       'assets': [
-        asset(host.manifestName),
         asset(host.fileName),
         // Other systems' files are on the same release.
         asset('otakase-android.apk'),
-        asset('otakase-android.json'),
+        for (final other in DesktopTarget.values)
+          if (other.fileName != host.fileName) asset(other.fileName),
       ],
-    };
-    final metadata = {
-      'schema': 1,
-      'package_name': 'com.xyverion.otakase',
-      'version_name': '26.8.0',
-      'version_code': 26008000,
-      'file': host.fileName,
-      'size': bytes.length,
-      'sha256': checksum,
     };
     return AppUpdates(
       platform: host,
       client: () => MockClient((request) async {
         if (request.url.host == 'api.github.com') {
           return http.Response(jsonEncode(release), 200);
-        }
-        if (request.url.path.endsWith('.json')) {
-          expect(request.url.pathSegments.last, host.manifestName);
-          return http.Response(jsonEncode(metadata), 200);
         }
         expect(request.url.pathSegments.last, host.fileName);
         return http.Response.bytes(bytes, 200);
@@ -103,10 +91,8 @@ void main() {
     expect(DesktopTarget.windows.fileName, 'otakase-app-windows-setup.exe');
     expect(DesktopTarget.macos.fileName, 'otakase-app-macos.zip');
     expect(DesktopTarget.linux.fileName, 'otakase-app-linux-x86_64.AppImage');
-    final names = DesktopTarget.values
-        .expand((t) => [t.fileName, t.manifestName])
-        .toSet();
-    expect(names, hasLength(6));
+    final names = DesktopTarget.values.map((t) => t.fileName).toSet();
+    expect(names, hasLength(3));
   });
 
   test('development builds count as older than any release', () async {
