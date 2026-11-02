@@ -101,12 +101,6 @@ shortcut to open Otakase from anywhere.
 
 More on the [wiki](https://github.com/TheXykril/otakase/wiki).
 
-## The command-line otakase
-
-Otakase started as a command-line app. It has been replaced by the app;
-v26.7.0 was its last release. Your watch positions are stored on AniList and
-MyAnimeList, so the app picks up where the command line left off.
-
 ## Help
 
 See [Troubleshooting](https://github.com/TheXykril/otakase/wiki/Troubleshooting)
