@@ -365,43 +365,6 @@ class Catalog {
     return AccountPage(rows, hasMore: (d['paging'] as Map?)?['next'] != null);
   }
 
-  Future<List<SkipSpan>> skipTimes(
-    int malId,
-    int episode,
-    double duration,
-  ) async {
-    if (malId <= 0 || duration <= 0) return [];
-    try {
-      final uri = Uri.https(
-        'api.aniskip.com',
-        '/v2/skip-times/$malId/$episode',
-        {
-          'types': ['op', 'ed', 'recap'],
-          'episodeLength': '${duration.round()}',
-        },
-      );
-      final r = await client.get(uri).timeout(const Duration(seconds: 6));
-      if (r.statusCode != 200) return [];
-      final data = jsonDecode(r.body) as Map;
-      final out = <SkipSpan>[];
-      for (final e in data['results'] as List? ?? []) {
-        final length = (e['episodeLength'] as num?)?.toDouble() ?? 0;
-        final span = (e['interval'] as Map?) ?? {};
-        final start = (span['startTime'] as num?)?.toDouble() ?? -1;
-        final end = (span['endTime'] as num?)?.toDouble() ?? -1;
-        if ((length - duration).abs() <= 20 &&
-            start >= 0 &&
-            end > start &&
-            end <= duration) {
-          out.add(SkipSpan(e['skipType'] as String, start, end));
-        }
-      }
-      return out;
-    } catch (_) {
-      return [];
-    }
-  }
-
   Future<bool> isFiller(int malId, int episode) async {
     if (malId <= 0) return false;
     try {

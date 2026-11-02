@@ -170,6 +170,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
         if (!mounted || busy) return;
         setState(() {});
         if (started) scrobble(playing ? 'start' : 'pause');
+        showPresence();
       }),
       player.stream.completed.listen((done) {
         if (done && !busy) unawaited(ended());
@@ -181,12 +182,28 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     ]);
     saveTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!busy && duration > Duration.zero) unawaited(save());
+      showPresence();
     });
     unawaited(open());
   }
 
+  /// The Discord status on desktop.
+  void showPresence() {
+    if (busy || duration <= Duration.zero) return;
+    unawaited(
+      widget.services.presence.movie(
+        request.title,
+        request.subtitle,
+        paused: !player.state.playing,
+        position: player.state.position.inMilliseconds / 1000,
+        duration: duration.inMilliseconds / 1000,
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    unawaited(widget.services.presence.clear());
     scope.cancel();
     hideTimer?.cancel();
     saveTimer?.cancel();

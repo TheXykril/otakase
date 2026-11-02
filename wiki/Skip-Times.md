@@ -1,65 +1,43 @@
 # Skip times
 
-Openings and endings are skipped using whichever source knows them, asked in
-this order: the provider in use, [AniSkip](https://api.aniskip.com/api-docs),
-[theintrodb](https://theintrodb.org), and optionally Anime-Skip. The first
-three need no setup.
+Openings, endings and recaps are skipped using whichever service knows them.
+All are asked at once: the source playing the episode,
+[AniSkip](https://api.aniskip.com/api-docs), [TheIntroDB](https://theintrodb.org)
+and [Anime-Skip](https://anime-skip.com). For each kind, the first one in that
+order with a usable answer wins. None of them needs setup.
 
-The first time theintrodb is needed, otakase downloads a small lookup table in
-the background; playback is never held up for it. Set `IntroDBSkipTimes=false`
-to leave theintrodb out.
+TheIntroDB files episodes under TMDB show numbers, so the first time it is
+needed Otakase downloads a small lookup table (about 6 MB, refreshed monthly).
+Playback is never held up for it.
 
-## Fixing the times yourself
+Turn services off under **More → Settings → Playback**: *TheIntroDB skip
+times* and *Anime-Skip skip times*. AniSkip is always asked. Anime-Skip uses
+the public client id it publishes for trying its API; being shared, it may be
+rate-limited now and then.
 
-When a skip is wrong, or missing, you can say so from the player:
+## See where a skip came from, and vote
 
-| Key | What it does |
-|---|---|
-| `Alt+o` | Mark the opening: once at its start, again at its end |
-| `Alt+e` | The same for the ending |
-| `Alt+s` | Send what you marked to AniSkip: press once to see it, again to send |
-| `Alt+r` | Forget the marks |
-| `Alt+u` | Agree with the skip you were given |
-| `Alt+d` | Report the skip you were given as wrong |
+In the player, press **Skip times** (the flag button on desktop). The panel
+lists every span of the episode with the service it came from. Pick one to
+watch it. For AniSkip spans, answer **Right times?** with Yes or No: the vote
+goes to AniSkip and helps everyone get better times.
 
-With otakase's player look (`MpvSkin`), the same actions are in the skip
-times menu (the fast-forward button in the control row), and the keyboard
-button or `?` lists every key.
+## Mark missing or wrong times
 
-Everything appears on the player's own screen, so you never leave the episode.
-Nothing is sent until you press `Alt+s` a second time, with the exact times on
-screen in between. These entries are public, and every player that reads
-AniSkip inherits them. Submissions are filed under an id this program invents
-and keeps; AniSkip has no accounts and asks for nothing about you. Set
-`ContributeSkipTimes=false` to leave the keys unbound.
+From the same panel, pick **Mark opening**, **Mark ending** or **Mark recap**
+(it says **Fix** when one is already there). A card stays on the video while
+it plays:
 
-## Adding Anime-Skip
+- **Now** sets the start or the end to the moment playing.
+- **−1s** and **+1s** nudge either by a second.
+- **Watch start** and **Watch end** jump just before each point, so you can
+  check them.
+- **Send** sends the span to AniSkip; the player uses it straight away.
 
-[Anime-Skip](https://anime-skip.com) is the fourth source, and the only one
-that needs a client id. The simplest way to turn it on:
+A new mark starts where you are, with a typical length (1:30 for openings and
+endings), so often only the end needs a nudge. Back closes the card.
 
-```
-AnimeSkipClientID=auto
-```
-
-Otakase then uses Anime-Skip's public shared id and replaces it on its own if
-it changes. Being shared, it may be rate-limited.
-
-For an id of your own, run:
-
-```
-otakase -setup-anime-skip
-```
-
-This opens Anime-Skip's account page in your browser (sign up first if you
-have not already) and asks you to paste back the client id you create there.
-
-You can also write an id you already have straight into the config, in place
-of `auto`:
-
-```
-AnimeSkipClientID=your_client_id_here
-```
-
-Leaving the setting empty is fine: Anime-Skip is simply not asked, and the
-other sources carry on.
+Marked times are public: every player that reads AniSkip gets them. They are
+filed under a random id the app makes for your profile; AniSkip has no
+accounts and asks for nothing about you. A show without a MyAnimeList id
+can't take times, because AniSkip files them under that id.

@@ -16,6 +16,8 @@ import 'data/app_updates.dart';
 import 'data/downloads.dart';
 import 'data/movies.dart';
 import 'data/trakt.dart';
+import 'data/presence.dart';
+import 'data/skip_times.dart';
 import 'desktop/desktop_core.dart';
 import 'desktop/desktop_updates.dart';
 
@@ -58,6 +60,8 @@ class AppServices {
     tvRemote.status = () =>
         playerStatus?.call() ?? {'has_player': false, 'playing': false};
     resolver = SourceResolver(core, store, report: discord.reportProvider);
+    skipTimes = SkipTimes(core, store);
+    presence = DiscordPresence(core, store);
     tracking = TrackingService(this.auth, store: store);
     tracking.onProgressWritten = () => heritage.progressWritten = true;
     discord.remote = (action, args) async {
@@ -86,12 +90,17 @@ class AppServices {
   late final MovieService movies;
   late final DownloadManager downloads;
   late final DiscordService discord;
+  late final SkipTimes skipTimes;
+  late final DiscordPresence presence;
   late final Heritage heritage;
   late final WatchRooms watchRooms;
   late final WatchParties party;
   late final CommunityExtras extras;
   late final TVRemote tvRemote;
   late final AppUpdates updates;
+
+  /// A show the last player finished, to be scored once it closes.
+  Anime? ratingDue;
   Json Function()? playerStatus;
   Future<void> Function(String action, Json args)? playerCommand;
   final ProfileManager? profiles;
@@ -106,6 +115,7 @@ class AppServices {
     await party.close();
     extras.dispose();
     await tvRemote.close();
+    await presence.clear();
     await discord.close();
     closed = true;
     updates.dispose();
