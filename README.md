@@ -33,8 +33,7 @@ Android TV, Windows, macOS and Linux.
 
 ## Features
 
-- Searches several sources and falls back by itself when one fails
-- Plays from a torrent while it downloads when no site has the episode
+- Pick a show and press play: no links to hunt for and nothing to set up
 - Syncs progress, status, scores and resume position with AniList, MyAnimeList, or both
 - Skips openings, endings and filler episodes
 - Resumes where you left off, on any of your devices
@@ -93,8 +92,8 @@ your progress on the device. On a TV, scan the QR code with your phone to sign
 in, with both on the same home network.
 
 Pick a show, pick an episode, and it plays. **Sub/Dub** and the **Tracks**
-button in the player choose the audio and subtitles. Playback settings (skips,
-even out volume, torrent sources and mobile data) are under **Settings**.
+button in the player choose the audio and subtitles. Playback settings (skips
+and even out volume) are under **Settings**.
 
 On the computer, starting the app with `--launcher` opens the keyboard launcher instead of the
 window: type to filter, Enter to pick, Esc to go back. Bind it to a desktop
@@ -102,32 +101,11 @@ shortcut to open Otakase from anywhere.
 
 More on the [wiki](https://github.com/TheXykril/otakase/wiki).
 
-## The command-line otakase
-
-Otakase started as a command-line app. It has been replaced by the app;
-v26.7.0 was its last release. Your watch positions are stored on AniList and
-MyAnimeList, so the app picks up where the command line left off.
-
 ## Help
 
 See [Troubleshooting](https://github.com/TheXykril/otakase/wiki/Troubleshooting)
-on the wiki. **Diagnostics** in the app shows which sources answer and what
-went wrong. Still stuck? Ask on [Discord](https://otakase.xyverion.com/discord/)
-or [open an issue](https://github.com/TheXykril/otakase/issues).
-
-## Credits
-
-[ani-cli](https://github.com/pystardust/ani-cli) and
-[jerry](https://github.com/justchokingaround/jerry) came first, and this owes
-both. Lists and metadata come from [AniList](https://anilist.co) and
-[MyAnimeList](https://myanimelist.net), skip times from
-[AniSkip](https://api.aniskip.com/api-docs) and others, and filler episode
-numbers from [Jikan](https://jikan.moe/). The app's icons are [Lucide](https://lucide.dev/).
-
-## Contributing
-
-Pull requests are open to the project's collaborators only. Bug reports are
-welcome as issues, and ideas on [Discord](https://otakase.xyverion.com/discord/).
+on the wiki. **Diagnostics** in the app shows what went wrong. Still stuck?
+Ask on [Discord](https://otakase.xyverion.com/discord/) or [open an issue](https://github.com/TheXykril/otakase/issues).
 
 ## Licence
 
