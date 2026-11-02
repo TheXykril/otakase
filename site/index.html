@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>otakase · leave the episode to us</title>
-<meta name="description" content="otakase finds the episode, plays it in mpv, skips the opening and keeps AniList or MyAnimeList in sync. Free and open source for Linux, macOS and Windows.">
+<title>Otakase · leave the episode to us</title>
+<meta name="description" content="Otakase finds the episode, plays it, skips the opening and keeps AniList or MyAnimeList in sync. Free and open source for Android, Android TV, Windows, macOS and Linux.">
 <meta name="theme-color" content="#0e0d0c">
-<meta property="og:title" content="otakase">
-<meta property="og:description" content="Finds the episode, plays it in mpv, skips the opening and keeps your list in sync.">
+<meta property="og:title" content="Otakase">
+<meta property="og:description" content="Finds the episode, plays it, skips the opening and keeps your list in sync. On your phone, TV and computer.">
 <meta property="og:image" content="https://otakase.xyverion.com/img/social-preview.png">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="640">
@@ -28,7 +28,7 @@
     <a class="brand" href="./"><img src="img/favicon.svg" alt="" width="22" height="22">OTAKASE</a>
     <span class="sp"></span>
     <a href="#features">WAY</a>
-    <a href="#tour-h">PLAYER</a>
+    <a href="#tour-h">LOOK</a>
     <a href="#install">INSTALL</a>
     <a href="https://github.com/TheXykril/otakase/wiki">WIKI</a>
     <a href="discord/">DISCORD</a>
@@ -40,19 +40,19 @@
     <div class="rt">
       <p class="mono tag">お任せ · <span id="ver">LATEST RELEASE</span></p>
       <h1 class="fill big"><span class="ghost">LEAVE IT<br>TO US.</span><span class="l on" aria-hidden="true">LEAVE IT<br>TO US.</span><span class="l" aria-hidden="true">LEAVE IT<br>TO US.</span></h1>
-      <p class="lede">otakase finds the episode, plays it in mpv, skips the opening and keeps AniList or MyAnimeList in sync. Free and open source.</p>
+      <p class="lede">Otakase finds the episode, plays it, skips the opening and keeps AniList or MyAnimeList in sync. On your phone, your TV and your computer. Free and open source.</p>
       <a class="dl" href="#install">DOWNLOAD →</a>
       <p class="mono now" id="now" aria-live="off"></p>
     </div>
   </header>
 
   <section class="list" id="features" aria-label="Features">
-    <div class="it"><span class="kj" aria-hidden="true">再</span><div><h3>Plays in mpv</h3><p>Its own player look with chapter marks and a next-episode card. Your own mpv settings stay as they are.</p></div></div>
-    <div class="it"><span class="kj" aria-hidden="true">飛</span><div><h3>Skips intros</h3><p>Openings, endings, recaps and filler episodes, skipped automatically or one key away.</p></div></div>
-    <div class="it"><span class="kj" aria-hidden="true">同</span><div><h3>Syncs your list</h3><p>AniList, MyAnimeList, both, or local only. Your progress updates when the episode ends.</p></div></div>
-    <div class="it"><span class="kj" aria-hidden="true">映</span><div><h3>Casts to the TV</h3><p>Chromecast, DLNA TVs and Kodi, with skips and the next episode still working.</p></div></div>
-    <div class="it"><span class="kj" aria-hidden="true">続</span><div><h3>Resumes anywhere</h3><p>Pick up mid-episode, even on another computer.</p></div></div>
-    <div class="it"><span class="kj" aria-hidden="true">彩</span><div><h3>Follows your theme</h3><p>Menus and player take your desktop's colours, from pywal and base16 to KDE, GNOME, macOS and Windows.</p></div></div>
+    <div class="it"><span class="kj" aria-hidden="true">再</span><div><h3>Just plays</h3><p>It tries the sources for you and remembers what worked. No site hopping, nothing else to install.</p></div></div>
+    <div class="it"><span class="kj" aria-hidden="true">飛</span><div><h3>Skips intros</h3><p>Openings and endings skipped automatically or one press away, and filler episodes left out.</p></div></div>
+    <div class="it"><span class="kj" aria-hidden="true">同</span><div><h3>Syncs your list</h3><p>AniList, MyAnimeList or both. Your progress updates when the episode ends.</p></div></div>
+    <div class="it"><span class="kj" aria-hidden="true">映</span><div><h3>Made for the TV</h3><p>Android TV with the remote, sign-in with your phone, and your phone as a remote.</p></div></div>
+    <div class="it"><span class="kj" aria-hidden="true">続</span><div><h3>Resumes anywhere</h3><p>Stop on the phone, carry on mid-episode on the TV or the computer.</p></div></div>
+    <div class="it"><span class="kj" aria-hidden="true">彩</span><div><h3>Shu</h3><p>Dressed in the vermilion of a torii gate, with Continue Watching, Up next and the week's schedule up front.</p></div></div>
   </section>
 
   <section class="sec how" aria-labelledby="how-h">
@@ -60,134 +60,83 @@
     <h2 id="how-h">Three steps, then the episode.</h2>
     <ol class="steps">
       <li><span class="n">一</span><h3>Pick</h3><p>Your list opens first, with the show you stopped halfway at the top. Or type to search any title.</p></li>
-      <li><span class="n">二</span><h3>Play</h3><p>otakase finds a working source, picks sub or dub, and opens the episode in mpv where you left it.</p></li>
+      <li><span class="n">二</span><h3>Play</h3><p>Otakase finds a working source, picks sub or dub, and starts the episode where you left it.</p></li>
       <li><span class="n">三</span><h3>Done</h3><p>When the credits roll your list is updated, and the next episode is one click away.</p></li>
     </ol>
   </section>
 
   <section class="sec tour" aria-labelledby="tour-h">
-    <p class="mono tag">The player</p>
-    <h2 id="tour-h">mpv, dressed for anime.</h2>
-    <figure class="shot big-shot"><img src="img/player-skip.jpg" alt="The player during the opening, with a Skip Opening button and the opening and ending marked on the timeline" width="1280" height="720" loading="lazy"><figcaption class="mono">Openings and endings marked on the timeline. Skip with Enter, or let otakase do it.</figcaption></figure>
+    <p class="mono tag">A look inside</p>
+    <h2 id="tour-h">Same Otakase, every screen.</h2>
+    <div class="os-pick mono" role="group" aria-label="Show Otakase on">
+      <button type="button" data-shot="computer" aria-pressed="true">COMPUTER</button>
+      <button type="button" data-shot="tv" aria-pressed="false">TV</button>
+      <button type="button" data-shot="phone" aria-pressed="false">PHONE</button>
+    </div>
+    <figure class="shot os-shot big-shot" data-shot="computer"><img src="img/app-desktop.jpg" alt="Otakase on the computer: a show page with its banner, Resume episode 8, the episode grid and details" width="1440" height="900" loading="lazy"><figcaption class="mono">Windows, macOS and Linux. Pick up exactly where you stopped.</figcaption></figure>
+    <figure class="shot os-shot big-shot" data-shot="tv" hidden><img src="img/app-tv.jpg" alt="Otakase on Android TV: a show page laid out for the remote" width="1440" height="810" loading="lazy"><figcaption class="mono">Android TV. Every button in reach of the remote.</figcaption></figure>
+    <figure class="shot os-shot big-shot" data-shot="phone" hidden><img src="img/app-phone.jpg" alt="Otakase on a phone: Home with Continue watching, and a show page" width="1440" height="900" loading="lazy"><figcaption class="mono">Phone. Your story first, the rest a swipe away.</figcaption></figure>
     <div class="pair">
-      <figure class="shot"><img src="img/player-episodes.jpg" alt="The player's episode menu open over the video" width="1280" height="720" loading="lazy"><figcaption class="mono">Every episode, one menu away.</figcaption></figure>
-      <figure class="shot"><img src="img/player-subs.jpg" alt="The player's subtitle menu with English and Japanese tracks" width="1280" height="720" loading="lazy"><figcaption class="mono">Subtitles and audio without digging.</figcaption></figure>
+      <figure class="shot"><img src="img/app-player.jpg" alt="The player with skip marks on the timeline" width="1440" height="810" loading="lazy"><figcaption class="mono">Openings and endings marked on the timeline.</figcaption></figure>
+      <figure class="shot"><img src="img/app-launcher.jpg" alt="The keyboard launcher filtering shows as you type" width="680" height="560" loading="lazy"><figcaption class="mono">The launcher: type, Enter, watch.</figcaption></figure>
     </div>
-    <p class="hint">Same player on macOS, Windows and Linux: it is mpv with otakase's skin.</p>
   </section>
 
-  <section class="sec menus" aria-labelledby="menus-h">
-    <p class="mono tag">The menus</p>
-    <h2 id="menus-h">Same otakase on every system.</h2>
-    <div class="os-pick mono" role="group" aria-label="Show the menu on">
-      <button type="button" data-shot="macos" aria-pressed="true">MACOS</button>
-      <button type="button" data-shot="windows" aria-pressed="false">WINDOWS</button>
-      <button type="button" data-shot="linux" aria-pressed="false">LINUX</button>
-      <button type="button" data-shot="rofi" aria-pressed="false">ROFI</button>
-    </div>
-    <figure class="shot os-shot" data-shot="macos"><img src="img/os-macos.jpg" alt="otakase's menu in the macOS Terminal: the Watching list with the shows to continue at the top" width="1200" height="550" loading="lazy"><figcaption class="mono">macOS Terminal. Tab through your lists, type to filter.</figcaption></figure>
-    <figure class="shot os-shot" data-shot="windows" hidden><img src="img/os-windows.jpg" alt="otakase's menu in Windows Terminal running PowerShell" width="1200" height="558" loading="lazy"><figcaption class="mono">Windows Terminal or PowerShell. The installer puts otakase on your PATH.</figcaption></figure>
-    <figure class="shot os-shot" data-shot="linux" hidden><img src="img/menu-terminal.jpg" alt="otakase's terminal menu on Linux: the Watching list with tabs and a details pane" width="1180" height="620" loading="lazy"><figcaption class="mono">Any Linux terminal.</figcaption></figure>
-    <figure class="shot os-shot" data-shot="rofi" hidden><img src="img/menu-grid.jpg" alt="otakase's rofi menu: a grid of posters with a toolbar of actions" width="1202" height="748" loading="lazy"><figcaption class="mono">On Linux, rofi menus with posters. Bind it to a key and skip the terminal.</figcaption></figure>
-  </section>
-
-  <section class="sec cast" aria-labelledby="cast-h">
+  <section class="sec cast" aria-labelledby="where-h">
     <div>
-      <p class="mono tag">Casting</p>
-      <h2 id="cast-h">Send it to the big screen.</h2>
-      <p class="lede">Run <code>otakase -cast</code> and pick the TV. Skips, resume and the next episode keep working, and the terminal becomes the remote.</p>
+      <p class="mono tag">Everywhere</p>
+      <h2 id="where-h">Wherever you watch.</h2>
+      <p class="lede">The same Otakase on each of them, with your list, your place in the episode and your settings. It updates itself.</p>
     </div>
     <ul class="devices">
-      <li><span class="kj" aria-hidden="true">映</span><b>Chromecast</b><span class="mono">and Google TV</span></li>
-      <li><span class="kj" aria-hidden="true">画</span><b>Smart TVs</b><span class="mono">over DLNA</span></li>
-      <li><span class="kj" aria-hidden="true">箱</span><b>Kodi</b><span class="mono">on any box</span></li>
+      <li><span class="kj" aria-hidden="true">画</span><b>Phone</b><span class="mono">Android 7 and newer</span></li>
+      <li><span class="kj" aria-hidden="true">映</span><b>TV</b><span class="mono">Android TV and Google TV</span></li>
+      <li><span class="kj" aria-hidden="true">箱</span><b>Computer</b><span class="mono">Windows, macOS and Linux</span></li>
     </ul>
-  </section>
-
-  <section class="sec themes" aria-labelledby="themes-h">
-    <p class="mono tag">Colours</p>
-    <h2 id="themes-h">Shu by default. Yours if you have one.</h2>
-    <p class="lede">otakase ships in Shu, the vermilion of a torii gate. If your desktop has a theme, the menus and the player take its colours instead.</p>
-    <div class="swatches">
-      <div class="sw" style="--b:#0e0d0c;--f:#ece4d6;--a:#d2492f"><i></i><span>Shu · default</span></div>
-      <div class="sw" style="--b:#1a1b26;--f:#c0caf5;--a:#7aa2f7"><i></i><span>Tokyo Night</span></div>
-      <div class="sw" style="--b:#1e1e2e;--f:#cdd6f4;--a:#cba6f7"><i></i><span>Catppuccin</span></div>
-      <div class="sw" style="--b:#282828;--f:#ebdbb2;--a:#fabd2f"><i></i><span>Gruvbox</span></div>
-      <div class="sw" style="--b:#2e3440;--f:#eceff4;--a:#88c0d0"><i></i><span>Nord</span></div>
-      <div class="sw" style="--b:#fafafa;--f:#2b2b3a;--a:#1f6fd1"><i></i><span>Your accent</span></div>
-    </div>
-    <p class="hint">Read from pywal, base16, KDE, GNOME, macOS, Windows or Omarchy, or a colours file of your own.</p>
   </section>
 
   <section class="sec faq" aria-labelledby="faq-h">
     <p class="mono tag">Questions</p>
     <h2 id="faq-h">Before you ask.</h2>
-    <details><summary>Is it free?</summary><p>Yes. otakase is open source under the GPL-3.0, with no ads, no accounts of its own and nothing to pay for.</p></details>
-    <details><summary>Does otakase host any video?</summary><p>No. It is a player front end: it finds episodes that are already public on the web and hands them to mpv. Nothing is uploaded or stored by the project.</p></details>
-    <details><summary>Do I need an AniList or MyAnimeList account?</summary><p>No. Pick local tracking on first launch and your progress stays on your computer. You can sign in to AniList, MyAnimeList or both later.</p></details>
-    <details><summary>What else do I need?</summary><p>mpv, which the install commands above bring along. The Windows installer carries its own copy. rofi is optional on Linux.</p></details>
-    <details><summary>Can I keep watching on another computer?</summary><p>Yes. With AniList or MyAnimeList, otakase keeps the minute you stopped at with your list, so another computer picks up mid-episode.</p></details>
+    <details><summary>Is it free?</summary><p>Yes. Otakase is open source under the GPL-3.0, with no ads, no accounts of its own and nothing to pay for.</p></details>
+    <details><summary>Does Otakase host any video?</summary><p>No. It is a player front end: it finds episodes that are already public on the web and plays them. Nothing is uploaded or stored by the project.</p></details>
+    <details><summary>Do I need an AniList or MyAnimeList account?</summary><p>No. Without one your progress stays on the device. You can sign in to AniList, MyAnimeList or both whenever you like.</p></details>
+    <details><summary>What else do I need?</summary><p>Nothing. The app brings its own player on every system.</p></details>
+    <details><summary>Can I keep watching on another device?</summary><p>Yes. With AniList or MyAnimeList, Otakase keeps the minute you stopped at with your list, so another device picks up mid-episode.</p></details>
+    <details><summary>What happened to the command-line otakase?</summary><p>It is being retired in favour of the app; v26.7.0 is the last release that carries it. Your list and watch positions carry over by themselves.</p></details>
   </section>
 
   <section class="inst" id="install" aria-labelledby="inst-h">
     <h2 id="inst-h">Install in a minute.</h2>
     <div class="inst-body">
-      <div class="tabs mono" role="tablist" aria-label="Operating system">
-        <button role="tab" id="t-linux" aria-controls="p-linux" aria-selected="true">LINUX</button>
-        <button role="tab" id="t-arch" aria-controls="p-arch" aria-selected="false">ARCH</button>
-        <button role="tab" id="t-macos" aria-controls="p-macos" aria-selected="false">MACOS</button>
+      <div class="tabs mono" role="tablist" aria-label="Device">
+        <button role="tab" id="t-android" aria-controls="p-android" aria-selected="true">ANDROID</button>
         <button role="tab" id="t-windows" aria-controls="p-windows" aria-selected="false">WINDOWS</button>
+        <button role="tab" id="t-macos" aria-controls="p-macos" aria-selected="false">MACOS</button>
+        <button role="tab" id="t-linux" aria-controls="p-linux" aria-selected="false">LINUX</button>
       </div>
-      <div role="tabpanel" id="p-linux" aria-labelledby="t-linux">
-<pre><code>sudo apt install mpv curl
-curl -Lo otakase \
-  https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-x86_64
-chmod +x otakase
-sudo install -Dm755 otakase /usr/bin/otakase
-sudo ln -sf otakase /usr/bin/otk</code></pre>
-        <p class="hint">For ARM64, download <code>otakase-linux-arm64</code> instead. <code>rofi</code>, <code>libnotify</code> and <code>ffmpeg</code> are optional extras.</p>
-      </div>
-      <div role="tabpanel" id="p-arch" aria-labelledby="t-arch" hidden>
-<pre><code>sudo pacman -S --needed go git mpv
-git clone https://github.com/TheXykril/otakase.git
-cd otakase
-makepkg -si</code></pre>
-        <p class="hint">Builds with the bundled PKGBUILD so pacman tracks it.</p>
-      </div>
-      <div role="tabpanel" id="p-macos" aria-labelledby="t-macos" hidden>
-<pre><code>brew install mpv
-curl -Lo otakase \
-  https://github.com/TheXykril/otakase/releases/latest/download/otakase-macos-universal
-chmod +x otakase
-sudo mv otakase /usr/local/bin/
-sudo ln -sf otakase /usr/local/bin/otk</code></pre>
-        <p class="hint">Paste into Terminal. The universal build runs on Apple Silicon and Intel; <code>otakase-macos-arm64</code> and <code>otakase-macos-x86_64</code> are smaller.</p>
+      <div role="tabpanel" id="p-android" aria-labelledby="t-android">
+        <p><a class="dl" href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-android.apk">GET THE APK →</a></p>
+        <p class="hint">One app for phones and Android TV, Android 7.0 or newer. Android asks once to allow installing apps from your browser or file manager. Later updates install from More &gt; About &amp; updates.</p>
       </div>
       <div role="tabpanel" id="p-windows" aria-labelledby="t-windows" hidden>
-<pre><code>winget install TheXykril.Otakase</code></pre>
-        <p class="hint">Paste into PowerShell or Windows Terminal. It comes with mpv and adds <code>otakase</code> and <code>otk</code> to your PATH; open a new terminal afterwards.</p>
-        <p class="hint">No winget? Get the <a href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-installer.exe">installer</a>, or the standalone <a href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-x86_64.exe">otakase-windows-x86_64.exe</a> with your own mpv.</p>
+        <p><a class="dl" href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-windows-setup.exe">GET THE INSTALLER →</a></p>
+        <p class="hint">Installs for your user only, no administrator needed, and adds Otakase to the Start menu.</p>
       </div>
-      <div class="run">
-        <p class="mono tag">Then, on any system</p>
-<dl class="cmds">
-          <dt><code>otakase</code></dt><dd>your list; otk works too</dd>
-          <dt><code>otakase -c</code></dt><dd>continue where you left off</dd>
-          <dt><code>otakase -cast</code></dt><dd>play on a TV on your network</dd>
-        </dl>
-        <details class="more"><summary class="mono">More commands</summary>
-        <dl class="cmds">
-          <dt><code>otakase -dub</code></dt><dd>dub instead of sub, this run</dd>
-          <dt><code>otakase -download -episodes 1-12</code></dt><dd>save episodes instead (needs ffmpeg)</dd>
-          <dt><code>otakase -e</code></dt><dd>edit your settings</dd>
-          <dt><code>otakase -u</code></dt><dd>update to the latest release</dd>
-        </dl>
-        </details>
+      <div role="tabpanel" id="p-macos" aria-labelledby="t-macos" hidden>
+        <p><a class="dl" href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-macos.zip">GET THE APP →</a></p>
+        <p class="hint">Unzip and move Otakase to Applications; it runs on Apple Silicon and Intel. It is not signed by Apple yet, so the first time, right-click it and choose Open.</p>
+      </div>
+      <div role="tabpanel" id="p-linux" aria-labelledby="t-linux" hidden>
+        <p><a class="dl" href="https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-linux-x86_64.AppImage">GET THE APPIMAGE →</a></p>
+<pre><code>chmod +x otakase-app-linux-x86_64.AppImage
+./otakase-app-linux-x86_64.AppImage</code></pre>
+        <p class="hint">Runs on any x86_64 distribution, with its player inside. Start it with <code>--launcher</code> for a small keyboard menu you can bind to a shortcut.</p>
       </div>
     </div>
   </section>
 
-  <footer class="mono">お任せ · otakase is a free, open-source player front end. It does not host, upload or store any video. GPL-3.0. Cover art via AniList.</footer>
+  <footer class="mono">お任せ · Otakase is a free, open-source player front end. It does not host, upload or store any video. GPL-3.0. Cover art via AniList.</footer>
 </div>
 <script src="app.js" defer></script>
 </body>

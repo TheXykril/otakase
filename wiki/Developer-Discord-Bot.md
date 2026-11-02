@@ -55,8 +55,8 @@ server and stays connected to Discord.
 - **Issue links:** `#123` in a message gets a card for that GitHub issue or
   pull request (title, open/merged/closed, labels), at most once per number
   per channel every 10 minutes. Code spans and channel mentions are skipped.
-- **/provider-status:** runs `otakase -provider-status` with the latest
-  release (bundled in the add-on, fetched by `install.sh`) and lists which
+- **/provider-status:** runs `otakase-helper -provider-status` (built
+  into the add-on image, built by `install.sh`) and lists which
   sources answer, cached for five minutes. The answer is only seen by the
   member who asked. 18+ sources (shown as "nyaa 18+") are listed, along with
   the apps' reports for them, only when the member's AniList is linked with
@@ -619,23 +619,22 @@ another. Members' own `/watchparty` parties are separate.
   They also hold `skip_op` and `skip_ed`: a room starts with its automatic
   opening/ending skips set from its opener's preferences; the host can still
   toggle them for the room.
-- Episodes are found by the otakase CLI in the image:
-  `otakase -stream-info <anilist id>:<episode>` (with `-dub`, and
+- Episodes are found by `otakase-helper` in the image:
+  `otakase-helper -stream-info <anilist id>:<episode>` (with `-dub`, and
   `-stream-adult` for 18+) prints the episode's links, headers and
   subtitles as JSON without asking anything. The episode starts from the
   fast lookup (`-stream-info-fast`, three-minute limit). Each site gets
   30 seconds to answer (one that is down can take a minute to say so), and
   once a download is found in the preferred language the other language
   isn't searched. After it plays,
-  the other lookups run one after another, so a small host runs one CLI at
+  the other lookups run one after another, so a small host runs one helper at
   a time: for KickAssAnime, `-stream-languages kickassanime:<show id>:<ep>`
   fetches the other spoken-language releases by the show id the first
   lookup returned (`provider_id`), without searching again; then the other
   audio version (sub or dub) is looked up only if that did not already
-  bring it; then the next episode, so it starts at once. An older CLI
-  without `-stream-languages` gets the full lookup instead. The CLI must
-  be new enough to have the flags; the Dockerfile takes the latest
-  release, else main.
+  bring it; then the next episode, so it starts at once. An older helper
+  without `-stream-languages` gets the full lookup instead. The Dockerfile
+  builds the helper from main.
 - The relay serves `/activity/api/watch/media/{key}/{id}`: the key is
   random per episode, ids are handed out for each address the playlists
   name, so it fetches nothing else. The master playlist is cut to the best
@@ -916,9 +915,9 @@ the owner's ticket.
 
 ### Watch-room torrent playback
 
-The bot launches the CLI from the same checkout with `-torrent-serve HASH sub|dub`.
-Install ffmpeg, ffprobe and a font package on non-container hosts. Container builds
-accept `OTAKASE_CLI_REF` to pin the helper for branch validation; the add-on defaults
+The bot launches `otakase-helper` (`cmd/otakase-helper`) from the same checkout with
+`-torrent-serve HASH sub|dub`. Install ffmpeg, ffprobe and a font package on non-container
+hosts. Container builds accept `OTAKASE_HELPER_REF` to pin the helper for branch validation; the add-on defaults
 to main. The build fails if the helper cannot be built. The helper is fetched
 straight from GitHub (`GOPRIVATE`), not through proxy.golang.org, which can answer
 `main` with a commit half an hour old. The bot logs the helper's module version
@@ -1001,14 +1000,14 @@ releasing the helper slot. Inherited directory locks protect active helpers;
 the next startup reclaims unlocked directories left by abrupt termination.
 
 Local verification: run `go test ./...` in both the repository root and `bot/`,
-and `go test -race ./...` in `bot/`. The CLI integration test generates a local
+and `go test -race ./...` in `bot/`. The helper integration test (`cmd/otakase-helper`) generates a local
 dual-audio MKV and checks subtitle rendering after out-of-order segment requests.
 It requires ffmpeg and ffprobe; otherwise that test is skipped.
 
 ### Watch-room movie
 
 Searching `otakase` in the room picker lists "Otakase: The Movie" (show id `-1`, never
-sent to AniList). Picking it runs the CLI as `-movie-serve "<host name>"`, with the
+sent to AniList). Picking it runs `otakase-helper -movie-serve "<host name>"`, with the
 host's AniList access token in `OTAKASE_MOVIE_ANILIST_TOKEN` when their link has one.
 The helper builds the same ASS subtitle, lavfi graph and synthesised music the app
 plays in mpv, draws them once with ffmpeg (libass, 1280×720, no B-frames) into a

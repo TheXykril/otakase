@@ -1,0 +1,208 @@
+name: App build
+
+# Builds and checks everything a release ships: the Android APK (phones and
+# Android TV) and the desktop app for Windows, macOS and Linux. Called by
+# "Build and release" and "Dev Build"; it does not run on its own.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit or ref to build
+        required: true
+        type: string
+      version:
+        description: Version to stamp into the apps (empty reads VERSION.txt)
+        required: false
+        type: string
+        default: ""
+      signed:
+        description: Sign the APK with the release key (never for PR code)
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  OTAKASE_VERSION: ${{ inputs.version }}
+
+jobs:
+  # Go vet and tests for the core and the bot helper, vet for the bot (its
+  # tests run locally before a bot PR; one of them is flaky). -short skips
+  # the live provider tests; those hit real hosts, so run them by hand on
+  # your own machine (see the wiki's Providers page).
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - name: Vet
+        run: |
+          go vet ./...
+          (cd bot && go vet ./...)
+
+      - name: Test
+        run: go test -short -race ./...
+
+  # Flutter analysis and tests, once for every platform.
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.8"
+          channel: stable
+
+      - name: Analyze and test
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+  # One APK with both ARM runtimes. Signed with the release key from the
+  # ANDROID_* secrets only when the caller asks (main); PR code never sees
+  # them and gets the debug key, which cannot update an installed release.
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.8"
+          channel: stable
+
+      - name: Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      - name: Signing key
+        if: inputs.signed
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::error::Android release signing key is required to publish app updates"
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/otakase-release.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/otakase-release.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > app/android/key.properties
+
+      - name: Build APK
+        run: |
+          [ -n "$OTAKASE_VERSION" ] || unset OTAKASE_VERSION
+          app/scripts/build-apk.sh
+          mkdir -p release/android
+          cp app/build/app/outputs/flutter-apk/app-release.apk release/android/otakase-android.apk
+          cp app/build/app/outputs/flutter-apk/otakase-android.json release/android/
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f app/android/key.properties "$RUNNER_TEMP/otakase-release.jks"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: otakase-android
+          path: |
+            release/android/otakase-android.apk
+            release/android/otakase-android.json
+          retention-days: 7
+          if-no-files-found: error
+
+  # The desktop app, one runner per OS (Flutter cannot cross-compile it).
+  # Each makes the release file the in-app updater installs and its metadata
+  # (app/scripts/package-desktop.sh).
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-24.04
+          - os: macos
+            runner: macos-latest
+          - os: windows
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.8"
+          channel: stable
+
+      - name: Linux build tools
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config \
+            libgtk-3-dev libsecret-1-dev libmpv-dev patchelf
+
+      - name: Build
+        working-directory: app
+        run: |
+          [ -n "$OTAKASE_VERSION" ] || unset OTAKASE_VERSION
+          scripts/build-desktop.sh release
+
+      - name: Package
+        working-directory: app
+        run: |
+          [ -n "$OTAKASE_VERSION" ] || unset OTAKASE_VERSION
+          scripts/package-desktop.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: otakase-app-${{ matrix.os }}
+          path: app/build/desktop-release/*
+          retention-days: 7
+          if-no-files-found: error

@@ -4,16 +4,15 @@
 
 <h1 align="center">Otakase</h1>
 
-<p align="center">Watch anime from the command line, with your list kept in sync.</p>
+<p align="center">Watch anime on your phone, TV and computer, with your list kept in sync.</p>
 
 <p align="center">
   <a href="https://github.com/TheXykril/otakase/releases/latest"><img src="https://img.shields.io/github/v/release/TheXykril/otakase?label=release&color=d2492f" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-c99a2e" alt="GPL-3.0"></a>
   <a href="https://otakase.xyverion.com/discord/"><img src="https://img.shields.io/badge/discord-join-d2492f?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/TheXykril/otakase/releases"><img src="https://img.shields.io/github/downloads/TheXykril/otakase/total?label=downloads&color=c99a2e" alt="Downloads"></a>
-  <a href="#install"><img src="https://img.shields.io/badge/platform-linux%20%C2%B7%20macOS%20%C2%B7%20windows-c99a2e" alt="Linux, macOS, Windows"></a>
+  <a href="#install"><img src="https://img.shields.io/badge/platform-android%20%C2%B7%20android%20tv%20%C2%B7%20windows%20%C2%B7%20macOS%20%C2%B7%20linux-c99a2e" alt="Android, Android TV, Windows, macOS, Linux"></a>
   <a href="#features"><img src="https://img.shields.io/badge/sync-AniList%20%C2%B7%20MAL-c99a2e" alt="Syncs with AniList and MyAnimeList"></a>
-  <a href="https://mpv.io/"><img src="https://img.shields.io/badge/plays%20in-mpv-d2492f?logo=mpv&logoColor=white" alt="Plays in mpv"></a>
 </p>
 
 <p align="center">
@@ -23,10 +22,9 @@
   <a href="https://otakase.xyverion.com/discord/">Discord</a>
 </p>
 
-Otakase finds the episode, plays it in mpv, skips the opening, ending, filler
-and recaps, and updates AniList or MyAnimeList when you are done. It works on
-Linux, macOS and Windows, with optional rofi menus that follow your desktop
-theme.
+Otakase finds the episode, plays it, skips the opening and ending, and
+updates AniList or MyAnimeList when you are done. One app for Android phones,
+Android TV, Windows, macOS and Linux.
 
 > *Omakase* (「お任せ」) means "I'll leave it to you". Add a little *otaku*
 > and you get *otakase*: pick a show and leave the rest to it.
@@ -35,228 +33,88 @@ theme.
 
 ## Features
 
-- Searches several sources at once and falls back when one fails, up to 1080p
-- Picks the other audio by itself when a show has only sub or only dub
-- Stream, save episodes with `-download`, or cast them to a Chromecast, DLNA TV or Kodi
-- Track locally, on AniList, on MyAnimeList, or on both at once
-- Skips openings, endings, filler episodes and recaps
-- Resumes where you left off, even on another device
-- Discord Rich Presence
-- Works with the Otakase Discord: Play in Otakase buttons, synced watch parties, and problem reports straight from the app
-- rofi menus with poster previews, themed from your desktop colours (Omarchy, pywal, base16, KDE, GNOME, macOS, Windows)
-- Its own look in mpv, in the same colours, with a skip button and the next episode a click away
+- Searches several sources and falls back by itself when one fails
+- Plays from a torrent while it downloads when no site has the episode
+- Syncs progress, status, scores and resume position with AniList, MyAnimeList, or both
+- Skips openings, endings and filler episodes
+- Resumes where you left off, on any of your devices
+- Continue Watching, Up next with countdowns for airing shows, and a weekly Schedule
+- Up to six profiles, each with its own accounts, history and settings
+- Android TV with full remote control, sign-in by QR code, and your phone as a remote
+- On the computer: a full window, or a small keyboard launcher you can open from a shortcut
+- Works with the Otakase Discord: watch rooms, queued shows, and problem reports from the app
+- Updates itself on every platform
 
 ## Install
 
-> Otakase needs **mpv**. Everything else is optional: `rofi` for the graphical
-> menus, `libnotify` for desktop notifications, `xdg-utils` to open the
-> browser for sign-in, and `ffmpeg` for saving and casting episodes.
+The app has its own player, so there is nothing else to install.
 
-### Android phone and TV
+### Android phone and Android TV
 
-Install [the Android APK](https://github.com/TheXykril/otakase/releases/latest/download/otakase-android.apk)
-on your phone or Android TV. The app includes its player.
-For later updates, open **More > About & updates**, choose **Download update**,
-then **Install update**. Approve Android's installation prompt. If Android asks,
-allow Otakase to install updates. Your profiles and progress stay in place.
-
-When no site has an episode, the app plays it from a torrent while it
-downloads, like the CLI does. Nothing is shared back, and the file is deleted
-when you stop. Turn this off, or allow it on mobile data, under
-**Settings > Playback** (**Torrent sources**, **Torrents on mobile data**).
-
-### Arch Linux / Manjaro
-
-Build from source with the bundled PKGBUILD, so pacman tracks it like any
-other package:
-
-```bash
-sudo pacman -S --needed go git mpv
-git clone https://github.com/TheXykril/otakase.git
-cd otakase
-makepkg -si
-```
-
-Or install the prebuilt binary, with no Go toolchain needed:
-
-```bash
-sudo pacman -S --needed mpv
-curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-x86_64
-chmod +x otakase
-sudo install -Dm755 otakase /usr/bin/otakase
-sudo ln -sf otakase /usr/bin/otk
-```
-
-Optional extras:
-
-```bash
-sudo pacman -S rofi libnotify xdg-utils ffmpeg
-```
-
-### Debian / Ubuntu and other Linux
-
-```bash
-sudo apt update
-sudo apt install mpv curl rofi libnotify-bin xdg-utils
-
-# x86_64
-curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-x86_64
-# ARM64
-curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/otakase-linux-arm64
-
-chmod +x otakase
-sudo install -Dm755 otakase /usr/bin/otakase
-sudo ln -sf otakase /usr/bin/otk
-```
-
-### macOS
-
-```bash
-brew install mpv curl
-
-# Apple Silicon
-curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/otakase-macos-arm64
-# Intel
-curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/otakase-macos-x86_64
-# Either (universal)
-curl -Lo otakase https://github.com/TheXykril/otakase/releases/latest/download/otakase-macos-universal
-
-chmod +x otakase
-sudo mv otakase /usr/local/bin/
-sudo ln -sf otakase /usr/local/bin/otk
-```
-
-Uninstall with `sudo rm /usr/local/bin/otakase /usr/local/bin/otk`.
+Install [otakase-android.apk](https://github.com/TheXykril/otakase/releases/latest/download/otakase-android.apk)
+(Android 7.0 or newer). Android asks once to allow installing apps from your
+browser or file manager.
 
 ### Windows
 
-Either run the
-[installer](https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-installer.exe),
-or download the standalone
-[otakase-windows-x86_64.exe](https://github.com/TheXykril/otakase/releases/latest/download/otakase-windows-x86_64.exe).
-The installer comes with mpv and adds `otakase` and `otk` to your PATH, so you
-can type either in any new terminal. The standalone file needs mpv installed
-separately. The rofi interface is Linux-only; Windows uses the terminal menus.
+Run [otakase-app-windows-setup.exe](https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-windows-setup.exe).
+It installs for your user only, so it needs no administrator rights, and adds
+Otakase to the Start menu.
 
-## Usage
+### macOS
 
-Run `otakase` (or the shorter `otk`) to pick from your list. The first time,
-it asks how you want to track: **local**, **AniList**, **MyAnimeList**, or
-both. AniList and MyAnimeList sign in through your browser.
+Download [otakase-app-macos.zip](https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-macos.zip),
+unzip it and move **Otakase** to Applications. It works on Apple Silicon and
+Intel. The app is not signed by Apple yet, so the first time, right-click it
+and choose **Open**.
 
-Otakase opens on your Watching list. The shows you played last are at the
-top; pick one to resume where you stopped. In the terminal, **← and →** (or Tab
-and Shift+Tab) move between your lists: watching, planning, all and the rest.
-Under rofi, Tab does the same and the **Lists** button picks one. **Add new
-anime**, at the end of a list, searches AniList and adds a show.
+### Linux
 
-The actions sit beside the list, each on a key you can press from anywhere in
-it (`^u` means Ctrl+U): along the bottom in the terminal, as buttons above the
-list under rofi. Escape quits.
-
-| Key | Action | What it does |
-|---|---|---|
-| `^u` | Untracked | Search any show and watch it without touching your list, history or tracker |
-| `^e` | Update | Change a show's progress, status or score by hand |
-| `^k` | Cast | Turn casting on or off for this run |
-| `^g` | Surprise | A random show from Plan to Watch, with Reroll; starting it offers to move it to Watching |
-| `^s` | Stats | Your watch totals and recent history ([more](https://github.com/TheXykril/otakase/wiki/Stats)) |
-| `^t` | Tracker | Switch between local, AniList, MyAnimeList or both |
-| `^r` | Remap | Fix a show that plays the wrong anime, by picking the right match (add `REMAP_PROVIDER` to `MenuActions`) |
-| `^l` | Continue | Pick up a show you played recently (terminal) |
-
-`MenuOrder` picks your lists and `MenuActions` your actions, both in the
-config (`otakase -e`).
-
-Common commands:
+Download [otakase-app-linux-x86_64.AppImage](https://github.com/TheXykril/otakase/releases/latest/download/otakase-app-linux-x86_64.AppImage),
+make it executable and run it:
 
 ```bash
-otakase -c                          # continue where you left off
-otakase -rofi -image-preview        # graphical menu with posters
-otakase -dub                        # dub instead of sub, for this run
-otakase -download -episodes 1-12    # save episodes instead of playing (needs ffmpeg)
-otakase -cast                       # play on a TV on your network (needs ffmpeg)
-otakase -e                          # edit the config file
-otakase -u                          # update to the latest release
+chmod +x otakase-app-linux-x86_64.AppImage
+./otakase-app-linux-x86_64.AppImage
 ```
 
-Every flag is listed on the [Command-line Flags](https://github.com/TheXykril/otakase/wiki/Command-Line-Flags)
-wiki page.
+### Updates
 
-## Casting
+The app checks for new releases itself. On Android open **More > About &
+updates**, choose **Download update**, then **Install update**. On the
+computer it offers the update and installs it for you. Your profiles and
+progress stay in place.
 
-`otakase -cast` plays on a Chromecast, a smart TV (DLNA) or Kodi on the same
-network. Or pick **Browser** and open the link it shows (or scan the code) on
-any phone, TV or console with a web browser. Keep otakase running while you
-watch; the terminal shows the controls. If your TV does not show up, run `otakase -cast-setup` once to let
-casting through your firewall.
+## Getting started
 
-More in [Casting](https://github.com/TheXykril/otakase/wiki/Casting) and
-[Casting Problems](https://github.com/TheXykril/otakase/wiki/Casting-Problems).
+Sign in under **Accounts** to sync with AniList or MyAnimeList; you can sign in
+to both. Without an account, Home shows trending and seasonal anime and keeps
+your progress on the device. On a TV, scan the QR code with your phone to sign
+in, with both on the same home network.
 
-## Hyprland keybinding
+Pick a show, pick an episode, and it plays. **Sub/Dub** and the **Tracks**
+button in the player choose the audio and subtitles. Playback settings (skips,
+even out volume, torrent sources and mobile data) are under **Settings**.
 
-Installing the package binds **Super+Shift+A** to open the rofi menu, with no
-terminal needed. Run `otakase -install-keybind` to add it yourself, or
-`otakase -remove-keybind` to take it off. Set `OTAKASE_NO_KEYBIND=1` before
-installing to skip it. More on the
-[Hyprland Keybinding](https://github.com/TheXykril/otakase/wiki/Hyprland-Keybinding) wiki page.
+On the computer, starting the app with `--launcher` opens the keyboard launcher instead of the
+window: type to filter, Enter to pick, Esc to go back. Bind it to a desktop
+shortcut to open Otakase from anywhere.
 
-## MyAnimeList sign-in
+More on the [wiki](https://github.com/TheXykril/otakase/wiki).
 
-MyAnimeList needs your own MAL app credentials, set in the config file or the
-environment:
+## The command-line otakase
 
-```bash
-OTAKASE_MAL_CLIENT_ID=your_client_id
-OTAKASE_MAL_CLIENT_SECRET=your_client_secret
-```
-
-If the browser reaches the callback page but otakase does not continue, run
-the command again and paste the full callback URL when asked.
-
-## Settings
-
-Run `otakase -e` to edit `~/.config/otakase/otakase.conf`. The ones most
-people change:
-
-| Setting | What it does |
-|---|---|
-| `SubOrDub` | `sub` or `dub` |
-| `SubsLanguage` | Subtitle language, e.g. `english` or `pt` |
-| `Quality` | `best`, `1080`, `720` or `480` |
-| `SkipOp` / `SkipEd` | Skip openings and endings (`true` by default) |
-| `SkipFiller` / `SkipRecap` | Skip filler episodes and recaps (`true` by default) |
-| `NextEpisodePrompt` | Ask before playing the next episode |
-| `RofiSelection` | Use rofi menus instead of the terminal |
-| `DiscordShareRatings` | `ask` (default) offers to share the score you give a finished show in the Otakase Discord; `never` stops asking |
-| `LinkMenus` | Play in Otakase links from the browser: `rofi` (default, no terminal window) or `terminal` |
-| `TrackingRemote` | `none`, `anilist`, `myanimelist` or `anilist+myanimelist` |
-| `CastDevice` | Cast to this device without asking (`Browser` for the browser link) |
-| `Theme` | `auto` follows your desktop colours; `builtin` uses otakase's own |
-| `ThemeFile` | Path to a colour palette file to use instead (pywal, base16 or `colors.toml`) |
-| `Icons` | Icons in the menus: `auto` (default), `true` or `false` for plain text |
-| `ExperimentalMovies` | `true` adds Movies to the menu, for movies and series that aren't anime. Experimental, off by default |
-| `DiscordWatchWithMe` | With the app linked to the Otakase Discord, a Watch with me button in your Discord status lets friends follow your player. Off by default; also under Community |
-| `MpvSkin` | otakase's look in mpv (Up/Down keys change volume): `true` (default), `auto` (only if you don't use your own mpv skin), or `false` for mpv's usual look |
-
-Every setting is explained on the
-[Configuration](https://github.com/TheXykril/otakase/wiki/Configuration) wiki
-page.
-
-## Where your data lives
-
-| Path | Contents |
-|---|---|
-| `~/.config/otakase/otakase.conf` | Your settings |
-| `~/.local/share/otakase/` | Watch history, sign-ins, logs, cached artwork |
-| `~/.local/share/otakase/otakase-debug.log` | The log to check first when something misbehaves |
+Otakase started as a command-line app. It is being retired in favour of the
+app; v26.7.0 is the last release that carries it. Your watch positions are
+stored on AniList and MyAnimeList, so the app picks up where the command line
+left off.
 
 ## Help
 
 See [Troubleshooting](https://github.com/TheXykril/otakase/wiki/Troubleshooting)
-on the wiki. Still stuck? [Open an issue](https://github.com/TheXykril/otakase/issues)
-with the relevant lines from `otakase-debug.log`.
+on the wiki. **Diagnostics** in the app shows which sources answer and what
+went wrong. Still stuck? Ask on [Discord](https://otakase.xyverion.com/discord/)
+or [open an issue](https://github.com/TheXykril/otakase/issues).
 
 ## Credits
 
@@ -265,8 +123,7 @@ with the relevant lines from `otakase-debug.log`.
 both. Lists and metadata come from [AniList](https://anilist.co) and
 [MyAnimeList](https://myanimelist.net), skip times from
 [AniSkip](https://api.aniskip.com/api-docs) and others, and filler episode
-numbers from [Jikan](https://jikan.moe/). The player's icons are Google's
-[Material Icons](https://github.com/google/material-design-icons).
+numbers from [Jikan](https://jikan.moe/). The app's icons are [Lucide](https://lucide.dev/).
 
 ## Contributing
 

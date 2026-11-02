@@ -1,22 +1,25 @@
 # Otakase Wiki
 
 The [README](https://github.com/TheXykril/otakase#readme) covers installing
-otakase and getting started. These pages go further.
+Otakase and getting started. These pages go further.
 
-## Guides
+## Using Otakase
 
-- **[Configuration](Configuration)**: every setting in the config file, and theming
-- **[Command-line Flags](Command-Line-Flags)**: every flag, with its default
-- **[Tracking](Tracking)**: AniList, MyAnimeList, and both at once
-- **[Casting](Casting)**: playing on a Chromecast, DLNA TV or Kodi
-- **[Skip Times](Skip-Times)**: where opening and ending times come from, and fixing wrong ones
-- **[Stats](Stats)**: what the Stats page shows for each tracker
-- **[Hyprland Keybinding](Hyprland-Keybinding)**: the Super+Shift+A shortcut
-- **[Casting Problems](Casting-Problems)**: TV not found, episode never starts, firewall errors, no subtitles, wrong device
-- **[Troubleshooting](Troubleshooting)**: playback, tracking, and menu issues not related to casting
+- **[Tracking](Tracking)**: AniList, MyAnimeList, both at once, and resuming on another device
+- **[Android TV](Android-TV)**: the remote, signing in with your phone, and using your phone as a remote
+- **[Desktop](Desktop)**: the window, the keyboard launcher, and updates on Windows, macOS and Linux
+- **[Troubleshooting](Troubleshooting)**: nothing found, playback that won't start, progress that doesn't sync
 
-If your problem isn't listed, check `otakase-debug.log` in your storage directory first. Most error messages point straight at the cause. Still stuck? [Open an issue](https://github.com/TheXykril/otakase/issues).
+Still stuck? Ask on [Discord](https://otakase.xyverion.com/discord/) or
+[open an issue](https://github.com/TheXykril/otakase/issues).
+
+## The command-line otakase
+
+Otakase started as a command-line app, which is being retired; v26.7.0 is
+the last release that carries it. Its pages stay under **Command line** in
+the sidebar until it is gone.
 
 ## Developer
 
-How otakase works inside, how to build and test it, and how releases are cut: see the **[Developer](Developer)** section.
+How Otakase works inside, how to build and test it, and how releases are cut:
+see the **[Developer](Developer)** section.
