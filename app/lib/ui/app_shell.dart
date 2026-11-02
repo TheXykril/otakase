@@ -71,6 +71,9 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int selected = 0;
   int? focusedNav;
+
+  /// The tab under the mouse on a computer; it brightens but stays closed.
+  int? hoveredNav;
   bool rootIsCurrent = true;
   StreamSubscription<String>? remoteEvents;
   final navFocus = List.generate(
@@ -113,6 +116,8 @@ class _AppShellState extends State<AppShell> {
       if (mounted) communityMessage(context, text);
     });
     unawaited(startRemote());
+    // Trakt sits with the other trackers in Accounts and on More.
+    unawaited(widget.services.trakt.load());
     if ((Platform.isAndroid || isDesktop) &&
         widget.services.store.flag('CheckUpdates')) {
       unawaited(widget.services.updates.check());
@@ -442,18 +447,27 @@ class _AppShellState extends State<AppShell> {
         showFocusBorder: !widget.isTV,
         focusFill: widget.isTV ? Colors.transparent : bg,
         hoverColor: widget.isTV ? Colors.transparent : null,
-        onHover: widget.isTV
+        // A TV remote moves between tabs by focus, so focus opens the tab.
+        // A computer has a mouse: hovering only lights the tab up and a
+        // click opens it.
+        onHover: widget.isTV && !isDesktop
             ? (hovered) {
                 if (hovered) navFocus[index].requestFocus();
               }
-            : null,
+            : (hovered) => setState(
+                () => hoveredNav = hovered
+                    ? index
+                    : hoveredNav == index
+                    ? null
+                    : hoveredNav,
+              ),
         onFocusChanged: (value) => setState(() {
           focusedNav = value
               ? index
               : focusedNav == index
               ? null
               : focusedNav;
-          if (widget.isTV && value) {
+          if (widget.isTV && !isDesktop && value) {
             selected = index;
             widget.services.root = index;
           }
@@ -495,7 +509,7 @@ class _AppShellState extends State<AppShell> {
                                         : active
                                         ? FontWeight.w600
                                         : FontWeight.w500,
-                                    color: focused
+                                    color: focused || hoveredNav == index
                                         ? fgBright
                                         : active
                                         ? fg
@@ -569,46 +583,23 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  /// Desktop top bar: tabs in the middle on every system. Windows and Linux
-  /// put the logo on the left and the window buttons on the right; macOS has
-  /// its own buttons on the left, so the logo moves to the right there. A
-  /// future account button goes beside the window buttons.
-  Widget desktopHeader() => DesktopTopBar(
-    brand: const Brand(),
-    tabs: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < rootTabs.length; i++) ...[
-          nav(i),
-          if (i < rootTabs.length - 1) const SizedBox(width: 14),
-        ],
+  Widget get navTabs => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (var i = 0; i < rootTabs.length; i++) ...[
+        nav(i),
+        if (i < rootTabs.length - 1) const SizedBox(width: 14),
       ],
-    ),
+    ],
   );
 
+  /// Desktop and TV share one top bar: tabs on an island in the middle, the
+  /// logo on the left corner island. A computer has its window buttons on
+  /// the right one (macOS swaps them with the logo); a TV its clock.
   Widget header() => isDesktop
-      ? desktopHeader()
+      ? DesktopTopBar(brand: const Brand(), tabs: navTabs)
       : widget.isTV
-      ? Padding(
-          padding: EdgeInsets.fromLTRB(
-            math.max(48, MediaQuery.paddingOf(context).left),
-            math.max(27, MediaQuery.paddingOf(context).top),
-            48,
-            12,
-          ),
-          child: Row(
-            children: [
-              const Brand(),
-              const SizedBox(width: 28),
-              for (var i = 0; i < rootTabs.length; i++) ...[
-                nav(i),
-                if (i < rootTabs.length - 1) const SizedBox(width: 14),
-              ],
-              const Spacer(),
-              const DeviceStatus(isTV: true),
-            ],
-          ),
-        )
+      ? TVTopBar(tabs: navTabs)
       : Padding(
           padding: EdgeInsets.fromLTRB(
             20,
@@ -671,6 +662,7 @@ class _AppShellState extends State<AppShell> {
       widget.services.auth,
       widget.services.tracking,
       widget.services.discord,
+      widget.services.trakt,
     ]),
     builder: (context, _) {
       final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
@@ -809,20 +801,9 @@ class _AppShellState extends State<AppShell> {
                       height: tvHeaderExtent(context),
                       child: DecoratedBox(
                         key: const Key('tv-header-scrim'),
-                        decoration: isDesktop
-                            ? const BoxDecoration()
-                            : const BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Color(0xf00e0d0c),
-                                    Color(0xc00e0d0c),
-                                    Color(0x000e0d0c),
-                                  ],
-                                  stops: [0, .75, 1],
-                                ),
-                              ),
+                        // The islands keep the bar readable over art and
+                        // scrolled pages, on desktop and TV alike.
+                        decoration: const BoxDecoration(),
                         child: WindowDragArea(child: header()),
                       ),
                     ),
@@ -854,4 +835,26 @@ class Brand extends StatelessWidget {
       ),
     ],
   );
+}
+
+/// The TV top bar: the desktop island bar with the clock in place of the
+/// window buttons, kept inside the screen's safe area.
+class TVTopBar extends StatelessWidget {
+  const TVTopBar({super.key, required this.tabs});
+  final Widget tabs;
+  @override
+  Widget build(BuildContext context) {
+    final safe = MediaQuery.paddingOf(context);
+    return DesktopTopBar(
+      brand: const Brand(),
+      tabs: tabs,
+      trailing: const DeviceStatus(isTV: true),
+      inset: EdgeInsets.fromLTRB(
+        math.max(8, safe.left - 40),
+        math.max(18, safe.top - 9),
+        math.max(24, safe.right - 24),
+        0,
+      ),
+    );
+  }
 }

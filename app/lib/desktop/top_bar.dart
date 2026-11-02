@@ -1,18 +1,25 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../ui/components.dart';
 import 'header_island.dart';
 import 'window_frame.dart';
 
-/// The desktop top bar: the logo and window buttons on islands grown out of
-/// the top corners and the [tabs] on an island hanging from the middle.
-/// macOS keeps its own buttons top left, so the logo moves to the right.
+/// The top bar of desktop and TV: the logo and the end controls on islands
+/// grown out of the top corners and the [tabs] on an island hanging from the
+/// middle. On a computer the end island holds the window buttons, and macOS
+/// keeps its own buttons top left, so the logo moves to the right there. A TV
+/// passes its clock as [trailing] and an [inset] that keeps every control
+/// inside the screen's safe area.
 class DesktopTopBar extends StatelessWidget {
   const DesktopTopBar({
     super.key,
     required this.brand,
     required this.tabs,
     this.leading,
+    this.trailing,
+    this.inset = EdgeInsets.zero,
   });
 
   final Widget brand, tabs;
@@ -20,13 +27,31 @@ class DesktopTopBar extends StatelessWidget {
   /// Shown before the logo, such as a back button on pushed pages.
   final Widget? leading;
 
+  /// Replaces the window buttons, such as the clock on a TV.
+  final Widget? trailing;
+
+  /// Extra room at the top and sides, inside the islands.
+  final EdgeInsets inset;
+
   static const height = 84.0;
   static const islandHeight = 66.0;
 
+  /// The full height for this [inset] and the reader's text size.
+  static double extent(BuildContext context, {double top = 0}) =>
+      top + height - islandHeight + islandExtent(context);
+
+  /// Island height, taller when large text needs the room.
+  static double islandExtent(BuildContext context) => math.max(
+    islandHeight,
+    MediaQuery.textScalerOf(context).scale(20) * 1.4 + 28,
+  );
+
   @override
   Widget build(BuildContext context) {
-    final mac = macWindowLayout;
-    final flush = windowButtonStyle == WindowButtonStyle.windows;
+    final window = trailing == null;
+    final mac = window && macWindowLayout;
+    final flush = window && windowButtonStyle == WindowButtonStyle.windows;
+    final islandTall = islandExtent(context);
     Widget island(
       IslandSide side,
       Widget child,
@@ -34,9 +59,9 @@ class DesktopTopBar extends StatelessWidget {
       AlignmentGeometry align = Alignment.center,
     }) => HeaderIsland(
       side: side,
-      padding: padding,
+      padding: padding.copyWith(top: padding.top + inset.top),
       child: SizedBox(
-        height: islandHeight,
+        height: islandTall,
         child: Align(alignment: align, widthFactor: 1, child: child),
       ),
     );
@@ -49,7 +74,7 @@ class DesktopTopBar extends StatelessWidget {
       ],
     );
     return SizedBox(
-      height: height,
+      height: extent(context, top: inset.top),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -60,7 +85,7 @@ class DesktopTopBar extends StatelessWidget {
               IslandSide.left,
               start,
               EdgeInsets.fromLTRB(
-                mac ? 0 : (leading != null ? 24 : 40),
+                mac ? 0 : (leading != null ? 24 : 40) + inset.left,
                 0,
                 mac ? 8 : 28,
                 0,
@@ -84,10 +109,10 @@ class DesktopTopBar extends StatelessWidget {
             right: 0,
             child: island(
               IslandSide.right,
-              mac ? brand : const WindowButtons(),
+              trailing ?? (mac ? brand : const WindowButtons()),
               flush
                   ? const EdgeInsets.only(left: 18)
-                  : const EdgeInsets.fromLTRB(26, 0, 24, 0),
+                  : EdgeInsets.fromLTRB(26, 0, 24 + inset.right, 0),
               align: flush ? Alignment.topCenter : Alignment.center,
             ),
           ),

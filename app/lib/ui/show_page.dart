@@ -8,7 +8,7 @@ import '../data/episode_metadata.dart';
 import '../data/synced_resume.dart';
 import '../data/tracking.dart';
 import '../services.dart';
-import 'app_shell.dart' show Brand, rootTabs;
+import 'app_shell.dart' show Brand, TVTopBar, rootTabs;
 import 'components.dart';
 import 'find_show.dart';
 import 'downloads_page.dart';
@@ -444,25 +444,26 @@ class _ShowPageState extends State<ShowPage> {
     );
   }
 
-  Widget tvNavigation() => Padding(
-    padding: const EdgeInsets.fromLTRB(48, 27, 48, 12),
-    child: Row(
-      children: [
-        const Brand(),
-        const SizedBox(width: 28),
-        for (var i = 0; i < rootTabs.length; i++)
-          TextButton(
-            onPressed: () {
-              Navigator.popUntil(context, (r) => r.isFirst);
-              widget.services.selectRoot?.call(i);
-            },
-            child: Text(rootTabs[i]),
-          ),
-        const Spacer(),
-        const DeviceStatus(isTV: true),
+  /// The main tabs in the top bar; picking one leaves the show for it.
+  Widget rootTabRow() => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (var i = 0; i < rootTabs.length; i++) ...[
+        DesktopTab(
+          key: ValueKey('show-nav-${rootTabs[i]}'),
+          label: rootTabs[i],
+          selected: widget.services.root == i,
+          onPressed: () {
+            Navigator.popUntil(context, (r) => r.isFirst);
+            widget.services.selectRoot?.call(i);
+          },
+        ),
+        if (i < rootTabs.length - 1) const SizedBox(width: 14),
       ],
-    ),
+    ],
   );
+
+  Widget tvNavigation() => TVTopBar(tabs: rootTabRow());
 
   // ---------------------------------------------------------------- desktop
 
@@ -475,23 +476,7 @@ class _ShowPageState extends State<ShowPage> {
         icon: const Icon(LucideIcons.arrowLeft, color: fgBright),
       ),
       brand: const Brand(),
-      tabs: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < rootTabs.length; i++) ...[
-            DesktopTab(
-              key: ValueKey('show-nav-${rootTabs[i]}'),
-              label: rootTabs[i],
-              selected: widget.services.root == i,
-              onPressed: () {
-                Navigator.popUntil(context, (r) => r.isFirst);
-                widget.services.selectRoot?.call(i);
-              },
-            ),
-            if (i < rootTabs.length - 1) const SizedBox(width: 14),
-          ],
-        ],
-      ),
+      tabs: rootTabRow(),
     ),
   );
 
@@ -688,6 +673,7 @@ class _ShowPageState extends State<ShowPage> {
           FocusBox(
             isTV: true,
             outsideFrame: true,
+            lift: true,
             radius: 12,
             onPressed: () => play(ep),
             child: ClipRRect(
@@ -1004,6 +990,7 @@ class _ShowPageState extends State<ShowPage> {
                     child: FocusBox(
                       isTV: true,
                       outsideFrame: true,
+                      lift: true,
                       radius: 8,
                       onPressed: () => Navigator.push(
                         context,

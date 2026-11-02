@@ -350,6 +350,7 @@ class _ContinueCardState extends State<_ContinueCard> {
           FocusBox(
             isTV: true,
             outsideFrame: true,
+            lift: true,
             radius: 12,
             onPressed: widget.onPressed,
             onHover: (value) => setState(() => hovered = value),
