@@ -16,6 +16,7 @@ import '../ui/seal.dart';
 import 'desktop_core.dart';
 import 'window_frame.dart';
 import 'external_mpv.dart';
+import 'tiling.dart';
 
 /// True while the app shows the launcher instead of the full window. Set by
 /// `otakase --launcher`; "Open full app" turns it off in the same process.
@@ -43,7 +44,15 @@ Future<void> resizeDesktopWindow({required bool launcher}) async {
   );
   await windowManager.setSize(launcher ? launcherSize : const Size(1440, 900));
   await windowManager.center();
+  // Tiling compositors ignore the size: float the launcher like the old
+  // rofi popup, and put the full app back in the layout.
+  launcherPlaced = DateTime.now();
+  await placeOnTiler(size: launcher ? launcherSize : null);
 }
+
+/// When the window was last floated or resized; focus changes around that
+/// time come from the compositor, not from the viewer leaving.
+DateTime launcherPlaced = DateTime(0);
 
 /// One row of a launcher menu.
 class LauncherItem {
@@ -89,7 +98,7 @@ class LauncherPage extends StatefulWidget {
   State<LauncherPage> createState() => LauncherPageState();
 }
 
-class LauncherPageState extends State<LauncherPage> {
+class LauncherPageState extends State<LauncherPage> with WindowListener {
   final query = TextEditingController();
   final input = FocusNode(debugLabel: 'Launcher input');
   final scroll = ScrollController();
@@ -118,9 +127,37 @@ class LauncherPageState extends State<LauncherPage> {
     await closeDesktopWindow();
   }
 
+  /// True while a player runs from the launcher.
+  bool playing = false;
+
+  /// Like rofi, the launcher goes away when another window takes focus,
+  /// but not while it plays or right after the compositor moved it.
+  @override
+  void onWindowBlur() {
+    if (playing || !desktopLauncher.value || !mounted) return;
+    if (DateTime.now().difference(launcherPlaced) <
+        const Duration(seconds: 2)) {
+      return;
+    }
+    if (ModalRoute.of(context)?.isCurrent == false) return;
+    unawaited(quit());
+  }
+
   @override
   void initState() {
     super.initState();
+    if (isDesktop) {
+      windowManager.addListener(this);
+      launcherPlaced = DateTime.now();
+      // On a tiling compositor the window opened as a tile: float it.
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => unawaited(
+          placeOnTiler(size: launcherSize, attempts: 10).then((_) {
+            launcherPlaced = DateTime.now();
+          }),
+        ),
+      );
+    }
     desktopCloseHook = quit;
     menus.add(mainMenu());
     query.addListener(() => setState(() => selected = 0));
@@ -129,6 +166,7 @@ class LauncherPageState extends State<LauncherPage> {
 
   @override
   void dispose() {
+    if (isDesktop) windowManager.removeListener(this);
     if (desktopCloseHook == quit) desktopCloseHook = null;
     query.dispose();
     input.dispose();
@@ -576,10 +614,12 @@ class LauncherPageState extends State<LauncherPage> {
 
   /// Grows the window to a player, plays, then comes back to the menu.
   Future<void> runPlayer(Widget player) async {
+    playing = true;
     if (isDesktop) {
       await windowManager.setAlwaysOnTop(false);
       await windowManager.setSize(launcherPlayerSize);
       await windowManager.center();
+      await placeOnTiler(size: launcherPlayerSize);
     }
     if (!mounted) return;
     await Navigator.push(
@@ -587,6 +627,7 @@ class LauncherPageState extends State<LauncherPage> {
       OtakaseRoute<void>(builder: (_) => TVViewport(child: player)),
     );
     if (isDesktop) await resizeDesktopWindow(launcher: true);
+    playing = false;
     if (!mounted) return;
     // Progress moved on; rebuild the lists from the new state.
     setState(() {
