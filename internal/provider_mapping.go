@@ -174,7 +174,7 @@ func optionDisplayName(option SelectionOption) string {
 // the two answers here rather than a policy imposed on it: this is only reached
 // on an exact title and episode-count match, and the alternative -- "select
 // manually" -- is a menu that cannot be shown, which would end the episode
-// instead. See wiki/Developer-Cast-Window-Prompts.md.
+// instead. See the cast window prompts dev notes.
 func confirmProviderMatch(config *Config, option SelectionOption, reason string) bool {
 	Out(fmt.Sprintf("Match found by %s: %s", reason, optionDisplayName(option)))
 	if castWindowNonInteractive() {
@@ -853,7 +853,7 @@ func episodeLinkFailureDiagnosis(config *Config, anime *Anime, lastErr error) st
 //
 // With no viewer at the keyboard it takes the one answer that needs no menu --
 // search for the show again -- and the caller bounds that to a single attempt
-// before backing out. See wiki/Developer-Cast-Window-Prompts.md.
+// before backing out. See the cast window prompts dev notes.
 func promptEpisodeLinkFailureRecovery(config *Config, anime *Anime, lastErr error, includeAudio bool) string {
 	diagnosis := episodeLinkFailureDiagnosis(config, anime, lastErr)
 	if castWindowNonInteractive() {

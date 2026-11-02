@@ -79,5 +79,3 @@ Playback chooses a working copy automatically. Change Sub/Dub before playing and
 actual audio or subtitle tracks through Tracks. The red episode thread follows your saved
 position and continues through the played part of the timeline. Even out volume (on by
 default, in Playback settings) raises quiet dialogue and softens loud effects.
-
-[Developer build and testing notes](../wiki/Developer-Android-App.md)

@@ -429,7 +429,7 @@ func HandleLastEpisodeCompletion(userConfig *Config, anime *Anime, userToken str
 			// alternative is a countdown whose only outcomes are "write a rating
 			// nobody chose" and "write nothing at all". Arrows and one key work
 			// from a sofa; typing a number does not. See
-			// wiki/Developer-Cast-Window-Prompts.md.
+			// the cast window prompts dev notes.
 			if score, given := castAwaitScore(userConfig, anime, castCountdownDuration); given {
 				if err := RateAnimeWithScore(userToken, anime.AnilistId, float64(score)); err != nil {
 					Log(fmt.Sprintf("Error rating anime: %v", err))
@@ -549,7 +549,7 @@ func handleSequelCheck(userConfig *Config, anime *Anime, userToken string) (summ
 	// do with it" menus: a further instalment is a different show to put on a
 	// list, not a continuation of this one, and it is not a decision to make on
 	// someone's behalf while they are not there to make it. Reported rather than
-	// dropped -- see wiki/Developer-Cast-Window-Prompts.md.
+	// dropped -- see the cast window prompts dev notes.
 	if castWindowNonInteractive() {
 		title := sequelDisplayTitle(userConfig, &sequels[0])
 		Out(fmt.Sprintf("Sequel available: %s. Leaving your list alone.", title))

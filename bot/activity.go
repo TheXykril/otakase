@@ -28,7 +28,7 @@ import (
 // The page signs in with the Embedded App SDK: Discord gives it a code,
 // the bot trades the code for the member's id with the app's client
 // secret and hands the page its own session token. Set-up is in
-// wiki/Developer-Discord-Bot.md (Activity).
+// the bot dev notes (Activity).
 
 //go:embed assets/activity
 var activityFiles embed.FS

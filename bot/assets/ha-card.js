@@ -564,7 +564,7 @@ for (const [type, cls, name, description] of CARDS) {
     name,
     description,
     preview: false,
-    documentationURL: "https://github.com/TheXykril/otakase/wiki/Developer-Discord-Bot",
+    documentationURL: "https://github.com/TheXykril/otakase",
   });
 }
 console.info("Otakase Bot cards " + VERSION);
