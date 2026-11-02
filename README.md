@@ -12,7 +12,7 @@
   <a href="https://otakase.xyverion.com/discord/"><img src="https://img.shields.io/badge/discord-join-d2492f?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/TheXykril/otakase/releases"><img src="https://img.shields.io/github/downloads/TheXykril/otakase/total?label=downloads&color=c99a2e" alt="Downloads"></a>
   <a href="#install"><img src="https://img.shields.io/badge/platform-android%20%C2%B7%20android%20tv%20%C2%B7%20windows%20%C2%B7%20macOS%20%C2%B7%20linux-c99a2e" alt="Android, Android TV, Windows, macOS, Linux"></a>
-  <a href="#features"><img src="https://img.shields.io/badge/sync-AniList%20%C2%B7%20MAL-c99a2e" alt="Syncs with AniList and MyAnimeList"></a>
+  <a href="#features"><img src="https://img.shields.io/badge/sync-AniList%20%C2%B7%20MAL%20%C2%B7%20Trakt-c99a2e" alt="Syncs with AniList, MyAnimeList and Trakt"></a>
 </p>
 
 <p align="center">
