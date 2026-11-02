@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../data/models.dart';
 import '../desktop/desktop_core.dart';
 import '../services.dart';
+import '../data/community_extras.dart';
+import 'community_extras_page.dart';
 import 'components.dart';
 import 'movie_page.dart';
 
@@ -95,6 +97,12 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   Future<void> load({bool more = false}) async {
+    if (isKonamiText(query.text)) {
+      // The cheat code spelt out, as it worked in the CLI's rofi menu.
+      query.clear();
+      unawaited(openCheat(context, widget.services, widget.isTV));
+      return;
+    }
     final g = ++generation;
     setState(() {
       busy = true;

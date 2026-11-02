@@ -10,6 +10,8 @@ import '../data/store.dart';
 import 'components.dart';
 import 'device_status.dart';
 import 'app_updates.dart';
+import '../desktop/desktop_core.dart';
+import '../desktop/launcher_shortcut.dart';
 
 Future<void> openSettings(
   BuildContext context,
@@ -86,6 +88,9 @@ const settingLabels = <String, String>{
   'PercentageToMarkComplete': 'Mark watched at',
   'ResumePlayback': 'Resume where you left off',
   'CheckUpdates': 'Check for updates',
+  'ExternalMpv': 'Play in my own mpv',
+  'MpvPath': 'mpv program',
+  'DiscordWatchWithMe': 'Watch with me',
   'Notifications': 'Notifications',
   'Updates': 'Updates',
   'Diagnostics': 'Diagnostics',
@@ -516,6 +521,31 @@ class _SettingsPageState extends State<SettingsPage> {
           icon: LucideIcons.signal,
         ),
         toggle('ResumePlayback', 'Resume locally saved positions.'),
+        if (isDesktop) ...[
+          toggle(
+            'ExternalMpv',
+            'Open episodes in your installed mpv, with your mpv.conf, scripts and keys.',
+            icon: LucideIcons.squareArrowOutUpRight,
+          ),
+          if (store.flag('ExternalMpv'))
+            row(
+              'MpvPath',
+              'The mpv to run: a name on PATH or a full path.',
+              value: store.text('MpvPath'),
+              onTap: () => edit('MpvPath'),
+            ),
+          row(
+            'Launcher shortcut',
+            'A key that opens the launcher from anywhere.',
+            value: '',
+            onTap: () => Navigator.push(
+              context,
+              OtakaseRoute<void>(
+                builder: (_) => LauncherShortcutPage(services: widget.services),
+              ),
+            ),
+          ),
+        ],
         row(
           'PercentageToMarkComplete',
           'Mark an episode watched on stop after this percentage.',

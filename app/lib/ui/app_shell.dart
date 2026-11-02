@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 
 import '../core.dart';
 import '../data/models.dart';
-import '../player.dart';
 import '../services.dart';
 import 'catalog_pages.dart';
 import 'components.dart';
@@ -17,12 +16,15 @@ import 'more_page.dart';
 import 'seal.dart';
 import 'show_page.dart';
 import 'community_page.dart';
+import 'community_extras_page.dart';
+import '../data/community_extras.dart';
 import 'movie_page.dart';
 import 'tv_remote_page.dart';
 import '../data/tv_remote.dart';
 import '../desktop/desktop_core.dart';
 import '../desktop/top_bar.dart';
 import '../desktop/window_frame.dart';
+import '../desktop/external_mpv.dart';
 
 /// The top-level pages. Desktop has room for Schedule as its own tab.
 List<String> get rootTabs => isDesktop
@@ -84,14 +86,71 @@ class _AppShellState extends State<AppShell> {
         widget.services.store.flag('CheckUpdates')) {
       unawaited(widget.services.updates.check());
     }
+    HardwareKeyboard.instance.addHandler(konamiKey);
+    widget.services.party.open = partyOpen;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await widget.services.discord.initialize();
+      unawaited(widget.services.extras.refreshClub());
       if (mounted) await birthdayCapsule(context, widget.services, widget.isTV);
     });
   }
 
+  final konami = KonamiTracker();
+
+  /// ↑↑↓↓←→←→BA anywhere outside the player opens the cheat code hunt.
+  bool konamiKey(KeyEvent event) {
+    if (event is! KeyDownEvent || !mounted) return false;
+    final name = switch (event.logicalKey) {
+      LogicalKeyboardKey.arrowUp => 'up',
+      LogicalKeyboardKey.arrowDown => 'down',
+      LogicalKeyboardKey.arrowLeft => 'left',
+      LogicalKeyboardKey.arrowRight => 'right',
+      LogicalKeyboardKey.keyB => 'b',
+      LogicalKeyboardKey.keyA => 'a',
+      LogicalKeyboardKey.select || LogicalKeyboardKey.enter => 'select',
+      _ => 'other',
+    };
+    if (konami.press(name) && widget.services.playerStatus == null) {
+      unawaited(openCheat(context, widget.services, widget.isTV));
+    }
+    return false;
+  }
+
+  /// A watch party member opens the host's show and episode.
+  Future<void> partyOpen(int anilistId, int episode) async {
+    if (!mounted) return;
+    var anime = Anime(id: anilistId, title: 'Watch party');
+    try {
+      anime = await widget.services.catalog.detail(
+        anime,
+        adult: widget.services.store.adultAllowed,
+      );
+    } catch (_) {
+      // The player looks the show up by its AniList id anyway.
+    }
+    if (!mounted) return;
+    unawaited(
+      Navigator.push(
+        context,
+        OtakaseRoute<void>(
+          builder: (_) => playerFor(
+            services: widget.services,
+            anime: anime,
+            episode: episode,
+            isTV: widget.isTV,
+            mode: widget.services.store.text('SubOrDub'),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(konamiKey);
+    if (widget.services.party.open == partyOpen) {
+      widget.services.party.open = null;
+    }
     FocusManager.instance.removeHighlightModeListener(modeChanged);
     widget.services.auth.remoteLink = null;
     unawaited(remoteEvents?.cancel() ?? Future<void>.value());
@@ -210,7 +269,7 @@ class _AppShellState extends State<AppShell> {
   void resume(WatchEntry h) => Navigator.push(
     context,
     OtakaseRoute<void>(
-      builder: (_) => PlayerPage(
+      builder: (_) => playerFor(
         services: widget.services,
         anime: h.anime,
         episode: h.episode,
