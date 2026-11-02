@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.84
+
+- Watch room episode picker: episode pictures and titles also come from ani.zip (TVDB stills), so more episodes have a picture, as in the app.
+
 ## 1.30.83
 
 - The add-on now ships a small `otakase-helper` program for the watch room and `/provider-status` instead of the full command-line app. Nothing changes for members.
