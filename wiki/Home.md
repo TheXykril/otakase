@@ -18,8 +18,3 @@ Still stuck? Ask on [Discord](https://otakase.xyverion.com/discord/) or
 Otakase started as a command-line app, which is being retired; v26.7.0 is
 the last release that carries it. Its pages stay under **Command line** in
 the sidebar until it is gone.
-
-## Developer
-
-How Otakase works inside, how to build and test it, and how releases are cut:
-see the **[Developer](Developer)** section.
