@@ -177,12 +177,6 @@ func configuredProviderNames(config *Config) []string {
 	return ensureEnabledProviderNames(parseProviderConfig(raw))
 }
 
-// ConfiguredProviderNames returns the enabled providers the config's
-// Provider setting names, in the order they are tried.
-func ConfiguredProviderNames(config *Config) []string {
-	return configuredProviderNames(config)
-}
-
 // ProviderStackContains reports whether the configured stack includes the
 // named provider.
 func ProviderStackContains(config *Config, providerName string) bool {
@@ -331,12 +325,6 @@ func sourceTag(providerName string) string {
 		}
 	}
 	return "[source]"
-}
-
-// SearchAnime searches every configured provider.
-func SearchAnime(title, mode string) ([]SelectionOption, error) {
-	stack := configuredProviderNames(GetGlobalConfig())
-	return searchAnimeWithProviders(stack, title, mode)
 }
 
 // searchProviderWithRetry runs one provider search, retrying transient network

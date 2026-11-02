@@ -22,16 +22,6 @@ const PlaylistName = "playlist.m3u8"
 // internal/cast_playback.go wires this to it at init.
 var Log = func(string) {}
 
-// BuildRemuxArgs renders the stream into HLS the cast device can play.
-//
-// The device cannot send the headers these providers require, so it never
-// fetches the provider URL: ffmpeg does, with the headers, and writes a clean
-// local stream the device fetches instead. Nothing is re-encoded -- this is a
-// container change, so it costs bandwidth and almost no CPU.
-func BuildRemuxArgs(streamURL, referrer, outDir string) []string {
-	return BuildRemuxArgsFrom(streamURL, referrer, outDir, 0, nil, nil)
-}
-
 // BuildRemuxArgsFrom is BuildRemuxArgs starting the stream at an offset.
 //
 // A cast episode cannot be seeked on the device: the receiver accepts SEEK and
@@ -104,11 +94,6 @@ type Remux struct {
 	err    error
 	done   chan struct{}
 	stderr strings.Builder
-}
-
-// StartRemux begins remuxing and returns without waiting for the first segment.
-func StartRemux(ffmpegPath, streamURL, referrer, outDir string) (*Remux, error) {
-	return StartFFmpeg(ffmpegPath, BuildRemuxArgs(streamURL, referrer, outDir), outDir)
 }
 
 // StartFFmpeg runs a prepared ffmpeg command and watches it the same way,

@@ -2,9 +2,7 @@ package internal
 
 import (
 	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -12,7 +10,7 @@ var (
 	// exitOnce matters more than it looks: restoreAndExit is reached from
 	// several places, and a second caller must wait for the first teardown
 	// rather than start it again or exit before the cleanups finish.
-	installInterruptOnce, exitOnce sync.Once
+	exitOnce sync.Once
 
 	exitCleanupMu sync.Mutex
 	exitCleanups  []func()
@@ -37,15 +35,6 @@ func RegisterExitCleanup(fn func()) (cancel func()) {
 			exitCleanups[i] = nil
 		}
 	}
-}
-
-// resetExitCleanupsForTest drops every registered cleanup. Tests share this
-// package-global registry, so a test that registers must not leak into the
-// next one.
-func resetExitCleanupsForTest() {
-	exitCleanupMu.Lock()
-	defer exitCleanupMu.Unlock()
-	exitCleanups = nil
 }
 
 func runExitCleanups() {
@@ -73,38 +62,6 @@ func runExitCleanups() {
 // exitCleanupBudget is how long the cleanups get, all of them together. It
 // has to leave room for castStopTimeout and the local steps after it.
 const exitCleanupBudget = 4 * time.Second
-
-// interruptSignals are the signals that must restore the terminal and run the
-// exit cleanups before the process goes away.
-//
-// SIGHUP is here because closing a terminal window closes its pty and the
-// kernel sends SIGHUP to the foreground process group. A cast started from
-// rofi runs in a window of its own, and closing that window is the intended
-// way to stop it -- unhandled, the process would die with no teardown, leaving
-// the device playing a stream whose server has gone and a whole episode of
-// segments on disk.
-func interruptSignals() []os.Signal {
-	return []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP}
-}
-
-// HandleTerminalInterrupts routes the interrupt signals through
-// restoreAndExit, so the terminal is put back and the cleanups run before the
-// process ends. Calling it again does nothing.
-func HandleTerminalInterrupts() {
-	installInterruptOnce.Do(func() {
-		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, interruptSignals()...)
-		go exitOnSignals(signals)
-	})
-}
-
-// exitOnSignals exits with 130, the shell's status for an interrupted
-// command, when a signal arrives.
-func exitOnSignals(signals <-chan os.Signal) {
-	for range signals {
-		restoreAndExit(130)
-	}
-}
 
 // restoreAndExit ends the process with status, after putting the terminal
 // back and running the exit cleanups.

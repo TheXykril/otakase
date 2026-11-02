@@ -126,12 +126,6 @@ func castPanelLabels(anime *Anime) (int, string) {
 	return anime.Ep.Number, castPanelPlaybackKeys
 }
 
-// castPanelDoneKeys is the footer for a frame drawn after the season is over.
-// The playback keys are wrong there: nothing is playing, so space, the arrows
-// and q do nothing, and a viewer told "q stop" while being shown the result of
-// their rating has been told the wrong thing.
-const castPanelDoneKeys = " season finished "
-
 // castPanelPlainLine is the fallback for a terminal too narrow to frame.
 func castPanelPlainLine(state castPanelState, width int) string {
 	line := fmt.Sprintf("%s %s/%s %d%%", state.State, castClock(state.Position), castPanelTotal(state), int(state.Volume*100+0.5))
@@ -322,10 +316,6 @@ func castPanelTruncate(text string, width int) string {
 	}
 	return lipgloss.NewStyle().MaxWidth(width-1).Render(text) + "\u2026"
 }
-
-// lipglossWidth measures a rendered line in terminal cells, ignoring the ANSI
-// escapes that colour it.
-func lipglossWidth(line string) int { return lipgloss.Width(line) }
 
 // Panel styles, set by ApplyTheme so the panel follows the same palette as the
 // menus rather than inventing its own colours.

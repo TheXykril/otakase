@@ -1,12 +1,10 @@
 package internal
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -20,81 +18,6 @@ const (
 	castSetupStreamPort    = 8010
 	castSetupDiscoveryPort = cast.DefaultDiscoveryPort
 )
-
-// CastSetup gets casting through this machine's firewall in one go: it fixes
-// the ports a firewall rule needs, shows the rules, runs them with sudo once
-// the viewer says yes, and then searches so they see the result.
-//
-// It is a command of its own, run on purpose. Casting itself still never
-// touches a firewall -- changing one as a side effect of watching an episode
-// is not something a media player should do -- but a viewer who asked for the
-// fix should not have to copy it out of an error message.
-func CastSetup(config *Config) error {
-	if config == nil {
-		return fmt.Errorf("no config")
-	}
-	if err := castSetupFixPorts(os.Stdout, config, ConfigFilePath); err != nil {
-		return err
-	}
-	if port := castBrowserFirewallPort(config); port > 0 {
-		fmt.Printf("Casting uses UDP %d (TV answers), UDP 5353 (mDNS), TCP %d (the stream) and TCP %d (the browser player).\n",
-			config.CastDiscoveryPort, config.CastPort, port)
-	} else {
-		fmt.Printf("Casting uses UDP %d (TV answers), UDP 5353 (mDNS) and TCP %d (the stream).\n",
-			config.CastDiscoveryPort, config.CastPort)
-	}
-
-	firewall := ""
-	if runtime.GOOS == "linux" {
-		firewall = castDetectFirewall()
-	}
-	if firewall == "" {
-		fmt.Println("No ufw or firewalld found running, so there is nothing to allow.")
-	} else {
-		subnet := castLocalSubnet(cast.LocalAddress())
-		if subnet == "" {
-			subnet = "192.168.0.0/24"
-		}
-		rules, _ := castDiscoveryFirewallRules(config, subnet, firewall)
-		fmt.Printf("%s is on. These rules let devices on %s through:\n", firewall, subnet)
-		for _, rule := range rules {
-			fmt.Println("  " + castShellCommand([][]string{rule}))
-		}
-		if !castSetupConfirm(os.Stdout, "Run them now? You will be asked for your password. [Y/n] ") {
-			fmt.Println("Nothing changed. Run the lines above yourself when ready.")
-			return nil
-		}
-		if err := castSetupApply(rules); err != nil {
-			return err
-		}
-		fmt.Println("Firewall updated.")
-	}
-
-	fmt.Println("Looking for cast devices...")
-	cast.SetKodi(cast.KodiSettings{
-		Hosts:    strings.Split(config.KodiHost, ","),
-		User:     config.KodiUser,
-		Password: config.KodiPassword,
-	})
-	cast.SetDiscoveryPort(config.CastDiscoveryPort)
-	endBusy := BeginBusy(config, "Looking for cast devices")
-	devices, err := cast.Discover(context.Background(), cast.DefaultDiscoveryTimeout)
-	endBusy()
-	if err != nil {
-		return err
-	}
-	if len(devices) == 0 {
-		fmt.Println("Still no devices. Check the TV is on, on this network, and has its DLNA or media renderer setting on.")
-		fmt.Println("More help: https://github.com/TheXykril/otakase/wiki/Casting-Problems")
-		return nil
-	}
-	fmt.Println("Found:")
-	for _, device := range devices {
-		fmt.Println("  " + device.String())
-	}
-	fmt.Println("Cast with otakase -cast.")
-	return nil
-}
 
 // castSetupFixPorts gives CastPort and CastDiscoveryPort fixed values when
 // they are random, in memory and in the config file, because a random port is
@@ -123,23 +46,6 @@ func castSetupFixPorts(out io.Writer, config *Config, configPath string) error {
 		}
 	}
 	return SaveConfigToFile(configPath, configMap)
-}
-
-// castSetupConfirm asks a yes/no question that defaults to yes. Ended stdin is
-// a no: nobody answered.
-func castSetupConfirm(out io.Writer, question string) bool {
-	defer suspendBusy()()
-	fmt.Fprint(out, question)
-	line, err := stdinLineReader().ReadString('\n')
-	if err != nil && line == "" {
-		fmt.Fprintln(out)
-		return false
-	}
-	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "", "y", "yes":
-		return true
-	}
-	return false
 }
 
 // castSetupApply asks for the sudo password the way otakase -u does -- a

@@ -35,9 +35,6 @@ const Name = "otakase"
 //go:embed otakase.png
 var pngData []byte
 
-//go:embed otakase-menu.png
-var menuData []byte
-
 //go:embed otakase.svg
 var svgData []byte
 
@@ -51,16 +48,6 @@ var desktopEntry []byte
 
 //go:embed otakase-link.desktop
 var linkEntry []byte
-
-// PNG is the 256 px icon.
-func PNG() []byte { return pngData }
-
-// MenuPNG is the icon at 112 px, the size rofi's 56 px icon takes on a
-// screen scaled 2x.
-func MenuPNG() []byte { return menuData }
-
-// SVG is the scalable icon.
-func SVG() []byte { return svgData }
 
 var (
 	pathOnce sync.Once

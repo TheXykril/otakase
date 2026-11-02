@@ -100,11 +100,3 @@ func noteProviderFailure(providerName string, err error) {
 		Log(fmt.Sprintf("Provider %s failed %d times in a row; skipping it for %s", providerName, entry.consecutiveFailures, providerCooldown))
 	}
 }
-
-// ResetProviderHealth clears all recorded provider failures, so a user retrying
-// on purpose is never told to wait.
-func ResetProviderHealth() {
-	providerHealthMu.Lock()
-	defer providerHealthMu.Unlock()
-	providerHealthBy = map[string]*providerHealthEntry{}
-}

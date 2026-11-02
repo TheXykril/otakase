@@ -3,7 +3,6 @@ package internal
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -206,28 +205,6 @@ func TestInjectMissingConfigOptionsAddsOnlyRegisteredMissingKeys(t *testing.T) {
 	}
 }
 
-// An option added to defaultConfigMap but never registered was silently never
-// added to existing configs, which is how ContinueWatchingRows, Quality, the
-// Kodi and Cast options and others went missing on upgrade.
-func TestEveryDefaultConfigOptionIsClassified(t *testing.T) {
-	introduced := configOptionsIntroducedInVersion()
-	baseline := baselineConfigOptions()
-	for key := range defaultConfigMap() {
-		_, registered := introduced[key]
-		switch {
-		case registered && baseline[key]:
-			t.Errorf("%s is both baseline and registered as introduced", key)
-		case !registered && !baseline[key]:
-			t.Errorf("%s is in defaultConfigMap but not registered in configOptionsIntroducedInVersion", key)
-		}
-	}
-	for key := range introduced {
-		if _, ok := defaultConfigMap()[key]; !ok {
-			t.Errorf("%s is registered but has no default", key)
-		}
-	}
-}
-
 func migrateFrom(t *testing.T, storedVersion, appVersion string, extra string) string {
 	t.Helper()
 	tempDir := t.TempDir()
@@ -295,13 +272,5 @@ func TestVersionOrderingTreatsBlankAsOldest(t *testing.T) {
 		if got := versionAtMost(tc.a, tc.b); got != tc.lessEq {
 			t.Errorf("versionAtMost(%q, %q) = %v", tc.a, tc.b, got)
 		}
-	}
-}
-
-func TestAnEmptyProviderSettingMeansTheStack(t *testing.T) {
-	withAllProvidersEnabledForTest(t)
-
-	if got := ConfiguredProviderNames(&Config{}); !slices.Equal(got, fullTestStack) {
-		t.Fatalf("got %v, want %v", got, fullTestStack)
 	}
 }

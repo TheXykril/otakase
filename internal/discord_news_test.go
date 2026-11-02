@@ -119,44 +119,6 @@ func TestCommunityOptions(t *testing.T) {
 	}
 }
 
-func TestUpdatePromptOffersDiscordWithNews(t *testing.T) {
-	previous := GetGlobalConfig()
-	t.Cleanup(func() { SetGlobalConfig(previous) })
-	config := newDiscordTestConfig(t, DefaultDiscordBotURL)
-	SetGlobalConfig(config)
-
-	state := pendingUpdate{LatestVersion: "26.9.0"}
-	for _, option := range updateActionOptions(state) {
-		if option.Key == "discord" {
-			t.Fatal("Discord offered without news")
-		}
-	}
-	if discordNewsLine() != "" {
-		t.Fatal("news line without news")
-	}
-
-	saveDiscordNews(config, discordNews{Announcement: &discordAnnouncement{Title: "Hello"}, Online: 2, FetchedAt: time.Now()})
-	found := false
-	for _, option := range updateActionOptions(state) {
-		if option.Key == "discord" {
-			found = true
-			if !strings.Contains(option.Label, "2 online") {
-				t.Errorf("label = %q", option.Label)
-			}
-		}
-	}
-	if !found {
-		t.Fatal("no Join Discord row with news cached")
-	}
-	if line := discordNewsLine(); !strings.HasPrefix(line, "Discord: Hello") {
-		t.Errorf("news line = %q", line)
-	}
-	opened := stubDiscordOpen(t)
-	if err := openDiscordInvite(); err != nil || len(*opened) != 1 || (*opened)[0] != DiscordInviteURL {
-		t.Errorf("opened %v, err %v", *opened, err)
-	}
-}
-
 func TestDiscordNewsDecodesProtocol(t *testing.T) {
 	var news discordNews
 	if err := json.Unmarshal([]byte(`{"announcement":null,"online":0,"members":5,"invite":""}`), &news); err != nil {

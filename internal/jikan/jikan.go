@@ -44,47 +44,6 @@ type Episode struct {
 	Recap         bool   `json:"recap"`
 }
 
-// Episode returns the details of one episode.
-func (c *Client) Episode(malID, number int) (Episode, error) {
-	var answer struct {
-		Data *Episode `json:"data"`
-	}
-	if err := c.get(fmt.Sprintf("/anime/%d/episodes/%d", malID, number), &answer); err != nil {
-		return Episode{}, err
-	}
-	if answer.Data == nil {
-		return Episode{}, fmt.Errorf("jikan: no data for episode %d of %d", number, malID)
-	}
-	return *answer.Data, nil
-}
-
-// FillerEpisodes returns the numbers of every episode marked as filler.
-func (c *Client) FillerEpisodes(malID int) ([]int, error) {
-	var filler []int
-	for page := 1; ; page++ {
-		var answer struct {
-			Data []struct {
-				Number int  `json:"mal_id"`
-				Filler bool `json:"filler"`
-			} `json:"data"`
-			Pagination struct {
-				HasNextPage bool `json:"has_next_page"`
-			} `json:"pagination"`
-		}
-		if err := c.get(fmt.Sprintf("/anime/%d/episodes?page=%d", malID, page), &answer); err != nil {
-			return nil, err
-		}
-		for _, ep := range answer.Data {
-			if ep.Filler {
-				filler = append(filler, ep.Number)
-			}
-		}
-		if !answer.Pagination.HasNextPage {
-			return filler, nil
-		}
-	}
-}
-
 // Pictures returns every image URL Jikan lists for a show, in all sizes.
 func (c *Client) Pictures(malID int) ([]string, error) {
 	type sizes struct {

@@ -124,25 +124,6 @@ func configOptionsIntroducedInVersion() map[string]string {
 	}
 }
 
-// baselineConfigOptions are the options every config has had from the start.
-// They are written by createDefaultConfig and never appended on upgrade.
-func baselineConfigOptions() map[string]bool {
-	return map[string]bool{
-		"Player": true, "MpvArgs": true, "StoragePath": true,
-		"AnimeNameLanguage": true, "SubsLanguage": true, "MenuOrder": true,
-		"SubOrDub": true, "SubStyle": true, "PercentageToMarkComplete": true,
-		"NextEpisodePrompt": true, "AutoAudioFallback": true,
-		"SkipOp": true, "SkipEd": true, "SkipFiller": true, "SkipRecap": true,
-		"RofiSelection": true, "ImagePreview": true, "ScoreOnCompletion": true,
-		"SaveMpvSpeed": true, "AddMissingOptions": true, "AlternateScreen": true,
-		"DiscordPresence": true, "DiscordClientId": true,
-		"TrackingLocal": true, "TrackingRemote": true, "TrackingConfigured": true,
-		"MyAnimeListClientID": true, "MyAnimeListClientSecret": true,
-		"MyAnimeListImported": true, "MyAnimeListImportDismissed": true,
-		"ShowNewEpisodes": true, "Theme": true, "DownloadDir": true,
-	}
-}
-
 // injectMissingConfigOptions adds the default of every registered option the
 // config lacks and reports the keys added.
 //

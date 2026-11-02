@@ -129,7 +129,6 @@ type (
 // matches the desktop theme on Omarchy. ApplyTheme rebuilds them; the values here
 // are the builtin palette so the package is usable before it is called.
 var (
-	titleStyle          lipgloss.Style
 	filterLabelStyle    lipgloss.Style
 	filterTextStyle     lipgloss.Style
 	selectedItemStyle   lipgloss.Style
@@ -160,7 +159,6 @@ func ApplyTheme(palette theme.Palette) {
 	castPanelPlayStyle = lipgloss.NewStyle().Foreground(color(palette.Green)).Bold(true)
 	castPanelPauseStyle = lipgloss.NewStyle().Foreground(color(palette.Yellow)).Bold(true)
 
-	titleStyle = lipgloss.NewStyle().Foreground(color(palette.Accent)).Bold(true)
 	filterLabelStyle = lipgloss.NewStyle().Foreground(color(palette.Magenta)).Bold(true)
 	filterTextStyle = lipgloss.NewStyle().Foreground(color(palette.Green))
 	regularItemStyle = lipgloss.NewStyle().Foreground(color(palette.Foreground)).Padding(0, 1)

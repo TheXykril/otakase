@@ -8,13 +8,9 @@ Otakase and getting started. These pages go further.
 - **[Tracking](Tracking)**: AniList, MyAnimeList, both at once, and resuming on another device
 - **[Android TV](Android-TV)**: the remote, signing in with your phone, and using your phone as a remote
 - **[Desktop](Desktop)**: the window, the keyboard launcher, and updates on Windows, macOS and Linux
+- **[Casting](Casting)**: Chromecast, DLNA TVs, Kodi and any browser on your network
+- **[Skip Times](Skip-Times)**: where openings and endings come from, and fixing them yourself
 - **[Troubleshooting](Troubleshooting)**: nothing found, playback that won't start, progress that doesn't sync
 
 Still stuck? Ask on [Discord](https://otakase.xyverion.com/discord/) or
 [open an issue](https://github.com/TheXykril/otakase/issues).
-
-## The command-line otakase
-
-Otakase started as a command-line app, which is being retired; v26.7.0 is
-the last release that carries it. Its pages stay under **Command line** in
-the sidebar until it is gone.

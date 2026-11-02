@@ -47,15 +47,6 @@ func TestCastSetupFixPortsKeepsChosenPorts(t *testing.T) {
 	}
 }
 
-func TestCastSetupConfirm(t *testing.T) {
-	for input, want := range map[string]bool{"\n": true, "y\n": true, "YES\n": true, "n\n": false, "no\n": false, "": false} {
-		stdinFromString(t, input)
-		if got := castSetupConfirm(io.Discard, "? "); got != want {
-			t.Errorf("answer %q: got %v, want %v", input, got, want)
-		}
-	}
-}
-
 // The rules run in order and stop at the first failure, naming it.
 func TestCastSetupRunStopsAtFirstFailure(t *testing.T) {
 	var ran []string

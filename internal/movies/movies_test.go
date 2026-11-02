@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -144,45 +143,6 @@ func TestSiteFollowsTheEntryRedirect(t *testing.T) {
 	if remembered != origin.URL {
 		t.Errorf("remembered %q, want %q", remembered, origin.URL)
 	}
-}
-
-func TestStoreProgress(t *testing.T) {
-	store, err := OpenStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	movie := Movie{Path: "/filmas/alkis-online-3/", Title: "Alkis"}
-	if err := store.SetWatchlist(movie, true); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SetProgress(movie, 600, 5580, false); err != nil {
-		t.Fatal(err)
-	}
-	if got := store.Continue(); len(got) != 1 || got[0].Position != 600 || got[0].Title != "Alkis" {
-		t.Fatalf("continue = %+v", got)
-	}
-	if err := store.SetProgress(Movie{Path: movie.Path}, 5500, 5580, true); err != nil {
-		t.Fatal(err)
-	}
-	entry, _ := store.Get(movie.Key())
-	if !entry.Watched || entry.Position != 0 || entry.Watchlist || entry.Title != "Alkis" {
-		t.Errorf("after finishing: %+v", entry)
-	}
-	if len(store.Continue()) != 0 || len(store.History()) != 1 {
-		t.Errorf("continue %d, history %d", len(store.Continue()), len(store.History()))
-	}
-
-	reopened, err := OpenStore(storeDir(store))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, ok := reopened.Get(movie.Key()); !ok || !got.Watched {
-		t.Errorf("not kept on disk: %+v", got)
-	}
-}
-
-func storeDir(store *Store) string {
-	return filepath.Dir(store.path)
 }
 
 // The call as a Doodstream embed page made it, fetched from a home
@@ -490,38 +450,6 @@ func TestParseSeriesPage(t *testing.T) {
 	}
 	if seasonOf("/serialai/x-online/") != 1 {
 		t.Error("a page without a season number is season 1")
-	}
-}
-
-// A series is in Continue from its first episode played until its last is
-// finished, carrying on from the episode after the last finished.
-func TestStoreEpisodeProgress(t *testing.T) {
-	store, _ := OpenStore(t.TempDir())
-	show := Movie{Provider: VidsrcName, Path: "tt0903747", Title: "Breaking Bad", IMDb: "tt0903747", Series: true}
-	if err := store.SetEpisodeProgress(show, Episode{Season: 1, Number: 1}, 300, 3500, false, false); err != nil {
-		t.Fatal(err)
-	}
-	entry, _ := store.Get(show.Key())
-	if !entry.Started() || entry.Position != 300 || entry.At() != (Episode{Season: 1, Number: 1}) || entry.EpisodeDone {
-		t.Fatalf("after part of S1E1: %+v", entry)
-	}
-	_ = store.SetEpisodeProgress(show, Episode{Season: 1, Number: 1}, 0, 3500, true, false)
-	entry, _ = store.Get(show.Key())
-	if !entry.Started() || !entry.EpisodeDone || entry.Position != 0 || entry.Watched {
-		t.Fatalf("after S1E1 finished: %+v", entry)
-	}
-	if len(store.Continue()) != 1 {
-		t.Error("a series with episodes to go should be in Continue")
-	}
-	_ = store.SetEpisodeProgress(show, Episode{Season: 5, Number: 16}, 0, 3500, true, true)
-	entry, _ = store.Get(show.Key())
-	if !entry.Watched || entry.Started() || len(store.Continue()) != 0 || len(store.History()) != 1 {
-		t.Fatalf("after the last episode: %+v", entry)
-	}
-	_ = store.SetWatched(show, false)
-	entry, _ = store.Get(show.Key())
-	if entry.Watched || entry.Started() || entry.Episode != 0 {
-		t.Fatalf("started over: %+v", entry)
 	}
 }
 

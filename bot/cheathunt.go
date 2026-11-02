@@ -1,7 +1,7 @@
 package main
 
-// The cheat code. Entering the Konami code in Otakase (↑↑↓↓←→←→BA in the
-// terminal, or typing uuddlrlrba in rofi) starts a puzzle hunt made for the
+// The cheat code. Entering the Konami code in the Otakase app (↑↑↓↓←→←→BA)
+// starts a puzzle hunt made for the
 // member whose app is linked (cheatpuzzles.go). Solving it mints a one-time
 // code. Codes are not tied to anyone: the finder can redeem it or give it
 // away, and the first /redeem wins. Its reward is five watch tickets: one ticket opens one

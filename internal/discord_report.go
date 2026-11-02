@@ -42,20 +42,6 @@ const (
 // when the user has asked to send one, never during startup or playback.
 var discordUploadClient = &http.Client{Timeout: 20 * time.Second}
 
-// PreservePreviousLog copies a non-empty log aside before it is emptied for
-// this run, as otakase-debug.previous.log beside it.
-func PreservePreviousLog(logFile string) {
-	info, err := os.Stat(logFile)
-	if err != nil || info.Size() == 0 {
-		return
-	}
-	data, err := readFileTail(logFile, reportLogMax)
-	if err != nil {
-		return
-	}
-	_ = os.WriteFile(filepath.Join(filepath.Dir(logFile), previousLogFileName), data, 0o600)
-}
-
 // reportLogPath is the log a report attaches: this run's when the report is
 // made from inside otakase, the previous run's for `otakase -report`.
 func reportLogPath(previousRun bool) string {
@@ -115,14 +101,6 @@ func lastLines(data []byte, n int) string {
 // reportDiagnostics is the block of app details sent with a report. It is a
 // variable so the fuller `otakase -diag` block can stand in for this one.
 var reportDiagnostics = fallbackDiagnosticsText
-
-// UseDiagnosticsFor makes reports carry the `otakase -diag` block for the
-// given config file.
-func UseDiagnosticsFor(version, configPath string) {
-	reportDiagnostics = func(_ *Config, logPath string) string {
-		return Diagnostics(version, configPath, logPath)
-	}
-}
 
 // fallbackDiagnosticsText collects what a report needs to be acted on: the
 // version, the system, the settings that change how playback works, and the
@@ -371,58 +349,6 @@ func reportFallback(ui reportUI, report problemReport) {
 	}
 }
 
-// cliReportUI asks on plain terminal lines.
-type cliReportUI struct {
-	in  func() (string, error)
-	out io.Writer
-}
-
-func newCLIReportUI() cliReportUI {
-	return cliReportUI{
-		in:  func() (string, error) { return stdinLineReader().ReadString('\n') },
-		out: os.Stdout,
-	}
-}
-
-func (ui cliReportUI) ask(question, hint string) (string, bool) {
-	fmt.Fprintln(ui.out, question)
-	if hint != "" {
-		fmt.Fprintln(ui.out, "  "+hint)
-	}
-	fmt.Fprint(ui.out, "> ")
-	line, err := ui.in()
-	line = strings.TrimSpace(line)
-	if err != nil && line == "" {
-		return "", false
-	}
-	return line, line != ""
-}
-
-func (ui cliReportUI) choose(question string, options []SelectionOption) string {
-	fmt.Fprintln(ui.out)
-	fmt.Fprintln(ui.out, question)
-	for i, option := range options {
-		fmt.Fprintf(ui.out, "  %d) %s\n", i+1, option.Label)
-	}
-	fmt.Fprint(ui.out, "Choose a number (enter to cancel): ")
-	line, _ := ui.in()
-	n, err := strconv.Atoi(strings.TrimSpace(line))
-	if err != nil || n < 1 || n > len(options) {
-		return ""
-	}
-	return options[n-1].Key
-}
-
-func (ui cliReportUI) say(message string) { fmt.Fprintln(ui.out, message) }
-
-func (ui cliReportUI) link(config *Config) bool {
-	if err := RunDiscordLinkCLI(config); err != nil {
-		fmt.Fprintln(ui.out, "Linking failed:", err)
-		return false
-	}
-	return discordLinked(config)
-}
-
 // menuReportUI asks with otakase's own prompts and menus.
 type menuReportUI struct {
 	config *Config
@@ -491,9 +417,4 @@ func pauseAfterNotice(config *Config) {
 	}
 	Out("Press Enter to go back.")
 	AwaitEnter()
-}
-
-// RunReportCLI is `otakase -report`.
-func RunReportCLI(config *Config) {
-	runReport(config, newCLIReportUI(), reportLogPath(true))
 }

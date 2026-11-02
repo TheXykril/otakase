@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -98,86 +97,6 @@ func writeTrackingBackup(config *Config, action string, aniList, myAnimeList Ani
 		return "", writeErr
 	}
 	return target, nil
-}
-
-// maybeImportAniListToMyAnimeList offers, once, to copy an AniList list into
-// an empty MyAnimeList one. A saved AniList token is the sign there is one.
-func maybeImportAniListToMyAnimeList(config *Config, user *User) error {
-	switch {
-	case config == nil || user == nil || !UsesMyAnimeListTracking(config):
-		return nil
-	case config.MyAnimeListImported, config.MyAnimeListImportDismissed:
-		return nil
-	case hasAnyEntries(user.AnimeList):
-		return nil
-	}
-	if _, statErr := os.Stat(anilistTokenPath(config)); statErr != nil {
-		return nil
-	}
-
-	Out("AniList tracking data was found.")
-	answer, selectErr := promptSelect([]SelectionOption{
-		{Key: "yes", Label: "Import your existing AniList progress into MyAnimeList", Icon: icons.Import},
-		{Key: "no", Label: "Start with MyAnimeList as-is", Icon: icons.Next},
-	})
-	if selectErr != nil {
-		return selectErr
-	}
-
-	if answer.Key == "yes" {
-		if importErr := ImportAniListTrackingToMyAnimeList(config); importErr != nil {
-			return importErr
-		}
-		if refreshErr := RefreshMyAnimeListUserAnimeList(config, user); refreshErr != nil {
-			return refreshErr
-		}
-	}
-	config.MyAnimeListImported = answer.Key == "yes"
-	config.MyAnimeListImportDismissed = answer.Key != "yes"
-	return persistTrackingConfig(config)
-}
-
-// myAnimeListImportFields is what importing an AniList entry writes to
-// MyAnimeList. Unlike a sync it leaves dates alone and only sends a score or
-// rewatch count that is actually set.
-func myAnimeListImportFields(entry Entry) map[string]string {
-	fields := map[string]string{"num_watched_episodes": strconv.Itoa(entry.Progress)}
-	maps.Copy(fields, myAnimeListStatusFields(entry.Status))
-	if entry.Status != "REPEATING" {
-		// Only a rewatch sends the flag on import.
-		delete(fields, "is_rewatching")
-	}
-	if entry.Score > 0 {
-		fields["score"] = strconv.Itoa(myAnimeListScore(entry.Score))
-	}
-	if entry.Repeat > 0 {
-		fields["num_times_rewatched"] = strconv.Itoa(entry.Repeat)
-	}
-	return fields
-}
-
-// ImportAniListTrackingToMyAnimeList copies the signed-in AniList list onto
-// MyAnimeList. Shows without a MyAnimeList ID can't be written there, and
-// private entries stay off it since MyAnimeList cannot hide one.
-func ImportAniListTrackingToMyAnimeList(config *Config) error {
-	token, tokenErr := storedAniListToken(config)
-	if tokenErr != nil {
-		return tokenErr
-	}
-	source, fetchErr := fetchAniListAnimeListFromToken(token)
-	if fetchErr != nil {
-		return fetchErr
-	}
-
-	for _, entry := range getEntriesByCategory(source, "ALL") {
-		if entry.Private || entry.Media.MalID == 0 {
-			continue
-		}
-		if writeErr := updateMyAnimeListListStatus(config, entry.Media.MalID, myAnimeListImportFields(entry)); writeErr != nil {
-			return writeErr
-		}
-	}
-	return nil
 }
 
 // fetchAniListAnimeListFromToken reads the whole list of whoever token

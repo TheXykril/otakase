@@ -43,9 +43,6 @@ const (
 	// movieEndCardSeconds is the closing card after the roll has gone.
 	movieEndCardSeconds = 8
 
-	// movieValueRunes keeps a long show title on its half of the screen.
-	movieValueRunes = 34
-
 	// The wall's covers, in canvas pixels.
 	movieCoverWidth  = 250
 	movieCoverHeight = 354

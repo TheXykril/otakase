@@ -27,16 +27,6 @@ func visibleEntriesByCategory(list AnimeList, category string, config *Config) [
 	return hideAdultEntries(getEntriesByCategory(list, category), config)
 }
 
-// searchVariables are the AniList search variables. isAdult is sent only to
-// hide 18+ titles; left out, AniList returns both.
-func searchVariables(query string) map[string]interface{} {
-	variables := map[string]interface{}{"search": query}
-	if config := GetGlobalConfig(); config != nil && !config.AdultContent {
-		variables["isAdult"] = false
-	}
-	return variables
-}
-
 // providerNamesForShow is the provider stack to look for one show on. An
 // adult show is carried only by adult providers, so with AdultContent on it
 // goes to those alone: the general hosts cannot have it, and asking them

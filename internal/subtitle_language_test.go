@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -89,45 +88,5 @@ func TestAddAlternateSubtitlesSkipsTheChosenTrack(t *testing.T) {
 	command := sent[0]
 	if command[0] != "sub-add" || command[1] != "pt.vtt" || command[2] != "auto" || command[4] != "pt" {
 		t.Fatalf("command = %v", command)
-	}
-}
-
-func TestSubtitleTrackLanguage(t *testing.T) {
-	tracks := []SubtitleTrack{{URL: "https://cdn/pt.vtt", Language: "Portuguese"}}
-	external := map[string]interface{}{"external-filename": "https://cdn/pt.vtt"}
-	if got := subtitleTrackLanguage(external, tracks); got != "portuguese" {
-		t.Fatalf("external got %q", got)
-	}
-	embedded := map[string]interface{}{"lang": "spa"}
-	if got := subtitleTrackLanguage(embedded, nil); got != "spanish" {
-		t.Fatalf("embedded got %q", got)
-	}
-	if got := subtitleTrackLanguage(nil, nil); got != "" {
-		t.Fatalf("no track got %q", got)
-	}
-}
-
-func TestSubtitleChoiceRemembersASwitch(t *testing.T) {
-	dir := t.TempDir()
-	config := &Config{StoragePath: dir, SubsLanguage: "english"}
-	anime := &Anime{AnilistId: 21}
-	w := &subtitleChoiceWatcher{}
-
-	w.note(config, anime, "english") // what played first
-	if len(loadShowPrefs(dir)) != 0 {
-		t.Fatal("the first track seen is not a choice")
-	}
-	w.note(config, anime, "")
-	w.note(config, anime, "portuguese")
-	if got := loadShowPrefs(dir)["21"].SubtitleLanguage; got != "portuguese" {
-		t.Fatalf("switch not remembered, got %q", got)
-	}
-	// Another show starts fresh.
-	w.note(config, &Anime{AnilistId: 99}, "english")
-	if _, stored := loadShowPrefs(dir)["99"]; stored {
-		t.Fatal("first track of a new show was stored")
-	}
-	if !strings.Contains(showPrefsPath(dir), showPrefsFileName) {
-		t.Fatal("path")
 	}
 }

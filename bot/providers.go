@@ -15,7 +15,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// /provider-status runs `otakase -provider-status` (the add-on image ships
+// /provider-status runs `otakase-helper -provider-status` (the add-on image ships
 // the latest release) and shows which sources answer from here.
 
 type providerResult struct {

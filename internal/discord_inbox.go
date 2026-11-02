@@ -1,11 +1,8 @@
 package internal
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,9 +24,6 @@ const (
 	discordInboxWait     = 25 // seconds the bot holds the request open
 	maxKeptInboxItems    = 50
 )
-
-// discordInboxClient waits longer than the bot holds the request.
-var discordInboxClient = &http.Client{Timeout: (discordInboxWait + 15) * time.Second}
 
 // discordInboxItem is one message from the bot.
 type discordInboxItem struct {
@@ -61,116 +55,9 @@ func registerDiscordInbox(kind string, fn func(config *Config, item discordInbox
 }
 
 var (
-	discordInboxOnce sync.Once
-	// discordInboxRetry is the first wait after a failed request, doubled
-	// up to discordInboxRetryMax. Tests shorten them.
-	discordInboxRetry    = 30 * time.Second
-	discordInboxRetryMax = 10 * time.Minute
-	discordInboxIdle     = 2 * time.Minute // between checks while not linked
+
+// between checks while not linked
 )
-
-// StartDiscordInbox starts the background inbox reader, once per run.
-func StartDiscordInbox(config *Config) {
-	if !discordEnabled(config) {
-		return
-	}
-	retry, retryMax := discordInboxRetry, discordInboxRetryMax
-	discordInboxOnce.Do(func() { go runDiscordInbox(config, retry, retryMax, nil) })
-}
-
-// runDiscordInbox reads the inbox until stop is closed; a nil stop runs for
-// the life of the process. The retry waits are passed in rather than read
-// from the package variables so a test can't change them under a running
-// reader.
-func runDiscordInbox(config *Config, retry, retryMax time.Duration, stop <-chan struct{}) {
-	wait := retry
-	for {
-		if !discordInboxPause(stop, 0) {
-			return
-		}
-		if !discordLinked(config) {
-			if !discordInboxPause(stop, discordInboxIdle) {
-				return
-			}
-			continue
-		}
-		items, err := fetchDiscordInbox(config, discordInboxWait)
-		if err != nil {
-			if !errors.Is(err, errDiscordUnauthorized) {
-				Log(fmt.Sprintf("Discord: inbox: %v", err))
-				if !discordInboxPause(stop, wait) {
-					return
-				}
-				wait = min(wait*2, retryMax)
-			}
-			continue
-		}
-		wait = retry
-		handleDiscordInbox(config, items)
-	}
-}
-
-// discordInboxPause waits d, and reports false if stop closed first.
-func discordInboxPause(stop <-chan struct{}, d time.Duration) bool {
-	select {
-	case <-stop:
-		return false
-	default:
-	}
-	if d <= 0 {
-		return true
-	}
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-stop:
-		return false
-	case <-timer.C:
-		return true
-	}
-}
-
-func fetchDiscordInbox(config *Config, waitSeconds int) ([]discordInboxItem, error) {
-	link := loadDiscordLink(config)
-	if link.Token == "" {
-		return nil, errDiscordUnauthorized
-	}
-	var answer struct {
-		Items []discordInboxItem `json:"items"`
-	}
-	path := fmt.Sprintf("/v1/inbox?wait=%d", waitSeconds)
-	if _, err := discordDoWith(discordInboxClient, context.Background(), config, http.MethodGet, path, link.Token, "", nil, &answer); err != nil {
-		return nil, err
-	}
-	return answer.Items, nil
-}
-
-// handleDiscordInbox runs each item's handler and acks them all, the ones
-// nobody understood too: the bot would otherwise send them again at once.
-func handleDiscordInbox(config *Config, items []discordInboxItem) {
-	if len(items) == 0 {
-		return
-	}
-	ids := make([]string, 0, len(items))
-	for _, item := range items {
-		ids = append(ids, item.ID)
-		if !item.Expires.IsZero() && time.Now().After(item.Expires) {
-			continue
-		}
-		if fn, ok := discordInboxHandlers[item.Kind]; ok {
-			fn(config, item)
-		} else {
-			Log(fmt.Sprintf("Discord: inbox item of unknown kind %q dropped (an update may know it)", item.Kind))
-		}
-	}
-	link := loadDiscordLink(config)
-	if link.Token == "" {
-		return
-	}
-	if _, err := discordPostJSON(context.Background(), config, "/v1/inbox/ack", link.Token, map[string][]string{"ids": ids}, nil); err != nil {
-		Log(fmt.Sprintf("Discord: inbox ack failed: %v", err))
-	}
-}
 
 // Kept items: the From Discord list.
 

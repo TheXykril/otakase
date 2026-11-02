@@ -106,12 +106,6 @@ var (
 // done long before the first menu; a slow fontconfig only costs this much once.
 const readyWait = 300 * time.Millisecond
 
-// Resolve records whether icons are drawn. It is called once at startup.
-func Resolve(on bool) {
-	enabled.Store(on)
-	readyOnce.Do(func() { close(ready) })
-}
-
 // Enabled reports whether labels get icons.
 func Enabled() bool {
 	select {

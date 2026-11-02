@@ -145,19 +145,6 @@ func BeginBusy(config *Config, stage string) func() {
 	return sync.OnceFunc(func() { b.end() })
 }
 
-// setBusyStage renames the step the active indicator shows, if there is one.
-func setBusyStage(stage string) {
-	busyMu.Lock()
-	b := activeBusy
-	busyMu.Unlock()
-	if b == nil {
-		return
-	}
-	b.mu.Lock()
-	b.stage = stage
-	b.mu.Unlock()
-}
-
 // EndAllBusy stops any indicator, for exit paths that never reach the caller's
 // end function.
 func EndAllBusy() {

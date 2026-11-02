@@ -36,7 +36,7 @@ func (b *bot) supportForm(i *discordgo.InteractionCreate) {
 		Type: discordgo.InteractionResponseModal,
 		Data: &discordgo.InteractionResponseData{CustomID: "support-form", Title: "Ask for help", Components: []discordgo.MessageComponent{
 			input("system", "System (OS)", discordgo.TextInputShort, true, 2, 80, "e.g. Arch Linux, Ubuntu 24.04, Windows 11, macOS 15"),
-			input("version", "Otakase version", discordgo.TextInputShort, true, 1, 40, "What otakase -v says, e.g. 26.5.0"),
+			input("version", "Otakase version", discordgo.TextInputShort, true, 1, 40, "From About & updates, e.g. 26.7.0"),
 			input("install", "How you installed it", discordgo.TextInputShort, true, 2, 100, "e.g. AUR, winget, install script, Homebrew"),
 			input("what", "What happened", discordgo.TextInputParagraph, true, 10, 900, "The first line becomes the title of your post"),
 			input("steps", "Steps or error (optional)", discordgo.TextInputParagraph, false, 0, 900, "What you did, and any error or log lines"),

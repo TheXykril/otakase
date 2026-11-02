@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -100,14 +99,6 @@ type aniListList struct {
 
 const aniListTitleFields = `title { romaji english native }`
 
-const aniListSearchQuery = `query ($search: String, $isAdult: Boolean) {
-	Page(page: 1, perPage: 50) {
-		media(search: $search, type: ANIME, isAdult: $isAdult) {
-			id episodes ` + aniListTitleFields + `%s
-		}
-	}
-}`
-
 // The list query is the same with or without covers; only the preview grid
 // needs them, and they make the answer noticeably larger.
 const aniListCollectionQuery = `query ($userId: Int, $type: MediaType) {
@@ -130,10 +121,6 @@ const aniListCollectionQuery = `query ($userId: Int, $type: MediaType) {
 
 const aniListCoverField = `
 					coverImage { large }`
-
-func aniListSearchQueryFor(withCover bool) string {
-	return fmt.Sprintf(aniListSearchQuery, coverFieldIf(withCover))
-}
 
 func aniListCollectionQueryFor(withCover bool) string {
 	return fmt.Sprintf(aniListCollectionQuery, coverFieldIf(withCover))
@@ -160,10 +147,6 @@ const aniListSaveEntryMutation = `mutation (
 	}
 }`
 
-const aniListSetStatusMutation = `mutation ($mediaId: Int, $status: MediaListStatus) {
-	SaveMediaListEntry(mediaId: $mediaId, status: $status) { id status }
-}`
-
 const aniListSetScoreMutation = `mutation ($mediaId: Int, $score: Float) {
 	SaveMediaListEntry(mediaId: $mediaId, score: $score) { id mediaId score }
 }`
@@ -180,34 +163,6 @@ func mediaDisplayTitle(media Media, config *Config) string {
 		fallback = strconv.Itoa(id)
 	}
 	return cmp.Or(names.Romaji, names.English, names.Japanese, fallback)
-}
-
-// levenshtein is the case-insensitive edit distance, used to put the closest
-// search results first. Only two rows of the table are ever needed.
-func levenshtein(a, b string) int {
-	ar := []rune(strings.ToLower(a))
-	br := []rune(strings.ToLower(b))
-	if len(ar) == 0 {
-		return len(br)
-	}
-
-	prev := make([]int, len(br)+1)
-	next := make([]int, len(br)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i, ca := range ar {
-		next[0] = i + 1
-		for j, cb := range br {
-			substitute := prev[j]
-			if ca != cb {
-				substitute++
-			}
-			next[j+1] = min(prev[j+1]+1, next[j]+1, substitute)
-		}
-		prev, next = next, prev
-	}
-	return prev[len(br)]
 }
 
 func aniListHTTPClient() *http.Client {
@@ -430,92 +385,6 @@ func decodeAniList(data []byte, out interface{}) error {
 	return nil
 }
 
-type aniListSearchHit struct {
-	id       int
-	title    string
-	cover    string
-	episodes int
-}
-
-// searchAniList returns the ten results whose title is closest to query.
-func searchAniList(query, token string, withCover bool) ([]aniListSearchHit, error) {
-	body, encodeErr := encodeGraphQL(aniListSearchQueryFor(withCover), searchVariables(query))
-	if encodeErr != nil {
-		return nil, encodeErr
-	}
-	payload, searchErr := doAniListSearchRequest(anilistEndpoint, body, token)
-	if searchErr != nil {
-		return nil, searchErr
-	}
-	var answer struct {
-		Data ResponseData `json:"data"`
-	}
-	if decodeErr := decodeAniListStrict(payload, &answer); decodeErr != nil {
-		return nil, decodeErr
-	}
-
-	media := answer.Data.Page.Media
-	hits := make([]aniListSearchHit, 0, len(media))
-	distance := make([]int, 0, len(media))
-	for _, anime := range media {
-		title := cmp.Or(anime.Title.English, anime.Title.Romaji)
-		hits = append(hits, aniListSearchHit{anime.ID, title, anime.CoverImage.Large, anime.Episodes})
-		distance = append(distance, levenshtein(title, query))
-	}
-	sort.Sort(byDistance{hits, distance})
-	if len(hits) > 10 {
-		hits = hits[:10]
-	}
-	return hits, nil
-}
-
-type byDistance struct {
-	hits     []aniListSearchHit
-	distance []int
-}
-
-func (s byDistance) Len() int           { return len(s.hits) }
-func (s byDistance) Less(i, j int) bool { return s.distance[i] < s.distance[j] }
-func (s byDistance) Swap(i, j int) {
-	s.hits[i], s.hits[j] = s.hits[j], s.hits[i]
-	s.distance[i], s.distance[j] = s.distance[j], s.distance[i]
-}
-
-// SearchAnimeAnilistPreview is SearchAnimeAnilist with cover images, keyed by
-// AniList ID for the image grid.
-func SearchAnimeAnilistPreview(query, token string) (map[string]RofiSelectPreview, error) {
-	hits, err := searchAniList(query, token, true)
-	if err != nil {
-		return nil, err
-	}
-	previews := make(map[string]RofiSelectPreview, len(hits))
-	for _, hit := range hits {
-		previews[strconv.Itoa(hit.id)] = RofiSelectPreview{
-			Title:      FormatAnimeSearchLabel(hit.title, hit.episodes),
-			CoverImage: hit.cover,
-		}
-	}
-	return previews, nil
-}
-
-// SearchAnimeAnilist searches AniList and returns the closest ten matches,
-// keyed by AniList ID.
-func SearchAnimeAnilist(query, token string) ([]SelectionOption, error) {
-	hits, err := searchAniList(query, token, false)
-	if err != nil {
-		return nil, err
-	}
-	var options []SelectionOption
-	for _, hit := range hits {
-		options = append(options, SelectionOption{
-			Key:   strconv.Itoa(hit.id),
-			Label: FormatAnimeSearchLabel(hit.title, hit.episodes),
-			Title: hit.title,
-		})
-	}
-	return options, nil
-}
-
 // GetAnilistUserID returns the signed-in viewer's ID and name.
 func GetAnilistUserID(token string) (int, string, error) {
 	var answer struct {
@@ -549,34 +418,6 @@ func GetAnilistUserID(token string) (int, string, error) {
 	return *me.ID, me.Name, nil
 }
 
-// setAniListStatus puts animeID on the status list, wrapping a failure with
-// failure as its prefix.
-func setAniListStatus(animeID int, status, token, failure string) error {
-	vars := map[string]interface{}{"mediaId": animeID, "status": status}
-	if queryErr := aniListQuery(aniListSetStatusMutation, vars, token, nil); queryErr != nil {
-		return fmt.Errorf("%s: %w", failure, queryErr)
-	}
-	return nil
-}
-
-func AddAniListAnimeToWatchingList(mediaID int, token string) error {
-	if addErr := setAniListStatus(mediaID, "CURRENT", token, "failed to add anime"); addErr != nil {
-		return addErr
-	}
-	Out(fmt.Sprintf("Anime with ID %d has been added to your watching list.", mediaID))
-	return nil
-}
-
-// AddAniListAnimeToList puts an anime on the list for status (CURRENT,
-// PLANNING, PAUSED, DROPPED, ...).
-func AddAniListAnimeToList(mediaID int, status string, token string) error {
-	if addErr := setAniListStatus(mediaID, status, token, "failed to add anime to list"); addErr != nil {
-		return addErr
-	}
-	Out("Anime added to: " + aniListStatusLabels[status])
-	return nil
-}
-
 // fetchAniListMedia looks one media up by ID. A missing Media means AniList
 // has no such ID, which callers report as "not found".
 func fetchAniListMedia(query string, id int, token string) (*aniListMedia, error) {
@@ -603,17 +444,6 @@ func GetAnimeMalID(mediaID int) (int, error) {
 		return 0, fmt.Errorf("AniList media %d has no MyAnimeList ID", mediaID)
 	}
 	return found.IDMal, nil
-}
-
-// GetAnimeIDAndImage returns the MyAnimeList ID (0 when there is none) and
-// the cover URL for an AniList media ID.
-func GetAnimeIDAndImage(mediaID int) (int, string, error) {
-	const query = `query ($id: Int) { Media(id: $id) { idMal coverImage { large } } }`
-	found, lookupErr := fetchAniListMedia(query, mediaID, "")
-	if lookupErr != nil {
-		return 0, "", lookupErr
-	}
-	return found.IDMal, found.CoverImage.Large, nil
 }
 
 // GetUserData returns the viewer's whole anime list collection, undecoded,
@@ -678,40 +508,6 @@ func fuzzyDateInput(date FuzzyDate) interface{} {
 		return nil
 	}
 	return date
-}
-
-// anilistRewatchCompletion is what finishing a rewatch writes to the entry: one
-// more repeat than it already had, and the date the viewer actually started
-// rather than today.
-//
-// Separated from the request so it can be tested without a network -- and
-// because both values come off the Anime struct, which is exactly what a
-// process that did not load the entry itself is liable to be missing.
-func anilistRewatchCompletion(anime Anime, completedAt FuzzyDate) (repeat int, startedAt FuzzyDate) {
-	repeat = anime.Repeat + 1
-	startedAt = anime.StartedAt
-	if startedAt == (FuzzyDate{}) {
-		startedAt = completedAt
-	}
-	return repeat, startedAt
-}
-
-// CompleteAniListAnimeRewatch closes a rewatch as completed today, at the
-// episode the viewer finished on.
-func CompleteAniListAnimeRewatch(token string, show Anime) error {
-	today := currentFuzzyDate()
-	repeats, began := anilistRewatchCompletion(show, today)
-	completed, lastEpisode := "COMPLETED", show.Ep.Number
-	return SaveAniListAnimeListEntry(token, show.AnilistId, &completed, &lastEpisode, &repeats, nil, &began, &today)
-}
-
-// RateAniListAnime asks for a score and saves it; cancelling saves nothing.
-func RateAniListAnime(accessToken string, animeID int) error {
-	score, skipped, promptErr := promptAnimeScoreValue()
-	if promptErr != nil || skipped {
-		return promptErr
-	}
-	return saveAniListAnimeScore(accessToken, animeID, score)
 }
 
 func saveAniListAnimeScore(accessToken string, mediaID int, score float64) error {
@@ -924,92 +720,10 @@ type (
 		Status  string
 		SiteURL string
 	}
-
-	// aniListRelationsResponse is the answer to aniListRelationsQuery.
-	aniListRelationsResponse struct {
-		Data *struct {
-			Media *struct {
-				Relations *struct {
-					Edges []struct {
-						RelationType string        `json:"relationType"`
-						Node         *aniListMedia `json:"node"`
-					} `json:"edges"`
-				} `json:"relations"`
-			} `json:"Media"`
-		} `json:"data"`
-	}
 )
-
-const aniListRelationsQuery = `query ($id: Int) {
-	Media(id: $id, type: ANIME) {
-		relations {
-			edges {
-				relationType
-				node { id title { romaji english } coverImage { large } episodes status siteUrl }
-			}
-		}
-	}
-}`
-
-// GetAnimeSequel returns the shows AniList lists as sequels of animeID, or
-// nil when there are none.
-func GetAnimeSequel(mediaID int, token string) ([]SequelInfo, error) {
-	var answer aniListRelationsResponse
-	if queryErr := aniListQuery(aniListRelationsQuery, map[string]interface{}{"id": mediaID}, token, &answer); queryErr != nil {
-		return nil, fmt.Errorf("failed to get anime relations: %w", queryErr)
-	}
-	if shapeErr := mediaShapeError(answer.Data != nil, answer.Data != nil && answer.Data.Media != nil); shapeErr != nil {
-		return nil, shapeErr
-	}
-	relations := answer.Data.Media.Relations
-	if relations == nil {
-		return nil, nil
-	}
-
-	var found []SequelInfo
-	for _, edge := range relations.Edges {
-		if edge.RelationType != "SEQUEL" || edge.Node == nil {
-			continue
-		}
-		sequel := edge.Node
-		found = append(found, SequelInfo{
-			ID:         sequel.ID,
-			Title:      AnimeTitle{Romaji: sequel.Title.Romaji, English: sequel.Title.English},
-			CoverImage: sequel.CoverImage.Large,
-			Episodes:   sequel.Episodes,
-			Status:     sequel.Status,
-			SiteURL:    sequel.SiteURL,
-		})
-	}
-	return found, nil
-}
 
 // DeleteAniListListEntry removes a list entry by its list (not media) ID.
 func DeleteAniListListEntry(token string, entryID int) error {
 	const mutation = `mutation ($id: Int) { DeleteMediaListEntry(id: $id) { deleted } }`
 	return aniListQuery(mutation, map[string]interface{}{"id": entryID}, token, nil)
-}
-
-// FindSequelInAnimeList reports which list a sequel is already on. The order
-// matters only for a show on two lists at once, which AniList does not allow.
-func FindSequelInAnimeList(list AnimeList, sequelID int) (status string, onList bool) {
-	lookIn := []struct {
-		status  string
-		entries []Entry
-	}{
-		{"CURRENT", list.Watching},
-		{"PLANNING", list.Planning},
-		{"COMPLETED", list.Completed},
-		{"PAUSED", list.Paused},
-		{"DROPPED", list.Dropped},
-		{"REWATCHING", list.Rewatching},
-	}
-	for _, bucket := range lookIn {
-		for _, entry := range bucket.entries {
-			if entry.Media.ID == sequelID {
-				return bucket.status, true
-			}
-		}
-	}
-	return "", false
 }

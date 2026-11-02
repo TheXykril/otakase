@@ -85,9 +85,3 @@ func CloseLogFile() error {
 	logPath = ""
 	return err
 }
-
-// resetLogHandleForTest drops the cached handle so a test can point the logger at
-// a fresh path.
-func resetLogHandleForTest() {
-	_ = CloseLogFile()
-}

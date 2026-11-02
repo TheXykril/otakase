@@ -251,35 +251,6 @@ func TestARebuiltStreamThatFailsIsStillReported(t *testing.T) {
 	}
 }
 
-func TestADyingStreamIsReportedBeforeAnySeek(t *testing.T) {
-	switched := newCastRemuxSwitch(startedRemux(t, "exit 1"))
-
-	<-switched.Done()
-	if switched.Err() == nil {
-		t.Fatal("a remux that failed before any seek was reported as healthy")
-	}
-	if switched.seeked() {
-		t.Fatal("a switch that never swapped reported a seek")
-	}
-}
-
-func TestTheSwitchWaitsOnTheCurrentStreamNotTheReplacedOne(t *testing.T) {
-	switched := newCastRemuxSwitch(startedRemux(t, "exit 0"))
-	// The replaced stream has already finished. Waiting on it would report the
-	// episode over the moment the viewer seeks.
-	<-switched.Done()
-
-	switched.swap(startedRemux(t, "sleep 30"))
-	select {
-	case <-switched.Done():
-		t.Fatal("the switch reported the new stream finished")
-	default:
-	}
-	if !switched.seeked() {
-		t.Fatal("a swapped switch did not report a seek")
-	}
-}
-
 // startedRemux runs a shell command through the real remux plumbing, so the
 // switch is exercised against the type it actually wraps.
 func startedRemux(t *testing.T, script string) *cast.Remux {

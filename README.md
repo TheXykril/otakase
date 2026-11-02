@@ -4,7 +4,7 @@
 
 <h1 align="center">Otakase</h1>
 
-<p align="center">Watch anime on your phone, TV and computer, with your list kept in sync.</p>
+<p align="center"><b>Leave it to Otakase.</b><br>Anime, movies and shows, served on every screen you own. One app that plays whatever you want, remembers every episode and picks up wherever you are. You pick, Otakase handles the rest.</p>
 
 <p align="center">
   <a href="https://github.com/TheXykril/otakase/releases/latest"><img src="https://img.shields.io/github/v/release/TheXykril/otakase?label=release&color=d2492f" alt="Latest release"></a>
@@ -104,10 +104,9 @@ More on the [wiki](https://github.com/TheXykril/otakase/wiki).
 
 ## The command-line otakase
 
-Otakase started as a command-line app. It is being retired in favour of the
-app; v26.7.0 is the last release that carries it. Your watch positions are
-stored on AniList and MyAnimeList, so the app picks up where the command line
-left off.
+Otakase started as a command-line app. It has been replaced by the app;
+v26.7.0 was its last release. Your watch positions are stored on AniList and
+MyAnimeList, so the app picks up where the command line left off.
 
 ## Help
 

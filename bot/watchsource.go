@@ -14,7 +14,7 @@ import (
 )
 
 // Where the watch room's episodes come from: the otakase CLI the add-on
-// ships finds the episode on the providers (`otakase -stream-info`), the
+// ships finds the episode on the providers (`otakase-helper -stream-info`), the
 // same way the app does, without asking anything. Shows are picked from an
 // AniList search; watching an episode moves the members' AniList and MAL
 // progress on.
@@ -28,7 +28,7 @@ const (
 	watchInfoTTL         = 30 * time.Minute
 )
 
-// streamInfo is `otakase -stream-info`'s answer.
+// streamInfo is `otakase-helper -stream-info`'s answer.
 type streamInfo struct {
 	AnilistID     int                   `json:"anilist_id"`
 	Episode       int                   `json:"episode"`

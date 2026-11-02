@@ -133,20 +133,6 @@ func botCommandOutput(cmd *exec.Cmd, limit int) ([]byte, error) {
 	return output.buffer.Bytes(), err
 }
 
-func probeBotMedia(ctx context.Context, source, mode string, wait time.Duration) (botMedia, error) {
-	ctx, cancel := context.WithTimeout(ctx, wait)
-	defer cancel()
-	out, err := botCommandOutput(exec.CommandContext(ctx, "ffprobe", "-v", "error", "-threads", "1", "-show_streams", "-show_format", "-of", "json", source), 1<<20)
-	if err != nil {
-		return botMedia{}, fmt.Errorf("probe video: %w", err)
-	}
-	var p botProbe
-	if err = json.Unmarshal(out, &p); err != nil {
-		return botMedia{}, err
-	}
-	return chooseBotMedia(p, mode)
-}
-
 // botAudioLanguage normalizes ffprobe language tags for the Activity's
 // selector and the local relay routes. Unknown tracks retain their stream
 // number so they remain selectable without inventing a language.

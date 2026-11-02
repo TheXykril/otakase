@@ -18,9 +18,6 @@ import (
 // Tests shorten it.
 var discordHeartbeatInterval = 60 * time.Second
 
-// discordMPVPollInterval is how often the mpv watcher reads the position.
-var discordMPVPollInterval = 5 * time.Second
-
 type heartbeatWatching struct {
 	AnilistID int    `json:"anilist_id"`
 	Title     string `json:"title"`
@@ -263,60 +260,4 @@ func (s *discordWatchSession) finish() {
 			s.cancelExit()
 		}
 	})
-}
-
-// StartDiscordMPVWatch reports an mpv playback to the bot: it reads the
-// position every few seconds and ends when mpv goes away or done closes.
-// It returns at once and does nothing when the app is not linked.
-func StartDiscordMPVWatch(config *Config, anime *Anime, socketPath string, done <-chan struct{}) {
-	if socketPath == "" || socketPath == "cast" || socketPath == "android-intent" || !discordLinked(config) {
-		return
-	}
-	startWatchWithMe(config, anime, socketPath)
-	session := startDiscordWatch(config, anime)
-	if session == nil {
-		return
-	}
-	trackRemotePlayer(socketPath)
-	go func() {
-		defer untrackRemotePlayer(socketPath)
-		defer session.end()
-		ticker := time.NewTicker(discordMPVPollInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-			}
-			value, err := MPVSendCommand(socketPath, []interface{}{"get_property", "time-pos"})
-			if err != nil {
-				if MPVConnectionGone(err) && !IsMPVRunning(socketPath) {
-					return
-				}
-				continue
-			}
-			if position, ok := value.(float64); ok {
-				session.observe(anime.Ep.Number, position)
-			}
-		}
-	}()
-}
-
-// StartDiscordBackground is the launch's share of the Discord features: one
-// heartbeat if linked (then a Touch Grass badge still waiting handed over),
-// and the news refreshed when the cached copy is old. All of it runs in the
-// background and never holds the launch up.
-func StartDiscordBackground(config *Config) {
-	if !discordEnabled(config) {
-		return
-	}
-	go func() {
-		if err := sendDiscordHeartbeat(config, nil, 0); err != nil {
-			Log(fmt.Sprintf("Discord: launch heartbeat failed: %v", err))
-		}
-		claimPendingTouchGrass(config)
-	}()
-	go refreshDiscordNewsIfStale(config)
-	StartDiscordInbox(config)
 }

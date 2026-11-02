@@ -49,18 +49,3 @@ func BenchmarkListMergeDualPlan(b *testing.B) {
 		buildDualRemoteSyncPlan(al, mal)
 	}
 }
-
-func BenchmarkListMergeCombine(b *testing.B) {
-	al, mal := syntheticList(1000), syntheticList(1000)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		mergeAnimeLists(al, mal)
-	}
-}
-
-func BenchmarkListMergeTitleDistance(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		levenshtein("Kusuriya no Hitorigoto Season 2", "The Apothecary Diaries Season 2")
-	}
-}

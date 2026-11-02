@@ -51,17 +51,6 @@ func castLocalSubnet(addr string) string {
 	return fmt.Sprintf("%d.%d.%d.0/24", v4[0], v4[1], v4[2])
 }
 
-// castFirewallHint is what to tell a viewer whose device never connected.
-//
-// It prints the command rather than running it. Allowing a port needs root,
-// and a program that plays anime should not be able to change a firewall as a
-// side effect of watching an episode -- nor should it prompt for a password to
-// do so. The viewer runs one line they can read first.
-func castFirewallHint(config *Config, serverAddr, firewall string) string {
-	message, _ := castFirewallHintWithCommand(config, serverAddr, firewall)
-	return message
-}
-
 // castFirewallHintWithCommand is castFirewallHint, plus the bare command by
 // itself. Nothing can paste "sudo ufw allow from ..." into a terminal without
 // also pasting the sentence in front of it, so the two are kept apart here and

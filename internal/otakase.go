@@ -29,21 +29,6 @@ var inAppScreen bool
 // about what produced it.
 const LogFileName = "otakase-debug.log"
 
-// legacyLogFileName is what the log was called before it carried a name.
-const legacyLogFileName = "debug.log"
-
-// RemoveLegacyLogFile deletes a log left by an older version, so the storage
-// directory does not keep a stale file that looks like the current one.
-func RemoveLegacyLogFile(storageDir string) {
-	storageDir = strings.TrimSpace(storageDir)
-	if storageDir == "" {
-		return
-	}
-	if err := os.Remove(filepath.Join(storageDir, legacyLogFileName)); err != nil && !os.IsNotExist(err) {
-		Log(fmt.Sprintf("Could not remove the old debug log: %v", err))
-	}
-}
-
 // ClearLogFile empties the log at path, creating it and its folder when
 // they are missing. Every launch starts a fresh log.
 func ClearLogFile(path string) error {
@@ -261,12 +246,6 @@ func Out(data interface{}) {
 			Log(fmt.Sprintf("Failed to send notification: %v", err))
 		}
 	}
-}
-
-// imageNotice is a message for Out that, in rofi mode with image previews on,
-// is shown as a notification with the picture at imagePath as its icon.
-func imageNotice(imagePath, text string) string {
-	return fmt.Sprintf("-i %s \"%s\"", imagePath, text)
 }
 
 // splitImageNotice takes an imageNotice apart. The path is the second word,

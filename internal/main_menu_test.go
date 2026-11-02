@@ -6,38 +6,11 @@ import (
 	"testing"
 )
 
-func TestLaunchListIsWatching(t *testing.T) {
-	if got := launchList(&Config{MenuOrder: "ALL,CURRENT"}); got != "CURRENT" {
-		t.Errorf("launch = %s, want CURRENT", got)
-	}
-	// Without Watching, the first list named.
-	if got := launchList(&Config{MenuOrder: "PLANNING,ALL", TrackingRemote: TrackingRemoteAniList}); got != "PLANNING" {
-		t.Errorf("launch = %s, want PLANNING", got)
-	}
-	// Naming no list still opens somewhere.
-	if got := launchList(&Config{MenuOrder: "CAST"}); got != "CURRENT" {
-		t.Errorf("launch = %s, want CURRENT", got)
-	}
-}
-
 func TestNextListWraps(t *testing.T) {
 	config := &Config{MenuOrder: "CURRENT,PLANNING,ALL", TrackingRemote: TrackingRemoteAniList}
 	for current, want := range map[string]string{"CURRENT": "PLANNING", "PLANNING": "ALL", "ALL": "CURRENT", "DROPPED": "CURRENT"} {
 		if got := nextList(config, current); got != want {
 			t.Errorf("after %s: %s, want %s", current, got, want)
-		}
-	}
-}
-
-func TestMainMenuKeys(t *testing.T) {
-	for _, key := range []string{"CAST", "UPDATE", listsMenuKey, nextListKey, resumeRowPrefix + "21"} {
-		if !isMainMenuKey(key) {
-			t.Errorf("%s should be dispatched", key)
-		}
-	}
-	for _, key := range []string{"21", "add_new", "CURRENT", ""} {
-		if isMainMenuKey(key) {
-			t.Errorf("%s should not be dispatched", key)
 		}
 	}
 }

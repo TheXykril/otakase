@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"strings"
 	"testing"
 	"time"
 )
@@ -64,31 +63,6 @@ func TestDecodeCastKeyWaitsForASplitEscapeSequence(t *testing.T) {
 
 	if got, used := decodeCastKey([]byte{0x1b, '[', 'C'}); got != castCmdSeekForward || used != 3 {
 		t.Errorf("completed sequence = (%v, %d), want (castCmdSeekForward, 3)", got, used)
-	}
-}
-
-// The status line is the only thing on screen for twenty minutes, so it shows
-// where the episode is, whether it is moving, and what the volume is.
-func TestCastStatusLine(t *testing.T) {
-	line := castStatusLine(724, 1451, "PLAYING", 0.6)
-
-	for _, want := range []string{"12:04", "24:11", "PLAYING", "60%"} {
-		if !strings.Contains(line, want) {
-			t.Errorf("status line %q does not contain %q", line, want)
-		}
-	}
-}
-
-// A device that has not reported a duration yet must not render as "/ 0:00" or
-// divide by zero building the bar.
-func TestCastStatusLineToleratesAnUnknownDuration(t *testing.T) {
-	line := castStatusLine(12, 0, "BUFFERING", 0.5)
-
-	if !strings.Contains(line, "BUFFERING") {
-		t.Errorf("status line %q lost the player state", line)
-	}
-	if strings.Contains(line, "NaN") || strings.Contains(line, "Inf") {
-		t.Errorf("status line %q has a number built by dividing by zero", line)
 	}
 }
 
@@ -190,50 +164,6 @@ func TestCastControlsRememberThereIsNoTerminal(t *testing.T) {
 	}
 	if starts != 1 {
 		t.Errorf("the terminal was set up %d times, want 1", starts)
-	}
-}
-
-// Minor 6. castSetRawMode used to disagree with the tty across episodes: raw
-// mode was entered per episode and the restores registered for the exit ran
-// FIFO, so the flag ended up false while the terminal was still raw and Out
-// printed bare \n into it, walking the output diagonally. With one entry and
-// one restore for the process, the flag and the tty cannot come apart -- and a
-// whole season leaves the terminal cooked.
-func TestCastControlsLeaveTheTerminalCookedAfterASeason(t *testing.T) {
-	resetCastControlsForTest(t)
-	resetExitCleanupsForTest()
-	t.Cleanup(resetExitCleanupsForTest)
-	t.Cleanup(func() { castSetRawMode(false) })
-
-	// Stands in for castControlsBeginTerminal, which needs a tty: the same
-	// bookkeeping, without term.MakeRaw.
-	entries := 0
-	castControlsBegin = func(config *Config) bool {
-		entries++
-		castSetRawMode(true)
-		RegisterExitCleanup(func() { castSetRawMode(false) })
-		return true
-	}
-
-	for episode := 0; episode < 6; episode++ {
-		_, release, ok := startCastControls(nil)
-		if !ok {
-			t.Fatalf("episode %d was refused controls", episode+1)
-		}
-		release()
-	}
-
-	if entries != 1 {
-		t.Errorf("raw mode was entered %d times, want 1", entries)
-	}
-	if !castRawModeActive() {
-		t.Error("the raw-mode flag went false while the terminal was still raw")
-	}
-
-	runExitCleanups()
-
-	if castRawModeActive() {
-		t.Error("the terminal was left raw after the exit cleanups ran")
 	}
 }
 

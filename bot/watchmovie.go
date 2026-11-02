@@ -9,7 +9,7 @@ import (
 // "Otakase: The Movie" in the watch room. The app hides the film behind a
 // search for "otakase" when adding a show; the room's picker does the same.
 // It is not on AniList and has no episodes on the providers: the CLI draws it
-// (`otakase -movie-serve`), about the host when their AniList is linked with
+// (`otakase-helper -movie-serve`), about the host when their AniList is linked with
 // access, and serves it the way the torrent helper serves an episode.
 
 // watchMovieID stands in for an AniList id, which are all positive.

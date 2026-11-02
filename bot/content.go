@@ -54,7 +54,7 @@ var faqs = []faqEntry{
 	{"sync", "My progress didn't sync", "Writes to AniList and MyAnimeList happen in the background and can take a moment. " +
 		"Check the account under **Accounts**: one that needs signing in again shows it there. See [Tracking](" + wikiURL + "/Tracking)."},
 	{"cast", "Casting can't find my TV", "Phone or computer and TV need to be on the same network. On a computer, a firewall often drops the TV's answer. " +
-		"See [Casting Problems](" + wikiURL + "/Casting-Problems)."},
+		"See [Casting](" + wikiURL + "/Casting)."},
 	{"mac", "macOS says the app can't be opened", "It is not signed by Apple yet. Right-click **Otakase** in Applications and choose **Open** the first time."},
 	{"discord", "How do I link the app to Discord?", "Open **More → Discord** in the app and follow it, or run `/link-app` here. " +
 		"Linking lets you join watch rooms, follow shows and report problems straight from the app."},

@@ -39,29 +39,6 @@ var (
 	lifecycleNotify = sendLifecycleNotice
 )
 
-// AnnounceLaunch tells a viewer with no terminal that otakase has started, and
-// arms the notice for when it closes. In a terminal the launch is already
-// visible, so nothing is sent.
-func AnnounceLaunch(config *Config) {
-	if config == nil || !config.RofiSelection {
-		return
-	}
-	lifecycleMu.Lock()
-	closeNoticeArmed = true
-	lifecycleMu.Unlock()
-	// The main tag, so the "still starting" notice of a slow launch replaces
-	// this one instead of stacking under it.
-	lifecycleNotify(notifyTagMain, fmt.Sprintf("%s launched", DisplayName))
-}
-
-// ArmCloseNotice makes this process announce its exit. The cast window calls
-// it: it was opened from rofi, and when it ends otakase is fully closed.
-func ArmCloseNotice() {
-	lifecycleMu.Lock()
-	closeNoticeArmed = true
-	lifecycleMu.Unlock()
-}
-
 // disarmCloseNotice drops the notice once another process carries on the
 // session, as the cast window does after a handoff.
 func disarmCloseNotice() {

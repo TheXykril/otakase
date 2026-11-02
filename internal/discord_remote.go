@@ -23,23 +23,6 @@ func init() {
 	registerDiscordInbox("remote", applyDiscordRemote)
 }
 
-// trackRemotePlayer notes the playback /remote acts on.
-func trackRemotePlayer(socket string) {
-	remotePlayer.Lock()
-	remotePlayer.socket = socket
-	remotePlayer.Unlock()
-}
-
-// untrackRemotePlayer forgets a playback that ended, unless another one
-// took its place meanwhile.
-func untrackRemotePlayer(socket string) {
-	remotePlayer.Lock()
-	if remotePlayer.socket == socket {
-		remotePlayer.socket = ""
-	}
-	remotePlayer.Unlock()
-}
-
 func currentRemotePlayer() string {
 	remotePlayer.Lock()
 	defer remotePlayer.Unlock()

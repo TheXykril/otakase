@@ -2,55 +2,8 @@ package theme
 
 import (
 	"math"
-	"strings"
 	"testing"
 )
-
-func TestParseColorsTOMLReadsOmarchyFormat(t *testing.T) {
-	// Verbatim shape of an Omarchy colors.toml, including the non-hex entries
-	// and a key that only some themes define.
-	content := `mode = "dark"
-
-accent = "#798186"
-selection = "#343d41"
-
-background = "#101315"
-foreground = "#cacccc"
-
-hyprland_active_border = "rgba(798186ee) rgba(caccccee)"
-
-red = "#565d60"
-orange = "#f6b6ab"
-`
-	values := parseColorsTOML(content)
-
-	for key, want := range map[string]string{
-		"mode":       "dark",
-		"accent":     "#798186",
-		"background": "#101315",
-		"foreground": "#cacccc",
-		"red":        "#565d60",
-		"orange":     "#f6b6ab",
-	} {
-		if values[key] != want {
-			t.Fatalf("%s = %q, want %q", key, values[key], want)
-		}
-	}
-	// Non-hex values are kept verbatim; the palette simply ignores them.
-	if !strings.HasPrefix(values["hyprland_active_border"], "rgba(") {
-		t.Fatalf("hyprland_active_border = %q", values["hyprland_active_border"])
-	}
-}
-
-func TestParseColorsTOMLIgnoresCommentsAndBlanks(t *testing.T) {
-	values := parseColorsTOML("# a comment\n\n  \naccent = \"#abcdef\"\n[table]\nbroken line\n")
-	if values["accent"] != "#abcdef" {
-		t.Fatalf("accent = %q", values["accent"])
-	}
-	if len(values) != 1 {
-		t.Fatalf("expected only accent, got %v", values)
-	}
-}
 
 func TestIsHexColor(t *testing.T) {
 	for _, good := range []string{"#fff", "#FFFFFF", "#101315", "#AbCdEf"} {
@@ -146,61 +99,6 @@ func TestSelectionForegroundIsReadable(t *testing.T) {
 	if ratio := contrastRatio(light.SelectionBackground(), fg); ratio < 4.5 {
 		t.Fatalf("selection text contrast %.2f is too low (fg=%s on %s)", ratio, fg, light.SelectionBackground())
 	}
-}
-
-// A theme missing colours must still produce a complete palette.
-func TestLoadOmarchyFallsBackForMissingKeys(t *testing.T) {
-	values := parseColorsTOML(`accent = "#123456"`)
-	if values["accent"] != "#123456" {
-		t.Fatal("sanity")
-	}
-
-	fallback := Builtin()
-	pick := func(fallbackValue string, keys ...string) string {
-		for _, key := range keys {
-			if color, ok := values[key]; ok && isHexColor(color) {
-				return normalizeHex(color)
-			}
-		}
-		return fallbackValue
-	}
-	if got := pick(fallback.Red, "bright_red", "red"); got != fallback.Red {
-		t.Fatalf("expected the builtin red for a theme that omits it, got %q", got)
-	}
-	if got := pick(fallback.Accent, "accent"); got != "#123456" {
-		t.Fatalf("expected the theme's accent, got %q", got)
-	}
-}
-
-func TestParseMode(t *testing.T) {
-	for raw, want := range map[string]Mode{
-		"":         ModeAuto,
-		"auto":     ModeAuto,
-		"AUTO":     ModeAuto,
-		"omarchy":  ModeOmarchy,
-		"system":   ModeAuto,
-		"builtin":  ModeBuiltin,
-		"off":      ModeBuiltin,
-		"nonsense": ModeAuto,
-	} {
-		if got := ParseMode(raw); got != want {
-			t.Fatalf("ParseMode(%q) = %q, want %q", raw, got, want)
-		}
-	}
-}
-
-func TestResolveBuiltinNeverTouchesOmarchy(t *testing.T) {
-	palette, err := Resolve(ModeBuiltin, "")
-	if err != nil {
-		t.Fatalf("resolve builtin: %v", err)
-	}
-	if palette.Source != SourceBuiltin {
-		t.Fatalf("source = %q", palette.Source)
-	}
-	if Active().Source != SourceBuiltin {
-		t.Fatal("Resolve should install the palette as active")
-	}
-	t.Cleanup(func() { SetActive(Builtin()) })
 }
 
 // A muted grey that sinks into the background is brought up until it reads,

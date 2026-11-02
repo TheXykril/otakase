@@ -243,7 +243,7 @@ func changelogCommand() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{Name: "changelog", Description: "What changed in an Otakase release",
 		Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionString, Name: "version", Description: "Release to show (default: the latest)", Autocomplete: true},
-			{Type: discordgo.ApplicationCommandOptionString, Name: "since", Description: "Your version: show everything newer than it (otakase -v)", Autocomplete: true},
+			{Type: discordgo.ApplicationCommandOptionString, Name: "since", Description: "Your version: show everything newer than it (About & updates in the app)", Autocomplete: true},
 		}}
 }
 

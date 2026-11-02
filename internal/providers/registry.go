@@ -141,23 +141,3 @@ func Referrer(provider string) string {
 	}
 	return ""
 }
-
-// SetFactoryForTest swaps a registered provider's factory and returns the
-// function that puts the original back.
-func SetFactoryForTest(provider string, factory func() Provider) (restore func()) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	name := canonicalName(provider)
-	original, ok := registered[name]
-	if !ok {
-		panic(fmt.Sprintf("providers.SetFactoryForTest: no provider called %q", provider))
-	}
-	registered[name] = registration{meta: original.meta, factory: factory}
-	restore = func() {
-		mu.Lock()
-		defer mu.Unlock()
-		registered[name] = original
-	}
-	return restore
-}

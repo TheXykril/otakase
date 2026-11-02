@@ -343,13 +343,6 @@ func saveTrackingIDCache(dir string, cache trackingIDCache) error {
 	return writeCacheFile(myAnimeListFile(dir, trackingIDCacheFile), data)
 }
 
-// safeAniListString returns v when it is a string and "" otherwise, for fields
-// of an untyped GraphQL response.
-func safeAniListString(v any) string {
-	text, _ := v.(string)
-	return text
-}
-
 // lookupAniListMediaByMalIDs finds the AniList media for several MyAnimeList
 // ids in one aliased query. Ids AniList does not know are left out.
 func lookupAniListMediaByMalIDs(ids []int) (map[int]aniListMediaLookupResult, error) {
@@ -692,45 +685,10 @@ func myAnimeListScore(score float64) int {
 	return int(score + 0.5)
 }
 
-func rateMyAnimeListAnime(config *Config, malID int) error {
-	score, cancelled, promptErr := promptAnimeScoreValue()
-	if promptErr != nil || cancelled {
-		return promptErr
-	}
-	return rateMyAnimeListAnimeWithScore(config, malID, myAnimeListScore(score))
-}
-
 func rateMyAnimeListAnimeWithScore(config *Config, malID int, score int) error {
 	return writeMyAnimeListAndReport(config, malID,
 		map[string]string{"score": strconv.Itoa(score)},
 		fmt.Sprintf("Successfully rated anime (malId: %d) with score: %d", malID, score))
-}
-
-func addMyAnimeListAnimeToList(config *Config, malID int, status string) error {
-	return writeMyAnimeListAndReport(config, malID, myAnimeListStatusFields(status),
-		"Anime added to: "+status)
-}
-
-// completeMyAnimeListRewatch marks a finished rewatch as completed and counts
-// it. A missing start date is set to today along with the finish date.
-func completeMyAnimeListRewatch(config *Config, malID int, anime Anime) error {
-	today := currentFuzzyDate()
-	began := anime.StartedAt
-	if began == (FuzzyDate{}) {
-		began = today
-	}
-	completion := myAnimeListStatusFields("COMPLETED")
-	completion["num_watched_episodes"] = strconv.Itoa(anime.Ep.Number)
-	completion["start_date"] = formatMyAnimeListDate(began)
-	completion["finish_date"] = formatMyAnimeListDate(today)
-	// The count goes in a second write, after the completion.
-	count := map[string]string{"num_times_rewatched": strconv.Itoa(anime.Repeat + 1)}
-	for _, fields := range []map[string]string{completion, count} {
-		if writeErr := updateMyAnimeListListStatus(config, malID, fields); writeErr != nil {
-			return writeErr
-		}
-	}
-	return nil
 }
 
 func deleteMyAnimeListEntry(config *Config, malID int) error {

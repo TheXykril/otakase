@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.86
+
+- Log hints for errors from the old command-line app now point at the app, and casting help links to the new Casting wiki page.
+
 ## 1.30.85
 
 - New staff command `/post-info` posts the welcome, rules and FAQ messages again with the current text (all three, or one). It replaces `/post-welcome`.

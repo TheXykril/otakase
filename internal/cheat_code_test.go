@@ -53,26 +53,6 @@ func TestMainListKonamiFinishes(t *testing.T) {
 	}
 }
 
-func TestRofiKonamiText(t *testing.T) {
-	picked, err := parseRofiSelection(nil, "UUDD LRLR BA\n", []SelectionOption{{Key: "1", Label: "Frieren"}}, true)
-	if err != nil || picked.Key != cheatCodeKey {
-		t.Fatalf("list: %+v %v", picked, err)
-	}
-	rows := []SelectionOption{{Key: "1", Label: "Frieren"}}
-	if picked, _ := parseMainGridSelection("-1 uuddlrlrba\n", rows); picked.Key != cheatCodeKey {
-		t.Fatalf("grid code: %+v", picked)
-	}
-	if picked, _ := parseMainGridSelection("-1 typo\n", rows); picked.Key != "" {
-		t.Fatalf("grid typo: %+v", picked)
-	}
-	if picked, _ := parseMainGridSelection("0 fri\n", rows); picked.Key != "1" {
-		t.Fatalf("grid pick: %+v", picked)
-	}
-	if !isMainMenuKey(cheatCodeKey) {
-		t.Fatal("not dispatched as a main menu key")
-	}
-}
-
 func TestCheatOpenCommand(t *testing.T) {
 	for in, want := range map[string]int{"open": 1, "Open 3": 3, "open x": 0, "opener": 0, "teapot": 0} {
 		if n, ok := cheatOpenCommand(in); n != want && ok {

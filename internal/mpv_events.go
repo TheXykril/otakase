@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/thexykril/otakase/internal/mpv"
 )
@@ -76,16 +75,4 @@ func mpvFloatProperty(socket, name string) (float64, error) {
 		return 0, fmt.Errorf("the player did not answer with a number for %s", name)
 	}
 	return value, nil
-}
-
-// mpvShowText puts a line on the player's own screen.
-//
-// Everything this feature says has to go here: mpv is what the viewer is
-// looking at, and a message printed to the terminal behind it is a message
-// nobody reads.
-func mpvShowText(socket, text string, duration time.Duration) {
-	milliseconds := int(duration / time.Millisecond)
-	if _, err := MPVSendCommand(socket, []interface{}{"show-text", text, milliseconds}); err != nil {
-		Log(fmt.Sprintf("skip marker: could not show %q: %v", text, err))
-	}
 }

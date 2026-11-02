@@ -3,7 +3,6 @@ package internal
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -24,39 +23,6 @@ func TestRemoteSyncWriteGate(t *testing.T) {
 		if got := ShouldWriteRemoteTracking(tc.cfg, tc.anime); got != tc.want {
 			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
 		}
-	}
-}
-
-func TestRemoteSyncDecliningImportOnlyDismisses(t *testing.T) {
-	dir := t.TempDir()
-	confPath := filepath.Join(dir, "otakase.conf")
-	if err := createDefaultConfig(confPath); err != nil {
-		t.Fatal(err)
-	}
-	savedPath := ConfigFilePath
-	ConfigFilePath = confPath
-	t.Cleanup(func() { ConfigFilePath = savedPath })
-
-	if err := os.WriteFile(filepath.Join(dir, "anilist_token.json"), []byte("tok"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cfg := &Config{
-		StoragePath:        dir,
-		TrackingRemote:     TrackingRemoteMyAnimeList,
-		TrackingConfigured: true,
-	}
-	withPromptSelect(t, func([]SelectionOption) (SelectionOption, error) {
-		return SelectionOption{Key: "no"}, nil
-	})
-
-	if err := maybeImportAniListToMyAnimeList(cfg, &User{}); err != nil {
-		t.Fatal(err)
-	}
-	if cfg.MyAnimeListImported {
-		t.Error("import marked done after saying no")
-	}
-	if !cfg.MyAnimeListImportDismissed {
-		t.Error("prompt not marked dismissed")
 	}
 }
 

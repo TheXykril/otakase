@@ -150,32 +150,6 @@ func (news discordNews) headline() string {
 	return line
 }
 
-// discordUpdateOption is the update prompt's "Join Discord" row, when there
-// is news to go with it.
-func discordUpdateOption() (SelectionOption, bool) {
-	news, ok := cachedDiscordNews(GetGlobalConfig())
-	if !ok {
-		return SelectionOption{}, false
-	}
-	label := "Join the Otakase Discord"
-	if counts := news.countsLine(); counts != "" {
-		label += " · " + counts
-	}
-	return SelectionOption{Key: "discord", Label: label, Icon: icons.OpenLink}, true
-}
-
-// discordNewsLine is the update prompt's line about the latest announcement.
-func discordNewsLine() string {
-	news, ok := cachedDiscordNews(GetGlobalConfig())
-	if !ok {
-		return ""
-	}
-	if headline := news.headline(); headline != "" {
-		return "Discord: " + headline
-	}
-	return ""
-}
-
 // openDiscordInvite opens the server's invite in the browser.
 func openDiscordInvite() error {
 	url := DiscordInviteURL

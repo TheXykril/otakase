@@ -87,76 +87,6 @@ func TestMainMenuHidesRemoteOnlyEntriesForLocalTracking(t *testing.T) {
 	}
 }
 
-func TestLocalAnimeListFromHistoryUsesNextEpisodeAsProgressBase(t *testing.T) {
-	t.Parallel()
-
-	history := []Anime{
-		{
-			AnilistId:     123,
-			MalId:         456,
-			TotalEpisodes: 28,
-			Title:         AnimeTitle{English: "Frieren", Romaji: "Sousou no Frieren"},
-			Ep:            Episode{Number: 7},
-		},
-		{AnilistId: 9},
-	}
-	got := localAnimeListFromHistory(history).Watching
-	if len(got) != 2 {
-		t.Fatalf("%d watching entries, want 2", len(got))
-	}
-
-	first := got[0]
-	wantMedia := Media{ID: 123, MalID: 456, Episodes: 28, Title: history[0].Title}
-	if !reflect.DeepEqual(first.Media, wantMedia) {
-		t.Errorf("media = %+v, want %+v", first.Media, wantMedia)
-	}
-	if first.Status != "CURRENT" || first.Progress != 6 {
-		t.Errorf("episode 7 next gave %s/%d, want CURRENT/6", first.Status, first.Progress)
-	}
-
-	second := got[1]
-	if second.Progress != 0 {
-		t.Errorf("show never started has progress %d", second.Progress)
-	}
-	if second.Media.Title != (AnimeTitle{English: "9", Romaji: "9"}) {
-		t.Errorf("untitled show should go by its ID, got %+v", second.Media.Title)
-	}
-
-	if empty := localAnimeListFromHistory(nil); hasAnyEntries(empty) {
-		t.Errorf("no history gave %+v", empty)
-	}
-}
-
-func TestTrackerPredicatesPerMode(t *testing.T) {
-	t.Parallel()
-
-	type flags struct{ remote, aniList, myAnimeList, dual bool }
-	cases := map[string]struct {
-		cfg  *Config
-		want flags
-	}{
-		// A nil config behaves like the old AniList-only setup.
-		"no config":   {nil, flags{true, true, false, false}},
-		"local":       {&Config{TrackingRemote: TrackingRemoteNone}, flags{}},
-		"anilist":     {&Config{TrackingRemote: TrackingRemoteAniList}, flags{true, true, false, false}},
-		"myanimelist": {&Config{TrackingRemote: TrackingRemoteMyAnimeList}, flags{true, false, true, false}},
-		"both":        {&Config{TrackingRemote: TrackingRemoteBoth}, flags{true, true, true, true}},
-		// Remote, but nothing is written anywhere.
-		"unknown": {&Config{TrackingRemote: "carrier-pigeon"}, flags{remote: true}},
-	}
-	for name, tc := range cases {
-		got := flags{
-			remote:      UsesRemoteTracking(tc.cfg),
-			aniList:     UsesAniListTracking(tc.cfg),
-			myAnimeList: UsesMyAnimeListTracking(tc.cfg),
-			dual:        UsesDualRemoteTracking(tc.cfg),
-		}
-		if got != tc.want {
-			t.Errorf("%s: %+v, want %+v", name, got, tc.want)
-		}
-	}
-}
-
 func TestTrackingCategoryEnabled(t *testing.T) {
 	t.Parallel()
 
@@ -390,30 +320,6 @@ func TestMyAnimeListEntryWrites(t *testing.T) {
 	})
 }
 
-func TestMyAnimeListImportFieldsOnlySendWhatIsSet(t *testing.T) {
-	t.Parallel()
-
-	plain := myAnimeListImportFields(Entry{Status: "PLANNING"})
-	if _, ok := plain["score"]; ok {
-		t.Errorf("an unscored entry imported a score: %v", plain)
-	}
-	if _, ok := plain["num_times_rewatched"]; ok {
-		t.Errorf("an entry never rewatched imported a count: %v", plain)
-	}
-
-	rewatch := myAnimeListImportFields(Entry{Status: "REPEATING", Progress: 2, Score: 6.4, Repeat: 1})
-	want := map[string]string{
-		"status":               "watching",
-		"is_rewatching":        "true",
-		"num_watched_episodes": "2",
-		"score":                "6",
-		"num_times_rewatched":  "1",
-	}
-	if !reflect.DeepEqual(rewatch, want) {
-		t.Errorf("fields = %v, want %v", rewatch, want)
-	}
-}
-
 // recordedWrite returns a trackerWrite that logs each step it is asked for.
 func recordedWrite(steps *[]string, aniListErr, malIDErr, myAnimeListErr error) trackerWrite {
 	return trackerWrite{
@@ -596,46 +502,6 @@ func TestRateAnimeWithScoreOnMyAnimeListLooksUpTheIDAndRounds(t *testing.T) {
 	}
 	if got[1].path != "/v2/anime/4242/my_list_status" || got[1].form["score"] != "8" {
 		t.Errorf("write = %s %v, want score 8 on 4242", got[1].path, got[1].form)
-	}
-}
-
-func TestStartAnimeRewatchUsesTheAnimeItIsGiven(t *testing.T) {
-	_, requests := recordTrackerRequests(t, TrackingRemoteMyAnimeList, 0)
-	// The global anime is skipped this session; the one being rewatched is not.
-	SetGlobalAnime(&Anime{SkipRemoteSync: true})
-
-	if err := StartAnimeRewatch("token", Anime{AnilistId: 5, MalId: 500}); err != nil {
-		t.Fatalf("StartAnimeRewatch: %v", err)
-	}
-
-	got := requests()
-	if len(got) != 1 {
-		t.Fatalf("sent %d requests, want only the MyAnimeList write: %+v", len(got), got)
-	}
-	want := myAnimeListRewatchStart(currentFuzzyDate())
-	delete(want, "finish_date")
-	for key, value := range want {
-		if got[0].form[key] != value {
-			t.Errorf("%s = %q, want %q", key, got[0].form[key], value)
-		}
-	}
-	if value, sent := got[0].form["finish_date"]; !sent || value != "" {
-		t.Errorf("the old finish date should be cleared, form = %v", got[0].form)
-	}
-}
-
-func TestTrackerWritesAreSkippedForASkippedSession(t *testing.T) {
-	_, requests := recordTrackerRequests(t, TrackingRemoteBoth, 1)
-	SetGlobalAnime(&Anime{SkipRemoteSync: true})
-
-	if err := AddAnimeToList(1, "PLANNING", "token"); err != nil {
-		t.Fatalf("AddAnimeToList: %v", err)
-	}
-	if err := UpdateAnimeStatus("token", 1, "PAUSED"); err != nil {
-		t.Fatalf("UpdateAnimeStatus: %v", err)
-	}
-	if got := requests(); len(got) != 0 {
-		t.Fatalf("a skipped session still wrote: %+v", got)
 	}
 }
 

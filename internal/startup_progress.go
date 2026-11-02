@@ -27,11 +27,10 @@ const (
 )
 
 type startupProgress struct {
-	mu      sync.Mutex
-	stage   string
-	started time.Time
-	done    chan struct{}
-	closed  bool
+	mu     sync.Mutex
+	stage  string
+	done   chan struct{}
+	closed bool
 	// announced records whether anything was shown, so Done knows if there is a
 	// notification to replace.
 	announced bool
@@ -45,62 +44,6 @@ var (
 	startupReporter = func(message string) { Out(message) }
 )
 
-// BeginStartupProgress starts reporting a slow launch: a notification when
-// launched from rofi, a spinner in a terminal.
-func BeginStartupProgress(config *Config, stage string) {
-	// The clock runs regardless of how otakase was launched: a slow start is worth
-	// recording in a terminal too, where it is merely visible rather than
-	// mysterious.
-	beginStartupClock(stage)
-
-	if config == nil || !config.RofiSelection {
-		// A terminal shows output, but nothing is printed while the tracker
-		// signs in or the list loads, so it gets the spinner instead.
-		startupMu.Lock()
-		running := startupBusyEnd != nil
-		startupMu.Unlock()
-		if config != nil && !running {
-			// BeginBusy takes startupMu itself, so it runs outside it.
-			end := BeginBusy(config, stage)
-			startupMu.Lock()
-			startupBusyEnd = end
-			startupMu.Unlock()
-		}
-		return
-	}
-
-	startupMu.Lock()
-	defer startupMu.Unlock()
-	if activeStartup != nil {
-		return
-	}
-
-	progress := &startupProgress{
-		stage:   stage,
-		started: time.Now(),
-		done:    make(chan struct{}),
-	}
-	activeStartup = progress
-	go progress.run()
-}
-
-// StartupStage updates what the launch is currently waiting on.
-func StartupStage(stage string) {
-	recordStartupStageTiming(stage)
-
-	setBusyStage(stage)
-
-	startupMu.Lock()
-	progress := activeStartup
-	startupMu.Unlock()
-	if progress == nil {
-		return
-	}
-	progress.mu.Lock()
-	progress.stage = stage
-	progress.mu.Unlock()
-}
-
 // A slow launch is hard to argue about from the outside: the only evidence is
 // that nothing happens for a while. Timing each stage into the log turns "otakase
 // takes a minute" into a line naming which step spent it, and costs one
@@ -111,27 +54,6 @@ var (
 	startupClockLast  time.Time
 	startupClockStage string
 )
-
-func beginStartupClock(stage string) {
-	now := time.Now()
-	startupClockMu.Lock()
-	defer startupClockMu.Unlock()
-	startupClockBegan, startupClockLast, startupClockStage = now, now, stage
-}
-
-func recordStartupStageTiming(stage string) {
-	now := time.Now()
-	startupClockMu.Lock()
-	previous, last, began := startupClockStage, startupClockLast, startupClockBegan
-	startupClockLast, startupClockStage = now, stage
-	startupClockMu.Unlock()
-
-	if began.IsZero() || previous == "" {
-		return
-	}
-	Log(fmt.Sprintf("Startup timing: %q took %s (%s since launch)",
-		previous, now.Sub(last).Round(time.Millisecond), now.Sub(began).Round(time.Millisecond)))
-}
 
 // reportStartupTotal closes the timing record when the first menu appears.
 func reportStartupTotal() {
@@ -182,45 +104,4 @@ func EndStartupProgress() {
 	if progress.announced {
 		startupReporter("Ready.")
 	}
-}
-
-func (p *startupProgress) run() {
-	select {
-	case <-p.done:
-		return
-	case <-time.After(startupQuietPeriod):
-	}
-
-	ticker := time.NewTicker(startupTickInterval)
-	defer ticker.Stop()
-
-	p.announce()
-	// Where a notification cannot be replaced in place (see
-	// desktop_notify.go), each refresh would be one more toast.
-	if !busyNotifyRepeats {
-		<-p.done
-		return
-	}
-	for {
-		select {
-		case <-p.done:
-			return
-		case <-ticker.C:
-			p.announce()
-		}
-	}
-}
-
-func (p *startupProgress) announce() {
-	p.mu.Lock()
-	if p.closed {
-		p.mu.Unlock()
-		return
-	}
-	p.announced = true
-	stage := p.stage
-	elapsed := int(time.Since(p.started).Seconds())
-	p.mu.Unlock()
-
-	startupReporter(fmt.Sprintf("%s (%ds)", stage, elapsed))
 }
