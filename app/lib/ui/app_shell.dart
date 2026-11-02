@@ -840,14 +840,18 @@ class Brand extends StatelessWidget {
 /// The TV top bar: the desktop island bar with the clock in place of the
 /// window buttons, kept inside the screen's safe area.
 class TVTopBar extends StatelessWidget {
-  const TVTopBar({super.key, required this.tabs});
+  const TVTopBar({super.key, required this.tabs, this.leading});
   final Widget tabs;
+
+  /// Shown before the logo, such as the back button on a show.
+  final Widget? leading;
   @override
   Widget build(BuildContext context) {
     final safe = MediaQuery.paddingOf(context);
     return DesktopTopBar(
       brand: const Brand(),
       tabs: tabs,
+      leading: leading,
       trailing: const DeviceStatus(isTV: true),
       inset: EdgeInsets.fromLTRB(
         math.max(8, safe.left - 40),
