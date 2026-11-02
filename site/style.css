@@ -11,6 +11,8 @@
 html.home{scroll-snap-type:y mandatory;scrollbar-width:none}
 html.home::-webkit-scrollbar,html.home body::-webkit-scrollbar{display:none}
 .snap{position:absolute;left:0;width:1px;height:1px;scroll-snap-align:start;scroll-snap-stop:always}
+/* where app.js puts them too: scene i at i quarters of the pinned scroll */
+.snap{top:calc((500vh - 100svh) * var(--i) / 4)}
 .after{scroll-snap-align:start;scroll-snap-stop:always}
 .endpage{min-height:100vh;min-height:100svh;display:flex;flex-direction:column}
 .endpage>.wrap:last-child{margin-top:auto;width:100%}
