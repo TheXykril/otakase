@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 26.1.3 - 2026-11-02
+
+Sign-ins now stay saved on Linux, and Trakt signs in through your browser
+on a computer. If you were signed out, sign in once more after updating.
 
 ### Changed
 
