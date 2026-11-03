@@ -20,7 +20,6 @@ import 'services.dart';
 import 'tls_ca.dart';
 import 'ui/components.dart';
 import 'ui/device_status.dart';
-import 'ui/find_show.dart';
 import 'ui/seal.dart';
 import 'ui/skip_marker.dart';
 import 'ui/player_keys.dart';
@@ -1175,24 +1174,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     isTV: widget.isTV,
   );
 
-  /// The viewer's own search, when the automatic match is wrong or found
-  /// nothing; playback starts again from the pick.
-  Future<void> findMyself() async {
-    panelOpen = true;
-    final picked = await findShowMyself(
-      context,
-      widget.services,
-      anime,
-      widget.isTV,
-    );
-    panelOpen = false;
-    if (!picked || !mounted) return;
-    await save();
-    failedSources.clear();
-    setState(() => error = '');
-    await open();
-  }
-
   Future<void> tryAnotherCopy({bool automatic = false}) async {
     await save();
     if (source != null && copy + 1 < source!.streams.length) {
@@ -1872,12 +1853,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           AppButton(
                             label: 'Try another copy',
                             onPressed: tryAnotherCopy,
-                            isTV: widget.isTV,
-                          ),
-                          AppButton(
-                            label: 'Find it myself',
-                            icon: LucideIcons.search,
-                            onPressed: findMyself,
                             isTV: widget.isTV,
                           ),
                         ],
