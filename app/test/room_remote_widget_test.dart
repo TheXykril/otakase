@@ -28,7 +28,7 @@ const tv = TVDevice(
 );
 
 class FakeLan extends LanTransport {
-  final commands = <String>[];
+  final commands = <String>[], hellos = <String>[];
   bool adult = false;
   @override
   Future<Json> post(
@@ -36,7 +36,18 @@ class FakeLan extends LanTransport {
     String path,
     Json body, {
     String token = '',
+    Duration connectTimeout = const Duration(seconds: 3),
   }) async {
+    hellos.add(device.host);
+    if (path == '/hello') {
+      return {
+        'otakase': 1,
+        'kind': 'tv',
+        'id': tv.id,
+        'name': tv.name,
+        'port': tvDiscoveryPort,
+      };
+    }
     if (path == '/pair') {
       return {
         'id': device.id,
@@ -172,6 +183,36 @@ void main() {
       await s.close();
     },
   );
+  testWidgets('phone pairs by typing the code when no TV is found', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    await tester.pumpWidget(const SizedBox());
+    final lan = FakeLan();
+    final active = await services(lan: lan);
+    await tester.pumpWidget(
+      page(
+        TVRemotePage(services: active, isTV: false, findTVs: () async => []),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Living room'), findsNothing);
+    await tester.tap(find.byKey(const Key('tv-enter-code')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('tv-code')), '012345');
+    await tester.enterText(find.byKey(const Key('tv-address')), '8.8.8.8');
+    await tester.pump();
+    expect(find.text('Use the numbers shown under the code'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('tv-address')), '192.168.1.8');
+    await tester.pump();
+    await tester.tap(find.text('Pair'));
+    await tester.pumpAndSettle();
+    expect(lan.hellos.first, '192.168.1.8');
+    expect(active.tvRemote.paired.single.id, tv.id);
+    expect(find.text('Playing story'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await active.close();
+  });
   testWidgets('phone pairs and exposes playback, episode and volume controls', (
     tester,
   ) async {

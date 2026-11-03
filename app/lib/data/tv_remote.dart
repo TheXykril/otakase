@@ -81,6 +81,7 @@ class LanTransport {
     String path,
     Json body, {
     String token = '',
+    Duration connectTimeout = const Duration(seconds: 3),
   }) async {
     if (!allowed(tv.host) || tv.port < 1 || tv.port > 65535) {
       throw StateError('Choose a TV on your local network.');
@@ -89,7 +90,7 @@ class LanTransport {
     final socket = await Socket.connect(
       tv.host,
       tv.port,
-      timeout: const Duration(seconds: 3),
+      timeout: connectTimeout,
     );
     try {
       final payload = utf8.encode(jsonEncode(body));
@@ -128,9 +129,17 @@ class LanTransport {
   }
 }
 
-TVDevice? parseTVAdvertisement(String raw, String host) {
+TVDevice? parseTVAdvertisement(
+  String raw,
+  String host, {
+  bool allowLoopback = false,
+}) {
   final a = InternetAddress.tryParse(host);
-  if (a == null || !privateAddress(a) || raw.length > 1024) return null;
+  if (a == null ||
+      !(privateAddress(a) || allowLoopback && a.isLoopback) ||
+      raw.length > 1024) {
+    return null;
+  }
   try {
     final j = jsonDecode(raw) as Map;
     if (j['otakase'] != 1 ||
@@ -152,9 +161,59 @@ TVDevice? parseTVAdvertisement(String raw, String host) {
   }
 }
 
+/// x.y.z.255 for each local address, so the ask reaches the Wi-Fi even when
+/// 255.255.255.255 leaves through another link or the router drops it.
+List<String> directedBroadcasts(List<String> addresses) => {
+  for (final a in addresses)
+    if (InternetAddress.tryParse(a) case final ip? when privateAddress(ip))
+      '${ip.rawAddress[0]}.${ip.rawAddress[1]}.${ip.rawAddress[2]}.255',
+}.toList();
+
+/// Every other host on the same /24 as [addresses], for the direct check
+/// when broadcasts never arrive.
+List<String> neighbourHosts(List<String> addresses) {
+  final own = addresses.toSet(), hosts = <String>{};
+  for (final a in addresses) {
+    final ip = InternetAddress.tryParse(a);
+    if (ip == null || !privateAddress(ip)) continue;
+    final b = ip.rawAddress;
+    for (var last = 1; last < 255; last++) {
+      final host = '${b[0]}.${b[1]}.${b[2]}.$last';
+      if (!own.contains(host)) hosts.add(host);
+    }
+  }
+  return hosts.toList();
+}
+
+/// Asks one address for the TV on [port], the fixed remote port.
+Future<TVDevice?> helloTV(
+  String host, {
+  int port = tvDiscoveryPort,
+  LanTransport transport = const LanTransport(),
+  Duration connectTimeout = const Duration(seconds: 3),
+}) async {
+  try {
+    final j = await transport.post(
+      TVDevice(id: '', name: '', host: host, port: port),
+      '/hello',
+      {'otakase': 1},
+      connectTimeout: connectTimeout,
+    );
+    return parseTVAdvertisement(
+      jsonEncode(j),
+      host,
+      allowLoopback: transport.allowLoopback,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
 Future<List<TVDevice>> discoverTVs({
   Duration wait = const Duration(seconds: 2),
   int port = tvDiscoveryPort,
+  bool sweep = true,
+  Future<List<String>> Function() addresses = lanAddresses,
 }) async {
   final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
   socket.broadcastEnabled = true;
@@ -176,17 +235,54 @@ Future<List<TVDevice>> discoverTVs({
     }
   });
   try {
-    socket.send(
-      utf8.encode('{"otakase":1,"kind":"discover"}'),
-      InternetAddress('255.255.255.255'),
-      port,
-    );
-    await Future<void>.delayed(wait);
+    final own = await addresses().catchError((Object _) => <String>[]);
+    final ask = utf8.encode('{"otakase":1,"kind":"discover"}');
+    for (final target in ['255.255.255.255', ...directedBroadcasts(own)]) {
+      try {
+        socket.send(ask, InternetAddress(target), port);
+      } catch (_) {
+        /* Some links refuse broadcasts; the others still go out. */
+      }
+    }
+    final checks = <Future<void>>[Future<void>.delayed(wait)];
+    if (sweep) {
+      // Routers and firewalls often drop broadcasts, so also knock on the
+      // fixed remote port of every neighbour, a few at a time.
+      final hosts = neighbourHosts(own);
+      Future<void> worker() async {
+        while (hosts.isNotEmpty) {
+          final host = hosts.removeLast();
+          final tv = await helloTV(
+            host,
+            port: port,
+            connectTimeout: const Duration(milliseconds: 700),
+          );
+          if (tv != null) found.putIfAbsent(tv.id, () => tv);
+        }
+      }
+
+      checks.addAll([for (var i = 0; i < 48; i++) worker()]);
+    }
+    await Future.wait(checks);
   } finally {
     await subscription.cancel();
     socket.close();
   }
   return found.values.toList();
+}
+
+/// Reads "192.168.1.20" or "192.168.1.20:8654" typed from the TV screen.
+(String, int)? parseTVAddress(String raw) {
+  final value = raw.trim();
+  final match = RegExp(r'^(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{1,5}))?$')
+      .firstMatch(value);
+  if (match == null) return null;
+  final ip = InternetAddress.tryParse(match[1]!);
+  final port = int.tryParse(match[2] ?? '') ?? tvDiscoveryPort;
+  if (ip == null || !privateAddress(ip) || port < 1 || port > 65535) {
+    return null;
+  }
+  return (ip.address, port);
 }
 
 String remoteName(String value) =>
@@ -220,6 +316,8 @@ class TVRemote extends ChangeNotifier {
   Json Function()? status;
   final _events = StreamController<String>.broadcast();
   Stream<String> get events => _events.stream;
+  bool get hasPhones => (_phones['clients'] as Map? ?? {}).isNotEmpty;
+  int get port => _server?.port ?? 0;
   List<TVDevice> get paired => _paired.values
       .whereType<Map>()
       .map((m) => TVDevice.fromJson(m.cast<String, dynamic>()))
@@ -255,7 +353,10 @@ class TVRemote extends ChangeNotifier {
         });
   }
 
-  Future<void> startTV({int discoveryPort = tvDiscoveryPort}) async {
+  Future<void> startTV({
+    int discoveryPort = tvDiscoveryPort,
+    int serverPort = tvDiscoveryPort,
+  }) async {
     if (closed || serverStarted) return;
     await initialize();
     if (closed || serverStarted) return;
@@ -268,7 +369,13 @@ class TVRemote extends ChangeNotifier {
         );
       }
       address = ip;
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
+      try {
+        // A fixed port lets phones find the TV without broadcasts and lets
+        // people open one port in a desktop firewall.
+        _server = await HttpServer.bind(InternetAddress.anyIPv4, serverPort);
+      } on SocketException {
+        _server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
+      }
       if (closed) {
         await _server?.close(force: true);
         return;
@@ -378,6 +485,16 @@ class TVRemote extends ChangeNotifier {
       final body = (jsonDecode(
         await utf8.decoder.bind(r).join().timeout(const Duration(seconds: 3)),
       ) as Map).cast<String, dynamic>();
+      if (r.uri.path == '/hello') {
+        await _reply(r, 200, {
+          'otakase': 1,
+          'kind': 'tv',
+          'id': id,
+          'name': name,
+          'port': _server!.port,
+        });
+        return;
+      }
       if (r.uri.path == '/pair') {
         if (_waitUntil != null && now().isBefore(_waitUntil!)) {
           await _reply(r, 429, {
@@ -520,6 +637,54 @@ class TVRemote extends ChangeNotifier {
     };
     await _persist('lan.remote', _paired);
     notifyListeners();
+  }
+
+  /// Pairs with the TV showing [digits]. [address] is what the TV shows
+  /// under the code; when it is empty every TV found nearby is tried.
+  Future<TVDevice> pairByCode(
+    String digits, {
+    String address = '',
+    String phoneName = 'Phone',
+    Future<List<TVDevice>> Function() findTVs = discoverTVs,
+  }) async {
+    final List<TVDevice> candidates;
+    if (address.trim().isNotEmpty) {
+      final parsed = parseTVAddress(address);
+      if (parsed == null) {
+        throw StateError(
+          'Type the address shown on the TV, like 192.168.1.20.',
+        );
+      }
+      final tv = await helloTV(
+        parsed.$1,
+        port: parsed.$2,
+        transport: transport,
+      );
+      if (tv == null) {
+        throw StateError(
+          'No Otakase TV answered at ${address.trim()}. Check that both '
+          'are on the same Wi-Fi and the TV shows its pairing code.',
+        );
+      }
+      candidates = [tv];
+    } else {
+      candidates = await findTVs();
+      if (candidates.isEmpty) {
+        throw StateError(
+          'No TV found. Type the address shown under the code on the TV.',
+        );
+      }
+    }
+    Object? last;
+    for (final tv in candidates) {
+      try {
+        await pair(tv, digits, phoneName: phoneName);
+        return tv;
+      } catch (e) {
+        last = e;
+      }
+    }
+    throw last ?? StateError('The code does not match.');
   }
 
   void found(TVDevice tv) {

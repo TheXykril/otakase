@@ -208,7 +208,11 @@ class _AppShellState extends State<AppShell> {
   Future<void> startRemote() async {
     await widget.services.tvRemote.initialize();
     if (widget.services.closed) return;
-    if (widget.isTV && Platform.isAndroid) {
+    // Desktops only listen once a phone is paired, so a first launch never
+    // opens a firewall prompt; the Phone remote page starts it on demand.
+    if (widget.isTV &&
+        (Platform.isAndroid ||
+            isDesktop && widget.services.tvRemote.hasPhones)) {
       await widget.services.tvRemote.startTV();
     }
     try {
