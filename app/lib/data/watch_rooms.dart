@@ -53,6 +53,12 @@ class RoomState {
   int get version => number(json['ver']);
   int get hold => number(json['hold']);
   bool get host => json['is_host'] == true;
+
+  /// This account's Discord Activity is in the room too. It drives the
+  /// room, so this device follows it like a viewer while keeping host
+  /// controls.
+  bool get hostElsewhere => host && json['me_activity'] == true;
+  bool get drives => host && !hostElsewhere;
   bool get playing => json['playing'] == true;
   bool get adult =>
       json['adult'] == true || (json['show'] as Map?)?['adult'] == true;
@@ -416,14 +422,23 @@ class WatchRooms extends ChangeNotifier {
     }
   }
 
+  /// The address the player loads a room file from. Playlists are asked for
+  /// with direct=1: the bot's edge cache path is a Discord URL mapping that
+  /// only exists inside the Activity, so the app takes every segment from
+  /// the bot itself.
   Uri mediaUri(String path) {
-    final bot = Uri.parse(discord.baseUrl),
-        uri = Uri.parse('${discord.baseUrl}/activity/').resolve(path);
+    final bot = Uri.parse(discord.baseUrl);
+    var uri = Uri.parse('${discord.baseUrl}/activity/').resolve(path);
     if (uri.scheme != bot.scheme ||
         uri.host != bot.host ||
         uri.port != bot.port) {
       throw const FormatException(
         'The room returned an invalid stream address.',
+      );
+    }
+    if (uri.path.toLowerCase().endsWith('.m3u8')) {
+      uri = uri.replace(
+        queryParameters: {...uri.queryParameters, 'direct': '1'},
       );
     }
     return uri;

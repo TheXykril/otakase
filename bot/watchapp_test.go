@@ -101,3 +101,59 @@ func TestWatchAppTokenDoesNotGrantOtherActivityRoutes(t *testing.T) {
 		}
 	}
 }
+func TestWatchAppSameAccountAsHost(t *testing.T) {
+	b, now := watchBot(t, "https://cdn.example/episode.m3u8")
+	b.store.update(func(d *storeData) { d.WatchTickets = map[string]int{"host": 1} })
+	if code := watchPost(b, (*bot).watchOpen, "host", watchIn{Room: "room-same", Channel: "vc"}, nil); code != 200 {
+		t.Fatalf("open: %d", code)
+	}
+	token := watchAppToken(b, "host")
+	joined := watchAppCall(b, token, "POST", "open", watchIn{Room: "room-same", Channel: "vc"}, (*bot).watchOpen)
+	var view watchView
+	_ = json.Unmarshal(joined.Body.Bytes(), &view)
+	if joined.Code != 200 || !view.IsHost || !view.MeActivity {
+		t.Fatalf("second device join: %d %s", joined.Code, joined.Body)
+	}
+	b.watch.mu.Lock()
+	cur := b.watch.room("room-same")
+	cur.phase = "play"
+	cur.setPos(100, true, *now)
+	b.watch.mu.Unlock()
+	if code := watchAppCall(b, token, "POST", "beat", watchIn{Room: "room-same", Pos: 900, Playing: false}, (*bot).watchBeat).Code; code != 200 {
+		t.Fatalf("app beat: %d", code)
+	}
+	b.watch.mu.Lock()
+	pos, playing := cur.position(*now), cur.playing
+	b.watch.mu.Unlock()
+	if pos != 100 || !playing {
+		t.Fatalf("app beat moved a room its Activity drives: %v %v", pos, playing)
+	}
+	if code := watchAppCall(b, token, "POST", "leave", watchIn{Room: "room-same"}, (*bot).watchLeave).Code; code != 200 {
+		t.Fatalf("app leave: %d", code)
+	}
+	b.watch.mu.Lock()
+	_, still := cur.members["host"]
+	b.watch.mu.Unlock()
+	if !still {
+		t.Fatal("leaving on the app took the Activity out of the room")
+	}
+	// Back on the app, then the Activity closes: the app keeps the room
+	// and drives it from then on.
+	watchAppCall(b, token, "POST", "open", watchIn{Room: "room-same", Channel: "vc"}, (*bot).watchOpen)
+	if code := watchPost(b, (*bot).watchLeave, "host", watchIn{Room: "room-same"}, nil); code != 200 {
+		t.Fatalf("activity leave: %d", code)
+	}
+	state := watchAppCall(b, token, "GET", "state?room=room-same&v=-1", nil, (*bot).watchState)
+	view = watchView{}
+	_ = json.Unmarshal(state.Body.Bytes(), &view)
+	if state.Code != 200 || !view.IsHost || view.MeActivity {
+		t.Fatalf("app after Activity left: %d %s", state.Code, state.Body)
+	}
+	watchAppCall(b, token, "POST", "beat", watchIn{Room: "room-same", Pos: 300, Playing: true}, (*bot).watchBeat)
+	b.watch.mu.Lock()
+	pos = cur.position(*now)
+	b.watch.mu.Unlock()
+	if pos != 300 {
+		t.Fatalf("app host beat ignored once alone: %v", pos)
+	}
+}

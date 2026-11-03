@@ -85,6 +85,30 @@ type watchMember struct {
 	pos    float64
 	stuck  bool // it was buffering or still loading
 	beatAt time.Time
+
+	// When the member's Activity and the linked app last polled. One
+	// account can watch on both at once; each keeps its own presence.
+	act, app time.Time
+}
+
+// saw notes a poll from the member's app or Activity.
+func (m *watchMember) saw(fromApp bool, now time.Time) {
+	m.seen = now
+	if fromApp {
+		m.app = now
+	} else {
+		m.act = now
+	}
+}
+
+// elsewhere tells whether the member's other device (the Activity when this
+// request came from the app, else the app) is still in the room.
+func (m *watchMember) elsewhere(fromApp bool, now time.Time) bool {
+	other := m.app
+	if fromApp {
+		other = m.act
+	}
+	return !other.IsZero() && now.Sub(other) <= watchGone
 }
 
 type watchAsk struct {
@@ -1192,6 +1216,9 @@ type watchView struct {
 	Languages       watchLanguagePreference         `json:"languages"`
 	Preferences     watchPlaybackPreferences        `json:"preferences"`
 	Max             int                             `json:"max"`
+	// MeActivity is set while this account's Activity is in the room, so
+	// the app on a second device follows it instead of driving the room.
+	MeActivity bool `json:"me_activity,omitempty"`
 	// CDN is the edge cache's path when one is set up (watchedge.go), so
 	// a player can tell its segments failing there.
 	CDN string `json:"cdn,omitempty"`
@@ -1208,6 +1235,9 @@ func (b *bot) watchViewOf(r *watchRoom, user string, staff bool, now time.Time) 
 		CDN: strings.TrimRight(b.cfg.WatchCDN, "/")}
 	if v.Chat == nil {
 		v.Chat = []watchChat{}
+	}
+	if m := r.members[user]; m != nil {
+		v.MeActivity = m.elsewhere(true, now)
 	}
 	v.Events = slices.Clone(r.events)
 	if r.hold != 0 {
@@ -1529,10 +1559,12 @@ func (b *bot) watchOpen(w http.ResponseWriter, r *http.Request) {
 		watchClock(b, cur)
 		log.Printf("watch room opened by member %s in channel %s", user, in.Channel)
 	}
+	fromApp := b.acts.user(r) == ""
 	if m, ok := cur.members[user]; ok {
-		m.seen = now
+		m.saw(fromApp, now)
 	} else {
-		m := &watchMember{name: name, joined: now, seen: now}
+		m := &watchMember{name: name, joined: now}
+		m.saw(fromApp, now)
 		if cur.phase == "play" {
 			m.from = cur.position(now)
 		}
@@ -1575,7 +1607,7 @@ func (b *bot) watchState(w http.ResponseWriter, r *http.Request) {
 			apiError(w, http.StatusForbidden, "you're not in the watch room")
 			return
 		}
-		m.seen = watchNow()
+		m.saw(b.acts.user(r) == "", watchNow())
 		if cur.ver != have {
 			b.watchAnswerView(w, cur, user, staff)
 			return
@@ -1604,8 +1636,18 @@ func (b *bot) watchLeave(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{"ok": true}
 	b.watch.mu.Lock()
 	if cur := b.watch.room(in.Room); cur != nil {
-		if _, ok := cur.members[user]; ok {
-			now := watchNow()
+		now := watchNow()
+		fromApp := b.acts.user(r) == ""
+		if m, ok := cur.members[user]; ok && m.elsewhere(fromApp, now) {
+			// The same account is still watching on its other device:
+			// only this one leaves.
+			if fromApp {
+				m.app = time.Time{}
+			} else {
+				m.act = time.Time{}
+			}
+			cur.changed()
+		} else if ok {
 			if p, ok := cur.resumeOf(user, now); ok {
 				cur.resumes = append(cur.resumes, p)
 				out["ep"], out["secs"], out["done"] = p.ep, p.secs, p.done
@@ -2108,6 +2150,12 @@ func (b *bot) watchBeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := watchNow()
+	if m := cur.members[user]; m != nil && b.acts.user(r) == "" && m.elsewhere(true, now) {
+		// The account's Activity is in the room too and drives it; the
+		// app only follows.
+		writeJSON(w, http.StatusOK, map[string]int{"ver": cur.ver})
+		return
+	}
 	if m := cur.members[user]; m != nil && cur.phase == "play" && !math.IsNaN(in.Pos) && in.Pos >= 0 {
 		was, wasStuck := m.pos, m.stuck
 		m.pos, m.stuck, m.beatAt = in.Pos, in.Buffering || !in.Playing && cur.playing, now

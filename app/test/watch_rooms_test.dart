@@ -174,8 +174,20 @@ void main() {
       expect(f.rooms.state, null);
       expect(
         f.rooms.mediaUri('api/watch/media/test/index.m3u8').toString(),
-        '$discordBotUrl/activity/api/watch/media/test/index.m3u8',
+        '$discordBotUrl/activity/api/watch/media/test/index.m3u8?direct=1',
       );
+      expect(
+        f.rooms.mediaUri('api/watch/media/test/s0.vtt').toString(),
+        '$discordBotUrl/activity/api/watch/media/test/s0.vtt',
+      );
+      final mine = RoomState({
+        'is_host': true,
+        'me_activity': true,
+      }, DateTime(2026));
+      expect(mine.host, true);
+      expect(mine.drives, false);
+      expect(RoomState({'is_host': true}, DateTime(2026)).drives, true);
+      expect(RoomState({'me_activity': true}, DateTime(2026)).drives, false);
       expect(
         () => f.rooms.mediaUri('https://outside.example/file'),
         throwsFormatException,

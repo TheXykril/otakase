@@ -251,7 +251,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
         }
       }),
       player.stream.completed.listen((done) {
-        if (done && rooms.state?.host == true) {
+        if (done && rooms.state?.drives == true) {
           unawaited(run(() => rooms.control('next')));
         }
       }),
@@ -452,7 +452,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
     applying = true;
     try {
       final target = current.target(DateTime.now());
-      if (current.host) {
+      if (current.drives) {
         if (force &&
             (player.state.position.inMilliseconds / 1000 - target).abs() > .5) {
           await player.seek(Duration(milliseconds: (target * 1000).round()));

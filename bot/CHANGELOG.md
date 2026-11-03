@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.88
+
+- One account can be in a watch room on the Activity and in the app at once. The Activity keeps driving the room, the app follows it, and leaving on one doesn't take the other out.
+
 ## 1.30.87
 
 - The welcome post header shows the new name styling and the "Leave it to Otakase." tagline.
