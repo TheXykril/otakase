@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Phone remote finds TVs and computers more often.** The phone now also
+  checks every device on the Wi-Fi directly when broadcasts get lost, and a
+  computer no longer shows a Docker or VM address in its QR code.
+- **Pair by typing the code.** Control TV has an Enter code button. Type the
+  six digits and, if the TV is not found, the address shown under the code.
+
 ## 26.1.5 - 2026-11-03
 
 18+ titles now stay off Home, even after you watch them.

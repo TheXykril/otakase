@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otakase/data/lan_page.dart';
 import 'package:otakase/data/profiles.dart';
 import 'package:otakase/data/tv_remote.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +11,7 @@ import 'auth_test.dart' show MemoryTokens;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  lookupTests();
   test(
     'QR and discovery accept only local literal IPv4 with valid code and port',
     () {
@@ -63,7 +65,7 @@ void main() {
       );
       addTearDown(tv.close);
       addTearDown(phone.close);
-      await tv.startTV(discoveryPort: 0);
+      await tv.startTV(discoveryPort: 0, serverPort: 0);
       final code = await tv.beginPair(),
           actions = <String>[],
           events = <String>[];
@@ -127,7 +129,7 @@ void main() {
         );
     addTearDown(tv.close);
     addTearDown(phone.close);
-    await tv.startTV(discoveryPort: 0);
+    await tv.startTV(discoveryPort: 0, serverPort: 0);
     final code = await tv.beginPair();
     final wrong = code.code == '000000' ? '111111' : '000000';
     for (var i = 0; i < 5; i++) {
@@ -172,7 +174,7 @@ void main() {
           );
       addTearDown(tv.close);
       addTearDown(phone.close);
-      await tv.startTV(discoveryPort: 0);
+      await tv.startTV(discoveryPort: 0, serverPort: 0);
       final code = await tv.beginPair();
       await phone.pair(code.device, code.code);
       final opening = Completer<void>(), actions = <String>[];
@@ -242,5 +244,98 @@ void main() {
     await expectLater(second.send(first.paired.single), throwsStateError);
     await second.close();
     await two.deactivate();
+  });
+}
+
+void lookupTests() {
+  test('home network addresses skip container bridges and mobile data', () {
+    expect(lanInterfaceRank('wlan0'), lessThan(lanInterfaceRank('eth0')));
+    expect(lanInterfaceRank('wlp3s0'), 0);
+    expect(lanInterfaceRank('enp0s31f6'), 1);
+    for (final name in [
+      'docker0',
+      'br-1a2b',
+      'virbr0',
+      'podman0',
+      'tailscale0',
+      'wg0',
+      'rmnet_data0',
+    ]) {
+      expect(lanInterfaceRank(name), 9, reason: name);
+    }
+    expect(directedBroadcasts(['192.168.1.20', '8.8.8.8', '10.0.4.7']), [
+      '192.168.1.255',
+      '10.0.4.255',
+    ]);
+    final hosts = neighbourHosts(['192.168.1.20']);
+    expect(hosts.length, 253);
+    expect(hosts, isNot(contains('192.168.1.20')));
+    expect(hosts, containsAll(['192.168.1.1', '192.168.1.254']));
+    expect(parseTVAddress(' 192.168.1.20 '), ('192.168.1.20', tvDiscoveryPort));
+    expect(parseTVAddress('192.168.1.20:9000'), ('192.168.1.20', 9000));
+    expect(parseTVAddress('8.8.8.8'), null);
+    expect(parseTVAddress('192.168.1'), null);
+    expect(parseTVAddress('192.168.1.20:70000'), null);
+  });
+  test('phones pair from the code alone, without a discovered TV', () async {
+    final tv = TVRemote(
+          storage: MemoryTokens(),
+          name: 'Laptop',
+          findAddress: () async => '127.0.0.1',
+          transport: const LanTransport(allowLoopback: true),
+        ),
+        other = TVRemote(
+          storage: MemoryTokens(),
+          name: 'Other TV',
+          findAddress: () async => '127.0.0.1',
+          transport: const LanTransport(allowLoopback: true),
+        ),
+        phone = TVRemote(
+          storage: MemoryTokens(),
+          transport: const LanTransport(allowLoopback: true),
+        );
+    addTearDown(tv.close);
+    addTearDown(other.close);
+    addTearDown(phone.close);
+    await tv.startTV(discoveryPort: 0, serverPort: 0);
+    await other.startTV(discoveryPort: 0, serverPort: 0);
+    final code = await tv.beginPair();
+    await other.beginPair();
+    final hello = await helloTV(
+      '127.0.0.1',
+      port: tv.port,
+      transport: const LanTransport(allowLoopback: true),
+    );
+    expect(hello?.id, tv.id);
+    expect(hello?.name, 'Laptop');
+    expect(hello?.port, tv.port);
+    // Several TVs nearby: the one whose code matches is the one paired.
+    final paired = await phone.pairByCode(
+      code.code,
+      findTVs: () async => [
+        (await helloTV(
+          '127.0.0.1',
+          port: other.port,
+          transport: const LanTransport(allowLoopback: true),
+        ))!,
+        hello!,
+      ],
+    );
+    expect(paired.id, tv.id);
+    expect(phone.paired.single.id, tv.id);
+    await expectLater(
+      phone.pairByCode('123456', findTVs: () async => []),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('address shown under the code'),
+        ),
+      ),
+    );
+    await expectLater(
+      phone.pairByCode('123456', address: 'living room'),
+      throwsStateError,
+    );
   });
 }

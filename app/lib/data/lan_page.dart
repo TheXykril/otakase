@@ -11,15 +11,49 @@ bool privateAddress(InternetAddress a) {
       b[0] == 172 && b[1] >= 16 && b[1] <= 31;
 }
 
-Future<String?> lanAddress() async {
+/// Virtual or mobile-data interfaces that phones on the same Wi-Fi cannot
+/// reach: container and VM bridges, VPN tunnels and cellular links.
+final _unreachableInterface = RegExp(
+  r'^(docker|br-|virbr|veth|podman|cni|flannel|vmnet|vboxnet|lxc|lxd|incus|'
+  r'tun|tap|wg|tailscale|zt|utun|ppp|rmnet|ccmni|clat|v4-rmnet|dummy|kube)',
+  caseSensitive: false,
+);
+
+int lanInterfaceRank(String name) {
+  final n = name.toLowerCase();
+  if (_unreachableInterface.hasMatch(n)) return 9;
+  if (n.startsWith('wl') || n.contains('wi-fi') || n.contains('wifi')) {
+    return 0;
+  }
+  if (n.startsWith('en') || n.startsWith('eth') || n.contains('ethernet')) {
+    return 1;
+  }
+  return 2;
+}
+
+/// Local IPv4 addresses that other devices on the home network can reach,
+/// best first: Wi-Fi, then wired, then other links. Container bridges,
+/// VPNs and mobile data come last, and only when [all] is set.
+Future<List<String>> lanAddresses({bool all = false}) async {
+  final found = <(int, String)>[];
   for (final interface in await NetworkInterface.list(
     type: InternetAddressType.IPv4,
   )) {
+    final rank = lanInterfaceRank(interface.name);
+    if (rank == 9 && !all) continue;
     for (final a in interface.addresses) {
-      if (privateAddress(a)) return a.address;
+      if (privateAddress(a)) found.add((rank, a.address));
     }
   }
-  return null;
+  found.sort((a, b) => a.$1.compareTo(b.$1));
+  return [for (final f in found) f.$2];
+}
+
+Future<String?> lanAddress() async {
+  final ranked = await lanAddresses();
+  if (ranked.isNotEmpty) return ranked.first;
+  final any = await lanAddresses(all: true);
+  return any.isEmpty ? null : any.first;
 }
 
 String randomSecret() =>

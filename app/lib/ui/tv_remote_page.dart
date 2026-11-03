@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -126,6 +127,39 @@ class _TVRemotePageState extends State<TVRemotePage> {
     }
   }
 
+  Future<void> enterCode() async {
+    final entry = await showDialog<(String, String)>(
+      context: context,
+      builder: (_) => const _CodeDialog(),
+    );
+    if (entry == null || !mounted) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      final tv = await remote.pairByCode(
+        entry.$1,
+        address: entry.$2,
+        phoneName: widget.services.profiles?.active.name ?? 'Phone',
+        findTVs: widget.findTVs,
+      );
+      if (mounted) {
+        setState(() {
+          selected = tv;
+          devices = {
+            for (final d in [...remote.paired, ...devices]) d.id: d,
+          }.values.toList();
+        });
+        await refresh();
+      }
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> refresh() async {
     final tv = selected;
     if (tv == null || polling || !mounted) return;
@@ -217,11 +251,28 @@ class _TVRemotePageState extends State<TVRemotePage> {
                   textAlign: TextAlign.center,
                   style: mono.copyWith(fontSize: 38, color: accentText),
                 ),
+                if (code.device.host.isNotEmpty)
+                  Text(
+                    'Address ${code.device.port == tvDiscoveryPort ? code.device.host : '${code.device.host}:${code.device.port}'}',
+                    key: const Key('tv-pair-address'),
+                    textAlign: TextAlign.center,
+                    style: mono.copyWith(fontSize: 22, color: muted),
+                  ),
+                const SizedBox(height: 8),
                 Text(
-                  'Scan with your phone, or enter this code in More > Control TV.\nExpires in ${left ~/ 60} min ${left % 60} s.',
+                  'Scan with your phone camera, or on the phone open More > Control TV > Enter code.\nExpires in ${left ~/ 60} min ${left % 60} s.',
                   textAlign: TextAlign.center,
                   style: uiStyle(context),
                 ),
+                if (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      'Phone cannot find this computer? Allow port $tvDiscoveryPort (TCP and UDP) in its firewall, or type the address on the phone.',
+                      textAlign: TextAlign.center,
+                      style: uiStyle(context, color: muted),
+                    ),
+                  ),
                 const SizedBox(height: 20),
               ],
               AppButton(
@@ -264,10 +315,17 @@ class _TVRemotePageState extends State<TVRemotePage> {
                 isTV: false,
                 onPressed: busy ? null : scan,
               ),
+              const SizedBox(height: 12),
+              AppButton(
+                key: const Key('tv-enter-code'),
+                label: 'Enter code',
+                isTV: false,
+                onPressed: busy ? null : enterCode,
+              ),
               const SizedBox(height: 16),
               if (!busy && devices.isEmpty)
                 Text(
-                  'Open More > Phone remote on the TV, then scan its QR code or find TVs again.',
+                  'Open More > Phone remote on the TV or computer. Scan its QR code with the phone camera, tap Enter code, or find TVs again.',
                   style: uiStyle(context),
                 ),
               for (final tv in devices)
@@ -461,6 +519,77 @@ class _PairDialogState extends State<_PairDialog> {
             : null,
         child: const Text('Pair'),
       ),
+    ],
+  );
+}
+
+class _CodeDialog extends StatefulWidget {
+  const _CodeDialog();
+  @override
+  State<_CodeDialog> createState() => _CodeDialogState();
+}
+
+class _CodeDialogState extends State<_CodeDialog> {
+  final code = TextEditingController(), address = TextEditingController();
+  @override
+  void dispose() {
+    code.dispose();
+    address.dispose();
+    super.dispose();
+  }
+
+  bool get ready =>
+      code.text.length == 6 &&
+      (address.text.trim().isEmpty || parseTVAddress(address.text) != null);
+
+  void submit() {
+    if (ready) Navigator.pop(context, (code.text, address.text.trim()));
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Enter the TV code'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          key: const Key('tv-code'),
+          controller: code,
+          autofocus: true,
+          maxLength: 6,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(labelText: 'Code shown on TV'),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => submit(),
+        ),
+        TextField(
+          key: const Key('tv-address'),
+          controller: address,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9.:]')),
+          ],
+          decoration: InputDecoration(
+            labelText: 'Address shown on TV (optional)',
+            hintText: '192.168.1.20',
+            errorText:
+                address.text.trim().isEmpty ||
+                    parseTVAddress(address.text) != null
+                ? null
+                : 'Use the numbers shown under the code',
+          ),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => submit(),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      TextButton(onPressed: ready ? submit : null, child: const Text('Pair')),
     ],
   );
 }
