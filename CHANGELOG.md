@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 26.1.5 - 2026-11-03
+
+18+ titles now stay off Home, even after you watch them.
 
 ### Changed
 
