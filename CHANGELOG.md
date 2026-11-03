@@ -1,5 +1,23 @@
 # Changelog
 
+## 26.1.4 - 2026-11-03
+
+Movies and shows now pick up where you left them, on every device signed in
+to Trakt.
+
+### Fixed
+
+- **Movies and shows resume where you stopped.** A spot saved on this
+  device is no longer replaced by an older one from Trakt, and spots that
+  never reached Trakt are sent on the next sync. Leaving the app pauses
+  playback and saves your spot, and the player checks Trakt for a newer
+  one before it starts, so you carry on from another phone, TV or
+  computer.
+- **Watching a film again** resumes from where you are and keeps it in
+  Continue. Downloaded files remember where you left them too.
+- **The newest movie stays first in Continue** when two saves land at the
+  same moment.
+
 ## 26.1.3 - 2026-11-02
 
 Sign-ins now stay saved on Linux, and Trakt signs in through your browser
