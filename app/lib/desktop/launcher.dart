@@ -460,7 +460,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
       final e = movies.entry(t);
       menu.items.addAll([
         LauncherItem(
-          e != null && e.started && !e.finished ? 'Resume' : 'Play',
+          e != null && e.started ? 'Resume' : 'Play',
           icon: LucideIcons.play,
           onSelect: () => playTitle(t),
         ),

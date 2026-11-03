@@ -60,9 +60,14 @@ class MovieEntry {
     this.percent = 0,
     this.watched = const {},
     this.updated = 0,
+    this.pushed = 0,
   });
   final MediaTitle title;
   final int season, episode, position, duration, updated;
+
+  /// The [updated] time Trakt last heard about, so a spot saved here but
+  /// never sent (the app was closed mid-film) goes up on the next sync.
+  final int pushed;
 
   /// Progress Trakt reported, used until the duration is known here.
   final double percent;
@@ -72,7 +77,7 @@ class MovieEntry {
   bool get finished => title.isShow ? false : watched.contains('movie');
   String get code => 'S${season}E$episode';
   bool get started => position > 0 || percent > 0;
-  double get progress => duration > 0
+  double get progress => position > 0 && duration > 0
       ? (position / duration).clamp(0, 1).toDouble()
       : (percent / 100).clamp(0, 1).toDouble();
   int resumeAt(int knownDuration) => position > 0
@@ -90,6 +95,7 @@ class MovieEntry {
     double? percent,
     Set<String>? watched,
     int? updated,
+    int? pushed,
   }) => MovieEntry(
     title: title ?? this.title,
     season: season ?? this.season,
@@ -99,6 +105,7 @@ class MovieEntry {
     percent: percent ?? this.percent,
     watched: watched ?? this.watched,
     updated: updated ?? this.updated,
+    pushed: pushed ?? this.pushed,
   );
 
   factory MovieEntry.fromJson(Json json) => MovieEntry(
@@ -110,6 +117,7 @@ class MovieEntry {
     percent: (json['percent'] as num?)?.toDouble() ?? 0,
     watched: (json['watched'] as List? ?? []).whereType<String>().toSet(),
     updated: number(json['updated']),
+    pushed: number(json['pushed']),
   );
   Json toJson() => {
     'title': title.toJson(),
@@ -120,6 +128,7 @@ class MovieEntry {
     'percent': percent,
     'watched': watched.toList()..sort(),
     'updated': updated,
+    'pushed': pushed,
   };
 }
 
@@ -141,13 +150,21 @@ class MoviePlayback {
 /// Films and series for one profile: Trakt for the catalog and the viewer's
 /// lists, the core's sources for playing, and the local history.
 class MovieService extends ChangeNotifier {
-  MovieService({required this.trakt, required this.core, required this.store}) {
+  MovieService({
+    required this.trakt,
+    required this.core,
+    required this.store,
+    this.pushGap = const Duration(milliseconds: 1100),
+  }) {
     _read();
     trakt.addListener(_traktChanged);
   }
   final Trakt trakt;
   final CoreClient core;
   final AppStore store;
+
+  /// The wait between progress uploads, under Trakt's one write a second.
+  final Duration pushGap;
   final Map<String, MovieEntry> _entries = {};
   List<MediaTitle> watchlist = [];
   bool syncing = false;
@@ -219,7 +236,8 @@ class MovieService extends ChangeNotifier {
       _entries.values
           .where(
             (e) =>
-                !e.finished && (e.started || e.title.isShow && e.episode > 0),
+                // A watched film being watched again still has a spot to resume.
+                e.started || !e.finished && e.title.isShow && e.episode > 0,
           )
           .toList()
         ..sort((a, b) => b.updated.compareTo(a.updated));
@@ -235,8 +253,10 @@ class MovieService extends ChangeNotifier {
         : e.watched.contains('movie');
   }
 
-  /// Pulls the watchlist, watched titles and paused progress from Trakt.
-  /// Trakt wins: it is where the viewer's other apps write too.
+  /// Pulls the watchlist, watched titles and paused progress from Trakt, and
+  /// sends up any spot saved here that Trakt has not heard of. For progress
+  /// the newer side wins, so a film paused on the phone resumes on the TV and
+  /// the other way round.
   Future<void> sync() async {
     await trakt.load();
     if (!trakt.signedIn || syncing) return;
@@ -245,7 +265,6 @@ class MovieService extends ChangeNotifier {
     try {
       final lib = await trakt.library();
       watchlist = lib.watchlist;
-      final stamp = DateTime.now().millisecondsSinceEpoch;
       for (final t in lib.watchedMovies.values) {
         final e = _entries[t.key];
         if (e == null || !e.watched.contains('movie')) {
@@ -264,24 +283,104 @@ class MovieService extends ChangeNotifier {
           watched: {...e.watched, ...shown.codes},
         );
       }
-      for (final p in lib.playback) {
-        final e = _entries[p.title.key];
-        _entries[p.title.key] =
-            (e ?? MovieEntry(title: p.title, updated: stamp)).copyWith(
-              season: p.title.isShow ? p.season : null,
-              episode: p.title.isShow ? p.episode : null,
-              percent: p.progress,
-              position: 0,
-              updated: e?.updated ?? stamp,
-            );
-      }
+      final pending = _mergePlayback(lib.playback);
       lastError = null;
       await _persist();
+      _notify();
+      await _push(pending);
     } catch (e) {
       lastError = 'Trakt sync failed. $e';
     } finally {
       syncing = false;
       _notify();
+    }
+  }
+
+  /// Takes Trakt's paused spots where they are newer than the one saved here
+  /// and returns the keys of local spots Trakt is behind on.
+  List<String> _mergePlayback(List<TraktPaused> paused) {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final onTrakt = <String, TraktPaused>{};
+    for (final p in paused) {
+      final had = onTrakt[p.title.key];
+      if (had == null || p.pausedAt > had.pausedAt) onTrakt[p.title.key] = p;
+    }
+    for (final p in onTrakt.values) {
+      final e = _entries[p.title.key];
+      if (e != null && e.started && p.pausedAt > 0 && e.updated > p.pausedAt) {
+        continue;
+      }
+      final when = p.pausedAt > 0 ? p.pausedAt : stamp;
+      final same =
+          e != null &&
+          (!p.title.isShow || e.season == p.season && e.episode == p.episode);
+      _entries[p.title.key] = (e ?? MovieEntry(title: p.title)).copyWith(
+        season: p.title.isShow ? p.season : null,
+        episode: p.title.isShow ? p.episode : null,
+        percent: p.progress,
+        position: same && e.duration > 0
+            ? (e.duration * p.progress / 100).round()
+            : 0,
+        duration: same ? null : 0,
+        updated: e == null || when > e.updated ? when : e.updated,
+        pushed: e == null || when > e.updated ? when : e.updated,
+      );
+    }
+    final cutoff = stamp - const Duration(days: 30).inMilliseconds;
+    return [
+      for (final e in _entries.values)
+        if (e.updated > e.pushed &&
+            e.updated > cutoff &&
+            e.position >= 60 &&
+            e.duration > 0)
+          e.title.key,
+    ];
+  }
+
+  /// Sends saved spots up to Trakt as paused playback, newest first.
+  Future<void> _push(List<String> keys) async {
+    final entries = [for (final k in keys) ?_entries[k]]
+      ..sort((a, b) => b.updated.compareTo(a.updated));
+    var first = true;
+    for (final e in entries.take(10)) {
+      if (!trakt.signedIn) return;
+      if (!first && pushGap > Duration.zero) await Future.delayed(pushGap);
+      first = false;
+      try {
+        await trakt.scrobble(
+          'pause',
+          e.title,
+          e.position * 100 / e.duration,
+          season: e.season,
+          episode: e.episode,
+        );
+        _markPushed(e.title.key, e.updated);
+      } catch (_) {
+        /* Tried again on the next sync. */
+      }
+    }
+    await _persist();
+  }
+
+  void _markPushed(String key, int updated) {
+    final now = _entries[key];
+    if (now != null && now.updated == updated) {
+      _entries[key] = now.copyWith(pushed: updated);
+    }
+  }
+
+  /// Picks up a spot paused on another device just before playing. Quick and
+  /// quiet: playback starts from the local spot if Trakt is slow or away.
+  Future<void> refreshResume() async {
+    if (!trakt.signedIn) return;
+    try {
+      final paused = await trakt.playback().timeout(const Duration(seconds: 6));
+      final pending = _mergePlayback(paused);
+      await _persist();
+      _notify();
+      unawaited(_push(pending));
+    } catch (_) {
+      /* The local spot is used. */
     }
   }
 
@@ -371,6 +470,7 @@ class MovieService extends ChangeNotifier {
     int episode = 0,
   }) async {
     if (!trakt.signedIn) return;
+    final sent = _entries[title.key]?.updated;
     try {
       await trakt.scrobble(
         action,
@@ -379,6 +479,10 @@ class MovieService extends ChangeNotifier {
         season: season,
         episode: episode,
       );
+      if (sent != null && action != 'start') {
+        _markPushed(title.key, sent);
+        await _persist();
+      }
     } catch (_) {
       /* Playback goes on; the progress is saved locally. */
     }

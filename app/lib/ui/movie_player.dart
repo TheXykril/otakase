@@ -114,7 +114,8 @@ class MoviePlayerPage extends StatefulWidget {
   State<MoviePlayerPage> createState() => _MoviePlayerPageState();
 }
 
-class _MoviePlayerPageState extends State<MoviePlayerPage> {
+class _MoviePlayerPageState extends State<MoviePlayerPage>
+    with WidgetsBindingObserver {
   late final Player player;
   late final VideoController video;
   late PlayRequest request;
@@ -136,6 +137,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     request = widget.request;
     player = Player(
       configuration: const PlayerConfiguration(
@@ -203,8 +205,33 @@ class _MoviePlayerPageState extends State<MoviePlayerPage> {
     );
   }
 
+  /// Leaving the app (home button, TV input switch, minimised window) saves
+  /// the spot and tells Trakt it paused there, so another device can pick up
+  /// even if this one never comes back to close the player.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (busy || duration <= Duration.zero) return;
+    if (state == AppLifecycleState.resumed) {
+      if (started && !finished && player.state.playing) scrobble('start');
+      return;
+    }
+    if (state != AppLifecycleState.hidden &&
+        state != AppLifecycleState.paused) {
+      return;
+    }
+    unawaited(save(completed: finished));
+    if (finished) return;
+    if (isDesktop) {
+      scrobble('pause');
+    } else if (player.state.playing) {
+      // The playing listener sends the pause.
+      unawaited(player.pause());
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(widget.services.presence.clear());
     scope.cancel();
     hideTimer?.cancel();

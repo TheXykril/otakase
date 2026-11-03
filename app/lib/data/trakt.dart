@@ -214,11 +214,18 @@ class TraktPaused {
     this.progress, {
     this.season = 0,
     this.episode = 0,
+    this.pausedAt = 0,
   });
   final MediaTitle title;
   final double progress;
   final int season, episode;
+
+  /// When it was paused, in milliseconds since the epoch; 0 when unknown.
+  final int pausedAt;
 }
+
+int _pausedAt(Object? value) =>
+    value is String ? DateTime.tryParse(value)?.millisecondsSinceEpoch ?? 0 : 0;
 
 /// Trakt for one profile: the public catalog, the device sign-in, and the
 /// viewer's watchlist, history and progress. The token is kept with the
@@ -691,9 +698,23 @@ class Trakt extends ChangeNotifier {
         }
       }
     }
+    return TraktLibrary(
+      watchlist: watchlist,
+      watchedMovies: movies,
+      watchedEpisodes: episodes,
+      playback: _paused(results[4]),
+    );
+  }
+
+  /// Paused films and episodes only, for a quick check before playing.
+  Future<List<TraktPaused>> playback() async =>
+      _paused(await _get('/sync/playback?extended=full,images', auth: true));
+
+  List<TraktPaused> _paused(dynamic rows) {
     final playback = <TraktPaused>[];
-    for (final row in (results[4] as List? ?? []).whereType<Map>()) {
+    for (final row in (rows as List? ?? []).whereType<Map>()) {
       final progress = (row['progress'] as num?)?.toDouble() ?? 0;
+      final pausedAt = _pausedAt(row['paused_at']);
       if (row['type'] == 'movie' && row['movie'] is Map) {
         playback.add(
           TraktPaused(
@@ -702,6 +723,7 @@ class Trakt extends ChangeNotifier {
               'movie',
             ),
             progress,
+            pausedAt: pausedAt,
           ),
         );
       } else if (row['type'] == 'episode' &&
@@ -717,16 +739,12 @@ class Trakt extends ChangeNotifier {
             progress,
             season: number(e['season']),
             episode: number(e['number']),
+            pausedAt: pausedAt,
           ),
         );
       }
     }
-    return TraktLibrary(
-      watchlist: watchlist,
-      watchedMovies: movies,
-      watchedEpisodes: episodes,
-      playback: playback,
-    );
+    return playback;
   }
 
   Json _item(MediaTitle title, {int season = 0, int episode = 0}) =>

@@ -159,7 +159,14 @@ class DownloadsPage extends StatelessWidget {
       builder: (_) => MoviePlayerPage(
         services: services,
         isTV: isTV,
-        request: filePlay(d.title, d.label, d.path, d.subtitles),
+        request: filePlay(
+          d.title,
+          d.label,
+          d.path,
+          d.subtitles,
+          store: services.store,
+          id: d.id,
+        ),
       ),
     ),
   );

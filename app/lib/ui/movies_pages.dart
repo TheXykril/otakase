@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../core.dart';
 import '../data/movies.dart';
 import '../data/models.dart';
+import '../data/store.dart';
 import '../data/trakt.dart';
 import '../desktop/desktop_core.dart';
 import '../services.dart';
@@ -432,6 +433,9 @@ PlayRequest titlePlay(
         ? (title.year > 0 ? '${title.year}' : '')
         : episode.label,
     open: (failed, scope, status) async {
+      // Another device may have paused this further along; look while the
+      // stream is found so the spot is fresh when playback starts.
+      final pulled = failed.isEmpty ? movies.refreshResume() : null;
       final p = await movies.resolve(
         title,
         season: season,
@@ -440,6 +444,7 @@ PlayRequest titlePlay(
         status: status,
         skip: failed,
       );
+      await pulled;
       final headers = Map<String, String>.of(p.stream.headers);
       if (p.stream.referrer.isNotEmpty) headers['Referer'] = p.stream.referrer;
       return PlayableMedia(
@@ -453,9 +458,7 @@ PlayRequest titlePlay(
     },
     resumeAt: (duration) {
       final e = movies.entry(title);
-      if (e == null || movies.watched(title, season: season, episode: number)) {
-        return 0;
-      }
+      if (e == null) return 0;
       if (title.isShow && (e.season != season || e.episode != number)) return 0;
       return e.resumeAt(duration);
     },
@@ -625,7 +628,7 @@ class _TitlePageState extends State<TitlePage> {
               entry.season == next.season &&
               entry.episode == next.number &&
               entry.started)
-        : (entry?.started ?? false) && !watched;
+        : entry?.started ?? false;
     return Wrap(
       spacing: 12,
       runSpacing: 8,
@@ -1112,15 +1115,30 @@ Future<void> _traktBrowserSignIn(
   }
 }
 
-/// Plays a downloaded file.
+/// Plays a downloaded file. With a [store], where it was left is kept per
+/// download, so a saved film or episode resumes like a streamed one.
 PlayRequest filePlay(
   String title,
   String label,
   String path,
-  List<Json> subtitles,
-) => PlayRequest(
+  List<Json> subtitles, {
+  AppStore? store,
+  String id = '',
+}) => PlayRequest(
   title: title,
   subtitle: label,
+  resumeAt: store == null || id.isEmpty
+      ? null
+      : (_) => number((store.value('DownloadSpots') as Map?)?[id]),
+  onProgress: store == null || id.isEmpty
+      ? null
+      : (position, duration, completed) {
+          final spots = Map<String, dynamic>.from(
+            store.value('DownloadSpots') as Map? ?? {},
+          );
+          completed ? spots.remove(id) : spots[id] = position;
+          return store.set('DownloadSpots', spots);
+        },
   open: (failed, scope, status) async {
     if (failed.isNotEmpty) {
       throw const CoreFailure('no_stream', 'This file could not be played.');
