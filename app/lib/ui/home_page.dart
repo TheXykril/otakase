@@ -266,9 +266,8 @@ class _HomePageState extends State<HomePage> {
   /// Trending picks for the desktop hero.
   Future<void> loadFeatured() async {
     try {
-      final data = await widget.services.catalog.home(
-        adult: widget.services.store.adultAllowed,
-      );
+      // Home never shows 18+ titles, whatever the account allows.
+      final data = await widget.services.catalog.home(adult: false);
       if (mounted) setState(() => featured = data);
     } catch (_) {
       // The hero falls back to what you are watching.
@@ -297,7 +296,7 @@ class _HomePageState extends State<HomePage> {
     for (final a in featured?.trending ?? const <Anime>[]) {
       rank++;
       if (picks.length >= 5) break;
-      if (!widget.services.store.visible(a) || !seen.add(a.key)) continue;
+      if (a.isAdult || !seen.add(a.key)) continue;
       picks.add(
         HeroPick(
           anime: a,
@@ -366,13 +365,13 @@ class _HomePageState extends State<HomePage> {
     final continuation = buildContinuation(
       snapshots.values.expand((e) => e).toList(),
       store.history,
-      adult: store.adultAllowed,
+      // 18+ titles stay off Home even when watched; lists and search keep them.
+      adult: false,
       now: DateTime.now(),
     );
     final continuing = continuation.continueWatching;
     final resume = continuing.firstOrNull;
-    final stage =
-        widget.isTV && focused != null && store.visible(focused!.anime)
+    final stage = widget.isTV && focused != null && !focused!.anime.isAdult
         ? focused
         : resume;
     final configured = ['AniList', 'MAL'].where(s.auth.signedIn).toList();
@@ -615,6 +614,8 @@ class _AccountBlockState extends State<AccountBlock> {
           });
         }
       }
+      // The full list still feeds sync above; Home only drops 18+ rows.
+      result = result.where((e) => !e.anime.isAdult).toList();
       if (mounted && g == generation) {
         setState(() {
           entries = result;
@@ -638,7 +639,7 @@ class _AccountBlockState extends State<AccountBlock> {
                 .map(
                   (e) => ListEntry.fromJson((e as Map).cast<String, dynamic>()),
                 )
-                .where((e) => widget.services.store.visible(e.anime))
+                .where((e) => !e.anime.isAdult)
                 .toList();
             setState(() {
               entries = rows;

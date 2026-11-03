@@ -202,8 +202,13 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   }
 
   LauncherMenu mainMenu() {
-    final last = showsAnime ? services.store.continuing.firstOrNull : null;
-    final listed = {for (final e in watching) e.anime.key};
+    // The opening menu is Home: 18+ titles stay off it even when watched.
+    final resumable = services.store.continuing
+        .where((h) => !h.anime.isAdult)
+        .toList();
+    final shown = watching.where((e) => !e.anime.isAdult).toList();
+    final last = showsAnime ? resumable.firstOrNull : null;
+    final listed = {for (final e in shown) e.anime.key};
     final movies = services.movies;
     final continuing = showsTitles ? movies.continuing : <MovieEntry>[];
     final continued = {for (final e in continuing) e.title.key};
@@ -223,7 +228,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
             onSelect: () => play(last.anime, last.episode),
           ),
         for (final e in continuing.skip(titleFirst ? 1 : 0)) continueTitle(e),
-        for (final e in watching)
+        for (final e in shown)
           LauncherItem(
             e.anime.title,
             icon: LucideIcons.tv,
@@ -233,7 +238,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
             onSelect: () => openShow(e.anime, e.progress),
           ),
         if (showsAnime)
-          for (final h in services.store.continuing.skip(1))
+          for (final h in resumable.skip(1))
             if (!listed.contains(h.anime.key))
               LauncherItem(
                 h.anime.title,

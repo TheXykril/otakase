@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **AdultContent: 18+ titles no longer appear on Home**, even after you
+  watch them. They stay in your lists and search when your account allows
+  them.
+
 ## 26.1.4 - 2026-11-03
 
 Movies and shows now pick up where you left them, on every device signed in
