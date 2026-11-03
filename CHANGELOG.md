@@ -1,9 +1,15 @@
 # Changelog
 
-## Unreleased
+## 26.1.6 - 2026-11-03
+
+Phones find TVs and computers for the remote more often, and you can pair by
+typing the code. Watch rooms play in the app again.
 
 ### Fixed
 
+- **Watch rooms play in the app.** Rooms no longer stop with "Retry or leave
+  the room", and one account can watch in the Discord Activity and the app
+  at the same time.
 - **Phone remote finds TVs and computers more often.** The phone now also
   checks every device on the Wi-Fi directly when broadcasts get lost, and a
   computer no longer shows a Docker or VM address in its QR code.
