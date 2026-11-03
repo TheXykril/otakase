@@ -172,6 +172,51 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Home keeps 18+ titles off even when allowed and watched', (
+    tester,
+  ) async {
+    final auth = AuthService(
+      storage: MemoryTokens(),
+      client: MockClient((request) async {
+        if (!request.body.contains('MediaListCollection')) {
+          return json({'data': <String, dynamic>{}});
+        }
+        return json({
+          'data': {
+            'MediaListCollection': {
+              'lists': [
+                {
+                  'entries': [
+                    for (final a in [fixture.anime, restricted])
+                      {'status': 'CURRENT', 'progress': 2, 'media': a.toJson()},
+                  ],
+                },
+              ],
+            },
+          },
+        });
+      }),
+    );
+    auth.accounts['AniList'] = Account(
+      service: 'AniList',
+      token: 'token',
+      expires: DateTime.now().add(const Duration(days: 30)),
+      username: 'viewer',
+      userId: 7,
+      displayAdultContent: true,
+    );
+    final catalog = HomeCatalog();
+    final services = await launchHome(tester, catalog: catalog, auth: auth);
+    await services.store.progress(restricted, 3, 600, 1440);
+    await tester.pumpAndSettle();
+    expect(services.store.adultAllowed, isTrue);
+    expect(services.store.continuing.map((h) => h.anime.id), [99]);
+    expect(find.text(fixture.anime.title), findsWidgets);
+    expect(find.text('Restricted story'), findsNothing);
+    expect(catalog.adultFlags.every((adult) => !adult), isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final service in ['AniList', 'MAL']) {
     testWidgets('$service refreshes on Home return and changed category', (
       tester,

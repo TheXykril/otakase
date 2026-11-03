@@ -51,9 +51,8 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
     });
     try {
       if (refresh) widget.services.catalog.clear();
-      final result = await widget.services.catalog.home(
-        adult: widget.services.store.adultAllowed,
-      );
+      // Home never shows 18+ titles, whatever the account allows.
+      final result = await widget.services.catalog.home(adult: false);
       if (mounted && request == generation) setState(() => data = result);
     } catch (e) {
       if (mounted && request == generation) {
@@ -66,7 +65,7 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
 
   @override
   Widget build(BuildContext context) {
-    final visible = widget.services.store.visible;
+    bool visible(Anime a) => !a.isAdult;
     final trending = data?.trending.where(visible).toList() ?? <Anime>[];
     final seasonal = data?.season.where(visible).toList() ?? <Anime>[];
     final recent = <String, Airing>{};
