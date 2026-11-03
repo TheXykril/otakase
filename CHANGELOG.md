@@ -18,6 +18,12 @@ to Trakt.
 - **The newest movie stays first in Continue** when two saves land at the
   same moment.
 
+### Removed
+
+- **Wrong show?** and **Find it myself** are gone, along with their own
+  search. Shows are always matched automatically, and picks made with it
+  are no longer used.
+
 ## 26.1.3 - 2026-11-02
 
 Sign-ins now stay saved on Linux, and Trakt signs in through your browser

@@ -10,7 +10,6 @@ import '../data/tracking.dart';
 import '../services.dart';
 import 'app_shell.dart' show Brand, TVTopBar, rootTabs;
 import 'components.dart';
-import 'find_show.dart';
 import 'downloads_page.dart';
 import 'device_status.dart';
 import 'home_page.dart';
@@ -159,14 +158,6 @@ class _ShowPageState extends State<ShowPage> {
         isTV: widget.isTV,
         onPressed: () =>
             editListStatus(context, widget.services, anime, widget.isTV),
-      ),
-      AppButton(
-        key: const Key('show-find'),
-        label: 'Wrong show?',
-        icon: LucideIcons.search,
-        isTV: widget.isTV,
-        onPressed: () =>
-            findShowMyself(context, widget.services, anime, widget.isTV),
       ),
       // Downloads are for phones and computers; a TV streams.
       if (!widget.isTV || isDesktop)

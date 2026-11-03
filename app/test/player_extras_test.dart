@@ -8,39 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'dart:math';
 
-class SourceCore extends CoreClient {
-  final calls = <Json>[];
-  @override
-  Future<Json> request(
-    Json input, {
-    void Function(int)? onHandle,
-    RequestScope? scope,
-    Duration timeout = const Duration(seconds: 40),
-  }) async {
-    calls.add(input);
-    return switch (input['operation']) {
-      'providers' => {
-        'providers': ['anikoto', 'megavid'],
-        'adult': <String>[],
-      },
-      'match' => {
-        'show': {'id': 'auto-${input['provider']}'},
-      },
-      'resolve' => {
-        'streams': [
-          {'url': 'https://v.example/${input['show_id']}.m3u8'},
-        ],
-      },
-      'search' => {
-        'shows': [
-          {'id': '${input['provider']}-hit', 'title': 'Hit', 'label': ''},
-        ],
-      },
-      _ => {},
-    };
-  }
-}
-
 class RecordingCore extends CoreClient {
   final calls = <Json>[];
   Json answer = {};
@@ -163,51 +130,5 @@ void main() {
         ),
       ),
     );
-  });
-
-  test('a manual pick is kept per show and can be dropped', () async {
-    final s = await store();
-    expect(s.manualMatch(frieren), isNull);
-    await s.setManualMatch(frieren, {
-      'provider': 'anikoto',
-      'id': 'frieren-1',
-      'mode': 'sub',
-      'title': 'Sousou no Frieren',
-    });
-    expect(s.manualMatch(frieren)?['id'], 'frieren-1');
-    await s.setManualMatch(frieren, null);
-    expect(s.manualMatch(frieren), isNull);
-  });
-
-  test('the viewer\'s pick is played first, without matching', () async {
-    final core = SourceCore();
-    final s = await store();
-    await s.setManualMatch(frieren, {
-      'provider': 'megavid',
-      'id': 'picked',
-      'mode': 'sub',
-      'title': 'Frieren',
-    });
-    final r = SourceResolver(core, s);
-    final got = await r.resolve(
-      frieren,
-      1,
-      scope: RequestScope(),
-      status: (_) {},
-      mode: 'sub',
-    );
-    expect(got.provider, 'megavid');
-    expect(got.showId, 'picked');
-    expect(core.calls.where((c) => c['operation'] == 'match'), isEmpty);
-  });
-
-  test('the own search asks every source and names them by place', () async {
-    final core = SourceCore();
-    final r = SourceResolver(core, await store());
-    final found = await r.searchAll(frieren, 'sousou', 'sub', RequestScope());
-    expect(found.map((f) => '${f.place}:${f.id}'), [
-      '1:anikoto-hit',
-      '2:megavid-hit',
-    ]);
   });
 }

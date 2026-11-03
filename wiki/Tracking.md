@@ -22,13 +22,6 @@ After the last episode of a show that has finished airing, the app asks for a
 score from 1 to 10 when the player closes, and marks the show completed. Turn
 it off under **Settings → Playback → Rate when I finish a show**.
 
-## Wrong show?
-
-If a show plays the wrong series, or nothing is found, press **Wrong show?**
-on its page (or **Find it myself** when an episode will not open). Search in
-your own words and pick the right result: that pick is used for the show from
-then on. **Back to automatic** in the same window forgets it.
-
 ## Resuming on another device
 
 Your place in an episode is kept in the show's AniList note or MyAnimeList
