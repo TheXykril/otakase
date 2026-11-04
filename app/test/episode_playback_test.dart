@@ -8,6 +8,7 @@ import 'package:otakase/core.dart';
 import 'package:otakase/data/episode_completion.dart';
 import 'package:otakase/data/external_subtitles.dart';
 import 'package:otakase/data/models.dart';
+import 'package:otakase/data/skip_times.dart';
 
 Duration seconds(int value) => Duration(seconds: value);
 
@@ -20,18 +21,99 @@ void main() {
     expect(reachedEpisodeEnd(seconds(6), seconds(10)), isFalse);
   });
 
-  test('terminal credits count, credits followed by a scene do not', () {
-    const credits = [SkipSpan('ed', 1290, 1440)];
-    expect(watchedEpisode(seconds(1290), seconds(1440), 95, credits), isTrue);
-    expect(watchedEpisode(seconds(1289), seconds(1440), 95, credits), isFalse);
-    expect(watchedEpisode(seconds(1290), seconds(1440), 100, credits), isFalse);
+  final runtime = seconds(1440);
+  EpisodeViewing watchedThrough(int time) =>
+      EpisodeViewing()..start(runtime, [1440000, time * 1000]);
+
+  test('terminal credits keep the short-tail tolerance', () {
+    const credits = [SkipSpan('ed', 1290, 1437)];
+    final viewing = watchedThrough(1290);
+    expect(viewing.credits(seconds(1290), runtime, credits), isTrue);
+    expect(viewing.credits(seconds(1289), runtime, credits), isFalse);
     expect(
-      watchedEpisode(seconds(1290), seconds(1440), 95, [
+      watchedThrough(600).credits(seconds(1290), runtime, credits),
+      isFalse,
+    );
+    expect(
+      viewing.credits(seconds(1290), runtime, [
         const SkipSpan('ed', 1290, 1400),
       ]),
       isFalse,
     );
-    expect(watchedEpisode(seconds(1224), seconds(1440), 85, []), isTrue);
+  });
+
+  test('leaving at 85 percent or seeking from the middle does not finish', () {
+    final viewing = watchedThrough(600)
+      ..seek(seconds(600), seconds(1438))
+      ..sample(seconds(1438), playing: true)
+      ..sample(seconds(1439), playing: true);
+    expect(viewing.ended(seconds(1439), runtime, []), isFalse);
+    expect(watchedThrough(1224).credits(seconds(1224), runtime, []), isFalse);
+  });
+
+  test('normal end and an unmarked outro skip can finish without markers', () {
+    expect(watchedThrough(1438).ended(seconds(1439), runtime, []), isTrue);
+    final viewing = watchedThrough(1340)
+      ..seek(seconds(1340), seconds(1437))
+      ..sample(seconds(1437), playing: true);
+    expect(viewing.ended(seconds(1437), runtime, []), isFalse);
+    viewing.sample(seconds(1438), playing: true);
+    expect(viewing.ended(seconds(1438), runtime, []), isTrue);
+  });
+
+  test('marker skip lands before post-credit story and waits for playback', () {
+    const ed = SkipSpan('ed', 1290, 1400);
+    final viewing = watchedThrough(1290)
+      ..seek(seconds(1290), seconds(1400), span: ed)
+      ..sample(seconds(1290), playing: true);
+    expect(viewing.checkpoint, [1440000, 1290000]);
+    viewing.sample(seconds(1400), playing: true);
+    expect(viewing.checkpoint, [1440000, 1400000]);
+    expect(viewing.credits(seconds(1400), runtime, [ed]), isFalse);
+    expect(viewing.ended(seconds(1400), runtime, [ed]), isFalse);
+  });
+
+  test(
+    'ordinary seek steps preserve viewing without crediting a long jump',
+    () {
+      final viewing = watchedThrough(100)
+        ..seek(seconds(100), seconds(110))
+        ..sample(seconds(110), playing: true);
+      expect(viewing.checkpoint, [1440000, 110000, 10000]);
+      viewing.seek(seconds(110), seconds(160));
+      viewing.sample(seconds(160), playing: true);
+      expect(viewing.checkpoint, [1440000, 110000, 10000]);
+    },
+  );
+
+  test('terminal auto-skip counts when EOF arrives before the position', () {
+    const ed = SkipSpan('ed', 1290, 1440);
+    final viewing = watchedThrough(1290)
+      ..seek(seconds(1290), runtime, span: ed);
+    expect(viewing.ended(seconds(1290), runtime, [ed]), isTrue);
+  });
+
+  test('viewing evidence is isolated from a differently timed cut', () {
+    final viewing = EpisodeViewing()..start(runtime, [1500000, 1439000]);
+    expect(viewing.ended(seconds(1439), runtime, []), isFalse);
+  });
+
+  test('lookup combines a pair or falls back to the best partial source', () {
+    const op = SkipSpan('op', 30, 90);
+    const ed = SkipSpan('ed', 1290, 1437, source: 'theintrodb');
+    const alternateOp = SkipSpan('op', 35, 95, source: 'aniskip');
+    const recap = SkipSpan('recap', 100, 110, source: 'aniskip');
+    expect(selectSkipSpans([op], [alternateOp, recap, ed], 1440), [
+      op,
+      recap,
+      ed,
+    ]);
+    expect(selectSkipSpans([op], [alternateOp, recap], 1440), [
+      alternateOp,
+      recap,
+    ]);
+    expect(selectSkipSpans([], [ed], 1440), [ed]);
+    expect(selectSkipSpans([], [], 1440), isEmpty);
   });
 
   testWidgets('stall waits for a full interval without progress', (

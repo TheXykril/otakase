@@ -10,28 +10,134 @@ bool reachedEpisodeEnd(Duration position, Duration duration) {
   return position.inMilliseconds >= duration.inMilliseconds - tolerance;
 }
 
-bool watchedEpisode(
-  Duration position,
-  Duration duration,
-  int percentage,
-  List<SkipSpan> spans,
-) {
-  if (position <= Duration.zero || duration <= Duration.zero) return false;
-  if (position.inMilliseconds * 100 >= duration.inMilliseconds * percentage) {
-    return true;
+/// Keeps viewing evidence separate from the playhead used to resume.
+class EpisodeViewing {
+  int _through = 0, _last = 0, _length = 0, _sampleAt = 0;
+  int? _target, _skipEnd;
+  int _manualSkipped = 0, _pendingManualSkip = 0;
+  bool _tailSeek = false, _playedAfterTailSeek = false;
+  final _clock = Stopwatch()..start();
+
+  void start(Duration duration, List<int>? checkpoint) {
+    final length = duration.inMilliseconds;
+    if (length <= 0 || _length != 0) return;
+    _length = length;
+    if (checkpoint != null &&
+        checkpoint.length >= 2 &&
+        (checkpoint[0] - length).abs() <= 1000) {
+      _through = checkpoint[1].clamp(0, length);
+      if (checkpoint.length == 3) {
+        _manualSkipped = checkpoint[2].clamp(0, 30000);
+      }
+    }
   }
-  if (percentage >= 100) return false;
-  final seconds = position.inMilliseconds / 1000;
-  return spans.any(
-    (span) =>
-        span.type == 'ed' &&
-        span.start >= duration.inMilliseconds * .00075 &&
-        seconds >= span.start &&
-        reachedEpisodeEnd(
-          Duration(milliseconds: (span.end * 1000).round()),
+
+  List<int>? get checkpoint => _length == 0
+      ? null
+      : [_length, _through, if (_manualSkipped > 0) _manualSkipped];
+
+  void sample(Duration position, {required bool playing, double rate = 1}) {
+    if (_length == 0) return;
+    final at = position.inMilliseconds;
+    final now = _clock.elapsedMilliseconds;
+    if (_target case final target?) {
+      if ((at - target).abs() <= 1500) {
+        if (_skipEnd case final end?) {
+          _through = math.max(_through, end);
+          _manualSkipped += _pendingManualSkip;
+        }
+      } else if (now - _sampleAt < 3000) {
+        return;
+      } else {
+        _tailSeek = false;
+      }
+      _target = null;
+      _skipEnd = null;
+      _pendingManualSkip = 0;
+    } else {
+      final delta = at - _last;
+      final allowance = ((now - _sampleAt) * rate + 1500).clamp(1500, 5000);
+      if (playing && delta > 0 && delta <= allowance) {
+        if (_last <= _through + 1000) _through = math.max(_through, at);
+        if (_tailSeek) _playedAfterTailSeek = true;
+      } else if (delta < -1000 || delta > allowance) {
+        _tailSeek = false;
+        _playedAfterTailSeek = false;
+      }
+    }
+    _last = at;
+    _sampleAt = now;
+  }
+
+  void seek(Duration from, Duration to, {SkipSpan? span}) {
+    final start = from.inMilliseconds;
+    final end = to.inMilliseconds;
+    final continuedTail = _playedAfterTailSeek;
+    _target = end;
+    _skipEnd = null;
+    _pendingManualSkip = 0;
+    _sampleAt = _clock.elapsedMilliseconds;
+    _tailSeek = false;
+    _playedAfterTailSeek = false;
+    if (_length == 0 || end <= start) return;
+    if (span != null) {
+      if (span.contains(start / 1000) &&
+          _through + 1000 >= (span.start * 1000).round()) {
+        _skipEnd = end;
+      }
+    } else if (start <= _through + 1000 &&
+        end - start <= 15000 &&
+        _manualSkipped + end - start <= 30000 &&
+        end < _length) {
+      // A few ordinary seek steps should not discard a full viewing session.
+      _skipEnd = end;
+      _pendingManualSkip = end - start;
+    } else if ((start <= _through + 1000 || continuedTail) &&
+        _length - start <= math.min(120000, _length ~/ 4) &&
+        end < _length) {
+      _tailSeek = true;
+    }
+  }
+
+  void externalSeek(Duration from, Duration to) {
+    if (_target == null) seek(from, to);
+  }
+
+  bool credits(Duration position, Duration duration, List<SkipSpan> spans) {
+    if (duration <= Duration.zero) return false;
+    final at = position.inMilliseconds;
+    return spans.any((span) {
+      final start = (span.start * 1000).round();
+      return span.type == 'ed' &&
+          start >= duration.inMilliseconds * .75 &&
+          at >= start &&
+          _through + 1000 >= start &&
+          reachedEpisodeEnd(
+            Duration(milliseconds: (span.end * 1000).round()),
+            duration,
+          );
+    });
+  }
+
+  /// Some players emit EOF before reporting the landing position of a skip.
+  bool endingSkip(Duration position, Duration duration, List<SkipSpan> spans) {
+    final end = _skipEnd;
+    return end != null &&
+        reachedEpisodeEnd(Duration(milliseconds: end), duration) &&
+        credits(
+          position,
           duration,
-        ),
-  );
+          spans.where((span) => (span.end * 1000).round() == end).toList(),
+        );
+  }
+
+  bool ended(Duration position, Duration duration, List<SkipSpan> spans) =>
+      endingSkip(position, duration, spans) ||
+      reachedEpisodeEnd(position, duration) &&
+          (_through >=
+                  duration.inMilliseconds - math.min(6000, _length ~/ 20) ||
+              _playedAfterTailSeek ||
+              credits(position, duration, spans));
 }
 
 /// A one-shot timeout rearmed whenever the player advances.

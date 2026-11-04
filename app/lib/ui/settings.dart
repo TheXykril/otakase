@@ -92,7 +92,7 @@ const settingLabels = <String, String>{
   'Quality': 'Quality',
   'TorrentSources': 'Torrent sources',
   'TorrentOnMobileData': 'Torrents on mobile data',
-  'PercentageToMarkComplete': 'Mark watched at',
+  'PercentageToMarkComplete': 'Mark films and series watched at',
   'ResumePlayback': 'Resume where you left off',
   'CheckUpdates': 'Check for updates',
   'ExternalMpv': 'Play in my own mpv',
@@ -683,7 +683,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
         row(
           'PercentageToMarkComplete',
-          'Mark an episode watched on stop after this percentage.',
+          'Mark films and non-anime episodes watched on stop after this percentage.',
           value: '${store.integer('PercentageToMarkComplete')}%',
           onTap: () => numberChoice('PercentageToMarkComplete', [
             70,

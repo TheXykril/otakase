@@ -92,6 +92,23 @@ func TestEachKindComesFromTheFirstServiceThatHasIt(t *testing.T) {
 	}
 }
 
+func TestLookupKeepsAlternativesForThePlayer(t *testing.T) {
+	s, _ := fake(t,
+		`{"found":true,"results":[{"interval":{"startTime":80,"endTime":170},"skipType":"op","skipId":"a1","episodeLength":1420}]}`,
+		`{"intro":[{"start_ms":10000,"end_ms":99000}]}`,
+		`{"data":{"findEpisodesByShowId":[]}}`)
+	opts := all()
+	opts.AllCandidates = true
+	spans, errs := s.Lookup(context.Background(), http.DefaultClient, Ref{MalID: 1, AniListID: 1, Episode: 3, Length: 1420}, opts)
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	if len(spans) != 2 || spans[0].Source != AniSkip || spans[1].Source != IntroDB ||
+		spans[0].Type != "op" || spans[1].Type != "op" {
+		t.Fatalf("spans = %+v, want an opening from both services", spans)
+	}
+}
+
 func TestAServiceThatFailsLeavesTheOthers(t *testing.T) {
 	s, _ := fake(t, "", `{"intro":[{"start_ms":null,"end_ms":90000}]}`, `{"errors":[{"message":"boom"}]}`)
 	spans, errs := s.Lookup(context.Background(), http.DefaultClient, Ref{MalID: 1, AniListID: 1, Episode: 1}, all())

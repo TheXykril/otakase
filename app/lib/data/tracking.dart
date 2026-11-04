@@ -55,7 +55,10 @@ class CombinedAccountPage {
 class TrackingService extends ChangeNotifier {
   void Function()? onProgressWritten;
   TrackingService(this.auth, {DateTime Function()? now, this.store})
-    : now = now ?? DateTime.now;
+    : now = now ?? DateTime.now {
+    auth.addListener(_scheduleCompletions);
+    _scheduleCompletions();
+  }
   final DateTime Function() now;
   final AppStore? store;
   final AuthService auth;
@@ -69,6 +72,8 @@ class TrackingService extends ChangeNotifier {
   @override
   void dispose() {
     closed = true;
+    _completionRetry?.cancel();
+    auth.removeListener(_scheduleCompletions);
     super.dispose();
   }
 
@@ -505,38 +510,135 @@ class TrackingService extends ChangeNotifier {
   );
   Future<void> finish(Anime anime, int episode, int total) => _serial(
     anime,
-    () => _each(anime, (s) async {
-      final e = await entry(s, anime);
-      final progress = max(episode, e?.progress ?? 0);
-      final complete = total > 0 && progress >= total;
-      await _save(
-        s,
+    () => _each(anime, (service) async {
+      final e = await entry(service, anime);
+      await _finishEntry(
+        service,
         anime,
-        progress: progress,
-        status: complete
-            ? 'COMPLETED'
-            : (s == 'MAL'
-                  ? const {
-                          'plan_to_watch': 'CURRENT',
-                          'watching': 'CURRENT',
-                          'on_hold': 'CURRENT',
-                          'dropped': 'CURRENT',
-                          'completed': 'COMPLETED',
-                        }[e?.status] ??
-                        'CURRENT'
-                  : e?.status == 'REPEATING'
-                  ? 'REPEATING'
-                  : e?.status == 'COMPLETED'
-                  ? 'COMPLETED'
-                  : 'CURRENT'),
-        notes: syncedResumeAfterEpisode(e?.notes ?? '', episode, total),
+        e,
+        max(episode, e?.progress ?? 0),
+        total,
+        episode,
       );
-      if (!closed) onProgressWritten?.call();
     }),
   );
+
+  Future<void> _finishEntry(
+    String s,
+    Anime anime,
+    ListEntry? e,
+    int progress,
+    int total,
+    int episode,
+  ) async {
+    final complete = total > 0 && progress >= total;
+    await _save(
+      s,
+      anime,
+      progress: progress,
+      status: complete
+          ? 'COMPLETED'
+          : (s == 'MAL'
+                ? const {
+                        'plan_to_watch': 'CURRENT',
+                        'watching': 'CURRENT',
+                        'on_hold': 'CURRENT',
+                        'dropped': 'CURRENT',
+                        'completed': 'COMPLETED',
+                      }[e?.status] ??
+                      'CURRENT'
+                : e?.status == 'REPEATING'
+                ? 'REPEATING'
+                : e?.status == 'COMPLETED'
+                ? 'COMPLETED'
+                : 'CURRENT'),
+      notes: syncedResumeAfterEpisode(e?.notes ?? '', episode, total),
+    );
+    if (!closed) onProgressWritten?.call();
+  }
+
+  static const _completionKey = 'PendingEpisodeCompletions';
+  Timer? _completionRetry;
+  Json get _pending =>
+      Map<String, dynamic>.from(store?.value(_completionKey) as Map? ?? {});
+
+  bool _current(Json job) {
+    final service = job['service'] as String;
+    return auth.signedIn(service) && job['identity'] == _identity(service);
+  }
+
+  void _scheduleCompletions() {
+    if (closed ||
+        _completionRetry != null ||
+        !_pending.values.any((job) => _current(job as Json))) {
+      return;
+    }
+    _completionRetry = Timer(const Duration(seconds: 30), () async {
+      try {
+        for (final item in _pending.entries) {
+          final job = item.value as Json;
+          if (closed || !_current(job)) continue;
+          final anime = Anime.fromJson(job['anime'] as Json);
+          try {
+            await _serial(anime, () => _sendCompletion(item.key, anime));
+          } catch (_) {
+            // Keep the queued write until the tracker is reachable.
+          }
+        }
+      } finally {
+        _completionRetry = null;
+        _scheduleCompletions();
+      }
+    });
+  }
+
+  Future<void> _sendCompletion(String key, Anime anime) async {
+    final job = _pending[key] as Json?;
+    if (job == null || closed || !_current(job)) return;
+    final service = job['service'] as String;
+    final e = await entry(service, anime);
+    if (closed || !_current(job)) return;
+    final previous = e?.progress ?? 0;
+    final progress = store!.entry(anime)?.contiguousAfter(previous) ?? previous;
+    if (progress > previous) {
+      await _finishEntry(service, anime, e, progress, anime.episodes, progress);
+    }
+    final remaining = _pending..remove(key);
+    await store!.set(_completionKey, remaining);
+    if (remaining.isEmpty) {
+      _completionRetry?.cancel();
+      _completionRetry = null;
+    }
+  }
+
+  Future<void> _recordCompletion(Anime anime, int episode, int total) {
+    if (store == null) return finish(anime, episode, total);
+    return _serial(anime, () async {
+      final queued = _pending;
+      final keys = <String, String>{};
+      for (final service in services(anime)) {
+        final identity = _identity(service);
+        final key = '${_entryKey(service, anime)}:$identity';
+        keys[service] = key;
+        queued[key] = {
+          'service': service,
+          'identity': identity,
+          'anime': anime.toJson(),
+        };
+      }
+      if (keys.isEmpty) return;
+      await store!.set(_completionKey, queued);
+      _scheduleCompletions();
+      await _each(anime, (service) async {
+        final key = keys[service];
+        if (key != null) await _sendCompletion(key, anime);
+      });
+    });
+  }
+
   ResumePusher pusher() => ResumePusher(
     push: (key, p) => pushResume(_shows[key]!, p),
-    finish: (key, ep, total) => finish(_shows[key]!, ep, total),
+    finish: (key, ep, total) => _recordCompletion(_shows[key]!, ep, total),
     onError: (e) {
       lastError = e.toString();
       notifyListeners();

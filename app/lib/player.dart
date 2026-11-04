@@ -18,6 +18,7 @@ import 'data/models.dart';
 import 'desktop/desktop_core.dart';
 import 'desktop/player_bar.dart';
 import 'desktop/window_frame.dart';
+import 'data/skip_times.dart';
 import 'data/store.dart';
 import 'data/synced_resume.dart';
 import 'data/subtitle_fallback.dart';
@@ -63,6 +64,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Timer? discordMeter;
   int savedResume = 0;
   final completedEpisodes = <int>{};
+  var viewing = EpisodeViewing();
+  String? viewingKey;
   bool nextCancelled = false, scrubbing = false;
   PlaybackSource? source;
   RequestScope scope = RequestScope();
@@ -332,6 +335,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     reopenedCopy = reopening;
     countdownSeconds = 0;
     playbackPosition = Duration.zero;
+    viewing = EpisodeViewing();
+    viewingKey = null;
     setState(() {
       busy = true;
       error = '';
@@ -363,9 +368,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       final historyBeforeOpen = widget.services.store.entry(anime);
       savedResume = math.max(
         savedResume,
-        historyBeforeOpen?.episode == episode
-            ? historyBeforeOpen?.position ?? 0
-            : 0,
+        historyBeforeOpen?.resumeFor(episode) ?? 0,
       );
       final synced = await widget.services.tracking.resume(anime);
       savedResume = math.max(savedResume, synced.forEpisode(episode));
@@ -540,26 +543,23 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       episode,
       scope,
     );
+    if (!mounted || g != generation) return;
+    final seconds = duration.inMilliseconds / 1000;
+    if (seconds <= 0) return;
+    final provider = selectSkipSpans(result, const [], seconds);
+    if (provider.any((s) => s.type == 'op') &&
+        provider.any((s) => s.type == 'ed')) {
+      setState(() => spans = provider);
+      return;
+    }
     final extra = await widget.services.skipTimes.lookup(
       anime,
       episode,
-      duration.inMilliseconds / 1000,
+      seconds,
       scope: scope,
     );
     if (!mounted || g != generation) return;
-    final merged = [
-      ...result,
-      ...extra.where((s) => !result.any((v) => v.type == s.type)),
-    ];
-    setState(
-      () => spans =
-          merged
-              .where(
-                (s) => duration == Duration.zero || s.end <= duration.inSeconds,
-              )
-              .toList()
-            ..sort((a, b) => a.start.compareTo(b.start)),
-    );
+    setState(() => spans = selectSkipSpans(result, extra, seconds));
   }
 
   bool languageMatches(String? language, String? title, String preferred) {
@@ -788,6 +788,29 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         (p == Duration.zero && player.state.completed && !casting)) {
       return;
     }
+    final currentSource = source;
+    if (currentSource != null) {
+      final key =
+          '$episode:${currentSource.provider}:${currentSource.showId}:${currentSource.mode}:$copy';
+      if (viewingKey != key) {
+        viewingKey = key;
+        viewing = EpisodeViewing();
+        viewing.start(
+          duration,
+          widget.services.store.entry(anime)?.viewing[key],
+        );
+      } else if (viewing.checkpoint == null) {
+        viewing.start(
+          duration,
+          widget.services.store.entry(anime)?.viewing[key],
+        );
+      }
+    }
+    viewing.sample(
+      p,
+      playing: casting ? castStatus?.state == 'playing' : player.state.playing,
+      rate: casting ? 1 : player.state.rate,
+    );
     if (p != playbackPosition) {
       playbackPosition = p;
       watchForStall();
@@ -825,7 +848,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           p.inMilliseconds / 1000 >=
               current.start + widget.services.store.integer('SkipDelay')) {
         skipped.add(key);
-        unawaited(seekTo(Duration(milliseconds: (current.end * 1000).round())));
+        unawaited(skipSpan(current));
       } else if (entered &&
           !panelOpen &&
           !scrubbing &&
@@ -840,7 +863,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   void playbackEnded() {
     if (!mounted || profileStopped || busy || finished) return;
-    if (!reachedEpisodeEnd(playbackPosition, duration)) {
+    if (!reachedEpisodeEnd(playbackPosition, duration) &&
+        !viewing.endingSkip(playbackPosition, duration, spans)) {
       if (casting) {
         setState(() {
           error = 'The cast stopped before the end of the episode.';
@@ -854,8 +878,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     finished = true;
     playRequested = false;
     stall.cancel();
-    unawaited(save(completed: true));
-    offerNext();
+    final watched = viewing.ended(playbackPosition, duration, spans);
+    unawaited(save(completed: watched));
+    if (watched) offerNext();
   }
 
   void watchForStall() {
@@ -934,24 +959,21 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         (leaving &&
             !retrying &&
             error.isEmpty &&
-            watchedEpisode(
-              at,
-              duration,
-              widget.services.store.integer('PercentageToMarkComplete'),
-              spans,
-            ));
+            viewing.credits(at, duration, spans));
     final newlyWatched = watched && completedEpisodes.add(episode);
-    if (newlyWatched && finishesShow(widget.services, anime, episode)) {
-      widget.services.ratingDue = anime;
-    }
     final persist = widget.services.store.progress(
       anime,
       episode,
       at.inSeconds,
       duration.inSeconds,
       completed: watched,
+      viewingKey: viewingKey,
+      viewingCheckpoint: viewing.checkpoint,
     );
     if (newlyWatched) {
+      if (finishesShow(widget.services, anime, episode)) {
+        widget.services.ratingDue = anime;
+      }
       await resumePusher.episodeDone(anime.key, episode, anime.episodes);
     } else if (!watched) {
       resumePusher.note(anime.key, episode, at.inSeconds);
@@ -1010,8 +1032,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await castControl('play');
   }
 
+  Future<void> skipSpan(SkipSpan span) =>
+      seekTo(Duration(milliseconds: (span.end * 1000).round()), span: span);
+
   /// Moves playback here or on the cast device.
-  Future<void> seekTo(Duration target) async {
+  Future<void> seekTo(Duration target, {SkipSpan? span}) async {
+    viewing.seek(playbackPosition, target, span: span);
     if (!casting) {
       await player.seek(target);
       watchForStall();
@@ -1207,7 +1233,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         // else 85 s, as in the CLI.
         final span = active;
         if (span != null) {
-          await seekTo(Duration(milliseconds: (span.end * 1000).round()));
+          await skipSpan(span);
         } else {
           await seek(85);
         }
@@ -1685,7 +1711,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       case PlayerAction.skipSegment:
         final span = active;
         if (span == null) return false;
-        unawaited(seekTo(Duration(milliseconds: (span.end * 1000).round())));
+        unawaited(skipSpan(span));
         showControls();
       case PlayerAction.previousEpisode:
         if (episode <= 1) {
@@ -1993,9 +2019,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         label: active!.type == 'op' ? 'Skip opening' : active!.label,
         focusNode: skipFocus,
         onPressed: () {
-          unawaited(
-            seekTo(Duration(milliseconds: (active!.end * 1000).round())),
-          );
+          unawaited(skipSpan(active!));
           playFocus.requestFocus();
           showControls();
         },

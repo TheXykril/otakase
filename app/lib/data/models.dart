@@ -334,11 +334,27 @@ class WatchEntry {
     this.position = 0,
     this.duration = 0,
     this.watched = const [],
+    this.viewing = const {},
+    this.resumes = const {},
     this.updated = 0,
   });
   final Anime anime;
   final int episode, position, duration, updated;
   final List<int> watched;
+  final Map<String, List<int>> viewing;
+  final Map<String, int> resumes;
+
+  int resumeFor(int episode) =>
+      resumes['$episode'] ?? (this.episode == episode ? position : 0);
+
+  int contiguousAfter(int progress) {
+    final episodes = watched.toSet();
+    while (episodes.contains(progress + 1)) {
+      progress++;
+    }
+    return progress;
+  }
+
   factory WatchEntry.fromJson(Json j) => WatchEntry(
     anime: Anime.fromJson((j['anime'] as Map).cast<String, dynamic>()),
     episode: number(j['episode']),
@@ -346,6 +362,18 @@ class WatchEntry {
     duration: number(j['duration']),
     updated: number(j['updated']),
     watched: (j['watched'] as List? ?? []).map(number).toList(),
+    viewing: {
+      for (final entry in (j['viewing'] as Map? ?? {}).entries)
+        if (entry.key is String &&
+            entry.value is List &&
+            ((entry.value as List).length == 2 ||
+                (entry.value as List).length == 3))
+          entry.key as String: (entry.value as List).map(number).toList(),
+    },
+    resumes: {
+      for (final entry in (j['resumes'] as Map? ?? {}).entries)
+        if (entry.key is String) entry.key as String: number(entry.value),
+    },
   );
   Json toJson() => {
     'anime': anime.toJson(),
@@ -354,6 +382,8 @@ class WatchEntry {
     'duration': duration,
     'updated': updated,
     'watched': watched,
+    if (viewing.isNotEmpty) 'viewing': viewing,
+    if (resumes.isNotEmpty) 'resumes': resumes,
   };
 }
 

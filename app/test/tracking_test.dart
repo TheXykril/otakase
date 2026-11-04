@@ -6,6 +6,8 @@ import 'package:http/testing.dart';
 import 'package:otakase/data/auth.dart';
 import 'package:otakase/data/models.dart';
 import 'package:otakase/data/synced_resume.dart';
+import 'package:otakase/data/store.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:otakase/data/tracking.dart';
 
 import 'auth_test.dart' show MemoryTokens, account, json;
@@ -208,6 +210,102 @@ void main() {
       auth.dispose();
     },
   );
+  test(
+    'episode gaps keep their resume and block tracker advancement',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final writes = <int>[];
+      final auth = AuthService(
+        storage: MemoryTokens(),
+        client: MockClient((r) async {
+          final body = jsonDecode(r.body) as Map;
+          if ((body['query'] as String).startsWith('mutation')) {
+            writes.add((body['variables'] as Map)['progress'] as int);
+            return json({
+              'data': {
+                'SaveMediaListEntry': {'id': 1},
+              },
+            });
+          }
+          return json({
+            'data': {
+              'Media': {
+                'mediaListEntry': {'status': 'CURRENT', 'progress': 3},
+              },
+            },
+          });
+        }),
+      );
+      auth.accounts['AniList'] = account('AniList');
+      final store = AppStore(prefs);
+      final tracking = TrackingService(auth, store: store)..remember(anime);
+      addTearDown(auth.dispose);
+      addTearDown(tracking.dispose);
+      final pusher = tracking.pusher();
+
+      await store.progress(anime, 4, 600, 1440);
+      await store.progress(anime, 5, 1440, 1440, completed: true);
+      await pusher.episodeDone(anime.key, 5, 12);
+      expect(writes, isEmpty);
+      expect(AppStore(prefs).entry(anime)!.resumeFor(4), 600);
+      expect(store.entry(anime)!.watched, [5]);
+
+      await store.progress(anime, 4, 1440, 1440, completed: true);
+      await pusher.episodeDone(anime.key, 4, 12);
+      expect(writes, [5]);
+    },
+  );
+
+  test(
+    'a failed tracker completion stays queued after rebuilding the store',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      var offline = true;
+      final writes = <int>[];
+      final auth = AuthService(
+        storage: MemoryTokens(),
+        client: MockClient((r) async {
+          if (offline) return http.Response('', 503);
+          final body = jsonDecode(r.body) as Map;
+          if ((body['query'] as String).startsWith('mutation')) {
+            writes.add((body['variables'] as Map)['progress'] as int);
+            return json({
+              'data': {
+                'SaveMediaListEntry': {'id': 1},
+              },
+            });
+          }
+          return json({
+            'data': {
+              'Media': {'mediaListEntry': null},
+            },
+          });
+        }),
+      );
+      auth.accounts['AniList'] = account('AniList');
+      final store = AppStore(prefs);
+      final tracking = TrackingService(auth, store: store)..remember(anime);
+      addTearDown(auth.dispose);
+
+      await store.progress(anime, 1, 1440, 1440, completed: true);
+      await tracking.pusher().episodeDone(anime.key, 1, 12);
+      tracking.dispose();
+      final restored = AppStore(prefs);
+      expect(restored.value('PendingEpisodeCompletions'), isNotEmpty);
+      expect(restored.entry(anime)!.watched, [1]);
+
+      offline = false;
+      final reloaded = TrackingService(auth, store: restored)..remember(anime);
+      addTearDown(reloaded.dispose);
+      await restored.progress(anime, 2, 1440, 1440, completed: true);
+      await reloaded.pusher().episodeDone(anime.key, 2, 12);
+      expect(writes, [2]);
+      expect(restored.value('PendingEpisodeCompletions'), isEmpty);
+    },
+  );
+
   test('one failed tracker does not prevent writes to the other', () async {
     var malWrites = 0;
     final auth = AuthService(

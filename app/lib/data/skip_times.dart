@@ -116,6 +116,56 @@ class SkipTimes {
   }
 }
 
+/// Selects markers for the current cut. If a complete pair cannot be
+/// assembled, keep the single source with the most usable marker types.
+List<SkipSpan> selectSkipSpans(
+  List<SkipSpan> provider,
+  List<SkipSpan> alternatives,
+  double duration,
+) {
+  final sources = <String, Map<String, SkipSpan>>{};
+  for (final span in [...provider, ...alternatives]) {
+    if (!span.start.isFinite ||
+        !span.end.isFinite ||
+        span.start < 0 ||
+        span.start >= span.end ||
+        span.end > duration) {
+      continue;
+    }
+    sources
+        .putIfAbsent(span.source, () => {})
+        .putIfAbsent(span.type, () => span);
+  }
+  final openings = sources.values.map((s) => s['op']).nonNulls;
+  final endings = sources.values.map((s) => s['ed']).nonNulls;
+  for (final op in openings) {
+    for (final ed in endings) {
+      if (op.end > ed.start) continue;
+      final recap = sources.values
+          .map((s) => s['recap'])
+          .nonNulls
+          .where(
+            (span) =>
+                (span.end <= op.start || span.start >= op.end) &&
+                (span.end <= ed.start || span.start >= ed.end),
+          )
+          .firstOrNull;
+      return [op, ed, ?recap]..sort((a, b) => a.start.compareTo(b.start));
+    }
+  }
+  List<SkipSpan> best = [];
+  for (final source in sources.values) {
+    final op = source['op'];
+    final ed = source['ed'];
+    final usable = [
+      for (final span in source.values)
+        if (span != ed || op == null || op.end <= span.start) span,
+    ];
+    if (usable.length > best.length) best = usable;
+  }
+  return best..sort((a, b) => a.start.compareTo(b.start));
+}
+
 /// A random version 4 UUID.
 String newUuid(Random random) {
   final b = List<int>.generate(16, (_) => random.nextInt(256));
