@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -10,12 +11,11 @@ import '../data/movies.dart';
 import '../data/trakt.dart';
 import '../services.dart';
 import '../ui/components.dart';
-import '../ui/movie_player.dart';
 import '../ui/movies_pages.dart';
 import '../ui/seal.dart';
 import 'desktop_core.dart';
+import 'launcher_playback.dart';
 import 'window_frame.dart';
-import 'external_mpv.dart';
 import 'tiling.dart';
 
 /// True while the app shows the launcher instead of the full window. Set by
@@ -34,25 +34,249 @@ const launcherSize = Size(680, 560);
 const launcherTitle = 'Otakase Launcher';
 const launcherPlayerSize = Size(1280, 760);
 
-/// Switches the window between launcher and full app sizes.
-Future<void> resizeDesktopWindow({required bool launcher}) async {
-  if (!isDesktop) return;
-  await windowManager.setTitle(launcher ? launcherTitle : 'Otakase');
-  await windowManager.setAlwaysOnTop(launcher);
-  await windowManager.setMinimumSize(
-    launcher ? const Size(480, 360) : const Size(960, 600),
-  );
-  await windowManager.setSize(launcher ? launcherSize : const Size(1440, 900));
-  await windowManager.center();
-  // Tiling compositors ignore the size: float the launcher like the old
-  // rofi popup, and put the full app back in the layout.
-  launcherPlaced = DateTime.now();
-  await placeOnTiler(size: launcher ? launcherSize : null);
+const launcherMinimumSize = Size(480, 360);
+const _launcherFadeDuration = Duration(milliseconds: 144);
+
+bool get launcherFadesContent =>
+    Platform.isLinux &&
+    (Platform.environment['WAYLAND_DISPLAY'] ?? '').isNotEmpty;
+
+final _launcherClosing = ValueNotifier(false);
+Completer<void>? _launcherFadeOut;
+var _launcherOpacity = 0.0;
+
+/// Blur during placement comes from the compositor moving the window.
+bool _launcherPlaced = false;
+bool _launcherLayerSurface = false;
+
+HyprlandLauncherAnchor? _launcherAnchor;
+
+Future<void> _stopLauncherAnchor() async {
+  final anchor = _launcherAnchor;
+  _launcherAnchor = null;
+  await anchor?.stop();
 }
 
-/// When the window was last floated or resized; focus changes around that
-/// time come from the compositor, not from the viewer leaving.
-DateTime launcherPlaced = DateTime(0);
+Future<void> prepareLauncherWindow({bool fadeContent = false}) async {
+  await _stopLauncherAnchor();
+  _launcherPlaced = false;
+  _launcherClosing.value = false;
+  await windowManager.ensureInitialized();
+  _launcherLayerSurface = false;
+  if (isDesktop && Platform.isLinux) {
+    _launcherLayerSurface =
+        await const MethodChannel('otakase/launcher_surface')
+            .invokeMethod<bool>('isLayerSurface') ??
+        false;
+  }
+  if (_launcherLayerSurface) {
+    await windowManager.setBackgroundColor(Colors.transparent);
+    return;
+  }
+  if (!fadeContent) await _setLauncherOpacity(0);
+  await windowManager.waitUntilReadyToShow(
+    WindowOptions(
+      title: launcherTitle,
+      size: launcherSize,
+      minimumSize: launcherMinimumSize,
+      center: true,
+      backgroundColor: fadeContent ? Colors.transparent : bg,
+    ),
+  );
+  await _setLauncherWindowControls(true);
+}
+
+Future<void> revealLauncherWindow({
+  required bool reduceMotion,
+  bool fadeContent = false,
+  String? workspace,
+}) async {
+  if (_launcherLayerSurface) {
+    await windowManager.show();
+    _launcherPlaced = true;
+    return;
+  }
+  await showDesktopWindow();
+  final placed = await placeOnTiler(
+    size: launcherSize,
+    raise: true,
+    workspace: workspace,
+  );
+  if (fadeContent) await _waitForLauncherSize();
+  _launcherPlaced = true;
+  if (placed &&
+      !_launcherClosing.value &&
+      tilerFrom(Platform.environment) == Tiler.hyprland) {
+    final anchor = HyprlandLauncherAnchor(
+      processId: pid,
+      restore: (home) async {
+        await placeOnTiler(
+          size: launcherSize,
+          raise: true,
+          workspace: home ?? workspace,
+          attempts: 1,
+          run: (exe, args) =>
+              Process.run(exe, args).timeout(const Duration(milliseconds: 350)),
+        );
+      },
+    );
+    _launcherAnchor = anchor;
+    unawaited(anchor.start());
+  }
+
+  if (!fadeContent) {
+    await _fadeNativeLauncher(closing: false, reduceMotion: reduceMotion);
+  }
+}
+
+Future<void> dismissLauncherWindow({
+  required bool reduceMotion,
+  required bool fadeContent,
+}) async {
+  if (_launcherClosing.value) return;
+
+  final fadeOut = fadeContent && !reduceMotion ? Completer<void>() : null;
+  _launcherFadeOut = fadeOut;
+  _launcherClosing.value = true;
+  final stopped = _stopLauncherAnchor();
+  if (fadeOut != null) {
+    // An unfocused window may stop getting frames on some compositors.
+    await fadeOut.future.timeout(
+      _launcherFadeDuration + const Duration(milliseconds: 100),
+      onTimeout: () {},
+    );
+    _launcherFadeOut = null;
+  } else if (!fadeContent) {
+    await _fadeNativeLauncher(closing: true, reduceMotion: reduceMotion);
+  }
+  await stopped;
+  await windowManager.hide();
+}
+
+Future<void> _setLauncherOpacity(double opacity) async {
+  _launcherOpacity = opacity;
+  await windowManager.setOpacity(opacity);
+}
+
+Future<void> _fadeNativeLauncher({
+  required bool closing,
+  required bool reduceMotion,
+}) async {
+  final from = _launcherOpacity;
+  final to = closing ? 0.0 : 1.0;
+  if (!reduceMotion && from != to) {
+    const step = Duration(milliseconds: 16);
+    final frames = _launcherFadeDuration.inMilliseconds ~/ step.inMilliseconds;
+    for (var frame = 1; frame < frames; frame++) {
+      await Future<void>.delayed(step);
+      if (!closing && _launcherClosing.value) return;
+      final progress = Curves.easeOutCubic.transform(frame / frames);
+      await _setLauncherOpacity(from + (to - from) * progress);
+    }
+  }
+  if (closing || !_launcherClosing.value) await _setLauncherOpacity(to);
+}
+
+Future<void> _waitForLauncherSize() async {
+  final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+  if (view == null) return;
+
+  // A compositor accepts the resize before Flutter receives the new metrics.
+  // Keep the launcher usable if a compositor overrides the requested size.
+  for (var frame = 0; frame < 30; frame++) {
+    final size = view.physicalSize / view.devicePixelRatio;
+    if ((size.width - launcherSize.width).abs() <= 1 &&
+        (size.height - launcherSize.height).abs() <= 1) {
+      await WidgetsBinding.instance.endOfFrame;
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+}
+
+/// Fades the pixels drawn by Flutter on Wayland, where the native opacity
+/// request does not hide the window while the compositor places it.
+class LauncherStartup extends StatelessWidget {
+  const LauncherStartup({
+    super.key,
+    required this.ready,
+    required this.reduceMotion,
+    required this.child,
+  });
+
+  final Future<void> ready;
+  final bool reduceMotion;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<void>(
+    future: ready,
+    builder: (context, snapshot) {
+      return ValueListenableBuilder(
+        valueListenable: _launcherClosing,
+        child: child,
+        builder: (context, closing, child) {
+          final visible =
+              snapshot.connectionState == ConnectionState.done && !closing;
+          return IgnorePointer(
+            ignoring: !visible,
+            child: AnimatedOpacity(
+              opacity: visible ? 1 : 0,
+              duration: reduceMotion ? Duration.zero : _launcherFadeDuration,
+              curve: Curves.easeOutCubic,
+              onEnd: () {
+                final fadeOut = _launcherFadeOut;
+                if (closing && fadeOut != null && !fadeOut.isCompleted) {
+                  fadeOut.complete();
+                }
+              },
+              child: child,
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+Future<void> _setLauncherWindowControls(bool launcher) async {
+  await windowManager.setResizable(!launcher);
+  await windowManager.setMinimizable(!launcher);
+  if (Platform.isWindows) await windowManager.setMaximizable(!launcher);
+  if (Platform.isMacOS) await windowManager.setMovable(!launcher);
+  await windowManager.setTitleBarStyle(
+    TitleBarStyle.hidden,
+    windowButtonVisibility: !launcher,
+  );
+  await windowManager.setAlwaysOnTop(launcher);
+  await windowManager.setSkipTaskbar(launcher);
+}
+
+/// Restores normal window controls for the app and player.
+Future<void> resizeDesktopWindow({
+  required bool launcher,
+  bool player = false,
+  bool place = true,
+}) async {
+  if (!isDesktop) return;
+  await _stopLauncherAnchor();
+  _launcherPlaced = false;
+  final size = launcher
+      ? launcherSize
+      : (player ? launcherPlayerSize : fullAppSize);
+  if (!launcher) await _setLauncherWindowControls(false);
+  await windowManager.setTitle(launcher ? launcherTitle : 'Otakase');
+  await windowManager.setMinimumSize(
+    launcher || player ? launcherMinimumSize : fullAppMinimumSize,
+  );
+  await windowManager.setSize(size);
+  await windowManager.center();
+  if (place) {
+    await placeOnTiler(size: launcher || player ? size : null, raise: launcher);
+  }
+  if (launcher) await _setLauncherWindowControls(true);
+  _launcherPlaced = launcher;
+}
 
 /// One row of a launcher menu.
 class LauncherItem {
@@ -103,6 +327,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   final input = FocusNode(debugLabel: 'Launcher input');
   final scroll = ScrollController();
   final menus = <LauncherMenu>[];
+  final _menuHistory = <({String filter, int selected, double offset})>[];
   int selected = 0;
   String? message;
   List<ListEntry> watching = [];
@@ -119,13 +344,27 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
 
   /// Saves playback and closes the window. The full app's shell replaces
   /// this hook once the launcher turns into the full app.
-  Future<void> quit() async {
+  Future<void> quit({bool fromPlayer = false}) async {
+    if (_quitting || playing && !fromPlayer) return;
+    _quitting = true;
+    if (isDesktop) {
+      await dismissLauncherWindow(
+        reduceMotion: WidgetsBinding
+            .instance
+            .platformDispatcher
+            .accessibilityFeatures
+            .disableAnimations,
+        fadeContent: launcherFadesContent,
+      );
+    }
     await services.close().timeout(
       const Duration(seconds: 5),
       onTimeout: () {},
     );
     await closeDesktopWindow();
   }
+
+  bool _quitting = false;
 
   /// True while a player runs from the launcher.
   bool playing = false;
@@ -134,9 +373,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   /// but not while it plays or right after the compositor moved it.
   @override
   void onWindowBlur() {
-    if (playing || !desktopLauncher.value || !mounted) return;
-    if (DateTime.now().difference(launcherPlaced) <
-        const Duration(seconds: 2)) {
+    if (playing || !_launcherPlaced || !desktopLauncher.value || !mounted) {
       return;
     }
     if (ModalRoute.of(context)?.isCurrent == false) return;
@@ -144,20 +381,34 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   }
 
   @override
+  void onWindowFocus() {
+    if (!mounted ||
+        playing ||
+        _quitting ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    input.requestFocus();
+  }
+
+  KeyEventResult _escape(KeyEvent event) {
+    if (event.logicalKey != LogicalKeyboardKey.escape ||
+        playing ||
+        !mounted ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return KeyEventResult.ignored;
+    }
+    if (!_quitting && event is KeyDownEvent) {
+      if (!back()) unawaited(quit());
+    }
+    return KeyEventResult.handled;
+  }
+
+  @override
   void initState() {
     super.initState();
-    if (isDesktop) {
-      windowManager.addListener(this);
-      launcherPlaced = DateTime.now();
-      // On a tiling compositor the window opened as a tile: float it.
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => unawaited(
-          placeOnTiler(size: launcherSize, attempts: 10).then((_) {
-            launcherPlaced = DateTime.now();
-          }),
-        ),
-      );
-    }
+    if (isDesktop) windowManager.addListener(this);
+    FocusManager.instance.addEarlyKeyEventHandler(_escape);
     desktopCloseHook = quit;
     menus.add(mainMenu());
     query.addListener(() => setState(() => selected = 0));
@@ -167,6 +418,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   @override
   void dispose() {
     if (isDesktop) windowManager.removeListener(this);
+    FocusManager.instance.removeEarlyKeyEventHandler(_escape);
     if (desktopCloseHook == quit) desktopCloseHook = null;
     query.dispose();
     input.dispose();
@@ -277,7 +529,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
           'Open full app',
           icon: LucideIcons.appWindow,
           detail: 'Ctrl+W',
-          onSelect: () => widget.onOpenApp?.call(),
+          onSelect: openFullApp,
         ),
         LauncherItem('Quit', icon: LucideIcons.x, onSelect: quit),
       ],
@@ -292,12 +544,25 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
 
   void push(LauncherMenu menu) {
     setState(() {
+      _menuHistory.add((
+        filter: query.text,
+        selected: selected,
+        offset: scroll.hasClients ? scroll.offset : 0,
+      ));
       menus.add(menu);
       selected = 0;
       message = null;
       query.clear();
     });
+    _restoreScroll(0);
     input.requestFocus();
+  }
+
+  void _restoreScroll(double offset) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scroll.hasClients) return;
+      scroll.jumpTo(offset.clamp(0, scroll.position.maxScrollExtent));
+    });
   }
 
   bool back() {
@@ -306,13 +571,18 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
       return true;
     }
     if (menus.length > 1) {
+      final previous = _menuHistory.removeLast();
       setState(() {
         menus.removeLast();
         // The main menu shows what changed meanwhile (watchlist, progress).
         if (menus.length == 1) menus[0] = mainMenu();
-        selected = 0;
+        query.text = previous.filter;
+        query.selection = TextSelection.collapsed(offset: query.text.length);
+        selected = previous.selected;
         message = null;
       });
+      _restoreScroll(previous.offset);
+      input.requestFocus();
       return true;
     }
     return false;
@@ -459,7 +729,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
     final open = LauncherItem(
       'Open in full app',
       icon: LucideIcons.externalLink,
-      onSelect: () => widget.onOpenApp?.call(),
+      onSelect: openFullApp,
     );
     if (!t.isShow) {
       final e = movies.entry(t);
@@ -526,11 +796,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
     TitleEpisode? episode,
     List<TitleEpisode> episodes = const [],
   }) => runPlayer(
-    MoviePlayerPage(
-      services: services,
-      isTV: true,
-      request: titlePlay(services, t, episode: episode, episodes: episodes),
-    ),
+    LauncherPlayback.title(services.profileId, t, episode, episodes),
   );
 
   void openShow(Anime anime, int progress) {
@@ -567,7 +833,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
         LauncherItem(
           'Open in full app',
           icon: LucideIcons.externalLink,
-          onSelect: () => widget.onOpenApp?.call(),
+          onSelect: openFullApp,
         ),
       ], detail: total > 0 ? 'Ep $progress/$total' : 'Ep $progress'),
     );
@@ -607,35 +873,103 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
     setState(() => selected = math.min(progress, total - 1));
   }
 
-  Future<void> play(Anime anime, int episode) => runPlayer(
-    playerFor(
-      services: services,
-      anime: anime,
-      episode: episode,
-      isTV: true,
-      mode: services.store.text('SubOrDub'),
-    ),
-  );
+  Future<void> play(Anime anime, int episode) =>
+      runPlayer(LauncherPlayback.anime(services.profileId, anime, episode));
 
-  /// Grows the window to a player, plays, then comes back to the menu.
-  Future<void> runPlayer(Widget player) async {
+  Future<void> openFullApp() async {
+    if (!_launcherLayerSurface) {
+      widget.onOpenApp?.call();
+      return;
+    }
+    if (playing || _quitting) return;
     playing = true;
+    if (await _handOff(LauncherPlayback.fullApp(services.profileId))) return;
+    playing = false;
+    if (mounted) setState(() => message = 'Otakase could not open a window.');
+  }
+
+  Future<bool> _handOff(LauncherPlayback request) async {
+    final File handoff;
+    try {
+      handoff = await request.start();
+    } on ProcessException {
+      return false;
+    } on FileSystemException {
+      return false;
+    }
+    await dismissLauncherWindow(
+      reduceMotion: _reduceMotion,
+      fadeContent: launcherFadesContent,
+    );
+    try {
+      await services.close().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {},
+      );
+    } finally {
+      try {
+        await request.handOff(handoff);
+      } finally {
+        await closeDesktopWindow();
+      }
+    }
+    return true;
+  }
+
+  bool get _reduceMotion => WidgetsBinding
+      .instance
+      .platformDispatcher
+      .accessibilityFeatures
+      .disableAnimations;
+
+  Future<void> runPlayer(LauncherPlayback request) async {
+    if (playing || _quitting) return;
+    playing = true;
+    if (isDesktop &&
+        (_launcherLayerSurface || services.profiles?.active.locked != true) &&
+        await _handOff(request)) {
+      return;
+    }
+    if (_launcherLayerSurface) {
+      playing = false;
+      if (mounted) {
+        setState(() => message = 'The player window could not open.');
+      }
+      return;
+    }
+
+    // A locked profile's unlocked session must stay in this process.
     if (isDesktop) {
-      await windowManager.setAlwaysOnTop(false);
-      await windowManager.setSize(launcherPlayerSize);
-      await windowManager.center();
-      await placeOnTiler(size: launcherPlayerSize);
+      await dismissLauncherWindow(
+        reduceMotion: _reduceMotion,
+        fadeContent: launcherFadesContent,
+      );
+      await resizeDesktopWindow(launcher: false, player: true, place: false);
     }
     if (!mounted) return;
-    await Navigator.push(
+    if (isDesktop) setState(() {});
+    final playback = Navigator.push(
       context,
-      OtakaseRoute<void>(builder: (_) => TVViewport(child: player)),
+      OtakaseRoute<void>(
+        builder: (_) =>
+            DesktopFrame(child: TVViewport(child: request.player(services))),
+      ),
     );
-    if (isDesktop) await resizeDesktopWindow(launcher: true);
+    if (isDesktop) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!launcherFadesContent) await _setLauncherOpacity(1);
+      _launcherClosing.value = false;
+      await showDesktopWindow();
+    }
+    await playback;
+    if (isDesktop) {
+      await quit(fromPlayer: true);
+      return;
+    }
     playing = false;
     if (!mounted) return;
-    // Progress moved on; rebuild the lists from the new state.
     setState(() {
+      _menuHistory.clear();
       menus
         ..clear()
         ..add(mainMenu());
@@ -648,24 +982,35 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   List<LauncherItem> visible() {
     final menu = menus.last;
     final q = query.text.trim();
-    final rows = q.isEmpty
-        ? menu.items
-        : menu.items
-              .where(
-                (i) =>
-                    i.keepWhenFiltering ||
-                    i.label.toLowerCase().contains(q.toLowerCase()),
-              )
-              .toList();
-    final extra = q.isEmpty ? null : menu.typed?.call(q);
-    if (extra == null) return rows;
-    // Enter after typing runs the typed row (search, episode number) unless
-    // a row's name starts with the typed text, like rofi's best match.
+    if (q.isEmpty) return menu.items;
     final lower = q.toLowerCase();
-    final match = rows.any(
-      (i) => !i.keepWhenFiltering && i.label.toLowerCase().startsWith(lower),
-    );
-    return match ? [...rows, extra] : [extra, ...rows];
+    final words = lower.split(RegExp(r'\s+'));
+    final ranked = <({LauncherItem item, int score, int index})>[];
+    for (final (index, item) in menu.items.indexed) {
+      final label = item.label.toLowerCase();
+      final tokens = label.split(RegExp(r'[\s:·()/–—-]+'));
+      final score = label == lower
+          ? 0
+          : label.startsWith(lower)
+          ? 1
+          : words.every((word) => tokens.any((token) => token.startsWith(word)))
+          ? 2
+          : label.contains(lower)
+          ? 3
+          : item.keepWhenFiltering
+          ? 4
+          : -1;
+      if (score >= 0) ranked.add((item: item, score: score, index: index));
+    }
+    ranked.sort((a, b) {
+      final byScore = a.score.compareTo(b.score);
+      return byScore == 0 ? a.index.compareTo(b.index) : byScore;
+    });
+    final rows = [for (final entry in ranked) entry.item];
+    final extra = menu.typed?.call(q);
+    if (extra == null) return rows;
+    final clearMatch = ranked.isNotEmpty && ranked.first.score <= 2;
+    return clearMatch ? [...rows, extra] : [extra, ...rows];
   }
 
   void move(int by, int count) {
@@ -685,14 +1030,18 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   }
 
   KeyEventResult key(FocusNode node, KeyEvent event) {
+    if (_quitting) return KeyEventResult.handled;
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
     final rows = visible();
     final k = event.logicalKey;
-    if (k == LogicalKeyboardKey.arrowDown) {
+    final control = HardwareKeyboard.instance.isControlPressed;
+    if (k == LogicalKeyboardKey.arrowDown ||
+        control && k == LogicalKeyboardKey.keyJ) {
       move(1, rows.length);
-    } else if (k == LogicalKeyboardKey.arrowUp) {
+    } else if (k == LogicalKeyboardKey.arrowUp ||
+        control && k == LogicalKeyboardKey.keyK) {
       move(-1, rows.length);
     } else if (k == LogicalKeyboardKey.pageDown) {
       move(8, rows.length);
@@ -703,11 +1052,9 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
       if (event is KeyDownEvent && selected < rows.length) {
         unawaited(Future.sync(rows[selected].onSelect));
       }
-    } else if (k == LogicalKeyboardKey.escape) {
-      if (event is KeyDownEvent && !back()) unawaited(quit());
     } else if (k == LogicalKeyboardKey.keyW &&
         HardwareKeyboard.instance.isControlPressed) {
-      widget.onOpenApp?.call();
+      unawaited(openFullApp());
     } else {
       return KeyEventResult.ignored;
     }
@@ -716,6 +1063,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    if (isDesktop && playing) return const ColoredBox(color: bg);
     final menu = menus.last;
     final rows = visible();
     if (selected >= rows.length) selected = math.max(0, rows.length - 1);
@@ -728,47 +1076,38 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
         ),
         child: Column(
           children: [
-            WindowDragArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16 + windowButtonsLeading,
-                  14,
-                  16,
-                  10,
-                ),
-                child: Row(
-                  children: [
-                    if (menus.length > 1)
-                      IconButton(
-                        tooltip: 'Back',
-                        icon: const Icon(LucideIcons.chevronLeft, size: 18),
-                        onPressed: back,
-                      )
-                    else
-                      const OtakaseSeal(size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        menu.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: uiStyle(
-                          context,
-                          size: 15,
-                          weight: FontWeight.w600,
-                          color: fgBright,
-                        ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Row(
+                children: [
+                  if (menus.length > 1)
+                    IconButton(
+                      tooltip: 'Back',
+                      icon: const Icon(LucideIcons.chevronLeft, size: 18),
+                      onPressed: back,
+                    )
+                  else
+                    const OtakaseSeal(size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      menu.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: uiStyle(
+                        context,
+                        size: 15,
+                        weight: FontWeight.w600,
+                        color: fgBright,
                       ),
                     ),
-                    if (menu.detail.isNotEmpty)
-                      Text(
-                        menu.detail,
-                        style: mono.copyWith(fontSize: 12, color: muted),
-                      ),
-                    const SizedBox(width: 8),
-                    const WindowButtons(),
-                  ],
-                ),
+                  ),
+                  if (menu.detail.isNotEmpty)
+                    Text(
+                      menu.detail,
+                      style: mono.copyWith(fontSize: 12, color: muted),
+                    ),
+                ],
               ),
             ),
             Padding(
@@ -802,6 +1141,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
                   selected: i == selected,
                   onHover: () => setState(() => selected = i),
                   onTap: () {
+                    if (_quitting) return;
                     setState(() => selected = i);
                     unawaited(Future.sync(rows[i].onSelect));
                     input.requestFocus();

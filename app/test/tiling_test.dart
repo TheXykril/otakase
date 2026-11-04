@@ -44,6 +44,89 @@ void main() {
     );
   });
 
+  test('Hyprland raises the popup above other floating windows', () {
+    expect(
+      hyprlandLuaDispatches(42, size: size, raise: true).last,
+      'hl.dsp.window.alter_zorder({ mode = "top", window = "pid:42" })',
+    );
+    expect(
+      hyprlandLegacyBatch(42, size: size, raise: true),
+      endsWith('dispatch alterzorder top,pid:42'),
+    );
+  });
+
+  test(
+    'captures the focused workspace and moves the popup before centering',
+    () async {
+      Future<ProcessResult> respond(
+        String command,
+        List<String> args,
+      ) async => ProcessResult(
+        0,
+        0,
+        command == 'hyprctl'
+            ? '{"id": 4}'
+            : '[{"name":"one","focused":false},{"name":"work","focused":true}]',
+        '',
+      );
+      final hypr = await focusedTilerWorkspace(
+        env: {'HYPRLAND_INSTANCE_SIGNATURE': 'x'},
+        linux: true,
+        run: respond,
+      );
+      final sway = await focusedTilerWorkspace(
+        env: {'SWAYSOCK': 'x'},
+        linux: true,
+        run: respond,
+      );
+      expect(hypr, '4');
+      expect(sway, 'work');
+      expect(
+        hyprlandLuaDispatches(42, size: size, workspace: hypr)[1],
+        contains('workspace = "4"'),
+      );
+      expect(
+        hyprlandLegacyBatch(42, size: size, workspace: hypr),
+        contains('movetoworkspacesilent 4,pid:42'),
+      );
+      expect(
+        swayCommand(42, size: size, workspace: sway),
+        contains('move container to workspace "work", resize set'),
+      );
+    },
+  );
+
+  test('a compositor drag is restored to the launcher workspace', () async {
+    var x = 100;
+    var workspace = 4;
+    final restores = <String?>[];
+    final anchor = HyprlandLauncherAnchor(
+      processId: 42,
+      run: (_, args) async => ProcessResult(
+        0,
+        0,
+        '[{"pid":9,"mapped":true,"at":[30,60]},'
+            '{"pid":42,"mapped":true,"at":[$x,200],"workspace":{"id":$workspace}}]',
+        '',
+      ),
+      restore: (home) async => restores.add(home),
+    );
+    await anchor.check();
+    x = 140;
+    await anchor.check();
+    x = 180;
+    workspace = 5;
+    await anchor.check();
+    expect(restores, isEmpty);
+    await anchor.check();
+    expect(restores, ['4']);
+
+    await anchor.stop();
+    await anchor.check();
+    await anchor.check();
+    expect(restores, ['4']);
+  });
+
   group('placeOnTiler', () {
     final calls = <List<String>>[];
     setUp(calls.clear);

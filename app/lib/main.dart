@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core.dart';
@@ -10,6 +12,9 @@ import 'data/auth.dart';
 import 'data/profiles.dart';
 import 'desktop/desktop_core.dart';
 import 'desktop/launcher.dart';
+import 'desktop/launcher_playback.dart';
+import 'desktop/launcher_toggle.dart';
+import 'desktop/tiling.dart';
 import 'desktop/window_frame.dart';
 import 'services.dart';
 import 'ui/rate_prompt.dart';
@@ -19,11 +24,46 @@ import 'ui/seal.dart';
 import 'ui/profiles_page.dart';
 
 Future<void> main([List<String> args = const []]) async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  final reduceMotion =
+      binding.platformDispatcher.accessibilityFeatures.disableAnimations;
+  final wayland = launcherFadesContent;
   MediaKit.ensureInitialized();
+  LauncherToggle? toggle;
+  LauncherPlayback? playback;
+  String? workspace;
   if (isDesktop) {
+    final playerArgument = args.indexOf(LauncherPlayback.argument);
+    if (playerArgument >= 0) {
+      if (playerArgument + 1 >= args.length) exit(1);
+      try {
+        playback = await LauncherPlayback.read(args[playerArgument + 1]);
+      } on Exception {
+        exit(1);
+      } on StateError {
+        exit(1);
+      }
+    }
     readDesktopArguments(args);
-    await setUpDesktopWindow(launcher: desktopLauncher.value);
+    if (desktopLauncher.value) {
+      try {
+        toggle = await LauncherToggle.open(
+          await getApplicationSupportDirectory(),
+        );
+        if (toggle == null) exit(0);
+      } on FileSystemException {
+        // An unavailable settings directory should not prevent opening.
+      }
+      workspace = await focusedTilerWorkspace();
+      await prepareLauncherWindow(fadeContent: wayland);
+    } else {
+      await setUpDesktopWindow(
+        size: playback == null || playback.opensFullApp
+            ? fullAppSize
+            : launcherPlayerSize,
+      );
+      await showDesktopWindow();
+    }
   }
   final core = CoreClient();
   final profiles = ProfileManager(
@@ -35,7 +75,7 @@ Future<void> main([List<String> args = const []]) async {
     isTV: isDesktop || await core.isTV(),
   );
   try {
-    await profiles.initialize();
+    await profiles.initialize(playbackProfile: playback?.profileId);
   } catch (e) {
     profiles.error = e.toString();
   }
@@ -45,12 +85,59 @@ Future<void> main([List<String> args = const []]) async {
       overlays: [SystemUiOverlay.bottom],
     );
   }
-  runApp(ProfileHost(manager: profiles));
+  final app = ProfileHost(
+    manager: profiles,
+    playback: playback?.opensFullApp == true ? null : playback,
+  );
+  final ready = isDesktop && desktopLauncher.value && wayland
+      ? Completer<void>()
+      : null;
+  runApp(
+    ready == null
+        ? app
+        : LauncherStartup(
+            ready: ready.future,
+            reduceMotion: reduceMotion,
+            child: app,
+          ),
+  );
+  if (isDesktop && desktopLauncher.value) {
+    await binding.waitUntilFirstFrameRasterized;
+    await revealLauncherWindow(
+      reduceMotion: reduceMotion,
+      fadeContent: ready != null,
+      workspace: workspace,
+    );
+    ready?.complete();
+    if (toggle != null) {
+      final owner = toggle;
+      desktopLauncher.addListener(() {
+        if (!desktopLauncher.value) unawaited(owner.close());
+      });
+      owner.watch(() async {
+        if (!desktopLauncher.value) return;
+        if (desktopCloseHook != null) {
+          await quitDesktopApp();
+        } else {
+          await dismissLauncherWindow(
+            reduceMotion: reduceMotion,
+            fadeContent: wayland,
+          );
+          await profiles.close().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {},
+          );
+          await closeDesktopWindow();
+        }
+      });
+    }
+  }
 }
 
 class ProfileHost extends StatefulWidget {
-  const ProfileHost({super.key, required this.manager});
+  const ProfileHost({super.key, required this.manager, this.playback});
   final ProfileManager manager;
+  final LauncherPlayback? playback;
   @override
   State<ProfileHost> createState() => _ProfileHostState();
 }
@@ -78,6 +165,7 @@ class _ProfileHostState extends State<ProfileHost> {
                 ),
                 services: services,
                 isTV: widget.manager.isTV,
+                playback: widget.playback,
               ),
               if (widget.manager.busy)
                 const Positioned.fill(
@@ -94,9 +182,13 @@ class _ProfileHostState extends State<ProfileHost> {
         isTV: widget.manager.isTV,
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
-          builder: (context, child) => DesktopFrame(
-            child: widget.manager.isTV ? TVViewport(child: child!) : child!,
-          ),
+          builder: (context, child) => desktopLauncher.value
+              ? child!
+              : DesktopFrame(
+                  child: widget.manager.isTV
+                      ? TVViewport(child: child!)
+                      : child!,
+                ),
           theme: ThemeData(
             brightness: Brightness.dark,
             fontFamily: 'Inter',
@@ -133,7 +225,9 @@ class _ProfileHostState extends State<ProfileHost> {
                           TextButton(
                             onPressed: () async {
                               try {
-                                await widget.manager.initialize();
+                                await widget.manager.initialize(
+                                  playbackProfile: widget.playback?.profileId,
+                                );
                               } catch (e) {
                                 widget.manager.error = e.toString();
                                 if (mounted) setState(() {});
@@ -159,8 +253,10 @@ class OtakaseApp extends StatefulWidget {
     required this.services,
     required this.isTV,
     this.splash = false,
+    this.playback,
   });
   final AppServices services;
+  final LauncherPlayback? playback;
   final bool isTV, splash;
   @override
   State<OtakaseApp> createState() => _OtakaseAppState();
@@ -168,7 +264,11 @@ class OtakaseApp extends StatefulWidget {
 
 class _OtakaseAppState extends State<OtakaseApp> {
   late final ratingPrompt = RatingPrompt(widget.services, isTV: widget.isTV);
+  bool _openingFullApp = false;
+
   Future<void> openFullApp() async {
+    if (_openingFullApp) return;
+    _openingFullApp = true;
     await resizeDesktopWindow(launcher: false);
     desktopLauncher.value = false;
   }
@@ -221,11 +321,11 @@ class _OtakaseAppState extends State<OtakaseApp> {
         title: 'Otakase',
         navigatorObservers: [ratingPrompt],
         debugShowCheckedModeBanner: false,
-        builder: (context, child) => DesktopFrame(
-          child: widget.isTV && !desktopLauncher.value
-              ? TVViewport(child: child!)
-              : child!,
-        ),
+        builder: (context, child) => desktopLauncher.value
+            ? child!
+            : DesktopFrame(
+                child: widget.isTV ? TVViewport(child: child!) : child!,
+              ),
         theme: ThemeData(
           brightness: Brightness.dark,
           colorScheme: const ColorScheme.dark(
@@ -360,7 +460,12 @@ class _OtakaseAppState extends State<OtakaseApp> {
             overlayColor: shu.withValues(alpha: .1),
           ),
         ),
-        home: desktopLauncher.value
+        home: widget.playback != null
+            ? LauncherPlayerWindow(
+                request: widget.playback!,
+                services: widget.services,
+              )
+            : desktopLauncher.value
             ? LauncherPage(services: widget.services, onOpenApp: openFullApp)
             : widget.splash
             ? SplashGate(

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otakase/data/trakt.dart';
+import 'package:otakase/desktop/desktop_core.dart';
 import 'package:otakase/desktop/launcher.dart';
+import 'package:otakase/main.dart';
 import 'package:otakase/services.dart';
 
 import 'widget_test.dart' as fixture;
@@ -40,6 +42,48 @@ Future<void> press(WidgetTester tester, LogicalKeyboardKey key) async {
 }
 
 void main() {
+  testWidgets('desktop launcher has no window drag areas or window buttons', (
+    tester,
+  ) async {
+    final services = await fixture.services();
+    debugDesktopOverride = true;
+    desktopLauncher.value = true;
+    addTearDown(() {
+      desktopLauncher.value = false;
+      debugDesktopOverride = null;
+    });
+    await tester.pumpWidget(OtakaseApp(services: services, isTV: true));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('window-edge-drag')), findsNothing);
+    expect(find.byKey(const Key('window-drag-area')), findsNothing);
+    expect(find.byKey(const Key('window-minimize')), findsNothing);
+    expect(find.byKey(const Key('window-maximize')), findsNothing);
+    expect(find.text('Quit'), findsOneWidget);
+    final input = tester.widget<TextField>(
+      find.byKey(const Key('launcher-input')),
+    );
+    expect(input.focusNode!.hasFocus, isTrue);
+  });
+
+  testWidgets('Escape works after the launcher input loses focus', (
+    tester,
+  ) async {
+    await pumpLauncher(tester);
+    final field = find.byKey(const Key('launcher-input'));
+    await tester.enterText(field, 'full');
+    final state = tester.state<LauncherPageState>(find.byType(LauncherPage));
+    state.input.unfocus();
+    await tester.pump();
+    expect(state.input.hasFocus, isFalse);
+
+    await press(tester, LogicalKeyboardKey.escape);
+    expect(state.query.text, isEmpty);
+    state.onWindowFocus();
+    await tester.pump();
+    expect(state.input.hasFocus, isTrue);
+  });
+
   testWidgets('starts on Continue and filters by typing', (tester) async {
     await pumpLauncher(tester);
     expect(find.text('Continue: Frieren · Ep 3'), findsOneWidget);
@@ -50,8 +94,8 @@ void main() {
     expect(find.text('Open full app'), findsOneWidget);
     expect(find.text('Continue: Frieren · Ep 3'), findsNothing);
     expect(find.text('Search for “full”'), findsOneWidget);
-    // "Open full app" does not start with "full", so search is on top.
-    await press(tester, LogicalKeyboardKey.enter);
+    await tester.tap(find.text('Search for “full”'));
+    await tester.pumpAndSettle();
     expect(find.text('Search'), findsOneWidget);
   });
 
@@ -68,9 +112,9 @@ void main() {
 
   testWidgets('search, show menu, episode menu and back', (tester) async {
     await pumpLauncher(tester);
-    await tester.enterText(find.byKey(const Key('launcher-input')), 'frier');
+    await tester.enterText(find.byKey(const Key('launcher-input')), 'frierenn');
     await tester.pumpAndSettle();
-    // No row starts with the typed text, so Enter searches straight away.
+    // No local row matches the typed text, so Enter searches the catalog.
     await press(tester, LogicalKeyboardKey.enter);
     expect(find.text('Search'), findsOneWidget);
     expect(find.text('Frieren'), findsOneWidget);
@@ -94,7 +138,47 @@ void main() {
     expect(find.text('Play next: resume episode 3'), findsOneWidget);
     await press(tester, LogicalKeyboardKey.escape);
     await press(tester, LogicalKeyboardKey.escape);
+    expect(find.text('frierenn'), findsOneWidget);
+    await press(tester, LogicalKeyboardKey.escape);
     expect(find.text('Continue: Frieren · Ep 3'), findsOneWidget);
+  });
+
+  testWidgets('word prefixes, control keys and back preserve the choice', (
+    tester,
+  ) async {
+    const another = MediaTitle(
+      kind: 'movie',
+      trakt: 3,
+      title: 'Spirited Away Again',
+    );
+    await pumpLauncher(
+      tester,
+      content: 'movies',
+      setUp: (services) async {
+        await services.movies.setWatchlist(film, true);
+        await services.movies.setWatchlist(another, true);
+      },
+    );
+    await tester.enterText(find.byKey(const Key('launcher-input')), 'spi aw');
+    await tester.pumpAndSettle();
+    expect(find.text('Spirited Away'), findsOneWidget);
+    expect(find.text('Spirited Away Again'), findsOneWidget);
+    expect(find.text('Search for “spi aw”'), findsOneWidget);
+
+    final state = tester.state<LauncherPageState>(find.byType(LauncherPage));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await press(tester, LogicalKeyboardKey.keyJ);
+    expect(state.selected, 1);
+    await press(tester, LogicalKeyboardKey.keyK);
+    expect(state.selected, 0);
+    await press(tester, LogicalKeyboardKey.keyJ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await press(tester, LogicalKeyboardKey.enter);
+    expect(find.text('Play'), findsOneWidget);
+
+    await press(tester, LogicalKeyboardKey.escape);
+    expect(find.text('spi aw'), findsOneWidget);
+    expect(state.selected, 1);
   });
 
   testWidgets('Ctrl+W and the menu row open the full app', (tester) async {

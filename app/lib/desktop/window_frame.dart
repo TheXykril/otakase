@@ -8,25 +8,27 @@ import 'package:window_manager/window_manager.dart';
 import '../ui/components.dart';
 import 'desktop_core.dart';
 
-/// Opens the desktop window without a system title bar. The app's own top
-/// bar moves the window and holds the window buttons. macOS keeps its
-/// traffic-light buttons, drawn over the top-left corner of the app.
-Future<void> setUpDesktopWindow({bool launcher = false}) async {
+const fullAppSize = Size(1440, 900);
+const fullAppMinimumSize = Size(960, 600);
+
+/// Prepares the window before the runner renders its first frame.
+Future<void> setUpDesktopWindow({Size size = fullAppSize}) async {
   await windowManager.ensureInitialized();
-  final options = WindowOptions(
-    title: launcher ? 'Otakase Launcher' : 'Otakase',
-    size: launcher ? const Size(680, 560) : const Size(1440, 900),
-    minimumSize: launcher ? const Size(480, 360) : const Size(960, 600),
-    center: true,
-    alwaysOnTop: launcher,
-    backgroundColor: bg,
-    titleBarStyle: TitleBarStyle.hidden,
-    windowButtonVisibility: !launcher,
+  await windowManager.waitUntilReadyToShow(
+    WindowOptions(
+      title: 'Otakase',
+      size: size,
+      minimumSize: fullAppMinimumSize,
+      center: true,
+      backgroundColor: bg,
+      titleBarStyle: TitleBarStyle.hidden,
+    ),
   );
-  await windowManager.waitUntilReadyToShow(options, () async {
-    await windowManager.show();
-    await windowManager.focus();
-  });
+}
+
+Future<void> showDesktopWindow() async {
+  await windowManager.show();
+  await windowManager.focus();
 }
 
 /// Space the macOS traffic lights take at the left of the top bar.

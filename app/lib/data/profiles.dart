@@ -214,7 +214,7 @@ class ProfileManager extends ChangeNotifier {
     orElse: () => _profiles.first,
   );
   Profile profile(String id) => _profiles.firstWhere((p) => p.id == id);
-  Future<void> initialize() async {
+  Future<void> initialize({String? playbackProfile}) async {
     if (session != null) return;
     _profiles.clear();
     error = null;
@@ -234,9 +234,16 @@ class ProfileManager extends ChangeNotifier {
       activeId = '1';
       await _migrate();
     }
-    initialized = true;
     if (!_profiles.any((p) => p.id == activeId)) activeId = _profiles.first.id;
-    if (!(askOnStart && _profiles.length > 1) && !active.locked) {
+    if (playbackProfile != null) {
+      if (!_profiles.any((p) => p.id == playbackProfile)) {
+        throw StateError('The selected playback profile was removed.');
+      }
+      activeId = playbackProfile;
+    }
+    initialized = true;
+    if ((playbackProfile != null || !(askOnStart && _profiles.length > 1)) &&
+        !active.locked) {
       await switchTo(activeId);
     }
     notifyListeners();

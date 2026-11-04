@@ -58,18 +58,32 @@ The player takes mpv's keys. **?** shows this list in the player.
 
 ## The launcher
 
-Starting the app with `--launcher` opens a small window that stays on top, for when you
-only want to pick something and watch: type to filter, arrows or
-PageUp/PageDown to move, **Enter** to pick, **Esc** to clear the text, go back,
-then close. Playing an episode grows it to fit the player. Like a popup, it
-closes when you click into another window.
+Starting the app with `--launcher` opens a fixed-size popup. The menu fades
+in on open and fades out when dismissed or when the popup loses focus.
+Reduced motion skips both fades. Type to filter, use the arrows or
+PageUp/PageDown to move, and press **Enter** to pick. **Esc** clears your
+filter, goes back, then closes the menu. Ctrl+J and Ctrl+K move down and up.
+Going back restores the previous filter and highlighted row. Type parts
+of a title such as “solo lev” to filter, or choose **Search for…** to search
+the catalog. The shortcut closes the popup when pressed again.
+
+Playing from the popup fades out the menu and opens a normal player window.
+On Hyprland with Wayland layer shell, playback and the full app open in
+separate windows. Locked profiles ask for the profile code in the new
+window. Other desktops keep the unlocked session when reusing the popup
+window. Closing playback returns control to the desktop.
 
 With **Movies & shows** on for your profile, the launcher lists the films
 and series you are watching and your Trakt watchlist, searches them along
 with anime, and has a **Trending movies & shows** list.
 
-On Hyprland, sway and i3 the launcher floats in the middle of the screen
-instead of opening as a tile; nothing needs adding to your config for it.
+On Hyprland with Wayland layer shell version 4 or later, the launcher
+opens as a centered overlay. Hyprland’s window drag and resize shortcuts
+leave the overlay in place. On older Hyprland sessions, the popup falls
+back to a floating window and returns to center after a compositor drag.
+On sway and i3, the floating popup opens on the focused workspace. Windows,
+macOS and X11 open the popup above other windows on the display under the
+pointer.
 
 Bind it to a keyboard shortcut in your desktop's settings to open Otakase
 from anywhere. On Hyprland, for example:

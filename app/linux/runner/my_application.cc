@@ -1,6 +1,7 @@
 #include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
+#include <gtk-layer-shell.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
@@ -15,6 +16,17 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+static void launcher_surface_method(FlMethodChannel* channel,
+                                    FlMethodCall* call,
+                                    gpointer user_data) {
+  if (g_strcmp0(fl_method_call_get_name(call), "isLayerSurface") != 0) {
+    fl_method_call_respond_not_implemented(call, nullptr);
+    return;
+  }
+  g_autoptr(FlValue) value = fl_value_new_bool(GPOINTER_TO_INT(user_data));
+  fl_method_call_respond_success(call, value, nullptr);
+}
+
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
@@ -26,22 +38,47 @@ static void my_application_activate(GApplication* application) {
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
+  const bool launcher =
+      g_strv_contains(self->dart_entrypoint_arguments, "--launcher");
+
   // No title bar: the app draws its own top bar, like on Windows and macOS.
   // The title still names the window in task bars and window switchers.
-  gtk_window_set_title(window, "Otakase");
+  gtk_window_set_title(window, launcher ? "Otakase Launcher" : "Otakase");
   gtk_window_set_decorated(window, FALSE);
 
-  gtk_window_set_default_size(window, 1280, 720);
+  // GTK uses the default size for non-resizable windows on the first map.
+  // Advertise the popup's size before the compositor places the surface.
+  gtk_window_set_default_size(window, launcher ? 680 : 1280,
+                              launcher ? 560 : 720);
+  if (launcher) {
+    // A layer surface is centered without anchors. Hyprland cannot move
+    // or resize it with the modifier binds for application windows.
+    if (g_getenv("HYPRLAND_INSTANCE_SIGNATURE") != nullptr &&
+        gtk_layer_get_protocol_version() >= 4) {
+      gtk_layer_init_for_window(window);
+      gtk_layer_set_namespace(window, "otakase-launcher");
+      gtk_layer_set_layer(window, GTK_LAYER_SHELL_LAYER_OVERLAY);
+      gtk_layer_set_keyboard_mode(window, GTK_LAYER_SHELL_KEYBOARD_MODE_ON_DEMAND);
+    }
+    gtk_window_set_resizable(window, FALSE);
+    gtk_window_set_position(window, GTK_WIN_POS_CENTER);
+    GdkVisual* visual =
+        gdk_screen_get_rgba_visual(gtk_window_get_screen(window));
+    if (visual != nullptr) {
+      gtk_widget_set_visual(GTK_WIDGET(window), visual);
+    }
+  }
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);
 
   FlView* view = fl_view_new(project);
-  GdkRGBA background_color;
-  // Background defaults to black, override it here if necessary, e.g. #00000000
-  // for transparent.
-  gdk_rgba_parse(&background_color, "#0e0d0c");
+  // Let Flutter draw the launcher's first visible pixels after placement.
+  GdkRGBA background_color = {};
+  if (!launcher) {
+    gdk_rgba_parse(&background_color, "#0e0d0c");
+  }
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
@@ -54,6 +91,15 @@ static void my_application_activate(GApplication* application) {
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
   token_store_register(view);
+  if (launcher) {
+    g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+    g_autoptr(FlMethodChannel) channel = fl_method_channel_new(
+        fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+        "otakase/launcher_surface", FL_METHOD_CODEC(codec));
+    fl_method_channel_set_method_call_handler(
+        channel, launcher_surface_method,
+        GINT_TO_POINTER(gtk_layer_is_layer_window(window)), nullptr);
+  }
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

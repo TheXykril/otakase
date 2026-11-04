@@ -1,16 +1,26 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otakase/desktop/desktop_core.dart';
+import 'package:otakase/desktop/launcher.dart';
 import 'package:otakase/desktop/window_frame.dart';
 
 void main() {
   final calls = <String>[];
+  final requests = <MethodCall>[];
   var maximized = false;
+  var layerSurface = false;
+  const launcherSurface = MethodChannel('otakase/launcher_surface');
 
   setUp(() {
     calls.clear();
+    requests.clear();
     maximized = false;
+    layerSurface = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(launcherSurface, (_) async => layerSurface);
     debugTilingOverride = false;
     debugDesktopOverride = true;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -18,7 +28,13 @@ void main() {
           call,
         ) async {
           calls.add(call.method);
+          requests.add(call);
           switch (call.method) {
+            case 'isMinimized':
+            case 'isFullScreen':
+              return false;
+            case 'getBounds':
+              return {'x': 0.0, 'y': 0.0, 'width': 680.0, 'height': 560.0};
             case 'isMaximized':
               return maximized;
             case 'maximize':
@@ -34,6 +50,8 @@ void main() {
     debugDesktopOverride = null;
     debugTilingOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(launcherSurface, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
   });
 
@@ -42,6 +60,189 @@ void main() {
       body: WindowDragArea(child: WindowButtons(onClose: onClose)),
     ),
   );
+
+  void mockDisplay() {
+    const screen = MethodChannel('dev.leanflutter.plugins/screen_retriever');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    const origin = {'dx': 0.0, 'dy': 0.0};
+    const display = {
+      'id': 'primary',
+      'size': {'width': 1440.0, 'height': 900.0},
+      'visiblePosition': origin,
+    };
+    messenger.setMockMethodCallHandler(
+      screen,
+      (call) async => switch (call.method) {
+        'getPrimaryDisplay' => display,
+        'getAllDisplays' => {
+          'displays': [display],
+        },
+        'getCursorScreenPoint' => origin,
+        _ => throw MissingPluginException(call.method),
+      },
+    );
+    addTearDown(() => messenger.setMockMethodCallHandler(screen, null));
+  }
+
+  testWidgets('launcher fades in and releases window controls for playback', (
+    tester,
+  ) async {
+    mockDisplay();
+
+    List<dynamic> values(String method, String key) => requests
+        .where((call) => call.method == method)
+        .map((call) => call.arguments[key])
+        .toList();
+
+    await prepareLauncherWindow();
+    expect(calls, isNot(contains('show')));
+    expect(values('setOpacity', 'opacity'), [0.0]);
+
+    final reveal = revealLauncherWindow(reduceMotion: false);
+    await tester.pump();
+    for (var frame = 0; frame < 9; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await reveal;
+
+    final opacity = values('setOpacity', 'opacity');
+    expect(opacity, hasLength(greaterThan(2)));
+    expect(opacity, orderedEquals([...opacity]..sort()));
+    expect(opacity.last, 1.0);
+    expect(
+      calls,
+      containsAllInOrder(['setOpacity', 'show', 'focus', 'setOpacity']),
+    );
+
+    await resizeDesktopWindow(launcher: false, player: true);
+    await resizeDesktopWindow(launcher: true);
+    await resizeDesktopWindow(launcher: false);
+    expect(values('setResizable', 'isResizable'), [false, true, false, true]);
+    expect(values('setAlwaysOnTop', 'isAlwaysOnTop'), [
+      true,
+      false,
+      true,
+      false,
+    ]);
+    expect(values('setSkipTaskbar', 'isSkipTaskbar'), [
+      true,
+      false,
+      true,
+      false,
+    ]);
+    expect(values('setBounds', 'width').whereType<double>(), [
+      launcherSize.width,
+      launcherPlayerSize.width,
+      launcherSize.width,
+      fullAppSize.width,
+    ]);
+
+    requests.clear();
+    await revealLauncherWindow(reduceMotion: true);
+    expect(values('setOpacity', 'opacity'), [1.0]);
+
+    calls.clear();
+    requests.clear();
+    final dismiss = dismissLauncherWindow(
+      reduceMotion: false,
+      fadeContent: false,
+    );
+    await dismissLauncherWindow(reduceMotion: false, fadeContent: false);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(values('setOpacity', 'opacity').single, inExclusiveRange(0, 1));
+    expect(calls, isNot(contains('hide')));
+    for (var frame = 0; frame < 8; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await dismiss;
+    final fadeOut = values('setOpacity', 'opacity');
+    expect(fadeOut, orderedEquals(([...fadeOut]..sort()).reversed));
+    expect(fadeOut.last, 0.0);
+    expect(calls.where((call) => call == 'hide'), hasLength(1));
+    expect(calls.last, 'hide');
+
+    await prepareLauncherWindow();
+    await revealLauncherWindow(reduceMotion: true);
+    calls.clear();
+    requests.clear();
+    await dismissLauncherWindow(reduceMotion: true, fadeContent: false);
+    expect(values('setOpacity', 'opacity'), [0.0]);
+    expect(calls, ['setOpacity', 'hide']);
+  });
+
+  testWidgets('launcher stays transparent while Wayland reports a tile', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 2;
+    tester.view.physicalSize = const Size(2880, 1800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    mockDisplay();
+    await prepareLauncherWindow(fadeContent: true);
+    final ready = revealLauncherWindow(reduceMotion: false, fadeContent: true);
+    await tester.pumpWidget(
+      LauncherStartup(
+        ready: ready,
+        reduceMotion: false,
+        child: const SizedBox.expand(),
+      ),
+    );
+
+    double opacity() => tester
+        .widget<FadeTransition>(find.byType(FadeTransition))
+        .opacity
+        .value;
+    await tester.pump(const Duration(milliseconds: 48));
+    await tester.pump(const Duration(milliseconds: 48));
+    expect(
+      tester.widget<AnimatedOpacity>(find.byType(AnimatedOpacity)).opacity,
+      0,
+    );
+    expect(opacity(), 0);
+    expect(calls, containsAllInOrder(['show', 'focus']));
+
+    tester.view.physicalSize = launcherSize * 2;
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump();
+    await ready;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 72));
+    expect(opacity(), inExclusiveRange(0, 1));
+    await tester.pumpAndSettle();
+    expect(opacity(), 1);
+
+    final dismiss = dismissLauncherWindow(
+      reduceMotion: false,
+      fadeContent: true,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 72));
+    expect(opacity(), inExclusiveRange(0, 1));
+    expect(calls, isNot(contains('hide')));
+    await tester.pumpAndSettle();
+    expect(calls.last, 'hide');
+    await dismiss;
+    expect(opacity(), 0);
+    expect(calls, isNot(contains('setOpacity')));
+  });
+
+  testWidgets('a native layer popup skips movable window setup', (
+    tester,
+  ) async {
+    layerSurface = true;
+    await prepareLauncherWindow(fadeContent: true);
+    await revealLauncherWindow(reduceMotion: true, fadeContent: true);
+    expect(calls, [
+      'ensureInitialized',
+      'setBackgroundColor',
+      'isMinimized',
+      'show',
+    ]);
+    await dismissLauncherWindow(reduceMotion: true, fadeContent: true);
+    expect(calls.last, 'hide');
+  }, skip: !Platform.isLinux);
 
   testWidgets('window buttons minimise, maximise and close', (tester) async {
     var closed = 0;
