@@ -618,6 +618,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         widget.services.catalog.client,
         source!.streams[copy],
         track['url'] as String,
+        nativeCore: Platform.isAndroid ? widget.services.core : null,
+        scope: scope,
       );
       if (!current()) return false;
       final title = track['label'] as String? ?? 'Subtitles';

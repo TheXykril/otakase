@@ -43,8 +43,10 @@ class SubtitleFailure implements Exception {
 Future<({List<int> bytes, String extension})> downloadSubtitle(
   http.Client client,
   ResolvedStream stream,
-  String link,
-) async {
+  String link, {
+  CoreClient? nativeCore,
+  RequestScope? scope,
+}) async {
   final url = Uri.tryParse(link.trim());
   final video = Uri.tryParse(stream.url);
   final referrer = Uri.tryParse(stream.referrer);
@@ -62,6 +64,38 @@ Future<({List<int> bytes, String extension})> downloadSubtitle(
 
   final headers = Map<String, String>.of(stream.headers);
   if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
+  final List<int> bytes;
+  if (nativeCore == null) {
+    bytes = await downloadSubtitleWithHttp(client, uri, headers);
+  } else {
+    try {
+      final data = await nativeCore.request(
+        {
+          'operation': 'subtitle_download',
+          'subtitle': {'url': uri.toString(), 'headers': headers},
+        },
+        scope: scope,
+        timeout: const Duration(seconds: 23),
+      );
+      bytes = base64Decode(data['body'] as String? ?? '');
+    } on CoreFailure catch (e) {
+      throw SubtitleFailure(e.message);
+    }
+  }
+  try {
+    return (bytes: bytes, extension: subtitleExtension(bytes, uri));
+  } on FormatException {
+    throw const SubtitleFailure(
+      'The subtitle server returned an invalid file.',
+    );
+  }
+}
+
+Future<List<int>> downloadSubtitleWithHttp(
+  http.Client client,
+  Uri uri,
+  Map<String, String> headers,
+) async {
   final http.Response response;
   try {
     response = await client
@@ -77,14 +111,7 @@ Future<({List<int> bytes, String extension})> downloadSubtitle(
       'Subtitle download failed (HTTP ${response.statusCode}).',
     );
   }
-  final bytes = response.bodyBytes;
-  try {
-    return (bytes: bytes, extension: subtitleExtension(bytes, uri));
-  } on FormatException {
-    throw const SubtitleFailure(
-      'The subtitle server returned an invalid file.',
-    );
-  }
+  return response.bodyBytes;
 }
 
 /// mpv's requested subtitle setting can be automatic or reuse the same ID.

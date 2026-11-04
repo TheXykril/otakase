@@ -152,6 +152,31 @@ void main() {
     },
   );
 
+  test('Android sidecar requests bypass the Dart HTTP client', () async {
+    final bytes = utf8.encode('WEBVTT\n\n00:00.000 --> 00:02.000\n日本語');
+    final core = _SubtitleCore(bytes);
+    final client = MockClient((_) async => fail('Android used Dart HTTP'));
+    final subtitle = await downloadSubtitle(
+      client,
+      stream,
+      'https://subtitles.example/track',
+      nativeCore: core,
+    );
+    expect(subtitle.bytes, bytes);
+    expect(subtitle.extension, 'vtt');
+    expect(core.input, {
+      'operation': 'subtitle_download',
+      'subtitle': {
+        'url': 'https://subtitles.example/track',
+        'headers': {
+          'User-Agent': 'Provider player',
+          'Origin': 'https://provider.example',
+          'Referer': 'https://provider.example/watch/',
+        },
+      },
+    });
+  });
+
   test(
     'checks the active file instead of requiring the subtitle ID to change',
     () {
@@ -165,4 +190,22 @@ void main() {
       );
     },
   );
+}
+
+class _SubtitleCore extends CoreClient {
+  _SubtitleCore(this.bytes);
+
+  final List<int> bytes;
+  Json? input;
+
+  @override
+  Future<Json> request(
+    Json input, {
+    void Function(int)? onHandle,
+    RequestScope? scope,
+    Duration timeout = const Duration(seconds: 40),
+  }) async {
+    this.input = input;
+    return {'body': base64Encode(bytes)};
+  }
 }
