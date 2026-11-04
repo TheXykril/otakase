@@ -47,6 +47,8 @@ var _launcherOpacity = 0.0;
 
 /// Blur during placement comes from the compositor moving the window.
 bool _launcherPlaced = false;
+bool _launcherLayerSurface = false;
+
 HyprlandLauncherAnchor? _launcherAnchor;
 
 Future<void> _stopLauncherAnchor() async {
@@ -60,6 +62,17 @@ Future<void> prepareLauncherWindow({bool fadeContent = false}) async {
   _launcherPlaced = false;
   _launcherClosing.value = false;
   await windowManager.ensureInitialized();
+  _launcherLayerSurface = false;
+  if (isDesktop && Platform.isLinux) {
+    _launcherLayerSurface =
+        await const MethodChannel('otakase/launcher_surface')
+            .invokeMethod<bool>('isLayerSurface') ??
+        false;
+  }
+  if (_launcherLayerSurface) {
+    await windowManager.setBackgroundColor(Colors.transparent);
+    return;
+  }
   if (!fadeContent) await _setLauncherOpacity(0);
   await windowManager.waitUntilReadyToShow(
     WindowOptions(
@@ -78,6 +91,11 @@ Future<void> revealLauncherWindow({
   bool fadeContent = false,
   String? workspace,
 }) async {
+  if (_launcherLayerSurface) {
+    await windowManager.show();
+    _launcherPlaced = true;
+    return;
+  }
   await showDesktopWindow();
   final placed = await placeOnTiler(
     size: launcherSize,
@@ -511,7 +529,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
           'Open full app',
           icon: LucideIcons.appWindow,
           detail: 'Ctrl+W',
-          onSelect: () => widget.onOpenApp?.call(),
+          onSelect: openFullApp,
         ),
         LauncherItem('Quit', icon: LucideIcons.x, onSelect: quit),
       ],
@@ -711,7 +729,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
     final open = LauncherItem(
       'Open in full app',
       icon: LucideIcons.externalLink,
-      onSelect: () => widget.onOpenApp?.call(),
+      onSelect: openFullApp,
     );
     if (!t.isShow) {
       final e = movies.entry(t);
@@ -815,7 +833,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
         LauncherItem(
           'Open in full app',
           icon: LucideIcons.externalLink,
-          onSelect: () => widget.onOpenApp?.call(),
+          onSelect: openFullApp,
         ),
       ], detail: total > 0 ? 'Ep $progress/$total' : 'Ep $progress'),
     );
@@ -858,48 +876,72 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   Future<void> play(Anime anime, int episode) =>
       runPlayer(LauncherPlayback.anime(services.profileId, anime, episode));
 
+  Future<void> openFullApp() async {
+    if (!_launcherLayerSurface) {
+      widget.onOpenApp?.call();
+      return;
+    }
+    if (playing || _quitting) return;
+    playing = true;
+    if (await _handOff(LauncherPlayback.fullApp(services.profileId))) return;
+    playing = false;
+    if (mounted) setState(() => message = 'Otakase could not open a window.');
+  }
+
+  Future<bool> _handOff(LauncherPlayback request) async {
+    final File handoff;
+    try {
+      handoff = await request.start();
+    } on ProcessException {
+      return false;
+    } on FileSystemException {
+      return false;
+    }
+    await dismissLauncherWindow(
+      reduceMotion: _reduceMotion,
+      fadeContent: launcherFadesContent,
+    );
+    try {
+      await services.close().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {},
+      );
+    } finally {
+      try {
+        await request.handOff(handoff);
+      } finally {
+        await closeDesktopWindow();
+      }
+    }
+    return true;
+  }
+
+  bool get _reduceMotion => WidgetsBinding
+      .instance
+      .platformDispatcher
+      .accessibilityFeatures
+      .disableAnimations;
+
   Future<void> runPlayer(LauncherPlayback request) async {
     if (playing || _quitting) return;
     playing = true;
-    final reduceMotion = WidgetsBinding
-        .instance
-        .platformDispatcher
-        .accessibilityFeatures
-        .disableAnimations;
-    if (isDesktop && services.profiles?.active.locked != true) {
-      File? handoff;
-      try {
-        handoff = await request.start();
-      } on ProcessException {
-        // The built-in window remains usable if the OS refuses to start another.
-      } on FileSystemException {
-        // The handoff directory may be unavailable.
+    if (isDesktop &&
+        (_launcherLayerSurface || services.profiles?.active.locked != true) &&
+        await _handOff(request)) {
+      return;
+    }
+    if (_launcherLayerSurface) {
+      playing = false;
+      if (mounted) {
+        setState(() => message = 'The player window could not open.');
       }
-      if (handoff != null) {
-        await dismissLauncherWindow(
-          reduceMotion: reduceMotion,
-          fadeContent: launcherFadesContent,
-        );
-        try {
-          await services.close().timeout(
-            const Duration(seconds: 5),
-            onTimeout: () {},
-          );
-        } finally {
-          try {
-            await request.handOff(handoff);
-          } finally {
-            await closeDesktopWindow();
-          }
-        }
-        return;
-      }
+      return;
     }
 
     // A locked profile's unlocked session must stay in this process.
     if (isDesktop) {
       await dismissLauncherWindow(
-        reduceMotion: reduceMotion,
+        reduceMotion: _reduceMotion,
         fadeContent: launcherFadesContent,
       );
       await resizeDesktopWindow(launcher: false, player: true, place: false);
@@ -1012,7 +1054,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
       }
     } else if (k == LogicalKeyboardKey.keyW &&
         HardwareKeyboard.instance.isControlPressed) {
-      widget.onOpenApp?.call();
+      unawaited(openFullApp());
     } else {
       return KeyEventResult.ignored;
     }

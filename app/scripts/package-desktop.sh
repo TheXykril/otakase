@@ -52,6 +52,8 @@ case "$(uname -s)" in
     rm -rf "$appdir"
     mkdir -p "$appdir/usr/lib/otakase"
     cp -a build/linux/x64/release/bundle/. "$appdir/usr/lib/otakase/"
+    layer_shell_lib=$(pkg-config --variable=libdir gtk-layer-shell-0)
+    cp -L "$layer_shell_lib/libgtk-layer-shell.so.0" "$appdir/usr/lib/otakase/lib/"
     bundle_libmpv "$appdir/usr/lib/otakase/lib"
     cp packaging/linux/AppRun "$appdir/AppRun"
     chmod 755 "$appdir/AppRun"

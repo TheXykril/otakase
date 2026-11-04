@@ -5,7 +5,7 @@
 #   scripts/build-desktop.sh [release|debug]
 #
 # Flutter cannot cross-compile desktop apps, so run this on the OS you build
-# for. Linux needs clang, cmake, ninja, GTK 3, libsecret and libmpv headers.
+# for. Linux needs clang, cmake, ninja, GTK 3, GTK Layer Shell, libsecret and libmpv headers.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

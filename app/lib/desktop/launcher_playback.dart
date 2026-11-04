@@ -31,7 +31,11 @@ class LauncherPlayback {
         'episodes': episodes.map(_episodeJson).toList(),
       };
 
+  LauncherPlayback.fullApp(this.profileId) : data = const {'fullApp': true};
+
   LauncherPlayback._(this.profileId, this.data);
+
+  bool get opensFullApp => data['fullApp'] == true;
 
   final String profileId;
   final Json data;

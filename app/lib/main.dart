@@ -58,7 +58,9 @@ Future<void> main([List<String> args = const []]) async {
       await prepareLauncherWindow(fadeContent: wayland);
     } else {
       await setUpDesktopWindow(
-        size: playback == null ? fullAppSize : launcherPlayerSize,
+        size: playback == null || playback.opensFullApp
+            ? fullAppSize
+            : launcherPlayerSize,
       );
       await showDesktopWindow();
     }
@@ -83,7 +85,10 @@ Future<void> main([List<String> args = const []]) async {
       overlays: [SystemUiOverlay.bottom],
     );
   }
-  final app = ProfileHost(manager: profiles, playback: playback);
+  final app = ProfileHost(
+    manager: profiles,
+    playback: playback?.opensFullApp == true ? null : playback,
+  );
   final ready = isDesktop && desktopLauncher.value && wayland
       ? Completer<void>()
       : null;

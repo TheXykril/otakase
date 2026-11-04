@@ -68,18 +68,22 @@ of a title such as “solo lev” to filter, or choose **Search for…** to sear
 the catalog. The shortcut closes the popup when pressed again.
 
 Playing from the popup fades out the menu and opens a normal player window.
-A locked profile reuses the existing window after hiding the popup to keep
-the unlocked session. Closing playback returns control to the desktop.
+On Hyprland with Wayland layer shell, playback and the full app open in
+separate windows. Locked profiles ask for the profile code in the new
+window. Other desktops keep the unlocked session when reusing the popup
+window. Closing playback returns control to the desktop.
 
 With **Movies & shows** on for your profile, the launcher lists the films
 and series you are watching and your Trakt watchlist, searches them along
 with anime, and has a **Trending movies & shows** list.
 
-The popup opens above other windows on Windows, macOS and X11. On Hyprland,
-sway and i3, Otakase centers the floating popup on the focused workspace.
-On Hyprland, a compositor drag snaps back to the launcher’s original
-workspace. Other desktops use the display under the pointer. On Wayland,
-the compositor controls stacking and its own window shortcuts.
+On Hyprland with Wayland layer shell version 4 or later, the launcher
+opens as a centered overlay. Hyprland’s window drag and resize shortcuts
+leave the overlay in place. On older Hyprland sessions, the popup falls
+back to a floating window and returns to center after a compositor drag.
+On sway and i3, the floating popup opens on the focused workspace. Windows,
+macOS and X11 open the popup above other windows on the display under the
+pointer.
 
 Bind it to a keyboard shortcut in your desktop's settings to open Otakase
 from anywhere. On Hyprland, for example:

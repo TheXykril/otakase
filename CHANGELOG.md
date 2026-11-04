@@ -8,7 +8,7 @@
   large window at startup and fades out when dismissed. Press the shortcut
   again to close it. The launcher restores your filter when you go back,
   matches partial title words, and hands playback off to a normal window.
-  On Hyprland, the popup returns to center after a compositor drag, and Esc
+  On Hyprland, the Wayland overlay stays fixed during window drags. Esc
   works even if the search field loses focus.
 
 ## 26.1.7 - 2026-11-04

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,11 +11,16 @@ void main() {
   final calls = <String>[];
   final requests = <MethodCall>[];
   var maximized = false;
+  var layerSurface = false;
+  const launcherSurface = MethodChannel('otakase/launcher_surface');
 
   setUp(() {
     calls.clear();
     requests.clear();
     maximized = false;
+    layerSurface = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(launcherSurface, (_) async => layerSurface);
     debugTilingOverride = false;
     debugDesktopOverride = true;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -42,6 +49,8 @@ void main() {
   tearDown(() {
     debugDesktopOverride = null;
     debugTilingOverride = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(launcherSurface, null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
   });
@@ -218,6 +227,22 @@ void main() {
     expect(opacity(), 0);
     expect(calls, isNot(contains('setOpacity')));
   });
+
+  testWidgets('a native layer popup skips movable window setup', (
+    tester,
+  ) async {
+    layerSurface = true;
+    await prepareLauncherWindow(fadeContent: true);
+    await revealLauncherWindow(reduceMotion: true, fadeContent: true);
+    expect(calls, [
+      'ensureInitialized',
+      'setBackgroundColor',
+      'isMinimized',
+      'show',
+    ]);
+    await dismissLauncherWindow(reduceMotion: true, fadeContent: true);
+    expect(calls.last, 'hide');
+  }, skip: !Platform.isLinux);
 
   testWidgets('window buttons minimise, maximise and close', (tester) async {
     var closed = 0;
