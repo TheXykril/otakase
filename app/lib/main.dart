@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,12 +20,17 @@ import 'ui/seal.dart';
 import 'ui/profiles_page.dart';
 
 Future<void> main([List<String> args = const []]) async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  final reduceMotion =
+      binding.platformDispatcher.accessibilityFeatures.disableAnimations;
+  final wayland =
+      Platform.isLinux &&
+      (Platform.environment['WAYLAND_DISPLAY'] ?? '').isNotEmpty;
   MediaKit.ensureInitialized();
   if (isDesktop) {
     readDesktopArguments(args);
     if (desktopLauncher.value) {
-      await prepareLauncherWindow();
+      await prepareLauncherWindow(fadeContent: wayland);
     } else {
       await setUpDesktopWindow();
       await showDesktopWindow();
@@ -50,14 +56,26 @@ Future<void> main([List<String> args = const []]) async {
       overlays: [SystemUiOverlay.bottom],
     );
   }
-  runApp(ProfileHost(manager: profiles));
+  final app = ProfileHost(manager: profiles);
+  final ready = isDesktop && desktopLauncher.value && wayland
+      ? Completer<void>()
+      : null;
+  runApp(
+    ready == null
+        ? app
+        : LauncherStartup(
+            ready: ready.future,
+            reduceMotion: reduceMotion,
+            child: app,
+          ),
+  );
   if (isDesktop && desktopLauncher.value) {
-    final binding = WidgetsBinding.instance;
     await binding.waitUntilFirstFrameRasterized;
     await revealLauncherWindow(
-      reduceMotion:
-          binding.platformDispatcher.accessibilityFeatures.disableAnimations,
+      reduceMotion: reduceMotion,
+      fadeContent: ready != null,
     );
+    ready?.complete();
   }
 }
 

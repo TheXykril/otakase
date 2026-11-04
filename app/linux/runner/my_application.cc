@@ -26,22 +26,38 @@ static void my_application_activate(GApplication* application) {
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
+  const bool launcher =
+      g_strv_contains(self->dart_entrypoint_arguments, "--launcher");
+
   // No title bar: the app draws its own top bar, like on Windows and macOS.
   // The title still names the window in task bars and window switchers.
-  gtk_window_set_title(window, "Otakase");
+  gtk_window_set_title(window, launcher ? "Otakase Launcher" : "Otakase");
   gtk_window_set_decorated(window, FALSE);
 
-  gtk_window_set_default_size(window, 1280, 720);
+  // GTK uses the default size for non-resizable windows on the first map.
+  // Advertise the popup's size before the compositor places the surface.
+  gtk_window_set_default_size(window, launcher ? 680 : 1280,
+                              launcher ? 560 : 720);
+  if (launcher) {
+    gtk_window_set_resizable(window, FALSE);
+    gtk_window_set_position(window, GTK_WIN_POS_CENTER);
+    GdkVisual* visual =
+        gdk_screen_get_rgba_visual(gtk_window_get_screen(window));
+    if (visual != nullptr) {
+      gtk_widget_set_visual(GTK_WIDGET(window), visual);
+    }
+  }
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);
 
   FlView* view = fl_view_new(project);
-  GdkRGBA background_color;
-  // Background defaults to black, override it here if necessary, e.g. #00000000
-  // for transparent.
-  gdk_rgba_parse(&background_color, "#0e0d0c");
+  // Let Flutter draw the launcher's first visible pixels after placement.
+  GdkRGBA background_color = {};
+  if (!launcher) {
+    gdk_rgba_parse(&background_color, "#0e0d0c");
+  }
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));

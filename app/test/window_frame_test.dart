@@ -130,6 +130,48 @@ void main() {
     expect(values('setOpacity', 'opacity'), [1.0]);
   });
 
+  testWidgets('launcher stays transparent while Wayland reports a tile', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 2;
+    tester.view.physicalSize = const Size(2880, 1800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final ready = revealLauncherWindow(reduceMotion: false, fadeContent: true);
+    await tester.pumpWidget(
+      LauncherStartup(
+        ready: ready,
+        reduceMotion: false,
+        child: const SizedBox.expand(),
+      ),
+    );
+
+    double opacity() => tester
+        .widget<FadeTransition>(find.byType(FadeTransition))
+        .opacity
+        .value;
+    await tester.pump(const Duration(milliseconds: 48));
+    await tester.pump(const Duration(milliseconds: 48));
+    expect(
+      tester.widget<AnimatedOpacity>(find.byType(AnimatedOpacity)).opacity,
+      0,
+    );
+    expect(opacity(), 0);
+    expect(calls, containsAllInOrder(['show', 'focus']));
+
+    tester.view.physicalSize = launcherSize * 2;
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump();
+    await ready;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 72));
+    expect(opacity(), inExclusiveRange(0, 1));
+    await tester.pumpAndSettle();
+    expect(opacity(), 1);
+    expect(calls, isNot(contains('setOpacity')));
+  });
+
   testWidgets('window buttons minimise, maximise and close', (tester) async {
     var closed = 0;
     await tester.pumpWidget(frame(onClose: () async => closed++));

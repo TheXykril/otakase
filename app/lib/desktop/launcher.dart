@@ -40,27 +40,32 @@ const launcherMinimumSize = Size(480, 360);
 /// Blur during placement comes from the compositor moving the window.
 bool _launcherPlaced = false;
 
-Future<void> prepareLauncherWindow() async {
+Future<void> prepareLauncherWindow({bool fadeContent = false}) async {
   _launcherPlaced = false;
   await windowManager.ensureInitialized();
-  await windowManager.setOpacity(0);
+  if (!fadeContent) await windowManager.setOpacity(0);
   await windowManager.waitUntilReadyToShow(
-    const WindowOptions(
+    WindowOptions(
       title: launcherTitle,
       size: launcherSize,
       minimumSize: launcherMinimumSize,
       center: true,
-      backgroundColor: bg,
+      backgroundColor: fadeContent ? Colors.transparent : bg,
     ),
   );
   await _setLauncherWindowControls(true);
 }
 
-Future<void> revealLauncherWindow({required bool reduceMotion}) async {
+Future<void> revealLauncherWindow({
+  required bool reduceMotion,
+  bool fadeContent = false,
+}) async {
   await showDesktopWindow();
   await placeOnTiler(size: launcherSize, raise: true);
+  if (fadeContent) await _waitForLauncherSize();
   _launcherPlaced = true;
 
+  if (fadeContent) return;
   if (!reduceMotion) {
     const frames = 9;
     for (var frame = 1; frame < frames; frame++) {
@@ -71,6 +76,57 @@ Future<void> revealLauncherWindow({required bool reduceMotion}) async {
     }
   }
   await windowManager.setOpacity(1);
+}
+
+Future<void> _waitForLauncherSize() async {
+  final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+  if (view == null) return;
+
+  // A compositor accepts the resize before Flutter receives the new metrics.
+  // Keep the launcher usable if a compositor overrides the requested size.
+  for (var frame = 0; frame < 30; frame++) {
+    final size = view.physicalSize / view.devicePixelRatio;
+    if ((size.width - launcherSize.width).abs() <= 1 &&
+        (size.height - launcherSize.height).abs() <= 1) {
+      await WidgetsBinding.instance.endOfFrame;
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+}
+
+/// Fades the pixels drawn by Flutter on Wayland, where the native opacity
+/// request does not hide the window while the compositor places it.
+class LauncherStartup extends StatelessWidget {
+  const LauncherStartup({
+    super.key,
+    required this.ready,
+    required this.reduceMotion,
+    required this.child,
+  });
+
+  final Future<void> ready;
+  final bool reduceMotion;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<void>(
+    future: ready,
+    builder: (context, snapshot) {
+      final visible = snapshot.connectionState == ConnectionState.done;
+      return IgnorePointer(
+        ignoring: !visible,
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 144),
+          curve: Curves.easeOutCubic,
+          child: child,
+        ),
+      );
+    },
+  );
 }
 
 Future<void> _setLauncherWindowControls(bool launcher) async {

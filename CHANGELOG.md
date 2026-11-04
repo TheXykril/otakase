@@ -4,8 +4,9 @@
 
 ### Fixed
 
-- The desktop launcher opens as a fixed-size popup, fades in and closes when
-  it loses focus. Playback and the full app use normal window controls.
+- The desktop launcher fades in at its fixed popup size without flashing a
+  large window at startup. It closes when it loses focus. Playback and the full
+  app use normal window controls.
 
 ## 26.1.7 - 2026-11-04
 
