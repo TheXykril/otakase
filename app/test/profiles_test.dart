@@ -85,6 +85,47 @@ Future<ProfileManager> manager({
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+  test(
+    'launcher playback selects the requested profile without bypassing a lock',
+    () async {
+      final setup = await manager();
+      final other = await setup.add('Family');
+      await setup.setAskOnStart(true);
+      final preferences = setup.preferences;
+      ProfileManager newPlayer() {
+        final player = ProfileManager(
+          preferences: preferences,
+          tokens: MemoryTokens(),
+          core: CoreClient(),
+          isTV: true,
+          clientFactory: profileClient,
+          hashLock: fastLock,
+          platformCallbacks: false,
+        );
+        addTearDown(player.close);
+        return player;
+      }
+
+      final player = newPlayer();
+      await player.initialize(playbackProfile: other.id);
+      expect(player.session?.profileId, other.id);
+      await player.setLock(other.id, 'UDLR');
+      await player.close();
+
+      final locked = newPlayer();
+      await locked.initialize(playbackProfile: other.id);
+      expect(locked.activeId, other.id);
+      expect(locked.session, isNull);
+
+      final missing = newPlayer();
+      await expectLater(
+        missing.initialize(playbackProfile: 'missing'),
+        throwsStateError,
+      );
+      expect(missing.session, isNull);
+    },
+  );
+
   test('failed secure migration retains legacy data and retries without overwriting it', () async {
     SharedPreferences.setMockInitialValues({
       'settings.v1': jsonEncode({'SubsLanguage': 'lithuanian'}),

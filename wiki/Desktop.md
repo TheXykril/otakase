@@ -62,16 +62,22 @@ Starting the app with `--launcher` opens a fixed-size popup. The menu fades
 in on open and fades out when dismissed or when the popup loses focus.
 Reduced motion skips both fades. Type to filter, use the arrows or
 PageUp/PageDown to move, and press **Enter** to pick. **Esc** clears your
-filter, goes back, then closes the menu. Starting playback or opening the
-full app restores the normal window controls.
+filter, goes back, then closes the menu. Ctrl+J and Ctrl+K move down and up.
+Going back restores the previous filter and highlighted row. Type parts
+of a title such as “solo lev” to filter, or choose **Search for…** to search
+the catalog. The shortcut closes the popup when pressed again.
+
+Playing from the popup fades out the menu and opens a normal player window.
+A locked profile reuses the existing window after hiding the popup to keep
+the unlocked session. Closing playback returns control to the desktop.
 
 With **Movies & shows** on for your profile, the launcher lists the films
 and series you are watching and your Trakt watchlist, searches them along
 with anime, and has a **Trending movies & shows** list.
 
 The popup opens above other windows on Windows, macOS and X11. On Hyprland,
-sway and i3, Otakase centers the floating popup and brings it forward.
-On Wayland, the compositor controls stacking and its own window shortcuts.
+sway and i3, Otakase centers the floating popup on the focused workspace.
+Other desktops use the display under the pointer. On Wayland, the compositor controls stacking and its own window shortcuts.
 
 Bind it to a keyboard shortcut in your desktop's settings to open Otakase
 from anywhere. On Hyprland, for example:

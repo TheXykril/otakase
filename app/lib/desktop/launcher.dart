@@ -11,12 +11,11 @@ import '../data/movies.dart';
 import '../data/trakt.dart';
 import '../services.dart';
 import '../ui/components.dart';
-import '../ui/movie_player.dart';
 import '../ui/movies_pages.dart';
 import '../ui/seal.dart';
 import 'desktop_core.dart';
+import 'launcher_playback.dart';
 import 'window_frame.dart';
-import 'external_mpv.dart';
 import 'tiling.dart';
 
 /// True while the app shows the launcher instead of the full window. Set by
@@ -69,9 +68,10 @@ Future<void> prepareLauncherWindow({bool fadeContent = false}) async {
 Future<void> revealLauncherWindow({
   required bool reduceMotion,
   bool fadeContent = false,
+  String? workspace,
 }) async {
   await showDesktopWindow();
-  await placeOnTiler(size: launcherSize, raise: true);
+  await placeOnTiler(size: launcherSize, raise: true, workspace: workspace);
   if (fadeContent) await _waitForLauncherSize();
   _launcherPlaced = true;
 
@@ -205,6 +205,7 @@ Future<void> _setLauncherWindowControls(bool launcher) async {
 Future<void> resizeDesktopWindow({
   required bool launcher,
   bool player = false,
+  bool place = true,
 }) async {
   if (!isDesktop) return;
   _launcherPlaced = false;
@@ -218,7 +219,9 @@ Future<void> resizeDesktopWindow({
   );
   await windowManager.setSize(size);
   await windowManager.center();
-  await placeOnTiler(size: launcher || player ? size : null, raise: launcher);
+  if (place) {
+    await placeOnTiler(size: launcher || player ? size : null, raise: launcher);
+  }
   if (launcher) await _setLauncherWindowControls(true);
   _launcherPlaced = launcher;
 }
@@ -272,6 +275,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   final input = FocusNode(debugLabel: 'Launcher input');
   final scroll = ScrollController();
   final menus = <LauncherMenu>[];
+  final _menuHistory = <({String filter, int selected, double offset})>[];
   int selected = 0;
   String? message;
   List<ListEntry> watching = [];
@@ -288,8 +292,8 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
 
   /// Saves playback and closes the window. The full app's shell replaces
   /// this hook once the launcher turns into the full app.
-  Future<void> quit() async {
-    if (_quitting) return;
+  Future<void> quit({bool fromPlayer = false}) async {
+    if (_quitting || playing && !fromPlayer) return;
     _quitting = true;
     if (isDesktop) {
       await dismissLauncherWindow(
@@ -462,12 +466,25 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
 
   void push(LauncherMenu menu) {
     setState(() {
+      _menuHistory.add((
+        filter: query.text,
+        selected: selected,
+        offset: scroll.hasClients ? scroll.offset : 0,
+      ));
       menus.add(menu);
       selected = 0;
       message = null;
       query.clear();
     });
+    _restoreScroll(0);
     input.requestFocus();
+  }
+
+  void _restoreScroll(double offset) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scroll.hasClients) return;
+      scroll.jumpTo(offset.clamp(0, scroll.position.maxScrollExtent));
+    });
   }
 
   bool back() {
@@ -476,13 +493,18 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
       return true;
     }
     if (menus.length > 1) {
+      final previous = _menuHistory.removeLast();
       setState(() {
         menus.removeLast();
         // The main menu shows what changed meanwhile (watchlist, progress).
         if (menus.length == 1) menus[0] = mainMenu();
-        selected = 0;
+        query.text = previous.filter;
+        query.selection = TextSelection.collapsed(offset: query.text.length);
+        selected = previous.selected;
         message = null;
       });
+      _restoreScroll(previous.offset);
+      input.requestFocus();
       return true;
     }
     return false;
@@ -696,11 +718,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
     TitleEpisode? episode,
     List<TitleEpisode> episodes = const [],
   }) => runPlayer(
-    MoviePlayerPage(
-      services: services,
-      isTV: true,
-      request: titlePlay(services, t, episode: episode, episodes: episodes),
-    ),
+    LauncherPlayback.title(services.profileId, t, episode, episodes),
   );
 
   void openShow(Anime anime, int progress) {
@@ -777,33 +795,79 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
     setState(() => selected = math.min(progress, total - 1));
   }
 
-  Future<void> play(Anime anime, int episode) => runPlayer(
-    playerFor(
-      services: services,
-      anime: anime,
-      episode: episode,
-      isTV: true,
-      mode: services.store.text('SubOrDub'),
-    ),
-  );
+  Future<void> play(Anime anime, int episode) =>
+      runPlayer(LauncherPlayback.anime(services.profileId, anime, episode));
 
-  /// Grows the window to a player, plays, then comes back to the menu.
-  Future<void> runPlayer(Widget player) async {
-    if (playing) return;
+  Future<void> runPlayer(LauncherPlayback request) async {
+    if (playing || _quitting) return;
     playing = true;
-    await resizeDesktopWindow(launcher: false, player: true);
+    final reduceMotion = WidgetsBinding
+        .instance
+        .platformDispatcher
+        .accessibilityFeatures
+        .disableAnimations;
+    if (isDesktop && services.profiles?.active.locked != true) {
+      File? handoff;
+      try {
+        handoff = await request.start();
+      } on ProcessException {
+        // The built-in window remains usable if the OS refuses to start another.
+      } on FileSystemException {
+        // The handoff directory may be unavailable.
+      }
+      if (handoff != null) {
+        await dismissLauncherWindow(
+          reduceMotion: reduceMotion,
+          fadeContent: launcherFadesContent,
+        );
+        try {
+          await services.close().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {},
+          );
+        } finally {
+          try {
+            await request.handOff(handoff);
+          } finally {
+            await closeDesktopWindow();
+          }
+        }
+        return;
+      }
+    }
+
+    // A locked profile's unlocked session must stay in this process.
+    if (isDesktop) {
+      await dismissLauncherWindow(
+        reduceMotion: reduceMotion,
+        fadeContent: launcherFadesContent,
+      );
+      await resizeDesktopWindow(launcher: false, player: true, place: false);
+    }
     if (!mounted) return;
-    await Navigator.push(
+    if (isDesktop) setState(() {});
+    final playback = Navigator.push(
       context,
       OtakaseRoute<void>(
-        builder: (_) => DesktopFrame(child: TVViewport(child: player)),
+        builder: (_) =>
+            DesktopFrame(child: TVViewport(child: request.player(services))),
       ),
     );
-    if (isDesktop) await resizeDesktopWindow(launcher: true);
+    if (isDesktop) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!launcherFadesContent) await _setLauncherOpacity(1);
+      _launcherClosing.value = false;
+      await showDesktopWindow();
+    }
+    await playback;
+    if (isDesktop) {
+      await quit(fromPlayer: true);
+      return;
+    }
     playing = false;
     if (!mounted) return;
-    // Progress moved on; rebuild the lists from the new state.
     setState(() {
+      _menuHistory.clear();
       menus
         ..clear()
         ..add(mainMenu());
@@ -816,24 +880,35 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   List<LauncherItem> visible() {
     final menu = menus.last;
     final q = query.text.trim();
-    final rows = q.isEmpty
-        ? menu.items
-        : menu.items
-              .where(
-                (i) =>
-                    i.keepWhenFiltering ||
-                    i.label.toLowerCase().contains(q.toLowerCase()),
-              )
-              .toList();
-    final extra = q.isEmpty ? null : menu.typed?.call(q);
-    if (extra == null) return rows;
-    // Enter after typing runs the typed row (search, episode number) unless
-    // a row's name starts with the typed text, like rofi's best match.
+    if (q.isEmpty) return menu.items;
     final lower = q.toLowerCase();
-    final match = rows.any(
-      (i) => !i.keepWhenFiltering && i.label.toLowerCase().startsWith(lower),
-    );
-    return match ? [...rows, extra] : [extra, ...rows];
+    final words = lower.split(RegExp(r'\s+'));
+    final ranked = <({LauncherItem item, int score, int index})>[];
+    for (final (index, item) in menu.items.indexed) {
+      final label = item.label.toLowerCase();
+      final tokens = label.split(RegExp(r'[\s:·()/–—-]+'));
+      final score = label == lower
+          ? 0
+          : label.startsWith(lower)
+          ? 1
+          : words.every((word) => tokens.any((token) => token.startsWith(word)))
+          ? 2
+          : label.contains(lower)
+          ? 3
+          : item.keepWhenFiltering
+          ? 4
+          : -1;
+      if (score >= 0) ranked.add((item: item, score: score, index: index));
+    }
+    ranked.sort((a, b) {
+      final byScore = a.score.compareTo(b.score);
+      return byScore == 0 ? a.index.compareTo(b.index) : byScore;
+    });
+    final rows = [for (final entry in ranked) entry.item];
+    final extra = menu.typed?.call(q);
+    if (extra == null) return rows;
+    final clearMatch = ranked.isNotEmpty && ranked.first.score <= 2;
+    return clearMatch ? [...rows, extra] : [extra, ...rows];
   }
 
   void move(int by, int count) {
@@ -859,9 +934,12 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
     }
     final rows = visible();
     final k = event.logicalKey;
-    if (k == LogicalKeyboardKey.arrowDown) {
+    final control = HardwareKeyboard.instance.isControlPressed;
+    if (k == LogicalKeyboardKey.arrowDown ||
+        control && k == LogicalKeyboardKey.keyJ) {
       move(1, rows.length);
-    } else if (k == LogicalKeyboardKey.arrowUp) {
+    } else if (k == LogicalKeyboardKey.arrowUp ||
+        control && k == LogicalKeyboardKey.keyK) {
       move(-1, rows.length);
     } else if (k == LogicalKeyboardKey.pageDown) {
       move(8, rows.length);
@@ -885,6 +963,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    if (isDesktop && playing) return const ColoredBox(color: bg);
     final menu = menus.last;
     final rows = visible();
     if (selected >= rows.length) selected = math.max(0, rows.length - 1);

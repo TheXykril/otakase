@@ -12,12 +12,12 @@ const fullAppSize = Size(1440, 900);
 const fullAppMinimumSize = Size(960, 600);
 
 /// Prepares the window before the runner renders its first frame.
-Future<void> setUpDesktopWindow() async {
+Future<void> setUpDesktopWindow({Size size = fullAppSize}) async {
   await windowManager.ensureInitialized();
   await windowManager.waitUntilReadyToShow(
-    const WindowOptions(
+    WindowOptions(
       title: 'Otakase',
-      size: fullAppSize,
+      size: size,
       minimumSize: fullAppMinimumSize,
       center: true,
       backgroundColor: bg,

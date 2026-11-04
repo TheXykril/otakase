@@ -76,8 +76,8 @@ void main() {
     expect(find.text('Open full app'), findsOneWidget);
     expect(find.text('Continue: Frieren · Ep 3'), findsNothing);
     expect(find.text('Search for “full”'), findsOneWidget);
-    // "Open full app" does not start with "full", so search is on top.
-    await press(tester, LogicalKeyboardKey.enter);
+    await tester.tap(find.text('Search for “full”'));
+    await tester.pumpAndSettle();
     expect(find.text('Search'), findsOneWidget);
   });
 
@@ -94,9 +94,9 @@ void main() {
 
   testWidgets('search, show menu, episode menu and back', (tester) async {
     await pumpLauncher(tester);
-    await tester.enterText(find.byKey(const Key('launcher-input')), 'frier');
+    await tester.enterText(find.byKey(const Key('launcher-input')), 'frierenn');
     await tester.pumpAndSettle();
-    // No row starts with the typed text, so Enter searches straight away.
+    // No local row matches the typed text, so Enter searches the catalog.
     await press(tester, LogicalKeyboardKey.enter);
     expect(find.text('Search'), findsOneWidget);
     expect(find.text('Frieren'), findsOneWidget);
@@ -120,7 +120,47 @@ void main() {
     expect(find.text('Play next: resume episode 3'), findsOneWidget);
     await press(tester, LogicalKeyboardKey.escape);
     await press(tester, LogicalKeyboardKey.escape);
+    expect(find.text('frierenn'), findsOneWidget);
+    await press(tester, LogicalKeyboardKey.escape);
     expect(find.text('Continue: Frieren · Ep 3'), findsOneWidget);
+  });
+
+  testWidgets('word prefixes, control keys and back preserve the choice', (
+    tester,
+  ) async {
+    const another = MediaTitle(
+      kind: 'movie',
+      trakt: 3,
+      title: 'Spirited Away Again',
+    );
+    await pumpLauncher(
+      tester,
+      content: 'movies',
+      setUp: (services) async {
+        await services.movies.setWatchlist(film, true);
+        await services.movies.setWatchlist(another, true);
+      },
+    );
+    await tester.enterText(find.byKey(const Key('launcher-input')), 'spi aw');
+    await tester.pumpAndSettle();
+    expect(find.text('Spirited Away'), findsOneWidget);
+    expect(find.text('Spirited Away Again'), findsOneWidget);
+    expect(find.text('Search for “spi aw”'), findsOneWidget);
+
+    final state = tester.state<LauncherPageState>(find.byType(LauncherPage));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await press(tester, LogicalKeyboardKey.keyJ);
+    expect(state.selected, 1);
+    await press(tester, LogicalKeyboardKey.keyK);
+    expect(state.selected, 0);
+    await press(tester, LogicalKeyboardKey.keyJ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await press(tester, LogicalKeyboardKey.enter);
+    expect(find.text('Play'), findsOneWidget);
+
+    await press(tester, LogicalKeyboardKey.escape);
+    expect(find.text('spi aw'), findsOneWidget);
+    expect(state.selected, 1);
   });
 
   testWidgets('Ctrl+W and the menu row open the full app', (tester) async {

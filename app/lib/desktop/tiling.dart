@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
@@ -28,6 +29,7 @@ List<String> hyprlandLuaDispatches(
   int pid, {
   required Size? size,
   bool raise = false,
+  String? workspace,
 }) {
   final window = 'window = "pid:$pid"';
   if (size == null) {
@@ -35,6 +37,8 @@ List<String> hyprlandLuaDispatches(
   }
   return [
     'hl.dsp.window.float({ action = "set", $window })',
+    if (workspace != null)
+      'hl.dsp.window.move({ workspace = ${jsonEncode(workspace)}, follow = false, $window })',
     'hl.dsp.window.resize({ x = ${size.width.round()}, y = ${size.height.round()}, $window })',
     'hl.dsp.window.center({ $window })',
     'hl.dsp.focus({ $window })',
@@ -44,11 +48,17 @@ List<String> hyprlandLuaDispatches(
 
 /// Hyprland before 0.55 (hyprlang config): one `hyprctl --batch` line.
 /// centerwindow works on the focused window, so focus comes first.
-String hyprlandLegacyBatch(int pid, {required Size? size, bool raise = false}) {
+String hyprlandLegacyBatch(
+  int pid, {
+  required Size? size,
+  bool raise = false,
+  String? workspace,
+}) {
   final w = 'pid:$pid';
   if (size == null) return 'dispatch settiled $w';
   return [
     'dispatch setfloating $w',
+    if (workspace != null) 'dispatch movetoworkspacesilent $workspace,$w',
     'dispatch resizewindowpixel exact ${size.width.round()} ${size.height.round()},$w',
     'dispatch focuswindow $w',
     'dispatch centerwindow',
@@ -57,14 +67,54 @@ String hyprlandLegacyBatch(int pid, {required Size? size, bool raise = false}) {
 }
 
 /// sway and i3 take the same command.
-String swayCommand(int pid, {required Size? size}) => size == null
-    ? '[pid=$pid] floating disable'
-    : '[pid=$pid] floating enable, resize set ${size.width.round()} ${size.height.round()}, move position center, focus';
+String swayCommand(int pid, {required Size? size, String? workspace}) {
+  if (size == null) return '[pid=$pid] floating disable';
+  return '[pid=$pid] floating enable, '
+      '${workspace == null ? '' : 'move container to workspace ${jsonEncode(workspace)}, '}'
+      'resize set ${size.width.round()} ${size.height.round()}, move position center, focus';
+}
 
 typedef CommandRunner = Future<ProcessResult> Function(
   String executable,
   List<String> args,
 );
+
+/// Captured before mapping, when the previous application still owns focus.
+Future<String?> focusedTilerWorkspace({
+  Map<String, String>? env,
+  bool? linux,
+  CommandRunner? run,
+}) async {
+  final tiler = tilerFrom(env ?? Platform.environment, linux: linux);
+  if (tiler == null) return null;
+  final runner = run ?? Process.run;
+  try {
+    final result =
+        await (tiler == Tiler.hyprland
+                ? runner('hyprctl', ['-j', 'activeworkspace'])
+                : runner(tiler == Tiler.sway ? 'swaymsg' : 'i3-msg', [
+                    '-t',
+                    'get_workspaces',
+                  ]))
+            .timeout(const Duration(milliseconds: 350));
+    if (result.exitCode != 0) return null;
+    final data = jsonDecode(result.stdout as String);
+    if (tiler == Tiler.hyprland) {
+      final id = data is Map ? data['id'] : null;
+      return id is int && id > 0 ? '$id' : null;
+    }
+    if (data is! List) return null;
+    for (final workspace in data.whereType<Map>()) {
+      final name = workspace['name'];
+      if (workspace['focused'] == true && name is String && name.isNotEmpty) {
+        return name;
+      }
+    }
+  } on Exception {
+    return null;
+  }
+  return null;
+}
 
 /// Floats this window at [size] in the middle of the screen, or puts it
 /// back in the tiling layout when [size] is null. Does nothing outside a
@@ -75,6 +125,7 @@ typedef CommandRunner = Future<ProcessResult> Function(
 Future<bool> placeOnTiler({
   Size? size,
   bool raise = false,
+  String? workspace,
   Map<String, String>? env,
   bool? linux,
   int? processId,
@@ -88,7 +139,7 @@ Future<bool> placeOnTiler({
   final runner = run ?? Process.run;
   for (var i = 0; i < attempts; i++) {
     try {
-      if (await _place(tiler, id, size, raise, runner)) return true;
+      if (await _place(tiler, id, size, raise, workspace, runner)) return true;
     } catch (_) {
       return false; // hyprctl or swaymsg missing: nothing to do.
     }
@@ -107,11 +158,17 @@ Future<bool> _place(
   int id,
   Size? size,
   bool raise,
+  String? workspace,
   CommandRunner run,
 ) async {
   switch (tiler) {
     case Tiler.hyprland:
-      final lua = hyprlandLuaDispatches(id, size: size, raise: raise);
+      final lua = hyprlandLuaDispatches(
+        id,
+        size: size,
+        raise: raise,
+        workspace: workspace,
+      );
       final first = await run('hyprctl', ['dispatch', lua.first]);
       if (_ok(first)) {
         for (final d in lua.skip(1)) {
@@ -126,7 +183,7 @@ Future<bool> _place(
       }
       final legacy = await run('hyprctl', [
         '--batch',
-        hyprlandLegacyBatch(id, size: size, raise: raise),
+        hyprlandLegacyBatch(id, size: size, raise: raise, workspace: workspace),
       ]);
       final text = '${legacy.stdout}'.toLowerCase();
       return legacy.exitCode == 0 &&
@@ -134,7 +191,7 @@ Future<bool> _place(
           !text.contains('not found');
     case Tiler.sway || Tiler.i3:
       final r = await run(tiler == Tiler.sway ? 'swaymsg' : 'i3-msg', [
-        swayCommand(id, size: size),
+        swayCommand(id, size: size, workspace: workspace),
       ]);
       // An unmatched criteria reports success false.
       return r.exitCode == 0 && !'${r.stdout}'.contains('"success": false');

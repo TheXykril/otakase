@@ -55,6 +55,47 @@ void main() {
     );
   });
 
+  test(
+    'captures the focused workspace and moves the popup before centering',
+    () async {
+      Future<ProcessResult> respond(
+        String command,
+        List<String> args,
+      ) async => ProcessResult(
+        0,
+        0,
+        command == 'hyprctl'
+            ? '{"id": 4}'
+            : '[{"name":"one","focused":false},{"name":"work","focused":true}]',
+        '',
+      );
+      final hypr = await focusedTilerWorkspace(
+        env: {'HYPRLAND_INSTANCE_SIGNATURE': 'x'},
+        linux: true,
+        run: respond,
+      );
+      final sway = await focusedTilerWorkspace(
+        env: {'SWAYSOCK': 'x'},
+        linux: true,
+        run: respond,
+      );
+      expect(hypr, '4');
+      expect(sway, 'work');
+      expect(
+        hyprlandLuaDispatches(42, size: size, workspace: hypr)[1],
+        contains('workspace = "4"'),
+      );
+      expect(
+        hyprlandLegacyBatch(42, size: size, workspace: hypr),
+        contains('movetoworkspacesilent 4,pid:42'),
+      );
+      expect(
+        swayCommand(42, size: size, workspace: sway),
+        contains('move container to workspace "work", resize set'),
+      );
+    },
+  );
+
   group('placeOnTiler', () {
     final calls = <List<String>>[];
     setUp(calls.clear);
