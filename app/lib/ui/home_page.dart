@@ -51,12 +51,13 @@ class ResumeCard extends StatelessWidget {
     required this.entry,
     required this.isTV,
     required this.onResume,
+    required this.onOpen,
     this.autofocus = true,
     this.showArtwork = true,
   });
   final WatchEntry entry;
   final bool isTV, autofocus, showArtwork;
-  final VoidCallback onResume;
+  final VoidCallback onResume, onOpen;
   @override
   Widget build(BuildContext context) {
     final anime = entry.anime;
@@ -89,116 +90,133 @@ class ResumeCard extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(isTV ? 0 : 16),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (showArtwork) HeroArt(anime, height: height),
-            Positioned(
-              top: 13,
-              left: isTV ? 48 : 14,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                color: bgDeep.withValues(alpha: .95),
-                child: Text(
-                  entry.position > 0
-                      ? 'Continue watching'
-                      : 'Your next episode',
-                  style: uiStyle(context, size: 15),
-                ),
-              ),
-            ),
-            if (anime.nativeTitle.isNotEmpty)
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onOpen,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (showArtwork) HeroArt(anime, height: height),
               Positioned(
-                right: isTV ? 48 : 10,
-                top: 16,
-                child: NativeTitle(anime.nativeTitle, isTV: isTV),
-              ),
-            if (isTV)
-              Positioned(
-                right: 100,
-                bottom: 36,
+                top: 13,
+                left: isTV ? 48 : 14,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 2,
+                    horizontal: 8,
+                    vertical: 4,
                   ),
-                  decoration: BoxDecoration(
-                    color: bgDeep.withValues(alpha: .9),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
+                  color: bgDeep.withValues(alpha: .95),
                   child: Text(
-                    entry.episode.toString().padLeft(2, '0'),
-                    style: display.copyWith(fontSize: 54),
+                    entry.position > 0
+                        ? 'Continue watching'
+                        : 'Your next episode',
+                    style: uiStyle(context, size: 15),
                   ),
                 ),
               ),
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  isTV ? 48 : 18,
-                  48,
-                  isTV ? 300 : 42,
-                  20,
+              if (anime.nativeTitle.isNotEmpty)
+                Positioned(
+                  right: isTV ? 48 : 10,
+                  top: 16,
+                  child: NativeTitle(anime.nativeTitle, isTV: isTV),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'EP ${entry.episode.toString().padLeft(2, '0')}',
-                      style: mono.copyWith(fontSize: isTV ? 20 : 15, color: fg),
+              if (isTV)
+                Positioned(
+                  right: 100,
+                  bottom: 36,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 2,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      anime.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: titleStyle,
+                    decoration: BoxDecoration(
+                      color: bgDeep.withValues(alpha: .9),
+                      borderRadius: BorderRadius.circular(9),
                     ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 12,
-                      runSpacing: 4,
-                      children: [
-                        AppButton(
-                          key: const Key('home-resume'),
-                          label: entry.position > 0 ? 'Resume' : 'Play',
-                          icon: LucideIcons.play,
-                          filled: true,
-                          isTV: isTV,
-                          autofocus: autofocus,
-                          onPressed: onResume,
+                    child: Text(
+                      entry.episode.toString().padLeft(2, '0'),
+                      style: display.copyWith(fontSize: 54),
+                    ),
+                  ),
+                ),
+              Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    isTV ? 48 : 18,
+                    48,
+                    isTV ? 300 : 42,
+                    20,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'EP ${entry.episode.toString().padLeft(2, '0')}',
+                        style: mono.copyWith(
+                          fontSize: isTV ? 20 : 15,
+                          color: fg,
                         ),
-                        if (knownDuration && entry.position > 0)
-                          Container(
-                            color: bgDeep.withValues(alpha: .95),
-                            padding: const EdgeInsets.all(4),
-                            child: Text(
-                              '${((entry.duration - entry.position).clamp(0, entry.duration) / 60).ceil()} min left',
-                              style: uiStyle(context, size: 15),
-                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        anime.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: titleStyle,
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 12,
+                        runSpacing: 4,
+                        children: [
+                          AppButton(
+                            key: const Key('home-resume'),
+                            label: entry.position > 0 ? 'Resume' : 'Play',
+                            icon: LucideIcons.play,
+                            filled: true,
+                            isTV: isTV,
+                            autofocus: autofocus,
+                            onPressed: onResume,
                           ),
-                      ],
-                    ),
-                  ],
+                          if (isTV)
+                            AppButton(
+                              label: 'Details',
+                              icon: LucideIcons.info,
+                              isTV: true,
+                              onPressed: onOpen,
+                            ),
+                          if (knownDuration && entry.position > 0)
+                            Container(
+                              color: bgDeep.withValues(alpha: .95),
+                              padding: const EdgeInsets.all(4),
+                              child: Text(
+                                '${((entry.duration - entry.position).clamp(0, entry.duration) / 60).ceil()} min left',
+                                style: uiStyle(context, size: 15),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            if (knownDuration && entry.position > 0)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: LinearProgressIndicator(
-                  value: (entry.position / entry.duration).clamp(0, 1),
-                  minHeight: 3,
-                  color: shu,
-                  backgroundColor: line,
+              if (knownDuration && entry.position > 0)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: LinearProgressIndicator(
+                    value: (entry.position / entry.duration).clamp(0, 1),
+                    minHeight: 3,
+                    color: shu,
+                    backgroundColor: line,
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -411,6 +429,7 @@ class _HomePageState extends State<HomePage> {
                       isTV: true,
                       showArtwork: false,
                       onResume: () => widget.onResume(stage),
+                      onOpen: () => widget.onOpen(stage.anime),
                     ),
                 ],
               ),
@@ -430,6 +449,7 @@ class _HomePageState extends State<HomePage> {
               entry: stage,
               isTV: widget.isTV,
               onResume: () => widget.onResume(stage),
+              onOpen: () => widget.onOpen(stage.anime),
             ),
           for (final service in lists)
             AccountBlock(

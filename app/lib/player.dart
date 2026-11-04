@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,8 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import 'cast/cast.dart';
 import 'core.dart';
+import 'data/episode_completion.dart';
+import 'data/external_subtitles.dart';
 import 'data/hls_quality.dart';
 import 'data/models.dart';
 import 'desktop/desktop_core.dart';
@@ -66,6 +69,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   final playFocus = FocusNode(debugLabel: 'Play pause');
   final skipFocus = FocusNode(debugLabel: 'Skip segment');
   Timer? hideTimer, saveTimer, nextTimer, loadingTimer;
+  final stall = PlaybackStallWatchdog();
+  bool playRequested = false;
   int copy = 0, generation = 0, countdownSeconds = 0;
   bool overlay = true,
       fullscreen = false,
@@ -77,7 +82,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       audioSelected = false;
   String status = 'Finding an episode', error = '';
   final failedSources = <String>{};
-  bool retrying = false;
+  bool retrying = false, reopenedCopy = false;
   List<SkipSpan> spans = [];
   List<int> episodes = [];
   List<int> availableQualities = [];
@@ -88,6 +93,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   String? marking;
   SkipSpan? markingExisting;
   Duration position = Duration.zero, duration = Duration.zero;
+  Duration playbackPosition = Duration.zero;
   late final CastClient caster = CastClient(widget.services.core);
 
   /// The device the episode plays on instead of this screen, or null.
@@ -99,6 +105,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   /// The external subtitle track last picked, which a cast takes along.
   Json? externalTrack;
+  int subtitleRequest = 0;
+  int? selectingTracks;
   bool get casting => castDevice != null;
   bool get isPlaying =>
       casting ? castStatus?.paused != true : player.state.playing;
@@ -168,36 +176,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         if (changed) unawaited(loadSkips(generation));
       }),
       player.stream.completed.listen((done) {
-        if (done && !busy && !casting && !completedEpisodes.contains(episode)) {
-          finished = true;
-          unawaited(save(completed: true));
-          offerNext();
-        }
+        if (done && !casting) playbackEnded();
       }),
       player.stream.error.listen((message) {
-        // A subtitle or track error must not throw away a playing copy; only
-        // a file that never loaded counts as a broken stream.
-        if (casting ||
-            message.toLowerCase().contains('sub') ||
-            player.state.duration > Duration.zero) {
-          return;
-        }
-        if (mounted && !busy && !retrying) {
-          if (source != null) {
-            unawaited(
-              widget.services.discord.reportProvider(
-                source!.provider,
-                false,
-                'playback',
-                message,
-              ),
-            );
-          }
-          retrying = true;
-          unawaited(
-            tryAnotherCopy(automatic: true)
-                .whenComplete(() => retrying = false),
-          );
+        if (!casting &&
+            player.state.duration == Duration.zero &&
+            !message.toLowerCase().contains('sub')) {
+          unawaited(recoverPlayback(message, reopen: false));
         }
       }),
       player.stream.tracks.listen((_) {
@@ -206,6 +191,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       player.stream.playing.listen((playing) {
         if (mounted) {
           showControls();
+          watchForStall();
           if (!playing && !busy && !casting) {
             unawaited(save().then((_) => resumePusher.flush()));
           }
@@ -233,9 +219,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) {
-      unawaited(save().then((_) => resumePusher.flush()));
+      final leaving =
+          !casting &&
+          (state == AppLifecycleState.hidden ||
+              state == AppLifecycleState.paused);
+      unawaited(save(leaving: leaving).then((_) => resumePusher.flush()));
       // A cast plays on with this screen off.
-      if (!casting) unawaited(player.pause());
+      if (!casting) unawaited(pausePlayback());
     }
   }
 
@@ -259,6 +249,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Future<void> configure() async {
     final s = widget.services.store;
+    await property('sub-visibility', 'yes');
     await property('sub-font', s.text('SubtitleFont'));
     await property('sub-font-size', s.integer('SubtitleSize').toString());
     await property('sub-color', s.text('SubtitleColour'));
@@ -318,14 +309,22 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> open({int? mirror}) async {
+  Future<void> open({
+    int? mirror,
+    Duration? resumeFrom,
+    bool reopening = false,
+  }) async {
     marking = null;
     if (profileStopped) return;
     final g = ++generation;
     scope.cancel();
     scope = RequestScope();
     nextTimer?.cancel();
+    stall.cancel();
+    playRequested = false;
+    reopenedCopy = reopening;
     countdownSeconds = 0;
+    playbackPosition = Duration.zero;
     setState(() {
       busy = true;
       error = '';
@@ -338,6 +337,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     });
     skipped.clear();
     subSelected = false;
+    subtitleRequest++;
     audioSelected = false;
     if (widget.services.auth.accounts.length > 1 &&
         (anime.id <= 0 || anime.malId <= 0)) {
@@ -350,18 +350,22 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         widget.services.tracking.lastError = 'Unable to link this title to both trackers. Retry from Show details.';
       }
     }
-    final historyBeforeOpen = widget.services.store.entry(anime);
-    savedResume = math.max(
-      savedResume,
-      historyBeforeOpen?.episode == episode
-          ? historyBeforeOpen?.position ?? 0
-          : 0,
-    );
-    final synced = await widget.services.tracking.resume(anime);
-    savedResume = math.max(savedResume, synced.forEpisode(episode));
-    if ((historyBeforeOpen?.watched.contains(episode) ?? false) ||
-        episode <= widget.services.tracking.progress(anime)) {
-      savedResume = 0;
+    if (resumeFrom != null) {
+      savedResume = resumeFrom.inSeconds;
+    } else {
+      final historyBeforeOpen = widget.services.store.entry(anime);
+      savedResume = math.max(
+        savedResume,
+        historyBeforeOpen?.episode == episode
+            ? historyBeforeOpen?.position ?? 0
+            : 0,
+      );
+      final synced = await widget.services.tracking.resume(anime);
+      savedResume = math.max(savedResume, synced.forEpisode(episode));
+      if ((historyBeforeOpen?.watched.contains(episode) ?? false) ||
+          episode <= widget.services.tracking.progress(anime)) {
+        savedResume = 0;
+      }
     }
     if (!mounted || g != generation) return;
     try {
@@ -387,20 +391,24 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (stream.torrent) watchLoading(g);
       if (casting) {
         if (externalTrack != null &&
-            !stream.subtitles.any((t) => t['url'] == externalTrack!['url'])) {
+            !externalSubtitleTracks(stream)
+                .any((t) => t['url'] == externalTrack!['url'])) {
           externalTrack = null;
         }
         await castCurrent(
-          start: widget.services.store.flag('ResumePlayback')
+          start:
+              resumeFrom != null || widget.services.store.flag('ResumePlayback')
               ? savedResume.toDouble()
               : 0,
         );
         if (!mounted || g != generation) return;
+        playbackPosition = Duration(seconds: savedResume);
         setState(() => busy = false);
         unawaited(loadEpisodes(g));
         showControls();
         return;
       }
+      externalTrack = null;
       final headers = Map<String, String>.of(stream.headers);
       if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
       await configure();
@@ -419,13 +427,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         }
       }
       if (!mounted || g != generation) return;
-      if (widget.services.store.flag('ResumePlayback') && savedResume > 0) {
+      if (savedResume > 0 &&
+          (resumeFrom != null ||
+              widget.services.store.flag('ResumePlayback'))) {
         await player.seek(Duration(seconds: savedResume));
+        playbackPosition = Duration(seconds: savedResume);
       }
       await preferredTracks(g);
       if (!mounted || g != generation) return;
-      await player.play();
       setState(() => busy = false);
+      await resumePlayback();
+      if (!mounted || g != generation) return;
       unawaited(loadEpisodes(g));
       unawaited(loadSkips(g));
       showControls();
@@ -485,13 +497,26 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     };
     final values =
         aliases[preferred.toLowerCase()] ?? [preferred.toLowerCase()];
-    final lang = (language ?? '').toLowerCase(),
-        label = (title ?? '').toLowerCase();
+    final lang = (language ?? '')
+        .trim()
+        .toLowerCase()
+        .split(RegExp('[-_]'))
+        .first;
+    final label = (title ?? '').toLowerCase();
     return values.any((s) => lang == s || (s.length > 2 && label.contains(s)));
   }
 
   Future<void> preferredTracks(int g) async {
-    if (player.state.duration <= Duration.zero) return;
+    if (!mounted || g != generation || selectingTracks == g) return;
+    selectingTracks = g;
+    try {
+      await pickPreferredTracks(g, subtitleRequest);
+    } finally {
+      if (selectingTracks == g) selectingTracks = null;
+    }
+  }
+
+  Future<void> pickPreferredTracks(int g, int request) async {
     final s = widget.services.store;
     if (!audioSelected) {
       for (final language in s.text('AudioLanguages').split(',')) {
@@ -508,7 +533,15 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         }
       }
     }
-    if (subSelected || source == null || !mounted || g != generation) return;
+    if (subSelected ||
+        source == null ||
+        !mounted ||
+        g != generation ||
+        request != subtitleRequest ||
+        casting) {
+      return;
+    }
+    final stream = source!.streams[copy];
     final preferences = s
         .text('SubsLanguage')
         .toLowerCase()
@@ -532,7 +565,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         await player.setSubtitleTrack(embedded.first);
         return;
       }
-      final external = source!.streams[copy].subtitles.where(
+      final external = externalSubtitleTracks(stream).where(
         (t) => languageMatches(
           t['language'] as String?,
           t['label'] as String?,
@@ -540,41 +573,83 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         ),
       );
       for (final track in external) {
-        if (await externalSubtitle(track, g, manual: false)) {
+        if (await externalSubtitle(track, g, request, manual: false)) {
           subSelected = true;
           return;
         }
-        if (!mounted || g != generation) return;
+        if (!mounted || g != generation || request != subtitleRequest) return;
       }
+    }
+    // Some providers only return a single, unlabelled sidecar.
+    final legacy = externalSubtitleTracks(stream)
+        .where((t) => t['url'] == stream.subtitle && t['language'] == null)
+        .firstOrNull;
+    if (legacy != null &&
+        await externalSubtitle(legacy, g, request, manual: false)) {
+      subSelected = true;
     }
   }
 
-  Future<bool> externalSubtitle(Json track, int g, {bool manual = true}) async {
-    externalTrack = track;
+  Future<bool> externalSubtitle(
+    Json track,
+    int g,
+    int request, {
+    bool manual = true,
+  }) async {
     if (casting) {
+      externalTrack = track;
       if (manual) unawaited(castCurrent(start: position.inSeconds.toDouble()));
       return true;
     }
+    Directory? temporary;
+    bool current() => mounted && g == generation && request == subtitleRequest;
     try {
       final stream = source!.streams[copy];
       final headers = Map<String, String>.of(stream.headers);
       if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
+      final uri = Uri.parse(track['url'] as String);
       final response = await widget.services.catalog.client
-          .get(Uri.parse(track['url'] as String), headers: headers)
+          .get(uri, headers: headers)
           .timeout(const Duration(seconds: 15));
-      if (!mounted || g != generation) return false;
+      if (!current()) return false;
       if (response.statusCode != 200) throw const FormatException();
-      // libass receives the original text, including ASS positions and styles.
-      await player.setSubtitleTrack(
-        SubtitleTrack.data(
+      final extension = subtitleExtension(response.bodyBytes, uri);
+      final title = track['label'] as String? ?? 'Subtitles';
+      final language = track['language'] as String?;
+      final native = player.platform;
+      final previous = native is NativePlayer
+          ? await native.getProperty('sid')
+          : '';
+      final SubtitleTrack subtitle;
+      if (Platform.isAndroid) {
+        temporary = await Directory.systemTemp.createTemp('otakase-subtitle-');
+        final file = File('${temporary.path}/track.$extension');
+        await file.writeAsBytes(response.bodyBytes, flush: true);
+        subtitle = SubtitleTrack.uri(
+          file.path,
+          title: title,
+          language: language,
+        );
+      } else {
+        subtitle = SubtitleTrack.data(
           utf8.decode(response.bodyBytes, allowMalformed: true),
-          title: track['label'] as String? ?? 'Subtitles',
-          language: track['language'] as String?,
-        ),
-      );
+          title: title,
+          language: language,
+        );
+      }
+      if (!current()) return false;
+      await player.setSubtitleTrack(subtitle);
+      if (native is NativePlayer) {
+        final selected = await native.getProperty('sid');
+        if (int.tryParse(selected) == null || selected == previous) {
+          throw const FormatException('Player did not select the subtitle');
+        }
+      }
+      if (!current()) return false;
+      externalTrack = track;
       return true;
     } catch (_) {
-      if (manual && mounted && g == generation) {
+      if (manual && mounted && current()) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Subtitle load failed. Choose another track.'),
@@ -582,12 +657,26 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         );
       }
       return false;
+    } finally {
+      try {
+        await temporary?.delete(recursive: true);
+      } on FileSystemException {
+        // The platform also clears its temporary directory.
+      }
     }
   }
 
   void tick(Duration p) {
     if (profileStopped) return;
-    if (!mounted || busy) return;
+    if (!mounted ||
+        busy ||
+        (p == Duration.zero && player.state.completed && !casting)) {
+      return;
+    }
+    if (p != playbackPosition) {
+      playbackPosition = p;
+      watchForStall();
+    }
     if (p > Duration.zero && source != null) {
       widget.services.discord.observe(anime, episode, p.inMilliseconds / 1000);
       unawaited(
@@ -606,7 +695,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final entered =
         active?.type != current?.type || active?.start != current?.start;
     setState(() {
-      position = p;
+      if (!scrubbing) position = p;
       active = current;
     });
     if (current != null) {
@@ -632,45 +721,127 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         });
       }
     }
-    if (duration.inSeconds > 0 &&
-        duration.inSeconds - p.inSeconds <= 15 &&
-        !finished &&
-        !nextCancelled &&
-        canNext) {
-      finished = true;
-      offerNext();
+  }
+
+  void playbackEnded() {
+    if (!mounted || profileStopped || busy || finished) return;
+    if (!reachedEpisodeEnd(playbackPosition, duration)) {
+      if (casting) {
+        setState(() {
+          error = 'The cast stopped before the end of the episode.';
+          overlay = true;
+        });
+      } else {
+        unawaited(recoverPlayback('Stream ended early'));
+      }
+      return;
+    }
+    finished = true;
+    playRequested = false;
+    stall.cancel();
+    unawaited(save(completed: true));
+    offerNext();
+  }
+
+  void watchForStall() {
+    stall.cancel();
+    if (!mounted ||
+        busy ||
+        casting ||
+        !playRequested ||
+        finished ||
+        error.isNotEmpty) {
+      return;
+    }
+    stall.arm(() {
+      if (!scrubbing) {
+        unawaited(recoverPlayback('Playback stopped making progress'));
+      } else {
+        watchForStall();
+      }
+    });
+  }
+
+  Future<void> recoverPlayback(String reason, {bool reopen = true}) async {
+    if (!mounted ||
+        profileStopped ||
+        casting ||
+        busy ||
+        retrying ||
+        finished ||
+        error.isNotEmpty ||
+        source == null) {
+      return;
+    }
+    retrying = true;
+    final g = generation;
+    final resume = playbackPosition == Duration.zero
+        ? Duration(seconds: savedResume)
+        : playbackPosition;
+    try {
+      await save();
+      if (!mounted || g != generation) return;
+      if (reopen && !reopenedCopy) {
+        await open(mirror: copy, resumeFrom: resume, reopening: true);
+        if (!mounted || generation != g + 1 || error.isEmpty) return;
+      }
+      unawaited(
+        widget.services.discord.reportProvider(
+          source!.provider,
+          false,
+          'playback',
+          reason,
+        ),
+      );
+      await tryAnotherCopy(automatic: true, resumeFrom: resume);
+    } finally {
+      retrying = false;
+      if (mounted) {
+        if (player.state.completed &&
+            !finished &&
+            g != generation &&
+            error.isEmpty) {
+          playbackEnded();
+        } else {
+          watchForStall();
+        }
+      }
     }
   }
 
-  Future<void> save({bool completed = false}) async {
-    if (profileStopped) return;
-    if (busy || duration <= Duration.zero) return;
+  Future<void> save({bool completed = false, bool leaving = false}) async {
+    if (profileStopped || busy || duration <= Duration.zero) return;
+    final at = playbackPosition;
+    if (!completed && at == Duration.zero) return;
     final watched =
         completed ||
-        position.inSeconds / duration.inSeconds * 100 >=
-            widget.services.store.integer('PercentageToMarkComplete');
-    if (watched) {
-      if (completedEpisodes.add(episode)) {
-        if (finishesShow(widget.services, anime, episode)) {
-          widget.services.ratingDue = anime;
-        }
-        await resumePusher.episodeDone(anime.key, episode, anime.episodes);
-      }
-    } else {
-      resumePusher.note(anime.key, episode, position.inSeconds);
+        completedEpisodes.contains(episode) ||
+        (leaving &&
+            !retrying &&
+            error.isEmpty &&
+            watchedEpisode(
+              at,
+              duration,
+              widget.services.store.integer('PercentageToMarkComplete'),
+              spans,
+            ));
+    final newlyWatched = watched && completedEpisodes.add(episode);
+    if (newlyWatched && finishesShow(widget.services, anime, episode)) {
+      widget.services.ratingDue = anime;
     }
-    // Past the watched threshold the episode counts as seen: no resume point,
-    // so it reads "Watched" and opens from the start next time.
-    await widget.services.store.progress(
+    final persist = widget.services.store.progress(
       anime,
       episode,
-      watched ? 0 : position.inSeconds,
+      at.inSeconds,
       duration.inSeconds,
-      completed: completed,
+      completed: watched,
     );
-    if (watched && !completed) {
-      await widget.services.store.markWatched(anime, episode, true);
+    if (newlyWatched) {
+      await resumePusher.episodeDone(anime.key, episode, anime.episodes);
+    } else if (!watched) {
+      resumePusher.note(anime.key, episode, at.inSeconds);
     }
+    await persist;
   }
 
   void showControls() {
@@ -707,18 +878,30 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Future<void> playPause() => isPlaying ? pausePlayback() : resumePlayback();
 
   Future<void> pausePlayback() async {
-    if (!casting) return player.pause();
+    if (!casting) {
+      playRequested = false;
+      stall.cancel();
+      return player.pause();
+    }
     await castControl('pause');
   }
 
   Future<void> resumePlayback() async {
-    if (!casting) return player.play();
+    if (!casting) {
+      playRequested = true;
+      watchForStall();
+      return player.play();
+    }
     await castControl('play');
   }
 
   /// Moves playback here or on the cast device.
   Future<void> seekTo(Duration target) async {
-    if (!casting) return player.seek(target);
+    if (!casting) {
+      await player.seek(target);
+      watchForStall();
+      return;
+    }
     setState(() => position = target);
     await castControl('seek', target.inMilliseconds / 1000);
   }
@@ -752,6 +935,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     castDevice = device;
     castStatus = null;
     castEnded = -1;
+    playRequested = false;
+    stall.cancel();
     await player.pause();
     if (!mounted) return;
     setState(() => overlay = true);
@@ -846,11 +1031,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
       if (s.state == 'ended' && castEnded != s.load) {
         castEnded = s.load;
-        if (!completedEpisodes.contains(episode)) {
-          finished = true;
-          await save(completed: true);
-          offerNext();
-        }
+        final at = Duration(milliseconds: (s.position * 1000).round());
+        if (at > Duration.zero) playbackPosition = at;
+        playbackEnded();
       }
     } catch (_) {
       // A missed poll is retried in a second.
@@ -957,7 +1140,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (target < 1 || anime.airedEpisodes > 0 && target > anime.airedEpisodes) {
       return;
     }
-    await save();
+    await save(leaving: true);
     await resumePusher.flush();
     if (!mounted || profileStopped) return;
     savedResume = 0;
@@ -970,9 +1153,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Future<void> next({bool automatic = false}) async {
     if (!canNext) return;
     nextTimer?.cancel();
-    await save(completed: true);
+    await save(leaving: true);
     var target = episodes.where((e) => e > episode).firstOrNull ?? episode + 1;
-    if (automatic && widget.services.store.flag('SkipFiller')) {
+    if (automatic && finished && widget.services.store.flag('SkipFiller')) {
       // A bounded lookup avoids runaway requests when metadata is incomplete.
       for (var i = 0; i < 12 && target <= anime.airedEpisodes; i++) {
         if (!await widget.services.catalog.isFiller(anime.malId, target)) {
@@ -1039,11 +1222,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   ),
                   onTap: () {
                     subSelected = true;
+                    subtitleRequest++;
+                    externalTrack = null;
                     Navigator.pop(dialog);
                     unawaited(player.setSubtitleTrack(track));
                   },
                 ),
-              for (final track in source?.streams[copy].subtitles ?? <Json>[])
+              for (final track
+                  in source == null
+                      ? <Json>[]
+                      : externalSubtitleTracks(source!.streams[copy]))
                 ChoiceRow(
                   title: Text(
                     '${track['label'] ?? track['language'] ?? 'Subtitles'}',
@@ -1051,7 +1239,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   onTap: () {
                     subSelected = true;
                     Navigator.pop(dialog);
-                    unawaited(externalSubtitle(track, generation));
+                    unawaited(
+                      externalSubtitle(track, generation, ++subtitleRequest),
+                    );
                   },
                 ),
               const Divider(),
@@ -1174,17 +1364,23 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     isTV: widget.isTV,
   );
 
-  Future<void> tryAnotherCopy({bool automatic = false}) async {
+  Future<void> tryAnotherCopy({
+    bool automatic = false,
+    Duration? resumeFrom,
+  }) async {
+    final g = generation;
+    resumeFrom ??= playbackPosition;
     await save();
+    if (!mounted || g != generation) return;
     if (source != null && copy + 1 < source!.streams.length) {
-      await open(mirror: copy + 1);
+      await open(mirror: copy + 1, resumeFrom: resumeFrom);
       return;
     }
     if (source != null) failedSources.add(source!.provider);
     if (failedSources.length >=
         (await widget.services.resolver.sourcesFor(anime)).length) {
       if (automatic) {
-        if (mounted) {
+        if (mounted && g == generation) {
           setState(() {
             busy = false;
             error = 'This episode could not be played.';
@@ -1195,7 +1391,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
       failedSources.clear();
     }
-    if (mounted) await open();
+    if (mounted && g == generation) await open(resumeFrom: resumeFrom);
   }
 
   Future<void> qualityPanel() async {
@@ -1215,7 +1411,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (chosen != null && mounted) {
       await save();
       await widget.services.store.set('Quality', chosen);
-      await open(mirror: copy);
+      await open(mirror: copy, resumeFrom: playbackPosition);
     } else if (mounted) {
       showControls();
     }
@@ -1520,11 +1716,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     scope.cancel();
     hideTimer?.cancel();
     saveTimer?.cancel();
+    stall.cancel();
     nextTimer?.cancel();
     loadingTimer?.cancel();
     castTimer?.cancel();
     if (casting) unawaited(caster.control('stop').catchError((_) {}));
-    if (!profileStopped) unawaited(save().then((_) => resumePusher.flush()));
+    if (!profileStopped) {
+      unawaited(save(leaving: true).then((_) => resumePusher.flush()));
+    }
     if (identical(widget.services.stopPlayback, profileStop)) {
       widget.services.stopPlayback = null;
     }
@@ -1560,6 +1759,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (profileStopped) return;
     hideTimer?.cancel();
     saveTimer?.cancel();
+    stall.cancel();
     nextTimer?.cancel();
     loadingTimer?.cancel();
     discordMeter?.cancel();
@@ -1572,9 +1772,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
     generation++;
     scope.cancel();
+    playRequested = false;
     await player.pause();
     if (casting) await stopCast(resumeHere: false);
-    await save();
+    await save(leaving: true);
     await resumePusher.flush().timeout(
       const Duration(seconds: 5),
       onTimeout: () {},

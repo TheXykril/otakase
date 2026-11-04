@@ -15,8 +15,8 @@ const sourceNames = [
   'nyaa',
 ];
 // Evens out loudness while playing: quiet dialogue comes up and loud effects
-// come down. Uses ffmpeg's dynaudnorm (about a 3 s window, at most 10x gain).
-const volumeLeveller = 'lavfi=[dynaudnorm=f=200:g=15:p=0.95:m=10]';
+// come down. Use the signal at each boundary so gain stays level after seeks.
+const volumeLeveller = 'lavfi=[dynaudnorm=f=200:g=15:p=0.95:m=10:b=1]';
 
 /// The mpv `af` value for the viewer's NormalizeVolume setting.
 String audioFilter(AppStore store) =>

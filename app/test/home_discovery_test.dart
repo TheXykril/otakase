@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:otakase/data/auth.dart';
 import 'package:otakase/data/catalog.dart';
 import 'package:otakase/data/models.dart';
+import 'package:otakase/desktop/desktop_home.dart';
 import 'package:otakase/main.dart';
 import 'package:otakase/services.dart';
 import 'package:otakase/ui/components.dart';
@@ -101,6 +102,60 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  for (final tv in [false, true]) {
+    testWidgets('Home banner opens show details on ${tv ? 'TV' : 'phone'}', (
+      tester,
+    ) async {
+      final services = await launchHome(tester, tv: tv, catalog: HomeCatalog());
+      final feature = find.byKey(const Key('discovery-featured'));
+      await tester.tapAt(tester.getTopRight(feature) + const Offset(-24, 24));
+      await tester.pumpAndSettle();
+      expect(find.byType(ShowPage), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      await services.store.progress(fixture.anime, 5, 720, 1440);
+      await tester.pumpAndSettle();
+      final resume = find.byKey(const Key('resume-card'));
+      await tester.tapAt(tester.getTopRight(resume) + const Offset(-24, 24));
+      await tester.pumpAndSettle();
+      expect(find.byType(ShowPage), findsOneWidget);
+    });
+  }
+
+  testWidgets('desktop banner opens details and Play still starts playback', (
+    tester,
+  ) async {
+    var opened = 0;
+    var played = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DesktopHero(
+            picks: [
+              HeroPick(
+                anime: fixture.anime,
+                kicker: 'Trending',
+                action: 'Play episode 1',
+                onPlay: () => played++,
+                onDetails: () => opened++,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.tapAt(
+      tester.getTopRight(find.byKey(const Key('desktop-hero'))) +
+          const Offset(-24, 24),
+    );
+    expect(opened, 1);
+    expect(played, 0);
+    await tester.tap(find.byKey(const Key('desktop-hero-play')));
+    expect(opened, 1);
+    expect(played, 1);
+  });
 
   testWidgets('unlinked Home retains local resume above discovery', (
     tester,

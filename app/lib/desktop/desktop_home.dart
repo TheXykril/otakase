@@ -80,130 +80,137 @@ class _DesktopHeroState extends State<DesktopHero> {
       if (a.studio.isNotEmpty) _Chip(label: a.studio),
     ];
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onHover: (_) => hoveredAt = DateTime.now(),
       onExit: (_) => hoveredAt = null,
       child: SizedBox(
         key: const Key('desktop-hero'),
         height: height,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 600),
-              child: KeyedSubtree(
-                key: ValueKey(a.key),
-                child: HeroArt(
-                  a,
-                  height: height,
-                  posterPadding: EdgeInsets.fromLTRB(
-                    0,
-                    widget.topInset + 12,
-                    desktopSide + 220,
-                    48,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: pick.onDetails,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 600),
+                child: KeyedSubtree(
+                  key: ValueKey(a.key),
+                  child: HeroArt(
+                    a,
+                    height: height,
+                    posterPadding: EdgeInsets.fromLTRB(
+                      0,
+                      widget.topInset + 12,
+                      desktopSide + 220,
+                      48,
+                    ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              left: desktopSide,
-              right: desktopSide,
-              top: widget.topInset,
-              bottom: 36,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 900),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            pick.kicker.toUpperCase(),
-                            style: mono.copyWith(
-                              fontSize: 17,
-                              color: accentText,
-                              letterSpacing: 3,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            a.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: display.copyWith(fontSize: 60),
-                          ),
-                          if (chips.isNotEmpty) ...[
-                            const SizedBox(height: 18),
-                            Wrap(spacing: 10, runSpacing: 8, children: chips),
-                          ],
-                          if (a.description.isNotEmpty) ...[
-                            const SizedBox(height: 18),
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 760),
-                              child: Text(
-                                a.description,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: uiStyle(context, color: muted),
+              Positioned(
+                left: desktopSide,
+                right: desktopSide,
+                top: widget.topInset,
+                bottom: 36,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 900),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              pick.kicker.toUpperCase(),
+                              style: mono.copyWith(
+                                fontSize: 17,
+                                color: accentText,
+                                letterSpacing: 3,
                               ),
                             ),
-                          ],
-                          const SizedBox(height: 26),
-                          Row(
-                            children: [
-                              AppButton(
-                                key: const Key('desktop-hero-play'),
-                                label: pick.action,
-                                icon: LucideIcons.play,
-                                filled: true,
-                                isTV: true,
-                                onPressed: pick.onPlay,
-                              ),
-                              const SizedBox(width: 14),
-                              AppButton(
-                                key: const Key('desktop-hero-details'),
-                                label: 'Details',
-                                icon: LucideIcons.info,
-                                isTV: true,
-                                onPressed: pick.onDetails,
+                            const SizedBox(height: 10),
+                            Text(
+                              a.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: display.copyWith(fontSize: 60),
+                            ),
+                            if (chips.isNotEmpty) ...[
+                              const SizedBox(height: 18),
+                              Wrap(spacing: 10, runSpacing: 8, children: chips),
+                            ],
+                            if (a.description.isNotEmpty) ...[
+                              const SizedBox(height: 18),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 760,
+                                ),
+                                child: Text(
+                                  a.description,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: uiStyle(context, color: muted),
+                                ),
                               ),
                             ],
-                          ),
-                        ],
+                            const SizedBox(height: 26),
+                            Row(
+                              children: [
+                                AppButton(
+                                  key: const Key('desktop-hero-play'),
+                                  label: pick.action,
+                                  icon: LucideIcons.play,
+                                  filled: true,
+                                  isTV: true,
+                                  onPressed: pick.onPlay,
+                                ),
+                                const SizedBox(width: 14),
+                                AppButton(
+                                  key: const Key('desktop-hero-details'),
+                                  label: 'Details',
+                                  icon: LucideIcons.info,
+                                  isTV: true,
+                                  onPressed: pick.onDetails,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  if (widget.picks.length > 1)
-                    Row(
-                      children: [
-                        for (var i = 0; i < widget.picks.length; i++)
-                          GestureDetector(
-                            key: ValueKey('desktop-hero-dot-$i'),
-                            onTap: () => setState(() => index = i),
-                            child: MouseRegion(
-                              cursor: SystemMouseCursors.click,
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 250),
-                                margin: const EdgeInsets.only(left: 8),
-                                width: i == index ? 30 : 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: i == index
-                                      ? shu
-                                      : fgBright.withValues(alpha: .3),
-                                  borderRadius: BorderRadius.circular(5),
+                    if (widget.picks.length > 1)
+                      Row(
+                        children: [
+                          for (var i = 0; i < widget.picks.length; i++)
+                            GestureDetector(
+                              key: ValueKey('desktop-hero-dot-$i'),
+                              onTap: () => setState(() => index = i),
+                              child: MouseRegion(
+                                cursor: SystemMouseCursors.click,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  margin: const EdgeInsets.only(left: 8),
+                                  width: i == index ? 30 : 10,
+                                  height: 10,
+                                  decoration: BoxDecoration(
+                                    color: i == index
+                                        ? shu
+                                        : fgBright.withValues(alpha: .3),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                ],
+                        ],
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
