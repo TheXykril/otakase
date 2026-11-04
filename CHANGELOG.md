@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Anime episodes save your place when you leave early.** Otakase marks
+  episodes watched based on playback and ending credits instead of the old
+  85% threshold. Automatic opening and ending skips look for missing markers
+  across enabled sources.
+- **AniList and MyAnimeList keep progress in episode order.** Otakase remembers
+  episodes watched out of order, advances tracker progress once you fill the
+  gap, and retries failed completion updates.
+
 ## 26.1.6 - 2026-11-03
 
 Phones find TVs and computers for the remote more often, and you can pair by
