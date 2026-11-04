@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,9 +22,7 @@ Future<void> main([List<String> args = const []]) async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
   final reduceMotion =
       binding.platformDispatcher.accessibilityFeatures.disableAnimations;
-  final wayland =
-      Platform.isLinux &&
-      (Platform.environment['WAYLAND_DISPLAY'] ?? '').isNotEmpty;
+  final wayland = launcherFadesContent;
   MediaKit.ensureInitialized();
   if (isDesktop) {
     readDesktopArguments(args);

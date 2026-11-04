@@ -59,11 +59,11 @@ The player takes mpv's keys. **?** shows this list in the player.
 ## The launcher
 
 Starting the app with `--launcher` opens a fixed-size popup. The menu fades
-in unless your system asks for reduced motion, and closes when it loses
-focus. Type to filter, use the arrows or PageUp/PageDown to move, and press
-**Enter** to pick. **Esc** clears your filter, goes back, then closes the
-menu. Starting playback or opening the full app restores the normal window
-controls.
+in on open and fades out when dismissed or when the popup loses focus.
+Reduced motion skips both fades. Type to filter, use the arrows or
+PageUp/PageDown to move, and press **Enter** to pick. **Esc** clears your
+filter, goes back, then closes the menu. Starting playback or opening the
+full app restores the normal window controls.
 
 With **Movies & shows** on for your profile, the launcher lists the films
 and series you are watching and your Trakt watchlist, searches them along

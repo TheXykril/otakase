@@ -36,14 +36,24 @@ const launcherTitle = 'Otakase Launcher';
 const launcherPlayerSize = Size(1280, 760);
 
 const launcherMinimumSize = Size(480, 360);
+const _launcherFadeDuration = Duration(milliseconds: 144);
+
+bool get launcherFadesContent =>
+    Platform.isLinux &&
+    (Platform.environment['WAYLAND_DISPLAY'] ?? '').isNotEmpty;
+
+final _launcherClosing = ValueNotifier(false);
+Completer<void>? _launcherFadeOut;
+var _launcherOpacity = 0.0;
 
 /// Blur during placement comes from the compositor moving the window.
 bool _launcherPlaced = false;
 
 Future<void> prepareLauncherWindow({bool fadeContent = false}) async {
   _launcherPlaced = false;
+  _launcherClosing.value = false;
   await windowManager.ensureInitialized();
-  if (!fadeContent) await windowManager.setOpacity(0);
+  if (!fadeContent) await _setLauncherOpacity(0);
   await windowManager.waitUntilReadyToShow(
     WindowOptions(
       title: launcherTitle,
@@ -65,17 +75,55 @@ Future<void> revealLauncherWindow({
   if (fadeContent) await _waitForLauncherSize();
   _launcherPlaced = true;
 
-  if (fadeContent) return;
-  if (!reduceMotion) {
-    const frames = 9;
+  if (!fadeContent) {
+    await _fadeNativeLauncher(closing: false, reduceMotion: reduceMotion);
+  }
+}
+
+Future<void> dismissLauncherWindow({
+  required bool reduceMotion,
+  required bool fadeContent,
+}) async {
+  if (_launcherClosing.value) return;
+
+  final fadeOut = fadeContent && !reduceMotion ? Completer<void>() : null;
+  _launcherFadeOut = fadeOut;
+  _launcherClosing.value = true;
+  if (fadeOut != null) {
+    // An unfocused window may stop getting frames on some compositors.
+    await fadeOut.future.timeout(
+      _launcherFadeDuration + const Duration(milliseconds: 100),
+      onTimeout: () {},
+    );
+    _launcherFadeOut = null;
+  } else if (!fadeContent) {
+    await _fadeNativeLauncher(closing: true, reduceMotion: reduceMotion);
+  }
+  await windowManager.hide();
+}
+
+Future<void> _setLauncherOpacity(double opacity) async {
+  _launcherOpacity = opacity;
+  await windowManager.setOpacity(opacity);
+}
+
+Future<void> _fadeNativeLauncher({
+  required bool closing,
+  required bool reduceMotion,
+}) async {
+  final from = _launcherOpacity;
+  final to = closing ? 0.0 : 1.0;
+  if (!reduceMotion && from != to) {
+    const step = Duration(milliseconds: 16);
+    final frames = _launcherFadeDuration.inMilliseconds ~/ step.inMilliseconds;
     for (var frame = 1; frame < frames; frame++) {
-      await Future<void>.delayed(const Duration(milliseconds: 16));
-      await windowManager.setOpacity(
-        Curves.easeOutCubic.transform(frame / frames),
-      );
+      await Future<void>.delayed(step);
+      if (!closing && _launcherClosing.value) return;
+      final progress = Curves.easeOutCubic.transform(frame / frames);
+      await _setLauncherOpacity(from + (to - from) * progress);
     }
   }
-  await windowManager.setOpacity(1);
+  if (closing || !_launcherClosing.value) await _setLauncherOpacity(to);
 }
 
 Future<void> _waitForLauncherSize() async {
@@ -113,17 +161,28 @@ class LauncherStartup extends StatelessWidget {
   Widget build(BuildContext context) => FutureBuilder<void>(
     future: ready,
     builder: (context, snapshot) {
-      final visible = snapshot.connectionState == ConnectionState.done;
-      return IgnorePointer(
-        ignoring: !visible,
-        child: AnimatedOpacity(
-          opacity: visible ? 1 : 0,
-          duration: reduceMotion
-              ? Duration.zero
-              : const Duration(milliseconds: 144),
-          curve: Curves.easeOutCubic,
-          child: child,
-        ),
+      return ValueListenableBuilder(
+        valueListenable: _launcherClosing,
+        child: child,
+        builder: (context, closing, child) {
+          final visible =
+              snapshot.connectionState == ConnectionState.done && !closing;
+          return IgnorePointer(
+            ignoring: !visible,
+            child: AnimatedOpacity(
+              opacity: visible ? 1 : 0,
+              duration: reduceMotion ? Duration.zero : _launcherFadeDuration,
+              curve: Curves.easeOutCubic,
+              onEnd: () {
+                final fadeOut = _launcherFadeOut;
+                if (closing && fadeOut != null && !fadeOut.isCompleted) {
+                  fadeOut.complete();
+                }
+              },
+              child: child,
+            ),
+          );
+        },
       );
     },
   );
@@ -232,7 +291,16 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   Future<void> quit() async {
     if (_quitting) return;
     _quitting = true;
-    if (isDesktop) await windowManager.hide();
+    if (isDesktop) {
+      await dismissLauncherWindow(
+        reduceMotion: WidgetsBinding
+            .instance
+            .platformDispatcher
+            .accessibilityFeatures
+            .disableAnimations,
+        fadeContent: launcherFadesContent,
+      );
+    }
     await services.close().timeout(
       const Duration(seconds: 5),
       onTimeout: () {},
@@ -785,6 +853,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   }
 
   KeyEventResult key(FocusNode node, KeyEvent event) {
+    if (_quitting) return KeyEventResult.handled;
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
@@ -893,6 +962,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
                   selected: i == selected,
                   onHover: () => setState(() => selected = i),
                   onTap: () {
+                    if (_quitting) return;
                     setState(() => selected = i);
                     unawaited(Future.sync(rows[i].onSelect));
                     input.requestFocus();

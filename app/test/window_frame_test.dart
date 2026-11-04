@@ -52,9 +52,7 @@ void main() {
     ),
   );
 
-  testWidgets('launcher fades in and releases window controls for playback', (
-    tester,
-  ) async {
+  void mockDisplay() {
     const screen = MethodChannel('dev.leanflutter.plugins/screen_retriever');
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -76,6 +74,12 @@ void main() {
       },
     );
     addTearDown(() => messenger.setMockMethodCallHandler(screen, null));
+  }
+
+  testWidgets('launcher fades in and releases window controls for playback', (
+    tester,
+  ) async {
+    mockDisplay();
 
     List<dynamic> values(String method, String key) => requests
         .where((call) => call.method == method)
@@ -128,6 +132,34 @@ void main() {
     requests.clear();
     await revealLauncherWindow(reduceMotion: true);
     expect(values('setOpacity', 'opacity'), [1.0]);
+
+    calls.clear();
+    requests.clear();
+    final dismiss = dismissLauncherWindow(
+      reduceMotion: false,
+      fadeContent: false,
+    );
+    await dismissLauncherWindow(reduceMotion: false, fadeContent: false);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(values('setOpacity', 'opacity').single, inExclusiveRange(0, 1));
+    expect(calls, isNot(contains('hide')));
+    for (var frame = 0; frame < 8; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await dismiss;
+    final fadeOut = values('setOpacity', 'opacity');
+    expect(fadeOut, orderedEquals(([...fadeOut]..sort()).reversed));
+    expect(fadeOut.last, 0.0);
+    expect(calls.where((call) => call == 'hide'), hasLength(1));
+    expect(calls.last, 'hide');
+
+    await prepareLauncherWindow();
+    await revealLauncherWindow(reduceMotion: true);
+    calls.clear();
+    requests.clear();
+    await dismissLauncherWindow(reduceMotion: true, fadeContent: false);
+    expect(values('setOpacity', 'opacity'), [0.0]);
+    expect(calls, ['setOpacity', 'hide']);
   });
 
   testWidgets('launcher stays transparent while Wayland reports a tile', (
@@ -138,6 +170,8 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
 
+    mockDisplay();
+    await prepareLauncherWindow(fadeContent: true);
     final ready = revealLauncherWindow(reduceMotion: false, fadeContent: true);
     await tester.pumpWidget(
       LauncherStartup(
@@ -169,6 +203,19 @@ void main() {
     expect(opacity(), inExclusiveRange(0, 1));
     await tester.pumpAndSettle();
     expect(opacity(), 1);
+
+    final dismiss = dismissLauncherWindow(
+      reduceMotion: false,
+      fadeContent: true,
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 72));
+    expect(opacity(), inExclusiveRange(0, 1));
+    expect(calls, isNot(contains('hide')));
+    await tester.pumpAndSettle();
+    expect(calls.last, 'hide');
+    await dismiss;
+    expect(opacity(), 0);
     expect(calls, isNot(contains('setOpacity')));
   });
 
