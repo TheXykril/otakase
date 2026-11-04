@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The desktop launcher opens as a fixed-size popup, fades in and closes when
+  it loses focus. Playback and the full app use normal window controls.
+
 ## 26.1.7 - 2026-11-04
 
 ### Fixed

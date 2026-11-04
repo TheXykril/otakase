@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otakase/data/trakt.dart';
+import 'package:otakase/desktop/desktop_core.dart';
 import 'package:otakase/desktop/launcher.dart';
+import 'package:otakase/main.dart';
 import 'package:otakase/services.dart';
 
 import 'widget_test.dart' as fixture;
@@ -40,6 +42,30 @@ Future<void> press(WidgetTester tester, LogicalKeyboardKey key) async {
 }
 
 void main() {
+  testWidgets('desktop launcher has no window drag areas or window buttons', (
+    tester,
+  ) async {
+    final services = await fixture.services();
+    debugDesktopOverride = true;
+    desktopLauncher.value = true;
+    addTearDown(() {
+      desktopLauncher.value = false;
+      debugDesktopOverride = null;
+    });
+    await tester.pumpWidget(OtakaseApp(services: services, isTV: true));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('window-edge-drag')), findsNothing);
+    expect(find.byKey(const Key('window-drag-area')), findsNothing);
+    expect(find.byKey(const Key('window-minimize')), findsNothing);
+    expect(find.byKey(const Key('window-maximize')), findsNothing);
+    expect(find.text('Quit'), findsOneWidget);
+    final input = tester.widget<TextField>(
+      find.byKey(const Key('launcher-input')),
+    );
+    expect(input.focusNode!.hasFocus, isTrue);
+  });
+
   testWidgets('starts on Continue and filters by typing', (tester) async {
     await pumpLauncher(tester);
     expect(find.text('Continue: Frieren · Ep 3'), findsOneWidget);

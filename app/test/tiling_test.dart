@@ -44,6 +44,17 @@ void main() {
     );
   });
 
+  test('Hyprland raises the popup above other floating windows', () {
+    expect(
+      hyprlandLuaDispatches(42, size: size, raise: true).last,
+      'hl.dsp.window.alter_zorder({ mode = "top", window = "pid:42" })',
+    );
+    expect(
+      hyprlandLegacyBatch(42, size: size, raise: true),
+      endsWith('dispatch alterzorder top,pid:42'),
+    );
+  });
+
   group('placeOnTiler', () {
     final calls = <List<String>>[];
     setUp(calls.clear);

@@ -24,7 +24,11 @@ Tiler? tilerFrom(Map<String, String> env, {bool? linux}) {
 
 /// Hyprland 0.55 and later (Lua config): each dispatcher is a Lua call,
 /// sent one per `hyprctl dispatch`.
-List<String> hyprlandLuaDispatches(int pid, {required Size? size}) {
+List<String> hyprlandLuaDispatches(
+  int pid, {
+  required Size? size,
+  bool raise = false,
+}) {
   final window = 'window = "pid:$pid"';
   if (size == null) {
     return ['hl.dsp.window.float({ action = "unset", $window })'];
@@ -34,12 +38,13 @@ List<String> hyprlandLuaDispatches(int pid, {required Size? size}) {
     'hl.dsp.window.resize({ x = ${size.width.round()}, y = ${size.height.round()}, $window })',
     'hl.dsp.window.center({ $window })',
     'hl.dsp.focus({ $window })',
+    if (raise) 'hl.dsp.window.alter_zorder({ mode = "top", $window })',
   ];
 }
 
 /// Hyprland before 0.55 (hyprlang config): one `hyprctl --batch` line.
 /// centerwindow works on the focused window, so focus comes first.
-String hyprlandLegacyBatch(int pid, {required Size? size}) {
+String hyprlandLegacyBatch(int pid, {required Size? size, bool raise = false}) {
   final w = 'pid:$pid';
   if (size == null) return 'dispatch settiled $w';
   return [
@@ -47,6 +52,7 @@ String hyprlandLegacyBatch(int pid, {required Size? size}) {
     'dispatch resizewindowpixel exact ${size.width.round()} ${size.height.round()},$w',
     'dispatch focuswindow $w',
     'dispatch centerwindow',
+    if (raise) 'dispatch alterzorder top,$w',
   ].join(' ; ');
 }
 
@@ -68,6 +74,7 @@ typedef CommandRunner = Future<ProcessResult> Function(
 /// few times.
 Future<bool> placeOnTiler({
   Size? size,
+  bool raise = false,
   Map<String, String>? env,
   bool? linux,
   int? processId,
@@ -81,7 +88,7 @@ Future<bool> placeOnTiler({
   final runner = run ?? Process.run;
   for (var i = 0; i < attempts; i++) {
     try {
-      if (await _place(tiler, id, size, runner)) return true;
+      if (await _place(tiler, id, size, raise, runner)) return true;
     } catch (_) {
       return false; // hyprctl or swaymsg missing: nothing to do.
     }
@@ -95,10 +102,16 @@ bool _ok(ProcessResult r) {
   return r.exitCode == 0 && (out.isEmpty || out.startsWith('ok'));
 }
 
-Future<bool> _place(Tiler tiler, int id, Size? size, CommandRunner run) async {
+Future<bool> _place(
+  Tiler tiler,
+  int id,
+  Size? size,
+  bool raise,
+  CommandRunner run,
+) async {
   switch (tiler) {
     case Tiler.hyprland:
-      final lua = hyprlandLuaDispatches(id, size: size);
+      final lua = hyprlandLuaDispatches(id, size: size, raise: raise);
       final first = await run('hyprctl', ['dispatch', lua.first]);
       if (_ok(first)) {
         for (final d in lua.skip(1)) {
@@ -113,7 +126,7 @@ Future<bool> _place(Tiler tiler, int id, Size? size, CommandRunner run) async {
       }
       final legacy = await run('hyprctl', [
         '--batch',
-        hyprlandLegacyBatch(id, size: size),
+        hyprlandLegacyBatch(id, size: size, raise: raise),
       ]);
       final text = '${legacy.stdout}'.toLowerCase();
       return legacy.exitCode == 0 &&

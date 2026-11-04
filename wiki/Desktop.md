@@ -58,18 +58,20 @@ The player takes mpv's keys. **?** shows this list in the player.
 
 ## The launcher
 
-Starting the app with `--launcher` opens a small window that stays on top, for when you
-only want to pick something and watch: type to filter, arrows or
-PageUp/PageDown to move, **Enter** to pick, **Esc** to clear the text, go back,
-then close. Playing an episode grows it to fit the player. Like a popup, it
-closes when you click into another window.
+Starting the app with `--launcher` opens a fixed-size popup. The menu fades
+in unless your system asks for reduced motion, and closes when it loses
+focus. Type to filter, use the arrows or PageUp/PageDown to move, and press
+**Enter** to pick. **Esc** clears your filter, goes back, then closes the
+menu. Starting playback or opening the full app restores the normal window
+controls.
 
 With **Movies & shows** on for your profile, the launcher lists the films
 and series you are watching and your Trakt watchlist, searches them along
 with anime, and has a **Trending movies & shows** list.
 
-On Hyprland, sway and i3 the launcher floats in the middle of the screen
-instead of opening as a tile; nothing needs adding to your config for it.
+The popup opens above other windows on Windows, macOS and X11. On Hyprland,
+sway and i3, Otakase centers the floating popup and brings it forward.
+On Wayland, the compositor controls stacking and its own window shortcuts.
 
 Bind it to a keyboard shortcut in your desktop's settings to open Otakase
 from anywhere. On Hyprland, for example:

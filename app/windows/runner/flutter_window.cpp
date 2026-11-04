@@ -51,6 +51,18 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // The launcher has neither a resize frame nor a maximize button. Block
+  // system-menu shortcuts that would still move or resize the popup.
+  if (message == WM_SYSCOMMAND &&
+      (GetWindowLongPtr(hwnd, GWL_STYLE) & (WS_THICKFRAME | WS_MAXIMIZEBOX)) == 0) {
+    switch (wparam & 0xfff0) {
+      case SC_MOVE:
+      case SC_SIZE:
+      case SC_MAXIMIZE:
+        return 0;
+    }
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

@@ -23,7 +23,12 @@ Future<void> main([List<String> args = const []]) async {
   MediaKit.ensureInitialized();
   if (isDesktop) {
     readDesktopArguments(args);
-    await setUpDesktopWindow(launcher: desktopLauncher.value);
+    if (desktopLauncher.value) {
+      await prepareLauncherWindow();
+    } else {
+      await setUpDesktopWindow();
+      await showDesktopWindow();
+    }
   }
   final core = CoreClient();
   final profiles = ProfileManager(
@@ -46,6 +51,14 @@ Future<void> main([List<String> args = const []]) async {
     );
   }
   runApp(ProfileHost(manager: profiles));
+  if (isDesktop && desktopLauncher.value) {
+    final binding = WidgetsBinding.instance;
+    await binding.waitUntilFirstFrameRasterized;
+    await revealLauncherWindow(
+      reduceMotion:
+          binding.platformDispatcher.accessibilityFeatures.disableAnimations,
+    );
+  }
 }
 
 class ProfileHost extends StatefulWidget {
@@ -94,9 +107,13 @@ class _ProfileHostState extends State<ProfileHost> {
         isTV: widget.manager.isTV,
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
-          builder: (context, child) => DesktopFrame(
-            child: widget.manager.isTV ? TVViewport(child: child!) : child!,
-          ),
+          builder: (context, child) => desktopLauncher.value
+              ? child!
+              : DesktopFrame(
+                  child: widget.manager.isTV
+                      ? TVViewport(child: child!)
+                      : child!,
+                ),
           theme: ThemeData(
             brightness: Brightness.dark,
             fontFamily: 'Inter',
@@ -168,7 +185,11 @@ class OtakaseApp extends StatefulWidget {
 
 class _OtakaseAppState extends State<OtakaseApp> {
   late final ratingPrompt = RatingPrompt(widget.services, isTV: widget.isTV);
+  bool _openingFullApp = false;
+
   Future<void> openFullApp() async {
+    if (_openingFullApp) return;
+    _openingFullApp = true;
     await resizeDesktopWindow(launcher: false);
     desktopLauncher.value = false;
   }
@@ -221,11 +242,11 @@ class _OtakaseAppState extends State<OtakaseApp> {
         title: 'Otakase',
         navigatorObservers: [ratingPrompt],
         debugShowCheckedModeBanner: false,
-        builder: (context, child) => DesktopFrame(
-          child: widget.isTV && !desktopLauncher.value
-              ? TVViewport(child: child!)
-              : child!,
-        ),
+        builder: (context, child) => desktopLauncher.value
+            ? child!
+            : DesktopFrame(
+                child: widget.isTV ? TVViewport(child: child!) : child!,
+              ),
         theme: ThemeData(
           brightness: Brightness.dark,
           colorScheme: const ColorScheme.dark(

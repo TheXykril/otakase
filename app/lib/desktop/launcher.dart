@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -34,25 +35,78 @@ const launcherSize = Size(680, 560);
 const launcherTitle = 'Otakase Launcher';
 const launcherPlayerSize = Size(1280, 760);
 
-/// Switches the window between launcher and full app sizes.
-Future<void> resizeDesktopWindow({required bool launcher}) async {
-  if (!isDesktop) return;
-  await windowManager.setTitle(launcher ? launcherTitle : 'Otakase');
-  await windowManager.setAlwaysOnTop(launcher);
-  await windowManager.setMinimumSize(
-    launcher ? const Size(480, 360) : const Size(960, 600),
+const launcherMinimumSize = Size(480, 360);
+
+/// Blur during placement comes from the compositor moving the window.
+bool _launcherPlaced = false;
+
+Future<void> prepareLauncherWindow() async {
+  _launcherPlaced = false;
+  await windowManager.ensureInitialized();
+  await windowManager.setOpacity(0);
+  await windowManager.waitUntilReadyToShow(
+    const WindowOptions(
+      title: launcherTitle,
+      size: launcherSize,
+      minimumSize: launcherMinimumSize,
+      center: true,
+      backgroundColor: bg,
+    ),
   );
-  await windowManager.setSize(launcher ? launcherSize : const Size(1440, 900));
-  await windowManager.center();
-  // Tiling compositors ignore the size: float the launcher like the old
-  // rofi popup, and put the full app back in the layout.
-  launcherPlaced = DateTime.now();
-  await placeOnTiler(size: launcher ? launcherSize : null);
+  await _setLauncherWindowControls(true);
 }
 
-/// When the window was last floated or resized; focus changes around that
-/// time come from the compositor, not from the viewer leaving.
-DateTime launcherPlaced = DateTime(0);
+Future<void> revealLauncherWindow({required bool reduceMotion}) async {
+  await showDesktopWindow();
+  await placeOnTiler(size: launcherSize, raise: true);
+  _launcherPlaced = true;
+
+  if (!reduceMotion) {
+    const frames = 9;
+    for (var frame = 1; frame < frames; frame++) {
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      await windowManager.setOpacity(
+        Curves.easeOutCubic.transform(frame / frames),
+      );
+    }
+  }
+  await windowManager.setOpacity(1);
+}
+
+Future<void> _setLauncherWindowControls(bool launcher) async {
+  await windowManager.setResizable(!launcher);
+  await windowManager.setMinimizable(!launcher);
+  if (Platform.isWindows) await windowManager.setMaximizable(!launcher);
+  if (Platform.isMacOS) await windowManager.setMovable(!launcher);
+  await windowManager.setTitleBarStyle(
+    TitleBarStyle.hidden,
+    windowButtonVisibility: !launcher,
+  );
+  await windowManager.setAlwaysOnTop(launcher);
+  await windowManager.setSkipTaskbar(launcher);
+}
+
+/// Restores normal window controls for the app and player.
+Future<void> resizeDesktopWindow({
+  required bool launcher,
+  bool player = false,
+}) async {
+  if (!isDesktop) return;
+  _launcherPlaced = false;
+  final size = launcher
+      ? launcherSize
+      : (player ? launcherPlayerSize : fullAppSize);
+  if (!launcher) await _setLauncherWindowControls(false);
+  await windowManager.setTitle(launcher ? launcherTitle : 'Otakase');
+  await windowManager.setMinimumSize(
+    launcher || player ? launcherMinimumSize : fullAppMinimumSize,
+  );
+  await windowManager.setSize(size);
+  await windowManager.center();
+  await placeOnTiler(size: launcher || player ? size : null, raise: launcher);
+  if (launcher) await _setLauncherWindowControls(true);
+  _launcherPlaced = launcher;
+}
 
 /// One row of a launcher menu.
 class LauncherItem {
@@ -120,12 +174,17 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   /// Saves playback and closes the window. The full app's shell replaces
   /// this hook once the launcher turns into the full app.
   Future<void> quit() async {
+    if (_quitting) return;
+    _quitting = true;
+    if (isDesktop) await windowManager.hide();
     await services.close().timeout(
       const Duration(seconds: 5),
       onTimeout: () {},
     );
     await closeDesktopWindow();
   }
+
+  bool _quitting = false;
 
   /// True while a player runs from the launcher.
   bool playing = false;
@@ -134,9 +193,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   /// but not while it plays or right after the compositor moved it.
   @override
   void onWindowBlur() {
-    if (playing || !desktopLauncher.value || !mounted) return;
-    if (DateTime.now().difference(launcherPlaced) <
-        const Duration(seconds: 2)) {
+    if (playing || !_launcherPlaced || !desktopLauncher.value || !mounted) {
       return;
     }
     if (ModalRoute.of(context)?.isCurrent == false) return;
@@ -146,18 +203,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   @override
   void initState() {
     super.initState();
-    if (isDesktop) {
-      windowManager.addListener(this);
-      launcherPlaced = DateTime.now();
-      // On a tiling compositor the window opened as a tile: float it.
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => unawaited(
-          placeOnTiler(size: launcherSize, attempts: 10).then((_) {
-            launcherPlaced = DateTime.now();
-          }),
-        ),
-      );
-    }
+    if (isDesktop) windowManager.addListener(this);
     desktopCloseHook = quit;
     menus.add(mainMenu());
     query.addListener(() => setState(() => selected = 0));
@@ -619,17 +665,15 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
 
   /// Grows the window to a player, plays, then comes back to the menu.
   Future<void> runPlayer(Widget player) async {
+    if (playing) return;
     playing = true;
-    if (isDesktop) {
-      await windowManager.setAlwaysOnTop(false);
-      await windowManager.setSize(launcherPlayerSize);
-      await windowManager.center();
-      await placeOnTiler(size: launcherPlayerSize);
-    }
+    await resizeDesktopWindow(launcher: false, player: true);
     if (!mounted) return;
     await Navigator.push(
       context,
-      OtakaseRoute<void>(builder: (_) => TVViewport(child: player)),
+      OtakaseRoute<void>(
+        builder: (_) => DesktopFrame(child: TVViewport(child: player)),
+      ),
     );
     if (isDesktop) await resizeDesktopWindow(launcher: true);
     playing = false;
@@ -728,47 +772,38 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
         ),
         child: Column(
           children: [
-            WindowDragArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16 + windowButtonsLeading,
-                  14,
-                  16,
-                  10,
-                ),
-                child: Row(
-                  children: [
-                    if (menus.length > 1)
-                      IconButton(
-                        tooltip: 'Back',
-                        icon: const Icon(LucideIcons.chevronLeft, size: 18),
-                        onPressed: back,
-                      )
-                    else
-                      const OtakaseSeal(size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        menu.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: uiStyle(
-                          context,
-                          size: 15,
-                          weight: FontWeight.w600,
-                          color: fgBright,
-                        ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Row(
+                children: [
+                  if (menus.length > 1)
+                    IconButton(
+                      tooltip: 'Back',
+                      icon: const Icon(LucideIcons.chevronLeft, size: 18),
+                      onPressed: back,
+                    )
+                  else
+                    const OtakaseSeal(size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      menu.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: uiStyle(
+                        context,
+                        size: 15,
+                        weight: FontWeight.w600,
+                        color: fgBright,
                       ),
                     ),
-                    if (menu.detail.isNotEmpty)
-                      Text(
-                        menu.detail,
-                        style: mono.copyWith(fontSize: 12, color: muted),
-                      ),
-                    const SizedBox(width: 8),
-                    const WindowButtons(),
-                  ],
-                ),
+                  ),
+                  if (menu.detail.isNotEmpty)
+                    Text(
+                      menu.detail,
+                      style: mono.copyWith(fontSize: 12, color: muted),
+                    ),
+                ],
               ),
             ),
             Padding(
