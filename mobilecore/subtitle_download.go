@@ -3,6 +3,7 @@ package mobilecore
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -80,7 +81,7 @@ func (c *Core) downloadSubtitle(ctx context.Context, req *subtitleDownloadReques
 		return failure("subtitle_url", "The subtitle link must use HTTPS.", false)
 	}
 	client := &http.Client{
-		Transport: subtitleTransport(c),
+		Transport: subtitleDownloadTransport(c),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if !allowedSubtitleURL(req.URL) || (via[0].URL.Scheme == "https" && req.URL.Scheme != "https") {
 				return errInsecureSubtitle
@@ -98,6 +99,9 @@ func (c *Core) downloadSubtitle(ctx context.Context, req *subtitleDownloadReques
 	var status subtitleHTTPError
 	var dns *net.DNSError
 	var certificate *tls.CertificateVerificationError
+	var hostname x509.HostnameError
+	var invalid x509.CertificateInvalidError
+	var unknownAuthority x509.UnknownAuthorityError
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
 		return failure("subtitle_timeout", "The subtitle download timed out.", true)
@@ -111,6 +115,12 @@ func (c *Core) downloadSubtitle(ctx context.Context, req *subtitleDownloadReques
 		return failure("subtitle_http", fmt.Sprintf("Subtitle download failed (HTTP %d).", status), false)
 	case errors.As(err, &dns):
 		return failure("subtitle_dns", "The subtitle server address could not be found (DNS).", true)
+	case errors.As(err, &hostname):
+		return failure("subtitle_tls_hostname", "The subtitle certificate does not match the server name.", false)
+	case errors.As(err, &invalid) && invalid.Reason == x509.Expired:
+		return failure("subtitle_tls_date", "The subtitle certificate expired or is not yet valid.", false)
+	case errors.As(err, &unknownAuthority):
+		return failure("subtitle_tls_chain", "The subtitle certificate chain is not trusted.", false)
 	case errors.As(err, &certificate):
 		return failure("subtitle_tls", "The subtitle server certificate could not be verified.", false)
 	default:

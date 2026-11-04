@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"net"
@@ -59,6 +60,9 @@ func TestSubtitleDownloadClassifiesFailures(t *testing.T) {
 	}{
 		{"subtitle_dns", &net.DNSError{Err: "lookup failed", Name: "subtitles.example"}},
 		{"subtitle_tls", &tls.CertificateVerificationError{Err: errors.New("untrusted")}},
+		{"subtitle_tls_chain", &tls.CertificateVerificationError{Err: x509.UnknownAuthorityError{}}},
+		{"subtitle_tls_hostname", &tls.CertificateVerificationError{Err: x509.HostnameError{}}},
+		{"subtitle_tls_date", &tls.CertificateVerificationError{Err: x509.CertificateInvalidError{Reason: x509.Expired}}},
 		{"subtitle_timeout", context.DeadlineExceeded},
 		{"subtitle_network", errors.New("connection reset")},
 		{"subtitle_http", nil},
