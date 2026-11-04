@@ -36,8 +36,11 @@ String subtitleExtension(List<int> bytes, Uri uri) {
 }
 
 class SubtitleFailure implements Exception {
-  const SubtitleFailure(this.message);
+  const SubtitleFailure(this.message, {this.host});
   final String message;
+
+  /// Only failures reaching the sidecar trigger an automatic source change.
+  final String? host;
 }
 
 Future<({List<int> bytes, String extension})> downloadSubtitle(
@@ -46,6 +49,7 @@ Future<({List<int> bytes, String extension})> downloadSubtitle(
   String link, {
   CoreClient? nativeCore,
   RequestScope? scope,
+  Duration timeout = const Duration(seconds: 15),
 }) async {
   final url = Uri.tryParse(link.trim());
   final video = Uri.tryParse(stream.url);
@@ -66,7 +70,12 @@ Future<({List<int> bytes, String extension})> downloadSubtitle(
   if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
   final List<int> bytes;
   if (nativeCore == null) {
-    bytes = await downloadSubtitleWithHttp(client, uri, headers);
+    bytes = await downloadSubtitleWithHttp(
+      client,
+      uri,
+      headers,
+      timeout: timeout,
+    );
   } else {
     try {
       final data = await nativeCore.request(
@@ -75,11 +84,24 @@ Future<({List<int> bytes, String extension})> downloadSubtitle(
           'subtitle': {'url': uri.toString(), 'headers': headers},
         },
         scope: scope,
-        timeout: const Duration(seconds: 23),
+        timeout: timeout,
       );
       bytes = base64Decode(data['body'] as String? ?? '');
     } on CoreFailure catch (e) {
-      throw SubtitleFailure(e.message);
+      throw SubtitleFailure(
+        e.message,
+        host:
+            e.code.startsWith('subtitle_tls') ||
+                const {
+                  'subtitle_dns',
+                  'subtitle_network',
+                  'subtitle_timeout',
+                  'subtitle_http',
+                  'timeout',
+                }.contains(e.code)
+            ? uri.host
+            : null,
+      );
     }
   }
   try {
@@ -94,21 +116,24 @@ Future<({List<int> bytes, String extension})> downloadSubtitle(
 Future<List<int>> downloadSubtitleWithHttp(
   http.Client client,
   Uri uri,
-  Map<String, String> headers,
-) async {
+  Map<String, String> headers, {
+  required Duration timeout,
+}) async {
   final http.Response response;
   try {
-    response = await client
-        .get(uri, headers: headers)
-        .timeout(const Duration(seconds: 15));
+    response = await client.get(uri, headers: headers).timeout(timeout);
   } on TimeoutException {
-    throw const SubtitleFailure('The subtitle download timed out.');
+    throw SubtitleFailure('The subtitle download timed out.', host: uri.host);
   } on Exception {
-    throw const SubtitleFailure('The subtitle server could not be reached.');
+    throw SubtitleFailure(
+      'The subtitle server could not be reached.',
+      host: uri.host,
+    );
   }
   if (response.statusCode != 200) {
     throw SubtitleFailure(
       'Subtitle download failed (HTTP ${response.statusCode}).',
+      host: uri.host,
     );
   }
   return response.bodyBytes;

@@ -20,6 +20,7 @@ import 'desktop/player_bar.dart';
 import 'desktop/window_frame.dart';
 import 'data/store.dart';
 import 'data/synced_resume.dart';
+import 'data/subtitle_fallback.dart';
 import 'services.dart';
 import 'tls_ca.dart';
 import 'ui/components.dart';
@@ -108,6 +109,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Json? externalTrack;
   int subtitleRequest = 0;
   int? selectingTracks;
+  bool skipEpisodeSubtitles = false;
+  ({String provider, int copy})? unsubtitledCopy;
   bool get casting => castDevice != null;
   bool get isPlaying =>
       casting ? castStatus?.paused != true : player.state.playing;
@@ -174,7 +177,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         if (!mounted || d <= Duration.zero || casting) return;
         final changed = duration == Duration.zero;
         setState(() => duration = d);
-        if (changed) unawaited(loadSkips(generation));
+        if (changed && !busy) unawaited(loadSkips(generation));
       }),
       player.stream.completed.listen((done) {
         if (done && !casting) playbackEnded();
@@ -314,12 +317,15 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     int? mirror,
     Duration? resumeFrom,
     bool reopening = false,
+    String? onlyProvider,
   }) async {
     marking = null;
     if (profileStopped) return;
     final g = ++generation;
     scope.cancel();
     scope = RequestScope();
+    final requestScope = scope;
+    unsubtitledCopy = null;
     nextTimer?.cancel();
     stall.cancel();
     playRequested = false;
@@ -372,25 +378,24 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     try {
       await player.stop();
       await clearSubtitleFiles();
-      if (mirror == null) {
+      if (mirror == null || onlyProvider != null) {
         await widget.services.core.stopPlayback();
         source = await widget.services.resolver.resolve(
           anime,
           episode,
-          scope: scope,
-          exclude: failedSources,
-          mode: widget.mode,
+          scope: requestScope,
+          exclude: onlyProvider == null ? failedSources : const {},
+          mode: onlyProvider == null ? widget.mode : 'sub',
+          onlyProvider: onlyProvider,
+          allowAudioFallback: onlyProvider == null,
           status: (s) {
             if (mounted && g == generation) setState(() => status = s);
           },
         );
-        copy = 0;
-      } else {
-        copy = mirror;
       }
       if (!mounted || g != generation) return;
+      copy = mirror != null && mirror < source!.streams.length ? mirror : 0;
       final stream = source!.streams[copy];
-      if (stream.torrent) watchLoading(g);
       if (casting) {
         if (externalTrack != null &&
             !externalSubtitleTracks(stream)
@@ -410,32 +415,55 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         showControls();
         return;
       }
-      externalTrack = null;
-      final headers = Map<String, String>.of(stream.headers);
-      if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
-      await configure();
-      await configureQuality(stream, headers);
-      await player.open(Media(stream.url, httpHeaders: headers), play: false);
+      final initial = source!;
+      final initialCopy = copy;
+      final failure = await selectSubtitleCopy(
+        initial: initial,
+        initialCopy: initialCopy,
+        enabled: !skipEpisodeSubtitles && widget.mode != 'dub',
+        scope: requestScope,
+        openCopy: (candidate, index) => prepareCopy(candidate, index, g),
+        nextSource: (tried) async {
+          await player.stop();
+          requestScope.check();
+          await widget.services.core.stopPlayback();
+          try {
+            return await widget.services.resolver.resolve(
+              anime,
+              episode,
+              scope: requestScope,
+              status: (_) {
+                if (mounted && g == generation) {
+                  setState(() => status = 'Finding a copy with subtitles');
+                }
+              },
+              exclude: {...failedSources, ...tried, ...torrentSources},
+              mode: 'sub',
+              allowAudioFallback: false,
+            );
+          } on CoreFailure catch (e) {
+            if (e.code == 'no_stream') return null;
+            rethrow;
+          }
+        },
+      );
       if (!mounted || g != generation) return;
-      // Seeking and adding subtitles before mpv has loaded the file fails, so
-      // wait until it reports a duration (a live stream may never do so).
-      if (player.state.duration == Duration.zero) {
-        try {
-          await player.stream.duration
-              .firstWhere((d) => d > Duration.zero)
-              .timeout(const Duration(seconds: 20));
-        } on TimeoutException {
-          // Play anyway; tracks are picked when they appear.
-        }
+      if (failure != null) {
+        unsubtitledCopy = (provider: initial.provider, copy: initialCopy);
+        setState(() {
+          busy = false;
+          error =
+              'Subtitles could not be loaded from ${failure.host}. '
+              'No other copy had working subtitles.';
+        });
+        return;
       }
-      if (!mounted || g != generation) return;
       if (savedResume > 0 &&
           (resumeFrom != null ||
               widget.services.store.flag('ResumePlayback'))) {
         await player.seek(Duration(seconds: savedResume));
         playbackPosition = Duration(seconds: savedResume);
       }
-      await preferredTracks(g);
       if (!mounted || g != generation) return;
       setState(() => busy = false);
       await resumePlayback();
@@ -451,6 +479,53 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         });
       }
     }
+  }
+
+  Future<SubtitleCopyCheck> prepareCopy(
+    PlaybackSource candidate,
+    int index,
+    int g,
+  ) async {
+    final requestScope = scope;
+    await player.stop();
+    requestScope.check();
+    await clearSubtitleFiles();
+    requestScope.check();
+    source = candidate;
+    copy = index;
+    externalTrack = null;
+    subSelected = false;
+    audioSelected = false;
+    subtitleRequest++;
+    setState(() {
+      duration = Duration.zero;
+      position = Duration.zero;
+    });
+    final stream = candidate.streams[index];
+    if (stream.torrent) watchLoading(g);
+    final headers = Map<String, String>.of(stream.headers);
+    if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
+    await configure();
+    await configureQuality(stream, headers);
+    requestScope.check();
+    await player.open(Media(stream.url, httpHeaders: headers), play: false);
+    requestScope.check();
+    if (player.state.duration == Duration.zero) {
+      try {
+        await player.stream.duration
+            .firstWhere((d) => d > Duration.zero)
+            .timeout(const Duration(seconds: 20));
+      } on TimeoutException {
+        // Live streams may never report a duration.
+      }
+    }
+    requestScope.check();
+    if (skipEpisodeSubtitles) {
+      subSelected = true;
+      await player.setSubtitleTrack(SubtitleTrack.no());
+    }
+    final failure = await preferredTracks(g);
+    return (selected: subSelected, failure: failure);
   }
 
   Future<void> loadEpisodes(int g) async {
@@ -508,17 +583,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     return values.any((s) => lang == s || (s.length > 2 && label.contains(s)));
   }
 
-  Future<void> preferredTracks(int g) async {
-    if (!mounted || g != generation || selectingTracks == g) return;
+  Future<SubtitleFailure?> preferredTracks(int g) async {
+    if (!mounted || g != generation || selectingTracks == g) return null;
     selectingTracks = g;
     try {
-      await pickPreferredTracks(g, subtitleRequest);
+      return await pickPreferredTracks(g, subtitleRequest);
     } finally {
       if (selectingTracks == g) selectingTracks = null;
     }
   }
 
-  Future<void> pickPreferredTracks(int g, int request) async {
+  Future<SubtitleFailure?> pickPreferredTracks(int g, int request) async {
     final s = widget.services.store;
     if (!audioSelected) {
       for (final language in s.text('AudioLanguages').split(',')) {
@@ -541,9 +616,15 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         g != generation ||
         request != subtitleRequest ||
         casting) {
-      return;
+      return null;
     }
     final stream = source!.streams[copy];
+    SubtitleFailure? failure;
+    final attempted = <Object?>{};
+    void recordFailure(SubtitleFailure problem) {
+      if (problem.host != null) failure ??= problem;
+    }
+
     final preferences = s
         .text('SubsLanguage')
         .toLowerCase()
@@ -554,7 +635,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (preferred == 'none' || preferred == 'off') {
         subSelected = true;
         await player.setSubtitleTrack(SubtitleTrack.no());
-        return;
+        return null;
       }
       final embedded = player.state.tracks.subtitle.where(
         (t) =>
@@ -565,7 +646,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (embedded.isNotEmpty) {
         subSelected = true;
         await player.setSubtitleTrack(embedded.first);
-        return;
+        return null;
       }
       final external = externalSubtitleTracks(stream).where(
         (t) => languageMatches(
@@ -575,11 +656,20 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         ),
       );
       for (final track in external) {
-        if (await externalSubtitle(track, g, request, manual: false)) {
+        if (!attempted.add(track['url'])) continue;
+        if (await externalSubtitle(
+          track,
+          g,
+          request,
+          manual: false,
+          onFailure: recordFailure,
+        )) {
           subSelected = true;
-          return;
+          return null;
         }
-        if (!mounted || g != generation || request != subtitleRequest) return;
+        if (!mounted || g != generation || request != subtitleRequest) {
+          return null;
+        }
       }
     }
     // Some providers only return a single, unlabelled sidecar.
@@ -587,9 +677,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         .where((t) => t['url'] == stream.subtitle && t['language'] == null)
         .firstOrNull;
     if (legacy != null &&
-        await externalSubtitle(legacy, g, request, manual: false)) {
+        attempted.add(legacy['url']) &&
+        await externalSubtitle(
+          legacy,
+          g,
+          request,
+          manual: false,
+          onFailure: recordFailure,
+        )) {
       subSelected = true;
+      return null;
     }
+    return failure;
   }
 
   final subtitleDirectories = <Directory>{};
@@ -605,6 +704,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     int g,
     int request, {
     bool manual = true,
+    void Function(SubtitleFailure)? onFailure,
   }) async {
     if (casting) {
       externalTrack = track;
@@ -620,6 +720,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         track['url'] as String,
         nativeCore: Platform.isAndroid ? widget.services.core : null,
         scope: scope,
+        timeout:
+            !manual && busy && widget.mode == 'sub' && source?.mode == 'sub'
+            ? const Duration(seconds: 6)
+            : Duration(seconds: Platform.isAndroid ? 23 : 15),
       );
       if (!current()) return false;
       final title = track['label'] as String? ?? 'Subtitles';
@@ -663,6 +767,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       externalTrack = track;
       return true;
     } catch (e) {
+      if (e is SubtitleFailure && current()) onFailure?.call(e);
       if (manual && mounted && current()) {
         final message = e is SubtitleFailure
             ? e.message
@@ -1156,6 +1261,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     savedResume = 0;
     nextCancelled = false;
     episode = target;
+    skipEpisodeSubtitles = false;
     failedSources.clear();
     await open();
   }
@@ -1183,6 +1289,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     savedResume = 0;
     nextCancelled = false;
     episode = target;
+    skipEpisodeSubtitles = false;
     failedSources.clear();
     await open();
   }
@@ -2062,6 +2169,20 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                         runSpacing: 8,
                         alignment: WrapAlignment.center,
                         children: [
+                          if (unsubtitledCopy case final fallback?)
+                            AppButton(
+                              label: 'Play without subtitles',
+                              onPressed: () {
+                                skipEpisodeSubtitles = true;
+                                unawaited(
+                                  open(
+                                    onlyProvider: fallback.provider,
+                                    mirror: fallback.copy,
+                                  ),
+                                );
+                              },
+                              isTV: widget.isTV,
+                            ),
                           AppButton(
                             label: 'Try another copy',
                             onPressed: tryAnotherCopy,
