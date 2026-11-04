@@ -148,6 +148,83 @@ Future<bool> placeOnTiler({
   return false;
 }
 
+/// Hyprland handles its modifier drag before the window receives pointer
+/// input. Keep the popup anchored by putting it back when its position settles.
+class HyprlandLauncherAnchor {
+  HyprlandLauncherAnchor({
+    required this.processId,
+    required this.restore,
+    CommandRunner? run,
+  }) : _run = run ?? Process.run;
+
+  final int processId;
+  final Future<void> Function(String? workspace) restore;
+  final CommandRunner _run;
+  Timer? _timer;
+  Future<void>? _restoring;
+  ({int x, int y, String? workspace})? _home, _displaced;
+  bool _checking = false, _stopped = false;
+
+  Future<void> start() async {
+    await check();
+    if (!_stopped && _home != null) {
+      _timer = Timer.periodic(
+        const Duration(milliseconds: 180),
+        (_) => unawaited(check()),
+      );
+    }
+  }
+
+  Future<void> stop() async {
+    _stopped = true;
+    _timer?.cancel();
+    await _restoring;
+  }
+
+  Future<void> check() async {
+    if (_stopped || _checking) return;
+    _checking = true;
+    try {
+      final result = await _run('hyprctl', [
+        '-j',
+        'clients',
+      ]).timeout(const Duration(milliseconds: 500));
+      if (_stopped || result.exitCode != 0) return;
+      final clients = jsonDecode(result.stdout.toString());
+      if (clients is! List) return;
+      for (final client in clients.whereType<Map>()) {
+        if (client['pid'] != processId || client['mapped'] != true) continue;
+        final at = client['at'];
+        final workspace = client['workspace'];
+        final id = workspace is Map ? workspace['id'] : null;
+        if (at is! List || at.length != 2 || at[0] is! int || at[1] is! int) {
+          return;
+        }
+        final position = (
+          x: at[0] as int,
+          y: at[1] as int,
+          workspace: id is int && id > 0 ? '$id' : null,
+        );
+        _home ??= position;
+        if (position == _home) {
+          _displaced = null;
+        } else if (position == _displaced) {
+          _displaced = null;
+          await (_restoring = restore(_home!.workspace));
+        } else {
+          _displaced = position;
+        }
+        return;
+      }
+    } on Exception {
+      // A compositor reload can interrupt the request. Retry on the next tick.
+    } finally {
+      _restoring = null;
+      _checking = false;
+    }
+  }
+}
+
 bool _ok(ProcessResult r) {
   final out = '${r.stdout}'.trim().toLowerCase();
   return r.exitCode == 0 && (out.isEmpty || out.startsWith('ok'));

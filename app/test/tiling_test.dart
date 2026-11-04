@@ -96,6 +96,37 @@ void main() {
     },
   );
 
+  test('a compositor drag is restored to the launcher workspace', () async {
+    var x = 100;
+    var workspace = 4;
+    final restores = <String?>[];
+    final anchor = HyprlandLauncherAnchor(
+      processId: 42,
+      run: (_, args) async => ProcessResult(
+        0,
+        0,
+        '[{"pid":9,"mapped":true,"at":[30,60]},'
+            '{"pid":42,"mapped":true,"at":[$x,200],"workspace":{"id":$workspace}}]',
+        '',
+      ),
+      restore: (home) async => restores.add(home),
+    );
+    await anchor.check();
+    x = 140;
+    await anchor.check();
+    x = 180;
+    workspace = 5;
+    await anchor.check();
+    expect(restores, isEmpty);
+    await anchor.check();
+    expect(restores, ['4']);
+
+    await anchor.stop();
+    await anchor.check();
+    await anchor.check();
+    expect(restores, ['4']);
+  });
+
   group('placeOnTiler', () {
     final calls = <List<String>>[];
     setUp(calls.clear);

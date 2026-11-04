@@ -47,8 +47,16 @@ var _launcherOpacity = 0.0;
 
 /// Blur during placement comes from the compositor moving the window.
 bool _launcherPlaced = false;
+HyprlandLauncherAnchor? _launcherAnchor;
+
+Future<void> _stopLauncherAnchor() async {
+  final anchor = _launcherAnchor;
+  _launcherAnchor = null;
+  await anchor?.stop();
+}
 
 Future<void> prepareLauncherWindow({bool fadeContent = false}) async {
+  await _stopLauncherAnchor();
   _launcherPlaced = false;
   _launcherClosing.value = false;
   await windowManager.ensureInitialized();
@@ -71,9 +79,32 @@ Future<void> revealLauncherWindow({
   String? workspace,
 }) async {
   await showDesktopWindow();
-  await placeOnTiler(size: launcherSize, raise: true, workspace: workspace);
+  final placed = await placeOnTiler(
+    size: launcherSize,
+    raise: true,
+    workspace: workspace,
+  );
   if (fadeContent) await _waitForLauncherSize();
   _launcherPlaced = true;
+  if (placed &&
+      !_launcherClosing.value &&
+      tilerFrom(Platform.environment) == Tiler.hyprland) {
+    final anchor = HyprlandLauncherAnchor(
+      processId: pid,
+      restore: (home) async {
+        await placeOnTiler(
+          size: launcherSize,
+          raise: true,
+          workspace: home ?? workspace,
+          attempts: 1,
+          run: (exe, args) =>
+              Process.run(exe, args).timeout(const Duration(milliseconds: 350)),
+        );
+      },
+    );
+    _launcherAnchor = anchor;
+    unawaited(anchor.start());
+  }
 
   if (!fadeContent) {
     await _fadeNativeLauncher(closing: false, reduceMotion: reduceMotion);
@@ -89,6 +120,7 @@ Future<void> dismissLauncherWindow({
   final fadeOut = fadeContent && !reduceMotion ? Completer<void>() : null;
   _launcherFadeOut = fadeOut;
   _launcherClosing.value = true;
+  final stopped = _stopLauncherAnchor();
   if (fadeOut != null) {
     // An unfocused window may stop getting frames on some compositors.
     await fadeOut.future.timeout(
@@ -99,6 +131,7 @@ Future<void> dismissLauncherWindow({
   } else if (!fadeContent) {
     await _fadeNativeLauncher(closing: true, reduceMotion: reduceMotion);
   }
+  await stopped;
   await windowManager.hide();
 }
 
@@ -208,6 +241,7 @@ Future<void> resizeDesktopWindow({
   bool place = true,
 }) async {
   if (!isDesktop) return;
+  await _stopLauncherAnchor();
   _launcherPlaced = false;
   final size = launcher
       ? launcherSize
@@ -329,9 +363,34 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   }
 
   @override
+  void onWindowFocus() {
+    if (!mounted ||
+        playing ||
+        _quitting ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    input.requestFocus();
+  }
+
+  KeyEventResult _escape(KeyEvent event) {
+    if (event.logicalKey != LogicalKeyboardKey.escape ||
+        playing ||
+        !mounted ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return KeyEventResult.ignored;
+    }
+    if (!_quitting && event is KeyDownEvent) {
+      if (!back()) unawaited(quit());
+    }
+    return KeyEventResult.handled;
+  }
+
+  @override
   void initState() {
     super.initState();
     if (isDesktop) windowManager.addListener(this);
+    FocusManager.instance.addEarlyKeyEventHandler(_escape);
     desktopCloseHook = quit;
     menus.add(mainMenu());
     query.addListener(() => setState(() => selected = 0));
@@ -341,6 +400,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   @override
   void dispose() {
     if (isDesktop) windowManager.removeListener(this);
+    FocusManager.instance.removeEarlyKeyEventHandler(_escape);
     if (desktopCloseHook == quit) desktopCloseHook = null;
     query.dispose();
     input.dispose();
@@ -950,8 +1010,6 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
       if (event is KeyDownEvent && selected < rows.length) {
         unawaited(Future.sync(rows[selected].onSelect));
       }
-    } else if (k == LogicalKeyboardKey.escape) {
-      if (event is KeyDownEvent && !back()) unawaited(quit());
     } else if (k == LogicalKeyboardKey.keyW &&
         HardwareKeyboard.instance.isControlPressed) {
       widget.onOpenApp?.call();

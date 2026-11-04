@@ -66,6 +66,24 @@ void main() {
     expect(input.focusNode!.hasFocus, isTrue);
   });
 
+  testWidgets('Escape works after the launcher input loses focus', (
+    tester,
+  ) async {
+    await pumpLauncher(tester);
+    final field = find.byKey(const Key('launcher-input'));
+    await tester.enterText(field, 'full');
+    final state = tester.state<LauncherPageState>(find.byType(LauncherPage));
+    state.input.unfocus();
+    await tester.pump();
+    expect(state.input.hasFocus, isFalse);
+
+    await press(tester, LogicalKeyboardKey.escape);
+    expect(state.query.text, isEmpty);
+    state.onWindowFocus();
+    await tester.pump();
+    expect(state.input.hasFocus, isTrue);
+  });
+
   testWidgets('starts on Continue and filters by typing', (tester) async {
     await pumpLauncher(tester);
     expect(find.text('Continue: Frieren · Ep 3'), findsOneWidget);

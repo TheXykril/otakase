@@ -77,7 +77,9 @@ with anime, and has a **Trending movies & shows** list.
 
 The popup opens above other windows on Windows, macOS and X11. On Hyprland,
 sway and i3, Otakase centers the floating popup on the focused workspace.
-Other desktops use the display under the pointer. On Wayland, the compositor controls stacking and its own window shortcuts.
+On Hyprland, a compositor drag snaps back to the launcher’s original
+workspace. Other desktops use the display under the pointer. On Wayland,
+the compositor controls stacking and its own window shortcuts.
 
 Bind it to a keyboard shortcut in your desktop's settings to open Otakase
 from anywhere. On Hyprland, for example:
