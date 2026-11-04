@@ -6,7 +6,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../core.dart';
+import '../data/episode_completion.dart';
 import '../data/models.dart';
+import '../data/skip_times.dart';
 import '../data/store.dart';
 import '../player.dart';
 import '../services.dart';
@@ -49,11 +51,19 @@ const mpvStatusScript = r'''
 -- Otakase: reports the position and runs the app's commands.
 local file = mp.get_opt("otakase-commands")
 local seen = 0
+local seeking = false
+mp.register_event("seek", function() seeking = true end)
+mp.register_event("end-file", function(event)
+  io.stdout:write("otakase-end " .. event.reason .. "\n")
+  io.stdout:flush()
+end)
 mp.add_periodic_timer(0.5, function()
   local pos = mp.get_property_number("time-pos") or -1
   local dur = mp.get_property_number("duration") or -1
   local paused = mp.get_property_bool("pause") and 1 or 0
-  io.stdout:write(string.format("otakase-status %.3f %.3f %d\n", pos, dur, paused))
+  local jumped = seeking and 1 or 0
+  if pos >= 0 then seeking = false end
+  io.stdout:write(string.format("otakase-status %.3f %.3f %d %d\n", pos, dur, paused, jumped))
   io.stdout:flush()
   if not file then return end
   local f = io.open(file, "r")
@@ -72,10 +82,18 @@ end)
 
 /// One status line from the script.
 class MpvStatus {
-  const MpvStatus(this.position, this.duration, this.paused);
+  const MpvStatus(
+    this.position,
+    this.duration,
+    this.paused, {
+    this.seek = false,
+  });
   final double position, duration;
-  final bool paused;
-  bool get loaded => position >= 0 && duration > 0;
+  final bool paused, seek;
+  bool get loaded =>
+      position.isFinite && duration.isFinite && position >= 0 && duration > 0;
+  Duration get at => Duration(milliseconds: (position * 1000).round());
+  Duration get total => Duration(milliseconds: (duration * 1000).round());
 }
 
 MpvStatus? parseMpvStatus(String line) {
@@ -85,7 +103,12 @@ MpvStatus? parseMpvStatus(String line) {
   final pos = double.tryParse(parts[at + 1]),
       dur = double.tryParse(parts[at + 2]);
   if (pos == null || dur == null) return null;
-  return MpvStatus(pos, dur, parts[at + 3] == '1');
+  return MpvStatus(
+    pos,
+    dur,
+    parts[at + 3] == '1',
+    seek: parts.length > at + 4 && parts[at + 4] == '1',
+  );
 }
 
 /// Quotes [s] for an mpv input command.
@@ -183,6 +206,10 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
   Process? process;
   File? commands;
   MpvStatus? last;
+  var viewing = EpisodeViewing();
+  String? viewingKey;
+  String? endReason;
+  bool completionSaved = false;
   List<SkipSpan> spans = [];
   final skipped = <String>{};
   final failed = <String>{};
@@ -215,7 +242,7 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
     if (identical(widget.services.playerStatus, statusHandler)) {
       widget.services.playerStatus = null;
     }
-    unawaited(save().then((_) => resumePusher.flush()));
+    unawaited(save(leaving: true).then((_) => resumePusher.flush()));
     unawaited(widget.services.discord.stopWatching());
     process?.kill();
     unawaited(widget.services.core.stopPlayback());
@@ -261,11 +288,11 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
       case 'party_skip':
         final pos = last?.position ?? 0;
         final span = spans.where((s) => s.contains(pos)).firstOrNull;
-        await mpv(
-          span == null
-              ? 'seek 85'
-              : 'seek ${span.end.toStringAsFixed(2)} absolute',
-        );
+        if (span == null) {
+          await mpv('seek 85');
+        } else {
+          await skipSpan(span, last!);
+        }
       case 'volume':
         await mpv('set volume ${number(args['volume']).clamp(0, 100)}');
       case 'next':
@@ -284,7 +311,7 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
     if (target < 1 || anime.airedEpisodes > 0 && target > anime.airedEpisodes) {
       return;
     }
-    await save();
+    await save(leaving: true);
     await resumePusher.flush();
     final old = process;
     process = null;
@@ -307,8 +334,12 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
       status = 'Finding an episode';
     });
     skipped.clear();
+    viewing = EpisodeViewing();
+    viewingKey = null;
+    endReason = null;
+    completionSaved = false;
     final entry = widget.services.store.entry(anime);
-    savedResume = entry?.episode == episode ? entry?.position ?? 0 : 0;
+    savedResume = entry?.resumeFor(episode) ?? 0;
     final synced = await widget.services.tracking.resume(anime);
     savedResume = math.max(savedResume, synced.forEpisode(episode));
     if ((entry?.watched.contains(episode) ?? false) ||
@@ -328,6 +359,9 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
         },
       );
       if (!mounted || g != generation) return;
+      final current = source!;
+      viewingKey =
+          '$episode:${current.provider}:${current.showId}:${current.mode}:0';
       final dir = await Directory.systemTemp.createTemp('otakase-mpv');
       final script = File('${dir.path}${Platform.pathSeparator}otakase.lua');
       await script.writeAsString(mpvStatusScript);
@@ -357,13 +391,14 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
         status = 'Playing in mpv';
       });
       unawaited(p.stderr.drain<void>());
-      p.stdout
+      final output = p.stdout
           .transform(utf8.decoder)
           .transform(const LineSplitter())
-          .listen((l) => onStatus(l, g));
+          .forEach((line) => onStatus(line, g));
       unawaited(loadSkips(g));
       unawaited(
         p.exitCode.then((_) async {
+          await output;
           if (identical(process, p)) await exited(g);
           try {
             await dir.delete(recursive: true);
@@ -396,27 +431,44 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
       await Future<void>.delayed(const Duration(seconds: 1));
       if (!mounted || g != generation) return;
     }
+    if (!mounted || g != generation) return;
+    final seconds = last?.duration ?? 0;
+    if (seconds <= 0) return;
+    final provider = selectSkipSpans(found, const [], seconds);
+    if (provider.any((s) => s.type == 'op') &&
+        provider.any((s) => s.type == 'ed')) {
+      setState(() => spans = provider);
+      return;
+    }
     final extra = await widget.services.skipTimes.lookup(
       anime,
       episode,
-      last?.duration ?? 0,
+      seconds,
       scope: scope,
     );
     if (!mounted || g != generation) return;
-    setState(
-      () => spans = [
-        ...found,
-        ...extra.where((e) => !found.any((f) => f.type == e.type)),
-      ]..sort((a, b) => a.start.compareTo(b.start)),
-    );
+    setState(() => spans = selectSkipSpans(found, extra, seconds));
   }
 
   void onStatus(String line, int g) {
+    if (!mounted || g != generation) return;
+    final end = RegExp(r'otakase-end (\w+)$').firstMatch(line.trim());
+    if (end != null) {
+      endReason = end[1];
+      if (endReason == 'eof') unawaited(save());
+      return;
+    }
     final s = parseMpvStatus(line);
-    if (s == null || !mounted || g != generation) return;
-    final first = last == null || !last!.loaded;
+    if (s == null || !s.loaded) return;
+    final previous = last;
+    final first = previous == null;
     setState(() => last = s);
-    if (!s.loaded) return;
+    viewing.start(
+      s.total,
+      widget.services.store.entry(anime)?.viewing[viewingKey],
+    );
+    if (s.seek && previous != null) viewing.externalSeek(previous.at, s.at);
+    viewing.sample(s.at, playing: !s.paused);
     if (first && source != null) {
       unawaited(
         widget.services.discord.reportProvider(
@@ -455,7 +507,7 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
           !skipped.contains(key) &&
           s.position >= span.start + store.integer('SkipDelay')) {
         skipped.add(key);
-        unawaited(mpv('seek ${span.end.toStringAsFixed(2)} absolute'));
+        unawaited(skipSpan(span, s));
         unawaited(
           mpv(
             'show-text ${mpvQuote(span.label.replaceFirst('Skip', 'Skipped'))} 2000',
@@ -465,32 +517,50 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
     }
   }
 
-  bool get watched {
-    final s = last;
-    if (s == null || !s.loaded) return false;
-    return s.position / s.duration * 100 >=
-        widget.services.store.integer('PercentageToMarkComplete');
+  Future<void> skipSpan(SkipSpan span, MpvStatus status) {
+    viewing.seek(
+      status.at,
+      Duration(milliseconds: (span.end * 1000).round()),
+      span: span,
+    );
+    return mpv('seek ${span.end.toStringAsFixed(2)} absolute');
   }
 
-  Future<void> save() async {
+  bool get watched {
     final s = last;
-    if (s == null || !s.loaded) return;
-    final done = watched;
-    if (done) {
+    return s != null &&
+        (completionSaved ||
+            endReason == 'eof' && viewing.ended(s.at, s.total, spans));
+  }
+
+  Future<void> save({bool leaving = false}) async {
+    final s = last;
+    if (s == null) return;
+    final done =
+        watched ||
+        leaving &&
+            endReason != 'error' &&
+            viewing.credits(s.at, s.total, spans);
+    final newlyWatched = done && !completionSaved;
+    if (newlyWatched) completionSaved = true;
+    final persist = widget.services.store.progress(
+      anime,
+      episode,
+      s.position.floor(),
+      s.duration.floor(),
+      completed: done,
+      viewingKey: viewingKey,
+      viewingCheckpoint: viewing.checkpoint,
+    );
+    if (newlyWatched) {
       if (finishesShow(widget.services, anime, episode)) {
         widget.services.ratingDue = anime;
       }
       await resumePusher.episodeDone(anime.key, episode, anime.episodes);
-    } else {
+    } else if (!done) {
       resumePusher.note(anime.key, episode, s.position.floor());
     }
-    await widget.services.store.progress(
-      anime,
-      episode,
-      done ? 0 : s.position.floor(),
-      s.duration.floor(),
-    );
-    if (done) await widget.services.store.markWatched(anime, episode, true);
+    await persist;
   }
 
   bool get canNext => anime.airedEpisodes > episode || anime.airedEpisodes == 0;
@@ -498,7 +568,7 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
   Future<void> exited(int g) async {
     if (!mounted || g != generation) return;
     process = null;
-    await save();
+    await save(leaving: true);
     await resumePusher.flush();
     await widget.services.discord.stopWatching();
     if (!mounted) return;

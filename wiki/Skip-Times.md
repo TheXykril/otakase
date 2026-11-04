@@ -1,17 +1,21 @@
 # Skip times
 
-Openings, endings and recaps are skipped using whichever service knows them.
-All are asked at once: the episode's own skip data,
-[AniSkip](https://api.aniskip.com/api-docs), [TheIntroDB](https://theintrodb.org)
-and [Anime-Skip](https://anime-skip.com). For each kind, the first one in that
-order with a usable answer wins. None of them needs setup.
+Openings, endings and recaps skip automatically when enabled. Otakase
+checks the playing source first. If an opening or ending is missing, it
+checks [AniSkip](https://api.aniskip.com/api-docs), [TheIntroDB](https://theintrodb.org)
+and [Anime-Skip](https://anime-skip.com), as enabled. If the results still
+lack an opening or ending, the source with the most usable markers wins.
+An episode can have either marker, both, or neither.
+
+An ending skip jumps to the end of the marked credits. Any footage after
+the marker continues playing.
 
 TheIntroDB files episodes under TMDB show numbers, so the first time it is
 needed Otakase downloads a small lookup table (about 6 MB, refreshed monthly).
 Playback is never held up for it.
 
 Turn services off under **More → Settings → Playback**: *TheIntroDB skip
-times* and *Anime-Skip skip times*. AniSkip is always asked. Anime-Skip uses
+times* and *Anime-Skip skip times*. AniSkip is always enabled. Anime-Skip uses
 the public client id it publishes for trying its API; being shared, it may be
 rate-limited now and then.
 

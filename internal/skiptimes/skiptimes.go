@@ -56,6 +56,8 @@ var order = []string{AniSkip, IntroDB, AnimeSkip}
 // Options choose which services are asked.
 type Options struct {
 	IntroDB bool
+	// AllCandidates preserves alternatives when the app also has provider markers.
+	AllCandidates bool
 	// AnimeSkipClientID is the Anime-Skip client id: empty skips Anime-Skip,
 	// "auto" uses the id Anime-Skip publishes for its API playground.
 	AnimeSkipClientID string
@@ -141,6 +143,9 @@ func (s *Service) Lookup(ctx context.Context, client *http.Client, ref Ref, opts
 		}
 		if a.err != nil && !errors.Is(a.err, context.Canceled) {
 			errs = append(errs, a.err)
+		}
+		if opts.AllCandidates {
+			clear(taken)
 		}
 		for _, span := range a.spans {
 			span.Source = name

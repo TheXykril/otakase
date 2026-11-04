@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/thexykril/otakase/internal/skiptimes"
 )
@@ -83,9 +84,16 @@ func (c *Core) executeExtras(ctx context.Context, input string) string {
 		if req.Episode <= 0 || req.Episode > 10000 || (req.MalID <= 0 && req.AnilistID <= 0) {
 			return failure("invalid_request", "A tracker id and positive episode are required.", false)
 		}
-		spans, _ := c.skipService().Lookup(ctx, client, skiptimes.Ref{
+		// Leave time to return successful results before the app gives up.
+		lookupCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		lookupClient := &http.Client{
+			Transport: &requestTransport{ctx: lookupCtx, base: c.transport},
+			Timeout:   20 * time.Second,
+		}
+		spans, _ := c.skipService().Lookup(lookupCtx, lookupClient, skiptimes.Ref{
 			MalID: req.MalID, AniListID: req.AnilistID, Episode: req.Episode, Length: req.Length,
-		}, skiptimes.Options{IntroDB: req.IntroDB, AnimeSkipClientID: req.AnimeSkip})
+		}, skiptimes.Options{IntroDB: req.IntroDB, AnimeSkipClientID: req.AnimeSkip, AllCandidates: true})
 		if ctx.Err() != nil {
 			return contextFailure(ctx.Err())
 		}

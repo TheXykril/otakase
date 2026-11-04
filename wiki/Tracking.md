@@ -7,6 +7,17 @@ network. Each account logs out separately.
 
 Without an account, watched episodes and resume positions stay on the device.
 
+## When an episode counts as watched
+
+Leaving early saves your place. Otakase uses playback and the episode's
+ending markers to tell when you finish. Opening and ending auto-skips still
+work, and episodes without markers count when playback finishes. A scene
+after the credits still plays if the ending marker stops before it.
+
+If you watch episodes out of order, Otakase keeps the individual episodes
+and resume points on your device. AniList and MyAnimeList advance once you
+fill the gap. Otakase retries a completion update if a tracker is offline.
+
 ## Both at once
 
 With both signed in, Home combines your lists and every change goes to both

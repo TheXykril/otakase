@@ -177,17 +177,40 @@ class AppStore extends ChangeNotifier {
     int position,
     int duration, {
     bool completed = false,
+    String? viewingKey,
+    List<int>? viewingCheckpoint,
   }) async {
     final old = entry(anime);
     _history.remove(old?.anime.key);
     final watched = {...old?.watched ?? <int>[]};
     if (completed) watched.add(episode);
+    final viewing = {...?old?.viewing};
+    final resumes = {...?old?.resumes};
+    if (old != null && old.position > 0 && !old.watched.contains(old.episode)) {
+      resumes.putIfAbsent('${old.episode}', () => old.position);
+    }
+    if (watched.contains(episode)) {
+      viewing.removeWhere((key, _) => key.startsWith('$episode:'));
+      resumes.remove('$episode');
+    } else {
+      resumes['$episode'] = position;
+      if (viewingKey != null && viewingCheckpoint != null) {
+        final prior = viewing[viewingKey];
+        if (prior == null ||
+            prior[0] != viewingCheckpoint[0] ||
+            prior[1] < viewingCheckpoint[1]) {
+          viewing[viewingKey] = viewingCheckpoint;
+        }
+      }
+    }
     _history[anime.key] = WatchEntry(
       anime: anime,
       episode: episode,
       position: completed ? 0 : position,
       duration: duration,
       watched: watched.toList()..sort(),
+      viewing: viewing,
+      resumes: resumes,
       updated: DateTime.now().millisecondsSinceEpoch,
     );
     notifyListeners();
@@ -208,6 +231,8 @@ class AppStore extends ChangeNotifier {
       position: old?.position ?? 0,
       duration: old?.duration ?? 0,
       watched: list.toList()..sort(),
+      viewing: old?.viewing ?? const {},
+      resumes: old?.resumes ?? const {},
       updated: DateTime.now().millisecondsSinceEpoch,
     );
     notifyListeners();
