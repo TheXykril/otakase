@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:otakase/core.dart';
 import 'package:otakase/data/episode_completion.dart';
 import 'package:otakase/data/external_subtitles.dart';
@@ -92,6 +95,73 @@ void main() {
       expect(
         () => subtitleExtension(utf8.encode('<!DOCTYPE html>'), url),
         throwsFormatException,
+      );
+    },
+  );
+  final stream = ResolvedStream.fromJson({
+    'url': 'http://127.0.0.1:17323/video.m3u8',
+    'referrer': 'https://provider.example/watch/',
+    'headers': {
+      'User-Agent': 'Provider player',
+      'Origin': 'https://provider.example',
+    },
+  });
+
+  test(
+    'protected sidecar preserves bytes and resolves against the provider',
+    () async {
+      final bytes = utf8.encode('WEBVTT\n\n00:00.000 --> 00:02.000\n日本語');
+      final client = MockClient((request) async {
+        expect(request.url, Uri.parse('https://provider.example/watch/track'));
+        expect(request.headers['referer'], 'https://provider.example/watch/');
+        expect(request.headers['user-agent'], 'Provider player');
+        expect(request.headers['origin'], 'https://provider.example');
+        return http.Response.bytes(bytes, 200);
+      });
+      final subtitle = await downloadSubtitle(client, stream, 'track');
+      expect(subtitle.bytes, bytes);
+      expect(subtitle.extension, 'vtt');
+    },
+  );
+
+  test(
+    'manual subtitle errors distinguish HTTP failures from invalid files',
+    () async {
+      final forbidden = MockClient(
+        (_) async => http.Response('Forbidden', 403),
+      );
+      final html = MockClient(
+        (_) async => http.Response('<html>Blocked</html>', 200),
+      );
+      final unreachable = MockClient(
+        (_) async => throw http.ClientException('Offline'),
+      );
+      const link = '//subtitles.example/track';
+      for (final (client, message) in [
+        (forbidden, 'Subtitle download failed (HTTP 403).'),
+        (html, 'The subtitle server returned an invalid file.'),
+        (unreachable, 'The subtitle server could not be reached.'),
+      ]) {
+        await expectLater(
+          downloadSubtitle(client, stream, link),
+          throwsA(
+            isA<SubtitleFailure>().having((e) => e.message, 'message', message),
+          ),
+        );
+      }
+    },
+  );
+
+  test(
+    'checks the active file instead of requiring the subtitle ID to change',
+    () {
+      final file = File('/cache/otakase-subtitle-x/track.ass');
+      expect(isActiveSubtitleFile(file, file.path), isTrue);
+      expect(isActiveSubtitleFile(file, file.uri.toString()), isTrue);
+      expect(isActiveSubtitleFile(file, 'auto'), isFalse);
+      expect(
+        isActiveSubtitleFile(file, '/cache/otakase-subtitle-y/track.ass'),
+        isFalse,
       );
     },
   );

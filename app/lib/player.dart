@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'cast/cast.dart';
 import 'core.dart';
@@ -370,6 +371,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (!mounted || g != generation) return;
     try {
       await player.stop();
+      await clearSubtitleFiles();
       if (mirror == null) {
         await widget.services.core.stopPlayback();
         source = await widget.services.resolver.resolve(
@@ -590,6 +592,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
   }
 
+  final subtitleDirectories = <Directory>{};
+
+  Future<void> clearSubtitleFiles() async {
+    final directories = subtitleDirectories.toList();
+    subtitleDirectories.clear();
+    await Future.wait(directories.map(deleteSubtitleDirectory));
+  }
+
   Future<bool> externalSubtitle(
     Json track,
     int g,
@@ -604,65 +614,63 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     Directory? temporary;
     bool current() => mounted && g == generation && request == subtitleRequest;
     try {
-      final stream = source!.streams[copy];
-      final headers = Map<String, String>.of(stream.headers);
-      if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
-      final uri = Uri.parse(track['url'] as String);
-      final response = await widget.services.catalog.client
-          .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+      final subtitle = await downloadSubtitle(
+        widget.services.catalog.client,
+        source!.streams[copy],
+        track['url'] as String,
+      );
       if (!current()) return false;
-      if (response.statusCode != 200) throw const FormatException();
-      final extension = subtitleExtension(response.bodyBytes, uri);
       final title = track['label'] as String? ?? 'Subtitles';
       final language = track['language'] as String?;
       final native = player.platform;
-      final previous = native is NativePlayer
-          ? await native.getProperty('sid')
-          : '';
-      final SubtitleTrack subtitle;
-      if (Platform.isAndroid) {
-        temporary = await Directory.systemTemp.createTemp('otakase-subtitle-');
-        final file = File('${temporary.path}/track.$extension');
-        await file.writeAsBytes(response.bodyBytes, flush: true);
-        subtitle = SubtitleTrack.uri(
-          file.path,
-          title: title,
-          language: language,
-        );
-      } else {
-        subtitle = SubtitleTrack.data(
-          utf8.decode(response.bodyBytes, allowMalformed: true),
-          title: title,
-          language: language,
-        );
-      }
-      if (!current()) return false;
-      await player.setSubtitleTrack(subtitle);
-      if (native is NativePlayer) {
-        final selected = await native.getProperty('sid');
-        if (int.tryParse(selected) == null || selected == previous) {
-          throw const FormatException('Player did not select the subtitle');
+      if (Platform.isAndroid && native is NativePlayer) {
+        final File file;
+        try {
+          final cache = await getTemporaryDirectory();
+          temporary = await cache.createTemp('otakase-subtitle-');
+          file = File('${temporary.path}/track.${subtitle.extension}');
+          await file.writeAsBytes(subtitle.bytes, flush: true);
+        } on Exception {
+          throw const SubtitleFailure('The subtitle file could not be saved.');
         }
+        if (!current()) return false;
+        await player.setSubtitleTrack(
+          SubtitleTrack.uri(file.path, title: title, language: language),
+        );
+        final active = await native.getProperty(
+          'current-tracks/sub/external-filename',
+        );
+        if (!isActiveSubtitleFile(file, active)) {
+          throw const SubtitleFailure(
+            'The player could not open this subtitle file.',
+          );
+        }
+        if (!current()) return false;
+        subtitleDirectories.add(temporary);
+        temporary = null;
+      } else {
+        await player.setSubtitleTrack(
+          SubtitleTrack.data(
+            utf8.decode(subtitle.bytes, allowMalformed: true),
+            title: title,
+            language: language,
+          ),
+        );
       }
       if (!current()) return false;
       externalTrack = track;
       return true;
-    } catch (_) {
+    } catch (e) {
       if (manual && mounted && current()) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Subtitle load failed. Choose another track.'),
-          ),
-        );
+        final message = e is SubtitleFailure
+            ? e.message
+            : 'The player could not open this subtitle file.';
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
       }
       return false;
     } finally {
-      try {
-        await temporary?.delete(recursive: true);
-      } on FileSystemException {
-        // The platform also clears its temporary directory.
-      }
+      if (temporary != null) await deleteSubtitleDirectory(temporary);
     }
   }
 
@@ -1742,6 +1750,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     skipFocus.dispose();
     unawaited(
       player.dispose().then((_) async {
+        await clearSubtitleFiles();
         if (!profileStopped) await widget.services.core.stopPlayback();
       }),
     );

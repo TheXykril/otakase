@@ -1,4 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:http/http.dart' as http;
 
 import '../core.dart';
 import 'models.dart';
@@ -29,4 +33,69 @@ String subtitleExtension(List<int> bytes, Uri uri) {
   return const {'vtt', 'srt', 'ass', 'ssa'}.contains(extension)
       ? extension
       : 'sub';
+}
+
+class SubtitleFailure implements Exception {
+  const SubtitleFailure(this.message);
+  final String message;
+}
+
+Future<({List<int> bytes, String extension})> downloadSubtitle(
+  http.Client client,
+  ResolvedStream stream,
+  String link,
+) async {
+  final url = Uri.tryParse(link.trim());
+  final video = Uri.tryParse(stream.url);
+  final referrer = Uri.tryParse(stream.referrer);
+  final base = video != null && !{'127.0.0.1', 'localhost'}.contains(video.host)
+      ? video
+      : referrer;
+  final uri = url == null || link.trim().isEmpty
+      ? null
+      : base?.resolveUri(url) ?? url;
+  if (uri == null ||
+      !{'http', 'https'}.contains(uri.scheme) ||
+      uri.host.isEmpty) {
+    throw const SubtitleFailure('The subtitle link is invalid.');
+  }
+
+  final headers = Map<String, String>.of(stream.headers);
+  if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
+  final http.Response response;
+  try {
+    response = await client
+        .get(uri, headers: headers)
+        .timeout(const Duration(seconds: 15));
+  } on TimeoutException {
+    throw const SubtitleFailure('The subtitle download timed out.');
+  } on Exception {
+    throw const SubtitleFailure('The subtitle server could not be reached.');
+  }
+  if (response.statusCode != 200) {
+    throw SubtitleFailure(
+      'Subtitle download failed (HTTP ${response.statusCode}).',
+    );
+  }
+  final bytes = response.bodyBytes;
+  try {
+    return (bytes: bytes, extension: subtitleExtension(bytes, uri));
+  } on FormatException {
+    throw const SubtitleFailure(
+      'The subtitle server returned an invalid file.',
+    );
+  }
+}
+
+/// mpv's requested subtitle setting can be automatic or reuse the same ID.
+/// Read back the source of the active track to confirm which file opened.
+bool isActiveSubtitleFile(File file, String selected) =>
+    selected == file.path || selected == file.uri.toString();
+
+Future<void> deleteSubtitleDirectory(Directory directory) async {
+  try {
+    await directory.delete(recursive: true);
+  } on FileSystemException {
+    // The OS can also clear the app cache.
+  }
 }
