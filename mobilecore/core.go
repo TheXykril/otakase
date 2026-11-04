@@ -89,7 +89,8 @@ type request struct {
 	// Zero takes the best release.
 	Quality int `json:"quality"`
 	// Cast describes a cast_* operation.
-	Cast *castRequest `json:"cast"`
+	Cast     *castRequest             `json:"cast"`
+	Subtitle *subtitleDownloadRequest `json:"subtitle"`
 }
 
 type apiError struct {
@@ -291,6 +292,9 @@ func (c *Core) execute(ctx context.Context, input string) string {
 	if req.Operation == "stop" {
 		c.StopPlayback()
 		return encode(response{Version: 1, Data: map[string]bool{"stopped": true}})
+	}
+	if req.Operation == "subtitle_download" {
+		return c.downloadSubtitle(ctx, req.Subtitle)
 	}
 	if strings.HasPrefix(req.Operation, "cast_") {
 		return c.castOperation(ctx, req)

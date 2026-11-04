@@ -206,49 +206,56 @@ class _FeaturedAnime extends StatelessWidget {
       margin: EdgeInsets.symmetric(horizontal: isTV ? 0 : 20),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(isTV ? 0 : 16),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (showArtwork) HeroArt(anime, height: height),
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  isTV ? 48 : 18,
-                  24,
-                  isTV ? 300 : 18,
-                  20,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Trending now', style: uiStyle(context, color: muted)),
-                    const SizedBox(height: 8),
-                    Text(
-                      anime.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: uiStyle(
-                        context,
-                        size: isTV ? 36 : 28,
-                        weight: FontWeight.w700,
-                        height: 1.2,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onOpen,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (showArtwork) HeroArt(anime, height: height),
+              Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    isTV ? 48 : 18,
+                    24,
+                    isTV ? 300 : 18,
+                    20,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Trending now',
+                        style: uiStyle(context, color: muted),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    AppButton(
-                      key: const Key('discovery-open'),
-                      label: 'View anime',
-                      filled: true,
-                      isTV: isTV,
-                      onPressed: onOpen,
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        anime.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: uiStyle(
+                          context,
+                          size: isTV ? 36 : 28,
+                          weight: FontWeight.w700,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      AppButton(
+                        key: const Key('discovery-open'),
+                        label: 'View anime',
+                        filled: true,
+                        isTV: isTV,
+                        onPressed: onOpen,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

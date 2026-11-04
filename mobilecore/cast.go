@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -866,31 +865,8 @@ func (k *caster) closeCast() {
 	}
 }
 
-const maxSubtitleBytes = 16 << 20
-
 func fetchSubtitles(ctx context.Context, c *Core, req castRequest) ([]byte, error) {
-	transport := http.DefaultTransport
-	if c != nil && c.transport != nil {
-		transport = c.transport
-	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	r, err := http.NewRequestWithContext(ctx, http.MethodGet, req.Subtitle, nil)
-	if err != nil {
-		return nil, err
-	}
-	for k, v := range req.Headers {
-		r.Header.Set(k, v)
-	}
-	resp, err := (&http.Client{Transport: transport}).Do(r)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("subtitles answered %s", resp.Status)
-	}
-	return io.ReadAll(io.LimitReader(resp.Body, maxSubtitleBytes))
+	return readSubtitle(ctx, &http.Client{Transport: subtitleTransport(c)}, req.Subtitle, req.Headers)
 }
 
 func fetchSubtitlesVTT(ctx context.Context, c *Core, req castRequest) ([]byte, error) {

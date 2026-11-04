@@ -209,8 +209,12 @@ class SourceResolver {
     required void Function(String) status,
     Set<String> exclude = const {},
     String? mode,
+    String? onlyProvider,
+    bool allowAudioFallback = true,
   }) async {
-    final order = await sourcesFor(anime);
+    final order = (await sourcesFor(anime))
+        .where((p) => onlyProvider == null || p == onlyProvider)
+        .toList();
     scope.check();
     final remembered = store.preferredSource(anime);
     final providers = [
@@ -225,7 +229,7 @@ class SourceResolver {
       );
     }
     final modes = [mode ?? store.text('SubOrDub')];
-    if (store.flag('AutoAudioFallback')) {
+    if (allowAudioFallback && store.flag('AutoAudioFallback')) {
       modes.add(modes.first == 'sub' ? 'dub' : 'sub');
     }
     for (final provider in providers) {

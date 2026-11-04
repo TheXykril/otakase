@@ -73,6 +73,7 @@ void main() {
       final s = await store();
       expect(audioFilter(s), volumeLeveller);
       expect(volumeLeveller, contains('dynaudnorm'));
+      expect(volumeLeveller, contains(':b=1]'));
       await s.set('NormalizeVolume', false);
       expect(audioFilter(s), '');
     },
