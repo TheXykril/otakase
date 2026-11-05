@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import '../data/episode_metadata.dart';
@@ -12,6 +13,8 @@ import 'app_shell.dart' show Brand, TVTopBar, rootTabs;
 import 'components.dart';
 import 'downloads_page.dart';
 import 'device_status.dart';
+import 'episode_controls.dart';
+import 'more_page.dart' show openDetail;
 import 'home_page.dart';
 import 'status_editor.dart';
 import 'progress_thread.dart';
@@ -46,6 +49,166 @@ class _ShowPageState extends State<ShowPage> {
 
   /// Which block of 50 episodes the desktop grid shows.
   int? range;
+  int? focusedEpisode;
+  final jumpButtonFocus = FocusNode(debugLabel: 'Go to episode');
+  final episodeDetailsFocus = FocusNode(debugLabel: 'Episode details');
+  final revealedEpisodes = <int>{};
+  final episodeScroll = ScrollController();
+  final episodeFocus = <int, FocusNode>{};
+  FocusNode focusForEpisode(int ep) =>
+      episodeFocus.putIfAbsent(ep, () => FocusNode(debugLabel: 'Episode $ep'));
+  double tvGridStart = 0, tvRowExtent = 0;
+
+  bool seenEpisode(int ep) =>
+      (widget.services.store.entry(anime)?.watched.contains(ep) ?? false) ||
+      ep <= widget.services.tracking.progress(anime);
+
+  bool hiddenEpisode(int ep) =>
+      widget.services.store.flag('HideEpisodeSpoilers') &&
+      !seenEpisode(ep) &&
+      !revealedEpisodes.contains(ep);
+
+  int resumeEpisode(int ep) {
+    final entry = widget.services.store.entry(anime);
+    return seenEpisode(ep)
+        ? 0
+        : max(entry?.resumeFor(ep) ?? 0, remote.forEpisode(ep));
+  }
+
+  String episodeTitle(int ep) {
+    final title = art(ep)?['title'] as String? ?? '';
+    return hiddenEpisode(ep) || title.trim().isEmpty
+        ? 'Episode $ep'
+        : '$ep. $title';
+  }
+
+  Widget episodeArtwork(int ep) {
+    final thumbnail = art(ep)?['thumbnail'] as String? ?? '';
+    if (thumbnail.isNotEmpty || anime.banner.isNotEmpty) {
+      return CoverImage(
+        thumbnail.isNotEmpty ? thumbnail : anime.banner,
+        banner: thumbnail.isEmpty,
+        width: 560,
+        height: 315,
+      );
+    }
+    return EpisodeArtFallback(anime.cover, ep, width: 560, height: 315);
+  }
+
+  Future<void> episodeInfo(int ep) async {
+    await openDetail(
+      context,
+      StatefulBuilder(
+        builder: (context, update) => EpisodeInfo(
+          episode: ep,
+          title: episodeTitle(ep),
+          airdate: art(ep)?['airdate'] as String? ?? '',
+          description: art(ep)?['description'] as String? ?? '',
+          duration: anime.duration,
+          position: resumeEpisode(ep),
+          seen: seenEpisode(ep),
+          hidden: hiddenEpisode(ep),
+          isTV: widget.isTV,
+          artwork: episodeArtwork(ep),
+          onPlay: () {
+            Navigator.pop(context);
+            unawaited(play(ep));
+          },
+          onReveal: () {
+            setState(() => revealedEpisodes.add(ep));
+            update(() {});
+          },
+        ),
+      ),
+      widget.isTV,
+    );
+  }
+
+  Future<void> jumpToEpisode() async {
+    jumpButtonFocus.requestFocus();
+    final target = await chooseEpisode(
+      context,
+      total: anime.airedEpisodes,
+      current: nextEpisode,
+      isTV: widget.isTV,
+    );
+    if (!mounted) return;
+    if (target == null) {
+      jumpButtonFocus.requestFocus();
+      return;
+    }
+    episodeDetailsFocus.requestFocus();
+    setState(() {
+      focusedEpisode = target;
+      if (isDesktop) range = (target - 1) ~/ 50;
+    });
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    if (widget.isTV && !isDesktop && episodeScroll.hasClients) {
+      final offset =
+          tvGridStart +
+          ((target - 1) ~/ 4) * tvRowExtent -
+          tvTitleExtent(context) -
+          12;
+      episodeScroll.jumpTo(
+        offset.clamp(0, episodeScroll.position.maxScrollExtent),
+      );
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (!mounted) return;
+    final jumpFocus = focusForEpisode(target);
+    jumpFocus.requestFocus();
+    if (jumpFocus.context case final targetContext?
+        when targetContext.mounted) {
+      if (isDesktop) {
+        await Scrollable.ensureVisible(targetContext, alignment: .5);
+      } else {
+        await revealFocus(
+          targetContext,
+          stillFocused: () => mounted && jumpFocus.hasFocus,
+        );
+      }
+    }
+  }
+
+  double tvTitleExtent(BuildContext context) {
+    final lineHeight = MediaQuery.textScalerOf(context).scale(20) * 1.4;
+    // Leave room for both a two-line title and the padded action buttons.
+    return tvHeaderExtent(context) + max(lineHeight * 2, lineHeight + 38) + 16;
+  }
+
+  Widget focusedTitle() => Row(
+    children: [
+      Expanded(
+        child: Text(
+          episodeTitle(focusedEpisode ?? nextEpisode),
+          key: const Key('focused-episode-title'),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: uiStyle(context, weight: FontWeight.w600),
+        ),
+      ),
+      const SizedBox(width: 16),
+      AppButton(
+        key: const Key('episode-details'),
+        focusNode: episodeDetailsFocus,
+        label: 'Episode details',
+        icon: LucideIcons.info,
+        isTV: widget.isTV,
+        onPressed: () => episodeInfo(focusedEpisode ?? nextEpisode),
+      ),
+      const SizedBox(width: 12),
+      AppButton(
+        key: const Key('episode-jump'),
+        focusNode: jumpButtonFocus,
+        label: 'Go to episode',
+        icon: LucideIcons.hash,
+        isTV: widget.isTV,
+        onPressed: jumpToEpisode,
+      ),
+    ],
+  );
+
   @override
   void initState() {
     super.initState();
@@ -85,6 +248,12 @@ class _ShowPageState extends State<ShowPage> {
   @override
   void dispose() {
     playFocus.dispose();
+    jumpButtonFocus.dispose();
+    episodeDetailsFocus.dispose();
+    for (final node in episodeFocus.values) {
+      node.dispose();
+    }
+    episodeScroll.dispose();
     super.dispose();
   }
 
@@ -316,6 +485,7 @@ class _ShowPageState extends State<ShowPage> {
     final seconds = seen
         ? 0
         : max(h?.episode == ep ? h?.position ?? 0 : 0, remote.forEpisode(ep));
+    final hidden = hiddenEpisode(ep);
     final current = started && ep == nextEpisode;
     final metadata = art(ep);
     final thumbnail = metadata?['thumbnail'] as String? ?? '';
@@ -330,6 +500,7 @@ class _ShowPageState extends State<ShowPage> {
         isTV: widget.isTV,
         radius: card ? 12 : 7,
         onPressed: () => play(ep),
+        onLongPress: () => episodeInfo(ep),
         padding: EdgeInsets.all(card ? 14 : 8),
         child: Container(
           constraints: BoxConstraints(minHeight: card ? 110 : 78),
@@ -355,39 +526,45 @@ class _ShowPageState extends State<ShowPage> {
                 child: SizedBox(
                   width: card ? 92 : 73,
                   height: card ? 86 : 47,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      if (thumbnail.isNotEmpty)
-                        CoverImage(
-                          thumbnail,
-                          width: card ? 92 : 73,
-                          height: card ? 86 : 47,
-                        )
-                      else
-                        EpisodeArtFallback(
-                          key: ValueKey('episode-cover-fallback-$ep'),
-                          anime.cover,
-                          ep,
-                          width: card ? 92 : 73,
-                          height: card ? 86 : 47,
-                        ),
-                      if (seen) ...[
-                        ColoredBox(color: bgDeep.withValues(alpha: .65)),
-                        Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: fg),
-                            ),
-                            child: Text('済', style: uiStyle(context, size: 15)),
+                  child: SpoilerArt(
+                    hidden: hidden,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (thumbnail.isNotEmpty)
+                          CoverImage(
+                            thumbnail,
+                            width: card ? 92 : 73,
+                            height: card ? 86 : 47,
+                          )
+                        else
+                          EpisodeArtFallback(
+                            key: ValueKey('episode-cover-fallback-$ep'),
+                            anime.cover,
+                            ep,
+                            width: card ? 92 : 73,
+                            height: card ? 86 : 47,
                           ),
-                        ),
+                        if (seen) ...[
+                          ColoredBox(color: bgDeep.withValues(alpha: .65)),
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: fg),
+                              ),
+                              child: Text(
+                                '済',
+                                style: uiStyle(context, size: 15),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -398,7 +575,9 @@ class _ShowPageState extends State<ShowPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      metadata?['title'] as String? ?? 'Episode $ep',
+                      hidden
+                          ? 'Episode $ep'
+                          : metadata?['title'] as String? ?? 'Episode $ep',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: uiStyle(
@@ -646,12 +825,11 @@ class _ShowPageState extends State<ShowPage> {
     final seen =
         (h?.watched.contains(ep) ?? false) ||
         ep <= widget.services.tracking.progress(anime);
-    final seconds = seen
-        ? 0
-        : max(h?.episode == ep ? h?.position ?? 0 : 0, remote.forEpisode(ep));
+    final seconds = resumeEpisode(ep);
     final length = h?.episode == ep && (h?.duration ?? 0) > 0
         ? h!.duration
         : anime.duration * 60;
+    final hidden = hiddenEpisode(ep);
     final current = started && ep == nextEpisode;
     final metadata = art(ep);
     final thumbnail = metadata?['thumbnail'] as String? ?? '';
@@ -660,7 +838,6 @@ class _ShowPageState extends State<ShowPage> {
         : anime.banner.isNotEmpty
         ? anime.banner
         : anime.cover;
-    final title = metadata?['title'] as String?;
     final height = width * 9 / 16;
     String clock(int s) =>
         '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
@@ -670,110 +847,144 @@ class _ShowPageState extends State<ShowPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FocusBox(
-            isTV: true,
-            outsideFrame: true,
-            lift: true,
-            radius: 12,
-            onPressed: () => play(ep),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                width: width,
-                height: height,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (thumbnail.isEmpty && anime.banner.isEmpty)
-                      EpisodeArtFallback(
-                        anime.coverLarge.isNotEmpty
-                            ? anime.coverLarge
-                            : anime.cover,
-                        ep,
-                        width: width,
-                        height: height,
-                      )
-                    else
-                      CoverImage(
-                        image,
-                        width: width,
-                        height: height,
-                        banner: thumbnail.isEmpty && anime.banner.isNotEmpty,
+          Focus(
+            skipTraversal: true,
+            onKeyEvent: (_, event) {
+              if (event.logicalKey == LogicalKeyboardKey.info ||
+                  event.logicalKey == LogicalKeyboardKey.contextMenu) {
+                if (event is KeyDownEvent) unawaited(episodeInfo(ep));
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: FocusBox(
+              focusNode: focusForEpisode(ep),
+              onFocusChanged: (value) {
+                if (value && focusedEpisode != ep) {
+                  setState(() => focusedEpisode = ep);
+                }
+              },
+              onHover: (value) {
+                if (value && isDesktop && focusedEpisode != ep) {
+                  setState(() => focusedEpisode = ep);
+                }
+              },
+              onLongPress: () => episodeInfo(ep),
+              isTV: true,
+              outsideFrame: true,
+              lift: true,
+              radius: 12,
+              onPressed: () => play(ep),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: width,
+                  height: height,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      SpoilerArt(
+                        hidden: hidden,
+                        iconAlignment: current
+                            ? Alignment.topRight
+                            : Alignment.center,
+                        child: thumbnail.isEmpty && anime.banner.isEmpty
+                            ? EpisodeArtFallback(
+                                anime.coverLarge.isNotEmpty
+                                    ? anime.coverLarge
+                                    : anime.cover,
+                                ep,
+                                width: width,
+                                height: height,
+                              )
+                            : CoverImage(
+                                image,
+                                width: width,
+                                height: height,
+                                banner:
+                                    thumbnail.isEmpty &&
+                                    anime.banner.isNotEmpty,
+                              ),
                       ),
-                    if (seen) ColoredBox(color: bgDeep.withValues(alpha: .35)),
-                    if (length > 0)
-                      Positioned(
-                        left: 12,
-                        bottom: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: bgDeep.withValues(alpha: .8),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            clock(length),
-                            style: mono.copyWith(fontSize: 15, color: fgBright),
+                      if (seen)
+                        ColoredBox(color: bgDeep.withValues(alpha: .35)),
+                      if (length > 0)
+                        Positioned(
+                          left: 12,
+                          bottom: 12,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: bgDeep.withValues(alpha: .8),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              clock(length),
+                              style: mono.copyWith(
+                                fontSize: 15,
+                                color: fgBright,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    if (seen)
-                      Positioned(
-                        top: 10,
-                        right: 10,
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          decoration: const BoxDecoration(
-                            color: ok,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            LucideIcons.check,
-                            size: 17,
-                            color: bgDeep,
+                      if (seen)
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            decoration: const BoxDecoration(
+                              color: ok,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              LucideIcons.check,
+                              size: 17,
+                              color: bgDeep,
+                            ),
                           ),
                         ),
-                      ),
-                    if (current)
-                      Center(
-                        child: Container(
-                          width: 56,
-                          height: 56,
-                          decoration: const BoxDecoration(
+                      if (current)
+                        Center(
+                          child: Container(
+                            width: 56,
+                            height: 56,
+                            decoration: const BoxDecoration(
+                              color: shu,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              LucideIcons.play,
+                              size: 24,
+                              color: bgDeep,
+                            ),
+                          ),
+                        ),
+                      if (seconds > 0 && length > 0)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: LinearProgressIndicator(
+                            value: (seconds / length).clamp(0.0, 1.0),
+                            minHeight: 4,
                             color: shu,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            LucideIcons.play,
-                            size: 24,
-                            color: bgDeep,
+                            backgroundColor: fgBright.withValues(alpha: .18),
                           ),
                         ),
-                      ),
-                    if (seconds > 0 && length > 0)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: LinearProgressIndicator(
-                          value: (seconds / length).clamp(0.0, 1.0),
-                          minHeight: 4,
-                          color: shu,
-                          backgroundColor: fgBright.withValues(alpha: .18),
-                        ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 10),
           Text(
-            title == null ? 'Episode $ep' : '$ep. $title',
+            episodeTitle(ep),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: uiStyle(
@@ -909,7 +1120,8 @@ class _ShowPageState extends State<ShowPage> {
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
+        if (total > 0) ...[focusedTitle(), const SizedBox(height: 20)],
         if (total == 0)
           Text(
             'Episode availability is checked when you press Play.',
@@ -1022,6 +1234,7 @@ class _ShowPageState extends State<ShowPage> {
   Widget desktopBody(int last, int position) => Stack(
     children: [
       CustomScrollView(
+        controller: episodeScroll,
         slivers: [
           SliverToBoxAdapter(child: desktopHeader(last, position)),
           SliverToBoxAdapter(
@@ -1116,6 +1329,7 @@ class _ShowPageState extends State<ShowPage> {
                   children: [
                     Expanded(
                       child: CustomScrollView(
+                        controller: episodeScroll,
                         slivers: [
                           SliverToBoxAdapter(child: header(last, position)),
                           SliverToBoxAdapter(
@@ -1180,9 +1394,18 @@ class _ShowPageState extends State<ShowPage> {
                               ),
                             ),
                           ),
+                          if (widget.isTV && anime.airedEpisodes > 0)
+                            SliverPersistentHeader(
+                              pinned: true,
+                              delegate: _EpisodeTitleHeader(
+                                extent: tvTitleExtent(context),
+                                top: tvHeaderExtent(context),
+                                child: focusedTitle(),
+                              ),
+                            ),
                           if (widget.isTV)
                             ScrollClearance(
-                              top: tvHeaderExtent(context) + 12,
+                              top: tvTitleExtent(context) + 12,
                               child: SliverLayoutBuilder(
                                 builder: (context, constraints) {
                                   const padding = 48.0, gap = 22.0;
@@ -1197,6 +1420,9 @@ class _ShowPageState extends State<ShowPage> {
                                       10 +
                                       text.scale(20) * 2 * 1.4 +
                                       8;
+                                  tvGridStart =
+                                      constraints.precedingScrollExtent + 8;
+                                  tvRowExtent = height + 26;
                                   return SliverPadding(
                                     padding: const EdgeInsets.fromLTRB(
                                       padding,
@@ -1279,4 +1505,34 @@ class _ShowPageState extends State<ShowPage> {
       ),
     ),
   );
+}
+
+class _EpisodeTitleHeader extends SliverPersistentHeaderDelegate {
+  _EpisodeTitleHeader({
+    required this.extent,
+    required this.top,
+    required this.child,
+  });
+  final double extent, top;
+  final Widget child;
+  @override
+  double get minExtent => extent;
+  @override
+  double get maxExtent => extent;
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) => SizedBox.expand(
+    child: ColoredBox(
+      color: bg,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(48, top + 8, 48, 8),
+        child: child,
+      ),
+    ),
+  );
+  @override
+  bool shouldRebuild(covariant _EpisodeTitleHeader oldDelegate) => true;
 }

@@ -213,7 +213,7 @@ void main() {
         ),
       ).requestFocus();
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('show-play')), findsOneWidget);
+      expect(find.byKey(const Key('focused-episode-title')), findsOneWidget);
       final firstRow = tester.getTopLeft(first).dy;
       expect(tester.getTopLeft(episode(4)).dy, closeTo(firstRow, 1));
       expect(tester.getTopLeft(episode(5)).dy, greaterThan(firstRow));
@@ -249,7 +249,16 @@ void main() {
         await focusPoster(tester, result(0));
         await key(tester, LogicalKeyboardKey.select);
         final first = find.byKey(const ValueKey('episode-1'));
-        await tester.ensureVisible(first);
+        await tester.scrollUntilVisible(
+          first,
+          250,
+          scrollable: find
+              .descendant(
+                of: find.byType(ShowPage),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
         Focus.of(
           tester.element(
             find.descendant(of: first, matching: find.byType(ClipRRect)).first,

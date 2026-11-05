@@ -36,6 +36,7 @@ const settingDefaults = <String, dynamic>{
   'SubtitleBackground': '#00000000',
   'SubtitleOutline': 2,
   'SubtitlePosition': 100,
+  'HideEpisodeSpoilers': false,
   'NextEpisodePrompt': false,
   'SkipOp': true,
   'SkipEd': true,

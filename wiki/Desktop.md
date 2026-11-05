@@ -28,6 +28,20 @@ The pages sit in a bar at the top, with the window buttons in the style of
 your system. **Esc** goes back. Moving the mouse over the
 player shows its controls.
 
+## Episode browsing
+
+**Go to episode** accepts number keys or its keypad and selects the episode in
+the appropriate range without playing it. The title line and **Episode details**
+show the focused or hovered episode; the Menu or Info key on a focused card
+also opens its details. A pointer long press opens details on phone or desktop.
+
+Focus outlines appear when you navigate with arrow keys or Tab. Moving, clicking
+or scrolling the mouse hides the outline while keeping the logical focus.
+
+**Settings > Playback > Hide episode spoilers** defaults off. When enabled,
+unwatched titles are hidden and artwork is blurred behind a crossed-out eye.
+Reveal an episode from its details for the current visit without marking it watched.
+
 ## Player keys
 
 The player takes mpv's keys. **?** shows this list in the player.

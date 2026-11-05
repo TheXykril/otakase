@@ -24,8 +24,17 @@ List<Json> mergeEpisodeMetadata(List<Json> primary, List<Json> fallback) {
     final n = episodeNumber(e);
     if (n <= 0 || n > 10000) continue;
     final row = rows.putIfAbsent(n, () => {'episode': n});
-    for (final key in ['title', 'thumbnail', 'airdate', 'url', 'site']) {
-      if (_present(e[key])) row[key] = e[key];
+    for (final key in [
+      'title',
+      'thumbnail',
+      'airdate',
+      'description',
+      'url',
+      'site',
+    ]) {
+      if (_present(e[key])) {
+        row[key] = key == 'description' ? plainText(e[key] as String) : e[key];
+      }
     }
   }
   return (rows.keys.toList()..sort()).map((n) => rows[n]!).toList();
@@ -157,6 +166,7 @@ class EpisodeMetadata {
         return {
           'episode': number(e['mal_id']),
           'title': e['title'],
+          'description': e['synopsis'],
           'thumbnail':
               _image((images?['jpg'] as Map?)?['image_url']) ??
               _image((images?['webp'] as Map?)?['image_url']) ??
@@ -191,6 +201,7 @@ class EpisodeMetadata {
               ? e['title_en_us']
               : e['canonical_title'],
           'thumbnail': _image(e['thumbnail']),
+          'description': e['synopsis'],
         },
     ];
   }
@@ -209,6 +220,7 @@ class EpisodeMetadata {
             'title': ((e.value as Map)['title'] as Map?)?['en'],
             'thumbnail': _image((e.value as Map)['image']),
             'airdate': (e.value as Map)['airdate'],
+            'description': (e.value as Map)['overview'],
           },
     ];
   }

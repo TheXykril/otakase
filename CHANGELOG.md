@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Episode browsing: jump by number without autoplay, read focused titles and episode details, optionally hide unwatched artwork and titles. Desktop focus outlines follow keyboard and mouse use.
+
 ### Improved
 
 - TV anime pages show episodes in a four-column grid directly below the
