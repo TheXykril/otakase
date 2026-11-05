@@ -77,6 +77,47 @@ class TrackingService extends ChangeNotifier {
     super.dispose();
   }
 
+  // Status is scoped to the tracker account and to each title. A successful
+  // update for another title must not hide an earlier failure.
+  final Map<String, int> _sending = {};
+  final Map<String, Set<String>> _failed = {};
+  final Map<String, DateTime> _lastSent = {};
+  String _statusKey(String service) => '$service:${_identity(service)}';
+  bool get sendingProgress => auth.accounts.keys.any(
+    (service) => (_sending[_statusKey(service)] ?? 0) > 0,
+  );
+  DateTime? lastSentTo(String service) => _lastSent[_statusKey(service)];
+  bool updateFailed(String service) =>
+      _failed[_statusKey(service)]?.isNotEmpty ?? false;
+  bool needsAttention(String service) =>
+      updateFailed(service) || hasPendingCompletion(service);
+  bool hasPendingCompletion(String service) => _pending.values.any(
+    (job) =>
+        job is Map &&
+        job['service'] == service &&
+        _current(job.cast<String, dynamic>()),
+  );
+
+  String progressStatus(String service) {
+    final key = _statusKey(service);
+    if ((_sending[key] ?? 0) > 0) return 'Sending update to $service…';
+    if (updateFailed(service)) {
+      return 'Update needs attention · check connection or sign-in';
+    }
+    if (hasPendingCompletion(service)) {
+      return 'Progress saved locally · waiting to sync with $service';
+    }
+    final sent = _lastSent[key];
+    if (sent == null) return 'Connected · no updates sent this session';
+    final minutes = now().difference(sent).inMinutes;
+    final ago = minutes < 1
+        ? 'just now'
+        : minutes < 60
+        ? '$minutes min ago'
+        : '${minutes ~/ 60} h ago';
+    return 'Last update sent to $service · $ago';
+  }
+
   int revision = 0;
   final Map<String, Future<void>> _writes = {};
   final Map<String, Anime> _shows = {};
@@ -307,15 +348,22 @@ class TrackingService extends ChangeNotifier {
       .toList();
   Future<void> _each(Anime anime, Future<void> Function(String) action) async {
     if (!auth.hasAccounts) return;
+    final statusKeys = {
+      for (final service in auth.accounts.keys) service: _statusKey(service),
+    };
     final supported = services(anime).toList();
     final failures = auth.accounts.keys
         .where((s) => !supported.contains(s))
         .toList();
+    for (final service in failures) {
+      _failed.putIfAbsent(statusKeys[service]!, () => {}).add(anime.key);
+    }
     await Future.wait(
       services(anime).map((service) async {
         try {
           await action(service);
         } catch (_) {
+          _failed.putIfAbsent(statusKeys[service]!, () => {}).add(anime.key);
           failures.add(service);
         }
       }),
@@ -336,6 +384,45 @@ class TrackingService extends ChangeNotifier {
   }
 
   Future<void> _save(
+    String service,
+    Anime anime, {
+    String? status,
+    int? progress,
+    double? score,
+    String? notes,
+    int? repeat,
+    FuzzyDate? startedAt,
+    FuzzyDate? completedAt,
+    bool omitRewatching = false,
+  }) async {
+    final key = _statusKey(service);
+    _sending[key] = (_sending[key] ?? 0) + 1;
+    notifyListeners();
+    try {
+      await _saveEntry(
+        service,
+        anime,
+        status: status,
+        progress: progress,
+        score: score,
+        notes: notes,
+        repeat: repeat,
+        startedAt: startedAt,
+        completedAt: completedAt,
+        omitRewatching: omitRewatching,
+      );
+      _lastSent[key] = now();
+      _failed[key]?.remove(anime.key);
+    } catch (_) {
+      _failed.putIfAbsent(key, () => {}).add(anime.key);
+      rethrow;
+    } finally {
+      _sending[key] = (_sending[key] ?? 1) - 1;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _saveEntry(
     String service,
     Anime anime, {
     String? status,
@@ -603,8 +690,10 @@ class TrackingService extends ChangeNotifier {
     if (progress > previous) {
       await _finishEntry(service, anime, e, progress, anime.episodes, progress);
     }
+    _failed[_statusKey(service)]?.remove(anime.key);
     final remaining = _pending..remove(key);
     await store!.set(_completionKey, remaining);
+    notifyListeners();
     if (remaining.isEmpty) {
       _completionRetry?.cancel();
       _completionRetry = null;

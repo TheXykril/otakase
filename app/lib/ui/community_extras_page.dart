@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/community_extras.dart';
 import '../data/discord.dart';
@@ -173,7 +174,15 @@ class _BackupPageState extends State<BackupPage> {
 /// Community → Report a problem: posts to the support forum as the linked
 /// member, with the app details attached.
 class ReportPage extends StatefulWidget {
-  const ReportPage({super.key, required this.services, required this.isTV});
+  const ReportPage({
+    super.key,
+    required this.services,
+    required this.isTV,
+    this.initialTitle = '',
+    this.initialBody = '',
+    this.playbackDetails = '',
+  });
+  final String initialTitle, initialBody, playbackDetails;
   final AppServices services;
   final bool isTV;
   @override
@@ -184,6 +193,22 @@ class _ReportPageState extends State<ReportPage> {
   final title = TextEditingController(), body = TextEditingController();
   bool sending = false, details = true;
   String message = '', url = '';
+
+  @override
+  void initState() {
+    super.initState();
+    title.text = String.fromCharCodes(widget.initialTitle.runes.take(100));
+    body.text = widget.initialBody;
+  }
+
+  String get diagnostics =>
+      reportDiagnostics(widget.services.store, extra: widget.playbackDetails);
+
+  String get reportText => [
+    title.text,
+    body.text,
+    if (details) diagnostics,
+  ].where((part) => part.isNotEmpty).join('\n\n');
 
   @override
   void dispose() {
@@ -205,7 +230,7 @@ class _ReportPageState extends State<ReportPage> {
       final link = await widget.services.extras.report(
         title.text,
         body.text,
-        details ? reportDiagnostics(widget.services.store) : '',
+        details ? diagnostics : '',
       );
       if (!mounted) return;
       setState(() {
@@ -239,60 +264,72 @@ class _ReportPageState extends State<ReportPage> {
           onPressed: () =>
               widget.services.auth.launch(Uri.parse(discordInviteUrl)),
         ),
-      ] else ...[
-        RemoteTextInput(
-          isTV: widget.isTV,
-          builder: (focus) => TextField(
-            focusNode: focus,
-            controller: title,
-            maxLength: 100,
-            decoration: const InputDecoration(
-              labelText: 'What went wrong',
-              hintText: 'Episode 3 of Frieren won’t play',
-            ),
-          ),
-        ),
-        RemoteTextInput(
-          isTV: widget.isTV,
-          multiline: true,
-          builder: (focus) => TextField(
-            focusNode: focus,
-            controller: body,
-            maxLength: 4000,
-            minLines: 3,
-            maxLines: 8,
-            decoration: const InputDecoration(
-              labelText: 'More details (optional)',
-            ),
-          ),
-        ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Attach app details'),
-          subtitle: const Text(
-            'Version, system, source order and how the sources did this run.',
-          ),
-          value: details,
-          onChanged: (v) => setState(() => details = v),
-        ),
-        if (details)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              reportDiagnostics(widget.services.store),
-              style: mono.copyWith(fontSize: 13),
-            ),
-          ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: AppButton(
-            label: sending ? 'Sending…' : 'Send report',
-            filled: true,
-            isTV: widget.isTV,
-            onPressed: sending || url.isNotEmpty ? null : send,
-          ),
-        ),
       ],
+      RemoteTextInput(
+        isTV: widget.isTV,
+        builder: (focus) => TextField(
+          focusNode: focus,
+          controller: title,
+          maxLength: 100,
+          decoration: const InputDecoration(
+            labelText: 'What went wrong',
+            hintText: 'Episode 3 of Frieren won’t play',
+          ),
+        ),
+      ),
+      RemoteTextInput(
+        isTV: widget.isTV,
+        multiline: true,
+        builder: (focus) => TextField(
+          focusNode: focus,
+          controller: body,
+          maxLength: 4000,
+          minLines: 3,
+          maxLines: 8,
+          decoration: const InputDecoration(
+            labelText: 'More details (optional)',
+          ),
+        ),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Attach app details'),
+        subtitle: const Text(
+          'Version, system, source order and how the sources did this run.',
+        ),
+        value: details,
+        onChanged: (v) => setState(() => details = v),
+      ),
+      if (details)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(diagnostics, style: mono.copyWith(fontSize: 13)),
+        ),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: AppButton(
+          label: sending ? 'Sending…' : 'Send report',
+          filled: true,
+          isTV: widget.isTV,
+          onPressed: !linked || sending || url.isNotEmpty ? null : send,
+        ),
+      ),
+      const SizedBox(height: 12),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: AppButton(
+          label: 'Copy report',
+          isTV: widget.isTV,
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: reportText));
+            if (mounted) {
+              setState(
+                () => message = 'Report copied. You can paste it into support.',
+              );
+            }
+          },
+        ),
+      ),
       if (message.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 16),

@@ -20,6 +20,7 @@ import '../tls_ca.dart';
 import 'components.dart';
 import 'player_keys.dart';
 import 'seal.dart';
+import 'playback_report.dart';
 
 /// Something to play: a stream found by a source, or a downloaded file.
 class PlayableMedia {
@@ -1122,6 +1123,15 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
                               failed.clear();
                               unawaited(open());
                             },
+                          ),
+                          PlaybackReportButton(
+                            services: widget.services,
+                            isTV: widget.isTV,
+                            title: request.title,
+                            episode: request.subtitle,
+                            problem: error,
+                            position: position,
+                            provider: media?.label ?? '',
                           ),
                           AppButton(
                             label: 'Back',

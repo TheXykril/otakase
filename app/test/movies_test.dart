@@ -323,6 +323,8 @@ void main() {
       expect(movies.entry(series)!.position, 900);
       expect(scrobbles, hasLength(1));
       expect(scrobbles.single['progress'], 33.33);
+      expect(movies.lastProgressSentAt, isNotNull);
+      expect(movies.hasPendingResume, isFalse);
       expect(scrobbles.single['episode'], {'season': 1, 'number': 2});
       // A film paused on another device shows up to resume here.
       expect(movies.entry(film)!.resumeAt(6000), 3000);

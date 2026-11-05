@@ -182,6 +182,36 @@ String reportDiagnostics(AppStore store, {String extra = ''}) {
   return b.toString().trim();
 }
 
+/// Only hostnames from error URLs are useful to support; signed paths,
+/// query strings and authorization values must not enter a report.
+String redactPlaybackProblem(String value) => value
+    .replaceAllMapped(
+      RegExp(r'https?://[^\s<>"\x27]+', caseSensitive: false),
+      (m) => Uri.tryParse(m[0]!)?.host ?? '[address omitted]',
+    )
+    .replaceAll(
+      RegExp(r'Bearer\s+[^\s,;]+', caseSensitive: false),
+      'Bearer [omitted]',
+    )
+    .replaceAll(
+      RegExp(
+        r'(?:token|authorization|password|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+',
+        caseSensitive: false,
+      ),
+      '[credential omitted]',
+    );
+
+String playbackReportDetails({
+  required String provider,
+  required Duration position,
+  required String problem,
+}) => [
+  if (provider.isNotEmpty)
+    'Playback source: ${redactPlaybackProblem(provider)}',
+  'Position: ${position.inSeconds.clamp(0, 2147483647)} seconds',
+  'Problem: ${redactPlaybackProblem(problem)}',
+].join('\n');
+
 /// Talks to the bot for the club, backup, cheat code and reports.
 class CommunityExtras extends ChangeNotifier {
   CommunityExtras({

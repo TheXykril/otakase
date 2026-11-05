@@ -169,6 +169,22 @@ class MovieService extends ChangeNotifier {
   List<MediaTitle> watchlist = [];
   bool syncing = false;
   String? lastError;
+  DateTime? _lastProgressSentAt;
+  String? _progressAccount;
+  DateTime? get lastProgressSentAt =>
+      trakt.signedIn && _progressAccount == trakt.username
+      ? _lastProgressSentAt
+      : null;
+  bool get hasPendingResume => _entries.values.any(
+    (e) => e.updated > e.pushed && e.position >= 60 && e.duration > 0,
+  );
+  void _progressSent(String account) {
+    if (_disposed || !trakt.signedIn || trakt.username != account) return;
+    _lastProgressSentAt = DateTime.now();
+    _progressAccount = trakt.username;
+    _notify();
+  }
+
   bool _disposed = false;
   final Map<String, Json> _matches = {};
   final Map<String, String> _translations = {};
@@ -339,6 +355,7 @@ class MovieService extends ChangeNotifier {
 
   /// Sends saved spots up to Trakt as paused playback, newest first.
   Future<void> _push(List<String> keys) async {
+    final account = trakt.username;
     final entries = [for (final k in keys) ?_entries[k]]
       ..sort((a, b) => b.updated.compareTo(a.updated));
     var first = true;
@@ -355,6 +372,7 @@ class MovieService extends ChangeNotifier {
           episode: e.episode,
         );
         _markPushed(e.title.key, e.updated);
+        _progressSent(account);
       } catch (_) {
         /* Tried again on the next sync. */
       }
@@ -470,6 +488,7 @@ class MovieService extends ChangeNotifier {
     int episode = 0,
   }) async {
     if (!trakt.signedIn) return;
+    final account = trakt.username;
     final sent = _entries[title.key]?.updated;
     try {
       await trakt.scrobble(
@@ -481,6 +500,7 @@ class MovieService extends ChangeNotifier {
       );
       if (sent != null && action != 'start') {
         _markPushed(title.key, sent);
+        _progressSent(account);
         await _persist();
       }
     } catch (_) {
