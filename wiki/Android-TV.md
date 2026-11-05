@@ -8,8 +8,11 @@ it switches to a layout made for the remote.
 - **Left/Right** on the top bar switch between Home, Search and More; **Down**
   or **OK** enters the page, and **Up** from the top of a page goes back to the
   bar.
-- Left and Right stay inside a row of covers or episodes and stop at either
-  end. **Back** from a show returns to the same cover.
+- Left and Right stay inside each cover row and stop at either end.
+  Anime episodes appear directly on the details page in a four-column grid,
+  with the same thumbnail cards as desktop. Left/Right moves across a row;
+  Up/Down moves between rows and scrolls further episodes into view.
+  **Back** from a show returns to the same cover.
 - Search keeps the keyboard closed while you move around. Press **OK** on the
   search field to type, then submit to reach the filters and results.
 - **Back** on Home asks whether to leave, with Exit already selected.

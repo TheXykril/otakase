@@ -46,7 +46,6 @@ class _ShowPageState extends State<ShowPage> {
 
   /// Which block of 50 episodes the desktop grid shows.
   int? range;
-  final episodeScroll = ScrollController();
   @override
   void initState() {
     super.initState();
@@ -86,7 +85,6 @@ class _ShowPageState extends State<ShowPage> {
   @override
   void dispose() {
     playFocus.dispose();
-    episodeScroll.dispose();
     super.dispose();
   }
 
@@ -790,6 +788,8 @@ class _ShowPageState extends State<ShowPage> {
                 : seconds > 0
                 ? '${max(1, (length - seconds) ~/ 60)} min left'
                 : 'Not watched',
+            maxLines: widget.isTV && !isDesktop ? 1 : null,
+            overflow: widget.isTV && !isDesktop ? TextOverflow.ellipsis : null,
             style: uiStyle(
               context,
               size: 17,
@@ -1181,42 +1181,41 @@ class _ShowPageState extends State<ShowPage> {
                             ),
                           ),
                           if (widget.isTV)
-                            // The same episode cards as on a computer, in a
-                            // row the remote moves along.
-                            SliverToBoxAdapter(
-                              child: LayoutBuilder(
-                                builder: (context, box) {
-                                  final width = ((box.maxWidth - 82 - 66) / 4)
-                                      .clamp(280.0, 440.0);
+                            ScrollClearance(
+                              top: tvHeaderExtent(context) + 12,
+                              child: SliverLayoutBuilder(
+                                builder: (context, constraints) {
+                                  const padding = 48.0, gap = 22.0;
+                                  final width =
+                                      (constraints.crossAxisExtent -
+                                          padding * 2 -
+                                          gap * 3) /
+                                      4;
                                   final text = MediaQuery.textScalerOf(context);
                                   final height =
                                       width * 9 / 16 +
                                       10 +
-                                      (text.scale(20) + text.scale(17)) * 1.4 +
-                                      24;
-                                  return SizedBox(
-                                    height: height,
-                                    child: RemoteFocusRow(
-                                      isTV: true,
-                                      controller: episodeScroll,
+                                      text.scale(20) * 2 * 1.4 +
+                                      8;
+                                  return SliverPadding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      padding,
+                                      8,
+                                      padding,
+                                      24,
+                                    ),
+                                    sliver: SliverGrid.builder(
+                                      key: const Key('tv-episode-grid'),
+                                      gridDelegate:
+                                          SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: 4,
+                                            crossAxisSpacing: gap,
+                                            mainAxisSpacing: 26,
+                                            mainAxisExtent: height,
+                                          ),
                                       itemCount: anime.airedEpisodes,
-                                      itemWidth: width,
-                                      spacing: 22,
-                                      padding: 41,
-                                      child: ListView.separated(
-                                        controller: episodeScroll,
-                                        scrollDirection: Axis.horizontal,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 41,
-                                          vertical: 8,
-                                        ),
-                                        itemCount: anime.airedEpisodes,
-                                        separatorBuilder: (_, i) =>
-                                            const SizedBox(width: 22),
-                                        itemBuilder: (_, i) => RemoteFocusItem(
-                                          index: i,
-                                          child: episodeCard(i + 1, width),
-                                        ),
+                                      itemBuilder: (_, i) => RevealArea(
+                                        child: episodeCard(i + 1, width),
                                       ),
                                     ),
                                   );
@@ -1231,66 +1230,6 @@ class _ShowPageState extends State<ShowPage> {
                               sliver: SliverList.builder(
                                 itemCount: anime.airedEpisodes.clamp(0, 10000),
                                 itemBuilder: (_, i) => episodeRow(i + 1),
-                              ),
-                            ),
-                          if (widget.isTV)
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 48,
-                                ),
-                                child: AppButton(
-                                  label: 'All episodes',
-                                  isTV: true,
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    OtakaseRoute<void>(
-                                      builder: (_) => Scaffold(
-                                        appBar: AppBar(
-                                          title: const Text('All episodes'),
-                                          leading: const BackButton(),
-                                        ),
-                                        body: LayoutBuilder(
-                                          builder: (context, box) {
-                                            final width =
-                                                (box.maxWidth - 96 - 66) / 4;
-                                            final text =
-                                                MediaQuery.textScalerOf(
-                                                  context,
-                                                );
-                                            return GridView.builder(
-                                              padding:
-                                                  const EdgeInsets.fromLTRB(
-                                                    48,
-                                                    8,
-                                                    48,
-                                                    27,
-                                                  ),
-                                              gridDelegate:
-                                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                                    crossAxisCount: 4,
-                                                    crossAxisSpacing: 22,
-                                                    mainAxisSpacing: 26,
-                                                    mainAxisExtent:
-                                                        width * 9 / 16 +
-                                                        10 +
-                                                        (text.scale(20) +
-                                                                text.scale(
-                                                                  17,
-                                                                )) *
-                                                            1.4 +
-                                                        8,
-                                                  ),
-                                              itemCount: anime.airedEpisodes,
-                                              itemBuilder: (_, i) =>
-                                                  episodeCard(i + 1, width),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
                               ),
                             ),
                           for (final section in {

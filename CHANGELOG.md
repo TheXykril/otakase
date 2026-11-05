@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Improved
+
+- TV anime pages show episodes in a four-column grid directly below the
+  details, using desktop-style thumbnail cards and remote row navigation.
+
 ### Fixed
 
 - The desktop launcher fades in at its fixed popup size without flashing a
