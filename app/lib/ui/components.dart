@@ -847,66 +847,75 @@ class AppButton extends StatelessWidget {
     this.isTV = false,
     this.autofocus = false,
     this.focusNode,
+    this.disabledReason,
   });
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
   final bool filled, isTV, autofocus;
   final FocusNode? focusNode;
+  final String? disabledReason;
   @override
-  Widget build(BuildContext context) => FocusBox(
-    isTV: isTV,
-    autofocus: autofocus,
-    focusNode: focusNode,
-    radius: 999,
-    onPressed: onPressed,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: onPressed == null
-            ? line
-            : filled
-            ? shu
-            : fgBright.withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(
-              icon,
-              size: isTV ? 24 : 20,
-              color: onPressed == null
-                  ? muted
-                  : filled
-                  ? bgDeep
-                  : fgBright,
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: uiStyle(
-                context,
-                weight: FontWeight.w600,
+  Widget build(BuildContext context) {
+    final button = FocusBox(
+      isTV: isTV,
+      autofocus: autofocus,
+      focusNode: focusNode,
+      radius: 999,
+      onPressed: onPressed,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: onPressed == null
+              ? line
+              : filled
+              ? shu
+              : fgBright.withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: isTV ? 24 : 20,
                 color: onPressed == null
                     ? muted
                     : filled
                     ? bgDeep
                     : fgBright,
               ),
+              const SizedBox(width: 8),
+            ],
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: uiStyle(
+                  context,
+                  weight: FontWeight.w600,
+                  color: onPressed == null
+                      ? muted
+                      : filled
+                      ? bgDeep
+                      : fgBright,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+    if (onPressed != null || disabledReason == null) return button;
+    return Tooltip(
+      message: disabledReason!,
+      child: Semantics(enabled: false, hint: disabledReason, child: button),
+    );
+  }
 }
 
 class AppTab extends StatelessWidget {

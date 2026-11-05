@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Search and episode lists distinguish failed requests from empty results.
+  Retry keeps search filters and loaded pages, and movie search and episode
+  loading offer a Retry action. Partial movie-list failures keep available titles.
+  Browse errors use generic wording without internal service names or URLs.
+- Unavailable playback and downloads explain why they cannot be used yet.
+
 - The desktop launcher fades in at its fixed popup size without flashing a
   large window at startup and fades out when dismissed. Press the shortcut
   again to close it. The launcher restores your filter when you go back,

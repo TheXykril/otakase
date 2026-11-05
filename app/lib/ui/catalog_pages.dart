@@ -4,12 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
+import '../data/catalog.dart' show CatalogFailure;
 import '../desktop/desktop_core.dart';
 import '../services.dart';
 import '../data/community_extras.dart';
 import 'community_extras_page.dart';
 import 'components.dart';
 import 'movie_page.dart';
+
+// Browse messages describe the failed task, never an upstream name, URL or
+// arbitrary exception. Keep the useful rate-limit instruction without naming it.
+String _catalogMessage(Object error, String fallback) =>
+    error is CatalogFailure && error.statusCode == 429
+    ? 'Too many requests. Wait a moment and retry.'
+    : fallback;
 
 class SearchPage extends StatefulWidget {
   const SearchPage({
@@ -45,6 +53,7 @@ class _SearchPageState extends State<SearchPage> {
   int? year;
   int page = 1, generation = 0;
   bool busy = true, hasMore = false, voiceAvailable = false;
+  bool retryMore = false;
   bool editing = false;
   List<String> genres = [];
   late bool adultSeen;
@@ -104,11 +113,13 @@ class _SearchPageState extends State<SearchPage> {
       return;
     }
     final g = ++generation;
+    final requestedPage = more ? page + 1 : 1;
     setState(() {
       busy = true;
       error = null;
       if (!more) {
         page = 1;
+        hasMore = false;
         items = [];
       }
     });
@@ -125,7 +136,7 @@ class _SearchPageState extends State<SearchPage> {
       final result = await widget.services.catalog.search(
         query.text,
         adult: widget.services.store.flag('AdultContent'),
-        page: page,
+        page: requestedPage,
         format: format,
         season: season,
         year: year,
@@ -134,12 +145,21 @@ class _SearchPageState extends State<SearchPage> {
       );
       if (mounted && g == generation) {
         setState(() {
+          page = requestedPage;
           items = more ? [...items, ...result.items] : result.items;
           hasMore = result.hasMore;
         });
       }
     } catch (e) {
-      if (mounted && g == generation) setState(() => error = e.toString());
+      if (mounted && g == generation) {
+        setState(() {
+          error = _catalogMessage(
+            e,
+            'Anime could not be loaded. Check your connection and retry.',
+          );
+          retryMore = more;
+        });
+      }
     } finally {
       if (mounted && g == generation) setState(() => busy = false);
     }
@@ -394,24 +414,42 @@ class _SearchPageState extends State<SearchPage> {
       ),
       if (isDesktop) activeFilters(),
       const SizedBox(height: 22),
-      if (busy) const SkeletonBlock(height: 180),
-      if (error != null)
-        FailureView(message: error!, onRetry: () => load(), isTV: widget.isTV),
+      if (busy && items.isEmpty)
+        Semantics(
+          liveRegion: true,
+          label: 'Searching anime',
+          child: const SkeletonBlock(height: 180),
+        ),
+      if (error != null && items.isEmpty)
+        FailureView(
+          message: error!,
+          onRetry: () => load(more: retryMore),
+          isTV: widget.isTV,
+        ),
       if (!busy && items.isEmpty && error == null)
         EmptyState(
-          message: 'No matching anime.',
-          action: AppButton(
-            label: 'Clear filters',
-            isTV: widget.isTV,
-            onPressed: () {
-              format = null;
-              season = null;
-              year = null;
-              genre = null;
-              status = null;
-              unawaited(load());
-            },
-          ),
+          message: query.text.trim().isEmpty
+              ? (filters.count == 0
+                    ? 'No anime to display right now.'
+                    : 'No anime are available for these filters.')
+              : 'No matching anime. Try another title or spelling.',
+          action: filters.count == 0
+              ? Text(
+                  'Change the search above to try again.',
+                  style: uiStyle(context, color: muted),
+                )
+              : AppButton(
+                  label: 'Clear filters',
+                  isTV: widget.isTV,
+                  onPressed: () {
+                    format = null;
+                    season = null;
+                    year = null;
+                    genre = null;
+                    status = null;
+                    unawaited(load());
+                  },
+                ),
         ),
       LayoutBuilder(
         builder: (context, box) {
@@ -451,17 +489,31 @@ class _SearchPageState extends State<SearchPage> {
           );
         },
       ),
-      if (hasMore)
+      if (busy && items.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Semantics(
+            liveRegion: true,
+            child: Text(
+              'Loading more anime…',
+              style: uiStyle(context, color: muted),
+            ),
+          ),
+        ),
+      if (error != null && items.isNotEmpty)
+        FailureView(
+          message:
+              'More results could not be loaded. Your results are still here.',
+          onRetry: () => load(more: retryMore),
+          isTV: widget.isTV,
+        ),
+      if (hasMore && error == null)
         Padding(
           padding: const EdgeInsets.all(20),
           child: AppButton(
             label: 'Load more',
-            onPressed: busy
-                ? null
-                : () {
-                    page++;
-                    unawaited(load(more: true));
-                  },
+            disabledReason: busy ? 'More results are loading.' : null,
+            onPressed: busy ? null : () => unawaited(load(more: true)),
             isTV: widget.isTV,
           ),
         ),
@@ -490,6 +542,7 @@ class _SchedulePageState extends State<SchedulePage> {
   String? error;
   bool busy = true;
   int generation = 0, page = 1;
+  bool retryAppend = false;
   bool more = false;
   // Desktop shows the whole week at once.
   int week = 0;
@@ -527,7 +580,14 @@ class _SchedulePageState extends State<SchedulePage> {
         setState(() => days = {for (var i = 0; i < 7; i++) i: result[i]});
       }
     } catch (e) {
-      if (mounted && generation == g) setState(() => error = e.toString());
+      if (mounted && generation == g) {
+        setState(
+          () => error = _catalogMessage(
+            e,
+            'Airing times could not be loaded. Check your connection and retry.',
+          ),
+        );
+      }
     } finally {
       if (mounted && generation == g) setState(() => busy = false);
     }
@@ -752,7 +812,7 @@ class _SchedulePageState extends State<SchedulePage> {
                         ),
                         if (busy && days.isEmpty)
                           const SkeletonBlock(height: 100)
-                        else if (rows.isEmpty)
+                        else if (rows.isEmpty && error == null)
                           Text(
                             mineOnly ? 'Nothing from your list' : 'Quiet day',
                             style: uiStyle(context, size: 15, color: muted),
@@ -772,11 +832,13 @@ class _SchedulePageState extends State<SchedulePage> {
 
   Future<void> load({bool append = false}) async {
     final g = ++generation;
+    final requestedPage = append ? page + 1 : 1;
     setState(() {
       busy = true;
       error = null;
       if (!append) {
         page = 1;
+        more = false;
         rows = [];
       }
     });
@@ -784,16 +846,25 @@ class _SchedulePageState extends State<SchedulePage> {
       final result = await widget.services.catalog.schedule(
         selected,
         adult: widget.services.store.flag('AdultContent'),
-        page: page,
+        page: requestedPage,
       );
       if (mounted && generation == g) {
         setState(() {
+          page = requestedPage;
           rows = append ? [...rows, ...result] : result;
           more = result.length == 50;
         });
       }
     } catch (e) {
-      if (mounted && generation == g) setState(() => error = e.toString());
+      if (mounted && generation == g) {
+        setState(() {
+          error = _catalogMessage(
+            e,
+            'Airing times could not be loaded. Check your connection and retry.',
+          );
+          retryAppend = append;
+        });
+      }
     } finally {
       if (mounted && generation == g) setState(() => busy = false);
     }
@@ -840,11 +911,11 @@ class _SchedulePageState extends State<SchedulePage> {
           ),
         ),
         const SizedBox(height: 20),
-        if (busy) const SkeletonBlock(height: 180),
+        if (busy && rows.isEmpty) const SkeletonBlock(height: 180),
         if (error != null)
           FailureView(
             message: error!,
-            onRetry: () => load(),
+            onRetry: () => load(append: retryAppend),
             isTV: widget.isTV,
           ),
         if (!busy && rows.isEmpty && error == null)
@@ -893,15 +964,11 @@ class _SchedulePageState extends State<SchedulePage> {
               ),
             ),
           ),
-        if (more)
+        if (more && error == null)
           AppButton(
             label: 'Load more',
-            onPressed: busy
-                ? null
-                : () {
-                    page++;
-                    unawaited(load(append: true));
-                  },
+            disabledReason: busy ? 'More airing times are loading.' : null,
+            onPressed: busy ? null : () => unawaited(load(append: true)),
             isTV: widget.isTV,
           ),
       ],
