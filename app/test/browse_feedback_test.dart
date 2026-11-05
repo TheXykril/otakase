@@ -19,6 +19,7 @@ import 'package:otakase/ui/show_page.dart';
 
 import 'auth_test.dart' show MemoryTokens;
 import 'widget_test.dart' as fixture;
+import 'uniform_ui_test.dart' show desktop;
 
 class FeedbackCatalog extends Catalog {
   FeedbackCatalog({super.client});
@@ -126,10 +127,14 @@ void main() {
         expect(find.byType(FailureView), findsNothing);
         expect(find.textContaining('No matching anime'), findsNothing);
         gate.completeError(
-          const CatalogFailure('Catalog is temporarily unavailable.'),
+          const CatalogFailure(
+            'ExampleProvider https://source.example.invalid/api?token=hidden failed.',
+          ),
         );
         await tester.pumpAndSettle();
         expect(find.byType(FailureView), findsOneWidget);
+        expect(find.textContaining('ExampleProvider'), findsNothing);
+        expect(find.textContaining('source.example.invalid'), findsNothing);
         expect(find.textContaining('No matching anime'), findsNothing);
         catalog.answer = (_) async => const CatalogPage([]);
         await tester.ensureVisible(find.text('Retry'));
@@ -152,7 +157,9 @@ void main() {
       final catalog = FeedbackCatalog()
         ..answer = (page) async {
           if (page == 2 && fail) {
-            throw const CatalogFailure('Page unavailable.');
+            throw const CatalogFailure(
+              'ExampleProvider https://source.example.invalid/page failed.',
+            );
           }
           return CatalogPage([
             Anime(id: page, title: 'Result $page'),
@@ -165,6 +172,8 @@ void main() {
       await tester.tap(find.text('Load more'));
       await tester.pumpAndSettle();
       expect(find.byType(FailureView), findsOneWidget);
+      expect(find.textContaining('ExampleProvider'), findsNothing);
+      expect(find.textContaining('source.example.invalid'), findsNothing);
       expect(
         identical(
           tester.element(find.byKey(const Key('search-al:1'))),
@@ -222,6 +231,8 @@ void main() {
       gates[0].complete(reply({}, 503));
       await tester.pumpAndSettle();
       expect(find.byType(FailureView), findsOneWidget);
+      expect(find.textContaining('ExampleProvider'), findsNothing);
+      expect(find.textContaining('source.example.invalid'), findsNothing);
       expect(find.text('No matching movies or shows.'), findsNothing);
       await tester.ensureVisible(find.text('Retry'));
       await tester.tap(find.text('Retry'));
@@ -284,6 +295,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(FailureView), findsOneWidget);
+      expect(find.textContaining('ExampleProvider'), findsNothing);
+      expect(find.textContaining('source.example.invalid'), findsNothing);
       expect(
         find.text('No movies or shows to display right now.'),
         findsNothing,
@@ -369,6 +382,8 @@ void main() {
       gates[0].complete(reply({}, 503));
       await tester.pumpAndSettle();
       expect(find.byType(FailureView), findsOneWidget);
+      expect(find.textContaining('ExampleProvider'), findsNothing);
+      expect(find.textContaining('source.example.invalid'), findsNothing);
       expect(
         tester.widget<AppButton>(find.byKey(const Key('title-play'))).label,
         'Episodes unavailable',
@@ -447,7 +462,9 @@ void main() {
         ..calendar = (day, page) async {
           requested.add((day, page));
           if (page == 2 && failed) {
-            throw const CatalogFailure('Calendar is unavailable.');
+            throw const CatalogFailure(
+              'ExampleProvider https://source.example.invalid/calendar failed.',
+            );
           }
           return List.generate(
             page == 1 ? 50 : 1,
@@ -567,4 +584,53 @@ void main() {
       expect(find.byType(FailureView), findsNothing);
     },
   );
+  testWidgets('weekly Schedule keeps upstream errors out of visible copy', (
+    tester,
+  ) async {
+    final catalog = FeedbackCatalog()
+      ..calendar = (_, page) async {
+        throw const CatalogFailure(
+          'ExampleProvider https://source.example.invalid/calendar failed.',
+        );
+      };
+    await mount(
+      tester,
+      catalog,
+      (app) => Scaffold(
+        body: SchedulePage(services: app, isTV: true, onOpen: (_) {}),
+      ),
+      tv: true,
+      prepare: (_) async => desktop(),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(FailureView), findsOneWidget);
+    expect(
+      find.text(
+        'Airing times could not be loaded. Check your connection and retry.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('ExampleProvider'), findsNothing);
+    expect(find.textContaining('source.example.invalid'), findsNothing);
+  });
+
+  testWidgets('rate-limit guidance does not name the catalog service', (
+    tester,
+  ) async {
+    final catalog = FeedbackCatalog()
+      ..answer = (_) async {
+        throw const CatalogFailure(
+          'ExampleProvider limit at https://source.example.invalid',
+          statusCode: 429,
+        );
+      };
+    await mount(tester, catalog, search);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Too many requests. Wait a moment and retry.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('ExampleProvider'), findsNothing);
+    expect(find.textContaining('source.example.invalid'), findsNothing);
+  });
 }

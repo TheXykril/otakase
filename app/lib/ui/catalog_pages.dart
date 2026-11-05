@@ -4,12 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
+import '../data/catalog.dart' show CatalogFailure;
 import '../desktop/desktop_core.dart';
 import '../services.dart';
 import '../data/community_extras.dart';
 import 'community_extras_page.dart';
 import 'components.dart';
 import 'movie_page.dart';
+
+// Browse messages describe the failed task, never an upstream name, URL or
+// arbitrary exception. Keep the useful rate-limit instruction without naming it.
+String _catalogMessage(Object error, String fallback) =>
+    error is CatalogFailure && error.statusCode == 429
+    ? 'Too many requests. Wait a moment and retry.'
+    : fallback;
 
 class SearchPage extends StatefulWidget {
   const SearchPage({
@@ -145,7 +153,10 @@ class _SearchPageState extends State<SearchPage> {
     } catch (e) {
       if (mounted && g == generation) {
         setState(() {
-          error = e.toString();
+          error = _catalogMessage(
+            e,
+            'Anime could not be loaded. Check your connection and retry.',
+          );
           retryMore = more;
         });
       }
@@ -492,7 +503,7 @@ class _SearchPageState extends State<SearchPage> {
       if (error != null && items.isNotEmpty)
         FailureView(
           message:
-              'More results could not be loaded. Your results are still here.\n$error',
+              'More results could not be loaded. Your results are still here.',
           onRetry: () => load(more: retryMore),
           isTV: widget.isTV,
         ),
@@ -569,7 +580,14 @@ class _SchedulePageState extends State<SchedulePage> {
         setState(() => days = {for (var i = 0; i < 7; i++) i: result[i]});
       }
     } catch (e) {
-      if (mounted && generation == g) setState(() => error = e.toString());
+      if (mounted && generation == g) {
+        setState(
+          () => error = _catalogMessage(
+            e,
+            'Airing times could not be loaded. Check your connection and retry.',
+          ),
+        );
+      }
     } finally {
       if (mounted && generation == g) setState(() => busy = false);
     }
@@ -840,7 +858,10 @@ class _SchedulePageState extends State<SchedulePage> {
     } catch (e) {
       if (mounted && generation == g) {
         setState(() {
-          error = e.toString();
+          error = _catalogMessage(
+            e,
+            'Airing times could not be loaded. Check your connection and retry.',
+          );
           retryAppend = append;
         });
       }
