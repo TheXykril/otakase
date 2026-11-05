@@ -31,6 +31,7 @@ import 'ui/skip_marker.dart';
 import 'ui/player_keys.dart';
 import 'ui/progress_thread.dart';
 import 'ui/rate_prompt.dart';
+import 'ui/playback_report.dart';
 import 'ui/watch_party_page.dart';
 
 class PlayerPage extends StatefulWidget {
@@ -2211,6 +2212,15 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                             label: 'Try another copy',
                             onPressed: tryAnotherCopy,
                             isTV: widget.isTV,
+                          ),
+                          PlaybackReportButton(
+                            services: widget.services,
+                            isTV: widget.isTV,
+                            title: anime.title,
+                            episode: 'Episode $episode',
+                            problem: error,
+                            position: position,
+                            provider: source?.provider ?? '',
                           ),
                         ],
                       ),

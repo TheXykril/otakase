@@ -302,6 +302,9 @@ class _ShowPageState extends State<ShowPage> {
   }
 
   Widget actions(int last, int position) {
+    final unavailable = anime.status == 'NOT_YET_RELEASED'
+        ? 'No episodes have aired yet.'
+        : null;
     final entry = widget.services.tracking.mergedCached(anime);
     final label = entry == null
         ? (widget.services.auth.hasAccounts ? 'Add to list' : 'Local progress')
@@ -311,6 +314,7 @@ class _ShowPageState extends State<ShowPage> {
     final buttons = [
       AppButton(
         key: const Key('show-play'),
+        disabledReason: unavailable,
         label: position > 0 ? 'Resume episode $last' : 'Play episode $last',
         icon: LucideIcons.play,
         filled: true,
@@ -330,6 +334,7 @@ class _ShowPageState extends State<ShowPage> {
       if (!widget.isTV || isDesktop)
         AppButton(
           key: const Key('show-download'),
+          disabledReason: unavailable,
           label: 'Download',
           icon: LucideIcons.download,
           isTV: widget.isTV,
@@ -344,7 +349,7 @@ class _ShowPageState extends State<ShowPage> {
                 ),
         ),
     ];
-    return widget.isTV
+    final controls = widget.isTV
         ? Wrap(spacing: 12, runSpacing: 8, children: buttons)
         : Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -355,6 +360,20 @@ class _ShowPageState extends State<ShowPage> {
               ],
             ],
           );
+    if (unavailable == null) return controls;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        controls,
+        const SizedBox(height: 8),
+        Text(
+          unavailable,
+          key: const Key('show-action-explanation'),
+          style: uiStyle(context, color: muted),
+        ),
+      ],
+    );
   }
 
   Widget header(int last, int position) {

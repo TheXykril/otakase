@@ -2,14 +2,27 @@
 
 ## Unreleased
 
-- Episode browsing: jump by number without autoplay, read focused titles and episode details, optionally hide unwatched artwork and titles. Desktop focus outlines follow keyboard and mouse use.
-
 ### Improved
 
+- More and desktop Settings group watching, profile, device, community and
+  help options. Accounts shows when tracker updates are being sent, when
+  they need attention, and the last update sent this session.
+- Playback errors open a prefilled problem report with optional app and
+  playback details to review before sending. Reports can also be copied
+  without linking Discord.
 - TV anime pages show episodes in a four-column grid directly below the
   details, using desktop-style thumbnail cards and remote row navigation.
+- Episode browsing: jump by number without autoplay, read focused titles and
+  episode details, optionally hide unwatched artwork and titles. Desktop
+  focus outlines follow keyboard and mouse use.
 
 ### Fixed
+
+- Search and episode lists distinguish failed requests from empty results.
+  Retry keeps search filters and loaded pages, and movie search and episode
+  loading offer a Retry action. Partial movie-list failures keep available titles.
+  Browse errors use generic wording without internal service names or URLs.
+- Unavailable playback and downloads explain why they cannot be used yet.
 
 - The desktop launcher fades in at its fixed popup size without flashing a
   large window at startup and fades out when dismissed. Press the shortcut
