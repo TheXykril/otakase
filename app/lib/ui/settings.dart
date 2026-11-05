@@ -67,6 +67,7 @@ Future<void> openSettings(
 // Friendly names for settings. The keys match the CLI config, so they stay
 // the storage keys; only the label shown to the viewer changes.
 const settingLabels = <String, String>{
+  'HideEpisodeSpoilers': 'Hide episode spoilers',
   'SubsLanguage': 'Subtitle language',
   'AudioLanguages': 'Audio languages',
   'SubtitleFont': 'Subtitle font',
@@ -577,6 +578,11 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ]),
       group('Playback', LucideIcons.circlePlay, [
+        toggle(
+          'HideEpisodeSpoilers',
+          'Blur unwatched episode artwork and hide episode titles until you reveal them.',
+          icon: LucideIcons.eyeOff,
+        ),
         toggle(
           'NextEpisodePrompt',
           'Ask before the next episode. Off enables the end countdown.',

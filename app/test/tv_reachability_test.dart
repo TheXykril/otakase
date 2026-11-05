@@ -321,14 +321,18 @@ void main() {
     });
   }
 
-  testWidgets('TV All episodes has no unreachable controls', (tester) async {
+  testWidgets('TV inline episode grid has no unreachable controls', (
+    tester,
+  ) async {
     await openShow(tester);
-    final all = find.text('All episodes');
-    await tester.ensureVisible(all);
-    Focus.of(tester.element(all)).requestFocus();
+    final first = find.byKey(const Key('episode-1'));
+    await tester.ensureVisible(first);
+    Focus.of(
+      tester.element(
+        find.descendant(of: first, matching: find.byType(ClipRRect)).first,
+      ),
+    ).requestFocus();
     await tester.pumpAndSettle();
-    await key(tester, LogicalKeyboardKey.select);
-    expect(find.byType(BackButton), findsOneWidget);
     expect(onTopPage(), isTrue);
     expect(await unreachable(tester), isEmpty);
     await tester.pumpWidget(const SizedBox());

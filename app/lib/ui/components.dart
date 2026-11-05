@@ -72,30 +72,44 @@ class AppLayout extends InheritedWidget {
 /// Whether the desktop viewer is moving around with the keyboard (arrow keys
 /// or Tab) rather than the mouse.
 abstract final class DesktopInput {
-  static bool keyboard = false;
-  static bool _listening = false;
+  static final keyboardMode = ValueNotifier(false);
+  static bool get keyboard => keyboardMode.value;
+  static bool _pointerListening = false;
+  static void key(KeyEvent event) {
+    if (event is KeyDownEvent &&
+        {
+          LogicalKeyboardKey.arrowUp,
+          LogicalKeyboardKey.arrowDown,
+          LogicalKeyboardKey.arrowLeft,
+          LogicalKeyboardKey.arrowRight,
+          LogicalKeyboardKey.tab,
+        }.contains(event.logicalKey)) {
+      keyboardMode.value = true;
+    }
+  }
+
+  static bool _key(KeyEvent event) {
+    key(event);
+    return false;
+  }
+
+  static void pointer(PointerEvent event) {
+    if (event is PointerDownEvent ||
+        event is PointerScrollEvent ||
+        event is PointerHoverEvent ||
+        event is PointerMoveEvent) {
+      keyboardMode.value = false;
+    }
+  }
 
   static void listen() {
-    if (_listening) return;
-    _listening = true;
-    HardwareKeyboard.instance.addHandler((event) {
-      if (event is KeyDownEvent &&
-          {
-            LogicalKeyboardKey.arrowUp,
-            LogicalKeyboardKey.arrowDown,
-            LogicalKeyboardKey.arrowLeft,
-            LogicalKeyboardKey.arrowRight,
-            LogicalKeyboardKey.tab,
-          }.contains(event.logicalKey)) {
-        keyboard = true;
-      }
-      return false;
-    });
-    GestureBinding.instance.pointerRouter.addGlobalRoute((event) {
-      if (event is PointerDownEvent || event is PointerScrollEvent) {
-        keyboard = false;
-      }
-    });
+    // Reattach safely after an engine/test input reset; never register twice.
+    HardwareKeyboard.instance.removeHandler(_key);
+    HardwareKeyboard.instance.addHandler(_key);
+    if (!_pointerListening) {
+      GestureBinding.instance.pointerRouter.addGlobalRoute(pointer);
+      _pointerListening = true;
+    }
   }
 }
 
@@ -296,6 +310,7 @@ class FocusBox extends StatefulWidget {
     this.hoverColor,
     this.onHover,
     this.onFocusChanged,
+    this.onLongPress,
     this.lift = false,
   });
   final Widget child;
@@ -308,7 +323,7 @@ class FocusBox extends StatefulWidget {
   final Color? hoverColor;
   final ValueChanged<bool>? onHover;
   final ValueChanged<bool>? onFocusChanged;
-  final VoidCallback? onPressed, onFocused;
+  final VoidCallback? onPressed, onFocused, onLongPress;
   final bool isTV, autofocus;
   final FocusNode? focusNode;
   final EdgeInsets padding;
@@ -329,12 +344,19 @@ class _FocusBoxState extends State<FocusBox> {
   void initState() {
     super.initState();
     FocusManager.instance.addHighlightModeListener(modeChanged);
+    if (isDesktop) DesktopInput.listen();
+    DesktopInput.keyboardMode.addListener(inputChanged);
   }
 
   @override
   void dispose() {
     FocusManager.instance.removeHighlightModeListener(modeChanged);
+    DesktopInput.keyboardMode.removeListener(inputChanged);
     super.dispose();
+  }
+
+  void inputChanged() {
+    if (mounted && isDesktop) setState(() {});
   }
 
   @override
@@ -369,13 +391,17 @@ class _FocusBoxState extends State<FocusBox> {
   Widget build(BuildContext context) {
     final visible =
         focused &&
-        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+        (isDesktop
+            ? DesktopInput.keyboard
+            : FocusManager.instance.highlightMode ==
+                  FocusHighlightMode.traditional);
     final interaction = Material(
       color: Colors.transparent,
       child: InkWell(
         autofocus: widget.autofocus,
         focusNode: widget.focusNode,
         onTap: widget.onPressed,
+        onLongPress: widget.onLongPress,
         focusColor: Colors.transparent,
         hoverColor: widget.hoverColor ?? line.withValues(alpha: .4),
         onHover: (value) {

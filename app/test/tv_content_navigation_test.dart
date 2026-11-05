@@ -36,12 +36,21 @@ class BrowseCatalog extends fixture.TestCatalog {
   }) async => CatalogPage(stories);
 }
 
-Future<AppServices> launchBrowse(WidgetTester tester) async {
+class LongEpisodeCatalog extends BrowseCatalog {
+  @override
+  Future<Anime> detail(Anime anime, {required bool adult}) async =>
+      Anime(id: anime.id, title: 'Long story', episodes: 1100, duration: 24);
+}
+
+Future<AppServices> launchBrowse(
+  WidgetTester tester, {
+  BrowseCatalog? catalog,
+}) async {
   await fixture.launch(tester, tv: true);
   await tester.pumpWidget(const SizedBox());
   final base = await fixture.services();
   final services = AppServices(
-    catalog: BrowseCatalog(),
+    catalog: catalog ?? BrowseCatalog(),
     store: base.store,
     core: base.core,
     auth: AuthService(storage: MemoryTokens()),
@@ -179,34 +188,105 @@ void main() {
     expect(focusedWithin(card(15)), isTrue);
   });
 
-  testWidgets('TV episode shelf clamps at both ends', (tester) async {
-    await launchBrowse(tester);
-    navigation(tester, 'Search').requestFocus();
-    await tester.pumpAndSettle();
-    await focusPoster(tester, result(0));
-    await key(tester, LogicalKeyboardKey.select);
-    final first = find.byKey(const ValueKey('episode-1'));
-    await tester.ensureVisible(first);
-    Focus.of(
-      tester.element(
-        find.descendant(of: first, matching: find.byType(CoverImage)),
-      ),
-    ).requestFocus();
-    await tester.pumpAndSettle();
-    await key(tester, LogicalKeyboardKey.arrowLeft);
-    expect(focusedWithin(first), isTrue);
-    for (var i = 2; i <= fixture.anime.episodes; i++) {
+  testWidgets(
+    'TV episode grid has four columns and the remote moves between rows',
+    (tester) async {
+      await launchBrowse(tester);
+      navigation(tester, 'Search').requestFocus();
+      await tester.pumpAndSettle();
+      await focusPoster(tester, result(0));
+      await key(tester, LogicalKeyboardKey.select);
+      final grid = tester.widget<SliverGrid>(
+        find.byKey(const Key('tv-episode-grid')),
+      );
+      expect(
+        (grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount)
+            .crossAxisCount,
+        4,
+      );
+      Finder episode(int n) => find.byKey(ValueKey('episode-$n'));
+      final first = episode(1);
+      await tester.ensureVisible(first);
+      Focus.of(
+        tester.element(
+          find.descendant(of: first, matching: find.byType(ClipRRect)).first,
+        ),
+      ).requestFocus();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('focused-episode-title')), findsOneWidget);
+      final firstRow = tester.getTopLeft(first).dy;
+      expect(tester.getTopLeft(episode(4)).dy, closeTo(firstRow, 1));
+      expect(tester.getTopLeft(episode(5)).dy, greaterThan(firstRow));
+      await key(tester, LogicalKeyboardKey.arrowLeft);
+      expect(focusedWithin(first), isTrue);
+      for (var ep = 2; ep <= 4; ep++) {
+        await key(tester, LogicalKeyboardKey.arrowRight);
+        expect(focusedWithin(episode(ep)), isTrue);
+      }
       await key(tester, LogicalKeyboardKey.arrowRight);
-      expect(focusedWithin(find.byKey(ValueKey('episode-$i'))), isTrue);
-    }
-    await key(tester, LogicalKeyboardKey.arrowRight);
-    expect(
-      focusedWithin(find.byKey(ValueKey('episode-${fixture.anime.episodes}'))),
-      isTrue,
+      expect(focusedWithin(episode(4)), isTrue);
+      for (var ep = 8; ep <= fixture.anime.episodes; ep += 4) {
+        await key(tester, LogicalKeyboardKey.arrowDown);
+        expect(focusedWithin(episode(ep)), isTrue);
+        expect(tester.getTopLeft(episode(ep)).dy, greaterThanOrEqualTo(103));
+      }
+      await key(tester, LogicalKeyboardKey.arrowUp);
+      expect(focusedWithin(episode(24)), isTrue);
+      expect(find.text('All episodes'), findsNothing);
+      expect(find.byKey(const Key('show-sidebar')), findsNothing);
+    },
+  );
+
+  for (final scale in [1.0, 1.8]) {
+    testWidgets(
+      'TV long episode grid scrolls lazy rows with text scale $scale',
+      (tester) async {
+        await launchBrowse(tester, catalog: LongEpisodeCatalog());
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        navigation(tester, 'Search').requestFocus();
+        await tester.pumpAndSettle();
+        await focusPoster(tester, result(0));
+        await key(tester, LogicalKeyboardKey.select);
+        final first = find.byKey(const ValueKey('episode-1'));
+        await tester.scrollUntilVisible(
+          first,
+          250,
+          scrollable: find
+              .descendant(
+                of: find.byType(ShowPage),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        Focus.of(
+          tester.element(
+            find.descendant(of: first, matching: find.byType(ClipRRect)).first,
+          ),
+        ).requestFocus();
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('episode-1100')),
+          findsNothing,
+          reason: 'Long series build only nearby rows',
+        );
+        for (var ep = 5; ep <= 49; ep += 4) {
+          await key(tester, LogicalKeyboardKey.arrowDown);
+          final card = find.byKey(ValueKey('episode-$ep'));
+          expect(
+            focusedWithin(card),
+            isTrue,
+            reason: 'Episode $ep at text scale $scale',
+          );
+          expect(tester.getTopLeft(card).dy, greaterThanOrEqualTo(103));
+        }
+        expect(tester.takeException(), isNull);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(focusedWithin(result(0)), isTrue);
+      },
     );
-    await key(tester, LogicalKeyboardKey.arrowDown);
-    expect(focusedWithin(find.text('All episodes')), isTrue);
-  });
+  }
 
   testWidgets('TV held arrows keep the same order while shelves animate', (
     tester,

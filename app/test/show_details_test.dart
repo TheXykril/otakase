@@ -80,12 +80,6 @@ Future<void> openShow(
     ),
   );
   await tester.pumpAndSettle();
-  if (tv) {
-    await tester.ensureVisible(find.text('All episodes'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('All episodes'));
-    await tester.pumpAndSettle();
-  }
   addTearDown(auth.dispose);
 }
 
@@ -94,6 +88,7 @@ void main() {
     tester,
   ) async {
     await openShow(tester, tv: true, resumed: true);
+    expect(find.byKey(const Key('tv-episode-grid')), findsOneWidget);
     final fourth = find.byKey(const ValueKey('episode-4'));
     await tester.ensureVisible(fourth);
     await tester.pumpAndSettle();

@@ -170,7 +170,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('show-play')), findsOneWidget);
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'Resume or Play');
-    expect(find.text('All episodes'), findsOneWidget);
+    expect(find.byKey(const Key('tv-episode-grid')), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('catalog-search')), findsOneWidget);

@@ -8,8 +8,11 @@ it switches to a layout made for the remote.
 - **Left/Right** on the top bar switch between Home, Search and More; **Down**
   or **OK** enters the page, and **Up** from the top of a page goes back to the
   bar.
-- Left and Right stay inside a row of covers or episodes and stop at either
-  end. **Back** from a show returns to the same cover.
+- Left and Right stay inside each cover row and stop at either end.
+  Anime episodes appear directly on the details page in a four-column grid,
+  with the same thumbnail cards as desktop. Left/Right moves across a row;
+  Up/Down moves between rows and scrolls further episodes into view.
+  **Back** from a show returns to the same cover.
 - Search keeps the keyboard closed while you move around. Press **OK** on the
   search field to type, then submit to reach the filters and results.
 - **Back** on Home asks whether to leave, with Exit already selected.
@@ -17,6 +20,25 @@ it switches to a layout made for the remote.
 
 Menus scale to your screen by themselves, and Android's larger text setting
 still applies.
+
+## Finding an episode
+
+Anime details include **Go to episode**, with current/latest shortcuts and a
+keypad. While this dialog is open, the remote's number buttons also enter an
+episode number. Confirming selects that card; it does not start playback.
+Otakase consumes the number presses it receives in this dialog. Some TVs reserve
+these buttons before apps receive them, so this depends on the TV and remote.
+
+The selected card's title appears in a reserved line above the grid.
+**Episode details** (or the remote's Info button on a card) opens its full title,
+airdate, duration, saved resume point and a synopsis when the source supplies one.
+Back returns to the same card. Pressing OK on a card still starts playback.
+
+**More > Playback > Hide episode spoilers** is off by default. When enabled,
+unwatched episode titles are hidden, and covers are blurred with a crossed-out
+eye. Use **Reveal this episode** in its details to show that episode for this
+visit; revealing it does not mark it watched. Watched episodes stay visible.
+The setting belongs to the current profile and also applies on phone and desktop.
 
 ## Signing in
 

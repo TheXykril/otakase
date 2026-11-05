@@ -11,7 +11,9 @@ On TV, Up from the top of a page returns to the Home, Search and More tabs.
 Left and Right switch pages immediately, with a red underline beneath the selected
 tab. Hovering over a tab also switches pages. Down or OK enters the page.
 Back from a root page first focuses its tab.
-Left and Right stay inside a cover or episode shelf, stopping at either end.
+Left and Right stay inside a cover row, stopping at either end. Anime details show
+a four-column episode grid directly on the page, with desktop-style thumbnail cards.
+Left/Right moves across a row; Up/Down moves between rows.
 Only offscreen items scroll into view, and Back from a title restores the same cover.
 Search keeps the keyboard closed while you move through the page. Press OK on the
 search field to type, then submit Search to continue to the filters and results.

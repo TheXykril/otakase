@@ -39,6 +39,21 @@ http.Response utf8Json(Object body) =>
     http.Response.bytes(utf8.encode(jsonEncode(body)), 200);
 
 void main() {
+  test('episode summaries retain source priority and become plain text', () {
+    final rows = mergeEpisodeMetadata(
+      [
+        {'episode': 1, 'description': '<p>Preferred &amp; complete.</p>'},
+        {'episode': 2, 'description': ''},
+      ],
+      [
+        {'episode': 1, 'description': 'Fallback'},
+        {'episode': 2, 'description': '<b>Available summary.</b>'},
+      ],
+    );
+    expect(rows[0]['description'], 'Preferred & complete.');
+    expect(rows[1]['description'], 'Available summary.');
+  });
+
   test(
     'recorded ani.zip fills missing episode art and preserves AniList first',
     () async {

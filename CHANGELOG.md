@@ -10,6 +10,11 @@
 - Playback errors open a prefilled problem report with optional app and
   playback details to review before sending. Reports can also be copied
   without linking Discord.
+- TV anime pages show episodes in a four-column grid directly below the
+  details, using desktop-style thumbnail cards and remote row navigation.
+- Episode browsing: jump by number without autoplay, read focused titles and
+  episode details, optionally hide unwatched artwork and titles. Desktop
+  focus outlines follow keyboard and mouse use.
 
 ### Fixed
 

@@ -277,22 +277,29 @@ class _OtakaseAppState extends State<OtakaseApp> {
     if (mounted) setState(() {});
   }
 
+  void desktopInputChanged() {
+    if (mounted && isDesktop) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
     FocusManager.instance.addHighlightModeListener(modeChanged);
+    DesktopInput.keyboardMode.addListener(desktopInputChanged);
   }
 
   @override
   void dispose() {
     FocusManager.instance.removeHighlightModeListener(modeChanged);
+    DesktopInput.keyboardMode.removeListener(desktopInputChanged);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final traditional =
-        FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+    final traditional = isDesktop
+        ? DesktopInput.keyboard
+        : FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
     final focusStyle = ButtonStyle(
       textStyle: WidgetStatePropertyAll(
         TextStyle(
