@@ -58,6 +58,7 @@ class MovieShelves {
   final Trakt trakt;
   Future<Map<String, List<MediaTitle>>>? _loading;
   DateTime _loaded = DateTime(0);
+  bool partialFailure = false;
   static const rows = {
     'Trending movies': ('movie', 'trending'),
     'Trending shows': ('show', 'trending'),
@@ -73,17 +74,25 @@ class MovieShelves {
     }
     return _loading ??= () async {
       final results = await Future.wait([
-        for (final row in rows.values)
-          trakt.list(row.$1, row.$2).catchError((_) => <MediaTitle>[]),
+        for (final row in rows.values) _row(row.$1, row.$2),
       ]);
       _loaded = DateTime.now();
-      final out = Map.fromIterables(rows.keys, results);
-      if (out.values.every((r) => r.isEmpty)) {
+      partialFailure = results.any((r) => r.$2);
+      final out = Map.fromIterables(rows.keys, results.map((r) => r.$1));
+      if (out.values.every((r) => r.isEmpty) && results.any((r) => r.$2)) {
         _loading = null;
         throw const TraktFailure('Trakt could not be reached.');
       }
       return out;
     }();
+  }
+
+  Future<(List<MediaTitle>, bool)> _row(String kind, String order) async {
+    try {
+      return (await trakt.list(kind, order), false);
+    } catch (_) {
+      return (<MediaTitle>[], true);
+    }
   }
 }
 
@@ -156,9 +165,9 @@ class _MoviesHomeState extends State<MoviesHome> {
         final pad = widget.isTV ? 48.0 : 20.0;
         return RefreshIndicator(
           onRefresh: () async {
-            setState(
-              () => shelves = shelvesOf(widget.services).load(refresh: true),
-            );
+            setState(() {
+              shelves = shelvesOf(widget.services).load(refresh: true);
+            });
             await movies.sync();
           },
           child: ListView(
@@ -262,11 +271,10 @@ class _MoviesHomeState extends State<MoviesHome> {
                     return FailureView(
                       message: 'Movies and shows could not be loaded.',
                       isTV: widget.isTV,
-                      onRetry: () => setState(
-                        () =>
-                            shelves = shelvesOf(widget.services)
-                                .load(refresh: true),
-                      ),
+                      onRetry: () => setState(() {
+                        shelves = shelvesOf(widget.services)
+                            .load(refresh: true);
+                      }),
                     );
                   }
                   if (!snap.hasData) {
@@ -275,9 +283,26 @@ class _MoviesHomeState extends State<MoviesHome> {
                       child: Center(child: CircularProgressIndicator()),
                     );
                   }
+                  if (snap.data!.values.every((items) => items.isEmpty)) {
+                    return const EmptyState(
+                      message: 'No movies or shows to display right now.',
+                      action: Text('Check back later for new titles.'),
+                    );
+                  }
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (snap.connectionState == ConnectionState.waiting)
+                        const LinearProgressIndicator(color: shu)
+                      else if (shelvesOf(widget.services).partialFailure)
+                        FailureView(
+                          message: 'Some movie and show lists could not be loaded. Available titles are still shown.',
+                          onRetry: () => setState(() {
+                            shelves = shelvesOf(widget.services)
+                                .load(refresh: true);
+                          }),
+                          isTV: widget.isTV,
+                        ),
                       for (final e in snap.data!.entries) row(e.key, e.value),
                     ],
                   );
@@ -327,25 +352,32 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
     debounce = Timer(const Duration(milliseconds: 450), () => search(value));
   }
 
-  Future<void> search(String value) async {
+  Future<void> search(String value, {bool retry = false}) async {
     final q = value.trim();
-    if (q == query) return;
+    if (q == query && !retry && (loading || error.isEmpty)) return;
     query = q;
     final g = ++generation;
     if (q.isEmpty) {
-      setState(() => results = []);
+      setState(() {
+        results = [];
+        loading = false;
+        error = '';
+      });
       return;
     }
     setState(() {
       loading = true;
       error = '';
+      results = [];
     });
     try {
       final found = await widget.services.trakt.search(q);
       if (mounted && g == generation) setState(() => results = found);
     } catch (_) {
       if (mounted && g == generation) {
-        setState(() => error = 'Search failed. Try again.');
+        setState(
+          () => error = 'Movies and shows could not be searched. Check your connection and retry.',
+        );
       }
     } finally {
       if (mounted && g == generation) setState(() => loading = false);
@@ -389,10 +421,33 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
             ),
           ),
           const SizedBox(height: 20),
-          if (loading) const LinearProgressIndicator(color: shu),
-          if (error.isNotEmpty) EmptyState(message: error, error: true),
+          if (loading) ...[
+            const LinearProgressIndicator(color: shu),
+            const SizedBox(height: 12),
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                'Searching movies and shows…',
+                style: uiStyle(context, color: muted),
+              ),
+            ),
+          ],
+          if (error.isNotEmpty)
+            FailureView(
+              message: error,
+              onRetry: () => search(query, retry: true),
+              isTV: widget.isTV,
+            ),
           if (!loading && error.isEmpty && query.isNotEmpty && results.isEmpty)
-            const EmptyState(message: 'Nothing found.'),
+            const EmptyState(
+              message: 'No matching movies or shows.',
+              action: Text('Try a different title or spelling.'),
+            ),
+          if (!loading && error.isEmpty && query.isEmpty)
+            const EmptyState(
+              message: 'Search for a movie or show.',
+              action: Text('Enter a title above to get started.'),
+            ),
           Wrap(
             spacing: 12,
             runSpacing: 16,
@@ -507,7 +562,7 @@ class TitlePage extends StatefulWidget {
 class _TitlePageState extends State<TitlePage> {
   late MediaTitle title = widget.title;
   List<TitleEpisode> episodes = [];
-  bool loadingEpisodes = false;
+  bool loadingEpisodes = false, episodesLoaded = false;
   String episodeError = '';
   int season = 1;
   MovieService get movies => widget.services.movies;
@@ -518,7 +573,13 @@ class _TitlePageState extends State<TitlePage> {
     unawaited(load());
   }
 
-  Future<void> load() async {
+  Future<void> load({bool preserveSeason = false}) async {
+    if (title.isShow) {
+      setState(() {
+        loadingEpisodes = true;
+        episodeError = '';
+      });
+    }
     if (title.overview.isEmpty || title.fanart.isEmpty) {
       try {
         final full = await widget.services.trakt.details(title);
@@ -527,17 +588,21 @@ class _TitlePageState extends State<TitlePage> {
         /* The list entry has enough to play from. */
       }
     }
-    if (!title.isShow) return;
-    setState(() => loadingEpisodes = true);
+    if (!mounted || !title.isShow) return;
     try {
       final list = await widget.services.trakt.episodes(title);
       if (!mounted) return;
       final e = movies.entry(title);
       setState(() {
         episodes = list;
-        season = e != null && e.season > 0
-            ? e.season
-            : (list.isEmpty ? 1 : list.first.season);
+        if (!episodesLoaded ||
+            !preserveSeason ||
+            !list.any((episode) => episode.season == season)) {
+          season = e != null && e.season > 0
+              ? e.season
+              : (list.isEmpty ? 1 : list.first.season);
+        }
+        episodesLoaded = true;
       });
     } catch (_) {
       if (mounted) {
@@ -629,15 +694,27 @@ class _TitlePageState extends State<TitlePage> {
               entry.episode == next.number &&
               entry.started)
         : entry?.started ?? false;
-    return Wrap(
+    final unavailable = !title.isShow || next != null
+        ? null
+        : loadingEpisodes
+        ? 'Episode information is loading.'
+        : episodeError.isNotEmpty
+        ? 'Episode information is unavailable. Retry below.'
+        : 'No aired episodes are available.';
+    final controls = Wrap(
       spacing: 12,
       runSpacing: 8,
       children: [
         AppButton(
           key: const Key('title-play'),
+          disabledReason: unavailable,
           label: title.isShow
               ? next == null
-                    ? (loadingEpisodes ? 'Loading episodes' : 'No episodes yet')
+                    ? (loadingEpisodes
+                          ? 'Loading episodes'
+                          : episodeError.isNotEmpty
+                          ? 'Episodes unavailable'
+                          : 'No episodes yet')
                     : '${resume ? 'Resume' : 'Play'} ${next.code}'
               : resume
               ? 'Resume'
@@ -675,6 +752,22 @@ class _TitlePageState extends State<TitlePage> {
               onPressed: () => download(),
             ),
         ],
+      ],
+    );
+    if (unavailable == null) return controls;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        controls,
+        const SizedBox(height: 8),
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            unavailable,
+            key: const Key('title-action-explanation'),
+            style: uiStyle(context, color: muted),
+          ),
+        ),
       ],
     );
   }
@@ -921,7 +1014,16 @@ class _TitlePageState extends State<TitlePage> {
                     if (loadingEpisodes)
                       const Center(child: CircularProgressIndicator())
                     else if (episodeError.isNotEmpty)
-                      EmptyState(message: episodeError, error: true)
+                      FailureView(
+                        message: episodeError,
+                        onRetry: () => load(preserveSeason: true),
+                        isTV: widget.isTV,
+                      )
+                    else if (episodes.isEmpty)
+                      const EmptyState(
+                        message: 'No episodes to display yet.',
+                        action: Text('Check back after an episode airs.'),
+                      )
                     else
                       episodeList(context),
                   ],

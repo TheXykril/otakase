@@ -1,0 +1,570 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:otakase/data/auth.dart';
+import 'package:otakase/data/catalog.dart';
+import 'package:otakase/data/models.dart';
+import 'package:otakase/data/trakt.dart';
+import 'package:otakase/main.dart';
+import 'package:otakase/services.dart';
+import 'package:otakase/ui/catalog_pages.dart';
+import 'package:otakase/ui/components.dart';
+import 'package:otakase/ui/home_page.dart';
+import 'package:otakase/ui/movies_pages.dart';
+import 'package:otakase/ui/show_page.dart';
+
+import 'auth_test.dart' show MemoryTokens;
+import 'widget_test.dart' as fixture;
+
+class FeedbackCatalog extends Catalog {
+  FeedbackCatalog({super.client});
+  final searches = <({String query, int page, String? format})>[];
+  Future<CatalogPage> Function(int page)? answer;
+  Future<List<Airing>> Function(DateTime day, int page)? calendar;
+  @override
+  Future<HomeData> home({required bool adult}) async =>
+      const HomeData(trending: [], season: []);
+  @override
+  Future<List<String>> genres({required bool adult}) async => ['Action'];
+  @override
+  Future<Anime> detail(Anime anime, {required bool adult}) async => anime;
+  @override
+  Future<CatalogPage> search(
+    String query, {
+    required bool adult,
+    int page = 1,
+    String? format,
+    String? season,
+    int? year,
+    String? genre,
+    String? status,
+  }) {
+    searches.add((query: query, page: page, format: format));
+    return answer?.call(page) ?? Future.value(const CatalogPage([]));
+  }
+
+  @override
+  Future<List<Airing>> schedule(
+    DateTime day, {
+    required bool adult,
+    int page = 1,
+  }) => calendar?.call(day, page) ?? Future.value([]);
+}
+
+Future<AppServices> mount(
+  WidgetTester tester,
+  FeedbackCatalog catalog,
+  Widget Function(AppServices app) page, {
+  bool tv = false,
+  double scale = 1,
+  Future<void> Function(AppServices)? prepare,
+}) async {
+  await fixture.launch(tester, tv: tv);
+  await tester.pumpWidget(const SizedBox());
+  tester.platformDispatcher.textScaleFactorTestValue = scale;
+  addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  final base = await fixture.services();
+  final app = AppServices(
+    catalog: catalog,
+    store: base.store,
+    core: base.core,
+    auth: AuthService(storage: MemoryTokens(), client: catalog.client),
+  );
+  if (prepare != null) await prepare(app);
+  await tester.pumpWidget(
+    ImageSources(
+      provider: (_) => const AssetImage('assets/otakase.png'),
+      child: OtakaseApp(services: app, isTV: tv),
+    ),
+  );
+  await tester.pumpAndSettle();
+  catalog.searches.clear();
+  Navigator.of(tester.element(find.byType(HomePage)))
+      .push(MaterialPageRoute<void>(builder: (_) => page(app)));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  addTearDown(() async {
+    await tester.pumpWidget(const SizedBox());
+    await app.close();
+  });
+  return app;
+}
+
+Widget search(AppServices app, {bool tv = false}) => Scaffold(
+  body: SearchPage(
+    services: app,
+    isTV: tv,
+    initialQuery: 'Frieren',
+    initialFormat: 'TV',
+    onOpen: (_) {},
+    onVoice: () async => null,
+  ),
+);
+http.Response reply(Object value, [int status = 200]) =>
+    http.Response(jsonEncode(value), status);
+const series = MediaTitle(
+  kind: 'show',
+  trakt: 7,
+  title: 'Example series',
+  overview: 'A story.',
+  fanart: 'https://fixture.invalid/banner.jpg',
+);
+
+void main() {
+  for (final tv in [false, true]) {
+    testWidgets(
+      'anime failure is distinct from empty and retry retains query/filters on ${tv ? 'TV' : 'phone'}',
+      (tester) async {
+        final gate = Completer<CatalogPage>();
+        final catalog = FeedbackCatalog()..answer = (_) => gate.future;
+        await mount(tester, catalog, (app) => search(app, tv: tv), tv: tv);
+        expect(find.byType(SkeletonBlock), findsWidgets);
+        expect(find.byType(FailureView), findsNothing);
+        expect(find.textContaining('No matching anime'), findsNothing);
+        gate.completeError(
+          const CatalogFailure('Catalog is temporarily unavailable.'),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(FailureView), findsOneWidget);
+        expect(find.textContaining('No matching anime'), findsNothing);
+        catalog.answer = (_) async => const CatalogPage([]);
+        await tester.ensureVisible(find.text('Retry'));
+        await tester.tap(find.text('Retry'));
+        await tester.pumpAndSettle();
+        expect(catalog.searches.map((r) => (r.query, r.page, r.format)), [
+          ('Frieren', 1, 'TV'),
+          ('Frieren', 1, 'TV'),
+        ]);
+        expect(find.byType(FailureView), findsNothing);
+        expect(find.textContaining('No matching anime'), findsOneWidget);
+        expect(find.text('Clear filters'), findsOneWidget);
+      },
+    );
+  }
+  testWidgets(
+    'failed Load more retains cards and retries the same page before advancing',
+    (tester) async {
+      var fail = true;
+      final catalog = FeedbackCatalog()
+        ..answer = (page) async {
+          if (page == 2 && fail) {
+            throw const CatalogFailure('Page unavailable.');
+          }
+          return CatalogPage([
+            Anime(id: page, title: 'Result $page'),
+          ], hasMore: page < 3);
+        };
+      await mount(tester, catalog, search);
+      await tester.pumpAndSettle();
+      final original = tester.element(find.byKey(const Key('search-al:1')));
+      await tester.ensureVisible(find.text('Load more'));
+      await tester.tap(find.text('Load more'));
+      await tester.pumpAndSettle();
+      expect(find.byType(FailureView), findsOneWidget);
+      expect(
+        identical(
+          tester.element(find.byKey(const Key('search-al:1'))),
+          original,
+        ),
+        isTrue,
+      );
+      await tester.ensureVisible(find.text('Retry'));
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(catalog.searches.map((r) => r.page), [1, 2, 2]);
+      fail = false;
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('search-al:1')), findsOneWidget);
+      expect(find.byKey(const Key('search-al:2')), findsOneWidget);
+      await tester.ensureVisible(find.text('Load more'));
+      await tester.tap(find.text('Load more'));
+      await tester.pumpAndSettle();
+      expect(catalog.searches.map((r) => r.page), [1, 2, 2, 2, 3]);
+      expect(
+        catalog.searches.every((r) => r.query == 'Frieren' && r.format == 'TV'),
+        isTrue,
+      );
+      expect(find.byKey(const Key('search-al:3')), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'movie search retries the same query, distinguishes empty and clears failed/loading state',
+    (tester) async {
+      final gates = <Completer<http.Response>>[];
+      final queries = <String?>[];
+      final catalog = FeedbackCatalog(
+        client: MockClient((request) async {
+          if (request.url.path.startsWith('/search/')) {
+            queries.add(request.url.queryParameters['query']);
+            final gate = Completer<http.Response>();
+            gates.add(gate);
+            return gate.future;
+          }
+          return reply([]);
+        }),
+      );
+      await mount(
+        tester,
+        catalog,
+        (app) => Scaffold(body: MovieSearchPage(services: app, isTV: false)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Search for a movie or show.'), findsOneWidget);
+      final field = find.byKey(const Key('movie-search-field'));
+      await tester.enterText(field, 'Arrival');
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Searching movies and shows…'), findsOneWidget);
+      gates[0].complete(reply({}, 503));
+      await tester.pumpAndSettle();
+      expect(find.byType(FailureView), findsOneWidget);
+      expect(find.text('No matching movies or shows.'), findsNothing);
+      await tester.ensureVisible(find.text('Retry'));
+      await tester.tap(find.text('Retry'));
+      await tester.pump();
+      expect(queries, ['Arrival', 'Arrival']);
+      gates[1].complete(reply([]));
+      await tester.pumpAndSettle();
+      expect(find.text('No matching movies or shows.'), findsOneWidget);
+      await tester.enterText(field, 'Pending');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.enterText(field, '');
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(find.text('Search for a movie or show.'), findsOneWidget);
+      gates[2].complete(
+        reply([
+          {
+            'type': 'movie',
+            'movie': {
+              'title': 'Stale result',
+              'ids': {'trakt': 42},
+            },
+          },
+        ]),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Stale result'), findsNothing);
+    },
+  );
+  testWidgets(
+    'successful empty movie shelves are not reported as a network failure',
+    (tester) async {
+      final catalog = FeedbackCatalog(
+        client: MockClient((_) async => reply([])),
+      );
+      await mount(
+        tester,
+        catalog,
+        (app) => MoviesHome(services: app, isTV: false),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No movies or shows to display right now.'),
+        findsOneWidget,
+      );
+      expect(find.byType(FailureView), findsNothing);
+    },
+  );
+  testWidgets(
+    'failed movie shelves offer retry and preserve success/error distinction',
+    (tester) async {
+      var failed = true;
+      final catalog = FeedbackCatalog(
+        client: MockClient((_) async => failed ? reply({}, 503) : reply([])),
+      );
+      await mount(
+        tester,
+        catalog,
+        (app) => MoviesHome(services: app, isTV: false),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(FailureView), findsOneWidget);
+      expect(
+        find.text('No movies or shows to display right now.'),
+        findsNothing,
+      );
+      failed = false;
+      await tester.ensureVisible(find.text('Retry'));
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No movies or shows to display right now.'),
+        findsOneWidget,
+      );
+      expect(find.byType(FailureView), findsNothing);
+    },
+  );
+  for (final tv in [false, true]) {
+    testWidgets(
+      'unreleased anime explains disabled playback/downloads on ${tv ? 'TV' : 'phone'}',
+      (tester) async {
+        await mount(
+          tester,
+          FeedbackCatalog(),
+          (app) => ShowPage(
+            services: app,
+            anime: const Anime(
+              id: 8,
+              title: 'Upcoming',
+              status: 'NOT_YET_RELEASED',
+            ),
+            isTV: tv,
+          ),
+          tv: tv,
+          scale: tv ? 1.8 : 1,
+        );
+        await tester.pumpAndSettle();
+        final play = tester.widget<AppButton>(
+          find.byKey(const Key('show-play')),
+        );
+        expect(play.onPressed, isNull);
+        expect(play.disabledReason, 'No episodes have aired yet.');
+        expect(
+          find.byKey(const Key('show-action-explanation')),
+          findsOneWidget,
+        );
+        if (!tv) {
+          expect(
+            tester
+                .widget<AppButton>(find.byKey(const Key('show-download')))
+                .disabledReason,
+            play.disabledReason,
+          );
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+  testWidgets(
+    'series distinguishes loading, failure and no aired episodes with a working retry',
+    (tester) async {
+      final gates = <Completer<http.Response>>[];
+      final catalog = FeedbackCatalog(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/seasons')) {
+            final gate = Completer<http.Response>();
+            gates.add(gate);
+            return gate.future;
+          }
+          return reply([]);
+        }),
+      );
+      await mount(
+        tester,
+        catalog,
+        (app) => TitlePage(services: app, title: series, isTV: true),
+        tv: true,
+      );
+      expect(
+        tester
+            .widget<AppButton>(find.byKey(const Key('title-play')))
+            .disabledReason,
+        'Episode information is loading.',
+      );
+      gates[0].complete(reply({}, 503));
+      await tester.pumpAndSettle();
+      expect(find.byType(FailureView), findsOneWidget);
+      expect(
+        tester.widget<AppButton>(find.byKey(const Key('title-play'))).label,
+        'Episodes unavailable',
+      );
+      expect(find.text('No episodes to display yet.'), findsNothing);
+      await tester.ensureVisible(find.text('Retry'));
+      await tester.tap(find.text('Retry'));
+      await tester.pump();
+      expect(find.text('Episodes could not be loaded.'), findsNothing);
+      gates[1].complete(reply([]));
+      await tester.pumpAndSettle();
+      expect(find.byType(FailureView), findsNothing);
+      expect(find.text('No episodes to display yet.'), findsOneWidget);
+      expect(
+        tester
+            .widget<AppButton>(find.byKey(const Key('title-play')))
+            .disabledReason,
+        'No aired episodes are available.',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'episode retry restores the saved season when the first load failed',
+    (tester) async {
+      var failed = true;
+      final catalog = FeedbackCatalog(
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/seasons')) {
+            if (failed) return reply({}, 503);
+            return reply([
+              for (final season in [1, 2])
+                {
+                  'number': season,
+                  'episodes': [
+                    {
+                      'number': 1,
+                      'title': 'First',
+                      'first_aired': '2020-01-01T00:00:00Z',
+                    },
+                  ],
+                },
+            ]);
+          }
+          return reply([]);
+        }),
+      );
+      await mount(
+        tester,
+        catalog,
+        (app) => TitlePage(services: app, title: series, isTV: false),
+        prepare: (app) =>
+            app.movies.progress(series, 90, 1400, season: 2, episode: 1),
+      );
+      await tester.pumpAndSettle();
+      failed = false;
+      await tester.ensureVisible(find.text('Retry'));
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<AppTab>(find.byKey(const Key('season-2'))).selected,
+        isTrue,
+      );
+      expect(
+        tester.widget<AppButton>(find.byKey(const Key('title-play'))).onPressed,
+        isNotNull,
+      );
+    },
+  );
+  testWidgets(
+    'Schedule keeps the selected day and loaded rows when an extra page fails',
+    (tester) async {
+      final requested = <(DateTime, int)>[];
+      var failed = true;
+      final catalog = FeedbackCatalog()
+        ..calendar = (day, page) async {
+          requested.add((day, page));
+          if (page == 2 && failed) {
+            throw const CatalogFailure('Calendar is unavailable.');
+          }
+          return List.generate(
+            page == 1 ? 50 : 1,
+            (i) => Airing(
+              Anime(id: page * 100 + i, title: 'Airing $page-$i'),
+              1,
+              DateTime(day.year, day.month, day.day, 18),
+            ),
+          );
+        };
+      await mount(
+        tester,
+        catalog,
+        (app) => Scaffold(
+          body: SchedulePage(services: app, isTV: false, onOpen: (_) {}),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Load more'),
+        600,
+        scrollable: find
+            .descendant(
+              of: find.byType(SchedulePage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Load more')),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Load more'));
+      await tester.pumpAndSettle();
+      expect(find.text('Airing 1-49'), findsOneWidget);
+      expect(find.text('A quiet day on the calendar.'), findsNothing);
+      failed = false;
+      await tester.scrollUntilVisible(
+        find.text('Retry'),
+        -600,
+        scrollable: find
+            .descendant(
+              of: find.byType(SchedulePage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Retry')),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(requested.map((r) => r.$2), [1, 2, 2]);
+      expect(requested.map((r) => r.$1).toSet(), hasLength(1));
+      await tester.scrollUntilVisible(
+        find.text('Airing 2-0'),
+        600,
+        scrollable: find
+            .descendant(
+              of: find.byType(SchedulePage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Airing 1-49'), findsOneWidget);
+      expect(find.text('Airing 2-0'), findsOneWidget);
+      expect(find.byType(FailureView), findsNothing);
+    },
+  );
+  testWidgets(
+    'partial movie-list failure keeps available titles and offers retry',
+    (tester) async {
+      var failed = true;
+      final catalog = FeedbackCatalog(
+        client: MockClient((request) async {
+          if (request.url.path == '/movies/trending') {
+            return reply([
+              {
+                'movie': {
+                  'title': 'Available movie',
+                  'ids': {'trakt': 99},
+                },
+              },
+            ]);
+          }
+          return failed ? reply({}, 503) : reply([]);
+        }),
+      );
+      await mount(
+        tester,
+        catalog,
+        (app) => MoviesHome(services: app, isTV: false),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Available movie'), findsWidgets);
+      expect(
+        find.textContaining('Some movie and show lists could not be loaded.'),
+        findsOneWidget,
+      );
+      failed = false;
+      await tester.ensureVisible(find.text('Retry'));
+      await tester.pumpAndSettle();
+      await Scrollable.ensureVisible(
+        tester.element(find.text('Retry')),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(find.text('Available movie'), findsWidgets);
+      expect(find.byType(FailureView), findsNothing);
+    },
+  );
+}
