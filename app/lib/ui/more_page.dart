@@ -22,6 +22,7 @@ import 'community_extras_page.dart';
 import 'watch_party_page.dart';
 import 'tv_remote_page.dart';
 import 'watch_rooms_page.dart';
+import 'account_sync_status.dart';
 
 Future<void> openAccounts(
   BuildContext context,
@@ -74,7 +75,6 @@ class MorePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isDesktop) return DesktopMore(services: services, onOpen: onOpen);
-    final accounts = services.auth.accounts.values;
     final identity = accountNames(services).join(' · ');
     Widget row(
       String title,
@@ -161,12 +161,7 @@ class MorePage extends StatelessWidget {
                         identity.isEmpty ? 'Your accounts' : identity,
                         style: uiStyle(context, weight: FontWeight.w600),
                       ),
-                      Text(
-                        identity.isNotEmpty
-                            ? 'Tracker sync${accounts.any((a) => a.expired) ? ' · Login needs attention' : ''}'
-                            : 'Local progress',
-                        style: uiStyle(context, size: 15, color: muted),
-                      ),
+                      AccountSyncStatus(services: services),
                     ],
                   ),
                 ),
@@ -186,17 +181,7 @@ class MorePage extends StatelessWidget {
             style: uiStyle(context, size: 15, color: muted),
           ),
         ],
-        if (services.tracking.lastError != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'Progress is saved locally. ${services.tracking.lastError}',
-              style: uiStyle(context, size: 15, color: warn),
-            ),
-          ),
-        const SizedBox(height: 20),
-        // Same order as the desktop settings sidebar: settings first,
-        // then the community and tools.
+        const MoreGroupHeading('Watching'),
         row(
           'Playback',
           'Resume, skips & quality',
@@ -229,40 +214,6 @@ class MorePage extends StatelessWidget {
             () => openDownloads(context, services, isTV),
           ),
         row(
-          'Appearance',
-          'Shu / Dark',
-          LucideIcons.palette,
-          () => openSettings(context, services, isTV, section: 'Appearance'),
-        ),
-        ListenableBuilder(
-          listenable: services.updates,
-          builder: (context, _) => row(
-            'About & updates',
-            services.updates.available
-                ? 'Update available · ${services.updates.update!.label}'
-                : 'Otakase · Android phone and TV',
-            LucideIcons.info,
-            () => openSettings(
-              context,
-              services,
-              isTV,
-              section: 'About & updates',
-            ),
-          ),
-        ),
-        if (services.profiles case final manager?)
-          row(
-            'Profiles',
-            manager.active.name,
-            LucideIcons.users,
-            () => Navigator.push(
-              context,
-              OtakaseRoute<void>(
-                builder: (_) => ProfilesPage(manager: manager),
-              ),
-            ),
-          ),
-        row(
           'Schedule',
           'This week · ${DateTime.now().timeZoneName}',
           LucideIcons.calendarDays,
@@ -292,6 +243,47 @@ class MorePage extends StatelessWidget {
             ),
           ),
         ),
+        const MoreGroupHeading('Your profile'),
+        if (services.profiles case final manager?)
+          row(
+            'Profiles',
+            manager.active.name,
+            LucideIcons.users,
+            () => Navigator.push(
+              context,
+              OtakaseRoute<void>(
+                builder: (_) => ProfilesPage(manager: manager),
+              ),
+            ),
+          ),
+        row(
+          'Settings backup',
+          'Keep your settings with the Discord bot',
+          LucideIcons.cloudUpload,
+          () => openDetail(
+            context,
+            BackupPage(services: services, isTV: isTV),
+            isTV,
+          ),
+        ),
+        row(
+          'Appearance',
+          'Shu / Dark',
+          LucideIcons.palette,
+          () => openSettings(context, services, isTV, section: 'Appearance'),
+        ),
+        const MoreGroupHeading('Devices'),
+        row(
+          isTV ? 'Phone remote' : 'Control TV',
+          'Pair on your local network',
+          LucideIcons.tv,
+          () => openDetail(
+            context,
+            TVRemotePage(services: services, isTV: isTV),
+            isTV,
+          ),
+        ),
+        const MoreGroupHeading('Community'),
         row(
           'Discord',
           services.discord.linked ? services.discord.name : 'Link this profile',
@@ -350,14 +342,16 @@ class MorePage extends StatelessWidget {
             isTV,
           ),
         ),
+        const MoreGroupHeading('Help & app'),
         row(
-          'Settings backup',
-          'Keep your settings with the Discord bot',
-          LucideIcons.cloudUpload,
-          () => openDetail(
+          'Diagnostics',
+          'Playback checks',
+          LucideIcons.activity,
+          () => Navigator.push(
             context,
-            BackupPage(services: services, isTV: isTV),
-            isTV,
+            OtakaseRoute<void>(
+              builder: (_) => DiagnosticsHub(services: services, isTV: isTV),
+            ),
           ),
         ),
         row(
@@ -370,24 +364,19 @@ class MorePage extends StatelessWidget {
             isTV,
           ),
         ),
-        row(
-          isTV ? 'Phone remote' : 'Control TV',
-          'Pair on your local network',
-          LucideIcons.tv,
-          () => openDetail(
-            context,
-            TVRemotePage(services: services, isTV: isTV),
-            isTV,
-          ),
-        ),
-        row(
-          'Diagnostics',
-          'Playback checks',
-          LucideIcons.activity,
-          () => Navigator.push(
-            context,
-            OtakaseRoute<void>(
-              builder: (_) => DiagnosticsHub(services: services, isTV: isTV),
+        ListenableBuilder(
+          listenable: services.updates,
+          builder: (context, _) => row(
+            'About & updates',
+            services.updates.available
+                ? 'Update available · ${services.updates.update!.label}'
+                : 'Otakase · Android phone and TV',
+            LucideIcons.info,
+            () => openSettings(
+              context,
+              services,
+              isTV,
+              section: 'About & updates',
             ),
           ),
         ),
@@ -458,7 +447,6 @@ class _DesktopMoreState extends State<DesktopMore> {
 
   @override
   Widget build(BuildContext context) {
-    final accounts = services.auth.accounts.values;
     final identity = accountNames(services).join(' · ');
     void detail(Widget page) => unawaited(openDetail(context, page, true));
     final sidebar = ListView(
@@ -513,12 +501,7 @@ class _DesktopMoreState extends State<DesktopMore> {
                         overflow: TextOverflow.ellipsis,
                         style: uiStyle(context, weight: FontWeight.w600),
                       ),
-                      Text(
-                        identity.isNotEmpty
-                            ? 'Tracker sync${accounts.any((a) => a.expired) ? ' · Login needs attention' : ''}'
-                            : 'Local progress',
-                        style: uiStyle(context, size: 15, color: muted),
-                      ),
+                      AccountSyncStatus(services: services),
                     ],
                   ),
                 ),
@@ -526,7 +509,7 @@ class _DesktopMoreState extends State<DesktopMore> {
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        const MoreGroupHeading('Watching'),
         item('Playback', LucideIcons.circlePlay),
         item('Subtitles & languages', LucideIcons.captions),
         item('Movies & shows', LucideIcons.clapperboard),
@@ -535,9 +518,7 @@ class _DesktopMoreState extends State<DesktopMore> {
           LucideIcons.download,
           open: () => openDownloads(context, services, true),
         ),
-        item('Appearance', LucideIcons.palette),
-        item('About & updates', LucideIcons.info),
-        const Divider(height: 28),
+        const MoreGroupHeading('Your profile'),
         if (services.profiles case final manager?)
           item(
             'Profiles',
@@ -549,6 +530,19 @@ class _DesktopMoreState extends State<DesktopMore> {
               ),
             ),
           ),
+        item(
+          'Settings backup',
+          LucideIcons.cloudUpload,
+          open: () => detail(BackupPage(services: services, isTV: true)),
+        ),
+        item('Appearance', LucideIcons.palette),
+        const MoreGroupHeading('Devices'),
+        item(
+          'Phone remote',
+          LucideIcons.tv,
+          open: () => detail(TVRemotePage(services: services, isTV: true)),
+        ),
+        const MoreGroupHeading('Community'),
         item(
           'Discord',
           LucideIcons.messagesSquare,
@@ -576,21 +570,7 @@ class _DesktopMoreState extends State<DesktopMore> {
           LucideIcons.mail,
           open: () => detail(CapsulePage(services: services, isTV: true)),
         ),
-        item(
-          'Settings backup',
-          LucideIcons.cloudUpload,
-          open: () => detail(BackupPage(services: services, isTV: true)),
-        ),
-        item(
-          'Report a problem',
-          LucideIcons.lifeBuoy,
-          open: () => detail(ReportPage(services: services, isTV: true)),
-        ),
-        item(
-          'Phone remote',
-          LucideIcons.tv,
-          open: () => detail(TVRemotePage(services: services, isTV: true)),
-        ),
+        const MoreGroupHeading('Help & app'),
         item(
           'Diagnostics',
           LucideIcons.activity,
@@ -601,14 +581,12 @@ class _DesktopMoreState extends State<DesktopMore> {
             ),
           ),
         ),
-        if (services.tracking.lastError != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Text(
-              'Progress is saved locally. ${services.tracking.lastError}',
-              style: uiStyle(context, size: 15, color: warn),
-            ),
-          ),
+        item(
+          'Report a problem',
+          LucideIcons.lifeBuoy,
+          open: () => detail(ReportPage(services: services, isTV: true)),
+        ),
+        item('About & updates', LucideIcons.info),
       ],
     );
     return Row(
@@ -752,8 +730,16 @@ class _AccountsPageState extends State<AccountsPage> {
           if (trakt.username.isNotEmpty)
             Text(trakt.username, style: uiStyle(context)),
           Text(
-            'Signed in · Movies and shows sync',
-            style: uiStyle(context, size: 15, color: ok),
+            traktSyncStatus(widget.services),
+            style: uiStyle(
+              context,
+              size: 15,
+              color:
+                  widget.services.movies.lastError != null ||
+                      trakt.lastError != null
+                  ? warn
+                  : muted,
+            ),
           ),
           const SizedBox(height: 12),
           AppButton(
@@ -813,6 +799,8 @@ class _AccountsPageState extends State<AccountsPage> {
           widget.services.store,
           widget.services.listSync,
           widget.services.trakt,
+          widget.services.tracking,
+          widget.services.movies,
         ]),
         builder: (context, _) => ListView(
           padding: const EdgeInsets.all(24),
@@ -850,11 +838,15 @@ class _AccountsPageState extends State<AccountsPage> {
                 Text(
                   account.expired
                       ? 'Login expired. Sign in again to sync.'
-                      : 'Signed in · Tracker sync',
+                      : widget.services.tracking.progressStatus(service),
                   style: uiStyle(
                     context,
                     size: 15,
-                    color: account.expired ? warn : ok,
+                    color:
+                        account.expired ||
+                            widget.services.tracking.needsAttention(service)
+                        ? warn
+                        : muted,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -985,5 +977,26 @@ class _LoginDialogState extends State<_LoginDialog> {
         child: const Text('Cancel'),
       ),
     ],
+  );
+}
+
+class MoreGroupHeading extends StatelessWidget {
+  const MoreGroupHeading(this.title, {super.key});
+  final String title;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
+    child: Semantics(
+      header: true,
+      child: Text(
+        title,
+        style: uiStyle(
+          context,
+          size: 15,
+          color: muted,
+          weight: FontWeight.w600,
+        ),
+      ),
+    ),
   );
 }

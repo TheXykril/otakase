@@ -298,11 +298,13 @@ void main() {
 
       offline = false;
       final reloaded = TrackingService(auth, store: restored)..remember(anime);
+      expect(reloaded.progressStatus('AniList'), contains('waiting to sync'));
       addTearDown(reloaded.dispose);
       await restored.progress(anime, 2, 1440, 1440, completed: true);
       await reloaded.pusher().episodeDone(anime.key, 2, 12);
       expect(writes, [2]);
       expect(restored.value('PendingEpisodeCompletions'), isEmpty);
+      expect(reloaded.progressStatus('AniList'), contains('Last update sent'));
     },
   );
 
@@ -327,6 +329,8 @@ void main() {
     );
     expect(malWrites, 1);
     expect(tracking.lastError, contains('AniList'));
+    expect(tracking.progressStatus('AniList'), contains('needs attention'));
+    expect(tracking.progressStatus('MAL'), contains('Last update sent'));
     auth.dispose();
   });
   test(

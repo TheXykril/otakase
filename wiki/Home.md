@@ -3,6 +3,13 @@
 The [README](https://github.com/TheXykril/otakase#readme) covers installing
 Otakase and getting started. These pages go further.
 
+## More and Settings
+
+The account card stays at the top. The options below are grouped into
+**Watching**, **Your profile**, **Devices**, **Community**, and **Help & app**.
+Phone and TV use More; desktop Settings uses the same groups. Schedule is
+under Watching on phone and TV and keeps its own tab on desktop.
+
 ## Using Otakase
 
 - **[Tracking](Tracking)**: AniList, MyAnimeList, both at once, and resuming on another device

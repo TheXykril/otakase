@@ -191,8 +191,18 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.select);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('more-Accounts')), findsOneWidget);
-      // Playback, Subtitles, Movies & shows, Appearance, About, Schedule.
-      for (var i = 0; i < 6; i++) {
+      bool scheduleFocused() {
+        var found = false;
+        FocusManager.instance.primaryFocus?.context?.visitAncestorElements((
+          element,
+        ) {
+          found = element.widget.key == const Key('more-Schedule');
+          return !found;
+        });
+        return found;
+      }
+
+      for (var i = 0; i < 24 && !scheduleFocused(); i++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
         await tester.pumpAndSettle();
       }
@@ -205,6 +215,7 @@ void main() {
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('more-Schedule')), findsOneWidget);
+      expect(scheduleFocused(), isTrue);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },

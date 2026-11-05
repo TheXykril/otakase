@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Improved
+
+- More and desktop Settings group watching, profile, device, community and
+  help options. Accounts shows when tracker updates are being sent, when
+  they need attention, and the last update sent this session.
+- Playback errors open a prefilled problem report with optional app and
+  playback details to review before sending. Reports can also be copied
+  without linking Discord.
+
 ### Fixed
 
 - Search and episode lists distinguish failed requests from empty results.
