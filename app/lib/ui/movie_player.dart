@@ -10,6 +10,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../core.dart';
 import '../data/hls_quality.dart';
+import '../data/external_subtitles.dart';
 import '../data/models.dart';
 import '../data/store.dart';
 import '../desktop/desktop_core.dart';
@@ -395,6 +396,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
         break;
       }
     }
+    if (!mounted || g != generation || subPicked) return;
     final preferences = store
         .text('SubsLanguage')
         .toLowerCase()
@@ -418,24 +420,34 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       return;
     }
     for (final preferred in preferences) {
-      final embedded = player.state.tracks.subtitle.where(
-        (t) =>
-            t.id != 'auto' &&
-            t.id != 'no' &&
-            languageMatches(t.language, t.title, preferred),
-      );
-      if (embedded.isNotEmpty) {
-        await player.setSubtitleTrack(embedded.first);
-        return;
-      }
-      for (final track in m.subtitles.where(
-        (t) => languageMatches(
-          t['language'] as String?,
-          t['label'] as String?,
-          preferred,
-        ),
+      if (!mounted || g != generation || subPicked) return;
+      final candidates = <({SubtitleTrack? embedded, Json? external})>[
+        for (final track in player.state.tracks.subtitle)
+          if (track.id != 'auto' &&
+              track.id != 'no' &&
+              languageMatches(track.language, track.title, preferred))
+            (embedded: track, external: null),
+        for (final track in m.subtitles)
+          if (languageMatches(
+            track['language'] as String?,
+            track['label'] as String?,
+            preferred,
+          ))
+            (embedded: null, external: track),
+      ];
+      for (final candidate in dialogueSubtitleOrder(
+        candidates,
+        language: (t) =>
+            t.embedded?.language ?? t.external?['language'] as String?,
+        label: (t) => t.embedded?.title ?? t.external?['label'] as String?,
       )) {
-        if (await loadSubtitle(track, g)) return;
+        if (!mounted || g != generation || subPicked) return;
+        if (candidate.embedded case final track?) {
+          subPicked = true;
+          await player.setSubtitleTrack(track);
+          return;
+        }
+        if (await loadSubtitle(candidate.external!, g)) return;
       }
     }
   }
@@ -457,6 +469,9 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
         );
       }
       if (!mounted || g != generation) return false;
+      if (text.replaceFirst('\uFEFF', '').trimLeft().startsWith('WEBVTT')) {
+        text = utf8.decode(repairWebVtt(utf8.encode(text)));
+      }
       await player.setSubtitleTrack(
         SubtitleTrack.data(
           text,
@@ -664,8 +679,10 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       case ('audio', final AudioTrack t):
         await player.setAudioTrack(t);
       case ('sub', final SubtitleTrack t):
+        subPicked = true;
         await player.setSubtitleTrack(t);
       case ('file', final Json t):
+        subPicked = true;
         await loadSubtitle(t, generation);
     }
     showControls();

@@ -1093,9 +1093,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await castCurrent(start: at);
   }
 
-  /// The subtitles a cast takes: the external track picked, or the first one
-  /// matching the subtitle languages.
+  /// Keep an explicit external choice, otherwise prefer dialogue for casting.
   String castSubtitle(ResolvedStream stream) {
+    if (skipEpisodeSubtitles) return '';
     if (externalTrack case final Json track) {
       return track['url'] as String? ?? '';
     }
@@ -1108,7 +1108,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         .where((v) => v.isNotEmpty);
     for (final preferred in preferences) {
       if (preferred == 'none' || preferred == 'off') return '';
-      for (final t in stream.subtitles) {
+      for (final t in dialogueSubtitleOrder(
+        stream.subtitles,
+        language: (t) => t['language'] as String?,
+        label: (t) => t['label'] as String?,
+      )) {
         if (languageMatches(
           t['language'] as String?,
           t['label'] as String?,
@@ -1119,7 +1123,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
     }
     if (stream.subtitles.isNotEmpty) {
-      return stream.subtitles.first['url'] as String? ?? '';
+      return dialogueSubtitleOrder(
+                stream.subtitles,
+                language: (t) => t['language'] as String?,
+                label: (t) => t['label'] as String?,
+              ).first['url']
+              as String? ??
+          '';
     }
     return stream.subtitle.startsWith('http') ? stream.subtitle : '';
   }

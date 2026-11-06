@@ -18,8 +18,9 @@
 
 ### Fixed
 
-- Automatic subtitles prefer full dialogue over forced/signs-only tracks,
-  preventing long silent gaps when both tracks are available.
+- Automatic subtitles prefer full dialogue over forced/signs-only tracks
+  in anime, movies and casting. Malformed WebVTT blocks are removed before
+  local playback or cast conversion so later dialogue remains readable.
 
 - Search and episode lists distinguish failed requests from empty results.
   Retry keeps search filters and loaded pages, and movie search and episode

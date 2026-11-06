@@ -51,7 +51,14 @@ func fetchCastSubtitle(subtitleURL, referrer, outDir string) (string, error) {
 	}
 	defer file.Close()
 
-	if _, err := io.Copy(file, response.Body); err != nil {
+	body, err := io.ReadAll(io.LimitReader(response.Body, (16<<20)+1))
+	if err != nil {
+		return "", fmt.Errorf("cast: could not read the subtitles: %w", err)
+	}
+	if len(body) > 16<<20 {
+		return "", fmt.Errorf("cast: subtitle file exceeds 16 MiB")
+	}
+	if _, err := file.Write(cast.RepairWebVTT(body)); err != nil {
 		return "", fmt.Errorf("cast: could not save the subtitles: %w", err)
 	}
 	return path, nil

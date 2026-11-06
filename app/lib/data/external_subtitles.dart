@@ -60,6 +60,41 @@ String subtitleExtension(List<int> bytes, Uri uri) {
       : 'sub';
 }
 
+/// Ignore orphan text blocks that make native WebVTT demuxers stop reading.
+/// Keep timed cues, cue IDs, settings and WebVTT metadata. Leave valid files
+/// byte-for-byte intact, including their original encoding and line endings.
+List<int> repairWebVtt(List<int> bytes) {
+  final text = utf8.decode(bytes, allowMalformed: true);
+  final normalized = text
+      .replaceFirst('\uFEFF', '')
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n');
+  final timing = RegExp(
+    r'^(?:\d{2,}:)?\d{2}:\d{2}\.\d{3}[ \t]+-->[ \t]+(?:\d{2,}:)?\d{2}:\d{2}\.\d{3}(?:[ \t].*)?$',
+  );
+  final kept = <String>[];
+  var dropped = false;
+  for (final raw in normalized.split(RegExp(r'\n[ \t]*\n'))) {
+    final block = raw.replaceAll(RegExp(r'^\n+|\n+$'), '');
+    if (block.trim().isEmpty) continue;
+    final lines = block.split('\n');
+    final header = kept.isEmpty && lines.first.startsWith('WEBVTT');
+    final metadata =
+        RegExp(r'^NOTE(?:[ \t]|$)').hasMatch(lines.first) ||
+        lines.first == 'STYLE' ||
+        lines.first == 'REGION';
+    final cue =
+        timing.hasMatch(lines.first) ||
+        (lines.length > 1 && timing.hasMatch(lines[1]));
+    if (header || metadata || cue) {
+      kept.add(block);
+    } else {
+      dropped = true;
+    }
+  }
+  return dropped ? utf8.encode('${kept.join('\n\n')}\n') : bytes;
+}
+
 class SubtitleFailure implements Exception {
   const SubtitleFailure(this.message, {this.host});
   final String message;
@@ -130,7 +165,11 @@ Future<({List<int> bytes, String extension})> downloadSubtitle(
     }
   }
   try {
-    return (bytes: bytes, extension: subtitleExtension(bytes, uri));
+    final extension = subtitleExtension(bytes, uri);
+    return (
+      bytes: extension == 'vtt' ? repairWebVtt(bytes) : bytes,
+      extension: extension,
+    );
   } on FormatException {
     throw const SubtitleFailure(
       'The subtitle server returned an invalid file.',
