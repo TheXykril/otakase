@@ -638,25 +638,32 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         await player.setSubtitleTrack(SubtitleTrack.no());
         return null;
       }
-      final embedded = player.state.tracks.subtitle.where(
-        (t) =>
-            t.id != 'auto' &&
-            t.id != 'no' &&
-            languageMatches(t.language, t.title, preferred),
-      );
-      if (embedded.isNotEmpty) {
-        subSelected = true;
-        await player.setSubtitleTrack(embedded.first);
-        return null;
-      }
-      final external = externalSubtitleTracks(stream).where(
-        (t) => languageMatches(
-          t['language'] as String?,
-          t['label'] as String?,
-          preferred,
-        ),
-      );
-      for (final track in external) {
+      final candidates = <({SubtitleTrack? embedded, Json? external})>[
+        for (final track in player.state.tracks.subtitle)
+          if (track.id != 'auto' &&
+              track.id != 'no' &&
+              languageMatches(track.language, track.title, preferred))
+            (embedded: track, external: null),
+        for (final track in externalSubtitleTracks(stream))
+          if (languageMatches(
+            track['language'] as String?,
+            track['label'] as String?,
+            preferred,
+          ))
+            (embedded: null, external: track),
+      ];
+      for (final candidate in dialogueSubtitleOrder(
+        candidates,
+        language: (t) =>
+            t.embedded?.language ?? t.external?['language'] as String?,
+        label: (t) => t.embedded?.title ?? t.external?['label'] as String?,
+      )) {
+        if (candidate.embedded case final track?) {
+          subSelected = true;
+          await player.setSubtitleTrack(track);
+          return null;
+        }
+        final track = candidate.external!;
         if (!attempted.add(track['url'])) continue;
         if (await externalSubtitle(
           track,

@@ -18,6 +18,9 @@
 
 ### Fixed
 
+- Automatic subtitles prefer full dialogue over forced/signs-only tracks,
+  preventing long silent gaps when both tracks are available.
+
 - Search and episode lists distinguish failed requests from empty results.
   Retry keeps search filters and loaded pages, and movie search and episode
   loading offer a Retry action. Partial movie-list failures keep available titles.

@@ -15,6 +15,31 @@ Iterable<Json> externalSubtitleTracks(ResolvedStream stream) sync* {
   }
 }
 
+/// Prefer dialogue over closed captions and signs-only/forced tracks, retaining
+/// source order for equal choices. Apply within one preferred language/copy.
+Iterable<T> dialogueSubtitleOrder<T>(
+  Iterable<T> tracks, {
+  required String? Function(T) language,
+  required String? Function(T) label,
+}) {
+  int rank(T track) {
+    final text = '${language(track) ?? ''} ${label(track) ?? ''}'.toLowerCase();
+    if (RegExp(r'\b(forced|signs?|songs?)\b').hasMatch(text)) return 2;
+    if (RegExp(r'\b(cc|sdh|closed captions?|hearing impaired)\b')
+        .hasMatch(text)) {
+      return 1;
+    }
+    return 0;
+  }
+
+  final indexed = tracks.indexed.toList();
+  indexed.sort((a, b) {
+    final order = rank(a.$2).compareTo(rank(b.$2));
+    return order != 0 ? order : a.$1.compareTo(b.$1);
+  });
+  return indexed.map((entry) => entry.$2);
+}
+
 /// Give native demuxers a filename hint while retaining the original bytes.
 String subtitleExtension(List<int> bytes, Uri uri) {
   final prefix = utf8
