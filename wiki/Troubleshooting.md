@@ -32,6 +32,21 @@ are included. **Send report** posts to support through your linked Discord
 profile; **Copy report** also works without Discord. Nothing is sent until
 you choose Send report.
 
+## Subtitles appear only occasionally
+
+In Tracks, choose the full dialogue track instead of one labelled Forced,
+Signs or Songs. Those tracks may translate only on-screen text, leaving long
+gaps during dialogue. Automatic selection prefers full dialogue tracks, then
+closed captions, before forced/signs-only tracks within the preferred language.
+Your manual track choice remains available. The same automatic track priority
+applies to movies and casting.
+
+Some subtitle files contain untimed text blocks that can make playback stop
+reading later cues. Otakase removes those malformed blocks before loading
+WebVTT files locally or preparing them for casting. If subtitles still stop,
+include the episode, approximate time, and whether seeking or skipping happened
+in a playback report.
+
 ## Progress didn't update on AniList / MyAnimeList
 
 Writes to the trackers are paced to stay inside their limits and happen in the

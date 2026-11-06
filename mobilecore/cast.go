@@ -866,7 +866,8 @@ func (k *caster) closeCast() {
 }
 
 func fetchSubtitles(ctx context.Context, c *Core, req castRequest) ([]byte, error) {
-	return readSubtitle(ctx, &http.Client{Transport: subtitleTransport(c)}, req.Subtitle, req.Headers)
+	body, err := readSubtitle(ctx, &http.Client{Transport: subtitleTransport(c)}, req.Subtitle, req.Headers)
+	return cast.RepairWebVTT(body), err
 }
 
 func fetchSubtitlesVTT(ctx context.Context, c *Core, req castRequest) ([]byte, error) {
