@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Android updates retry certificate lookup when firmware omits signing details.**
+  Matching certificates from Android's legacy lookup are accepted; different
+  keys are still rejected. Unreadable certificates show a separate error.
+
+
 ## 26.1.8 - 2026-11-07
 
 Subtitle fixes, easier episode browsing on TV, and clearer menus and playback feedback.

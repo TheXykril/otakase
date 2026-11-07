@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
+import android.content.pm.Signature
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -74,13 +75,25 @@ class AppUpdates(private val activity: FlutterActivity, messenger: BinaryMesseng
         info.longVersionCode else info.versionCode.toLong()
 
     @Suppress("DEPRECATION")
-    private fun signers(info: PackageInfo): Set<String> {
-        val signatures = if (Build.VERSION.SDK_INT >= 28) info.signingInfo?.apkContentsSigners else info.signatures
-        return signatures?.map { signature ->
+    private fun signers(info: PackageInfo, legacy: () -> PackageInfo?): Set<String> {
+        val primary = if (Build.VERSION.SDK_INT >= 28)
+            info.signingInfo?.apkContentsSigners else info.signatures
+        return readUpdateSigners(signerHashes(primary)) {
+            val fallback = try { legacy() } catch (_: Exception) { null }
+            // A second lookup must describe exactly the same package/version.
+            if (fallback == null || fallback.packageName != info.packageName || code(fallback) != code(info)) {
+                emptySet()
+            } else {
+                signerHashes(fallback.signatures)
+            }
+        }
+    }
+
+    private fun signerHashes(signatures: Array<Signature>?): Set<String> =
+        signatures?.map { signature ->
             MessageDigest.getInstance("SHA-256").digest(signature.toByteArray())
                 .joinToString("") { "%02x".format(it) }
         }?.toSet() ?: emptySet()
-    }
 
     @Suppress("DEPRECATION")
     private fun validate(call: MethodCall): File {
@@ -111,10 +124,14 @@ class AppUpdates(private val activity: FlutterActivity, messenger: BinaryMesseng
         require(code(archive) == expectedCode && code(archive) > code(current)) {
             "This update is not newer than the installed app."
         }
-        val trusted = signers(current)
-        require(trusted.isNotEmpty() && trusted == signers(archive)) {
-            "This update uses a different signing key. Install updates from the same distributor."
-        }
+        verifyUpdateSigning(
+            signers(current) {
+                activity.packageManager.getPackageInfo(activity.packageName, PackageManager.GET_SIGNATURES)
+            },
+            signers(archive) {
+                activity.packageManager.getPackageArchiveInfo(file.path, PackageManager.GET_SIGNATURES)
+            },
+        )
         require((archive.applicationInfo?.minSdkVersion ?: Int.MAX_VALUE) <= Build.VERSION.SDK_INT) {
             "This update needs a newer Android version."
         }
