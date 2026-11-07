@@ -2,38 +2,43 @@
 
 ## Unreleased
 
+## 26.1.8 - 2026-11-07
+
+Subtitle fixes, easier episode browsing on TV, and clearer menus and playback feedback.
+
 ### Improved
 
-- More and desktop Settings group watching, profile, device, community and
-  help options. Accounts shows when tracker updates are being sent, when
-  they need attention, and the last update sent this session.
-- Playback errors open a prefilled problem report with optional app and
-  playback details to review before sending. Reports can also be copied
-  without linking Discord.
-- TV anime pages show episodes in a four-column grid directly below the
-  details, using desktop-style thumbnail cards and remote row navigation.
-- Episode browsing: jump by number without autoplay, read focused titles and
-  episode details, optionally hide unwatched artwork and titles. Desktop
-  focus outlines follow keyboard and mouse use.
+- **More and desktop Settings are easier to browse.** Watching, profile,
+  device, community and help options are grouped together.
+- **Accounts shows tracker sync status.** See updates being sent, updates
+  that need attention, and the last update sent this session.
+- **Playback problems are easier to report.** Review a prefilled report with
+  optional playback details before sending, or copy it without linking Discord.
+- **TV episodes use a desktop-style thumbnail grid.** Browse four columns
+  directly below the anime details, jump by episode number without autoplay,
+  and read full titles and episode details with the remote.
+- **Optional spoiler protection hides unwatched episode titles and artwork.**
+  It is off by default. Desktop focus outlines appear for keyboard navigation
+  and hide again when using the mouse.
 
 ### Fixed
 
-- Automatic subtitles prefer full dialogue over forced/signs-only tracks
-  in anime, movies and casting. Malformed WebVTT blocks are removed before
-  local playback or cast conversion so later dialogue remains readable.
-
-- Search and episode lists distinguish failed requests from empty results.
-  Retry keeps search filters and loaded pages, and movie search and episode
-  loading offer a Retry action. Partial movie-list failures keep available titles.
-  Browse errors use generic wording without internal service names or URLs.
-- Unavailable playback and downloads explain why they cannot be used yet.
-
-- The desktop launcher fades in at its fixed popup size without flashing a
-  large window at startup and fades out when dismissed. Press the shortcut
-  again to close it. The launcher restores your filter when you go back,
-  matches partial title words, and hands playback off to a normal window.
-  On Hyprland, the Wayland overlay stays fixed during window drags. Esc
-  works even if the search field loses focus.
+- **Automatic subtitles prefer full dialogue over forced or signs-only tracks.**
+  The same selection order applies to anime, movies and casting, with closed
+  captions available before forced tracks when full dialogue is unavailable.
+- **Malformed subtitle files no longer hide later timed dialogue.** Untimed
+  WebVTT text blocks are removed before local playback or cast preparation
+  so the player can continue reading the remaining cues.
+- **Failed searches and episode lists offer clearer retries.** Retry keeps
+  filters and loaded pages. Movie search and episode loading offer Retry,
+  and partial movie-list failures keep the titles that loaded successfully.
+- **Unavailable playback and downloads explain why they cannot be used yet.**
+  Browse errors use plain wording without internal service names or URLs.
+- **The desktop launcher opens as a fixed popup without a large-window flash.**
+  It fades in and out, closes on a second shortcut press, restores filters,
+  matches partial title words and opens playback in a regular window. The
+  Hyprland overlay stays fixed during window drags; Esc works after the
+  search field loses focus.
 
 ## 26.1.7 - 2026-11-04
 
