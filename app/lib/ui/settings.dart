@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -15,6 +14,7 @@ import 'app_updates.dart';
 import '../desktop/desktop_core.dart';
 import '../desktop/launcher_shortcut.dart';
 import '../desktop/system_install.dart';
+import '../host.dart';
 
 Future<void> openSettings(
   BuildContext context,
@@ -664,9 +664,7 @@ class _SettingsPageState extends State<SettingsPage> {
               future: systemInstall.installed(),
               builder: (context, done) => row(
                 'Add to apps and terminal',
-                Platform.isMacOS
-                    ? 'Adds the otakase command to your terminal.'
-                    : 'Adds Otakase to your app menu and the otakase command to your terminal.',
+                Host.macOS ? 'Adds the otakase command to your terminal.' : 'Adds Otakase to your app menu and the otakase command to your terminal.',
                 value: done.data == true ? 'Added' : '',
                 icon: LucideIcons.squareTerminal,
                 onTap: () async {

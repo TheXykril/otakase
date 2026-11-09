@@ -13,6 +13,7 @@ import '../services.dart';
 import '../tls_ca.dart';
 import 'components.dart';
 import 'device_status.dart';
+import 'mpv.dart';
 
 class WatchRoomsPage extends StatefulWidget {
   const WatchRoomsPage({super.key, required this.services, required this.isTV});
@@ -346,8 +347,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
   }
 
   Future<void> configure() async {
-    final native = player.platform;
-    if (native is! NativePlayer) return;
+    if (!player.isMpv) return;
     final s = widget.services.store;
     for (final entry in {
       'sub-font': s.text('SubtitleFont'),
@@ -360,7 +360,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
       'af': audioFilter(s),
       ...await tlsOptions(),
     }.entries) {
-      await native.setProperty(entry.key, entry.value);
+      await player.mpvSet(entry.key, entry.value);
     }
   }
 

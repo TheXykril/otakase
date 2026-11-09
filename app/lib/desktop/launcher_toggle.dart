@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
+import '../host.dart';
+
 /// A shortcut invocation either owns the popup or asks its owner to close.
 class LauncherToggle {
   LauncherToggle._(this._lock, this._signal, this._initialLength);
@@ -18,7 +20,7 @@ class LauncherToggle {
     Directory directory, {
     Map<String, String>? environment,
   }) async {
-    final env = environment ?? Platform.environment;
+    final env = environment ?? Host.environment;
     final session = [
       for (final key in [
         'XDG_SESSION_ID',
@@ -32,7 +34,7 @@ class LauncherToggle {
         .convert(utf8.encode(session))
         .toString()
         .substring(0, 16);
-    final prefix = '${directory.path}${Platform.pathSeparator}launcher-$suffix';
+    final prefix = '${directory.path}${Host.pathSeparator}launcher-$suffix';
     final signal = await File('$prefix.toggle').create();
     final initialLength = await signal.length();
     final lock = await File('$prefix.lock').open(mode: FileMode.append);
@@ -40,9 +42,7 @@ class LauncherToggle {
       await lock.lock();
     } on FileSystemException catch (error) {
       await lock.close();
-      final contention = Platform.isWindows
-          ? const {32, 33}
-          : const {11, 13, 35};
+      final contention = Host.windows ? const {32, 33} : const {11, 13, 35};
       if (!contention.contains(error.osError?.errorCode)) rethrow;
       await signal.writeAsBytes([1], mode: FileMode.append, flush: true);
       return null;

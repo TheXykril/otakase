@@ -144,54 +144,26 @@ footer a:hover{color:var(--bright)}
   .wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 }
 
-/* look around: the app's screens with press-able spots (tour.js) */
+/* try it: the app built for the web, in a device frame (demo.js) */
 .tour{padding-block:48px 40px;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;justify-content:center}
 .tour[hidden]{display:none}
-.tgrid{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);grid-template-areas:"head stage" "ctl stage";grid-template-rows:auto 1fr;column-gap:48px;align-items:center}
-.thead{grid-area:head;min-width:0;align-self:end}
-.tctl{grid-area:ctl;min-width:0;align-self:start}
-.tstage{grid-area:stage}
+.tgrid{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);column-gap:48px;align-items:center}
+.thead{min-width:0}
 .tlead{color:var(--muted);margin:-10px 0 22px}
-.tour .tabs{margin-bottom:20px}
-.tnow{display:flex;align-items:center;gap:14px;margin-bottom:12px}
-.tnow .pill{height:42px;padding:0 18px;flex:none}
-.tnow .pill:disabled{opacity:.4;cursor:default;filter:none}
-.tnow div{min-width:0}
-.tnow .mono{display:block;font-size:11px}
-.tnow b{display:block;color:var(--bright);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.thint{color:var(--muted);font-size:14px;margin:0 0 10px}
-.tshow{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);cursor:pointer;margin-bottom:16px}
-.tshow input{accent-color:var(--shu);width:16px;height:16px}
-.tlist{display:grid;gap:10px;max-height:min(34vh,300px);overflow:auto;padding-right:6px;scrollbar-width:thin}
-.tgroup{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.tgroup .mono{width:100%;font-size:11px}
-.tgroup .chip{height:30px;font:500 13px var(--body);color:var(--fg);cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tgroup .chip:hover{border-color:var(--muted)}
-.tgroup .chip[aria-current=true]{background:var(--fg);color:var(--deep);border-color:var(--fg)}
-.tstage{min-width:0;display:flex;flex-direction:column;align-items:center;gap:14px}
+.tour .tabs{margin-bottom:16px}
+.thint{color:var(--muted);font-size:14px;margin:0 0 8px}
+.tstage{min-width:0;display:flex;justify-content:center}
 .tdev{--w:1440;--h:900;width:100%;position:relative}
-.tscr{position:relative;aspect-ratio:var(--w)/var(--h);overflow:hidden;background:#000;outline:none;touch-action:pan-x}
-.tscr:focus-visible{box-shadow:0 0 0 2px var(--shu-text)}
-.tscr img{position:absolute;inset:0;width:100%;height:100%;display:block;transition:opacity .25s}
-.tscr img.loading{opacity:.35}
-.tspots{position:absolute;inset:0}
-.hs{position:absolute;padding:0;margin:0;border:0;background:transparent;border-radius:10px;cursor:pointer;transition:box-shadow .15s,background .15s}
-.hs:hover,.hs:focus-visible,.marks .hs{background:rgba(210,73,47,.14);box-shadow:inset 0 0 0 2px var(--shu-text);outline:none}
-.tv .hs.sel{box-shadow:inset 0 0 0 3px var(--bright),0 0 18px rgba(255,248,236,.35);background:rgba(255,248,236,.08)}
-/* frames: laptop lid + deck, TV bezel + stand, phone body (turns sideways for the player) */
+.tscr{position:relative;aspect-ratio:var(--w)/var(--h);overflow:hidden;background:var(--bg)}
+.tscr iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:var(--bg)}
 .tdev.computer{max-width:900px;width:94%}
 .tdev.computer .tscr{border:12px solid #0d0b0a;border-bottom-width:18px;border-radius:16px 16px 4px 4px;box-shadow:0 0 0 2px #2b2522,0 30px 60px rgba(0,0,0,.6)}
 .tdev.computer::after{content:"";display:block;height:14px;margin:0 -4%;border-radius:2px 2px 30px 30px/2px 2px 12px 12px;background:linear-gradient(#5a524d,#3a3431 30%,#1f1b19)}
 .tdev.tv{max-width:920px}
 .tdev.tv .tscr{border:8px solid #0a0908;border-radius:8px;box-shadow:0 0 0 2px #2c2623,0 30px 70px rgba(0,0,0,.65)}
 .tdev.tv::after{content:"";display:block;width:26%;height:12px;margin:12px auto 0;border-radius:8px 8px 4px 4px;background:linear-gradient(#4a423e,#1d1917)}
-.tdev.phone{width:min(330px,calc((100svh - 190px) * 412 / 915),100%)}
+.tdev.phone{width:min(360px,calc((100svh - 120px) * 412 / 915),100%)}
+.tdev.phone.wide{width:min(720px,100%)}
 .tdev.phone .tscr{border:10px solid #0b0a09;border-radius:38px;box-shadow:0 0 0 2px #2e2825,0 30px 60px rgba(0,0,0,.7)}
-.tdev.phone.wide{width:min(700px,100%)}
-.tpages{display:flex;align-items:center;gap:10px;font:13px var(--mono);color:var(--muted)}
-.tpages[hidden]{display:none}
-.tpages button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--fg);display:grid;place-items:center;cursor:pointer}
-.tpages button:disabled{opacity:.35;cursor:default}
-.tpages svg{width:18px;height:18px}
-@media (max-width:1000px){.tgrid{grid-template-columns:1fr;grid-template-areas:"head" "stage" "ctl";grid-template-rows:auto;row-gap:20px}.tlist{max-height:none}.tour .sh{margin-bottom:16px}}
-@media (max-width:760px){.tour .tabs{grid-template-columns:repeat(3,1fr)}.tdev.computer .tscr{border-width:6px 6px 10px}.tdev.tv .tscr{border-width:4px}.tdev.phone .tscr{border-width:6px;border-radius:26px}.hs{border-radius:6px}}
+@media (max-width:1000px){.tgrid{grid-template-columns:1fr;row-gap:20px}.tour .sh{margin-bottom:16px}}
+@media (max-width:760px){.tour .tabs{grid-template-columns:repeat(3,1fr)}.tdev.computer .tscr{border-width:6px 6px 10px}.tdev.tv .tscr{border-width:4px}.tdev.phone .tscr{border-width:6px;border-radius:26px}}

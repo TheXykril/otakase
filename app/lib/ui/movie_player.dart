@@ -23,6 +23,7 @@ import 'player_keys.dart';
 import 'seal.dart';
 import 'phone_player.dart';
 import 'playback_report.dart';
+import 'mpv.dart';
 
 /// Something to play: a stream found by a source, or a downloaded file.
 class PlayableMedia {
@@ -271,8 +272,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
   }
 
   Future<void> property(String name, String value) async {
-    final native = player.platform;
-    if (native is NativePlayer) await native.setProperty(name, value);
+    await player.mpvSet(name, value);
   }
 
   Future<void> configure() async {

@@ -12,6 +12,7 @@ import '../desktop/desktop_core.dart';
 import '../desktop/open_link.dart';
 import 'models.dart';
 import 'oauth_config.dart';
+import '../host.dart';
 
 abstract class TokenStore {
   Future<String?> read(String key);
@@ -32,7 +33,7 @@ class SecureTokenStore implements TokenStore {
 /// keyring itself (linux/runner/token_store.cc); other systems use the
 /// secure storage plugin.
 TokenStore platformTokenStore() =>
-    !kIsWeb && Platform.isLinux ? LinuxTokenStore() : SecureTokenStore();
+    !kIsWeb && Host.linux ? LinuxTokenStore() : SecureTokenStore();
 
 /// Tokens in the Linux desktop keyring, one keyring item per key, or in
 /// private files when the desktop has no keyring service.

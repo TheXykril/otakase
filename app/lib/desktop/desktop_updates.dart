@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../data/app_updates.dart';
 import 'window_frame.dart';
+import '../host.dart';
 
 /// Which desktop build this is. Each has its own release file.
 enum DesktopTarget {
@@ -14,9 +15,9 @@ enum DesktopTarget {
   const DesktopTarget(this.fileName);
   final String fileName;
 
-  static DesktopTarget get current => Platform.isWindows
+  static DesktopTarget get current => Host.windows
       ? windows
-      : Platform.isMacOS
+      : Host.macOS
       ? macos
       : linux;
 }
@@ -51,8 +52,8 @@ class DesktopUpdatePlatform extends UpdatePlatform {
     Future<void> Function()? quit,
     int? processId,
   }) : target = target ?? DesktopTarget.current,
-       executable = executable ?? Platform.resolvedExecutable,
-       environment = environment ?? Platform.environment,
+       executable = executable ?? Host.executable,
+       environment = environment ?? Host.environment,
        version = version ?? const String.fromEnvironment('OTAKASE_VERSION'),
        _start = start ?? _startDetached,
        _quit = quit ?? quitDesktopApp,
@@ -106,7 +107,7 @@ class DesktopUpdatePlatform extends UpdatePlatform {
         // Copies from the installer have its uninstaller beside them; the
         // installer updates exactly that folder.
         final uninstaller = File(
-          '${File(executable).parent.path}${Platform.pathSeparator}unins000.exe',
+          '${File(executable).parent.path}${Host.pathSeparator}unins000.exe',
         );
         return await uninstaller.exists()
             ? null
@@ -132,7 +133,7 @@ class DesktopUpdatePlatform extends UpdatePlatform {
   static Future<bool> _writable(Directory directory) async {
     try {
       final probe = File(
-        '${directory.path}${Platform.pathSeparator}.otakase-update-check-$pid',
+        '${directory.path}${Host.pathSeparator}.otakase-update-check-$pid',
       );
       await probe.writeAsBytes(const [], flush: true);
       await probe.delete();
@@ -160,7 +161,7 @@ class DesktopUpdatePlatform extends UpdatePlatform {
         folder = image.parent;
         name = '.${image.uri.pathSegments.last}.update';
     }
-    final file = File('${folder.path}${Platform.pathSeparator}$name');
+    final file = File('${folder.path}${Host.pathSeparator}$name');
     if (await file.exists()) await file.delete();
     if (target == DesktopTarget.macos && await _staged.exists()) {
       await _staged.delete(recursive: true);

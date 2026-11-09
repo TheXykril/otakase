@@ -42,13 +42,13 @@ jobs:
           flutter test test/site_screens_test.dart --update-goldens \
             --dart-define=SITE_SHOTS="$RUNNER_TEMP/shots"
 
-      # The "Look around" tour walks the app the same way: every screen it
-      # can reach from Home, per device, with where each button sits.
-      - name: Render the app tour
+      # "Try it here" on the site is the app itself, built for the web with
+      # the same sample shows (app/demo). Its player plays a generated clip.
+      - name: Build the live demo
         working-directory: app
         run: |
-          flutter test test/site_tour_test.dart --update-goldens \
-            --dart-define=SITE_TOUR="$RUNNER_TEMP/tour"
+          sudo apt-get install -y -qq ffmpeg > /dev/null
+          demo/build.sh ../site/demo
 
       - name: Use the new screens
         run: |
@@ -61,21 +61,9 @@ jobs:
           for png in sorted(src.glob('*.png')):
               Image.open(png).convert('RGB').save(dst / f'{png.stem}.webp', 'WEBP', quality=80, method=6)
           PY
-          python3 - "$RUNNER_TEMP/tour" site/tour <<'PY'
-          import pathlib, shutil, sys
-          from PIL import Image
-          src, dst = map(pathlib.Path, sys.argv[1:])
-          shutil.rmtree(dst, ignore_errors=True)
-          for png in sorted(src.rglob('*.png')):
-              out = dst / png.relative_to(src).with_suffix('.webp')
-              out.parent.mkdir(parents=True, exist_ok=True)
-              Image.open(png).convert('RGB').save(out, 'WEBP', quality=78, method=6)
-          shutil.copy(src / 'tour.json', dst / 'tour.json')
-          PY
           ids=$(python3 -c "import json; print(', '.join(str(s['id']) for s in json.load(open('app/test/fixtures/site/shows.json'))))")
           sed -i "s/const SHOTS = \[.*\];/const SHOTS = [$ids];/" site/app.js
           ls site/img/shots
-          du -sh site/tour
 
       # Browsers keep app.js and style.css for hours, so each deploy gives
       # them a new address and a reload always gets the matching files.
