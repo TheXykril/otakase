@@ -96,6 +96,7 @@ const settingLabels = <String, String>{
   'PercentageToMarkComplete': 'Count movies & shows as watched at',
   'ResumePlayback': 'Resume where you left off',
   'CheckUpdates': 'Check for updates',
+  'KeepScreenOn': 'Keep screen on',
   'ExternalMpv': 'Play in my own mpv',
   'MpvPath': 'mpv program',
   'DiscordWatchWithMe': 'Watch with me',
@@ -478,6 +479,13 @@ class _SettingsPageState extends State<SettingsPage> {
           onTap: chooseContent,
         ),
         row('Theme', 'Warm dark appearance.', value: 'Shu / Dark'),
+        if (Host.android)
+          toggle(
+            'KeepScreenOn',
+            'Stop the screen turning off while Otakase is open. '
+                'Videos, downloads and updates keep it on either way.',
+            icon: LucideIcons.sun,
+          ),
       ]),
       group('Subtitles & languages', LucideIcons.captions, [
         row(

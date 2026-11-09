@@ -10,6 +10,13 @@ abstract final class Host {
   static bool get macOS => !kIsWeb && Platform.isMacOS;
   static bool get windows => !kIsWeb && Platform.isWindows;
   static String get name => kIsWeb ? 'web' : Platform.operatingSystem;
+
+  /// Set at start-up when the Android host is a TV.
+  static bool tv = false;
+
+  /// The system as the Discord bot names it (Go's GOOS): Dart says "macos"
+  /// where Go says "darwin".
+  static String get goos => name == 'macos' ? 'darwin' : name;
   static Map<String, String> get environment =>
       kIsWeb ? const {} : Platform.environment;
   static String get pathSeparator => kIsWeb ? '/' : Platform.pathSeparator;

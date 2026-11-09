@@ -208,6 +208,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
   @override
   void initState() {
     super.initState();
+    FullBleed.enter();
     WidgetsBinding.instance.addObserver(this);
     player = Player(
       configuration: const PlayerConfiguration(
@@ -680,6 +681,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
       ),
     );
     if (!widget.isTV) unawaited(SystemChrome.setPreferredOrientations([]));
+    FullBleed.leave();
     super.dispose();
   }
 

@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Bundle
+import android.view.WindowManager
 import android.text.format.DateFormat
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -31,6 +33,7 @@ class MainActivity : FlutterActivity() {
     private var pendingLogin: String? = null
     private var pendingRemote: String? = null
     private var multicastLock: WifiManager.MulticastLock? = null
+    private var workText: String? = null
     private fun remoteUri(intent: Intent?): String? = intent?.data?.takeIf {
         it.scheme == "otakase" && it.host == "remote"
     }?.toString()
@@ -51,6 +54,17 @@ class MainActivity : FlutterActivity() {
             values["charging"] = state == BatteryManager.BATTERY_STATUS_CHARGING || state == BatteryManager.BATTERY_STATUS_FULL
         }
         return values
+    }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Draw under the camera cutout too. Without this Android leaves a
+        // black strip on the cutout side, most visibly in the landscape
+        // player; Flutter keeps content out of it through its safe area.
+        if (Build.VERSION.SDK_INT >= 28) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        super.onCreate(savedInstanceState)
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -110,6 +124,10 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 } catch (_: Exception) { result.error("unavailable", "Local discovery unavailable", null) }
                 "status" -> result.success(deviceStatus())
+                "keepAwake" -> {
+                    keepAwake(call.argument<Boolean>("screen") == true, call.argument<String>("work"))
+                    result.success(null)
+                }
                 "launchUri" -> try {
                     val uri = android.net.Uri.parse(call.arguments as String)
                     require(uri.scheme == "https" && uri.host in listOf("anilist.co", "myanimelist.net", "otakase.xyverion.com", "bot.xyverion.com", "discord.com", "discord.gg", "trakt.tv", "auth.trakt.tv"))
@@ -199,6 +217,22 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /// [screen] keeps the display on while the app is in front. Its own view
+    /// flag, so the player's keep-awake while a video plays stays separate.
+    /// [work] names background work (downloads) that must go on after the
+    /// screen turns off; null when there is none.
+    private fun keepAwake(screen: Boolean, work: String?) {
+        window.decorView.keepScreenOn = screen
+        if (work == workText) return
+        try {
+            if (work == null) WorkService.stop(this) else WorkService.start(this, work)
+            workText = work
+        } catch (_: Exception) {
+            // Android blocks starting it from the background; the next
+            // change while the app is open tries again.
+        }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == voiceRequest) {
@@ -213,6 +247,9 @@ class MainActivity : FlutterActivity() {
         appUpdates = null
         multicastLock?.let { if (it.isHeld) it.release() }
         multicastLock = null
+        // Downloads run in the core, which closes with the app.
+        if (workText != null) WorkService.stop(this)
+        workText = null
         voiceResult?.success(null)
         voiceResult = null
         detached = true

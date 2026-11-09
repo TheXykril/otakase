@@ -9,6 +9,17 @@
   languages sit in **Subtitles & languages** next to the anime ones. Movie
   sources no longer have on/off switches; all of them are tried in your
   language order.
+- **Downloads keep going when the phone sleeps.** On Android phones and TVs
+  the screen stays on while an app update or episode downloads, and the
+  download carries on in the background (with a notification) if the screen
+  turns off or you switch apps. New **Keep screen on** setting in Display
+  keeps the screen on the whole time Otakase is open.
+
+### Fixed
+
+- **Settings backup shows the right device.** A backup made on a computer no
+  longer says it came from Android; it names Windows, macOS, Linux, Android or
+  Android TV.
 
 ## 26.2.0 - 2026-11-09
 
