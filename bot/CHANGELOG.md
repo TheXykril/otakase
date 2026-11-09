@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.92
+
+- Bug reports filed from support posts leave out source names and the web addresses that carry them, writing "a source" instead.
+
 ## 1.30.91
 
 - Settings backups remember the system they were made on (Windows, macOS, Linux, Android or Android TV) instead of the one the app was linked from.

@@ -372,6 +372,23 @@ func TestBugIssueBody(t *testing.T) {
 	}
 }
 
+func TestBugIssueHidesSourceNames(t *testing.T) {
+	body := bugIssueBody("Megavid fails, cp.megavid.buzz gives 502. Nyaa works.", "26.2.0, kickass off", "https://discord.com/channels/1/2")
+	for _, name := range []string{"egavid", "Nyaa", "kickass"} {
+		if strings.Contains(body, name) {
+			t.Errorf("%q names a source (%s)", body, name)
+		}
+	}
+	for _, want := range []string{"a source fails, a source gives 502. a source works.", "26.2.0, a source off", "discord.com/channels/1/2"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("%q missing %q", body, want)
+		}
+	}
+	if got := hideSourceNames("Anime keeps buffering"); got != "Anime keeps buffering" {
+		t.Errorf("plain words changed: %q", got)
+	}
+}
+
 func TestIsNudge(t *testing.T) {
 	m := &discordgo.Message{Author: &discordgo.User{ID: "bot"}, Embeds: []*discordgo.MessageEmbed{{Title: nudgeTitle}}}
 	if !isNudge(m, "bot") || isNudge(m, "someone") {
