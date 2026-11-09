@@ -314,7 +314,7 @@ class _AppShellState extends State<AppShell> {
 
   void resume(WatchEntry h) {
     if (titleCardsOf(widget.services).title(h.anime) case final title?) {
-      unawaited(openTitle(context, widget.services, title, widget.isTV));
+      unawaited(resumeTitle(context, widget.services, title, widget.isTV));
       return;
     }
     unawaited(

@@ -12,7 +12,8 @@ import '../desktop/desktop_core.dart';
 import '../desktop/desktop_home.dart';
 import 'components.dart';
 import 'discovery_home.dart';
-import 'movies_pages.dart' show titleCardsOf, titleCaption;
+import '../data/trakt.dart' show MediaTitle;
+import 'movies_pages.dart' show shelvesOf, titleCardsOf, titleCaption;
 
 /// Two lists that are each newest first, merged newest first while keeping
 /// each list's own order.
@@ -71,8 +72,12 @@ class ResumeCard extends StatelessWidget {
     required this.onOpen,
     this.autofocus = true,
     this.showArtwork = true,
+    this.label,
   });
   final WatchEntry entry;
+
+  /// Replaces the episode line, for a film or series.
+  final String? label;
   final bool isTV, autofocus, showArtwork;
   final VoidCallback onResume, onOpen;
   @override
@@ -126,6 +131,8 @@ class ResumeCard extends StatelessWidget {
                   child: Text(
                     entry.position > 0
                         ? 'Continue watching'
+                        : label == 'MOVIE'
+                        ? 'Up next'
                         : 'Your next episode',
                     style: uiStyle(context, size: 15),
                   ),
@@ -137,7 +144,7 @@ class ResumeCard extends StatelessWidget {
                   top: 16,
                   child: NativeTitle(anime.nativeTitle, isTV: isTV),
                 ),
-              if (isTV)
+              if (isTV && label == null)
                 Positioned(
                   right: 100,
                   bottom: 36,
@@ -170,7 +177,8 @@ class ResumeCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'EP ${entry.episode.toString().padLeft(2, '0')}',
+                        label ??
+                            'EP ${entry.episode.toString().padLeft(2, '0')}',
                         style: mono.copyWith(
                           fontSize: isTV ? 20 : 15,
                           color: fg,
@@ -320,8 +328,36 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Trending films and series for the desktop hero, alternating.
+  List<MediaTitle> featuredTitles = [];
+
   /// Trending picks for the desktop hero.
   Future<void> loadFeatured() async {
+    if (showsTitles) {
+      unawaited(
+        shelvesOf(widget.services)
+            .load()
+            .then((rows) {
+              final films = rows['Trending movies'] ?? const <MediaTitle>[];
+              final shows = rows['Trending shows'] ?? const <MediaTitle>[];
+              if (mounted) {
+                setState(
+                  () => featuredTitles = [
+                    for (
+                      var i = 0;
+                      i < math.max(films.length, shows.length);
+                      i++
+                    ) ...[
+                      if (i < films.length) films[i],
+                      if (i < shows.length) shows[i],
+                    ],
+                  ],
+                );
+              }
+            })
+            .catchError((Object _) {}),
+      );
+    }
     try {
       // Home never shows 18+ titles, whatever the account allows.
       final data = await widget.services.catalog.home(adult: false);
@@ -331,9 +367,27 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  List<HeroPick> heroPicks(List<WatchEntry> continuing) {
+  List<HeroPick> heroPicks(
+    List<WatchEntry> continuing,
+    Map<String, MovieEntry> titleProgress,
+  ) {
     final picks = <HeroPick>[];
+    final cards = titleCardsOf(widget.services);
     for (final e in continuing.take(2)) {
+      if (titleProgress[e.anime.key] case final t?) {
+        final started = t.started;
+        final what = t.title.isShow && t.episode > 0 ? ' ${t.code}' : '';
+        picks.add(
+          HeroPick(
+            anime: e.anime,
+            kicker: 'Continue · ${titleCaption(t)}',
+            action: started ? 'Resume$what' : 'Play$what',
+            onPlay: () => widget.onResume(e),
+            onDetails: () => widget.onOpen(e.anime),
+          ),
+        );
+        continue;
+      }
       final left = e.duration > 0 ? ((e.duration - e.position) / 60).ceil() : 0;
       picks.add(
         HeroPick(
@@ -349,20 +403,42 @@ class _HomePageState extends State<HomePage> {
       );
     }
     final seen = picks.map((p) => p.anime.key).toSet();
-    var rank = 0;
-    for (final a in featured?.trending ?? const <Anime>[]) {
-      rank++;
-      if (picks.length >= 5) break;
-      if (a.isAdult || !seen.add(a.key)) continue;
-      picks.add(
-        HeroPick(
-          anime: a,
-          kicker: 'Trending #$rank',
-          action: 'Play episode 1',
-          onPlay: () => widget.onResume(WatchEntry(anime: a)),
-          onDetails: () => widget.onOpen(a),
-        ),
-      );
+    final anime = [
+      for (final (i, a) in (featured?.trending ?? const <Anime>[]).indexed)
+        if (!a.isAdult && !seen.contains(a.key)) (i + 1, a),
+    ];
+    final films = [
+      if (showsTitles)
+        for (final t in featuredTitles)
+          if (!seen.contains(cards.card(t).key)) t,
+    ];
+    // Trending anime and films take turns after what you are watching.
+    for (var i = 0; picks.length < 5; i++) {
+      if (i >= anime.length && i >= films.length) break;
+      if (i < anime.length) {
+        final (rank, a) = anime[i];
+        picks.add(
+          HeroPick(
+            anime: a,
+            kicker: 'Trending #$rank',
+            action: 'Play episode 1',
+            onPlay: () => widget.onResume(WatchEntry(anime: a)),
+            onDetails: () => widget.onOpen(a),
+          ),
+        );
+      }
+      if (i < films.length && picks.length < 5) {
+        final t = films[i], card = cards.card(t);
+        picks.add(
+          HeroPick(
+            anime: card,
+            kicker: t.isShow ? 'Trending series' : 'Trending movie',
+            action: t.isShow ? 'Play episode 1' : 'Play movie',
+            onPlay: () => widget.onResume(WatchEntry(anime: card)),
+            onDetails: () => widget.onOpen(card),
+          ),
+        );
+      }
     }
     return picks;
   }
@@ -428,10 +504,8 @@ class _HomePageState extends State<HomePage> {
       adult: false,
       now: DateTime.now(),
     );
-    final continuing = continuation.continueWatching;
-    final resume = continuing.firstOrNull;
-    // Films and series join the Continue watching row and get a watchlist
-    // row; the big resume card stays for anime.
+    // Films and series join Continue watching, the big resume card and the
+    // desktop hero, and the Trakt watchlist gets a row.
     final titles = showsTitles;
     if (titles && !titlesSynced) unawaited(syncTitles());
     final cards = titleCardsOf(s);
@@ -452,11 +526,14 @@ class _HomePageState extends State<HomePage> {
         titleProgress[cards.card(e.title).key] = e;
       }
     }
-    final shelf = mergeRecent(
-      isDesktop ? continuing : continuing.skip(1).toList(),
-      titleEntries,
-    );
-    final watchlist = titles ? s.movies.watchlist : const [];
+    final continuing = mergeRecent(continuation.continueWatching, titleEntries);
+    final resume = continuing.firstOrNull;
+    final shelf = isDesktop ? continuing : continuing.skip(1).toList();
+    final watchlist = titles && s.trakt.signedIn ? s.movies.watchlist : null;
+    String? titleLabel(WatchEntry e) => switch (titleProgress[e.anime.key]) {
+      final t? => t.title.isShow && t.episode > 0 ? t.code : 'MOVIE',
+      _ => null,
+    };
     final stage = widget.isTV && focused != null && !focused!.anime.isAdult
         ? focused
         : resume;
@@ -472,7 +549,7 @@ class _HomePageState extends State<HomePage> {
         children: [
           if (isDesktop) ...[
             DesktopHero(
-              picks: heroPicks(continuing),
+              picks: heroPicks(continuing, titleProgress),
               topInset: widget.topInset,
             ),
             DesktopContinueRow(
@@ -501,6 +578,7 @@ class _HomePageState extends State<HomePage> {
                   if (stage != null)
                     ResumeCard(
                       entry: stage,
+                      label: titleLabel(stage),
                       isTV: true,
                       showArtwork: false,
                       onResume: () => widget.onResume(stage),
@@ -522,6 +600,7 @@ class _HomePageState extends State<HomePage> {
           if (!widget.isTV && stage != null)
             ResumeCard(
               entry: stage,
+              label: titleLabel(stage),
               isTV: widget.isTV,
               onResume: () => widget.onResume(stage),
               onOpen: () => widget.onOpen(stage.anime),
@@ -577,7 +656,28 @@ class _HomePageState extends State<HomePage> {
                   .firstWhere((e) => e.anime.key == a.key)
                   .caption(DateTime.now()),
             ),
-          if (watchlist.isNotEmpty)
+          if (watchlist != null && watchlist.isEmpty)
+            Padding(
+              key: const Key('home-title-watchlist'),
+              padding: EdgeInsets.fromLTRB(
+                widget.isTV ? 48 : 20,
+                28,
+                widget.isTV ? 48 : 20,
+                4,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionLabel('Movies & shows watchlist'),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add movies and shows to your Trakt watchlist and they show up here.',
+                    style: uiStyle(context, color: muted),
+                  ),
+                ],
+              ),
+            )
+          else if (watchlist != null)
             PosterRow(
               key: const Key('home-title-watchlist'),
               title: 'Movies & shows watchlist',
@@ -594,6 +694,7 @@ class _HomePageState extends State<HomePage> {
             DiscoveryHome(
               key: discovery,
               services: s,
+              titles: titles,
               isTV: widget.isTV,
               hasResume: stage != null,
               showIntro: !isDesktop,

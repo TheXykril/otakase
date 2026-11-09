@@ -1,12 +1,14 @@
 import 'dart:async';
+import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import '../data/catalog.dart' show CatalogFailure;
-import '../data/trakt.dart' show MediaTitle;
+import '../data/trakt.dart' show MediaTitle, traktFilterRequests;
 import '../desktop/desktop_core.dart';
 import '../services.dart';
 import '../data/community_extras.dart';
@@ -181,21 +183,53 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
+  /// Films and series for the query and filters: Trakt search with the
+  /// filters it understands, or its popular lists when only filters are set.
   Future<void> searchTitles({bool retry = false}) async {
-    final q = widget.titles ? query.text.trim() : '';
-    if (q == titlesQuery && !retry) return;
-    titlesQuery = q;
+    final q = query.text.trim();
+    final key = widget.titles && (q.isNotEmpty || filters.count > 0)
+        ? [q, format, season, year, genre, status].join('|')
+        : '';
+    if (key == titlesQuery && !retry) return;
+    titlesQuery = key;
     final g = ++titleGeneration;
+    final requests = traktFilterRequests(
+      format: format,
+      season: season,
+      year: year,
+      genre: genre,
+      status: status,
+    );
     setState(() {
       titleResults = [];
       titlesFailed = false;
-      titlesBusy = q.isNotEmpty;
+      titlesBusy = key.isNotEmpty && requests.isNotEmpty;
     });
-    if (q.isEmpty) return;
+    if (!titlesBusy) return;
+    final trakt = widget.services.trakt;
     try {
-      final found = await widget.services.trakt.search(q);
+      final List<List<MediaTitle>> found;
+      if (q.isNotEmpty &&
+          requests.length == 2 &&
+          mapEquals(requests[0].$2, requests[1].$2)) {
+        // One search keeps films and series in order of relevance.
+        found = [await trakt.search(q, filters: requests[0].$2)];
+      } else {
+        found = await Future.wait([
+          for (final (kind, filters) in requests)
+            q.isNotEmpty
+                ? trakt.search(q, kinds: kind, filters: filters)
+                : trakt.list(kind, 'popular', filters: filters),
+        ]);
+      }
+      final longest = found.fold(0, (n, l) => math.max(n, l.length));
+      final merged = [
+        for (var i = 0; i < longest; i++)
+          for (final list in found)
+            if (i < list.length) list[i],
+      ];
       if (mounted && g == titleGeneration) {
-        setState(() => titleResults = found);
+        setState(() => titleResults = merged);
       }
     } catch (_) {
       if (mounted && g == titleGeneration) setState(() => titlesFailed = true);
@@ -204,7 +238,7 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
-  /// Films and series for the query, in a row above the anime.
+  /// Films and series for the query, in a row under the anime.
   List<Widget> titleRow() {
     if (titlesQuery.isEmpty) return const [];
     final cards = titleCardsOf(widget.services);
@@ -246,14 +280,6 @@ class _SearchPageState extends State<SearchPage> {
             );
           },
         ),
-      if (titlesFailed || titlesBusy || titleResults.isNotEmpty) ...[
-        const SizedBox(height: 4),
-        if (items.isNotEmpty || busy)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: const SectionLabel('Anime'),
-          ),
-      ],
     ];
   }
 
@@ -508,7 +534,11 @@ class _SearchPageState extends State<SearchPage> {
       ),
       if (isDesktop) activeFilters(),
       const SizedBox(height: 22),
-      ...titleRow(),
+      if (titlesQuery.isNotEmpty && items.isNotEmpty)
+        const Padding(
+          padding: EdgeInsets.only(bottom: 14),
+          child: SectionLabel('Anime'),
+        ),
       if (busy && items.isEmpty)
         Semantics(
           liveRegion: true,
@@ -615,6 +645,7 @@ class _SearchPageState extends State<SearchPage> {
             isTV: widget.isTV,
           ),
         ),
+      ...titleRow(),
     ],
   );
 }

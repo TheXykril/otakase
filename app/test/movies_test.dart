@@ -548,8 +548,41 @@ void main() {
     },
   );
 
+  test('anime search filters map to Trakt filters', () {
+    List<String> f({
+      String? format,
+      String? season,
+      int? year,
+      String? genre,
+      String? status,
+    }) => [
+      for (final (kind, filters) in traktFilterRequests(
+        format: format,
+        season: season,
+        year: year,
+        genre: genre,
+        status: status,
+      ))
+        '$kind $filters',
+    ];
+    expect(f(), ['movie {}', 'show {}']);
+    expect(f(format: 'MOVIE', year: 2023, genre: 'Sci-Fi'), [
+      'movie {years: 2023, genres: science-fiction}',
+    ]);
+    expect(f(season: 'FALL', year: 2024, format: 'TV'), ['show {years: 2024}']);
+    expect(f(status: 'RELEASING'), ['show {status: returning series}']);
+    expect(f(status: 'FINISHED'), ['movie {}', 'show {status: ended}']);
+    expect(f(format: 'OVA'), isEmpty);
+    expect(f(genre: 'Mecha'), isEmpty);
+    expect(f(status: 'HIATUS'), isEmpty);
+  });
+
   group('content setting', () {
-    Future<AppServices> launchWith(WidgetTester tester, String content) async {
+    Future<AppServices> launchWith(
+      WidgetTester tester,
+      String content, {
+      bool trakt = false,
+    }) async {
       tester.view.physicalSize = const Size(412, 915);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -607,10 +640,18 @@ void main() {
         }
         return http.Response('[]', 200);
       });
+      final tokens = MemoryTokens();
+      if (trakt) {
+        tokens.values[traktTokenKey] = jsonEncode({
+          'access_token': 'tok',
+          'expires_in': 0,
+        });
+      }
       final services = AppServices(
         catalog: Catalog(client: client),
         store: store,
         core: MovieCore(),
+        auth: AuthService(client: client, storage: tokens),
       );
       await tester.pumpWidget(OtakaseApp(services: services, isTV: false));
       await tester.pumpAndSettle();
@@ -624,8 +665,15 @@ void main() {
       expect(rootTabs, ['Home', 'Search', 'More']);
       expect(find.byKey(const ValueKey('nav-Movies')), findsNothing);
       expect(find.byType(MoviesHome), findsNothing);
+      // The guest home browses films and series too; no watchlist row
+      // without Trakt.
+      expect(find.text('Trending movies', skipOffstage: false), findsOneWidget);
+      expect(
+        find.byKey(const Key('home-title-watchlist'), skipOffstage: false),
+        findsNothing,
+      );
 
-      // A film being watched joins Continue watching on Home.
+      // A film being watched becomes the big resume card on Home.
       const film = MediaTitle(
         kind: 'movie',
         trakt: 102156,
@@ -633,6 +681,25 @@ void main() {
         year: 2014,
       );
       await services.movies.progress(film, 600, 6000);
+      await tester.pumpAndSettle();
+      final card = find.byKey(const Key('resume-card'));
+      expect(card, findsOneWidget);
+      expect(
+        find.descendant(of: card, matching: find.text('Interstellar')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: card, matching: find.text('MOVIE')),
+        findsOneWidget,
+      );
+
+      // A second one joins the Continue watching row.
+      const series = MediaTitle(
+        kind: 'show',
+        trakt: 1388,
+        title: 'Breaking Bad',
+      );
+      await services.movies.progress(series, 300, 2700, season: 1, episode: 2);
       await tester.pumpAndSettle();
       final row = find.byKey(
         const ValueKey('section-Continue watching'),
@@ -668,7 +735,14 @@ void main() {
     });
 
     testWidgets('a film watchlist gets its own row on Home', (tester) async {
-      final services = await launchWith(tester, 'both');
+      final services = await launchWith(tester, 'both', trakt: true);
+      expect(
+        find.text(
+          'Add movies and shows to your Trakt watchlist and they show up here.',
+          skipOffstage: false,
+        ),
+        findsOneWidget,
+      );
       services.movies.watchlist = [
         const MediaTitle(kind: 'show', trakt: 1390, title: 'Game of Thrones'),
       ];

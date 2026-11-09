@@ -5,10 +5,12 @@
 ### Improved
 
 - **Anime, movies and shows share Home and Search.** With both turned on in
-  Movies & shows, there is no separate Movies tab: films and series you are
-  watching join Continue watching, your Trakt watchlist gets its own row on
-  Home, and Search finds movies and shows above the anime results. Turn one
-  off and only its parts disappear.
+  Movies & shows, there is no separate Movies tab. Films and series you are
+  watching show in the big resume card, the desktop banner and Continue
+  watching; trending movies and shows join the desktop banner and the home
+  you see before signing in. Signed in to Trakt, your watchlist gets its own
+  row. Search lists anime first, then movies and shows, and the filters apply
+  to both. Turn one off and only its parts disappear.
 - **Films, series and anime share one player look on phones and TVs.** Back,
   title and cast sit on top, −10 / play / +10 in the middle, and the timeline
   with times at the bottom.
