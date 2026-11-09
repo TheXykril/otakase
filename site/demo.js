@@ -60,7 +60,7 @@
   if (window.ResizeObserver) new ResizeObserver(fit).observe(scr); else addEventListener('resize', fit);
 
   // Only shown when the demo was deployed with the site.
-  fetch(src, { method: 'HEAD' }).then((r) => {
+  fetch(src).then((r) => {
     if (!r.ok) return;
     sec.hidden = false;
     const ua = navigator.userAgent;
