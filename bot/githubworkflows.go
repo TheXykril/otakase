@@ -14,10 +14,11 @@ import (
 )
 
 // The repository's workflows only run when started by hand. /github starts
-// one from Discord, so builds, releases, the site and the wiki can be kicked
-// off from a phone. Only server admins can use it: a release is public.
-// Winget, the Discord release post and the installer check aren't listed:
-// every build tests the installer and a release runs the other two.
+// one from Discord, so builds, releases and the wiki can be kicked off from a
+// phone. Only server admins can use it: a release is public.
+// Winget, the Discord release post, the site and the installer check aren't
+// listed: every build tests the installer, a release runs the Discord post and
+// the site, and Wiki sync rebuilds the site too.
 
 // workflowsURL is a variable so tests can point it at a fake server.
 var workflowsURL = "https://api.github.com/repos/TheXykril/otakase/actions/workflows"
@@ -32,7 +33,6 @@ type ghWorkflow struct {
 var ghWorkflows = []ghWorkflow{
 	{key: "build", file: "ci-cd.yml", label: "Build and release"},
 	{key: "dev", file: "dev-build.yml", label: "Dev build", needsVersion: true, takesVersion: true},
-	{key: "site", file: "site.yml", label: "Site"},
 	{key: "wiki", file: "wiki-sync.yml", label: "Wiki sync"},
 }
 
@@ -51,7 +51,7 @@ func init() {
 		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{Name: w.label, Value: w.key})
 	}
 	admin := int64(discordgo.PermissionAdministrator)
-	registerCommand(&discordgo.ApplicationCommand{Name: "github", Description: "Start a GitHub workflow (build, release, site, wiki...)",
+	registerCommand(&discordgo.ApplicationCommand{Name: "github", Description: "Start a GitHub workflow (build, release, dev, wiki)",
 		DefaultMemberPermissions: &admin, Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionString, Name: "workflow", Description: "Which workflow to start", Required: true, Choices: choices},
 			{Type: discordgo.ApplicationCommandOptionBoolean, Name: "release", Description: "Build and release: also publish a release of main (default off)"},

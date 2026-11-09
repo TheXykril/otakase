@@ -4,11 +4,12 @@ name: Wiki sync
 # this repository like any other file. The wiki is replaced wholesale: pages
 # edited or added on the wiki directly are overwritten or removed.
 # Runs only when started by hand (Actions tab or the bot's /github command).
+# The site's help pages are built from wiki/ too, so the site is rebuilt
+# after every sync.
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: wiki-sync
@@ -17,6 +18,8 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
 
@@ -37,3 +40,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Sync from ${GITHUB_REPOSITORY}@${GITHUB_SHA::7}"
           git push
+
+  site:
+    needs: sync
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/site.yml

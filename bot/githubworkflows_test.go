@@ -13,7 +13,7 @@ import (
 func TestWorkflowInputs(t *testing.T) {
 	build, _ := workflowByKey("build")
 	dev, _ := workflowByKey("dev")
-	site, _ := workflowByKey("site")
+	wiki, _ := workflowByKey("wiki")
 
 	in, err := workflowInputs(build, true, 0, "")
 	if err != nil || in["release"] != "true" || len(in) != 1 {
@@ -27,9 +27,9 @@ func TestWorkflowInputs(t *testing.T) {
 	}
 	for name, bad := range map[string]func() error{
 		"release with pr":     func() error { _, err := workflowInputs(build, true, 3, ""); return err },
-		"release on site":     func() error { _, err := workflowInputs(site, true, 0, ""); return err },
+		"release on wiki":     func() error { _, err := workflowInputs(wiki, true, 0, ""); return err },
 		"dev without version": func() error { _, err := workflowInputs(dev, false, 0, ""); return err },
-		"version on site":     func() error { _, err := workflowInputs(site, false, 0, "1.0.0"); return err },
+		"version on wiki":     func() error { _, err := workflowInputs(wiki, false, 0, "1.0.0"); return err },
 	} {
 		if bad() == nil {
 			t.Errorf("%s: want an error", name)
@@ -84,7 +84,7 @@ func TestDispatchWorkflow(t *testing.T) {
 	if path != "/ci-cd.yml/dispatches" || body["ref"] != "main" || body["inputs"].(map[string]any)["release"] != "true" {
 		t.Errorf("sent %s %v", path, body)
 	}
-	if status, err := dispatchWorkflow("bad", "site.yml", nil); err == nil || status != http.StatusUnauthorized {
+	if status, err := dispatchWorkflow("bad", "wiki-sync.yml", nil); err == nil || status != http.StatusUnauthorized {
 		t.Errorf("bad token: %d %v", status, err)
 	}
 }
