@@ -133,5 +133,6 @@ flutter {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation(files("libs/mobilecore.aar"))
 }

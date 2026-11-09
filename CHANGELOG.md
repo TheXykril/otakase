@@ -36,6 +36,13 @@
   times sit on the time row; hold an icon to see its name, or on TV the focused
   icon shows its name. Skip opening is a small chip instead of a round button.
 
+### Fixed
+
+- **Android TV updates no longer report a wrong signing key on some firmware.**
+  When Android leaves out certificate details, the updater asks again the
+  older way. Different keys are still rejected, and unreadable certificates
+  show their own message.
+
 ## 26.1.8 - 2026-11-07
 
 Subtitle fixes, easier episode browsing on TV, and clearer menus and playback feedback.
