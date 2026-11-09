@@ -567,6 +567,11 @@ PlayRequest titlePlay(
     subtitle: episode == null
         ? (title.year > 0 ? '${title.year}' : '')
         : episode.label,
+    length:
+        (episode != null && episode.runtime > 0
+            ? episode.runtime
+            : title.runtime) *
+        60,
     open: (failed, scope, status) async {
       // Another device may have paused this further along; look while the
       // stream is found so the spot is fresh when playback starts.
