@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### New
+
+- **Cast movies and shows.** The cast button now works in the film and series
+  player too, on phones and computers. Play, pause and seeking control the
+  TV, the next episode follows onto it, and progress and Trakt keep updating.
+  Stop casting picks up on this screen where the TV was. Downloads still play
+  on this screen only.
+
 ### Improved
 
 - **Anime, movies and shows share Home and Search.** With both turned on in
