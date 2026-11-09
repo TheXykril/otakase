@@ -176,11 +176,6 @@ void main() {
       '8filmai',
       'vidsrc',
     ]);
-    await store.set('DisabledMovieSources', ['8filmai']);
-    expect((await movies.sourcesFor(film)).map((s) => s.name), [
-      'filmukas',
-      'vidsrc',
-    ]);
     await movies.rememberSource(film, 'vidsrc');
     expect((await movies.sourcesFor(film)).first.name, 'vidsrc');
   });

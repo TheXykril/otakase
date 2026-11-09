@@ -4,10 +4,15 @@
 
 ### Improved
 
+- **Tidier settings.** What you watch is gone. Appearance is now **Display**
+  and starts with the choice of anime, movies & shows, or both. Movie & show
+  languages sit in **Subtitles & languages** next to the anime ones. Movie
+  sources no longer have on/off switches; all of them are tried in your
+  language order.
 - **Downloads keep going when the phone sleeps.** On Android phones and TVs
   the screen stays on while an app update or episode downloads, and the
   download carries on in the background (with a notification) if the screen
-  turns off or you switch apps. New **Keep screen on** setting in Appearance
+  turns off or you switch apps. New **Keep screen on** setting in Display
   keeps the screen on the whole time Otakase is open.
 
 ### Fixed
