@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Bundle
+import android.view.WindowManager
 import android.text.format.DateFormat
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -52,6 +54,17 @@ class MainActivity : FlutterActivity() {
             values["charging"] = state == BatteryManager.BATTERY_STATUS_CHARGING || state == BatteryManager.BATTERY_STATUS_FULL
         }
         return values
+    }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Draw under the camera cutout too. Without this Android leaves a
+        // black strip on the cutout side, most visibly in the landscape
+        // player; Flutter keeps content out of it through its safe area.
+        if (Build.VERSION.SDK_INT >= 28) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        super.onCreate(savedInstanceState)
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

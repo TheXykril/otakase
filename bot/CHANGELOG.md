@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.91
+
+- Settings backups remember the system they were made on (Windows, macOS, Linux, Android or Android TV) instead of the one the app was linked from.
+
 ## 1.30.90
 
 - Downloads, help and changelog links point at the website: `/install`, `/latest`, `/changelog`, update nudges, the info posts and bug follow-ups use otakase.xyverion.com (downloads through its /download/ route, help pages under /help, the changelog under /changelog). Repost the welcome and FAQ posts with `/post-info` to update their buttons.

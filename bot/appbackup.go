@@ -16,8 +16,8 @@ import (
 // and get it back on another computer once that one is linked too. One
 // backup per member, not per app, so a new PC finds it.
 //
-//	POST   /v1/backup {"config":"…"} (auth) → {"at":"…"}
-//	GET    /v1/backup (auth)                → {"config","at","from_os"}, 404 when none
+//	POST   /v1/backup {"config":"…","os","tv"} (auth) → {"at":"…"}
+//	GET    /v1/backup (auth)                → {"config","at","from_os","from_tv"}, 404 when none
 //	DELETE /v1/backup (auth)                → {}
 //
 // /settings-backup in Discord says when the last one was made and deletes it.
@@ -31,6 +31,7 @@ type appBackup struct {
 	Config  string    `json:"config"`
 	At      time.Time `json:"at"`
 	FromOS  string    `json:"from_os,omitempty"`
+	FromTV  bool      `json:"from_tv,omitempty"`
 	Version string    `json:"version,omitempty"`
 }
 
@@ -73,6 +74,8 @@ func (b *bot) apiBackupSave(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Config string `json:"config"`
+		OS     string `json:"os"`
+		TV     bool   `json:"tv"`
 	}
 	if !readJSON(w, r, maxBackupBytes+4<<10, &req) {
 		return
@@ -98,7 +101,13 @@ func (b *bot) apiBackupSave(w http.ResponseWriter, r *http.Request) {
 		if d.AppBackups == nil {
 			d.AppBackups = map[string]appBackup{}
 		}
-		d.AppBackups[user] = appBackup{Config: conf, At: now, FromOS: link.OS, Version: link.Version}
+		// The system the backup came from: the one the app says it runs on,
+		// or for older apps the one its link last reported.
+		from := cleanOS(req.OS)
+		if from == "" {
+			from = link.OS
+		}
+		d.AppBackups[user] = appBackup{Config: conf, At: now, FromOS: from, FromTV: req.TV && from == "android", Version: link.Version}
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"at": now})
 }
@@ -119,7 +128,7 @@ func (b *bot) apiBackupGet(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusNotFound, "no settings backup yet")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"config": bk.Config, "at": bk.At, "from_os": bk.FromOS})
+	writeJSON(w, http.StatusOK, map[string]any{"config": bk.Config, "at": bk.At, "from_os": bk.FromOS, "from_tv": bk.FromTV})
 }
 
 func (b *bot) apiBackupDelete(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +148,9 @@ func backupView(bk appBackup, ok bool) (*discordgo.MessageEmbed, []discordgo.Mes
 			[]discordgo.MessageComponent{}
 	}
 	from := osLabel(bk.FromOS)
+	if bk.FromTV {
+		from += " TV"
+	}
 	if bk.Version != "" {
 		from += " · Otakase " + bk.Version
 	}

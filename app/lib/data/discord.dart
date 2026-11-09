@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../host.dart';
 import 'auth.dart';
 import 'models.dart';
 import 'store.dart';
@@ -296,7 +297,7 @@ class DiscordService extends ChangeNotifier {
           .join('-')
           .toLowerCase()
           .startsWith('dev'),
-      'os': 'android',
+      'os': Host.goos,
       'share_watching': store.flag('DiscordShareWatching'),
       'watching': store.flag('DiscordShareWatching') && anime != null
           ? {
