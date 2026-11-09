@@ -7,7 +7,8 @@ cd "$(dirname "$0")/.."
 out=$(realpath -m "${1:-../site/demo}")
 
 rm -rf build/web
-flutter build web -t demo/main.dart --release --base-href /demo/
+flutter build web -t demo/main.dart --release --base-href /demo/ \
+  --no-web-resources-cdn
 rm -rf "$out"
 mkdir -p "$(dirname "$out")"
 cp -r build/web "$out"
