@@ -16,6 +16,21 @@
 <body>
   <!-- The website's live demo (app/demo). Shown inside the site's device frames. -->
   <div class="wait" aria-hidden="true">任</div>
+  <script>
+    // The site shows this page scaled down (?dpr=): draw only the pixels
+    // that end up on screen.
+    (() => {
+      const dpr = parseFloat(new URLSearchParams(location.search).get('dpr'));
+      if (dpr > 0) Object.defineProperty(window, 'devicePixelRatio', { get: () => dpr });
+    })();
+  </script>
+  <script>
+    // Keys the app does not use (an arrow at the edge of a row) must not
+    // scroll the website around the demo.
+    addEventListener('keydown', (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) e.preventDefault();
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

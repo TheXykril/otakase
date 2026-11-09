@@ -18,6 +18,7 @@ import 'desktop/tiling.dart';
 import 'desktop/window_frame.dart';
 import 'services.dart';
 import 'ui/rate_prompt.dart';
+import 'ui/app_keys.dart';
 import 'ui/app_shell.dart';
 import 'ui/components.dart';
 import 'ui/seal.dart';
@@ -181,6 +182,7 @@ class _ProfileHostState extends State<ProfileHost> {
       return AppLayout(
         isTV: widget.manager.isTV,
         child: MaterialApp(
+          shortcuts: appShortcuts,
           debugShowCheckedModeBanner: false,
           builder: (context, child) => desktopLauncher.value
               ? child!
@@ -326,6 +328,7 @@ class _OtakaseAppState extends State<OtakaseApp> {
       isTV: widget.isTV,
       child: MaterialApp(
         title: 'Otakase',
+        shortcuts: appShortcuts,
         navigatorObservers: [ratingPrompt],
         debugShowCheckedModeBanner: false,
         builder: (context, child) => desktopLauncher.value

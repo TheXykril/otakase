@@ -45,7 +45,10 @@
   }
   function load() {
     started = true;
-    frame.src = src + (src.includes('?') ? '&' : '?') + 'device=' + device;
+    // The app draws only as many pixels as end up on screen: the frame is
+    // scaled down, and the demo draws without the graphics card.
+    const dpr = Math.max(0.5, Math.min(devicePixelRatio, Math.round(devicePixelRatio * scr.clientWidth / size()[0] * 4) / 4));
+    frame.src = src + (src.includes('?') ? '&' : '?') + 'device=' + device + '&dpr=' + dpr;
   }
   function pick(name) {
     if (name === device) return;

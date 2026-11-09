@@ -147,7 +147,8 @@ footer a:hover{color:var(--bright)}
 /* try it: the app built for the web, in a device frame (demo.js) */
 .tour{padding-block:48px 40px;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;justify-content:center}
 .tour[hidden]{display:none}
-.tgrid{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);column-gap:48px;align-items:center}
+.tour.wrap{max-width:1440px}
+.tgrid{display:grid;grid-template-columns:minmax(0,280px) minmax(0,1fr);column-gap:40px;align-items:center}
 .thead{min-width:0}
 .tlead{color:var(--muted);margin:-10px 0 22px}
 .tour .tabs{margin-bottom:16px}
@@ -156,14 +157,14 @@ footer a:hover{color:var(--bright)}
 .tdev{--w:1440;--h:900;width:100%;position:relative}
 .tscr{position:relative;aspect-ratio:var(--w)/var(--h);overflow:hidden;background:var(--bg)}
 .tscr iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:var(--bg)}
-.tdev.computer{max-width:900px;width:94%}
+.tdev.computer{width:min(96%,calc((100svh - 110px) * 1440 / 900))}
 .tdev.computer .tscr{border:12px solid #0d0b0a;border-bottom-width:18px;border-radius:16px 16px 4px 4px;box-shadow:0 0 0 2px #2b2522,0 30px 60px rgba(0,0,0,.6)}
 .tdev.computer::after{content:"";display:block;height:14px;margin:0 -4%;border-radius:2px 2px 30px 30px/2px 2px 12px 12px;background:linear-gradient(#5a524d,#3a3431 30%,#1f1b19)}
-.tdev.tv{max-width:920px}
+.tdev.tv{width:min(100%,calc((100svh - 100px) * 16 / 9))}
 .tdev.tv .tscr{border:8px solid #0a0908;border-radius:8px;box-shadow:0 0 0 2px #2c2623,0 30px 70px rgba(0,0,0,.65)}
 .tdev.tv::after{content:"";display:block;width:26%;height:12px;margin:12px auto 0;border-radius:8px 8px 4px 4px;background:linear-gradient(#4a423e,#1d1917)}
-.tdev.phone{width:min(360px,calc((100svh - 120px) * 412 / 915),100%)}
-.tdev.phone.wide{width:min(720px,100%)}
+.tdev.phone{width:min(460px,calc((100svh - 80px) * 412 / 915),100%)}
+.tdev.phone.wide{width:min(100%,calc((100svh - 80px) * 915 / 412))}
 .tdev.phone .tscr{border:10px solid #0b0a09;border-radius:38px;box-shadow:0 0 0 2px #2e2825,0 30px 60px rgba(0,0,0,.7)}
-@media (max-width:1000px){.tgrid{grid-template-columns:1fr;row-gap:20px}.tour .sh{margin-bottom:16px}}
+@media (max-width:1000px){.tgrid{grid-template-columns:1fr;row-gap:20px}.tour .sh{margin-bottom:16px}.tdev.computer,.tdev.tv{width:100%}}
 @media (max-width:760px){.tour .tabs{grid-template-columns:repeat(3,1fr)}.tdev.computer .tscr{border-width:6px 6px 10px}.tdev.tv .tscr{border-width:4px}.tdev.phone .tscr{border-width:6px;border-radius:26px}}
