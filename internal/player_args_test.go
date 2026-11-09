@@ -1,6 +1,9 @@
 package internal
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -87,6 +90,32 @@ func TestBuildPlaybackArgsEvensOutVolumeUnlessTheUserSetFilters(t *testing.T) {
 		p := buildPlaybackArgs(&Config{NormalizeVolume: true, MpvArgs: []string{own}}, &Anime{}, link, nil)
 		if slices.Contains(p.args, "--af-append="+volumeLevellerFilter) {
 			t.Fatalf("leveller added on top of the user's %s: %q", own, p.args)
+		}
+	}
+}
+
+func TestVolumeLevellerMatchesTheApp(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "app", "lib", "data", "store.dart"))
+	if err != nil {
+		t.Skipf("app source not found: %v", err)
+	}
+	if !strings.Contains(string(src), "'"+volumeLevellerFilter+"'") {
+		t.Fatalf("app volumeLeveller differs from %q", volumeLevellerFilter)
+	}
+}
+
+func TestVolumeLevellerIsAValidFilterGraph(t *testing.T) {
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	graph := strings.TrimSuffix(strings.TrimPrefix(volumeLevellerFilter, "lavfi=["), "]")
+	for _, layout := range []string{"mono", "stereo", "5.1", "7.1"} {
+		out, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error",
+			"-f", "lavfi", "-i", "anoisesrc=d=1:a=0.1,aformat=channel_layouts="+layout,
+			"-af", graph, "-f", "null", "-").CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: %v\n%s", layout, err, out)
 		}
 	}
 }

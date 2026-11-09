@@ -14,9 +14,16 @@ const sourceNames = [
   'reanime',
   'nyaa',
 ];
-// Evens out loudness while playing: quiet dialogue comes up and loud effects
-// come down. Use the signal at each boundary so gain stays level after seeks.
-const volumeLeveller = 'lavfi=[dynaudnorm=f=200:g=15:p=0.95:m=10:b=1]';
+// Evens out loudness while playing so dialogue stays clear next to loud
+// effects and music. In order: fold surround tracks down to stereo with the
+// centre (dialogue) channel forward and the LFE left out, pull back wide
+// stereo music a little, trim deep bass, lift the speech band, squash loud
+// peaks, then level the result over about a second. A plain loudness leveller
+// lets a single bang or a loud score set the gain, which drops nearby voices
+// far below the rest of the film. Uses the signal at each boundary so gain
+// stays level after seeks. Keep in step with volumeLevellerFilter in Go.
+const volumeLeveller =
+    'lavfi=[aresample=ochl=stereo:clev=1.414:slev=0.5:lfe_mix_level=0,stereotools=slev=0.5,lowshelf=f=150:g=-8,equalizer=f=2500:t=o:w=2:g=4,acompressor=threshold=-30dB:ratio=6:attack=3:release=200:knee=6:link=maximum,dynaudnorm=f=150:g=7:p=0.95:m=8:b=1]';
 
 /// The mpv `af` value for the viewer's NormalizeVolume setting.
 String audioFilter(AppStore store) =>

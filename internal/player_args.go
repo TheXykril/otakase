@@ -233,10 +233,13 @@ func buildPlaybackArgs(config *Config, anime *Anime, link string, callerArgs []s
 	return p
 }
 
-// volumeLevellerFilter evens out loudness while playing: quiet dialogue comes
-// up and loud effects come down. ffmpeg's dynaudnorm with about a 3 s window
-// and at most 10x gain; the Android app uses the same filter.
-const volumeLevellerFilter = "lavfi=[dynaudnorm=f=200:g=15:p=0.95:m=10]"
+// volumeLevellerFilter evens out loudness while playing so dialogue stays
+// clear next to loud effects and music: surround tracks fold down to stereo
+// with the centre channel forward and no LFE, wide stereo is narrowed a
+// little, deep bass trimmed, the speech band lifted and loud peaks squashed
+// before dynaudnorm levels the result over about a second. The app uses the
+// same filter (volumeLeveller in app/lib/data/store.dart).
+const volumeLevellerFilter = "lavfi=[aresample=ochl=stereo:clev=1.414:slev=0.5:lfe_mix_level=0,stereotools=slev=0.5,lowshelf=f=150:g=-8,equalizer=f=2500:t=o:w=2:g=4,acompressor=threshold=-30dB:ratio=6:attack=3:release=200:knee=6:link=maximum,dynaudnorm=f=150:g=7:p=0.95:m=8:b=1]"
 
 // hasMPVAudioFilterArg reports whether the arguments already set audio
 // filters (--af, --af-append, --af-add and the rest), which are left to win.

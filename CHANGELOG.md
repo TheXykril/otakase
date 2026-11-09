@@ -8,6 +8,10 @@
   an update) could sign you out of Trakt. Otakase now refreshes the sign-in
   once instead of several times at the same moment, and keeps it when Trakt or
   the network is briefly down.
+- **Voices stay clear with Even out volume.** Loud effects or music no longer
+  push dialogue down to a whisper. Surround soundtracks now fold down with the
+  dialogue channel up front, and loud bangs are tamed before the volume is
+  levelled, so voices near them keep their level.
 
 ### Improved
 
