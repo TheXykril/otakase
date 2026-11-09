@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.91
+
+- Bug reports filed from support posts leave out source names and the web addresses that carry them, writing "a source" instead.
+
 ## 1.30.90
 
 - Downloads, help and changelog links point at the website: `/install`, `/latest`, `/changelog`, update nudges, the info posts and bug follow-ups use otakase.xyverion.com (downloads through its /download/ route, help pages under /help, the changelog under /changelog). Repost the welcome and FAQ posts with `/post-info` to update their buttons.

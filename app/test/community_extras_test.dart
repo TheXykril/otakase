@@ -171,9 +171,16 @@ void main() {
       x.dispose();
       await discord.close();
     });
+    store.health('megavid', 'Working');
+    store.health('sukebei', 'Unavailable');
+    store.health('movie:8filmai', 'No match');
     final diag = reportDiagnostics(store);
     expect(diag, contains('Otakase app'));
-    expect(diag, isNot(contains('sukebei')));
+    expect(diag, contains('Source 2 Working'));
+    expect(diag, contains('Movie source 2 No match'));
+    for (final name in [...sourceNames, 'sukebei', '8filmai', 'vidsrc']) {
+      expect(diag.toLowerCase(), isNot(contains(name)));
+    }
     final url = await x.report('It broke', 'Details', diag);
     expect(url, 'https://discord.com/channels/1/2');
     expect(seen.url.path, '/v1/report');

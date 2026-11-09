@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
@@ -96,12 +97,32 @@ func contains(xs []string, x string) bool {
 	return false
 }
 
+// issueSourceNames are the sources the app has used, current and retired.
+// Bug reports become public issues, where sources are never named.
+var issueSourceNames = []string{
+	"anikoto", "megavid", "animex", "kickassanime", "kickass", "anizone",
+	"reanime", "nyaa", "sukebei", "allanime", "anidb", "anineko", "anipub",
+	"flixcloud", "megaplay", "vidsrc", "8filmai", "filmukas",
+}
+
+// sourceWordRe matches a source name and any web address around it.
+var sourceWordRe = regexp.MustCompile(`(?i)[a-z0-9.-]*(?:` + strings.Join(issueSourceNames, "|") + `)[a-z0-9.-]*`)
+
+// hideSourceNames swaps every source name in s for "a source".
+func hideSourceNames(s string) string {
+	return sourceWordRe.ReplaceAllStringFunc(s, func(m string) string {
+		lead := strings.TrimLeft(m, ".-")
+		trail := strings.TrimRight(lead, ".-")
+		return m[:len(m)-len(lead)] + "a source" + lead[len(trail):]
+	})
+}
+
 // bugIssueBody is the bug report filed from a support post. It ends with
 // the post's link, which bugfollow.go uses to find the post again.
 func bugIssueBody(question, details, postURL string) string {
-	body := "**Describe the bug**\n" + clip(strings.TrimSpace(question), 1500)
+	body := "**Describe the bug**\n" + clip(hideSourceNames(strings.TrimSpace(question)), 1500)
 	if details = strings.TrimSpace(details); details != "" {
-		body += "\n\n**Version and system**\n" + clip(details, 300)
+		body += "\n\n**Version and system**\n" + clip(hideSourceNames(details), 300)
 	}
 	return body + "\n\n_From the Discord support post: " + postURL + "_"
 }
@@ -168,7 +189,7 @@ func (b *bot) fileBugReport(i *discordgo.InteractionCreate, threadID string) {
 		question = m.Content
 	}
 	post := fmt.Sprintf("https://discord.com/channels/%s/%s", b.cfg.GuildID, th.ID)
-	is, status, err := createIssue(b.cfg.GitHubToken, clip(th.Name, 120), bugIssueBody(question, modalValues(i)["details"], post), []string{"bug"})
+	is, status, err := createIssue(b.cfg.GitHubToken, clip(hideSourceNames(th.Name), 120), bugIssueBody(question, modalValues(i)["details"], post), []string{"bug"})
 	if err != nil {
 		log.Printf("bug report: %v (%d)", err, status)
 		reply(errorEmbed("Couldn't file the bug report right now. Try again in a minute."))

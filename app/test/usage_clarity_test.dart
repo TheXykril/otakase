@@ -120,23 +120,33 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  test('playback report keeps host and position without signed links or credentials', () {
+  test('playback report keeps position without addresses, credentials or source names', () {
     final report = playbackReportDetails(
-      provider: 'source',
+      provider: 'megavid',
       position: const Duration(seconds: 312),
-      problem: 'Failed https://user:pass@sub.example/secret/path?token=secret Bearer private-token api_key=hidden',
+      problem: 'Failed https://user:pass@sub.example/secret/path?token=secret Bearer private-token api_key=hidden; lookup cdn.example.to: no such host; animex gave no links',
     );
-    expect(report, contains('sub.example'));
     expect(report, contains('312 seconds'));
+    expect(report, contains('Playback source: Source 2'));
+    expect(report, contains('Source 3 gave no links'));
     for (final secret in [
       'user:pass',
+      'sub.example',
+      'cdn.example.to',
       '/secret/path',
       'token=secret',
       'private-token',
       'api_key=hidden',
+      'megavid',
+      'animex',
     ]) {
       expect(report, isNot(contains(secret)));
     }
+  });
+
+  test('a film report numbers its source and keeps the language', () {
+    expect(reportSource('8Filmai · Lithuanian'), 'Movie source 2 · Lithuanian');
+    expect(reportSource('somethingnew'), 'Other source');
   });
 
   testWidgets(

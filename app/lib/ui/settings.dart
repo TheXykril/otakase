@@ -598,9 +598,11 @@ class _SettingsPageState extends State<SettingsPage> {
             initialData: knownMovieSources,
             builder: (context, snap) => Column(
               children: [
-                for (final source in snap.data ?? knownMovieSources)
+                for (final (i, source)
+                    in (snap.data ?? knownMovieSources).indexed)
                   row(
-                    source.label,
+                    // Sources are never named to the viewer.
+                    'Movie source ${i + 1}',
                     [
                       languageTitle(source.languageName),
                       source.series ? 'movies and shows' : 'movies only',

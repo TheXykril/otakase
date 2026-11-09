@@ -1338,7 +1338,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
                             episode: request.subtitle,
                             problem: error,
                             position: position,
-                            provider: media?.label ?? '',
+                            provider: media?.copy ?? '',
                           ),
                           AppButton(
                             label: 'Back',

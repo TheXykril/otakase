@@ -587,7 +587,8 @@ PlayRequest titlePlay(
         subtitles: p.stream.subtitles,
         audioLanguage: p.audioLanguage,
         copy: '${p.source.name}:${p.server}',
-        label: '${p.source.label} · ${languageTitle(p.source.languageName)}',
+        // Sources are never named to the viewer.
+        label: languageTitle(p.source.languageName),
       );
     },
     resumeAt: (duration) {

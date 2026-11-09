@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'discord.dart';
 import 'models.dart';
+import 'movies.dart';
 import 'store.dart';
 import '../host.dart';
 
@@ -159,14 +160,17 @@ String get deviceSystem {
 
 /// What a report carries so it can be acted on: the version, the system,
 /// the settings that change playback, and how the sources are doing.
+/// Reports may be shared in public, so sources are numbered as in
+/// Diagnostics and never named.
 String reportDiagnostics(AppStore store, {String extra = ''}) {
+  final off = (store.value('DisabledProviders') as List? ?? const [])
+      .map((e) => sourceLabel('$e'))
+      .join(', ');
   final b = StringBuffer()
     ..writeln('Otakase app $appVersion')
     ..writeln('System: $deviceSystem')
-    ..writeln(
-      'Source order: ${store.text('Provider')} · ${store.value('ProviderOrder')}',
-    )
-    ..writeln('Turned off: ${store.value('DisabledProviders')}')
+    ..writeln('Sources: ${store.text('Provider')}')
+    ..writeln('Turned off: ${off.isEmpty ? 'none' : off}')
     ..writeln(
       'Sub or dub: ${store.text('SubOrDub')}, subs ${store.text('SubsLanguage')}',
     )
@@ -174,40 +178,101 @@ String reportDiagnostics(AppStore store, {String extra = ''}) {
     ..writeln('Torrents: ${store.flag('TorrentSources') ? 'on' : 'off'}')
     ..writeln('External mpv: ${store.flag('ExternalMpv') ? 'on' : 'off'}');
   final health = store.providerHealth.entries
-      .where((e) => store.adultAllowed || e.key != 'sukebei')
-      .map((e) => '${e.key} ${e.value}')
+      .where((e) => store.adultAllowed || !adultSourceNames.contains(e.key))
+      .map((e) => '${sourceLabel(e.key)} ${e.value}')
       .join(', ');
   if (health.isNotEmpty) b.writeln('Sources this run: $health');
-  if (extra.trim().isNotEmpty) b.writeln(extra.trim());
+  if (extra.trim().isNotEmpty) b.writeln(hideSourceNames(extra.trim()));
   return b.toString().trim();
 }
 
-/// Only hostnames from error URLs are useful to support; signed paths,
-/// query strings and authorization values must not enter a report.
-String redactPlaybackProblem(String value) => value
-    .replaceAllMapped(
-      RegExp(r'https?://[^\s<>"\x27]+', caseSensitive: false),
-      (m) => Uri.tryParse(m[0]!)?.host ?? '[address omitted]',
-    )
-    .replaceAll(
-      RegExp(r'Bearer\s+[^\s,;]+', caseSensitive: false),
-      'Bearer [omitted]',
-    )
-    .replaceAll(
-      RegExp(
-        r'(?:token|authorization|password|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+',
-        caseSensitive: false,
+/// Sources that carry only 18+ titles (mobilecore adultProviderNames).
+const adultSourceNames = {'sukebei'};
+
+/// What a report calls a source: its number in the order Diagnostics lists
+/// them, never its name.
+String sourceLabel(String key) {
+  final name = key
+      .replaceFirst(RegExp('^movie:'), '')
+      .split(':')
+      .first
+      .trim()
+      .toLowerCase();
+  final i = sourceNames.indexOf(name);
+  if (i >= 0) return 'Source ${i + 1}';
+  if (adultSourceNames.contains(name)) return '18+ source';
+  final m = knownMovieSources.indexWhere(
+    (s) => s.name == name || s.label.toLowerCase() == name,
+  );
+  if (m >= 0) return 'Movie source ${m + 1}';
+  return name.isEmpty ? '' : 'Other source';
+}
+
+/// Replaces every source name in [text] with its number.
+String hideSourceNames(String text) {
+  final names = <String, String>{
+    for (final n in sourceNames) n: n,
+    for (final n in adultSourceNames) n: n,
+    for (final s in knownMovieSources) ...{s.name: s.name, s.label: s.name},
+    // Other spellings of the same sources.
+    'kickass': 'kickassanime',
+  };
+  final keys = names.keys.where((n) => n.isNotEmpty).toList()
+    ..sort((a, b) => b.length.compareTo(a.length));
+  return text.replaceAllMapped(
+    RegExp(
+      '(?<![a-z0-9])(?:${keys.map(RegExp.escape).join('|')})(?![a-z0-9])',
+      caseSensitive: false,
+    ),
+    (m) => sourceLabel(
+      names[keys.firstWhere((k) => k.toLowerCase() == m[0]!.toLowerCase())]!,
+    ),
+  );
+}
+
+/// Support needs neither web addresses (which can name a source) nor
+/// signed paths, query strings or authorization values, so none of them
+/// enter a report.
+String redactPlaybackProblem(String value) => hideSourceNames(
+  value
+      .replaceAll(
+        RegExp(r'https?://[^\s<>"\x27]+', caseSensitive: false),
+        '[address omitted]',
+      )
+      .replaceAll(
+        RegExp(r'Bearer\s+[^\s,;]+', caseSensitive: false),
+        'Bearer [omitted]',
+      )
+      .replaceAll(
+        RegExp(
+          r'(?:token|authorization|password|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+',
+          caseSensitive: false,
+        ),
+        '[credential omitted]',
+      )
+      // Bare host names, as in "lookup example.to: no such host".
+      .replaceAll(
+        RegExp(
+          r'(?<![\w@/.-])(?:[a-z0-9-]+\.)+(?!(?:mp4|mkv|ts|m3u8|ass|srt|vtt|json|html?|go|dart|log|txt)\b)[a-z]{2,24}(?![\w.-])',
+          caseSensitive: false,
+        ),
+        '[address omitted]',
       ),
-      '[credential omitted]',
-    );
+);
+
+/// The playback source as a report shows it: "Source 2", or for a film
+/// "Movie source 1 · English".
+String reportSource(String provider) {
+  final parts = provider.split('·').map((p) => p.trim()).toList();
+  return [sourceLabel(parts.first), ...parts.skip(1)].join(' · ');
+}
 
 String playbackReportDetails({
   required String provider,
   required Duration position,
   required String problem,
 }) => [
-  if (provider.isNotEmpty)
-    'Playback source: ${redactPlaybackProblem(provider)}',
+  if (provider.isNotEmpty) 'Playback source: ${reportSource(provider)}',
   'Position: ${position.inSeconds.clamp(0, 2147483647)} seconds',
   'Problem: ${redactPlaybackProblem(problem)}',
 ].join('\n');
