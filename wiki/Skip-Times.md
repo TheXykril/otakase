@@ -21,7 +21,8 @@ rate-limited now and then.
 
 ## See where a skip came from, and vote
 
-In the player, press **Skip times** (the flag button on desktop). The panel
+In the player, press **Skip times** (the » icon on phones and TVs, the flag
+button on desktop). The panel
 lists every span of the episode with the service it came from. Pick one to
 watch it. For AniSkip spans, answer **Right times?** with Yes or No: the vote
 goes to AniSkip and helps everyone get better times.
