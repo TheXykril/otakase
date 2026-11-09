@@ -5,12 +5,30 @@ import 'package:flutter/material.dart';
 
 import '../data/models.dart';
 import '../data/continuation.dart';
+import '../data/movies.dart';
 import '../data/tracking.dart';
 import '../services.dart';
 import '../desktop/desktop_core.dart';
 import '../desktop/desktop_home.dart';
 import 'components.dart';
 import 'discovery_home.dart';
+import '../data/trakt.dart' show MediaTitle;
+import 'movies_pages.dart' show shelvesOf, titleCardsOf, titleCaption;
+
+/// Two lists that are each newest first, merged newest first while keeping
+/// each list's own order.
+List<WatchEntry> mergeRecent(List<WatchEntry> a, List<WatchEntry> b) {
+  final out = <WatchEntry>[];
+  var i = 0, j = 0;
+  while (i < a.length || j < b.length) {
+    if (j >= b.length || i < a.length && a[i].updated >= b[j].updated) {
+      out.add(a[i++]);
+    } else {
+      out.add(b[j++]);
+    }
+  }
+  return out;
+}
 
 class NativeTitle extends StatelessWidget {
   const NativeTitle(this.title, {super.key, required this.isTV});
@@ -54,8 +72,18 @@ class ResumeCard extends StatelessWidget {
     required this.onOpen,
     this.autofocus = true,
     this.showArtwork = true,
+    this.label,
+    this.kicker,
+    this.action,
   });
   final WatchEntry entry;
+
+  /// Replace the corner note and the play button's name, for a trending
+  /// pick in the banner.
+  final String? kicker, action;
+
+  /// Replaces the episode line, for a film or series.
+  final String? label;
   final bool isTV, autofocus, showArtwork;
   final VoidCallback onResume, onOpen;
   @override
@@ -107,9 +135,12 @@ class ResumeCard extends StatelessWidget {
                   ),
                   color: bgDeep.withValues(alpha: .95),
                   child: Text(
-                    entry.position > 0
-                        ? 'Continue watching'
-                        : 'Your next episode',
+                    kicker ??
+                        (entry.position > 0
+                            ? 'Continue watching'
+                            : label == 'MOVIE'
+                            ? 'Up next'
+                            : 'Your next episode'),
                     style: uiStyle(context, size: 15),
                   ),
                 ),
@@ -120,7 +151,7 @@ class ResumeCard extends StatelessWidget {
                   top: 16,
                   child: NativeTitle(anime.nativeTitle, isTV: isTV),
                 ),
-              if (isTV)
+              if (isTV && label == null)
                 Positioned(
                   right: 100,
                   bottom: 36,
@@ -153,7 +184,8 @@ class ResumeCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'EP ${entry.episode.toString().padLeft(2, '0')}',
+                        label ??
+                            'EP ${entry.episode.toString().padLeft(2, '0')}',
                         style: mono.copyWith(
                           fontSize: isTV ? 20 : 15,
                           color: fg,
@@ -174,7 +206,9 @@ class ResumeCard extends StatelessWidget {
                         children: [
                           AppButton(
                             key: const Key('home-resume'),
-                            label: entry.position > 0 ? 'Resume' : 'Play',
+                            label:
+                                action ??
+                                (entry.position > 0 ? 'Resume' : 'Play'),
                             icon: LucideIcons.play,
                             filled: true,
                             isTV: isTV,
@@ -255,10 +289,54 @@ class _HomePageState extends State<HomePage> {
   final discovery = GlobalKey<DiscoveryHomeState>();
   bool refreshScheduled = false;
   HomeData? featured;
+
+  /// Whether films and series share Home with anime on this profile.
+  bool get showsTitles =>
+      contentModeOf(widget.services.store) == ContentMode.both;
+  bool titlesSynced = false;
+
+  /// Which pick the phone and TV banner shows; it moves on every few
+  /// seconds, like the desktop one, unless it was just touched.
+  int banner = 0;
+  DateTime? bannerTouched;
+  Timer? bannerTimer;
+  void touchBanner() => bannerTouched = DateTime.now();
+  void moveBanner(int step) => setState(() {
+    banner += step;
+    touchBanner();
+  });
+
+  void titlesChanged() {
+    if (mounted && showsTitles) setState(() {});
+  }
+
+  /// Pulls the film and series watchlist and progress once titles show.
+  Future<void> syncTitles() async {
+    titlesSynced = true;
+    try {
+      await widget.services.trakt.load();
+      await widget.services.movies.sync();
+    } catch (_) {
+      // Home keeps what is saved on this device.
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    widget.services.movies.addListener(titlesChanged);
     if (isDesktop) unawaited(loadFeatured());
+    if (!isDesktop) {
+      bannerTimer = Timer.periodic(const Duration(seconds: 9), (_) {
+        final paused =
+            bannerTouched != null &&
+            DateTime.now().difference(bannerTouched!) <
+                const Duration(seconds: 20);
+        if (!mounted || paused || !widget.active) return;
+        if (MediaQuery.disableAnimationsOf(context)) return;
+        setState(() => banner++);
+      });
+    }
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -281,8 +359,41 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// Trending films and series for the desktop hero, alternating.
+  List<MediaTitle> featuredTitles = [];
+
   /// Trending picks for the desktop hero.
+  /// Whether trending picks were asked for. Phones and TVs only need them
+  /// once the banner shows something to resume.
+  bool featureRequested = false;
+
   Future<void> loadFeatured() async {
+    featureRequested = true;
+    if (showsTitles) {
+      unawaited(
+        shelvesOf(widget.services)
+            .load()
+            .then((rows) {
+              final films = rows['Trending movies'] ?? const <MediaTitle>[];
+              final shows = rows['Trending shows'] ?? const <MediaTitle>[];
+              if (mounted) {
+                setState(
+                  () => featuredTitles = [
+                    for (
+                      var i = 0;
+                      i < math.max(films.length, shows.length);
+                      i++
+                    ) ...[
+                      if (i < films.length) films[i],
+                      if (i < shows.length) shows[i],
+                    ],
+                  ],
+                );
+              }
+            })
+            .catchError((Object _) {}),
+      );
+    }
     try {
       // Home never shows 18+ titles, whatever the account allows.
       final data = await widget.services.catalog.home(adult: false);
@@ -292,12 +403,33 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  List<HeroPick> heroPicks(List<WatchEntry> continuing) {
+  List<HeroPick> heroPicks(
+    List<WatchEntry> continuing,
+    Map<String, MovieEntry> titleProgress,
+  ) {
     final picks = <HeroPick>[];
+    final cards = titleCardsOf(widget.services);
     for (final e in continuing.take(2)) {
+      if (titleProgress[e.anime.key] case final t?) {
+        final started = t.started;
+        final what = t.title.isShow && t.episode > 0 ? ' ${t.code}' : '';
+        picks.add(
+          HeroPick(
+            entry: e,
+            label: t.title.isShow && t.episode > 0 ? t.code : 'MOVIE',
+            anime: e.anime,
+            kicker: 'Continue · ${titleCaption(t)}',
+            action: started ? 'Resume$what' : 'Play$what',
+            onPlay: () => widget.onResume(e),
+            onDetails: () => widget.onOpen(e.anime),
+          ),
+        );
+        continue;
+      }
       final left = e.duration > 0 ? ((e.duration - e.position) / 60).ceil() : 0;
       picks.add(
         HeroPick(
+          entry: e,
           anime: e.anime,
           kicker:
               'Continue · Ep ${e.episode}${left > 0 && e.position > 0 ? ' · $left min left' : ''}',
@@ -310,27 +442,51 @@ class _HomePageState extends State<HomePage> {
       );
     }
     final seen = picks.map((p) => p.anime.key).toSet();
-    var rank = 0;
-    for (final a in featured?.trending ?? const <Anime>[]) {
-      rank++;
-      if (picks.length >= 5) break;
-      if (a.isAdult || !seen.add(a.key)) continue;
-      picks.add(
-        HeroPick(
-          anime: a,
-          kicker: 'Trending #$rank',
-          action: 'Play episode 1',
-          onPlay: () => widget.onResume(WatchEntry(anime: a)),
-          onDetails: () => widget.onOpen(a),
-        ),
-      );
+    final anime = [
+      for (final (i, a) in (featured?.trending ?? const <Anime>[]).indexed)
+        if (!a.isAdult && !seen.contains(a.key)) (i + 1, a),
+    ];
+    final films = [
+      if (showsTitles)
+        for (final t in featuredTitles)
+          if (!seen.contains(cards.card(t).key)) t,
+    ];
+    // Trending anime and films take turns after what you are watching.
+    for (var i = 0; picks.length < 5; i++) {
+      if (i >= anime.length && i >= films.length) break;
+      if (i < anime.length) {
+        final (rank, a) = anime[i];
+        picks.add(
+          HeroPick(
+            anime: a,
+            kicker: 'Trending #$rank',
+            action: 'Play episode 1',
+            onPlay: () => widget.onResume(WatchEntry(anime: a)),
+            onDetails: () => widget.onOpen(a),
+          ),
+        );
+      }
+      if (i < films.length && picks.length < 5) {
+        final t = films[i], card = cards.card(t);
+        picks.add(
+          HeroPick(
+            anime: card,
+            label: t.isShow ? 'SERIES' : 'MOVIE',
+            kicker: t.isShow ? 'Trending series' : 'Trending movie',
+            action: t.isShow ? 'Play episode 1' : 'Play movie',
+            onPlay: () => widget.onResume(WatchEntry(anime: card)),
+            onDetails: () => widget.onOpen(card),
+          ),
+        );
+      }
     }
     return picks;
   }
 
   Future<void> refresh({bool forceSync = false}) async {
-    if (isDesktop) unawaited(loadFeatured());
+    if (isDesktop || featureRequested) unawaited(loadFeatured());
     await Future.wait([
+      if (showsTitles) syncTitles(),
       if (discovery.currentState case final page?) page.load(refresh: true),
       ...blocks.values.map(
         (key) =>
@@ -365,8 +521,10 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    widget.services.movies.removeListener(titlesChanged);
     artTimer?.cancel();
     clock?.cancel();
+    bannerTimer?.cancel();
     super.dispose();
   }
 
@@ -387,11 +545,120 @@ class _HomePageState extends State<HomePage> {
       adult: false,
       now: DateTime.now(),
     );
-    final continuing = continuation.continueWatching;
+    // Films and series join Continue watching, the big resume card and the
+    // desktop hero, and the Trakt watchlist gets a row.
+    final titles = showsTitles;
+    if (titles && !titlesSynced) unawaited(syncTitles());
+    final cards = titleCardsOf(s);
+    final titleProgress = <String, MovieEntry>{};
+    final titleEntries = <WatchEntry>[
+      if (titles)
+        for (final e in s.movies.continuing)
+          WatchEntry(
+            anime: cards.card(e.title),
+            episode: e.episode,
+            position: e.position,
+            duration: e.duration,
+            updated: e.updated,
+          ),
+    ];
+    if (titles) {
+      for (final e in s.movies.continuing) {
+        titleProgress[cards.card(e.title).key] = e;
+      }
+    }
+    final continuing = mergeRecent(continuation.continueWatching, titleEntries);
     final resume = continuing.firstOrNull;
-    final stage = widget.isTV && focused != null && !focused!.anime.isAdult
+    final shelf = isDesktop ? continuing : continuing.skip(1).toList();
+    final watchlist = titles && s.trakt.signedIn ? s.movies.watchlist : null;
+    String? titleLabel(WatchEntry e) => switch (titleProgress[e.anime.key]) {
+      final t? => t.title.isShow && t.episode > 0 ? t.code : 'MOVIE',
+      _ => null,
+    };
+    // The phone and TV banner takes turns like the desktop one: what you
+    // are watching, then trending picks. It only shows once there is
+    // something to resume; a TV list focus still takes it over.
+    if (resume != null && !featureRequested) unawaited(loadFeatured());
+    final picks = resume == null
+        ? const <HeroPick>[]
+        : heroPicks(continuing, titleProgress);
+    final pick = picks.isEmpty ? null : picks[banner % picks.length];
+    final tvFocus = widget.isTV && focused != null && !focused!.anime.isAdult;
+    final stage = tvFocus
         ? focused
-        : resume;
+        : pick == null
+        ? null
+        : pick.entry ?? WatchEntry(anime: pick.anime);
+    Widget bannerCard(WatchEntry stage, {required bool tv}) {
+      final shown = tvFocus ? null : pick;
+      final card = ResumeCard(
+        entry: stage,
+        label: shown?.label ?? titleLabel(stage),
+        kicker: shown == null || shown.entry != null ? null : shown.kicker,
+        action: shown == null || shown.entry != null ? null : shown.action,
+        isTV: widget.isTV,
+        showArtwork: !tv,
+        onResume: shown?.onPlay ?? () => widget.onResume(stage),
+        onOpen: shown?.onDetails ?? () => widget.onOpen(stage.anime),
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onKeyEvent: (_, _) {
+              touchBanner();
+              return KeyEventResult.ignored;
+            },
+            child: Listener(
+              onPointerDown: (_) => touchBanner(),
+              child: GestureDetector(
+                onHorizontalDragEnd: picks.length < 2
+                    ? null
+                    : (d) {
+                        final v = d.primaryVelocity ?? 0;
+                        if (v.abs() > 200) moveBanner(v < 0 ? 1 : -1);
+                      },
+                child: card,
+              ),
+            ),
+          ),
+          if (picks.length > 1 && !tvFocus)
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                widget.isTV ? 48 : 20,
+                12,
+                widget.isTV ? 48 : 20,
+                0,
+              ),
+              child: Row(
+                key: const Key('home-banner-dots'),
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  for (var i = 0; i < picks.length; i++)
+                    GestureDetector(
+                      onTap: () => moveBanner(i - banner % picks.length),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        margin: const EdgeInsets.only(left: 8),
+                        width: i == banner % picks.length ? 26 : 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: i == banner % picks.length
+                              ? shu
+                              : fgBright.withValues(alpha: .3),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      );
+    }
+
     final configured = ['AniList', 'MAL'].where(s.auth.signedIn).toList();
     final combined = s.auth.signedIn('AniList') && s.auth.signedIn('MAL');
     final lists = combined ? ['AniList'] : configured;
@@ -404,10 +671,17 @@ class _HomePageState extends State<HomePage> {
         children: [
           if (isDesktop) ...[
             DesktopHero(
-              picks: heroPicks(continuing),
+              picks: heroPicks(continuing, titleProgress),
               topInset: widget.topInset,
             ),
-            DesktopContinueRow(entries: continuing, onResume: widget.onResume),
+            DesktopContinueRow(
+              entries: shelf,
+              onResume: widget.onResume,
+              label: (e) => switch (titleProgress[e.anime.key]) {
+                final t? => titleCaption(t),
+                _ => null,
+              },
+            ),
           ],
           if (!isDesktop &&
               widget.isTV &&
@@ -423,14 +697,7 @@ class _HomePageState extends State<HomePage> {
                     padding: EdgeInsets.fromLTRB(48, 12, 48, 16),
                     child: PageHeading('Back to your story', '続'),
                   ),
-                  if (stage != null)
-                    ResumeCard(
-                      entry: stage,
-                      isTV: true,
-                      showArtwork: false,
-                      onResume: () => widget.onResume(stage),
-                      onOpen: () => widget.onOpen(stage.anime),
-                    ),
+                  if (stage != null) bannerCard(stage, tv: true),
                 ],
               ),
             ),
@@ -444,13 +711,7 @@ class _HomePageState extends State<HomePage> {
               ),
               child: const PageHeading('Back to your story', '続'),
             ),
-          if (!widget.isTV && stage != null)
-            ResumeCard(
-              entry: stage,
-              isTV: widget.isTV,
-              onResume: () => widget.onResume(stage),
-              onOpen: () => widget.onOpen(stage.anime),
-            ),
+          if (!widget.isTV && stage != null) bannerCard(stage, tv: false),
           for (final service in lists)
             AccountBlock(
               key: blocks.putIfAbsent(
@@ -473,18 +734,24 @@ class _HomePageState extends State<HomePage> {
               },
               autofocus: stage == null && service == lists.first,
             ),
-          if (!isDesktop && continuing.length > 1)
+          if (!isDesktop && shelf.isNotEmpty)
             PosterRow(
               title: 'Continue watching',
-              items: continuing.skip(1).map((e) => e.anime).toList(),
+              items: shelf.map((e) => e.anime).toList(),
               isTV: widget.isTV,
               onOpen: widget.onOpen,
               progress: (a) {
-                final h = continuing.firstWhere((e) => e.anime.key == a.key);
+                if (titleProgress[a.key] case final t?) {
+                  return t.progress > 0 ? t.progress : null;
+                }
+                final h = shelf.firstWhere((e) => e.anime.key == a.key);
                 return h.duration > 0 ? h.position / h.duration : null;
               },
-              captions: (a) =>
-                  'Episode ${continuing.firstWhere((e) => e.anime.key == a.key).episode}',
+              captions: (a) => switch (titleProgress[a.key]) {
+                final t? => titleCaption(t),
+                _ =>
+                  'Episode ${shelf.firstWhere((e) => e.anime.key == a.key).episode}',
+              },
             ),
           if (continuation.upNext.isNotEmpty)
             PosterRow(
@@ -496,10 +763,45 @@ class _HomePageState extends State<HomePage> {
                   .firstWhere((e) => e.anime.key == a.key)
                   .caption(DateTime.now()),
             ),
+          if (watchlist != null && watchlist.isEmpty)
+            Padding(
+              key: const Key('home-title-watchlist'),
+              padding: EdgeInsets.fromLTRB(
+                widget.isTV ? 48 : 20,
+                28,
+                widget.isTV ? 48 : 20,
+                4,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionLabel('Movies & shows watchlist'),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add movies and shows to your Trakt watchlist and they show up here.',
+                    style: uiStyle(context, color: muted),
+                  ),
+                ],
+              ),
+            )
+          else if (watchlist != null)
+            PosterRow(
+              key: const Key('home-title-watchlist'),
+              title: 'Movies & shows watchlist',
+              items: [for (final t in watchlist) cards.card(t)],
+              isTV: widget.isTV,
+              onOpen: widget.onOpen,
+              captions: (a) => switch (cards.title(a)) {
+                final t? when t.isShow => 'Series',
+                final t? when t.year > 0 => '${t.year}',
+                _ => 'Movie',
+              },
+            ),
           if (configured.isEmpty)
             DiscoveryHome(
               key: discovery,
               services: s,
+              titles: titles,
               isTV: widget.isTV,
               hasResume: stage != null,
               showIntro: !isDesktop,

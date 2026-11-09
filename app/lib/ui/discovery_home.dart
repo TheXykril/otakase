@@ -4,8 +4,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
+import '../data/trakt.dart' show MediaTitle;
 import '../services.dart';
 import 'components.dart';
+import 'movies_pages.dart' show shelvesOf, titleCardsOf;
 
 class DiscoveryHome extends StatefulWidget {
   const DiscoveryHome({
@@ -18,9 +20,13 @@ class DiscoveryHome extends StatefulWidget {
     required this.onAccounts,
     this.topInset = 0,
     this.showIntro = true,
+    this.titles = false,
   });
   final AppServices services;
   final bool isTV, hasResume;
+
+  /// Also browse films and series, for a profile that shows both.
+  final bool titles;
 
   /// False on desktop, where the home hero already features a show.
   final bool showIntro;
@@ -33,6 +39,7 @@ class DiscoveryHome extends StatefulWidget {
 
 class DiscoveryHomeState extends State<DiscoveryHome> {
   HomeData? data;
+  Map<String, List<MediaTitle>> titleRows = {};
   String? error;
   bool busy = true;
   int generation = 0;
@@ -43,7 +50,24 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
     unawaited(load());
   }
 
+  Future<void> loadTitles({bool refresh = false}) async {
+    if (!widget.titles) return;
+    try {
+      final rows = await shelvesOf(widget.services).load(refresh: refresh);
+      if (mounted) setState(() => titleRows = rows);
+    } catch (_) {
+      // Anime still shows; the film rows come back on the next refresh.
+    }
+  }
+
+  @override
+  void didUpdateWidget(DiscoveryHome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.titles && !oldWidget.titles) unawaited(loadTitles());
+  }
+
   Future<void> load({bool refresh = false}) async {
+    unawaited(loadTitles(refresh: refresh));
     final request = ++generation;
     setState(() {
       busy = true;
@@ -61,6 +85,18 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
     } finally {
       if (mounted && request == generation) setState(() => busy = false);
     }
+  }
+
+  /// A row of films or series from Trakt, opened like anime cards.
+  Widget titleRow(String name) {
+    final items = widget.titles ? titleRows[name] ?? const [] : const [];
+    final cards = titleCardsOf(widget.services);
+    return PosterRow(
+      title: name,
+      items: [for (final t in items) cards.card(t)],
+      isTV: widget.isTV,
+      onOpen: widget.onOpen,
+    );
   }
 
   @override
@@ -93,7 +129,9 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
               const PageHeading('Find your next story', '探'),
               const SizedBox(height: 8),
               Text(
-                'Browse anime, or link AniList or MAL to see your lists and sync progress.',
+                widget.titles
+                    ? 'Browse anime, movies and shows, or link AniList, MAL or Trakt to see your lists and sync progress.'
+                    : 'Browse anime, or link AniList or MAL to see your lists and sync progress.',
                 style: uiStyle(context, color: muted),
               ),
               const SizedBox(height: 12),
@@ -102,7 +140,7 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
                 runSpacing: 4,
                 children: [
                   AppButton(
-                    label: 'Search anime',
+                    label: widget.titles ? 'Search' : 'Search anime',
                     icon: LucideIcons.search,
                     isTV: widget.isTV,
                     autofocus: !widget.hasResume,
@@ -165,12 +203,16 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
           isTV: widget.isTV,
           onOpen: widget.onOpen,
         ),
+        titleRow('Trending movies'),
+        titleRow('Trending shows'),
         PosterRow(
           title: 'Popular this season',
           items: seasonal,
           isTV: widget.isTV,
           onOpen: widget.onOpen,
         ),
+        titleRow('Popular movies'),
+        titleRow('Popular shows'),
         PosterRow(
           title: 'Recently aired',
           items: recent.values.map((e) => e.anime).toList(),

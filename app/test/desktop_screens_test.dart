@@ -282,7 +282,9 @@ void main() {
       } else if (screen == 'settings') {
         await tester.tap(find.byKey(const ValueKey('nav-More')));
       } else if (screen == 'schedule') {
-        await tester.tap(find.byKey(const ValueKey('nav-Schedule')));
+        await tester.tap(find.byKey(const ValueKey('nav-More')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('more-Schedule')));
       } else if (screen == 'show-long') {
         unawaited(
           tester

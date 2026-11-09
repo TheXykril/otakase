@@ -571,15 +571,23 @@ class Trakt extends ChangeNotifier {
         MediaTitle.fromTrakt(item.cast<String, dynamic>(), kind),
   ].where((t) => t.trakt > 0 && t.title.isNotEmpty).toList();
 
+  static String _filters(Map<String, String> filters) => [
+    for (final f in filters.entries)
+      '&${f.key}=${Uri.encodeQueryComponent(f.value)}',
+  ].join();
+
   /// trending, popular, anticipated or watched (this week).
   Future<List<MediaTitle>> list(
     String kind,
     String list, {
     int limit = 20,
+    Map<String, String> filters = const {},
   }) async {
     final path = list == 'watched' ? 'watched/weekly' : list;
     return _titles(
-      await _get('/${_plural(kind)}/$path?extended=full,images&limit=$limit'),
+      await _get(
+        '/${_plural(kind)}/$path?extended=full,images&limit=$limit${_filters(filters)}',
+      ),
       kind,
     );
   }
@@ -587,10 +595,11 @@ class Trakt extends ChangeNotifier {
   Future<List<MediaTitle>> search(
     String query, {
     String kinds = 'movie,show',
+    Map<String, String> filters = const {},
   }) async {
     final rows =
         await _get(
-          '/search/$kinds?query=${Uri.encodeQueryComponent(query)}&extended=full,images&limit=30',
+          '/search/$kinds?query=${Uri.encodeQueryComponent(query)}&extended=full,images&limit=30${_filters(filters)}',
         ) as List? ??
         [];
     return [
@@ -812,4 +821,62 @@ class Trakt extends ChangeNotifier {
     },
     auth: true,
   );
+}
+
+/// Anime genres with a matching Trakt genre.
+const _traktGenres = {
+  'Action': 'action',
+  'Adventure': 'adventure',
+  'Comedy': 'comedy',
+  'Drama': 'drama',
+  'Fantasy': 'fantasy',
+  'Horror': 'horror',
+  'Music': 'music',
+  'Mystery': 'mystery',
+  'Romance': 'romance',
+  'Sci-Fi': 'science-fiction',
+  'Sports': 'sports',
+  'Thriller': 'thriller',
+};
+
+/// The Trakt lookups that match the anime search filters: one per kind
+/// (movie or show) with its query filters. Empty when no film or series can
+/// match, like an OVA format or a genre Trakt does not have. A season only
+/// narrows to its year; Trakt status filters exist for series only.
+List<(String, Map<String, String>)> traktFilterRequests({
+  String? format,
+  String? season,
+  int? year,
+  String? genre,
+  String? status,
+}) {
+  final kinds = switch (format) {
+    null => ['movie', 'show'],
+    'MOVIE' => ['movie'],
+    'TV' || 'TV_SHORT' => ['show'],
+    _ => <String>[],
+  };
+  final common = <String, String>{if (year != null) 'years': '$year'};
+  if (genre != null) {
+    final slug = _traktGenres[genre];
+    if (slug == null) return const [];
+    common['genres'] = slug;
+  }
+  final showStatus = switch (status) {
+    null => null,
+    'RELEASING' => 'returning series',
+    'FINISHED' => 'ended',
+    'NOT_YET_RELEASED' => 'planned,in production',
+    'CANCELLED' => 'canceled',
+    _ => '',
+  };
+  if (showStatus == '') return const [];
+  return [
+    for (final kind in kinds)
+      if (kind == 'show')
+        ('show', {...common, 'status': ?showStatus})
+      // A film has no airing status; only a finished one can match.
+      else if (status == null || status == 'FINISHED')
+        ('movie', common),
+  ];
 }
