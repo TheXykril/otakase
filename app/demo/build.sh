@@ -6,6 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 out=$(realpath -m "${1:-../site/demo}")
 
+rm -rf build/web
 flutter build web -t demo/main.dart --release --base-href /demo/
 rm -rf "$out"
 mkdir -p "$(dirname "$out")"
