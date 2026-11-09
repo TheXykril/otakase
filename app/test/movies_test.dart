@@ -765,6 +765,13 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('nav-Search')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('movie-search-field')), findsOneWidget);
+      // No airing schedule without anime.
+      await tester.tap(find.byKey(const ValueKey('nav-More')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('more-Schedule'), skipOffstage: false),
+        findsNothing,
+      );
       await tester.pumpWidget(const SizedBox());
     });
 
@@ -779,6 +786,9 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('nav-Search')));
       await tester.pumpAndSettle();
       expect(find.text('Search anime'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('nav-More')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('more-Schedule')), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       shellContent = ContentMode.anime;
     });

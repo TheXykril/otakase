@@ -34,26 +34,18 @@ import '../desktop/system_install.dart';
 /// What the active profile shows; the shell sets it as it builds.
 ContentMode shellContent = ContentMode.anime;
 
-/// The top-level pages. Desktop has room for Schedule as its own tab. Films
-/// and series share Home and Search with anime; a profile with only films and
-/// series has no Schedule.
-List<String> get rootTabs => switch (shellContent) {
-  ContentMode.movies => const ['Home', 'Search', 'More'],
-  ContentMode.anime || ContentMode.both =>
-    isDesktop
-        ? const ['Home', 'Search', 'Schedule', 'More']
-        : const ['Home', 'Search', 'More'],
-};
+/// The top-level pages, the same for every content setting: films and series
+/// share Home and Search with anime, and Schedule lives in More.
+List<String> get rootTabs => const ['Home', 'Search', 'More'];
 
 const _tabIcons = {
   'Home': LucideIcons.house,
   'Search': LucideIcons.search,
-  'Schedule': LucideIcons.calendarDays,
   'More': LucideIcons.ellipsis,
 };
 
 /// Most tabs any content setting gives.
-const _maxTabs = 4;
+const _maxTabs = 3;
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.services, required this.isTV});
@@ -727,12 +719,6 @@ class _AppShellState extends State<AppShell> {
             fieldFocus: searchField,
             onNavigateUp: () => navFocus[1].requestFocus(),
             titles: shellContent == ContentMode.both,
-          ),
-        if (isDesktop && !moviesOnly)
-          SchedulePage(
-            services: widget.services,
-            isTV: widget.isTV,
-            onOpen: open,
           ),
         MorePage(services: widget.services, isTV: widget.isTV, onOpen: open),
       ];
