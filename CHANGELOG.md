@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.2.2 - 2026-11-10
+
+Films that drop no longer end as watched, Trakt stays signed in, and voices stay clear with Even out volume.
+
 ### Fixed
 
 - **Films no longer stop early as watched.** When a stream dropped partway
