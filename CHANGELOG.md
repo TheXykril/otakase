@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Improved
+
+- **Tidier settings.** What you watch is gone: the choice of anime, movies &
+  shows, or both now sits at the top of **Appearance**, and movie & show
+  languages sit in **Subtitles & languages** next to the anime ones. Movie
+  sources no longer have on/off switches; all of them are tried in your
+  language order.
+
 ## 26.2.0 - 2026-11-09
 
 Movies and shows join Home and Search and can be cast to your TV, one player look everywhere, and an Android TV update fix.

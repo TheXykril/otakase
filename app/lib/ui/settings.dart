@@ -141,9 +141,6 @@ String settingValue(AppStore store, String key) {
   return settingValueNames[key]?[raw] ?? raw;
 }
 
-/// The section that holds the Content choice and the movie sources.
-const contentSection = 'What you watch';
-
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
@@ -267,12 +264,6 @@ class _SettingsPageState extends State<SettingsPage> {
       'MovieLanguages',
       orders.firstWhere((o) => label(o) == result),
     );
-  }
-
-  Future<void> toggleMovieSource(String name) async {
-    final off = {...store.strings('DisabledMovieSources')};
-    if (!off.remove(name)) off.add(name);
-    await store.set('DisabledMovieSources', off.toList()..sort());
   }
 
   Widget group(String title, IconData icon, List<Widget> children) =>
@@ -478,6 +469,14 @@ class _SettingsPageState extends State<SettingsPage> {
           child: PageHeading('Settings', '設'),
         ),
       group('Appearance', LucideIcons.palette, [
+        row(
+          'Content',
+          'Anime, movies & shows, or both. Each profile keeps its own '
+              'choice, so one can show only movies and another only anime.',
+          value: contentLabels[store.text('Content')] ?? store.text('Content'),
+          icon: LucideIcons.clapperboard,
+          onTap: chooseContent,
+        ),
         row('Theme', 'Warm dark appearance.', value: 'Shu / Dark'),
       ]),
       group('Subtitles & languages', LucideIcons.captions, [
@@ -493,6 +492,18 @@ class _SettingsPageState extends State<SettingsPage> {
           value: store.text('AudioLanguages'),
           onTap: () => edit('AudioLanguages'),
         ),
+        // Only matters once movies & shows are on.
+        if (contentModeOf(store) != ContentMode.anime)
+          row(
+            'MovieLanguages',
+            'Movies and episodes are looked for in the first language, then '
+                'the next.',
+            value: widget.services.movies.languages
+                .map(languageTitle)
+                .join(', then '),
+            icon: LucideIcons.languages,
+            onTap: chooseMovieLanguages,
+          ),
         row(
           'SubtitleFont',
           'Built into the app. Covers Japanese text and on-screen signs.',
@@ -567,55 +578,6 @@ class _SettingsPageState extends State<SettingsPage> {
           'Play the dubbed version when no subtitled one is found, or the other way round.',
           icon: LucideIcons.globe,
         ),
-      ]),
-      group(contentSection, LucideIcons.clapperboard, [
-        row(
-          'Content',
-          'Anime, movies & shows, or both. Each profile keeps its own '
-              'choice, so one can show only movies and another only anime.',
-          value: contentLabels[store.text('Content')] ?? store.text('Content'),
-          icon: LucideIcons.users,
-          onTap: chooseContent,
-        ),
-        if (contentModeOf(store) != ContentMode.anime) ...[
-          row(
-            'MovieLanguages',
-            'Movies and episodes are looked for in the first language, then '
-                'the next. vidsrc is English; 8Filmai and Filmukas are Lithuanian.',
-            value: widget.services.movies.languages
-                .map(languageTitle)
-                .join(', then '),
-            icon: LucideIcons.languages,
-            onTap: chooseMovieLanguages,
-          ),
-          FutureBuilder(
-            // Asked only while this group shows; the core lists the sources.
-            future: widget.section == null || widget.section == contentSection
-                ? widget.services.movies.sources().catchError(
-                    (_) => knownMovieSources,
-                  )
-                : null,
-            initialData: knownMovieSources,
-            builder: (context, snap) => Column(
-              children: [
-                for (final source in snap.data ?? knownMovieSources)
-                  row(
-                    source.label,
-                    [
-                      languageTitle(source.languageName),
-                      source.series ? 'movies and shows' : 'movies only',
-                      ?store.providerHealth['movie:${source.name}'],
-                    ].join(' · '),
-                    value: widget.services.movies.sourceEnabled(source.name)
-                        ? 'On'
-                        : 'Off',
-                    icon: LucideIcons.server,
-                    onTap: () => toggleMovieSource(source.name),
-                  ),
-              ],
-            ),
-          ),
-        ],
       ]),
       group('Playback', LucideIcons.circlePlay, [
         toggle(

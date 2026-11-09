@@ -229,12 +229,6 @@ class MorePage extends StatelessWidget {
             section: 'Subtitles & languages',
           ),
         ),
-        row(
-          contentSection,
-          contentLabels[services.store.text('Content')] ?? '',
-          LucideIcons.clapperboard,
-          () => openSettings(context, services, isTV, section: contentSection),
-        ),
         if (!isTV)
           row(
             'Downloads',
@@ -274,7 +268,7 @@ class MorePage extends StatelessWidget {
         ),
         row(
           'Appearance',
-          'Shu / Dark',
+          '${contentLabels[services.store.text('Content')] ?? ''} · Shu / Dark',
           LucideIcons.palette,
           () => openSettings(context, services, isTV, section: 'Appearance'),
         ),
@@ -518,7 +512,6 @@ class _DesktopMoreState extends State<DesktopMore> {
         const MoreGroupHeading('Watching'),
         item('Playback', LucideIcons.circlePlay),
         item('Subtitles & languages', LucideIcons.captions),
-        item(contentSection, LucideIcons.clapperboard),
         item(
           'Downloads',
           LucideIcons.download,

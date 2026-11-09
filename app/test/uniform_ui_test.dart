@@ -80,7 +80,7 @@ void main() {
         home: SettingsPage(
           services: services,
           isTV: false,
-          section: contentSection,
+          section: 'Subtitles & languages',
         ),
       ),
     );
@@ -101,16 +101,21 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    await open(contentSection);
+    await open('Appearance');
     expect(find.text('This profile shows'), findsOneWidget);
     expect(find.text('Anime only'), findsOneWidget);
-    // Movie languages and sources only matter once movies are on.
+
+    await open('Subtitles & languages');
+    // Movie languages sit with the anime ones once movies are on, and
+    // movie sources have no switches.
     expect(find.text('Movie & show languages'), findsNothing);
     await services.store.set('Content', 'both');
     await tester.pumpAndSettle();
     expect(find.text('Movie & show languages'), findsOneWidget);
-
-    await open('Subtitles & languages');
+    expect(find.textContaining('Movie source'), findsNothing);
+    expect(find.text('vidsrc'), findsNothing);
+    await services.store.set('Content', 'anime');
+    await tester.pumpAndSettle();
     expect(find.text('White'), findsOneWidget);
     expect(find.text('None'), findsOneWidget);
     expect(find.text('Original styling'), findsOneWidget);

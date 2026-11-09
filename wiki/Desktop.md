@@ -87,9 +87,10 @@ separate windows. Locked profiles ask for the profile code in the new
 window. Other desktops keep the unlocked session when reusing the popup
 window. Closing playback returns control to the desktop.
 
-When your profile shows movies & shows (**More > What you watch**), the launcher lists the films
-and series you are watching and your Trakt watchlist, searches them along
-with anime, and has a **Trending movies & shows** list.
+When your profile shows movies & shows (**More > Appearance > This profile
+shows**), the launcher lists the films and series you are watching and your
+Trakt watchlist, searches them along with anime, and has a **Trending movies &
+shows** list.
 
 On Hyprland with Wayland layer shell version 4 or later, the launcher
 opens as a centered overlay. Hyprland’s window drag and resize shortcuts

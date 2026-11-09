@@ -537,18 +537,13 @@ class MovieService extends ChangeNotifier {
     ];
   }
 
-  bool sourceEnabled(String name) =>
-      !store.strings('DisabledMovieSources').contains(name);
-
   /// The sources tried for a title, best first: the viewer's first language,
   /// then the next, each language's sources in the core's order. The source
   /// that played a title before goes first.
   Future<List<MovieSource>> sourcesFor(MediaTitle title) async {
     final all = await sources();
     final order = languages;
-    final usable = all
-        .where((s) => sourceEnabled(s.name) && (!title.isShow || s.series))
-        .toList();
+    final usable = all.where((s) => !title.isShow || s.series).toList();
     int rank(MovieSource s) {
       final i = order.indexOf(s.languageName);
       return i < 0 ? order.length : i;

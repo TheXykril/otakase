@@ -65,7 +65,6 @@ const settingDefaults = <String, dynamic>{
   // Anime until the viewer picks, so an existing profile looks the same.
   'Content': 'anime',
   'MovieLanguages': ['english', 'lithuanian'],
-  'DisabledMovieSources': <String>[],
   'DiscordWatchWithMe': false,
   'ExternalMpv': false,
   'MpvPath': 'mpv',
