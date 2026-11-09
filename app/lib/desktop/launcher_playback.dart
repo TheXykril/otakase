@@ -13,6 +13,7 @@ import '../ui/movie_player.dart';
 import '../ui/movies_pages.dart';
 import 'external_mpv.dart';
 import 'window_frame.dart';
+import '../host.dart';
 
 /// The media and profile selected in the popup. The player opens in its own
 /// process and loads the normal profile settings and progress there.
@@ -57,18 +58,15 @@ class LauncherPlayback {
   /// opening its own. A file avoids command-line size limits for long series.
   Future<File> start() async {
     final dir = await Directory.systemTemp.createTemp('otakase-play-');
-    final file = File('${dir.path}${Platform.pathSeparator}request.json');
-    final executable =
-        Platform.environment['APPIMAGE'] ?? Platform.resolvedExecutable;
+    final file = File('${dir.path}${Host.pathSeparator}request.json');
+    final executable = Host.environment['APPIMAGE'] ?? Host.executable;
     try {
       await File('${file.path}.tmp')
           .writeAsString(jsonEncode({'profile': profileId, ...data}));
       await Process.start(
         executable,
         [argument, file.path],
-        workingDirectory: Platform.isWindows
-            ? File(executable).parent.path
-            : null,
+        workingDirectory: Host.windows ? File(executable).parent.path : null,
         mode: ProcessStartMode.detached,
       );
       return file;
@@ -85,7 +83,7 @@ class LauncherPlayback {
   static Future<LauncherPlayback> read(String path) async {
     final file = File(path).absolute;
     final directory = file.parent;
-    final directoryName = directory.path.split(Platform.pathSeparator).last;
+    final directoryName = directory.path.split(Host.pathSeparator).last;
     if (file.uri.pathSegments.last != 'request.json' ||
         !directoryName.startsWith('otakase-play-') ||
         await directory.parent.resolveSymbolicLinks() !=

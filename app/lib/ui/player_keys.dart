@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 
 import 'components.dart';
+import 'mpv.dart';
+import '../host.dart';
 
 /// What a key does in the desktop player. The keys are mpv's own, as the
 /// old command-line app left them in its mpv skin, so muscle memory from
@@ -352,8 +354,7 @@ double nextSpeed(double rate, PlayerAction action) {
 /// The key actions both players run the same way on the media_kit player.
 extension PlayerKeyOps on Player {
   Future<void> _command(List<String> args) async {
-    final native = platform;
-    if (native is NativePlayer) await native.command(args);
+    await mpvCommand(args);
   }
 
   /// Picks the next (or previous) subtitle track, Off included; returns its
@@ -401,12 +402,9 @@ extension PlayerKeyOps on Player {
 
   Future<String> shiftSubtitles(double seconds) async {
     await _command(['add', 'sub-delay', '$seconds']);
-    final native = platform;
-    if (native is NativePlayer) {
-      final delay = double.tryParse(await native.getProperty('sub-delay'));
-      if (delay != null) {
-        return 'Subtitle delay ${(delay * 1000).round()} ms';
-      }
+    final delay = double.tryParse(await mpvGet('sub-delay') ?? '');
+    if (delay != null) {
+      return 'Subtitle delay ${(delay * 1000).round()} ms';
     }
     return 'Subtitle delay changed';
   }
@@ -421,12 +419,10 @@ extension PlayerKeyOps on Player {
     final shot = await screenshot(format: 'image/png');
     if (shot == null) return 'No picture to save';
     final home =
-        Platform.environment['HOME'] ??
-        Platform.environment['USERPROFILE'] ??
-        '.';
+        Host.environment['HOME'] ?? Host.environment['USERPROFILE'] ?? '.';
     final dir = Directory(
-      '$home${Platform.pathSeparator}Pictures'
-      '${Platform.pathSeparator}Otakase',
+      '$home${Host.pathSeparator}Pictures'
+      '${Host.pathSeparator}Otakase',
     );
     await dir.create(recursive: true);
     final safe = name.replaceAll(RegExp(r'[^\w\- ]+'), '').trim();
@@ -435,7 +431,7 @@ extension PlayerKeyOps on Player {
         .replaceAll(RegExp(r'[:.]'), '-')
         .substring(0, 19);
     final file = File(
-      '${dir.path}${Platform.pathSeparator}${safe.isEmpty ? 'otakase' : safe} $stamp.png',
+      '${dir.path}${Host.pathSeparator}${safe.isEmpty ? 'otakase' : safe} $stamp.png',
     );
     await file.writeAsBytes(shot);
     return 'Screenshot saved in Pictures/Otakase';

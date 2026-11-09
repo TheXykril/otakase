@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../services.dart';
 import '../ui/components.dart';
 import '../ui/device_status.dart';
+import '../host.dart';
 
 // A key that opens the launcher from anywhere, replacing the CLI's
 // Super+Shift+A rofi binding. On Hyprland the app writes the binding into
@@ -30,9 +31,9 @@ const _cliConfEnd = '# <<< otakase keybinding <<<';
 
 /// The command that opens the launcher: this app with --launcher.
 String launcherCommand([Map<String, String>? env, String? executable]) {
-  final e = env ?? Platform.environment;
+  final e = env ?? Host.environment;
   // An AppImage runs from a temporary mount; bind the AppImage itself.
-  var exe = e['APPIMAGE'] ?? executable ?? Platform.resolvedExecutable;
+  var exe = e['APPIMAGE'] ?? executable ?? Host.executable;
   if (exe.contains(' ')) exe = '"$exe"';
   return '$exe --launcher';
 }
@@ -61,8 +62,8 @@ HyprlandConfig? findHyprlandConfig(String home) {
 }
 
 bool get onHyprland =>
-    Platform.isLinux &&
-    (Platform.environment['HYPRLAND_INSTANCE_SIGNATURE'] ?? '').isNotEmpty;
+    Host.linux &&
+    (Host.environment['HYPRLAND_INSTANCE_SIGNATURE'] ?? '').isNotEmpty;
 
 (int, int)? _range(String body, String start, String end) {
   final s = body.indexOf(start);
@@ -138,7 +139,7 @@ class _LauncherShortcutPageState extends State<LauncherShortcutPage> {
   String message = '';
   final command = launcherCommand();
   HyprlandConfig? get config =>
-      findHyprlandConfig(Platform.environment['HOME'] ?? '');
+      findHyprlandConfig(Host.environment['HOME'] ?? '');
 
   bool get bound {
     final c = config;
@@ -182,13 +183,13 @@ class _LauncherShortcutPageState extends State<LauncherShortcutPage> {
   }
 
   String get help {
-    if (Platform.isWindows) {
+    if (Host.windows) {
       return 'Right-click the Otakase shortcut in the Start menu, open its file location, then Properties: put the command below in Target and pick a Shortcut key.';
     }
-    if (Platform.isMacOS) {
+    if (Host.macOS) {
       return 'In Shortcuts, make a shortcut that runs the command below as a shell script, then give it a keyboard shortcut.';
     }
-    final desktop = (Platform.environment['XDG_CURRENT_DESKTOP'] ?? '')
+    final desktop = (Host.environment['XDG_CURRENT_DESKTOP'] ?? '')
         .toLowerCase();
     if (desktop.contains('kde')) {
       return 'System Settings, Shortcuts, Add New, Command or Script: paste the command below and press the keys you want.';

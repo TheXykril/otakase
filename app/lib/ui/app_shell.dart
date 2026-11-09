@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +29,7 @@ import '../desktop/window_frame.dart';
 import '../desktop/external_mpv.dart';
 import '../desktop/launcher.dart';
 import '../desktop/system_install.dart';
+import '../host.dart';
 
 /// What the active profile shows; the shell sets it as it builds.
 ContentMode shellContent = ContentMode.anime;
@@ -105,7 +105,7 @@ class _AppShellState extends State<AppShell> {
     unawaited(startRemote());
     // Trakt sits with the other trackers in Accounts and on More.
     unawaited(widget.services.trakt.load());
-    if ((Platform.isAndroid || isDesktop) &&
+    if ((Host.android || isDesktop) &&
         widget.services.store.flag('CheckUpdates')) {
       unawaited(widget.services.updates.check());
     }
@@ -198,8 +198,7 @@ class _AppShellState extends State<AppShell> {
     // Desktops only listen once a phone is paired, so a first launch never
     // opens a firewall prompt; the Phone remote page starts it on demand.
     if (widget.isTV &&
-        (Platform.isAndroid ||
-            isDesktop && widget.services.tvRemote.hasPhones)) {
+        (Host.android || isDesktop && widget.services.tvRemote.hasPhones)) {
       await widget.services.tvRemote.startTV();
     }
     try {

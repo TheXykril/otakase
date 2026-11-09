@@ -32,6 +32,8 @@ import 'ui/rate_prompt.dart';
 import 'ui/phone_player.dart';
 import 'ui/playback_report.dart';
 import 'ui/watch_party_page.dart';
+import 'ui/mpv.dart';
+import 'host.dart';
 
 class PlayerPage extends StatefulWidget {
   const PlayerPage({
@@ -250,8 +252,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   Future<void> property(String name, String value) async {
-    final native = player.platform;
-    if (native is NativePlayer) await native.setProperty(name, value);
+    await player.mpvSet(name, value);
   }
 
   Future<void> configure() async {
@@ -725,18 +726,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         widget.services.catalog.client,
         source!.streams[copy],
         track['url'] as String,
-        nativeCore: Platform.isAndroid ? widget.services.core : null,
+        nativeCore: Host.android ? widget.services.core : null,
         scope: scope,
         timeout:
             !manual && busy && widget.mode == 'sub' && source?.mode == 'sub'
             ? const Duration(seconds: 6)
-            : Duration(seconds: Platform.isAndroid ? 23 : 15),
+            : Duration(seconds: Host.android ? 23 : 15),
       );
       if (!current()) return false;
       final title = track['label'] as String? ?? 'Subtitles';
       final language = track['language'] as String?;
-      final native = player.platform;
-      if (Platform.isAndroid && native is NativePlayer) {
+      if (Host.android && player.isMpv) {
         final File file;
         try {
           final cache = await getTemporaryDirectory();
@@ -750,9 +750,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         await player.setSubtitleTrack(
           SubtitleTrack.uri(file.path, title: title, language: language),
         );
-        final active = await native.getProperty(
-          'current-tracks/sub/external-filename',
-        );
+        final active =
+            await player.mpvGet('current-tracks/sub/external-filename') ?? '';
         if (!isActiveSubtitleFile(file, active)) {
           throw const SubtitleFailure(
             'The player could not open this subtitle file.',
@@ -2140,6 +2139,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             fit: StackFit.expand,
             children: [
               GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () {
                   if (overlay) {
                     setState(() => overlay = false);
@@ -2151,7 +2151,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 child: Focus(
                   focusNode: surface,
                   autofocus: true,
-                  child: Video(controller: video, controls: NoVideoControls),
+                  // The picture never takes taps itself, so a tap anywhere
+                  // on it reaches the detector above (on the web the video
+                  // is a page element that would otherwise keep them).
+                  child: IgnorePointer(
+                    child: Video(controller: video, controls: NoVideoControls),
+                  ),
                 ),
               ),
               if (casting && !busy && error.isEmpty)

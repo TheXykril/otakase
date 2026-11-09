@@ -16,6 +16,7 @@ import '../ui/components.dart';
 import '../ui/rate_prompt.dart';
 import '../ui/seal.dart';
 import 'desktop_core.dart';
+import '../host.dart';
 
 // External mpv, as the CLI played: the desktop app finds the stream and
 // hands it to the viewer's own mpv, so their mpv.conf, scripts and key
@@ -363,9 +364,9 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
       viewingKey =
           '$episode:${current.provider}:${current.showId}:${current.mode}:0';
       final dir = await Directory.systemTemp.createTemp('otakase-mpv');
-      final script = File('${dir.path}${Platform.pathSeparator}otakase.lua');
+      final script = File('${dir.path}${Host.pathSeparator}otakase.lua');
       await script.writeAsString(mpvStatusScript);
-      commands = File('${dir.path}${Platform.pathSeparator}commands');
+      commands = File('${dir.path}${Host.pathSeparator}commands');
       await commands!.writeAsString('');
       final title = '${anime.title} - Episode $episode';
       final args = mpvArguments(

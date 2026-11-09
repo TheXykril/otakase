@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 
+import '../host.dart';
+
 // Tiling compositors (Hyprland, sway, i3) put every new window in the
 // tiling layout, so the launcher opened as a big tile instead of the small
 // popup the old rofi menu was. These ask the compositor to float this
@@ -14,7 +16,7 @@ import 'package:flutter/widgets.dart';
 enum Tiler { hyprland, sway, i3 }
 
 Tiler? tilerFrom(Map<String, String> env, {bool? linux}) {
-  if (!(linux ?? Platform.isLinux)) return null;
+  if (!(linux ?? Host.linux)) return null;
   if ((env['HYPRLAND_INSTANCE_SIGNATURE'] ?? '').isNotEmpty) {
     return Tiler.hyprland;
   }
@@ -85,7 +87,7 @@ Future<String?> focusedTilerWorkspace({
   bool? linux,
   CommandRunner? run,
 }) async {
-  final tiler = tilerFrom(env ?? Platform.environment, linux: linux);
+  final tiler = tilerFrom(env ?? Host.environment, linux: linux);
   if (tiler == null) return null;
   final runner = run ?? Process.run;
   try {
@@ -133,7 +135,7 @@ Future<bool> placeOnTiler({
   int attempts = 6,
   Duration wait = const Duration(milliseconds: 150),
 }) async {
-  final tiler = tilerFrom(env ?? Platform.environment, linux: linux);
+  final tiler = tilerFrom(env ?? Host.environment, linux: linux);
   if (tiler == null) return false;
   final id = processId ?? pid;
   final runner = run ?? Process.run;

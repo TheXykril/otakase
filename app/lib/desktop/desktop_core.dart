@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
+import '../host.dart';
+
 /// True when the app runs as a Windows, macOS or Linux desktop app.
 /// `flutter test` also runs on a desktop host but tests the Android paths,
 /// so it is off there unless a test sets [debugDesktopOverride].
@@ -12,8 +14,8 @@ bool get isDesktop => debugDesktopOverride ?? _desktopHost;
 bool? debugDesktopOverride;
 
 final bool _desktopHost =
-    (Platform.isWindows || Platform.isMacOS || Platform.isLinux) &&
-    !Platform.environment.containsKey('FLUTTER_TEST');
+    (Host.windows || Host.macOS || Host.linux) &&
+    !Host.environment.containsKey('FLUTTER_TEST');
 
 /// Starts the helper process. Tests replace it with a fake.
 typedef CoreLauncher = Future<Process> Function(String executable);
@@ -48,14 +50,14 @@ class DesktopCore {
   /// Linux) or in the bundle's Resources (macOS). OTAKASE_CORE overrides it
   /// for development builds.
   static String helperPath() {
-    final override = Platform.environment['OTAKASE_CORE'];
+    final override = Host.environment['OTAKASE_CORE'];
     if (override != null && override.isNotEmpty) return override;
-    final name = Platform.isWindows ? 'otakase-core.exe' : 'otakase-core';
-    final dir = File(Platform.resolvedExecutable).parent;
-    if (Platform.isMacOS) {
+    final name = Host.windows ? 'otakase-core.exe' : 'otakase-core';
+    final dir = File(Host.executable).parent;
+    if (Host.macOS) {
       return '${dir.parent.path}/Resources/$name';
     }
-    return '${dir.path}${Platform.pathSeparator}$name';
+    return '${dir.path}${Host.pathSeparator}$name';
   }
 
   Future<Process> _ensure() {

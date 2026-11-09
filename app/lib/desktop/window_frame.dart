@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../ui/components.dart';
 import 'desktop_core.dart';
+import '../host.dart';
 
 const fullAppSize = Size(1440, 900);
 const fullAppMinimumSize = Size(960, 600);
@@ -38,7 +39,7 @@ bool? debugMacLayout;
 
 /// True when the window uses the macOS layout: Apple's own buttons on the
 /// left, nothing drawn by the app for them.
-bool get macWindowLayout => debugMacLayout ?? Platform.isMacOS;
+bool get macWindowLayout => debugMacLayout ?? Host.macOS;
 
 double get windowButtonsLeading => isDesktop && macWindowLayout ? 78 : 0;
 
@@ -122,7 +123,7 @@ bool? debugTilingOverride;
 
 bool get tilingWindowManager =>
     debugTilingOverride ??
-    (Platform.isLinux && isTilingWindowManager(Platform.environment));
+    (Host.linux && isTilingWindowManager(Host.environment));
 
 /// How the window buttons are drawn: like the system the app runs on.
 enum WindowButtonStyle {
@@ -165,10 +166,7 @@ WindowButtonStyle get windowButtonStyle =>
     debugWindowButtonStyle ??
     (debugTilingOverride == true
         ? WindowButtonStyle.tiling
-        : windowButtonStyleFor(
-            windows: Platform.isWindows,
-            env: Platform.environment,
-          ));
+        : windowButtonStyleFor(windows: Host.windows, env: Host.environment));
 
 /// Minimise, maximise and close for Windows and Linux, drawn like the
 /// system's own buttons. Tiling window managers only get close. macOS uses its own
@@ -193,7 +191,7 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
     windowManager.addListener(this);
     // Wayland compositors report tiled windows as maximised, so Linux always
     // shows the plain maximise icon.
-    if (Platform.isLinux) return;
+    if (Host.linux) return;
     unawaited(
       windowManager.isMaximized().then((value) {
         if (mounted) setState(() => maximized = value);
@@ -209,7 +207,7 @@ class _WindowButtonsState extends State<WindowButtons> with WindowListener {
 
   @override
   void onWindowMaximize() {
-    if (!Platform.isLinux) setState(() => maximized = true);
+    if (!Host.linux) setState(() => maximized = true);
   }
 
   @override

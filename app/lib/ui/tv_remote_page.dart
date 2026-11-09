@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +9,7 @@ import '../data/tv_remote.dart';
 import '../services.dart';
 import 'components.dart';
 import 'device_status.dart';
+import '../host.dart';
 
 class TVRemotePage extends StatefulWidget {
   const TVRemotePage({
@@ -264,7 +264,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
                   textAlign: TextAlign.center,
                   style: uiStyle(context),
                 ),
-                if (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+                if (Host.linux || Host.windows || Host.macOS)
                   Padding(
                     padding: const EdgeInsets.only(top: 12),
                     child: Text(

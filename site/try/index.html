@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Otakase · Demo</title>
+<meta name="description" content="Click through a demo of the Otakase app on a computer, phone or TV. Nothing to install.">
+<meta name="theme-color" content="#0e0d0c">
+<meta property="og:title" content="Otakase demo">
+<meta property="og:description" content="Click through the Otakase app on a computer, phone or TV.">
+<meta property="og:image" content="https://otakase.xyverion.com/img/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="../img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Archivo+Black&family=JetBrains+Mono&display=swap">
+<!-- only the kanji the page uses, so the Japanese font stays a few kilobytes -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700;900&text=%E4%BB%BB%E7%B6%9A%E9%A3%9B%E6%98%A0%E5%90%8C%E8%A6%8B%E3%81%8A%E3%81%9B&display=swap">
+<link rel="stylesheet" href="../style.css?v=dev">
+</head>
+<body class="try">
+<div class="wrap tbar"><a href="../" class="tback" aria-label="Otakase home"><img src="../img/favicon.svg" alt="" width="28" height="28"><span>OTAKASE</span></a><a class="pill p" href="../#download"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg><span>Download</span></a></div>
+<!-- The real app, built for the web with demo data (app/demo), runs in
+     the frame. The Site deploy builds it into site/demo/. -->
+<section class="tour wrap" id="tour" aria-labelledby="tour-h" data-src="../demo/?v=dev">
+  <div class="tgrid">
+    <div class="thead">
+      <div class="sh"><h2 id="tour-h">Look around.</h2><span class="kj" aria-hidden="true">見</span></div>
+      <p class="tlead">A demo of the Otakase app you can click through. See every page, menu and setting on a computer, phone or TV.</p>
+      <div class="tabs" role="tablist" aria-label="Device" id="tour-devices">
+        <button role="tab" data-device="computer" aria-selected="true">Computer</button>
+        <button role="tab" data-device="phone" aria-selected="false">Phone</button>
+        <button role="tab" data-device="tv" aria-selected="false">TV</button>
+      </div>
+      <p class="thint" id="tour-hint"></p>
+      <p class="thint">The shows here are only examples and nothing really plays: episodes open a placeholder video. Nothing is saved and no account is needed. To watch for real, <a href="../#download">get the app</a>.</p>
+    </div>
+    <div class="tstage">
+      <div class="tdev computer" id="tour-dev">
+        <div class="tscr" id="tour-scr"><iframe id="tour-app" title="Otakase demo" loading="lazy"></iframe></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><footer><span>お任せ · Otakase · GPL-3.0 · Otakase does not host or upload any video.</span><nav><a href="https://github.com/TheXykril/otakase/wiki">Help</a><a href="https://otakase.xyverion.com/discord/">Discord</a><a href="https://github.com/TheXykril/otakase">GitHub</a></nav></footer></div>
+<script src="../demo.js?v=dev"></script>
+</body>
+</html>

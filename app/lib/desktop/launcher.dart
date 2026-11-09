@@ -17,6 +17,7 @@ import 'desktop_core.dart';
 import 'launcher_playback.dart';
 import 'window_frame.dart';
 import 'tiling.dart';
+import '../host.dart';
 
 /// True while the app shows the launcher instead of the full window. Set by
 /// `otakase --launcher`; "Open full app" turns it off in the same process.
@@ -38,8 +39,7 @@ const launcherMinimumSize = Size(480, 360);
 const _launcherFadeDuration = Duration(milliseconds: 144);
 
 bool get launcherFadesContent =>
-    Platform.isLinux &&
-    (Platform.environment['WAYLAND_DISPLAY'] ?? '').isNotEmpty;
+    Host.linux && (Host.environment['WAYLAND_DISPLAY'] ?? '').isNotEmpty;
 
 final _launcherClosing = ValueNotifier(false);
 Completer<void>? _launcherFadeOut;
@@ -63,7 +63,7 @@ Future<void> prepareLauncherWindow({bool fadeContent = false}) async {
   _launcherClosing.value = false;
   await windowManager.ensureInitialized();
   _launcherLayerSurface = false;
-  if (isDesktop && Platform.isLinux) {
+  if (isDesktop && Host.linux) {
     _launcherLayerSurface =
         await const MethodChannel('otakase/launcher_surface')
             .invokeMethod<bool>('isLayerSurface') ??
@@ -106,7 +106,7 @@ Future<void> revealLauncherWindow({
   _launcherPlaced = true;
   if (placed &&
       !_launcherClosing.value &&
-      tilerFrom(Platform.environment) == Tiler.hyprland) {
+      tilerFrom(Host.environment) == Tiler.hyprland) {
     final anchor = HyprlandLauncherAnchor(
       processId: pid,
       restore: (home) async {
@@ -242,8 +242,8 @@ class LauncherStartup extends StatelessWidget {
 Future<void> _setLauncherWindowControls(bool launcher) async {
   await windowManager.setResizable(!launcher);
   await windowManager.setMinimizable(!launcher);
-  if (Platform.isWindows) await windowManager.setMaximizable(!launcher);
-  if (Platform.isMacOS) await windowManager.setMovable(!launcher);
+  if (Host.windows) await windowManager.setMaximizable(!launcher);
+  if (Host.macOS) await windowManager.setMovable(!launcher);
   await windowManager.setTitleBarStyle(
     TitleBarStyle.hidden,
     windowButtonVisibility: !launcher,

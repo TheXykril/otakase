@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 // The full mpv libraries check HTTPS certificates, but their TLS library cannot
 // read Android's certificate store, so every https stream failed. Collect the
 // system and user-added CAs into one PEM file that mpv can load.
@@ -19,7 +21,10 @@ Future<Map<String, String>>? _options;
 Future<Map<String, String>> tlsOptions({
   List<String> dirs = _caDirs,
   Directory? cache,
-}) => _options ??= _build(dirs, cache ?? Directory.systemTemp);
+}) => _options ??= kIsWeb
+    // The browser plays the stream itself and has its own certificates.
+    ? Future.value(const {})
+    : _build(dirs, cache ?? Directory.systemTemp);
 
 Future<Map<String, String>> _build(List<String> dirs, Directory cache) async {
   final certs = <String>{};
