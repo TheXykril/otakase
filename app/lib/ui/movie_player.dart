@@ -156,6 +156,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
   @override
   void initState() {
     super.initState();
+    FullBleed.enter();
     WidgetsBinding.instance.addObserver(this);
     request = widget.request;
     player = Player(
@@ -279,6 +280,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     surface.dispose();
     playFocus.dispose();
     flash.dispose();
+    FullBleed.leave();
     super.dispose();
   }
 

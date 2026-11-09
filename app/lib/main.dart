@@ -189,7 +189,7 @@ class _ProfileHostState extends State<ProfileHost> {
               : DesktopFrame(
                   child: widget.manager.isTV
                       ? TVViewport(child: child!)
-                      : child!,
+                      : CutoutInset(child: child!),
                 ),
           theme: ThemeData(
             brightness: Brightness.dark,
@@ -334,7 +334,9 @@ class _OtakaseAppState extends State<OtakaseApp> {
         builder: (context, child) => desktopLauncher.value
             ? child!
             : DesktopFrame(
-                child: widget.isTV ? TVViewport(child: child!) : child!,
+                child: widget.isTV
+                    ? TVViewport(child: child!)
+                    : CutoutInset(child: child!),
               ),
         theme: ThemeData(
           brightness: Brightness.dark,
