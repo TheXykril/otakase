@@ -67,7 +67,15 @@
     if (!r.ok) return;
     sec.hidden = false;
     const ua = navigator.userAgent;
-    pick(/Android TV|AFT|BRAVIA|SMART-TV|SmartTV/i.test(ua) ? 'tv' : /Android|iPhone|iPad/i.test(ua) ? 'phone' : 'computer');
+    const tv = /Android TV|AFT|BRAVIA|SMART-TV|SmartTV/i.test(ua);
+    // On a phone the computer and TV would be too small to use: only the
+    // phone is offered there.
+    if (!tv && (/Android|iPhone/i.test(ua) || matchMedia('(max-width: 760px)').matches)) {
+      $('tour-devices').hidden = true;
+      pick('phone');
+    } else {
+      pick(tv ? 'tv' : /iPad/i.test(ua) ? 'phone' : 'computer');
+    }
     // The app is a few megabytes: start it once the section is close.
     if (!('IntersectionObserver' in window)) { load(); return; }
     const io = new IntersectionObserver((es) => {

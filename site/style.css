@@ -146,7 +146,7 @@ footer a:hover{color:var(--bright)}
 
 /* try it: the app built for the web, in a device frame (demo.js) */
 .tour{padding-block:48px 40px;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;justify-content:center}
-.tour[hidden]{display:none}
+.tour[hidden],.tour .tabs[hidden]{display:none}
 .tour.wrap{max-width:1440px}
 .tgrid{display:grid;grid-template-columns:minmax(0,280px) minmax(0,1fr);column-gap:40px;align-items:center}
 .thead{min-width:0}

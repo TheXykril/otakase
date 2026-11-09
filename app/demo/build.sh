@@ -7,13 +7,15 @@ cd "$(dirname "$0")/.."
 out=$(realpath -m "${1:-../site/demo}")
 
 rm -rf build/web
-flutter build web -t demo/main.dart --release --base-href /demo/ \
+# --wasm: browsers that can run it get the faster renderer (skwasm), the
+# others fall back to the JavaScript build (CanvasKit).
+flutter build web -t demo/main.dart --release --wasm --base-href /demo/ \
   --no-web-resources-cdn
 rm -rf "$out"
 mkdir -p "$(dirname "$out")"
 cp -r build/web "$out"
-# Only CanvasKit is used; the other renderers and debug symbols are 20 MB.
-rm -rf "$out"/canvaskit/{skwasm*,wimp*,webparagraph,*.symbols} \
+# Renderers the loader never picks here, and debug symbols.
+rm -rf "$out"/canvaskit/{wimp*,webparagraph,*.symbols} \
   "$out"/canvaskit/*/*.symbols "$out/flutter_service_worker.js"
 mkdir -p "$out/art"
 cp test/fixtures/site/*.jpg test/fixtures/site/shows.json "$out/art/"
