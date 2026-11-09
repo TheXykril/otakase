@@ -125,6 +125,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    FullBleed.enter();
     WidgetsBinding.instance.addObserver(this);
     anime = widget.anime;
     episode = widget.episode;
@@ -1912,6 +1913,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       ),
     );
     if (!widget.isTV) unawaited(SystemChrome.setPreferredOrientations([]));
+    FullBleed.leave();
     super.dispose();
   }
 
