@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.2.0 - 2026-11-09
+
+Movies and shows join Home and Search, cast to your TV, and one player look everywhere.
+
 ### New
 
 - **Cast movies and shows.** The cast button now works in the film and series
