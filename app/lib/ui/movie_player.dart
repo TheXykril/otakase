@@ -10,6 +10,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../cast/cast.dart';
 import '../core.dart';
+import '../data/episode_completion.dart';
 import '../data/hls_quality.dart';
 import '../data/external_subtitles.dart';
 import '../data/models.dart';
@@ -63,8 +64,13 @@ class PlayRequest {
     this.onProgress,
     this.onScrobble,
     this.next,
+    this.length = 0,
   });
   final String title, subtitle;
+
+  /// The usual running time in seconds, 0 when unknown. A copy that reports
+  /// far less than this is cut short and never marks the title watched.
+  final int length;
   final Future<PlayableMedia> Function(
     Set<String> failed,
     RequestScope scope,
@@ -101,6 +107,17 @@ bool languageMatches(String? language, String? title, String preferred) {
   return values.any((s) => lang == s || (s.length > 2 && label.contains(s)));
 }
 
+/// Whether a copy reporting [duration] is about as long as a title that
+/// usually runs [expected] seconds (0 when unknown). A copy under half of
+/// it is cut short.
+bool copyLengthTrusted(Duration duration, int expected) =>
+    expected <= 0 || duration.inSeconds * 2 >= expected;
+
+/// Whether playback at [at] is the real end of the title, not a source that
+/// stopped sending.
+bool filmEnded(Duration at, Duration duration, int expected) =>
+    copyLengthTrusted(duration, expected) && reachedEpisodeEnd(at, duration);
+
 /// The player for films, series episodes and downloads. It shares the
 /// desktop control bar with the anime player and keeps the remote keys:
 /// OK plays and pauses, left and right seek, up shows the buttons, Back
@@ -134,6 +151,17 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
   Duration position = Duration.zero, duration = Duration.zero;
   bool busy = true, overlay = true, scrubbing = false, fullscreen = false;
   bool finished = false, started = false, subPicked = false;
+
+  /// Notices a stream that stops moving while it should play.
+  final stall = PlaybackStallWatchdog();
+
+  /// Times this copy was opened again after dropping; reset once it plays
+  /// on well past the drop.
+  int reopens = 0;
+
+  /// Where a dropped stream left off, so another copy or Try again starts
+  /// there whatever the resume setting says.
+  Duration? recoverAt;
   String status = 'Finding a copy', error = '';
   int generation = 0;
 
@@ -177,6 +205,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       player.stream.position.listen((p) {
         if (!mounted || busy || scrubbing || casting) return;
         tick(p);
+        watchForStall();
       }),
       player.stream.duration.listen((d) {
         if (mounted && d > Duration.zero && !casting) {
@@ -188,9 +217,17 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
         setState(() {});
         if (started) scrobble(playing ? 'start' : 'pause');
         showPresence();
+        watchForStall();
       }),
       player.stream.completed.listen((done) {
-        if (done && !busy && !casting) unawaited(ended());
+        if (!done || busy || casting) return;
+        // A source that stops sending also ends the file; only the real end
+        // counts as watched.
+        if (atEnd(player.state.position) || atEnd(position)) {
+          unawaited(ended());
+        } else {
+          unawaited(recover());
+        }
       }),
       player.stream.error.listen((message) {
         if (!mounted || busy || casting || duration > Duration.zero) return;
@@ -204,11 +241,20 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     unawaited(open());
   }
 
+  bool get lengthTrusted => copyLengthTrusted(duration, request.length);
+
+  bool atEnd(Duration at) => filmEnded(at, duration, request.length);
+
   /// Moves the timeline and marks the title watched near the end.
   void tick(Duration p) {
     setState(() => position = p);
+    final drop = recoverAt;
+    if (reopens > 0 && drop != null && p > drop + const Duration(minutes: 2)) {
+      reopens = 0;
+    }
     final total = duration.inSeconds;
     if (!finished &&
+        lengthTrusted &&
         total > 0 &&
         p.inSeconds * 100 >=
             total * store.integer('PercentageToMarkComplete') &&
@@ -266,6 +312,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     hideTimer?.cancel();
     saveTimer?.cancel();
     castTimer?.cancel();
+    stall.cancel();
     if (casting) unawaited(caster.control('stop').catchError((_) {}));
     if (!busy && duration > Duration.zero) {
       unawaited(save(completed: finished));
@@ -324,6 +371,8 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     final g = ++generation;
     scope.cancel();
     scope = RequestScope();
+    stall.cancel();
+    reopens = 0;
     setState(() {
       busy = true;
       error = '';
@@ -348,11 +397,14 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
           await stopCast(resumeHere: false);
           if (!mounted || g != generation) return;
         } else {
-          final resume = store.flag('ResumePlayback')
-              ? request.resumeAt?.call(0) ?? 0
-              : 0;
+          final resume =
+              recoverAt?.inSeconds ??
+              (store.flag('ResumePlayback')
+                  ? request.resumeAt?.call(0) ?? 0
+                  : 0);
           await castCurrent(start: resume.toDouble());
           if (!mounted || g != generation) return;
+          recoverAt = null;
           started = true;
           setState(() => busy = false);
           showControls();
@@ -381,15 +433,17 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       }
       if (!mounted || g != generation) return;
       final resume =
-          request.resumeAt?.call(player.state.duration.inSeconds) ?? 0;
-      if (store.flag('ResumePlayback') &&
-          resume > 0 &&
-          resume < player.state.duration.inSeconds - 30) {
+          recoverAt?.inSeconds ??
+          (store.flag('ResumePlayback')
+              ? request.resumeAt?.call(player.state.duration.inSeconds) ?? 0
+              : 0);
+      if (resume > 0 && resume < player.state.duration.inSeconds - 30) {
         await player.seek(Duration(seconds: resume));
       }
       await pickTracks(found, g);
       if (!mounted || g != generation) return;
       await player.play();
+      recoverAt = null;
       started = true;
       scrobble('start');
       setState(() => busy = false);
@@ -531,6 +585,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       finished = true;
       await save(completed: true);
     }
+    stall.cancel();
     scrobble('stop');
     final next = request.next?.call();
     if (!mounted) return;
@@ -539,8 +594,89 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       return;
     }
     request = next;
+    recoverAt = null;
     failed.clear();
     await open();
+  }
+
+  /// Rearms the stall check while playback should move.
+  void watchForStall() {
+    if (busy || casting || error.isNotEmpty || !player.state.playing) {
+      stall.cancel();
+      return;
+    }
+    stall.arm(() => unawaited(recover()));
+  }
+
+  /// The stream dropped or stalled before the end: open the same copy again
+  /// at the spot (twice), then another copy from there. The title is not
+  /// marked watched.
+  Future<void> recover() async {
+    final m = media;
+    if (!mounted || busy || casting || error.isNotEmpty || m == null) return;
+    stall.cancel();
+    final g = generation;
+    final now = player.state.position;
+    final at = now > position && now < duration ? now : position;
+    position = at;
+    recoverAt = at;
+    await save(completed: finished);
+    if (!finished) scrobble('pause');
+    if (!mounted || g != generation) return;
+    if (reopens < 2) {
+      reopens++;
+      setState(() {
+        busy = true;
+        status = 'Reconnecting';
+      });
+      final ok = await reopen(m, at, g);
+      if (!mounted || g != generation) return;
+      if (ok) {
+        setState(() => busy = false);
+        if (started && !finished) scrobble('start');
+        return;
+      }
+    }
+    if (m.copy.isEmpty) {
+      setState(() {
+        busy = false;
+        error = 'Playback stopped before the end.';
+      });
+      return;
+    }
+    failed.add(m.copy);
+    await open();
+  }
+
+  /// Loads [m] again at [at] with the same audio and subtitles.
+  Future<bool> reopen(PlayableMedia m, Duration at, int g) async {
+    final audio = player.state.track.audio;
+    final subtitle = player.state.track.subtitle;
+    final picked = externalTrack;
+    try {
+      await player.open(mediaFor(m), play: false);
+      if (player.state.duration == Duration.zero) {
+        await player.stream.duration
+            .firstWhere((d) => d > Duration.zero)
+            .timeout(const Duration(seconds: 25));
+      }
+      if (!mounted || g != generation) return false;
+      final tracks = player.state.tracks;
+      final sameAudio = tracks.audio.where((t) => t.id == audio.id);
+      if (sameAudio.isNotEmpty) await player.setAudioTrack(sameAudio.first);
+      if (picked != null) {
+        await loadSubtitle(picked, g);
+      } else {
+        final same = tracks.subtitle.where((t) => t.id == subtitle.id);
+        if (same.isNotEmpty) await player.setSubtitleTrack(same.first);
+      }
+      if (!mounted || g != generation) return false;
+      await player.seek(at);
+      await player.play();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> playNext() async {
@@ -551,6 +687,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       if (!finished) scrobble('pause');
     }
     request = next;
+    recoverAt = null;
     failed.clear();
     await open();
   }
@@ -781,7 +918,16 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       }
       if (s.state == 'ended' && castEnded != s.load) {
         castEnded = s.load;
-        await ended();
+        if (atEnd(position)) {
+          await ended();
+        } else {
+          recoverAt = position;
+          await save(completed: finished);
+          if (!finished) scrobble('pause');
+          if (mounted) {
+            setState(() => error = 'The cast stopped before the end.');
+          }
+        }
       }
     } catch (_) {
       // A missed poll is retried in a second.

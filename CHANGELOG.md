@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- **Films no longer stop early as watched.** When a stream dropped partway
+  through a film or episode, the player closed and marked it watched (also on
+  Trakt). Now it reconnects at the same spot, then tries another copy from
+  there, and only the real end counts as watched.
 - **Trakt stays signed in.** Opening the app after a while (for example after
   an update) could sign you out of Trakt. Otakase now refreshes the sign-in
   once instead of several times at the same moment, and keeps it when Trakt or
