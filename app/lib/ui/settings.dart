@@ -468,7 +468,7 @@ class _SettingsPageState extends State<SettingsPage> {
           padding: EdgeInsets.symmetric(horizontal: 24),
           child: PageHeading('Settings', '設'),
         ),
-      group('Appearance', LucideIcons.palette, [
+      group('Display', LucideIcons.palette, [
         row(
           'Content',
           'Anime, movies & shows, or both. Each profile keeps its own '

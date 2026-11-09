@@ -4,8 +4,8 @@
 
 ### Improved
 
-- **Tidier settings.** What you watch is gone: the choice of anime, movies &
-  shows, or both now sits at the top of **Appearance**, and movie & show
+- **Tidier settings.** What you watch is gone. Appearance is now **Display**
+  and starts with the choice of anime, movies & shows, or both. Movie & show
   languages sit in **Subtitles & languages** next to the anime ones. Movie
   sources no longer have on/off switches; all of them are tried in your
   language order.

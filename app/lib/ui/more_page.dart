@@ -267,10 +267,10 @@ class MorePage extends StatelessWidget {
           ),
         ),
         row(
-          'Appearance',
+          'Display',
           '${contentLabels[services.store.text('Content')] ?? ''} · Shu / Dark',
           LucideIcons.palette,
-          () => openSettings(context, services, isTV, section: 'Appearance'),
+          () => openSettings(context, services, isTV, section: 'Display'),
         ),
         const MoreGroupHeading('Devices'),
         row(
@@ -540,7 +540,7 @@ class _DesktopMoreState extends State<DesktopMore> {
           LucideIcons.cloudUpload,
           open: () => detail(BackupPage(services: services, isTV: true)),
         ),
-        item('Appearance', LucideIcons.palette),
+        item('Display', LucideIcons.palette),
         const MoreGroupHeading('Devices'),
         item(
           'Phone remote',

@@ -101,7 +101,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    await open('Appearance');
+    await open('Display');
     expect(find.text('This profile shows'), findsOneWidget);
     expect(find.text('Anime only'), findsOneWidget);
 

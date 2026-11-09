@@ -210,7 +210,7 @@ void main() {
     'Settings backup',
     'Report a problem',
     'Phone remote',
-    'Appearance',
+    'Display',
     'About & updates',
     'Diagnostics',
   ];
