@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Improved
+
+- **Downloads keep going when the phone sleeps.** On Android phones and TVs
+  the screen stays on while an app update or episode downloads, and the
+  download carries on in the background (with a notification) if the screen
+  turns off or you switch apps. New **Keep screen on** setting in Appearance
+  keeps the screen on the whole time Otakase is open.
+
 ## 26.2.0 - 2026-11-09
 
 Movies and shows join Home and Search and can be cast to your TV, one player look everywhere, and an Android TV update fix.

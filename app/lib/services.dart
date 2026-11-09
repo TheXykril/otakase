@@ -15,6 +15,7 @@ import 'data/tv_remote.dart';
 import 'data/app_updates.dart';
 import 'data/downloads.dart';
 import 'data/movies.dart';
+import 'data/stay_awake.dart';
 import 'data/trakt.dart';
 import 'data/presence.dart';
 import 'data/skip_times.dart';
@@ -31,7 +32,9 @@ class AppServices {
     AppUpdates? appUpdates,
     this.profiles,
     this.profileId = '1',
-  }) : auth = auth ?? AuthService(client: catalog.client) {
+    StayAwake? awake,
+  }) : awake = awake ?? StayAwake.instance,
+       auth = auth ?? AuthService(client: catalog.client) {
     updates =
         appUpdates ??
         AppUpdates(platform: isDesktop ? DesktopUpdatePlatform() : null);
@@ -77,7 +80,29 @@ class AppServices {
     );
     this.auth.addListener(_adultPreference);
     _adultPreference();
+    updates.addListener(_updateAwake);
+    downloads.addListener(_downloadsAwake);
+    store.addListener(_screenSetting);
+    _screenSetting();
   }
+  final StayAwake awake;
+  void _updateAwake() => awake.busy(
+    'update',
+    updates.phase == UpdatePhase.downloading
+        ? 'Downloading the Otakase update'
+        : null,
+  );
+  void _downloadsAwake() {
+    final running = downloads.items.where((i) => i.running).length;
+    awake.busy(
+      'downloads',
+      running == 0
+          ? null
+          : 'Saving $running ${running == 1 ? 'download' : 'downloads'}',
+    );
+  }
+
+  void _screenSetting() => awake.always = store.flag('KeepScreenOn');
   void _adultPreference() => store.setAdultAllowed(
     auth.account('AniList')?.displayAdultContent ?? false,
   );
@@ -118,6 +143,13 @@ class AppServices {
     await presence.clear();
     await discord.close();
     closed = true;
+    updates.removeListener(_updateAwake);
+    downloads.removeListener(_downloadsAwake);
+    store.removeListener(_screenSetting);
+    awake
+      ..busy('update', null)
+      ..busy('downloads', null)
+      ..always = false;
     updates.dispose();
     auth.removeListener(_adultPreference);
     listSync.dispose();
