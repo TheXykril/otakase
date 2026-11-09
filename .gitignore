@@ -4,3 +4,7 @@ vendor/
 
 # Live demo on the site, built by the Site workflow at deploy (app/demo)
 /site/demo/
+
+# Help pages and changelog, built by the Site workflow (.github/site_pages.py)
+/site/help/
+/site/changelog/

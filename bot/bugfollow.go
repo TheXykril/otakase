@@ -8,8 +8,9 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// When /bug or "Report on GitHub" is used in a support post, the bot finds
-// the GitHub issue made from it (the issue links back to the post) and,
+// When /bug or "Report a bug" is used in a support post, the bot files an
+// issue that links back to the post (older reports were filed by hand, so
+// the bot also looks for issues linking a remembered post) and,
 // once the issue is closed and a release with the fix is out, tells the
 // poster in the post how to update. Issues closed without a fix are
 // mentioned once too.
@@ -24,7 +25,7 @@ const (
 	bugStillWaiting = ""
 )
 
-// bugReport is a support post that was turned into a GitHub issue.
+// bugReport is a support post that was reported as a bug.
 type bugReport struct {
 	Poster   string    `json:"poster"`
 	Reported time.Time `json:"reported"`
@@ -62,7 +63,7 @@ func bugOutcome(is ghIssueFull, rels []ghRelease) (string, ghRelease) {
 	return bugStillWaiting, ghRelease{}
 }
 
-// rememberBugReport notes a support post that is being reported on GitHub.
+// rememberBugReport notes a support post that is being reported as a bug.
 func (b *bot) rememberBugReport(th *discordgo.Channel) {
 	owner := b.postOwner(th) // the member, also for posts the bot made for them
 	b.store.update(func(d *storeData) {
@@ -191,7 +192,7 @@ func (b *bot) findBugIssues(reports map[string]bugReport) error {
 }
 
 func bugFollowMessage(outcome, poster string, is ghIssueFull, rel ghRelease) *discordgo.MessageSend {
-	link := fmt.Sprintf("[#%d](%s)", is.Number, is.HTMLURL)
+	link := fmt.Sprintf("**#%d**", is.Number)
 	msg := &discordgo.MessageSend{
 		Content:         "<@" + poster + ">",
 		AllowedMentions: &discordgo.MessageAllowedMentions{Users: []string{poster}},
@@ -201,16 +202,16 @@ func bugFollowMessage(outcome, poster string, is ghIssueFull, rel ghRelease) *di
 	case bugFixed:
 		v := rel.version()
 		e.Title = "Fixed in " + v
-		e.Description = fmt.Sprintf("The GitHub issue from this post, %s, is fixed in **%s**.\n\n%s", link, v, updateHowTo)
-		msg.Components = linkButtons("Changelog", fmt.Sprintf("%s/blob/%s/CHANGELOG.md", repoURL, rel.TagName), "Release", rel.HTMLURL)
+		e.Description = fmt.Sprintf("The bug from this post, %s, is fixed in **%s**.\n\n%s", link, v, updateHowTo)
+		msg.Components = linkButtons("What's new", versionChangelogURL(v), "Download", downloadPage)
 	case bugDuplicate:
 		e.Color = 0x8A8276
-		e.Description = fmt.Sprintf("The GitHub issue from this post, %s, was closed as a duplicate of another issue. "+
-			"The issue links to the one being worked on, so follow that one for updates.", link)
+		e.Description = fmt.Sprintf("The bug from this post, %s, was already reported, so it is followed under its first report. "+
+			"Ask here if you want to know how it is going.", link)
 	default:
 		e.Color = 0x8A8276
-		e.Description = fmt.Sprintf("The GitHub issue from this post, %s, was closed as not planned. "+
-			"Sorry this one won't be fixed; the issue on GitHub says why. Reply here if you have questions.", link)
+		e.Description = fmt.Sprintf("The bug from this post, %s, was closed as not planned. "+
+			"Sorry this one won't be fixed. Reply here if you have questions.", link)
 	}
 	msg.Embeds = []*discordgo.MessageEmbed{e}
 	return msg

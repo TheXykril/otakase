@@ -1,11 +1,24 @@
 package main
 
+import "strings"
+
+// Everything the bot links to is on the website: the help pages (built from
+// the repo's wiki/ folder), the changelog and the downloads, which the
+// site's /download/ route serves from the latest release. Members never get
+// a link to the repository itself.
 const (
-	repoURL = "https://github.com/TheXykril/otakase"
-	siteURL = "https://otakase.xyverion.com/"
-	wikiURL = repoURL + "/wiki"
-	dlURL   = repoURL + "/releases/latest/download/"
+	siteURL      = "https://otakase.xyverion.com/"
+	wikiURL      = siteURL + "help"
+	dlURL        = siteURL + "download/"
+	downloadPage = siteURL + "#download"
+	changelogURL = siteURL + "changelog/"
 )
+
+// versionChangelogURL is the changelog section of one version (26.2.0 or
+// v26.2.0).
+func versionChangelogURL(version string) string {
+	return changelogURL + "#" + strings.TrimPrefix(version, "v")
+}
 
 type installGuide struct {
 	Title string

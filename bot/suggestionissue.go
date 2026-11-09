@@ -27,7 +27,7 @@ func suggestionIssueCommand() *discordgo.ApplicationCommand {
 }
 
 func suggestionIssueField(n int) *discordgo.MessageEmbedField {
-	return &discordgo.MessageEmbedField{Name: "GitHub issue", Value: fmt.Sprintf("[#%d](%s/issues/%d)", n, repoURL, n)}
+	return &discordgo.MessageEmbedField{Name: "Planned", Value: fmt.Sprintf("Tracked as **#%d**", n)}
 }
 
 // suggestionIssueBody is the text of the GitHub issue made from s.
@@ -97,8 +97,7 @@ func (b *bot) suggestionIssue(i *discordgo.InteractionCreate) {
 		return
 	}
 	if s.Issue > 0 {
-		b.respond(i, true, errorEmbed("This suggestion already has GitHub issue #%d.", s.Issue),
-			linkButtons("Open issue", fmt.Sprintf("%s/issues/%d", repoURL, s.Issue))...)
+		b.respond(i, true, errorEmbed("This suggestion already has GitHub issue #%d.", s.Issue))
 		return
 	}
 	if b.cfg.GitHubToken == "" {
@@ -141,14 +140,13 @@ func (b *bot) suggestionIssue(i *discordgo.InteractionCreate) {
 	}
 	if _, err := b.s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
 		Embeds: []*discordgo.MessageEmbed{{Color: shu,
-			Description: fmt.Sprintf("<@%s> made GitHub issue **#%d** from this suggestion. "+
-				"When it's closed there, the suggestion is marked done or declined here.", i.Member.User.ID, is.Number)}},
-		Components:      linkButtons("Open issue", is.HTMLURL),
+			Description: fmt.Sprintf("<@%s> added this suggestion to the plan as **#%d**. "+
+				"It is marked done or declined here when that is decided.", i.Member.User.ID, is.Number)}},
 		AllowedMentions: &discordgo.MessageAllowedMentions{},
 	}); err != nil {
 		log.Printf("suggestion issue note: %v", err)
 	}
-	reply(&discordgo.MessageEmbed{Color: shu, Description: fmt.Sprintf("Made issue [#%d](%s).", is.Number, is.HTMLURL)})
+	reply(&discordgo.MessageEmbed{Color: shu, Description: fmt.Sprintf("Made issue **#%d**.", is.Number)})
 }
 
 // issueOutcome maps a closed GitHub issue to a suggestion status, or "" when
@@ -209,7 +207,7 @@ func (b *bot) checkSuggestionIssues() error {
 		case "duplicate":
 			how = "a duplicate"
 		}
-		note := fmt.Sprintf("GitHub issue #%d was closed as %s.", n, how)
+		note := fmt.Sprintf("#%d was closed as %s.", n, how)
 		by := ""
 		if b.s.State != nil && b.s.State.User != nil {
 			by = b.s.State.User.ID
@@ -219,7 +217,7 @@ func (b *bot) checkSuggestionIssues() error {
 		}
 		if _, err := b.s.ChannelMessageSendComplex(thread, &discordgo.MessageSend{
 			Embeds: []*discordgo.MessageEmbed{{Color: st.Color,
-				Description: fmt.Sprintf("Marked **%s**: [GitHub issue #%d](%s) was closed as %s.", st.Label, n, is.HTMLURL, how)}},
+				Description: fmt.Sprintf("Marked **%s**: **#%d** was closed as %s.", st.Label, n, how)}},
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		}); err != nil {
 			log.Printf("suggestion issue note: %v", err)

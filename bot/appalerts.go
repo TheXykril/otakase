@@ -82,7 +82,7 @@ func fixedNotice(is ghIssueFull, rel ghRelease) inboxItem {
 	v := rel.version()
 	return inboxItem{Kind: "notice", Title: "Fixed in v" + v,
 		Text: fmt.Sprintf("Your report “%s” (#%d) is fixed. The app offers the update.", clip(cleanText(is.Title, false), 80), is.Number),
-		URL:  rel.HTMLURL}
+		URL:  versionChangelogURL(v)}
 }
 
 // noticeBugFixed tells the poster's apps that their bug is fixed. Posts

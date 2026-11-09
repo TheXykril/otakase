@@ -360,12 +360,15 @@ func TestRenderAiringBoard(t *testing.T) {
 	}
 }
 
-func TestBugReportURL(t *testing.T) {
-	u := bugReportURL("Playback never starts", "mpv opens then closes", "https://discord.com/channels/1/2")
-	for _, want := range []string{"/issues/new?", "title=Playback+never+starts", "labels=bug", "mpv+opens+then+closes"} {
-		if !strings.Contains(u, want) {
-			t.Errorf("%s missing %q", u, want)
+func TestBugIssueBody(t *testing.T) {
+	body := bugIssueBody("mpv opens then closes", "26.2.0 on Pixel 8", "https://discord.com/channels/1/2")
+	for _, want := range []string{"**Describe the bug**", "mpv opens then closes", "**Version and system**\n26.2.0 on Pixel 8", "discord.com/channels/1/2"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("%q missing %q", body, want)
 		}
+	}
+	if strings.Contains(bugIssueBody("q", " ", "x"), "Version and system") {
+		t.Error("empty details still get a heading")
 	}
 }
 
@@ -783,10 +786,13 @@ func TestRulesAndFAQPayloads(t *testing.T) {
 		t.Error("support placeholder not filled")
 	}
 	faq := encode(faqPayload([]faqEntry{{"a", "First?", "Yes."}, {"b", "Second?", "Staff text"}}))
-	for _, want := range []string{"### First?\\nYes.", "### Second?\\nStaff text", "attachment://faq-header.png", "Open an issue"} {
+	for _, want := range []string{"### First?\\nYes.", "### Second?\\nStaff text", "attachment://faq-header.png", "/help/Troubleshooting"} {
 		if !strings.Contains(faq, want) {
 			t.Errorf("faq miss %q", want)
 		}
+	}
+	if strings.Contains(faq, "github.com") {
+		t.Error("faq links the repository")
 	}
 }
 
@@ -1001,7 +1007,7 @@ func TestWikiEmbed(t *testing.T) {
 	}
 	b.wiki.update(testWiki, nil)
 	e := b.wikiEmbed("Rofi menus look wrong", "the rofi menus look broken")
-	if e == nil || !strings.Contains(e.Description, "(https://github.com/TheXykril/otakase/wiki/Troubleshooting#the-rofi-menus-look-wrong)") {
+	if e == nil || !strings.Contains(e.Description, "(https://otakase.xyverion.com/help/Troubleshooting#the-rofi-menus-look-wrong)") {
 		t.Errorf("embed = %+v", e)
 	}
 }

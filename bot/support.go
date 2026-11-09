@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/url"
 	"strings"
 	"time"
 
@@ -49,7 +48,7 @@ func (b *bot) greetSupportPost(id, title, text string) {
 func supportButtons() []discordgo.MessageComponent {
 	return []discordgo.MessageComponent{discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 		discordgo.Button{Label: "Mark solved", Style: discordgo.SuccessButton, CustomID: "solved"},
-		discordgo.Button{Label: "Report on GitHub", Style: discordgo.SecondaryButton, CustomID: "bug"},
+		discordgo.Button{Label: "Report a bug", Style: discordgo.SecondaryButton, CustomID: "bug"},
 		discordgo.Button{Label: "Troubleshooting", Style: discordgo.LinkButton, URL: wikiURL + "/Troubleshooting"},
 	}}}
 }
@@ -97,31 +96,100 @@ func contains(xs []string, x string) bool {
 	return false
 }
 
-// bugReportURL opens a new GitHub issue filled in from a support post.
-func bugReportURL(title, question, postURL string) string {
-	body := "**Describe the bug**\n" + clip(strings.TrimSpace(question), 1500) +
-		"\n\n**Version and system**\n\n\n_From the Discord support post: " + postURL + "_"
-	q := url.Values{"title": {clip(title, 120)}, "body": {body}, "labels": {"bug"}}
-	return repoURL + "/issues/new?" + q.Encode()
+// bugIssueBody is the bug report filed from a support post. It ends with
+// the post's link, which bugfollow.go uses to find the post again.
+func bugIssueBody(question, details, postURL string) string {
+	body := "**Describe the bug**\n" + clip(strings.TrimSpace(question), 1500)
+	if details = strings.TrimSpace(details); details != "" {
+		body += "\n\n**Version and system**\n" + clip(details, 300)
+	}
+	return body + "\n\n_From the Discord support post: " + postURL + "_"
 }
 
-// reportBug answers /bug or the "Report on GitHub" button inside a support
-// post with a link that opens a pre-filled GitHub issue.
+// reportBug answers /bug or the "Report a bug" button inside a support post
+// with a short form; sending it files the bug report (see fileBugReport).
 func (b *bot) reportBug(i *discordgo.InteractionCreate) {
-	s := b.s
-	th, err := s.Channel(i.ChannelID)
+	th, err := b.s.Channel(i.ChannelID)
 	if err != nil || th.ParentID != b.cfg.SupportForum {
 		b.respond(i, true, errorEmbed("Use this inside a post in the support forum."))
 		return
 	}
+	var r bugReport
+	b.store.view(func(d *storeData) { r = d.BugReports[th.ID] })
+	if r.Issue > 0 {
+		b.respond(i, true, &discordgo.MessageEmbed{Color: shu, Description: fmt.Sprintf(
+			"This post is already reported as bug **#%d**. You'll get a message here when it's fixed.", r.Issue)})
+		return
+	}
+	if b.cfg.GitHubToken == "" {
+		b.respond(i, true, errorEmbed("Bug reports aren't set up on this server yet. A moderator will pass it on."))
+		return
+	}
+	if err := b.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseModal,
+		Data: &discordgo.InteractionResponseData{CustomID: "bug-form:" + th.ID, Title: "Report a bug", Components: []discordgo.MessageComponent{
+			discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.TextInput{
+				CustomID: "details", Label: "App version and device", Style: discordgo.TextInputShort, Required: true, MaxLength: 200,
+				Placeholder: "e.g. 26.2.0 on a Pixel 8 (About & updates shows the version)"}}},
+		}},
+	}); err != nil {
+		log.Printf("bug form: %v", err)
+	}
+}
+
+// fileBugReport files the bug report from a sent /bug form.
+func (b *bot) fileBugReport(i *discordgo.InteractionCreate, threadID string) {
+	th, err := b.s.Channel(threadID)
+	if err != nil || th.ParentID != b.cfg.SupportForum {
+		b.respond(i, true, errorEmbed("Use this inside a post in the support forum."))
+		return
+	}
+	if err := b.s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{Flags: discordgo.MessageFlagsEphemeral}}); err != nil {
+		log.Printf("defer: %v", err)
+		return
+	}
+	reply := func(e *discordgo.MessageEmbed) {
+		if _, err := b.s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{e}}); err != nil {
+			log.Printf("edit: %v", err)
+		}
+	}
+	b.rememberBugReport(th)
+	var r bugReport
+	b.store.view(func(d *storeData) { r = d.BugReports[th.ID] })
+	if r.Issue > 0 {
+		reply(&discordgo.MessageEmbed{Color: shu, Description: fmt.Sprintf("This post is already reported as bug **#%d**.", r.Issue)})
+		return
+	}
 	question := ""
 	// A forum post's first message has the same id as the post.
-	if m, err := s.ChannelMessage(th.ID, th.ID); err == nil {
+	if m, err := b.s.ChannelMessage(th.ID, th.ID); err == nil {
 		question = m.Content
 	}
 	post := fmt.Sprintf("https://discord.com/channels/%s/%s", b.cfg.GuildID, th.ID)
-	b.rememberBugReport(th)
-	b.respond(i, true, &discordgo.MessageEmbed{Color: shu,
-		Description: "This opens a GitHub issue filled in from this post. Add your version (About & updates in the app) and device, then submit it."},
-		linkButtons("Open GitHub issue", bugReportURL(th.Name, question, post))...)
+	is, status, err := createIssue(b.cfg.GitHubToken, clip(th.Name, 120), bugIssueBody(question, modalValues(i)["details"], post), []string{"bug"})
+	if err != nil {
+		log.Printf("bug report: %v (%d)", err, status)
+		reply(errorEmbed("Couldn't file the bug report right now. Try again in a minute."))
+		return
+	}
+	b.store.update(func(d *storeData) {
+		if cur, ok := d.BugReports[th.ID]; ok {
+			cur.Issue = is.Number
+			d.BugReports[th.ID] = cur
+		}
+	})
+	if _, err := b.s.ChannelMessageSendComplex(th.ID, &discordgo.MessageSend{
+		Embeds: []*discordgo.MessageEmbed{{Color: shu, Description: fmt.Sprintf(
+			"Reported as bug **#%d**. The bot posts here when a release fixes it.", is.Number)}},
+		AllowedMentions: &discordgo.MessageAllowedMentions{},
+	}); err != nil {
+		log.Printf("bug report note: %v", err)
+	}
+	reply(&discordgo.MessageEmbed{Color: shu, Description: fmt.Sprintf("Filed as bug **#%d**. Thanks!", is.Number)})
+}
+
+func init() {
+	registerModal("bug-form:", func(b *bot, i *discordgo.InteractionCreate, threadID string) { b.fileBugReport(i, threadID) })
 }

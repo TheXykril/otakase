@@ -1,6 +1,6 @@
 // Command otakase-bot is the Discord bot for the Otakase community server.
 //
-// It answers slash commands (/install, /faq, /latest, /anime, /link-github,
+// It answers slash commands (/install, /faq, /latest, /anime,
 // /link-anilist, /profile, /help), greets new support posts with a checklist and a "Mark solved"
 // button, answers common questions it sees in chat, removes cross-channel
 // spam and scams, helps moderators, makes voice rooms and welcomes new
@@ -36,8 +36,6 @@ type config struct {
 	SupportForum       string
 	ModChannel         string
 	LogChannel         string // background job failures and crashes, else ModChannel
-	ContributorRole    string
-	GitHubClientID     string
 	GitHubToken        string
 	WelcomeDM          bool
 	AiringChannel      string // daily airing post, empty = the "anime" channel
@@ -92,7 +90,6 @@ func loadEnvFile(path string) {
 var haOptions = map[string]string{
 	"token":                     "DISCORD_BOT_TOKEN",
 	"guild_id":                  "OTAKASE_GUILD_ID",
-	"github_client_id":          "OTAKASE_GITHUB_CLIENT_ID",
 	"github_token":              "GITHUB_TOKEN",
 	"welcome_dm":                "OTAKASE_WELCOME_DM",
 	"daily_airing":              "OTAKASE_DAILY_AIRING",
@@ -145,8 +142,6 @@ func loadConfig() config {
 		SupportForum:       os.Getenv("OTAKASE_SUPPORT_FORUM"),
 		ModChannel:         os.Getenv("OTAKASE_MOD_CHANNEL"),
 		LogChannel:         os.Getenv("OTAKASE_LOG_CHANNEL"),
-		ContributorRole:    os.Getenv("OTAKASE_CONTRIBUTOR_ROLE"),
-		GitHubClientID:     strings.TrimSpace(os.Getenv("OTAKASE_GITHUB_CLIENT_ID")),
 		GitHubToken:        os.Getenv("GITHUB_TOKEN"),
 		WelcomeDM:          os.Getenv("OTAKASE_WELCOME_DM") != "false",
 		AiringChannel:      os.Getenv("OTAKASE_AIRING_CHANNEL"),
@@ -375,9 +370,6 @@ func (b *bot) resolveIDs() {
 			log.Printf("listing roles: %v", err)
 		}
 		for _, r := range roles {
-			if r.Name == "Contributor" && b.cfg.ContributorRole == "" {
-				b.cfg.ContributorRole = r.ID
-			}
 			if strings.EqualFold(r.Name, "AniList linked") && b.cfg.AniListRole == "" {
 				b.cfg.AniListRole = r.ID
 			}
@@ -386,6 +378,6 @@ func (b *bot) resolveIDs() {
 			}
 		}
 	}
-	log.Printf("support forum %q, mod channel %q, log channel %q, contributor role %q, airing channel %q, lounge %q, create room %q, suggestions %q, anilist role %q",
-		b.cfg.SupportForum, b.cfg.ModChannel, b.cfg.LogChannel, b.cfg.ContributorRole, b.cfg.AiringChannel, b.cfg.LoungeChannel, b.cfg.CreateRoom, b.cfg.SuggestionsChannel, b.cfg.AniListRole)
+	log.Printf("support forum %q, mod channel %q, log channel %q, airing channel %q, lounge %q, create room %q, suggestions %q, anilist role %q",
+		b.cfg.SupportForum, b.cfg.ModChannel, b.cfg.LogChannel, b.cfg.AiringChannel, b.cfg.LoungeChannel, b.cfg.CreateRoom, b.cfg.SuggestionsChannel, b.cfg.AniListRole)
 }

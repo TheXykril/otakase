@@ -1,7 +1,7 @@
-# Otakase Wiki
+# Otakase Help
 
-The [README](https://github.com/TheXykril/otakase#readme) covers installing
-Otakase and getting started. These pages go further.
+The [website](https://otakase.xyverion.com/#download) has the downloads for
+every system. These pages cover using Otakase.
 
 ## More and Settings
 
@@ -19,5 +19,5 @@ under Watching on every device.
 - **[Skip Times](Skip-Times)**: where openings and endings come from, and fixing them yourself
 - **[Troubleshooting](Troubleshooting)**: nothing found, playback that won't start, progress that doesn't sync
 
-Still stuck? Ask on [Discord](https://otakase.xyverion.com/discord/) or
-[open an issue](https://github.com/TheXykril/otakase/issues).
+Still stuck? Ask in the support forum on
+[Discord](https://otakase.xyverion.com/discord/).

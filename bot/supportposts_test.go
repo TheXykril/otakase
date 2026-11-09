@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -49,13 +48,13 @@ func TestKnownIssuesText(t *testing.T) {
 		issueAt(7, "closed", "not_planned", tptr(day(15))), // not shown
 	}
 	got := knownIssuesText(issues, testStableReleases)
-	for _, want := range []string{"[#5 Issue 5]", "#6 Issue 6](", "being worked on", "reported <t:",
-		"**Fixed in the latest release (26.6.0)**\n- [#3 Issue 3]", "About & updates", "**Fixed, coming in the next release**\n- [#4 Issue 4]"} {
+	for _, want := range []string{"- **#5** Issue 5", "- **#6** Issue 6", "being worked on", "reported <t:",
+		"**Fixed in the latest release (26.6.0)**\n- **#3** Issue 3", "About & updates", "**Fixed, coming in the next release**\n- **#4** Issue 4"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
 	}
-	for _, not := range []string{"#2 ", "#7 ", "No known problems"} {
+	for _, not := range []string{"#2*", "#7*", "No known problems", "github.com"} {
 		if strings.Contains(got, not) {
 			t.Errorf("unexpected %q in:\n%s", not, got)
 		}
@@ -67,7 +66,7 @@ func TestKnownIssuesText(t *testing.T) {
 
 func TestKnownIssuesTextNoOpenButFixed(t *testing.T) {
 	got := knownIssuesText([]ghIssueFull{issueAt(3, "closed", "completed", tptr(day(15)))}, testStableReleases)
-	if !strings.HasPrefix(got, "No known problems right now.") || !strings.Contains(got, "#3 Issue 3") {
+	if !strings.HasPrefix(got, "No known problems right now.") || !strings.Contains(got, "**#3** Issue 3") {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -152,8 +151,7 @@ func TestBugFollowMessage(t *testing.T) {
 }
 
 func TestThreadFromIssueBody(t *testing.T) {
-	u, _ := url.Parse(bugReportURL("mpv fails", "it breaks", "https://discord.com/channels/111/222"))
-	body := u.Query().Get("body")
+	body := bugIssueBody("it breaks", "26.2.0", "https://discord.com/channels/111/222")
 	if got := threadFromIssueBody(body, "111"); got != "222" {
 		t.Errorf("got %q from %q", got, body)
 	}

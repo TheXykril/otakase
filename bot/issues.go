@@ -11,7 +11,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// Typing #123 in chat shows that GitHub issue or pull request.
+// Typing #123 in chat shows that issue or pull request as a small card.
+// The card has no link: the server doesn't point people at the repository.
 
 // issueRefRe matches #123 at the start of a word, so channel mentions
 // (<#id>) and URL fragments are left alone.
@@ -119,13 +120,12 @@ func issueEmbed(is ghIssue) *discordgo.MessageEmbed {
 	for _, l := range is.Labels {
 		labels = append(labels, l.Name)
 	}
-	footer := status + " · by " + is.User.Login
+	footer := status
 	if len(labels) > 0 {
 		footer += " · " + strings.Join(labels, ", ")
 	}
 	return &discordgo.MessageEmbed{
 		Title:  clip(fmt.Sprintf("#%d %s", is.Number, is.Title), 256),
-		URL:    is.HTMLURL,
 		Color:  color,
 		Footer: &discordgo.MessageEmbedFooter{Text: footer},
 	}

@@ -60,7 +60,7 @@ func TestBugFixedNotice(t *testing.T) {
 	// The post belongs to the bot: the member who sent the report gets it.
 	b.noticeBugFixed("t1", "bot", is, rel)
 	items := inboxFor(b, tok)
-	if len(items) != 1 || items[0].Title != "Fixed in v26.9.0" || items[0].URL != rel.HTMLURL || !strings.Contains(items[0].Text, "#42") {
+	if len(items) != 1 || items[0].Title != "Fixed in v26.9.0" || items[0].URL != versionChangelogURL("26.9.0") || !strings.Contains(items[0].Text, "#42") {
 		t.Fatalf("items: %+v", items)
 	}
 }
@@ -142,7 +142,7 @@ func TestNudgeUpdate(t *testing.T) {
 	b.nudgeUpdate(ev)
 	b.nudgeUpdate(ev)
 	items := inboxFor(b, tok)
-	if len(items) != 1 || items[0].Kind != "notice" || items[0].URL != repoURL+"/releases/tag/v26.9.0" || !strings.Contains(items[0].Text, "26.8.1") {
+	if len(items) != 1 || items[0].Kind != "notice" || items[0].URL != versionChangelogURL("26.9.0") || !strings.Contains(items[0].Text, "26.8.1") {
 		t.Fatalf("one notice for the old app: %+v", items)
 	}
 	if len(inboxFor(b, other)) != 0 {
