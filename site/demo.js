@@ -1,4 +1,4 @@
-// "Try it here": the app itself, built for the web (app/demo), in a device
+// The demo page (/try): the app itself, built for the web (app/demo), in a device
 // frame. The page inside is drawn at the device's real size and scaled down
 // to fit, so it lays out exactly as on that device.
 (() => {
@@ -10,8 +10,8 @@
   const tabs = [...$('tour-devices').querySelectorAll('button')];
   const SIZE = { computer: [1440, 900], phone: [412, 915], tv: [1600, 900] };
   const HINT = {
-    computer: 'Click around: tabs, shows, settings and the player. The arrow at the top left goes back.',
-    phone: 'Tap around and scroll or swipe, like on your phone. Esc is the Back button.',
+    computer: 'Click around like in the app. The arrow at the top left goes back.',
+    phone: 'Tap and scroll like on a phone. Esc goes back.',
     tv: 'Click the screen once, then use the arrow keys, Enter and Esc like a remote.',
   };
   let device = null, started = false;
@@ -73,7 +73,7 @@
     if (!tv && (/Android|iPhone/i.test(ua) || matchMedia('(max-width: 760px)').matches)) {
       $('tour-devices').hidden = true;
       pick('phone');
-      $('tour-hint').textContent = 'Tap around and scroll, just like in the app.';
+      $('tour-hint').textContent = 'Tap and scroll like in the app.';
     } else {
       pick(tv ? 'tv' : /iPad/i.test(ua) ? 'phone' : 'computer');
     }

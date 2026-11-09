@@ -157,6 +157,8 @@ footer a:hover{color:var(--bright)}
 .tlead{color:var(--muted);margin:-10px 0 22px}
 .tour .tabs{margin-bottom:16px}
 .thint{color:var(--muted);font-size:14px;margin:0 0 8px}
+.thint a{color:var(--fg)}
+.tour .sh h2{white-space:nowrap}
 .tstage{min-width:0;display:flex;justify-content:center}
 .tdev{--w:1440;--h:900;width:100%;position:relative}
 .tscr{position:relative;aspect-ratio:var(--w)/var(--h);overflow:hidden;background:var(--bg)}
