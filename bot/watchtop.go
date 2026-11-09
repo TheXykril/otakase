@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 	"time"
@@ -11,10 +10,9 @@ import (
 )
 
 // Top on the server: shared watch time per show and ISO week, from the
-// heartbeats of members who share what they watch. When a new week starts
-// (Monday, UTC) the bot posts last week's most watched shows in a channel
-// named "top" or "watch-top", else the anime channel. /server-watch-top
-// shows this week so far or last week. (/server-top is the AniList one.)
+// heartbeats of members who share what they watch. /server-watch-top shows
+// this week so far or last week; nothing is posted on its own. (/server-top
+// is the AniList one.)
 // Adult titles never show, nor shows AniList couldn't confirm.
 
 const (
@@ -33,7 +31,6 @@ type serverShow struct {
 
 func init() {
 	onHeartbeat((*bot).serverWatchHeartbeat)
-	registerJob("Server watch top", (*bot).serverWatchLoop)
 	registerCommand(&discordgo.ApplicationCommand{Name: "server-watch-top", Description: "The shows members watched most in Otakase this week or last",
 		Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionString, Name: "week", Description: "Which week (default this one)", Choices: []*discordgo.ApplicationCommandOptionChoice{
@@ -164,39 +161,4 @@ func (b *bot) serverWatchTopCommand(i *discordgo.InteractionCreate) {
 		e, _ := serverTopView(title, b.serverWeek(week), appShowInfo)
 		return e, nil
 	})
-}
-
-// serverWatchLoop posts last week's top once a new week starts.
-func (b *bot) serverWatchLoop() {
-	for {
-		b.postServerWatchTop(appNow())
-		time.Sleep(time.Hour)
-	}
-}
-
-func (b *bot) postServerWatchTop(now time.Time) {
-	last := isoWeekKey(now.AddDate(0, 0, -7))
-	var due bool
-	b.store.view(func(d *storeData) { due = d.ServerWatchPosted != last && len(d.ServerWatch[last]) > 0 })
-	if !due || b.s == nil {
-		return
-	}
-	ch := b.textChannelNamed("top", "watch-top")
-	if ch == "" {
-		ch = b.cfg.AiringChannel
-	}
-	if ch == "" {
-		return
-	}
-	e, n := serverTopView("Most watched last week", b.serverWeek(last), appShowInfo)
-	if n == 0 {
-		b.store.update(func(d *storeData) { d.ServerWatchPosted = last })
-		return // nothing that can be shown
-	}
-	if _, err := b.s.ChannelMessageSendComplex(ch, &discordgo.MessageSend{Embeds: []*discordgo.MessageEmbed{e},
-		AllowedMentions: &discordgo.MessageAllowedMentions{}}); err != nil {
-		log.Printf("server watch top: %v", err)
-		return
-	}
-	b.store.update(func(d *storeData) { d.ServerWatchPosted = last })
 }

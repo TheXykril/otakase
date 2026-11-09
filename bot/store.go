@@ -116,8 +116,6 @@ type storeData struct {
 	Club *watchClub `json:"club,omitempty"`
 	// Shared watch time per show by ISO week, then AniList id.
 	ServerWatch map[string]map[int]serverShow `json:"server_watch,omitempty"`
-	// The last week whose most watched shows were posted.
-	ServerWatchPosted string `json:"server_watch_posted,omitempty"`
 	// Today's featured anime, picked once a day.
 	Featured *featuredPick `json:"featured,omitempty"`
 	// Each member's time with today's featured anime and its bonus.
