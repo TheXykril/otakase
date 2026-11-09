@@ -74,6 +74,13 @@ void main() {
       expect(audioFilter(s), volumeLeveller);
       expect(volumeLeveller, contains('dynaudnorm'));
       expect(volumeLeveller, contains(':b=1]'));
+      // Surround tracks fold down with the dialogue channel forward, and loud
+      // peaks are squashed before levelling so voices near them stay audible.
+      expect(volumeLeveller, startsWith('lavfi=[aresample=ochl=stereo:'));
+      expect(
+        volumeLeveller.indexOf('acompressor'),
+        lessThan(volumeLeveller.indexOf('dynaudnorm')),
+      );
       await s.set('NormalizeVolume', false);
       expect(audioFilter(s), '');
     },
