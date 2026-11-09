@@ -9,6 +9,7 @@ import 'package:otakase/data/community_extras.dart';
 import 'package:otakase/data/discord.dart';
 import 'package:otakase/data/store.dart';
 import 'package:otakase/desktop/external_mpv.dart';
+import 'package:otakase/host.dart';
 import 'package:otakase/desktop/launcher_shortcut.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -104,6 +105,29 @@ void main() {
   test('no backup is a null, not an error', () async {
     final (x, _) = await fixture((_) async => json({'error': 'none'}, 404));
     expect(await x.fetchBackup(), isNull);
+  });
+
+  test('a backup names the system it was made on', () async {
+    final (x, calls) = await fixture(
+      (r) async => r.method == 'POST'
+          ? json({'at': '2026-11-09T12:00:00Z'})
+          : json({
+              'config': 'Player=mpv',
+              'at': '2026-11-09T12:00:00Z',
+              'from_os': 'windows',
+            }),
+    );
+    await x.backUp();
+    final sent = jsonDecode(
+      calls.lastWhere((r) => r.method == 'POST').body,
+    ) as Map<String, dynamic>;
+    expect(sent['os'], Host.goos);
+    expect(sent['tv'], isFalse);
+    expect((await x.fetchBackup())!.fromOS, 'Windows');
+    expect(systemLabel('android', tv: true), 'Android TV');
+    expect(systemLabel('android'), 'Android');
+    expect(systemLabel('darwin'), 'macOS');
+    expect(systemLabel('linux'), 'Linux');
   });
 
   test('cheat hunt steps and answers go to the bot', () async {

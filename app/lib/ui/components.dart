@@ -2058,3 +2058,44 @@ class TransportButton extends StatelessWidget {
     ),
   );
 }
+
+/// The window draws under a phone's camera cutout (see MainActivity). In
+/// landscape the cutout sits on the left or right edge, so menus and pages
+/// keep their content beside it while the background still fills the
+/// screen. Players call [enter] and [leave] so video runs edge to edge; their
+/// controls stay in their own safe area.
+class FullBleed {
+  static final screens = ValueNotifier<int>(0);
+
+  static void enter() => _change(1);
+  static void leave() => _change(-1);
+
+  // Players start and stop while the tree builds or is locked, so the count
+  // moves after the frame.
+  static void _change(int by) {
+    WidgetsBinding.instance
+      ..addPostFrameCallback((_) => screens.value += by)
+      ..scheduleFrame();
+  }
+}
+
+/// Keeps app content out of a side cutout unless a player is showing.
+class CutoutInset extends StatelessWidget {
+  const CutoutInset({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<int>(
+    valueListenable: FullBleed.screens,
+    builder: (context, screens, _) => ColoredBox(
+      color: bg,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        left: screens == 0,
+        right: screens == 0,
+        child: child,
+      ),
+    ),
+  );
+}

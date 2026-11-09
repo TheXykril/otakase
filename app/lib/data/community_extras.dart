@@ -149,6 +149,17 @@ bool isKonamiText(String text) {
   return t == 'uuddlrlrba' || t == '↑↑↓↓←→←→ba';
 }
 
+/// A system the bot reports (Go's GOOS) the way people say it.
+String systemLabel(String goos, {bool tv = false}) => switch (goos) {
+  'android' => tv ? 'Android TV' : 'Android',
+  'windows' => 'Windows',
+  'darwin' || 'macos' => 'macOS',
+  'linux' => 'Linux',
+  'ios' => 'iOS',
+  'other' => '',
+  _ => goos,
+};
+
 String get deviceSystem {
   if (kIsWeb) return 'web';
   try {
@@ -335,7 +346,7 @@ class CommunityExtras extends ChangeNotifier {
     await discord.request(
       'POST',
       '/v1/backup',
-      body: {'config': text},
+      body: {'config': text, 'os': Host.goos, 'tv': Host.tv},
       timeout: const Duration(seconds: 15),
     );
     return '\n'.allMatches(text).length + 1;
@@ -352,7 +363,10 @@ class CommunityExtras extends ChangeNotifier {
       return (
         config: r['config'] as String? ?? '',
         at: DateTime.tryParse(r['at'] as String? ?? '')?.toLocal(),
-        fromOS: r['from_os'] as String? ?? '',
+        fromOS: systemLabel(
+          r['from_os'] as String? ?? '',
+          tv: r['from_tv'] as bool? ?? false,
+        ),
       );
     } on BotFailure catch (e) {
       if (e.status == 404) return null;
