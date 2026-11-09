@@ -58,6 +58,7 @@ const settingDefaults = <String, dynamic>{
   'TorrentSources': true,
   'TorrentOnMobileData': false,
   'CheckUpdates': true,
+  'KeepScreenOn': false,
   'SyncAniListMAL': true,
   'DiscordShareWatching': false,
   'DiscordShareRatings': 'ask',

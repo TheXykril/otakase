@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Improved
+
+- **Downloads keep going when the phone sleeps.** On Android phones and TVs
+  the screen stays on while an app update or episode downloads, and the
+  download carries on in the background (with a notification) if the screen
+  turns off or you switch apps. New **Keep screen on** setting in Appearance
+  keeps the screen on the whole time Otakase is open.
+
 ### Fixed
 
 - **Settings backup shows the right device.** A backup made on a computer no
