@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.93
+
+- `/github` no longer offers Site: the website now rebuilds by itself after each release and after every Wiki sync.
+
 ## 1.30.92
 
 - Bug reports filed from support posts leave out source names and the web addresses that carry them, writing "a source" instead.

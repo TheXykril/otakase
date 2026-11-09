@@ -2,9 +2,13 @@ name: Site
 
 # Publishes site/ to GitHub Pages. Pages must be set to deploy from
 # "GitHub Actions" in the repository settings.
-# Runs only when started by hand (Actions tab or the bot's /github command).
+# Runs by itself at the end of Build and release (when it publishes a
+# release, so the changelog shows the new version) and of Wiki sync (so the
+# help pages match the wiki). It can still be started by hand from the
+# Actions tab.
 on:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read

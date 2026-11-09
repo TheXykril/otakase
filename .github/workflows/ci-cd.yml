@@ -5,7 +5,7 @@ name: Build and release
 # builds the Android APK and the desktop app for Windows, macOS and Linux
 # (app-build.yml); the files are on the run's page under Artifacts.
 # With "release" ticked it publishes v<VERSION.txt> from main as a GitHub
-# release.
+# release, then deploys the site so its changelog shows the new version.
 
 on:
   workflow_dispatch:
@@ -135,3 +135,13 @@ jobs:
     with:
       version: ${{ needs.release.outputs.version }}
     secrets: inherit
+
+  # The site's changelog is built from CHANGELOG.md at deploy, so it only
+  # shows a new version once the site is rebuilt after the release.
+  site:
+    needs: release
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/site.yml
