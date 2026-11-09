@@ -12,8 +12,13 @@
 
 ### Improved
 
+- **Clearer settings.** The Movies & shows section is now **What you watch**,
+  since it is where a profile picks anime only, movies & shows only, or both.
+  Movie languages and sources show there once movies are on. Subtitle
+  colours, background, style, sub or dub and quality show plain names instead
+  of codes, and many descriptions say what the setting does in plain words.
 - **Anime, movies and shows share Home and Search.** With both turned on in
-  Movies & shows, there is no separate Movies tab. Films and series you are
+  What you watch, there is no separate Movies tab. Films and series you are
   watching show in the big resume card, the desktop banner and Continue
   watching; trending movies and shows join the desktop banner and the home
   you see before signing in. Signed in to Trakt, your watchlist gets its own

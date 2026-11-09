@@ -230,11 +230,10 @@ class MorePage extends StatelessWidget {
           ),
         ),
         row(
-          'Movies & shows',
+          contentSection,
           contentLabels[services.store.text('Content')] ?? '',
           LucideIcons.clapperboard,
-          () =>
-              openSettings(context, services, isTV, section: 'Movies & shows'),
+          () => openSettings(context, services, isTV, section: contentSection),
         ),
         if (!isTV)
           row(
@@ -519,7 +518,7 @@ class _DesktopMoreState extends State<DesktopMore> {
         const MoreGroupHeading('Watching'),
         item('Playback', LucideIcons.circlePlay),
         item('Subtitles & languages', LucideIcons.captions),
-        item('Movies & shows', LucideIcons.clapperboard),
+        item(contentSection, LucideIcons.clapperboard),
         item(
           'Downloads',
           LucideIcons.download,
