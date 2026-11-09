@@ -25,12 +25,11 @@ import 'data/subtitle_fallback.dart';
 import 'services.dart';
 import 'tls_ca.dart';
 import 'ui/components.dart';
-import 'ui/device_status.dart';
 import 'ui/seal.dart';
 import 'ui/skip_marker.dart';
 import 'ui/player_keys.dart';
-import 'ui/progress_thread.dart';
 import 'ui/rate_prompt.dart';
+import 'ui/phone_player.dart';
 import 'ui/playback_report.dart';
 import 'ui/watch_party_page.dart';
 
@@ -2033,7 +2032,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     alignment: Alignment.centerRight,
     child: Padding(
       padding: const EdgeInsets.all(16),
-      child: AppButton(
+      child: PlayerChip(
+        icon: LucideIcons.chevronsRight,
         label: active!.type == 'op' ? 'Skip opening' : active!.label,
         focusNode: skipFocus,
         onPressed: () {
@@ -2254,233 +2254,74 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   },
                 ),
               if (overlay && !busy && error.isEmpty && !isDesktop)
-                SafeArea(
-                  child: Column(
-                    children: [
-                      Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [bgDeep, Color(0x00080707)],
-                          ),
-                        ),
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              tooltip: 'Back',
-                              onPressed: () => Navigator.pop(context),
-                              icon: const Icon(LucideIcons.arrowLeft),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    anime.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: uiStyle(
-                                      context,
-                                      size: 20,
-                                      weight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'EPISODE $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
-                                    style: uiStyle(
-                                      context,
-                                      size: 15,
-                                      color: muted,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (!widget.isTV)
-                              IconButton(
-                                key: const Key('player-cast'),
-                                tooltip: casting ? 'Casting' : 'Cast',
-                                onPressed: () => unawaited(castMenu()),
-                                icon: Icon(
-                                  LucideIcons.cast,
-                                  color: casting ? accentText : null,
-                                ),
-                              ),
-                            DeviceStatus(isTV: widget.isTV),
-                            const SizedBox(width: 12),
-                            const SizedBox(
-                              width: 48,
-                              height: 48,
-                              child: Center(child: OtakaseSeal()),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: 24,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              TransportButton(
-                                label: 'Rewind 10 seconds',
-                                text: '−10',
-                                onPressed: () => seek(-10),
-                              ),
-                              TransportButton(
-                                label: isPlaying ? 'Pause' : 'Play',
-                                icon: isPlaying
-                                    ? LucideIcons.pause
-                                    : LucideIcons.play,
-                                primary: true,
-                                focusNode: playFocus,
-                                onPressed: () {
-                                  unawaited(playPause());
-                                  showControls();
-                                },
-                              ),
-                              TransportButton(
-                                label: 'Forward 10 seconds',
-                                text: '+10',
-                                onPressed: () => seek(10),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (active != null) skipButton(),
-                      if (countdownSeconds > 0) nextCard(context),
-                      Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Color(0x00080707), bgDeep],
-                          ),
-                        ),
-                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                        child: Column(
-                          children: [
-                            SizedBox(
-                              height: 44,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                    ),
-                                    child: CustomPaint(
-                                      size: const Size(double.infinity, 6),
-                                      painter: SkipPainter(spans, duration),
-                                    ),
-                                  ),
-                                  KageSeekSlider(
-                                    key: const Key('player-timeline'),
-                                    value: position.inMilliseconds
-                                        .clamp(
-                                          0,
-                                          math.max(1, duration.inMilliseconds),
-                                        )
-                                        .toDouble(),
-                                    max: math
-                                        .max(1, duration.inMilliseconds)
-                                        .toDouble(),
-                                    onChangeStart: (_) {
-                                      scrubbing = true;
-                                      hideTimer?.cancel();
-                                    },
-                                    onChanged: (v) {
-                                      setState(
-                                        () => position = Duration(
-                                          milliseconds: v.round(),
-                                        ),
-                                      );
-                                    },
-                                    onChangeEnd: (v) {
-                                      scrubbing = false;
-                                      unawaited(
-                                        seekTo(
-                                          Duration(milliseconds: v.round()),
-                                        ),
-                                      );
-                                      showControls();
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Row(
-                              children: [
-                                Text(
-                                  '${time(position)} / ${time(duration)}',
-                                  style: mono.copyWith(
-                                    fontSize: widget.isTV ? 20 : 15,
-                                    color: fg,
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                                const Spacer(),
-                                if (casting
-                                    ? castStatus?.state == 'buffering'
-                                    : player.state.buffering)
-                                  Text(
-                                    'Buffering',
-                                    style: uiStyle(
-                                      context,
-                                      size: 15,
-                                      color: muted,
-                                    ),
-                                  ),
-                                const Spacer(),
-                                Text(
-                                  '−${time(duration - position)}',
-                                  style: mono.copyWith(
-                                    fontSize: widget.isTV ? 20 : 15,
-                                    color: fg,
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 12,
-                              runSpacing: 0,
-                              alignment: WrapAlignment.center,
-                              children: [
-                                AppButton(
-                                  label: 'Next',
-                                  onPressed: canNext ? () => next() : null,
-                                  isTV: widget.isTV,
-                                ),
-                                AppButton(
-                                  label: 'Tracks',
-                                  onPressed: trackPanel,
-                                  isTV: widget.isTV,
-                                ),
-                                AppButton(
-                                  label: 'Quality',
-                                  onPressed: qualityPanel,
-                                  isTV: widget.isTV,
-                                ),
-                                AppButton(
-                                  label: 'Skip times',
-                                  onPressed: skipPanel,
-                                  isTV: widget.isTV,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                PhonePlayerControls(
+                  isTV: widget.isTV,
+                  title: anime.title,
+                  subtitle: 'Episode $episode · ${source?.mode ?? widget.mode}',
+                  position: position,
+                  duration: duration,
+                  spans: spans,
+                  playing: isPlaying,
+                  buffering: casting
+                      ? castStatus?.state == 'buffering'
+                      : player.state.buffering,
+                  playFocus: playFocus,
+                  onBack: () => Navigator.pop(context),
+                  onPlayPause: () {
+                    unawaited(playPause());
+                    showControls();
+                  },
+                  onSeekBy: (s) => unawaited(seek(s)),
+                  onSeekStart: (_) {
+                    scrubbing = true;
+                    hideTimer?.cancel();
+                  },
+                  onSeekChanged: (v) => setState(
+                    () => position = Duration(milliseconds: v.round()),
                   ),
+                  onSeekEnd: (v) {
+                    scrubbing = false;
+                    unawaited(seekTo(Duration(milliseconds: v.round())));
+                    showControls();
+                  },
+                  topActions: [
+                    if (!widget.isTV)
+                      IconButton(
+                        key: const Key('player-cast'),
+                        tooltip: casting ? 'Casting' : 'Cast',
+                        onPressed: () => unawaited(castMenu()),
+                        icon: Icon(
+                          LucideIcons.cast,
+                          color: casting ? accentText : fgBright,
+                        ),
+                      ),
+                  ],
+                  above: [
+                    if (active != null) skipButton(),
+                    if (countdownSeconds > 0) nextCard(context),
+                  ],
+                  actions: [
+                    PlayerButton(
+                      icon: LucideIcons.skipForward,
+                      label: 'Next',
+                      onPressed: canNext ? () => next() : null,
+                    ),
+                    PlayerButton(
+                      icon: LucideIcons.captions,
+                      label: 'Audio & subs',
+                      onPressed: trackPanel,
+                    ),
+                    PlayerButton(
+                      icon: LucideIcons.gauge,
+                      label: 'Quality',
+                      onPressed: qualityPanel,
+                    ),
+                    PlayerButton(
+                      icon: LucideIcons.chevronsRight,
+                      label: 'Skip times',
+                      onPressed: skipPanel,
+                    ),
+                  ],
                 ),
             ],
           ),
@@ -2488,42 +2329,4 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       ),
     ),
   );
-}
-
-class SkipPainter extends CustomPainter {
-  SkipPainter(this.spans, this.duration);
-  final List<SkipSpan> spans;
-  final Duration duration;
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (duration.inMilliseconds <= 0) return;
-    for (final span in spans) {
-      final left =
-          (span.start * 1000 / duration.inMilliseconds).clamp(0.0, 1.0) *
-          size.width;
-      final right =
-          (span.end * 1000 / duration.inMilliseconds).clamp(0.0, 1.0) *
-          size.width;
-      final region = Rect.fromLTRB(left, 0, right, 7);
-      canvas.save();
-      canvas.clipRect(region);
-      canvas.drawRect(region, Paint()..color = const Color(0xff302923));
-      for (double x = left - 7; x < right; x += 10) {
-        canvas.drawPath(
-          Path()
-            ..moveTo(x, 7)
-            ..lineTo(x + 7, 0)
-            ..lineTo(x + 11, 0)
-            ..lineTo(x + 4, 7)
-            ..close(),
-          Paint()..color = fg,
-        );
-      }
-      canvas.restore();
-    }
-  }
-
-  @override
-  bool shouldRepaint(SkipPainter old) =>
-      old.spans != spans || old.duration != duration;
 }

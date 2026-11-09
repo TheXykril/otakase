@@ -21,6 +21,7 @@ import '../tls_ca.dart';
 import 'components.dart';
 import 'player_keys.dart';
 import 'seal.dart';
+import 'phone_player.dart';
 import 'playback_report.dart';
 
 /// Something to play: a stream found by a source, or a downloaded file.
@@ -865,163 +866,53 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
 
   String time(Duration d) => DesktopPlayerBar.time(d);
 
-  Widget mobileControls(BuildContext context) {
-    final playing = player.state.playing;
-    final total = math.max(1, duration.inMilliseconds).toDouble();
-    return Stack(
-      children: [
-        const Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: [0, .25, .6, 1],
-                  colors: [
-                    Color(0xb3000000),
-                    Color(0x00000000),
-                    Color(0x00000000),
-                    Color(0xd9000000),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: widget.isTV ? 48 : 16,
-              vertical: widget.isTV ? 27 : 8,
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      tooltip: 'Back',
-                      onPressed: () => Navigator.maybePop(context),
-                      icon: const Icon(LucideIcons.arrowLeft, color: fgBright),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            request.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: uiStyle(
-                              context,
-                              size: 18,
-                              weight: FontWeight.w600,
-                              color: fgBright,
-                            ),
-                          ),
-                          Text(
-                            [
-                              request.subtitle,
-                              media?.label ?? '',
-                            ].where((s) => s.isNotEmpty).join(' · '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: uiStyle(context, size: 15, color: muted),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Row(
-                  children: [
-                    Text(time(position), style: mono.copyWith(color: fg)),
-                    Expanded(
-                      child: Slider(
-                        value: position.inMilliseconds
-                            .clamp(0, total)
-                            .toDouble(),
-                        max: total,
-                        activeColor: shu,
-                        inactiveColor: line,
-                        onChangeStart: (_) {
-                          scrubbing = true;
-                          hideTimer?.cancel();
-                        },
-                        onChanged: (v) => setState(
-                          () => position = Duration(milliseconds: v.round()),
-                        ),
-                        onChangeEnd: (v) {
-                          scrubbing = false;
-                          unawaited(
-                            player.seek(Duration(milliseconds: v.round())),
-                          );
-                          showControls();
-                        },
-                      ),
-                    ),
-                    Text(time(duration), style: mono.copyWith(color: fg)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    TransportButton(
-                      label: 'Back 10 seconds',
-                      icon: LucideIcons.rotateCcw,
-                      onPressed: () => unawaited(seekBy(-10)),
-                    ),
-                    const SizedBox(width: 16),
-                    TransportButton(
-                      label: playing ? 'Pause' : 'Play',
-                      icon: playing ? LucideIcons.pause : LucideIcons.play,
-                      primary: true,
-                      focusNode: playFocus,
-                      onPressed: () {
-                        unawaited(player.playOrPause());
-                        showControls();
-                      },
-                    ),
-                    const SizedBox(width: 16),
-                    TransportButton(
-                      label: 'Forward 10 seconds',
-                      icon: LucideIcons.rotateCw,
-                      onPressed: () => unawaited(seekBy(10)),
-                    ),
-                    const SizedBox(width: 16),
-                    TransportButton(
-                      label: 'Audio and subtitles',
-                      icon: LucideIcons.captions,
-                      onPressed: () => unawaited(trackPanel()),
-                    ),
-                    if ((media?.copy ?? '').isNotEmpty) ...[
-                      const SizedBox(width: 16),
-                      TransportButton(
-                        label: 'Try another copy',
-                        icon: LucideIcons.refreshCw,
-                        onPressed: () => unawaited(anotherCopy()),
-                      ),
-                    ],
-                    if (request.next != null) ...[
-                      const SizedBox(width: 16),
-                      TransportButton(
-                        label: 'Next episode',
-                        icon: LucideIcons.skipForward,
-                        onPressed: () => unawaited(playNext()),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget mobileControls(BuildContext context) => PhonePlayerControls(
+    isTV: widget.isTV,
+    title: request.title,
+    subtitle: [
+      request.subtitle,
+      media?.label ?? '',
+    ].where((s) => s.isNotEmpty).join(' · '),
+    position: position,
+    duration: duration,
+    playing: player.state.playing,
+    buffering: player.state.buffering,
+    playFocus: playFocus,
+    onBack: () => Navigator.maybePop(context),
+    onPlayPause: () {
+      unawaited(player.playOrPause());
+      showControls();
+    },
+    onSeekBy: (s) => unawaited(seekBy(s)),
+    onSeekStart: (_) {
+      scrubbing = true;
+      hideTimer?.cancel();
+    },
+    onSeekChanged: (v) =>
+        setState(() => position = Duration(milliseconds: v.round())),
+    onSeekEnd: (v) {
+      scrubbing = false;
+      unawaited(player.seek(Duration(milliseconds: v.round())));
+      showControls();
+    },
+    actions: [
+      PlayerButton(
+        icon: LucideIcons.skipForward,
+        label: 'Next',
+        onPressed: request.next != null ? () => unawaited(playNext()) : null,
+      ),
+      PlayerButton(
+        icon: LucideIcons.captions,
+        label: 'Audio & subs',
+        onPressed: () => unawaited(trackPanel()),
+      ),
+      PlayerButton(
+        icon: LucideIcons.gauge,
+        label: 'Quality',
+        onPressed: () => unawaited(qualityPanel()),
+      ),
+    ],
+  );
 
   Widget desktopControls() => DesktopPlayerBar(
     title: request.title,

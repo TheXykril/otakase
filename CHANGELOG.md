@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Improved
+
+- **Films, series and anime share one player look on phones and TVs.** Back,
+  title and cast sit on top, −10 / play / +10 in the middle, and the timeline
+  with times at the bottom.
+- **Player buttons are plain icons.** Next, Audio & subs, Quality and Skip
+  times sit on the time row; hold an icon to see its name, or on TV the focused
+  icon shows its name. Skip opening is a small chip instead of a round button.
+
 ## 26.1.8 - 2026-11-07
 
 Subtitle fixes, easier episode browsing on TV, and clearer menus and playback feedback.
