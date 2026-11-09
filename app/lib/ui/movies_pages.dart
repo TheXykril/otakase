@@ -39,6 +39,85 @@ class TitleCards {
   MediaTitle? title(Anime a) => _byId[a.id];
 }
 
+final _cards = Expando<TitleCards>();
+
+/// The cards films and series get on pages shared with anime (Home and
+/// Search), so the shell can tell a film card from an anime one on open.
+TitleCards titleCardsOf(AppServices services) =>
+    _cards[services] ??= TitleCards();
+
+/// What a film or series card in a Continue watching row says under it.
+String titleCaption(MovieEntry e) {
+  if (e.title.isShow && e.episode > 0) return e.code;
+  final left = e.duration > 0 && e.position > 0
+      ? ((e.duration - e.position) / 60).ceil()
+      : 0;
+  return left > 0 ? '$left min left' : 'Movie';
+}
+
+/// The episode of a series to carry on with: the one stopped in, else the
+/// one after the last watched.
+TitleEpisode? titleUpNext(
+  MovieService movies,
+  MediaTitle title,
+  List<TitleEpisode> episodes,
+) {
+  if (episodes.isEmpty) return null;
+  final e = movies.entry(title);
+  if (e != null && e.episode > 0) {
+    final i = episodes.indexWhere(
+      (x) => x.season == e.season && x.number == e.episode,
+    );
+    if (i >= 0) {
+      final done = movies.watched(title, season: e.season, episode: e.episode);
+      if (!done) return episodes[i];
+      if (i + 1 < episodes.length) return episodes[i + 1];
+    }
+  }
+  return episodes.firstWhere(
+    (x) => !movies.watched(title, season: x.season, episode: x.number),
+    orElse: () => episodes.first,
+  );
+}
+
+/// Plays a film from where it was left, or a series from its next episode,
+/// as Resume on Home does for anime. Opens the title page when the episodes
+/// cannot be found.
+Future<void> resumeTitle(
+  BuildContext context,
+  AppServices services,
+  MediaTitle title,
+  bool isTV,
+) async {
+  var episodes = <TitleEpisode>[];
+  TitleEpisode? episode;
+  if (title.isShow) {
+    try {
+      episodes = await services.trakt.episodes(title);
+    } catch (_) {
+      // The title page explains and retries.
+    }
+    episode = titleUpNext(services.movies, title, episodes);
+    if (!context.mounted) return;
+    if (episode == null) return openTitle(context, services, title, isTV);
+  }
+  await Navigator.push(
+    context,
+    OtakaseRoute<void>(
+      builder: (_) => MoviePlayerPage(
+        services: services,
+        isTV: isTV,
+        request: titlePlay(
+          services,
+          title,
+          episode: episode,
+          episodes: episodes,
+        ),
+      ),
+    ),
+  );
+}
+
 Future<void> openTitle(
   BuildContext context,
   AppServices services,
@@ -631,28 +710,7 @@ class _TitlePageState extends State<TitlePage> {
 
   /// The episode to carry on with: the one stopped in, else the one after
   /// the last watched.
-  TitleEpisode? get upNext {
-    if (episodes.isEmpty) return null;
-    final e = movies.entry(title);
-    if (e != null && e.episode > 0) {
-      final i = episodes.indexWhere(
-        (x) => x.season == e.season && x.number == e.episode,
-      );
-      if (i >= 0) {
-        final done = movies.watched(
-          title,
-          season: e.season,
-          episode: e.episode,
-        );
-        if (!done) return episodes[i];
-        if (i + 1 < episodes.length) return episodes[i + 1];
-      }
-    }
-    return episodes.firstWhere(
-      (x) => !movies.watched(title, season: x.season, episode: x.number),
-      orElse: () => episodes.first,
-    );
-  }
+  TitleEpisode? get upNext => titleUpNext(movies, title, episodes);
 
   Future<void> download([TitleEpisode? episode]) =>
       downloadTitle(context, widget.services, title, episode: episode);

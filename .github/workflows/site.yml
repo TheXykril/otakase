@@ -42,9 +42,22 @@ jobs:
           flutter test test/site_screens_test.dart --update-goldens \
             --dart-define=SITE_SHOTS="$RUNNER_TEMP/shots"
 
+      # Refresh the package index first: the runner image's copy goes stale
+      # and installs then fail with 404s.
+      - name: Install ffmpeg and Pillow
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg python3-pil > /dev/null
+
+      # "Try it here" on the site is the app itself, built for the web with
+      # the same sample shows (app/demo). Its player plays a generated clip.
+      - name: Build the live demo
+        working-directory: app
+        run: |
+          demo/build.sh ../site/demo
+
       - name: Use the new screens
         run: |
-          sudo apt-get install -y -qq python3-pil > /dev/null
           rm -f site/img/shots/*.webp
           python3 - "$RUNNER_TEMP/shots" site/img/shots <<'PY'
           import pathlib, sys
@@ -60,7 +73,7 @@ jobs:
       # Browsers keep app.js and style.css for hours, so each deploy gives
       # them a new address and a reload always gets the matching files.
       - name: Stamp asset versions
-        run: sed -i "s/?v=dev/?v=${GITHUB_SHA::7}/g" site/index.html
+        run: sed -i "s/?v=dev/?v=${GITHUB_SHA::7}/g" site/index.html site/try/index.html
 
       - uses: actions/upload-pages-artifact@v4
         with:

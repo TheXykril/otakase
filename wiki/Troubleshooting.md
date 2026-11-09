@@ -52,7 +52,7 @@ Back up your profiles before considering an uninstall, which removes local data.
 
 ## Subtitles appear only occasionally
 
-In Tracks, choose the full dialogue track instead of one labelled Forced,
+In Tracks (Audio & subs on phones and TVs), choose the full dialogue track instead of one labelled Forced,
 Signs or Songs. Those tracks may translate only on-screen text, leaving long
 gaps during dialogue. Automatic selection prefers full dialogue tracks, then
 closed captions, before forced/signs-only tracks within the preferred language.

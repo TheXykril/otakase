@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core.dart';
 import '../desktop/desktop_core.dart';
 import 'models.dart';
+import '../host.dart';
 
 /// An episode or a film saved for watching offline.
 class DownloadItem {
@@ -179,8 +180,8 @@ class DownloadManager extends ChangeNotifier {
     }
     final folder = await _folder();
     final name = safeFileName(label.isEmpty ? title : '$title - $label');
-    final dir = '$folder${Platform.pathSeparator}${safeFileName(title)}';
-    final base = '$dir${Platform.pathSeparator}$name';
+    final dir = '$folder${Host.pathSeparator}${safeFileName(title)}';
+    final base = '$dir${Host.pathSeparator}$name';
     final headers = Map<String, String>.of(stream.headers);
     if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
     final d = await core.request({
@@ -343,18 +344,15 @@ class DownloadManager extends ChangeNotifier {
 /// The folder downloads go to: the app's own Movies folder on Android, the
 /// viewer's Videos folder on a desktop.
 Future<String> defaultDownloadFolder() async {
-  if (Platform.isAndroid) {
+  if (Host.android) {
     final dir = await CoreClient.channel.invokeMethod<String>('downloadsDir');
     if (dir == null) throw const CoreFailure('storage', 'No download folder.');
     return dir;
   }
-  final home =
-      Platform.environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'] ?? '';
-  final sep = Platform.pathSeparator;
+  final home = Host.environment[Host.windows ? 'USERPROFILE' : 'HOME'] ?? '';
+  final sep = Host.pathSeparator;
   if (isDesktop && home.isNotEmpty) {
-    final videos = Directory(
-      '$home$sep${Platform.isMacOS ? 'Movies' : 'Videos'}',
-    );
+    final videos = Directory('$home$sep${Host.macOS ? 'Movies' : 'Videos'}');
     return '${videos.path}${sep}Otakase';
   }
   return '${Directory.systemTemp.path}${sep}Otakase';

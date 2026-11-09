@@ -8,7 +8,7 @@ Otakase and getting started. These pages go further.
 The account card stays at the top. The options below are grouped into
 **Watching**, **Your profile**, **Devices**, **Community**, and **Help & app**.
 Phone and TV use More; desktop Settings uses the same groups. Schedule is
-under Watching on phone and TV and keeps its own tab on desktop.
+under Watching on every device.
 
 ## Using Otakase
 

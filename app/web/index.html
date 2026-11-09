@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Otakase demo</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0e0d0c; overflow: hidden; }
+    /* Taps on the video reach the app, as on a phone, not the browser player. */
+    video { pointer-events: none; }
+    .wait { position: fixed; inset: 0; display: grid; place-items: center; color: #d2492f; font: 700 56px serif; }
+  </style>
+</head>
+<body>
+  <!-- The website's live demo (app/demo). Shown inside the site's device frames. -->
+  <div class="wait" aria-hidden="true">任</div>
+  <script>
+    // The site shows this page scaled down (?dpr=): draw only the pixels
+    // that end up on screen.
+    (() => {
+      const dpr = parseFloat(new URLSearchParams(location.search).get('dpr'));
+      if (dpr > 0) Object.defineProperty(window, 'devicePixelRatio', { get: () => dpr });
+    })();
+  </script>
+  <script>
+    // Keys the app does not use (an arrow at the edge of a row) must not
+    // scroll the website around the demo.
+    addEventListener('keydown', (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) e.preventDefault();
+    });
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

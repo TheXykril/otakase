@@ -344,7 +344,10 @@ void main() {
         catalog: catalog,
         auth: auth,
       );
-      expect(catalog.calls, 0);
+      // Only the banner's trending picks, never 18+; no discovery rows.
+      expect(catalog.calls, 1);
+      expect(catalog.adultFlags, [false]);
+      expect(find.text('Find your next story'), findsNothing);
       expect(requests, 1);
       expect(find.byKey(const Key('home-refresh')), findsNothing);
       expect(find.byTooltip('Refresh lists'), findsNothing);

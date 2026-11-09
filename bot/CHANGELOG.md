@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.89
+
+- The bot no longer posts last week's most watched shows every Monday. `/server-watch-top` still shows this week or last week on request.
+
 ## 1.30.88
 
 - One account can be in a watch room on the Activity and in the app at once. The Activity keeps driving the room, the app follows it, and leaving on one doesn't take the other out.

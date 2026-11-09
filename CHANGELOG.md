@@ -2,12 +2,46 @@
 
 ## Unreleased
 
+### New
+
+- **Cast movies and shows.** The cast button now works in the film and series
+  player too, on phones and computers. Play, pause and seeking control the
+  TV, the next episode follows onto it, and progress and Trakt keep updating.
+  Stop casting picks up on this screen where the TV was. Downloads still play
+  on this screen only.
+
+### Improved
+
+- **Clearer settings.** The Movies & shows section is now **What you watch**,
+  since it is where a profile picks anime only, movies & shows only, or both.
+  Movie languages and sources show there once movies are on. Subtitle
+  colours, background, style, sub or dub and quality show plain names instead
+  of codes, and many descriptions say what the setting does in plain words.
+- **Anime, movies and shows share Home and Search.** With both turned on in
+  What you watch, there is no separate Movies tab. Films and series you are
+  watching show in the big resume card, the desktop banner and Continue
+  watching; trending movies and shows join the desktop banner and the home
+  you see before signing in. Signed in to Trakt, your watchlist gets its own
+  row. Search lists anime first, then movies and shows, and the filters apply
+  to both. Turn one off and only its parts disappear.
+- **The phone and TV home banner takes turns like the desktop one.** It moves
+  between what you are watching and trending picks every few seconds, pausing
+  after you touch it; swipe it or tap the dots on a phone.
+- **Schedule moved to More on desktop too.** The tab bar is just Home, Search
+  and More everywhere.
+- **Films, series and anime share one player look on phones and TVs.** Back,
+  title and cast sit on top, −10 / play / +10 in the middle, and the timeline
+  with times at the bottom.
+- **Player buttons are plain icons.** Next, Audio & subs, Quality and Skip
+  times sit on the time row; hold an icon to see its name, or on TV the focused
+  icon shows its name. Skip opening is a small chip instead of a round button.
+
 ### Fixed
 
-- **Android updates retry certificate lookup when firmware omits signing details.**
-  Matching certificates from Android's legacy lookup are accepted; different
-  keys are still rejected. Unreadable certificates show a separate error.
-
+- **Android TV updates no longer report a wrong signing key on some firmware.**
+  When Android leaves out certificate details, the updater asks again the
+  older way. Different keys are still rejected, and unreadable certificates
+  show their own message.
 
 ## 26.1.8 - 2026-11-07
 

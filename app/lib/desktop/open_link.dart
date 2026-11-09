@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../host.dart';
+
 /// Starts a program. Tests replace it.
 typedef LinkOpener = Future<ProcessResult> Function(
   String executable,
@@ -13,9 +15,9 @@ LinkOpener debugLinkOpener = Process.run;
 Future<bool> openInBrowser(Uri uri) async {
   if (uri.scheme != 'https' && uri.scheme != 'http') return false;
   final link = uri.toString();
-  final (String executable, List<String> arguments) = Platform.isWindows
+  final (String executable, List<String> arguments) = Host.windows
       ? ('rundll32', ['url.dll,FileProtocolHandler', link])
-      : Platform.isMacOS
+      : Host.macOS
       ? ('open', [link])
       : ('xdg-open', [link]);
   try {

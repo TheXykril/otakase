@@ -99,7 +99,8 @@ your progress on the device. On a TV, scan the QR code with your phone to sign
 in, with both on the same home network.
 
 Pick a show, pick an episode, and it plays. **Sub/Dub** and the **Tracks**
-button in the player choose the audio and subtitles. Playback settings (skips
+button in the player (the subtitles icon on phones and TVs; hold an icon to
+see its name) choose the audio and subtitles. Playback settings (skips
 and even out volume) are under **Settings**.
 
 On the computer, starting the app with `--launcher` opens the keyboard launcher instead of the

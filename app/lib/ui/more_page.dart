@@ -37,6 +37,36 @@ List<String> accountNames(AppServices services) => [
     services.trakt.username.isEmpty ? 'Trakt' : services.trakt.username,
 ];
 
+/// The airing schedule as its own page, opened from More.
+Future<void> openSchedule(
+  BuildContext context,
+  AppServices services,
+  bool isTV,
+) => Navigator.push(
+  context,
+  OtakaseRoute<void>(
+    builder: (_) => Scaffold(
+      appBar: AppBar(
+        leading: const BackButton(),
+        actions: [
+          DeviceStatus(isTV: isTV),
+          const SizedBox(width: 24),
+        ],
+      ),
+      body: SchedulePage(
+        services: services,
+        isTV: isTV,
+        onOpen: (a) => Navigator.push(
+          context,
+          OtakaseRoute<void>(
+            builder: (_) => ShowPage(services: services, anime: a, isTV: isTV),
+          ),
+        ),
+      ),
+    ),
+  ),
+);
+
 Future<void> openDetail(BuildContext context, Widget page, bool isTV) async {
   if (!isTV) {
     await Navigator.push(context, OtakaseRoute<void>(builder: (_) => page));
@@ -200,11 +230,10 @@ class MorePage extends StatelessWidget {
           ),
         ),
         row(
-          'Movies & shows',
+          contentSection,
           contentLabels[services.store.text('Content')] ?? '',
           LucideIcons.clapperboard,
-          () =>
-              openSettings(context, services, isTV, section: 'Movies & shows'),
+          () => openSettings(context, services, isTV, section: contentSection),
         ),
         if (!isTV)
           row(
@@ -213,36 +242,13 @@ class MorePage extends StatelessWidget {
             LucideIcons.download,
             () => openDownloads(context, services, isTV),
           ),
-        row(
-          'Schedule',
-          'This week · ${DateTime.now().timeZoneName}',
-          LucideIcons.calendarDays,
-          () => Navigator.push(
-            context,
-            OtakaseRoute<void>(
-              builder: (_) => Scaffold(
-                appBar: AppBar(
-                  leading: const BackButton(),
-                  actions: [
-                    DeviceStatus(isTV: isTV),
-                    const SizedBox(width: 24),
-                  ],
-                ),
-                body: SchedulePage(
-                  services: services,
-                  isTV: isTV,
-                  onOpen: (a) => Navigator.push(
-                    context,
-                    OtakaseRoute<void>(
-                      builder: (_) =>
-                          ShowPage(services: services, anime: a, isTV: isTV),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+        if (contentModeOf(services.store) != ContentMode.movies)
+          row(
+            'Schedule',
+            'This week · ${DateTime.now().timeZoneName}',
+            LucideIcons.calendarDays,
+            () => openSchedule(context, services, isTV),
           ),
-        ),
         const MoreGroupHeading('Your profile'),
         if (services.profiles case final manager?)
           row(
@@ -512,12 +518,18 @@ class _DesktopMoreState extends State<DesktopMore> {
         const MoreGroupHeading('Watching'),
         item('Playback', LucideIcons.circlePlay),
         item('Subtitles & languages', LucideIcons.captions),
-        item('Movies & shows', LucideIcons.clapperboard),
+        item(contentSection, LucideIcons.clapperboard),
         item(
           'Downloads',
           LucideIcons.download,
           open: () => openDownloads(context, services, true),
         ),
+        if (contentModeOf(services.store) != ContentMode.movies)
+          item(
+            'Schedule',
+            LucideIcons.calendarDays,
+            open: () => openSchedule(context, services, true),
+          ),
         const MoreGroupHeading('Your profile'),
         if (services.profiles case final manager?)
           item(

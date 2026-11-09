@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'discord.dart';
 import 'models.dart';
 import 'store.dart';
+import '../host.dart';
 
 // The CLI's other Community rows, now in the app: the server club, the
 // settings backup, the cheat code hunt and Report a problem. All talk to the
@@ -151,7 +151,7 @@ bool isKonamiText(String text) {
 String get deviceSystem {
   if (kIsWeb) return 'web';
   try {
-    return Platform.operatingSystem;
+    return Host.name;
   } catch (_) {
     return 'unknown';
   }

@@ -1,3 +1,6 @@
 __pycache__/
 /bot/bot
 vendor/
+
+# Live demo on the site, built by the Site workflow at deploy (app/demo)
+/site/demo/

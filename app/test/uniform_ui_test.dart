@@ -80,12 +80,45 @@ void main() {
         home: SettingsPage(
           services: services,
           isTV: false,
-          section: 'Movies & shows',
+          section: contentSection,
         ),
       ),
     );
     await tester.pumpAndSettle();
     expect(find.text('Trakt'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('settings read in plain words', (tester) async {
+    await fixture.launch(tester);
+    final services = tester.widget<HomePage>(find.byType(HomePage)).services;
+    Future<void> open(String section) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsPage(services: services, isTV: false, section: section),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await open(contentSection);
+    expect(find.text('This profile shows'), findsOneWidget);
+    expect(find.text('Anime only'), findsOneWidget);
+    // Movie languages and sources only matter once movies are on.
+    expect(find.text('Movie & show languages'), findsNothing);
+    await services.store.set('Content', 'both');
+    await tester.pumpAndSettle();
+    expect(find.text('Movie & show languages'), findsOneWidget);
+
+    await open('Subtitles & languages');
+    expect(find.text('White'), findsOneWidget);
+    expect(find.text('None'), findsOneWidget);
+    expect(find.text('Original styling'), findsOneWidget);
+    expect(find.text('Subtitled'), findsOneWidget);
+    expect(find.text('#FFFFFF'), findsNothing);
+
+    await open('Playback');
+    expect(find.text('Best available'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }

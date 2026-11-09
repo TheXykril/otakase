@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../host.dart';
+
 /// Runs a program and returns how it went. Tests replace it.
 typedef InstallRunner = Future<ProcessResult> Function(
   String executable,
@@ -31,11 +33,11 @@ class SystemInstall {
     bool? macos,
     this.binDir = '/usr/local/bin',
     this.temp,
-  }) : environment = environment ?? Platform.environment,
-       executable = executable ?? Platform.resolvedExecutable,
+  }) : environment = environment ?? Host.environment,
+       executable = executable ?? Host.executable,
        _run = run ?? _defaultRun,
-       linux = linux ?? Platform.isLinux,
-       macos = macos ?? Platform.isMacOS;
+       linux = linux ?? Host.linux,
+       macos = macos ?? Host.macOS;
 
   final Map<String, String> environment;
   final String executable;

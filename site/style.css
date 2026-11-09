@@ -143,3 +143,73 @@ footer a:hover{color:var(--bright)}
   .tabs{display:grid;grid-template-columns:1fr 1fr;border-radius:24px;width:100%}
   .wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 }
+
+/* try it: the app built for the web, in a device frame (demo.js). The page
+   never scrolls: it is exactly the window's height and the device takes
+   whatever room the rest leaves, sized from its stage (container units). */
+body.try{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+.tbar.wrap{max-width:1440px;width:100%}
+.tbar{flex:none;display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:16px}
+.tback{display:inline-flex;align-items:center;gap:10px;color:var(--fg);text-decoration:none;font:15px/1 'Archivo Black','Arial Black',sans-serif;letter-spacing:1px}
+.tour{flex:1;min-height:0;display:flex;padding-block:4px 16px}
+.tour[hidden],.tour .tabs[hidden]{display:none}
+.tour.wrap{max-width:1440px;width:100%}
+.tgrid{flex:1;min-width:0;min-height:0;display:grid;grid-template-columns:minmax(0,280px) minmax(0,1fr);grid-template-rows:minmax(0,1fr);column-gap:40px;align-items:center}
+.thead{min-width:0}
+.tlead{color:var(--muted);margin:-10px 0 22px}
+.tour .tabs{margin-bottom:16px}
+.thint{color:var(--muted);font-size:14px;margin:0 0 8px}
+.thint a{color:var(--fg)}
+.thint:empty,.tshort{display:none}
+.tour .sh h2{white-space:nowrap}
+.tstage{min-width:0;min-height:0;height:100%;container-type:size;display:flex;align-items:center;justify-content:center}
+/* --bx/--by: the frame around the screen, so the screen keeps the device's shape */
+.tdev{--w:1440;--h:900;--bx:0px;--by:0px;--max:100cqw;position:relative;width:min(var(--max),(100cqh - var(--by)) * var(--w) / var(--h) + var(--bx))}
+.tscr{position:relative;box-sizing:content-box;aspect-ratio:var(--w)/var(--h);overflow:hidden;background:var(--bg)}
+.tscr iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:var(--bg)}
+.tdev.computer{--bx:24px;--by:44px;--max:92cqw}
+.tdev.computer .tscr{border:12px solid #0d0b0a;border-bottom-width:18px;border-radius:16px 16px 4px 4px;box-shadow:0 0 0 2px #2b2522,0 30px 60px rgba(0,0,0,.6)}
+.tdev.computer::after{content:"";display:block;height:14px;margin:0 -4%;border-radius:2px 2px 30px 30px/2px 2px 12px 12px;background:linear-gradient(#5a524d,#3a3431 30%,#1f1b19)}
+.tdev.tv{--bx:16px;--by:40px}
+.tdev.tv .tscr{border:8px solid #0a0908;border-radius:8px;box-shadow:0 0 0 2px #2c2623,0 30px 70px rgba(0,0,0,.65)}
+.tdev.tv::after{content:"";display:block;width:26%;height:12px;margin:12px auto 0;border-radius:8px 8px 4px 4px;background:linear-gradient(#4a423e,#1d1917)}
+.tdev.phone{--bx:20px;--by:20px;--max:min(100cqw,460px)}
+.tdev.phone.wide{--max:100cqw}
+.tdev.phone .tscr{border:10px solid #0b0a09;border-radius:38px;box-shadow:0 0 0 2px #2e2825,0 30px 60px rgba(0,0,0,.7)}
+.try footer{flex:none;margin-top:0;padding-block:10px max(12px,env(safe-area-inset-bottom,0px));font-size:13px;row-gap:4px}
+@media (max-width:1000px){
+  .tgrid{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);row-gap:14px;align-items:stretch}
+  .tour .sh{margin-bottom:10px}
+  .tlead{margin:-4px 0 12px}
+  .tour .tabs{margin-bottom:10px}
+  .thint{margin-bottom:4px}
+}
+@media (max-width:760px){
+  .tbar{padding-block:10px}
+  .tbar .pill{height:40px;padding:0 18px}
+  .tour{padding-block:0 10px}
+  .tour .sh{margin-bottom:6px}
+  .tour .sh h2{font-size:24px}
+  .tour .sh .kj{font-size:28px}
+  .tlead{display:none}
+  .thint{font-size:13px;line-height:1.4}
+  .tour .tabs{grid-template-columns:repeat(3,1fr)}
+  .tdev.computer{--bx:12px;--by:30px}
+  .tdev.computer .tscr{border-width:6px 6px 10px}
+  .tdev.tv{--bx:8px;--by:32px}
+  .tdev.tv .tscr{border-width:4px}
+  .tdev.phone{--bx:12px;--by:12px}
+  .tdev.phone .tscr{border-width:6px;border-radius:26px}
+  .tour .sh .kj{display:none}
+  .tlong{display:none}
+  .tshort{display:inline}
+  .try footer{font-size:12px;padding-block:8px max(10px,env(safe-area-inset-bottom,0px));white-space:nowrap}
+  .try footer nav{gap:14px}
+  .try .fhost{display:none}
+}
+/* phones on their side: text beside the device, no footer */
+@media (max-width:1000px) and (max-height:500px){
+  .tbar{padding-block:8px}
+  .tgrid{grid-template-columns:minmax(0,260px) minmax(0,1fr);grid-template-rows:minmax(0,1fr);column-gap:20px;align-items:center}
+  .try footer{display:none}
+}

@@ -87,7 +87,7 @@ separate windows. Locked profiles ask for the profile code in the new
 window. Other desktops keep the unlocked session when reusing the popup
 window. Closing playback returns control to the desktop.
 
-With **Movies & shows** on for your profile, the launcher lists the films
+When your profile shows movies & shows (**More > What you watch**), the launcher lists the films
 and series you are watching and your Trakt watchlist, searches them along
 with anime, and has a **Trending movies & shows** list.
 

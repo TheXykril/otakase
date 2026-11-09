@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../cast/cast.dart';
 import '../core.dart';
 import '../data/hls_quality.dart';
 import '../data/external_subtitles.dart';
@@ -21,7 +22,9 @@ import '../tls_ca.dart';
 import 'components.dart';
 import 'player_keys.dart';
 import 'seal.dart';
+import 'phone_player.dart';
 import 'playback_report.dart';
+import 'mpv.dart';
 
 /// Something to play: a stream found by a source, or a downloaded file.
 class PlayableMedia {
@@ -134,6 +137,20 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
   String status = 'Finding a copy', error = '';
   int generation = 0;
 
+  late final CastClient caster = CastClient(widget.services.core);
+  CastDevice? castDevice;
+  CastStatus? castStatus;
+  Timer? castTimer;
+  int castEnded = -1;
+  bool castPolling = false, castPlaying = false;
+
+  /// The subtitle file last loaded, which a cast takes along.
+  Json? externalTrack;
+
+  bool get casting => castDevice != null;
+  bool get isPlaying =>
+      casting ? castStatus?.paused != true : player.state.playing;
+
   AppStore get store => widget.services.store;
 
   @override
@@ -157,32 +174,25 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     );
     subscriptions.addAll([
       player.stream.position.listen((p) {
-        if (!mounted || busy || scrubbing) return;
-        setState(() => position = p);
-        final total = duration.inSeconds;
-        if (!finished &&
-            total > 0 &&
-            p.inSeconds * 100 >=
-                total * store.integer('PercentageToMarkComplete') &&
-            total - p.inSeconds < 600) {
-          finished = true;
-          unawaited(save(completed: true));
-        }
+        if (!mounted || busy || scrubbing || casting) return;
+        tick(p);
       }),
       player.stream.duration.listen((d) {
-        if (mounted && d > Duration.zero) setState(() => duration = d);
+        if (mounted && d > Duration.zero && !casting) {
+          setState(() => duration = d);
+        }
       }),
       player.stream.playing.listen((playing) {
-        if (!mounted || busy) return;
+        if (!mounted || busy || casting) return;
         setState(() {});
         if (started) scrobble(playing ? 'start' : 'pause');
         showPresence();
       }),
       player.stream.completed.listen((done) {
-        if (done && !busy) unawaited(ended());
+        if (done && !busy && !casting) unawaited(ended());
       }),
       player.stream.error.listen((message) {
-        if (!mounted || busy || duration > Duration.zero) return;
+        if (!mounted || busy || casting || duration > Duration.zero) return;
         unawaited(anotherCopy());
       }),
     ]);
@@ -193,6 +203,20 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     unawaited(open());
   }
 
+  /// Moves the timeline and marks the title watched near the end.
+  void tick(Duration p) {
+    setState(() => position = p);
+    final total = duration.inSeconds;
+    if (!finished &&
+        total > 0 &&
+        p.inSeconds * 100 >=
+            total * store.integer('PercentageToMarkComplete') &&
+        total - p.inSeconds < 600) {
+      finished = true;
+      unawaited(save(completed: true));
+    }
+  }
+
   /// The Discord status on desktop.
   void showPresence() {
     if (busy || duration <= Duration.zero) return;
@@ -200,8 +224,9 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       widget.services.presence.movie(
         request.title,
         request.subtitle,
-        paused: !player.state.playing,
-        position: player.state.position.inMilliseconds / 1000,
+        paused: !isPlaying,
+        position:
+            (casting ? position : player.state.position).inMilliseconds / 1000,
         duration: duration.inMilliseconds / 1000,
       ),
     );
@@ -222,7 +247,8 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       return;
     }
     unawaited(save(completed: finished));
-    if (finished) return;
+    // A cast plays on with this screen off.
+    if (finished || casting) return;
     if (isDesktop) {
       scrobble('pause');
     } else if (player.state.playing) {
@@ -238,6 +264,8 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     scope.cancel();
     hideTimer?.cancel();
     saveTimer?.cancel();
+    castTimer?.cancel();
+    if (casting) unawaited(caster.control('stop').catchError((_) {}));
     if (!busy && duration > Duration.zero) {
       unawaited(save(completed: finished));
       if (!finished) scrobble('pause');
@@ -270,8 +298,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
   }
 
   Future<void> property(String name, String value) async {
-    final native = player.platform;
-    if (native is NativePlayer) await native.setProperty(name, value);
+    await player.mpvSet(name, value);
   }
 
   Future<void> configure() async {
@@ -302,6 +329,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       finished = false;
       started = false;
       subPicked = false;
+      externalTrack = null;
       position = Duration.zero;
       duration = Duration.zero;
       status = 'Finding a copy';
@@ -313,6 +341,22 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       });
       if (!mounted || g != generation) return;
       media = found;
+      if (casting) {
+        if (local(found)) {
+          await stopCast(resumeHere: false);
+          if (!mounted || g != generation) return;
+        } else {
+          final resume = store.flag('ResumePlayback')
+              ? request.resumeAt?.call(0) ?? 0
+              : 0;
+          await castCurrent(start: resume.toDouble());
+          if (!mounted || g != generation) return;
+          started = true;
+          setState(() => busy = false);
+          showControls();
+          return;
+        }
+      }
       setState(() => status = 'Loading');
       variants = found.url.contains('.m3u8')
           ? await fetchHlsVariants(
@@ -323,14 +367,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
           : <HlsVariant>[];
       if (!mounted || g != generation) return;
       await configure();
-      final local = !found.url.startsWith('http');
-      await player.open(
-        Media(
-          local ? Uri.file(found.url).toString() : found.url,
-          httpHeaders: found.headers,
-        ),
-        play: false,
-      );
+      await player.open(mediaFor(found), play: false);
       if (player.state.duration == Duration.zero) {
         try {
           await player.stream.duration
@@ -480,6 +517,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
         ),
       );
       subPicked = true;
+      externalTrack = track;
       return true;
     } catch (_) {
       return false;
@@ -546,18 +584,13 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     if (chosen == another) return anotherCopy();
     final quality = labels[chosen]!;
     await store.set('Quality', quality);
-    if (!mounted || busy || media == null) return;
+    if (!mounted || busy || media == null || casting) return;
     // mpv picks the HLS variant when it opens the stream, so open the same
     // copy again at the same spot.
     final at = player.state.position;
     final playing = player.state.playing;
     await property('hls-bitrate', hlsBitrate(quality, variants));
-    final m = media!;
-    final local = !m.url.startsWith('http');
-    await player.open(
-      Media(local ? Uri.file(m.url).toString() : m.url, httpHeaders: m.headers),
-      play: false,
-    );
+    await player.open(mediaFor(media!), play: false);
     try {
       await player.stream.duration
           .firstWhere((d) => d > Duration.zero)
@@ -583,11 +616,239 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     await open();
   }
 
+  static bool local(PlayableMedia m) => !m.url.startsWith('http');
+
+  static Media mediaFor(PlayableMedia m) => Media(
+    local(m) ? Uri.file(m.url).toString() : m.url,
+    httpHeaders: m.headers,
+  );
+
+  Future<void> castControl(String action, [double value = 0]) async {
+    try {
+      await caster.control(action, value);
+      await pollCast();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('The cast device did not answer.')),
+        );
+      }
+    }
+  }
+
+  /// Picks a device and moves the title there.
+  Future<void> castMenu() async {
+    hideTimer?.cancel();
+    final m = media;
+    if (m != null && local(m)) {
+      flash.show('Downloads play on this screen only');
+      showControls();
+      return;
+    }
+    final device = await pickCastDevice(context, caster);
+    if (!mounted) return;
+    if (device == null) {
+      showControls();
+      return;
+    }
+    await startCast(device);
+  }
+
+  Future<void> startCast(CastDevice device) async {
+    final at = position.inMilliseconds / 1000;
+    if (!busy && duration > Duration.zero) await save(completed: finished);
+    castDevice = device;
+    castStatus = null;
+    castEnded = -1;
+    castPlaying = false;
+    await player.pause();
+    if (!mounted) return;
+    setState(() => overlay = true);
+    if (media == null || busy) return; // open() casts once it resolves.
+    await castCurrent(start: at);
+  }
+
+  /// The subtitle file the device should show: the one picked here, else
+  /// the first in the subtitle language order. Dubs and embedded tracks
+  /// send none; a file on this device cannot be fetched by the core.
+  String castSubtitle(PlayableMedia m) {
+    bool web(Json? t) => ((t?['url'] as String?) ?? '').startsWith('http');
+    if (externalTrack case final Json t) {
+      return web(t) ? t['url'] as String : '';
+    }
+    if (subPicked) return '';
+    final preferences = store
+        .text('SubsLanguage')
+        .toLowerCase()
+        .split(',')
+        .map((v) => v.trim())
+        .where((v) => v.isNotEmpty)
+        .toList();
+    if (preferences.isEmpty ||
+        preferences.first == 'off' ||
+        preferences.first == 'none') {
+      return '';
+    }
+    if (m.audioLanguage
+        .split(',')
+        .any((code) => languageMatches(code.trim(), '', preferences.first))) {
+      return '';
+    }
+    final files = m.subtitles.where(web).toList();
+    for (final preferred in preferences) {
+      for (final t in dialogueSubtitleOrder(
+        files,
+        language: (t) => t['language'] as String?,
+        label: (t) => t['label'] as String?,
+      )) {
+        if (languageMatches(
+          t['language'] as String?,
+          t['label'] as String?,
+          preferred,
+        )) {
+          return t['url'] as String;
+        }
+      }
+    }
+    return '';
+  }
+
+  /// Sends the current copy to the cast device.
+  Future<void> castCurrent({double start = 0}) async {
+    final device = castDevice, m = media;
+    if (device == null || m == null) return;
+    try {
+      await caster.start(
+        device: device,
+        stream: ResolvedStream.fromJson({
+          'url': m.url,
+          'headers': m.headers,
+          'hls': m.url.contains('.m3u8') || variants.isNotEmpty,
+        }),
+        title: [
+          request.title,
+          request.subtitle,
+        ].where((s) => s.isNotEmpty).join(' · '),
+        subtitle: castSubtitle(m),
+        start: start,
+        duration: duration.inMilliseconds / 1000,
+      );
+    } on CoreFailure catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+      castDevice = null;
+      setState(() {});
+      return;
+    }
+    castTimer?.cancel();
+    castTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => unawaited(pollCast()),
+    );
+  }
+
+  Future<void> pollCast() async {
+    if (!casting || castPolling || !mounted) return;
+    castPolling = true;
+    try {
+      final s = await caster.status();
+      if (!mounted || !casting) return;
+      if (!s.active) {
+        // Stopped from the browser page.
+        await stopCast(remote: true);
+        return;
+      }
+      setState(() {
+        castStatus = s;
+        if (s.duration > 0) {
+          duration = Duration(milliseconds: (s.duration * 1000).round());
+        }
+      });
+      if (busy) return;
+      if (s.state == 'playing' || s.state == 'paused') {
+        if (!scrubbing) {
+          tick(Duration(milliseconds: (s.position * 1000).round()));
+        }
+        final playing = s.state == 'playing';
+        if (playing != castPlaying && started && !finished) {
+          scrobble(playing ? 'start' : 'pause');
+          showPresence();
+        }
+        castPlaying = playing;
+      }
+      if (s.state == 'ended' && castEnded != s.load) {
+        castEnded = s.load;
+        await ended();
+      }
+    } catch (_) {
+      // A missed poll is retried in a second.
+    } finally {
+      castPolling = false;
+    }
+  }
+
+  /// Ends the cast. Unless the screen is being left, the title carries on
+  /// here from where the device was.
+  Future<void> stopCast({bool resumeHere = true, bool remote = false}) async {
+    castTimer?.cancel();
+    castTimer = null;
+    if (!remote) {
+      try {
+        await caster.control('stop');
+      } catch (_) {
+        /* The device may already be gone. */
+      }
+    }
+    castDevice = null;
+    castStatus = null;
+    if (!mounted) return;
+    setState(() {});
+    if (!resumeHere) return;
+    final m = media;
+    if (m == null || busy || error.isNotEmpty) return;
+    await save(completed: finished);
+    final at = position, g = generation;
+    if (player.state.duration == Duration.zero) {
+      // The title went straight to the device; load it here first.
+      setState(() {
+        busy = true;
+        status = 'Loading';
+      });
+      try {
+        await configure();
+        await player.open(mediaFor(m), play: false);
+        await player.stream.duration
+            .firstWhere((d) => d > Duration.zero)
+            .timeout(const Duration(seconds: 25));
+      } on TimeoutException {
+        /* Play anyway. */
+      } catch (_) {
+        if (mounted && g == generation) {
+          setState(() {
+            busy = false;
+            error = 'This title could not be opened.';
+          });
+        }
+        return;
+      }
+      if (!mounted || g != generation) return;
+      final picked = externalTrack;
+      await pickTracks(m, g);
+      if (picked != null) await loadSubtitle(picked, g);
+      if (!mounted || g != generation) return;
+      setState(() => busy = false);
+    }
+    await player.seek(at);
+    await player.play();
+    if (mounted) showControls();
+  }
+
   void showControls() {
     hideTimer?.cancel();
     if (!overlay) setState(() => overlay = true);
     hideTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted && !busy && error.isEmpty && player.state.playing) {
+      if (mounted && !busy && error.isEmpty && isPlaying && !casting) {
         setState(() => overlay = false);
         surface.requestFocus();
       }
@@ -603,8 +864,20 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       ),
     );
     setState(() => position = clamped);
-    await player.seek(clamped);
+    await seekTo(clamped);
     showControls();
+  }
+
+  /// Moves playback here or on the cast device.
+  Future<void> seekTo(Duration target) async {
+    if (!casting) return player.seek(target);
+    setState(() => position = target);
+    await castControl('seek', target.inMilliseconds / 1000);
+  }
+
+  Future<void> playPause() async {
+    if (!casting) return player.playOrPause();
+    await castControl(castStatus?.paused == true ? 'play' : 'pause');
   }
 
   Future<void> toggleFullscreen() async {
@@ -680,12 +953,17 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
         await player.setAudioTrack(t);
       case ('sub', final SubtitleTrack t):
         subPicked = true;
+        externalTrack = null;
         await player.setSubtitleTrack(t);
       case ('file', final Json t):
         subPicked = true;
         await loadSubtitle(t, generation);
     }
-    showControls();
+    // The device takes the subtitle file when the stream starts.
+    if (casting && choice.$1 != 'audio') {
+      await castCurrent(start: position.inMilliseconds / 1000);
+    }
+    if (mounted) showControls();
   }
 
   KeyEventResult key(FocusNode node, KeyEvent event) {
@@ -710,7 +988,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
         (onSurface &&
             (k == LogicalKeyboardKey.select ||
                 k == LogicalKeyboardKey.enter))) {
-      unawaited(player.playOrPause());
+      unawaited(playPause());
       showControls();
       return KeyEventResult.handled;
     }
@@ -777,7 +1055,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     if (busy || error.isNotEmpty) return false;
     switch (action) {
       case PlayerAction.playPause:
-        unawaited(player.playOrPause());
+        unawaited(playPause());
         showControls();
       case PlayerAction.seekBack || PlayerAction.seekForward:
         unawaited(seekBy(action == PlayerAction.seekBack ? -5 : 5));
@@ -865,165 +1143,8 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
 
   String time(Duration d) => DesktopPlayerBar.time(d);
 
-  Widget mobileControls(BuildContext context) {
-    final playing = player.state.playing;
-    final total = math.max(1, duration.inMilliseconds).toDouble();
-    return Stack(
-      children: [
-        const Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: [0, .25, .6, 1],
-                  colors: [
-                    Color(0xb3000000),
-                    Color(0x00000000),
-                    Color(0x00000000),
-                    Color(0xd9000000),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: widget.isTV ? 48 : 16,
-              vertical: widget.isTV ? 27 : 8,
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      tooltip: 'Back',
-                      onPressed: () => Navigator.maybePop(context),
-                      icon: const Icon(LucideIcons.arrowLeft, color: fgBright),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            request.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: uiStyle(
-                              context,
-                              size: 18,
-                              weight: FontWeight.w600,
-                              color: fgBright,
-                            ),
-                          ),
-                          Text(
-                            [
-                              request.subtitle,
-                              media?.label ?? '',
-                            ].where((s) => s.isNotEmpty).join(' · '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: uiStyle(context, size: 15, color: muted),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Row(
-                  children: [
-                    Text(time(position), style: mono.copyWith(color: fg)),
-                    Expanded(
-                      child: Slider(
-                        value: position.inMilliseconds
-                            .clamp(0, total)
-                            .toDouble(),
-                        max: total,
-                        activeColor: shu,
-                        inactiveColor: line,
-                        onChangeStart: (_) {
-                          scrubbing = true;
-                          hideTimer?.cancel();
-                        },
-                        onChanged: (v) => setState(
-                          () => position = Duration(milliseconds: v.round()),
-                        ),
-                        onChangeEnd: (v) {
-                          scrubbing = false;
-                          unawaited(
-                            player.seek(Duration(milliseconds: v.round())),
-                          );
-                          showControls();
-                        },
-                      ),
-                    ),
-                    Text(time(duration), style: mono.copyWith(color: fg)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    TransportButton(
-                      label: 'Back 10 seconds',
-                      icon: LucideIcons.rotateCcw,
-                      onPressed: () => unawaited(seekBy(-10)),
-                    ),
-                    const SizedBox(width: 16),
-                    TransportButton(
-                      label: playing ? 'Pause' : 'Play',
-                      icon: playing ? LucideIcons.pause : LucideIcons.play,
-                      primary: true,
-                      focusNode: playFocus,
-                      onPressed: () {
-                        unawaited(player.playOrPause());
-                        showControls();
-                      },
-                    ),
-                    const SizedBox(width: 16),
-                    TransportButton(
-                      label: 'Forward 10 seconds',
-                      icon: LucideIcons.rotateCw,
-                      onPressed: () => unawaited(seekBy(10)),
-                    ),
-                    const SizedBox(width: 16),
-                    TransportButton(
-                      label: 'Audio and subtitles',
-                      icon: LucideIcons.captions,
-                      onPressed: () => unawaited(trackPanel()),
-                    ),
-                    if ((media?.copy ?? '').isNotEmpty) ...[
-                      const SizedBox(width: 16),
-                      TransportButton(
-                        label: 'Try another copy',
-                        icon: LucideIcons.refreshCw,
-                        onPressed: () => unawaited(anotherCopy()),
-                      ),
-                    ],
-                    if (request.next != null) ...[
-                      const SizedBox(width: 16),
-                      TransportButton(
-                        label: 'Next episode',
-                        icon: LucideIcons.skipForward,
-                        onPressed: () => unawaited(playNext()),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget desktopControls() => DesktopPlayerBar(
+  Widget mobileControls(BuildContext context) => PhonePlayerControls(
+    isTV: widget.isTV,
     title: request.title,
     subtitle: [
       request.subtitle,
@@ -1031,18 +1152,14 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     ].where((s) => s.isNotEmpty).join(' · '),
     position: position,
     duration: duration,
-    buffered: player.state.buffer,
-    playing: player.state.playing,
-    buffering: player.state.buffering,
-    silent: player.state.volume == 0,
-    fullscreen: fullscreen,
-    trackLabel: 'Tracks',
-    centerLabel: request.subtitle,
-    stripes: const [],
+    playing: isPlaying,
+    buffering: casting
+        ? castStatus?.state == 'buffering'
+        : player.state.buffering,
     playFocus: playFocus,
     onBack: () => Navigator.maybePop(context),
     onPlayPause: () {
-      unawaited(player.playOrPause());
+      unawaited(playPause());
       showControls();
     },
     onSeekBy: (s) => unawaited(seekBy(s)),
@@ -1054,7 +1171,73 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
         setState(() => position = Duration(milliseconds: v.round())),
     onSeekEnd: (v) {
       scrubbing = false;
-      unawaited(player.seek(Duration(milliseconds: v.round())));
+      unawaited(seekTo(Duration(milliseconds: v.round())));
+      showControls();
+    },
+    topActions: [
+      if (!widget.isTV)
+        IconButton(
+          key: const Key('player-cast'),
+          tooltip: casting ? 'Casting' : 'Cast',
+          onPressed: () => unawaited(castMenu()),
+          icon: Icon(LucideIcons.cast, color: casting ? accentText : fgBright),
+        ),
+    ],
+    actions: [
+      PlayerButton(
+        icon: LucideIcons.skipForward,
+        label: 'Next',
+        onPressed: request.next != null ? () => unawaited(playNext()) : null,
+      ),
+      PlayerButton(
+        icon: LucideIcons.captions,
+        label: 'Audio & subs',
+        onPressed: () => unawaited(trackPanel()),
+      ),
+      PlayerButton(
+        icon: LucideIcons.gauge,
+        label: 'Quality',
+        onPressed: () => unawaited(qualityPanel()),
+      ),
+    ],
+  );
+
+  Widget desktopControls() => DesktopPlayerBar(
+    title: request.title,
+    subtitle: [
+      request.subtitle,
+      media?.label ?? '',
+    ].where((s) => s.isNotEmpty).join(' · '),
+    position: position,
+    duration: duration,
+    buffered: casting ? Duration.zero : player.state.buffer,
+    playing: isPlaying,
+    buffering: casting
+        ? castStatus?.state == 'buffering'
+        : player.state.buffering,
+    casting: casting,
+    onCast: () => unawaited(castMenu()),
+    silent: player.state.volume == 0,
+    fullscreen: fullscreen,
+    trackLabel: 'Tracks',
+    centerLabel: request.subtitle,
+    stripes: const [],
+    playFocus: playFocus,
+    onBack: () => Navigator.maybePop(context),
+    onPlayPause: () {
+      unawaited(playPause());
+      showControls();
+    },
+    onSeekBy: (s) => unawaited(seekBy(s)),
+    onSeekStart: (_) {
+      scrubbing = true;
+      hideTimer?.cancel();
+    },
+    onSeekChanged: (v) =>
+        setState(() => position = Duration(milliseconds: v.round())),
+    onSeekEnd: (v) {
+      scrubbing = false;
+      unawaited(seekTo(Duration(milliseconds: v.round())));
       showControls();
     },
     onNext: request.next != null ? () => unawaited(playNext()) : null,
@@ -1097,6 +1280,13 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
                 child: Video(controller: video, controls: NoVideoControls),
               ),
             ),
+            if (casting && !busy && error.isEmpty)
+              CastPanel(
+                status: castStatus,
+                deviceName: castDevice!.name,
+                isTV: widget.isTV,
+                onStop: () => unawaited(stopCast()),
+              ),
             if (busy)
               Center(
                 child: Column(
