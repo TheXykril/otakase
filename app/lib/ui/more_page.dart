@@ -229,12 +229,6 @@ class MorePage extends StatelessWidget {
             section: 'Subtitles & languages',
           ),
         ),
-        row(
-          contentSection,
-          contentLabels[services.store.text('Content')] ?? '',
-          LucideIcons.clapperboard,
-          () => openSettings(context, services, isTV, section: contentSection),
-        ),
         if (!isTV)
           row(
             'Downloads',
@@ -273,10 +267,10 @@ class MorePage extends StatelessWidget {
           ),
         ),
         row(
-          'Appearance',
-          'Shu / Dark',
+          'Display',
+          '${contentLabels[services.store.text('Content')] ?? ''} · Shu / Dark',
           LucideIcons.palette,
-          () => openSettings(context, services, isTV, section: 'Appearance'),
+          () => openSettings(context, services, isTV, section: 'Display'),
         ),
         const MoreGroupHeading('Devices'),
         row(
@@ -518,7 +512,6 @@ class _DesktopMoreState extends State<DesktopMore> {
         const MoreGroupHeading('Watching'),
         item('Playback', LucideIcons.circlePlay),
         item('Subtitles & languages', LucideIcons.captions),
-        item(contentSection, LucideIcons.clapperboard),
         item(
           'Downloads',
           LucideIcons.download,
@@ -547,7 +540,7 @@ class _DesktopMoreState extends State<DesktopMore> {
           LucideIcons.cloudUpload,
           open: () => detail(BackupPage(services: services, isTV: true)),
         ),
-        item('Appearance', LucideIcons.palette),
+        item('Display', LucideIcons.palette),
         const MoreGroupHeading('Devices'),
         item(
           'Phone remote',
