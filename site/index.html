@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Archivo+Black&family=JetBrains+Mono&display=swap">
 <!-- only the kanji the page uses, so the Japanese font stays a few kilobytes -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700;900&text=%E4%BB%BB%E7%B6%9A%E9%A3%9B%E6%98%A0%E5%90%8C%E3%81%8A%E3%81%9B&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700;900&text=%E4%BB%BB%E7%B6%9A%E9%A3%9B%E6%98%A0%E5%90%8C%E8%A6%8B%E3%81%8A%E3%81%9B&display=swap">
 <link rel="stylesheet" href="style.css?v=dev">
 </head>
 <body>
@@ -48,6 +48,37 @@
     <div class="hint mono" id="hint">Scroll<i></i></div>
   </div>
   <div class="snap" style="--i:0"></div><div class="snap" style="--i:1"></div><div class="snap" style="--i:2"></div><div class="snap" style="--i:3"></div><div class="snap" style="--i:4"></div>
+</section>
+
+<!-- Filled by tour.js from tour/tour.json, which the Site deploy renders
+     from the app itself; hidden when the file is missing. -->
+<section class="tour wrap after" id="tour" aria-labelledby="tour-h" data-src="tour/tour.json?v=dev" hidden>
+  <div class="tgrid">
+    <div class="thead">
+      <div class="sh"><h2 id="tour-h">Look around.</h2><span class="kj" aria-hidden="true">見</span></div>
+      <p class="tlead">This is the real app, screen for screen. Pick a device and press around: tabs, shows, settings and the player.</p>
+      <div class="tabs" role="tablist" aria-label="Device" id="tour-devices">
+        <button role="tab" data-device="computer" aria-selected="true">Computer</button>
+        <button role="tab" data-device="phone" aria-selected="false">Phone</button>
+        <button role="tab" data-device="tv" aria-selected="false">TV</button>
+      </div>
+    </div>
+    <div class="tctl">
+      <div class="tnow"><button class="pill" id="tour-back" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7M19 12H5"/></svg><span>Back</span></button><div><span class="mono" id="tour-kind"></span><b id="tour-title"></b></div></div>
+      <p class="thint" id="tour-hint"></p>
+      <label class="tshow"><input type="checkbox" id="tour-marks"> Show what I can press</label>
+      <nav class="tlist" id="tour-list" aria-label="Jump to a screen"></nav>
+    </div>
+    <div class="tstage">
+      <div class="tdev computer" id="tour-dev">
+        <div class="tscr" id="tour-scr" tabindex="0" aria-describedby="tour-hint">
+          <img id="tour-img" alt="">
+          <div class="tspots" id="tour-spots"></div>
+        </div>
+      </div>
+      <div class="tpages" id="tour-pages"><button type="button" id="tour-up" aria-label="Scroll up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></button><span id="tour-page"></span><button type="button" id="tour-down" aria-label="Scroll down"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button></div>
+    </div>
+  </div>
 </section>
 
 <section class="dl wrap after" id="download" aria-labelledby="dl-h">
@@ -95,5 +126,6 @@
 <div class="wrap"><footer><span>お任せ · Otakase · GPL-3.0 · Otakase does not host or upload any video.</span><nav><a href="https://github.com/TheXykril/otakase/wiki">Help</a><a href="https://otakase.xyverion.com/discord/">Discord</a><a href="https://github.com/TheXykril/otakase">GitHub</a></nav></footer></div>
 </div>
 <script src="app.js?v=dev"></script>
+<script src="tour.js?v=dev"></script>
 </body>
 </html>

@@ -1,3 +1,6 @@
 __pycache__/
 /bot/bot
 vendor/
+
+# Site tour screens, rendered by the Site workflow at deploy
+/site/tour/

@@ -227,7 +227,8 @@
     step(e.deltaY > 0 ? 1 : -1);
   }, { passive: false });
   addEventListener('keydown', (e) => {
-    if (e.target.closest && e.target.closest('input,textarea,[role=tab]')) return;
+    // the tour uses the arrow keys like a TV remote
+    if (e.target.closest && e.target.closest('input,textarea,[role=tab],#tour')) return;
     const dir = { PageDown: 1, ArrowDown: 1, ' ': e.shiftKey ? -1 : 1, PageUp: -1, ArrowUp: -1 }[e.key];
     if (!dir) return;
     e.preventDefault();
@@ -242,7 +243,7 @@
     macos: ['Otakase for macOS', 'Unzip and move Otakase to Applications. Runs on Apple Silicon and Intel. The first time, right-click it and choose Open.', 'Get the app', R + 'otakase-app-macos.zip'],
     linux: ['Otakase for Linux', 'One AppImage for any x86_64 distribution, with its player inside. Make it executable with <code>chmod +x</code> and run it.', 'Get the AppImage', R + 'otakase-app-linux-x86_64.AppImage'],
   };
-  const tabs = [...document.querySelectorAll('[role=tab]')];
+  const tabs = [...document.querySelectorAll('#download [role=tab]')];
   function pick(key) {
     tabs.forEach((t) => { const on = t.id === 't-' + key; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; });
     const [h, txt, btn, url] = P[key];
