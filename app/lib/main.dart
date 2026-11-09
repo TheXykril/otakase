@@ -16,6 +16,7 @@ import 'desktop/launcher_playback.dart';
 import 'desktop/launcher_toggle.dart';
 import 'desktop/tiling.dart';
 import 'desktop/window_frame.dart';
+import 'host.dart';
 import 'services.dart';
 import 'ui/rate_prompt.dart';
 import 'ui/app_keys.dart';
@@ -67,13 +68,15 @@ Future<void> main([List<String> args = const []]) async {
     }
   }
   final core = CoreClient();
+  final androidTV = !isDesktop && await core.isTV();
+  Host.tv = androidTV;
   final profiles = ProfileManager(
     preferences: await SharedPreferences.getInstance(),
     tokens: platformTokenStore(),
     core: core,
     // Desktop starts from the wide TV layout (shelves, top navigation) and
     // adds mouse and window controls on top.
-    isTV: isDesktop || await core.isTV(),
+    isTV: isDesktop || androidTV,
   );
   try {
     await profiles.initialize(playbackProfile: playback?.profileId);
