@@ -147,6 +147,10 @@ footer a:hover{color:var(--bright)}
 /* try it: the app built for the web, in a device frame (demo.js) */
 .tour{padding-block:48px 40px;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;justify-content:center}
 .tour[hidden],.tour .tabs[hidden]{display:none}
+.tbar.wrap{max-width:1440px}
+.tbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:20px}
+.tback{display:inline-flex;align-items:center;gap:10px;color:var(--fg);text-decoration:none;font:15px/1 'Archivo Black','Arial Black',sans-serif;letter-spacing:1px}
+.try .tour{min-height:calc(100svh - 88px);padding-block:8px 40px}
 .tour.wrap{max-width:1440px}
 .tgrid{display:grid;grid-template-columns:minmax(0,280px) minmax(0,1fr);column-gap:40px;align-items:center}
 .thead{min-width:0}

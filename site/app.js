@@ -227,8 +227,7 @@
     step(e.deltaY > 0 ? 1 : -1);
   }, { passive: false });
   addEventListener('keydown', (e) => {
-    // the tour uses the arrow keys like a TV remote
-    if (e.target.closest && e.target.closest('input,textarea,[role=tab],#tour')) return;
+    if (e.target.closest && e.target.closest('input,textarea,[role=tab]')) return;
     const dir = { PageDown: 1, ArrowDown: 1, ' ': e.shiftKey ? -1 : 1, PageUp: -1, ArrowUp: -1 }[e.key];
     if (!dir) return;
     e.preventDefault();

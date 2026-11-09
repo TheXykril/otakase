@@ -73,6 +73,7 @@
     if (!tv && (/Android|iPhone/i.test(ua) || matchMedia('(max-width: 760px)').matches)) {
       $('tour-devices').hidden = true;
       pick('phone');
+      $('tour-hint').textContent = 'Tap around and scroll, just like in the app.';
     } else {
       pick(tv ? 'tv' : /iPad/i.test(ua) ? 'phone' : 'computer');
     }
