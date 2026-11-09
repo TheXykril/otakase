@@ -11,8 +11,6 @@
 <meta property="og:image" content="https://otakase.xyverion.com/img/social-preview.png">
 <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="../img/favicon-32.png" sizes="32x32">
-<!-- Without JavaScript, go straight to the fallback invite. -->
-<noscript><meta http-equiv="refresh" content="0; url=https://discord.gg/AfrDAeWbcW"></noscript>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -36,26 +34,31 @@
   <img src="../img/favicon.svg" alt="">
   <h1>OTAKASE ON DISCORD</h1>
   <p id="msg">Opening the invite…</p>
-  <a class="go" id="go" href="https://discord.gg/AfrDAeWbcW">JOIN THE SERVER</a>
+  <noscript><p>Turn on JavaScript to get an invite.</p></noscript>
+  <a class="go" id="go" href="./" hidden>JOIN THE SERVER</a>
   <a class="back" href="../">← otakase.xyverion.com</a>
 </main>
 <script>
-// The server widget hands out a live invite, so this link keeps working even
-// if an old invite is removed. The invite below is only the fallback.
+// The server widget hands out a live invite that Discord keeps fresh. There
+// is no permanent invite: if the widget can't answer, the visitor tries again.
 (function () {
-  var fallback = "https://discord.gg/AfrDAeWbcW";
-  var done = false;
-  function go(url) {
-    if (done) return;
-    done = true;
-    document.getElementById("go").href = url;
-    location.replace(url);
+  var msg = document.getElementById("msg");
+  var go = document.getElementById("go");
+  function fail() {
+    msg.textContent = "Couldn't get an invite right now. Try again in a minute.";
+    go.textContent = "TRY AGAIN";
+    go.href = location.href;
+    go.hidden = false;
   }
-  setTimeout(function () { go(fallback); }, 2500);
   fetch("https://discord.com/api/guilds/1556588123561922560/widget.json")
     .then(function (r) { return r.ok ? r.json() : {}; })
-    .then(function (w) { go(w.instant_invite || fallback); })
-    .catch(function () { go(fallback); });
+    .then(function (w) {
+      if (!w.instant_invite) return fail();
+      go.href = w.instant_invite;
+      go.hidden = false;
+      location.replace(w.instant_invite);
+    })
+    .catch(fail);
 })();
 </script>
 </body>
