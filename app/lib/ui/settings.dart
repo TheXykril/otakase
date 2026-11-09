@@ -93,7 +93,7 @@ const settingLabels = <String, String>{
   'Quality': 'Quality',
   'TorrentSources': 'Torrent sources',
   'TorrentOnMobileData': 'Torrents on mobile data',
-  'PercentageToMarkComplete': 'Mark films and series watched at',
+  'PercentageToMarkComplete': 'Count movies & shows as watched at',
   'ResumePlayback': 'Resume where you left off',
   'CheckUpdates': 'Check for updates',
   'ExternalMpv': 'Play in my own mpv',
@@ -103,11 +103,46 @@ const settingLabels = <String, String>{
   'Updates': 'Updates',
   'Diagnostics': 'Diagnostics',
   'About': 'About',
-  'Content': 'Shows on this profile',
-  'MovieLanguages': 'Source languages',
+  'Content': 'This profile shows',
+  'MovieLanguages': 'Movie & show languages',
 };
 
 String settingLabel(String key) => settingLabels[key] ?? key;
+
+/// Plain names for stored values the viewer picks from a list. The stored
+/// value stays the same; only what the viewer reads changes.
+const settingValueNames = <String, Map<String, String>>{
+  'SubtitleColour': {
+    '#FFFFFF': 'White',
+    '#FFFFCC': 'Cream',
+    '#FFF3A3': 'Yellow',
+    '#D84836': 'Red',
+    '#A6E3FF': 'Light blue',
+  },
+  'SubtitleBackground': {
+    '#00000000': 'None',
+    '#80000000': 'See-through dark',
+    '#CC000000': 'Dark',
+  },
+  'SubStyle': {'soft': 'Original styling', 'plain': 'My subtitle settings'},
+  'SubOrDub': {'sub': 'Subtitled', 'dub': 'Dubbed'},
+  'Quality': {
+    'best': 'Best available',
+    '1080': '1080p',
+    '720': '720p',
+    '480': '480p',
+    '360': '360p',
+  },
+};
+
+/// How a stored setting value reads in settings.
+String settingValue(AppStore store, String key) {
+  final raw = store.text(key);
+  return settingValueNames[key]?[raw] ?? raw;
+}
+
+/// The section that holds the Content choice and the movie sources.
+const contentSection = 'What you watch';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -176,14 +211,16 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> choose(String key, List<String> values) async {
+    final names = settingValueNames[key] ?? const <String, String>{};
+    String name(String v) => names[v] ?? v;
     final result = await chooseValue(
       context,
       settingLabel(key),
-      values,
-      selected: store.text(key),
+      values.map(name).toList(),
+      selected: name(store.text(key)),
     );
     if (result != null) {
-      await store.set(key, result);
+      await store.set(key, values.firstWhere((v) => name(v) == result));
     }
   }
 
@@ -446,24 +483,24 @@ class _SettingsPageState extends State<SettingsPage> {
       group('Subtitles & languages', LucideIcons.captions, [
         row(
           'SubsLanguage',
-          'Subtitle language priority, comma separated. Use off to disable.',
+          'Languages to try in order, separated by commas. Type off for no subtitles.',
           value: store.text('SubsLanguage'),
           onTap: () => edit('SubsLanguage'),
         ),
         row(
           'AudioLanguages',
-          'Preferred audio language order.',
+          'Audio languages to try in order, separated by commas.',
           value: store.text('AudioLanguages'),
           onTap: () => edit('AudioLanguages'),
         ),
         row(
           'SubtitleFont',
-          'Bundled font for Japanese text and ASS signs.',
+          'Built into the app. Covers Japanese text and on-screen signs.',
           value: store.text('SubtitleFont'),
         ),
         row(
           'SubtitleSize',
-          'Size for subtitle text.',
+          'How big subtitle text is.',
           value: store.text('SubtitleSize'),
           onTap: () => numberChoice('SubtitleSize', [
             24,
@@ -479,8 +516,8 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         row(
           'SubtitleColour',
-          'Text colour.',
-          value: store.text('SubtitleColour'),
+          'Colour of subtitle text.',
+          value: settingValue(store, 'SubtitleColour'),
           onTap: () => choose('SubtitleColour', [
             '#FFFFFF',
             '#FFFFCC',
@@ -491,8 +528,8 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         row(
           'SubtitleBackground',
-          'Subtitle background colour.',
-          value: store.text('SubtitleBackground'),
+          'Box behind subtitle text.',
+          value: settingValue(store, 'SubtitleBackground'),
           onTap: () => choose('SubtitleBackground', [
             '#00000000',
             '#80000000',
@@ -501,81 +538,84 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         row(
           'SubtitleOutline',
-          'Outline thickness.',
+          'How thick the edge around subtitle text is.',
           value: store.text('SubtitleOutline'),
           onTap: () => numberChoice('SubtitleOutline', [0, 1, 2, 3, 4, 5]),
         ),
         row(
           'SubtitlePosition',
-          'Vertical placement, higher values move text down.',
+          'Height on screen. Higher numbers sit lower.',
           value: store.text('SubtitlePosition'),
           onTap: () =>
               numberChoice('SubtitlePosition', [10, 25, 50, 75, 90, 95, 100]),
         ),
         row(
           'SubStyle',
-          'soft keeps the release styling (ASS signs); plain uses the subtitle settings below.',
-          value: store.text('SubStyle'),
+          'Original styling keeps the fonts and signs the subtitles came with. '
+              'My subtitle settings uses the size, colour and position above.',
+          value: settingValue(store, 'SubStyle'),
           onTap: () => choose('SubStyle', ['soft', 'plain']),
         ),
         row(
           'SubOrDub',
-          'Preferred stream.',
-          value: store.text('SubOrDub').toUpperCase(),
+          'Which version to play when an episode has both.',
+          value: settingValue(store, 'SubOrDub'),
           onTap: () => choose('SubOrDub', ['sub', 'dub']),
         ),
         toggle(
           'AutoAudioFallback',
-          'Try the other stream when unavailable. Unstable.',
+          'Play the dubbed version when no subtitled one is found, or the other way round.',
           icon: LucideIcons.globe,
         ),
       ]),
-      group('Movies & shows', LucideIcons.clapperboard, [
+      group(contentSection, LucideIcons.clapperboard, [
         row(
           'Content',
-          'Each profile keeps its own choice, so one can show only movies '
-              'and another only anime.',
+          'Anime, movies & shows, or both. Each profile keeps its own '
+              'choice, so one can show only movies and another only anime.',
           value: contentLabels[store.text('Content')] ?? store.text('Content'),
           icon: LucideIcons.users,
           onTap: chooseContent,
         ),
-        row(
-          'MovieLanguages',
-          'A film or episode is looked for in the first language, then the '
-              'next. vidsrc is English; 8Filmai and Filmukas are Lithuanian.',
-          value: widget.services.movies.languages
-              .map(languageTitle)
-              .join(', then '),
-          icon: LucideIcons.languages,
-          onTap: chooseMovieLanguages,
-        ),
-        FutureBuilder(
-          // Asked only while this group shows; the core lists the sources.
-          future: widget.section == null || widget.section == 'Movies & shows'
-              ? widget.services.movies.sources().catchError(
-                  (_) => knownMovieSources,
-                )
-              : null,
-          initialData: knownMovieSources,
-          builder: (context, snap) => Column(
-            children: [
-              for (final source in snap.data ?? knownMovieSources)
-                row(
-                  source.label,
-                  [
-                    languageTitle(source.languageName),
-                    source.series ? 'movies and series' : 'movies',
-                    ?store.providerHealth['movie:${source.name}'],
-                  ].join(' · '),
-                  value: widget.services.movies.sourceEnabled(source.name)
-                      ? 'On'
-                      : 'Off',
-                  icon: LucideIcons.server,
-                  onTap: () => toggleMovieSource(source.name),
-                ),
-            ],
+        if (contentModeOf(store) != ContentMode.anime) ...[
+          row(
+            'MovieLanguages',
+            'Movies and episodes are looked for in the first language, then '
+                'the next. vidsrc is English; 8Filmai and Filmukas are Lithuanian.',
+            value: widget.services.movies.languages
+                .map(languageTitle)
+                .join(', then '),
+            icon: LucideIcons.languages,
+            onTap: chooseMovieLanguages,
           ),
-        ),
+          FutureBuilder(
+            // Asked only while this group shows; the core lists the sources.
+            future: widget.section == null || widget.section == contentSection
+                ? widget.services.movies.sources().catchError(
+                    (_) => knownMovieSources,
+                  )
+                : null,
+            initialData: knownMovieSources,
+            builder: (context, snap) => Column(
+              children: [
+                for (final source in snap.data ?? knownMovieSources)
+                  row(
+                    source.label,
+                    [
+                      languageTitle(source.languageName),
+                      source.series ? 'movies and shows' : 'movies only',
+                      ?store.providerHealth['movie:${source.name}'],
+                    ].join(' · '),
+                    value: widget.services.movies.sourceEnabled(source.name)
+                        ? 'On'
+                        : 'Off',
+                    icon: LucideIcons.server,
+                    onTap: () => toggleMovieSource(source.name),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ]),
       group('Playback', LucideIcons.circlePlay, [
         toggle(
@@ -585,11 +625,11 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         toggle(
           'NextEpisodePrompt',
-          'Ask before the next episode. Off enables the end countdown.',
+          'Wait for you at the end of an episode. Off counts down and plays the next one.',
         ),
-        toggle('SkipOp', 'Automatically skip verified intro ranges.'),
-        toggle('SkipEd', 'Automatically skip verified ending ranges.'),
-        toggle('SkipRecap', 'Automatically skip verified recap ranges.'),
+        toggle('SkipOp', 'Jump past the opening when its times are known.'),
+        toggle('SkipEd', 'Jump past the ending when its times are known.'),
+        toggle('SkipRecap', 'Jump past recaps when their times are known.'),
         toggle(
           'NormalizeVolume',
           'Raise quiet dialogue and soften loud effects.',
@@ -603,21 +643,21 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         toggle(
           'SkipFiller',
-          'Skip verified filler when advancing automatically.',
+          'Leave out known filler episodes when the next episode plays on its own.',
         ),
         toggle(
           'IntroDBSkipTimes',
-          'Also look skip times up in TheIntroDB. AniSkip is always asked.',
+          'Also get skip times from TheIntroDB. AniSkip is always used.',
           icon: LucideIcons.flag,
         ),
         toggle(
           'AnimeSkipTimes',
-          'Also look skip times up in Anime-Skip.',
+          'Also get skip times from Anime-Skip.',
           icon: LucideIcons.flag,
         ),
         toggle(
           'ScoreOnCompletion',
-          'Ask for a score after the last episode of a finished show.',
+          'Ask for a score after the last episode of a show that has ended.',
           icon: LucideIcons.star,
         ),
         if (isDesktop)
@@ -630,8 +670,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         row(
           'Quality',
-          'Default video height, or best.',
-          value: store.text('Quality'),
+          'Picture quality to play when there is a choice.',
+          value: settingValue(store, 'Quality'),
           onTap: () => choose('Quality', ['best', '1080', '720', '480', '360']),
         ),
         toggle(
@@ -645,7 +685,10 @@ class _SettingsPageState extends State<SettingsPage> {
           'Torrents download the whole episode. Off waits for Wi-Fi.',
           icon: LucideIcons.signal,
         ),
-        toggle('ResumePlayback', 'Resume locally saved positions.'),
+        toggle(
+          'ResumePlayback',
+          'Start where you stopped last time on this device.',
+        ),
         if (isDesktop) ...[
           toggle(
             'ExternalMpv',
@@ -687,7 +730,8 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
         row(
           'PercentageToMarkComplete',
-          'Mark films and non-anime episodes watched on stop after this percentage.',
+          'A movie or show episode you stop after this point counts as watched. '
+              'Anime counts once the episode ends.',
           value: '${store.integer('PercentageToMarkComplete')}%',
           onTap: () => numberChoice('PercentageToMarkComplete', [
             70,
@@ -703,7 +747,7 @@ class _SettingsPageState extends State<SettingsPage> {
       group('About & updates', LucideIcons.shield, [
         toggle(
           'CheckUpdates',
-          'Check for app updates at startup.',
+          'Look for a new version when the app starts.',
           icon: LucideIcons.download,
         ),
         AppUpdatePanel(
