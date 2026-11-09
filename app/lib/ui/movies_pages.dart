@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../core.dart';
@@ -1134,21 +1135,44 @@ Future<void> traktSignIn(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'Open ${code.verificationUrl} and enter',
+              isTV
+                  ? 'Scan with your phone, the code is filled in. Or go to ${code.verificationUrl} and enter'
+                  : 'Open Trakt fills in the code for you. Or go to ${code.verificationUrl} and enter',
               style: uiStyle(dialog, color: muted),
             ),
             const SizedBox(height: 12),
-            SelectableText(
-              code.userCode,
-              style: display.copyWith(letterSpacing: 4),
+            Tooltip(
+              message: 'Copy code',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: code.userCode));
+                  if (dialog.mounted) {
+                    ScaffoldMessenger.of(dialog).showSnackBar(
+                      const SnackBar(content: Text('Code copied.')),
+                    );
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    code.userCode,
+                    style: display.copyWith(letterSpacing: 4),
+                  ),
+                ),
+              ),
             ),
             // A TV shows the page as a QR code for a phone; a phone opens it.
+            // Both carry the code, so it never has to be typed.
             if (isTV) ...[
               const SizedBox(height: 16),
               Container(
                 color: fgBright,
                 padding: const EdgeInsets.all(8),
-                child: QrImageView(data: code.verificationUrl, size: 180),
+                child: QrImageView(data: code.activationUrl, size: 180),
               ),
             ],
             const SizedBox(height: 12),
@@ -1162,8 +1186,14 @@ Future<void> traktSignIn(
           if (!isTV)
             TextButton(
               onPressed: () => unawaited(
-                services.auth
-                    .launch(Uri.parse(code.verificationUrl))
+                // The page opens with the code in it; the clipboard covers
+                // a browser that drops it on the way through sign-in.
+                Clipboard.setData(ClipboardData(text: code.userCode))
+                    .catchError((Object _) {})
+                    .then(
+                      (_) =>
+                          services.auth.launch(Uri.parse(code.activationUrl)),
+                    )
                     .catchError((_) {
                       if (dialog.mounted) {
                         ScaffoldMessenger.of(dialog).showSnackBar(

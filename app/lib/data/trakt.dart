@@ -188,6 +188,15 @@ class TraktDeviceCode {
       interval = number(json['interval']);
   final String deviceCode, userCode, verificationUrl;
   final int expiresIn, interval;
+
+  /// The activation page with the code already in it, so nobody has to type
+  /// it. Trakt keeps the code through its own sign-in page.
+  String get activationUrl {
+    final base = verificationUrl.endsWith('/')
+        ? verificationUrl.substring(0, verificationUrl.length - 1)
+        : verificationUrl;
+    return userCode.isEmpty ? verificationUrl : '$base/$userCode';
+  }
 }
 
 /// What Trakt holds for the signed-in viewer.
@@ -283,20 +292,33 @@ class Trakt extends ChangeNotifier {
     Object? body,
     bool auth = false,
   }) async {
-    final bearer = auth ? await _bearer() : null;
-    final request = http.Request(method, Uri.parse('$api$path'))
-      ..headers.addAll(_headers(bearer));
-    if (body != null) request.body = jsonEncode(body);
-    final response = await http.Response.fromStream(
-      await client.send(request).timeout(const Duration(seconds: 20)),
-    );
-    if (response.statusCode == 401 && auth) {
-      // The session was revoked on trakt.tv.
-      await signOut();
-      throw const TraktFailure(
-        'Trakt sign-in expired. Sign in again.',
-        status: 401,
+    Future<http.Response> attempt(String? bearer) async {
+      final request = http.Request(method, Uri.parse('$api$path'))
+        ..headers.addAll(_headers(bearer));
+      if (body != null) request.body = jsonEncode(body);
+      return http.Response.fromStream(
+        await client.send(request).timeout(const Duration(seconds: 20)),
       );
+    }
+
+    var bearer = auth ? await _bearer() : null;
+    var response = await attempt(bearer);
+    if (response.statusCode == 401 && auth) {
+      // A refresh elsewhere may have replaced this access token, or it ran
+      // out early. Try once more with a fresh one before giving up.
+      final current = _token?['access_token'] as String?;
+      bearer = current != null && current != bearer
+          ? current
+          : await _bearer(force: true);
+      response = await attempt(bearer);
+      if (response.statusCode == 401) {
+        // The session was revoked on trakt.tv.
+        if (_token?['access_token'] == bearer) await signOut();
+        throw const TraktFailure(
+          'Trakt sign-in expired. Sign in again.',
+          status: 401,
+        );
+      }
     }
     if (response.statusCode >= 400) {
       throw TraktFailure(
@@ -314,37 +336,68 @@ class Trakt extends ChangeNotifier {
         : jsonDecode(utf8.decode(response.bodyBytes, allowMalformed: true));
   }
 
-  Future<String> _bearer() async {
+  Future<Json>? _refreshing;
+
+  Future<String> _bearer({bool force = false}) async {
     await load();
     final token = _token;
     if (token == null) throw const TraktFailure('Not signed in to Trakt.');
     final created = number(token['created_at']);
     final expires = number(token['expires_in']);
-    if (expires > 0 &&
-        now().millisecondsSinceEpoch ~/ 1000 > created + expires - 60) {
-      final response = await client
+    if (force ||
+        (expires > 0 &&
+            now().millisecondsSinceEpoch ~/ 1000 > created + expires - 60)) {
+      // Trakt hands out a new refresh token with every refresh and the old
+      // one stops working, so calls that start together share one refresh.
+      final fresh = await (_refreshing ??= _refresh(token)
+          .whenComplete(() => _refreshing = null));
+      return fresh['access_token'] as String;
+    }
+    return token['access_token'] as String;
+  }
+
+  /// Swaps [token] for a fresh one. Only a refused refresh signs out; when
+  /// Trakt or the network is down the saved sign-in stays for next time.
+  Future<Json> _refresh(Json token) async {
+    final refresh = token['refresh_token'];
+    if (refresh is! String || refresh.isEmpty) {
+      if (identical(_token, token)) await signOut();
+      throw const TraktFailure('Trakt sign-in expired. Sign in again.');
+    }
+    http.Response response;
+    try {
+      response = await client
           .post(
             Uri.parse('$api/oauth/token'),
             headers: _headers(),
             body: jsonEncode({
-              'refresh_token': token['refresh_token'],
+              'refresh_token': refresh,
               'client_id': traktClientId,
               'redirect_uri': _redirect(token),
               'grant_type': 'refresh_token',
             }),
           )
           .timeout(const Duration(seconds: 20));
-      if (response.statusCode != 200) {
-        await signOut();
-        throw const TraktFailure('Trakt sign-in expired. Sign in again.');
-      }
-      final fresh = (jsonDecode(response.body) as Map).cast<String, dynamic>();
-      if (token['redirect_uri'] case final String redirect) {
-        fresh['redirect_uri'] = redirect;
-      }
-      await _save(fresh);
+    } catch (_) {
+      throw const TraktFailure('Trakt could not be reached. Try again.');
     }
-    return _token!['access_token'] as String;
+    if (response.statusCode == 400 || response.statusCode == 401) {
+      // A newer sign-in may have landed while this one was out.
+      if (identical(_token, token)) await signOut();
+      throw const TraktFailure('Trakt sign-in expired. Sign in again.');
+    }
+    if (response.statusCode != 200) {
+      throw TraktFailure(
+        'Trakt answered ${response.statusCode}.',
+        status: response.statusCode,
+      );
+    }
+    final fresh = (jsonDecode(response.body) as Map).cast<String, dynamic>();
+    if (token['redirect_uri'] case final String redirect) {
+      fresh['redirect_uri'] = redirect;
+    }
+    await _save(fresh);
+    return fresh;
   }
 
   Future<void> _save(Json token) async {
