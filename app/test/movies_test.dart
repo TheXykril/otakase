@@ -16,6 +16,7 @@ import 'package:otakase/data/trakt.dart';
 import 'package:otakase/main.dart';
 import 'package:otakase/services.dart';
 import 'package:otakase/ui/app_shell.dart';
+import 'package:otakase/ui/home_page.dart';
 import 'package:otakase/ui/movies_pages.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -548,7 +549,7 @@ void main() {
   );
 
   group('content setting', () {
-    Future<void> launchWith(WidgetTester tester, String content) async {
+    Future<AppServices> launchWith(WidgetTester tester, String content) async {
       tester.view.physicalSize = const Size(412, 915);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -574,6 +575,21 @@ void main() {
         'settings.v1': jsonEncode({'Content': content}),
       });
       final client = MockClient((r) async {
+        if (r.url.host == 'api.trakt.tv' && r.url.path.startsWith('/search/')) {
+          return http.Response(
+            jsonEncode([
+              {
+                'type': 'movie',
+                'movie': {
+                  'title': 'Interstellar',
+                  'year': 2014,
+                  'ids': {'trakt': 102156},
+                },
+              },
+            ]),
+            200,
+          );
+        }
         if (r.url.host == 'api.trakt.tv' &&
             r.url.path.startsWith('/movies/trending')) {
           return http.Response(
@@ -598,22 +614,80 @@ void main() {
       );
       await tester.pumpWidget(OtakaseApp(services: services, isTV: false));
       await tester.pumpAndSettle();
+      return services;
     }
 
-    testWidgets('both adds a Movies tab', (tester) async {
-      await launchWith(tester, 'both');
-      expect(rootTabs, ['Home', 'Search', 'Movies', 'More']);
-      await tester.tap(find.byKey(const ValueKey('nav-Movies')));
+    testWidgets('both shares Home and Search instead of a Movies tab', (
+      tester,
+    ) async {
+      final services = await launchWith(tester, 'both');
+      expect(rootTabs, ['Home', 'Search', 'More']);
+      expect(find.byKey(const ValueKey('nav-Movies')), findsNothing);
+      expect(find.byType(MoviesHome), findsNothing);
+
+      // A film being watched joins Continue watching on Home.
+      const film = MediaTitle(
+        kind: 'movie',
+        trakt: 102156,
+        title: 'Interstellar',
+        year: 2014,
+      );
+      await services.movies.progress(film, 600, 6000);
       await tester.pumpAndSettle();
-      expect(find.text('Trending movies'), findsOneWidget);
-      expect(find.byType(MoviesHome), findsOneWidget);
+      final row = find.byKey(
+        const ValueKey('section-Continue watching'),
+        skipOffstage: false,
+      );
+      expect(row, findsOneWidget);
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.text('Interstellar', skipOffstage: false),
+          skipOffstage: false,
+        ),
+        findsWidgets,
+      );
+      expect(find.text('90 min left', skipOffstage: false), findsOne);
+
+      // Search finds films and series beside anime and opens their page.
+      await tester.tap(find.byKey(const ValueKey('nav-Search')));
+      await tester.pumpAndSettle();
+      expect(find.text('Search anime, movies and shows'), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('catalog-search')), 'inter');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      final titles = find.byKey(const Key('search-titles'));
+      expect(titles, findsOneWidget);
+      await tester.tap(
+        find.descendant(of: titles, matching: find.text('Interstellar')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(TitlePage), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
+      shellContent = ContentMode.anime;
+    });
+
+    testWidgets('a film watchlist gets its own row on Home', (tester) async {
+      final services = await launchWith(tester, 'both');
+      services.movies.watchlist = [
+        const MediaTitle(kind: 'show', trakt: 1390, title: 'Game of Thrones'),
+      ];
+      services.movies.notifyListeners();
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('home-title-watchlist'), skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(find.text('Game of Thrones', skipOffstage: false), findsWidgets);
+      await tester.pumpWidget(const SizedBox());
+      shellContent = ContentMode.anime;
     });
 
     testWidgets('movies only puts films on Home and Search', (tester) async {
       await launchWith(tester, 'movies');
       expect(rootTabs, ['Home', 'Search', 'More']);
       expect(find.text('Trending movies'), findsOneWidget);
+      expect(find.byType(HomePage), findsNothing);
       await tester.tap(find.byKey(const ValueKey('nav-Search')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('movie-search-field')), findsOneWidget);
@@ -624,6 +698,13 @@ void main() {
       await launchWith(tester, 'anime');
       expect(rootTabs, ['Home', 'Search', 'More']);
       expect(find.byType(MoviesHome), findsNothing);
+      expect(
+        find.byKey(const Key('home-title-watchlist'), skipOffstage: false),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('nav-Search')));
+      await tester.pumpAndSettle();
+      expect(find.text('Search anime'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       shellContent = ContentMode.anime;
     });

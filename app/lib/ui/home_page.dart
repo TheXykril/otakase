@@ -5,12 +5,29 @@ import 'package:flutter/material.dart';
 
 import '../data/models.dart';
 import '../data/continuation.dart';
+import '../data/movies.dart';
 import '../data/tracking.dart';
 import '../services.dart';
 import '../desktop/desktop_core.dart';
 import '../desktop/desktop_home.dart';
 import 'components.dart';
 import 'discovery_home.dart';
+import 'movies_pages.dart' show titleCardsOf, titleCaption;
+
+/// Two lists that are each newest first, merged newest first while keeping
+/// each list's own order.
+List<WatchEntry> mergeRecent(List<WatchEntry> a, List<WatchEntry> b) {
+  final out = <WatchEntry>[];
+  var i = 0, j = 0;
+  while (i < a.length || j < b.length) {
+    if (j >= b.length || i < a.length && a[i].updated >= b[j].updated) {
+      out.add(a[i++]);
+    } else {
+      out.add(b[j++]);
+    }
+  }
+  return out;
+}
 
 class NativeTitle extends StatelessWidget {
   const NativeTitle(this.title, {super.key, required this.isTV});
@@ -255,9 +272,31 @@ class _HomePageState extends State<HomePage> {
   final discovery = GlobalKey<DiscoveryHomeState>();
   bool refreshScheduled = false;
   HomeData? featured;
+
+  /// Whether films and series share Home with anime on this profile.
+  bool get showsTitles =>
+      contentModeOf(widget.services.store) == ContentMode.both;
+  bool titlesSynced = false;
+
+  void titlesChanged() {
+    if (mounted && showsTitles) setState(() {});
+  }
+
+  /// Pulls the film and series watchlist and progress once titles show.
+  Future<void> syncTitles() async {
+    titlesSynced = true;
+    try {
+      await widget.services.trakt.load();
+      await widget.services.movies.sync();
+    } catch (_) {
+      // Home keeps what is saved on this device.
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    widget.services.movies.addListener(titlesChanged);
     if (isDesktop) unawaited(loadFeatured());
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
@@ -331,6 +370,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> refresh({bool forceSync = false}) async {
     if (isDesktop) unawaited(loadFeatured());
     await Future.wait([
+      if (showsTitles) syncTitles(),
       if (discovery.currentState case final page?) page.load(refresh: true),
       ...blocks.values.map(
         (key) =>
@@ -365,6 +405,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    widget.services.movies.removeListener(titlesChanged);
     artTimer?.cancel();
     clock?.cancel();
     super.dispose();
@@ -389,6 +430,33 @@ class _HomePageState extends State<HomePage> {
     );
     final continuing = continuation.continueWatching;
     final resume = continuing.firstOrNull;
+    // Films and series join the Continue watching row and get a watchlist
+    // row; the big resume card stays for anime.
+    final titles = showsTitles;
+    if (titles && !titlesSynced) unawaited(syncTitles());
+    final cards = titleCardsOf(s);
+    final titleProgress = <String, MovieEntry>{};
+    final titleEntries = <WatchEntry>[
+      if (titles)
+        for (final e in s.movies.continuing)
+          WatchEntry(
+            anime: cards.card(e.title),
+            episode: e.episode,
+            position: e.position,
+            duration: e.duration,
+            updated: e.updated,
+          ),
+    ];
+    if (titles) {
+      for (final e in s.movies.continuing) {
+        titleProgress[cards.card(e.title).key] = e;
+      }
+    }
+    final shelf = mergeRecent(
+      isDesktop ? continuing : continuing.skip(1).toList(),
+      titleEntries,
+    );
+    final watchlist = titles ? s.movies.watchlist : const [];
     final stage = widget.isTV && focused != null && !focused!.anime.isAdult
         ? focused
         : resume;
@@ -407,7 +475,14 @@ class _HomePageState extends State<HomePage> {
               picks: heroPicks(continuing),
               topInset: widget.topInset,
             ),
-            DesktopContinueRow(entries: continuing, onResume: widget.onResume),
+            DesktopContinueRow(
+              entries: shelf,
+              onResume: widget.onResume,
+              label: (e) => switch (titleProgress[e.anime.key]) {
+                final t? => titleCaption(t),
+                _ => null,
+              },
+            ),
           ],
           if (!isDesktop &&
               widget.isTV &&
@@ -473,18 +548,24 @@ class _HomePageState extends State<HomePage> {
               },
               autofocus: stage == null && service == lists.first,
             ),
-          if (!isDesktop && continuing.length > 1)
+          if (!isDesktop && shelf.isNotEmpty)
             PosterRow(
               title: 'Continue watching',
-              items: continuing.skip(1).map((e) => e.anime).toList(),
+              items: shelf.map((e) => e.anime).toList(),
               isTV: widget.isTV,
               onOpen: widget.onOpen,
               progress: (a) {
-                final h = continuing.firstWhere((e) => e.anime.key == a.key);
+                if (titleProgress[a.key] case final t?) {
+                  return t.progress > 0 ? t.progress : null;
+                }
+                final h = shelf.firstWhere((e) => e.anime.key == a.key);
                 return h.duration > 0 ? h.position / h.duration : null;
               },
-              captions: (a) =>
-                  'Episode ${continuing.firstWhere((e) => e.anime.key == a.key).episode}',
+              captions: (a) => switch (titleProgress[a.key]) {
+                final t? => titleCaption(t),
+                _ =>
+                  'Episode ${shelf.firstWhere((e) => e.anime.key == a.key).episode}',
+              },
             ),
           if (continuation.upNext.isNotEmpty)
             PosterRow(
@@ -495,6 +576,19 @@ class _HomePageState extends State<HomePage> {
               captions: (a) => continuation.upNext
                   .firstWhere((e) => e.anime.key == a.key)
                   .caption(DateTime.now()),
+            ),
+          if (watchlist.isNotEmpty)
+            PosterRow(
+              key: const Key('home-title-watchlist'),
+              title: 'Movies & shows watchlist',
+              items: [for (final t in watchlist) cards.card(t)],
+              isTV: widget.isTV,
+              onOpen: widget.onOpen,
+              captions: (a) => switch (cards.title(a)) {
+                final t? when t.isShow => 'Series',
+                final t? when t.year > 0 => '${t.year}',
+                _ => 'Movie',
+              },
             ),
           if (configured.isEmpty)
             DiscoveryHome(

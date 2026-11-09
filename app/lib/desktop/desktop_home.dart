@@ -249,9 +249,13 @@ class DesktopContinueRow extends StatefulWidget {
     super.key,
     required this.entries,
     required this.onResume,
+    this.label,
   });
   final List<WatchEntry> entries;
   final ValueChanged<WatchEntry> onResume;
+
+  /// Replaces the episode line on a card, for films and series.
+  final String? Function(WatchEntry)? label;
   @override
   State<DesktopContinueRow> createState() => _DesktopContinueRowState();
 }
@@ -306,6 +310,7 @@ class _DesktopContinueRowState extends State<DesktopContinueRow> {
                       'desktop-continue-${widget.entries[i].anime.key}',
                     ),
                     entry: widget.entries[i],
+                    label: widget.label?.call(widget.entries[i]),
                     width: width,
                     first: i == 0,
                     onPressed: () => widget.onResume(widget.entries[i]),
@@ -327,8 +332,10 @@ class _ContinueCard extends StatefulWidget {
     required this.width,
     required this.first,
     required this.onPressed,
+    this.label,
   });
   final WatchEntry entry;
+  final String? label;
   final double width;
   final bool first;
   final VoidCallback onPressed;
@@ -396,7 +403,8 @@ class _ContinueCardState extends State<_ContinueCard> {
                       left: 16,
                       bottom: 16,
                       child: Text(
-                        'EP $ep${left > 0 ? ' · $left min left' : ''}',
+                        widget.label ??
+                            'EP $ep${left > 0 ? ' · $left min left' : ''}',
                         style: mono.copyWith(
                           fontSize: 17,
                           color: fgBright,

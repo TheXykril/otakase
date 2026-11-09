@@ -1,16 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import '../data/catalog.dart' show CatalogFailure;
+import '../data/trakt.dart' show MediaTitle;
 import '../desktop/desktop_core.dart';
 import '../services.dart';
 import '../data/community_extras.dart';
 import 'community_extras_page.dart';
 import 'components.dart';
 import 'movie_page.dart';
+import 'movies_pages.dart' show titleCardsOf;
 
 // Browse messages describe the failed task, never an upstream name, URL or
 // arbitrary exception. Keep the useful rate-limit instruction without naming it.
@@ -30,7 +33,11 @@ class SearchPage extends StatefulWidget {
     this.initialQuery = '',
     this.initialFormat,
     this.fieldFocus,
+    this.titles = false,
   });
+
+  /// Also searches films and series, for a profile that shows both.
+  final bool titles;
 
   /// Focus of the search field, so the shell can move into it.
   final FocusNode? fieldFocus;
@@ -57,6 +64,13 @@ class _SearchPageState extends State<SearchPage> {
   bool editing = false;
   List<String> genres = [];
   late bool adultSeen;
+
+  /// Films and series matching the query, when [SearchPage.titles] is on.
+  List<MediaTitle> titleResults = [];
+  bool titlesBusy = false, titlesFailed = false;
+  String titlesQuery = '';
+  int titleGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -89,6 +103,7 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void didUpdateWidget(SearchPage old) {
     super.didUpdateWidget(old);
+    if (old.titles != widget.titles) unawaited(searchTitles(retry: true));
     if (adultSeen != widget.services.store.adultAllowed) {
       adultSeen = widget.services.store.adultAllowed;
       debounce?.cancel();
@@ -112,6 +127,7 @@ class _SearchPageState extends State<SearchPage> {
       unawaited(openCheat(context, widget.services, widget.isTV));
       return;
     }
+    if (!more) unawaited(searchTitles());
     final g = ++generation;
     final requestedPage = more ? page + 1 : 1;
     setState(() {
@@ -163,6 +179,82 @@ class _SearchPageState extends State<SearchPage> {
     } finally {
       if (mounted && g == generation) setState(() => busy = false);
     }
+  }
+
+  Future<void> searchTitles({bool retry = false}) async {
+    final q = widget.titles ? query.text.trim() : '';
+    if (q == titlesQuery && !retry) return;
+    titlesQuery = q;
+    final g = ++titleGeneration;
+    setState(() {
+      titleResults = [];
+      titlesFailed = false;
+      titlesBusy = q.isNotEmpty;
+    });
+    if (q.isEmpty) return;
+    try {
+      final found = await widget.services.trakt.search(q);
+      if (mounted && g == titleGeneration) {
+        setState(() => titleResults = found);
+      }
+    } catch (_) {
+      if (mounted && g == titleGeneration) setState(() => titlesFailed = true);
+    } finally {
+      if (mounted && g == titleGeneration) setState(() => titlesBusy = false);
+    }
+  }
+
+  /// Films and series for the query, in a row above the anime.
+  List<Widget> titleRow() {
+    if (titlesQuery.isEmpty) return const [];
+    final cards = titleCardsOf(widget.services);
+    return [
+      if (titlesFailed)
+        FailureView(
+          message: 'Movies and shows could not be searched. Check your connection and retry.',
+          onRetry: () => unawaited(searchTitles(retry: true)),
+          isTV: widget.isTV,
+        )
+      else if (titlesBusy)
+        Semantics(
+          liveRegion: true,
+          label: 'Searching movies and shows',
+          child: const SkeletonBlock(height: 120),
+        )
+      else if (titleResults.isNotEmpty)
+        // The row brings its own side margin, so it spans the page edge to
+        // edge like the rows on Home.
+        LayoutBuilder(
+          builder: (context, box) {
+            final width = box.maxWidth + (widget.isTV ? 48 : 20) * 2;
+            return OverflowBox(
+              minWidth: width,
+              maxWidth: width,
+              fit: OverflowBoxFit.deferToChild,
+              child: PosterRow(
+                key: const Key('search-titles'),
+                title: 'Movies & shows',
+                items: [for (final t in titleResults) cards.card(t)],
+                isTV: widget.isTV,
+                onOpen: widget.onOpen,
+                captions: (a) => switch (cards.title(a)) {
+                  final t? when t.isShow => 'Series',
+                  final t? when t.year > 0 => '${t.year}',
+                  _ => 'Movie',
+                },
+              ),
+            );
+          },
+        ),
+      if (titlesFailed || titlesBusy || titleResults.isNotEmpty) ...[
+        const SizedBox(height: 4),
+        if (items.isNotEmpty || busy)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: const SectionLabel('Anime'),
+          ),
+      ],
+    ];
   }
 
   SearchFilters get filters => SearchFilters(
@@ -365,7 +457,9 @@ class _SearchPageState extends State<SearchPage> {
                   key: const Key('catalog-search'),
                   controller: query,
                   decoration: InputDecoration(
-                    hintText: 'Search anime',
+                    hintText: widget.titles
+                        ? 'Search anime, movies and shows'
+                        : 'Search anime',
                     prefixIcon: const Icon(LucideIcons.search),
                     suffixIcon: widget.isTV && voiceAvailable
                         ? IconButton(
@@ -414,6 +508,7 @@ class _SearchPageState extends State<SearchPage> {
       ),
       if (isDesktop) activeFilters(),
       const SizedBox(height: 22),
+      ...titleRow(),
       if (busy && items.isEmpty)
         Semantics(
           liveRegion: true,
@@ -426,7 +521,10 @@ class _SearchPageState extends State<SearchPage> {
           onRetry: () => load(more: retryMore),
           isTV: widget.isTV,
         ),
-      if (!busy && items.isEmpty && error == null)
+      if (!busy &&
+          items.isEmpty &&
+          error == null &&
+          (titlesBusy || titleResults.isEmpty))
         EmptyState(
           message: query.text.trim().isEmpty
               ? (filters.count == 0

@@ -34,16 +34,12 @@ import '../desktop/system_install.dart';
 /// What the active profile shows; the shell sets it as it builds.
 ContentMode shellContent = ContentMode.anime;
 
-/// The top-level pages. Desktop has room for Schedule as its own tab. A
-/// profile with films and series as well as anime gets a Movies tab; one
-/// with only films and series has them on Home and Search.
+/// The top-level pages. Desktop has room for Schedule as its own tab. Films
+/// and series share Home and Search with anime; a profile with only films and
+/// series has no Schedule.
 List<String> get rootTabs => switch (shellContent) {
   ContentMode.movies => const ['Home', 'Search', 'More'],
-  ContentMode.both =>
-    isDesktop
-        ? const ['Home', 'Search', 'Movies', 'Schedule', 'More']
-        : const ['Home', 'Search', 'Movies', 'More'],
-  ContentMode.anime =>
+  ContentMode.anime || ContentMode.both =>
     isDesktop
         ? const ['Home', 'Search', 'Schedule', 'More']
         : const ['Home', 'Search', 'More'],
@@ -52,13 +48,12 @@ List<String> get rootTabs => switch (shellContent) {
 const _tabIcons = {
   'Home': LucideIcons.house,
   'Search': LucideIcons.search,
-  'Movies': LucideIcons.clapperboard,
   'Schedule': LucideIcons.calendarDays,
   'More': LucideIcons.ellipsis,
 };
 
 /// Most tabs any content setting gives.
-const _maxTabs = 5;
+const _maxTabs = 4;
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.services, required this.isTV});
@@ -296,31 +291,48 @@ class _AppShellState extends State<AppShell> {
     return KeyEventResult.handled;
   }
 
-  Future<void> open(Anime a, {Object? heroTag}) => Navigator.push(
-    context,
-    OtakaseRoute<void>(
-      builder: (_) => isOtakaseMovie(a)
-          ? OtakaseMovie(services: widget.services, isTV: widget.isTV)
-          : ShowPage(
-              services: widget.services,
-              anime: a,
-              isTV: widget.isTV,
-              heroTag: heroTag,
-            ),
-    ),
-  );
-  void resume(WatchEntry h) => Navigator.push(
-    context,
-    OtakaseRoute<void>(
-      builder: (_) => playerFor(
-        services: widget.services,
-        anime: h.anime,
-        episode: h.episode,
-        isTV: widget.isTV,
-        mode: widget.services.store.text('SubOrDub'),
+  Future<void> open(Anime a, {Object? heroTag}) {
+    // Films and series on Home and Search come as cards; they open their
+    // own page.
+    if (titleCardsOf(widget.services).title(a) case final title?) {
+      return openTitle(context, widget.services, title, widget.isTV);
+    }
+    return Navigator.push(
+      context,
+      OtakaseRoute<void>(
+        builder: (_) => isOtakaseMovie(a)
+            ? OtakaseMovie(services: widget.services, isTV: widget.isTV)
+            : ShowPage(
+                services: widget.services,
+                anime: a,
+                isTV: widget.isTV,
+                heroTag: heroTag,
+              ),
       ),
-    ),
-  );
+    );
+  }
+
+  void resume(WatchEntry h) {
+    if (titleCardsOf(widget.services).title(h.anime) case final title?) {
+      unawaited(openTitle(context, widget.services, title, widget.isTV));
+      return;
+    }
+    unawaited(
+      Navigator.push(
+        context,
+        OtakaseRoute<void>(
+          builder: (_) => playerFor(
+            services: widget.services,
+            anime: h.anime,
+            episode: h.episode,
+            isTV: widget.isTV,
+            mode: widget.services.store.text('SubOrDub'),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<String?> voice() async {
     try {
       return await CoreClient.channel.invokeMethod<String>('voiceSearch');
@@ -714,9 +726,8 @@ class _AppShellState extends State<AppShell> {
             onVoice: voice,
             fieldFocus: searchField,
             onNavigateUp: () => navFocus[1].requestFocus(),
+            titles: shellContent == ContentMode.both,
           ),
-        if (shellContent == ContentMode.both)
-          MoviesHome(services: widget.services, isTV: widget.isTV),
         if (isDesktop && !moviesOnly)
           SchedulePage(
             services: widget.services,

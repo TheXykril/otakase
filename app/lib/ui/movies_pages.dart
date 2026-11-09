@@ -39,6 +39,22 @@ class TitleCards {
   MediaTitle? title(Anime a) => _byId[a.id];
 }
 
+final _cards = Expando<TitleCards>();
+
+/// The cards films and series get on pages shared with anime (Home and
+/// Search), so the shell can tell a film card from an anime one on open.
+TitleCards titleCardsOf(AppServices services) =>
+    _cards[services] ??= TitleCards();
+
+/// What a film or series card in a Continue watching row says under it.
+String titleCaption(MovieEntry e) {
+  if (e.title.isShow && e.episode > 0) return e.code;
+  final left = e.duration > 0 && e.position > 0
+      ? ((e.duration - e.position) / 60).ceil()
+      : 0;
+  return left > 0 ? '$left min left' : 'Movie';
+}
+
 Future<void> openTitle(
   BuildContext context,
   AppServices services,
