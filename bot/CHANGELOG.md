@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.30.90
+
+- Downloads, help and changelog links point at the website: `/install`, `/latest`, `/changelog`, update nudges, the info posts and bug follow-ups use otakase.xyverion.com (downloads through its /download/ route, help pages under /help, the changelog under /changelog). Repost the welcome and FAQ posts with `/post-info` to update their buttons.
+- **Report a bug** (the button in a support post, or `/bug`) now files the report itself after asking for the app version and device, and posts the bug number in the post. The member hears back there when a release fixes it.
+- Bug, suggestion and known-issue messages show plain `#123` numbers, and release notes in Discord leave out repository links and account names.
+- `/link-github` and the Contributor role link are gone, along with the `github_client_id` option.
 ## 1.30.89
 
 - The bot no longer posts last week's most watched shows every Monday. `/server-watch-top` still shows this week or last week on request.

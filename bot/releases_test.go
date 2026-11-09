@@ -37,9 +37,12 @@ func TestCompareVersions(t *testing.T) {
 
 func TestEmbedMarkdown(t *testing.T) {
 	in := "## 📝 Changelog\r\n\r\n- No direct commits.\r\n\r\n\r\n### Fixes ###\r\n---\r\n" +
-		"* fix by @x in https://github.com/TheXykril/otakase/pull/63\r\n"
+		"* fix by @x in https://github.com/TheXykril/otakase/pull/63\r\n" +
+		"- [abc1234](https://github.com/TheXykril/otakase/commit/abc1234) tweak\r\n" +
+		"![Otakase](https://raw.githubusercontent.com/TheXykril/otakase/v1/banner.png)\r\n" +
+		"**Full Changelog**: https://github.com/TheXykril/otakase/compare/v1...v2\r\n"
 	want := "**📝 Changelog**\n\n- No direct commits.\n\n**Fixes**\n" +
-		"* fix by @x in [#63](https://github.com/TheXykril/otakase/pull/63)"
+		"* fix in #63\n- abc1234 tweak"
 	if got := embedMarkdown(in); got != want {
 		t.Errorf("embedMarkdown:\n%q\nwant\n%q", got, want)
 	}
@@ -102,7 +105,7 @@ func TestSinceEmbed(t *testing.T) {
 	if i, j := strings.Index(e.Description, "26.7.0"), strings.Index(e.Description, "26.6.0"); i < 0 || j < i {
 		t.Errorf("not newest first: %q", e.Description)
 	}
-	if !strings.Contains(e.Description, "**New**") || strings.Contains(e.Description, "More on GitHub") {
+	if !strings.Contains(e.Description, "**New**") || strings.Contains(e.Description, "Full changelog") {
 		t.Errorf("description %q", e.Description)
 	}
 
@@ -115,14 +118,14 @@ func TestSinceEmbed(t *testing.T) {
 	if n := len([]rune(e.Description)); n > embedTextLimit {
 		t.Errorf("description is %d runes", n)
 	}
-	if !strings.HasSuffix(e.Description, "/releases)") || !strings.Contains(e.Description, "Otakase 26.30.0") {
+	if !strings.HasSuffix(e.Description, "/changelog/)") || !strings.Contains(e.Description, "Otakase 26.30.0") {
 		t.Errorf("trimmed description ends %q", e.Description[len(e.Description)-60:])
 	}
 
 	// One release bigger than the limit is cut inside.
 	huge := []ghRelease{{TagName: "v27.0.0", Body: strings.Repeat("- a long change line\n", 400)}}
 	e = sinceEmbed(huge, "26.0.0")
-	if n := len([]rune(e.Description)); n > embedTextLimit || !strings.Contains(e.Description, "More on GitHub") {
+	if n := len([]rune(e.Description)); n > embedTextLimit || !strings.Contains(e.Description, "Full changelog") {
 		t.Errorf("huge release: %d runes", n)
 	}
 }

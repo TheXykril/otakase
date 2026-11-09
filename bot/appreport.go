@@ -256,7 +256,7 @@ func (b *bot) helpAppReport(thread string, link appLink, rep appReportData) {
 	versionCheck.Unlock()
 	if _, err := b.s.ChannelMessageSendComplex(thread, &discordgo.MessageSend{
 		Embeds:          []*discordgo.MessageEmbed{outdatedEmbed(have, latest)},
-		Components:      linkButtons("Changelog", fmt.Sprintf("%s/blob/v%s/CHANGELOG.md", repoURL, latest), "Latest release", repoURL+"/releases/latest"),
+		Components:      linkButtons("What's new", versionChangelogURL(latest), "Download", downloadPage),
 		AllowedMentions: &discordgo.MessageAllowedMentions{},
 	}); err != nil {
 		log.Printf("version check reply: %v", err)

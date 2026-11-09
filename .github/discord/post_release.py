@@ -37,7 +37,6 @@ import urllib.error
 import urllib.request
 import uuid
 
-REPO = "https://github.com/TheXykril/otakase"
 SITE = "https://otakase.xyverion.com/"
 SHU = 0xD2492F
 API = "https://discord.com/api/v10"
@@ -147,7 +146,7 @@ def dev_payload(version, changes, role, has_image):
     for title, kind in groups:
         items = [c for c in changes if c[0] == kind]
         if items:
-            lines = [f"- {t} ([`{h}`]({REPO}/commit/{h}))" for _, t, h in items[:8]]
+            lines = [f"- {t} (`{h}`)" for _, t, h in items[:8]]
             if len(items) > 8:
                 lines.append(f"- *and {len(items) - 8} more*")
             card.append(text(f"### {title}\n" + "\n".join(lines)))
@@ -156,8 +155,11 @@ def dev_payload(version, changes, role, has_image):
     card += [SEP, text("-# Can be broken and is replaced by the next test build. "
                        "Install it by hand over your current app. "
                        "Report problems in the support forum.")]
-    return message(card, [("Download", f"{REPO}/releases/tag/dev"),
-                          ("Changes on main", f"{REPO}/commits/main")], role, has_image)
+    # The site's /download/dev/ route serves the dev release's files.
+    return message(card, [("Android", f"{SITE}download/dev/otakase-android.apk"),
+                          ("Windows", f"{SITE}download/dev/otakase-app-windows-setup.exe"),
+                          ("macOS", f"{SITE}download/dev/otakase-app-macos.zip"),
+                          ("Linux", f"{SITE}download/dev/otakase-app-linux-x86_64.AppImage")], role, has_image)
 
 
 def payload(version, when, groups, role, has_image):
@@ -178,9 +180,8 @@ def payload(version, when, groups, role, has_image):
             lines.append(f"- *and {len(entries) - MAX_ITEMS} more*")
         card.append(text(f"### {title}\n" + "\n".join(lines)))
     card += [SEP, text("-# The app offers the update itself (on Android: More > About & updates)")]
-    tag = f"v{version}"
-    return message(card, [("Download", f"{REPO}/releases/tag/{tag}"),
-                          ("Full changelog", f"{REPO}/blob/{tag}/CHANGELOG.md"),
+    return message(card, [("Download", f"{SITE}#download"),
+                          ("Full changelog", f"{SITE}changelog/#{version}"),
                           ("Website", SITE)], role, has_image)
 
 

@@ -13,7 +13,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// /changelog shows an Otakase release's notes from GitHub, or everything
+// /changelog shows an Otakase release's notes, or everything
 // newer than the version a member has.
 
 // releasesURL is a variable so tests can point it at a fake server.
@@ -109,6 +109,12 @@ var (
 	notesHeadingRe = regexp.MustCompile(`^#{1,6}\s+(.+?)\s*#*$`)
 	ruleRe         = regexp.MustCompile(`^\s*([-*_]\s*){3,}$`)
 	pullURLRe      = regexp.MustCompile(`https://github\.com/TheXykril/otakase/(pull|issues)/(\d+)\b`)
+	// Release notes come from GitHub and link there; Discord shows them
+	// without those links (see embedMarkdown).
+	ghLinkRe   = regexp.MustCompile(`\[([^\]]+)\]\(https://github\.com/[^)]*\)`)
+	ghURLRe    = regexp.MustCompile(`\s*https://github\.com/\S*`)
+	byLoginRe  = regexp.MustCompile(` by @[A-Za-z0-9-]+`)
+	noteSkipRe = regexp.MustCompile(`^\s*!\[|Full Changelog|Diff range`)
 )
 
 // embedMarkdown makes release notes read well in an embed: headings become
@@ -120,9 +126,13 @@ func embedMarkdown(notes string) string {
 	blank := true
 	for line := range strings.SplitSeq(notes, "\n") {
 		line = strings.TrimRight(line, " \t")
-		if ruleRe.MatchString(line) {
+		if ruleRe.MatchString(line) || noteSkipRe.MatchString(line) {
 			continue
 		}
+		line = ghLinkRe.ReplaceAllString(line, "$1")
+		line = pullURLRe.ReplaceAllString(line, "#$2")
+		line = ghURLRe.ReplaceAllString(line, "")
+		line = byLoginRe.ReplaceAllString(line, "")
 		if m := notesHeadingRe.FindStringSubmatch(line); m != nil {
 			line = "**" + strings.Trim(m[1], "*") + "**"
 		}
@@ -136,8 +146,7 @@ func embedMarkdown(notes string) string {
 		}
 		out = append(out, line)
 	}
-	text := strings.TrimSpace(strings.Join(out, "\n"))
-	return pullURLRe.ReplaceAllString(text, "[#$2]($0)")
+	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
 // fitText keeps text within limit runes, cutting at a line break when it can
@@ -190,8 +199,8 @@ func releaseEmbed(r ghRelease) *discordgo.MessageEmbed {
 	}
 	return &discordgo.MessageEmbed{
 		Title:       "Otakase " + r.version(),
-		URL:         r.HTMLURL,
-		Description: fitText(notes, embedTextLimit, fmt.Sprintf("[More on GitHub](%s)", r.HTMLURL)),
+		URL:         versionChangelogURL(r.version()),
+		Description: fitText(notes, embedTextLimit, fmt.Sprintf("[Full changelog](%s)", versionChangelogURL(r.version()))),
 		Color:       shu,
 		Footer:      &discordgo.MessageEmbedFooter{Text: "The app offers the update"},
 		Timestamp:   r.PublishedAt.Format(time.RFC3339),
@@ -201,7 +210,7 @@ func releaseEmbed(r ghRelease) *discordgo.MessageEmbed {
 // sinceEmbed combines the notes of every release newer than since, newest
 // first, keeping whole releases while they fit.
 func sinceEmbed(newer []ghRelease, since string) *discordgo.MessageEmbed {
-	more := fmt.Sprintf("[More on GitHub](%s/releases)", repoURL)
+	more := fmt.Sprintf("[Full changelog](%s)", changelogURL)
 	var b strings.Builder
 	shown := 0
 	for _, r := range newer {
@@ -225,7 +234,7 @@ func sinceEmbed(newer []ghRelease, since string) *discordgo.MessageEmbed {
 	}
 	return &discordgo.MessageEmbed{
 		Title:       fmt.Sprintf("What's new since %s", strings.TrimPrefix(strings.TrimSpace(since), "v")),
-		URL:         repoURL + "/releases",
+		URL:         changelogURL,
 		Description: text,
 		Color:       shu,
 		Footer:      &discordgo.MessageEmbedFooter{Text: newerCount(len(newer)) + " · the app offers the update"},
@@ -266,7 +275,7 @@ func changelogAnswer(token, version, since string) (*discordgo.MessageEmbed, []d
 	list, err := fetchReleases(token)
 	if err != nil {
 		log.Printf("releases: %v", err)
-		return errorEmbed("Couldn't reach GitHub right now. Releases: %s/releases", repoURL), nil
+		return errorEmbed("Couldn't load the releases right now. The changelog: %s", changelogURL), nil
 	}
 	if since != "" {
 		if _, ok := parseVersion(since); !ok {
@@ -277,13 +286,13 @@ func changelogAnswer(token, version, since string) (*discordgo.MessageEmbed, []d
 			return &discordgo.MessageEmbed{Color: shu, Description: fmt.Sprintf("Nothing newer than **%s**: you're up to date.",
 				strings.TrimPrefix(since, "v"))}, nil
 		}
-		return sinceEmbed(newer, since), linkButtons("Latest release", newer[0].HTMLURL)
+		return sinceEmbed(newer, since), linkButtons("Full changelog", changelogURL, "Download", downloadPage)
 	}
 	r, ok := findRelease(list, version)
 	if !ok {
-		return errorEmbed("There's no release **%s**. All releases: %s/releases", clip(version, 40), repoURL), nil
+		return errorEmbed("There's no release **%s**. Every release is in the changelog: %s", clip(version, 40), changelogURL), nil
 	}
-	return releaseEmbed(r), linkButtons("Release on GitHub", r.HTMLURL)
+	return releaseEmbed(r), linkButtons("Full changelog", versionChangelogURL(r.version()), "Download", downloadPage)
 }
 
 // releaseChoices lists release versions matching what was typed.

@@ -83,7 +83,7 @@ var rulesList = []struct{ title, text string }{
 	{"Keep it safe for work", "No NSFW content anywhere on the server."},
 	{"No spam or advertising", "No self-promotion, unsolicited DMs or invite links."},
 	{"Mark spoilers", "Use ||spoiler tags|| for anything past the latest episode."},
-	{"Report bugs on GitHub too", "Problems with clear steps to reproduce belong on GitHub Issues as well."},
+	{"Report bugs in support", "Post a bug in {support} with clear steps; **Report a bug** in the post (or `/bug`) passes it on and you hear back when it's fixed."},
 }
 
 func cv2Text(s string) map[string]any { return map[string]any{"type": 10, "content": s} }
@@ -126,7 +126,7 @@ func welcomePayload(chans []*discordgo.Channel) map[string]any {
 		cv2Text("### Start here\n" + strings.Join(lines, "\n")),
 		cv2Sep,
 		cv2Text("-# Pick your system and notifications in **Channels & Roles** at the top of the channel list. Type `/help` to see what the bot can do."),
-	}, cv2Button("Website", siteURL), cv2Button("Download", repoURL+"/releases/latest"), cv2Button("Wiki", wikiURL), cv2Button("GitHub", repoURL))
+	}, cv2Button("Website", siteURL), cv2Button("Download", downloadPage), cv2Button("Help", wikiURL))
 }
 
 // rulesPayload builds the rules message.
@@ -157,7 +157,7 @@ func faqPayload(list []faqEntry) map[string]any {
 	}
 	card = append(card, cv2Sep, cv2Text("-# Ask the bot any of these with `/faq`."))
 	return infoPayload("faq-header.png", card,
-		cv2Button("Troubleshooting", wikiURL+"/Troubleshooting"), cv2Button("Wiki", wikiURL), cv2Button("Open an issue", repoURL+"/issues/new/choose"))
+		cv2Button("Troubleshooting", wikiURL+"/Troubleshooting"), cv2Button("Help", wikiURL))
 }
 
 // infoPost builds one post: its payload and header picture.

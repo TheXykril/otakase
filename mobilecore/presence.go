@@ -15,9 +15,9 @@ import (
 const discordAppID = "1556589176164589578"
 
 // Discord fetches presence images itself, so they must be public URLs. They
-// are read from main, so a new image works without a site deploy.
+// are served by the website.
 const (
-	discordImageBase  = "https://raw.githubusercontent.com/TheXykril/otakase/main/site/img/"
+	discordImageBase  = "https://otakase.xyverion.com/img/"
 	discordIconImage  = discordImageBase + "icon-512.png"
 	discordMarkImage  = discordImageBase + "mark-256.png"
 	discordPauseImage = discordImageBase + "pause-256.png"

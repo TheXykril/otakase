@@ -30,8 +30,8 @@ While casting, the player controls drive the TV. **Stop casting** ends it.
 The TV fetches the video from this device, so the same firewall can block
 it after the TV was found. Allow your home network as above and cast again.
 If it still fails, open **Diagnostics** (in More or Settings) and send what
-it shows on [Discord](https://otakase.xyverion.com/discord/) or in an
-[issue](https://github.com/TheXykril/otakase/issues).
+it shows in the support forum on
+[Discord](https://otakase.xyverion.com/discord/).
 
 ## No subtitles on the TV
 

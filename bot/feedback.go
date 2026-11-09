@@ -164,7 +164,8 @@ func answerKeysText(keys []string) string {
 	return strings.Join(out, "\n")
 }
 
-var wikiLinkRe = regexp.MustCompile(`\]\(` + regexp.QuoteMeta(wikiURL) + `/([^)\s]+)\)`)
+// Cards posted before the help pages moved to the site link the GitHub wiki.
+var wikiLinkRe = regexp.MustCompile(`\]\((?:` + regexp.QuoteMeta(wikiURL) + `|https://github\.com/TheXykril/otakase/wiki)/([^)\s]+)\)`)
 
 // wikiAnswerKeys are the wiki sections a "From the wiki" card links.
 func wikiAnswerKeys(e *discordgo.MessageEmbed) []string {

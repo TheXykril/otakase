@@ -44,7 +44,7 @@ func TestSuggestionIssueBody(t *testing.T) {
 		}
 	}
 	s.Issue = 42
-	if e := s.embed(); len(e.Fields) != 2 || !strings.Contains(e.Fields[1].Value, "/issues/42") {
+	if e := s.embed(); len(e.Fields) != 2 || e.Fields[1].Value != "Tracked as **#42**" {
 		t.Errorf("card fields = %+v", e.Fields)
 	}
 }

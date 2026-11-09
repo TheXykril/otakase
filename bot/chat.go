@@ -99,7 +99,7 @@ func welcomeDMMessage(greeting string, firstSteps []string) *discordgo.MessageSe
 				sep,
 				discordgo.TextDisplay{Content: "-# Type `/help` in the server to see everything the bot can do."},
 			}},
-			linkButtons("Website", siteURL, "Download", repoURL+"/releases/latest", "Wiki", wikiURL)[0],
+			linkButtons("Website", siteURL, "Download", downloadPage, "Help", wikiURL)[0],
 		},
 	}
 }

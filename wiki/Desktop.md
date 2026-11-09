@@ -1,7 +1,7 @@
 # Desktop
 
-The desktop app runs on Windows, macOS and Linux. Install links are in the
-[README](https://github.com/TheXykril/otakase#install).
+The desktop app runs on Windows, macOS and Linux. Download it from the
+[website](https://otakase.xyverion.com/#download).
 
 ## Opening it
 

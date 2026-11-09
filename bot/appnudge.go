@@ -30,9 +30,6 @@ func init() {
 	})
 }
 
-// releaseURL is a release's page on GitHub.
-func releaseURL(version string) string { return repoURL + "/releases/tag/v" + version }
-
 // planNudge marks a release as nudged for the app and the member and says
 // which of the two still needed it.
 func planNudge(d *storeData, user, hash, latest string) (notice, dm bool) {
@@ -55,7 +52,7 @@ func planNudge(d *storeData, user, hash, latest string) (notice, dm bool) {
 // updateNotice is the inbox item for an app on an older version.
 func updateNotice(have, latest string) inboxItem {
 	return inboxItem{Kind: "notice", Title: "Otakase " + latest + " is out",
-		Text: fmt.Sprintf("You have %s. The app offers the update, or check About & updates.", have), URL: releaseURL(latest)}
+		Text: fmt.Sprintf("You have %s. The app offers the update, or check About & updates.", have), URL: versionChangelogURL(latest)}
 }
 
 func updateDM(have, latest string) *discordgo.MessageSend {
@@ -63,7 +60,7 @@ func updateDM(have, latest string) *discordgo.MessageSend {
 		Embeds: []*discordgo.MessageEmbed{{Title: "Otakase " + latest + " is out", Color: shu,
 			Description: fmt.Sprintf("Your linked Otakase app is on **%s**. "+updateHowTo+"", have),
 			Footer:      &discordgo.MessageEmbedFooter{Text: "One message per release · development builds are never nudged"}}},
-		Components: linkButtons("Changelog", fmt.Sprintf("%s/blob/v%s/CHANGELOG.md", repoURL, latest), "Release", releaseURL(latest)),
+		Components: linkButtons("What's new", versionChangelogURL(latest), "Download", downloadPage),
 	}
 }
 

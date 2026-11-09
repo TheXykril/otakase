@@ -40,20 +40,18 @@ func githubRequest(method, url, token string) *http.Request {
 func latestRelease(token string) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
 	var r struct {
 		TagName     string    `json:"tag_name"`
-		HTMLURL     string    `json:"html_url"`
 		PublishedAt time.Time `json:"published_at"`
 	}
 	if err := getJSON(githubRequest("GET", "https://api.github.com/repos/TheXykril/otakase/releases/latest", token), &r); err != nil {
-		return errorEmbed("Couldn't reach GitHub right now. Releases: %s/releases", repoURL), nil
+		return errorEmbed("Couldn't check for the latest release right now. Downloads: %s", downloadPage), nil
 	}
 	v := strings.TrimPrefix(r.TagName, "v")
 	return &discordgo.MessageEmbed{
-			Title:       "Otakase " + v,
-			URL:         r.HTMLURL,
-			Description: fmt.Sprintf("Released <t:%d:D>. The app offers the update; new here? See `/install`.", r.PublishedAt.Unix()),
-			Color:       shu,
-		}, linkButtons("Download", r.HTMLURL, "Changelog",
-			fmt.Sprintf("%s/blob/%s/CHANGELOG.md", repoURL, r.TagName))
+		Title:       "Otakase " + v,
+		URL:         versionChangelogURL(v),
+		Description: fmt.Sprintf("Released <t:%d:D>. The app offers the update; new here? See `/install`.", r.PublishedAt.Unix()),
+		Color:       shu,
+	}, linkButtons("Download", downloadPage, "What's new", versionChangelogURL(v))
 }
 
 const anilistQuery = `query ($q: String) {

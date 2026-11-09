@@ -32,7 +32,7 @@ func (b *bot) registerCommands() error {
 			{Type: discordgo.ApplicationCommandOptionString, Name: "title", Description: "Anime title", Required: true},
 		}},
 		{Name: "provider-status", Description: "Which anime sources work right now"},
-		{Name: "bug", Description: "Turn this support post into a GitHub issue"},
+		{Name: "bug", Description: "Report this support post as a bug"},
 		{Name: "watchparty", Description: "Plan a watch party in a voice channel", Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionString, Name: "anime", Description: "What you'll watch (pick from the suggestions)", Required: true, Autocomplete: true},
 			{Type: discordgo.ApplicationCommandOptionInteger, Name: "starts_in", Description: "Minutes from now (default 15)", MinValue: &zero, MaxValue: 10080},
@@ -62,10 +62,6 @@ func (b *bot) registerCommands() error {
 	cmds = append(cmds, supportExtraCommands()...)
 	cmds = append(cmds, appCommands()...)
 	cmds = append(cmds, registeredCommands...)
-	if b.cfg.GitHubClientID != "" && b.cfg.ContributorRole != "" {
-		cmds = append(cmds, &discordgo.ApplicationCommand{
-			Name: "link-github", Description: "Get the Contributor role for a merged pull request"})
-	}
 	addShareOptions(cmds)
 	_, err := b.s.ApplicationCommandBulkOverwrite(b.s.State.User.ID, b.cfg.GuildID, cmds)
 	return err
@@ -118,8 +114,6 @@ func (b *bot) onInteraction(s *discordgo.Session, i *discordgo.InteractionCreate
 			})
 		case "anime":
 			b.deferThen(i, onlyAsker(i), func() (*discordgo.MessageEmbed, []discordgo.MessageComponent) { return searchAnime(opt("title")) })
-		case "link-github":
-			b.startGitHubLink(i)
 		case "provider-status":
 			b.deferThen(i, true, b.providerStatusFor(interactionUser(i).ID))
 		case "bug":
@@ -314,11 +308,10 @@ func helpEmbed() *discordgo.MessageEmbed {
 		"`/room` your own voice channel: public, private or 18+ invite only (or join **Create room**)",
 		"Your room's chat has buttons to rename, lock, hide, limit, invite or hand it over",
 		"`/suggest` suggest an idea; vote on ideas with 👍 and 👎",
-		"`/bug` turn a support post into a GitHub issue",
+		"`/bug` report a support post as a bug; the bot tells you when it's fixed",
 		"`/support` ask for help with a short form; `/diagnose` how to share your diagnostics",
 		"`/helpers` the top helpers; thank someone in your post with `/thank`",
-		"Type `#123` to show a GitHub issue or pull request",
-		"`/link-github` Contributor role if you have a merged pull request",
+		"Type `#123` to show a bug report or planned change",
 		"`/link-anilist` link your AniList, then `/profile` shows what you watch",
 		"`/activity` opens Watch Together and games; `/leaderboard` shows points, `/riddle-add` creates emoji riddles",
 		"`/rank` your level from chatting, `/levels` the most active members",

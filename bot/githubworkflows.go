@@ -173,6 +173,6 @@ func (b *bot) githubCommand(i *discordgo.InteractionCreate) {
 			desc += " When it's done, the run's page has the builds to download under **Artifacts**."
 		}
 		return &discordgo.MessageEmbed{Title: what + " started", Color: shu, Description: desc},
-			linkButtons("Open runs", repoURL+"/actions/workflows/"+w.file)
+			linkButtons("Open runs", "https://github.com/TheXykril/otakase/actions/workflows/"+w.file)
 	})
 }

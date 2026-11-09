@@ -121,7 +121,7 @@ func (b *bot) checkVersionIn(m *discordgo.MessageCreate, text string) {
 	versionCheck.Unlock()
 	msg, err := b.s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
 		Embeds:          []*discordgo.MessageEmbed{outdatedEmbed(have, latest)},
-		Components:      append(linkButtons("Changelog", fmt.Sprintf("%s/blob/v%s/CHANGELOG.md", repoURL, latest), "Latest release", repoURL+"/releases/latest"), answerRow()),
+		Components:      append(linkButtons("What's new", versionChangelogURL(latest), "Download", downloadPage), answerRow()),
 		Reference:       m.Reference(),
 		AllowedMentions: &discordgo.MessageAllowedMentions{},
 	})

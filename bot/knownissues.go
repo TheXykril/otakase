@@ -10,7 +10,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// A pinned "Known issues" post in the support forum lists the open GitHub
+// A pinned "Known issues" post in the support forum lists the open
 // issues labelled known-issue and the ones fixed in recent releases. The bot
 // edits the post's first message every half hour.
 
@@ -20,8 +20,6 @@ const (
 	knownIssuesEvery = 30 * time.Minute
 	knownIssuesMax   = 15 // open issues listed before "and N more"
 )
-
-var knownIssuesURL = repoURL + "/issues?q=label%3A" + knownIssueLabel
 
 // knownIssuesLast is the text the post was last edited to, so an unchanged
 // list is not edited again. knownIssuesMu keeps the loop and the dashboard
@@ -71,7 +69,7 @@ func knownIssueStatus(is ghIssueFull) string {
 
 func knownIssueLine(is ghIssueFull, status string) string {
 	title := strings.NewReplacer("[", "(", "]", ")").Replace(clip(is.Title, 80))
-	line := fmt.Sprintf("- [#%d %s](%s)", is.Number, title, is.HTMLURL)
+	line := fmt.Sprintf("- **#%d** %s", is.Number, title)
 	if status != "" {
 		line += " · " + status
 	}
@@ -113,10 +111,10 @@ func knownIssuesText(issues []ghIssueFull, rels []ghRelease) string {
 	if len(open) == 0 {
 		parts = append(parts, "No known problems right now.")
 	} else {
-		lines := []string{"These are problems we already know about. No need to make a new post for them: open one to follow it or add details."}
+		lines := []string{"These are problems we already know about. No need to make a new post for them; this list changes when they are fixed."}
 		for k, is := range open {
 			if k == knownIssuesMax {
-				lines = append(lines, fmt.Sprintf("…and %d more on GitHub", len(open)-k))
+				lines = append(lines, fmt.Sprintf("…and %d more", len(open)-k))
 				break
 			}
 			lines = append(lines, knownIssueLine(is, knownIssueStatus(is)))
@@ -148,7 +146,7 @@ func knownIssuesText(issues []ghIssueFull, rels []ghRelease) string {
 }
 
 // withKnownNotes puts the notes staff added on the dashboard above the
-// GitHub list.
+// issue list.
 func withKnownNotes(text string, notes []string) string {
 	if len(notes) == 0 {
 		return text
@@ -158,7 +156,7 @@ func withKnownNotes(text string, notes []string) string {
 
 func knownIssuesEmbed(text string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{Title: knownIssuesTitle, Description: text, Color: shu,
-		Footer: &discordgo.MessageEmbedFooter{Text: "Kept up to date from GitHub by the bot"}}
+		Footer: &discordgo.MessageEmbedFooter{Text: "Kept up to date by the bot"}}
 }
 
 // knownIssuesTag picks a tag for the post: one named like "Known issues"
@@ -255,8 +253,7 @@ func (b *bot) createKnownIssues(text string) error {
 	th, err := b.s.ForumThreadStartComplex(b.cfg.SupportForum, &discordgo.ThreadStart{
 		Name: knownIssuesTitle, AutoArchiveDuration: 10080, AppliedTags: knownIssuesTag(forum),
 	}, &discordgo.MessageSend{
-		Embeds:     []*discordgo.MessageEmbed{knownIssuesEmbed(text)},
-		Components: linkButtons("All known issues on GitHub", knownIssuesURL),
+		Embeds: []*discordgo.MessageEmbed{knownIssuesEmbed(text)},
 	})
 	if err != nil {
 		return err

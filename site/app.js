@@ -235,7 +235,8 @@
   });
 
   // downloads
-  const R = 'https://github.com/TheXykril/otakase/releases/latest/download/';
+  // Served by the site's /download/ route from the latest release.
+  const R = '/download/';
   const P = {
     android: ['One app for phones and Android TV', 'Android 7.0 or newer. Android asks once to allow installing apps from your browser or file manager. Updates arrive inside the app.', 'Get the APK', R + 'otakase-android.apk'],
     windows: ['Otakase for Windows', 'Installs for your user only, no administrator needed, and adds Otakase to the Start menu.', 'Get the installer', R + 'otakase-app-windows-setup.exe'],
