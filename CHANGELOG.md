@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.2.1 - 2026-11-09
+
+Fixes for phone screens, downloads that stop when the phone sleeps, settings backups and problem reports, plus tidier settings.
+
 ### Improved
 
 - **Tidier settings.** What you watch is gone. Appearance is now **Display**
@@ -20,6 +24,12 @@
 - **Settings backup shows the right device.** A backup made on a computer no
   longer says it came from Android; it names Windows, macOS, Linux, Android or
   Android TV.
+- **Players fill the whole phone screen.** The side with the camera cutout is
+  no longer left empty; controls stay clear of it, and pages keep their content
+  beside the cutout in landscape.
+- **Problem reports share less.** Report a problem leaves out web addresses
+  and other details that aren't needed, and the film player's title line shows
+  just the year and language.
 
 ## 26.2.0 - 2026-11-09
 
