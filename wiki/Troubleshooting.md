@@ -32,6 +32,24 @@ are included. **Send report** posts to support through your linked Discord
 profile; **Copy report** also works without Discord. Nothing is sent until
 you choose Send report.
 
+## Android or TV update reports a different signing key
+
+Phone and TV install the same APK from GitHub Releases. Android requires an
+update to match the signing key of the app already installed. A development
+or locally built APK can use a different key from an official release.
+
+Some firmware can omit certificate information when Otakase inspects a
+downloaded APK. The updater retries Android's older certificate lookup when
+that information is missing and reports unreadable certificates separately
+from an actual mismatch.
+
+If an older Otakase version still shows the warning, download the official APK
+from [GitHub Releases](https://github.com/TheXykril/otakase/releases/latest) and
+open it with Android's system installer. The system independently verifies
+whether it can update the installed app. If it also rejects the signing key,
+report the TV model, Android version and where the installed APK came from.
+Back up your profiles before considering an uninstall, which removes local data.
+
 ## Subtitles appear only occasionally
 
 In Tracks (Audio & subs on phones and TVs), choose the full dialogue track instead of one labelled Forced,

@@ -18,6 +18,8 @@ build_args=(--release --target-platform android-arm,android-arm64
 echo "Otakase app $version (versionCode $code)"
 # One phone + TV APK, with both ARM runtimes.
 flutter build apk "${build_args[@]}"
+# Verify native updater certificate handling before the APK is uploaded.
+(cd android && ./gradlew testDebugUnitTest)
 python3 - <<'PY'
 from pathlib import Path
 for path in sorted(Path('build/app/outputs/flutter-apk').glob('*release.apk')):
