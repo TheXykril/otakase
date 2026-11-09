@@ -35,6 +35,31 @@ func TestBackupEndpoints(t *testing.T) {
 	if got := decode(t, w); got["config"] != "Player=mpv" || got["at"] == "" {
 		t.Fatalf("get: %v", got)
 	}
+	// The backup names the system it came from, not the one the link last
+	// reported.
+	b.store.update(func(d *storeData) {
+		l := d.AppLinks[hashToken(tok)]
+		l.OS = "android"
+		d.AppLinks[hashToken(tok)] = l
+	})
+	if w := apiJSON(t, b, "/v1/backup", `{"config":"Player=mpv","os":"windows","tv":true}`, tok); w.Code != http.StatusOK {
+		t.Fatalf("save from windows: %d %s", w.Code, w.Body)
+	}
+	if bk, _ := b.memberBackup("u1"); bk.FromOS != "windows" || bk.FromTV {
+		t.Fatalf("from windows: %+v", bk)
+	}
+	if w := apiJSON(t, b, "/v1/backup", `{"config":"Player=mpv","os":"android","tv":true}`, tok); w.Code != http.StatusOK {
+		t.Fatalf("save from tv: %d %s", w.Code, w.Body)
+	}
+	if got := decode(t, apiDo(t, b, http.MethodGet, "/v1/backup", nil, map[string]string{"Authorization": "Bearer " + other})); got["from_os"] != "android" || got["from_tv"] != true {
+		t.Fatalf("from tv: %v", got)
+	}
+	if w := apiJSON(t, b, "/v1/backup", `{"config":"Player=mpv"}`, tok); w.Code != http.StatusOK {
+		t.Fatalf("save from old app: %d %s", w.Code, w.Body)
+	}
+	if bk, _ := b.memberBackup("u1"); bk.FromOS != "android" || bk.FromTV {
+		t.Fatalf("old app falls back to the link: %+v", bk)
+	}
 	if w := apiJSON(t, b, "/v1/backup", `{"config":"`+strings.Repeat("a", maxBackupBytes+1)+`"}`, tok); w.Code != http.StatusRequestEntityTooLarge && w.Code != http.StatusBadRequest {
 		t.Fatalf("too large: %d", w.Code)
 	}

@@ -12,6 +12,7 @@ import 'package:otakase/data/heritage.dart';
 import 'package:otakase/data/lan_page.dart';
 import 'package:otakase/data/models.dart';
 import 'package:otakase/data/store.dart';
+import 'package:otakase/host.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth_test.dart' show MemoryTokens, account, json;
@@ -115,7 +116,7 @@ void main() {
     expect(bodies.single, {
       'version': appVersion,
       'dev_build': appVersion.contains('-dev'),
-      'os': 'android',
+      'os': Host.goos,
       'share_watching': false,
       'watching': null,
       'watched_seconds': 0,

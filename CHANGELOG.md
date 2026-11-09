@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Settings backup shows the right device.** A backup made on a computer no
+  longer says it came from Android; it names Windows, macOS, Linux, Android or
+  Android TV.
+
 ## 26.2.0 - 2026-11-09
 
 Movies and shows join Home and Search and can be cast to your TV, one player look everywhere, and an Android TV update fix.
