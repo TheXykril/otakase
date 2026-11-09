@@ -11,6 +11,9 @@
   you see before signing in. Signed in to Trakt, your watchlist gets its own
   row. Search lists anime first, then movies and shows, and the filters apply
   to both. Turn one off and only its parts disappear.
+- **The phone and TV home banner takes turns like the desktop one.** It moves
+  between what you are watching and trending picks every few seconds, pausing
+  after you touch it; swipe it or tap the dots on a phone.
 - **Schedule moved to More on desktop too.** The tab bar is just Home, Search
   and More everywhere.
 - **Films, series and anime share one player look on phones and TVs.** Back,

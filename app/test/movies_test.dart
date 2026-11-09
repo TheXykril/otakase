@@ -701,6 +701,24 @@ void main() {
       );
       await services.movies.progress(series, 300, 2700, season: 1, episode: 2);
       await tester.pumpAndSettle();
+      // The banner takes turns between them; a swipe moves it on.
+      expect(find.byKey(const Key('home-banner-dots')), findsOneWidget);
+      expect(
+        find.descendant(of: card, matching: find.text('Breaking Bad')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: card, matching: find.text('S1E2')),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(card);
+      await tester.pumpAndSettle();
+      await tester.fling(card, const Offset(-300, 0), 1000);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: card, matching: find.text('Interstellar')),
+        findsOneWidget,
+      );
       final row = find.byKey(
         const ValueKey('section-Continue watching'),
         skipOffstage: false,
@@ -714,7 +732,7 @@ void main() {
         ),
         findsWidgets,
       );
-      expect(find.text('90 min left', skipOffstage: false), findsOne);
+      expect(find.text('90 min left', skipOffstage: false), findsWidgets);
 
       // Search finds films and series beside anime and opens their page.
       await tester.tap(find.byKey(const ValueKey('nav-Search')));

@@ -17,10 +17,19 @@ class HeroPick {
     required this.action,
     required this.onPlay,
     required this.onDetails,
+    this.entry,
+    this.label,
   });
   final Anime anime;
   final String kicker, action;
   final VoidCallback onPlay, onDetails;
+
+  /// Where you left off, for a pick from Continue watching.
+  final WatchEntry? entry;
+
+  /// The line above the title on the phone and TV banner, in place of the
+  /// episode number.
+  final String? label;
 }
 
 /// The big banner at the top of the desktop home: the show you are watching
