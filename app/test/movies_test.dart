@@ -484,6 +484,99 @@ void main() {
     expect(body!['progress'], 41.23);
   });
 
+  group('Trakt sign-in survives restarts', () {
+    Json expired() => {
+      'access_token': 'old',
+      'refresh_token': 'ref',
+      'expires_in': 86400,
+      'created_at': 0,
+    };
+
+    test('calls that start together share one refresh', () async {
+      var refreshes = 0;
+      final tokens = MemoryTokens()
+        ..values[traktTokenKey] = jsonEncode(expired());
+      final trakt = Trakt(
+        client: MockClient((r) async {
+          if (r.url.path == '/oauth/token') {
+            refreshes++;
+            // Trakt rotates refresh tokens: a second use of 'ref' fails.
+            if (refreshes > 1) return http.Response('{}', 400);
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+            return http.Response(
+              jsonEncode({
+                'access_token': 'new',
+                'refresh_token': 'ref2',
+                'expires_in': 86400,
+                'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+              }),
+              200,
+            );
+          }
+          if (r.headers['Authorization'] != 'Bearer new') {
+            return http.Response('', 401);
+          }
+          return http.Response('[]', 200);
+        }),
+        storage: tokens,
+      );
+      await Future.wait([trakt.library(), trakt.library(), trakt.library()]);
+      expect(refreshes, 1);
+      expect(trakt.signedIn, isTrue);
+      final saved = jsonDecode(tokens.values[traktTokenKey]!) as Map;
+      expect(saved['refresh_token'], 'ref2');
+    });
+
+    test('Trakt being down keeps the sign-in', () async {
+      for (final down in [
+        (_) async => http.Response('', 503),
+        (_) async => throw http.ClientException('offline'),
+      ]) {
+        final tokens = MemoryTokens()
+          ..values[traktTokenKey] = jsonEncode(expired());
+        final trakt = Trakt(client: MockClient(down), storage: tokens);
+        await expectLater(trakt.library(), throwsA(isA<TraktFailure>()));
+        expect(trakt.signedIn, isTrue);
+        expect(tokens.values[traktTokenKey], contains('ref'));
+      }
+    });
+
+    test('a 401 refreshes once and retries before signing out', () async {
+      final seen = <String>[];
+      final tokens = MemoryTokens()
+        ..values[traktTokenKey] = jsonEncode({
+          ...expired(),
+          'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        });
+      final trakt = Trakt(
+        client: MockClient((r) async {
+          if (r.url.path == '/oauth/token') {
+            return http.Response(
+              jsonEncode({'access_token': 'new', 'refresh_token': 'ref2'}),
+              200,
+            );
+          }
+          seen.add(r.headers['Authorization'] ?? '');
+          return r.headers['Authorization'] == 'Bearer new'
+              ? http.Response('{}', 201)
+              : http.Response('', 401);
+        }),
+        storage: tokens,
+      );
+      await trakt.scrobble('pause', series, 10, season: 1, episode: 1);
+      expect(seen, ['Bearer old', 'Bearer new']);
+      expect(trakt.signedIn, isTrue);
+    });
+  });
+
+  test('the activation page link carries the code', () {
+    final code = TraktDeviceCode.fromJson({
+      'user_code': '8FGERUNC',
+      'verification_url': 'https://auth.trakt.tv/activate',
+    });
+    expect(code.activationUrl, 'https://auth.trakt.tv/activate/8FGERUNC');
+  });
+
   test(
     'downloads go into a folder per title and finish from the core status',
     () async {

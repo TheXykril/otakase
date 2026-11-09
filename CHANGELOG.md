@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Trakt stays signed in.** Opening the app after a while (for example after
+  an update) could sign you out of Trakt. Otakase now refreshes the sign-in
+  once instead of several times at the same moment, and keeps it when Trakt or
+  the network is briefly down.
+
+### Improved
+
+- **No more typing the Trakt code.** On phones, **Open Trakt** opens the
+  activation page with the code already filled in (and copies it, just in
+  case). On TVs the QR code carries the code too. Tap the code to copy it.
+
 ## 26.2.1 - 2026-11-09
 
 Fixes for phone screens, downloads that stop when the phone sleeps, settings backups and problem reports, plus tidier settings.
