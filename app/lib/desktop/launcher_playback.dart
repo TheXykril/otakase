@@ -9,7 +9,7 @@ import '../data/models.dart';
 import '../data/trakt.dart';
 import '../services.dart';
 import '../ui/components.dart';
-import '../ui/movie_player.dart';
+import '../player.dart';
 import '../ui/movies_pages.dart';
 import 'external_mpv.dart';
 import 'window_frame.dart';
@@ -120,7 +120,7 @@ class LauncherPlayback {
       );
     }
     final title = MediaTitle.fromJson(data['title'] as Json);
-    return MoviePlayerPage(
+    return PlayerPage.title(
       services: services,
       isTV: true,
       request: titlePlay(

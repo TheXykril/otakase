@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+
+- **Anime, films, shows and downloads now play in one player.** Every title
+  gets the same controls, keys, casting, stall recovery and quality list
+  (with Try another copy). Buttons for things a title has no data for, such
+  as skip times for films, stay hidden.
+
 ### Fixed
 
 - **Leaving a film right as it starts keeps your spot.** Backing out while
