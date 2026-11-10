@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- **Pair the phone remote by tapping Allow on the TV.** Tap a TV or
+  computer in Control TV on the phone and it asks Allow on screen, with two
+  numbers to match, instead of you typing a code. The QR code and typed
+  code still work.
+
+### Changed
+
+- **The phone remote is live.** It shows what the TV is doing the moment it
+  changes, reconnects on its own and finds the TV again after its address
+  changed, instead of asking every two seconds while the page is open.
+
 ## 26.3.1 - 2026-11-10
 
 The phone remote gets past firewalls, the player shading fills the camera cutout, and a dropped stream says Reconnecting again.

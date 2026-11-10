@@ -369,4 +369,163 @@ void lookupTests() {
       throwsStateError,
     );
   });
+
+  Future<(TVRemote, TVRemote, TVDevice)> tvAndPhone() async {
+    final tv = TVRemote(
+          storage: MemoryTokens(),
+          name: 'Living room',
+          findAddress: () async => '127.0.0.1',
+          transport: const LanTransport(allowLoopback: true),
+        ),
+        phone = TVRemote(
+          storage: MemoryTokens(),
+          transport: const LanTransport(allowLoopback: true),
+        );
+    addTearDown(tv.close);
+    addTearDown(phone.close);
+    await tv.startTV(discoveryPort: 0, serverPort: 0);
+    final found = await helloTV(
+      '127.0.0.1',
+      port: tv.port,
+      transport: const LanTransport(allowLoopback: true),
+    );
+    return (tv, phone, found!);
+  }
+
+  test('a phone asks and the TV allows it without typing a code', () async {
+    final (tv, phone, device) = await tvAndPhone();
+    expect(device.version, remoteVersion);
+    String? shown;
+    final asking = phone.requestControl(
+      device,
+      phoneName: 'Pixel',
+      digits: (d) => shown = d,
+      every: const Duration(milliseconds: 20),
+    );
+    while (tv.ask == null) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    expect(tv.ask!.phone, 'Pixel');
+    expect(tv.ask!.digits, matches(RegExp(r'^\d\d$')));
+    // A second phone cannot cover the question already on screen.
+    final other = TVRemote(
+      storage: MemoryTokens(),
+      transport: const LanTransport(allowLoopback: true),
+    );
+    addTearDown(other.close);
+    await expectLater(other.requestControl(device), throwsStateError);
+    await tv.allowAsk();
+    await asking;
+    expect(shown, isNotEmpty);
+    expect(tv.ask, null);
+    expect(phone.paired.single.id, tv.id);
+    tv.status = () => {'has_player': false};
+    expect((await phone.send(device))['name'], 'Living room');
+  });
+
+  test('Not now refuses, and three refusals make phones wait', () async {
+    final (tv, phone, device) = await tvAndPhone();
+    for (var i = 0; i < 3; i++) {
+      final asking = phone.requestControl(
+        device,
+        every: const Duration(milliseconds: 20),
+      );
+      while (tv.ask == null) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      tv.denyAsk();
+      await expectLater(
+        asking,
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            'The TV said not now.',
+          ),
+        ),
+      );
+    }
+    await expectLater(
+      phone.requestControl(device),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('Wait 30'),
+        ),
+      ),
+    );
+    expect(phone.paired, isEmpty);
+  });
+
+  test('the live connection pushes status and carries controls', () async {
+    HttpOverrides.global = _RealHttp();
+    addTearDown(() => HttpOverrides.global = null);
+    final (tv, phone, device) = await tvAndPhone();
+    final code = await tv.beginPair();
+    await phone.pair(device, code.code);
+    var playing = true;
+    final actions = <String>[];
+    tv.status = () => {
+      'has_player': true,
+      'title': 'A story',
+      'playing': playing,
+    };
+    tv.command = (action, args) async {
+      actions.add(action);
+      if (action == 'pause') playing = false;
+    };
+    final link = RemoteLink(phone, device, findTVs: () async => []);
+    addTearDown(link.close);
+    link.start();
+    Future<void> until(bool Function() ok) async {
+      for (var i = 0; i < 200 && !ok(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(ok(), isTrue);
+    }
+
+    await until(() => link.status['title'] == 'A story');
+    expect(link.state, LinkState.live);
+    await link.send('pause');
+    await until(() => link.status['playing'] == false);
+    expect(actions, ['pause']);
+    await expectLater(link.send('source'), throwsStateError);
+    // Forgotten phones are cut off and told to pair again.
+    await tv.forgetPhones();
+    await until(() => link.state == LinkState.lost);
+    expect(link.error, contains('Pair this phone'));
+  });
+
+  test('the live connection finds the TV again at a new address', () async {
+    HttpOverrides.global = _RealHttp();
+    addTearDown(() => HttpOverrides.global = null);
+    final (tv, phone, device) = await tvAndPhone();
+    final code = await tv.beginPair();
+    await phone.pair(device, code.code);
+    tv.status = () => {'has_player': false, 'title': 'Moved'};
+    // The saved address no longer answers, as after a router restart.
+    final gone = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final stale = TVDevice(
+      id: device.id,
+      name: device.name,
+      host: device.host,
+      port: gone.port,
+      version: 2,
+    );
+    await gone.close();
+    final link = RemoteLink(phone, stale, findTVs: () async => [device]);
+    addTearDown(link.close);
+    link.start();
+    for (var i = 0; i < 600 && link.status['title'] != 'Moved'; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(link.status['title'], 'Moved');
+    expect(link.tv.port, device.port);
+    expect(phone.paired.single.port, device.port);
+  });
 }
+
+/// The test binding answers every HttpClient with 400; the live remote
+/// needs real loopback sockets.
+class _RealHttp extends HttpOverrides {}

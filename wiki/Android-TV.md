@@ -51,14 +51,22 @@ text.
 
 ## Your phone as a remote
 
-On the TV, More > Phone remote shows a QR code and a pairing code that lasts
-ten minutes, with the TV's address under it. On the phone, More > Control TV
-finds TVs on the same network; scan the QR code with the phone camera, pick
-the TV, or tap Enter code and type the code. If the phone finds nothing, also
-type the address shown under the code. A computer works the same way from
+On the phone, More > Control TV finds TVs and computers running Otakase on the
+same network. Tap one and the TV asks **Allow** over whatever is on screen,
+showing two numbers that the phone shows too, so you can tell your phone from
+someone else's. Pick Allow and the phone is paired. Not now refuses; after
+three refusals in a row phones wait 30 seconds before asking again.
+
+If the phone finds nothing, open More > Phone remote on the TV. It shows a QR
+code and a pairing code that lasts ten minutes, with the TV's address under
+it: scan the QR code with the phone camera, or tap Enter code on the phone and
+type the code (and the address if needed). A computer works the same way from
 More > Phone remote. If its firewall is on (Linux or Windows), that page
 shows **Allow phone remote**: tap it and enter your password once. Otherwise
 allow port 8654 (TCP and UDP) yourself.
 Pair once, then control play, pause, ten-second seeks, the next episode,
-episode choice and volume. Pairings belong to each profile; forget a TV on the
+episode choice and volume. The phone stays connected and shows what the TV is
+doing as it happens; if the connection drops it reconnects on its own and
+finds the TV again when its address changed, for example after a router
+restart. Pairings belong to each profile; forget a TV on the
 phone, or every paired phone on the TV.
