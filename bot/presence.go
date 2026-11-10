@@ -25,7 +25,7 @@ type presence struct {
 }
 
 // defaultStatuses are the built-in statuses, after the version one.
-var defaultStatuses = []string{"Get it: otakase.xyverion.com", "Anime on phone, TV and PC", "/suggest an idea"}
+var defaultStatuses = []string{"Get it: otakase.com", "Anime on phone, TV and PC", "/suggest an idea"}
 
 func customStatus(text string) *discordgo.Activity {
 	return &discordgo.Activity{Name: "Custom Status", Type: discordgo.ActivityTypeCustom, State: text}

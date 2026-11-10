@@ -20,7 +20,7 @@ func newsServer(t *testing.T, hits *atomic.Int32) *httptest.Server {
 			t.Error("news sent a token; it needs none")
 		}
 		hits.Add(1)
-		w.Write([]byte(`{"announcement":{"title":"26.8.0 is out","text":"Watch parties","url":"https://discord.com/channels/1/2/3","at":"2026-10-03T12:00:00Z"},"online":12,"members":85,"invite":"https://otakase.xyverion.com/discord/"}`))
+		w.Write([]byte(`{"announcement":{"title":"26.8.0 is out","text":"Watch parties","url":"https://discord.com/channels/1/2/3","at":"2026-10-03T12:00:00Z"},"online":12,"members":85,"invite":"https://otakase.com/discord/"}`))
 	}))
 	t.Cleanup(srv.Close)
 	return srv

@@ -44,7 +44,7 @@ that information is missing and reports unreadable certificates separately
 from an actual mismatch.
 
 If an older Otakase version still shows the warning, download the official APK
-from the [website](https://otakase.xyverion.com/#download) and
+from the [website](https://otakase.com/#download) and
 open it with Android's system installer. The system independently verifies
 whether it can update the installed app. If it also rejects the signing key,
 report the TV model, Android version and where the installed APK came from.
@@ -91,4 +91,4 @@ It is not signed by Apple yet. Right-click Otakase in Applications and choose
 ---
 
 Still stuck? Ask in the support forum on
-[Discord](https://otakase.xyverion.com/discord/).
+[Discord](https://otakase.com/discord/).

@@ -11,7 +11,7 @@ import 'package:otakase/data/app_updates.dart';
 
 final apkBytes = List<int>.generate(1024, (i) => i % 256);
 final checksum = sha256.convert(apkBytes).toString();
-const base = 'https://otakase.xyverion.com/download/v26.7.0';
+const base = 'https://otakase.com/download/v26.7.0';
 
 Map<String, dynamic> asset(String name) => {
   'name': name,
@@ -158,7 +158,7 @@ void main() {
     expect(app.update!.url.toString(), '$base/$androidApk');
     await app.download();
     expect(app.phase, UpdatePhase.ready);
-    expect(hosts, {'otakase.xyverion.com'});
+    expect(hosts, {'otakase.com'});
   });
 
   test(
@@ -240,12 +240,12 @@ void main() {
     expect(updates.downloaded, isFalse);
     expect(host.validated, 0);
     for (final url in [
-      'http://otakase.xyverion.com/download/v26.7.0/$androidApk',
+      'http://otakase.com/download/v26.7.0/$androidApk',
       'https://evil.example/download/v26.7.0/$androidApk',
-      'https://otakase.xyverion.com.evil.example/download/v26.7.0/$androidApk',
-      'https://otakase.xyverion.com/download/v26.8.0/$androidApk',
-      'https://otakase.xyverion.com/download/v26.7.0/otakase-app-macos.zip',
-      'https://otakase.xyverion.com/download/v26.7.0/$androidApk?x=1',
+      'https://otakase.com.evil.example/download/v26.7.0/$androidApk',
+      'https://otakase.com/download/v26.8.0/$androidApk',
+      'https://otakase.com/download/v26.7.0/otakase-app-macos.zip',
+      'https://otakase.com/download/v26.7.0/$androidApk?x=1',
       'https://github.com/TheXykril/otakase/releases/download/v26.7.0/$androidApk',
     ]) {
       release['assets'] = [asset(androidApk)..['browser_download_url'] = url];

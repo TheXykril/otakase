@@ -21,7 +21,7 @@ func TestKeepAiringItemQueuesTheEpisode(t *testing.T) {
 	notifyAiring = func(message, url string) { shown = append(shown, message+" | "+url) }
 	t.Cleanup(func() { notifyAiring = previous })
 
-	keepAiringItem(config, discordInboxItem{ID: "a", Kind: "airing", Title: "Frieren", AnilistID: 154587, Episode: 4, URL: "https://otakase.xyverion.com/open/?anilist=154587&ep=4"})
+	keepAiringItem(config, discordInboxItem{ID: "a", Kind: "airing", Title: "Frieren", AnilistID: 154587, Episode: 4, URL: "https://otakase.com/open/?anilist=154587&ep=4"})
 	keepAiringItem(config, discordInboxItem{ID: "b", Kind: "airing", Title: "Frieren", AnilistID: 154587, Episode: 5})
 	keepAiringItem(config, discordInboxItem{ID: "c", Kind: "airing", Title: "Dandadan", AnilistID: 171018, Episode: 1})
 
@@ -35,7 +35,7 @@ func TestKeepAiringItemQueuesTheEpisode(t *testing.T) {
 	if got := inboxOption(items[1]).Label; got != "Play Frieren · episode 5" {
 		t.Errorf("menu label %q", got)
 	}
-	if len(shown) != 3 || shown[0] != "Episode 4 of Frieren is out | https://otakase.xyverion.com/open/?anilist=154587&ep=4" {
+	if len(shown) != 3 || shown[0] != "Episode 4 of Frieren is out | https://otakase.com/open/?anilist=154587&ep=4" {
 		t.Errorf("notifications: %q", shown)
 	}
 }

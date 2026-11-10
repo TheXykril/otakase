@@ -9,17 +9,17 @@
 <p align="center">
   <a href="https://github.com/TheXykril/otakase/releases/latest"><img src="https://img.shields.io/github/v/release/TheXykril/otakase?label=release&color=d2492f" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-c99a2e" alt="GPL-3.0"></a>
-  <a href="https://otakase.xyverion.com/discord/"><img src="https://img.shields.io/badge/discord-join-d2492f?logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://otakase.com/discord/"><img src="https://img.shields.io/badge/discord-join-d2492f?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://github.com/TheXykril/otakase/releases"><img src="https://img.shields.io/github/downloads/TheXykril/otakase/total?label=downloads&color=c99a2e" alt="Downloads"></a>
   <a href="#install"><img src="https://img.shields.io/badge/platform-android%20%C2%B7%20android%20tv%20%C2%B7%20windows%20%C2%B7%20macOS%20%C2%B7%20linux-c99a2e" alt="Android, Android TV, Windows, macOS, Linux"></a>
   <a href="#features"><img src="https://img.shields.io/badge/sync-AniList%20%C2%B7%20MAL%20%C2%B7%20Trakt-c99a2e" alt="Syncs with AniList, MyAnimeList and Trakt"></a>
 </p>
 
 <p align="center">
-  <a href="https://otakase.xyverion.com/">Website</a> ·
+  <a href="https://otakase.com/">Website</a> ·
   <a href="#install">Install</a> ·
   <a href="https://github.com/TheXykril/otakase/wiki">Wiki</a> ·
-  <a href="https://otakase.xyverion.com/discord/">Discord</a>
+  <a href="https://otakase.com/discord/">Discord</a>
 </p>
 
 Otakase finds the episode, plays it, skips the opening and ending, and
@@ -113,7 +113,7 @@ More on the [wiki](https://github.com/TheXykril/otakase/wiki).
 
 See [Troubleshooting](https://github.com/TheXykril/otakase/wiki/Troubleshooting)
 on the wiki. **Diagnostics** in the app shows what went wrong. Still stuck?
-Ask on [Discord](https://otakase.xyverion.com/discord/) or [open an issue](https://github.com/TheXykril/otakase/issues).
+Ask on [Discord](https://otakase.com/discord/) or [open an issue](https://github.com/TheXykril/otakase/issues).
 
 ## Licence
 

@@ -169,7 +169,7 @@ func TestPartyStartAPI(t *testing.T) {
 	}
 	w := apiJSON(t, b, "/v1/party/start", `{"anilist_id":154587,"episode":3,"title":"Frieren"}`, tok)
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &first) != nil || len(first.ID) != 16 ||
-		first.JoinURL != "https://otakase.xyverion.com/open/?party="+first.ID {
+		first.JoinURL != "https://otakase.com/open/?party="+first.ID {
 		t.Fatalf("start: %d %s", w.Code, w.Body)
 	}
 	w = apiJSON(t, b, "/v1/party/start", `{"anilist_id":154587,"episode":4,"title":"Frieren"}`, tok)

@@ -157,9 +157,9 @@ func TestPartyClock(t *testing.T) {
 
 func TestParsePartyID(t *testing.T) {
 	good := map[string]string{
-		"1290000000000000001":    "1290000000000000001",
-		" 1290000000000000001\n": "1290000000000000001",
-		"https://otakase.xyverion.com/open/?party=1290000000000000001":    "1290000000000000001",
+		"1290000000000000001":                                             "1290000000000000001",
+		" 1290000000000000001\n":                                          "1290000000000000001",
+		"https://otakase.com/open/?party=1290000000000000001":             "1290000000000000001",
 		"otakase://party?party=42":                                        "42",
 		"otakase://party/1290000000000000001":                             "1290000000000000001",
 		"https://discord.com/events/1111111111111111/1290000000000000001": "1290000000000000001",
@@ -169,7 +169,7 @@ func TestParsePartyID(t *testing.T) {
 			t.Errorf("%q: %q %v", in, got, ok)
 		}
 	}
-	for _, in := range []string{"", "frieren", "https://otakase.xyverion.com/open/", "12ab"} {
+	for _, in := range []string{"", "frieren", "https://otakase.com/open/", "12ab"} {
 		if got, ok := parsePartyID(in); ok {
 			t.Errorf("%q accepted as %q", in, got)
 		}

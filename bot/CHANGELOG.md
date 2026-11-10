@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.94
+
+- Links to the website use otakase.com: the bot status, play and watch party links, the invite link and the info posts. Repost the welcome and FAQ posts with `/post-info` to update their buttons.
+
 ## 1.30.93
 
 - `/github` no longer offers Site: the website now rebuilds by itself after each release and after every Wiki sync.

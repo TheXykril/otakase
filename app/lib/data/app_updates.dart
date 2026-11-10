@@ -101,7 +101,7 @@ class AppUpdate {
 /// The site the apps get updates from. It serves the release files from
 /// GitHub, or from the private copy of the releases when GitHub cannot, so
 /// updates keep working without GitHub.
-const updateSite = 'otakase.xyverion.com';
+const updateSite = 'otakase.com';
 
 /// The newest release, in GitHub's release shape, with links on [updateSite].
 final latestRelease = Uri.https(updateSite, '/download/latest.json');

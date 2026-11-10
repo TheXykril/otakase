@@ -17,7 +17,7 @@ const discordAppID = "1556589176164589578"
 // Discord fetches presence images itself, so they must be public URLs. They
 // are served by the website.
 const (
-	discordImageBase  = "https://otakase.xyverion.com/img/"
+	discordImageBase  = "https://otakase.com/img/"
 	discordIconImage  = discordImageBase + "icon-512.png"
 	discordMarkImage  = discordImageBase + "mark-256.png"
 	discordPauseImage = discordImageBase + "pause-256.png"

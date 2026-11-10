@@ -510,7 +510,7 @@ func TestScamReason(t *testing.T) {
 		"my steam profile https://steamcommunity.com/id/someone",
 		"free nitro would be nice lol",
 		"discord.js docs https://discord.js.org/docs",
-		"is there a free version? https://otakase.xyverion.com",
+		"is there a free version? https://otakase.com",
 		"https://store.steampowered.com/app/123 is free this week",
 		"@everyone the release is out",
 	}
@@ -915,7 +915,7 @@ func TestCrashWatch(t *testing.T) {
 }
 
 const testSidebar = "**[Home](Home)**\n\n**Using otakase**\n\n- [Casting Problems](Casting-Problems)\n- [Troubleshooting](Troubleshooting)\n" +
-	"- [Discord server](https://otakase.xyverion.com/discord/)\n\n**Developer**\n\n- [Overview](Developer)\n"
+	"- [Discord server](https://otakase.com/discord/)\n\n**Developer**\n\n- [Overview](Developer)\n"
 
 var testWiki = map[string]string{
 	"Casting-Problems": "# Casting Problems\n\n## No devices found / the TV isn't in the list\n\nYour Chromecast or TV must be on the same network.\n\n" +
@@ -1024,7 +1024,7 @@ func TestWikiEmbed(t *testing.T) {
 	}
 	b.wiki.update(testWiki, nil)
 	e := b.wikiEmbed("Rofi menus look wrong", "the rofi menus look broken")
-	if e == nil || !strings.Contains(e.Description, "(https://otakase.xyverion.com/help/Troubleshooting#the-rofi-menus-look-wrong)") {
+	if e == nil || !strings.Contains(e.Description, "(https://otakase.com/help/Troubleshooting#the-rofi-menus-look-wrong)") {
 		t.Errorf("embed = %+v", e)
 	}
 }

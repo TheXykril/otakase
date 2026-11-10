@@ -170,7 +170,7 @@ class DiscordPage extends StatelessWidget {
                           const [
                             'discord.com',
                             'discord.gg',
-                            'otakase.xyverion.com',
+                            'otakase.com',
                             'bot.xyverion.com',
                           ].contains(url.host)) {
                         try {

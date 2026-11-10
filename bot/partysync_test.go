@@ -264,7 +264,7 @@ func TestPartyPostSyncButton(t *testing.T) {
 			join = b.URL
 		}
 	}
-	if join != "https://otakase.xyverion.com/open/?party=ev1" {
+	if join != "https://otakase.com/open/?party=ev1" {
 		t.Errorf("join button: %q", join)
 	}
 	if !strings.Contains(e.Description, "synced to the host") {

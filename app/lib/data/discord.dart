@@ -11,7 +11,7 @@ import 'models.dart';
 import 'store.dart';
 
 const discordBotUrl = 'https://bot.xyverion.com';
-const discordInviteUrl = 'https://otakase.xyverion.com/discord/';
+const discordInviteUrl = 'https://otakase.com/discord/';
 // The CLI version, passed in by scripts/build-apk.sh. Other builds report a
 // dev build.
 const appVersion = String.fromEnvironment(

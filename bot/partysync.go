@@ -51,7 +51,7 @@ const (
 
 // partyJoinURL opens the party in Otakase, from the post's link button.
 func partyJoinURL(eventID string) string {
-	return "https://otakase.xyverion.com/open/?party=" + url.QueryEscape(eventID)
+	return "https://otakase.com/open/?party=" + url.QueryEscape(eventID)
 }
 
 func init() {
