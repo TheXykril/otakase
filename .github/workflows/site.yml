@@ -5,9 +5,6 @@ name: Site
 # Cloudflare step needs the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
 # secrets and is skipped while they are missing. GitHub Pages must be set to
 # deploy from "GitHub Actions" in the repository settings.
-# CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets and is skipped while
-# they are missing. GitHub Pages must be set to deploy from "GitHub Actions"
-# in the repository settings.
 # Runs by itself at the end of Build and release (when it publishes a
 # release, so the changelog shows the new version) and of Wiki sync (so the
 # help pages match the wiki). It can still be started by hand from the
