@@ -1,12 +1,14 @@
 (() => {
   const $ = (id) => document.getElementById(id);
 
-  // Always open at the start of the story. Browsers otherwise put a reload
-  // back where the last visit stopped, and a #download left in the address by
-  // the Download button reopens the page down at the downloads.
+  // Always open at the start of the story, unless a link asked for the
+  // downloads (/#download from the demo page, the wiki or the desktop app).
+  // Browsers otherwise put a reload back where the last visit stopped. The
+  // hash is dropped from the address so a reload starts at the top again.
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  const toDownloads = location.hash === '#download';
   if (location.hash) history.replaceState(null, '', location.pathname + location.search);
-  const toTop = () => window.scrollTo(0, 0);
+  const toTop = () => window.scrollTo(0, toDownloads ? $('download').offsetTop : 0);
   toTop();
   addEventListener('pageshow', (e) => { if (e.persisted) toTop(); });
   // Fonts and pictures arriving can still move things; until the visitor
