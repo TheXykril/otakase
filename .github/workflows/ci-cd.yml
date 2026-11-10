@@ -4,24 +4,38 @@ name: Build and release
 # Discord bot's /github command. Each run checks the Go core and the app and
 # builds the Android APK and the desktop app for Windows, macOS and Linux
 # (app-build.yml); the files are on the run's page under Artifacts.
-# With "release" ticked it publishes v<VERSION.txt> from main as a GitHub
-# release, then deploys the site so its changelog shows the new version
-# ("site": quick by default, full after app UI changes).
+#
+# "publish" picks what happens with the builds:
+# - nothing: a test build, files only under Artifacts (main or a PR).
+# - dev: replaces the "dev" pre-release with main and posts it in the
+#   Discord test-builds channel. "version" is the version it is heading to
+#   (empty = next drop after VERSION.txt, e.g. 26.3.1 -> 26.4.0).
+# - release: publishes v<VERSION.txt> from main as a GitHub release, posts it
+#   on Discord, then deploys the site so its changelog shows the new version
+#   ("site": quick by default, full after app UI changes).
 
 on:
   workflow_dispatch:
     inputs:
+      publish:
+        description: "Publish: nothing (test build), dev (dev pre-release) or release"
+        required: false
+        type: choice
+        options:
+          - nothing
+          - dev
+          - release
+        default: nothing
       pr_number:
-        description: PR number to build instead of main
+        description: PR number to build instead of main (test builds only)
         required: false
         type: string
-      release:
-        description: Publish a release of main
+      version:
+        description: "Dev only: version it is heading to, e.g. 26.8.0 (empty = next drop)"
         required: false
-        type: boolean
-        default: false
+        type: string
       site:
-        description: "Site build after a release: quick (text, changelog) or full (also app screens and Try demo, for app UI changes)"
+        description: "Release only: site build after it, quick (text, changelog) or full (also app screens and Try demo, for app UI changes)"
         required: false
         type: choice
         options:
@@ -32,33 +46,59 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      contents: read
     outputs:
       ref: ${{ steps.ref.outputs.ref }}
       publish: ${{ steps.ref.outputs.publish }}
+      version: ${{ steps.ref.outputs.version }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: VERSION.txt
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Pick what to build
         id: ref
         env:
+          PUBLISH: ${{ inputs.publish }}
           PR_NUMBER: ${{ inputs.pr_number }}
-          RELEASE: ${{ inputs.release }}
+          DEV_VERSION: ${{ inputs.version }}
           REF: ${{ github.ref }}
           SHA: ${{ github.sha }}
         run: |
+          PUBLISH=${PUBLISH:-nothing}
           if [ -n "$PR_NUMBER" ]; then
             if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
               echo "::error::pr_number must be a positive integer, got: $PR_NUMBER"
               exit 1
             fi
+            if [ "$PUBLISH" != nothing ]; then
+              echo "::error::A PR can only get a test build; $PUBLISH is always made from main"
+              exit 1
+            fi
             echo "ref=refs/pull/$PR_NUMBER/head" >> "$GITHUB_OUTPUT"
-            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "publish=nothing" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "ref=$SHA" >> "$GITHUB_OUTPUT"
-          if [ "$RELEASE" = "true" ] && [ "$REF" = "refs/heads/main" ]; then
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=false" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISH" != nothing ] && [ "$REF" != "refs/heads/main" ]; then
+            echo "::warning::Only main is published; this is a test build"
+            PUBLISH=nothing
+          fi
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISH" = dev ]; then
+            base=${DEV_VERSION#v}
+            if [ -z "$base" ]; then
+              IFS=. read -r yy drop _ < <(tr -d '[:space:]' < VERSION.txt)
+              base="$yy.$((drop + 1)).0"
+            fi
+            if ! [[ "$base" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::version must look like 26.8.0, got '$base'"
+              exit 1
+            fi
+            echo "version=$base-dev.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
           fi
 
   # Pinned to the commit this run started on, so a push to main while it runs
@@ -70,13 +110,92 @@ jobs:
     uses: ./.github/workflows/app-build.yml
     with:
       ref: ${{ needs.check.outputs.ref }}
+      # Empty reads VERSION.txt; a dev build stamps its own.
+      version: ${{ needs.check.outputs.version }}
       # Only main gets the release signing key; PR code never sees it.
       signed: ${{ inputs.pr_number == '' }}
     secrets: inherit
 
+  # Replaces the "dev" pre-release. It is marked pre-release and never
+  # "latest", so the apps' update checks never offer it; install it by hand.
+  # The "dev" tag does not start with "v", so the release changelog range
+  # skips it.
+  dev:
+    needs: [check, build]
+    if: needs.check.outputs.publish == 'dev'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: dev-build
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: read
+    env:
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+      DEV_VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          # History back to the last release commit, for the Discord post.
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: otakase-android
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: otakase-app-*
+          path: dist
+          merge-multiple: true
+
+      - name: Replace the dev release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete dev --cleanup-tag --yes || true
+          cat > notes.md <<EOF
+          Development build of \`main\` at ${GITHUB_SHA::7}, version \`$DEV_VERSION\`.
+
+          Not a release: it can be broken, and it is replaced by the next dev build. The apps never offer it as an update; install it by hand.
+          EOF
+          gh release create dev dist/otakase-android.apk dist/otakase-app-windows-setup.exe \
+            dist/otakase-app-macos.zip dist/otakase-app-linux-x86_64.AppImage \
+            --target "$GITHUB_SHA" \
+            --title "Otakase $DEV_VERSION" \
+            --notes-file notes.md \
+            --prerelease \
+            --latest=false
+
+      # Announces the build in the Discord server's test-builds channel, sent by
+      # the Otakase bot. Needs a DISCORD_BOT_TOKEN secret; without it this does
+      # nothing. A header that fails to render leaves the post without one.
+      - name: Render the Discord header
+        if: env.DISCORD_BOT_TOKEN != ''
+        continue-on-error: true
+        run: |
+          python3 .github/discord/post_release.py render-dev "$DEV_VERSION" "$RUNNER_TEMP/header.html"
+          npx -y playwright@1.56.1 screenshot --channel chrome --viewport-size 1600,400 \
+            --wait-for-timeout 3000 "file://$RUNNER_TEMP/header.html" "$RUNNER_TEMP/header.png"
+
+      - name: Post to Discord
+        if: env.DISCORD_BOT_TOKEN != ''
+        env:
+          # The test-builds channel (found by name in the server), and the
+          # "Tester" role each post pings (empty for no ping).
+          DISCORD_GUILD: "1556588123561922560"
+          DISCORD_DEV_CHANNEL: "test-builds"
+          DISCORD_DEV_ROLE: "1556589751077699664"
+        run: python3 .github/discord/post_release.py post-dev "$DEV_VERSION" "$RUNNER_TEMP/header.png"
+
   release:
     needs: [check, build]
-    if: needs.check.outputs.publish == 'true'
+    if: needs.check.outputs.publish == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write

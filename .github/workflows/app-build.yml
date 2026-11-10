@@ -2,7 +2,7 @@ name: App build
 
 # Builds and checks everything a release ships: the Android APK (phones and
 # Android TV) and the desktop app for Windows, macOS and Linux. Called by
-# "Build and release" and "Dev Build"; it does not run on its own.
+# "Build and release"; it does not run on its own.
 
 on:
   workflow_call:

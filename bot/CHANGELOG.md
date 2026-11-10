@@ -4,7 +4,8 @@
 
 ## 1.30.95
 
-- `/github` Build and release has a `site` option for releases: Quick (default) rebuilds the website's text and changelog, Full also rebuilds the app screens and the Try demo after app UI changes.
+- `/github` Build and release now covers dev builds too: pick `publish` Nothing (test build, default), Dev build or Release. Dev build is no longer its own workflow; its `version` is optional and defaults to the next drop.
+- Releases get a `site` option: Quick (default) rebuilds the website's text and changelog, Full also rebuilds the app screens and the Try demo after app UI changes.
 
 ## 1.30.94
 
