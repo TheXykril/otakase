@@ -97,6 +97,7 @@ const settingLabels = <String, String>{
   'ResumePlayback': 'Resume where you left off',
   'CheckUpdates': 'Check for updates',
   'KeepScreenOn': 'Keep screen on',
+  'RemoteAnywhere': 'Phone remote from anywhere',
   'ExternalMpv': 'Play in my own mpv',
   'MpvPath': 'mpv program',
   'DiscordWatchWithMe': 'Watch with me',
@@ -629,6 +630,13 @@ class _SettingsPageState extends State<SettingsPage> {
           'ScoreOnCompletion',
           'Ask for a score after the last episode of a show that has ended.',
           icon: LucideIcons.star,
+        ),
+        toggle(
+          'RemoteAnywhere',
+          'With this profile linked to Discord, your phones control this '
+              'device and your TVs through the Otakase bot when they are '
+              'not on the same Wi-Fi, and pair without a code.',
+          icon: LucideIcons.tv,
         ),
         if (isDesktop)
           toggle(

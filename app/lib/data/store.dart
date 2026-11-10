@@ -66,6 +66,9 @@ const settingDefaults = <String, dynamic>{
   'TorrentOnMobileData': false,
   'CheckUpdates': true,
   'KeepScreenOn': false,
+  // Phones on the same Discord account control TVs through the bot when
+  // the local network can't reach them.
+  'RemoteAnywhere': true,
   'SyncAniListMAL': true,
   'DiscordShareWatching': false,
   'DiscordShareRatings': 'ask',

@@ -36,6 +36,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
   TVRemote get remote => widget.services.tvRemote;
   List<TVDevice> devices = [];
   RemoteLink? get link => widget.services.remoteLink.value;
+  Set<String> mine = {};
   Timer? timer;
   String? error, firewallNote;
   bool busy = false, canAllow = false, allowing = false;
@@ -111,16 +112,18 @@ class _TVRemotePageState extends State<TVRemotePage> {
       } catch (_) {
         /* Ethernet needs no Wi-Fi lock. */
       }
-      final found = await widget.findTVs();
+      final lookups = await Future.wait([widget.findTVs(), accountTVs()]);
+      final found = lookups[0], account = lookups[1];
       if (!mounted) return;
       for (final tv in found) {
         remote.found(tv);
       }
-      setState(
-        () => devices = {
-          for (final tv in [...remote.paired, ...found]) tv.id: tv,
-        }.values.toList(),
-      );
+      setState(() {
+        mine = {for (final tv in account) tv.id};
+        devices = {
+          for (final tv in [...account, ...remote.paired, ...found]) tv.id: tv,
+        }.values.toList();
+      });
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     } finally {
@@ -131,6 +134,16 @@ class _TVRemotePageState extends State<TVRemotePage> {
         /* The lock is optional. */
       }
       if (mounted) setState(() => busy = false);
+    }
+  }
+
+  /// TVs and computers online on this profile's Discord account.
+  Future<List<TVDevice>> accountTVs() async {
+    if (!widget.services.store.flag('RemoteAnywhere')) return const [];
+    try {
+      return await widget.services.relay.tvs();
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -377,10 +390,15 @@ class _TVRemotePageState extends State<TVRemotePage> {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: AppButton(
                     label:
-                        '${tv.name}${remote.paired.any((p) => p.id == tv.id) ? ' · Paired' : ''}',
+                        '${tv.name}${remote.isPaired(tv.id)
+                            ? ' · Paired'
+                            : mine.contains(tv.id)
+                            ? ' · Your account'
+                            : ''}',
                     isTV: false,
                     onPressed: () async {
-                      if (remote.paired.any((p) => p.id == tv.id)) {
+                      // Paired, or on the same Discord account: no Allow.
+                      if (remote.isPaired(tv.id) || mine.contains(tv.id)) {
                         connect(tv);
                       } else {
                         await pair(tv);

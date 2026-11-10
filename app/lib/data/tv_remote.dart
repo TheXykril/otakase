@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'auth.dart';
 import 'lan_page.dart';
 import 'models.dart';
+import 'remote_relay.dart';
 
 const tvDiscoveryPort = 8654;
 
@@ -834,6 +835,55 @@ class TVRemote extends ChangeNotifier {
     return (202, {'id': id, 'name': name, ...?status?.call()});
   }
 
+  /// A control that came another way than this TV's own port, such as
+  /// through the Discord bot from a phone away from home.
+  (int, Json) control(String action, Json args) => _command(action, args);
+
+  /// What a phone can show for this TV, as the live connection sends it.
+  Json liveStatus() => {
+    'type': 'status',
+    'id': id,
+    'name': name,
+    ...?status?.call(),
+  };
+
+  /// Pairs a phone that proved it belongs to the same account (the bot
+  /// only lets a member's own apps reach their TVs): no Allow needed. The
+  /// answer carries this TV's address so the phone can use the local
+  /// network next time.
+  Future<Json> grant(String phone) async => {
+    ...await _addClient(phone),
+    'host': address,
+    'port': port,
+    'v': remoteVersion,
+  };
+
+  /// Phone side of [grant]: keeps the pairing like one made by Allow.
+  Future<TVDevice?> adopt(Json j) async {
+    final host = '${j['host'] ?? ''}', port = number(j['port']);
+    if (j['id'] is! String ||
+        j['token'] is! String ||
+        j['client'] is! String ||
+        host.isNotEmpty && !transport.allowed(host)) {
+      return null;
+    }
+    final tv = TVDevice(
+      id: j['id'] as String,
+      name: remoteName('${j['name'] ?? 'Otakase TV'}'),
+      host: host,
+      port: port,
+      version: remoteVersion,
+    );
+    _paired[tv.id] = {
+      ...tv.toJson(),
+      'token': j['token'],
+      'client': j['client'],
+    };
+    await _persist('lan.remote', _paired);
+    notifyListeners();
+    return tv;
+  }
+
   /// The live connection: the TV pushes what is playing whenever it
   /// changes and takes controls back, so phones never poll.
   Future<void> _openLive(HttpRequest r) async {
@@ -1064,6 +1114,8 @@ class TVRemote extends ChangeNotifier {
     }, token: saved['token'] as String);
   }
 
+  bool isPaired(String id) => _paired.containsKey(id);
+
   Future<void> forget(String id) async {
     _paired.remove(id);
     await _persist('lan.remote', _paired);
@@ -1103,7 +1155,7 @@ class TVRemote extends ChangeNotifier {
   }
 }
 
-enum LinkState { connecting, live, polling, lost }
+enum LinkState { connecting, live, polling, away, lost }
 
 /// The phone's side of the live connection to one paired TV. It keeps
 /// [status] current, reconnects on its own, finds the TV again by its id
@@ -1115,21 +1167,35 @@ class RemoteLink extends ChangeNotifier {
     this.tv, {
     this.findTVs = discoverTVs,
     this.pollEvery = const Duration(seconds: 2),
+    this.relay,
+    this.phoneName = 'Phone',
+    this.homeEvery = const Duration(seconds: 30),
   });
   final TVRemote remote;
   final Future<List<TVDevice>> Function() findTVs;
-  final Duration pollEvery;
+  final Duration pollEvery, homeEvery;
+
+  /// The way through the Discord bot when the local network can't reach
+  /// the TV; null keeps the remote local only.
+  final RelayClient? relay;
+  final String phoneName;
   TVDevice tv;
   Json status = {};
   LinkState state = LinkState.connecting;
   String? error;
   WebSocket? _socket;
-  Timer? _retry, _poll;
+  Timer? _retry, _poll, _home;
   int _fails = 0, _seq = 0;
   bool _closed = false, _finding = false;
   final _acks = <int, Completer<void>>{};
 
-  bool get live => state == LinkState.live || state == LinkState.polling;
+  bool get live =>
+      state == LinkState.live ||
+      state == LinkState.polling ||
+      state == LinkState.away;
+
+  /// Reached through the Discord bot instead of the local network.
+  bool get away => state == LinkState.away;
 
   void start() => unawaited(_connect());
 
@@ -1160,21 +1226,43 @@ class RemoteLink extends ChangeNotifier {
       }
       return;
     } catch (e) {
-      _lost(e);
+      final viaBot = await _viaRelay();
+      if (viaBot == null) {
+        _lost(e);
+      } else {
+        _attach(viaBot, LinkState.away);
+      }
       return;
     }
+    _attach(socket, LinkState.live);
+  }
+
+  Future<WebSocket?> _viaRelay() async {
+    final bot = relay;
+    if (bot == null || !bot.available || _closed) return null;
+    try {
+      return await bot.open(tv, phoneName);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _attach(WebSocket socket, LinkState as) {
     if (_closed) {
-      await socket.close();
+      unawaited(socket.close());
       return;
     }
+    final old = _socket;
     _socket = socket;
+    if (old != null) unawaited(old.close());
     _fails = 0;
-    _set(LinkState.live);
+    _set(as);
     socket.listen(
       _message,
       onDone: () {
         if (_socket != socket) return;
         _socket = null;
+        _home?.cancel();
         _lost(
           socket.closeCode == 4401
               ? StateError(socket.closeReason ?? 'Pair this TV again.')
@@ -1184,6 +1272,32 @@ class RemoteLink extends ChangeNotifier {
       onError: (Object _) {},
       cancelOnError: true,
     );
+    _home?.cancel();
+    if (as == LinkState.away) {
+      // Not paired on the local network yet: the TV trusts this phone
+      // because the bot only connects a member's own apps.
+      if (!remote.isPaired(tv.id)) {
+        socket.add(jsonEncode({'type': 'grant', 'name': phoneName}));
+      }
+      _home = Timer.periodic(homeEvery, (_) => unawaited(_tryHome()));
+    }
+  }
+
+  /// While away, moves back to the local network once it reaches the TV.
+  Future<void> _tryHome() async {
+    if (_closed || !away || !remote.isPaired(tv.id) || tv.host.isEmpty) {
+      return;
+    }
+    try {
+      final socket = await remote.openLive(tv);
+      if (!away) {
+        await socket.close();
+        return;
+      }
+      _attach(socket, LinkState.live);
+    } catch (_) {
+      /* Still away. */
+    }
   }
 
   Future<void> _refresh() async {
@@ -1204,6 +1318,14 @@ class RemoteLink extends ChangeNotifier {
       if (j['type'] == 'status') {
         status = j;
         notifyListeners();
+      } else if (j['type'] == 'grant') {
+        unawaited(
+          remote.adopt(j).then((paired) {
+            if (paired != null && paired.id == tv.id && !_closed) tv = paired;
+          }),
+        );
+      } else if (j['type'] == 'gone') {
+        unawaited(_socket?.close());
       } else if (j['type'] == 'ack') {
         final done = _acks.remove(number(j['seq']));
         final problem = j['error'];
@@ -1304,6 +1426,7 @@ class RemoteLink extends ChangeNotifier {
     _closed = true;
     _retry?.cancel();
     _poll?.cancel();
+    _home?.cancel();
     for (final done in _acks.values) {
       done.completeError(StateError('Closed.'));
     }

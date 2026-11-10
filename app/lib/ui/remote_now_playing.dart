@@ -17,6 +17,7 @@ bool remoteVisible(AppServices services, Json status) =>
 
 String remoteStateText(RemoteLink link) => switch (link.state) {
   LinkState.live || LinkState.polling => 'Connected',
+  LinkState.away => 'Away, through Discord',
   LinkState.lost => 'Reconnecting…',
   _ => 'Connecting…',
 };
@@ -358,7 +359,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
                     height: 8,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: current.live ? ok : warn,
+                      color: current.live && !current.away ? ok : warn,
                     ),
                   ),
                 ),
@@ -722,7 +723,7 @@ class RemoteMiniBar extends StatelessWidget {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            link.live
+                            link.live && !link.away
                                 ? link.tv.name
                                 : '${link.tv.name} · ${remoteStateText(link)}',
                             maxLines: 1,
@@ -730,7 +731,7 @@ class RemoteMiniBar extends StatelessWidget {
                             style: uiStyle(
                               context,
                               size: 12,
-                              color: link.live ? muted : warn,
+                              color: link.live && !link.away ? muted : warn,
                             ),
                           ),
                         ],

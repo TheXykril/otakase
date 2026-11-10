@@ -66,12 +66,23 @@ class _PlayOnSheet extends StatefulWidget {
 
 class _PlayOnSheetState extends State<_PlayOnSheet> {
   List<CastDevice> casts = [];
+  List<TVDevice> account = [];
   bool searching = true;
 
   @override
   void initState() {
     super.initState();
     unawaited(search());
+    if (widget.otakase && widget.services.store.flag('RemoteAnywhere')) {
+      unawaited(
+        widget.services.relay
+            .tvs()
+            .then((tvs) {
+              if (mounted) setState(() => account = tvs);
+            })
+            .catchError((Object _) {}),
+      );
+    }
   }
 
   Future<void> search() async {
@@ -127,8 +138,12 @@ class _PlayOnSheetState extends State<_PlayOnSheet> {
   Widget build(BuildContext context) {
     final linked = widget.services.remoteLink.value?.tv.id;
     final tvs = widget.otakase
-        ? widget.services.tvRemote.paired
+        ? {
+            for (final tv in [...account, ...widget.services.tvRemote.paired])
+              tv.id: tv,
+          }.values.toList()
         : const <TVDevice>[];
+    final mine = {for (final tv in account) tv.id};
     return SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -158,7 +173,13 @@ class _PlayOnSheetState extends State<_PlayOnSheet> {
                   icon: LucideIcons.tv,
                   accent: tv.id == linked ? shu : null,
                   title: tv.name,
-                  subtitle: tv.id == linked ? 'Connected' : 'Paired',
+                  subtitle: tv.id == linked
+                      ? 'Connected'
+                      : widget.services.tvRemote.isPaired(tv.id)
+                      ? 'Paired'
+                      : mine.contains(tv.id)
+                      ? 'Your account, through Discord'
+                      : 'Paired',
                   onTap: () => Navigator.pop(context, PlayOnTV(tv)),
                 ),
               row(
