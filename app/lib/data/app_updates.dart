@@ -59,7 +59,12 @@ class AppUpdate {
   /// Reads an update from the release data the Otakase site serves (GitHub's
   /// release shape): the version from the tag (v26.1.0), and the size and
   /// SHA-256 checksum recorded for the uploaded file.
-  factory AppUpdate.parse(Map release, Map asset, UpdatePlatform platform) {
+  factory AppUpdate.parse(
+    Map release,
+    Map asset,
+    UpdatePlatform platform, {
+    String host = updateSite,
+  }) {
     final tag = release['tag_name'];
     final match = tag is String
         ? RegExp(r'^v(\d{1,3}\.\d{1,3}(?:\.\d{1,3})?)$').firstMatch(tag)
@@ -84,6 +89,7 @@ class AppUpdate {
     final url = releaseAssetUri(
       asset['browser_download_url'],
       platform.fileName,
+      host: host,
     );
     if (url.pathSegments[1] != tag) {
       throw const FormatException('Release files do not match.');
@@ -103,16 +109,34 @@ class AppUpdate {
 /// updates keep working without GitHub.
 const updateSite = 'otakase.com';
 
-/// The newest release, in GitHub's release shape, with links on [updateSite].
-final latestRelease = Uri.https(updateSite, '/download/latest.json');
+/// The older address of the same site. It answers `/download/` the same way,
+/// with links on its own host. The app falls back to it when [updateSite]
+/// cannot be reached: some DNS filters and networks block a newly registered
+/// domain for weeks.
+const fallbackUpdateSite = 'otakase.xyverion.com';
 
-/// Checks a download link: `/download/<tag>/<filename>` on [updateSite].
-Uri releaseAssetUri(dynamic value, String filename) {
+/// Hosts asked for updates, in order.
+const updateSites = [updateSite, fallbackUpdateSite];
+
+/// The newest release, in GitHub's release shape, with links on the host
+/// that served it.
+Uri latestReleaseOn(String host) => Uri.https(host, '/download/latest.json');
+
+/// The newest release on [updateSite].
+final latestRelease = latestReleaseOn(updateSite);
+
+/// Checks a download link: `/download/<tag>/<filename>` on [host], the
+/// update site the release data came from.
+Uri releaseAssetUri(
+  dynamic value,
+  String filename, {
+  String host = updateSite,
+}) {
   final uri = value is String ? Uri.tryParse(value) : null;
   final parts = uri?.pathSegments ?? const <String>[];
   if (uri == null ||
       uri.scheme != 'https' ||
-      uri.host != updateSite ||
+      uri.host != host ||
       uri.port != 443 ||
       uri.userInfo.isNotEmpty ||
       uri.hasQuery ||
@@ -124,6 +148,36 @@ Uri releaseAssetUri(dynamic value, String filename) {
     throw const FormatException('Invalid release address.');
   }
   return uri;
+}
+
+/// True when [error] means the update site could not be reached at all
+/// (no DNS answer, refused or dropped connection, TLS failure, no answer in
+/// time), as opposed to an answer the app did not like.
+bool unreachable(Object error) =>
+    error is SocketException ||
+    error is TlsException ||
+    error is TimeoutException ||
+    error is http.ClientException;
+
+/// What to tell the user when no update site could be reached.
+String unreachableText(Object error) {
+  final text = error.toString().toLowerCase();
+  if (text.contains('host lookup') ||
+      text.contains('no address associated') ||
+      text.contains('nodename nor servname')) {
+    return 'Could not find the update site. Check your connection, or a DNS '
+        'or ad blocker that blocks $updateSite, and retry.';
+  }
+  if (error is TlsException ||
+      text.contains('handshake') ||
+      text.contains('certificate')) {
+    return 'Could not open a secure connection to the update site. Check the '
+        'date and time on this device and retry.';
+  }
+  if (error is TimeoutException || text.contains('timed out')) {
+    return 'The update site did not answer in time. Retry later.';
+  }
+  return 'Unable to check for updates. Check your connection and retry.';
 }
 
 /// Where an update comes from and how it is installed on this kind of
@@ -197,6 +251,12 @@ class AndroidUpdatePlatform extends UpdatePlatform {
       false;
 }
 
+/// No update site could be reached; [error] is what the first one failed with.
+class _Unreachable implements Exception {
+  const _Unreachable(this.error);
+  final Object error;
+}
+
 class AppUpdates extends ChangeNotifier {
   AppUpdates({UpdatePlatform? platform, http.Client Function()? client})
     : platform = platform ?? AndroidUpdatePlatform(),
@@ -250,7 +310,7 @@ class AppUpdates extends ChangeNotifier {
 
   Future<http.StreamedResponse> _get(http.Client client, Uri uri) async {
     final request = http.Request('GET', uri)
-      ..headers['Accept'] = uri == latestRelease
+      ..headers['Accept'] = uri.path == '/download/latest.json'
           ? 'application/json'
           : 'application/octet-stream'
       ..headers['User-Agent'] = 'Otakase-App';
@@ -293,8 +353,22 @@ class AppUpdates extends ChangeNotifier {
     try {
       installed = await platform.installed();
       if (!_active(generation)) return;
-      final response = await _get(client, latestRelease);
+      http.StreamedResponse? response;
+      var host = updateSite;
+      Object? firstError;
+      for (final site in updateSites) {
+        try {
+          response = await _get(client, latestReleaseOn(site));
+          host = site;
+          break;
+        } catch (e) {
+          if (!unreachable(e)) rethrow;
+          firstError ??= e;
+          if (!_active(generation)) return;
+        }
+      }
       if (!_active(generation)) return;
+      if (response == null) throw _Unreachable(firstError!);
       if (response.statusCode == 404) {
         _emit(UpdatePhase.unpublished);
         return;
@@ -311,7 +385,12 @@ class AppUpdates extends ChangeNotifier {
         _emit(UpdatePhase.unpublished);
         return;
       }
-      final candidate = AppUpdate.parse(release, files.single, platform);
+      final candidate = AppUpdate.parse(
+        release,
+        files.single,
+        platform,
+        host: host,
+      );
       update = candidate;
       manualReason = available ? await platform.manualReason() : null;
       if (!_active(generation)) return;
@@ -329,6 +408,7 @@ class AppUpdates extends ChangeNotifier {
             'Updates are available in the Android app.',
           HttpException() => e.message,
           FormatException() => e.message,
+          _Unreachable(:final error) => unreachableText(error),
           _ => 'Unable to check for updates. Check your connection and retry.',
         };
         _emit(UpdatePhase.failed);
