@@ -30,6 +30,7 @@ class DownloadItem {
     this.created = 0,
     this.subtitles = const [],
     this.coreId = 0,
+    this.meta = const {},
   });
 
   /// anime, movie or show.
@@ -40,6 +41,11 @@ class DownloadItem {
 
   /// Saved subtitle files beside the video, as {path, label, language}.
   List<Json> subtitles;
+
+  /// What was saved, so playing it offline still counts on the trackers:
+  /// {anime, episode} for an anime episode, {title, season, episode,
+  /// runtime} for a film or series episode. Empty for older downloads.
+  final Json meta;
   bool get running => state == 'running' || state == 'queued';
   bool get done => state == 'done';
   double get progress => partsTotal > 0
@@ -67,6 +73,7 @@ class DownloadItem {
         .whereType<Map>()
         .map((m) => m.cast<String, dynamic>())
         .toList(),
+    meta: (j['meta'] as Map?)?.cast<String, dynamic>() ?? const {},
   );
   Json toJson() => {
     'id': id,
@@ -84,6 +91,7 @@ class DownloadItem {
     'error': error,
     'created': created,
     'subtitles': subtitles,
+    if (meta.isNotEmpty) 'meta': meta,
   };
 }
 
@@ -167,6 +175,7 @@ class DownloadManager extends ChangeNotifier {
     required ResolvedStream stream,
     String poster = '',
     int quality = 0,
+    Json meta = const {},
   }) async {
     if (stream.torrent) {
       throw const CoreFailure(
@@ -202,6 +211,7 @@ class DownloadManager extends ChangeNotifier {
       state: 'running',
       created: DateTime.now().millisecondsSinceEpoch,
       coreId: number(d['id']),
+      meta: meta,
     );
     items.removeWhere((i) => i.id == id);
     items.insert(0, item);

@@ -65,6 +65,7 @@ class PlayRequest {
     this.onScrobble,
     this.next,
     this.length = 0,
+    this.onClose,
   });
   final String title, subtitle;
 
@@ -88,6 +89,9 @@ class PlayRequest {
 
   /// The episode after this one, or null at the end.
   final PlayRequest? Function()? next;
+
+  /// Run as the player closes, after the last save.
+  final Future<void> Function()? onClose;
 }
 
 bool languageMatches(String? language, String? title, String preferred) {
@@ -111,7 +115,7 @@ bool languageMatches(String? language, String? title, String preferred) {
 /// usually runs [expected] seconds (0 when unknown). A copy under half of
 /// it is cut short.
 bool copyLengthTrusted(Duration duration, int expected) =>
-    expected <= 0 || duration.inSeconds * 2 >= expected;
+    copyLengthPlausible(duration, expected);
 
 /// Whether playback at [at] is the real end of the title, not a source that
 /// stopped sending.
@@ -152,6 +156,28 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
   bool busy = true, overlay = true, scrubbing = false, fullscreen = false;
   bool finished = false, started = false, subPicked = false;
 
+  /// Set once Trakt was told the title is done, so later play and pause
+  /// events do not put it back in Trakt's paused list.
+  bool stopSent = false;
+
+  /// What was really watched, apart from where the playhead is: a title
+  /// skipped to its end is not watched.
+  var viewing = EpisodeViewing();
+
+  /// Where this copy started; a spot saved from playing counts as watched
+  /// up to it.
+  Duration startedAt = Duration.zero;
+  bool profileStopped = false;
+
+  /// The countdown to the next episode, 0 when none runs.
+  int countdownSeconds = 0;
+  Timer? nextTimer;
+  PlayRequest? upNext;
+
+  late final Future<void> Function() profileStop;
+  late final Future<void> Function(String, Json) commandHandler;
+  late final Json Function() statusHandler;
+
   /// Notices a stream that stops moving while it should play.
   final stall = PlaybackStallWatchdog();
 
@@ -187,6 +213,12 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     FullBleed.enter();
     WidgetsBinding.instance.addObserver(this);
     request = widget.request;
+    profileStop = stopForProfileSwitch;
+    widget.services.stopPlayback = profileStop;
+    commandHandler = control;
+    widget.services.playerCommand = commandHandler;
+    statusHandler = remoteStatus;
+    widget.services.playerStatus = statusHandler;
     player = Player(
       configuration: const PlayerConfiguration(
         libass: true,
@@ -215,7 +247,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       player.stream.playing.listen((playing) {
         if (!mounted || busy || casting) return;
         setState(() {});
-        if (started) scrobble(playing ? 'start' : 'pause');
+        if (started && !finished) scrobble(playing ? 'start' : 'pause');
         showPresence();
         watchForStall();
       }),
@@ -248,6 +280,15 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
   /// Moves the timeline and marks the title watched near the end.
   void tick(Duration p) {
     setState(() => position = p);
+    viewing.start(duration, [
+      duration.inMilliseconds,
+      startedAt.inMilliseconds,
+    ]);
+    viewing.sample(
+      p,
+      playing: casting ? castStatus?.state == 'playing' : player.state.playing,
+      rate: casting ? 1 : player.state.rate,
+    );
     final drop = recoverAt;
     if (reopens > 0 && drop != null && p > drop + const Duration(minutes: 2)) {
       reopens = 0;
@@ -258,10 +299,19 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
         total > 0 &&
         p.inSeconds * 100 >=
             total * store.integer('PercentageToMarkComplete') &&
-        total - p.inSeconds < 600) {
+        total - p.inSeconds < 600 &&
+        viewing.watchedUpTo(p)) {
       finished = true;
       unawaited(save(completed: true));
+      sendStop();
     }
+  }
+
+  /// Tells Trakt the title is done, once.
+  void sendStop() {
+    if (stopSent) return;
+    stopSent = true;
+    request.onScrobble?.call('stop', 100);
   }
 
   /// The Discord status on desktop.
@@ -307,6 +357,16 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    nextTimer?.cancel();
+    if (identical(widget.services.stopPlayback, profileStop)) {
+      widget.services.stopPlayback = null;
+    }
+    if (identical(widget.services.playerCommand, commandHandler)) {
+      widget.services.playerCommand = null;
+    }
+    if (identical(widget.services.playerStatus, statusHandler)) {
+      widget.services.playerStatus = null;
+    }
     unawaited(widget.services.presence.clear());
     scope.cancel();
     hideTimer?.cancel();
@@ -314,15 +374,20 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     castTimer?.cancel();
     stall.cancel();
     if (casting) unawaited(caster.control('stop').catchError((_) {}));
-    if (!busy && duration > Duration.zero) {
-      unawaited(save(completed: finished));
+    if (!profileStopped && !busy && duration > Duration.zero) {
+      final close = request.onClose;
+      unawaited(save(completed: finished).then((_) => close?.call()));
       if (!finished) scrobble('pause');
+    } else {
+      unawaited(request.onClose?.call());
     }
     for (final s in subscriptions) {
       unawaited(s.cancel());
     }
     unawaited(player.dispose());
-    unawaited(widget.services.core.stopPlayback().catchError((_) {}));
+    if (!profileStopped) {
+      unawaited(widget.services.core.stopPlayback().catchError((_) {}));
+    }
     if (fullscreen) unawaited(setDesktopFullScreen(false));
     surface.dispose();
     playFocus.dispose();
@@ -335,10 +400,18 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       ? 0
       : position.inMilliseconds * 100 / duration.inMilliseconds;
 
-  void scrobble(String action) =>
-      request.onScrobble?.call(action, action == 'stop' ? 100 : percent);
+  void scrobble(String action) {
+    if (action == 'stop') return sendStop();
+    if (stopSent) return;
+    // Before the first frame the spot is not known yet; 0% would tell
+    // Trakt the title was restarted.
+    if (action == 'pause' && position == Duration.zero) return;
+    request.onScrobble?.call(action, percent);
+  }
 
   Future<void> save({bool completed = false}) async {
+    // Leaving before playback moved must not wipe the saved spot.
+    if (!completed && position == Duration.zero) return;
     await request.onProgress?.call(
       position.inSeconds,
       duration.inSeconds,
@@ -368,16 +441,22 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
   }
 
   Future<void> open() async {
+    if (profileStopped) return;
     final g = ++generation;
     scope.cancel();
     scope = RequestScope();
     stall.cancel();
+    nextTimer?.cancel();
     reopens = 0;
+    viewing = EpisodeViewing();
+    startedAt = Duration.zero;
+    stopSent = false;
     setState(() {
       busy = true;
       error = '';
       overlay = true;
       finished = false;
+      countdownSeconds = 0;
       started = false;
       subPicked = false;
       externalTrack = null;
@@ -406,6 +485,8 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
           if (!mounted || g != generation) return;
           recoverAt = null;
           started = true;
+          position = Duration(seconds: resume);
+          startedAt = position;
           setState(() => busy = false);
           showControls();
           return;
@@ -437,14 +518,20 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
           (store.flag('ResumePlayback')
               ? request.resumeAt?.call(player.state.duration.inSeconds) ?? 0
               : 0);
-      if (resume > 0 && resume < player.state.duration.inSeconds - 30) {
-        await player.seek(Duration(seconds: resume));
+      final length = player.state.duration;
+      var at = Duration.zero;
+      if (resume > 0 && resume < length.inSeconds - 30) {
+        at = Duration(seconds: resume);
+        await player.seek(at);
       }
+      startedAt = at;
       await pickTracks(found, g);
       if (!mounted || g != generation) return;
       await player.play();
       recoverAt = null;
       started = true;
+      position = at;
+      if (length > Duration.zero) duration = length;
       scrobble('start');
       setState(() => busy = false);
       showControls();
@@ -581,18 +668,71 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
   }
 
   Future<void> ended() async {
+    stall.cancel();
+    final end = duration > Duration.zero ? duration : position;
+    // Only a title followed to its end counts; one skipped to the end
+    // keeps its spot and stays unwatched.
+    final watched =
+        finished ||
+        viewing.ended(end, duration, const []) ||
+        duration <= Duration.zero;
+    if (!watched) {
+      if (mounted) Navigator.maybePop(context);
+      return;
+    }
     if (!finished) {
       finished = true;
       await save(completed: true);
     }
-    stall.cancel();
-    scrobble('stop');
+    sendStop();
     final next = request.next?.call();
     if (!mounted) return;
     if (next == null) {
       Navigator.maybePop(context);
       return;
     }
+    offerNext(next);
+  }
+
+  /// Counts down to the next episode, or waits for Play next when the
+  /// viewer asked to be prompted, as the anime player does.
+  void offerNext(PlayRequest next) {
+    nextTimer?.cancel();
+    setState(() {
+      upNext = next;
+      countdownSeconds = 10;
+      overlay = true;
+    });
+    if (store.flag('NextEpisodePrompt')) return;
+    nextTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() => countdownSeconds--);
+      if (countdownSeconds <= 0) {
+        timer.cancel();
+        unawaited(startNext());
+      }
+    });
+  }
+
+  void cancelNext() {
+    nextTimer?.cancel();
+    setState(() {
+      countdownSeconds = 0;
+      upNext = null;
+    });
+  }
+
+  Future<void> startNext() async {
+    final next = upNext;
+    nextTimer?.cancel();
+    if (next == null) return;
+    setState(() {
+      countdownSeconds = 0;
+      upNext = null;
+    });
     request = next;
     recoverAt = null;
     failed.clear();
@@ -649,7 +789,12 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
   }
 
   /// Loads [m] again at [at] with the same audio and subtitles.
-  Future<bool> reopen(PlayableMedia m, Duration at, int g) async {
+  Future<bool> reopen(
+    PlayableMedia m,
+    Duration at,
+    int g, {
+    bool play = true,
+  }) async {
     final audio = player.state.track.audio;
     final subtitle = player.state.track.subtitle;
     final picked = externalTrack;
@@ -672,7 +817,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       }
       if (!mounted || g != generation) return false;
       await player.seek(at);
-      await player.play();
+      if (play) await player.play();
       return true;
     } catch (_) {
       return false;
@@ -690,6 +835,105 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     recoverAt = null;
     failed.clear();
     await open();
+  }
+
+  /// The phone remote, Discord and a watch party drive the player through
+  /// these, as they do the anime player.
+  Future<void> control(String action, Json args) async {
+    if (!mounted || profileStopped) return;
+    switch (action) {
+      case 'pause':
+        if (isPlaying) await playPause();
+      case 'play':
+        if (!isPlaying) await playPause();
+      case 'toggle':
+        await playPause();
+      case 'skip':
+        await seekBy(85);
+      case 'seek':
+        await seekBy(number(args['seconds']).clamp(-86400, 86400));
+      case 'seek_to':
+        final to = (args['position'] as num?)?.toDouble() ?? 0;
+        await seekTo(
+          Duration(
+            milliseconds: (to * 1000).round().clamp(
+              0,
+              math.max(0, duration.inMilliseconds),
+            ),
+          ),
+        );
+      case 'volume':
+        final level = number(args['volume']).clamp(0, 100).toDouble();
+        if (casting) {
+          await castControl('volume', level / 100);
+        } else {
+          await player.setVolume(level);
+        }
+      case 'next':
+        if (!busy) {
+          if (upNext != null) {
+            await startNext();
+          } else {
+            await playNext();
+          }
+        }
+      case 'stop':
+        if (!busy && duration > Duration.zero) {
+          await save(completed: finished);
+          if (!finished) scrobble('pause');
+        }
+        if (casting) await stopCast(resumeHere: false);
+        await player.stop();
+        if (mounted) Navigator.maybePop(context);
+    }
+    if (mounted) showControls();
+  }
+
+  Json remoteStatus() => {
+    'has_player': true,
+    'kind': 'movie',
+    'anilist_id': 0,
+    'loaded': !busy && duration > Duration.zero,
+    'position_ms': (casting ? position : player.state.position).inMilliseconds,
+    'title': [
+      request.title,
+      request.subtitle,
+    ].where((s) => s.isNotEmpty).join(' · '),
+    'adult': false,
+    'episode': 0,
+    'episodes': 0,
+    'position': position.inSeconds,
+    'duration': duration.inSeconds,
+    'playing': isPlaying,
+    'volume': casting
+        ? ((castStatus?.volume ?? 1) * 100).round()
+        : player.state.volume.round(),
+  };
+
+  /// Switching profiles stops the film where it is and keeps its spot.
+  Future<void> stopForProfileSwitch() async {
+    if (profileStopped) return;
+    hideTimer?.cancel();
+    saveTimer?.cancel();
+    nextTimer?.cancel();
+    stall.cancel();
+    if (identical(widget.services.playerCommand, commandHandler)) {
+      widget.services.playerCommand = null;
+    }
+    if (identical(widget.services.playerStatus, statusHandler)) {
+      widget.services.playerStatus = null;
+    }
+    generation++;
+    scope.cancel();
+    await player.pause();
+    if (casting) await stopCast(resumeHere: false);
+    if (!busy && duration > Duration.zero) {
+      await save(completed: finished);
+      if (!finished) scrobble('pause');
+    }
+    profileStopped = true;
+    await player.stop();
+    await widget.services.core.stopPlayback();
   }
 
   /// The picture sizes the copy offers (HLS only).
@@ -725,21 +969,28 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     await store.set('Quality', quality);
     if (!mounted || busy || media == null || casting) return;
     // mpv picks the HLS variant when it opens the stream, so open the same
-    // copy again at the same spot.
-    final at = player.state.position;
+    // copy again at the same spot, with the same audio and subtitles.
+    final m = media!, g = generation;
+    final at = player.state.position > Duration.zero
+        ? player.state.position
+        : position;
     final playing = player.state.playing;
+    stall.cancel();
+    await save(completed: finished);
     await property('hls-bitrate', hlsBitrate(quality, variants));
-    await player.open(mediaFor(media!), play: false);
-    try {
-      await player.stream.duration
-          .firstWhere((d) => d > Duration.zero)
-          .timeout(const Duration(seconds: 15));
-    } on TimeoutException {
-      /* Seek anyway. */
+    setState(() {
+      busy = true;
+      status = 'Loading';
+      position = at;
+    });
+    final ok = await reopen(m, at, g, play: playing);
+    if (!mounted || g != generation) return;
+    setState(() => busy = false);
+    if (!ok) {
+      await recover();
+      return;
     }
-    await player.seek(at);
-    if (playing) await player.play();
-    if (mounted) showControls();
+    showControls();
   }
 
   Future<void> anotherCopy() async {
@@ -750,6 +1001,11 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
         error = 'This file could not be played.';
       });
       return;
+    }
+    // Another copy carries on from here, whatever the resume setting says.
+    if (!busy && position > Duration.zero) {
+      recoverAt = position;
+      await save(completed: finished);
     }
     failed.add(copy);
     await open();
@@ -918,6 +1174,9 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       }
       if (s.state == 'ended' && castEnded != s.load) {
         castEnded = s.load;
+        // The device's last word on where it stopped beats the last poll.
+        final last = Duration(milliseconds: (s.position * 1000).round());
+        if (last > position) position = last;
         if (atEnd(position)) {
           await ended();
         } else {
@@ -996,7 +1255,12 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     hideTimer?.cancel();
     if (!overlay) setState(() => overlay = true);
     hideTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted && !busy && error.isEmpty && isPlaying && !casting) {
+      if (mounted &&
+          !busy &&
+          error.isEmpty &&
+          isPlaying &&
+          !casting &&
+          countdownSeconds == 0) {
         setState(() => overlay = false);
         surface.requestFocus();
       }
@@ -1018,6 +1282,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
 
   /// Moves playback here or on the cast device.
   Future<void> seekTo(Duration target) async {
+    viewing.seek(position, target);
     if (!casting) return player.seek(target);
     setState(() => position = target);
     await castControl('seek', target.inMilliseconds / 1000);
@@ -1131,6 +1396,30 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
       return KeyEventResult.handled;
     }
     if (busy || error.isNotEmpty) return KeyEventResult.ignored;
+    if (k == LogicalKeyboardKey.mediaPlay) {
+      if (!isPlaying) unawaited(playPause());
+      showControls();
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.mediaPause ||
+        k == LogicalKeyboardKey.mediaStop) {
+      if (isPlaying) unawaited(playPause());
+      showControls();
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.mediaRewind ||
+        k == LogicalKeyboardKey.mediaFastForward) {
+      unawaited(seekBy(k == LogicalKeyboardKey.mediaRewind ? -10 : 10));
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.mediaTrackNext) {
+      if (upNext != null) {
+        unawaited(startNext());
+      } else if (request.next != null) {
+        unawaited(playNext());
+      }
+      return KeyEventResult.handled;
+    }
     if (k == LogicalKeyboardKey.space ||
         k == LogicalKeyboardKey.mediaPlayPause ||
         (onSurface &&
@@ -1396,6 +1685,65 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     onFullscreen: () => unawaited(toggleFullscreen()),
   );
 
+  Widget nextCard(BuildContext context) {
+    final next = upNext!;
+    return Positioned(
+      right: 24,
+      bottom: isDesktop ? 120 : 140,
+      child: Container(
+        key: const Key('movie-next'),
+        width: 380,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: bgDeep.withValues(alpha: .92),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: line),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Next · ${next.subtitle}',
+              style: uiStyle(context, weight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              store.flag('NextEpisodePrompt')
+                  ? 'Continue the story?'
+                  : 'Playing in $countdownSeconds seconds',
+              style: uiStyle(context),
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(
+              minHeight: 2,
+              value: countdownSeconds / 10,
+              color: shu,
+              backgroundColor: line,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                AppButton(
+                  label: 'Play next',
+                  autofocus: true,
+                  onPressed: () => unawaited(startNext()),
+                  isTV: widget.isTV,
+                ),
+                AppButton(
+                  label: 'Cancel',
+                  onPressed: cancelNext,
+                  isTV: widget.isTV,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: bgDeep,
@@ -1503,6 +1851,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
               FocusTraversalGroup(
                 child: isDesktop ? desktopControls() : mobileControls(context),
               ),
+            if (upNext != null && !busy && error.isEmpty) nextCard(context),
             ValueListenableBuilder<String>(
               valueListenable: flash,
               builder: (_, text, _) => PlayerFlash(text: text),

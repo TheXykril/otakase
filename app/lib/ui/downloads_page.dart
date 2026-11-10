@@ -55,6 +55,14 @@ Future<void> downloadTitle(
       stream: p.stream,
       poster: title.poster,
       quality: _quality(services),
+      meta: {
+        'title': title.toJson(),
+        'season': episode?.season ?? 0,
+        'episode': episode?.number ?? 0,
+        'runtime': episode != null && episode.runtime > 0
+            ? episode.runtime
+            : title.runtime,
+      },
     );
     if (context.mounted) {
       _notice(
@@ -113,6 +121,7 @@ Future<void> downloadAnimeEpisode(
       stream: source.streams.first,
       poster: anime.cover,
       quality: _quality(services),
+      meta: {'anime': anime.toJson(), 'episode': episode},
     );
     if (context.mounted) {
       _notice(context, 'Downloading ${anime.title} episode $episode.');
@@ -159,14 +168,7 @@ class DownloadsPage extends StatelessWidget {
       builder: (_) => MoviePlayerPage(
         services: services,
         isTV: isTV,
-        request: filePlay(
-          d.title,
-          d.label,
-          d.path,
-          d.subtitles,
-          store: services.store,
-          id: d.id,
-        ),
+        request: downloadPlay(services, d),
       ),
     ),
   );
@@ -305,4 +307,92 @@ class DownloadsPage extends StatelessWidget {
     );
     if (yes == true) await services.downloads.remove(d);
   }
+}
+
+/// Plays a saved file. A download that knows what it is counts on AniList,
+/// MyAnimeList and Trakt and in Continue watching like a streamed one; the
+/// spot is also kept with the file.
+PlayRequest downloadPlay(AppServices services, DownloadItem d) {
+  final file = filePlay(
+    d.title,
+    d.label,
+    d.path,
+    d.subtitles,
+    store: services.store,
+    id: d.id,
+  );
+  final meta = d.meta;
+  final animeJson = meta['anime'];
+  final episode = number(meta['episode']);
+  if (d.kind == 'anime' && animeJson is Map && episode > 0) {
+    final anime = Anime.fromJson(animeJson.cast<String, dynamic>());
+    services.tracking.remember(anime);
+    final pusher = services.tracking.pusher();
+    return PlayRequest(
+      title: file.title,
+      subtitle: file.subtitle,
+      open: file.open,
+      resumeAt: file.resumeAt,
+      length: anime.duration * 60 * 2 ~/ 3,
+      onProgress: (position, duration, completed) async {
+        await file.onProgress?.call(position, duration, completed);
+        await services.store.progress(
+          anime,
+          episode,
+          position,
+          duration,
+          completed: completed,
+        );
+        if (completed) {
+          await pusher.episodeDone(anime.key, episode, anime.episodes);
+        } else {
+          pusher.note(anime.key, episode, position);
+        }
+      },
+      onClose: pusher.flush,
+    );
+  }
+  final titleJson = meta['title'];
+  if (titleJson is Map) {
+    final title = MediaTitle.fromJson(titleJson.cast<String, dynamic>());
+    final season = number(meta['season']);
+    final movies = services.movies;
+    return PlayRequest(
+      title: file.title,
+      subtitle: file.subtitle,
+      open: file.open,
+      length: number(meta['runtime']) * 60,
+      resumeAt: (duration) {
+        final spot = file.resumeAt?.call(duration) ?? 0;
+        if (spot > 0) return spot;
+        final e = movies.entry(title);
+        if (e == null) return 0;
+        if (title.isShow && (e.season != season || e.episode != episode)) {
+          return 0;
+        }
+        return e.resumeAt(duration);
+      },
+      onProgress: (position, duration, completed) async {
+        await file.onProgress?.call(position, duration, completed);
+        await movies.progress(
+          title,
+          position,
+          duration,
+          season: season,
+          episode: episode,
+          completed: completed,
+        );
+      },
+      onScrobble: (action, percent) => unawaited(
+        movies.scrobble(
+          action,
+          title,
+          percent,
+          season: season,
+          episode: episode,
+        ),
+      ),
+    );
+  }
+  return file;
 }

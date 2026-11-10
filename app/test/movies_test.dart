@@ -340,6 +340,51 @@ void main() {
   );
 
   test(
+    'a film finished here does not come back from an older Trakt pause',
+    () async {
+      final now = DateTime.now();
+      final client = MockClient((r) async {
+        if (r.url.path == '/sync/playback') {
+          return http.Response(
+            jsonEncode([
+              {
+                'type': 'movie',
+                'progress': 85,
+                'paused_at': now
+                    .subtract(const Duration(hours: 1))
+                    .toUtc()
+                    .toIso8601String(),
+                'movie': {
+                  'title': 'Interstellar',
+                  'ids': {'trakt': 102156},
+                },
+              },
+            ]),
+            200,
+          );
+        }
+        return http.Response('[]', 200);
+      });
+      final tokens = MemoryTokens()
+        ..values[traktTokenKey] = jsonEncode({
+          'access_token': 'tok',
+          'expires_in': 0,
+        });
+      final movies = MovieService(
+        trakt: Trakt(client: client, storage: tokens),
+        core: MovieCore(),
+        store: await freshStore(),
+        pushGap: Duration.zero,
+      );
+      await movies.progress(film, 8800, 9000, completed: true);
+      await movies.refreshResume();
+      expect(movies.watched(film), isTrue);
+      expect(movies.entry(film)!.resumeAt(9000), 0);
+      expect(movies.continuing, isEmpty);
+    },
+  );
+
+  test(
     'Trakt device sign-in waits for the code, then syncs the library',
     () async {
       var polls = 0;

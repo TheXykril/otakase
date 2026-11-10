@@ -323,7 +323,9 @@ class MovieService extends ChangeNotifier {
     }
     for (final p in onTrakt.values) {
       final e = _entries[p.title.key];
-      if (e != null && e.started && p.pausedAt > 0 && e.updated > p.pausedAt) {
+      // Anything newer saved here wins, a finish included: a film watched to
+      // the end here must not come back from an older pause on Trakt.
+      if (e != null && p.pausedAt > 0 && e.updated > p.pausedAt) {
         continue;
       }
       final when = p.pausedAt > 0 ? p.pausedAt : stamp;

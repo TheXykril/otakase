@@ -46,7 +46,11 @@ class AppServices {
     heritage = Heritage(store, StatsRepository(this.auth), discord);
     watchRooms = WatchRooms(discord: discord, store: store);
     party = WatchParties(discord: discord, store: store);
-    party.status = () => playerStatus?.call();
+    // A watch party follows anime only; a film playing is no party state.
+    party.status = () {
+      final s = playerStatus?.call();
+      return s?['kind'] == 'movie' ? null : s;
+    };
     party.command = (action, args) async {
       await playerCommand?.call(action, args);
     };
