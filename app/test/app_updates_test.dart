@@ -11,7 +11,7 @@ import 'package:otakase/data/app_updates.dart';
 
 final apkBytes = List<int>.generate(1024, (i) => i % 256);
 final checksum = sha256.convert(apkBytes).toString();
-const base = 'https://github.com/TheXykril/otakase/releases/download/v26.7.0';
+const base = 'https://otakase.xyverion.com/download/v26.7.0';
 
 Map<String, dynamic> asset(String name) => {
   'name': name,
@@ -129,7 +129,7 @@ void main() {
     updates = AppUpdates(
       platform: host,
       client: () => MockClient((request) async {
-        if (request.url.host == 'api.github.com') {
+        if (request.url.path == '/download/latest.json') {
           return http.Response(jsonEncode(release), status);
         }
         expect(request.url.pathSegments.last, androidApk);
@@ -140,6 +140,25 @@ void main() {
   tearDown(() async {
     updates.dispose();
     await directory.delete(recursive: true);
+  });
+
+  test('checks and downloads only through the Otakase site', () async {
+    final hosts = <String>{};
+    final app = AppUpdates(
+      platform: host,
+      client: () => MockClient((request) async {
+        hosts.add(request.url.host);
+        return request.url.path == '/download/latest.json'
+            ? http.Response(jsonEncode(release), 200)
+            : http.Response.bytes(download, 200);
+      }),
+    );
+    addTearDown(app.dispose);
+    await app.check();
+    expect(app.update!.url.toString(), '$base/$androidApk');
+    await app.download();
+    expect(app.phase, UpdatePhase.ready);
+    expect(hosts, {'otakase.xyverion.com'});
   });
 
   test(
@@ -189,7 +208,7 @@ void main() {
     },
   );
 
-  test('rejects invalid tags and file data, other repositories and mismatched assets', () async {
+  test('rejects invalid tags and file data, other hosts and mismatched assets', () async {
     for (final tag in [
       '26.7.0',
       'v26',
@@ -221,10 +240,13 @@ void main() {
     expect(updates.downloaded, isFalse);
     expect(host.validated, 0);
     for (final url in [
-      'http://github.com/TheXykril/otakase/releases/download/v26.7.0/$androidApk',
-      'https://github.com/other/otakase/releases/download/v26.7.0/$androidApk',
-      'https://evil.example/TheXykril/otakase/releases/download/v26.7.0/$androidApk',
-      'https://github.com/TheXykril/otakase/releases/download/v26.8.0/$androidApk',
+      'http://otakase.xyverion.com/download/v26.7.0/$androidApk',
+      'https://evil.example/download/v26.7.0/$androidApk',
+      'https://otakase.xyverion.com.evil.example/download/v26.7.0/$androidApk',
+      'https://otakase.xyverion.com/download/v26.8.0/$androidApk',
+      'https://otakase.xyverion.com/download/v26.7.0/otakase-app-macos.zip',
+      'https://otakase.xyverion.com/download/v26.7.0/$androidApk?x=1',
+      'https://github.com/TheXykril/otakase/releases/download/v26.7.0/$androidApk',
     ]) {
       release['assets'] = [asset(androidApk)..['browser_download_url'] = url];
       await updates.check();

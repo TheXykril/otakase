@@ -56,9 +56,9 @@ class AppUpdate {
   final Uri url;
   String get label => '$name (build $code)';
 
-  /// Reads an update straight from GitHub's release data: the version from
-  /// the tag (v26.1.0), and the size and SHA-256 checksum GitHub records for
-  /// the uploaded file.
+  /// Reads an update from the release data the Otakase site serves (GitHub's
+  /// release shape): the version from the tag (v26.1.0), and the size and
+  /// SHA-256 checksum recorded for the uploaded file.
   factory AppUpdate.parse(Map release, Map asset, UpdatePlatform platform) {
     final tag = release['tag_name'];
     final match = tag is String
@@ -85,7 +85,7 @@ class AppUpdate {
       asset['browser_download_url'],
       platform.fileName,
     );
-    if (url.pathSegments[4] != tag) {
+    if (url.pathSegments[1] != tag) {
       throw const FormatException('Release files do not match.');
     }
     return AppUpdate(
@@ -98,23 +98,29 @@ class AppUpdate {
   }
 }
 
+/// The site the apps get updates from. It serves the release files from
+/// GitHub, or from the private copy of the releases when GitHub cannot, so
+/// updates keep working without GitHub.
+const updateSite = 'otakase.xyverion.com';
+
+/// The newest release, in GitHub's release shape, with links on [updateSite].
+final latestRelease = Uri.https(updateSite, '/download/latest.json');
+
+/// Checks a download link: `/download/<tag>/<filename>` on [updateSite].
 Uri releaseAssetUri(dynamic value, String filename) {
   final uri = value is String ? Uri.tryParse(value) : null;
   final parts = uri?.pathSegments ?? const <String>[];
   if (uri == null ||
       uri.scheme != 'https' ||
-      uri.host != 'github.com' ||
+      uri.host != updateSite ||
       uri.port != 443 ||
       uri.userInfo.isNotEmpty ||
       uri.hasQuery ||
       uri.hasFragment ||
-      parts.length != 6 ||
-      parts[0].toLowerCase() != 'thexykril' ||
-      parts[1].toLowerCase() != 'otakase' ||
-      parts[2] != 'releases' ||
-      parts[3] != 'download' ||
-      parts[4].isEmpty ||
-      parts[5] != filename) {
+      parts.length != 3 ||
+      parts[0] != 'download' ||
+      parts[1].isEmpty ||
+      parts[2] != filename) {
     throw const FormatException('Invalid release address.');
   }
   return uri;
@@ -244,8 +250,8 @@ class AppUpdates extends ChangeNotifier {
 
   Future<http.StreamedResponse> _get(http.Client client, Uri uri) async {
     final request = http.Request('GET', uri)
-      ..headers['Accept'] = uri.host == 'api.github.com'
-          ? 'application/vnd.github+json'
+      ..headers['Accept'] = uri == latestRelease
+          ? 'application/json'
           : 'application/octet-stream'
       ..headers['User-Agent'] = 'Otakase-App';
     final response = await client
@@ -287,10 +293,7 @@ class AppUpdates extends ChangeNotifier {
     try {
       installed = await platform.installed();
       if (!_active(generation)) return;
-      final response = await _get(
-        client,
-        Uri.https('api.github.com', '/repos/TheXykril/otakase/releases/latest'),
-      );
+      final response = await _get(client, latestRelease);
       if (!_active(generation)) return;
       if (response.statusCode == 404) {
         _emit(UpdatePhase.unpublished);
