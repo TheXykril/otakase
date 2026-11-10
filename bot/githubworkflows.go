@@ -57,16 +57,22 @@ func init() {
 			{Type: discordgo.ApplicationCommandOptionBoolean, Name: "release", Description: "Build and release: also publish a release of main (default off)"},
 			{Type: discordgo.ApplicationCommandOptionInteger, Name: "pr", Description: "Build and release: build this pull request instead of main", MinValue: ptr(1.0)},
 			{Type: discordgo.ApplicationCommandOptionString, Name: "version", Description: "Dev build: the version it is heading to, e.g. 26.8.0"},
+			{Type: discordgo.ApplicationCommandOptionString, Name: "site", Description: "Release: site rebuild after it, quick (default) or full for app UI changes",
+				Choices: []*discordgo.ApplicationCommandOptionChoice{{Name: "Quick", Value: "quick"}, {Name: "Full (app screens and Try demo too)", Value: "full"}}},
 		}}, (*bot).githubCommand)
 }
 
 // workflowInputs builds the inputs a dispatch sends, or says what is wrong.
-func workflowInputs(w ghWorkflow, release bool, pr int64, version string) (map[string]string, error) {
+func workflowInputs(w ghWorkflow, release bool, pr int64, version, site string) (map[string]string, error) {
 	inputs := map[string]string{}
 	version = strings.TrimPrefix(strings.TrimSpace(version), "v")
 	switch {
 	case (release || pr > 0) && w.key != "build":
 		return nil, fmt.Errorf("release and pr only go with Build and release")
+	case site != "" && !release:
+		return nil, fmt.Errorf("site only goes with a release: the site is rebuilt after it")
+	case site != "" && site != "quick" && site != "full":
+		return nil, fmt.Errorf("site is quick or full")
 	case release && pr > 0:
 		return nil, fmt.Errorf("a release is always made from main, so leave pr out")
 	case w.needsVersion && version == "":
@@ -78,6 +84,9 @@ func workflowInputs(w ghWorkflow, release bool, pr int64, version string) (map[s
 		inputs["release"] = strconv.FormatBool(release)
 		if pr > 0 {
 			inputs["pr_number"] = strconv.FormatInt(pr, 10)
+		}
+		if site != "" {
+			inputs["site"] = site
 		}
 	}
 	if version != "" {
@@ -134,7 +143,7 @@ func (b *bot) githubCommand(i *discordgo.InteractionCreate) {
 	}
 	var release bool
 	var pr int64
-	var version string
+	var version, site string
 	if o := opts["release"]; o != nil {
 		release = o.BoolValue()
 	}
@@ -144,7 +153,10 @@ func (b *bot) githubCommand(i *discordgo.InteractionCreate) {
 	if o := opts["version"]; o != nil {
 		version = o.StringValue()
 	}
-	inputs, err := workflowInputs(w, release, pr, version)
+	if o := opts["site"]; o != nil {
+		site = o.StringValue()
+	}
+	inputs, err := workflowInputs(w, release, pr, version, site)
 	if err != nil {
 		b.respond(i, true, errorEmbed("%s.", strings.ToUpper(err.Error()[:1])+err.Error()[1:]))
 		return
@@ -167,6 +179,9 @@ func (b *bot) githubCommand(i *discordgo.InteractionCreate) {
 		what := w.label
 		if inputs["release"] == "true" {
 			what = "Release build"
+			if inputs["site"] == "full" {
+				what += " (full site rebuild)"
+			}
 		}
 		desc := "It shows up in the Actions tab within a few seconds."
 		if w.key == "build" {

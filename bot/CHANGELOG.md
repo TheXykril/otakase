@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.95
+
+- `/github` Build and release has a `site` option for releases: Quick (default) rebuilds the website's text and changelog, Full also rebuilds the app screens and the Try demo after app UI changes.
+
 ## 1.30.94
 
 - Links to the website use otakase.com: the bot status, play and watch party links, the invite link and the info posts. Repost the welcome and FAQ posts with `/post-info` to update their buttons.

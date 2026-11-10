@@ -15,21 +15,27 @@ func TestWorkflowInputs(t *testing.T) {
 	dev, _ := workflowByKey("dev")
 	wiki, _ := workflowByKey("wiki")
 
-	in, err := workflowInputs(build, true, 0, "")
+	in, err := workflowInputs(build, true, 0, "", "")
 	if err != nil || in["release"] != "true" || len(in) != 1 {
 		t.Fatalf("release build = %v %v", in, err)
 	}
-	if in, err = workflowInputs(build, false, 12, ""); err != nil || in["pr_number"] != "12" || in["release"] != "false" {
+	if in, err = workflowInputs(build, false, 12, "", ""); err != nil || in["pr_number"] != "12" || in["release"] != "false" {
 		t.Fatalf("pr build = %v %v", in, err)
 	}
-	if in, err = workflowInputs(dev, false, 0, " v26.8.0 "); err != nil || in["version"] != "26.8.0" {
+	if in, err = workflowInputs(dev, false, 0, " v26.8.0 ", ""); err != nil || in["version"] != "26.8.0" {
 		t.Fatalf("dev build = %v %v", in, err)
 	}
+	if in, err = workflowInputs(build, true, 0, "", "full"); err != nil || in["site"] != "full" || in["release"] != "true" {
+		t.Fatalf("release with full site = %v %v", in, err)
+	}
 	for name, bad := range map[string]func() error{
-		"release with pr":     func() error { _, err := workflowInputs(build, true, 3, ""); return err },
-		"release on wiki":     func() error { _, err := workflowInputs(wiki, true, 0, ""); return err },
-		"dev without version": func() error { _, err := workflowInputs(dev, false, 0, ""); return err },
-		"version on wiki":     func() error { _, err := workflowInputs(wiki, false, 0, "1.0.0"); return err },
+		"site without release": func() error { _, err := workflowInputs(build, false, 0, "", "full"); return err },
+		"site on wiki":         func() error { _, err := workflowInputs(wiki, false, 0, "", "quick"); return err },
+		"unknown site":         func() error { _, err := workflowInputs(build, true, 0, "", "huge"); return err },
+		"release with pr":      func() error { _, err := workflowInputs(build, true, 3, "", ""); return err },
+		"release on wiki":      func() error { _, err := workflowInputs(wiki, true, 0, "", ""); return err },
+		"dev without version":  func() error { _, err := workflowInputs(dev, false, 0, "", ""); return err },
+		"version on wiki":      func() error { _, err := workflowInputs(wiki, false, 0, "1.0.0", ""); return err },
 	} {
 		if bad() == nil {
 			t.Errorf("%s: want an error", name)
@@ -54,7 +60,7 @@ func TestGitHubWorkflowsMatchRepository(t *testing.T) {
 		}
 	}
 	ci, _ := os.ReadFile(filepath.Join("..", ".github", "workflows", "ci-cd.yml"))
-	for _, input := range []string{"release:", "pr_number:"} {
+	for _, input := range []string{"release:", "pr_number:", "site:"} {
 		if !strings.Contains(string(ci), input) {
 			t.Errorf("ci-cd.yml lost its %s input", input)
 		}

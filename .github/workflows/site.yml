@@ -20,7 +20,8 @@ name: Site
 # - Full ("full" ticked): also renders the app screens (site/img/shots) and
 #   builds the Try demo (Flutter web + placeholder clip). Use it after app UI
 #   changes or new sample shows (app/test/fixtures/site). Build and release
-#   always does a full build.
+#   has its own "site" choice (quick by default) for the rebuild after a
+#   release.
 # A quick build turns into a full one when there is no earlier full build to
 # reuse (the saved parts are dropped after 7 days without a site build).
 on:

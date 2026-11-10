@@ -5,7 +5,8 @@ name: Build and release
 # builds the Android APK and the desktop app for Windows, macOS and Linux
 # (app-build.yml); the files are on the run's page under Artifacts.
 # With "release" ticked it publishes v<VERSION.txt> from main as a GitHub
-# release, then deploys the site so its changelog shows the new version.
+# release, then deploys the site so its changelog shows the new version
+# ("site": quick by default, full after app UI changes).
 
 on:
   workflow_dispatch:
@@ -19,6 +20,14 @@ on:
         required: false
         type: boolean
         default: false
+      site:
+        description: "Site build after a release: quick (text, changelog) or full (also app screens and Try demo, for app UI changes)"
+        required: false
+        type: choice
+        options:
+          - quick
+          - full
+        default: quick
 
 jobs:
   check:
@@ -145,8 +154,8 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/site.yml
-    # A release ships app changes, so the screens and the Try demo are
-    # rebuilt too.
+    # "full" also rebuilds the app screens and the Try demo; pick it when the
+    # release changes the app's UI.
     with:
-      full: true
+      full: ${{ inputs.site == 'full' }}
     secrets: inherit
