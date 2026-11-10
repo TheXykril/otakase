@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.2.3 - 2026-11-10
+
+Everything plays in one player, casting gets past firewalls, closing the app mid-show no longer crashes it, and movie search gets filters.
+
 ### Added
 
 - **Movie and show search has filters,** like anime: type (movies or
@@ -18,6 +22,9 @@
   gets the same controls, keys, casting, stall recovery and quality list
   (with Try another copy). Buttons for things a title has no data for, such
   as skip times for films, stay hidden.
+- **The website is now otakase.com.** Links in the app, help pages and
+  Discord point there. The old address forwards to it, and updates keep
+  working on older versions.
 
 ### Fixed
 
@@ -53,12 +60,6 @@
   hid the network from the search, so only the browser showed up.
 - **A TV that gives up on a stream says so** instead of loading forever.
 - **macOS asks for local network access** so it can find TVs.
-
-### Changed
-
-- **The website is now otakase.com.** Links in the app, help pages and
-  Discord point there. The old address forwards to it, and updates keep
-  working on older versions.
 
 ## 26.2.2 - 2026-11-10
 
