@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- **Movie and show search has filters,** like anime: type (movies or
+  series), year, genre, series status and sort. Filters alone browse
+  popular or trending titles, no search text needed.
+- **Search can be sorted** by Popular, Trending, Top rated or Newest, for
+  anime too.
+- **More genres for movies and shows,** such as Crime, Documentary, Family,
+  War and Western.
+
 ### Changed
 
 - **Anime, films, shows and downloads now play in one player.** Every title

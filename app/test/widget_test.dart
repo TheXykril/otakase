@@ -36,6 +36,7 @@ class TestCatalog extends Catalog {
     int? year,
     String? genre,
     String? status,
+    String? sort,
   }) async => const CatalogPage([anime]);
   @override
   Future<List<String>> genres({required bool adult}) async => ['Adventure'];

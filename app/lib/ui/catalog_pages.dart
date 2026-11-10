@@ -1,14 +1,12 @@
 import 'dart:async';
-import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import '../data/catalog.dart' show CatalogFailure;
-import '../data/trakt.dart' show MediaTitle, traktFilterRequests;
+import '../data/trakt.dart' show MediaTitle, findTitles, traktFilterRequests;
 import '../desktop/desktop_core.dart';
 import '../services.dart';
 import '../data/community_extras.dart';
@@ -58,7 +56,7 @@ class _SearchPageState extends State<SearchPage> {
   final query = TextEditingController();
   Timer? debounce;
   List<Anime> items = [];
-  String? error, format, season, genre, status;
+  String? error, format, season, genre, status, sort;
   int? year;
   int page = 1, generation = 0;
   bool busy = true, hasMore = false, voiceAvailable = false;
@@ -160,6 +158,7 @@ class _SearchPageState extends State<SearchPage> {
         year: year,
         genre: genre,
         status: status,
+        sort: sort,
       );
       if (mounted && g == generation) {
         setState(() {
@@ -188,7 +187,7 @@ class _SearchPageState extends State<SearchPage> {
   Future<void> searchTitles({bool retry = false}) async {
     final q = query.text.trim();
     final key = widget.titles && (q.isNotEmpty || filters.count > 0)
-        ? [q, format, season, year, genre, status].join('|')
+        ? [q, format, season, year, genre, status, sort].join('|')
         : '';
     if (key == titlesQuery && !retry) return;
     titlesQuery = key;
@@ -206,30 +205,19 @@ class _SearchPageState extends State<SearchPage> {
       titlesBusy = key.isNotEmpty && requests.isNotEmpty;
     });
     if (!titlesBusy) return;
-    final trakt = widget.services.trakt;
     try {
-      final List<List<MediaTitle>> found;
-      if (q.isNotEmpty &&
-          requests.length == 2 &&
-          mapEquals(requests[0].$2, requests[1].$2)) {
-        // One search keeps films and series in order of relevance.
-        found = [await trakt.search(q, filters: requests[0].$2)];
-      } else {
-        found = await Future.wait([
-          for (final (kind, filters) in requests)
-            q.isNotEmpty
-                ? trakt.search(q, kinds: kind, filters: filters)
-                : trakt.list(kind, 'popular', filters: filters),
-        ]);
-      }
-      final longest = found.fold(0, (n, l) => math.max(n, l.length));
-      final merged = [
-        for (var i = 0; i < longest; i++)
-          for (final list in found)
-            if (i < list.length) list[i],
-      ];
+      final found = await findTitles(
+        widget.services.trakt,
+        q,
+        format: format,
+        season: season,
+        year: year,
+        genre: genre,
+        status: status,
+        sort: sort,
+      );
       if (mounted && g == titleGeneration) {
-        setState(() => titleResults = merged);
+        setState(() => titleResults = found);
       }
     } catch (_) {
       if (mounted && g == titleGeneration) setState(() => titlesFailed = true);
@@ -289,80 +277,18 @@ class _SearchPageState extends State<SearchPage> {
     year: year,
     genre: genre,
     status: status,
+    sort: sort,
   );
 
   Future<void> openFilters() async {
-    final sheet = SearchFilterSheet(
+    final result = await showSearchFilters(
+      context,
       initial: filters,
       genres: genres,
       isTV: widget.isTV,
       // TV applies each choice at once; phones confirm with Apply filters.
       onChanged: widget.isTV ? apply : null,
     );
-    final result = isDesktop
-        ? await showGeneralDialog<SearchFilters>(
-            context: context,
-            barrierDismissible: true,
-            barrierLabel: 'Close filters',
-            barrierColor: Colors.black38,
-            transitionDuration: const Duration(milliseconds: 160),
-            transitionBuilder: (context, animation, _, child) =>
-                FadeTransition(opacity: animation, child: child),
-            // A menu under the Filters button instead of a full-height panel.
-            pageBuilder: (context, _, _) => Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  top: tvHeaderExtent(context) + 96,
-                  right: 48,
-                ),
-                child: Material(
-                  key: const Key('search-filter-menu'),
-                  color: panel,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    side: const BorderSide(color: line),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: 680,
-                      maxHeight:
-                          MediaQuery.sizeOf(context).height -
-                          tvHeaderExtent(context) -
-                          140,
-                    ),
-                    child: sheet,
-                  ),
-                ),
-              ),
-            ),
-          )
-        : widget.isTV
-        ? await showGeneralDialog<SearchFilters>(
-            context: context,
-            barrierDismissible: true,
-            barrierLabel: 'Close filters',
-            barrierColor: Colors.black54,
-            pageBuilder: (context, _, _) => Align(
-              alignment: Alignment.centerRight,
-              child: Material(
-                color: panel,
-                child: SizedBox(
-                  width: 560,
-                  height: double.infinity,
-                  child: SafeArea(child: sheet),
-                ),
-              ),
-            ),
-          )
-        : await showModalBottomSheet<SearchFilters>(
-            context: context,
-            isScrollControlled: true,
-            showDragHandle: true,
-            backgroundColor: panel,
-            builder: (context) => SafeArea(child: sheet),
-          );
     if (result != null && mounted) await apply(result);
   }
 
@@ -373,6 +299,7 @@ class _SearchPageState extends State<SearchPage> {
       year = next.year;
       genre = next.genre;
       status = next.status;
+      sort = next.sort;
     });
     await load();
   }
@@ -394,55 +321,6 @@ class _SearchPageState extends State<SearchPage> {
     debounce?.cancel();
     query.dispose();
     super.dispose();
-  }
-
-  /// The chosen filters as removable chips under the desktop search field.
-  Widget activeFilters() {
-    final active = <(String, VoidCallback)>[
-      if (format != null) (_formats[format] ?? format!, () => format = null),
-      if (status != null) (_statuses[status] ?? status!, () => status = null),
-      if (genre != null) (genre!, () => genre = null),
-      if (season != null) (_seasons[season] ?? season!, () => season = null),
-      if (year != null) ('$year', () => year = null),
-    ];
-    if (active.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text('Active:', style: uiStyle(context, size: 17, color: muted)),
-          for (final (label, clear) in active)
-            FocusBox(
-              key: ValueKey('active-filter-$label'),
-              isTV: true,
-              radius: 999,
-              outsideFrame: true,
-              onPressed: () {
-                setState(clear);
-                unawaited(load());
-              },
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(14, 4, 10, 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: lineStrong),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(label, style: uiStyle(context, size: 17)),
-                    const SizedBox(width: 6),
-                    const Icon(LucideIcons.x, size: 16, color: muted),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -532,7 +410,11 @@ class _SearchPageState extends State<SearchPage> {
           ],
         ),
       ),
-      if (isDesktop) activeFilters(),
+      if (isDesktop)
+        ActiveFilters(
+          filters: filters,
+          onChanged: (next) => unawaited(apply(next)),
+        ),
       const SizedBox(height: 22),
       if (titlesQuery.isNotEmpty && items.isNotEmpty)
         const Padding(
@@ -575,6 +457,7 @@ class _SearchPageState extends State<SearchPage> {
                     year = null;
                     genre = null;
                     status = null;
+                    sort = null;
                     unawaited(load());
                   },
                 ),
@@ -1128,6 +1011,21 @@ const _statuses = {
   'CANCELLED': 'Cancelled',
 };
 
+/// Movie and show search: the same filter keys as anime, as Trakt names them.
+const _titleFormats = {'MOVIE': 'Movies', 'TV': 'Series'};
+const _titleStatuses = {
+  'RELEASING': 'Returning',
+  'FINISHED': 'Ended',
+  'NOT_YET_RELEASED': 'Upcoming',
+  'CANCELLED': 'Cancelled',
+};
+const _sorts = {
+  'POPULAR': 'Popular',
+  'TRENDING': 'Trending',
+  'SCORE': 'Top rated',
+  'NEWEST': 'Newest',
+};
+
 class SearchFilters {
   const SearchFilters({
     this.format,
@@ -1135,8 +1033,9 @@ class SearchFilters {
     this.year,
     this.genre,
     this.status,
+    this.sort,
   });
-  final String? format, season, genre, status;
+  final String? format, season, genre, status, sort;
   final int? year;
   int get count => [
     format,
@@ -1144,7 +1043,176 @@ class SearchFilters {
     year,
     genre,
     status,
+    sort,
   ].where((value) => value != null).length;
+
+  SearchFilters copyWith({
+    String? Function()? format,
+    String? Function()? season,
+    int? Function()? year,
+    String? Function()? genre,
+    String? Function()? status,
+    String? Function()? sort,
+  }) => SearchFilters(
+    format: format == null ? this.format : format(),
+    season: season == null ? this.season : season(),
+    year: year == null ? this.year : year(),
+    genre: genre == null ? this.genre : genre(),
+    status: status == null ? this.status : status(),
+    sort: sort == null ? this.sort : sort(),
+  );
+}
+
+/// Opens the Search filters: a menu under the Filters button on desktop, a
+/// side panel on TV and a bottom sheet on phones. [titles] shows the movie
+/// and show choices instead of the anime ones.
+Future<SearchFilters?> showSearchFilters(
+  BuildContext context, {
+  required SearchFilters initial,
+  required List<String> genres,
+  required bool isTV,
+  bool titles = false,
+  ValueChanged<SearchFilters>? onChanged,
+}) {
+  final sheet = SearchFilterSheet(
+    initial: initial,
+    genres: genres,
+    isTV: isTV,
+    titles: titles,
+    onChanged: onChanged,
+  );
+  if (isDesktop) {
+    return showGeneralDialog<SearchFilters>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close filters',
+      barrierColor: Colors.black38,
+      transitionDuration: const Duration(milliseconds: 160),
+      transitionBuilder: (context, animation, _, child) =>
+          FadeTransition(opacity: animation, child: child),
+      // A menu under the Filters button instead of a full-height panel.
+      pageBuilder: (context, _, _) => Align(
+        alignment: Alignment.topRight,
+        child: Padding(
+          padding: EdgeInsets.only(
+            top: tvHeaderExtent(context) + 96,
+            right: 48,
+          ),
+          child: Material(
+            key: const Key('search-filter-menu'),
+            color: panel,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: const BorderSide(color: line),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 680,
+                maxHeight:
+                    MediaQuery.sizeOf(context).height -
+                    tvHeaderExtent(context) -
+                    140,
+              ),
+              child: sheet,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  if (isTV) {
+    return showGeneralDialog<SearchFilters>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close filters',
+      barrierColor: Colors.black54,
+      pageBuilder: (context, _, _) => Align(
+        alignment: Alignment.centerRight,
+        child: Material(
+          color: panel,
+          child: SizedBox(
+            width: 560,
+            height: double.infinity,
+            child: SafeArea(child: sheet),
+          ),
+        ),
+      ),
+    );
+  }
+  return showModalBottomSheet<SearchFilters>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: panel,
+    builder: (context) => SafeArea(child: sheet),
+  );
+}
+
+/// The chosen filters as removable chips under the desktop search field.
+class ActiveFilters extends StatelessWidget {
+  const ActiveFilters({
+    super.key,
+    required this.filters,
+    required this.onChanged,
+    this.titles = false,
+  });
+  final SearchFilters filters;
+  final bool titles;
+  final ValueChanged<SearchFilters> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final f = filters;
+    final formats = titles ? _titleFormats : _formats;
+    final statuses = titles ? _titleStatuses : _statuses;
+    final active = <(String, SearchFilters)>[
+      if (f.format case final v?)
+        (formats[v] ?? v, f.copyWith(format: () => null)),
+      if (f.status case final v?)
+        (statuses[v] ?? v, f.copyWith(status: () => null)),
+      if (f.genre case final v?) (v, f.copyWith(genre: () => null)),
+      if (f.season case final v?)
+        (_seasons[v] ?? v, f.copyWith(season: () => null)),
+      if (f.year case final v?) ('$v', f.copyWith(year: () => null)),
+      if (f.sort case final v?) (_sorts[v] ?? v, f.copyWith(sort: () => null)),
+    ];
+    if (active.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text('Active:', style: uiStyle(context, size: 17, color: muted)),
+          for (final (label, without) in active)
+            FocusBox(
+              key: ValueKey('active-filter-$label'),
+              isTV: true,
+              radius: 999,
+              outsideFrame: true,
+              onPressed: () => onChanged(without),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 4, 10, 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: lineStrong),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(label, style: uiStyle(context, size: 17)),
+                    const SizedBox(width: 6),
+                    const Icon(LucideIcons.x, size: 16, color: muted),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class FilterButton extends StatelessWidget {
@@ -1205,19 +1273,22 @@ class FilterButton extends StatelessWidget {
   );
 }
 
-/// Format, season, year, genre and status for Search. With [onChanged] each
-/// choice applies at once and there is no Apply button.
+/// Format, season, year, genre, status and sort for Search. With [titles] it
+/// offers the movie and show choices: type, year, genre, series status and
+/// sort. With [onChanged] each choice applies at once and there is no Apply
+/// button.
 class SearchFilterSheet extends StatefulWidget {
   const SearchFilterSheet({
     super.key,
     required this.initial,
     required this.genres,
     this.isTV = false,
+    this.titles = false,
     this.onChanged,
   });
   final SearchFilters initial;
   final List<String> genres;
-  final bool isTV;
+  final bool isTV, titles;
   final ValueChanged<SearchFilters>? onChanged;
   @override
   State<SearchFilterSheet> createState() => _SearchFilterSheetState();
@@ -1227,7 +1298,8 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
   late String? format = widget.initial.format,
       season = widget.initial.season,
       genre = widget.initial.genre,
-      status = widget.initial.status;
+      status = widget.initial.status,
+      sort = widget.initial.sort;
   late int? year = widget.initial.year;
 
   SearchFilters get current => SearchFilters(
@@ -1236,6 +1308,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
     year: year,
     genre: genre,
     status: status,
+    sort: sort,
   );
 
   void change(VoidCallback update) {
@@ -1260,6 +1333,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
     String? selected,
     ValueChanged<String?> choose, {
     bool any = false,
+    String anyLabel = 'Any',
     bool autofocus = false,
   }) => Wrap(
     spacing: widget.isTV ? 12 : 8,
@@ -1267,7 +1341,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
     children: [
       if (any)
         FilterPill(
-          label: 'Any',
+          label: anyLabel,
           selected: selected == null,
           isTV: widget.isTV,
           autofocus: autofocus,
@@ -1354,7 +1428,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
               TextButton(
                 key: const Key('filters-reset'),
                 onPressed: () => change(() {
-                  format = season = genre = status = null;
+                  format = season = genre = status = sort = null;
                   year = null;
                 }),
                 child: Text(
@@ -1370,13 +1444,30 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
             ],
           ),
           section(
-            'Format',
-            chips(_formats, format, (v) => format = v, autofocus: widget.isTV),
+            widget.titles ? 'Type' : 'Format',
+            chips(
+              widget.titles ? _titleFormats : _formats,
+              format,
+              (v) => format = v,
+              any: widget.titles,
+              autofocus: widget.isTV,
+            ),
           ),
           section(
-            'Season',
-            chips(_seasons, season, (v) => season = v, any: true),
+            'Sort',
+            chips(
+              _sorts,
+              sort,
+              (v) => sort = v,
+              any: true,
+              anyLabel: 'Best match',
+            ),
           ),
+          if (!widget.titles)
+            section(
+              'Season',
+              chips(_seasons, season, (v) => season = v, any: true),
+            ),
           section(
             'Year',
             picker(
@@ -1400,12 +1491,13 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
               ),
             ),
           section(
-            'Status',
+            widget.titles ? 'Series status' : 'Status',
             picker(
-              _statuses[status] ?? 'Any status',
+              (widget.titles ? _titleStatuses : _statuses)[status] ??
+                  'Any status',
               () => pick(
-                'Status',
-                _statuses,
+                widget.titles ? 'Series status' : 'Status',
+                widget.titles ? _titleStatuses : _statuses,
                 status,
                 'Any status',
                 (v) => status = v,

@@ -33,6 +33,7 @@ class BrowseCatalog extends fixture.TestCatalog {
     int? year,
     String? genre,
     String? status,
+    String? sort,
   }) async => CatalogPage(stories);
 }
 

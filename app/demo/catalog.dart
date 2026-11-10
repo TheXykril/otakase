@@ -62,6 +62,7 @@ class DemoCatalog extends Catalog {
     int? year,
     String? genre,
     String? status,
+    String? sort,
   }) async => CatalogPage([main, ...others]);
   @override
   Future<List<String>> genres({required bool adult}) async => ['Action'];

@@ -48,11 +48,12 @@ class MediaTitle {
     this.network = '',
     this.airedEpisodes = 0,
     this.language = '',
+    this.votes = 0,
   });
 
   /// movie or show.
   final String kind;
-  final int trakt, tmdb, year, runtime, airedEpisodes;
+  final int trakt, tmdb, year, runtime, airedEpisodes, votes;
   final String title,
       imdb,
       slug,
@@ -104,6 +105,7 @@ class MediaTitle {
       network: json['network'] as String? ?? '',
       airedEpisodes: number(json['aired_episodes']),
       language: json['language'] as String? ?? '',
+      votes: number(json['votes']),
     );
   }
 
@@ -128,6 +130,7 @@ class MediaTitle {
     network: json['network'] as String? ?? '',
     airedEpisodes: number(json['aired_episodes']),
     language: json['language'] as String? ?? '',
+    votes: number(json['votes']),
   );
 
   Json toJson() => {
@@ -151,6 +154,7 @@ class MediaTitle {
     'network': network,
     'aired_episodes': airedEpisodes,
     'language': language,
+    if (votes > 0) 'votes': votes,
   };
 
   /// The ids Trakt matches a title by.
@@ -876,21 +880,37 @@ class Trakt extends ChangeNotifier {
   );
 }
 
-/// Anime genres with a matching Trakt genre.
+/// Search genres with their Trakt genre. Anime genres that Trakt has share
+/// its name here; the rest only exist for films and series.
 const _traktGenres = {
   'Action': 'action',
   'Adventure': 'adventure',
+  'Animation': 'animation',
+  'Anime': 'anime',
   'Comedy': 'comedy',
+  'Crime': 'crime',
+  'Documentary': 'documentary',
   'Drama': 'drama',
+  'Family': 'family',
   'Fantasy': 'fantasy',
+  'History': 'history',
+  'Holiday': 'holiday',
   'Horror': 'horror',
   'Music': 'music',
+  'Musical': 'musical',
   'Mystery': 'mystery',
   'Romance': 'romance',
   'Sci-Fi': 'science-fiction',
   'Sports': 'sports',
+  'Superhero': 'superhero',
+  'Suspense': 'suspense',
   'Thriller': 'thriller',
+  'War': 'war',
+  'Western': 'western',
 };
+
+/// The genres movie and show search can filter by.
+final traktGenreNames = _traktGenres.keys.toList();
 
 /// The Trakt lookups that match the anime search filters: one per kind
 /// (movie or show) with its query filters. Empty when no film or series can
@@ -932,4 +952,75 @@ List<(String, Map<String, String>)> traktFilterRequests({
       else if (status == null || status == 'FINISHED')
         ('movie', common),
   ];
+}
+
+/// Films and series for a search: Trakt search with [query] when there is
+/// one, else its trending or popular lists, narrowed by the search filters
+/// and put in [sort] order (null keeps relevance, or the list's own order).
+Future<List<MediaTitle>> findTitles(
+  Trakt trakt,
+  String query, {
+  String? format,
+  String? season,
+  int? year,
+  String? genre,
+  String? status,
+  String? sort,
+}) async {
+  final q = query.trim();
+  final requests = traktFilterRequests(
+    format: format,
+    season: season,
+    year: year,
+    genre: genre,
+    status: status,
+  );
+  if (requests.isEmpty) return const [];
+  final List<List<MediaTitle>> found;
+  if (q.isNotEmpty &&
+      requests.length == 2 &&
+      mapEquals(requests[0].$2, requests[1].$2)) {
+    // One search keeps films and series in order of relevance.
+    found = [await trakt.search(q, filters: requests[0].$2)];
+  } else {
+    found = await Future.wait([
+      for (final (kind, filters) in requests)
+        q.isNotEmpty
+            ? trakt.search(q, kinds: kind, filters: filters)
+            : trakt.list(
+                kind,
+                sort == 'TRENDING' ? 'trending' : 'popular',
+                limit: sort == null || sort == 'TRENDING' ? 20 : 40,
+                filters: filters,
+              ),
+    ]);
+  }
+  final longest = found.fold(0, (n, l) => max(n, l.length));
+  final merged = [
+    for (var i = 0; i < longest; i++)
+      for (final list in found)
+        if (i < list.length) list[i],
+  ];
+  // The trending and popular lists already come in that order.
+  return q.isEmpty && (sort == 'POPULAR' || sort == 'TRENDING')
+      ? merged
+      : sortTitles(merged, sort);
+}
+
+/// [titles] in a search sort order: POPULAR and TRENDING by votes, SCORE by
+/// rating, NEWEST by year. Ties keep their order; null keeps them all.
+List<MediaTitle> sortTitles(List<MediaTitle> titles, String? sort) {
+  final int Function(MediaTitle, MediaTitle)? compare = switch (sort) {
+    'POPULAR' || 'TRENDING' => (a, b) => b.votes.compareTo(a.votes),
+    'SCORE' => (a, b) => b.rating.compareTo(a.rating),
+    'NEWEST' => (a, b) => b.year.compareTo(a.year),
+    _ => null,
+  };
+  if (compare == null) return titles;
+  final indexed = titles.indexed.toList()
+    ..sort((a, b) {
+      final c = compare(a.$2, b.$2);
+      return c != 0 ? c : a.$1.compareTo(b.$1);
+    });
+  return [for (final (_, t) in indexed) t];
 }

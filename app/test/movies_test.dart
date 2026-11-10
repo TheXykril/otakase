@@ -708,9 +708,26 @@ void main() {
     expect(f(format: 'OVA'), isEmpty);
     expect(f(genre: 'Mecha'), isEmpty);
     expect(f(status: 'HIATUS'), isEmpty);
+    expect(f(format: 'TV', genre: 'Western'), ['show {genres: western}']);
+    expect(traktGenreNames, containsAll(['Crime', 'Documentary', 'War']));
+  });
+
+  test('movie search sorts keep ties in their found order', () {
+    const titles = [
+      MediaTitle(kind: 'movie', trakt: 1, title: 'A', year: 2001, rating: 7),
+      MediaTitle(kind: 'show', trakt: 2, title: 'B', year: 2020, votes: 90),
+      MediaTitle(kind: 'movie', trakt: 3, title: 'C', year: 2020, rating: 9),
+    ];
+    String names(String? sort) =>
+        sortTitles(titles, sort).map((t) => t.title).join();
+    expect(names(null), 'ABC');
+    expect(names('POPULAR'), 'BAC');
+    expect(names('SCORE'), 'CAB');
+    expect(names('NEWEST'), 'BCA');
   });
 
   group('content setting', () {
+    final seen = <Uri>[];
     Future<AppServices> launchWith(
       WidgetTester tester,
       String content, {
@@ -740,7 +757,9 @@ void main() {
       final store = await freshStore({
         'settings.v1': jsonEncode({'Content': content}),
       });
+      seen.clear();
       final client = MockClient((r) async {
+        seen.add(r.url);
         if (r.url.host == 'api.trakt.tv' && r.url.path.startsWith('/search/')) {
           return http.Response(
             jsonEncode([
@@ -923,6 +942,34 @@ void main() {
         find.byKey(const ValueKey('more-Schedule'), skipOffstage: false),
         findsNothing,
       );
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('movie search filters browse Trakt without a title', (
+      tester,
+    ) async {
+      await launchWith(tester, 'movies');
+      await tester.tap(find.byKey(const ValueKey('nav-Search')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('search-filters')));
+      await tester.pumpAndSettle();
+      // Film choices, not the anime ones.
+      expect(find.text('Type'), findsOneWidget);
+      expect(find.text('Season'), findsNothing);
+      await tester.tap(find.text('Series'));
+      await tester.ensureVisible(find.text('Crime'));
+      await tester.tap(find.text('Crime'));
+      await tester.ensureVisible(find.text('Top rated'));
+      await tester.tap(find.text('Top rated'));
+      await tester.ensureVisible(find.byKey(const Key('filters-apply')));
+      await tester.tap(find.byKey(const Key('filters-apply')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('search-filters-count')), findsOneWidget);
+      expect(find.text('3'), findsOneWidget);
+      final browse = seen.lastWhere((u) => u.host == 'api.trakt.tv');
+      expect(browse.path, '/shows/popular');
+      expect(browse.queryParameters['genres'], 'crime');
+      expect(browse.queryParameters['limit'], '40');
       await tester.pumpWidget(const SizedBox());
     });
 

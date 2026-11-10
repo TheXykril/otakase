@@ -43,6 +43,7 @@ class FeedbackCatalog extends Catalog {
     int? year,
     String? genre,
     String? status,
+    String? sort,
   }) {
     searches.add((query: query, page: page, format: format));
     return answer?.call(page) ?? Future.value(const CatalogPage([]));
