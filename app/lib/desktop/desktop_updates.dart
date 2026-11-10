@@ -79,11 +79,8 @@ class DesktopUpdatePlatform extends UpdatePlatform {
   String get footnote =>
       'Your profiles, accounts and watch progress are kept. Otakase closes for a moment and opens again on the new version.';
 
-  /// The release page, for copies that update by hand.
-  static final downloadPage = Uri.https(
-    'github.com',
-    '/TheXykril/otakase/releases/latest',
-  );
+  /// The download page on the Otakase site, for copies that update by hand.
+  static final downloadPage = Uri.parse('https://$updateSite/#download');
 
   @override
   Future<InstalledApp> installed() async =>
@@ -111,22 +108,22 @@ class DesktopUpdatePlatform extends UpdatePlatform {
         );
         return await uninstaller.exists()
             ? null
-            : 'This copy was not installed with the Otakase installer. Download the new version from the release page.';
+            : 'This copy was not installed with the Otakase installer. Download the new version from the Otakase website.';
       case DesktopTarget.macos:
         if (!bundle.path.endsWith('.app')) {
-          return 'Download the new version from the release page.';
+          return 'Download the new version from the Otakase website.';
         }
         return await _writable(bundle.parent)
             ? null
-            : 'Otakase cannot replace itself in ${bundle.parent.path}. Move it to Applications, or download the new version from the release page.';
+            : 'Otakase cannot replace itself in ${bundle.parent.path}. Move it to Applications, or download the new version from the Otakase website.';
       case DesktopTarget.linux:
         final image = appImage;
         if (image == null) {
-          return 'Otakase was installed by a package or by hand. Update it the same way, or use the AppImage from the release page to get updates here.';
+          return 'Otakase was installed by a package or by hand. Update it the same way, or use the AppImage from the Otakase website to get updates here.';
         }
         return await _writable(File(image).parent)
             ? null
-            : 'Otakase cannot replace $image. Download the new version from the release page.';
+            : 'Otakase cannot replace $image. Download the new version from the Otakase website.';
     }
   }
 

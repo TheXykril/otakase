@@ -10,7 +10,7 @@ import 'package:otakase/data/app_updates.dart';
 import 'package:otakase/desktop/desktop_updates.dart';
 import 'package:otakase/ui/app_updates.dart';
 
-const base = 'https://github.com/TheXykril/otakase/releases/download/v26.8.0';
+const base = 'https://otakase.xyverion.com/download/v26.8.0';
 
 // Starts of the real file kinds: an ELF AppImage and an MZ Windows program.
 final elf = [0x7f, 0x45, 0x4c, 0x46, ...List.filled(60, 7)];
@@ -68,7 +68,7 @@ void main() {
     return AppUpdates(
       platform: host,
       client: () => MockClient((request) async {
-        if (request.url.host == 'api.github.com') {
+        if (request.url.path == '/download/latest.json') {
           return http.Response(jsonEncode(release), 200);
         }
         expect(request.url.pathSegments.last, host.fileName);

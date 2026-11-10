@@ -103,7 +103,7 @@ class SystemInstall {
       final image = appImage;
       if (image == null) {
         throw const InstallFailure(
-          'Only the AppImage from the release page can install itself.',
+          'Only the AppImage from the Otakase website can install itself.',
         );
       }
       final result = await _run(image, ['--install']);

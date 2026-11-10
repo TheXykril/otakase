@@ -24,7 +24,7 @@ void main() {
         final updates = AppUpdates(
           platform: host,
           client: () => MockClient((request) async {
-            if (request.url.host == 'api.github.com') {
+            if (request.url.path == '/download/latest.json') {
               return http.Response(
                 jsonEncode({
                   'tag_name': 'v26.7.0',
