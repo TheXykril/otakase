@@ -190,8 +190,12 @@ class DownloadsPage extends StatelessWidget {
       builder: (context, _) {
         final items = services.downloads.items;
         if (items.isEmpty) {
-          return const EmptyState(
-            message: 'Nothing downloaded yet. Use Download on a show, film or episode to watch it offline.',
+          return const Center(
+            child: SingleChildScrollView(
+              child: EmptyState(
+                message: 'Nothing downloaded yet. Use Download on a show, film or episode to watch it offline.',
+              ),
+            ),
           );
         }
         return ListView.separated(

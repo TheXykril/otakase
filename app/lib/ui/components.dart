@@ -1043,33 +1043,39 @@ class EmptyState extends StatelessWidget {
   final Widget? action;
   final bool error;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          error ? '迷' : '空',
-          style: TextStyle(
-            fontFamily: 'NotoSansJP',
-            fontSize: AppLayout.tvOf(context) ? 25 : 24,
-            fontWeight: FontWeight.w700,
-            height: 1.2,
-            color: accentText,
-          ),
+  Widget build(BuildContext context) => Center(
+    heightFactor: 1,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              error ? '迷' : '空',
+              style: TextStyle(
+                fontFamily: 'NotoSansJP',
+                fontSize: AppLayout.tvOf(context) ? 25 : 24,
+                fontWeight: FontWeight.w700,
+                height: 1.2,
+                color: accentText,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: uiStyle(context, color: muted),
+            ),
+            const SizedBox(height: 16),
+            if (action != null)
+              action!
+            else
+              Text('Leave it to us.', style: uiStyle(context, color: muted)),
+          ],
         ),
-        const SizedBox(height: 16),
-        Text(
-          message,
-          textAlign: TextAlign.center,
-          style: uiStyle(context, color: muted),
-        ),
-        const SizedBox(height: 16),
-        if (action != null)
-          action!
-        else
-          Text('Leave it to us.', style: uiStyle(context, color: muted)),
-      ],
+      ),
     ),
   );
 }

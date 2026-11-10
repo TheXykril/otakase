@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Empty screens like Downloads now show their message centred instead of stuck in the top-left corner.
+
 ## 26.3.0 - 2026-11-10
 
 Everything plays in one player, casting gets past firewalls, closing the app mid-show no longer crashes it, and movie search gets filters.

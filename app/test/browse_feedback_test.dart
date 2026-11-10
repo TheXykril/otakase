@@ -391,6 +391,7 @@ void main() {
       );
       expect(find.text('No episodes to display yet.'), findsNothing);
       await tester.ensureVisible(find.text('Retry'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Retry'));
       await tester.pump();
       expect(find.text('Episodes could not be loaded.'), findsNothing);
