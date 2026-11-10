@@ -12,6 +12,9 @@
   instead of showing a raw connection error.
 - **Empty screens are centred.** Downloads and other empty pages show
   their message in the middle instead of stuck in the top-left corner.
+- **The player's shading now reaches under the camera cutout,** so the
+  darkened top and bottom bars run edge to edge with the video. Buttons and
+  text still keep clear of the camera.
 
 ## 26.3.0 - 2026-11-10
 

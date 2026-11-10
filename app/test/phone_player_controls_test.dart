@@ -193,4 +193,29 @@ void main() {
       );
     }
   });
+  testWidgets('phone player shading covers a camera cutout', (tester) async {
+    phone(tester);
+    // Camera cutout on the left edge of a landscape phone.
+    tester.view.padding = const FakeViewPadding(left: 50);
+    addTearDown(tester.view.resetPadding);
+    await tester.pumpWidget(controls([]));
+    final shades = find.descendant(
+      of: find.byType(PhonePlayerControls),
+      matching: find.byWidgetPredicate(
+        (w) =>
+            w is Container &&
+            w.decoration is BoxDecoration &&
+            (w.decoration! as BoxDecoration).gradient != null,
+      ),
+    );
+    expect(shades, findsNWidgets(2));
+    for (final shade in shades.evaluate()) {
+      final box = shade.renderObject! as RenderBox;
+      expect(box.localToGlobal(Offset.zero).dx, 0);
+      expect(box.size.width, 844);
+    }
+    // Buttons and text stay beside the cutout.
+    expect(tester.getTopLeft(find.byTooltip('Back')).dx, greaterThan(50));
+    expect(tester.getTopLeft(find.text('08:12 / 23:50')).dx, greaterThan(50));
+  });
 }
