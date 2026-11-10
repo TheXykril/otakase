@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- **The player's shading now reaches under the camera cutout,** so the
+  darkened top and bottom bars run edge to edge with the video. Buttons and
+  text still keep clear of the camera.
+
 ## 26.3.0 - 2026-11-10
 
 Everything plays in one player, casting gets past firewalls, closing the app mid-show no longer crashes it, and movie search gets filters.

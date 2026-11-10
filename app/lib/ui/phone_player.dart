@@ -75,65 +75,74 @@ class PhonePlayerControls extends StatelessWidget {
       color: fg,
       letterSpacing: 0,
     );
-    return SafeArea(
-      child: Column(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [bgDeep, Color(0x00080707)],
-              ),
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Back',
-                  onPressed: onBack,
-                  icon: const Icon(LucideIcons.arrowLeft, color: fgBright),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: uiStyle(
-                          context,
-                          size: 20,
-                          weight: FontWeight.w600,
-                          color: fgBright,
-                        ),
-                      ),
-                      if (subtitle.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle.toUpperCase(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: uiStyle(context, size: 15, color: muted),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                ...topActions,
-                DeviceStatus(isTV: isTV),
-                const SizedBox(width: 12),
-                const SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: Center(child: OtakaseSeal()),
-                ),
-              ],
+    // The shading runs edge to edge, under a camera cutout too, so it lines
+    // up with the video. Only the buttons and text keep to the safe area.
+    return Column(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [bgDeep, Color(0x00080707)],
             ),
           ),
-          Expanded(
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Back',
+                    onPressed: onBack,
+                    icon: const Icon(LucideIcons.arrowLeft, color: fgBright),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: uiStyle(
+                            context,
+                            size: 20,
+                            weight: FontWeight.w600,
+                            color: fgBright,
+                          ),
+                        ),
+                        if (subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: uiStyle(context, size: 15, color: muted),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  ...topActions,
+                  DeviceStatus(isTV: isTV),
+                  const SizedBox(width: 12),
+                  const SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Center(child: OtakaseSeal()),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: SafeArea(
+            top: false,
+            bottom: false,
             child: Center(
               child: Wrap(
                 alignment: WrapAlignment.center,
@@ -161,69 +170,77 @@ class PhonePlayerControls extends StatelessWidget {
               ),
             ),
           ),
-          ...above,
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x00080707), bgDeep],
-              ),
+        ),
+        for (final widget in above)
+          SafeArea(top: false, bottom: false, child: widget),
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x00080707), bgDeep],
             ),
-            padding: EdgeInsets.fromLTRB(24, 8, 24, isTV ? 40 : 12),
-            child: Column(
-              children: [
-                SizedBox(
-                  height: 44,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: CustomPaint(
-                          size: const Size(double.infinity, 6),
-                          painter: SkipPainter(spans, duration),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(24, 8, 24, isTV ? 40 : 12),
+              child: Column(
+                children: [
+                  SizedBox(
+                    height: 44,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: CustomPaint(
+                            size: const Size(double.infinity, 6),
+                            painter: SkipPainter(spans, duration),
+                          ),
                         ),
+                        KageSeekSlider(
+                          key: const Key('player-timeline'),
+                          value: position.inMilliseconds
+                              .clamp(0, max)
+                              .toDouble(),
+                          max: max,
+                          onChangeStart: onSeekStart,
+                          onChanged: onSeekChanged,
+                          onChangeEnd: onSeekEnd,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Text(
+                        '${DesktopPlayerBar.time(position)} / ${DesktopPlayerBar.time(duration)}',
+                        style: timeStyle,
                       ),
-                      KageSeekSlider(
-                        key: const Key('player-timeline'),
-                        value: position.inMilliseconds.clamp(0, max).toDouble(),
-                        max: max,
-                        onChangeStart: onSeekStart,
-                        onChanged: onSeekChanged,
-                        onChangeEnd: onSeekEnd,
+                      if (buffering) ...[
+                        const SizedBox(width: 16),
+                        Text(
+                          'Buffering',
+                          style: uiStyle(context, size: 15, color: muted),
+                        ),
+                      ],
+                      const Spacer(),
+                      for (final a in actions)
+                        PlayerIconButton(action: a, isTV: isTV),
+                      SizedBox(width: actions.isEmpty ? 0 : 12),
+                      Text(
+                        '−${DesktopPlayerBar.time(duration - position)}',
+                        style: timeStyle,
                       ),
                     ],
                   ),
-                ),
-                Row(
-                  children: [
-                    Text(
-                      '${DesktopPlayerBar.time(position)} / ${DesktopPlayerBar.time(duration)}',
-                      style: timeStyle,
-                    ),
-                    if (buffering) ...[
-                      const SizedBox(width: 16),
-                      Text(
-                        'Buffering',
-                        style: uiStyle(context, size: 15, color: muted),
-                      ),
-                    ],
-                    const Spacer(),
-                    for (final a in actions)
-                      PlayerIconButton(action: a, isTV: isTV),
-                    SizedBox(width: actions.isEmpty ? 0 : 12),
-                    Text(
-                      '−${DesktopPlayerBar.time(duration - position)}',
-                      style: timeStyle,
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
