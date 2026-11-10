@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otakase/ui/movie_player.dart';
+import 'package:otakase/data/play_request.dart';
 
 void main() {
   const film = Duration(minutes: 101);

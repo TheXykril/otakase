@@ -13,7 +13,8 @@ import '../desktop/desktop_core.dart';
 import '../services.dart';
 import 'components.dart';
 import 'downloads_page.dart';
-import 'movie_player.dart';
+import '../data/play_request.dart';
+import '../player.dart';
 
 /// Poster rows and cards are drawn for anime; a film or series is shown in
 /// them under an id no AniList entry can have, and mapped back on open.
@@ -105,7 +106,7 @@ Future<void> resumeTitle(
   await Navigator.push(
     context,
     OtakaseRoute<void>(
-      builder: (_) => MoviePlayerPage(
+      builder: (_) => PlayerPage.title(
         services: services,
         isTV: isTV,
         request: titlePlay(
@@ -702,7 +703,7 @@ class _TitlePageState extends State<TitlePage> {
   Future<void> play([TitleEpisode? episode]) => Navigator.push(
     context,
     OtakaseRoute<void>(
-      builder: (_) => MoviePlayerPage(
+      builder: (_) => PlayerPage.title(
         services: widget.services,
         isTV: widget.isTV,
         request: titlePlay(

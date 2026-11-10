@@ -8,7 +8,8 @@ import '../data/models.dart';
 import '../data/trakt.dart';
 import '../services.dart';
 import 'components.dart';
-import 'movie_player.dart';
+import '../data/play_request.dart';
+import '../player.dart';
 import 'movies_pages.dart';
 
 Future<void> openDownloads(
@@ -165,7 +166,7 @@ class DownloadsPage extends StatelessWidget {
   void play(BuildContext context, DownloadItem d) => Navigator.push(
     context,
     OtakaseRoute<void>(
-      builder: (_) => MoviePlayerPage(
+      builder: (_) => PlayerPage.title(
         services: services,
         isTV: isTV,
         request: downloadPlay(services, d),
