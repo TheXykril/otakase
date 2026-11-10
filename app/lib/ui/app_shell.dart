@@ -105,6 +105,7 @@ class _AppShellState extends State<AppShell> {
     });
     unawaited(startRemote());
     widget.services.tvRemote.addListener(remoteAsk);
+    if (widget.isTV) widget.services.tvRemote.start = startFromPhone;
     // Trakt sits with the other trackers in Accounts and on More.
     unawaited(widget.services.trakt.load());
     if ((Host.android || isDesktop) &&
@@ -193,6 +194,9 @@ class _AppShellState extends State<AppShell> {
     searchField.dispose();
     if (!widget.services.tvRemote.closed) {
       widget.services.tvRemote.removeListener(remoteAsk);
+      if (widget.services.tvRemote.start == startFromPhone) {
+        widget.services.tvRemote.start = null;
+      }
     }
     super.dispose();
   }
@@ -211,6 +215,43 @@ class _AppShellState extends State<AppShell> {
         useRootNavigator: true,
         builder: (_) =>
             RemoteAskDialog(remote: widget.services.tvRemote, ask: ask),
+      ),
+    );
+  }
+
+  /// A paired phone picked an episode for this TV: close whatever plays
+  /// and open it, at the phone's spot when it handed over.
+  Future<void> startFromPhone(
+    int id,
+    int episode,
+    int position,
+    String mode,
+  ) async {
+    final services = widget.services;
+    final anime = await services.catalog.detail(
+      Anime(id: id, title: ''),
+      adult: services.store.adultAllowed,
+    );
+    if (anime.isAdult && !services.store.adultAllowed) {
+      throw StateError('This profile hides 18+ titles.');
+    }
+    if (!mounted) return;
+    await services.stopPlayback?.call();
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    navigator.popUntil((route) => route.isFirst);
+    unawaited(
+      navigator.push(
+        OtakaseRoute<void>(
+          builder: (_) => playerFor(
+            services: services,
+            anime: anime,
+            episode: episode,
+            isTV: widget.isTV,
+            mode: mode,
+            startAt: position,
+          ),
+        ),
       ),
     );
   }

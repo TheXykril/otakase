@@ -1,4 +1,8 @@
 import 'dart:async';
+
+import 'remote_now_playing.dart';
+import 'play_on.dart';
+
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -269,6 +273,54 @@ class _ShowPageState extends State<ShowPage> {
       ),
     ),
   );
+
+  /// Plays [ep] where the viewer picks: here, on an Otakase TV this phone
+  /// then controls, or on a cast device.
+  Future<void> playOn(int ep) async {
+    final target = await pickPlayTarget(context, widget.services);
+    if (target == null || !mounted) return;
+    switch (target) {
+      case PlayHere():
+        await play(ep);
+      case PlayOnCast(:final device):
+        await Navigator.push(
+          context,
+          OtakaseRoute<void>(
+            builder: (_) => playerFor(
+              services: widget.services,
+              anime: anime,
+              episode: ep,
+              isTV: widget.isTV,
+              mode: mode,
+              castTo: device,
+            ),
+          ),
+        );
+      case PlayOnTV(:final tv):
+        final messenger = ScaffoldMessenger.of(context);
+        try {
+          final link = widget.services.controlTV(tv);
+          await link.ready();
+          await link.send(
+            'start',
+            args: {'anilist_id': anime.id, 'episode': ep, 'mode': mode},
+          );
+        } catch (e) {
+          messenger.showSnackBar(
+            SnackBar(content: Text(e is StateError ? e.message : '$e')),
+          );
+          return;
+        }
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          OtakaseRoute<void>(
+            builder: (_) => RemoteNowPlaying(services: widget.services),
+          ),
+        );
+    }
+  }
+
   int get nextEpisode {
     final h = widget.services.store.entry(anime);
     var ep = h == null
@@ -323,6 +375,18 @@ class _ShowPageState extends State<ShowPage> {
         focusNode: playFocus,
         onPressed: anime.status == 'NOT_YET_RELEASED' ? null : () => play(last),
       ),
+      // A phone can start the episode on a TV or cast it from here.
+      if (!widget.isTV)
+        AppButton(
+          key: const Key('show-play-on'),
+          disabledReason: unavailable,
+          label: 'Play on…',
+          icon: LucideIcons.cast,
+          isTV: false,
+          onPressed: anime.status == 'NOT_YET_RELEASED'
+              ? null
+              : () => playOn(last),
+        ),
       AppButton(
         key: const Key('show-status'),
         label: label,

@@ -12,6 +12,10 @@
   ending marked, Skip Intro, previous and next episode, volume, and
   episodes, subtitles, audio, quality and stop. A bar above the tabs shows
   what the TV is playing and opens the remote from anywhere in the app.
+- **Play on.** A show's page has Play on…, one list of paired TVs and
+  computers, this phone and cast devices. Pick a TV and the episode starts
+  there with the phone as its remote. The player's cast button uses the same
+  list and moves what you are watching to a TV at the same spot.
 
 ### Changed
 
