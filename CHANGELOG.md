@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.3.1 - 2026-11-10
+
+The phone remote gets past firewalls, the player shading fills the camera cutout, and a dropped stream says Reconnecting again.
+
 ### Fixed
 
 - **The phone remote gets past a computer's firewall.** More > Phone remote
