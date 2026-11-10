@@ -50,8 +50,14 @@ class CastStatus {
       note = json['note'] as String? ?? '',
       error = json['error'] as String? ?? '',
       link = json['link'] as String? ?? '',
-      viewers = (json['viewers'] as num?)?.toInt() ?? 0;
+      viewers = (json['viewers'] as num?)?.toInt() ?? 0,
+      blocked = json['blocked'] == true,
+      canAllow = json['can_allow'] == true;
   final bool active, paused;
+
+  /// The device never reached this computer, most often a firewall;
+  /// [canAllow] when the app can open it.
+  final bool blocked, canAllow;
   final String device, kind, state, note, error, link;
   final double position, duration;
   final double? volume;
@@ -71,14 +77,21 @@ class CastStatus {
   };
 }
 
-Future<void> _multicast(bool on) async {
-  if (isDesktop) return;
+/// Holds Android's multicast lock while [on], and returns the network
+/// interface the phone or TV is on: Android hides the interface list from
+/// the core, which then cannot search for Chromecasts by itself.
+Future<Json?> _multicast(bool on) async {
+  if (isDesktop) return null;
   try {
-    await const MethodChannel('otakase/device')
-        .invokeMethod<void>('localDiscovery', on);
+    final found = await const MethodChannel('otakase/device')
+        .invokeMethod<Object?>('localDiscovery', on);
+    if (found is Map && found['name'] is String && found['index'] is int) {
+      return {'name': found['name'], 'index': found['index']};
+    }
   } catch (_) {
     /* Ethernet and hosts without the lock need none. */
   }
+  return null;
 }
 
 /// The core's cast operations.
@@ -89,12 +102,12 @@ class CastClient {
   Future<List<CastDevice>> devices({int seconds = 4}) async {
     // Android drops the multicast answers TVs send unless the app holds a
     // Wi-Fi multicast lock while it listens.
-    await _multicast(true);
+    final network = await _multicast(true);
     final Json data;
     try {
       data = await core.request({
         'operation': 'cast_devices',
-        'cast': {'timeout': seconds},
+        'cast': {'timeout': seconds, 'interface': ?network},
       }, timeout: Duration(seconds: seconds + 10));
     } finally {
       await _multicast(false);
@@ -135,6 +148,19 @@ class CastClient {
       'operation': 'cast_status',
     }, timeout: const Duration(seconds: 12)),
   );
+
+  /// Opens this computer's firewall for casting, behind the system's own
+  /// password or admin prompt. False when it was refused or failed.
+  Future<bool> allow() async {
+    try {
+      await core.request({
+        'operation': 'cast_allow',
+      }, timeout: const Duration(minutes: 3));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   Future<void> control(String action, [double value = 0]) => core.request({
     'operation': 'cast_control',
@@ -279,11 +305,16 @@ class CastPanel extends StatelessWidget {
     required this.status,
     required this.deviceName,
     required this.onStop,
+    this.onAllow,
     this.isTV = false,
   });
   final CastStatus? status;
   final String deviceName;
   final VoidCallback onStop;
+
+  /// Opens the firewall and casts again, offered when the device could not
+  /// reach this computer.
+  final VoidCallback? onAllow;
   final bool isTV;
 
   @override
@@ -351,6 +382,16 @@ class CastPanel extends StatelessWidget {
                       : '${s.viewers} ${s.viewers == 1 ? 'screen' : 'screens'} watching',
                   textAlign: TextAlign.center,
                   style: uiStyle(context, size: 14, color: muted),
+                ),
+              ],
+              if (s != null && s.blocked && s.canAllow && onAllow != null) ...[
+                const SizedBox(height: 20),
+                AppButton(
+                  key: const Key('cast-allow'),
+                  label: 'Allow casting',
+                  icon: LucideIcons.shieldCheck,
+                  onPressed: onAllow!,
+                  isTV: isTV,
                 ),
               ],
               const SizedBox(height: 20),

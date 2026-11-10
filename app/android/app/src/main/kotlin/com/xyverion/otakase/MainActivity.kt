@@ -18,11 +18,13 @@ import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import com.xyverion.otakase.mobilecore.Mobilecore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.net.NetworkInterface
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
@@ -40,6 +42,26 @@ class MainActivity : FlutterActivity() {
     private fun loginUri(intent: Intent?): String? = intent?.data?.takeIf {
         it.scheme == "otakase" && it.host == "login"
     }?.toString()
+    // The Wi-Fi or Ethernet interface this device is on, as {name, index}.
+    // Android 11 and later hide the interface list from the Go core, which
+    // needs it to search for Chromecasts.
+    private fun localNetwork(): Map<String, Any>? {
+        val connectivity = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+        return try {
+            @Suppress("DEPRECATION")
+            val networks = connectivity.allNetworks.toList()
+            val local = networks.sortedBy { if (it == connectivity.activeNetwork) 0 else 1 }.firstOrNull { network ->
+                val caps = connectivity.getNetworkCapabilities(network) ?: return@firstOrNull false
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+            } ?: return null
+            val name = connectivity.getLinkProperties(local)?.interfaceName ?: return null
+            val index = NetworkInterface.getByName(name)?.index ?: return null
+            if (index <= 0) null else mapOf("name" to name, "index" to index)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun deviceStatus(): Map<String, Any> {
         val battery = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val level = battery?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
@@ -121,7 +143,7 @@ class MainActivity : FlutterActivity() {
                         multicastLock?.let { if (it.isHeld) it.release() }
                         multicastLock = null
                     }
-                    result.success(null)
+                    result.success(if (call.arguments == true) localNetwork() else null)
                 } catch (_: Exception) { result.error("unavailable", "Local discovery unavailable", null) }
                 "status" -> result.success(deviceStatus())
                 "keepAwake" -> {
