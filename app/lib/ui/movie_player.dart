@@ -936,6 +936,19 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
     }
   }
 
+  /// Opens this computer's firewall and starts the cast again where it was.
+  Future<void> allowCast() async {
+    final opened = await caster.allow();
+    if (!mounted || !casting) return;
+    if (!opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The firewall was not opened.')),
+      );
+      return;
+    }
+    await castCurrent(start: position.inMilliseconds / 1000);
+  }
+
   /// Ends the cast. Unless the screen is being left, the title carries on
   /// here from where the device was.
   Future<void> stopCast({bool resumeHere = true, bool remote = false}) async {
@@ -1434,6 +1447,7 @@ class _MoviePlayerPageState extends State<MoviePlayerPage>
                 deviceName: castDevice!.name,
                 isTV: widget.isTV,
                 onStop: () => unawaited(stopCast()),
+                onAllow: () => unawaited(allowCast()),
               ),
             if (busy)
               Center(

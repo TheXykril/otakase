@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Fixed
+
+- **Casting works behind a firewall.** The computer now sends casts from a
+  fixed port instead of a random one a firewall blocks, so the TV no longer
+  sits on loading. If the TV still cannot reach the computer, the stream goes
+  straight to the TV when it can, or the app says so and offers **Allow
+  casting**, which opens the firewall after your password (Linux) or admin
+  approval (Windows).
+- **Phones and Android TVs find Chromecasts again.** Android 11 and later
+  hid the network from the search, so only the browser showed up.
+- **A TV that gives up on a stream says so** instead of loading forever.
+- **macOS asks for local network access** so it can find TVs.
+
 ### Changed
 
 - **The website is now otakase.com.** Links in the app, help pages and
