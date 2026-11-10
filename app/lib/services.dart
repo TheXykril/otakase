@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
 import 'core.dart';
 import 'data/auth.dart';
 import 'data/tracking.dart';
@@ -126,6 +130,33 @@ class AppServices {
   late final WatchParties party;
   late final CommunityExtras extras;
   late final TVRemote tvRemote;
+
+  /// The TV this phone is controlling, kept across pages so the now
+  /// playing bar can show it anywhere in the app.
+  final remoteLink = ValueNotifier<RemoteLink?>(null);
+
+  /// Starts controlling [tv], closing any other TV's connection.
+  RemoteLink controlTV(
+    TVDevice tv, {
+    Future<List<TVDevice>> Function()? findTVs,
+  }) {
+    final old = remoteLink.value;
+    if (old != null && old.tv.id == tv.id) return old;
+    unawaited(old?.close());
+    final link = findTVs == null
+        ? RemoteLink(tvRemote, tv)
+        : RemoteLink(tvRemote, tv, findTVs: findTVs);
+    remoteLink.value = link..start();
+    return link;
+  }
+
+  /// Stops controlling the TV.
+  Future<void> leaveTV() async {
+    final old = remoteLink.value;
+    remoteLink.value = null;
+    await old?.close();
+  }
+
   late final AppUpdates updates;
 
   /// A show the last player finished, to be scored once it closes.
@@ -143,6 +174,7 @@ class AppServices {
     await watchRooms.close();
     await party.close();
     extras.dispose();
+    await leaveTV();
     await tvRemote.close();
     await presence.clear();
     await discord.close();

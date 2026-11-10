@@ -14,6 +14,7 @@ import 'package:otakase/data/store.dart';
 import 'package:otakase/data/tv_remote.dart';
 import 'package:otakase/services.dart';
 import 'package:otakase/ui/components.dart';
+import 'package:otakase/ui/remote_now_playing.dart';
 import 'package:otakase/ui/tv_remote_page.dart';
 import 'package:otakase/ui/watch_rooms_page.dart';
 import 'package:otakase/ui/movie_page.dart';
@@ -88,7 +89,24 @@ class FakeLan extends LanTransport {
       'episode': 3,
       'episodes': 12,
       'position': 40,
+      'duration': 1420,
+      'playing': true,
       'volume': 50,
+      'skip': 'Skip Intro',
+      'spans': [
+        {'type': 'op', 'start': 30, 'end': 120},
+      ],
+      'can_previous': true,
+      'subtitles': [
+        {'id': 'no', 'label': 'Off', 'on': false},
+        {'id': '2', 'label': 'English', 'on': true},
+      ],
+      'audio': [
+        {'id': '1', 'label': 'Japanese', 'on': true},
+        {'id': '2', 'label': 'English', 'on': false},
+      ],
+      'qualities': ['best', '1080', '720', 'worst'],
+      'quality': 'best',
     };
   }
 }
@@ -253,8 +271,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('tv-ask-digits')), findsNothing);
     expect(active.tvRemote.paired.single.id, tv.id);
+    expect(find.byType(RemoteNowPlaying), findsOneWidget);
     expect(find.text('Playing story'), findsOneWidget);
-    expect(find.text('Connected'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await active.close();
   });
@@ -338,27 +356,47 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Pair'));
     await tester.pumpAndSettle();
+    expect(find.byType(RemoteNowPlaying), findsOneWidget);
+    expect(find.byKey(const Key('remote-title')), findsOneWidget);
     expect(find.text('Playing story'), findsOneWidget);
-    for (final label in [
-      'Play',
-      'Pause',
-      '+10 s',
-      'Next episode',
-      'Volume +',
+    expect(find.text('EPISODE 3'), findsOneWidget);
+    for (final key in [
+      'remote-play',
+      'remote-forward',
+      'remote-back',
+      'remote-next',
+      'remote-previous',
+      'remote-skip',
     ]) {
-      await tester.ensureVisible(find.text(label));
-      await tester.tap(find.text(label));
+      await tester.ensureVisible(find.byKey(Key(key)));
+      await tester.tap(find.byKey(Key(key)));
       await tester.pumpAndSettle();
     }
     expect(lan.commands, [
-      'play:{}',
       'pause:{}',
       'seek:{"seconds":10}',
+      'seek:{"seconds":-10}',
       'next:{}',
-      'volume:{"volume":60}',
+      'previous:{}',
+      'party_skip:{}',
     ]);
-    await tester.ensureVisible(find.text('Pick episode'));
-    await tester.tap(find.text('Pick episode'));
+    await tester.ensureVisible(find.byKey(const Key('remote-tool-Subtitles')));
+    await tester.tap(find.byKey(const Key('remote-tool-Subtitles')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('remote-choice-no')));
+    await tester.pumpAndSettle();
+    expect(lan.commands.last, 'subtitle:{"id":"no"}');
+    await tester.tap(find.byKey(const Key('remote-tool-Audio')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('remote-choice-2')));
+    await tester.pumpAndSettle();
+    expect(lan.commands.last, 'audio:{"id":"2"}');
+    await tester.tap(find.byKey(const Key('remote-tool-Quality')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('720').last);
+    await tester.pumpAndSettle();
+    expect(lan.commands.last, 'quality:{"value":"720"}');
+    await tester.tap(find.byKey(const Key('remote-tool-Episodes')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('4').last);
     await tester.pumpAndSettle();
@@ -386,9 +424,13 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Living room · Paired'));
       await tester.pumpAndSettle();
+      expect(find.byType(RemoteNowPlaying), findsOneWidget);
       expect(find.text('Hidden title'), findsNothing);
-      expect(find.text('Playing on TV'), findsOneWidget);
-      expect(find.text('Pick episode'), findsNothing);
+      expect(find.text('Playing on Living room'), findsOneWidget);
+      final episodes = tester.widget<InkWell>(
+        find.byKey(const Key('remote-tool-Episodes')),
+      );
+      expect(episodes.onTap, isNull);
       await tester.pumpWidget(const SizedBox());
       await active.close();
     },

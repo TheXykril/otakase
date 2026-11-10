@@ -64,8 +64,12 @@ type the code (and the address if needed). A computer works the same way from
 More > Phone remote. If its firewall is on (Linux or Windows), that page
 shows **Allow phone remote**: tap it and enter your password once. Otherwise
 allow port 8654 (TCP and UDP) yourself.
-Pair once, then control play, pause, ten-second seeks, the next episode,
-episode choice and volume. The phone stays connected and shows what the TV is
+Pair once and the phone opens the remote for that TV: cover art, a seek bar
+with the opening and ending marked, Skip Intro when it shows on the TV,
+ten-second jumps, previous and next episode, volume, and buttons for
+episodes, subtitles, audio, quality and stop. While the TV plays, a bar above
+the phone's tabs shows what is on and opens the remote again. The remote's
+menu disconnects or forgets the TV. The phone stays connected and shows what the TV is
 doing as it happens; if the connection drops it reconnects on its own and
 finds the TV again when its address changed, for example after a router
 restart. Pairings belong to each profile; forget a TV on the

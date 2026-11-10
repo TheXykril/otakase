@@ -740,9 +740,16 @@ class TVRemote extends ChangeNotifier {
     'pause',
     'toggle',
     'seek',
+    'seek_to',
+    'party_skip',
     'next',
+    'previous',
     'episode',
     'volume',
+    'subtitle',
+    'audio',
+    'quality',
+    'stop',
   ];
 
   /// Checks one control from a phone and queues it for the player.
@@ -755,6 +762,18 @@ class TVRemote extends ChangeNotifier {
     }
     if (action == 'seek' && number(args['seconds']).abs() != 10) {
       return (400, {'error': 'Seek by 10 seconds.'});
+    }
+    if (action == 'seek_to' &&
+        (args['position'] is! num || (args['position'] as num) < 0)) {
+      return (400, {'error': 'Choose a place in the episode.'});
+    }
+    if ((action == 'subtitle' || action == 'audio') &&
+        (args['id'] is! String || (args['id'] as String).length > 64)) {
+      return (400, {'error': 'Choose a track.'});
+    }
+    if (action == 'quality' &&
+        !RegExp(r'^(best|worst|\d{3,4})$').hasMatch('${args['value']}')) {
+      return (400, {'error': 'Choose a quality.'});
     }
     if (_pendingCommands >= 10) {
       return (429, {'error': 'Wait for the TV to finish this action.'});
