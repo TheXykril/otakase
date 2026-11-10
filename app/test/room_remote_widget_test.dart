@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
+import 'package:otakase/cast/cast.dart';
 import 'package:otakase/core.dart';
 import 'package:otakase/data/auth.dart';
 import 'package:otakase/data/catalog.dart';
@@ -108,6 +110,19 @@ Future<AppServices> services({FakeLan? lan}) async {
   await s.discord.initialize(background: false);
   await s.tvRemote.initialize();
   return s;
+}
+
+class FakeFirewall implements RemoteFirewall {
+  FakeFirewall({this.on = true});
+  final bool on;
+  int opened = 0;
+  @override
+  Future<bool> canAllow() async => on;
+  @override
+  Future<bool> allow() async {
+    opened++;
+    return true;
+  }
 }
 
 Widget page(Widget home, {bool tv = false}) => AppLayout(
@@ -283,6 +298,39 @@ void main() {
       expect(find.text('Hidden title'), findsNothing);
       expect(find.text('Playing on TV'), findsOneWidget);
       expect(find.text('Pick episode'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await active.close();
+    },
+  );
+
+  testWidgets(
+    'a computer behind a firewall offers to let the phone remote in',
+    (tester) async {
+      await fixture.launch(tester);
+      await tester.pumpWidget(const SizedBox());
+      final active = await services();
+      final firewall = FakeFirewall();
+      await tester.pumpWidget(
+        page(
+          TVRemotePage(services: active, isTV: true, firewall: firewall),
+          tv: true,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      if (!Platform.isLinux && !Platform.isWindows) {
+        expect(find.byKey(const Key('tv-remote-allow')), findsNothing);
+      } else {
+        await tester.ensureVisible(find.byKey(const Key('tv-remote-allow')));
+        await tester.tap(find.byKey(const Key('tv-remote-allow')));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(firewall.opened, 1);
+        expect(
+          find.text(
+            'Phones can reach this computer now. Pair again on the phone.',
+          ),
+          findsOneWidget,
+        );
+      }
       await tester.pumpWidget(const SizedBox());
       await active.close();
     },

@@ -56,7 +56,9 @@ ten minutes, with the TV's address under it. On the phone, More > Control TV
 finds TVs on the same network; scan the QR code with the phone camera, pick
 the TV, or tap Enter code and type the code. If the phone finds nothing, also
 type the address shown under the code. A computer works the same way from
-More > Phone remote; if its firewall is on, allow port 8654 (TCP and UDP).
+More > Phone remote. If its firewall is on (Linux or Windows), that page
+shows **Allow phone remote**: tap it and enter your password once. Otherwise
+allow port 8654 (TCP and UDP) yourself.
 Pair once, then control play, pause, ten-second seeks, the next episode,
 episode choice and volume. Pairings belong to each profile; forget a TV on the
 phone, or every paired phone on the TV.
