@@ -1,7 +1,7 @@
 name: Site
 
-# Publishes site/ to Cloudflare Pages (project "otakase", which serves
-# otakase.xyverion.com) and to GitHub Pages. Cloudflare keeps serving the last
+# Publishes site/ to Cloudflare (the "otakase" Worker, which serves
+# otakase.xyverion.com through its static assets) and to GitHub Pages. Cloudflare keeps serving the last
 # deploy even if the repository goes away. The Cloudflare step needs the
 # CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets and is skipped while
 # they are missing. GitHub Pages must be set to deploy from "GitHub Actions"
@@ -91,13 +91,17 @@ jobs:
         run: sed -i "s/?v=dev/?v=${GITHUB_SHA::7}/g" site/index.html site/try/index.html site/help/*.html site/changelog/index.html
 
       # Cloudflare first, so a slow GitHub Pages deploy cannot hold it up.
-      - name: Publish to Cloudflare Pages
+      # Assets only, no script. The otakase.xyverion.com/* route is set in the
+      # Cloudflare dashboard, and the /download and /app-login Workers keep
+      # their own, more specific routes.
+      - name: Publish to Cloudflare
         if: env.CLOUDFLARE_READY == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy site --project-name=otakase --branch=main --commit-hash=${{ github.sha }} --commit-dirty=true
+          wranglerVersion: "4"
+          command: deploy --name otakase --assets site --compatibility-date 2026-11-01
 
       - uses: actions/upload-pages-artifact@v4
         with:
