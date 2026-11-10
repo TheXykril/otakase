@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otakase/data/lan_page.dart';
@@ -47,6 +48,36 @@ void main() {
       });
       expect(parseTVAdvertisement(raw, '192.168.1.8')!.id, 'tv-1');
       expect(parseTVAdvertisement(raw, '8.8.8.8'), null);
+    },
+  );
+  test(
+    'a TV that never answers explains the firewall, not the socket',
+    () async {
+      final closed = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final port = closed.port;
+      await closed.close();
+      final remote = TVRemote(
+        storage: MemoryTokens(),
+        transport: const LanTransport(allowLoopback: true),
+      );
+      await expectLater(
+        remote.pair(
+          TVDevice(id: 'tv-1', name: 'TV', host: '127.0.0.1', port: port),
+          '012345',
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            allOf(
+              contains('Could not reach 127.0.0.1'),
+              contains('Allow phone remote'),
+              isNot(contains('SocketException')),
+            ),
+          ),
+        ),
+      );
+      await remote.close();
     },
   );
   test(

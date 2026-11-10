@@ -68,6 +68,13 @@ class RemotePairCode {
   }
 }
 
+/// What the phone shows when the TV or computer at [host] never answered:
+/// almost always a firewall on a computer, or the two on different networks.
+String unreachableTVMessage(String host, int port) =>
+    'Could not reach $host. If it is a computer, open More > Phone remote '
+    'there and tap Allow phone remote, or allow port $port (TCP and UDP) in '
+    'its firewall. Check that both are on the same Wi-Fi.';
+
 class LanTransport {
   const LanTransport({this.allowLoopback = false});
   final bool allowLoopback;
@@ -87,11 +94,12 @@ class LanTransport {
       throw StateError('Choose a TV on your local network.');
     }
     // LAN requests use a direct socket, with neither proxies nor redirects.
-    final socket = await Socket.connect(
-      tv.host,
-      tv.port,
-      timeout: connectTimeout,
-    );
+    final Socket socket;
+    try {
+      socket = await Socket.connect(tv.host, tv.port, timeout: connectTimeout);
+    } on SocketException {
+      throw StateError(unreachableTVMessage(tv.host, tv.port));
+    }
     try {
       final payload = utf8.encode(jsonEncode(body));
       socket.add(

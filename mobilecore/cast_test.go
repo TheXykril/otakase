@@ -135,3 +135,17 @@ func TestSubtitlesToVTT(t *testing.T) {
 		t.Fatal("extension")
 	}
 }
+
+func TestCastFirewallSaysWhetherItCanOpen(t *testing.T) {
+	c := NewCore()
+	defer c.Close()
+	firewall := cast.Firewall
+	defer func() { cast.Firewall = firewall }()
+	for name, want := range map[string]bool{"ufw": true, "": false} {
+		cast.Firewall = func() string { return name }
+		out := run(t, c, `{"version":1,"operation":"cast_firewall"}`)
+		if got := out["data"].(map[string]any)["can_allow"]; got != want {
+			t.Fatalf("firewall %q: can_allow %v", name, got)
+		}
+	}
+}

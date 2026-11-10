@@ -162,10 +162,39 @@ class CastClient {
     }
   }
 
+  /// Whether this computer has a firewall the app can open.
+  Future<bool> canAllow() async {
+    try {
+      final data = await core.request({
+        'operation': 'cast_firewall',
+      }, timeout: const Duration(seconds: 12));
+      return data['can_allow'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> control(String action, [double value = 0]) => core.request({
     'operation': 'cast_control',
     'cast': {'action': action, 'value': value},
   }, timeout: const Duration(seconds: 12));
+}
+
+/// This computer's firewall, as the phone remote page needs it.
+abstract interface class RemoteFirewall {
+  Future<bool> canAllow();
+  Future<bool> allow();
+}
+
+/// [RemoteFirewall] through the core, which opens the cast and remote ports
+/// together behind one password prompt.
+class CoreFirewall implements RemoteFirewall {
+  const CoreFirewall(this.client);
+  final CastClient client;
+  @override
+  Future<bool> canAllow() => client.canAllow();
+  @override
+  Future<bool> allow() => client.allow();
 }
 
 /// Lists the devices on the network and returns the one picked.
