@@ -12,6 +12,9 @@
   instead of showing a raw connection error.
 - **Empty screens are centred.** Downloads and other empty pages show
   their message in the middle instead of stuck in the top-left corner.
+- **The player's shading now reaches under the camera cutout,** so the
+  darkened top and bottom bars run edge to edge with the video. Buttons and
+  text still keep clear of the camera.
 - **A dropped stream says Reconnecting again** while the player brings it
   back, instead of starting over with "Finding a copy".
 - **Movies and shows no longer name the source** while a copy is being
