@@ -202,6 +202,7 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
   late final resumePusher = widget.services.tracking.pusher();
   late final Future<void> Function(String, Json) commandHandler = control;
   late final Json Function() statusHandler = remoteStatus;
+  late final Future<void> Function() stopHandler = stopForQuit;
   RequestScope scope = RequestScope();
   PlaybackSource? source;
   Process? process;
@@ -225,6 +226,7 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
     widget.services.tracking.remember(anime);
     widget.services.playerCommand = commandHandler;
     widget.services.playerStatus = statusHandler;
+    widget.services.stopPlayback = stopHandler;
     saveTimer = Timer.periodic(
       const Duration(seconds: 5),
       (_) => unawaited(save()),
@@ -242,6 +244,9 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
     }
     if (identical(widget.services.playerStatus, statusHandler)) {
       widget.services.playerStatus = null;
+    }
+    if (identical(widget.services.stopPlayback, stopHandler)) {
+      widget.services.stopPlayback = null;
     }
     unawaited(save(leaving: true).then((_) => resumePusher.flush()));
     unawaited(widget.services.discord.stopWatching());
@@ -574,6 +579,24 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
       resumePusher.note(anime.key, episode, s.position.floor());
     }
     await persist;
+  }
+
+  /// The app quits or switches profile: save where mpv is, close it and
+  /// stop the helper's stream, so no mpv window outlives the app.
+  Future<void> stopForQuit() async {
+    generation++;
+    scope.cancel();
+    saveTimer?.cancel();
+    final running = process;
+    process = null;
+    await save(leaving: true);
+    await resumePusher.flush().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {},
+    );
+    await widget.services.discord.stopWatching();
+    running?.kill();
+    await widget.services.core.stopPlayback();
   }
 
   bool get canNext => anime.airedEpisodes > episode || anime.airedEpisodes == 0;
