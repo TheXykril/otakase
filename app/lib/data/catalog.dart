@@ -171,9 +171,17 @@ class Catalog {
     int? year,
     String? genre,
     String? status,
+    String? sort,
   }) async {
+    final order = switch (sort) {
+      'POPULAR' => 'POPULARITY_DESC',
+      'TRENDING' => 'TRENDING_DESC',
+      'SCORE' => 'SCORE_DESC',
+      'NEWEST' => 'START_DATE_DESC',
+      _ => query.trim().isEmpty ? 'POPULARITY_DESC' : 'SEARCH_MATCH',
+    };
     final data = await graph(
-      '''query(\$q:String,\$adult:Boolean,\$page:Int,\$format:MediaFormat,\$season:MediaSeason,\$year:Int,\$genre:String,\$status:MediaStatus){Page(page:\$page,perPage:30){pageInfo{hasNextPage}media(search:\$q,type:ANIME,isAdult:\$adult,format:\$format,season:\$season,seasonYear:\$year,genre:\$genre,status:\$status,sort:${query.trim().isEmpty ? 'POPULARITY_DESC' : 'SEARCH_MATCH'}){$mediaFields}}}''',
+      '''query(\$q:String,\$adult:Boolean,\$page:Int,\$format:MediaFormat,\$season:MediaSeason,\$year:Int,\$genre:String,\$status:MediaStatus){Page(page:\$page,perPage:30){pageInfo{hasNextPage}media(search:\$q,type:ANIME,isAdult:\$adult,format:\$format,season:\$season,seasonYear:\$year,genre:\$genre,status:\$status,sort:$order){$mediaFields}}}''',
       {
         'q': query.trim().isEmpty ? null : query.trim(),
         'adult': adult ? null : false,

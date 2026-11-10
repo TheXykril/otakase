@@ -11,6 +11,8 @@ import '../data/store.dart';
 import '../data/trakt.dart';
 import '../desktop/desktop_core.dart';
 import '../services.dart';
+import 'catalog_pages.dart'
+    show ActiveFilters, FilterButton, SearchFilters, showSearchFilters;
 import 'components.dart';
 import 'downloads_page.dart';
 import '../data/play_request.dart';
@@ -420,6 +422,10 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
   List<MediaTitle> results = [];
   bool loading = false;
   int generation = 0;
+  SearchFilters filters = const SearchFilters();
+
+  /// Whether anything is asked: a title, or filters to browse by.
+  bool get asked => query.isNotEmpty || filters.count > 0;
 
   @override
   void dispose() {
@@ -438,7 +444,7 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
     if (q == query && !retry && (loading || error.isEmpty)) return;
     query = q;
     final g = ++generation;
-    if (q.isEmpty) {
+    if (!asked) {
       setState(() {
         results = [];
         loading = false;
@@ -452,7 +458,16 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
       results = [];
     });
     try {
-      final found = await widget.services.trakt.search(q);
+      final f = filters;
+      final found = await findTitles(
+        widget.services.trakt,
+        q,
+        format: f.format,
+        year: f.year,
+        genre: f.genre,
+        status: f.status,
+        sort: f.sort,
+      );
       if (mounted && g == generation) setState(() => results = found);
     } catch (_) {
       if (mounted && g == generation) {
@@ -463,6 +478,24 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
     } finally {
       if (mounted && g == generation) setState(() => loading = false);
     }
+  }
+
+  Future<void> apply(SearchFilters next) async {
+    setState(() => filters = next);
+    await search(controller.text, retry: true);
+  }
+
+  Future<void> openFilters() async {
+    final result = await showSearchFilters(
+      context,
+      initial: filters,
+      genres: traktGenreNames,
+      isTV: widget.isTV,
+      titles: true,
+      // TV applies each choice at once; phones confirm with Apply filters.
+      onChanged: widget.isTV ? apply : null,
+    );
+    if (result != null && mounted) await apply(result);
   }
 
   @override
@@ -485,22 +518,43 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
       child: ListView(
         padding: EdgeInsets.fromLTRB(pad, 12, pad, contentBottom(context)),
         children: [
-          RemoteTextInput(
-            isTV: widget.isTV,
-            builder: (focus) => TextField(
-              key: const Key('movie-search-field'),
-              focusNode: widget.fieldFocus ?? focus,
-              autofocus: widget.autofocus,
-              controller: controller,
-              textInputAction: TextInputAction.search,
-              decoration: const InputDecoration(
-                hintText: 'Search movies and shows',
-                prefixIcon: Icon(LucideIcons.search),
-              ),
-              onChanged: changed,
-              onSubmitted: search,
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: RemoteTextInput(
+                    isTV: widget.isTV,
+                    builder: (focus) => TextField(
+                      key: const Key('movie-search-field'),
+                      focusNode: widget.fieldFocus ?? focus,
+                      autofocus: widget.autofocus,
+                      controller: controller,
+                      textInputAction: TextInputAction.search,
+                      decoration: const InputDecoration(
+                        hintText: 'Search movies and shows',
+                        prefixIcon: Icon(LucideIcons.search),
+                      ),
+                      onChanged: changed,
+                      onSubmitted: search,
+                    ),
+                  ),
+                ),
+                SizedBox(width: widget.isTV ? 14 : 10),
+                FilterButton(
+                  count: filters.count,
+                  isTV: widget.isTV,
+                  onPressed: openFilters,
+                ),
+              ],
             ),
           ),
+          if (isDesktop)
+            ActiveFilters(
+              filters: filters,
+              titles: true,
+              onChanged: (next) => unawaited(apply(next)),
+            ),
           const SizedBox(height: 20),
           if (loading) ...[
             const LinearProgressIndicator(color: shu),
@@ -519,15 +573,24 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
               onRetry: () => search(query, retry: true),
               isTV: widget.isTV,
             ),
-          if (!loading && error.isEmpty && query.isNotEmpty && results.isEmpty)
-            const EmptyState(
-              message: 'No matching movies or shows.',
-              action: Text('Try a different title or spelling.'),
-            ),
-          if (!loading && error.isEmpty && query.isEmpty)
+          if (!loading && error.isEmpty && asked && results.isEmpty)
+            filters.count == 0
+                ? const EmptyState(
+                    message: 'No matching movies or shows.',
+                    action: Text('Try a different title or spelling.'),
+                  )
+                : EmptyState(
+                    message: 'No movies or shows match these filters.',
+                    action: AppButton(
+                      label: 'Clear filters',
+                      isTV: widget.isTV,
+                      onPressed: () => unawaited(apply(const SearchFilters())),
+                    ),
+                  ),
+          if (!loading && error.isEmpty && !asked)
             const EmptyState(
               message: 'Search for a movie or show.',
-              action: Text('Enter a title above to get started.'),
+              action: Text('Enter a title above, or pick filters to browse.'),
             ),
           Wrap(
             spacing: 12,
