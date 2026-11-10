@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../cast/cast.dart';
 import '../data/models.dart';
 import '../data/tv_remote.dart';
 import '../services.dart';
@@ -18,11 +19,15 @@ class TVRemotePage extends StatefulWidget {
     required this.isTV,
     this.pairCode,
     this.findTVs = discoverTVs,
+    this.firewall,
   });
   final AppServices services;
   final bool isTV;
   final RemotePairCode? pairCode;
   final Future<List<TVDevice>> Function() findTVs;
+
+  /// Asks and opens this computer's firewall; the core's by default.
+  final RemoteFirewall? firewall;
   @override
   State<TVRemotePage> createState() => _TVRemotePageState();
 }
@@ -33,13 +38,16 @@ class _TVRemotePageState extends State<TVRemotePage> {
   TVDevice? selected;
   Json status = {};
   Timer? timer;
-  String? error;
-  bool busy = false, polling = false;
+  String? error, firewallNote;
+  bool busy = false, polling = false, canAllow = false, allowing = false;
+  late final RemoteFirewall firewall =
+      widget.firewall ?? CoreFirewall(CastClient(widget.services.core));
   @override
   void initState() {
     super.initState();
     if (widget.isTV) {
       unawaited(newCode());
+      if (Host.linux || Host.windows) unawaited(checkFirewall());
       timer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() {});
       });
@@ -66,6 +74,28 @@ class _TVRemotePageState extends State<TVRemotePage> {
     } finally {
       if (mounted) setState(() => busy = false);
     }
+  }
+
+  Future<void> checkFirewall() async {
+    final open = await firewall.canAllow();
+    if (mounted) setState(() => canAllow = open);
+  }
+
+  /// Opens the remote's port behind the system's password prompt, so a
+  /// phone can reach this computer without anyone typing firewall rules.
+  Future<void> allowFirewall() async {
+    setState(() {
+      allowing = true;
+      firewallNote = null;
+    });
+    final opened = await firewall.allow();
+    if (!mounted) return;
+    setState(() {
+      allowing = false;
+      firewallNote = opened
+          ? 'Phones can reach this computer now. Pair again on the phone.'
+          : 'The firewall was not opened.';
+    });
   }
 
   Future<void> scan() async {
@@ -264,7 +294,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
                   textAlign: TextAlign.center,
                   style: uiStyle(context),
                 ),
-                if (Host.linux || Host.windows || Host.macOS)
+                if ((Host.linux || Host.windows || Host.macOS) && !canAllow)
                   Padding(
                     padding: const EdgeInsets.only(top: 12),
                     child: Text(
@@ -274,6 +304,32 @@ class _TVRemotePageState extends State<TVRemotePage> {
                     ),
                   ),
                 const SizedBox(height: 20),
+              ],
+              if (canAllow) ...[
+                Text(
+                  'Phone cannot reach this computer? Its firewall is on. Allow the phone remote through it once.',
+                  textAlign: TextAlign.center,
+                  style: uiStyle(context, color: muted),
+                ),
+                const SizedBox(height: 12),
+                AppButton(
+                  key: const Key('tv-remote-allow'),
+                  label: allowing
+                      ? 'Waiting for password…'
+                      : 'Allow phone remote',
+                  isTV: true,
+                  onPressed: allowing ? null : allowFirewall,
+                ),
+                if (firewallNote != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      firewallNote!,
+                      textAlign: TextAlign.center,
+                      style: uiStyle(context, color: muted),
+                    ),
+                  ),
+                const SizedBox(height: 12),
               ],
               AppButton(
                 label: code != null && left > 0
