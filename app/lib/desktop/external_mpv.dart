@@ -531,8 +531,17 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
     final s = last;
     return s != null &&
         (completionSaved ||
-            endReason == 'eof' && viewing.ended(s.at, s.total, spans));
+            endReason == 'eof' &&
+                copyLengthOk &&
+                viewing.ended(s.at, s.total, spans));
   }
+
+  /// A copy under a third of the show's usual episode length is a
+  /// placeholder clip, never a watched episode.
+  bool get copyLengthOk => copyLengthPlausible(
+    last?.total ?? Duration.zero,
+    anime.duration * 60 * 2 ~/ 3,
+  );
 
   Future<void> save({bool leaving = false}) async {
     final s = last;
@@ -541,7 +550,10 @@ class _ExternalPlayerPageState extends State<ExternalPlayerPage> {
         watched ||
         leaving &&
             endReason != 'error' &&
+            copyLengthOk &&
             viewing.credits(s.at, s.total, spans);
+    // Closing mpv before playback moved must not wipe the saved spot.
+    if (!done && s.position <= 0) return;
     final newlyWatched = done && !completionSaved;
     if (newlyWatched) completionSaved = true;
     final persist = widget.services.store.progress(

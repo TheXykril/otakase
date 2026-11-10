@@ -234,8 +234,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           (state == AppLifecycleState.hidden ||
               state == AppLifecycleState.paused);
       unawaited(save(leaving: leaving).then((_) => resumePusher.flush()));
-      // A cast plays on with this screen off.
-      if (!casting) unawaited(pausePlayback());
+      // A cast plays on with this screen off. A computer window that only
+      // lost focus (inactive) or was minimised keeps playing, as films do;
+      // a phone or TV leaving the app pauses.
+      if (!casting && !isDesktop && leaving) unawaited(pausePlayback());
     }
   }
 
@@ -868,15 +870,28 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
   }
 
+  /// Whether this copy is about as long as the show's episodes; a short
+  /// placeholder clip played to its end is no watched episode.
+  /// Episode lengths vary more than film lengths, so only a copy under a
+  /// third of the usual length counts as cut short.
+  bool get copyLengthOk =>
+      copyLengthPlausible(duration, anime.duration * 60 * 2 ~/ 3);
+
   void playbackEnded() {
     if (!mounted || profileStopped || busy || finished) return;
-    if (!reachedEpisodeEnd(playbackPosition, duration) &&
-        !viewing.endingSkip(playbackPosition, duration, spans)) {
+    if (!copyLengthOk ||
+        !reachedEpisodeEnd(playbackPosition, duration) &&
+            !viewing.endingSkip(playbackPosition, duration, spans)) {
       if (casting) {
         setState(() {
           error = 'The cast stopped before the end of the episode.';
           overlay = true;
         });
+      } else if (!copyLengthOk) {
+        // A placeholder clip: the next copy starts the episode afresh.
+        playbackPosition = Duration.zero;
+        savedResume = 0;
+        unawaited(recoverPlayback('This copy is far shorter than the episode'));
       } else {
         unawaited(recoverPlayback('Stream ended early'));
       }
@@ -966,6 +981,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         (leaving &&
             !retrying &&
             error.isEmpty &&
+            copyLengthOk &&
             viewing.credits(at, duration, spans));
     final newlyWatched = watched && completedEpisodes.add(episode);
     final persist = widget.services.store.progress(

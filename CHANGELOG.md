@@ -4,6 +4,25 @@
 
 ### Fixed
 
+- **Leaving a film right as it starts keeps your spot.** Backing out while
+  it was still loading reset where you were to the start, here and on Trakt.
+- **Skipping to the end no longer marks a film or episode watched.** Only
+  watching it through counts, like anime.
+- **Films finished during the credits stay finished on Trakt** and no longer
+  come back to Continue watching.
+- **Try another copy and quality changes keep your place,** audio and
+  subtitles in films.
+- **The phone remote and Discord controls work for films and shows,** and
+  so do the Play, Pause, Stop, Rewind, Fast forward and Next buttons on TV
+  remotes.
+- **Series wait 10 seconds before the next episode** with Play next and
+  Cancel, or ask first when the next episode prompt is on.
+- **Downloads count as watched.** Episodes and films played from Downloads
+  now update AniList, MyAnimeList, Trakt and Continue watching (new downloads).
+- **A short placeholder clip no longer marks an anime episode watched;** the
+  next copy is tried instead.
+- **Anime keeps playing on a computer when the window loses focus,** like
+  films.
 - **Casting works behind a firewall.** The computer now sends casts from a
   fixed port instead of a random one a firewall blocks, so the TV no longer
   sits on loading. If the TV still cannot reach the computer, the stream goes

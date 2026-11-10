@@ -10,6 +10,12 @@ bool reachedEpisodeEnd(Duration position, Duration duration) {
   return position.inMilliseconds >= duration.inMilliseconds - tolerance;
 }
 
+/// Whether a copy reporting [duration] is about as long as an episode that
+/// usually runs [expectedSeconds] (0 when unknown). A copy under half of it is
+/// cut short or a placeholder clip, and never counts as watched.
+bool copyLengthPlausible(Duration duration, int expectedSeconds) =>
+    expectedSeconds <= 0 || duration.inSeconds * 2 >= expectedSeconds;
+
 /// Keeps viewing evidence separate from the playhead used to resume.
 class EpisodeViewing {
   int _through = 0, _last = 0, _length = 0, _sampleAt = 0;
@@ -31,6 +37,14 @@ class EpisodeViewing {
       }
     }
   }
+
+  /// Whether playback was followed without big jumps up to [position], with
+  /// [slack] of leeway for small gaps.
+  bool watchedUpTo(
+    Duration position, {
+    Duration slack = const Duration(minutes: 2),
+  }) =>
+      _length > 0 && _through + slack.inMilliseconds >= position.inMilliseconds;
 
   List<int>? get checkpoint => _length == 0
       ? null
