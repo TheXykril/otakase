@@ -48,3 +48,4 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/site.yml
+    secrets: inherit
