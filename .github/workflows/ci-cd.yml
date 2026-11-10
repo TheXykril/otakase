@@ -145,4 +145,8 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/site.yml
+    # A release ships app changes, so the screens and the Try demo are
+    # rebuilt too.
+    with:
+      full: true
     secrets: inherit
