@@ -12,6 +12,10 @@
   instead of showing a raw connection error.
 - **Empty screens are centred.** Downloads and other empty pages show
   their message in the middle instead of stuck in the top-left corner.
+- **A dropped stream says Reconnecting again** while the player brings it
+  back, instead of starting over with "Finding a copy".
+- **Movies and shows no longer name the source** while a copy is being
+  found, the same as anime.
 
 ## 26.3.0 - 2026-11-10
 

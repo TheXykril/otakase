@@ -201,12 +201,16 @@ void main() {
         ),
       );
       final movies = MovieService(trakt: trakt, core: core, store: store);
+      final steps = <String>[];
       final p = await movies.resolve(
         film,
         scope: RequestScope(),
-        status: (_) {},
+        status: steps.add,
         skip: {'vidsrc:server 1', '8filmai:server 2'},
       );
+      // The loading screen never names a source.
+      expect(steps, isNotEmpty);
+      expect(steps.toSet(), {'Finding a copy'});
       expect(p.source.name, 'vidsrc');
       expect(p.stream.url, 'https://cdn.example/vidsrc.m3u8');
       expect(p.server, 'server 3');
