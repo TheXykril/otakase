@@ -21,6 +21,9 @@
 
 ### Fixed
 
+- **Closing the app while something plays no longer crashes it.** Super+W,
+  Alt+F4, Cmd+Q, the task bar or logging out now save your spot, stop the
+  player, casting and any external mpv window, then quit cleanly.
 - **Leaving a film right as it starts keeps your spot.** Backing out while
   it was still loading reset where you were to the start, here and on Trakt.
 - **Skipping to the end no longer marks a film or episode watched.** Only

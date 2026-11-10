@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -352,13 +353,77 @@ Future<void> Function()? desktopCloseHook;
 /// the player's video texture is still alive. Callers save their state first
 /// (see [quitDesktopApp]).
 Future<void> closeDesktopWindow() async {
-  await windowManager.hide();
+  await hideDesktopWindow();
   exit(0);
 }
 
+/// Hides the window so a close feels instant while playback is saved.
+Future<void> hideDesktopWindow() async {
+  try {
+    await windowManager.hide().timeout(const Duration(seconds: 1));
+  } catch (_) {
+    // Quitting matters more than hiding first.
+  }
+}
+
+Future<void>? _quitting;
+
 /// Saves and stops everything through [desktopCloseHook], then closes.
-Future<void> quitDesktopApp() async =>
-    await (desktopCloseHook ?? closeDesktopWindow)();
+/// Every way of quitting lands here: the close button, the window manager
+/// (Super+W, Alt+F4, the task bar), Cmd+Q and termination signals. A second
+/// request while the first one saves joins it. If saving hangs or fails the
+/// app still exits.
+Future<void> quitDesktopApp() => _quitting ??= _quit();
+
+Future<void> _quit() async {
+  try {
+    await (desktopCloseHook ?? closeDesktopWindow)().timeout(
+      const Duration(seconds: 10),
+    );
+  } catch (_) {
+    await closeDesktopWindow();
+  }
+  // The hook returned without closing (another quit was already under way):
+  // let a later request try again.
+  _quitting = null;
+}
+
+/// Routes window close requests and termination signals through
+/// [quitDesktopApp], so playback is saved and the player stopped before the
+/// process ends. Without this the window manager destroys the window while
+/// the video still plays and the app crashes on the way out.
+Future<void> watchDesktopQuit() async {
+  if (!isDesktop || _quitWatcher != null) return;
+  final watcher = _quitWatcher = _DesktopQuitWatcher();
+  windowManager.addListener(watcher);
+  await windowManager.setPreventClose(true);
+  watcher.lifecycle = AppLifecycleListener(
+    onExitRequested: () async {
+      unawaited(quitDesktopApp());
+      return AppExitResponse.cancel;
+    },
+  );
+  final signals = [
+    ProcessSignal.sigint,
+    if (!Host.windows) ...[ProcessSignal.sigterm, ProcessSignal.sighup],
+  ];
+  for (final signal in signals) {
+    try {
+      signal.watch().listen((_) => unawaited(quitDesktopApp()));
+    } on SignalException {
+      // Not every signal can be watched on every system.
+    }
+  }
+}
+
+_DesktopQuitWatcher? _quitWatcher;
+
+class _DesktopQuitWatcher with WindowListener {
+  AppLifecycleListener? lifecycle;
+
+  @override
+  void onWindowClose() => unawaited(quitDesktopApp());
+}
 
 /// Wraps every desktop route: Esc goes back one page, and a thin strip
 /// along the top edge moves the window on pages whose header is not a

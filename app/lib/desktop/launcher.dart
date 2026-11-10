@@ -366,6 +366,10 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
 
   bool _quitting = false;
 
+  /// The close button or the window manager asked to close: quit even while
+  /// a player runs, which saves and stops it first.
+  Future<void> closeRequested() => quit(fromPlayer: true);
+
   /// True while a player runs from the launcher.
   bool playing = false;
 
@@ -409,7 +413,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
     super.initState();
     if (isDesktop) windowManager.addListener(this);
     FocusManager.instance.addEarlyKeyEventHandler(_escape);
-    desktopCloseHook = quit;
+    desktopCloseHook = closeRequested;
     menus.add(mainMenu());
     query.addListener(() => setState(() => selected = 0));
     unawaited(loadLists());
@@ -419,7 +423,7 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
   void dispose() {
     if (isDesktop) windowManager.removeListener(this);
     FocusManager.instance.removeEarlyKeyEventHandler(_escape);
-    if (desktopCloseHook == quit) desktopCloseHook = null;
+    if (desktopCloseHook == closeRequested) desktopCloseHook = null;
     query.dispose();
     input.dispose();
     scroll.dispose();

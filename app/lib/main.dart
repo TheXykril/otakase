@@ -66,6 +66,7 @@ Future<void> main([List<String> args = const []]) async {
       );
       await showDesktopWindow();
     }
+    await watchDesktopQuit();
   }
   final core = CoreClient();
   final androidTV = !isDesktop && await core.isTV();

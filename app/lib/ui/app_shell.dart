@@ -411,6 +411,7 @@ class _AppShellState extends State<AppShell> {
   /// the answer.
   /// Saves playback, signs out of Discord presence and closes the window.
   Future<void> closeWindow() async {
+    await hideDesktopWindow();
     await widget.services.close().timeout(
       const Duration(seconds: 5),
       onTimeout: () {},
