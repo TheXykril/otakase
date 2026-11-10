@@ -35,6 +35,14 @@ type castRequest struct {
 	// position in seconds), volume (Value is 0..1) or stop.
 	Action string  `json:"action"`
 	Value  float64 `json:"value"`
+	// Interface names the Wi-Fi interface cast_devices searches on, for
+	// Android, which hides the interface list from apps.
+	Interface *castInterface `json:"interface"`
+}
+
+type castInterface struct {
+	Name  string `json:"name"`
+	Index int    `json:"index"`
 }
 
 type castDevice struct {
@@ -58,6 +66,18 @@ const (
 // castStatusGone is how long a device may fail to answer before the cast
 // counts as lost.
 const castStatusGone = 20 * time.Second
+
+// castNoFetchGrace is how long a device that took the load may go without
+// asking this machine for the stream before it counts as blocked.
+var castNoFetchGrace = 15 * time.Second
+
+// castIdleGrace is how long after a load a device going back to idle is
+// still read as it settling, not as it giving up on the stream.
+var castIdleGrace = 20 * time.Second
+
+// castBlockedMessage is the error for a device that never reached this
+// machine.
+const castBlockedMessage = "The device could not reach this computer. A firewall is probably blocking it."
 
 // caster owns the devices found and the one cast running.
 type caster struct {
@@ -116,6 +136,16 @@ type castSession struct {
 	link     string
 	lastOK   time.Time
 	subsVTT  string
+	// playedAt is when the device was handed the current stream; fetchCheck
+	// says whether a device that never fetched it is still to be looked for.
+	playedAt   time.Time
+	fetchCheck bool
+	// direct is set once the stream went to the device straight from the
+	// source because it could not reach this machine.
+	direct bool
+	// blocked is set when the device could not reach this machine;
+	// canAllow when this computer has a firewall the app can open.
+	blocked, canAllow bool
 }
 
 func (c *Core) castOperation(ctx context.Context, req request) string {
@@ -141,6 +171,9 @@ func (c *Core) castOperation(ctx context.Context, req request) string {
 		data = c.caster.status()
 	case "cast_control":
 		data, err = c.caster.control(in)
+	case "cast_allow":
+		err = cast.AllowThroughFirewall(ctx)
+		data = map[string]any{"ok": err == nil}
 	case "cast_log":
 		castLog.Lock()
 		data = map[string]any{"lines": append([]string{}, castLog.lines...)}
@@ -180,6 +213,9 @@ func castDeviceID(d cast.Device) string {
 }
 
 func (k *caster) discover(ctx context.Context, in castRequest) (any, error) {
+	if in.Interface != nil {
+		cast.SetDiscoveryInterface(in.Interface.Name, in.Interface.Index)
+	}
 	timeout := time.Duration(in.Timeout * float64(time.Second))
 	if timeout <= 0 || timeout > 15*time.Second {
 		timeout = cast.DefaultDiscoveryTimeout
@@ -260,6 +296,7 @@ func (k *caster) start(c *Core, in castRequest) (any, error) {
 	s.req = in
 	s.state, s.err, s.note = "connecting", "", ""
 	s.seen, s.paused, s.position = false, false, in.Start
+	s.fetchCheck, s.direct, s.blocked = false, false, false
 	s.duration = in.Duration
 	s.lastOK = time.Now()
 	s.mu.Unlock()
@@ -428,6 +465,8 @@ func (s *castSession) play(c *Core, load int, req castRequest, start float64) er
 			s.mode, s.offset, s.pending, s.note = mode, offset, pending, note
 			s.subsVTT = subtitles
 			s.lastOK = time.Now()
+			s.playedAt = time.Now()
+			s.fetchCheck = !relay.Fetched()
 		}
 		s.mu.Unlock()
 		return nil
@@ -443,7 +482,13 @@ func (s *castSession) ensureRelay(c *Core) (*cast.Relay, error) {
 	}
 	// No overall timeout: a whole file is read for as long as it plays.
 	client := &http.Client{Transport: c.transport}
-	relay, err := cast.NewRelay(client, 0)
+	// The fixed port is the one a firewall rule can allow; another app
+	// holding it still leaves a cast that works wherever nothing blocks it.
+	relay, err := cast.NewRelay(client, cast.DefaultStreamPort)
+	if err != nil {
+		cast.Log("cast: stream port busy, using a random one: " + err.Error())
+		relay, err = cast.NewRelay(client, 0)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +549,11 @@ func (s *castSession) playFFmpeg(c *Core, load int, req castRequest, start float
 	}
 	s.mu.Lock()
 	if s.server == nil {
-		server, err := cast.NewServer(dir)
+		server, err := cast.NewServerOnPort(dir, cast.DefaultRebuildPort)
+		if err != nil {
+			cast.Log("cast: rebuild port busy, using a random one: " + err.Error())
+			server, err = cast.NewServer(dir)
+		}
 		if err != nil {
 			s.mu.Unlock()
 			return err
@@ -526,6 +575,8 @@ func (s *castSession) playFFmpeg(c *Core, load int, req castRequest, start float
 	if s.load == load {
 		s.mode, s.offset, s.pending, s.note = castFFmpeg, start, -1, note
 		s.lastOK = time.Now()
+		s.playedAt = time.Now()
+		s.fetchCheck = !server.Fetched()
 	}
 	s.mu.Unlock()
 	return nil
@@ -664,6 +715,12 @@ func (k *caster) status() any {
 	if s.err != "" {
 		out["error"] = s.err
 	}
+	if s.blocked {
+		out["blocked"] = true
+		if s.canAllow {
+			out["can_allow"] = true
+		}
+	}
 	if s.link != "" {
 		out["link"] = s.link
 		out["viewers"] = cast.BrowserViewers()
@@ -696,9 +753,25 @@ func (s *castSession) poll() {
 	if p.Settling {
 		return
 	}
+	if !s.seen && s.fetchCheck {
+		if s.fetchedLocked() {
+			s.fetchCheck = false
+		} else if time.Since(s.playedAt) > castNoFetchGrace {
+			s.fetchCheck = false
+			s.unreachableLocked(load)
+			return
+		}
+	}
 	if p.Idle {
 		if s.seen {
 			s.state = "ended"
+		} else if s.gaveUpLocked() {
+			s.state = "error"
+			if s.blocked {
+				s.err = castBlockedMessage
+			} else {
+				s.err = "The device could not play this stream. Try another copy."
+			}
 		}
 		return
 	}
@@ -730,6 +803,94 @@ func (s *castSession) poll() {
 			}
 		}()
 	}
+}
+
+// fetchedLocked reports whether the device has asked this machine for the
+// current stream. Called with mu held.
+func (s *castSession) fetchedLocked() bool {
+	switch {
+	case s.mode == castFFmpeg && s.server != nil:
+		return s.server.Fetched()
+	case s.relay != nil:
+		return s.relay.Fetched()
+	}
+	return true
+}
+
+// gaveUpLocked reports whether a device back at idle without ever playing
+// has given up on the stream rather than still opening it. Only a
+// Chromecast says idle for that alone. Called with mu held.
+func (s *castSession) gaveUpLocked() bool {
+	kind := s.device.Kind
+	return (kind == "" || kind == cast.KindChromecast) && !s.fetchCheck &&
+		!s.playedAt.IsZero() && time.Since(s.playedAt) > castIdleGrace
+}
+
+// directOK reports whether req can go to the device straight from its
+// source: nothing on the way needs headers the device cannot send, or
+// subtitles this machine would serve.
+func directOK(kind cast.Kind, mode string, req castRequest) bool {
+	if kind == cast.KindBrowser || mode != castRelay || req.Subtitle != "" {
+		return false
+	}
+	for name := range req.Headers {
+		if !strings.EqualFold(name, "User-Agent") {
+			return false
+		}
+	}
+	return true
+}
+
+// unreachableLocked handles a device that took the load and never fetched
+// the stream: most often a firewall on this machine. It hands the device the
+// source itself when nothing needs this machine in between, and otherwise
+// reports the cast blocked. Called with mu held.
+func (s *castSession) unreachableLocked(load int) {
+	s.blocked = true
+	s.canAllow = cast.Firewall() != ""
+	cast.Log("cast: " + s.device.Name + " never fetched the stream from this computer")
+	kind := s.device.Kind
+	if kind == "" {
+		kind = cast.KindChromecast
+	}
+	if s.direct || !directOK(kind, s.mode, s.req) {
+		s.state, s.err = "error", castBlockedMessage
+		return
+	}
+	s.direct = true
+	s.playedAt = time.Now()
+	req, player, start := s.req, s.player, s.position
+	go func() {
+		s.op.Lock()
+		defer s.op.Unlock()
+		if s.stale(load) {
+			return
+		}
+		media := cast.Media{URL: req.URL, Title: req.Title, Start: start}
+		if req.HLS {
+			media.ContentType = cast.HLSContentType
+		} else {
+			media.ContentType = cast.VideoTypeFor(req.URL)
+		}
+		if kind == cast.KindDLNA || kind == cast.KindKodi {
+			media.Start = 0
+		}
+		cast.Log("cast: sending the stream straight from its source")
+		if err := player.PlayMedia(media); err != nil {
+			s.fail(load, err)
+			return
+		}
+		s.mu.Lock()
+		if s.load == load {
+			s.offset = 0
+			if kind == cast.KindDLNA || kind == cast.KindKodi {
+				s.pending = start
+			}
+			s.playedAt = time.Now()
+			s.lastOK = time.Now()
+		}
+		s.mu.Unlock()
+	}()
 }
 
 func (k *caster) control(in castRequest) (any, error) {

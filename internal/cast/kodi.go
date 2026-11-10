@@ -74,7 +74,7 @@ var kodiHTTP = &http.Client{Timeout: 10 * time.Second}
 // kodiBrowse lists the Kodi instances announcing themselves. A variable so
 // tests can stand in for multicast.
 var kodiBrowse = func(ctx context.Context) ([]Device, error) {
-	resolver, err := zeroconf.NewResolver(zeroconf.SelectIPTraffic(zeroconf.IPv4))
+	resolver, err := zeroconf.NewResolver(zeroconfOptions()...)
 	if err != nil {
 		return nil, fmt.Errorf("cast: Kodi discovery: %w", err)
 	}

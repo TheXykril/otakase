@@ -165,4 +165,60 @@ void main() {
     await tester.tap(find.byKey(const Key('cast-stop')));
     expect(stopped, isTrue);
   });
+
+  testWidgets('panel offers to open the firewall when the TV was blocked', (
+    tester,
+  ) async {
+    final status = CastStatus.fromJson({
+      'active': true,
+      'device': 'Office TV',
+      'state': 'error',
+      'error': 'The device could not reach this computer.',
+      'blocked': true,
+      'can_allow': true,
+    });
+    var allowed = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CastPanel(
+            status: status,
+            deviceName: 'Office TV',
+            onStop: () {},
+            onAllow: () => allowed = true,
+          ),
+        ),
+      ),
+    );
+    expect(
+      find.text('The device could not reach this computer.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('cast-allow')));
+    expect(allowed, isTrue);
+  });
+
+  testWidgets('panel hides Allow casting without a firewall to open', (
+    tester,
+  ) async {
+    final status = CastStatus.fromJson({
+      'active': true,
+      'device': 'Office TV',
+      'state': 'error',
+      'blocked': true,
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CastPanel(
+            status: status,
+            deviceName: 'Office TV',
+            onStop: () {},
+            onAllow: () {},
+          ),
+        ),
+      ),
+    );
+    expect(find.byKey(const Key('cast-allow')), findsNothing);
+  });
 }
