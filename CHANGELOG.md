@@ -10,6 +10,8 @@
   opens the phone remote too.
 - **A phone that cannot reach the TV or computer says why** and what to do,
   instead of showing a raw connection error.
+- **Empty screens are centred.** Downloads and other empty pages show
+  their message in the middle instead of stuck in the top-left corner.
 
 ## 26.3.0 - 2026-11-10
 
