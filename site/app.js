@@ -257,6 +257,23 @@
   pick(os);
   const names = { android: 'Android', windows: 'Windows', macos: 'macOS', linux: 'Linux' };
   $('hero-dl').querySelector('span').textContent = 'Download for ' + names[os];
+  // Newest version, from the same answer the apps read for updates. Stays
+  // hidden if it does not come. "New" shows for a week after the release.
+  fetch(R + 'latest.json').then((r) => (r.ok ? r.json() : null)).then((rel) => {
+    const v = rel && /^v?(\d+\.\d+\.\d+)$/.exec(rel.tag_name || '');
+    if (!v) return;
+    const ver = v[1], log = '/changelog/#' + ver;
+    const at = Date.parse(rel.published_at || '');
+    const day = at ? new Date(at).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+    const dl = $('dl-ver');
+    dl.href = log;
+    dl.innerHTML = 'Version <u>' + ver + '</u>' + (day ? ' · ' + day : '') + ' · What\u2019s new';
+    dl.hidden = false;
+    const line = document.createElement('small');
+    line.textContent = 'Version ' + ver + (at && Date.now() - at < 7 * 864e5 ? ' · New' : '');
+    $('hero-dl').querySelector('span').append(line);
+    $('hero-dl').classList.add('two'); $('hero-try').classList.add('two');
+  }).catch(() => {});
   // Go to the downloads without writing #download into the address.
   $('hero-dl').addEventListener('click', (e) => {
     e.preventDefault();

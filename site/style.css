@@ -81,7 +81,7 @@ a{color:inherit;text-decoration:none}
 .facts li .ic{grid-row:span 2}
 .dlgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:48px;align-items:center}
 .dlgrid .panel{grid-template-columns:1fr}
-.dlgrid .panel .pill{justify-self:start}
+.dlgrid .panel .get{justify-self:start;align-items:flex-start}
 .show{display:flex;align-items:flex-end;justify-content:center;gap:28px}
 .mini{position:relative;flex:none;font-size:calc(var(--mw) / 100)}
 .mini.pc{--mw:420px;width:var(--mw)}
@@ -97,6 +97,9 @@ a{color:inherit;text-decoration:none}
 .hero p{font-size:clamp(16px,1.4vw,20px);max-width:620px;margin:0 auto 26px;text-wrap:balance}
 .hero .row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .hero p.mono{margin-top:18px;font-size:12px;margin-bottom:0}
+.hero .row .pill.two{height:58px}
+#hero-dl span{line-height:1.15}
+#hero-dl small{display:block;font:400 11px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;opacity:.75}
 
 .cap{position:absolute;left:max(6vw,24px);top:50%;width:min(36vw,480px);transform:translateY(-50%);visibility:hidden;opacity:0;will-change:transform,opacity;pointer-events:none}
 .cap.live{pointer-events:auto}
@@ -125,6 +128,11 @@ a{color:inherit;text-decoration:none}
 .panel{background:var(--panel);border:1px solid #2b241f;border-radius:22px;padding:30px;display:grid;grid-template-columns:1fr auto;gap:24px;align-items:center}
 .panel h3{font:700 24px var(--body);color:var(--bright);margin:0 0 8px}
 .panel p{color:var(--muted);margin:0;max-width:560px}
+.panel .get{display:flex;flex-direction:column;align-items:center;gap:12px}
+.ver{font:400 12px/1.4 var(--mono);letter-spacing:.06em;color:var(--muted)}
+.ver[hidden]{display:none}
+.ver:hover{color:var(--bright)}
+.ver u{text-decoration:none;color:var(--fg)}
 .panel code{font:14px var(--mono);color:var(--fg);background:var(--deep);padding:2px 6px;border-radius:6px}
 footer{margin-top:60px;padding-block:28px 50px;border-top:1px solid #2b241f;color:var(--muted);font-size:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 footer nav{display:flex;gap:18px}
