@@ -171,6 +171,10 @@ func (c *Core) castOperation(ctx context.Context, req request) string {
 		data = c.caster.status()
 	case "cast_control":
 		data, err = c.caster.control(in)
+	case "cast_firewall":
+		// Whether this computer has a firewall the app can open, asked
+		// before anything was blocked (the phone remote page offers it).
+		data = map[string]any{"can_allow": cast.Firewall() != ""}
 	case "cast_allow":
 		err = cast.AllowThroughFirewall(ctx)
 		data = map[string]any{"ok": err == nil}

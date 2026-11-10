@@ -73,3 +73,16 @@ func TestSetDiscoveryInterface(t *testing.T) {
 		t.Fatal("interface not cleared")
 	}
 }
+
+func TestFirewallPortsIncludePhoneRemote(t *testing.T) {
+	tcp, udp := false, false
+	for _, p := range FirewallPorts() {
+		if p.Port == RemotePort {
+			tcp = tcp || p.Proto == "tcp"
+			udp = udp || p.Proto == "udp"
+		}
+	}
+	if !tcp || !udp {
+		t.Fatalf("phone remote port %d not opened on both TCP and UDP", RemotePort)
+	}
+}

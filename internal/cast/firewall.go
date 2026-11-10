@@ -21,15 +21,20 @@ const DefaultStreamPort = 8010
 // the relay already holds DefaultStreamPort.
 const DefaultRebuildPort = 8013
 
+// RemotePort is where the app listens for a paired phone remote, on TCP for
+// its controls and UDP for the "find TVs" search. Opened with the cast ports,
+// so one password prompt lets both through.
+const RemotePort = 8654
+
 // FirewallPort is one port a cast needs open.
 type FirewallPort struct {
 	Port  int
 	Proto string
 }
 
-// FirewallPorts are the ports casting needs reachable from the LAN: the
-// stream, the rebuilt stream, the browser player page, the DLNA search
-// answers and mDNS.
+// FirewallPorts are the ports casting and the phone remote need reachable
+// from the LAN: the stream, the rebuilt stream, the browser player page, the
+// DLNA search answers, mDNS and the phone remote.
 func FirewallPorts() []FirewallPort {
 	return []FirewallPort{
 		{DefaultStreamPort, "tcp"},
@@ -37,6 +42,8 @@ func FirewallPorts() []FirewallPort {
 		{DefaultBrowserPort, "tcp"},
 		{currentDiscoveryPortOr(DefaultDiscoveryPort), "udp"},
 		{5353, "udp"},
+		{RemotePort, "tcp"},
+		{RemotePort, "udp"},
 	}
 }
 
