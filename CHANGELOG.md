@@ -15,6 +15,10 @@
 - **The player's shading now reaches under the camera cutout,** so the
   darkened top and bottom bars run edge to edge with the video. Buttons and
   text still keep clear of the camera.
+- **A dropped stream says Reconnecting again** while the player brings it
+  back, instead of starting over with "Finding a copy".
+- **Movies and shows no longer name the source** while a copy is being
+  found, the same as anime.
 
 ## 26.3.0 - 2026-11-10
 

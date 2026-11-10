@@ -615,7 +615,7 @@ class MovieService extends ChangeNotifier {
         );
     for (final source in order) {
       scope.check();
-      status('Finding a copy · ${source.label}');
+      status('Finding a copy');
       try {
         final matchKey =
             '${source.name}:${title.key}:${title.isShow ? season : 0}';

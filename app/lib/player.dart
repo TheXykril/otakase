@@ -164,7 +164,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       audioSelected = false;
   String status = 'Finding an episode', error = '';
   final failedSources = <String>{};
-  bool retrying = false, reopenedCopy = false;
+  bool retrying = false, reopenedCopy = false, streamDropped = false;
+
+  /// Shown instead of the search and loading steps while a dropped stream
+  /// comes back.
+  static const reconnecting = 'Reconnecting';
   List<SkipSpan> spans = [];
   List<int> episodes = [];
   List<int> availableQualities = [];
@@ -475,11 +479,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
   }
 
+  /// Shows [text] under the loading seal. While a dropped stream is being
+  /// brought back the screen keeps saying so instead of listing each step.
+  void showStatus(String text) {
+    if (!mounted) return;
+    setState(() => status = streamDropped ? reconnecting : text);
+  }
+
   /// Shows how much of a torrent copy has arrived while the player waits for
   /// its first frames.
   void watchLoading(int g) {
     loadingTimer?.cancel();
-    setState(() => status = 'Loading');
+    showStatus('Loading');
     loadingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (!mounted || g != generation || !busy) {
         timer.cancel();
@@ -488,7 +499,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       final p = await widget.services.core.torrentProgress();
       if (p == null || !mounted || g != generation || !busy) return;
       final mb = p.completed ~/ (1 << 20);
-      setState(() => status = mb > 0 ? 'Loading · $mb MB' : 'Loading');
+      showStatus(mb > 0 ? 'Loading · $mb MB' : 'Loading');
     });
   }
 
@@ -524,6 +535,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       overlay = true;
       duration = Duration.zero;
       position = Duration.zero;
+      if (streamDropped) {
+        status = reconnecting;
+      } else if (isTitle && (mirror == null || source == null)) {
+        status = 'Finding a copy';
+      }
     });
     skipped.clear();
     subSelected = false;
@@ -566,7 +582,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (isTitle && (mirror == null || source == null)) {
         await widget.services.core.stopPlayback();
         final found = await request!.open(failedSources, requestScope, (s) {
-          if (mounted && g == generation) setState(() => status = s);
+          if (g == generation) showStatus(s);
         });
         if (!mounted || g != generation) return;
         media = found;
@@ -587,7 +603,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           onlyProvider: onlyProvider,
           allowAudioFallback: onlyProvider == null,
           status: (s) {
-            if (mounted && g == generation) setState(() => status = s);
+            if (g == generation) showStatus(s);
           },
         );
       }
@@ -640,8 +656,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               episode,
               scope: requestScope,
               status: (_) {
-                if (mounted && g == generation) {
-                  setState(() => status = 'Finding a copy with subtitles');
+                if (g == generation) {
+                  showStatus('Finding a copy with subtitles');
                 }
               },
               exclude: {...failedSources, ...tried, ...torrentSources},
@@ -1264,6 +1280,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       return;
     }
     retrying = true;
+    // A copy that never started is still being found, not reconnected.
+    streamDropped =
+        duration > Duration.zero || playbackPosition > Duration.zero;
     final g = generation;
     final resume = playbackPosition == Duration.zero
         ? Duration(seconds: savedResume)
@@ -1289,6 +1308,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       await tryAnotherCopy(automatic: true, resumeFrom: resume);
     } finally {
       retrying = false;
+      streamDropped = false;
       if (mounted) {
         if (player.state.completed &&
             !finished &&
