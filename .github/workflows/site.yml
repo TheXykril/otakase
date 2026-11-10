@@ -11,12 +11,16 @@ name: Site
 # Actions tab.
 #
 # Two kinds of build:
-# - Quick (default): text only. Rebuilds the help pages, the changelog and
-#   the page files, and reuses the app screens and the Try demo from the
-#   last full build. Takes a minute or two.
-# - Full ("full" ticked): also renders the app screens and builds the Try
-#   demo from the app. Use it after app UI changes. Build and release always
-#   does a full build.
+# - Quick (default): everything that needs no Flutter. Rebuilds the help
+#   pages (wiki/), the changelog (CHANGELOG.md) and publishes the site's own
+#   files (pages, styles, scripts, images, the Try page around the demo,
+#   app-login, open, discord). Reuses the app screens and the Try demo from
+#   the last full build. The version and download line needs no build: the
+#   page reads it live from /download/latest.json.
+# - Full ("full" ticked): also renders the app screens (site/img/shots) and
+#   builds the Try demo (Flutter web + placeholder clip). Use it after app UI
+#   changes or new sample shows (app/test/fixtures/site). Build and release
+#   always does a full build.
 # A quick build turns into a full one when there is no earlier full build to
 # reuse (the saved parts are dropped after 7 days without a site build).
 on:
@@ -156,9 +160,11 @@ jobs:
             site/img/shots
           key: site-app-parts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # From the shows the screens were rendered with (the demo keeps a copy),
+      # so a quick build lists the reused screens, not newer sample shows.
       - name: List the screens
         run: |
-          ids=$(python3 -c "import json; print(', '.join(str(s['id']) for s in json.load(open('app/test/fixtures/site/shows.json'))))")
+          ids=$(python3 -c "import json; print(', '.join(str(s['id']) for s in json.load(open('site/demo/art/shows.json'))))")
           sed -i "s/const SHOTS = \[.*\];/const SHOTS = [$ids];/" site/app.js
           ls site/img/shots
 
