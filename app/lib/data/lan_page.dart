@@ -145,7 +145,7 @@ class LanPage {
         }
       } else if (r.method == 'GET') {
         body =
-            '<p>${htmlText(message)}</p>${textInput ? '<form method="post"><textarea name="text" rows="9" maxlength="$maxLength" autofocus>${htmlText(initial)}</textarea><button>Send to TV</button></form>' : '<a href="https://otakase.xyverion.com/discord/">Open the Otakase Discord</a>'}';
+            '<p>${htmlText(message)}</p>${textInput ? '<form method="post"><textarea name="text" rows="9" maxlength="$maxLength" autofocus>${htmlText(initial)}</textarea><button>Send to TV</button></form>' : '<a href="https://otakase.com/discord/">Open the Otakase Discord</a>'}';
       } else {
         r.response.statusCode = 405;
         await r.response.close();

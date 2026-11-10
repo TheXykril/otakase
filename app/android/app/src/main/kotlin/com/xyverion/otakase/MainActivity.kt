@@ -130,7 +130,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "launchUri" -> try {
                     val uri = android.net.Uri.parse(call.arguments as String)
-                    require(uri.scheme == "https" && uri.host in listOf("anilist.co", "myanimelist.net", "otakase.xyverion.com", "bot.xyverion.com", "discord.com", "discord.gg", "trakt.tv", "auth.trakt.tv"))
+                    require(uri.scheme == "https" && uri.host in listOf("anilist.co", "myanimelist.net", "otakase.com", "otakase.xyverion.com", "bot.xyverion.com", "discord.com", "discord.gg", "trakt.tv", "auth.trakt.tv"))
                     startActivity(Intent(Intent.ACTION_VIEW, uri))
                     result.success(null)
                 } catch (_: Exception) { result.error("unavailable", "Browser unavailable", null) }

@@ -28,7 +28,7 @@ const (
 	DefaultDiscordBotURL = "https://bot.xyverion.com"
 	// DiscordInviteURL is the invite to the Otakase Discord, which is also
 	// where the support forum lives.
-	DiscordInviteURL = "https://otakase.xyverion.com/discord/"
+	DiscordInviteURL = "https://otakase.com/discord/"
 
 	discordRequestTimeout = 5 * time.Second
 	discordLinkFileName   = "discord_link.json"

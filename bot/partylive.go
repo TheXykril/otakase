@@ -16,7 +16,7 @@ import (
 // liveGrace or sends {"type":"end"}.
 //
 //	POST /v1/party/start {"anilist_id":154587,"episode":12,"title":"Frieren"} (auth)
-//	  → {"id":"4821093371526630","join_url":"https://otakase.xyverion.com/open/?party=4821093371526630"}
+//	  → {"id":"4821093371526630","join_url":"https://otakase.com/open/?party=4821093371526630"}
 //
 // A member has one at a time: starting again returns the same party, with
 // the show updated. Ids are 16 digits, so they never meet an event id.

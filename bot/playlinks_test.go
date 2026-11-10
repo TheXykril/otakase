@@ -12,9 +12,9 @@ func TestPlayURL(t *testing.T) {
 		id, ep int
 		want   string
 	}{
-		{154587, 0, "https://otakase.xyverion.com/open/?anilist=154587"},
-		{154587, 12, "https://otakase.xyverion.com/open/?anilist=154587&ep=12"},
-		{1, -3, "https://otakase.xyverion.com/open/?anilist=1"},
+		{154587, 0, "https://otakase.com/open/?anilist=154587"},
+		{154587, 12, "https://otakase.com/open/?anilist=154587&ep=12"},
+		{1, -3, "https://otakase.com/open/?anilist=1"},
 		{0, 4, ""},
 		{-5, 0, ""},
 	}
@@ -39,7 +39,7 @@ func TestWithPlayButton(t *testing.T) {
 		t.Errorf("last button: %+v", got[2])
 	}
 	b, ok := got[0].(discordgo.Button)
-	if !ok || b.Label != "Play in Otakase" || b.Style != discordgo.LinkButton || b.URL != "https://otakase.xyverion.com/open/?anilist=2&ep=5" {
+	if !ok || b.Label != "Play in Otakase" || b.Style != discordgo.LinkButton || b.URL != "https://otakase.com/open/?anilist=2&ep=5" {
 		t.Errorf("first button: %+v", got[0])
 	}
 	if got := withPlayButton(row, 0, 5); len(got) != 1 {

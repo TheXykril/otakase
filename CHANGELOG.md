@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+
+- **The website is now otakase.com.** Links in the app, help pages and
+  Discord point there. The old address forwards to it, and updates keep
+  working on older versions.
+
 ## 26.2.2 - 2026-11-10
 
 Films that drop no longer end as watched, Trakt stays signed in, and voices stay clear with Even out volume.

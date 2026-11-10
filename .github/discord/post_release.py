@@ -37,7 +37,7 @@ import urllib.error
 import urllib.request
 import uuid
 
-SITE = "https://otakase.xyverion.com/"
+SITE = "https://otakase.com/"
 SHU = 0xD2492F
 API = "https://discord.com/api/v10"
 MAX_ITEMS = 6

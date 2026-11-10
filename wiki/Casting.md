@@ -31,7 +31,7 @@ The TV fetches the video from this device, so the same firewall can block
 it after the TV was found. Allow your home network as above and cast again.
 If it still fails, open **Diagnostics** (in More or Settings) and send what
 it shows in the support forum on
-[Discord](https://otakase.xyverion.com/discord/).
+[Discord](https://otakase.com/discord/).
 
 ## No subtitles on the TV
 

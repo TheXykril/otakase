@@ -7,7 +7,7 @@ import "strings"
 // site's /download/ route serves from the latest release. Members never get
 // a link to the repository itself.
 const (
-	siteURL      = "https://otakase.xyverion.com/"
+	siteURL      = "https://otakase.com/"
 	wikiURL      = siteURL + "help"
 	dlURL        = siteURL + "download/"
 	downloadPage = siteURL + "#download"

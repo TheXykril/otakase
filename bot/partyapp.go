@@ -14,7 +14,7 @@ import (
 //
 //	GET  /v1/parties (auth) → {"parties":[{"id":"123","title":"Frieren","start":"2026-10-14T19:00:00Z",
 //	       "anilist_id":154587,"sync":true,"host":"Alex","going":3,"rsvp":true,"live":false,
-//	       "join_url":"https://otakase.xyverion.com/open/?party=123","event_url":"https://discord.com/events/…"}]}
+//	       "join_url":"https://otakase.com/open/?party=123","event_url":"https://discord.com/events/…"}]}
 //	POST /v1/party/{id}/rsvp {"going":true} (auth) → {"going":true,"count":4}
 //
 // join_url is only there for synced parties. live: it has started, or the

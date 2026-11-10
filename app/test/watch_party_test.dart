@@ -86,7 +86,7 @@ void main() {
   test('party ids come from ids, join links, app links and event links', () {
     expect(parsePartyId(' 1234567890123456789 '), '1234567890123456789');
     expect(
-      parsePartyId('https://otakase.xyverion.com/open/?party=1234567890123'),
+      parsePartyId('https://otakase.com/open/?party=1234567890123'),
       '1234567890123',
     );
     expect(parsePartyId('otakase://party/1234567890123'), '1234567890123');
@@ -250,7 +250,7 @@ void main() {
       p.command = (action, args) async =>
           commands.add('$action ${args.values.join()}'.trim());
       p.open = (id, ep) async => opened.add((id, ep));
-      await p.join('https://otakase.xyverion.com/open/?party=123456');
+      await p.join('https://otakase.com/open/?party=123456');
       expect(p.active, isTrue);
       expect(p.hosting, isFalse);
       expect(socket.sent.first['type'], 'hello');

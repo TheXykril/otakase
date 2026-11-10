@@ -1,7 +1,7 @@
 # Desktop
 
 The desktop app runs on Windows, macOS and Linux. Download it from the
-[website](https://otakase.xyverion.com/#download).
+[website](https://otakase.com/#download).
 
 ## Opening it
 

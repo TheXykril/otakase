@@ -40,7 +40,7 @@ const (
 	linkCodeTTL      = 10 * time.Minute
 	maxPendingLinks  = 500
 	maxAppsPerMember = 10
-	appInviteURL     = "https://otakase.xyverion.com/discord/"
+	appInviteURL     = "https://otakase.com/discord/"
 )
 
 // appNow is the clock for the app features, a variable for tests.

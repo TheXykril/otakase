@@ -119,7 +119,7 @@ func TestDiscordPartiesFetchAndRSVP(t *testing.T) {
 		}
 		switch r.Method + " " + r.URL.Path {
 		case "GET /v1/parties":
-			w.Write([]byte(`{"parties":[{"id":"123","title":"Frieren","start":"2026-10-14T19:00:00Z","anilist_id":154587,"sync":true,"host":"Alex","going":3,"rsvp":false,"live":false,"join_url":"https://otakase.xyverion.com/open/?party=123","event_url":"https://discord.com/events/1/123"}]}`))
+			w.Write([]byte(`{"parties":[{"id":"123","title":"Frieren","start":"2026-10-14T19:00:00Z","anilist_id":154587,"sync":true,"host":"Alex","going":3,"rsvp":false,"live":false,"join_url":"https://otakase.com/open/?party=123","event_url":"https://discord.com/events/1/123"}]}`))
 		case "POST /v1/party/123/rsvp":
 			body, _ := io.ReadAll(r.Body)
 			if string(body) != "{\"going\":true}\n" && string(body) != `{"going":true}` {

@@ -11,7 +11,7 @@
 // who talks, rpc.activities.write sets the status line. A member who turns
 // the extra ones down signs in with identify alone.
 const DS_SCOPES = ["identify", "rpc.voice.read", "rpc.activities.write"];
-const DS_ICON = "https://otakase.xyverion.com/img/icon-512.png";
+const DS_ICON = "https://otakase.com/img/icon-512.png";
 const DS_LOCK = { unlocked: 1, portrait: 2, landscape: 3 };
 const DS_LAYOUT = { 0: "focused", 1: "pip", 2: "grid" };
 const DS_DOING = { watch: "Looking for a watch room", party: "Playing party games", board: "Checking the leaderboard", bingo: "Filling a watch bingo card" };
