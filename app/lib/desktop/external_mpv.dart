@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import '../cast/cast.dart';
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -33,7 +36,9 @@ Widget playerFor({
   required int episode,
   required bool isTV,
   required String mode,
-}) => isDesktop && services.store.flag('ExternalMpv')
+  int startAt = 0,
+  CastDevice? castTo,
+}) => isDesktop && services.store.flag('ExternalMpv') && castTo == null
     ? ExternalPlayerPage(
         services: services,
         anime: anime,
@@ -46,6 +51,8 @@ Widget playerFor({
         episode: episode,
         isTV: isTV,
         mode: mode,
+        startAt: startAt,
+        castTo: castTo,
       );
 
 const mpvStatusScript = r'''

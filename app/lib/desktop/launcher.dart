@@ -678,9 +678,8 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
     onSelect: () async {
       if (!e.title.isShow) return playTitle(e.title);
       final list = await episodesOf(e.title);
-      final at = list
-          .where((x) => x.season == e.season && x.number == e.episode)
-          .firstOrNull;
+      // The episode stopped in, or the one after a finished one.
+      final at = titleUpNext(services.movies, e.title, list);
       await playTitle(
         e.title,
         episode: at ?? TitleEpisode(season: e.season, number: e.episode),

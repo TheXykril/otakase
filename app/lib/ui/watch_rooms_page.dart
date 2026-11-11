@@ -7,6 +7,9 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../data/models.dart';
+import '../desktop/desktop_core.dart';
+import '../desktop/player_bar.dart';
+import '../desktop/window_frame.dart';
 import '../data/store.dart';
 import '../data/watch_rooms.dart';
 import '../services.dart';
@@ -14,6 +17,9 @@ import '../tls_ca.dart';
 import 'components.dart';
 import 'device_status.dart';
 import 'mpv.dart';
+import 'phone_player.dart';
+import 'player_keys.dart';
+import 'seal.dart';
 
 class WatchRoomsPage extends StatefulWidget {
   const WatchRoomsPage({super.key, required this.services, required this.isTV});
@@ -169,6 +175,30 @@ class _WatchRoomsPageState extends State<WatchRoomsPage> {
   );
 }
 
+/// The room's opening and ending, once the bot has checked them against
+/// this episode, as stripes on the player's timeline.
+List<SkipSpan> roomSkipSpans(Json room) {
+  if (room['skip_ready'] != true || decimal(room['dur']) <= 0) return const [];
+  final times = room['skip_times'] as Map? ?? {};
+  return [
+    for (final type in ['op', 'ed'])
+      if (times[type] case final Map span
+          when decimal(span['end']) > decimal(span['start']))
+        SkipSpan(type, decimal(span['start']), decimal(span['end'])),
+  ];
+}
+
+/// What a member asked the host for, in words, after "asks to".
+String roomAskText(Map ask) => switch (ask['kind']) {
+  'forward' when decimal(ask['by']) < 0 =>
+    'go back ${-decimal(ask['by']).round()} s',
+  'forward' => 'skip ${decimal(ask['by']).round()} s',
+  'seek' =>
+    'jump to ${DesktopPlayerBar.time(Duration(milliseconds: (decimal(ask['pos']) * 1000).round()))}',
+  'next' => 'play the next episode',
+  final kind => '$kind',
+};
+
 class WatchRoomPlayer extends StatefulWidget {
   const WatchRoomPlayer({
     super.key,
@@ -190,6 +220,8 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
   late final Future<void> Function(String, Json) commandHandler;
   late final Json Function() statusHandler;
   final surface = FocusNode(debugLabel: 'Watch room video');
+  final playFocus = FocusNode(debugLabel: 'Watch room play');
+  final flash = FlashText();
   final subscriptions = <StreamSubscription<dynamic>>[];
   Timer? followTimer, beatTimer, saveTimer, hideTimer;
   RoomState? view;
@@ -200,6 +232,11 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
       beating = false,
       subSelected = false;
   bool foreground = true, manualSubs = false;
+  bool scrubbing = false, panelOpen = false, fullscreen = false;
+
+  /// Where the timeline thumb sits while it is dragged.
+  Duration? scrubTo;
+  double lastVolume = 100;
   int generation = 0, readySent = 0;
   String media = '', subs = '';
   String? error;
@@ -493,7 +530,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
         }
       }
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) flash.show(message(e), long: true);
     } finally {
       applying = false;
     }
@@ -573,33 +610,127 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
     reveal();
   }
 
-  Future<void> run(Future<void> Function() action) async {
+  /// Runs a room action. A failed one is a short note on the picture, not
+  /// the error screen: the episode keeps playing.
+  Future<bool> run(Future<void> Function() action) async {
     try {
       await action();
-      if (mounted) setState(() => error = null);
+      return true;
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) flash.show(message(e), long: true);
+      return false;
     }
   }
 
+  static String message(Object e) => switch (e) {
+    StateError(:final message) => message,
+    _ => e.toString(),
+  };
+
+  /// Brings the controls up; they hide again after a while of playing.
   void reveal() {
+    hideTimer?.cancel();
     if (!mounted || ending) return;
     setState(() => overlay = true);
-    hideTimer?.cancel();
-    hideTimer = Timer(const Duration(seconds: 6), () {
-      if (mounted && surface.hasPrimaryFocus) setState(() => overlay = false);
+    hideTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && !panelOpen && !scrubbing && player.state.playing) {
+        setState(() => overlay = false);
+        surface.requestFocus();
+      }
     });
+  }
+
+  void hideControls() {
+    hideTimer?.cancel();
+    setState(() => overlay = false);
+    surface.requestFocus();
+  }
+
+  bool get hosting => view?.host == true;
+
+  /// Runs a room action; a member only asks the host, so say so.
+  Future<void> act(Future<void> Function() action, String asked) async {
+    if (await run(action) && mounted && !hosting) flash.show('Asked to $asked');
+    reveal();
+  }
+
+  Future<void> playPause() => act(
+    () => control('toggle', {}),
+    view?.playing == true ? 'pause' : 'play',
+  );
+
+  Future<void> seekBy(int seconds) => act(
+    () => rooms.jumpBy(seconds.toDouble()),
+    seconds < 0 ? 'go back ${-seconds} s' : 'skip $seconds s',
+  );
+
+  Future<void> seekTo(Duration to) => act(
+    () => rooms.control('seek', position: to.inMilliseconds / 1000),
+    'jump to ${DesktopPlayerBar.time(to)}',
+  );
+
+  Future<void> nextEpisode() =>
+      act(() => rooms.control('next'), 'play the next episode');
+
+  bool get canNext {
+    final last = number(view?.json['last_ep']);
+    return view?.phase == 'play' && (last == 0 || (view?.episode ?? 0) < last);
+  }
+
+  List<SkipSpan> get spans =>
+      view == null ? const [] : roomSkipSpans(view!.json);
+
+  String get roomLine {
+    final current = view;
+    final who = current == null
+        ? ''
+        : current.host
+        ? 'Hosting'
+        : 'Following ${hostName(current)}';
+    return [
+      if ((current?.episode ?? 0) > 0) 'Episode ${current!.episode}',
+      who,
+    ].where((s) => s.isNotEmpty).join(' · ');
+  }
+
+  String hostName(RoomState current) =>
+      (current.json['members'] as List? ?? [])
+              .whereType<Map>()
+              .where((m) => m['host'] == true)
+              .firstOrNull?['name']
+          as String? ??
+      'the host';
+
+  Duration get shown => scrubTo ?? player.state.position;
+
+  void toggleMute() {
+    final volume = player.state.volume;
+    if (volume > 0) lastVolume = volume;
+    unawaited(player.setVolume(volume > 0 ? 0 : lastVolume));
+    reveal();
+  }
+
+  Future<void> toggleFullscreen() async {
+    final on = await setDesktopFullScreen(!fullscreen);
+    if (mounted) setState(() => fullscreen = on);
+    reveal();
   }
 
   Future<void> tracks() async {
     final tracks = (view?.json['subs'] as List? ?? [])
         .whereType<Map>()
         .toList();
+    panelOpen = true;
+    reveal();
     final choice = await chooseValue(context, 'Subtitles', [
       'Off',
       ...tracks.map((t) => t['label'] as String? ?? 'Subtitle'),
     ]);
-    if (choice == null || ending) return;
+    panelOpen = false;
+    if (choice == null || ending) {
+      if (mounted) playFocus.requestFocus();
+      return;
+    }
     manualSubs = true;
     if (choice == 'Off') {
       await player.setSubtitleTrack(SubtitleTrack.no());
@@ -616,7 +747,131 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
         subSelected = true;
       }
     }
+    if (mounted) playFocus.requestFocus();
     reveal();
+  }
+
+  /// Who is in the room, progress sync, the host's auto skip switches and
+  /// leaving: what the anime player has no button for.
+  Future<void> roomPanel() async {
+    panelOpen = true;
+    reveal();
+    var leaving = false;
+    await showDialog<void>(
+      context: context,
+      builder: (dialog) => ListenableBuilder(
+        listenable: rooms,
+        builder: (dialog, _) {
+          final current = rooms.state;
+          final people = (current?.json['members'] as List? ?? [])
+              .whereType<Map>()
+              .toList();
+          final linked = (current?.json['linked'] as List? ?? []).join(' + ');
+          Widget toggle(String label, bool value, String on, String off) =>
+              ChoiceRow(
+                title: Text(label, style: uiStyle(dialog)),
+                trailing: Switch(
+                  value: value,
+                  onChanged: (_) =>
+                      unawaited(run(() => rooms.control(value ? off : on))),
+                ),
+                onTap: () =>
+                    unawaited(run(() => rooms.control(value ? off : on))),
+              );
+          return AlertDialog(
+            backgroundColor: panel,
+            title: Text(
+              'Watch room',
+              style: uiStyle(dialog, size: 22, weight: FontWeight.w600),
+            ),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(roomLine, style: uiStyle(dialog, color: muted)),
+                    const SizedBox(height: 12),
+                    const Text('Watching', style: TextStyle(color: accentText)),
+                    for (final p in people)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          [
+                            p['name'] as String? ?? 'Someone',
+                            if (p['host'] == true) 'host',
+                            if (number(p['behind']) > 0)
+                              '${p['behind']} s behind'
+                            else if (p['state'] == 'loading')
+                              'loading',
+                          ].join(' · '),
+                          style: uiStyle(dialog),
+                        ),
+                      ),
+                    if (current?.json['sync'] case final bool sync) ...[
+                      const Divider(),
+                      ChoiceRow(
+                        autofocus: true,
+                        title: Text(
+                          'Sync room progress${linked.isEmpty ? '' : ' · $linked'}',
+                          style: uiStyle(dialog),
+                        ),
+                        trailing: Switch(
+                          value: sync,
+                          onChanged: (v) => unawaited(run(() => rooms.sync(v))),
+                        ),
+                        onTap: () => unawaited(run(() => rooms.sync(!sync))),
+                      ),
+                    ],
+                    if (current?.host == true &&
+                        current?.json['skip_ready'] == true) ...[
+                      const Divider(),
+                      toggle(
+                        'Skip the opening for everyone',
+                        current?.json['auto_skip_op'] == true,
+                        'op-on',
+                        'op-off',
+                      ),
+                      toggle(
+                        'Skip the ending for everyone',
+                        current?.json['auto_skip_ed'] == true,
+                        'ed-on',
+                        'ed-off',
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                key: const Key('room-leave'),
+                onPressed: () {
+                  leaving = true;
+                  Navigator.pop(dialog);
+                },
+                child: const Text('Leave room'),
+              ),
+              TextButton(
+                autofocus: current?.json['sync'] is! bool,
+                onPressed: () => Navigator.pop(dialog),
+                child: const Text('Back'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    panelOpen = false;
+    if (leaving) {
+      await exit();
+      return;
+    }
+    if (mounted) {
+      playFocus.requestFocus();
+      reveal();
+    }
   }
 
   Future<void> stopForProfile() => closing ??= closeRoom();
@@ -673,6 +928,9 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
       unawaited(s.cancel());
     }
     surface.dispose();
+    playFocus.dispose();
+    flash.dispose();
+    if (fullscreen) unawaited(setDesktopFullScreen(false));
     unawaited((closing ?? Future<void>.value()).whenComplete(player.dispose));
     unawaited(
       SystemChrome.setEnabledSystemUIMode(
@@ -685,259 +943,354 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
     super.dispose();
   }
 
+  KeyEventResult keys(FocusNode node, KeyEvent e) {
+    if (e is! KeyDownEvent) return KeyEventResult.ignored;
+    final key = e.logicalKey;
+    if ([
+      LogicalKeyboardKey.mediaPlayPause,
+      LogicalKeyboardKey.space,
+    ].contains(key)) {
+      unawaited(playPause());
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.mediaTrackNext) {
+      if (canNext) unawaited(nextEpisode());
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.mediaRewind ||
+        key == LogicalKeyboardKey.mediaFastForward) {
+      unawaited(seekBy(key == LogicalKeyboardKey.mediaRewind ? -10 : 10));
+      return KeyEventResult.handled;
+    }
+    if (isDesktop && key == LogicalKeyboardKey.keyF) {
+      unawaited(toggleFullscreen());
+      return KeyEventResult.handled;
+    }
+    if (isDesktop && key == LogicalKeyboardKey.keyM) {
+      toggleMute();
+      return KeyEventResult.handled;
+    }
+    if (surface.hasPrimaryFocus) {
+      if (key == LogicalKeyboardKey.arrowLeft ||
+          key == LogicalKeyboardKey.arrowRight) {
+        unawaited(seekBy(key == LogicalKeyboardKey.arrowLeft ? -10 : 10));
+        return KeyEventResult.handled;
+      }
+      if ([LogicalKeyboardKey.select, LogicalKeyboardKey.enter].contains(key)) {
+        unawaited(playPause());
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowDown ||
+          key == LogicalKeyboardKey.arrowUp) {
+        reveal();
+        if (!busy && error == null) playFocus.requestFocus();
+        return KeyEventResult.handled;
+      }
+    }
+    reveal();
+    return KeyEventResult.ignored;
+  }
+
+  /// Room notes in the player's corner, above the controls when they show:
+  /// asks (the host answers them), the ready check, catching up and
+  /// counting the episode.
+  Widget notices(BuildContext context, RoomState current) {
+    final asks = (current.json['asks'] as List? ?? []).whereType<Map>();
+    final countAsk = number(current.json['count_ask']);
+    Widget card(String text, [List<Widget> buttons = const []]) => Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xe6191614),
+        border: Border.all(color: line),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(text, style: uiStyle(context, color: fgBright)),
+          if (buttons.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(spacing: 8, runSpacing: 8, children: buttons),
+          ],
+        ],
+      ),
+    );
+    final items = [
+      for (final ask in asks)
+        card(
+          '${ask['name'] ?? 'Someone'} asks to ${roomAskText(ask)}',
+          current.host
+              ? [
+                  PlayerChip(
+                    icon: LucideIcons.check,
+                    label: 'Accept',
+                    isTV: widget.isTV,
+                    onPressed: () => unawaited(
+                      run(() => rooms.answer(number(ask['id']), true)),
+                    ),
+                  ),
+                  PlayerChip(
+                    icon: LucideIcons.x,
+                    label: 'Decline',
+                    isTV: widget.isTV,
+                    onPressed: () => unawaited(
+                      run(() => rooms.answer(number(ask['id']), false)),
+                    ),
+                  ),
+                ]
+              : const [],
+        ),
+      if (rooms.error case final problem?) card(problem),
+      if (current.hold > 0) card('Waiting for everyone to be ready'),
+      if (behind > 0)
+        PlayerChip(
+          key: const Key('room-catch-up'),
+          icon: LucideIcons.fastForward,
+          label: '${behind.round()} s behind · Catch up',
+          isTV: widget.isTV,
+          onPressed: () => unawaited(apply(force: true)),
+        ),
+      if (countAsk > 0)
+        card('Count episode $countAsk as watched?', [
+          PlayerChip(
+            icon: LucideIcons.check,
+            label: 'Count it',
+            isTV: widget.isTV,
+            onPressed: () => unawaited(run(() => rooms.count(countAsk, true))),
+          ),
+          PlayerChip(
+            icon: LucideIcons.x,
+            label: 'Do not count',
+            isTV: widget.isTV,
+            onPressed: () => unawaited(run(() => rooms.count(countAsk, false))),
+          ),
+        ]),
+    ];
+    if (items.isEmpty) return const SizedBox.shrink();
+    final controls = overlay && !busy && error == null;
+    return Positioned(
+      right: 24,
+      left: isDesktop || widget.isTV ? null : 24,
+      bottom: !controls
+          ? 24
+          : isDesktop
+          ? 170
+          : widget.isTV
+          ? 190
+          : 120,
+      child: SafeArea(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: items,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final current = view;
+    final title = current?.anime?.title ?? 'Watch room';
+    final controls = overlay && !busy && error == null;
+    final duration = player.state.duration;
+    void seekStart(double _) {
+      scrubbing = true;
+      hideTimer?.cancel();
+    }
+
+    void seekChanged(double v) =>
+        setState(() => scrubTo = Duration(milliseconds: v.round()));
+    void seekEnd(double v) {
+      scrubbing = false;
+      final to = Duration(milliseconds: v.round());
+      setState(() => scrubTo = null);
+      unawaited(seekTo(to));
+    }
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (popped, result) {
-        if (!popped) unawaited(exit());
+        if (popped) return;
+        if (overlay && !busy && error == null) {
+          hideControls();
+        } else {
+          unawaited(exit());
+        }
       },
       child: Scaffold(
         backgroundColor: bgDeep,
         body: Focus(
-          focusNode: surface,
-          autofocus: true,
-          onKeyEvent: (node, e) {
-            if (e is! KeyDownEvent || !node.hasPrimaryFocus) {
-              return KeyEventResult.ignored;
-            }
-            if (e.logicalKey == LogicalKeyboardKey.arrowLeft) {
-              unawaited(run(() => rooms.jumpBy(-10)));
-              reveal();
-              return KeyEventResult.handled;
-            }
-            if (e.logicalKey == LogicalKeyboardKey.arrowRight) {
-              unawaited(run(() => rooms.jumpBy(10)));
-              reveal();
-              return KeyEventResult.handled;
-            }
-            if ([
-              LogicalKeyboardKey.select,
-              LogicalKeyboardKey.enter,
-              LogicalKeyboardKey.mediaPlayPause,
-              LogicalKeyboardKey.space,
-            ].contains(e.logicalKey)) {
-              unawaited(run(() => control('toggle', {})));
-              return KeyEventResult.handled;
-            }
-            reveal();
-            return KeyEventResult.ignored;
-          },
-          child: GestureDetector(
-            onTap: reveal,
+          skipTraversal: true,
+          onKeyEvent: keys,
+          child: MouseRegion(
+            onHover: isDesktop ? (_) => reveal() : null,
+            cursor: isDesktop && !overlay && !busy && error == null
+                ? SystemMouseCursors.none
+                : MouseCursor.defer,
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Video(controller: video, controls: NoVideoControls),
-                if (busy)
-                  const Center(child: CircularProgressIndicator(color: shu)),
-                if (overlay || busy || error != null || behind > 0)
-                  SafeArea(
-                    child: ColoredBox(
-                      color: bgDeep.withValues(alpha: .82),
-                      child: ListView(
-                        padding: EdgeInsets.all(widget.isTV ? 32 : 20),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onDoubleTap: isDesktop
+                      ? () => unawaited(toggleFullscreen())
+                      : null,
+                  onTap: () => overlay ? hideControls() : reveal(),
+                  child: Focus(
+                    focusNode: surface,
+                    autofocus: true,
+                    child: IgnorePointer(
+                      child: Video(
+                        controller: video,
+                        controls: NoVideoControls,
+                      ),
+                    ),
+                  ),
+                ),
+                ValueListenableBuilder<String>(
+                  valueListenable: flash,
+                  builder: (_, text, _) => PlayerFlash(text: text),
+                ),
+                if (busy && error == null)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  current?.anime?.title ?? 'Watch room',
-                                  style: uiStyle(
-                                    context,
-                                    size: 24,
-                                    weight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              DeviceStatus(isTV: widget.isTV),
-                            ],
-                          ),
-                          Text(
-                            'Episode ${current?.episode ?? 0} · ${current?.host == true ? 'Hosting' : 'Following the host'}',
-                            style: uiStyle(context, color: muted),
-                          ),
-                          if (busy)
-                            Text(
-                              current?.json['load_step'] as String? ??
-                                  'Waiting for the room',
-                              style: uiStyle(context),
-                            ),
+                          OtakaseSeal(size: widget.isTV ? 96 : 64),
                           const SizedBox(height: 24),
-                          LinearProgressIndicator(
-                            value: player.state.duration.inSeconds > 0
-                                ? (player.state.position.inSeconds /
-                                          player.state.duration.inSeconds)
-                                      .clamp(0, 1)
-                                : 0,
-                            minHeight: 3,
-                            color: shu,
-                            backgroundColor: line,
+                          const SkeletonBlock(width: 160, height: 2),
+                          const SizedBox(height: 24),
+                          Text(
+                            current?.json['load_step'] as String? ??
+                                'Waiting for the room',
+                            style: uiStyle(context),
                           ),
-                          const SizedBox(height: 20),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              AppButton(
-                                label: current?.host == true
-                                    ? (current?.playing == true
-                                          ? 'Pause'
-                                          : 'Play')
-                                    : (current?.playing == true
-                                          ? 'Ask to pause'
-                                          : 'Ask to play'),
-                                isTV: widget.isTV,
-                                onPressed: () =>
-                                    run(() => control('toggle', {})),
-                              ),
-                              AppButton(
-                                label: current?.host == true
-                                    ? '+10 s'
-                                    : 'Ask +10 s',
-                                isTV: widget.isTV,
-                                onPressed: () => run(() => rooms.jumpBy(10)),
-                              ),
-                              AppButton(
-                                label: current?.host == true
-                                    ? 'Next episode'
-                                    : 'Ask next episode',
-                                isTV: widget.isTV,
-                                onPressed: () =>
-                                    run(() => rooms.control('next')),
-                              ),
-                              AppButton(
-                                label: 'Tracks',
-                                isTV: widget.isTV,
-                                onPressed: tracks,
-                              ),
-                              AppButton(
-                                label: 'Hide controls',
-                                isTV: widget.isTV,
-                                onPressed: () {
-                                  setState(() => overlay = false);
-                                  surface.requestFocus();
-                                },
-                              ),
-                              AppButton(
-                                label: 'Leave room',
-                                isTV: widget.isTV,
-                                onPressed: exit,
-                              ),
-                              if (error != null && current?.phase == 'play')
-                                AppButton(
-                                  label: 'Retry stream',
-                                  isTV: widget.isTV,
-                                  onPressed: () =>
-                                      load(effectiveMedia(current!)),
-                                ),
-                              if (behind > 0)
-                                AppButton(
-                                  label:
-                                      '${behind.round()} s behind · Catch up',
-                                  isTV: widget.isTV,
-                                  onPressed: () => apply(force: true),
-                                ),
-                            ],
+                          const SizedBox(height: 16),
+                          AppButton(
+                            label: 'Leave room',
+                            onPressed: exit,
+                            isTV: widget.isTV,
                           ),
-                          if (current != null && current.hold > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: Text(
-                                'Waiting for everyone to be ready',
-                                style: uiStyle(context, color: muted),
-                              ),
-                            ),
-                          if (current?.json['sync'] case final bool sync)
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                'Sync room progress${(current?.json['linked'] as List? ?? []).isEmpty ? '' : ' · ${(current!.json['linked'] as List).join(' + ')}'}',
-                              ),
-                              value: sync,
-                              onChanged: (v) => run(() => rooms.sync(v)),
-                            ),
-                          if (number(current?.json['count_ask']) > 0)
-                            Wrap(
-                              spacing: 12,
-                              children: [
-                                AppButton(
-                                  label:
-                                      'Count episode ${current!.json['count_ask']} as watched',
-                                  isTV: widget.isTV,
-                                  onPressed: () => run(
-                                    () => rooms.count(
-                                      number(current.json['count_ask']),
-                                      true,
-                                    ),
-                                  ),
-                                ),
-                                AppButton(
-                                  label: 'Do not count',
-                                  isTV: widget.isTV,
-                                  onPressed: () => run(
-                                    () => rooms.count(
-                                      number(current.json['count_ask']),
-                                      false,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          for (final ask
-                              in (current?.json['asks'] as List? ?? [])
-                                  .whereType<Map>())
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${ask['name'] ?? 'Someone'} asks to ${ask['kind']}',
-                                    style: uiStyle(context),
-                                  ),
-                                  if (current?.host == true)
-                                    Wrap(
-                                      spacing: 12,
-                                      children: [
-                                        AppButton(
-                                          label: 'Accept',
-                                          isTV: widget.isTV,
-                                          onPressed: () => run(
-                                            () => rooms.answer(
-                                              number(ask['id']),
-                                              true,
-                                            ),
-                                          ),
-                                        ),
-                                        AppButton(
-                                          label: 'Decline',
-                                          isTV: widget.isTV,
-                                          onPressed: () => run(
-                                            () => rooms.answer(
-                                              number(ask['id']),
-                                              false,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                ],
-                              ),
-                            ),
-                          if (error != null || rooms.error != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: Text(
-                                error ?? rooms.error!,
-                                style: uiStyle(context, color: warn),
-                              ),
-                            ),
                         ],
                       ),
                     ),
                   ),
+                if (error != null)
+                  Center(
+                    child: ColoredBox(
+                      color: const Color(0xe6080707),
+                      child: EmptyState(
+                        error: current?.phase != 'over',
+                        message: error!,
+                        action: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            if (current?.phase == 'play')
+                              AppButton(
+                                label: 'Try again',
+                                icon: LucideIcons.refreshCw,
+                                filled: true,
+                                autofocus: true,
+                                onPressed: () => load(effectiveMedia(current!)),
+                                isTV: widget.isTV,
+                              ),
+                            AppButton(
+                              label: 'Leave room',
+                              autofocus: current?.phase != 'play',
+                              onPressed: exit,
+                              isTV: widget.isTV,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                if (controls && isDesktop)
+                  DesktopPlayerBar(
+                    title: title,
+                    subtitle: roomLine,
+                    position: shown,
+                    duration: duration,
+                    buffered: player.state.buffer,
+                    playing: current?.playing == true,
+                    buffering: player.state.buffering,
+                    silent: player.state.volume == 0,
+                    fullscreen: fullscreen,
+                    trackLabel: 'Subtitles',
+                    centerLabel: current?.host == true
+                        ? 'Hosting'
+                        : 'Watch room',
+                    stripes: spans,
+                    playFocus: playFocus,
+                    onBack: () => unawaited(exit()),
+                    onPlayPause: () => unawaited(playPause()),
+                    onSeekBy: (s) => unawaited(seekBy(s)),
+                    onSeekStart: seekStart,
+                    onSeekChanged: seekChanged,
+                    onSeekEnd: seekEnd,
+                    onNext: canNext ? () => unawaited(nextEpisode()) : null,
+                    onMute: toggleMute,
+                    onTracks: () => unawaited(tracks()),
+                    onQuality: null,
+                    onFullscreen: () => unawaited(toggleFullscreen()),
+                    extras: [
+                      (
+                        key: const Key('room-panel'),
+                        icon: LucideIcons.users,
+                        tooltip: 'Watch room',
+                        onPressed: () => unawaited(roomPanel()),
+                      ),
+                    ],
+                  ),
+                if (controls && !isDesktop)
+                  PhonePlayerControls(
+                    isTV: widget.isTV,
+                    title: title,
+                    subtitle: roomLine,
+                    position: shown,
+                    duration: duration,
+                    spans: spans,
+                    playing: current?.playing == true,
+                    buffering: player.state.buffering,
+                    playFocus: playFocus,
+                    onBack: () => unawaited(exit()),
+                    onPlayPause: () => unawaited(playPause()),
+                    onSeekBy: (s) => unawaited(seekBy(s)),
+                    onSeekStart: seekStart,
+                    onSeekChanged: seekChanged,
+                    onSeekEnd: seekEnd,
+                    actions: [
+                      PlayerButton(
+                        icon: LucideIcons.skipForward,
+                        label: hosting ? 'Next' : 'Ask for next',
+                        onPressed: canNext ? () => nextEpisode() : null,
+                      ),
+                      PlayerButton(
+                        icon: LucideIcons.captions,
+                        label: 'Subtitles',
+                        onPressed: tracks,
+                      ),
+                      PlayerButton(
+                        key: const Key('room-panel'),
+                        icon: LucideIcons.users,
+                        label: 'Watch room',
+                        onPressed: roomPanel,
+                      ),
+                    ],
+                  ),
+                // Above the controls, so the host can answer asks while the
+                // controls show.
+                if (current != null && error == null) notices(context, current),
               ],
             ),
           ),

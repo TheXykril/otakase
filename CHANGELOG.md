@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### Added
+
+- **Pair the phone remote by tapping Allow on the TV.** Tap a TV or
+  computer in Control TV on the phone and it asks Allow on screen, with two
+  numbers to match, instead of you typing a code. The QR code and typed
+  code still work.
+- **A full remote on the phone.** Cover art, a seek bar with the opening and
+  ending marked, Skip Intro, previous and next episode, volume, and
+  episodes, subtitles, audio, quality and stop. A bar above the tabs shows
+  what the TV is playing and opens the remote from anywhere in the app.
+- **Play on.** A show's page has Play on…, one list of paired TVs and
+  computers, this phone and cast devices. Pick a TV and the episode starts
+  there with the phone as its remote. The player's cast button uses the same
+  list and moves what you are watching to a TV at the same spot.
+- **Phone remote from anywhere.** With the phone and TV linked to the same
+  Discord account, the remote works when they are not on the same Wi-Fi,
+  through the Otakase bot, and your TVs pair without a code. Settings >
+  Playback > Phone remote from anywhere turns it off.
+
+### Changed
+
+- **Watch rooms use the normal player.** Joining a watch room in the app now
+  shows the same controls as any episode: the timeline with the opening and
+  ending marked, play, −10 / +10, next, subtitles, and on a computer the
+  player bar with mute and full screen. When you are not the host these ask
+  the host instead, and a short note says what you asked. Asks, the ready
+  check, catching up and counting the episode show as small cards in the
+  corner, and the new watch room button lists who is watching, progress
+  sync, the host's opening and ending skip switches and Leave room.
+- **The phone remote is live.** It shows what the TV is doing the moment it
+  changes, reconnects on its own and finds the TV again after its address
+  changed, instead of asking every two seconds while the page is open.
+
 ## 26.3.1 - 2026-11-10
 
 The phone remote gets past firewalls, the player shading fills the camera cutout, and a dropped stream says Reconnecting again.

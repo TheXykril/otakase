@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.30.96
+
+- The phone remote works away from home: a TV or computer linked to Discord keeps a connection to the bot, and phones linked to the same Discord account control it through the bot when they are not on the same Wi-Fi. They also pair with it without a code. New endpoints `GET /v1/remote/tvs`, `/v1/remote/host` and `/v1/remote/control` (WebSockets), memory only.
+
 ## 1.30.95
 
 - `/github` Build and release now covers dev builds too: pick `publish` Nothing (test build, default), Dev build or Release. Dev build is no longer its own workflow; its `version` is optional and defaults to the next drop.

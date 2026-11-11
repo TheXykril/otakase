@@ -21,6 +21,7 @@ import 'community_extras_page.dart';
 import '../data/community_extras.dart';
 import 'movie_page.dart';
 import 'movies_pages.dart';
+import 'remote_now_playing.dart';
 import 'tv_remote_page.dart';
 import '../data/tv_remote.dart';
 import '../desktop/desktop_core.dart';
@@ -103,6 +104,11 @@ class _AppShellState extends State<AppShell> {
       if (mounted) communityMessage(context, text);
     });
     unawaited(startRemote());
+    widget.services.tvRemote.addListener(remoteAsk);
+    if (widget.isTV) {
+      widget.services.tvRemote.start = startFromPhone;
+      widget.services.hostRemote(true);
+    }
     // Trakt sits with the other trackers in Accounts and on More.
     unawaited(widget.services.trakt.load());
     if ((Host.android || isDesktop) &&
@@ -189,7 +195,68 @@ class _AppShellState extends State<AppShell> {
       s.dispose();
     }
     searchField.dispose();
+    if (!widget.services.tvRemote.closed) {
+      widget.services.tvRemote.removeListener(remoteAsk);
+      if (widget.services.tvRemote.start == startFromPhone) {
+        widget.services.tvRemote.start = null;
+      }
+    }
     super.dispose();
+  }
+
+  String? askShown;
+
+  /// A phone asked to control this TV or computer: ask whoever is
+  /// watching, over any page or the player.
+  void remoteAsk() {
+    final ask = widget.services.tvRemote.ask;
+    if (!mounted || ask == null || ask.id == askShown) return;
+    askShown = ask.id;
+    unawaited(
+      showDialog<void>(
+        context: context,
+        useRootNavigator: true,
+        builder: (_) =>
+            RemoteAskDialog(remote: widget.services.tvRemote, ask: ask),
+      ),
+    );
+  }
+
+  /// A paired phone picked an episode for this TV: close whatever plays
+  /// and open it, at the phone's spot when it handed over.
+  Future<void> startFromPhone(
+    int id,
+    int episode,
+    int position,
+    String mode,
+  ) async {
+    final services = widget.services;
+    final anime = await services.catalog.detail(
+      Anime(id: id, title: ''),
+      adult: services.store.adultAllowed,
+    );
+    if (anime.isAdult && !services.store.adultAllowed) {
+      throw StateError('This profile hides 18+ titles.');
+    }
+    if (!mounted) return;
+    await services.stopPlayback?.call();
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    navigator.popUntil((route) => route.isFirst);
+    unawaited(
+      navigator.push(
+        OtakaseRoute<void>(
+          builder: (_) => playerFor(
+            services: services,
+            anime: anime,
+            episode: episode,
+            isTV: widget.isTV,
+            mode: mode,
+            startAt: position,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> startRemote() async {
@@ -628,6 +695,33 @@ class _AppShellState extends State<AppShell> {
             ),
           ),
         );
+
+  /// While this phone controls a TV that plays something, a bar above the
+  /// tabs shows it and opens the full remote.
+  Widget remoteBar() => ValueListenableBuilder(
+    valueListenable: widget.services.remoteLink,
+    builder: (context, link, _) => link == null
+        ? const SizedBox.shrink()
+        : ListenableBuilder(
+            listenable: link,
+            builder: (context, _) => link.status['has_player'] != true
+                ? const SizedBox.shrink()
+                : Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom:
+                        math.max(
+                          MediaQuery.viewPaddingOf(context).bottom,
+                          MediaQuery.paddingOf(context).bottom,
+                        ) +
+                        7 +
+                        72 +
+                        10,
+                    child: RemoteMiniBar(services: widget.services, link: link),
+                  ),
+          ),
+  );
+
   Widget phoneNav() => Positioned(
     left: 20,
     right: 20,
@@ -671,6 +765,7 @@ class _AppShellState extends State<AppShell> {
       widget.services.tracking,
       widget.services.discord,
       widget.services.trakt,
+      widget.services.remoteLink,
     ]),
     builder: (context, _) {
       final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
@@ -748,6 +843,11 @@ class _AppShellState extends State<AppShell> {
                                               .clamp(0, 2) *
                                           64) +
                                   7 +
+                                  // Room for the bar of a TV this phone
+                                  // controls.
+                                  (widget.services.remoteLink.value == null
+                                      ? 0
+                                      : 76) +
                                   math.max(
                                     MediaQuery.viewPaddingOf(context).bottom,
                                     MediaQuery.paddingOf(context).bottom,
@@ -809,6 +909,7 @@ class _AppShellState extends State<AppShell> {
                       ),
                     ),
                   ),
+                if (!widget.isTV && !keyboard) remoteBar(),
                 if (!widget.isTV && !keyboard) phoneNav(),
               ],
             ),

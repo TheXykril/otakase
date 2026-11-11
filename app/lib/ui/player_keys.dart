@@ -314,10 +314,15 @@ class PlayerFlash extends StatelessWidget {
 class FlashText extends ValueNotifier<String> {
   FlashText() : super('');
   Timer? _timer;
-  void show(String text) {
+
+  /// [long] keeps it up long enough to read a sentence, such as an error.
+  void show(String text, {bool long = false}) {
     value = text;
     _timer?.cancel();
-    _timer = Timer(const Duration(milliseconds: 1400), () => value = '');
+    _timer = Timer(
+      Duration(milliseconds: long ? 4000 : 1400),
+      () => value = '',
+    );
   }
 
   @override

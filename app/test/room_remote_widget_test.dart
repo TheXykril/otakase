@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +14,8 @@ import 'package:otakase/data/store.dart';
 import 'package:otakase/data/tv_remote.dart';
 import 'package:otakase/services.dart';
 import 'package:otakase/ui/components.dart';
+import 'package:otakase/ui/play_on.dart';
+import 'package:otakase/ui/remote_now_playing.dart';
 import 'package:otakase/ui/tv_remote_page.dart';
 import 'package:otakase/ui/watch_rooms_page.dart';
 import 'package:otakase/ui/movie_page.dart';
@@ -32,6 +34,12 @@ const tv = TVDevice(
 class FakeLan extends LanTransport {
   final commands = <String>[], hellos = <String>[];
   bool adult = false;
+  int waits = 0;
+
+  /// Answers like a TV on an older Otakase, so the phone asks for status.
+  @override
+  Future<WebSocket> live(TVDevice tv, Map<String, String> headers) =>
+      Future.error(const WebSocketException('not upgraded'));
   @override
   Future<Json> post(
     TVDevice device,
@@ -58,6 +66,20 @@ class FakeLan extends LanTransport {
         'client': 'phone',
       };
     }
+    if (path == '/ask') {
+      return {'request': 'r1', 'digits': '47'};
+    }
+    if (path == '/ask/wait') {
+      return ++waits < 2
+          ? {'state': 'waiting'}
+          : {
+              'state': 'allowed',
+              'id': device.id,
+              'name': device.name,
+              'token': 'ask-token',
+              'client': 'phone',
+            };
+    }
     if (path == '/command') {
       commands.add('${body['action']}:${jsonEncode(body['args'])}');
     }
@@ -68,7 +90,24 @@ class FakeLan extends LanTransport {
       'episode': 3,
       'episodes': 12,
       'position': 40,
+      'duration': 1420,
+      'playing': true,
       'volume': 50,
+      'skip': 'Skip Intro',
+      'spans': [
+        {'type': 'op', 'start': 30, 'end': 120},
+      ],
+      'can_previous': true,
+      'subtitles': [
+        {'id': 'no', 'label': 'Off', 'on': false},
+        {'id': '2', 'label': 'English', 'on': true},
+      ],
+      'audio': [
+        {'id': '1', 'label': 'Japanese', 'on': true},
+        {'id': '2', 'label': 'English', 'on': false},
+      ],
+      'qualities': ['best', '1080', '720', 'worst'],
+      'quality': 'best',
     };
   }
 }
@@ -198,6 +237,109 @@ void main() {
       await s.close();
     },
   );
+  testWidgets('a newer TV is paired by Allow on the TV, no code', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    await tester.pumpWidget(const SizedBox());
+    final lan = FakeLan();
+    final active = await services(lan: lan);
+    const newer = TVDevice(
+      id: 'tv-1',
+      name: 'Living room',
+      host: '192.168.1.8',
+      port: 12345,
+      version: 2,
+    );
+    await tester.pumpWidget(
+      page(
+        TVRemotePage(
+          services: active,
+          isTV: false,
+          findTVs: () async => [newer],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Living room'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const Key('tv-pair-code')), findsNothing);
+    expect(find.byKey(const Key('tv-ask-digits')), findsOneWidget);
+    expect(find.text('47'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('tv-ask-digits')), findsNothing);
+    expect(active.tvRemote.paired.single.id, tv.id);
+    expect(find.byType(RemoteNowPlaying), findsOneWidget);
+    expect(find.text('Playing story'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await active.close();
+  });
+  testWidgets('the TV asks whoever is watching and Allow lets the phone in', (
+    tester,
+  ) async {
+    final tvSide = TVRemote(storage: MemoryTokens(), name: 'Living room');
+    await tvSide.initialize();
+    final asked = tvSide.debugAsk('Pixel')!;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => RemoteAskDialog(remote: tvSide, ask: asked),
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pixel wants to control this device'), findsOneWidget);
+    expect(find.text(asked.digits), findsOneWidget);
+    await tester.tap(find.byKey(const Key('tv-ask-allow')));
+    await tester.pumpAndSettle();
+    expect(find.byType(RemoteAskDialog), findsNothing);
+    expect(tvSide.ask, null);
+    expect(asked.state, 'allowed');
+    expect(tvSide.hasPhones, isTrue);
+    await tvSide.close();
+  });
+  testWidgets('Play on lists paired TVs, this phone and cast devices', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    await tester.pumpWidget(const SizedBox());
+    final active = await services();
+    await active.tvRemote.pair(tv, '012345');
+    PlayTarget? picked;
+    await tester.pumpWidget(
+      page(
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () async =>
+                picked = await pickPlayTarget(context, active),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Play on'), findsOneWidget);
+    expect(find.byKey(const Key('play-on-here')), findsOneWidget);
+    expect(find.byKey(const Key('play-on-pair')), findsOneWidget);
+    await tester.tap(find.byKey(Key('play-on-tv-${tv.id}')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(picked, isA<PlayOnTV>().having((t) => t.tv.id, 'tv', tv.id));
+    await tester.pumpWidget(const SizedBox());
+    await active.close();
+  });
   testWidgets('phone pairs by typing the code when no TV is found', (
     tester,
   ) async {
@@ -247,27 +389,47 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Pair'));
     await tester.pumpAndSettle();
+    expect(find.byType(RemoteNowPlaying), findsOneWidget);
+    expect(find.byKey(const Key('remote-title')), findsOneWidget);
     expect(find.text('Playing story'), findsOneWidget);
-    for (final label in [
-      'Play',
-      'Pause',
-      '+10 s',
-      'Next episode',
-      'Volume +',
+    expect(find.text('EPISODE 3'), findsOneWidget);
+    for (final key in [
+      'remote-play',
+      'remote-forward',
+      'remote-back',
+      'remote-next',
+      'remote-previous',
+      'remote-skip',
     ]) {
-      await tester.ensureVisible(find.text(label));
-      await tester.tap(find.text(label));
+      await tester.ensureVisible(find.byKey(Key(key)));
+      await tester.tap(find.byKey(Key(key)));
       await tester.pumpAndSettle();
     }
     expect(lan.commands, [
-      'play:{}',
       'pause:{}',
       'seek:{"seconds":10}',
+      'seek:{"seconds":-10}',
       'next:{}',
-      'volume:{"volume":60}',
+      'previous:{}',
+      'party_skip:{}',
     ]);
-    await tester.ensureVisible(find.text('Pick episode'));
-    await tester.tap(find.text('Pick episode'));
+    await tester.ensureVisible(find.byKey(const Key('remote-tool-Subtitles')));
+    await tester.tap(find.byKey(const Key('remote-tool-Subtitles')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('remote-choice-no')));
+    await tester.pumpAndSettle();
+    expect(lan.commands.last, 'subtitle:{"id":"no"}');
+    await tester.tap(find.byKey(const Key('remote-tool-Audio')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('remote-choice-2')));
+    await tester.pumpAndSettle();
+    expect(lan.commands.last, 'audio:{"id":"2"}');
+    await tester.tap(find.byKey(const Key('remote-tool-Quality')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('720').last);
+    await tester.pumpAndSettle();
+    expect(lan.commands.last, 'quality:{"value":"720"}');
+    await tester.tap(find.byKey(const Key('remote-tool-Episodes')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('4').last);
     await tester.pumpAndSettle();
@@ -295,9 +457,13 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Living room · Paired'));
       await tester.pumpAndSettle();
+      expect(find.byType(RemoteNowPlaying), findsOneWidget);
       expect(find.text('Hidden title'), findsNothing);
-      expect(find.text('Playing on TV'), findsOneWidget);
-      expect(find.text('Pick episode'), findsNothing);
+      expect(find.text('Playing on Living room'), findsOneWidget);
+      final episodes = tester.widget<InkWell>(
+        find.byKey(const Key('remote-tool-Episodes')),
+      );
+      expect(episodes.onTap, isNull);
       await tester.pumpWidget(const SizedBox());
       await active.close();
     },

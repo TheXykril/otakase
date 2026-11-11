@@ -1,3 +1,9 @@
+import 'dart:async';
+
+import 'data/remote_relay.dart';
+
+import 'package:flutter/foundation.dart';
+
 import 'core.dart';
 import 'data/auth.dart';
 import 'data/tracking.dart';
@@ -64,6 +70,8 @@ class AppServices {
     tvRemote.command = (action, args) async {
       await playerCommand?.call(action, args);
     };
+    discord.addListener(_relayCheck);
+    store.addListener(_relayCheck);
     tvRemote.status = () =>
         playerStatus?.call() ?? {'has_player': false, 'playing': false};
     resolver = SourceResolver(core, store, report: discord.reportProvider);
@@ -126,6 +134,74 @@ class AppServices {
   late final WatchParties party;
   late final CommunityExtras extras;
   late final TVRemote tvRemote;
+
+  /// The TV this phone is controlling, kept across pages so the now
+  /// playing bar can show it anywhere in the app.
+  final remoteLink = ValueNotifier<RemoteLink?>(null);
+
+  /// Starts controlling [tv], closing any other TV's connection.
+  RemoteLink controlTV(
+    TVDevice tv, {
+    Future<List<TVDevice>> Function()? findTVs,
+  }) {
+    final old = remoteLink.value;
+    if (old != null && old.tv.id == tv.id) return old;
+    unawaited(old?.close());
+    final link = RemoteLink(
+      tvRemote,
+      tv,
+      findTVs: findTVs ?? discoverTVs,
+      relay: store.flag('RemoteAnywhere') ? relay : null,
+      phoneName: profiles?.active.name ?? 'Phone',
+    );
+    remoteLink.value = link..start();
+    return link;
+  }
+
+  /// The phone remote through the Discord bot, for TVs this phone can't
+  /// reach on the local network and TVs on the same Discord account.
+  late final relay = RelayClient(
+    base: discord.baseUrl,
+    token: () => discord.linked ? discord.linkToken : '',
+    list: () => discord.request('GET', '/v1/remote/tvs'),
+  );
+
+  RelayHost? _relayHost;
+  bool _hostsRemote = false;
+
+  /// On a TV or computer: keeps a connection to the Discord bot while the
+  /// profile is linked and RemoteAnywhere is on, so the member's phones
+  /// reach it away from home.
+  void hostRemote(bool on) {
+    _hostsRemote = on;
+    _relayCheck();
+  }
+
+  void _relayCheck() {
+    final want =
+        _hostsRemote &&
+        !closed &&
+        discord.linked &&
+        store.flag('RemoteAnywhere');
+    if (want && _relayHost == null) {
+      _relayHost = RelayHost(
+        remote: tvRemote,
+        base: discord.baseUrl,
+        token: () => discord.linked ? discord.linkToken : '',
+      )..start();
+    } else if (!want && _relayHost != null) {
+      unawaited(_relayHost!.close());
+      _relayHost = null;
+    }
+  }
+
+  /// Stops controlling the TV.
+  Future<void> leaveTV() async {
+    final old = remoteLink.value;
+    remoteLink.value = null;
+    await old?.close();
+  }
+
   late final AppUpdates updates;
 
   /// A show the last player finished, to be scored once it closes.
@@ -143,6 +219,11 @@ class AppServices {
     await watchRooms.close();
     await party.close();
     extras.dispose();
+    await leaveTV();
+    discord.removeListener(_relayCheck);
+    store.removeListener(_relayCheck);
+    await _relayHost?.close();
+    _relayHost = null;
     await tvRemote.close();
     await presence.clear();
     await discord.close();
