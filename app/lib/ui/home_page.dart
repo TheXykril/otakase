@@ -289,6 +289,13 @@ class _HomePageState extends State<HomePage> {
   final discovery = GlobalKey<DiscoveryHomeState>();
   bool refreshScheduled = false;
   HomeData? featured;
+  late final AppLifecycleListener lifecycle = AppLifecycleListener(
+    onResume: () {
+      if (mounted && showsTitles) {
+        unawaited(widget.services.movies.syncIfStale());
+      }
+    },
+  );
 
   /// Whether films and series share Home with anime on this profile.
   bool get showsTitles =>
@@ -311,11 +318,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// Pulls the film and series watchlist and progress once titles show.
-  Future<void> syncTitles() async {
+  Future<void> syncTitles({bool force = false}) async {
     titlesSynced = true;
     try {
       await widget.services.trakt.load();
-      await widget.services.movies.sync();
+      await widget.services.movies.sync(force: force);
     } catch (_) {
       // Home keeps what is saved on this device.
     }
@@ -324,6 +331,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    lifecycle;
     widget.services.movies.addListener(titlesChanged);
     if (isDesktop) unawaited(loadFeatured());
     if (!isDesktop) {
@@ -339,6 +347,12 @@ class _HomePageState extends State<HomePage> {
     }
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
+      // Picks up films and episodes watched on other devices meanwhile.
+      if (mounted && widget.active && showsTitles) {
+        unawaited(
+          widget.services.movies.syncIfStale(gap: const Duration(minutes: 5)),
+        );
+      }
     });
   }
 
@@ -486,7 +500,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> refresh({bool forceSync = false}) async {
     if (isDesktop || featureRequested) unawaited(loadFeatured());
     await Future.wait([
-      if (showsTitles) syncTitles(),
+      if (showsTitles) syncTitles(force: forceSync),
       if (discovery.currentState case final page?) page.load(refresh: true),
       ...blocks.values.map(
         (key) =>
@@ -522,6 +536,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     widget.services.movies.removeListener(titlesChanged);
+    lifecycle.dispose();
     artTimer?.cancel();
     clock?.cancel();
     bannerTimer?.cancel();
