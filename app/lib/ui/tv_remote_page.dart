@@ -10,6 +10,7 @@ import '../services.dart';
 import 'components.dart';
 import 'device_status.dart';
 import 'remote_now_playing.dart';
+import 'screen_orientation.dart';
 import '../host.dart';
 
 class TVRemotePage extends StatefulWidget {
@@ -52,6 +53,8 @@ class _TVRemotePageState extends State<TVRemotePage> {
         if (mounted) setState(() {});
       });
     } else {
+      // The remote is held like a phone, never turned sideways.
+      ScreenOrientation.lockUpright();
       unawaited(scan());
       if (widget.pairCode case final code?) {
         WidgetsBinding.instance.addPostFrameCallback(
@@ -171,7 +174,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
         builder: (_) => _AskDialog(
           tv: tv,
           remote: remote,
-          phoneName: widget.services.profiles?.active.name ?? 'Phone',
+          phoneName: widget.services.tvRemote.name,
         ),
       );
       if (allowed == true && mounted) connect(tv);
@@ -183,11 +186,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
     );
     if (code == null || !mounted) return;
     try {
-      await remote.pair(
-        tv,
-        code,
-        phoneName: widget.services.profiles?.active.name ?? 'Phone',
-      );
+      await remote.pair(tv, code, phoneName: widget.services.tvRemote.name);
       if (mounted) connect(tv);
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
@@ -208,7 +207,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
       final tv = await remote.pairByCode(
         entry.$1,
         address: entry.$2,
-        phoneName: widget.services.profiles?.active.name ?? 'Phone',
+        phoneName: widget.services.tvRemote.name,
         findTVs: widget.findTVs,
       );
       if (mounted) {
@@ -230,6 +229,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
   void dispose() {
     timer?.cancel();
     if (widget.isTV) remote.endPair();
+    if (!widget.isTV) ScreenOrientation.release();
     super.dispose();
   }
 

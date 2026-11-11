@@ -157,6 +157,21 @@ class MediaTitle {
     if (votes > 0) 'votes': votes,
   };
 
+  /// The few fields an Otakase TV needs to find and play this title, small
+  /// enough for the phone remote.
+  Json get remote => {
+    'kind': kind,
+    'trakt': trakt,
+    if (imdb.isNotEmpty) 'imdb': imdb,
+    if (tmdb > 0) 'tmdb': tmdb,
+    if (slug.isNotEmpty) 'slug': slug,
+    'title': String.fromCharCodes(title.runes.take(200)),
+    if (year > 0) 'year': year,
+    if (poster.length <= 500) 'poster': poster,
+    if (runtime > 0) 'runtime': runtime,
+    if (language.isNotEmpty) 'language': language,
+  };
+
   /// The ids Trakt matches a title by.
   Json get ids => {
     'trakt': trakt,

@@ -31,6 +31,7 @@ import 'data/subtitle_fallback.dart';
 import 'services.dart';
 import 'tls_ca.dart';
 import 'ui/components.dart';
+import 'ui/screen_orientation.dart';
 import 'ui/seal.dart';
 import 'ui/skip_marker.dart';
 import 'ui/player_keys.dart';
@@ -64,11 +65,11 @@ class PlayerPage extends StatefulWidget {
     required this.services,
     required PlayRequest this.request,
     required this.isTV,
+    this.startAt = 0,
+    this.castTo,
   }) : anime = null,
        episode = 0,
-       mode = 'sub',
-       startAt = 0,
-       castTo = null;
+       mode = 'sub';
   final AppServices services;
 
   /// Where to start, in seconds, when a phone handed the episode over;
@@ -1477,8 +1478,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       context,
       widget.services,
       here: false,
-      // Films go to an Otakase TV by cast for now.
-      otakase: !isTitle && !widget.isTV,
+      // Downloads and other titles a TV cannot find stay on cast.
+      otakase: !widget.isTV && (!isTitle || request!.remote != null),
       caster: caster,
     );
     panelOpen = false;
@@ -1503,12 +1504,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       await link.ready();
       await link.send(
         'start',
-        args: {
-          'anilist_id': anime.id,
-          'episode': episode,
-          'position': at,
-          'mode': source?.mode ?? widget.mode,
-        },
+        args: isTitle
+            ? {...request!.remote!, 'position': at}
+            : {
+                'anilist_id': anime.id,
+                'episode': episode,
+                'position': at,
+                'mode': source?.mode ?? widget.mode,
+              },
       );
     } catch (e) {
       if (mounted) flash.show(e is StateError ? e.message : '$e');
@@ -2164,7 +2167,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final tracks = player.state.tracks, chosen = player.state.track;
     return {
       'cover': isTitle
-          ? ''
+          ? request!.cover
           : anime.coverLarge.isNotEmpty
           ? anime.coverLarge
           : anime.cover,
@@ -2563,7 +2566,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         overlays: [SystemUiOverlay.bottom],
       ),
     );
-    if (!widget.isTV) unawaited(SystemChrome.setPreferredOrientations([]));
+    if (!widget.isTV) ScreenOrientation.restore();
     FullBleed.leave();
     super.dispose();
   }

@@ -16,6 +16,7 @@ import 'package:otakase/services.dart';
 import 'package:otakase/ui/components.dart';
 import 'package:otakase/ui/play_on.dart';
 import 'package:otakase/ui/remote_now_playing.dart';
+import 'package:otakase/ui/screen_orientation.dart';
 import 'package:otakase/ui/tv_remote_page.dart';
 import 'package:otakase/ui/watch_rooms_page.dart';
 import 'package:otakase/ui/movie_page.dart';
@@ -275,6 +276,7 @@ void main() {
     expect(find.byType(RemoteNowPlaying), findsOneWidget);
     expect(find.text('Playing story'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
+    expect(ScreenOrientation.upright, isFalse);
     await active.close();
   });
   testWidgets('the TV asks whoever is watching and Allow lets the phone in', (
@@ -353,6 +355,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // The phone remote stays upright while it is open.
+    expect(ScreenOrientation.upright, isTrue);
     expect(find.text('Living room'), findsNothing);
     await tester.tap(find.byKey(const Key('tv-enter-code')));
     await tester.pumpAndSettle();

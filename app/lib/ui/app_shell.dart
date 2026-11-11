@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import '../core.dart';
 import '../data/models.dart';
 import '../data/movies.dart';
+import '../data/trakt.dart';
+import '../player.dart';
 import '../services.dart';
 import 'catalog_pages.dart';
 import 'components.dart';
@@ -107,6 +109,7 @@ class _AppShellState extends State<AppShell> {
     widget.services.tvRemote.addListener(remoteAsk);
     if (widget.isTV) {
       widget.services.tvRemote.start = startFromPhone;
+      widget.services.tvRemote.startTitle = startTitleFromPhone;
       widget.services.hostRemote(true);
     }
     // Trakt sits with the other trackers in Accounts and on More.
@@ -200,6 +203,9 @@ class _AppShellState extends State<AppShell> {
       if (widget.services.tvRemote.start == startFromPhone) {
         widget.services.tvRemote.start = null;
       }
+      if (widget.services.tvRemote.startTitle == startTitleFromPhone) {
+        widget.services.tvRemote.startTitle = null;
+      }
     }
     super.dispose();
   }
@@ -253,6 +259,58 @@ class _AppShellState extends State<AppShell> {
             isTV: widget.isTV,
             mode: mode,
             startAt: position,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A paired phone picked a film or a series episode for this TV: close
+  /// whatever plays and open it, at the phone's spot when it handed over.
+  Future<void> startTitleFromPhone(
+    Json sent,
+    int season,
+    int number,
+    int position,
+  ) async {
+    final services = widget.services;
+    var title = MediaTitle.fromJson(sent);
+    try {
+      title = await services.trakt.details(title);
+    } catch (_) {
+      /* What the phone sent is enough to play from. */
+    }
+    var episodes = <TitleEpisode>[];
+    TitleEpisode? episode;
+    if (title.isShow) {
+      try {
+        episodes = await services.trakt.episodes(title);
+      } catch (_) {
+        /* Plays this one episode without a next one. */
+      }
+      episode = episodes.firstWhere(
+        (e) => e.season == season && e.number == number,
+        orElse: () => TitleEpisode(season: season, number: number),
+      );
+    }
+    if (!mounted) return;
+    await services.stopPlayback?.call();
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    navigator.popUntil((route) => route.isFirst);
+    unawaited(
+      navigator.push(
+        OtakaseRoute<void>(
+          builder: (_) => PlayerPage.title(
+            services: services,
+            isTV: widget.isTV,
+            startAt: position,
+            request: titlePlay(
+              services,
+              title,
+              episode: episode,
+              episodes: episodes,
+            ),
           ),
         ),
       ),

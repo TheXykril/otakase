@@ -8,6 +8,7 @@ import '../data/models.dart';
 import '../data/tv_remote.dart';
 import '../services.dart';
 import 'components.dart';
+import 'screen_orientation.dart';
 import 'skip_marker.dart';
 
 /// Whether the phone may show what the TV plays: 18+ titles stay hidden
@@ -37,6 +38,19 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
   String? error;
 
   RemoteLink? get link => widget.services.remoteLink.value;
+
+  @override
+  void initState() {
+    super.initState();
+    // The remote is held like a phone, never turned sideways.
+    ScreenOrientation.lockUpright();
+  }
+
+  @override
+  void dispose() {
+    ScreenOrientation.release();
+    super.dispose();
+  }
 
   Future<void> send(String action, {Json args = const {}}) async {
     final current = link;

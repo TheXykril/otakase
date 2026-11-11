@@ -577,6 +577,130 @@ void lookupTests() {
     expect(started, ['154587:8:492:dub', '5:1:0:sub']);
   });
 
+  test('a phone starts a film or a series episode on the TV', () async {
+    final (tv, phone, device) = await tvAndPhone();
+    final code = await tv.beginPair();
+    await phone.pair(device, code.code);
+    tv.status = () => {'has_player': false};
+    const film = {'kind': 'movie', 'trakt': 12, 'title': 'A film'};
+    const show = {'kind': 'show', 'trakt': 34, 'title': 'A show'};
+    // A TV without film support says so instead of failing quietly.
+    await expectLater(
+      phone.send(
+        device,
+        action: 'start',
+        args: {'title': film, 'season': 0, 'episode': 0},
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('Update'),
+        ),
+      ),
+    );
+    final started = <String>[];
+    tv.startTitle = (title, season, episode, position) async {
+      started.add(
+        '${title['kind']}:${title['trakt']}:$season:$episode:$position',
+      );
+    };
+    await phone.send(
+      device,
+      action: 'start',
+      args: {'title': film, 'season': 0, 'episode': 0, 'position': 61},
+    );
+    await phone.send(
+      device,
+      action: 'start',
+      args: {'title': show, 'season': 2, 'episode': 5},
+    );
+    for (final bad in [
+      {
+        'title': {...film, 'kind': 'game'},
+        'season': 0,
+        'episode': 0,
+      },
+      {
+        'title': {...film, 'trakt': 0},
+        'season': 0,
+        'episode': 0,
+      },
+      {
+        'title': {...film, 'trakt': '12'},
+        'season': 0,
+        'episode': 0,
+      },
+      {'title': film, 'season': 1, 'episode': 3},
+      {'title': show, 'season': 1, 'episode': 0},
+      {'title': show, 'season': -1, 'episode': 2},
+      {'title': film, 'season': 0, 'episode': 0, 'position': -4},
+    ]) {
+      await expectLater(
+        phone.send(device, action: 'start', args: bad),
+        throwsStateError,
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(started, ['movie:12:0:0:61', 'show:34:2:5:0']);
+  });
+
+  test('phone and TV show their device names, not a profile', () async {
+    HttpOverrides.global = _RealHttp();
+    addTearDown(() => HttpOverrides.global = null);
+    final tv = TVRemote(
+          storage: MemoryTokens(),
+          name: 'Profile name',
+          lookupName: () async => '  BRAVIA 4K VH2  ',
+          findAddress: () async => '127.0.0.1',
+          transport: const LanTransport(allowLoopback: true),
+        ),
+        phone = TVRemote(
+          storage: MemoryTokens(),
+          transport: const LanTransport(allowLoopback: true),
+        );
+    addTearDown(tv.close);
+    addTearDown(phone.close);
+    await tv.startTV(discoveryPort: 0, serverPort: 0);
+    expect(tv.name, 'BRAVIA 4K VH2');
+    final device = (await helloTV(
+      '127.0.0.1',
+      port: tv.port,
+      transport: const LanTransport(allowLoopback: true),
+    ))!;
+    expect(device.name, 'BRAVIA 4K VH2');
+    // Paired before, under a profile's name.
+    final code = await tv.beginPair();
+    await phone.pair(device, code.code, phoneName: 'Mom');
+    expect(tv.phoneNames, ['Mom']);
+    tv.status = () => {'has_player': false};
+    final link = RemoteLink(
+      phone,
+      device,
+      findTVs: () async => [],
+      phoneName: 'Pixel 9',
+    );
+    addTearDown(link.close);
+    link.start();
+    Future<void> until(bool Function() ok) async {
+      for (var i = 0; i < 200 && !ok(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(ok(), isTrue);
+    }
+
+    await until(() => tv.phoneNames.single == 'Pixel 9');
+    // The TV renamed in its settings shows up under the new name.
+    tv.name = 'Office TV';
+    await until(() => link.tv.name == 'Office TV');
+    expect(phone.paired.single.name, 'Office TV');
+  });
+
+  test('host names read as people name the computer', () {
+    expect(hostDeviceName('hyperion.local'), 'hyperion');
+    expect(hostDeviceName(' Desk-PC '), 'Desk-PC');
+  });
+
   test('the live connection finds the TV again at a new address', () async {
     HttpOverrides.global = _RealHttp();
     addTearDown(() => HttpOverrides.global = null);

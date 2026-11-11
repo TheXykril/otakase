@@ -63,10 +63,7 @@ class AppServices {
     extras = CommunityExtras(discord: discord, store: store);
     tvRemote =
         remoteControl ??
-        TVRemote(
-          storage: this.auth.storage,
-          name: profiles?.active.name ?? 'Otakase TV',
-        );
+        TVRemote(storage: this.auth.storage, lookupName: localDeviceName);
     tvRemote.command = (action, args) async {
       await playerCommand?.call(action, args);
     };
@@ -152,7 +149,7 @@ class AppServices {
       tv,
       findTVs: findTVs ?? discoverTVs,
       relay: store.flag('RemoteAnywhere') ? relay : null,
-      phoneName: profiles?.active.name ?? 'Phone',
+      phoneName: tvRemote.name,
     );
     remoteLink.value = link..start();
     return link;

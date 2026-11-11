@@ -62,6 +62,17 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /** The name people gave this phone or TV in its settings, else its maker and model. */
+    private fun deviceName(): String {
+        val named = try {
+            android.provider.Settings.Global.getString(contentResolver, "device_name")
+        } catch (_: Exception) { null }
+        if (!named.isNullOrBlank()) return named.trim()
+        val maker = Build.MANUFACTURER.orEmpty().replaceFirstChar { it.uppercase() }
+        val model = Build.MODEL.orEmpty()
+        return if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model".trim()
+    }
+
     private fun deviceStatus(): Map<String, Any> {
         val battery = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val level = battery?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
@@ -146,6 +157,7 @@ class MainActivity : FlutterActivity() {
                     result.success(if (call.arguments == true) localNetwork() else null)
                 } catch (_: Exception) { result.error("unavailable", "Local discovery unavailable", null) }
                 "status" -> result.success(deviceStatus())
+                "deviceName" -> result.success(deviceName())
                 "keepAwake" -> {
                     keepAwake(call.argument<Boolean>("screen") == true, call.argument<String>("work"))
                     result.success(null)

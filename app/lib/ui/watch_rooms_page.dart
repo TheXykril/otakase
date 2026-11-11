@@ -15,6 +15,7 @@ import '../data/watch_rooms.dart';
 import '../services.dart';
 import '../tls_ca.dart';
 import 'components.dart';
+import 'screen_orientation.dart';
 import 'device_status.dart';
 import 'mpv.dart';
 import 'phone_player.dart';
@@ -938,7 +939,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
         overlays: [SystemUiOverlay.bottom],
       ),
     );
-    if (!widget.isTV) unawaited(SystemChrome.setPreferredOrientations([]));
+    if (!widget.isTV) ScreenOrientation.restore();
     FullBleed.leave();
     super.dispose();
   }

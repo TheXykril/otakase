@@ -71,12 +71,17 @@ episodes, subtitles, audio, quality and stop. While the TV plays, a bar above
 the phone's tabs shows what is on and opens the remote again. The remote's
 menu disconnects or forgets the TV.
 
-You can also start from the phone. On a show's page, **Play on…** lists your
-paired TVs and computers, this phone, and cast devices (Chromecast, DLNA,
-Kodi, any browser) in one place. Pick a TV and the episode starts there while
-the phone becomes its remote. While watching on the phone, the player's cast
-button offers the same list: pick a paired TV and the episode moves there at
-the same spot. Films and series still go to TVs through casting.
+You can also start from the phone. On an anime, film or show page, **Play
+on…** lists your paired TVs and computers, this phone, and cast devices
+(Chromecast, DLNA, Kodi, any browser) in one place. Pick a TV and the episode
+or film starts there while the phone becomes its remote. While watching on
+the phone, the player's cast button offers the same list: pick a paired TV
+and it moves there at the same spot. Downloads still play on the phone or go
+through casting.
+
+TVs, computers and phones show under their own device name: the name set in
+Android's settings (else the maker and model), or the computer's name. The
+remote stays upright on the phone and does not turn sideways.
 
 Away from home, or on another network, the remote still works when the
 phone and the TV or computer are linked to the same Discord account
