@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 26.4.0 - 2026-11-11
+
+The phone remote becomes a full remote that works from anywhere, Search shows what is trending with more movie filters, watch rooms use the normal player, and Trakt keeps films and shows in step across devices.
+
 ### Added
 
 - **Trending on an empty Search.** Before you type anything, Search shows
@@ -47,6 +51,11 @@
 - **The phone remote is live.** It shows what the TV is doing the moment it
   changes, reconnects on its own and finds the TV again after its address
   changed, instead of asking every two seconds while the page is open.
+- **Trakt keeps films and shows in step across devices.** Home and Movies
+  check Trakt every few minutes while open and when the app comes back to
+  the front. A series watched on another device or app moves on to the next
+  episode in Continue, and leaves Continue once every aired episode is
+  watched.
 
 ### Fixed
 
@@ -54,6 +63,16 @@
   not found by its title (8Filmai calls The Transporter Refueled
   "Transporter 4"), Otakase looks by the first word and takes the film whose
   page carries the same IMDb id.
+- **A film finished on another device leaves Continue** here too, even a
+  rewatch or one marked watched before, instead of keeping its old spot.
+- **Finishes and watched marks made offline reach Trakt.** They are kept,
+  even across restarts, and sent with the time they happened once Trakt
+  answers again.
+- **Updates arrive when otakase.com is blocked.** Some DNS filters and ad
+  blockers block new web addresses; the app now checks for updates on the
+  old site instead. When neither answers, the error says why.
+- **The desktop Continue row plays the next episode** after a finished one
+  instead of replaying it.
 
 ## 26.3.1 - 2026-11-10
 
