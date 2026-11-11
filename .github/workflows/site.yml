@@ -123,8 +123,7 @@ jobs:
         run: |
           pkgs=python3-markdown
           [ "$FULL" = true ] && pkgs="$pkgs ffmpeg python3-pil"
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq $pkgs > /dev/null
+          .github/apt-install.sh $pkgs > /dev/null
 
       # Help pages (wiki/) and the changelog (CHANGELOG.md) live on the site,
       # so nothing on it links to the repository.
