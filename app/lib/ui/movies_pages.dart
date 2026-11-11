@@ -445,6 +445,16 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
   /// Whether anything is asked: a title, or filters to browse by.
   bool get asked => query.isNotEmpty || filters.count > 0;
 
+  /// Trending films and series, shown while nothing is asked; kept so
+  /// clearing the field brings them back without asking again.
+  List<MediaTitle>? trending;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(search('', retry: true));
+  }
+
   @override
   void dispose() {
     debounce?.cancel();
@@ -462,9 +472,9 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
     if (q == query && !retry && (loading || error.isEmpty)) return;
     query = q;
     final g = ++generation;
-    if (!asked) {
+    if (!asked && trending != null) {
       setState(() {
-        results = [];
+        results = trending!;
         loading = false;
         error = '';
       });
@@ -475,6 +485,7 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
       error = '';
       results = [];
     });
+    final browse = !asked;
     try {
       final f = filters;
       final found = await findTitles(
@@ -484,13 +495,16 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
         year: f.year,
         genre: f.genre,
         status: f.status,
-        sort: f.sort,
+        sort: browse ? 'TRENDING' : f.sort,
       );
+      if (browse) trending = found;
       if (mounted && g == generation) setState(() => results = found);
     } catch (_) {
       if (mounted && g == generation) {
         setState(
-          () => error = 'Movies and shows could not be searched. Check your connection and retry.',
+          () => error = !browse
+              ? 'Movies and shows could not be searched. Check your connection and retry.'
+              : 'Trending movies and shows could not be loaded. Check your connection and retry.',
         );
       }
     } finally {
@@ -580,7 +594,9 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
             Semantics(
               liveRegion: true,
               child: Text(
-                'Searching movies and shows…',
+                asked
+                    ? 'Searching movies and shows…'
+                    : 'Loading trending movies and shows…',
                 style: uiStyle(context, color: muted),
               ),
             ),
@@ -605,7 +621,12 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
                       onPressed: () => unawaited(apply(const SearchFilters())),
                     ),
                   ),
-          if (!loading && error.isEmpty && !asked)
+          if (!loading && error.isEmpty && !asked && results.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 14),
+              child: SectionLabel('Trending movies & shows'),
+            ),
+          if (!loading && error.isEmpty && !asked && results.isEmpty)
             const EmptyState(
               message: 'Search for a movie or show.',
               action: Text('Enter a title above, or pick filters to browse.'),

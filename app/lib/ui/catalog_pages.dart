@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show max, min;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show OverflowBoxFit;
@@ -70,6 +71,12 @@ class _SearchPageState extends State<SearchPage> {
   bool titlesBusy = false, titlesFailed = false;
   String titlesQuery = '';
   int titleGeneration = 0;
+
+  /// Nothing typed and no filters: the page shows what is trending.
+  bool get browsing => query.text.trim().isEmpty && filters.count == 0;
+
+  /// Trending anime and films share the page, so each shows about this many.
+  static const trendingShare = 12;
 
   @override
   void initState() {
@@ -158,7 +165,7 @@ class _SearchPageState extends State<SearchPage> {
         year: year,
         genre: genre,
         status: status,
-        sort: sort,
+        sort: sort ?? (browsing ? 'TRENDING' : null),
       );
       if (mounted && g == generation) {
         setState(() {
@@ -186,9 +193,12 @@ class _SearchPageState extends State<SearchPage> {
   /// filters it understands, or its popular lists when only filters are set.
   Future<void> searchTitles({bool retry = false}) async {
     final q = query.text.trim();
-    final key = widget.titles && (q.isNotEmpty || filters.count > 0)
-        ? [q, format, season, year, genre, status, sort].join('|')
-        : '';
+    // With nothing asked, trending films and series fill the page instead.
+    final key = !widget.titles
+        ? ''
+        : browsing
+        ? 'trending'
+        : [q, format, season, year, genre, status, sort].join('|');
     if (key == titlesQuery && !retry) return;
     titlesQuery = key;
     final g = ++titleGeneration;
@@ -214,7 +224,7 @@ class _SearchPageState extends State<SearchPage> {
         year: year,
         genre: genre,
         status: status,
-        sort: sort,
+        sort: browsing ? 'TRENDING' : sort,
       );
       if (mounted && g == titleGeneration) {
         setState(() => titleResults = found);
@@ -226,9 +236,95 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
+  /// Trending films and series under the trending anime, in a grid capped
+  /// like the anime so both get room.
+  List<Widget> trendingTitles() {
+    if (!widget.titles || !browsing) return const [];
+    final cards = titleCardsOf(widget.services);
+    return [
+      if (titlesFailed)
+        FailureView(
+          message: 'Trending movies and shows could not be loaded. Check your connection and retry.',
+          onRetry: () => unawaited(searchTitles(retry: true)),
+          isTV: widget.isTV,
+        )
+      else if (titlesBusy)
+        Semantics(
+          liveRegion: true,
+          label: 'Loading trending movies and shows',
+          child: const SkeletonBlock(height: 180),
+        )
+      else if (titleResults.isNotEmpty) ...[
+        const SizedBox(height: 26),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 14),
+          child: SectionLabel('Trending movies & shows'),
+        ),
+        posterGrid(
+          [for (final t in titleResults) cards.card(t)],
+          keyPrefix: 'trending-title',
+          cap: trendingShare,
+          caption: (a) => switch (cards.title(a)) {
+            final t? when t.isShow => 'Series',
+            final t? when t.year > 0 => '${t.year}',
+            _ => 'Movie',
+          },
+        ),
+      ],
+    ];
+  }
+
+  /// Poster cards in as many columns as fit. With [cap], only that many
+  /// show, rounded to whole rows (at least one).
+  Widget posterGrid(
+    List<Anime> list, {
+    required String keyPrefix,
+    int? cap,
+    String? Function(Anime)? caption,
+  }) => LayoutBuilder(
+    builder: (context, box) {
+      final gap = isDesktop ? 26.0 : 12.0;
+      final columns =
+          (box.maxWidth /
+                  (isDesktop
+                      ? 226
+                      : widget.isTV
+                      ? 180
+                      : (MediaQuery.textScalerOf(context).scale(1) > 1.2
+                            ? 150
+                            : 116)))
+              .floor()
+              .clamp(2, 9);
+      final width = (box.maxWidth - (columns - 1) * gap) / columns;
+      final count = cap == null
+          ? list.length
+          : min(list.length, max(columns, cap ~/ columns * columns));
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: count,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columns,
+          crossAxisSpacing: gap,
+          mainAxisSpacing: isDesktop ? 26 : 14,
+          mainAxisExtent:
+              width * 1.5 + 108 * MediaQuery.textScalerOf(context).scale(1),
+        ),
+        itemBuilder: (_, i) => PosterCard(
+          key: ValueKey('$keyPrefix-${list[i].key}'),
+          anime: list[i],
+          width: width,
+          isTV: widget.isTV,
+          caption: caption?.call(list[i]),
+          onOpen: () => widget.onOpen(list[i]),
+        ),
+      );
+    },
+  );
+
   /// Films and series for the query, in a row under the anime.
   List<Widget> titleRow() {
-    if (titlesQuery.isEmpty) return const [];
+    if (titlesQuery.isEmpty || browsing) return const [];
     final cards = titleCardsOf(widget.services);
     return [
       if (titlesFailed)
@@ -416,11 +512,15 @@ class _SearchPageState extends State<SearchPage> {
           onChanged: (next) => unawaited(apply(next)),
         ),
       const SizedBox(height: 22),
-      if (titlesQuery.isNotEmpty && items.isNotEmpty)
-        const Padding(
-          padding: EdgeInsets.only(bottom: 14),
-          child: SectionLabel('Anime'),
-        ),
+      // Always one slot, so the results below keep their place (and TV
+      // focus) when the heading comes and goes.
+      if (items.isNotEmpty && (browsing || titlesQuery.isNotEmpty))
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: SectionLabel(browsing ? 'Trending anime' : 'Anime'),
+        )
+      else
+        const SizedBox.shrink(),
       if (busy && items.isEmpty)
         Semantics(
           liveRegion: true,
@@ -462,43 +562,11 @@ class _SearchPageState extends State<SearchPage> {
                   },
                 ),
         ),
-      LayoutBuilder(
-        builder: (context, box) {
-          final gap = isDesktop ? 26.0 : 12.0;
-          final columns =
-              (box.maxWidth /
-                      (isDesktop
-                          ? 226
-                          : widget.isTV
-                          ? 180
-                          : (MediaQuery.textScalerOf(context).scale(1) > 1.2
-                                ? 150
-                                : 116)))
-                  .floor()
-                  .clamp(2, 9);
-          final width = (box.maxWidth - (columns - 1) * gap) / columns;
-          return GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: items.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              crossAxisSpacing: gap,
-              mainAxisSpacing: isDesktop ? 26 : 14,
-              mainAxisExtent:
-                  width * 1.5 +
-                  (widget.isTV ? 108 : 108) *
-                      MediaQuery.textScalerOf(context).scale(1),
-            ),
-            itemBuilder: (_, i) => PosterCard(
-              key: ValueKey('search-${items[i].key}'),
-              anime: items[i],
-              width: width,
-              isTV: widget.isTV,
-              onOpen: () => widget.onOpen(items[i]),
-            ),
-          );
-        },
+      posterGrid(
+        items,
+        keyPrefix: 'search',
+        // Anime and films share the trending page; anime alone pages on.
+        cap: browsing && widget.titles ? trendingShare : null,
       ),
       if (busy && items.isNotEmpty)
         Padding(
@@ -518,7 +586,7 @@ class _SearchPageState extends State<SearchPage> {
           onRetry: () => load(more: retryMore),
           isTV: widget.isTV,
         ),
-      if (hasMore && error == null)
+      if (hasMore && error == null && !(browsing && widget.titles))
         Padding(
           padding: const EdgeInsets.all(20),
           child: AppButton(
@@ -528,6 +596,7 @@ class _SearchPageState extends State<SearchPage> {
             isTV: widget.isTV,
           ),
         ),
+      ...trendingTitles(),
       ...titleRow(),
     ],
   );

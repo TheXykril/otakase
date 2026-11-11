@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Trending on an empty Search.** Before you type anything, Search shows
+  what is trending: anime, and with movies on, trending movies and shows
+  too, each kept to a few rows so both fit. Start typing and it switches to
+  your results; clear the box and trending comes back.
 - **Pair the phone remote by tapping Allow on the TV.** Tap a TV or
   computer in Control TV on the phone and it asks Allow on screen, with two
   numbers to match, instead of you typing a code. The QR code and typed
