@@ -476,6 +476,153 @@ void main() {
     expect(scrobbles, hasLength(1));
   });
 
+  group('Trakt catches up', () {
+    late List<http.Request> calls;
+    late bool down;
+    late Json activity;
+    late List<Json> paused;
+    late MovieService movies;
+
+    setUp(() async {
+      calls = [];
+      down = false;
+      activity = {
+        'all': '2026-11-11T09:00:00.000Z',
+        'movies': {'watched_at': '2026-11-11T09:00:00.000Z'},
+      };
+      paused = [];
+      final client = MockClient((r) async {
+        calls.add(r);
+        if (down) return http.Response('', 503);
+        switch (r.url.path) {
+          case '/sync/last_activities':
+            return http.Response(jsonEncode(activity), 200);
+          case '/sync/playback':
+            return http.Response(jsonEncode(paused), 200);
+          case '/sync/history':
+            return http.Response('{}', 201);
+        }
+        if (r.method == 'DELETE') return http.Response('', 204);
+        if (r.url.path.startsWith('/scrobble/')) {
+          return http.Response('{}', 201);
+        }
+        return http.Response('[]', 200);
+      });
+      final tokens = MemoryTokens()
+        ..values[traktTokenKey] = jsonEncode({
+          'access_token': 'tok',
+          'expires_in': 0,
+        });
+      movies = MovieService(
+        trakt: Trakt(client: client, storage: tokens),
+        core: MovieCore(),
+        store: await freshStore(),
+        pushGap: Duration.zero,
+      );
+      // Signing in starts a full sync; let it finish first.
+      await movies.trakt.load();
+      do {
+        await pumpEventQueue();
+      } while (movies.syncing);
+      calls.clear();
+    });
+
+    Iterable<http.Request> named(String path) =>
+        calls.where((r) => r.url.path == path);
+
+    test(
+      'a finish made while Trakt was away goes up on the next sync',
+      () async {
+        down = true;
+        await movies.progress(film, 8800, 9000, completed: true);
+        await movies.scrobble('stop', film, 100);
+        await movies.markWatched(series, true, season: 1, episode: 4);
+        expect(movies.unsentWatches, hasLength(2));
+        // Paused spots are no finish: nothing waits for them.
+        await movies.scrobble('pause', film, 40);
+        expect(movies.unsentWatches, hasLength(2));
+
+        down = false;
+        calls.clear();
+        await movies.sync();
+        final sent = [
+          for (final r in named('/sync/history')) jsonDecode(r.body) as Json,
+        ];
+        expect(sent, hasLength(2));
+        final film0 = (sent[0]['movies'] as List).single as Map;
+        expect(film0['ids'], containsPair('trakt', 102156));
+        expect(film0['watched_at'], isA<String>());
+        final show = (sent[1]['shows'] as List).single as Map;
+        final ep =
+            ((show['seasons'] as List).single as Map)['episodes'] as List;
+        expect((ep.single as Map)['number'], 4);
+        expect(movies.unsentWatches, isEmpty);
+
+        // Kept across restarts while waiting.
+        down = true;
+        await movies.scrobble('stop', film, 100);
+        final again = MovieService(
+          trakt: movies.trakt,
+          core: MovieCore(),
+          store: movies.store,
+        );
+        expect(again.unsentWatches, hasLength(1));
+      },
+    );
+
+    test('nothing new on Trakt skips the full pull', () async {
+      // The sign-in sync pulled everything already.
+      await movies.sync();
+      expect(named('/sync/last_activities'), hasLength(1));
+      expect(named('/sync/watched/movies'), isEmpty);
+
+      // Something happened on another device.
+      activity = {
+        ...activity,
+        'movies': {'watched_at': '2026-11-11T10:00:00.000Z'},
+      };
+      await movies.sync();
+      expect(named('/sync/watched/movies'), hasLength(1));
+      // Pull to refresh always pulls.
+      await movies.sync(force: true);
+      expect(named('/sync/watched/movies'), hasLength(2));
+    });
+
+    test(
+      'a paused spot older than a finish here is removed from Trakt',
+      () async {
+        await movies.progress(film, 8800, 9000, completed: true);
+        paused = [
+          {
+            'id': 77,
+            'type': 'movie',
+            'progress': 40,
+            'paused_at': DateTime.now()
+                .subtract(const Duration(hours: 2))
+                .toUtc()
+                .toIso8601String(),
+            'movie': {
+              'title': 'Interstellar',
+              'ids': {'trakt': 102156},
+            },
+          },
+        ];
+        await movies.sync(force: true);
+        expect(
+          calls.where((r) => r.method == 'DELETE').map((r) => r.url.path),
+          ['/sync/playback/77'],
+        );
+        expect(movies.entry(film)!.resumeAt(9000), 0);
+
+        // A rewatch spot here is not a finish: Trakt's older pause stays.
+        calls.clear();
+        await movies.progress(film, 600, 9000);
+        await movies.sync(force: true);
+        expect(calls.where((r) => r.method == 'DELETE'), isEmpty);
+      },
+    );
+  });
+
   test(
     'Trakt device sign-in waits for the code, then syncs the library',
     () async {

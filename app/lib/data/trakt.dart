@@ -233,10 +233,14 @@ class TraktPaused {
     this.season = 0,
     this.episode = 0,
     this.pausedAt = 0,
+    this.id = 0,
   });
   final MediaTitle title;
   final double progress;
   final int season, episode;
+
+  /// Trakt's id for this paused spot, to remove it once it is stale.
+  final int id;
 
   /// When it was paused, in milliseconds since the epoch; 0 when unknown.
   final int pausedAt;
@@ -795,6 +799,28 @@ class Trakt extends ChangeNotifier {
     );
   }
 
+  /// A fingerprint of when the viewer's films, episodes and lists last
+  /// changed on Trakt; while it stays the same the library has not changed.
+  /// Empty when Trakt does not say.
+  Future<String> lastActivity() async {
+    final data = await _get('/sync/last_activities', auth: true);
+    if (data is! Map) return '';
+    final parts = {
+      for (final k in ['movies', 'episodes', 'shows', 'seasons'])
+        if (data[k] is Map) k: data[k],
+    };
+    return parts.isEmpty ? '' : jsonEncode(parts);
+  }
+
+  /// Drops a paused spot from Trakt; one already gone counts as dropped.
+  Future<void> removePlayback(int id) async {
+    try {
+      await _send('DELETE', '/sync/playback/$id', auth: true);
+    } on TraktFailure catch (e) {
+      if (e.status != 404) rethrow;
+    }
+  }
+
   /// Paused films and episodes only, for a quick check before playing.
   Future<List<TraktPaused>> playback() async =>
       _paused(await _get('/sync/playback?extended=full,images', auth: true));
@@ -804,6 +830,7 @@ class Trakt extends ChangeNotifier {
     for (final row in (rows as List? ?? []).whereType<Map>()) {
       final progress = (row['progress'] as num?)?.toDouble() ?? 0;
       final pausedAt = _pausedAt(row['paused_at']);
+      final id = number(row['id']);
       if (row['type'] == 'movie' && row['movie'] is Map) {
         playback.add(
           TraktPaused(
@@ -813,6 +840,7 @@ class Trakt extends ChangeNotifier {
             ),
             progress,
             pausedAt: pausedAt,
+            id: id,
           ),
         );
       } else if (row['type'] == 'episode' &&
@@ -829,6 +857,7 @@ class Trakt extends ChangeNotifier {
             season: number(e['season']),
             episode: number(e['number']),
             pausedAt: pausedAt,
+            id: id,
           ),
         );
       }
@@ -836,30 +865,44 @@ class Trakt extends ChangeNotifier {
     return playback;
   }
 
-  Json _item(MediaTitle title, {int season = 0, int episode = 0}) =>
-      title.isShow
-      ? {
-          'shows': [
-            {
-              'ids': title.ids,
-              if (season > 0)
-                'seasons': [
-                  {
-                    'number': season,
-                    if (episode > 0)
-                      'episodes': [
-                        {'number': episode},
-                      ],
-                  },
-                ],
-            },
-          ],
-        }
-      : {
-          'movies': [
-            {'ids': title.ids},
-          ],
-        };
+  Json _item(
+    MediaTitle title, {
+    int season = 0,
+    int episode = 0,
+    int watchedAt = 0,
+  }) {
+    final at = watchedAt > 0
+        ? {
+            'watched_at': DateTime.fromMillisecondsSinceEpoch(
+              watchedAt,
+              isUtc: true,
+            ).toIso8601String(),
+          }
+        : const <String, dynamic>{};
+    return title.isShow
+        ? {
+            'shows': [
+              {
+                'ids': title.ids,
+                if (season > 0)
+                  'seasons': [
+                    {
+                      'number': season,
+                      if (episode > 0)
+                        'episodes': [
+                          {'number': episode, ...at},
+                        ],
+                    },
+                  ],
+              },
+            ],
+          }
+        : {
+            'movies': [
+              {'ids': title.ids, ...at},
+            ],
+          };
+  }
 
   Future<void> setWatchlist(MediaTitle title, bool on) => _send(
     'POST',
@@ -868,15 +911,23 @@ class Trakt extends ChangeNotifier {
     auth: true,
   );
 
+  /// Adds a watch to the history, at [watchedAt] (ms since the epoch) when
+  /// it happened earlier, or takes the title's watches off it.
   Future<void> setWatched(
     MediaTitle title,
     bool watched, {
     int season = 0,
     int episode = 0,
+    int watchedAt = 0,
   }) => _send(
     'POST',
     watched ? '/sync/history' : '/sync/history/remove',
-    body: _item(title, season: season, episode: episode),
+    body: _item(
+      title,
+      season: season,
+      episode: episode,
+      watchedAt: watched ? watchedAt : 0,
+    ),
     auth: true,
   );
 

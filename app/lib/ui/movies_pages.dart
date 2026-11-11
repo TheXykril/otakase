@@ -207,10 +207,17 @@ class _MoviesHomeState extends State<MoviesHome> {
     onResume: () => unawaited(movies.syncIfStale()),
   );
 
+  /// Picks up what other devices did while this page stays open.
+  late final Timer poll = Timer.periodic(
+    const Duration(minutes: 5),
+    (_) => unawaited(movies.syncIfStale(gap: const Duration(minutes: 4))),
+  );
+
   @override
   void initState() {
     super.initState();
     lifecycle;
+    poll;
     shelves = shelvesOf(widget.services).load();
     unawaited(widget.services.trakt.load().then((_) => movies.sync()));
   }
@@ -218,6 +225,7 @@ class _MoviesHomeState extends State<MoviesHome> {
   @override
   void dispose() {
     lifecycle.dispose();
+    poll.cancel();
     super.dispose();
   }
 
@@ -261,7 +269,7 @@ class _MoviesHomeState extends State<MoviesHome> {
             setState(() {
               shelves = shelvesOf(widget.services).load(refresh: true);
             });
-            await movies.sync();
+            await movies.sync(force: true);
           },
           child: ListView(
             key: const PageStorageKey('movies-home'),
@@ -1303,7 +1311,7 @@ Future<void> traktSignIn(
         ),
       ),
     );
-    unawaited(services.movies.sync());
+    unawaited(services.movies.sync(force: true));
   }
 }
 
@@ -1381,7 +1389,7 @@ Future<void> _traktBrowserSignIn(
         ),
       ),
     );
-    unawaited(services.movies.sync());
+    unawaited(services.movies.sync(force: true));
   }
 }
 
