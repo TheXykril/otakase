@@ -1017,6 +1017,46 @@ void main() {
     expect(traktGenreNames, containsAll(['Crime', 'Documentary', 'War']));
   });
 
+  test('film filters map to Trakt filters per kind', () {
+    List<String> f({
+      String? format,
+      int? year,
+      int? decade,
+      int? minScore,
+      String? language,
+      String? age,
+      String? length,
+      String? sort,
+    }) => [
+      for (final (kind, filters) in traktFilterRequests(
+        format: format,
+        year: year,
+        decade: decade,
+        minScore: minScore,
+        language: language,
+        age: age,
+        length: length,
+        sort: sort,
+      ))
+        '$kind $filters',
+    ];
+    expect(f(decade: 2010, minScore: 70, language: 'lt'), [
+      'movie {years: 2010-2019, ratings: 70-100, languages: lt}',
+      'show {years: 2010-2019, ratings: 70-100, languages: lt}',
+    ]);
+    expect(f(year: 2015, decade: 2010), [
+      'movie {years: 2015}',
+      'show {years: 2015}',
+    ]);
+    expect(f(age: 'FAMILY', length: 'SHORT'), [
+      'movie {certifications: g,pg, runtimes: 1-89}',
+      'show {certifications: tv-y,tv-y7,tv-g,tv-pg, runtimes: 1-29}',
+    ]);
+    // The box office is films only.
+    expect(f(sort: 'BOXOFFICE'), ['movie {}']);
+    expect(f(sort: 'BOXOFFICE', format: 'TV'), isEmpty);
+  });
+
   test('movie search sorts keep ties in their found order', () {
     const titles = [
       MediaTitle(kind: 'movie', trakt: 1, title: 'A', year: 2001, rating: 7),
@@ -1275,6 +1315,40 @@ void main() {
       expect(browse.path, '/shows/popular');
       expect(browse.queryParameters['genres'], 'crime');
       expect(browse.queryParameters['limit'], '40');
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('movie filters offer language, age, length and box office', (
+      tester,
+    ) async {
+      await launchWith(tester, 'movies');
+      await tester.tap(find.byKey(const ValueKey('nav-Search')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('search-filters')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Box office'));
+      await tester.tap(find.text('Box office'));
+      await tester.ensureVisible(find.text('Kids'));
+      await tester.tap(find.text('Kids'));
+      await tester.ensureVisible(find.text('Short'));
+      await tester.tap(find.text('Short'));
+      await tester.ensureVisible(find.text('7+'));
+      await tester.tap(find.text('7+'));
+      seen.clear();
+      await tester.ensureVisible(find.byKey(const Key('filters-apply')));
+      await tester.tap(find.byKey(const Key('filters-apply')));
+      await tester.pumpAndSettle();
+      expect(find.text('4'), findsOneWidget);
+      final browse = seen.lastWhere((u) => u.host == 'api.trakt.tv');
+      expect(browse.path, '/movies/boxoffice');
+      expect(browse.queryParameters['certifications'], 'g');
+      expect(browse.queryParameters['runtimes'], '1-89');
+      expect(browse.queryParameters['ratings'], '70-100');
+      expect(
+        seen.where((u) => u.path.startsWith('/shows/')),
+        isEmpty,
+        reason: 'the box office has films only',
+      );
       await tester.pumpWidget(const SizedBox());
     });
 

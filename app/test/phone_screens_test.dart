@@ -57,6 +57,8 @@ class ScreenCatalog extends Catalog {
     String? genre,
     String? status,
     String? sort,
+    int? decade,
+    int? minScore,
   }) async => const CatalogPage([story]);
   @override
   Future<List<String>> genres({required bool adult}) async => [

@@ -3,6 +3,7 @@ package mobilecore
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -139,5 +140,74 @@ func TestMovieScore(t *testing.T) {
 	}
 	if !strings.HasPrefix(movieSources[0].Name, "vidsrc") {
 		t.Fatal("vidsrc should come first")
+	}
+}
+
+func filmaiArticle(path, title, year string) string {
+	return `<article><a href="` + path + `"><img alt="` + title + ` online"></a><span class="year">` + year + `</span></article>`
+}
+
+// 8Filmai lists some films under another name, like "Transporter 4" for
+// The Transporter Refueled; the first word finds it and the IMDb id on its
+// page proves it.
+func TestFilmaiMatchFindsARenamedFilmByItsIMDbID(t *testing.T) {
+	var searches []string
+	c := NewCore()
+	t.Cleanup(c.Close)
+	c.transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		page := func(title, year, imdb string) []byte {
+			return []byte(`<h1>` + title + `</h1><span class="date">` + year + `</span><script>var imid='` + imdb + `';var data='a1|||s|';</script>`)
+		}
+		switch {
+		case r.URL.Path == "/" && r.URL.Query().Get("s") != "":
+			q := r.URL.Query().Get("s")
+			searches = append(searches, q)
+			if q != "Transporter" {
+				return reply(r, 200, []byte(`<html></html>`)), nil
+			}
+			return reply(r, 200, []byte(
+				filmaiArticle("/filmas/transporteris-online/", "Transporteris", "2002")+
+					filmaiArticle("/filmas/transporteris-3-online/", "Transporteris 3", "2015")+
+					filmaiArticle("/filmas/transporteris-4-online/", "Transporteris 4", "2015")+
+					filmaiArticle("/serialai/transporteris-1-sezonas-online/", "Transporteris", "2015"),
+			)), nil
+		case r.URL.Path == "/":
+			return reply(r, 200, nil), nil
+		case r.URL.Path == "/filmas/transporteris-3-online/":
+			// Same year, another film: its id does not match.
+			return reply(r, 200, page("Transporteris 3", "2015", "tt1111111")), nil
+		case r.URL.Path == "/filmas/transporteris-4-online/":
+			return reply(r, 200, page("Transporteris 4", "2015", "tt2400463")), nil
+		case r.URL.Path == "/filmas/transporteris-online/":
+			t.Errorf("a film from another year was opened")
+		}
+		return reply(r, 404, nil), nil
+	})
+	var m movieTitle
+	movieData(t, call(t, c, `{"version":1,"operation":"movie_match","provider":"8filmai","titles":["Kurjeris. Naujas užsakymas","The Transporter Refueled"],"year":2015,"imdb":"tt2400463"}`), "movie", &m)
+	if m.Path != "/filmas/transporteris-4-online/" || m.IMDb != "tt2400463" {
+		t.Fatalf("movie = %+v (searched %q)", m, searches)
+	}
+	if !slices.Contains(searches, "Transporter") {
+		t.Fatalf("searched %q", searches)
+	}
+	// Without an IMDb id to prove it, a loose match is never taken.
+	r := call(t, c, `{"version":1,"operation":"movie_match","provider":"8filmai","titles":["The Transporter Refueled"],"year":2015}`)
+	if r.Error == nil || r.Error.Code != "not_found" {
+		t.Fatalf("want not_found, got %+v", r)
+	}
+}
+
+func TestLooseQuery(t *testing.T) {
+	for title, want := range map[string]string{
+		"The Transporter Refueled":   "Transporter",
+		"Kurjeris. Naujas užsakymas": "Kurjeris",
+		"Interstellar":               "",
+		"It Follows":                 "",
+		"Mission: Impossible":        "Mission",
+	} {
+		if got := looseQuery(title); got != want {
+			t.Errorf("looseQuery(%q) = %q, want %q", title, got, want)
+		}
 	}
 }

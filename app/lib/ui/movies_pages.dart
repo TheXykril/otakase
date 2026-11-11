@@ -496,6 +496,11 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
         genre: f.genre,
         status: f.status,
         sort: browse ? 'TRENDING' : f.sort,
+        decade: f.decade,
+        minScore: f.minScore,
+        language: f.language,
+        age: f.age,
+        length: f.length,
       );
       if (browse) trending = found;
       if (mounted && g == generation) setState(() => results = found);

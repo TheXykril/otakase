@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/thexykril/otakase/internal/movies"
 	"github.com/thexykril/otakase/internal/providers"
@@ -296,6 +297,9 @@ func matchMovie(client *http.Client, req movieRequest) (movieTitle, error) {
 		}
 	}
 	if len(found) == 0 {
+		if m, ok := looseFilmaiMatch(p, req); ok {
+			return m, nil
+		}
 		if lastErr != nil {
 			return movieTitle{}, lastErr
 		}
@@ -323,6 +327,69 @@ func matchMovie(client *http.Client, req movieRequest) (movieTitle, error) {
 		}
 	}
 	return movieTitle{}, lastErr
+}
+
+// looseFilmaiMatch finds a film 8Filmai lists under another name, like
+// "Transporter 4" for The Transporter Refueled: it searches the first word of
+// each title and opens the films from about the same year, taking one only
+// when its page names the same IMDb id. Without that id nothing is taken.
+func looseFilmaiMatch(p movies.Provider, req movieRequest) (movieTitle, bool) {
+	if req.Provider != movies.FilmaiName || req.Series || !strings.HasPrefix(req.IMDb, "tt") {
+		return movieTitle{}, false
+	}
+	// Results of the exact searches are looked at again: a low score there
+	// may be a film under another name.
+	searched, seen := map[string]bool{}, map[string]bool{}
+	opened := 0
+	for _, title := range req.Titles {
+		if len(searched) == 3 || opened == 6 {
+			break
+		}
+		query := looseQuery(title)
+		if query == "" || searched[query] {
+			continue
+		}
+		searched[query] = true
+		results, err := p.Search(query)
+		if err != nil {
+			continue
+		}
+		for _, m := range results {
+			if opened == 6 {
+				break
+			}
+			if seen[m.Path] || m.Series || strings.HasPrefix(m.Path, "/serialai/") {
+				continue
+			}
+			seen[m.Path] = true
+			if year, err := strconv.Atoi(strings.TrimSpace(m.Year)); req.Year > 0 && err == nil && abs(year-req.Year) > 1 {
+				continue
+			}
+			opened++
+			page, _, err := p.Open(m)
+			if err != nil || page.IMDb != req.IMDb {
+				continue
+			}
+			page.Path = cmp.Or(page.Path, m.Path)
+			return titleOf(page), true
+		}
+	}
+	return movieTitle{}, false
+}
+
+// looseQuery is the first real word of a title ("The Transporter Refueled"
+// gives "Transporter"), or "" when the title is that one word already.
+func looseQuery(title string) string {
+	words := strings.FieldsFunc(title, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '\''
+	})
+	for len(words) > 1 && slices.Contains([]string{"the", "a", "an"}, strings.ToLower(words[0])) {
+		words = words[1:]
+	}
+	if len(words) < 2 || len([]rune(words[0])) < 3 {
+		return ""
+	}
+	return words[0]
 }
 
 var errUnknownSource = errors.New("unknown source")
