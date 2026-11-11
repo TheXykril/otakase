@@ -8,6 +8,10 @@
   computer in Control TV on the phone and it asks Allow on screen, with two
   numbers to match, instead of you typing a code. The QR code and typed
   code still work.
+- **A full remote on the phone.** Cover art, a seek bar with the opening and
+  ending marked, Skip Intro, previous and next episode, volume, and
+  episodes, subtitles, audio, quality and stop. A bar above the tabs shows
+  what the TV is playing and opens the remote from anywhere in the app.
 
 ### Changed
 

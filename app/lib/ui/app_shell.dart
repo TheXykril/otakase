@@ -21,6 +21,7 @@ import 'community_extras_page.dart';
 import '../data/community_extras.dart';
 import 'movie_page.dart';
 import 'movies_pages.dart';
+import 'remote_now_playing.dart';
 import 'tv_remote_page.dart';
 import '../data/tv_remote.dart';
 import '../desktop/desktop_core.dart';
@@ -650,6 +651,33 @@ class _AppShellState extends State<AppShell> {
             ),
           ),
         );
+
+  /// While this phone controls a TV that plays something, a bar above the
+  /// tabs shows it and opens the full remote.
+  Widget remoteBar() => ValueListenableBuilder(
+    valueListenable: widget.services.remoteLink,
+    builder: (context, link, _) => link == null
+        ? const SizedBox.shrink()
+        : ListenableBuilder(
+            listenable: link,
+            builder: (context, _) => link.status['has_player'] != true
+                ? const SizedBox.shrink()
+                : Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom:
+                        math.max(
+                          MediaQuery.viewPaddingOf(context).bottom,
+                          MediaQuery.paddingOf(context).bottom,
+                        ) +
+                        7 +
+                        72 +
+                        10,
+                    child: RemoteMiniBar(services: widget.services, link: link),
+                  ),
+          ),
+  );
+
   Widget phoneNav() => Positioned(
     left: 20,
     right: 20,
@@ -693,6 +721,7 @@ class _AppShellState extends State<AppShell> {
       widget.services.tracking,
       widget.services.discord,
       widget.services.trakt,
+      widget.services.remoteLink,
     ]),
     builder: (context, _) {
       final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
@@ -770,6 +799,11 @@ class _AppShellState extends State<AppShell> {
                                               .clamp(0, 2) *
                                           64) +
                                   7 +
+                                  // Room for the bar of a TV this phone
+                                  // controls.
+                                  (widget.services.remoteLink.value == null
+                                      ? 0
+                                      : 76) +
                                   math.max(
                                     MediaQuery.viewPaddingOf(context).bottom,
                                     MediaQuery.paddingOf(context).bottom,
@@ -831,6 +865,7 @@ class _AppShellState extends State<AppShell> {
                       ),
                     ),
                   ),
+                if (!widget.isTV && !keyboard) remoteBar(),
                 if (!widget.isTV && !keyboard) phoneNav(),
               ],
             ),

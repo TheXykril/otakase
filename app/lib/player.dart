@@ -1683,6 +1683,25 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         if (!busy && episode > 1) await pickEpisode(episode - 1);
       case 'episode':
         if (!busy) await pickEpisode(number(args['episode']));
+      case 'subtitle':
+        final id = '${args['id']}';
+        for (final track in player.state.tracks.subtitle) {
+          if (track.id != id) continue;
+          subSelected = true;
+          subtitleRequest++;
+          externalTrack = null;
+          await player.setSubtitleTrack(track);
+        }
+      case 'audio':
+        final id = '${args['id']}';
+        for (final track in player.state.tracks.audio) {
+          if (track.id != id) continue;
+          audioSelected = true;
+          await player.setAudioTrack(track);
+        }
+      case 'quality':
+        final value = '${args['value']}';
+        if (!busy && qualityChoices.contains(value)) await applyQuality(value);
       case 'stop':
         await save();
         if (!busy) scrobble('pause');
@@ -1694,7 +1713,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (mounted) showControls();
   }
 
-  Json remoteStatus() => isTitle
+  Json remoteStatus() => {...baseStatus(), ...remoteExtras()};
+
+  Json baseStatus() => isTitle
       ? {
           'has_player': true,
           'kind': 'movie',
@@ -1826,13 +1847,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               for (final track in player.state.tracks.subtitle)
                 ChoiceRow(
                   autofocus: track == player.state.tracks.subtitle.first,
-                  title: Text(
-                    track.id == 'no'
-                        ? 'Off'
-                        : track.id == 'auto'
-                        ? 'Automatic'
-                        : track.title ?? track.language ?? 'Track ${track.id}',
-                  ),
+                  title: Text(subtitleLabel(track)),
                   onTap: () {
                     subSelected = true;
                     subtitleRequest++;
@@ -1861,13 +1876,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               const Text('Audio', style: TextStyle(color: accentText)),
               for (final track in player.state.tracks.audio)
                 ChoiceRow(
-                  title: Text(
-                    track.title ??
-                        track.language ??
-                        (track.id == 'auto'
-                            ? 'Automatic'
-                            : 'Track ${track.id}'),
-                  ),
+                  title: Text(audioLabel(track)),
                   onTap: () {
                     audioSelected = true;
                     Navigator.pop(dialog);
@@ -2030,9 +2039,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Future<void> qualityPanel() async {
     const another = 'Try another copy';
     final values = [
-      'best',
-      ...availableQualities.map((h) => '$h'),
-      if (availableQualities.length > 1) 'worst',
+      ...qualityChoices,
       // A download has no other copy.
       if (!isTitle || (media?.copy ?? '').isNotEmpty) another,
     ];
@@ -2047,13 +2054,75 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (chosen == another && mounted) {
       await tryAnotherCopy(resumeFrom: playbackPosition);
     } else if (chosen != null && mounted) {
-      await save();
-      await widget.services.store.set('Quality', chosen);
-      rememberTracks();
-      await open(mirror: copy, resumeFrom: playbackPosition);
+      await applyQuality(chosen);
     } else if (mounted) {
       showControls();
     }
+  }
+
+  List<String> get qualityChoices => [
+    'best',
+    ...availableQualities.map((h) => '$h'),
+    if (availableQualities.length > 1) 'worst',
+  ];
+
+  Future<void> applyQuality(String chosen) async {
+    await save();
+    await widget.services.store.set('Quality', chosen);
+    rememberTracks();
+    await open(mirror: copy, resumeFrom: playbackPosition);
+  }
+
+  String subtitleLabel(SubtitleTrack track) => track.id == 'no'
+      ? 'Off'
+      : track.id == 'auto'
+      ? 'Automatic'
+      : track.title ?? track.language ?? 'Track ${track.id}';
+
+  String audioLabel(AudioTrack track) =>
+      track.title ??
+      track.language ??
+      (track.id == 'auto' ? 'Automatic' : 'Track ${track.id}');
+
+  /// What a phone remote shows beyond the basics: art, skip marks, the
+  /// skip button and the track and quality choices.
+  Json remoteExtras() {
+    final tracks = player.state.tracks, chosen = player.state.track;
+    return {
+      'cover': isTitle
+          ? ''
+          : anime.coverLarge.isNotEmpty
+          ? anime.coverLarge
+          : anime.cover,
+      'spans': [
+        for (final s in spans) {'type': s.type, 'start': s.start, 'end': s.end},
+      ],
+      'skip': active?.label,
+      'can_next': canNext,
+      'can_previous': !isTitle && episode > 1,
+      'subtitles': casting
+          ? const []
+          : [
+              for (final t in tracks.subtitle)
+                {
+                  'id': t.id,
+                  'label': subtitleLabel(t),
+                  'on': t.id == chosen.subtitle.id,
+                },
+            ],
+      'audio': casting
+          ? const []
+          : [
+              for (final t in tracks.audio)
+                {
+                  'id': t.id,
+                  'label': audioLabel(t),
+                  'on': t.id == chosen.audio.id,
+                },
+            ],
+      'qualities': casting ? const [] : qualityChoices,
+      'quality': widget.services.store.text('Quality'),
+    };
   }
 
   KeyEventResult remote(FocusNode node, KeyEvent event) {

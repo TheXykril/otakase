@@ -5,11 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../cast/cast.dart';
-import '../data/models.dart';
 import '../data/tv_remote.dart';
 import '../services.dart';
 import 'components.dart';
 import 'device_status.dart';
+import 'remote_now_playing.dart';
 import '../host.dart';
 
 class TVRemotePage extends StatefulWidget {
@@ -35,9 +35,7 @@ class TVRemotePage extends StatefulWidget {
 class _TVRemotePageState extends State<TVRemotePage> {
   TVRemote get remote => widget.services.tvRemote;
   List<TVDevice> devices = [];
-  TVDevice? selected;
-  RemoteLink? link;
-  Json get status => link?.status ?? const {};
+  RemoteLink? get link => widget.services.remoteLink.value;
   Timer? timer;
   String? error, firewallNote;
   bool busy = false, canAllow = false, allowing = false;
@@ -136,22 +134,19 @@ class _TVRemotePageState extends State<TVRemotePage> {
     }
   }
 
-  /// Opens the live connection to a paired [tv].
+  /// Controls a paired [tv] and opens its remote.
   void connect(TVDevice tv) {
-    final old = link;
-    if (old != null && old.tv.id == tv.id) return;
-    unawaited(old?.close());
-    final next = RemoteLink(remote, tv, findTVs: widget.findTVs);
-    next.addListener(() {
-      if (mounted) setState(() {});
-    });
-    setState(() {
-      selected = tv;
-      link = next;
-      error = null;
-    });
-    next.start();
+    widget.services.controlTV(tv, findTVs: widget.findTVs);
+    setState(() => error = null);
+    unawaited(openRemote());
   }
+
+  Future<void> openRemote() => Navigator.push(
+    context,
+    OtakaseRoute<void>(
+      builder: (_) => RemoteNowPlaying(services: widget.services),
+    ),
+  );
 
   /// Taps on a TV that is not paired yet: newer TVs ask on screen, older
   /// ones show a code to type.
@@ -218,33 +213,19 @@ class _TVRemotePageState extends State<TVRemotePage> {
     }
   }
 
-  Future<void> send(String action, {Json args = const {}}) async {
-    final current = link;
-    if (current == null) return;
-    try {
-      await current.send(action, args: args);
-      if (mounted) setState(() => error = null);
-    } catch (e) {
-      if (mounted) setState(() => error = e.toString());
-    }
-  }
-
   @override
   void dispose() {
     timer?.cancel();
-    unawaited(link?.close());
     if (widget.isTV) remote.endPair();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: remote,
+    listenable: Listenable.merge([remote, widget.services.remoteLink]),
     builder: (context, _) {
       final code = remote.code,
           left = remote.code?.expires.difference(DateTime.now()).inSeconds ?? 0;
-      final visible =
-          status['adult'] != true || widget.services.store.adultAllowed;
       return Scaffold(
         appBar: AppBar(
           title: Text(widget.isTV ? 'Phone remote' : 'Control TV'),
@@ -407,136 +388,48 @@ class _TVRemotePageState extends State<TVRemotePage> {
                     },
                   ),
                 ),
-              if (selected case final tv?) ...[
-                const SizedBox(height: 20),
-                Text(
-                  tv.name,
-                  style: uiStyle(context, size: 24, weight: FontWeight.w600),
-                ),
-                Text(
-                  switch (link?.state) {
-                    LinkState.live || LinkState.polling => 'Connected',
-                    LinkState.lost => 'Reconnecting…',
-                    _ => 'Connecting…',
-                  },
-                  key: const Key('tv-link-state'),
-                  style: uiStyle(
-                    context,
-                    color: link?.live == true ? ok : warn,
-                  ),
-                ),
-                Text(
-                  visible
-                      ? (status['title'] as String? ??
-                            'Open an episode on the TV')
-                      : 'Playing on TV',
-                  style: uiStyle(context),
-                ),
-                if (visible && number(status['episode']) > 0)
-                  Text(
-                    'Episode ${number(status['episode'])} · ${number(status['position'])} s',
-                    style: uiStyle(context, color: muted),
-                  ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    AppButton(
-                      label: 'Play',
-                      isTV: false,
-                      onPressed: () => send('play'),
-                    ),
-                    AppButton(
-                      label: 'Pause',
-                      isTV: false,
-                      onPressed: () => send('pause'),
-                    ),
-                    AppButton(
-                      label: '−10 s',
-                      isTV: false,
-                      onPressed: () => send('seek', args: {'seconds': -10}),
-                    ),
-                    AppButton(
-                      label: '+10 s',
-                      isTV: false,
-                      onPressed: () => send('seek', args: {'seconds': 10}),
-                    ),
-                    AppButton(
-                      label: 'Next episode',
-                      isTV: false,
-                      onPressed: () => send('next'),
-                    ),
-                    if (visible &&
-                        status['room'] != true &&
-                        number(status['episodes']) > 0)
+              if (link case final current?)
+                ListenableBuilder(
+                  listenable: current,
+                  builder: (context, _) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 20),
+                      Text(
+                        current.tv.name,
+                        style: uiStyle(
+                          context,
+                          size: 24,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        remoteStateText(current),
+                        key: const Key('tv-link-state'),
+                        style: uiStyle(
+                          context,
+                          color: current.live ? ok : warn,
+                        ),
+                      ),
+                      if (current.status['has_player'] == true)
+                        Text(
+                          remoteVisible(widget.services, current.status)
+                              ? '${current.status['title'] ?? ''}'
+                              : 'Playing on TV',
+                          style: uiStyle(context, color: muted),
+                        ),
+                      const SizedBox(height: 16),
                       AppButton(
-                        label: 'Pick episode',
+                        key: const Key('tv-open-remote'),
+                        label: 'Open remote',
                         isTV: false,
-                        onPressed: () async {
-                          final ep = await chooseValue(
-                            context,
-                            'Episode',
-                            List.generate(
-                              number(status['episodes']).clamp(1, 10000),
-                              (i) => '${i + 1}',
-                            ),
-                            selected: '${number(status['episode'])}',
-                          );
-                          if (ep != null) {
-                            await send(
-                              'episode',
-                              args: {'episode': int.parse(ep)},
-                            );
-                          }
-                        },
+                        onPressed: openRemote,
                       ),
-                    AppButton(
-                      label: 'Volume −',
-                      isTV: false,
-                      onPressed: () => send(
-                        'volume',
-                        args: {
-                          'volume': (number(status['volume']) - 10).clamp(
-                            0,
-                            100,
-                          ),
-                        },
-                      ),
-                    ),
-                    AppButton(
-                      label: 'Volume +',
-                      isTV: false,
-                      onPressed: () => send(
-                        'volume',
-                        args: {
-                          'volume': (number(status['volume']) + 10).clamp(
-                            0,
-                            100,
-                          ),
-                        },
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () async {
-                    await remote.forget(tv.id);
-                    unawaited(link?.close());
-                    if (mounted) {
-                      setState(() {
-                        selected = null;
-                        link = null;
-                        devices = remote.paired;
-                      });
-                    }
-                  },
-                  child: const Text('Forget TV'),
-                ),
-              ],
             ],
-            if (error ?? link?.error case final problem?)
+            if (error case final problem?)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
                 child: Text(problem, style: uiStyle(context, color: warn)),

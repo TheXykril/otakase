@@ -491,6 +491,32 @@ void lookupTests() {
     await until(() => link.status['playing'] == false);
     expect(actions, ['pause']);
     await expectLater(link.send('source'), throwsStateError);
+    for (final (action, args) in [
+      ('seek_to', {'position': 300}),
+      ('subtitle', {'id': '2'}),
+      ('audio', {'id': '1'}),
+      ('quality', {'value': '720'}),
+      ('previous', <String, dynamic>{}),
+      ('party_skip', <String, dynamic>{}),
+    ]) {
+      await link.send(action, args: args);
+    }
+    for (final (action, args) in [
+      ('seek_to', {'position': -5}),
+      ('subtitle', {'id': 2}),
+      ('quality', {'value': '../x'}),
+    ]) {
+      await expectLater(link.send(action, args: args), throwsStateError);
+    }
+    await until(() => actions.length == 7);
+    expect(actions.skip(1), [
+      'seek_to',
+      'subtitle',
+      'audio',
+      'quality',
+      'previous',
+      'party_skip',
+    ]);
     // Forgotten phones are cut off and told to pair again.
     await tv.forgetPhones();
     await until(() => link.state == LinkState.lost);
