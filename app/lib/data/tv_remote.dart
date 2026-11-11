@@ -13,22 +13,45 @@ import 'models.dart';
 
 const tvDiscoveryPort = 8654;
 
+/// What a TV speaks: 2 adds asking on the TV instead of a code, and the
+/// live connection.
+const remoteVersion = 2;
+
 class TVDevice {
   const TVDevice({
     required this.id,
     required this.name,
     required this.host,
     required this.port,
+    this.version = 1,
   });
   final String id, name, host;
-  final int port;
-  Json toJson() => {'id': id, 'name': name, 'host': host, 'port': port};
+  final int port, version;
+  Json toJson() => {
+    'id': id,
+    'name': name,
+    'host': host,
+    'port': port,
+    'v': version,
+  };
   factory TVDevice.fromJson(Json j) => TVDevice(
     id: j['id'] as String,
     name: j['name'] as String? ?? 'Otakase TV',
     host: j['host'] as String,
     port: number(j['port']),
+    version: number(j['v']) < 1 ? 1 : number(j['v']),
   );
+}
+
+/// A phone asking to control this TV, shown on the TV until someone picks
+/// Allow or Not now. [digits] show on both screens so people can tell
+/// their phone apart from another one asking.
+class RemoteAsk {
+  RemoteAsk(this.id, this.phone, this.digits, this.expires);
+  final String id, phone, digits;
+  final DateTime expires;
+  String state = 'waiting';
+  Json? grant;
 }
 
 class RemotePairCode {
@@ -135,6 +158,18 @@ class LanTransport {
       socket.destroy();
     }
   }
+
+  /// Opens the TV's live connection, also straight to it without proxies.
+  Future<WebSocket> live(TVDevice tv, Map<String, String> headers) {
+    final client = HttpClient()
+      ..findProxy = ((_) => 'DIRECT')
+      ..connectionTimeout = const Duration(seconds: 3);
+    return WebSocket.connect(
+      'ws://${tv.host}:${tv.port}/live',
+      headers: headers,
+      customClient: client,
+    ).timeout(const Duration(seconds: 5));
+  }
 }
 
 TVDevice? parseTVAdvertisement(
@@ -163,6 +198,7 @@ TVDevice? parseTVAdvertisement(
       name: j['name'] as String? ?? 'Otakase TV',
       host: host,
       port: number(j['port']),
+      version: number(j['v']) < 1 ? 1 : number(j['v']),
     );
   } catch (_) {
     return null;
@@ -317,8 +353,20 @@ class TVRemote extends ChangeNotifier {
   RemotePairCode? code;
   Json _paired = {}, _phones = {};
   Future<void>? _writes, _initializing, _commands;
-  int _wrong = 0, _pendingCommands = 0;
+  int _wrong = 0, _pendingCommands = 0, _denied = 0;
   DateTime? _waitUntil;
+  final _asks = <String, RemoteAsk>{};
+  final _live = <WebSocket, String>{};
+  RemoteAsk? _ask;
+
+  /// The phone waiting for Allow on this TV, if any.
+  RemoteAsk? get ask {
+    final a = _ask;
+    return a != null && a.state == 'waiting' && now().isBefore(a.expires)
+        ? a
+        : null;
+  }
+
   final _connected = <String, DateTime>{};
   Future<void> Function(String, Json)? command;
   Json Function()? status;
@@ -416,6 +464,7 @@ class TVRemote extends ChangeNotifier {
                       'id': id,
                       'name': name,
                       'port': _server!.port,
+                      'v': remoteVersion,
                     }),
                   ),
                   packet.address,
@@ -478,8 +527,15 @@ class TVRemote extends ChangeNotifier {
     if (closed ||
         peer == null ||
         !transport.allowed(peer.address) ||
-        r.method != 'POST' ||
         r.headers.value('origin') != null) {
+      await _reply(r, 403, {'error': 'Local app connections only.'});
+      return;
+    }
+    if (r.uri.path == '/live' && r.method == 'GET') {
+      await _openLive(r);
+      return;
+    }
+    if (r.method != 'POST') {
       await _reply(r, 403, {'error': 'Local app connections only.'});
       return;
     }
@@ -500,6 +556,7 @@ class TVRemote extends ChangeNotifier {
           'id': id,
           'name': name,
           'port': _server!.port,
+          'v': remoteVersion,
         });
         return;
       }
@@ -523,35 +580,25 @@ class TVRemote extends ChangeNotifier {
           await _reply(r, 403, {'error': 'The code does not match.'});
           return;
         }
-        final token = randomSecret(), key = randomSecret();
-        final clients = Map<String, dynamic>.from(
-          _phones['clients'] as Map? ?? {},
-        );
-        clients[key] = {
-          'hash': sha256.convert(utf8.encode(token)).toString(),
-          'name': remoteName(body['name']?.toString() ?? 'Phone'),
-        };
-        if (clients.length > 12) clients.remove(clients.keys.first);
-        _phones = {..._phones, 'clients': clients};
-        await _persist('lan.tv', _phones);
+        final grant = await _addClient(body['name']?.toString() ?? 'Phone');
         code = null;
-        await _reply(r, 200, {
-          'id': id,
-          'client': key,
-          'token': token,
-          'name': name,
-        });
+        await _reply(r, 200, grant);
         notifyListeners();
         return;
       }
-      final key = body['client'] as String? ?? '',
-          clients = _phones['clients'] as Map? ?? {};
-      final saved = clients[key] as Map?,
-          auth = r.headers.value('authorization') ?? '';
-      if (saved == null ||
-          !auth.startsWith('Bearer ') ||
-          sha256.convert(utf8.encode(auth.substring(7))).toString() !=
-              saved['hash']) {
+      if (r.uri.path == '/ask') {
+        final (status, reply) = _newAsk(body);
+        await _reply(r, status, reply);
+        return;
+      }
+      if (r.uri.path == '/ask/wait') {
+        final (status, reply) = _waitAsk(body['request']?.toString() ?? '');
+        await _reply(r, status, reply);
+        return;
+      }
+      final key = body['client'] as String? ?? '';
+      final saved = _client(key, r.headers.value('authorization'));
+      if (saved == null) {
         await _reply(r, 401, {'error': 'Pair this phone with the TV again.'});
         return;
       }
@@ -559,54 +606,13 @@ class TVRemote extends ChangeNotifier {
         await _reply(r, 404, {'error': 'Unknown control.'});
         return;
       }
-      final seen = _connected[key];
-      if (seen == null ||
-          now().difference(seen) > const Duration(seconds: 30)) {
-        _events.add('${saved['name']} connected');
-      }
-      _connected[key] = now();
+      _seen(key, saved);
       if (r.uri.path == '/command') {
-        final action = body['action'] as String? ?? '';
-        if (!const [
-          'play',
-          'pause',
-          'toggle',
-          'seek',
-          'next',
-          'episode',
-          'volume',
-        ].contains(action)) {
-          await _reply(r, 400, {'error': 'Unknown control.'});
-          return;
-        }
-        if (command == null || status?.call()['has_player'] != true) {
-          await _reply(r, 409, {'error': 'Open an episode on the TV first.'});
-          return;
-        }
-        final args = (body['args'] as Map? ?? {}).cast<String, dynamic>();
-        if (action == 'seek' && number(args['seconds']).abs() != 10) {
-          await _reply(r, 400, {'error': 'Seek by 10 seconds.'});
-          return;
-        }
-        if (_pendingCommands >= 10) {
-          await _reply(r, 429, {
-            'error': 'Wait for the TV to finish this action.',
-          });
-          return;
-        }
-        _pendingCommands++;
-        _commands = (_commands ?? Future<void>.value())
-            .catchError((Object _) {})
-            .then((_) async {
-              if (closed) return;
-              try {
-                await command?.call(action, args);
-              } catch (_) {
-                if (!closed) _events.add('TV control failed. Try again.');
-              }
-            })
-            .whenComplete(() => _pendingCommands--);
-        await _reply(r, 202, {'id': id, 'name': name, ...?status?.call()});
+        final (code, reply) = _command(
+          body['action'] as String? ?? '',
+          (body['args'] as Map? ?? {}).cast<String, dynamic>(),
+        );
+        await _reply(r, code, reply);
         return;
       }
       await _reply(r, 200, {'id': id, 'name': name, ...?status?.call()});
@@ -616,6 +622,290 @@ class TVRemote extends ChangeNotifier {
       } catch (_) {
         /* The phone disconnected. */
       }
+    }
+  }
+
+  /// The saved phone for [key] when [auth] carries its token.
+  Map? _client(String key, String? auth) {
+    final saved = (_phones['clients'] as Map? ?? {})[key] as Map?;
+    final bearer = auth ?? '';
+    if (saved == null ||
+        !bearer.startsWith('Bearer ') ||
+        sha256.convert(utf8.encode(bearer.substring(7))).toString() !=
+            saved['hash']) {
+      return null;
+    }
+    return saved;
+  }
+
+  void _seen(String key, Map saved) {
+    final seen = _connected[key];
+    if (seen == null || now().difference(seen) > const Duration(seconds: 30)) {
+      _events.add('${saved['name']} connected');
+    }
+    _connected[key] = now();
+  }
+
+  Future<Json> _addClient(String phone) async {
+    final token = randomSecret(), key = randomSecret();
+    final clients = Map<String, dynamic>.from(_phones['clients'] as Map? ?? {});
+    clients[key] = {
+      'hash': sha256.convert(utf8.encode(token)).toString(),
+      'name': remoteName(phone),
+    };
+    if (clients.length > 12) clients.remove(clients.keys.first);
+    _phones = {..._phones, 'clients': clients};
+    await _persist('lan.tv', _phones);
+    return {'id': id, 'client': key, 'token': token, 'name': name};
+  }
+
+  (int, Json) _newAsk(Json body) {
+    final at = now();
+    _asks.removeWhere((_, a) => !at.isBefore(a.expires));
+    if (_waitUntil != null && at.isBefore(_waitUntil!)) {
+      return (429, {'error': 'Wait 30 seconds before asking the TV again.'});
+    }
+    if (body['id'] != id) {
+      return (403, {'error': 'This is a different TV. Find TVs again.'});
+    }
+    if (ask != null) {
+      return (
+        429,
+        {'error': 'The TV is answering another phone. Try again in a minute.'},
+      );
+    }
+    final request = RemoteAsk(
+      randomSecret(),
+      remoteName(body['name']?.toString() ?? 'Phone'),
+      '${Random.secure().nextInt(90) + 10}',
+      at.add(const Duration(minutes: 1)),
+    );
+    _asks[request.id] = _ask = request;
+    notifyListeners();
+    return (202, {'request': request.id, 'digits': request.digits});
+  }
+
+  /// Puts a phone's question on screen without the network, for tests.
+  @visibleForTesting
+  RemoteAsk? debugAsk(String phone) {
+    _newAsk({'id': id, 'name': phone});
+    return ask;
+  }
+
+  (int, Json) _waitAsk(String request) {
+    final a = _asks[request];
+    if (a == null || a.state == 'waiting' && !now().isBefore(a.expires)) {
+      _asks.remove(request);
+      return (410, {'error': 'Nobody answered on the TV. Ask again.'});
+    }
+    if (a.state == 'denied') {
+      _asks.remove(request);
+      return (403, {'error': 'The TV said not now.'});
+    }
+    if (a.state == 'allowed') {
+      _asks.remove(request);
+      return (200, {'state': 'allowed', ...?a.grant});
+    }
+    return (200, {'state': 'waiting'});
+  }
+
+  /// Allow on the TV: the asking phone becomes a remote.
+  Future<void> allowAsk() async {
+    final a = ask;
+    if (a == null) return;
+    a.grant = await _addClient(a.phone);
+    a.state = 'allowed';
+    _ask = null;
+    _denied = 0;
+    _events.add('${a.phone} can control this TV');
+    notifyListeners();
+  }
+
+  /// Not now on the TV. Three in a row make phones wait 30 seconds, so
+  /// nobody on the network can keep the question on screen.
+  void denyAsk() {
+    final a = _ask;
+    if (a == null) return;
+    a.state = 'denied';
+    _ask = null;
+    if (++_denied >= 3) {
+      _denied = 0;
+      _waitUntil = now().add(const Duration(seconds: 30));
+    }
+    notifyListeners();
+  }
+
+  static const remoteActions = [
+    'play',
+    'pause',
+    'toggle',
+    'seek',
+    'next',
+    'episode',
+    'volume',
+  ];
+
+  /// Checks one control from a phone and queues it for the player.
+  (int, Json) _command(String action, Json args) {
+    if (!remoteActions.contains(action)) {
+      return (400, {'error': 'Unknown control.'});
+    }
+    if (command == null || status?.call()['has_player'] != true) {
+      return (409, {'error': 'Open an episode on the TV first.'});
+    }
+    if (action == 'seek' && number(args['seconds']).abs() != 10) {
+      return (400, {'error': 'Seek by 10 seconds.'});
+    }
+    if (_pendingCommands >= 10) {
+      return (429, {'error': 'Wait for the TV to finish this action.'});
+    }
+    _pendingCommands++;
+    _commands = (_commands ?? Future<void>.value())
+        .catchError((Object _) {})
+        .then((_) async {
+          if (closed) return;
+          try {
+            await command?.call(action, args);
+          } catch (_) {
+            if (!closed) _events.add('TV control failed. Try again.');
+          }
+        })
+        .whenComplete(() => _pendingCommands--);
+    return (202, {'id': id, 'name': name, ...?status?.call()});
+  }
+
+  /// The live connection: the TV pushes what is playing whenever it
+  /// changes and takes controls back, so phones never poll.
+  Future<void> _openLive(HttpRequest r) async {
+    final key = r.headers.value('x-otakase-client') ?? '';
+    final saved = _client(key, r.headers.value('authorization'));
+    if (saved == null) {
+      await _reply(r, 401, {'error': 'Pair this phone with the TV again.'});
+      return;
+    }
+    if (!WebSocketTransformer.isUpgradeRequest(r) || _live.length >= 8) {
+      await _reply(r, 400, {'error': 'Invalid request.'});
+      return;
+    }
+    final WebSocket socket;
+    try {
+      socket = await WebSocketTransformer.upgrade(r);
+    } catch (_) {
+      return;
+    }
+    if (closed) {
+      await socket.close();
+      return;
+    }
+    socket.pingInterval = const Duration(seconds: 5);
+    _live[socket] = key;
+    _seen(key, saved);
+    String? last;
+    void push() {
+      if ((_phones['clients'] as Map? ?? {})[key] == null) {
+        unawaited(socket.close(4401, 'Pair this phone with the TV again.'));
+        return;
+      }
+      final fresh = jsonEncode({
+        'type': 'status',
+        'id': id,
+        'name': name,
+        ...?status?.call(),
+      });
+      if (fresh != last) socket.add(last = fresh);
+    }
+
+    push();
+    final timer = Timer.periodic(
+      const Duration(milliseconds: 400),
+      (_) => push(),
+    );
+    socket.listen(
+      (data) {
+        if (data is! String || data.length > 4096) return;
+        try {
+          final j = (jsonDecode(data) as Map).cast<String, dynamic>();
+          final (code, reply) = _command(
+            j['action'] as String? ?? '',
+            (j['args'] as Map? ?? {}).cast<String, dynamic>(),
+          );
+          _connected[key] = now();
+          socket.add(
+            jsonEncode({
+              'type': 'ack',
+              'seq': j['seq'],
+              if (code >= 300) 'error': reply['error'],
+            }),
+          );
+        } catch (_) {
+          /* Ignore what is not a control. */
+        }
+      },
+      onDone: () {
+        timer.cancel();
+        _live.remove(socket);
+      },
+      cancelOnError: true,
+    );
+  }
+
+  /// Opens the live connection to a paired [tv].
+  Future<WebSocket> openLive(TVDevice tv) async {
+    final saved = _paired[tv.id] as Map?;
+    if (saved == null) throw StateError('Pair this TV first.');
+    if (!transport.allowed(tv.host) || tv.port < 1 || tv.port > 65535) {
+      throw StateError('Choose a TV on your local network.');
+    }
+    try {
+      final socket = await transport.live(tv, {
+        'authorization': 'Bearer ${saved['token']}',
+        'x-otakase-client': '${saved['client']}',
+      });
+      socket.pingInterval = const Duration(seconds: 5);
+      return socket;
+    } on SocketException {
+      throw StateError(unreachableTVMessage(tv.host, tv.port));
+    } on TimeoutException {
+      throw StateError(unreachableTVMessage(tv.host, tv.port));
+    }
+  }
+
+  /// Asks [tv] to let this phone control it and waits for Allow there.
+  /// [digits] receives the two numbers both screens show.
+  Future<void> requestControl(
+    TVDevice tv, {
+    String phoneName = 'Phone',
+    void Function(String digits)? digits,
+    bool Function()? cancelled,
+    Duration every = const Duration(seconds: 1),
+  }) async {
+    await initialize();
+    final asked = await transport.post(tv, '/ask', {
+      'id': tv.id,
+      'name': phoneName,
+    });
+    final request = asked['request'];
+    if (request is! String) {
+      throw const FormatException('Invalid TV answer.');
+    }
+    digits?.call('${asked['digits'] ?? ''}');
+    while (!closed && !(cancelled?.call() ?? false)) {
+      await Future<void>.delayed(every);
+      if (closed || (cancelled?.call() ?? false)) return;
+      final j = await transport.post(tv, '/ask/wait', {'request': request});
+      if (j['state'] != 'allowed') continue;
+      if (j['id'] != tv.id || j['token'] is! String || j['client'] is! String) {
+        throw const FormatException('Invalid TV pairing response.');
+      }
+      _paired[tv.id] = {
+        ...tv.toJson(),
+        'name': j['name'] ?? tv.name,
+        'token': j['token'],
+        'client': j['client'],
+      };
+      await _persist('lan.remote', _paired);
+      notifyListeners();
+      return;
     }
   }
 
@@ -723,6 +1013,9 @@ class TVRemote extends ChangeNotifier {
   Future<void> forgetPhones() async {
     _phones = {'id': id, 'clients': {}};
     _connected.clear();
+    for (final socket in _live.keys.toList()) {
+      unawaited(socket.close(4401, 'Pair this phone with the TV again.'));
+    }
     await _persist('lan.tv', _phones);
     notifyListeners();
   }
@@ -731,7 +1024,12 @@ class TVRemote extends ChangeNotifier {
     if (closed) return;
     closed = true;
     code = null;
+    _ask = null;
     _discovery?.close();
+    for (final socket in _live.keys.toList()) {
+      unawaited(socket.close());
+    }
+    _live.clear();
     await _server?.close(force: true);
     try {
       await const MethodChannel('otakase/device')
@@ -741,6 +1039,197 @@ class TVRemote extends ChangeNotifier {
     }
     if (_writes != null) await _writes;
     await _events.close();
+    super.dispose();
+  }
+}
+
+enum LinkState { connecting, live, polling, lost }
+
+/// The phone's side of the live connection to one paired TV. It keeps
+/// [status] current, reconnects on its own, finds the TV again by its id
+/// when its address changed, and falls back to asking every two seconds
+/// for TVs on an older Otakase.
+class RemoteLink extends ChangeNotifier {
+  RemoteLink(
+    this.remote,
+    this.tv, {
+    this.findTVs = discoverTVs,
+    this.pollEvery = const Duration(seconds: 2),
+  });
+  final TVRemote remote;
+  final Future<List<TVDevice>> Function() findTVs;
+  final Duration pollEvery;
+  TVDevice tv;
+  Json status = {};
+  LinkState state = LinkState.connecting;
+  String? error;
+  WebSocket? _socket;
+  Timer? _retry, _poll;
+  int _fails = 0, _seq = 0;
+  bool _closed = false, _finding = false;
+  final _acks = <int, Completer<void>>{};
+
+  bool get live => state == LinkState.live || state == LinkState.polling;
+
+  void start() => unawaited(_connect());
+
+  void _set(LinkState next, [String? message]) {
+    if (_closed) return;
+    state = next;
+    error = message;
+    notifyListeners();
+  }
+
+  Future<void> _connect() async {
+    if (_closed) return;
+    _retry?.cancel();
+    if (state != LinkState.lost) _set(LinkState.connecting);
+    final WebSocket socket;
+    try {
+      socket = await remote.openLive(tv);
+    } on WebSocketException {
+      // Not upgraded: an older TV, or this phone is no longer paired.
+      try {
+        status = await remote.send(tv);
+        _fails = 0;
+        _set(LinkState.polling);
+        _poll?.cancel();
+        _poll = Timer.periodic(pollEvery, (_) => unawaited(_refresh()));
+      } catch (e) {
+        _lost(e);
+      }
+      return;
+    } catch (e) {
+      _lost(e);
+      return;
+    }
+    if (_closed) {
+      await socket.close();
+      return;
+    }
+    _socket = socket;
+    _fails = 0;
+    _set(LinkState.live);
+    socket.listen(
+      _message,
+      onDone: () {
+        if (_socket != socket) return;
+        _socket = null;
+        _lost(
+          socket.closeCode == 4401
+              ? StateError(socket.closeReason ?? 'Pair this TV again.')
+              : null,
+        );
+      },
+      onError: (Object _) {},
+      cancelOnError: true,
+    );
+  }
+
+  Future<void> _refresh() async {
+    if (_closed || state != LinkState.polling) return;
+    try {
+      status = await remote.send(tv);
+      _set(LinkState.polling);
+    } catch (e) {
+      _poll?.cancel();
+      _lost(e);
+    }
+  }
+
+  void _message(dynamic data) {
+    if (data is! String) return;
+    try {
+      final j = (jsonDecode(data) as Map).cast<String, dynamic>();
+      if (j['type'] == 'status') {
+        status = j;
+        notifyListeners();
+      } else if (j['type'] == 'ack') {
+        final done = _acks.remove(number(j['seq']));
+        final problem = j['error'];
+        if (problem is String) {
+          done?.completeError(StateError(problem));
+        } else {
+          done?.complete();
+        }
+      }
+    } catch (_) {
+      /* Ignore what is not from Otakase. */
+    }
+  }
+
+  void _lost(Object? e) {
+    for (final done in _acks.values) {
+      done.completeError(StateError('Lost the TV. Reconnecting…'));
+    }
+    _acks.clear();
+    if (_closed) return;
+    _fails++;
+    final message = e is StateError ? e.message : null;
+    _set(LinkState.lost, message);
+    // The TV may have a new address after a router restart.
+    if (_fails >= 2) unawaited(_findAgain());
+    _retry?.cancel();
+    _retry = Timer(
+      Duration(seconds: 1 << (_fails - 1).clamp(0, 3)),
+      () => unawaited(_connect()),
+    );
+  }
+
+  Future<void> _findAgain() async {
+    if (_finding || _closed) return;
+    _finding = true;
+    try {
+      for (final found in await findTVs()) {
+        remote.found(found);
+        if (found.id == tv.id &&
+            (found.host != tv.host || found.port != tv.port)) {
+          tv = found;
+          _retry?.cancel();
+          unawaited(_connect());
+        }
+      }
+    } catch (_) {
+      /* Try again on the next miss. */
+    } finally {
+      _finding = false;
+    }
+  }
+
+  /// Sends one control and completes when the TV took it.
+  Future<void> send(String action, {Json args = const {}}) async {
+    final socket = _socket;
+    if (socket == null) {
+      if (state == LinkState.polling) {
+        await remote.send(tv, action: action, args: args);
+        unawaited(_refresh());
+        return;
+      }
+      throw StateError('Reconnecting to ${tv.name}…');
+    }
+    final seq = ++_seq, done = Completer<void>();
+    _acks[seq] = done;
+    socket.add(jsonEncode({'seq': seq, 'action': action, 'args': args}));
+    return done.future.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {
+        _acks.remove(seq);
+        throw StateError('${tv.name} did not answer. Try again.');
+      },
+    );
+  }
+
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    _retry?.cancel();
+    _poll?.cancel();
+    for (final done in _acks.values) {
+      done.completeError(StateError('Closed.'));
+    }
+    _acks.clear();
+    await _socket?.close();
+    _socket = null;
     super.dispose();
   }
 }

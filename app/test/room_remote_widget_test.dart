@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -32,6 +32,12 @@ const tv = TVDevice(
 class FakeLan extends LanTransport {
   final commands = <String>[], hellos = <String>[];
   bool adult = false;
+  int waits = 0;
+
+  /// Answers like a TV on an older Otakase, so the phone asks for status.
+  @override
+  Future<WebSocket> live(TVDevice tv, Map<String, String> headers) =>
+      Future.error(const WebSocketException('not upgraded'));
   @override
   Future<Json> post(
     TVDevice device,
@@ -57,6 +63,20 @@ class FakeLan extends LanTransport {
         'token': 'pair-token',
         'client': 'phone',
       };
+    }
+    if (path == '/ask') {
+      return {'request': 'r1', 'digits': '47'};
+    }
+    if (path == '/ask/wait') {
+      return ++waits < 2
+          ? {'state': 'waiting'}
+          : {
+              'state': 'allowed',
+              'id': device.id,
+              'name': device.name,
+              'token': 'ask-token',
+              'client': 'phone',
+            };
     }
     if (path == '/command') {
       commands.add('${body['action']}:${jsonEncode(body['args'])}');
@@ -198,6 +218,77 @@ void main() {
       await s.close();
     },
   );
+  testWidgets('a newer TV is paired by Allow on the TV, no code', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    await tester.pumpWidget(const SizedBox());
+    final lan = FakeLan();
+    final active = await services(lan: lan);
+    const newer = TVDevice(
+      id: 'tv-1',
+      name: 'Living room',
+      host: '192.168.1.8',
+      port: 12345,
+      version: 2,
+    );
+    await tester.pumpWidget(
+      page(
+        TVRemotePage(
+          services: active,
+          isTV: false,
+          findTVs: () async => [newer],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Living room'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const Key('tv-pair-code')), findsNothing);
+    expect(find.byKey(const Key('tv-ask-digits')), findsOneWidget);
+    expect(find.text('47'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('tv-ask-digits')), findsNothing);
+    expect(active.tvRemote.paired.single.id, tv.id);
+    expect(find.text('Playing story'), findsOneWidget);
+    expect(find.text('Connected'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await active.close();
+  });
+  testWidgets('the TV asks whoever is watching and Allow lets the phone in', (
+    tester,
+  ) async {
+    final tvSide = TVRemote(storage: MemoryTokens(), name: 'Living room');
+    await tvSide.initialize();
+    final asked = tvSide.debugAsk('Pixel')!;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => RemoteAskDialog(remote: tvSide, ask: asked),
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pixel wants to control this device'), findsOneWidget);
+    expect(find.text(asked.digits), findsOneWidget);
+    await tester.tap(find.byKey(const Key('tv-ask-allow')));
+    await tester.pumpAndSettle();
+    expect(find.byType(RemoteAskDialog), findsNothing);
+    expect(tvSide.ask, null);
+    expect(asked.state, 'allowed');
+    expect(tvSide.hasPhones, isTrue);
+    await tvSide.close();
+  });
   testWidgets('phone pairs by typing the code when no TV is found', (
     tester,
   ) async {

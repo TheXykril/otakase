@@ -36,10 +36,11 @@ class _TVRemotePageState extends State<TVRemotePage> {
   TVRemote get remote => widget.services.tvRemote;
   List<TVDevice> devices = [];
   TVDevice? selected;
-  Json status = {};
+  RemoteLink? link;
+  Json get status => link?.status ?? const {};
   Timer? timer;
   String? error, firewallNote;
-  bool busy = false, polling = false, canAllow = false, allowing = false;
+  bool busy = false, canAllow = false, allowing = false;
   late final RemoteFirewall firewall =
       widget.firewall ?? CoreFirewall(CastClient(widget.services.core));
   @override
@@ -53,7 +54,6 @@ class _TVRemotePageState extends State<TVRemotePage> {
       });
     } else {
       unawaited(scan());
-      timer = Timer.periodic(const Duration(seconds: 2), (_) => refresh());
       if (widget.pairCode case final code?) {
         WidgetsBinding.instance.addPostFrameCallback(
           (_) => pair(code.device, initial: code.code),
@@ -136,7 +136,39 @@ class _TVRemotePageState extends State<TVRemotePage> {
     }
   }
 
+  /// Opens the live connection to a paired [tv].
+  void connect(TVDevice tv) {
+    final old = link;
+    if (old != null && old.tv.id == tv.id) return;
+    unawaited(old?.close());
+    final next = RemoteLink(remote, tv, findTVs: widget.findTVs);
+    next.addListener(() {
+      if (mounted) setState(() {});
+    });
+    setState(() {
+      selected = tv;
+      link = next;
+      error = null;
+    });
+    next.start();
+  }
+
+  /// Taps on a TV that is not paired yet: newer TVs ask on screen, older
+  /// ones show a code to type.
   Future<void> pair(TVDevice tv, {String initial = ''}) async {
+    if (initial.isEmpty && tv.version >= 2) {
+      final allowed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _AskDialog(
+          tv: tv,
+          remote: remote,
+          phoneName: widget.services.profiles?.active.name ?? 'Phone',
+        ),
+      );
+      if (allowed == true && mounted) connect(tv);
+      return;
+    }
     final code = await showDialog<String>(
       context: context,
       builder: (_) => _PairDialog(name: tv.name, initial: initial),
@@ -148,10 +180,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
         code,
         phoneName: widget.services.profiles?.active.name ?? 'Phone',
       );
-      if (mounted) {
-        setState(() => selected = tv);
-        await refresh();
-      }
+      if (mounted) connect(tv);
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     }
@@ -176,12 +205,11 @@ class _TVRemotePageState extends State<TVRemotePage> {
       );
       if (mounted) {
         setState(() {
-          selected = tv;
           devices = {
             for (final d in [...remote.paired, ...devices]) d.id: d,
           }.values.toList();
         });
-        await refresh();
+        connect(tv);
       }
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
@@ -190,34 +218,12 @@ class _TVRemotePageState extends State<TVRemotePage> {
     }
   }
 
-  Future<void> refresh() async {
-    final tv = selected;
-    if (tv == null || polling || !mounted) return;
-    polling = true;
-    try {
-      final value = await remote.send(tv);
-      if (mounted && selected?.id == tv.id) {
-        setState(() {
-          status = value;
-          error = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => error = e.toString());
-    } finally {
-      polling = false;
-    }
-  }
-
   Future<void> send(String action, {Json args = const {}}) async {
-    final tv = selected;
-    if (tv == null) return;
+    final current = link;
+    if (current == null) return;
     try {
-      await remote.send(tv, action: action, args: args);
-      if (mounted) {
-        setState(() => error = null);
-        unawaited(refresh());
-      }
+      await current.send(action, args: args);
+      if (mounted) setState(() => error = null);
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     }
@@ -226,6 +232,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
   @override
   void dispose() {
     timer?.cancel();
+    unawaited(link?.close());
     if (widget.isTV) remote.endPair();
     super.dispose();
   }
@@ -290,7 +297,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
                   ),
                 const SizedBox(height: 8),
                 Text(
-                  'Scan with your phone camera, or on the phone open More > Control TV > Enter code.\nExpires in ${left ~/ 60} min ${left % 60} s.',
+                  'On the phone open More > Control TV and tap this TV, then pick Allow here. Or scan with the phone camera, or tap Enter code.\nCode expires in ${left ~/ 60} min ${left % 60} s.',
                   textAlign: TextAlign.center,
                   style: uiStyle(context),
                 ),
@@ -393,8 +400,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
                     isTV: false,
                     onPressed: () async {
                       if (remote.paired.any((p) => p.id == tv.id)) {
-                        setState(() => selected = tv);
-                        await refresh();
+                        connect(tv);
                       } else {
                         await pair(tv);
                       }
@@ -406,6 +412,18 @@ class _TVRemotePageState extends State<TVRemotePage> {
                 Text(
                   tv.name,
                   style: uiStyle(context, size: 24, weight: FontWeight.w600),
+                ),
+                Text(
+                  switch (link?.state) {
+                    LinkState.live || LinkState.polling => 'Connected',
+                    LinkState.lost => 'Reconnecting…',
+                    _ => 'Connecting…',
+                  },
+                  key: const Key('tv-link-state'),
+                  style: uiStyle(
+                    context,
+                    color: link?.live == true ? ok : warn,
+                  ),
                 ),
                 Text(
                   visible
@@ -505,10 +523,11 @@ class _TVRemotePageState extends State<TVRemotePage> {
                 TextButton(
                   onPressed: () async {
                     await remote.forget(tv.id);
+                    unawaited(link?.close());
                     if (mounted) {
                       setState(() {
                         selected = null;
-                        status = {};
+                        link = null;
                         devices = remote.paired;
                       });
                     }
@@ -517,10 +536,10 @@ class _TVRemotePageState extends State<TVRemotePage> {
                 ),
               ],
             ],
-            if (error != null)
+            if (error ?? link?.error case final problem?)
               Padding(
                 padding: const EdgeInsets.only(top: 16),
-                child: Text(error!, style: uiStyle(context, color: warn)),
+                child: Text(problem, style: uiStyle(context, color: warn)),
               ),
           ],
         ),
@@ -646,6 +665,175 @@ class _CodeDialogState extends State<_CodeDialog> {
         child: const Text('Cancel'),
       ),
       TextButton(onPressed: ready ? submit : null, child: const Text('Pair')),
+    ],
+  );
+}
+
+/// Phone side of asking a TV: shows the digits the TV shows next to its
+/// Allow button and closes with true once the TV allowed this phone.
+class _AskDialog extends StatefulWidget {
+  const _AskDialog({
+    required this.tv,
+    required this.remote,
+    required this.phoneName,
+  });
+  final TVDevice tv;
+  final TVRemote remote;
+  final String phoneName;
+  @override
+  State<_AskDialog> createState() => _AskDialogState();
+}
+
+class _AskDialogState extends State<_AskDialog> {
+  String digits = '';
+  String? error;
+  bool cancelled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(run());
+  }
+
+  Future<void> run() async {
+    try {
+      await widget.remote.requestControl(
+        widget.tv,
+        phoneName: widget.phoneName,
+        digits: (d) {
+          if (mounted) setState(() => digits = d);
+        },
+        cancelled: () => cancelled || !mounted,
+      );
+      if (mounted && !cancelled) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    }
+  }
+
+  @override
+  void dispose() {
+    cancelled = true;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.tv.name),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          error ??
+              (digits.isEmpty
+                  ? 'Asking the TV…'
+                  : 'Pick Allow on the TV. It shows these numbers too, so you know it is this phone.'),
+          style: uiStyle(context, color: error == null ? fg : warn),
+        ),
+        if (error == null && digits.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Center(
+              child: Text(
+                digits,
+                key: const Key('tv-ask-digits'),
+                style: mono.copyWith(fontSize: 40, color: accentText),
+              ),
+            ),
+          ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () {
+          cancelled = true;
+          Navigator.pop(context, false);
+        },
+        child: Text(error == null ? 'Cancel' : 'Close'),
+      ),
+    ],
+  );
+}
+
+/// TV side: a phone asks to control this TV. Shown over whatever is open,
+/// the player too, and closes on its own when the ask runs out.
+class RemoteAskDialog extends StatefulWidget {
+  const RemoteAskDialog({super.key, required this.remote, required this.ask});
+  final TVRemote remote;
+  final RemoteAsk ask;
+  @override
+  State<RemoteAskDialog> createState() => _RemoteAskDialogState();
+}
+
+class _RemoteAskDialogState extends State<RemoteAskDialog> {
+  Timer? expiry;
+  bool answered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.remote.addListener(changed);
+    expiry = Timer(
+      widget.ask.expires.difference(DateTime.now()),
+      () => close(false),
+    );
+  }
+
+  void changed() {
+    if (widget.remote.ask?.id != widget.ask.id) close(false);
+  }
+
+  void close(bool allow) {
+    if (answered || !mounted) return;
+    answered = true;
+    if (allow) {
+      unawaited(widget.remote.allowAsk());
+    } else if (widget.remote.ask?.id == widget.ask.id) {
+      widget.remote.denyAsk();
+    }
+    Navigator.pop(context);
+  }
+
+  @override
+  void dispose() {
+    expiry?.cancel();
+    widget.remote.removeListener(changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    icon: const Icon(LucideIcons.smartphone, color: shu),
+    title: Text('${widget.ask.phone} wants to control this device'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Check that the phone shows these numbers:',
+          textAlign: TextAlign.center,
+          style: uiStyle(context, color: muted),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          widget.ask.digits,
+          key: const Key('tv-ask-digits'),
+          style: mono.copyWith(fontSize: 40, color: accentText),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        key: const Key('tv-ask-deny'),
+        onPressed: () => close(false),
+        child: const Text('Not now'),
+      ),
+      TextButton(
+        key: const Key('tv-ask-allow'),
+        autofocus: true,
+        onPressed: () => close(true),
+        child: const Text('Allow'),
+      ),
     ],
   );
 }

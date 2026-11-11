@@ -103,6 +103,7 @@ class _AppShellState extends State<AppShell> {
       if (mounted) communityMessage(context, text);
     });
     unawaited(startRemote());
+    widget.services.tvRemote.addListener(remoteAsk);
     // Trakt sits with the other trackers in Accounts and on More.
     unawaited(widget.services.trakt.load());
     if ((Host.android || isDesktop) &&
@@ -189,7 +190,28 @@ class _AppShellState extends State<AppShell> {
       s.dispose();
     }
     searchField.dispose();
+    if (!widget.services.tvRemote.closed) {
+      widget.services.tvRemote.removeListener(remoteAsk);
+    }
     super.dispose();
+  }
+
+  String? askShown;
+
+  /// A phone asked to control this TV or computer: ask whoever is
+  /// watching, over any page or the player.
+  void remoteAsk() {
+    final ask = widget.services.tvRemote.ask;
+    if (!mounted || ask == null || ask.id == askShown) return;
+    askShown = ask.id;
+    unawaited(
+      showDialog<void>(
+        context: context,
+        useRootNavigator: true,
+        builder: (_) =>
+            RemoteAskDialog(remote: widget.services.tvRemote, ask: ask),
+      ),
+    );
   }
 
   Future<void> startRemote() async {
