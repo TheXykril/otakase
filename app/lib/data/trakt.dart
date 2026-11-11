@@ -705,6 +705,26 @@ class Trakt extends ChangeNotifier {
     ].where((t) => t.trakt > 0).toList();
   }
 
+  /// The film or series with this IMDb id, as a Discord share names it.
+  Future<MediaTitle?> byImdb(String imdb, {String? kind}) async {
+    if (!RegExp(r'^tt\d{5,10}$').hasMatch(imdb)) return null;
+    final rows =
+        await _get(
+          '/search/imdb/$imdb?type=${kind ?? 'movie,show'}&extended=full,images',
+        ) as List? ??
+        [];
+    for (final row in rows.whereType<Map>()) {
+      if (row[row['type']] case final Map item) {
+        final t = MediaTitle.fromTrakt(
+          item.cast<String, dynamic>(),
+          row['type'] as String,
+        );
+        if (t.trakt > 0) return t;
+      }
+    }
+    return null;
+  }
+
   Future<MediaTitle> details(MediaTitle title) async {
     final json = await _get(
       '/${_plural(title.kind)}/${title.trakt}?extended=full,images',

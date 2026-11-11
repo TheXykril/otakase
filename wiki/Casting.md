@@ -8,6 +8,9 @@ code: open it in any browser on the network and the episode plays there.
 
 While casting, the player controls drive the TV. **Stop casting** ends it.
 
+Downloaded episodes and films cast the same way: the TV fetches the file
+from this device, so keep it on and on the same network while it plays.
+
 ## No TVs found
 
 - The TV must be on (not in deep standby) and on the same network as this

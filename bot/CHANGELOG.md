@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.31.0
+
+- Watch rooms play movies and TV series. The picker has Anime and Movies & shows tabs; films and series are found on IMDb's public search, a series' aired episodes come from TVmaze and play in order across seasons. Streams come from vidsrc by IMDb id through the new helper mode `-title-stream-info`, with English subtitles passed inline. Titles move no AniList or MAL lists. New endpoint `GET /activity/api/watch/title`; covers from m.media-amazon.com and static.tvmaze.com go through the cover proxy.
+- `/share-title` recommends a movie or series to another member, in their DMs and their Otakase (inbox items carry `imdb`, with `key` movie or show).
+
 ## 1.30.96
 
 - The phone remote works away from home: a TV or computer linked to Discord keeps a connection to the bot, and phones linked to the same Discord account control it through the bot when they are not on the same Wi-Fi. They also pair with it without a code. New endpoints `GET /v1/remote/tvs`, `/v1/remote/host` and `/v1/remote/control` (WebSockets), memory only.

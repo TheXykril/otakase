@@ -12,6 +12,7 @@ import '../data/models.dart';
 import '../services.dart';
 import 'components.dart';
 import 'device_status.dart';
+import 'movies_pages.dart' show openTitle;
 import 'show_page.dart';
 
 void communityMessage(BuildContext context, String text) {
@@ -138,7 +139,7 @@ class DiscordPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  'Shows sent to you, new episodes of shows you follow and replies appear here.',
+                  'Shows and movies sent to you, new episodes of shows you follow and replies appear here.',
                   style: uiStyle(context, color: muted),
                 ),
               ),
@@ -148,7 +149,30 @@ class DiscordPage extends StatelessWidget {
                 child: FocusBox(
                   isTV: isTV,
                   onPressed: () async {
-                    if (number(item['anilist_id']) > 0) {
+                    final imdb = item['imdb'] as String? ?? '';
+                    if (imdb.isNotEmpty) {
+                      // A film or series shared with /share-title.
+                      try {
+                        final kind = item['key'] == 'show' ? 'show' : 'movie';
+                        final title = await services.trakt.byImdb(
+                          imdb,
+                          kind: kind,
+                        );
+                        if (!context.mounted) return;
+                        if (title == null) {
+                          communityMessage(
+                            context,
+                            'Couldn\'t find this title on Trakt.',
+                          );
+                          return;
+                        }
+                        await openTitle(context, services, title, isTV);
+                      } catch (e) {
+                        if (context.mounted) {
+                          communityMessage(context, e.toString());
+                        }
+                      }
+                    } else if (number(item['anilist_id']) > 0) {
                       final a = Anime(
                         id: number(item['anilist_id']),
                         title: item['title'] as String? ?? 'From Discord',

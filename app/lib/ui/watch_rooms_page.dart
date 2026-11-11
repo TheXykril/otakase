@@ -272,8 +272,10 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
     subscriptions.addAll([
       player.stream.position.listen((p) {
         if (!ending && !busy && view?.anime != null) {
+          final a = view!.anime!;
           widget.services.discord.observe(
-            view!.anime!,
+            // Films and series are not on AniList: heartbeats name them.
+            a.id > 0 ? a : Anime(id: 0, title: a.title),
             view!.episode,
             p.inMilliseconds / 1000,
           );
@@ -557,6 +559,7 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
   Future<void> save({bool completed = false}) async {
     final a = view?.anime;
     if (a == null ||
+        a.id <= 0 ||
         busy ||
         view!.episode < 1 ||
         player.state.duration <= Duration.zero ||
@@ -689,7 +692,8 @@ class _WatchRoomPlayerState extends State<WatchRoomPlayer>
         ? 'Hosting'
         : 'Following ${hostName(current)}';
     return [
-      if ((current?.episode ?? 0) > 0) 'Episode ${current!.episode}',
+      if ((current?.episode ?? 0) > 0 && current?.film != true)
+        'Episode ${current!.episode}',
       who,
     ].where((s) => s.isNotEmpty).join(' · ');
   }

@@ -451,7 +451,8 @@ func (b *bot) activityCover(w http.ResponseWriter, r *http.Request) {
 
 // proxyAniList passes a picture on AniList's image host through.
 func proxyAniList(w http.ResponseWriter, r *http.Request, src string) {
-	if !strings.HasPrefix(src, "https://media.kitsu.io/") && !strings.HasPrefix(src, "https://s4.anilist.co/") && !strings.HasPrefix(src, "https://img1.ak.crunchyroll.com/") && !strings.HasPrefix(src, "https://static.crunchyroll.com/") && !strings.HasPrefix(src, "https://artworks.thetvdb.com/") {
+	if !strings.HasPrefix(src, "https://media.kitsu.io/") && !strings.HasPrefix(src, "https://s4.anilist.co/") && !strings.HasPrefix(src, "https://img1.ak.crunchyroll.com/") && !strings.HasPrefix(src, "https://static.crunchyroll.com/") && !strings.HasPrefix(src, "https://artworks.thetvdb.com/") &&
+		!strings.HasPrefix(src, "https://m.media-amazon.com/images/") && !strings.HasPrefix(src, "https://static.tvmaze.com/") {
 		http.NotFound(w, r)
 		return
 	}

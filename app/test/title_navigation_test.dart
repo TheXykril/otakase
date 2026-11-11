@@ -7,6 +7,7 @@ import 'package:otakase/data/catalog.dart';
 import 'package:otakase/data/downloads.dart';
 import 'package:otakase/data/models.dart';
 import 'package:otakase/data/trakt.dart';
+import 'package:otakase/data/watch_rooms.dart';
 import 'package:otakase/services.dart';
 import 'package:otakase/ui/downloads_page.dart';
 import 'package:otakase/ui/movies_pages.dart';
@@ -242,5 +243,48 @@ void main() {
     expect(store.value('MpvPath'), isNull);
     expect(store.value('AutoFallback'), isNull);
     expect(store, isA<AppStore>());
+  });
+
+  test('a shared title is found on Trakt by its IMDb id', () async {
+    Uri? asked;
+    final trakt = Trakt(
+      client: MockClient((r) async {
+        asked = r.url;
+        return http.Response(
+          jsonEncode([
+            {
+              'type': 'movie',
+              'movie': {
+                'title': 'The Matrix',
+                'year': 1999,
+                'ids': {'trakt': 481, 'imdb': 'tt0133093'},
+              },
+            },
+          ]),
+          200,
+        );
+      }),
+      storage: MemoryTokens(),
+    );
+    final found = await trakt.byImdb('tt0133093', kind: 'movie');
+    expect(asked!.path, '/search/imdb/tt0133093');
+    expect(asked!.queryParameters['type'], 'movie');
+    expect(found!.title, 'The Matrix');
+    expect(await trakt.byImdb('0133093; drop'), isNull);
+  });
+
+  test('a watch room playing a film shows no episode number', () {
+    final film = RoomState({
+      'room': 'r',
+      'phase': 'play',
+      'ep': 1,
+      'show': {'id': -134093, 'title': 'The Matrix', 'format': 'MOVIE'},
+    }, DateTime(2026));
+    expect(film.film, isTrue);
+    expect(film.anime!.id, lessThan(0));
+    final series = RoomState({
+      'show': {'id': 1, 'title': 'Frieren', 'format': 'TV'},
+    }, DateTime(2026));
+    expect(series.film, isFalse);
   });
 }

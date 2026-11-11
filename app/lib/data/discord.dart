@@ -413,7 +413,9 @@ class DiscordService extends ChangeNotifier {
         case 'queue':
           kept.removeWhere(
             (k) =>
-                k['kind'] == 'queue' && k['anilist_id'] == item['anilist_id'],
+                k['kind'] == 'queue' &&
+                k['anilist_id'] == item['anilist_id'] &&
+                k['imdb'] == item['imdb'],
           );
           kept.insert(0, item);
           _tell(item, 'Sent to you');

@@ -436,8 +436,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     failedSources.clear();
   }
 
-  /// Whether [m] is a file on this device, which no cast device can fetch.
+  /// Whether [m] is a file on this device. The core serves it to a cast
+  /// device from here.
   static bool local(PlayableMedia m) => !m.url.startsWith('http');
+
+  /// Whether a download is playing, so its subtitle files can be cast too.
+  bool get castsFile => media != null && local(media!);
 
   /// Whether the copy's own audio is already in the first subtitle language,
   /// such as a Lithuanian dub, so no subtitles are wanted.
@@ -1493,14 +1497,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   /// Picks a device and moves the episode there, or offers to stop.
   Future<void> castMenu() async {
-    // A downloaded file can't reach a cast device; another Otakase can
-    // still stream the same episode or film when the download knows it.
-    final file = media != null && isTitle && local(media!);
-    if (file && (widget.isTV || request!.remote == null)) {
-      flash.show('Downloads play on this screen only');
-      showControls();
-      return;
-    }
+    // A download is cast from this device; another Otakase streams the
+    // same episode or film instead, when the download knows which it is.
     panelOpen = true;
     showControls();
     final target = await pickPlayTarget(
@@ -1509,7 +1507,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       here: false,
       // Titles a TV cannot find stay on cast.
       otakase: !widget.isTV && (!isTitle || request!.remote != null),
-      cast: !file,
       caster: caster,
     );
     panelOpen = false;
@@ -1583,14 +1580,15 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   String castSubtitle(ResolvedStream stream) {
     if (skipEpisodeSubtitles) return '';
     if (externalTrack case final Json track) {
-      // A file on this device cannot be fetched by the cast device.
+      // A file on this device reaches the cast device only beside a
+      // download, which the core serves from here.
       final url = track['url'] as String? ?? '';
-      return !isTitle || url.startsWith('http') ? url : '';
+      return !isTitle || url.startsWith('http') || castsFile ? url : '';
     }
     if ((source?.mode ?? widget.mode) == 'dub') return '';
     // A title's embedded track picked here, or a dub, sends no file.
     if (isTitle && (subSelected || dubbedTitle)) return '';
-    final files = isTitle
+    final files = isTitle && !castsFile
         ? stream.subtitles
               .where((t) => (t['url'] as String? ?? '').startsWith('http'))
               .toList()

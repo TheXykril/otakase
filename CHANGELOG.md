@@ -33,7 +33,15 @@
 - **Downloads play on.** A downloaded episode plays the next downloaded
   episode of the same show when it ends, and Previous and Next go between
   them. A downloaded episode or film can also be moved to an Otakase TV,
-  which streams the same one at the same spot.
+  which streams the same one at the same spot, or cast to a Chromecast,
+  DLNA TV, Kodi or browser straight from the file.
+- **Movies and shows in watch rooms.** The watch room picker in the
+  Discord Activity has a Movies & shows tab: search a film or series and
+  watch it together, series episode by episode across seasons. The app
+  joins these rooms like anime ones.
+- **Share movies and shows from Discord.** `/share-title` recommends a film
+  or series to another member, like `/share-anime`. It lands in their DMs
+  and under Community → From Discord, where it opens the film or show page.
 
 ### Changed
 

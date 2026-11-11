@@ -118,7 +118,7 @@ function wLiveCard(st) {
   if (st.adult || !st.show) {
     return `<div class="wlive"><i></i><span><b>${st.adult ? "A private room" : "Picking a show"}</b><small>${esc(at)} · ${people}</small>${join}</span></div>`;
   }
-  const ep = st.ep ? `Episode ${st.ep}${st.last_ep ? " of " + st.last_ep : ""}` : "";
+  const ep = st.ep && st.last_ep !== 1 ? `Episode ${st.ep}${st.last_ep ? " of " + st.last_ep : ""}` : "";
   return `<div class="wlive">${st.cover ? `<img src="${esc(st.cover)}" alt="" loading="lazy">` : "<i></i>"}
     <span><b>${esc(st.show)}</b><small>${[ep, st.playing ? "playing" : "paused"].filter(Boolean).join(" · ")}</small>
     <small>${icon("crown")} ${esc(st.host || "Someone")} · ${people} · <b>${esc(at)}</b></small>${join}</span></div>`;
@@ -604,25 +604,40 @@ function wAnswerButtons(el) {
 
 // ── Picking a show ──
 
+// wKind is what the picker searches: anime on AniList, or films and series.
+let wKind = "anime";
+
 function wPicker(changing) {
   const box = document.getElementById("wpick");
   box.innerHTML = `<p class="lead">Pick something to watch.</p>
-    ${searchBox("Search AniList…")}<div class="wresults" id="wres"></div>
+    <div class="tabs"><button class="btn ${wKind === "anime" ? "" : "alt"}" data-kind="anime">Anime</button><button class="btn ${
+      wKind === "titles" ? "" : "alt"}" data-kind="titles">Movies &amp; shows</button></div>
+    ${searchBox(wKind === "titles" ? "Search movies and shows…" : "Search AniList…")}<div class="wresults" id="wres"></div>
     ${changing ? `<button class="btn alt" id="wcancel">Back to the episode</button>` : ""}`;
   document.getElementById("list").remove();
+  box.querySelectorAll("[data-kind]").forEach((b) => (b.onclick = () => {
+    if (wKind === b.dataset.kind) return;
+    wKind = b.dataset.kind;
+    const text = document.getElementById("q").value;
+    wPicker(changing);
+    const again = document.getElementById("q");
+    again.value = text;
+    if (text.trim().length >= 2) again.oninput();
+  }));
   const q = document.getElementById("q");
   let t = 0;
   q.oninput = () => {
     clearTimeout(t);
     const text = q.value.trim();
     if (text.length < 2) return wListsDraw();
+    const kind = wKind;
     t = setTimeout(async () => {
       try {
-        wSearch = await api(`watch/search?room=${encodeURIComponent(wRoom)}&q=${encodeURIComponent(text)}`);
+        wSearch = await api(`watch/search?room=${encodeURIComponent(wRoom)}&q=${encodeURIComponent(text)}${kind === "titles" ? "&kind=titles" : ""}`);
       } catch (e) {
         return showError(e);
       }
-      if (q.value.trim() !== text) return;
+      if (q.value.trim() !== text || kind !== wKind) return;
       const res = document.getElementById("wres");
       res.innerHTML = wSearch.length ? wSearch.map((s, i) => wShowCard(s, i, wShowFacts(s))).join("") : `<p class="note">Nothing found.</p>`;
       res.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => wEpisode(wSearch[+b.dataset.i])));
@@ -645,8 +660,12 @@ function wPicker(changing) {
 }
 
 function wShowFacts(s) {
+  if (wIsTitle(s)) return [s.year, s.format === "MOVIE" ? "movie" : "series"].filter(Boolean).join(" · ");
   return [s.year, s.format && s.format.replace("_", " ").toLowerCase(), s.aired ? s.aired + " out" : s.episodes ? s.episodes + " eps" : ""].filter(Boolean).join(" · ");
 }
+
+// wIsTitle tells a film or series from IMDb (ids below -1000) from an anime.
+const wIsTitle = (s) => s && s.id <= -1001;
 
 function wShowCard(s, i, facts) {
   return `<button class="wshowcard" data-i="${i}">${s.cover ? `<img src="${esc(s.cover)}" alt="" loading="lazy">` : "<i></i>"}
@@ -659,6 +678,10 @@ function wShowCard(s, i, facts) {
 function wListsDraw() {
   const res = document.getElementById("wres");
   if (!res) return;
+  if (wKind === "titles") {
+    res.innerHTML = `<p class="note">Type a movie or show name. Shows play their aired episodes, season by season.</p>`;
+    return;
+  }
   if (!wLists) {
     res.innerHTML = `<p class="note">Loading your lists…</p>`;
     return;
@@ -685,6 +708,15 @@ function wPickerHeading(s) {
 // wEpisode is the episode grid for show s; item is its entry on the host's
 // list, which picks the next episode and may carry a position to resume.
 function wEpisode(s, item) {
+  if (wIsTitle(s) && s.format === "MOVIE") return wFilm(s);
+  if (wIsTitle(s) && !s.episodes) {
+    // Search results don't count a series' episodes; look it up first.
+    const res = document.getElementById("wres");
+    if (res) res.innerHTML = `${wPickerHeading(s)}<p class="note">Loading episodes…</p>`;
+    return api(`watch/title?room=${encodeURIComponent(wRoom)}&id=${encodeURIComponent(s.id)}`)
+      .then((full) => document.getElementById("wres") === res && wEpisode({ ...s, ...full, cover: s.cover }, item))
+      .catch(showError);
+  }
   const previews = new Map();
   for (const item of s.previews || []) {
     const title = item.title || "";
@@ -766,6 +798,26 @@ function wEpisode(s, item) {
     }
     if (res.querySelector(".wpickflow")) draw();
   }).catch(() => {});
+}
+
+// wFilm is the picker's last step for a film: one button plays it.
+function wFilm(s) {
+  const res = document.getElementById("wres");
+  if (!res) return;
+  res.innerHTML = `<div class="wpickflow">${wPickerHeading(s).replace("EPISODE SELECTION", "MOVIE")}
+    <p class="note">${esc([s.year, "English subtitles when there are any"].filter(Boolean).join(" · "))}</p>
+    <div class="wepfooter"><button class="btn alt" id="wback">Back to results</button>
+    <button class="btn" id="wgo">${icon("play")} Play the movie</button></div></div>`;
+  document.getElementById("wback").onclick = () => document.getElementById("q").oninput();
+  const go = document.getElementById("wgo");
+  go.onclick = () => {
+    go.disabled = true;
+    wChanging = false;
+    wvKey = "";
+    api("watch/pick", { room: wRoom, show: s.id, ep: 1, pos: 0, dub: false })
+      .then((nv) => wSet(nv))
+      .catch((err) => { go.disabled = false; showError(err); });
+  };
 }
 
 // ── The player ──
