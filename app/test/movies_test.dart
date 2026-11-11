@@ -481,6 +481,8 @@ void main() {
     late bool down;
     late Json activity;
     late List<Json> paused;
+    late List<Json> shows;
+    late Json? next;
     late MovieService movies;
 
     setUp(() async {
@@ -491,6 +493,8 @@ void main() {
         'movies': {'watched_at': '2026-11-11T09:00:00.000Z'},
       };
       paused = [];
+      shows = [];
+      next = null;
       final client = MockClient((r) async {
         calls.add(r);
         if (down) return http.Response('', 503);
@@ -501,6 +505,10 @@ void main() {
             return http.Response(jsonEncode(paused), 200);
           case '/sync/history':
             return http.Response('{}', 201);
+          case '/sync/watched/shows':
+            return http.Response(jsonEncode(shows), 200);
+          case '/shows/1388/progress/watched':
+            return http.Response(jsonEncode({'next_episode': next}), 200);
         }
         if (r.method == 'DELETE') return http.Response('', 204);
         if (r.url.path.startsWith('/scrobble/')) {
@@ -567,6 +575,64 @@ void main() {
           store: movies.store,
         );
         expect(again.unsentWatches, hasLength(1));
+      },
+    );
+
+    test(
+      'a series watched elsewhere continues from the next episode',
+      () async {
+        final at = DateTime.now().subtract(const Duration(days: 2));
+        shows = [
+          {
+            'show': {
+              'title': 'Breaking Bad',
+              'ids': {'trakt': 1388},
+            },
+            'seasons': [
+              {
+                'number': 1,
+                'episodes': [
+                  for (var n = 1; n <= 4; n++)
+                    {
+                      'number': n,
+                      'last_watched_at': at
+                          .add(Duration(minutes: n))
+                          .toUtc()
+                          .toIso8601String(),
+                    },
+                ],
+              },
+            ],
+          },
+        ];
+        next = {'season': 1, 'number': 5};
+        await movies.sync(force: true);
+        expect(movies.entry(series)!.code, 'S1E5');
+        expect(movies.continuing.map((e) => e.title.key), [series.key]);
+        expect(named('/shows/1388/progress/watched'), hasLength(1));
+
+        // Nothing new: Trakt is not asked again.
+        await movies.sync(force: true);
+        expect(named('/shows/1388/progress/watched'), hasLength(1));
+
+        // Episode 5 started here later keeps its spot.
+        await movies.progress(series, 600, 2700, season: 1, episode: 5);
+        await movies.sync(force: true);
+        expect(movies.entry(series)!.resumeAt(2700), 600);
+
+        // Caught up on another device: the series leaves Continue.
+        (((shows.single['seasons'] as List).single as Map)['episodes'] as List)
+            .add({
+              'number': 5,
+              'last_watched_at': DateTime.now()
+                  .add(const Duration(minutes: 1))
+                  .toUtc()
+                  .toIso8601String(),
+            });
+        next = null;
+        await movies.sync(force: true);
+        expect(movies.watched(series, season: 1, episode: 5), isTrue);
+        expect(movies.continuing, isEmpty);
       },
     );
 

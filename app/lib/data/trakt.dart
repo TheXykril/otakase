@@ -211,8 +211,12 @@ class TraktLibrary {
     this.watchedEpisodes = const {},
     this.playback = const [],
     this.watchedAt = const {},
+    this.lastEpisodes = const {},
   });
   final List<MediaTitle> watchlist;
+
+  /// The episode of each show watched last, and when, by show key.
+  final Map<String, ({int season, int episode, int at})> lastEpisodes;
 
   /// When each title was last watched, in milliseconds since the epoch: by
   /// key for a film, by key and S/E code for an episode ([watchedKey]).
@@ -772,6 +776,7 @@ class Trakt extends ChangeNotifier {
       }
     }
     final episodes = <String, ({MediaTitle title, Set<String> codes})>{};
+    final lastEpisodes = <String, ({int season, int episode, int at})>{};
     for (final row in (results[3] as List? ?? []).whereType<Map>()) {
       final show = row['show'];
       if (show is! Map) continue;
@@ -786,6 +791,14 @@ class Trakt extends ChangeNotifier {
           final at = _pausedAt(e['last_watched_at']);
           if (at > 0) {
             watchedAt[watchedKey(title, season: season, episode: episode)] = at;
+            final last = lastEpisodes[title.key];
+            if (last == null || at > last.at) {
+              lastEpisodes[title.key] = (
+                season: season,
+                episode: episode,
+                at: at,
+              );
+            }
           }
         }
       }
@@ -796,7 +809,20 @@ class Trakt extends ChangeNotifier {
       watchedEpisodes: episodes,
       playback: _paused(results[4]),
       watchedAt: watchedAt,
+      lastEpisodes: lastEpisodes,
     );
+  }
+
+  /// The next episode to watch in [show] by the viewer's Trakt history,
+  /// specials left out; null once every aired episode is watched.
+  Future<({int season, int episode})?> nextEpisode(MediaTitle show) async {
+    final data = await _get(
+      '/shows/${show.trakt}/progress/watched?specials=false&count_specials=false',
+      auth: true,
+    );
+    if (data is! Map || data['next_episode'] is! Map) return null;
+    final next = data['next_episode'] as Map;
+    return (season: number(next['season']), episode: number(next['number']));
   }
 
   /// A fingerprint of when the viewer's films, episodes and lists last

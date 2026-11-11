@@ -390,6 +390,7 @@ class MovieService extends ChangeNotifier {
           pushed: done ? at : null,
         );
       }
+      await _moveToUpNext(lib.lastEpisodes);
       final merged = _mergePlayback(lib.playback);
       lastError = null;
       if (activity.isNotEmpty) _activity[account] = activity;
@@ -415,6 +416,52 @@ class MovieService extends ChangeNotifier {
     if (last != null && DateTime.now().difference(last) < gap) return;
     await sync();
   }
+
+  /// Moves each series watched lately on another device or app to the
+  /// episode after the one watched there, so Continue offers it. A series
+  /// with every aired episode watched leaves Continue.
+  Future<void> _moveToUpNext(
+    Map<String, ({int season, int episode, int at})> last,
+  ) async {
+    final cutoff =
+        DateTime.now().millisecondsSinceEpoch -
+        const Duration(days: 30).inMilliseconds;
+    final moved = [
+      for (final MapEntry(:key, :value) in last.entries)
+        if (value.at > cutoff && _behind(_entries[key], value))
+          (key: key, last: value),
+    ]..sort((a, b) => b.last.at.compareTo(a.last.at));
+    for (final m in moved.take(10)) {
+      final e = _entries[m.key]!;
+      ({int season, int episode})? next;
+      try {
+        next = await trakt.nextEpisode(e.title);
+      } catch (_) {
+        // Without Trakt's answer the watched episode is kept as the spot,
+        // and the one after it is offered.
+        next = (season: m.last.season, episode: m.last.episode);
+      }
+      _entries[m.key] = e.copyWith(
+        season: next?.season ?? m.last.season,
+        episode: next?.episode ?? 0,
+        position: 0,
+        percent: 0,
+        duration: 0,
+        updated: m.last.at,
+        pushed: m.last.at,
+      );
+    }
+  }
+
+  /// Whether [e] still points before the episode Trakt saw watched last:
+  /// saved earlier, or on that very episode, finished, with no spot.
+  bool _behind(MovieEntry? e, ({int season, int episode, int at}) last) =>
+      e != null &&
+      (last.at > e.updated ||
+          last.at == e.updated &&
+              e.season == last.season &&
+              e.episode == last.episode &&
+              !e.started);
 
   /// Sends the watched marks Trakt missed, oldest first, at the time they
   /// happened. A mark Trakt refuses outright is dropped; one that fails
