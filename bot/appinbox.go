@@ -38,6 +38,7 @@ type inboxItem struct {
 	Text      string    `json:"text,omitempty"`
 	URL       string    `json:"url,omitempty"`
 	AniListID int       `json:"anilist_id,omitempty"`
+	IMDb      string    `json:"imdb,omitempty"` // a film or series, from /share-title
 	Episode   int       `json:"episode,omitempty"`
 	From      string    `json:"from,omitempty"` // display name of the member who sent it
 	Key       string    `json:"key,omitempty"`  // a setting's name, a remote action…

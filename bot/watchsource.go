@@ -192,7 +192,13 @@ func (c *watchInfos) get(ctx context.Context, cli string, id, ep int, dub, adult
 	ready := make(chan struct{})
 	c.m[key] = watchInfoEntry{ready: ready, at: time.Now()}
 	c.mu.Unlock()
-	info, err := watchResolve(ctx, cli, id, ep, dub, adult)
+	var info streamInfo
+	var err error
+	if watchTitleIMDb(id) != "" {
+		info, err = watchResolveTitle(ctx, cli, id, ep)
+	} else {
+		info, err = watchResolve(ctx, cli, id, ep, dub, adult)
+	}
 	c.mu.Lock()
 	if current, exists := c.m[key]; exists && current.ready == ready {
 		if ctx.Err() != nil {

@@ -38,7 +38,8 @@ Back returns to the same card. Pressing OK on a card still starts playback.
 unwatched episode titles are hidden, and covers are blurred with a crossed-out
 eye. Use **Reveal this episode** in its details to show that episode for this
 visit; revealing it does not mark it watched. Watched episodes stay visible.
-The setting belongs to the current profile and also applies on phone and desktop.
+The setting belongs to the current profile and also applies on phone and desktop,
+and to series episodes on a show's page (movies & shows) as well as anime.
 
 ## Signing in
 

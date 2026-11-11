@@ -269,6 +269,10 @@ func (k *caster) start(c *Core, in castRequest) (any, error) {
 	if in.URL == "" || len(in.URL) > 8<<10 {
 		return nil, castRefusal("A stream address is required.")
 	}
+	in, err := localCastAddresses(in)
+	if err != nil {
+		return nil, err
+	}
 	if !strings.HasPrefix(in.URL, "http://") && !strings.HasPrefix(in.URL, "https://") {
 		return nil, castRefusal("Only web streams can be cast.")
 	}

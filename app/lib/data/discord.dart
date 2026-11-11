@@ -111,7 +111,20 @@ class DiscordService extends ChangeNotifier {
   DateTime? _observedAt;
   String? lastError;
   Future<void> Function(String action, Json args)? remote;
+
+  /// Shows a short line for a new item from Discord, set by the app shell.
   void Function(String text)? notify;
+
+  void _tell(Json item, String fallback) {
+    final title = (item['title'] as String? ?? '').trim();
+    final text = (item['text'] as String? ?? '').trim();
+    final line = [
+      title.isEmpty ? fallback : title,
+      text,
+    ].where((s) => s.isNotEmpty).join(': ');
+    notify?.call(line);
+  }
+
   bool get linked =>
       !closed && (_link['token'] as String? ?? '').trim().isNotEmpty;
   String get name => _link['discord_name'] as String? ?? '';
@@ -326,7 +339,10 @@ class DiscordService extends ChangeNotifier {
   void observe(Anime anime, int episode, double position) {
     if (!linked) return;
     final first = _watching == null;
-    final changed = _watching?.key != anime.key || _episode != episode;
+    final changed =
+        _watching?.key != anime.key ||
+        _watching?.title != anime.title ||
+        _episode != episode;
     if (changed) meter.restart();
     _watching = anime;
     _episode = episode;
@@ -397,11 +413,25 @@ class DiscordService extends ChangeNotifier {
         case 'queue':
           kept.removeWhere(
             (k) =>
-                k['kind'] == 'queue' && k['anilist_id'] == item['anilist_id'],
+                k['kind'] == 'queue' &&
+                k['anilist_id'] == item['anilist_id'] &&
+                k['imdb'] == item['imdb'],
           );
           kept.insert(0, item);
+          _tell(item, 'Sent to you');
+        case 'airing':
+          // A new episode of a show followed with /follow in Discord.
+          kept.removeWhere(
+            (k) =>
+                k['kind'] == 'airing' &&
+                k['anilist_id'] == item['anilist_id'] &&
+                k['episode'] == item['episode'],
+          );
+          kept.insert(0, item);
+          _tell(item, 'New episode');
         case 'notice':
           kept.insert(0, item);
+          _tell(item, 'From Discord');
         case 'setting':
           if (item['key'] == 'DevBuilds') {
             await store.set('DevBuilds', item['value'] == 'true');

@@ -10,14 +10,64 @@
   episode that is already playing on the phone over to the TV keeps your
   spot too.
 
+- **Skip intros in TV series.** Episodes of shows now find their intro,
+  recap and credits times on TheIntroDB and skip them like anime episodes
+  do, with the same Skip opening, Skip ending and Skip recap settings.
+- **Previous and pick an episode in shows.** The previous episode key
+  (< or the media Previous key) and the phone remote's Previous and Episodes buttons
+  now work for TV series too, within the season playing.
+- **Rate movies and shows.** A film or show page has a Rate button, and
+  finishing a film or the last episode of a show that has ended asks for a
+  score (the "Ask for a score" setting), like anime. With Trakt signed in,
+  the score goes to Trakt.
+- **Series pages like anime pages.** A show's episodes now have stills,
+  a resume bar, the Hide episode spoilers blur, Episode details (the info
+  button, a long press, or the remote's Info key) with the summary, and
+  Go to episode for long seasons. Movies and shows also get a Related row.
+- **Your shows in the Schedule.** With movies & shows on and Trakt signed
+  in, Schedule lists new episodes of your series next to the anime airing
+  that day. A profile with only movies & shows gets Schedule too.
+- **Remove from Continue watching.** Long press a card in Continue
+  watching (right click on a computer, Info or Menu on a TV remote) to take
+  it off the row. It comes back once you play on.
+- **Downloads play on.** A downloaded episode plays the next downloaded
+  episode of the same show when it ends, and Previous and Next go between
+  them. A downloaded episode or film can also be moved to an Otakase TV,
+  which streams the same one at the same spot, or cast to a Chromecast,
+  DLNA TV, Kodi or browser straight from the file.
+- **Movies and shows in watch rooms.** The watch room picker in the
+  Discord Activity has a Movies & shows tab: search a film or series and
+  watch it together, series episode by episode across seasons. The app
+  joins these rooms like anime ones.
+- **Share movies and shows from Discord.** `/share-title` recommends a film
+  or series to another member, like `/share-anime`. It lands in their DMs
+  and under Community → From Discord, where it opens the film or show page.
+
 ### Changed
 
+- **Movies and shows count on Discord.** With the app linked to Discord,
+  films and series now add to your Otakase watch time and show in Who's
+  watching (when Share what I watch is on), like anime.
+- **New episodes of followed shows reach the app.** Shows followed with
+  /follow in Discord now show up under Community, From Discord, when a new
+  episode is out, with a short note on screen. Shows sent to you and
+  replies show that note too.
+- **Downloaded episodes resume like streamed ones.** A downloaded anime
+  episode you started while streaming now starts from that spot.
+- **Play on says This computer on a computer** instead of This phone.
+- **Download on a computer in TV mode** now shows for movies and shows
+  too, like it does for anime.
 - **The phone remote stays upright.** Control TV and the now playing
   remote no longer turn sideways when you tilt the phone.
 - **Remotes go by device name.** TVs, computers and phones show up in the
   remote under their own device name (the name set in Android's settings,
   or the computer's name) instead of the profile's name. Phones paired
   earlier switch to their device name the next time they connect.
+
+### Removed
+
+- **Play in my own mpv** is gone. Everything plays in Otakase's own player
+  on every device, with the same skips, tracking and remote.
 
 ## 26.4.0 - 2026-11-11
 

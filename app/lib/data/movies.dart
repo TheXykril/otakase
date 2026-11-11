@@ -76,6 +76,9 @@ class MovieEntry {
   final Set<String> watched;
   bool get finished => title.isShow ? false : watched.contains('movie');
   String get code => 'S${season}E$episode';
+
+  /// One number for the episode playing, for comparing places.
+  int get place => season * 100000 + episode;
   bool get started => position > 0 || percent > 0;
   double get progress => position > 0 && duration > 0
       ? (position / duration).clamp(0, 1).toDouble()
@@ -306,10 +309,18 @@ class MovieService extends ChangeNotifier {
           .where(
             (e) =>
                 // A watched film being watched again still has a spot to resume.
-                e.started || !e.finished && e.title.isShow && e.episode > 0,
+                (e.started || !e.finished && e.title.isShow && e.episode > 0) &&
+                !store.continueHidden(e.title.key, e.place, e.updated),
           )
           .toList()
         ..sort((a, b) => b.updated.compareTo(a.updated));
+
+  /// Takes [e] off Continue watching until another episode plays or its
+  /// spot moves on.
+  Future<void> hideContinue(MovieEntry e) async {
+    await store.hideContinue(e.title.key, e.place, e.updated);
+    _notify();
+  }
 
   bool onWatchlist(MediaTitle title) =>
       watchlist.any((t) => t.key == title.key);
@@ -618,6 +629,34 @@ class MovieService extends ChangeNotifier {
     } catch (_) {
       /* The local spot is used. */
     }
+  }
+
+  /// The score this profile gave [title], 0 when none.
+  int score(MediaTitle title) => store.integer('TitleScore.${title.key}');
+
+  /// Keeps a score from 1 to 10 for [title] and sends it to Trakt when
+  /// signed in, as an anime score goes to AniList and MyAnimeList.
+  Future<void> rate(MediaTitle title, int score) async {
+    await store.set('TitleScore.${title.key}', score.clamp(1, 10));
+    _notify();
+    if (trakt.signedIn) await trakt.rate(title, score);
+  }
+
+  /// Whether finishing this film, or [episode] of [season] of a show that
+  /// has ended, finishes the title, so a score is asked for.
+  bool finishes(
+    MediaTitle title,
+    List<({int season, int number})> episodes, {
+    int season = 0,
+    int episode = 0,
+  }) {
+    if (!store.flag('ScoreOnCompletion')) return false;
+    if (!title.isShow) return true;
+    if (title.status.toLowerCase() != 'ended' || episodes.isEmpty) {
+      return false;
+    }
+    final last = episodes.last;
+    return last.season == season && last.number == episode;
   }
 
   Future<void> setWatchlist(MediaTitle title, bool on) async {

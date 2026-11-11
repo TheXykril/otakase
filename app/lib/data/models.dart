@@ -180,10 +180,14 @@ class Anime {
 }
 
 class Airing {
-  const Airing(this.anime, this.episode, this.at);
+  const Airing(this.anime, this.episode, this.at, {this.label = ''});
   final Anime anime;
   final int episode;
   final DateTime at;
+
+  /// The episode line, such as S2E5 for a series; empty says Episode N.
+  final String label;
+  String get episodeLabel => label.isNotEmpty ? label : 'Episode $episode';
 }
 
 class CatalogPage {

@@ -698,7 +698,7 @@ func (b *bot) loadEpisode(r *watchRoom, show watchShow, ep int, dub bool, start 
 				// Its language pages usually carry the other version too.
 				b.findWatchLanguages(ctx, r, gen, cli, show.ID, ep, adult, dub, providerID)
 			}
-			if !haveOther && !b.watchHasAudio(r, gen, other) {
+			if !haveOther && !show.isTitle() && !b.watchHasAudio(r, gen, other) {
 				b.findWatchAlternate(ctx, r, gen, cli, show.ID, ep, adult, other == "dub")
 			}
 			// The next episode is looked up ahead, so it starts at once.
@@ -1345,6 +1345,7 @@ func init() {
 	apiHandle("POST /activity/api/watch/preferences", (*bot).watchPreferencesSet)
 	apiHandle("POST /activity/api/watch/end", (*bot).watchEnd)
 	apiHandle("GET /activity/api/watch/episodes", (*bot).watchEpisodes)
+	apiHandle("GET /activity/api/watch/title", (*bot).watchTitleAPI)
 	apiHandle("GET /activity/api/watch/cover", (*bot).watchCover)
 	apiHandle("GET /activity/api/watch/media/{key}/{id}", (*bot).watchMediaAPI)
 	apiHandle("HEAD /activity/api/watch/media/{key}/{id}", (*bot).watchMediaAPI)
@@ -1689,13 +1690,22 @@ func (b *bot) watchSearchAPI(w http.ResponseWriter, r *http.Request) {
 		adult = cur.adult
 	}
 	b.watch.mu.Unlock()
-	list, err := watchSearch(q, adult)
+	titles := r.URL.Query().Get("kind") == "titles"
+	search := watchSearch
+	if titles {
+		search = func(q string, _ bool) ([]watchShow, error) { return watchTitleSearch(q) }
+	}
+	list, err := search(q, adult)
 	if err != nil {
 		log.Printf("watch search: %v", err)
-		apiError(w, http.StatusBadGateway, "couldn't reach AniList, try again in a bit")
+		if titles {
+			apiError(w, http.StatusBadGateway, "couldn't reach the film search, try again in a bit")
+		} else {
+			apiError(w, http.StatusBadGateway, "couldn't reach AniList, try again in a bit")
+		}
 		return
 	}
-	if isWatchMovieQuery(q) {
+	if !titles && isWatchMovieQuery(q) {
 		list = append([]watchShow{watchMovieShow()}, list...)
 	}
 	for k := range list {
@@ -1742,8 +1752,14 @@ func (b *bot) watchEpisodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := strconv.Atoi(r.URL.Query().Get("id"))
-	if err != nil || id < 1 {
+	if err != nil || id < 1 && watchTitleIMDb(id) == "" {
 		apiError(w, http.StatusBadRequest, "invalid anime")
+		return
+	}
+	if watchTitleIMDb(id) != "" {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		writeJSON(w, http.StatusOK, watchTitlePreviews(ctx, watchShow{ID: id, Format: r.URL.Query().Get("format")}))
 		return
 	}
 	show, err := watchShowByID(id)
@@ -1957,12 +1973,13 @@ func (b *bot) watchPick(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	show, err := watchMovieShow(), error(nil)
-	if in.Show != watchMovieID {
-		show, err = watchShowByID(in.Show)
-	}
+	show, err := watchAnyShowByID(in.Show)
 	if err != nil {
-		apiError(w, http.StatusBadGateway, "couldn't reach AniList, try again in a bit")
+		if watchTitleIMDb(in.Show) != "" {
+			apiError(w, http.StatusBadGateway, "couldn't look that title up, try again in a bit")
+		} else {
+			apiError(w, http.StatusBadGateway, "couldn't reach AniList, try again in a bit")
+		}
 		return
 	}
 	staff := b.isAdmin(user)
@@ -1996,7 +2013,11 @@ func (b *bot) watchPick(w http.ResponseWriter, r *http.Request) {
 		start = 0
 	}
 	b.loadEpisode(cur, show, in.Ep, in.Dub, start)
-	cur.note("%s put on %s, episode %d", cur.name(user), show.Title, in.Ep)
+	if show.isTitle() && !show.series() {
+		cur.note("%s put on %s", cur.name(user), show.Title)
+	} else {
+		cur.note("%s put on %s, episode %d", cur.name(user), show.Title, in.Ep)
+	}
 	b.watchAnswerView(w, cur, user, staff)
 }
 

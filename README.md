@@ -37,7 +37,7 @@ Android TV, Windows, macOS and Linux.
 - Syncs progress, status, scores and resume position with AniList, MyAnimeList, or both
 - Skips openings, endings and filler episodes
 - Resumes where you left off, on any of your devices
-- Continue Watching, Up next with countdowns for airing shows, and a weekly Schedule
+- Continue Watching, Up next with countdowns for airing shows, and a weekly Schedule (with your Trakt shows when movies & shows are on)
 - Up to six profiles, each with its own accounts, history and settings
 - Android TV with full remote control, sign-in by QR code, and your phone as a remote
 - On the computer: a full window, or a small keyboard launcher you can open from a shortcut

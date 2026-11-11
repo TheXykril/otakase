@@ -203,6 +203,9 @@ class AppServices {
 
   /// A show the last player finished, to be scored once it closes.
   Anime? ratingDue;
+
+  /// A film or show just finished, to ask a score for as the player closes.
+  MediaTitle? titleRatingDue;
   Json Function()? playerStatus;
   Future<void> Function(String action, Json args)? playerCommand;
   final ProfileManager? profiles;

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
+import '../data/trakt.dart';
 import '../services.dart';
 import 'community_page.dart';
 import 'components.dart';
@@ -28,6 +29,16 @@ class RatingPrompt extends NavigatorObserver {
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     // Dialogs inside the player pop too; only the page itself counts.
     if (route is! PageRoute) return;
+    final title = services.titleRatingDue;
+    if (title != null) {
+      services.titleRatingDue = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final context = navigator?.context;
+        if (context == null || !context.mounted) return;
+        unawaited(askTitleRating(context, services, title, isTV));
+      });
+      return;
+    }
     final anime = services.ratingDue;
     if (anime == null) return;
     services.ratingDue = null;
@@ -50,8 +61,8 @@ Future<void> askRating(
       services.store.integer('LocalScore.${anime.key}') * 10.0;
   final score = await showDialog<int>(
     context: context,
-    builder: (_) => _RateDialog(
-      anime: anime,
+    builder: (_) => RateDialog(
+      name: anime.title,
       initial: (current / 10).round().clamp(0, 10),
       isTV: isTV,
     ),
@@ -79,26 +90,60 @@ Future<void> askRating(
   }
 }
 
-class _RateDialog extends StatefulWidget {
-  const _RateDialog({
-    required this.anime,
-    required this.initial,
-    required this.isTV,
-  });
-  final Anime anime;
-  final int initial;
-  final bool isTV;
-  @override
-  State<_RateDialog> createState() => _RateDialogState();
+/// Asks for a score from 1 to 10 for a film or show and keeps it, on Trakt
+/// too when signed in. [finished] words it for the end of playback.
+Future<void> askTitleRating(
+  BuildContext context,
+  AppServices services,
+  MediaTitle title,
+  bool isTV, {
+  bool finished = true,
+}) async {
+  final score = await showDialog<int>(
+    context: context,
+    builder: (_) => RateDialog(
+      name: title.title,
+      initial: services.movies.score(title),
+      isTV: isTV,
+      finished: finished,
+    ),
+  );
+  if (score == null || score <= 0 || !context.mounted) return;
+  try {
+    await services.movies.rate(title, score);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('The score was not sent to Trakt: $e')),
+      );
+    }
+  }
 }
 
-class _RateDialogState extends State<_RateDialog> {
+class RateDialog extends StatefulWidget {
+  const RateDialog({
+    super.key,
+    required this.name,
+    required this.initial,
+    required this.isTV,
+    this.finished = true,
+  });
+  final String name;
+  final int initial;
+  final bool isTV, finished;
+  @override
+  State<RateDialog> createState() => _RateDialogState();
+}
+
+class _RateDialogState extends State<RateDialog> {
   late int score = widget.initial;
 
   @override
   Widget build(BuildContext context) => AlertDialog(
     backgroundColor: panel,
-    title: Text('You finished ${widget.anime.title}'),
+    title: Text(
+      widget.finished ? 'You finished ${widget.name}' : 'Rate ${widget.name}',
+    ),
     content: SizedBox(
       width: 520,
       child: Column(

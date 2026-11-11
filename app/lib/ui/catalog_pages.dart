@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import '../data/catalog.dart' show CatalogFailure;
+import '../data/movies.dart' show ContentMode, contentModeOf;
 import '../data/trakt.dart'
     show
         MediaTitle,
@@ -684,6 +685,34 @@ class _SchedulePageState extends State<SchedulePage> {
   bool mineOnly = false;
   Map<int, List<Airing>> days = {};
 
+  /// Anime airing times come from AniList; series from the viewer's Trakt
+  /// calendar, with movies & shows on and Trakt signed in.
+  bool get anime => contentModeOf(widget.services.store) != ContentMode.movies;
+  bool get shows =>
+      contentModeOf(widget.services.store) != ContentMode.anime &&
+      widget.services.trakt.signedIn;
+
+  /// Series episodes airing in the [count] days from [from], as rows.
+  Future<List<Airing>> showRows(DateTime from, int count) async {
+    if (!shows) return const [];
+    final cards = titleCardsOf(widget.services);
+    final found = await widget.services.trakt.calendar(from, count);
+    return [
+      for (final e in found)
+        Airing(
+          cards.card(e.show),
+          e.episode.number,
+          e.at,
+          label: e.episode.code,
+        ),
+    ];
+  }
+
+  /// [rows] with series rows mixed in by time.
+  List<Airing> mixed(List<Airing> rows, List<Airing> series) => series.isEmpty
+      ? rows
+      : ([...rows, ...series]..sort((a, b) => a.at.compareTo(b.at)));
+
   @override
   void initState() {
     super.initState();
@@ -704,15 +733,29 @@ class _SchedulePageState extends State<SchedulePage> {
     });
     try {
       final adult = widget.services.store.flag('AdultContent');
+      final series = showRows(start, 7);
       final result = await Future.wait([
         for (var i = 0; i < 7; i++)
-          widget.services.catalog.schedule(
-            DateTime(start.year, start.month, start.day + i),
-            adult: adult,
-          ),
+          anime
+              ? widget.services.catalog.schedule(
+                  DateTime(start.year, start.month, start.day + i),
+                  adult: adult,
+                )
+              : Future.value(const <Airing>[]),
       ]);
+      final episodes = await series;
+      int dayOf(DateTime at) =>
+          DateTime(at.year, at.month, at.day).difference(start).inDays;
       if (mounted && generation == g) {
-        setState(() => days = {for (var i = 0; i < 7; i++) i: result[i]});
+        setState(
+          () => days = {
+            for (var i = 0; i < 7; i++)
+              i: mixed(result[i], [
+                for (final e in episodes)
+                  if (dayOf(e.at) == i) e,
+              ]),
+          },
+        );
       }
     } catch (e) {
       if (mounted && generation == g) {
@@ -729,6 +772,8 @@ class _SchedulePageState extends State<SchedulePage> {
   }
 
   bool onList(Anime anime) =>
+      // Series come from the viewer's own Trakt calendar.
+      titleCardsOf(widget.services).title(anime) != null ||
       widget.services.store.entry(anime) != null ||
       widget.services.tracking.mergedCached(anime) != null;
 
@@ -783,7 +828,7 @@ class _SchedulePageState extends State<SchedulePage> {
                       ),
                     ),
                     Text(
-                      'Episode ${row.episode}',
+                      row.episodeLabel,
                       style: uiStyle(context, size: 15, color: muted),
                     ),
                   ],
@@ -978,15 +1023,22 @@ class _SchedulePageState extends State<SchedulePage> {
       }
     });
     try {
-      final result = await widget.services.catalog.schedule(
-        selected,
-        adult: widget.services.store.flag('AdultContent'),
-        page: requestedPage,
-      );
+      final series = append ? null : showRows(selected, 1);
+      final result = anime
+          ? await widget.services.catalog.schedule(
+              selected,
+              adult: widget.services.store.flag('AdultContent'),
+              page: requestedPage,
+            )
+          : const <Airing>[];
+      final episodes = [
+        for (final e in await series ?? const <Airing>[])
+          if (DateTime(e.at.year, e.at.month, e.at.day) == selected) e,
+      ];
       if (mounted && generation == g) {
         setState(() {
           page = requestedPage;
-          rows = append ? [...rows, ...result] : result;
+          rows = append ? [...rows, ...result] : mixed(result, episodes);
           more = result.length == 50;
         });
       }
@@ -1088,7 +1140,7 @@ class _SchedulePageState extends State<SchedulePage> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Episode ${row.episode}',
+                          row.episodeLabel,
                           style: const TextStyle(color: muted),
                         ),
                       ],

@@ -55,6 +55,44 @@ class SkipTimes {
     }
   }
 
+  /// Opening, recap and credits of one series episode from TheIntroDB,
+  /// which knows shows by their TMDB id.
+  Future<List<SkipSpan>> lookupShow(
+    int tmdb,
+    int season,
+    int episode,
+    double length, {
+    RequestScope? scope,
+  }) async {
+    if (tmdb <= 0 || episode <= 0 || !store.flag('IntroDBSkipTimes')) {
+      return [];
+    }
+    try {
+      final d = await core.request(
+        {
+          'operation': 'skiptimes_show',
+          'tmdb_id': tmdb,
+          'season': season,
+          'episode': episode,
+          'length': length,
+        },
+        scope: scope,
+        timeout: const Duration(seconds: 30),
+      );
+      return [
+        for (final s in (d['spans'] as List? ?? []).whereType<Map>())
+          SkipSpan(
+            s['type'] as String? ?? '',
+            (s['start'] as num?)?.toDouble() ?? -1,
+            (s['end'] as num?)?.toDouble() ?? -1,
+            source: s['source'] as String? ?? '',
+          ),
+      ].where((s) => s.end > s.start && s.start >= 0).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// The random id AniSkip groups this viewer's submissions under. Made once
   /// per profile; it says nothing about who the viewer is.
   Future<String> submitter() async {

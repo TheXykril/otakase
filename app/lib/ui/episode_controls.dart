@@ -250,16 +250,22 @@ class EpisodeInfo extends StatelessWidget {
     required this.onPlay,
     required this.onReveal,
     this.description = '',
+    this.heading = '',
   });
   final int episode, duration, position;
   final String title, airdate, description;
+
+  /// The bar's title, such as S2E5; empty says Episode N.
+  final String heading;
   final bool seen, hidden, isTV;
   final Widget artwork;
   final VoidCallback onPlay, onReveal;
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text('Episode $episode')),
+    appBar: AppBar(
+      title: Text(heading.isNotEmpty ? heading : 'Episode $episode'),
+    ),
     body: ListView(
       padding: const EdgeInsets.all(24),
       children: [

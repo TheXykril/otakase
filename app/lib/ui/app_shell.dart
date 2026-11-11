@@ -29,7 +29,6 @@ import '../data/tv_remote.dart';
 import '../desktop/desktop_core.dart';
 import '../desktop/top_bar.dart';
 import '../desktop/window_frame.dart';
-import '../desktop/external_mpv.dart';
 import '../desktop/launcher.dart';
 import '../desktop/system_install.dart';
 import '../host.dart';
@@ -120,6 +119,7 @@ class _AppShellState extends State<AppShell> {
     }
     HardwareKeyboard.instance.addHandler(konamiKey);
     widget.services.party.open = partyOpen;
+    widget.services.discord.notify = fromDiscord;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await widget.services.discord.initialize();
       unawaited(widget.services.extras.refreshClub());
@@ -151,6 +151,17 @@ class _AppShellState extends State<AppShell> {
     return false;
   }
 
+  /// A new episode of a followed show, a shared show or a reply arrived
+  /// from Discord: say so; it waits under Community, From Discord.
+  void fromDiscord(String text) {
+    if (!mounted || widget.services.playerStatus != null) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
+      ),
+    );
+  }
+
   /// A watch party member opens the host's show and episode.
   Future<void> partyOpen(int anilistId, int episode) async {
     if (!mounted) return;
@@ -168,7 +179,7 @@ class _AppShellState extends State<AppShell> {
       Navigator.push(
         context,
         OtakaseRoute<void>(
-          builder: (_) => playerFor(
+          builder: (_) => PlayerPage(
             services: widget.services,
             anime: anime,
             episode: episode,
@@ -185,6 +196,9 @@ class _AppShellState extends State<AppShell> {
     HardwareKeyboard.instance.removeHandler(konamiKey);
     if (widget.services.party.open == partyOpen) {
       widget.services.party.open = null;
+    }
+    if (widget.services.discord.notify == fromDiscord) {
+      widget.services.discord.notify = null;
     }
     FocusManager.instance.removeHighlightModeListener(modeChanged);
     widget.services.auth.remoteLink = null;
@@ -252,7 +266,7 @@ class _AppShellState extends State<AppShell> {
     unawaited(
       navigator.push(
         OtakaseRoute<void>(
-          builder: (_) => playerFor(
+          builder: (_) => PlayerPage(
             services: services,
             anime: anime,
             episode: episode,
@@ -437,7 +451,7 @@ class _AppShellState extends State<AppShell> {
       Navigator.push(
         context,
         OtakaseRoute<void>(
-          builder: (_) => playerFor(
+          builder: (_) => PlayerPage(
             services: widget.services,
             anime: h.anime,
             episode: h.episode,

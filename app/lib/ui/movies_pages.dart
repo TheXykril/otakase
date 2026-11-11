@@ -19,6 +19,9 @@ import 'play_on.dart';
 import 'remote_now_playing.dart';
 import '../data/play_request.dart';
 import '../player.dart';
+import 'episode_controls.dart';
+import 'more_page.dart' show openDetail;
+import 'rate_prompt.dart';
 
 /// Poster rows and cards are drawn for anime; a film or series is shown in
 /// them under an id no AniList entry can have, and mapped back on open.
@@ -243,6 +246,7 @@ class _MoviesHomeState extends State<MoviesHome> {
     List<MediaTitle> items, {
     double? Function(Anime)? progress,
     String? Function(Anime)? captions,
+    void Function(Anime)? onMenu,
   }) => items.isEmpty
       ? const SizedBox.shrink()
       : Padding(
@@ -254,8 +258,20 @@ class _MoviesHomeState extends State<MoviesHome> {
             onOpen: (a) => open(a, ''),
             progress: progress,
             captions: captions,
+            onMenu: onMenu,
           ),
         );
+
+  /// Offers to take a card off Continue watching.
+  Future<void> removeContinue(Anime card, MovieEntry? e) async {
+    if (e == null) return;
+    const remove = 'Remove from Continue watching';
+    final choice = await chooseValue(context, card.title, [
+      remove,
+      'Cancel',
+    ], selected: 'Cancel');
+    if (choice == remove) await movies.hideContinue(e);
+  }
 
   @override
   Widget build(BuildContext context) => PosterNavigation(
@@ -353,6 +369,12 @@ class _MoviesHomeState extends State<MoviesHome> {
               row(
                 'Continue watching',
                 [for (final e in continuing) e.title],
+                onMenu: (a) {
+                  final t = cards.title(a);
+                  unawaited(
+                    removeContinue(a, t == null ? null : byCard[t.key]),
+                  );
+                },
                 progress: (a) {
                   final t = cards.title(a);
                   final e = t == null ? null : byCard[t.key];
@@ -672,6 +694,16 @@ PlayRequest titlePlay(
 }) {
   final movies = services.movies;
   final season = episode?.season ?? 0, number = episode?.number ?? 0;
+  // The episode [step] places from this one in the whole list.
+  PlayRequest? sibling(int step) {
+    final i = episodes.indexWhere(
+      (e) => e.season == season && e.number == number,
+    );
+    final j = i + step;
+    if (i < 0 || j < 0 || j >= episodes.length) return null;
+    return titlePlay(services, title, episode: episodes[j], episodes: episodes);
+  }
+
   return PlayRequest(
     title: title.title,
     cover: title.poster,
@@ -715,30 +747,50 @@ PlayRequest titlePlay(
       if (title.isShow && (e.season != season || e.episode != number)) return 0;
       return e.resumeAt(duration);
     },
-    onProgress: (position, duration, completed) => movies.progress(
-      title,
-      position,
-      duration,
-      season: season,
-      episode: number,
-      completed: completed,
-    ),
+    onProgress: (position, duration, completed) {
+      if (completed &&
+          movies.finishes(
+            title,
+            [for (final e in episodes) (season: e.season, number: e.number)],
+            season: season,
+            episode: number,
+          )) {
+        services.titleRatingDue = title;
+      }
+      return movies.progress(
+        title,
+        position,
+        duration,
+        season: season,
+        episode: number,
+        completed: completed,
+      );
+    },
     onScrobble: (action, percent) => unawaited(
       movies.scrobble(action, title, percent, season: season, episode: number),
     ),
-    next: episode == null
+    skips: episode == null || title.tmdb <= 0
         ? null
-        : () {
-            final i = episodes.indexWhere(
-              (e) => e.season == season && e.number == number,
-            );
-            if (i < 0 || i + 1 >= episodes.length) return null;
-            return titlePlay(
-              services,
-              title,
-              episode: episodes[i + 1],
-              episodes: episodes,
-            );
+        : (length, scope) => services.skipTimes.lookupShow(
+            title.tmdb,
+            season,
+            number,
+            length,
+            scope: scope,
+          ),
+    number: number,
+    count: episodes.where((e) => e.season == season).length,
+    next: episode == null ? null : () => sibling(1),
+    previous: episode == null ? null : () => sibling(-1),
+    pick: episode == null
+        ? null
+        : (n) {
+            final e = episodes
+                .where((e) => e.season == season && e.number == n)
+                .firstOrNull;
+            return e == null
+                ? null
+                : titlePlay(services, title, episode: e, episodes: episodes);
           },
   );
 }
@@ -765,10 +817,34 @@ class _TitlePageState extends State<TitlePage> {
   int season = 1;
   MovieService get movies => widget.services.movies;
 
+  /// Episodes shown despite the spoiler setting, for this visit only.
+  final revealed = <String>{};
+  final episodeFocus = <String, FocusNode>{};
+  List<MediaTitle> related = [];
+  final cards = TitleCards();
+
   @override
   void initState() {
     super.initState();
     unawaited(load());
+    unawaited(loadRelated());
+  }
+
+  @override
+  void dispose() {
+    for (final n in episodeFocus.values) {
+      n.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> loadRelated() async {
+    try {
+      final found = await widget.services.trakt.related(widget.title);
+      if (mounted) setState(() => related = found);
+    } catch (_) {
+      /* The page works without it. */
+    }
   }
 
   Future<void> load({bool preserveSeason = false}) async {
@@ -970,6 +1046,23 @@ class _TitlePageState extends State<TitlePage> {
           onPressed: () =>
               movies.setWatchlist(title, !movies.onWatchlist(title)),
         ),
+        AppButton(
+          key: const Key('title-rate'),
+          label: movies.score(title) > 0
+              ? 'Rated ${movies.score(title)}/10'
+              : 'Rate',
+          icon: LucideIcons.star,
+          isTV: widget.isTV,
+          onPressed: () => unawaited(
+            askTitleRating(
+              context,
+              widget.services,
+              title,
+              widget.isTV,
+              finished: false,
+            ),
+          ),
+        ),
         if (!title.isShow) ...[
           AppButton(
             key: const Key('title-watched'),
@@ -978,7 +1071,8 @@ class _TitlePageState extends State<TitlePage> {
             isTV: widget.isTV,
             onPressed: () => movies.markWatched(title, !watched),
           ),
-          if (!widget.isTV)
+          // Downloads are for phones and computers; a TV streams.
+          if (!widget.isTV || isDesktop)
             AppButton(
               key: const Key('title-download'),
               label: 'Download',
@@ -1007,95 +1101,243 @@ class _TitlePageState extends State<TitlePage> {
     );
   }
 
+  /// Whether [e]'s still and name stay covered by the spoiler setting.
+  bool hiddenEpisode(TitleEpisode e) =>
+      widget.services.store.flag('HideEpisodeSpoilers') &&
+      !revealed.contains(e.code) &&
+      !movies.watched(title, season: e.season, episode: e.number);
+
+  /// Where [e] was left, in seconds, 0 when it was not started.
+  int resumeOf(TitleEpisode e) {
+    final entry = movies.entry(title);
+    if (entry == null ||
+        entry.season != e.season ||
+        entry.episode != e.number ||
+        !entry.started) {
+      return 0;
+    }
+    return entry.position;
+  }
+
+  FocusNode focusFor(TitleEpisode e) =>
+      episodeFocus.putIfAbsent(e.code, () => FocusNode(debugLabel: e.code));
+
+  Widget episodeArt(TitleEpisode e, {double width = 560}) {
+    final height = width * 9 / 16;
+    final still = e.thumbnail.isNotEmpty ? e.thumbnail : title.fanart;
+    if (still.isNotEmpty) {
+      return CoverImage(
+        still,
+        banner: e.thumbnail.isEmpty,
+        width: width,
+        height: height,
+      );
+    }
+    return EpisodeArtFallback(
+      title.poster,
+      e.number,
+      width: width,
+      height: height,
+    );
+  }
+
+  String airdate(TitleEpisode e) => e.aired == null
+      ? ''
+      : '${e.aired!.year}-${e.aired!.month.toString().padLeft(2, '0')}-${e.aired!.day.toString().padLeft(2, '0')}';
+
+  /// The episode's still, name, date and summary, with Play.
+  Future<void> episodeInfo(TitleEpisode e) => openDetail(
+    context,
+    StatefulBuilder(
+      builder: (context, update) => EpisodeInfo(
+        episode: e.number,
+        heading: e.code,
+        title: e.title.isEmpty ? 'Episode ${e.number}' : e.title,
+        airdate: airdate(e),
+        description: e.overview,
+        duration: e.runtime > 0 ? e.runtime : title.runtime,
+        position: resumeOf(e),
+        seen: movies.watched(title, season: e.season, episode: e.number),
+        hidden: hiddenEpisode(e),
+        isTV: widget.isTV,
+        artwork: episodeArt(e),
+        onPlay: () {
+          Navigator.pop(context);
+          unawaited(play(e));
+        },
+        onReveal: () {
+          setState(() => revealed.add(e.code));
+          update(() {});
+        },
+      ),
+    ),
+    widget.isTV,
+  );
+
+  /// Picks an episode of the season by number and moves to it.
+  Future<void> jumpToEpisode(List<TitleEpisode> shown) async {
+    if (shown.isEmpty) return;
+    final current = upNext?.season == season ? upNext!.number : 1;
+    final target = await chooseEpisode(
+      context,
+      total: shown.last.number,
+      current: current,
+      isTV: widget.isTV,
+    );
+    if (target == null || !mounted) return;
+    final e = shown.where((e) => e.number == target).firstOrNull;
+    if (e == null) return;
+    final node = focusFor(e);
+    node.requestFocus();
+    await WidgetsBinding.instance.endOfFrame;
+    if (node.context case final c? when c.mounted) {
+      await Scrollable.ensureVisible(c, alignment: .3);
+    }
+  }
+
   Widget episodeList(BuildContext context) {
     final seasons = episodes.map((e) => e.season).toSet().toList()..sort();
     final shown = episodes.where((e) => e.season == season).toList();
+    final thumb = widget.isTV || isDesktop ? 160.0 : 112.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (seasons.length > 1)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final s in seasons) ...[
-                  AppTab(
-                    key: ValueKey('season-$s'),
-                    label: 'Season $s',
-                    selected: s == season,
-                    isTV: widget.isTV,
-                    onPressed: () => setState(() => season = s),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-              ],
+        Row(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    if (seasons.length > 1)
+                      for (final s in seasons) ...[
+                        AppTab(
+                          key: ValueKey('season-$s'),
+                          label: 'Season $s',
+                          selected: s == season,
+                          isTV: widget.isTV,
+                          onPressed: () => setState(() => season = s),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                  ],
+                ),
+              ),
             ),
-          ),
+            if (shown.length > 12)
+              AppButton(
+                key: const Key('title-episode-jump'),
+                label: 'Go to episode',
+                icon: LucideIcons.listOrdered,
+                isTV: widget.isTV,
+                onPressed: () => unawaited(jumpToEpisode(shown)),
+              ),
+          ],
+        ),
         const SizedBox(height: 12),
         for (final e in shown)
           Padding(
-            padding: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               children: [
                 Expanded(
-                  child: FocusBox(
-                    key: ValueKey('episode-${e.code}'),
-                    isTV: widget.isTV,
-                    radius: 10,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    onPressed: () => play(e),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 44,
-                          child: Text(
-                            '${e.number}',
-                            style: mono.copyWith(color: accentText),
-                          ),
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                e.title.isEmpty
-                                    ? 'Episode ${e.number}'
-                                    : e.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: uiStyle(
-                                  context,
-                                  weight: FontWeight.w500,
-                                ),
+                  child: CardMenu(
+                    onMenu: () => unawaited(episodeInfo(e)),
+                    child: FocusBox(
+                      key: ValueKey('episode-${e.code}'),
+                      focusNode: focusFor(e),
+                      isTV: widget.isTV,
+                      radius: 10,
+                      padding: const EdgeInsets.all(8),
+                      onPressed: () => play(e),
+                      onLongPress: () => unawaited(episodeInfo(e)),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: SizedBox(
+                              width: thumb,
+                              height: thumb * 9 / 16,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  SpoilerArt(
+                                    hidden: hiddenEpisode(e),
+                                    child: episodeArt(e, width: thumb),
+                                  ),
+                                  if (resumeOf(e) > 0 &&
+                                      (movies.entry(title)?.duration ?? 0) > 0)
+                                    Positioned(
+                                      left: 0,
+                                      right: 0,
+                                      bottom: 0,
+                                      child: LinearProgressIndicator(
+                                        value:
+                                            (resumeOf(e) /
+                                                    movies
+                                                        .entry(title)!
+                                                        .duration)
+                                                .clamp(0, 1),
+                                        minHeight: 3,
+                                        color: shu,
+                                        backgroundColor: line,
+                                      ),
+                                    ),
+                                ],
                               ),
-                              if (e.aired != null)
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 Text(
-                                  '${e.aired!.year}-${e.aired!.month.toString().padLeft(2, '0')}-${e.aired!.day.toString().padLeft(2, '0')}',
+                                  hiddenEpisode(e) || e.title.isEmpty
+                                      ? 'Episode ${e.number}'
+                                      : '${e.number}. ${e.title}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: uiStyle(
+                                    context,
+                                    weight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  [
+                                    if (airdate(e).isNotEmpty) airdate(e),
+                                    if (e.runtime > 0) '${e.runtime} min',
+                                    if (resumeOf(e) > 0)
+                                      'Resume at ${resumeOf(e) ~/ 60}m',
+                                  ].join(' · '),
                                   style: uiStyle(
                                     context,
                                     size: 15,
                                     color: muted,
                                   ),
                                 ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                        if (movies.watched(
-                          title,
-                          season: e.season,
-                          episode: e.number,
-                        ))
-                          const Icon(
-                            LucideIcons.circleCheck,
-                            color: ok,
-                            size: 20,
-                          ),
-                      ],
+                          if (movies.watched(
+                            title,
+                            season: e.season,
+                            episode: e.number,
+                          ))
+                            const Icon(
+                              LucideIcons.circleCheck,
+                              color: ok,
+                              size: 20,
+                            ),
+                        ],
+                      ),
                     ),
                   ),
+                ),
+                IconButton(
+                  tooltip: 'Episode details',
+                  onPressed: () => unawaited(episodeInfo(e)),
+                  icon: const Icon(LucideIcons.info, size: 20, color: muted),
                 ),
                 IconButton(
                   tooltip:
@@ -1110,7 +1352,7 @@ class _TitlePageState extends State<TitlePage> {
                   ),
                   icon: const Icon(LucideIcons.check, size: 20, color: muted),
                 ),
-                if (!widget.isTV)
+                if (!widget.isTV || isDesktop)
                   IconButton(
                     tooltip: 'Download ${e.code}',
                     onPressed: () => download(e),
@@ -1126,6 +1368,23 @@ class _TitlePageState extends State<TitlePage> {
       ],
     );
   }
+
+  /// Films or shows like this one, from Trakt.
+  Widget relatedRow() => related.isEmpty
+      ? const SizedBox.shrink()
+      : Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: PosterRow(
+            title: 'Related',
+            items: [for (final t in related) cards.card(t)],
+            isTV: widget.isTV,
+            onOpen: (a) {
+              if (cards.title(a) case final t?) {
+                unawaited(openTitle(context, widget.services, t, widget.isTV));
+              }
+            },
+          ),
+        );
 
   @override
   Widget build(BuildContext context) {
@@ -1263,6 +1522,13 @@ class _TitlePageState extends State<TitlePage> {
                       episodeList(context),
                   ],
                 ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [relatedRow()],
               ),
             ),
           ],

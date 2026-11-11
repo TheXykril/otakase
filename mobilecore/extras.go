@@ -24,6 +24,9 @@ type extrasRequest struct {
 	// IntroDB and AnimeSkip choose the optional services for a lookup.
 	IntroDB   bool   `json:"introdb"`
 	AnimeSkip string `json:"anime_skip"`
+	// A series episode known by its TMDB id and season, for skiptimes_show.
+	TmdbID int `json:"tmdb_id"`
+	Season int `json:"season"`
 
 	// Submit and vote.
 	Type      string  `json:"type"`
@@ -94,6 +97,24 @@ func (c *Core) executeExtras(ctx context.Context, input string) string {
 		spans, _ := c.skipService().Lookup(lookupCtx, lookupClient, skiptimes.Ref{
 			MalID: req.MalID, AniListID: req.AnilistID, Episode: req.Episode, Length: req.Length,
 		}, skiptimes.Options{IntroDB: req.IntroDB, AnimeSkipClientID: req.AnimeSkip, AllCandidates: true})
+		if ctx.Err() != nil {
+			return contextFailure(ctx.Err())
+		}
+		if spans == nil {
+			spans = []skiptimes.Span{}
+		}
+		return encode(response{Version: 1, Data: map[string]any{"spans": spans}})
+	case "skiptimes_show":
+		if req.TmdbID <= 0 || req.Season < 0 || req.Season > 1000 || req.Episode <= 0 || req.Episode > 100000 {
+			return failure("invalid_request", "A TMDB id, season and positive episode are required.", false)
+		}
+		lookupCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		lookupClient := &http.Client{
+			Transport: &requestTransport{ctx: lookupCtx, base: c.transport},
+			Timeout:   20 * time.Second,
+		}
+		spans, _ := c.skipService().LookupShow(lookupClient, req.TmdbID, req.Season, req.Episode, req.Length)
 		if ctx.Err() != nil {
 			return contextFailure(ctx.Err())
 		}

@@ -196,15 +196,16 @@ void main() {
       expect(find.text('Playback problem: Story'), findsOneWidget);
       expect(find.text('Story · Episode 3'), findsOneWidget);
       expect(find.textContaining('Subtitle host unavailable'), findsOneWidget);
+      final reportScroll = find
+          .descendant(
+            of: find.byType(ReportPage),
+            matching: find.byType(Scrollable),
+          )
+          .first;
       await tester.scrollUntilVisible(
         find.text('Send report'),
         200,
-        scrollable: find
-            .descendant(
-              of: find.byType(ReportPage),
-              matching: find.byType(Scrollable),
-            )
-            .first,
+        scrollable: reportScroll,
       );
       final send = tester.widget<AppButton>(
         find.widgetWithText(AppButton, 'Send report'),
@@ -214,14 +215,22 @@ void main() {
         isNull,
         reason: 'Unlinked reports can be copied, not sent',
       );
-      await tester.ensureVisible(find.text('Copy report'));
+      await tester.scrollUntilVisible(
+        find.text('Copy report'),
+        100,
+        scrollable: reportScroll,
+      );
       await tester.tap(find.text('Copy report'));
       await tester.pumpAndSettle();
       expect(copied, contains('Position: 32 seconds'));
       await tester.ensureVisible(find.byType(SwitchListTile));
       await tester.tap(find.byType(SwitchListTile));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Copy report'));
+      await tester.scrollUntilVisible(
+        find.text('Copy report'),
+        100,
+        scrollable: reportScroll,
+      );
       await tester.tap(find.text('Copy report'));
       await tester.pumpAndSettle();
       expect(copied, contains('Episode 3'));

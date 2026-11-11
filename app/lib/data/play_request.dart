@@ -43,6 +43,11 @@ class PlayRequest {
     this.onClose,
     this.cover = '',
     this.remote,
+    this.skips,
+    this.previous,
+    this.pick,
+    this.number = 0,
+    this.count = 0,
   });
   final String title, subtitle;
 
@@ -76,6 +81,21 @@ class PlayRequest {
 
   /// Run as the player closes, after the last save.
   final Future<void> Function()? onClose;
+
+  /// Opening, recap and credits times for a copy [length] seconds long;
+  /// null when nothing knows them.
+  final Future<List<SkipSpan>> Function(double length, RequestScope scope)?
+  skips;
+
+  /// The episode before this one, or null at the start.
+  final PlayRequest? Function()? previous;
+
+  /// Episode [number] of the same season, or null when there is none.
+  final PlayRequest? Function(int number)? pick;
+
+  /// This episode's number in its season and how many the season has, 0
+  /// for a film or a lone file.
+  final int number, count;
 }
 
 /// Whether a track's [language] code or [title] names the [preferred]

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"container/list"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -210,6 +211,14 @@ func (m *watchMedia) request(ctx context.Context, u string) (*http.Request, erro
 
 // fetch reads an upstream address whole, up to max bytes.
 func (m *watchMedia) fetch(ctx context.Context, u string, max int64) ([]byte, string, error) {
+	if inline, ok := strings.CutPrefix(u, "data:text/plain;base64,"); ok {
+		// A film's subtitles, which the helper hands over inline.
+		data, err := base64.StdEncoding.DecodeString(inline)
+		if err != nil || int64(len(data)) > max {
+			return nil, "", errors.Join(errTooBig, err)
+		}
+		return data, "text/plain", nil
+	}
 	req, err := m.request(ctx, u)
 	if err != nil {
 		return nil, "", err

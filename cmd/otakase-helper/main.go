@@ -7,6 +7,7 @@
 //	otakase-helper -provider-status
 //	otakase-helper -stream-info <anilist id>:<episode> [-stream-info-fast] [-stream-adult] [-dub|-sub]
 //	otakase-helper -stream-languages <provider>:<id>:<episode>
+//	otakase-helper -title-stream-info <imdb id>[:<season>:<episode>]
 //	otakase-helper -torrent-serve <info hash> <mode>
 //	otakase-helper -movie-serve <presenter>
 package main
@@ -43,6 +44,7 @@ type helperFlags struct {
 	streamInfoFast      bool
 	streamAdult         bool
 	streamLangs         string
+	titleInfo           string
 }
 
 func main() {
@@ -73,6 +75,7 @@ func main() {
 	flag.BoolVar(&f.streamInfoFast, "stream-info-fast", false, "Skip optional audio-release discovery for -stream-info")
 	flag.BoolVar(&f.streamAdult, "stream-adult", false, "Let -stream-info use the 18+ sources for 18+ titles")
 	flag.StringVar(&f.streamLangs, "stream-languages", "", "Print the other audio-language releases of an episode, as JSON, e.g. kickassanime:<provider id>:1")
+	flag.StringVar(&f.titleInfo, "title-stream-info", "", "Print a film's or series episode's stream link as JSON, e.g. tt0903747:1:2 (IMDb id[:season:episode])")
 	flag.Parse()
 
 	if f.version {
@@ -90,6 +93,13 @@ func main() {
 			os.Exit(providerStatus(cfg, f))
 		}
 		os.Exit(streamInfo(cfg, f))
+	case f.titleInfo != "":
+		info, err := titleStreamInfo(f.titleInfo)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println(internal.FormatStreamInfo(info))
 	case f.streamLangs != "":
 		info, err := streamLanguages(f.streamLangs)
 		if err != nil {

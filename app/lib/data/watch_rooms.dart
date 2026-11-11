@@ -62,6 +62,9 @@ class RoomState {
   bool get playing => json['playing'] == true;
   bool get adult =>
       json['adult'] == true || (json['show'] as Map?)?['adult'] == true;
+
+  /// A film plays as one episode with no number to show.
+  bool get film => (json['show'] as Map?)?['format'] == 'MOVIE';
   double get position => decimal(json['pos']);
   double get duration => decimal(json['dur']);
   Anime? get anime {
