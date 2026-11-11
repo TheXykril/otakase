@@ -523,6 +523,60 @@ void lookupTests() {
     expect(link.error, contains('Pair this phone'));
   });
 
+  test('a phone starts an episode on the TV with nothing playing', () async {
+    final (tv, phone, device) = await tvAndPhone();
+    final code = await tv.beginPair();
+    await phone.pair(device, code.code);
+    tv.status = () => {'has_player': false};
+    await expectLater(
+      phone.send(
+        device,
+        action: 'start',
+        args: {'anilist_id': 1, 'episode': 2},
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('Open Otakase'),
+        ),
+      ),
+    );
+    final started = <String>[];
+    tv.start = (id, episode, position, mode) async {
+      started.add('$id:$episode:$position:$mode');
+    };
+    await phone.send(
+      device,
+      action: 'start',
+      args: {
+        'anilist_id': 154587,
+        'episode': 8,
+        'position': 492,
+        'mode': 'dub',
+      },
+    );
+    await phone.send(
+      device,
+      action: 'start',
+      args: {'anilist_id': 5, 'episode': 1},
+    );
+    for (final bad in [
+      {'anilist_id': 0, 'episode': 1},
+      {'anilist_id': 5, 'episode': 0},
+      {'anilist_id': 5, 'episode': 1, 'position': -1},
+      {'anilist_id': 5, 'episode': 1, 'mode': 'raw'},
+      {'anilist_id': '5', 'episode': 1},
+    ]) {
+      await expectLater(
+        phone.send(device, action: 'start', args: bad),
+        throwsStateError,
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(started, ['154587:8:492:dub', '5:1:0:sub']);
+  });
+
   test('the live connection finds the TV again at a new address', () async {
     HttpOverrides.global = _RealHttp();
     addTearDown(() => HttpOverrides.global = null);

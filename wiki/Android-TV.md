@@ -69,7 +69,14 @@ with the opening and ending marked, Skip Intro when it shows on the TV,
 ten-second jumps, previous and next episode, volume, and buttons for
 episodes, subtitles, audio, quality and stop. While the TV plays, a bar above
 the phone's tabs shows what is on and opens the remote again. The remote's
-menu disconnects or forgets the TV. The phone stays connected and shows what the TV is
+menu disconnects or forgets the TV.
+
+You can also start from the phone. On a show's page, **Play on…** lists your
+paired TVs and computers, this phone, and cast devices (Chromecast, DLNA,
+Kodi, any browser) in one place. Pick a TV and the episode starts there while
+the phone becomes its remote. While watching on the phone, the player's cast
+button offers the same list: pick a paired TV and the episode moves there at
+the same spot. Films and series still go to TVs through casting. The phone stays connected and shows what the TV is
 doing as it happens; if the connection drops it reconnects on its own and
 finds the TV again when its address changed, for example after a router
 restart. Pairings belong to each profile; forget a TV on the

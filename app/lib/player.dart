@@ -1,4 +1,9 @@
 import 'dart:async';
+
+import 'data/tv_remote.dart';
+import 'ui/remote_now_playing.dart';
+import 'ui/play_on.dart';
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -48,6 +53,8 @@ class PlayerPage extends StatefulWidget {
     required this.episode,
     required this.isTV,
     required this.mode,
+    this.startAt = 0,
+    this.castTo,
   }) : request = null;
 
   /// A film, a series episode or a download: the request finds the copy and
@@ -59,8 +66,17 @@ class PlayerPage extends StatefulWidget {
     required this.isTV,
   }) : anime = null,
        episode = 0,
-       mode = 'sub';
+       mode = 'sub',
+       startAt = 0,
+       castTo = null;
   final AppServices services;
+
+  /// Where to start, in seconds, when a phone handed the episode over;
+  /// 0 resumes as usual.
+  final int startAt;
+
+  /// A cast device picked before the player opened: it casts right away.
+  final CastDevice? castTo;
   final Anime? anime;
   final PlayRequest? request;
   final int episode;
@@ -312,7 +328,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         ]),
       );
     }
-    unawaited(open());
+    castDevice = widget.castTo;
+    unawaited(
+      open(
+        resumeFrom: widget.startAt > 0
+            ? Duration(seconds: widget.startAt)
+            : null,
+      ),
+    );
   }
 
   @override
@@ -1450,10 +1473,61 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
     panelOpen = true;
     showControls();
-    final device = await pickCastDevice(context, caster);
+    final target = await pickPlayTarget(
+      context,
+      widget.services,
+      here: false,
+      // Films go to an Otakase TV by cast for now.
+      otakase: !isTitle && !widget.isTV,
+      caster: caster,
+    );
     panelOpen = false;
-    if (device == null || !mounted) return;
-    await startCast(device);
+    if (target == null || !mounted) return;
+    switch (target) {
+      case PlayOnCast(:final device):
+        await startCast(device);
+      case PlayOnTV(:final tv):
+        await handOff(tv);
+      case PlayHere():
+        showControls();
+    }
+  }
+
+  /// Moves this episode to an Otakase TV at the same spot, then turns this
+  /// screen into its remote.
+  Future<void> handOff(TVDevice tv) async {
+    final at = position.inSeconds;
+    flash.show('Sending to ${tv.name}…');
+    try {
+      final link = widget.services.controlTV(tv);
+      await link.ready();
+      await link.send(
+        'start',
+        args: {
+          'anilist_id': anime.id,
+          'episode': episode,
+          'position': at,
+          'mode': source?.mode ?? widget.mode,
+        },
+      );
+    } catch (e) {
+      if (mounted) flash.show(e is StateError ? e.message : '$e');
+      return;
+    }
+    if (!mounted) return;
+    await save();
+    await player.pause();
+    if (casting) await stopCast(resumeHere: false);
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    unawaited(
+      navigator.push(
+        OtakaseRoute<void>(
+          builder: (_) => RemoteNowPlaying(services: widget.services),
+        ),
+      ),
+    );
   }
 
   Future<void> startCast(CastDevice device) async {

@@ -14,6 +14,7 @@ import 'package:otakase/data/store.dart';
 import 'package:otakase/data/tv_remote.dart';
 import 'package:otakase/services.dart';
 import 'package:otakase/ui/components.dart';
+import 'package:otakase/ui/play_on.dart';
 import 'package:otakase/ui/remote_now_playing.dart';
 import 'package:otakase/ui/tv_remote_page.dart';
 import 'package:otakase/ui/watch_rooms_page.dart';
@@ -306,6 +307,38 @@ void main() {
     expect(asked.state, 'allowed');
     expect(tvSide.hasPhones, isTrue);
     await tvSide.close();
+  });
+  testWidgets('Play on lists paired TVs, this phone and cast devices', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    await tester.pumpWidget(const SizedBox());
+    final active = await services();
+    await active.tvRemote.pair(tv, '012345');
+    PlayTarget? picked;
+    await tester.pumpWidget(
+      page(
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () async =>
+                picked = await pickPlayTarget(context, active),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Play on'), findsOneWidget);
+    expect(find.byKey(const Key('play-on-here')), findsOneWidget);
+    expect(find.byKey(const Key('play-on-pair')), findsOneWidget);
+    await tester.tap(find.byKey(Key('play-on-tv-${tv.id}')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(picked, isA<PlayOnTV>().having((t) => t.tv.id, 'tv', tv.id));
+    await tester.pumpWidget(const SizedBox());
+    await active.close();
   });
   testWidgets('phone pairs by typing the code when no TV is found', (
     tester,

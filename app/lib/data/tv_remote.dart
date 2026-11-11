@@ -369,6 +369,10 @@ class TVRemote extends ChangeNotifier {
 
   final _connected = <String, DateTime>{};
   Future<void> Function(String, Json)? command;
+
+  /// Starts an episode on this TV for a phone, even with nothing open:
+  /// AniList id, episode, where to start in seconds, and sub or dub.
+  Future<void> Function(int id, int episode, int position, String mode)? start;
   Json Function()? status;
   final _events = StreamController<String>.broadcast();
   Stream<String> get events => _events.stream;
@@ -750,6 +754,7 @@ class TVRemote extends ChangeNotifier {
     'audio',
     'quality',
     'stop',
+    'start',
   ];
 
   /// Checks one control from a phone and queues it for the player.
@@ -757,6 +762,7 @@ class TVRemote extends ChangeNotifier {
     if (!remoteActions.contains(action)) {
       return (400, {'error': 'Unknown control.'});
     }
+    if (action == 'start') return _start(args);
     if (command == null || status?.call()['has_player'] != true) {
       return (409, {'error': 'Open an episode on the TV first.'});
     }
@@ -787,6 +793,41 @@ class TVRemote extends ChangeNotifier {
             await command?.call(action, args);
           } catch (_) {
             if (!closed) _events.add('TV control failed. Try again.');
+          }
+        })
+        .whenComplete(() => _pendingCommands--);
+    return (202, {'id': id, 'name': name, ...?status?.call()});
+  }
+
+  (int, Json) _start(Json args) {
+    final show = args['anilist_id'], episode = args['episode'];
+    final position = args['position'] ?? 0, mode = args['mode'] ?? 'sub';
+    if (show is! int ||
+        show <= 0 ||
+        episode is! int ||
+        episode < 1 ||
+        episode > 100000 ||
+        position is! int ||
+        position < 0 ||
+        (mode != 'sub' && mode != 'dub')) {
+      return (400, {'error': 'Choose an episode.'});
+    }
+    final begin = start;
+    if (begin == null) {
+      return (409, {'error': 'Open Otakase on the TV first.'});
+    }
+    if (_pendingCommands >= 10) {
+      return (429, {'error': 'Wait for the TV to finish this action.'});
+    }
+    _pendingCommands++;
+    _commands = (_commands ?? Future<void>.value())
+        .catchError((Object _) {})
+        .then((_) async {
+          if (closed) return;
+          try {
+            await begin(show, episode, position, mode as String);
+          } catch (e) {
+            if (!closed) _events.add('Could not start what the phone sent.');
           }
         })
         .whenComplete(() => _pendingCommands--);
@@ -1212,6 +1253,26 @@ class RemoteLink extends ChangeNotifier {
       /* Try again on the next miss. */
     } finally {
       _finding = false;
+    }
+  }
+
+  /// Waits until the connection is up, or fails after [timeout].
+  Future<void> ready({Duration timeout = const Duration(seconds: 8)}) async {
+    if (live) return;
+    final done = Completer<void>();
+    void check() {
+      if (live && !done.isCompleted) done.complete();
+    }
+
+    addListener(check);
+    try {
+      await done.future.timeout(
+        timeout,
+        onTimeout: () =>
+            throw StateError(error ?? 'Could not reach ${tv.name}.'),
+      );
+    } finally {
+      if (!_closed) removeListener(check);
     }
   }
 
