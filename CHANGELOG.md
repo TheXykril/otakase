@@ -23,6 +23,14 @@
 
 ### Changed
 
+- **Watch rooms use the normal player.** Joining a watch room in the app now
+  shows the same controls as any episode: the timeline with the opening and
+  ending marked, play, −10 / +10, next, subtitles, and on a computer the
+  player bar with mute and full screen. When you are not the host these ask
+  the host instead, and a short note says what you asked. Asks, the ready
+  check, catching up and counting the episode show as small cards in the
+  corner, and the new watch room button lists who is watching, progress
+  sync, the host's opening and ending skip switches and Leave room.
 - **The phone remote is live.** It shows what the TV is doing the moment it
   changes, reconnects on its own and finds the TV again after its address
   changed, instead of asking every two seconds while the page is open.
