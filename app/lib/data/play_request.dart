@@ -41,8 +41,17 @@ class PlayRequest {
     this.next,
     this.length = 0,
     this.onClose,
+    this.cover = '',
+    this.remote,
   });
   final String title, subtitle;
+
+  /// Art for the phone remote while this plays on a TV.
+  final String cover;
+
+  /// What an Otakase TV needs to play this too, as the phone remote's
+  /// start sends it; null when only this screen can play it.
+  final Json? remote;
 
   /// The usual running time in seconds, 0 when unknown. A copy that reports
   /// far less than this is cut short and never marks the title watched.

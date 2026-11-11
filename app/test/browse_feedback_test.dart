@@ -717,6 +717,7 @@ void main() {
       await tester.pumpAndSettle();
       failed = false;
       await tester.ensureVisible(find.text('Retry'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
       expect(

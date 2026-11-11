@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../host.dart';
 import 'auth.dart';
 import 'lan_page.dart';
 import 'models.dart';
@@ -333,16 +334,45 @@ Future<List<TVDevice>> discoverTVs({
 String remoteName(String value) =>
     String.fromCharCodes(value.trim().runes.take(40));
 
+/// This device's own name for the phone remote: the name set in Android's
+/// settings (else its maker and model), or the computer's host name.
+Future<String?> localDeviceName() async {
+  if (Host.android) {
+    return const MethodChannel('otakase/device')
+        .invokeMethod<String>('deviceName');
+  }
+  if (Host.linux || Host.macOS || Host.windows) {
+    return hostDeviceName(Platform.localHostname);
+  }
+  return null;
+}
+
+/// A host name as people read it: "hyperion.local" is "hyperion".
+String hostDeviceName(String host) {
+  final name = host.trim();
+  return name.toLowerCase().endsWith('.local')
+      ? name.substring(0, name.length - 6)
+      : name;
+}
+
 class TVRemote extends ChangeNotifier {
   TVRemote({
     required this.storage,
     this.name = 'Otakase TV',
+    this.lookupName,
     this.findAddress = lanAddress,
     this.transport = const LanTransport(),
     DateTime Function()? now,
   }) : now = now ?? DateTime.now;
   final TokenStore storage;
-  final String name;
+
+  /// What phones and TVs see this device as: its own device name once
+  /// [initialize] looked it up, never the profile's name.
+  String name;
+
+  /// Finds this device's name, such as the TV's name in its settings or
+  /// the computer's host name; null keeps [name].
+  final Future<String?> Function()? lookupName;
   final Future<String?> Function() findAddress;
   final LanTransport transport;
   final DateTime Function() now;
@@ -374,10 +404,22 @@ class TVRemote extends ChangeNotifier {
   /// Starts an episode on this TV for a phone, even with nothing open:
   /// AniList id, episode, where to start in seconds, and sub or dub.
   Future<void> Function(int id, int episode, int position, String mode)? start;
+
+  /// Starts a film or a series episode for a phone: the title as
+  /// [remoteTitle] sends it, season and episode (0 for a film), and where
+  /// to start in seconds.
+  Future<void> Function(Json title, int season, int episode, int position)?
+  startTitle;
   Json Function()? status;
   final _events = StreamController<String>.broadcast();
   Stream<String> get events => _events.stream;
   bool get hasPhones => (_phones['clients'] as Map? ?? {}).isNotEmpty;
+
+  /// The paired phones by the names they last gave.
+  List<String> get phoneNames => [
+    for (final c in (_phones['clients'] as Map? ?? {}).values)
+      if (c is Map) '${c['name'] ?? 'Phone'}',
+  ];
   int get port => _server?.port ?? 0;
   List<TVDevice> get paired => _paired.values
       .whereType<Map>()
@@ -403,6 +445,12 @@ class TVRemote extends ChangeNotifier {
       _phones = {};
     }
     id = _phones['id'] as String? ?? randomSecret();
+    try {
+      final found = remoteName(await lookupName?.call() ?? '');
+      if (found.isNotEmpty) name = found;
+    } catch (_) {
+      /* The default name still works. */
+    }
   }
 
   Future<void> _persist(String key, Json value) {
@@ -651,6 +699,19 @@ class TVRemote extends ChangeNotifier {
     _connected[key] = now();
   }
 
+  /// A paired phone tells its device name as it connects, so phones paired
+  /// under a profile's name show their own name from then on.
+  void _renamePhone(String key, String phone) {
+    final next = remoteName(phone);
+    final clients = Map<String, dynamic>.from(_phones['clients'] as Map? ?? {});
+    final saved = clients[key];
+    if (next.isEmpty || saved is! Map || saved['name'] == next) return;
+    clients[key] = {...saved, 'name': next};
+    _phones = {..._phones, 'clients': clients};
+    unawaited(_persist('lan.tv', _phones));
+    notifyListeners();
+  }
+
   Future<Json> _addClient(String phone) async {
     final token = randomSecret(), key = randomSecret();
     final clients = Map<String, dynamic>.from(_phones['clients'] as Map? ?? {});
@@ -763,7 +824,9 @@ class TVRemote extends ChangeNotifier {
     if (!remoteActions.contains(action)) {
       return (400, {'error': 'Unknown control.'});
     }
-    if (action == 'start') return _start(args);
+    if (action == 'start') {
+      return args['title'] is Map ? _startTitle(args) : _start(args);
+    }
     if (command == null || status?.call()['has_player'] != true) {
       return (409, {'error': 'Open an episode on the TV first.'});
     }
@@ -827,6 +890,48 @@ class TVRemote extends ChangeNotifier {
           if (closed) return;
           try {
             await begin(show, episode, position, mode as String);
+          } catch (e) {
+            if (!closed) _events.add('Could not start what the phone sent.');
+          }
+        })
+        .whenComplete(() => _pendingCommands--);
+    return (202, {'id': id, 'name': name, ...?status?.call()});
+  }
+
+  (int, Json) _startTitle(Json args) {
+    final title = (args['title'] as Map).cast<String, dynamic>();
+    final season = args['season'] ?? 0, episode = args['episode'] ?? 0;
+    final position = args['position'] ?? 0;
+    final kind = title['kind'], trakt = title['trakt'];
+    if ((kind != 'movie' && kind != 'show') ||
+        trakt is! int ||
+        trakt <= 0 ||
+        title['title'] is! String ||
+        season is! int ||
+        episode is! int ||
+        season < 0 ||
+        season > 1000 ||
+        episode < 0 ||
+        episode > 100000 ||
+        (kind == 'show') != (episode > 0) ||
+        position is! int ||
+        position < 0) {
+      return (400, {'error': 'Choose a film or an episode.'});
+    }
+    final begin = startTitle;
+    if (begin == null) {
+      return (409, {'error': 'Update Otakase on the TV to play films there.'});
+    }
+    if (_pendingCommands >= 10) {
+      return (429, {'error': 'Wait for the TV to finish this action.'});
+    }
+    _pendingCommands++;
+    _commands = (_commands ?? Future<void>.value())
+        .catchError((Object _) {})
+        .then((_) async {
+          if (closed) return;
+          try {
+            await begin(title, season, episode, position);
           } catch (e) {
             if (!closed) _events.add('Could not start what the phone sent.');
           }
@@ -935,6 +1040,10 @@ class TVRemote extends ChangeNotifier {
         if (data is! String || data.length > 4096) return;
         try {
           final j = (jsonDecode(data) as Map).cast<String, dynamic>();
+          if (j['type'] == 'name') {
+            _renamePhone(key, '${j['name'] ?? ''}');
+            return;
+          }
           final (code, reply) = _command(
             j['action'] as String? ?? '',
             (j['args'] as Map? ?? {}).cast<String, dynamic>(),
@@ -1093,6 +1202,16 @@ class TVRemote extends ChangeNotifier {
       }
     }
     throw last ?? StateError('The code does not match.');
+  }
+
+  /// Keeps a paired TV's name as the TV now tells it.
+  void renamed(String id, String name) {
+    final old = _paired[id];
+    final next = remoteName(name);
+    if (old is! Map || next.isEmpty || old['name'] == next) return;
+    _paired[id] = {...old, 'name': next};
+    unawaited(_persist('lan.remote', _paired));
+    notifyListeners();
   }
 
   void found(TVDevice tv) {
@@ -1273,6 +1392,10 @@ class RemoteLink extends ChangeNotifier {
       cancelOnError: true,
     );
     _home?.cancel();
+    if (as == LinkState.live) {
+      // TVs list paired phones by this name.
+      socket.add(jsonEncode({'type': 'name', 'name': phoneName}));
+    }
     if (as == LinkState.away) {
       // Not paired on the local network yet: the TV trusts this phone
       // because the bot only connects a member's own apps.
@@ -1317,6 +1440,17 @@ class RemoteLink extends ChangeNotifier {
       final j = (jsonDecode(data) as Map).cast<String, dynamic>();
       if (j['type'] == 'status') {
         status = j;
+        final name = j['name'];
+        if (name is String && name.isNotEmpty && name != tv.name) {
+          tv = TVDevice(
+            id: tv.id,
+            name: remoteName(name),
+            host: tv.host,
+            port: tv.port,
+            version: tv.version,
+          );
+          remote.renamed(tv.id, name);
+        }
         notifyListeners();
       } else if (j['type'] == 'grant') {
         unawaited(

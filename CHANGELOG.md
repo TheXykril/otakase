@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Added
+
+- **Play movies and shows on your TV from the phone.** A film or show page
+  on the phone now has Play on, like anime: pick an Otakase TV or computer
+  and it starts there, with the phone as its remote. Moving a film or
+  episode that is already playing on the phone over to the TV keeps your
+  spot too.
+
+### Changed
+
+- **The phone remote stays upright.** Control TV and the now playing
+  remote no longer turn sideways when you tilt the phone.
+- **Remotes go by device name.** TVs, computers and phones show up in the
+  remote under their own device name (the name set in Android's settings,
+  or the computer's name) instead of the profile's name. Phones paired
+  earlier switch to their device name the next time they connect.
+
 ## 26.4.0 - 2026-11-11
 
 The phone remote becomes a full remote that works from anywhere, Search shows what is trending with more movie filters, watch rooms use the normal player, and Trakt keeps films and shows in step across devices.

@@ -15,6 +15,8 @@ import 'catalog_pages.dart'
     show ActiveFilters, FilterButton, SearchFilters, showSearchFilters;
 import 'components.dart';
 import 'downloads_page.dart';
+import 'play_on.dart';
+import 'remote_now_playing.dart';
 import '../data/play_request.dart';
 import '../player.dart';
 
@@ -672,6 +674,8 @@ PlayRequest titlePlay(
   final season = episode?.season ?? 0, number = episode?.number ?? 0;
   return PlayRequest(
     title: title.title,
+    cover: title.poster,
+    remote: {'title': title.remote, 'season': season, 'episode': number},
     subtitle: episode == null
         ? (title.year > 0 ? '${title.year}' : '')
         : episode.label,
@@ -823,6 +827,54 @@ class _TitlePageState extends State<TitlePage> {
     ),
   );
 
+  /// Plays the film or [episode] where the viewer picks: here, on an
+  /// Otakase TV this phone then controls, or on a cast device.
+  Future<void> playOn([TitleEpisode? episode]) async {
+    final target = await pickPlayTarget(context, widget.services);
+    if (target == null || !mounted) return;
+    final request = titlePlay(
+      widget.services,
+      title,
+      episode: episode,
+      episodes: episodes,
+    );
+    switch (target) {
+      case PlayHere():
+        await play(episode);
+      case PlayOnCast(:final device):
+        await Navigator.push(
+          context,
+          OtakaseRoute<void>(
+            builder: (_) => PlayerPage.title(
+              services: widget.services,
+              isTV: widget.isTV,
+              request: request,
+              castTo: device,
+            ),
+          ),
+        );
+      case PlayOnTV(:final tv):
+        final messenger = ScaffoldMessenger.of(context);
+        try {
+          final link = widget.services.controlTV(tv);
+          await link.ready();
+          await link.send('start', args: request.remote!);
+        } catch (e) {
+          messenger.showSnackBar(
+            SnackBar(content: Text(e is StateError ? e.message : '$e')),
+          );
+          return;
+        }
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          OtakaseRoute<void>(
+            builder: (_) => RemoteNowPlaying(services: widget.services),
+          ),
+        );
+    }
+  }
+
   /// The episode to carry on with: the one stopped in, else the one after
   /// the last watched.
   TitleEpisode? get upNext => titleUpNext(movies, title, episodes);
@@ -898,6 +950,16 @@ class _TitlePageState extends State<TitlePage> {
           isTV: widget.isTV,
           onPressed: title.isShow && next == null ? null : () => play(next),
         ),
+        // A phone can start it on a TV or cast it from here.
+        if (!widget.isTV)
+          AppButton(
+            key: const Key('title-play-on'),
+            disabledReason: unavailable,
+            label: 'Play on…',
+            icon: LucideIcons.cast,
+            isTV: false,
+            onPressed: title.isShow && next == null ? null : () => playOn(next),
+          ),
         AppButton(
           key: const Key('title-watchlist'),
           label: movies.onWatchlist(title) ? 'On watchlist' : 'Watchlist',
