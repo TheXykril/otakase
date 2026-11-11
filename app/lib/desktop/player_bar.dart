@@ -41,15 +41,27 @@ class DesktopPlayerBar extends StatelessWidget {
     this.casting = false,
     this.onCast,
     this.onSkipTimes,
+    this.extras = const [],
   });
 
   final String title, subtitle, trackLabel, centerLabel;
   final Duration position, duration, buffered;
   final bool playing, buffering, silent, fullscreen;
   final List<SkipSpan> stripes;
-  final VoidCallback onBack, onPlayPause, onMute, onTracks, onQuality;
+  final VoidCallback onBack, onPlayPause, onMute, onTracks;
   final VoidCallback onFullscreen;
   final VoidCallback? onNext;
+
+  /// Opens the quality list; null hides the button (a watch room has one
+  /// stream picked by the bot).
+  final VoidCallback? onQuality;
+
+  /// More icons before the full screen button, such as a watch room's room
+  /// panel.
+  final List<
+    ({Key? key, IconData icon, String tooltip, VoidCallback onPressed})
+  >
+  extras;
 
   /// Opens the cast picker; null hides the button.
   final VoidCallback? onCast;
@@ -257,12 +269,13 @@ class DesktopPlayerBar extends StatelessWidget {
                         tooltip: 'Audio and subtitles',
                         onPressed: onTracks,
                       ),
-                      _BarIcon(
-                        key: const Key('player-quality'),
-                        icon: LucideIcons.settings2,
-                        tooltip: 'Quality',
-                        onPressed: onQuality,
-                      ),
+                      if (onQuality != null)
+                        _BarIcon(
+                          key: const Key('player-quality'),
+                          icon: LucideIcons.settings2,
+                          tooltip: 'Quality',
+                          onPressed: onQuality,
+                        ),
                       if (onSkipTimes != null)
                         _BarIcon(
                           key: const Key('player-skip-times'),
@@ -277,6 +290,13 @@ class DesktopPlayerBar extends StatelessWidget {
                           tooltip: casting ? 'Casting' : 'Cast to a TV',
                           onPressed: onCast!,
                           active: casting,
+                        ),
+                      for (final e in extras)
+                        _BarIcon(
+                          key: e.key,
+                          icon: e.icon,
+                          tooltip: e.tooltip,
+                          onPressed: e.onPressed,
                         ),
                       _BarIcon(
                         key: const Key('player-fullscreen'),
