@@ -210,8 +210,13 @@ class TraktLibrary {
     this.watchedMovies = const {},
     this.watchedEpisodes = const {},
     this.playback = const [],
+    this.watchedAt = const {},
   });
   final List<MediaTitle> watchlist;
+
+  /// When each title was last watched, in milliseconds since the epoch: by
+  /// key for a film, by key and S/E code for an episode ([watchedKey]).
+  final Map<String, int> watchedAt;
 
   /// Watched films by key.
   final Map<String, MediaTitle> watchedMovies;
@@ -236,6 +241,10 @@ class TraktPaused {
   /// When it was paused, in milliseconds since the epoch; 0 when unknown.
   final int pausedAt;
 }
+
+/// The [TraktLibrary.watchedAt] key for a film, or for one episode of a show.
+String watchedKey(MediaTitle title, {int season = 0, int episode = 0}) =>
+    title.isShow ? '${title.key}:S${season}E$episode' : title.key;
 
 int _pausedAt(Object? value) =>
     value is String ? DateTime.tryParse(value)?.millisecondsSinceEpoch ?? 0 : 0;
@@ -750,6 +759,14 @@ class Trakt extends ChangeNotifier {
     final movies = <String, MediaTitle>{
       for (final t in _titles(results[2], 'movie')) t.key: t,
     };
+    final watchedAt = <String, int>{};
+    for (final row in (results[2] as List? ?? []).whereType<Map>()) {
+      if (row['movie'] case final Map movie) {
+        final t = MediaTitle.fromTrakt(movie.cast<String, dynamic>(), 'movie');
+        final at = _pausedAt(row['last_watched_at']);
+        if (at > 0) watchedAt[t.key] = at;
+      }
+    }
     final episodes = <String, ({MediaTitle title, Set<String> codes})>{};
     for (final row in (results[3] as List? ?? []).whereType<Map>()) {
       final show = row['show'];
@@ -760,7 +777,12 @@ class Trakt extends ChangeNotifier {
           .codes;
       for (final s in (row['seasons'] as List? ?? []).whereType<Map>()) {
         for (final e in (s['episodes'] as List? ?? []).whereType<Map>()) {
-          seen.add('S${number(s['number'])}E${number(e['number'])}');
+          final season = number(s['number']), episode = number(e['number']);
+          seen.add('S${season}E$episode');
+          final at = _pausedAt(e['last_watched_at']);
+          if (at > 0) {
+            watchedAt[watchedKey(title, season: season, episode: episode)] = at;
+          }
         }
       }
     }
@@ -769,6 +791,7 @@ class Trakt extends ChangeNotifier {
       watchedMovies: movies,
       watchedEpisodes: episodes,
       playback: _paused(results[4]),
+      watchedAt: watchedAt,
     );
   }
 

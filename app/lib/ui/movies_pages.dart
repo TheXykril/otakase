@@ -203,12 +203,22 @@ class _MoviesHomeState extends State<MoviesHome> {
   final cards = TitleCards();
   late Future<Map<String, List<MediaTitle>>> shelves;
   MovieService get movies => widget.services.movies;
+  late final AppLifecycleListener lifecycle = AppLifecycleListener(
+    onResume: () => unawaited(movies.syncIfStale()),
+  );
 
   @override
   void initState() {
     super.initState();
+    lifecycle;
     shelves = shelvesOf(widget.services).load();
     unawaited(widget.services.trakt.load().then((_) => movies.sync()));
+  }
+
+  @override
+  void dispose() {
+    lifecycle.dispose();
+    super.dispose();
   }
 
   void open(Anime a, Object _) {

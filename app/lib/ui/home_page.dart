@@ -289,6 +289,13 @@ class _HomePageState extends State<HomePage> {
   final discovery = GlobalKey<DiscoveryHomeState>();
   bool refreshScheduled = false;
   HomeData? featured;
+  late final AppLifecycleListener lifecycle = AppLifecycleListener(
+    onResume: () {
+      if (mounted && showsTitles) {
+        unawaited(widget.services.movies.syncIfStale());
+      }
+    },
+  );
 
   /// Whether films and series share Home with anime on this profile.
   bool get showsTitles =>
@@ -324,6 +331,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    lifecycle;
     widget.services.movies.addListener(titlesChanged);
     if (isDesktop) unawaited(loadFeatured());
     if (!isDesktop) {
@@ -522,6 +530,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     widget.services.movies.removeListener(titlesChanged);
+    lifecycle.dispose();
     artTimer?.cancel();
     clock?.cancel();
     bannerTimer?.cancel();

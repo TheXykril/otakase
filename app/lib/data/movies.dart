@@ -277,26 +277,47 @@ class MovieService extends ChangeNotifier {
     await trakt.load();
     if (!trakt.signedIn || syncing) return;
     syncing = true;
+    _syncedAt = DateTime.now();
     _notify();
     try {
       final lib = await trakt.library();
       watchlist = lib.watchlist;
       for (final t in lib.watchedMovies.values) {
         final e = _entries[t.key];
-        if (e == null || !e.watched.contains('movie')) {
-          _entries[t.key] = (e ?? MovieEntry(title: t, updated: 0)).copyWith(
-            watched: {...?e?.watched, 'movie'},
-            position: 0,
-            percent: 0,
-          );
-        }
+        final at = lib.watchedAt[t.key] ?? 0;
+        final known = e != null && e.watched.contains('movie');
+        // Finished on another device after the spot saved here: the spot is
+        // done with. A spot saved here after that watch is a rewatch and
+        // stays.
+        final done = at > 0 ? e == null || at >= e.updated : !known;
+        if (known && !done) continue;
+        _entries[t.key] = (e ?? MovieEntry(title: t, updated: 0)).copyWith(
+          watched: {...?e?.watched, 'movie'},
+          position: done ? 0 : null,
+          percent: done ? 0 : null,
+          updated: done && at > (e?.updated ?? 0) ? at : null,
+          pushed: done && at > (e?.updated ?? 0) ? at : null,
+        );
       }
       for (final shown in lib.watchedEpisodes.values) {
         final e =
             _entries[shown.title.key] ??
             MovieEntry(title: shown.title, updated: 0);
+        final at =
+            lib.watchedAt[watchedKey(
+              e.title,
+              season: e.season,
+              episode: e.episode,
+            )] ??
+            0;
+        // The episode left mid-way here was finished elsewhere since.
+        final done = e.started && at > 0 && at >= e.updated;
         _entries[shown.title.key] = e.copyWith(
           watched: {...e.watched, ...shown.codes},
+          position: done ? 0 : null,
+          percent: done ? 0 : null,
+          updated: done ? at : null,
+          pushed: done ? at : null,
         );
       }
       final pending = _mergePlayback(lib.playback);
@@ -310,6 +331,20 @@ class MovieService extends ChangeNotifier {
       syncing = false;
       _notify();
     }
+  }
+
+  DateTime? _syncedAt;
+
+  /// Syncs again when the app comes back to the front, so a film finished
+  /// or paused on another device meanwhile shows here. Not more than once
+  /// a minute.
+  Future<void> syncIfStale() async {
+    final last = _syncedAt;
+    if (last != null &&
+        DateTime.now().difference(last) < const Duration(minutes: 1)) {
+      return;
+    }
+    await sync();
   }
 
   /// Takes Trakt's paused spots where they are newer than the one saved here

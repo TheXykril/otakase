@@ -388,6 +388,94 @@ void main() {
     },
   );
 
+  test('a film finished on another device clears the spot left here', () async {
+    final now = DateTime.now();
+    Json? watchedRow;
+    var episodeWatchedAt = '';
+    final scrobbles = <Json>[];
+    final client = MockClient((r) async {
+      switch (r.url.path) {
+        case '/sync/watched/movies':
+          return http.Response(jsonEncode([?watchedRow]), 200);
+        case '/sync/watched/shows':
+          if (episodeWatchedAt.isEmpty) return http.Response('[]', 200);
+          return http.Response(
+            jsonEncode([
+              {
+                'show': {
+                  'title': 'Breaking Bad',
+                  'ids': {'trakt': 1388},
+                },
+                'seasons': [
+                  {
+                    'number': 1,
+                    'episodes': [
+                      {'number': 2, 'last_watched_at': episodeWatchedAt},
+                    ],
+                  },
+                ],
+              },
+            ]),
+            200,
+          );
+        case '/scrobble/pause':
+          scrobbles.add(jsonDecode(r.body) as Json);
+          return http.Response('{}', 201);
+      }
+      return http.Response('[]', 200);
+    });
+    final tokens = MemoryTokens()
+      ..values[traktTokenKey] = jsonEncode({
+        'access_token': 'tok',
+        'expires_in': 0,
+      });
+    final movies = MovieService(
+      trakt: Trakt(client: client, storage: tokens),
+      core: MovieCore(),
+      store: await freshStore(),
+      pushGap: Duration.zero,
+    );
+    Json filmRow(DateTime at) => {
+      'plays': 2,
+      'last_watched_at': at.toUtc().toIso8601String(),
+      'movie': {
+        'title': 'Interstellar',
+        'ids': {'trakt': 102156},
+      },
+    };
+
+    // Watched once before, now being watched again here.
+    await movies.progress(film, 8800, 9000, completed: true);
+    await movies.progress(film, 4500, 9000);
+    // Trakt only knows the first watch: the rewatch spot stays.
+    watchedRow = filmRow(now.subtract(const Duration(days: 3)));
+    await movies.sync();
+    expect(movies.entry(film)!.resumeAt(9000), 4500);
+    expect(movies.continuing.map((e) => e.title.key), [film.key]);
+    // The rewatch spot went up to Trakt as a pause.
+    expect(scrobbles, hasLength(1));
+
+    // Finished on the phone since: the spot here is gone, and is not sent
+    // back up to Trakt as a pause.
+    watchedRow = filmRow(DateTime.now().add(const Duration(minutes: 1)));
+    await movies.sync();
+    expect(movies.watched(film), isTrue);
+    expect(movies.entry(film)!.resumeAt(9000), 0);
+    expect(movies.continuing, isEmpty);
+    expect(scrobbles, hasLength(1));
+
+    // An episode left mid-way here and finished elsewhere later.
+    await movies.progress(series, 900, 2700, season: 1, episode: 2);
+    episodeWatchedAt = DateTime.now()
+        .add(const Duration(minutes: 1))
+        .toUtc()
+        .toIso8601String();
+    await movies.sync();
+    expect(movies.watched(series, season: 1, episode: 2), isTrue);
+    expect(movies.entry(series)!.resumeAt(2700), 0);
+    expect(scrobbles, hasLength(1));
+  });
+
   test(
     'Trakt device sign-in waits for the code, then syncs the library',
     () async {
