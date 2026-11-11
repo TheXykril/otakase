@@ -1,12 +1,21 @@
 import 'dart:async';
+import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
 import '../data/catalog.dart' show CatalogFailure;
-import '../data/trakt.dart' show MediaTitle, findTitles, traktFilterRequests;
+import '../data/trakt.dart'
+    show
+        MediaTitle,
+        findTitles,
+        titleAges,
+        titleLanguages,
+        titleLengths,
+        titleOnlySorts,
+        traktFilterRequests,
+        traktGenreNames;
 import '../desktop/desktop_core.dart';
 import '../services.dart';
 import '../data/community_extras.dart';
@@ -58,6 +67,11 @@ class _SearchPageState extends State<SearchPage> {
   List<Anime> items = [];
   String? error, format, season, genre, status, sort;
   int? year;
+
+  /// Film and series filters (see [SearchFilters]); the anime use the
+  /// decade and score too.
+  int? decade, minScore;
+  String? language, age, length;
   int page = 1, generation = 0;
   bool busy = true, hasMore = false, voiceAvailable = false;
   bool retryMore = false;
@@ -70,6 +84,33 @@ class _SearchPageState extends State<SearchPage> {
   bool titlesBusy = false, titlesFailed = false;
   String titlesQuery = '';
   int titleGeneration = 0;
+
+  /// Nothing typed and no filters: the page shows what is trending.
+  bool get browsing => query.text.trim().isEmpty && filters.count == 0;
+
+  /// Anime and films share the page, so each shows about this many until
+  /// its More button opens the rest.
+  static const share = 12;
+  bool animeOpen = false, titlesOpen = false;
+
+  /// Whether the anime catalog knows [genre]; a films-only genre like Crime
+  /// has no anime to look for.
+  bool get animeGenre =>
+      genre == null || genres.isEmpty || genres.contains(genre);
+
+  /// Whether anime can match at all: not for a films-only genre, the box
+  /// office chart, or a language, age rating or length (anime has none).
+  bool get animeMatch =>
+      animeGenre &&
+      sort != 'BOXOFFICE' &&
+      language == null &&
+      age == null &&
+      length == null;
+
+  /// Genres for the filters: with films on, theirs join the anime ones.
+  List<String> get filterGenres => widget.titles
+      ? ({...genres, ...traktGenreNames}.toList()..sort())
+      : genres;
 
   @override
   void initState() {
@@ -137,9 +178,14 @@ class _SearchPageState extends State<SearchPage> {
         page = 1;
         hasMore = false;
         items = [];
+        animeOpen = false;
       }
     });
     try {
+      if (!animeMatch) {
+        // Only films and series can match; they show below.
+        return;
+      }
       if (otakaseMovieEnabled && query.text.trim().toLowerCase() == 'otakase') {
         if (mounted && g == generation) {
           setState(() {
@@ -158,7 +204,9 @@ class _SearchPageState extends State<SearchPage> {
         year: year,
         genre: genre,
         status: status,
-        sort: sort,
+        sort: sort ?? (browsing ? 'TRENDING' : null),
+        decade: decade,
+        minScore: minScore,
       );
       if (mounted && g == generation) {
         setState(() {
@@ -186,9 +234,25 @@ class _SearchPageState extends State<SearchPage> {
   /// filters it understands, or its popular lists when only filters are set.
   Future<void> searchTitles({bool retry = false}) async {
     final q = query.text.trim();
-    final key = widget.titles && (q.isNotEmpty || filters.count > 0)
-        ? [q, format, season, year, genre, status, sort].join('|')
-        : '';
+    // With nothing asked, trending films and series fill the page instead.
+    final key = !widget.titles
+        ? ''
+        : browsing
+        ? 'trending'
+        : [
+            q,
+            format,
+            season,
+            year,
+            genre,
+            status,
+            sort,
+            decade,
+            minScore,
+            language,
+            age,
+            length,
+          ].join('|');
     if (key == titlesQuery && !retry) return;
     titlesQuery = key;
     final g = ++titleGeneration;
@@ -198,9 +262,16 @@ class _SearchPageState extends State<SearchPage> {
       year: year,
       genre: genre,
       status: status,
+      decade: decade,
+      minScore: minScore,
+      language: language,
+      age: age,
+      length: length,
+      sort: sort,
     );
     setState(() {
       titleResults = [];
+      titlesOpen = false;
       titlesFailed = false;
       titlesBusy = key.isNotEmpty && requests.isNotEmpty;
     });
@@ -214,7 +285,12 @@ class _SearchPageState extends State<SearchPage> {
         year: year,
         genre: genre,
         status: status,
-        sort: sort,
+        sort: browsing ? 'TRENDING' : sort,
+        decade: decade,
+        minScore: minScore,
+        language: language,
+        age: age,
+        length: length,
       );
       if (mounted && g == titleGeneration) {
         setState(() => titleResults = found);
@@ -226,50 +302,117 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
-  /// Films and series for the query, in a row under the anime.
-  List<Widget> titleRow() {
+  /// Films and series under the anime: trending ones with nothing asked,
+  /// else those matching the query and filters. Capped like the anime so
+  /// both get room, until More movies & shows opens the rest.
+  List<Widget> titleSection() {
     if (titlesQuery.isEmpty) return const [];
     final cards = titleCardsOf(widget.services);
+    final heading = browsing ? 'Trending movies & shows' : 'Movies & shows';
     return [
       if (titlesFailed)
         FailureView(
-          message: 'Movies and shows could not be searched. Check your connection and retry.',
+          message: browsing
+              ? 'Trending movies and shows could not be loaded. Check your connection and retry.'
+              : 'Movies and shows could not be searched. Check your connection and retry.',
           onRetry: () => unawaited(searchTitles(retry: true)),
           isTV: widget.isTV,
         )
       else if (titlesBusy)
         Semantics(
           liveRegion: true,
-          label: 'Searching movies and shows',
-          child: const SkeletonBlock(height: 120),
+          label: browsing
+              ? 'Loading trending movies and shows'
+              : 'Searching movies and shows',
+          child: const SkeletonBlock(height: 180),
         )
       else if (titleResults.isNotEmpty)
-        // The row brings its own side margin, so it spans the page edge to
-        // edge like the rows on Home.
-        LayoutBuilder(
-          builder: (context, box) {
-            final width = box.maxWidth + (widget.isTV ? 48 : 20) * 2;
-            return OverflowBox(
-              minWidth: width,
-              maxWidth: width,
-              fit: OverflowBoxFit.deferToChild,
-              child: PosterRow(
-                key: const Key('search-titles'),
-                title: 'Movies & shows',
-                items: [for (final t in titleResults) cards.card(t)],
-                isTV: widget.isTV,
-                onOpen: widget.onOpen,
-                captions: (a) => switch (cards.title(a)) {
+        KeyedSubtree(
+          key: const Key('search-titles'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 26),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: SectionLabel(heading),
+              ),
+              posterGrid(
+                [for (final t in titleResults) cards.card(t)],
+                keyPrefix: 'title',
+                cap: titlesOpen ? null : share,
+                caption: (a) => switch (cards.title(a)) {
                   final t? when t.isShow => 'Series',
                   final t? when t.year > 0 => '${t.year}',
                   _ => 'Movie',
                 },
               ),
-            );
-          },
+              if (!titlesOpen && titleResults.length > share)
+                moreButton(
+                  'More movies & shows',
+                  () => setState(() => titlesOpen = true),
+                ),
+            ],
+          ),
         ),
     ];
   }
+
+  Widget moreButton(String label, VoidCallback onPressed) => Padding(
+    padding: const EdgeInsets.only(top: 16),
+    child: Center(
+      child: AppButton(label: label, isTV: widget.isTV, onPressed: onPressed),
+    ),
+  );
+
+  /// Poster cards in as many columns as fit. With [cap], only that many
+  /// show, rounded to whole rows (at least one).
+  Widget posterGrid(
+    List<Anime> list, {
+    required String keyPrefix,
+    int? cap,
+    String? Function(Anime)? caption,
+  }) => LayoutBuilder(
+    builder: (context, box) {
+      final gap = isDesktop ? 26.0 : 12.0;
+      final columns =
+          (box.maxWidth /
+                  (isDesktop
+                      ? 226
+                      : widget.isTV
+                      ? 180
+                      : (MediaQuery.textScalerOf(context).scale(1) > 1.2
+                            ? 150
+                            : 116)))
+              .floor()
+              .clamp(2, 9);
+      final width = (box.maxWidth - (columns - 1) * gap) / columns;
+      // Whole rows, rounded up so a cap of 12 never hides a 12th card.
+      final count = cap == null
+          ? list.length
+          : min(list.length, (cap + columns - 1) ~/ columns * columns);
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: count,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columns,
+          crossAxisSpacing: gap,
+          mainAxisSpacing: isDesktop ? 26 : 14,
+          mainAxisExtent:
+              width * 1.5 + 108 * MediaQuery.textScalerOf(context).scale(1),
+        ),
+        itemBuilder: (_, i) => PosterCard(
+          key: ValueKey('$keyPrefix-${list[i].key}'),
+          anime: list[i],
+          width: width,
+          isTV: widget.isTV,
+          caption: caption?.call(list[i]),
+          onOpen: () => widget.onOpen(list[i]),
+        ),
+      );
+    },
+  );
 
   SearchFilters get filters => SearchFilters(
     format: format,
@@ -278,13 +421,19 @@ class _SearchPageState extends State<SearchPage> {
     genre: genre,
     status: status,
     sort: sort,
+    decade: decade,
+    minScore: minScore,
+    language: language,
+    age: age,
+    length: length,
   );
 
   Future<void> openFilters() async {
     final result = await showSearchFilters(
       context,
       initial: filters,
-      genres: genres,
+      genres: filterGenres,
+      films: widget.titles,
       isTV: widget.isTV,
       // TV applies each choice at once; phones confirm with Apply filters.
       onChanged: widget.isTV ? apply : null,
@@ -300,6 +449,11 @@ class _SearchPageState extends State<SearchPage> {
       genre = next.genre;
       status = next.status;
       sort = next.sort;
+      decade = next.decade;
+      minScore = next.minScore;
+      language = next.language;
+      age = next.age;
+      length = next.length;
     });
     await load();
   }
@@ -416,11 +570,15 @@ class _SearchPageState extends State<SearchPage> {
           onChanged: (next) => unawaited(apply(next)),
         ),
       const SizedBox(height: 22),
-      if (titlesQuery.isNotEmpty && items.isNotEmpty)
-        const Padding(
-          padding: EdgeInsets.only(bottom: 14),
-          child: SectionLabel('Anime'),
-        ),
+      // Always one slot, so the results below keep their place (and TV
+      // focus) when the heading comes and goes.
+      if (items.isNotEmpty && (browsing || titlesQuery.isNotEmpty))
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: SectionLabel(browsing ? 'Trending anime' : 'Anime'),
+        )
+      else
+        const SizedBox.shrink(),
       if (busy && items.isEmpty)
         Semantics(
           liveRegion: true,
@@ -451,55 +609,20 @@ class _SearchPageState extends State<SearchPage> {
               : AppButton(
                   label: 'Clear filters',
                   isTV: widget.isTV,
-                  onPressed: () {
-                    format = null;
-                    season = null;
-                    year = null;
-                    genre = null;
-                    status = null;
-                    sort = null;
-                    unawaited(load());
-                  },
+                  onPressed: () => unawaited(apply(const SearchFilters())),
                 ),
         ),
-      LayoutBuilder(
-        builder: (context, box) {
-          final gap = isDesktop ? 26.0 : 12.0;
-          final columns =
-              (box.maxWidth /
-                      (isDesktop
-                          ? 226
-                          : widget.isTV
-                          ? 180
-                          : (MediaQuery.textScalerOf(context).scale(1) > 1.2
-                                ? 150
-                                : 116)))
-                  .floor()
-                  .clamp(2, 9);
-          final width = (box.maxWidth - (columns - 1) * gap) / columns;
-          return GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: items.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              crossAxisSpacing: gap,
-              mainAxisSpacing: isDesktop ? 26 : 14,
-              mainAxisExtent:
-                  width * 1.5 +
-                  (widget.isTV ? 108 : 108) *
-                      MediaQuery.textScalerOf(context).scale(1),
-            ),
-            itemBuilder: (_, i) => PosterCard(
-              key: ValueKey('search-${items[i].key}'),
-              anime: items[i],
-              width: width,
-              isTV: widget.isTV,
-              onOpen: () => widget.onOpen(items[i]),
-            ),
-          );
-        },
+      posterGrid(
+        items,
+        keyPrefix: 'search',
+        // Anime and films share the page; anime alone pages on.
+        cap: widget.titles && !animeOpen ? share : null,
       ),
+      if (widget.titles &&
+          !animeOpen &&
+          (hasMore || items.length > share) &&
+          error == null)
+        moreButton('More anime', () => setState(() => animeOpen = true)),
       if (busy && items.isNotEmpty)
         Padding(
           padding: const EdgeInsets.all(16),
@@ -518,7 +641,7 @@ class _SearchPageState extends State<SearchPage> {
           onRetry: () => load(more: retryMore),
           isTV: widget.isTV,
         ),
-      if (hasMore && error == null)
+      if (hasMore && error == null && (!widget.titles || animeOpen))
         Padding(
           padding: const EdgeInsets.all(20),
           child: AppButton(
@@ -528,7 +651,7 @@ class _SearchPageState extends State<SearchPage> {
             isTV: widget.isTV,
           ),
         ),
-      ...titleRow(),
+      ...titleSection(),
     ],
   );
 }
@@ -1034,9 +1157,24 @@ class SearchFilters {
     this.genre,
     this.status,
     this.sort,
+    this.decade,
+    this.minScore,
+    this.language,
+    this.age,
+    this.length,
   });
   final String? format, season, genre, status, sort;
   final int? year;
+
+  /// First year of a decade (2010 for the 2010s), used when no [year] is set.
+  final int? decade;
+
+  /// Lowest score out of 100, like 70 for 7+.
+  final int? minScore;
+
+  /// Films and series only: original language code, age rating up to
+  /// (see titleAges) and length (see titleLengths).
+  final String? language, age, length;
   int get count => [
     format,
     season,
@@ -1044,6 +1182,11 @@ class SearchFilters {
     genre,
     status,
     sort,
+    decade,
+    minScore,
+    language,
+    age,
+    length,
   ].where((value) => value != null).length;
 
   SearchFilters copyWith({
@@ -1053,6 +1196,11 @@ class SearchFilters {
     String? Function()? genre,
     String? Function()? status,
     String? Function()? sort,
+    int? Function()? decade,
+    int? Function()? minScore,
+    String? Function()? language,
+    String? Function()? age,
+    String? Function()? length,
   }) => SearchFilters(
     format: format == null ? this.format : format(),
     season: season == null ? this.season : season(),
@@ -1060,8 +1208,21 @@ class SearchFilters {
     genre: genre == null ? this.genre : genre(),
     status: status == null ? this.status : status(),
     sort: sort == null ? this.sort : sort(),
+    decade: decade == null ? this.decade : decade(),
+    minScore: minScore == null ? this.minScore : minScore(),
+    language: language == null ? this.language : language(),
+    age: age == null ? this.age : age(),
+    length: length == null ? this.length : length(),
   );
 }
+
+/// Decades for the filters, newest first, keyed by their first year.
+Map<String, String> _decades() {
+  final now = DateTime.now().year ~/ 10 * 10;
+  return {for (var d = now; d >= 1950; d -= 10) '$d': '${d}s'};
+}
+
+const _scores = {'60': '6+', '70': '7+', '80': '8+'};
 
 /// Opens the Search filters: a menu under the Filters button on desktop, a
 /// side panel on TV and a bottom sheet on phones. [titles] shows the movie
@@ -1072,6 +1233,7 @@ Future<SearchFilters?> showSearchFilters(
   required List<String> genres,
   required bool isTV,
   bool titles = false,
+  bool films = false,
   ValueChanged<SearchFilters>? onChanged,
 }) {
   final sheet = SearchFilterSheet(
@@ -1079,6 +1241,7 @@ Future<SearchFilters?> showSearchFilters(
     genres: genres,
     isTV: isTV,
     titles: titles,
+    films: films || titles,
     onChanged: onChanged,
   );
   if (isDesktop) {
@@ -1175,7 +1338,16 @@ class ActiveFilters extends StatelessWidget {
       if (f.season case final v?)
         (_seasons[v] ?? v, f.copyWith(season: () => null)),
       if (f.year case final v?) ('$v', f.copyWith(year: () => null)),
-      if (f.sort case final v?) (_sorts[v] ?? v, f.copyWith(sort: () => null)),
+      if (f.sort case final v?)
+        (_sorts[v] ?? titleOnlySorts[v] ?? v, f.copyWith(sort: () => null)),
+      if (f.decade case final v?) ('${v}s', f.copyWith(decade: () => null)),
+      if (f.minScore case final v?)
+        (_scores['$v'] ?? '$v+', f.copyWith(minScore: () => null)),
+      if (f.language case final v?)
+        (titleLanguages[v] ?? v, f.copyWith(language: () => null)),
+      if (f.age case final v?) (titleAges[v] ?? v, f.copyWith(age: () => null)),
+      if (f.length case final v?)
+        (titleLengths[v] ?? v, f.copyWith(length: () => null)),
     ];
     if (active.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -1284,11 +1456,15 @@ class SearchFilterSheet extends StatefulWidget {
     required this.genres,
     this.isTV = false,
     this.titles = false,
+    this.films = false,
     this.onChanged,
   });
   final SearchFilters initial;
   final List<String> genres;
-  final bool isTV, titles;
+
+  /// [films]: the film and series filters (language, age rating, length and
+  /// their extra sorts) show too, as when movies are on.
+  final bool isTV, titles, films;
   final ValueChanged<SearchFilters>? onChanged;
   @override
   State<SearchFilterSheet> createState() => _SearchFilterSheetState();
@@ -1299,8 +1475,13 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
       season = widget.initial.season,
       genre = widget.initial.genre,
       status = widget.initial.status,
-      sort = widget.initial.sort;
-  late int? year = widget.initial.year;
+      sort = widget.initial.sort,
+      language = widget.initial.language,
+      age = widget.initial.age,
+      length = widget.initial.length;
+  late int? year = widget.initial.year,
+      decade = widget.initial.decade,
+      minScore = widget.initial.minScore;
 
   SearchFilters get current => SearchFilters(
     format: format,
@@ -1309,6 +1490,11 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
     genre: genre,
     status: status,
     sort: sort,
+    decade: decade,
+    minScore: minScore,
+    language: language,
+    age: age,
+    length: length,
   );
 
   void change(VoidCallback update) {
@@ -1429,7 +1615,8 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
                 key: const Key('filters-reset'),
                 onPressed: () => change(() {
                   format = season = genre = status = sort = null;
-                  year = null;
+                  language = age = length = null;
+                  year = decade = minScore = null;
                 }),
                 child: Text(
                   'Reset',
@@ -1456,7 +1643,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
           section(
             'Sort',
             chips(
-              _sorts,
+              {..._sorts, if (widget.films) ...titleOnlySorts},
               sort,
               (v) => sort = v,
               any: true,
@@ -1472,15 +1659,61 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
             'Year',
             picker(
               year?.toString() ?? 'Any year',
+              () => pick('Year', years, year?.toString(), 'Any year', (v) {
+                year = int.tryParse(v ?? '');
+                // A year is narrower than a decade; keep one of them.
+                if (year != null) decade = null;
+              }),
+            ),
+          ),
+          section(
+            'Decade',
+            picker(
+              decade == null ? 'Any decade' : '${decade}s',
               () => pick(
-                'Year',
-                years,
-                year?.toString(),
-                'Any year',
-                (v) => year = int.tryParse(v ?? ''),
+                'Decade',
+                _decades(),
+                decade?.toString(),
+                'Any decade',
+                (v) {
+                  decade = int.tryParse(v ?? '');
+                  if (decade != null) year = null;
+                },
               ),
             ),
           ),
+          section(
+            'Rating',
+            chips(
+              _scores,
+              minScore?.toString(),
+              (v) => minScore = int.tryParse(v ?? ''),
+              any: true,
+            ),
+          ),
+          if (widget.films) ...[
+            section(
+              widget.titles ? 'Language' : 'Language (movies & shows)',
+              picker(
+                titleLanguages[language] ?? 'Any language',
+                () => pick(
+                  'Language',
+                  titleLanguages,
+                  language,
+                  'Any language',
+                  (v) => language = v,
+                ),
+              ),
+            ),
+            section(
+              widget.titles ? 'Age rating' : 'Age rating (movies & shows)',
+              chips(titleAges, age, (v) => age = v, any: true),
+            ),
+            section(
+              widget.titles ? 'Length' : 'Length (movies & shows)',
+              chips(titleLengths, length, (v) => length = v, any: true),
+            ),
+          ],
           if (widget.genres.isNotEmpty)
             section(
               'Genres',

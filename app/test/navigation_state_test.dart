@@ -28,6 +28,8 @@ class PreferenceCatalog extends fixture.TestCatalog {
     String? genre,
     String? status,
     String? sort,
+    int? decade,
+    int? minScore,
   }) async => CatalogPage([
     fixture.anime,
     if (adult) const Anime(id: 99, title: 'Restricted story', isAdult: true),

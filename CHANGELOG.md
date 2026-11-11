@@ -4,6 +4,19 @@
 
 ### Added
 
+- **Trending on an empty Search.** Before you type anything, Search shows
+  what is trending: anime, and with movies on, trending movies and shows
+  too. Start typing and it switches to your results; clear the box and
+  trending comes back.
+- **Anime and films side by side in Search.** With movies on, results and
+  filtered browsing show a few rows of anime and a few rows of movies and
+  shows, each with a More button to see the rest. The genre filter also
+  lists film genres like Crime, Family, History, War and Western; a genre
+  only films have shows just films.
+- **More Search filters for movies and shows.** Decade, rating (6+, 7+,
+  8+), original language, age rating (Kids, Family, Teens) and length, plus
+  Anticipated, Most watched and Box office sorts. Decade and rating narrow
+  the anime too.
 - **Pair the phone remote by tapping Allow on the TV.** Tap a TV or
   computer in Control TV on the phone and it asks Allow on screen, with two
   numbers to match, instead of you typing a code. The QR code and typed
@@ -34,6 +47,13 @@
 - **The phone remote is live.** It shows what the TV is doing the moment it
   changes, reconnects on its own and finds the TV again after its address
   changed, instead of asking every two seconds while the page is open.
+
+### Fixed
+
+- **Lithuanian films listed under another name now play.** When a film is
+  not found by its title (8Filmai calls The Transporter Refueled
+  "Transporter 4"), Otakase looks by the first word and takes the film whose
+  page carries the same IMDb id.
 
 ## 26.3.1 - 2026-11-10
 

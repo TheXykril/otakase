@@ -23,7 +23,7 @@ import 'uniform_ui_test.dart' show desktop;
 
 class FeedbackCatalog extends Catalog {
   FeedbackCatalog({super.client});
-  final searches = <({String query, int page, String? format})>[];
+  final searches = <({String query, int page, String? format, String? sort})>[];
   Future<CatalogPage> Function(int page)? answer;
   Future<List<Airing>> Function(DateTime day, int page)? calendar;
   @override
@@ -44,8 +44,10 @@ class FeedbackCatalog extends Catalog {
     String? genre,
     String? status,
     String? sort,
+    int? decade,
+    int? minScore,
   }) {
-    searches.add((query: query, page: page, format: format));
+    searches.add((query: query, page: page, format: format, sort: sort));
     return answer?.call(page) ?? Future.value(const CatalogPage([]));
   }
 
@@ -116,7 +118,279 @@ const series = MediaTitle(
   fanart: 'https://fixture.invalid/banner.jpg',
 );
 
+/// Poster cards whose key starts with [prefix], built or not.
+/// Only the page under test counts, not the shell's own Search tab below.
+Finder cardsKeyed(String prefix) => find.descendant(
+  of: find.byKey(const Key('page-under-test'), skipOffstage: false),
+  matching: find.byWidgetPredicate(
+    (w) =>
+        w is PosterCard &&
+        w.key is ValueKey<String> &&
+        (w.key! as ValueKey<String>).value.startsWith(prefix),
+    skipOffstage: false,
+  ),
+  skipOffstage: false,
+);
+
+List<Map<String, Object>> traktRows(String kind, int count) => [
+  for (var i = 1; i <= count; i++)
+    {
+      kind: {
+        'title': 'Trending $kind $i',
+        'year': 2020,
+        'ids': {'trakt': (kind == 'movie' ? 1000 : 2000) + i},
+      },
+    },
+];
+
 void main() {
+  testWidgets(
+    'empty search shows trending anime and films, each capped so both fit',
+    (tester) async {
+      final paths = <String>[];
+      final catalog =
+          FeedbackCatalog(
+              client: MockClient((request) async {
+                paths.add(request.url.path);
+                return switch (request.url.path) {
+                  '/movies/trending' => reply(traktRows('movie', 20)),
+                  '/shows/trending' => reply(traktRows('show', 20)),
+                  '/search/movie,show' => reply([
+                    for (final r in traktRows('movie', 3))
+                      {'type': 'movie', ...r},
+                  ]),
+                  _ => reply([]),
+                };
+              }),
+            )
+            ..answer = (page) async => CatalogPage([
+              for (var i = 1; i <= 30; i++)
+                Anime(id: page * 100 + i, title: 'Anime $page-$i'),
+            ], hasMore: true);
+      await mount(
+        tester,
+        catalog,
+        (app) => Scaffold(
+          key: const Key('page-under-test'),
+          body: SearchPage(
+            services: app,
+            isTV: false,
+            titles: true,
+            onOpen: (_) {},
+            onVoice: () async => null,
+          ),
+        ),
+      );
+      // A tall phone, so every section of the page is built.
+      tester.view.physicalSize = const Size(412, 4000);
+      await tester.pumpAndSettle();
+      expect(catalog.searches.single.query, '');
+      expect(catalog.searches.single.sort, 'TRENDING');
+      expect(paths, containsAll(['/movies/trending', '/shows/trending']));
+      expect(find.text('Trending anime'), findsOneWidget);
+      expect(find.text('Trending movies & shows'), findsOneWidget);
+      final anime = cardsKeyed('search-').evaluate().length;
+      final titles = cardsKeyed('title-').evaluate().length;
+      expect(anime, inInclusiveRange(1, 12));
+      expect(titles, inInclusiveRange(1, 12));
+      // Films and series take turns.
+      expect(find.text('Trending movie 1'), findsOneWidget);
+      expect(find.text('Trending show 1'), findsOneWidget);
+      // The capped anime grid does not page on above the films; More opens
+      // each section.
+      expect(find.text('Load more'), findsNothing);
+      expect(find.text('More anime'), findsOneWidget);
+      expect(find.text('More movies & shows'), findsOneWidget);
+      tester
+          .widget<AppButton>(
+            find.widgetWithText(AppButton, 'More movies & shows'),
+          )
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(cardsKeyed('title-').evaluate().length, 40);
+      expect(find.text('More movies & shows'), findsNothing);
+
+      // Typing swaps trending for results; clearing brings trending back.
+      await tester.enterText(find.byKey(const Key('catalog-search')), 'Fri');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      expect(catalog.searches.last.query, 'Fri');
+      expect(catalog.searches.last.sort, isNull);
+      expect(find.text('Trending anime'), findsNothing);
+      expect(find.text('Trending movies & shows'), findsNothing);
+      // Results stay split too: some anime, then movies and shows.
+      expect(find.text('Anime'), findsOneWidget);
+      expect(find.text('Movies & shows'), findsOneWidget);
+      expect(cardsKeyed('search-').evaluate().length, inInclusiveRange(1, 15));
+      expect(find.text('Load more'), findsNothing);
+      tester
+          .widget<AppButton>(find.widgetWithText(AppButton, 'More anime'))
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(cardsKeyed('search-').evaluate().length, 30);
+      expect(find.text('Load more'), findsOneWidget);
+      await tester.enterText(find.byKey(const Key('catalog-search')), '');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      expect(catalog.searches.last.sort, 'TRENDING');
+      expect(find.text('Trending anime'), findsOneWidget);
+      expect(find.text('Trending movies & shows'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'a films-only genre keeps anime and films together where it can',
+    (tester) async {
+      final paths = <Uri>[];
+      final catalog =
+          FeedbackCatalog(
+              client: MockClient((request) async {
+                paths.add(request.url);
+                return switch (request.url.path) {
+                  '/movies/popular' => reply(traktRows('movie', 3)),
+                  '/shows/popular' => reply(traktRows('show', 3)),
+                  _ => reply([]),
+                };
+              }),
+            )
+            ..answer = (page) async => CatalogPage([
+              for (var i = 1; i <= 5; i++)
+                Anime(id: page * 100 + i, title: 'Anime $page-$i'),
+            ]);
+      await mount(
+        tester,
+        catalog,
+        (app) => Scaffold(
+          key: const Key('page-under-test'),
+          body: SearchPage(
+            services: app,
+            isTV: false,
+            titles: true,
+            onOpen: (_) {},
+            onVoice: () async => null,
+          ),
+        ),
+      );
+      tester.view.physicalSize = const Size(412, 4000);
+      await tester.pumpAndSettle();
+      final filters = find.descendant(
+        of: find.byKey(const Key('page-under-test')),
+        matching: find.byKey(const Key('search-filters')),
+      );
+      // Action is both an anime and a film genre: both sections show.
+      await tester.tap(filters);
+      await tester.pumpAndSettle();
+      // Film genres join the anime ones.
+      expect(find.text('Crime'), findsOneWidget);
+      await tester.ensureVisible(find.text('Action'));
+      await tester.tap(find.text('Action'));
+      await tester.ensureVisible(find.byKey(const Key('filters-apply')));
+      await tester.tap(find.byKey(const Key('filters-apply')));
+      await tester.pumpAndSettle();
+      expect(find.text('Anime'), findsOneWidget);
+      expect(find.text('Movies & shows'), findsOneWidget);
+      expect(cardsKeyed('search-').evaluate().length, 5);
+      expect(cardsKeyed('title-').evaluate().length, 6);
+      expect(paths.last.queryParameters['genres'], 'action');
+
+      // Crime has no anime: no anime lookup, films still show.
+      final searches = catalog.searches.length;
+      await tester.tap(filters);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Crime'));
+      await tester.tap(find.text('Crime'));
+      await tester.ensureVisible(find.byKey(const Key('filters-apply')));
+      await tester.tap(find.byKey(const Key('filters-apply')));
+      await tester.pumpAndSettle();
+      expect(catalog.searches.length, searches);
+      expect(cardsKeyed('search-').evaluate(), isEmpty);
+      expect(cardsKeyed('title-').evaluate().length, 6);
+      expect(paths.last.queryParameters['genres'], 'crime');
+    },
+  );
+  testWidgets('anime-only empty search pages through trending anime', (
+    tester,
+  ) async {
+    final catalog = FeedbackCatalog()
+      ..answer = (page) async => CatalogPage([
+        for (var i = 1; i <= 30; i++)
+          Anime(id: page * 100 + i, title: 'Anime $page-$i'),
+      ], hasMore: true);
+    await mount(
+      tester,
+      catalog,
+      (app) => Scaffold(
+        key: const Key('page-under-test'),
+        body: SearchPage(
+          services: app,
+          isTV: false,
+          onOpen: (_) {},
+          onVoice: () async => null,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(catalog.searches.single.sort, 'TRENDING');
+    expect(find.text('Trending anime'), findsOneWidget);
+    expect(find.text('Trending movies & shows'), findsNothing);
+    expect(cardsKeyed('search-').evaluate().length, 30);
+    await tester.scrollUntilVisible(
+      find.text('Load more'),
+      400,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('page-under-test')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    // The bottom bar may cover it, so press it directly.
+    tester
+        .widget<AppButton>(
+          find.widgetWithText(AppButton, 'Load more', skipOffstage: false),
+        )
+        .onPressed!();
+    await tester.pumpAndSettle();
+    expect(catalog.searches.last.page, 2);
+    expect(catalog.searches.last.sort, 'TRENDING');
+  });
+  testWidgets('movie search shows trending films and series until asked', (
+    tester,
+  ) async {
+    final paths = <String>[];
+    final catalog = FeedbackCatalog(
+      client: MockClient((request) async {
+        paths.add(request.url.path);
+        return switch (request.url.path) {
+          '/movies/trending' => reply(traktRows('movie', 3)),
+          '/shows/trending' => reply(traktRows('show', 3)),
+          _ => reply([]),
+        };
+      }),
+    );
+    await mount(
+      tester,
+      catalog,
+      (app) => Scaffold(body: MovieSearchPage(services: app, isTV: false)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Trending movies & shows'), findsOneWidget);
+    expect(find.text('Trending movie 1'), findsOneWidget);
+    expect(find.text('Trending show 1'), findsOneWidget);
+    expect(find.text('Search for a movie or show.'), findsNothing);
+    final field = find.byKey(const Key('movie-search-field'));
+    await tester.enterText(field, 'Arrival');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(find.text('Trending movies & shows'), findsNothing);
+    expect(find.text('No matching movies or shows.'), findsOneWidget);
+    final asked = paths.where((p) => p.endsWith('/trending')).length;
+    await tester.enterText(field, '');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(find.text('Trending movie 1'), findsOneWidget);
+    // Clearing the field reuses the trending lists already fetched.
+    expect(paths.where((p) => p.endsWith('/trending')).length, asked);
+  });
   for (final tv in [false, true]) {
     testWidgets(
       'anime failure is distinct from empty and retry retains query/filters on ${tv ? 'TV' : 'phone'}',

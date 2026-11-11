@@ -172,16 +172,20 @@ class Catalog {
     String? genre,
     String? status,
     String? sort,
+    int? decade,
+    int? minScore,
   }) async {
+    // Upcoming anime, most popular first, stand in for anticipated films.
+    if (sort == 'ANTICIPATED') status = 'NOT_YET_RELEASED';
     final order = switch (sort) {
-      'POPULAR' => 'POPULARITY_DESC',
-      'TRENDING' => 'TRENDING_DESC',
+      'POPULAR' || 'ANTICIPATED' => 'POPULARITY_DESC',
+      'TRENDING' || 'WATCHED' => 'TRENDING_DESC',
       'SCORE' => 'SCORE_DESC',
       'NEWEST' => 'START_DATE_DESC',
       _ => query.trim().isEmpty ? 'POPULARITY_DESC' : 'SEARCH_MATCH',
     };
     final data = await graph(
-      '''query(\$q:String,\$adult:Boolean,\$page:Int,\$format:MediaFormat,\$season:MediaSeason,\$year:Int,\$genre:String,\$status:MediaStatus){Page(page:\$page,perPage:30){pageInfo{hasNextPage}media(search:\$q,type:ANIME,isAdult:\$adult,format:\$format,season:\$season,seasonYear:\$year,genre:\$genre,status:\$status,sort:$order){$mediaFields}}}''',
+      '''query(\$q:String,\$adult:Boolean,\$page:Int,\$format:MediaFormat,\$season:MediaSeason,\$year:Int,\$genre:String,\$status:MediaStatus,\$from:FuzzyDateInt,\$to:FuzzyDateInt,\$score:Int){Page(page:\$page,perPage:30){pageInfo{hasNextPage}media(search:\$q,type:ANIME,isAdult:\$adult,format:\$format,season:\$season,seasonYear:\$year,genre:\$genre,status:\$status,startDate_greater:\$from,startDate_lesser:\$to,averageScore_greater:\$score,sort:$order){$mediaFields}}}''',
       {
         'q': query.trim().isEmpty ? null : query.trim(),
         'adult': adult ? null : false,
@@ -191,6 +195,13 @@ class Catalog {
         'year': year,
         'genre': genre,
         if (status != 'ALL') 'status': status,
+        // A decade runs from its first day to the last of its tenth year.
+        if (year == null && decade != null) ...{
+          'from': decade * 10000,
+          'to': (decade + 10) * 10000,
+        },
+        // AniList's greater-than skips the floor itself.
+        if (minScore != null) 'score': minScore - 1,
       },
     );
     final p = (data['Page'] as Map);

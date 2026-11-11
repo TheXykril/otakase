@@ -1012,24 +1012,70 @@ const _traktGenres = {
 /// The genres movie and show search can filter by.
 final traktGenreNames = _traktGenres.keys.toList();
 
+/// Original languages Search can filter films and series by.
+const titleLanguages = {
+  'en': 'English',
+  'ja': 'Japanese',
+  'ko': 'Korean',
+  'zh': 'Chinese',
+  'lt': 'Lithuanian',
+  'fr': 'French',
+  'es': 'Spanish',
+  'de': 'German',
+  'it': 'Italian',
+  'ru': 'Russian',
+  'hi': 'Hindi',
+};
+
+/// Age ratings as "suitable up to": each holds the ones before it.
+const titleAges = {'KIDS': 'Kids', 'FAMILY': 'Family', 'TEENS': 'Teens'};
+const _movieAges = {'KIDS': 'g', 'FAMILY': 'g,pg', 'TEENS': 'g,pg,pg-13'};
+const _showAges = {
+  'KIDS': 'tv-y,tv-y7,tv-g',
+  'FAMILY': 'tv-y,tv-y7,tv-g,tv-pg',
+  'TEENS': 'tv-y,tv-y7,tv-g,tv-pg,tv-14',
+};
+
+/// Length: a film's running time, or a series' episode length.
+const titleLengths = {'SHORT': 'Short', 'MEDIUM': 'Medium', 'LONG': 'Long'};
+const _movieLengths = {'SHORT': '1-89', 'MEDIUM': '90-120', 'LONG': '121-999'};
+const _showLengths = {'SHORT': '1-29', 'MEDIUM': '30-60', 'LONG': '61-999'};
+
 /// The Trakt lookups that match the anime search filters: one per kind
 /// (movie or show) with its query filters. Empty when no film or series can
 /// match, like an OVA format or a genre Trakt does not have. A season only
-/// narrows to its year; Trakt status filters exist for series only.
+/// narrows to its year; Trakt status filters exist for series only. A
+/// [decade] is its first year (2010 for the 2010s), [minScore] a 0-100
+/// rating floor; [language], [age] and [length] are films and series only.
 List<(String, Map<String, String>)> traktFilterRequests({
   String? format,
   String? season,
   int? year,
   String? genre,
   String? status,
+  int? decade,
+  int? minScore,
+  String? language,
+  String? age,
+  String? length,
+  String? sort,
 }) {
   final kinds = switch (format) {
+    // The box office is a film chart.
+    null when sort == 'BOXOFFICE' => ['movie'],
     null => ['movie', 'show'],
     'MOVIE' => ['movie'],
-    'TV' || 'TV_SHORT' => ['show'],
+    'TV' || 'TV_SHORT' when sort != 'BOXOFFICE' => ['show'],
     _ => <String>[],
   };
-  final common = <String, String>{if (year != null) 'years': '$year'};
+  final common = <String, String>{
+    if (year != null)
+      'years': '$year'
+    else if (decade != null)
+      'years': '$decade-${decade + 9}',
+    if (minScore != null) 'ratings': '$minScore-100',
+    'languages': ?language,
+  };
   if (genre != null) {
     final slug = _traktGenres[genre];
     if (slug == null) return const [];
@@ -1047,10 +1093,25 @@ List<(String, Map<String, String>)> traktFilterRequests({
   return [
     for (final kind in kinds)
       if (kind == 'show')
-        ('show', {...common, 'status': ?showStatus})
+        (
+          'show',
+          {
+            ...common,
+            'status': ?showStatus,
+            'certifications': ?_showAges[age],
+            'runtimes': ?_showLengths[length],
+          },
+        )
       // A film has no airing status; only a finished one can match.
       else if (status == null || status == 'FINISHED')
-        ('movie', common),
+        (
+          'movie',
+          {
+            ...common,
+            'certifications': ?_movieAges[age],
+            'runtimes': ?_movieLengths[length],
+          },
+        ),
   ];
 }
 
@@ -1066,6 +1127,11 @@ Future<List<MediaTitle>> findTitles(
   String? genre,
   String? status,
   String? sort,
+  int? decade,
+  int? minScore,
+  String? language,
+  String? age,
+  String? length,
 }) async {
   final q = query.trim();
   final requests = traktFilterRequests(
@@ -1074,6 +1140,12 @@ Future<List<MediaTitle>> findTitles(
     year: year,
     genre: genre,
     status: status,
+    decade: decade,
+    minScore: minScore,
+    language: language,
+    age: age,
+    length: length,
+    sort: sort,
   );
   if (requests.isEmpty) return const [];
   final List<List<MediaTitle>> found;
@@ -1089,7 +1161,13 @@ Future<List<MediaTitle>> findTitles(
             ? trakt.search(q, kinds: kind, filters: filters)
             : trakt.list(
                 kind,
-                sort == 'TRENDING' ? 'trending' : 'popular',
+                switch (sort) {
+                  'TRENDING' => 'trending',
+                  'ANTICIPATED' => 'anticipated',
+                  'WATCHED' => 'watched',
+                  'BOXOFFICE' => 'boxoffice',
+                  _ => 'popular',
+                },
                 limit: sort == null || sort == 'TRENDING' ? 20 : 40,
                 filters: filters,
               ),
@@ -1101,11 +1179,28 @@ Future<List<MediaTitle>> findTitles(
       for (final list in found)
         if (i < list.length) list[i],
   ];
-  // The trending and popular lists already come in that order.
-  return q.isEmpty && (sort == 'POPULAR' || sort == 'TRENDING')
+  // Trakt's lists already come in their own order.
+  return q.isEmpty && listSorts.contains(sort)
       ? merged
       : sortTitles(merged, sort);
 }
+
+/// Sorts that are Trakt lists of their own; with a title typed they keep
+/// relevance, except the ones [sortTitles] can order by.
+const listSorts = {
+  'POPULAR',
+  'TRENDING',
+  'ANTICIPATED',
+  'WATCHED',
+  'BOXOFFICE',
+};
+
+/// Sorts only films and series have, for the filters.
+const titleOnlySorts = {
+  'ANTICIPATED': 'Anticipated',
+  'WATCHED': 'Most watched',
+  'BOXOFFICE': 'Box office',
+};
 
 /// [titles] in a search sort order: POPULAR and TRENDING by votes, SCORE by
 /// rating, NEWEST by year. Ties keep their order; null keeps them all.
