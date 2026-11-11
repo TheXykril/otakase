@@ -120,6 +120,7 @@ class _AppShellState extends State<AppShell> {
     }
     HardwareKeyboard.instance.addHandler(konamiKey);
     widget.services.party.open = partyOpen;
+    widget.services.discord.notify = fromDiscord;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await widget.services.discord.initialize();
       unawaited(widget.services.extras.refreshClub());
@@ -149,6 +150,17 @@ class _AppShellState extends State<AppShell> {
       unawaited(openCheat(context, widget.services, widget.isTV));
     }
     return false;
+  }
+
+  /// A new episode of a followed show, a shared show or a reply arrived
+  /// from Discord: say so; it waits under Community, From Discord.
+  void fromDiscord(String text) {
+    if (!mounted || widget.services.playerStatus != null) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
+      ),
+    );
   }
 
   /// A watch party member opens the host's show and episode.
@@ -185,6 +197,9 @@ class _AppShellState extends State<AppShell> {
     HardwareKeyboard.instance.removeHandler(konamiKey);
     if (widget.services.party.open == partyOpen) {
       widget.services.party.open = null;
+    }
+    if (widget.services.discord.notify == fromDiscord) {
+      widget.services.discord.notify = null;
     }
     FocusManager.instance.removeHighlightModeListener(modeChanged);
     widget.services.auth.remoteLink = null;

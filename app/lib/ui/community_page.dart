@@ -138,7 +138,7 @@ class DiscordPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  'Queued shows and replies appear here.',
+                  'Shows sent to you, new episodes of shows you follow and replies appear here.',
                   style: uiStyle(context, color: muted),
                 ),
               ),

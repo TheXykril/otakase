@@ -19,6 +19,7 @@ import 'play_on.dart';
 import 'remote_now_playing.dart';
 import '../data/play_request.dart';
 import '../player.dart';
+import 'rate_prompt.dart';
 
 /// Poster rows and cards are drawn for anime; a film or series is shown in
 /// them under an id no AniList entry can have, and mapped back on open.
@@ -672,6 +673,16 @@ PlayRequest titlePlay(
 }) {
   final movies = services.movies;
   final season = episode?.season ?? 0, number = episode?.number ?? 0;
+  // The episode [step] places from this one in the whole list.
+  PlayRequest? sibling(int step) {
+    final i = episodes.indexWhere(
+      (e) => e.season == season && e.number == number,
+    );
+    final j = i + step;
+    if (i < 0 || j < 0 || j >= episodes.length) return null;
+    return titlePlay(services, title, episode: episodes[j], episodes: episodes);
+  }
+
   return PlayRequest(
     title: title.title,
     cover: title.poster,
@@ -715,30 +726,50 @@ PlayRequest titlePlay(
       if (title.isShow && (e.season != season || e.episode != number)) return 0;
       return e.resumeAt(duration);
     },
-    onProgress: (position, duration, completed) => movies.progress(
-      title,
-      position,
-      duration,
-      season: season,
-      episode: number,
-      completed: completed,
-    ),
+    onProgress: (position, duration, completed) {
+      if (completed &&
+          movies.finishes(
+            title,
+            [for (final e in episodes) (season: e.season, number: e.number)],
+            season: season,
+            episode: number,
+          )) {
+        services.titleRatingDue = title;
+      }
+      return movies.progress(
+        title,
+        position,
+        duration,
+        season: season,
+        episode: number,
+        completed: completed,
+      );
+    },
     onScrobble: (action, percent) => unawaited(
       movies.scrobble(action, title, percent, season: season, episode: number),
     ),
-    next: episode == null
+    skips: episode == null || title.tmdb <= 0
         ? null
-        : () {
-            final i = episodes.indexWhere(
-              (e) => e.season == season && e.number == number,
-            );
-            if (i < 0 || i + 1 >= episodes.length) return null;
-            return titlePlay(
-              services,
-              title,
-              episode: episodes[i + 1],
-              episodes: episodes,
-            );
+        : (length, scope) => services.skipTimes.lookupShow(
+            title.tmdb,
+            season,
+            number,
+            length,
+            scope: scope,
+          ),
+    number: number,
+    count: episodes.where((e) => e.season == season).length,
+    next: episode == null ? null : () => sibling(1),
+    previous: episode == null ? null : () => sibling(-1),
+    pick: episode == null
+        ? null
+        : (n) {
+            final e = episodes
+                .where((e) => e.season == season && e.number == n)
+                .firstOrNull;
+            return e == null
+                ? null
+                : titlePlay(services, title, episode: e, episodes: episodes);
           },
   );
 }
@@ -970,6 +1001,23 @@ class _TitlePageState extends State<TitlePage> {
           onPressed: () =>
               movies.setWatchlist(title, !movies.onWatchlist(title)),
         ),
+        AppButton(
+          key: const Key('title-rate'),
+          label: movies.score(title) > 0
+              ? 'Rated ${movies.score(title)}/10'
+              : 'Rate',
+          icon: LucideIcons.star,
+          isTV: widget.isTV,
+          onPressed: () => unawaited(
+            askTitleRating(
+              context,
+              widget.services,
+              title,
+              widget.isTV,
+              finished: false,
+            ),
+          ),
+        ),
         if (!title.isShow) ...[
           AppButton(
             key: const Key('title-watched'),
@@ -978,7 +1026,8 @@ class _TitlePageState extends State<TitlePage> {
             isTV: widget.isTV,
             onPressed: () => movies.markWatched(title, !watched),
           ),
-          if (!widget.isTV)
+          // Downloads are for phones and computers; a TV streams.
+          if (!widget.isTV || isDesktop)
             AppButton(
               key: const Key('title-download'),
               label: 'Download',
@@ -1110,7 +1159,7 @@ class _TitlePageState extends State<TitlePage> {
                   ),
                   icon: const Icon(LucideIcons.check, size: 20, color: muted),
                 ),
-                if (!widget.isTV)
+                if (!widget.isTV || isDesktop)
                   IconButton(
                     tooltip: 'Download ${e.code}',
                     onPressed: () => download(e),

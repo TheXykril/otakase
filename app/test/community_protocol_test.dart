@@ -152,6 +152,14 @@ void main() {
               },
               {'id': 'n', 'kind': 'notice', 'title': 'Reply'},
               {
+                'id': 'e$round',
+                'kind': 'airing',
+                'anilist_id': 7,
+                'episode': 5,
+                'title': 'Followed',
+                'text': 'Episode 5 is out',
+              },
+              {
                 'id': 's',
                 'kind': 'setting',
                 'key': 'DevBuilds',
@@ -183,10 +191,15 @@ void main() {
       f.discord.remote = (action, args) async {
         actions.add(action);
       };
+      final told = <String>[];
+      f.discord.notify = told.add;
       await f.discord.pollInbox();
       round++;
       await f.discord.pollInbox();
-      expect(ack, ['q1', 'n', 's', 'a', 'r', 'x', 'u']);
+      expect(ack, ['q1', 'n', 'e1', 's', 'a', 'r', 'x', 'u']);
+      // A new episode of a followed show is kept once and announced.
+      expect(f.discord.inbox.where((i) => i['kind'] == 'airing').length, 1);
+      expect(told, contains('Followed: Episode 5 is out'));
       expect(actions, ['skip', 'skip']);
       expect(f.store.flag('DevBuilds'), true);
       expect(f.store.adultAllowed, false);

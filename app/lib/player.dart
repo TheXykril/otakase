@@ -220,6 +220,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       : episodes.isNotEmpty
       ? episodes.any((e) => e > episode)
       : anime.airedEpisodes > episode;
+
+  /// Whether an episode comes before this one: a series episode's request
+  /// knows, an anime episode is any after the first.
+  bool get canPrevious =>
+      isTitle ? request!.previous?.call() != null : episode > 1;
   @override
   void initState() {
     super.initState();
@@ -254,6 +259,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     discordMeter = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!profileStopped && !busy && duration > Duration.zero && isTitle) {
         showPresence();
+        // Films and series count towards Otakase watch time on Discord and
+        // show in Who's watching too, by name: they have no AniList id.
+        final r = request!;
+        widget.services.discord.observe(
+          Anime(
+            id: 0,
+            title: [r.title, r.subtitle].where((s) => s.isNotEmpty).join(' · '),
+          ),
+          0,
+          (casting ? position : player.state.position).inMilliseconds / 1000,
+        );
       } else if (!profileStopped && !busy && duration > Duration.zero) {
         unawaited(widget.services.party.playing(anime, episode));
         widget.services.discord.observe(
@@ -814,10 +830,20 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (mounted && g == generation) setState(() => episodes = result);
   }
 
-  /// Opening, ending and recap times. Only anime has them; films keep no
-  /// skip data, so their skip button never shows.
+  /// Opening, ending and recap times: from the source and the skip time
+  /// services for anime, from the request (TheIntroDB) for series episodes.
+  /// Films have none, so their skip button never shows.
   Future<void> loadSkips(int g) async {
-    if (source == null || isTitle) return;
+    if (source == null) return;
+    if (isTitle) {
+      final find = request!.skips;
+      final seconds = duration.inMilliseconds / 1000;
+      if (find == null || seconds <= 0) return;
+      final found = await find(seconds, scope);
+      if (!mounted || g != generation || !isTitle) return;
+      setState(() => spans = selectSkipSpans(const [], found, seconds));
+      return;
+    }
     final result = await widget.services.resolver.skips(
       source!,
       episode,
@@ -1467,7 +1493,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   /// Picks a device and moves the episode there, or offers to stop.
   Future<void> castMenu() async {
-    if (media case final m? when isTitle && local(m)) {
+    // A downloaded file can't reach a cast device; another Otakase can
+    // still stream the same episode or film when the download knows it.
+    final file = media != null && isTitle && local(media!);
+    if (file && (widget.isTV || request!.remote == null)) {
       flash.show('Downloads play on this screen only');
       showControls();
       return;
@@ -1478,8 +1507,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       context,
       widget.services,
       here: false,
-      // Downloads and other titles a TV cannot find stay on cast.
+      // Titles a TV cannot find stay on cast.
       otakase: !widget.isTV && (!isTitle || request!.remote != null),
+      cast: !file,
       caster: caster,
     );
     panelOpen = false;
@@ -1757,9 +1787,19 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       case 'next':
         if (!busy) await next();
       case 'previous':
-        if (!busy && episode > 1) await pickEpisode(episode - 1);
+        if (busy) break;
+        if (isTitle) {
+          await switchTitle(request!.previous?.call());
+        } else if (episode > 1) {
+          await pickEpisode(episode - 1);
+        }
       case 'episode':
-        if (!busy) await pickEpisode(number(args['episode']));
+        if (busy) break;
+        if (isTitle) {
+          await switchTitle(request!.pick?.call(number(args['episode'])));
+        } else {
+          await pickEpisode(number(args['episode']));
+        }
       case 'subtitle':
         final id = '${args['id']}';
         for (final track in player.state.tracks.subtitle) {
@@ -1805,8 +1845,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             request!.subtitle,
           ].where((s) => s.isNotEmpty).join(' · '),
           'adult': false,
-          'episode': 0,
-          'episodes': 0,
+          'episode': request!.number,
+          'episodes': request!.pick == null ? 0 : request!.count,
           'position': position.inSeconds,
           'duration': duration.inSeconds,
           'playing': isPlaying,
@@ -1833,6 +1873,19 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         : player.state.volume.round(),
   };
 
+  /// Leaves this film or series episode for [target], keeping the spot of
+  /// the one left. Nothing happens without a target.
+  Future<void> switchTitle(PlayRequest? target) async {
+    if (target == null || !isTitle) return;
+    nextTimer?.cancel();
+    await save(leaving: true);
+    if (!busy) scrobble('pause');
+    if (!mounted || profileStopped) return;
+    setState(() => countdownSeconds = 0);
+    startTitle(target);
+    await open();
+  }
+
   Future<void> pickEpisode(int target) async {
     if (isTitle) return;
     if (target < 1 || anime.airedEpisodes > 0 && target > anime.airedEpisodes) {
@@ -1853,14 +1906,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (!canNext) return;
     nextTimer?.cancel();
     if (isTitle) {
-      final target = upNext ?? request!.next?.call();
-      if (target == null) return;
-      await save(leaving: true);
-      if (!busy) scrobble('pause');
-      if (!mounted) return;
-      setState(() => countdownSeconds = 0);
-      startTitle(target);
-      await open();
+      await switchTitle(upNext ?? request!.next?.call());
       return;
     }
     await save(leaving: true);
@@ -2176,7 +2222,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       ],
       'skip': active?.label,
       'can_next': canNext,
-      'can_previous': !isTitle && episode > 1,
+      'can_previous': canPrevious,
       'subtitles': casting
           ? const []
           : [
@@ -2324,12 +2370,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       default:
     }
     if (busy || error.isNotEmpty) return false;
-    // Films have no skip times, episode list or watch party: those keys do
-    // nothing for them.
+    // Films and series have no skip marking, AniSkip votes or watch party:
+    // those keys do nothing for them.
     if (isTitle &&
         const {
-          PlayerAction.skipSegment,
-          PlayerAction.previousEpisode,
           PlayerAction.markOpening,
           PlayerAction.markEnding,
           PlayerAction.sendMarks,
@@ -2374,8 +2418,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         unawaited(skipSpan(span));
         showControls();
       case PlayerAction.previousEpisode:
-        if (episode <= 1) {
-          flash.show('This is the first episode');
+        if (!canPrevious) {
+          flash.show(
+            isTitle && request!.previous == null
+                ? 'Films have no episodes'
+                : 'This is the first episode',
+          );
         } else {
           unawaited(control('previous', {}));
         }
@@ -2504,7 +2552,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await showPlayerKeys(
       context,
       party: !isTitle && widget.services.party.active,
-      episodes: !isTitle,
+      episodes: !isTitle || request!.previous != null,
     );
     panelOpen = false;
     if (mounted) showControls();

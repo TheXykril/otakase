@@ -122,7 +122,7 @@ Future<void> downloadAnimeEpisode(
       stream: source.streams.first,
       poster: anime.cover,
       quality: _quality(services),
-      meta: {'anime': anime.toJson(), 'episode': episode},
+      meta: {'anime': anime.toJson(), 'episode': episode, 'mode': source.mode},
     );
     if (context.mounted) {
       _notice(context, 'Downloading ${anime.title} episode $episode.');
@@ -333,12 +333,32 @@ PlayRequest downloadPlay(AppServices services, DownloadItem d) {
     final anime = Anime.fromJson(animeJson.cast<String, dynamic>());
     services.tracking.remember(anime);
     final pusher = services.tracking.pusher();
+    final mode = meta['mode'] as String? ?? d.id.split(':').last;
     return PlayRequest(
       title: file.title,
       subtitle: file.subtitle,
       open: file.open,
-      resumeAt: file.resumeAt,
+      cover: d.poster,
+      // Another Otakase streams the same episode.
+      remote: anime.id > 0
+          ? {
+              'anilist_id': anime.id,
+              'episode': episode,
+              'mode': mode == 'dub' ? 'dub' : 'sub',
+            }
+          : null,
+      // Where this file was left, else where the episode was left while
+      // streaming it, as a streamed episode resumes.
+      resumeAt: (duration) {
+        final spot = file.resumeAt?.call(duration) ?? 0;
+        if (spot > 0) return spot;
+        final e = services.store.entry(anime);
+        if (e == null || e.watched.contains(episode)) return 0;
+        return e.resumeFor(episode);
+      },
       length: anime.duration * 60 * 2 ~/ 3,
+      next: () => _downloaded(services, d, 1),
+      previous: () => _downloaded(services, d, -1),
       onProgress: (position, duration, completed) async {
         await file.onProgress?.call(position, duration, completed);
         await services.store.progress(
@@ -366,6 +386,13 @@ PlayRequest downloadPlay(AppServices services, DownloadItem d) {
       title: file.title,
       subtitle: file.subtitle,
       open: file.open,
+      cover: d.poster,
+      // Another Otakase streams the same film or episode.
+      remote: title.trakt > 0
+          ? {'title': title.remote, 'season': season, 'episode': episode}
+          : null,
+      next: title.isShow ? () => _downloaded(services, d, 1) : null,
+      previous: title.isShow ? () => _downloaded(services, d, -1) : null,
       length: number(meta['runtime']) * 60,
       resumeAt: (duration) {
         final spot = file.resumeAt?.call(duration) ?? 0;
@@ -400,4 +427,44 @@ PlayRequest downloadPlay(AppServices services, DownloadItem d) {
     );
   }
   return file;
+}
+
+/// The finished download of the same show [step] episodes on from [d] (1
+/// the next one saved, -1 the one before), so saved episodes play on one
+/// after another like streamed ones.
+PlayRequest? _downloaded(AppServices services, DownloadItem d, int step) {
+  final from = _downloadOrder(d);
+  if (from == null) return null;
+  DownloadItem? best;
+  (String, int)? bestAt;
+  for (final other in services.downloads.items) {
+    if (!other.done || other.id == d.id) continue;
+    final at = _downloadOrder(other);
+    if (at == null || at.$1 != from.$1) continue;
+    final gap = (at.$2 - from.$2) * step;
+    if (gap <= 0) continue;
+    if (bestAt == null || gap < (bestAt.$2 - from.$2) * step) {
+      best = other;
+      bestAt = at;
+    }
+  }
+  return best == null ? null : downloadPlay(services, best);
+}
+
+/// Which show a download belongs to and its place in it, or null for a
+/// film or a download that doesn't know.
+(String, int)? _downloadOrder(DownloadItem d) {
+  final meta = d.meta;
+  final episode = number(meta['episode']);
+  if (episode <= 0) return null;
+  if (meta['anime'] case final Map a) {
+    final anime = Anime.fromJson(a.cast<String, dynamic>());
+    return ('anime:${anime.key}', episode);
+  }
+  if (meta['title'] case final Map t) {
+    final title = MediaTitle.fromJson(t.cast<String, dynamic>());
+    if (!title.isShow) return null;
+    return (title.key, number(meta['season']) * 100000 + episode);
+  }
+  return null;
 }

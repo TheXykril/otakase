@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../cast/cast.dart';
 import '../data/tv_remote.dart';
+import '../desktop/desktop_core.dart';
 import '../services.dart';
 import 'components.dart';
 import 'tv_remote_page.dart';
@@ -36,6 +37,7 @@ Future<PlayTarget?> pickPlayTarget(
   AppServices services, {
   bool here = true,
   bool otakase = true,
+  bool cast = true,
   CastClient? caster,
 }) => showModalBottomSheet<PlayTarget>(
   context: context,
@@ -46,6 +48,7 @@ Future<PlayTarget?> pickPlayTarget(
     services: services,
     here: here,
     otakase: otakase,
+    cast: cast,
     caster: caster ?? CastClient(services.core),
   ),
 );
@@ -55,10 +58,14 @@ class _PlayOnSheet extends StatefulWidget {
     required this.services,
     required this.here,
     required this.otakase,
+    required this.cast,
     required this.caster,
   });
   final AppServices services;
-  final bool here, otakase;
+
+  /// [cast] off leaves out cast devices, for a file on this device that
+  /// only another Otakase can find again.
+  final bool here, otakase, cast;
   final CastClient caster;
   @override
   State<_PlayOnSheet> createState() => _PlayOnSheetState();
@@ -72,7 +79,11 @@ class _PlayOnSheetState extends State<_PlayOnSheet> {
   @override
   void initState() {
     super.initState();
-    unawaited(search());
+    if (widget.cast) {
+      unawaited(search());
+    } else {
+      searching = false;
+    }
     if (widget.otakase && widget.services.store.flag('RemoteAnywhere')) {
       unawaited(
         widget.services.relay
@@ -207,13 +218,15 @@ class _PlayOnSheetState extends State<_PlayOnSheet> {
               heading('This device'),
               row(
                 key: const Key('play-on-here'),
-                icon: LucideIcons.smartphone,
-                title: 'This phone',
+                icon: isDesktop ? LucideIcons.monitor : LucideIcons.smartphone,
+                title: isDesktop ? 'This computer' : 'This phone',
                 onTap: () => Navigator.pop(context, const PlayHere()),
               ),
             ],
-            heading('Cast · basic controls'),
-            if (searching)
+            if (widget.cast) heading('Cast · basic controls'),
+            if (!widget.cast)
+              const SizedBox.shrink()
+            else if (searching)
               Padding(
                 padding: const EdgeInsets.all(12),
                 child: Row(

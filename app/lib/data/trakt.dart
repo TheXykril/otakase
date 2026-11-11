@@ -945,6 +945,18 @@ class Trakt extends ChangeNotifier {
           };
   }
 
+  /// Gives the film or show a score from 1 to 10 on Trakt.
+  Future<void> rate(MediaTitle title, int rating) => _send(
+    'POST',
+    '/sync/ratings',
+    body: {
+      title.isShow ? 'shows' : 'movies': [
+        {'ids': title.ids, 'rating': rating.clamp(1, 10)},
+      ],
+    },
+    auth: true,
+  );
+
   Future<void> setWatchlist(MediaTitle title, bool on) => _send(
     'POST',
     on ? '/sync/watchlist' : '/sync/watchlist/remove',

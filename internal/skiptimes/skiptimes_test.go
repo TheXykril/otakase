@@ -226,3 +226,17 @@ func TestSubmissionsAreChecked(t *testing.T) {
 		}
 	}
 }
+
+func TestASeriesEpisodeIsLookedUpByItsTMDBID(t *testing.T) {
+	s, _ := fake(t, "", `{"intro":[{"start_ms":314551,"end_ms":331127}],"credits":[{"start_ms":2848149,"end_ms":null}]}`, "")
+	spans, err := s.LookupShow(http.DefaultClient, 30991, 1, 2, 2900)
+	if err != nil || len(spans) != 2 {
+		t.Fatalf("spans = %+v, %v", spans, err)
+	}
+	if spans[0].Type != "op" || spans[0].Source != IntroDB || spans[1].Type != "ed" || spans[1].End != 2900 {
+		t.Errorf("spans = %+v", spans)
+	}
+	if spans, _ := s.LookupShow(http.DefaultClient, 0, 1, 2, 2900); len(spans) != 0 {
+		t.Errorf("without a TMDB id: %+v", spans)
+	}
+}

@@ -47,7 +47,32 @@ func (s *Service) introDB(ctx context.Context, client *http.Client, ref Ref) ([]
 	if !ok {
 		return nil, nil
 	}
-	url := fmt.Sprintf("%s?tmdb_id=%d&season=%d&episode=%d", s.introDBBase, show.ID, show.Season, ref.Episode)
+	return s.introDBEpisode(client, show.ID, show.Season, ref.Episode, ref.Length)
+}
+
+// LookupShow asks TheIntroDB for one episode of a series it knows by TMDB
+// id, season and episode, as films and shows from Trakt carry them. length
+// is the episode's length in seconds, zero when unknown.
+func (s *Service) LookupShow(client *http.Client, tmdbID, season, episode int, length float64) ([]Span, error) {
+	if tmdbID <= 0 || season < 0 || episode <= 0 {
+		return nil, nil
+	}
+	found, err := s.introDBEpisode(client, tmdbID, season, episode, length)
+	spans := []Span{}
+	taken := map[string]bool{}
+	for _, span := range found {
+		span.Source = IntroDB
+		if taken[span.Type] || !span.Usable() || !fits(span, length) {
+			continue
+		}
+		taken[span.Type] = true
+		spans = append(spans, span)
+	}
+	return spans, err
+}
+
+func (s *Service) introDBEpisode(client *http.Client, tmdbID, season, episode int, length float64) ([]Span, error) {
+	url := fmt.Sprintf("%s?tmdb_id=%d&season=%d&episode=%d", s.introDBBase, tmdbID, season, episode)
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("theintrodb: %w", err)
@@ -63,7 +88,7 @@ func (s *Service) introDB(ctx context.Context, client *http.Client, ref Ref) ([]
 	if err != nil {
 		return nil, err
 	}
-	return introDBSpans(body, ref.Length), nil
+	return introDBSpans(body, length), nil
 }
 
 type introDBSpan struct {

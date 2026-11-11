@@ -618,7 +618,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         toggle(
           'IntroDBSkipTimes',
-          'Also get skip times from TheIntroDB. AniSkip is always used.',
+          'Also get skip times from TheIntroDB. Series episodes use it for their intros and credits. AniSkip is always used for anime.',
           icon: LucideIcons.flag,
         ),
         toggle(
@@ -628,7 +628,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         toggle(
           'ScoreOnCompletion',
-          'Ask for a score after the last episode of a show that has ended.',
+          'Ask for a score after a film, or after the last episode of a show that has ended.',
           icon: LucideIcons.star,
         ),
         toggle(
@@ -670,7 +670,7 @@ class _SettingsPageState extends State<SettingsPage> {
         if (isDesktop) ...[
           toggle(
             'ExternalMpv',
-            'Open episodes in your installed mpv, with your mpv.conf, scripts and keys.',
+            'Open anime episodes in your installed mpv, with your mpv.conf, scripts and keys. Movies and shows still play in Otakase.',
             icon: LucideIcons.squareArrowOutUpRight,
           ),
           if (store.flag('ExternalMpv'))

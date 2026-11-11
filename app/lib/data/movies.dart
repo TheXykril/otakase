@@ -620,6 +620,34 @@ class MovieService extends ChangeNotifier {
     }
   }
 
+  /// The score this profile gave [title], 0 when none.
+  int score(MediaTitle title) => store.integer('TitleScore.${title.key}');
+
+  /// Keeps a score from 1 to 10 for [title] and sends it to Trakt when
+  /// signed in, as an anime score goes to AniList and MyAnimeList.
+  Future<void> rate(MediaTitle title, int score) async {
+    await store.set('TitleScore.${title.key}', score.clamp(1, 10));
+    _notify();
+    if (trakt.signedIn) await trakt.rate(title, score);
+  }
+
+  /// Whether finishing this film, or [episode] of [season] of a show that
+  /// has ended, finishes the title, so a score is asked for.
+  bool finishes(
+    MediaTitle title,
+    List<({int season, int number})> episodes, {
+    int season = 0,
+    int episode = 0,
+  }) {
+    if (!store.flag('ScoreOnCompletion')) return false;
+    if (!title.isShow) return true;
+    if (title.status.toLowerCase() != 'ended' || episodes.isEmpty) {
+      return false;
+    }
+    final last = episodes.last;
+    return last.season == season && last.number == episode;
+  }
+
   Future<void> setWatchlist(MediaTitle title, bool on) async {
     watchlist = [if (on) title, ...watchlist.where((t) => t.key != title.key)];
     _notify();

@@ -81,3 +81,11 @@ func TestSkipTimesLookupNeedsAnEpisode(t *testing.T) {
 		t.Errorf("a two-second opening was sent: %s", out)
 	}
 }
+
+func TestShowSkipTimesNeedAnEpisode(t *testing.T) {
+	c := NewCore()
+	out := c.execute(context.Background(), `{"version":1,"operation":"skiptimes_show","tmdb_id":1396,"season":1}`)
+	if !strings.Contains(out, "invalid_request") {
+		t.Errorf("lookup without an episode: %s", out)
+	}
+}
