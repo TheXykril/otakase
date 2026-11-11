@@ -16,6 +16,10 @@
   computers, this phone and cast devices. Pick a TV and the episode starts
   there with the phone as its remote. The player's cast button uses the same
   list and moves what you are watching to a TV at the same spot.
+- **Phone remote from anywhere.** With the phone and TV linked to the same
+  Discord account, the remote works when they are not on the same Wi-Fi,
+  through the Otakase bot, and your TVs pair without a code. Settings >
+  Playback > Phone remote from anywhere turns it off.
 
 ### Changed
 

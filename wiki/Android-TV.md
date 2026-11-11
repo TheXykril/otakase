@@ -76,7 +76,16 @@ paired TVs and computers, this phone, and cast devices (Chromecast, DLNA,
 Kodi, any browser) in one place. Pick a TV and the episode starts there while
 the phone becomes its remote. While watching on the phone, the player's cast
 button offers the same list: pick a paired TV and the episode moves there at
-the same spot. Films and series still go to TVs through casting. The phone stays connected and shows what the TV is
+the same spot. Films and series still go to TVs through casting.
+
+Away from home, or on another network, the remote still works when the
+phone and the TV or computer are linked to the same Discord account
+(More > Discord). The TV keeps a connection to the Otakase bot, and the
+phone controls it through the bot when the Wi-Fi can't reach it; the remote
+says **Away, through Discord** then and moves back to the Wi-Fi on its own.
+Your linked TVs show in Control TV and Play on as **Your account** and pair
+without a code or Allow. Turn this off with Settings > Playback > Phone
+remote from anywhere. The phone stays connected and shows what the TV is
 doing as it happens; if the connection drops it reconnects on its own and
 finds the TV again when its address changed, for example after a router
 restart. Pairings belong to each profile; forget a TV on the

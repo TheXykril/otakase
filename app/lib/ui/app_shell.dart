@@ -105,7 +105,10 @@ class _AppShellState extends State<AppShell> {
     });
     unawaited(startRemote());
     widget.services.tvRemote.addListener(remoteAsk);
-    if (widget.isTV) widget.services.tvRemote.start = startFromPhone;
+    if (widget.isTV) {
+      widget.services.tvRemote.start = startFromPhone;
+      widget.services.hostRemote(true);
+    }
     // Trakt sits with the other trackers in Accounts and on More.
     unawaited(widget.services.trakt.load());
     if ((Host.android || isDesktop) &&
