@@ -254,6 +254,119 @@ void main() {
     }
   });
 
+  group('when otakase.com cannot be reached', () {
+    const fallbackBase = 'https://otakase.xyverion.com/download/v26.7.0';
+    Map<String, dynamic> fallbackRelease() => {
+      ...release,
+      'assets': [
+        asset(androidApk)
+          ..['browser_download_url'] = '$fallbackBase/$androidApk',
+      ],
+    };
+
+    AppUpdates withSites({
+      required Object? Function() primary,
+      required Object? Function() fallback,
+      List<Uri>? requests,
+    }) {
+      final app = AppUpdates(
+        platform: host,
+        client: () => MockClient((request) async {
+          requests?.add(request.url);
+          if (request.url.path != '/download/latest.json') {
+            return http.Response.bytes(download, 200);
+          }
+          final answer = request.url.host == updateSite
+              ? primary()
+              : fallback();
+          if (answer is Exception) throw answer;
+          return answer as http.Response;
+        }),
+      );
+      addTearDown(app.dispose);
+      return app;
+    }
+
+    for (final error in [
+      const SocketException("Failed host lookup: 'otakase.com'"),
+      http.ClientException("Failed host lookup: 'otakase.com'"),
+      const HandshakeException('CERTIFICATE_VERIFY_FAILED'),
+      TimeoutException('no answer'),
+    ]) {
+      test('falls back to the old site after ${error.runtimeType}', () async {
+        final requests = <Uri>[];
+        final app = withSites(
+          primary: () => error,
+          fallback: () => http.Response(jsonEncode(fallbackRelease()), 200),
+          requests: requests,
+        );
+        await app.check();
+        expect(app.phase, UpdatePhase.available);
+        expect(app.update!.url.toString(), '$fallbackBase/$androidApk');
+        await app.download();
+        expect(app.phase, UpdatePhase.ready);
+        expect(requests.map((u) => u.toString()), [
+          'https://otakase.com/download/latest.json',
+          'https://otakase.xyverion.com/download/latest.json',
+          '$fallbackBase/$androidApk',
+        ]);
+      });
+    }
+
+    test('an answer from otakase.com is used, even an error', () async {
+      final requests = <Uri>[];
+      final app = withSites(
+        primary: () => http.Response('busy', 403),
+        fallback: () => fail('fallback asked'),
+        requests: requests,
+      );
+      await app.check();
+      expect(app.phase, UpdatePhase.failed);
+      expect(app.error, contains('busy'));
+      expect(requests.single.host, updateSite);
+    });
+
+    test('links must stay on the site that answered', () async {
+      final fromFallback = withSites(
+        primary: () => const SocketException('Failed host lookup'),
+        fallback: () => http.Response(jsonEncode(release), 200),
+      );
+      await fromFallback.check();
+      expect(fromFallback.phase, UpdatePhase.failed);
+      expect(fromFallback.error, 'Invalid release address.');
+      final fromPrimary = withSites(
+        primary: () => http.Response(jsonEncode(fallbackRelease()), 200),
+        fallback: () => fail('fallback asked'),
+      );
+      await fromPrimary.check();
+      expect(fromPrimary.phase, UpdatePhase.failed);
+      expect(fromPrimary.error, 'Invalid release address.');
+    });
+
+    test('says why when no site answers', () async {
+      for (final (error, text) in [
+        (
+          const SocketException("Failed host lookup: 'otakase.com'"),
+          'Could not find the update site',
+        ),
+        (
+          const HandshakeException('CERTIFICATE_VERIFY_FAILED'),
+          'secure connection',
+        ),
+        (TimeoutException('no answer'), 'did not answer in time'),
+        (
+          const SocketException('Connection refused'),
+          'Unable to check for updates',
+        ),
+      ]) {
+        final app = withSites(primary: () => error, fallback: () => error);
+        await app.check();
+        expect(app.phase, UpdatePhase.failed);
+        expect(app.error, contains(text), reason: '$error');
+      }
+    });
+  });
+
   test('downloads inside the app, verifies and opens the native installer only on request', () async {
     await updates.check();
     await updates.download();
