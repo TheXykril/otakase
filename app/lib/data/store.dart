@@ -61,7 +61,6 @@ const settingDefaults = <String, dynamic>{
   'Provider': 'stacked',
   'ProviderOrder': sourceNames,
   'DisabledProviders': <String>[],
-  'AutoFallback': true,
   'TorrentSources': true,
   'TorrentOnMobileData': false,
   'CheckUpdates': true,
@@ -77,8 +76,6 @@ const settingDefaults = <String, dynamic>{
   'Content': 'anime',
   'MovieLanguages': ['english', 'lithuanian'],
   'DiscordWatchWithMe': false,
-  'ExternalMpv': false,
-  'MpvPath': 'mpv',
 };
 
 class AppStore extends ChangeNotifier {
@@ -94,6 +91,10 @@ class AppStore extends ChangeNotifier {
     }
     _values.remove('AdultContent');
     _values.remove('ContinueWatchingAdult');
+    // Own-mpv playback and an automatic fallback switch nothing read.
+    _values.remove('ExternalMpv');
+    _values.remove('MpvPath');
+    _values.remove('AutoFallback');
     // 'ask' opened a track menu at every episode start; it is gone.
     if (_values['SubStyle'] == 'ask') _values['SubStyle'] = 'soft';
     try {
@@ -146,8 +147,36 @@ class AppStore extends ChangeNotifier {
   List<WatchEntry> get history =>
       _history.values.where((h) => visible(h.anime)).toList()
         ..sort((a, b) => b.updated.compareTo(a.updated));
-  List<WatchEntry> get continuing =>
-      history.where((h) => !h.watched.contains(h.episode)).toList();
+  List<WatchEntry> get continuing => history
+      .where(
+        (h) =>
+            !h.watched.contains(h.episode) &&
+            !continueHidden(h.anime.key, h.episode, h.updated),
+      )
+      .toList();
+
+  /// Whether the viewer took this off Continue watching. It comes back once
+  /// another episode plays or the spot moves on.
+  bool continueHidden(String key, int episode, int updated) {
+    final hidden = value('HiddenContinue');
+    if (hidden is! Map || hidden[key] is! Map) return false;
+    final h = hidden[key] as Map;
+    return number(h['episode']) == episode && updated <= number(h['updated']);
+  }
+
+  /// Takes a show, film or series off Continue watching until it moves on.
+  Future<void> hideContinue(String key, int episode, int updated) {
+    final hidden = Map<String, dynamic>.from(
+      value('HiddenContinue') as Map? ?? {},
+    );
+    hidden[key] = {'episode': episode, 'updated': updated};
+    // Only the latest few matter; old ones have moved on long ago.
+    while (hidden.length > 200) {
+      hidden.remove(hidden.keys.first);
+    }
+    return set('HiddenContinue', hidden);
+  }
+
   WatchEntry? entry(Anime anime) =>
       _history[anime.key] ??
       _history.values

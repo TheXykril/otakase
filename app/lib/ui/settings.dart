@@ -98,8 +98,6 @@ const settingLabels = <String, String>{
   'CheckUpdates': 'Check for updates',
   'KeepScreenOn': 'Keep screen on',
   'RemoteAnywhere': 'Phone remote from anywhere',
-  'ExternalMpv': 'Play in my own mpv',
-  'MpvPath': 'mpv program',
   'DiscordWatchWithMe': 'Watch with me',
   'Notifications': 'Notifications',
   'Updates': 'Updates',
@@ -668,18 +666,6 @@ class _SettingsPageState extends State<SettingsPage> {
           'Start where you stopped last time on this device.',
         ),
         if (isDesktop) ...[
-          toggle(
-            'ExternalMpv',
-            'Open anime episodes in your installed mpv, with your mpv.conf, scripts and keys. Movies and shows still play in Otakase.',
-            icon: LucideIcons.squareArrowOutUpRight,
-          ),
-          if (store.flag('ExternalMpv'))
-            row(
-              'MpvPath',
-              'The mpv to run: a name on PATH or a full path.',
-              value: store.text('MpvPath'),
-              onTap: () => edit('MpvPath'),
-            ),
           if (systemInstall.available)
             FutureBuilder<bool>(
               future: systemInstall.installed(),

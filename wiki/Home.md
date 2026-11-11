@@ -8,7 +8,13 @@ every system. These pages cover using Otakase.
 The account card stays at the top. The options below are grouped into
 **Watching**, **Your profile**, **Devices**, **Community**, and **Help & app**.
 Phone and TV use More; desktop Settings uses the same groups. Schedule is
-under Watching on every device.
+under Watching on every device. With movies & shows on and Trakt signed in,
+it also lists new episodes of your series (watched or on your Trakt
+watchlist) next to the anime airing that day.
+
+Long press a card in **Continue watching** (right click on a computer, the
+Info or Menu button on a TV remote) to remove it from the row. It comes back
+when you play another episode of it or watch further.
 
 ## Using Otakase
 

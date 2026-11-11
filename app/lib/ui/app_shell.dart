@@ -29,7 +29,6 @@ import '../data/tv_remote.dart';
 import '../desktop/desktop_core.dart';
 import '../desktop/top_bar.dart';
 import '../desktop/window_frame.dart';
-import '../desktop/external_mpv.dart';
 import '../desktop/launcher.dart';
 import '../desktop/system_install.dart';
 import '../host.dart';
@@ -180,7 +179,7 @@ class _AppShellState extends State<AppShell> {
       Navigator.push(
         context,
         OtakaseRoute<void>(
-          builder: (_) => playerFor(
+          builder: (_) => PlayerPage(
             services: widget.services,
             anime: anime,
             episode: episode,
@@ -267,7 +266,7 @@ class _AppShellState extends State<AppShell> {
     unawaited(
       navigator.push(
         OtakaseRoute<void>(
-          builder: (_) => playerFor(
+          builder: (_) => PlayerPage(
             services: services,
             anime: anime,
             episode: episode,
@@ -452,7 +451,7 @@ class _AppShellState extends State<AppShell> {
       Navigator.push(
         context,
         OtakaseRoute<void>(
-          builder: (_) => playerFor(
+          builder: (_) => PlayerPage(
             services: widget.services,
             anime: h.anime,
             episode: h.episode,

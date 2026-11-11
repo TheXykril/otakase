@@ -11,6 +11,11 @@ import 'package:otakase/services.dart';
 import 'package:otakase/ui/downloads_page.dart';
 import 'package:otakase/ui/movies_pages.dart';
 
+import 'dart:convert';
+
+import 'package:otakase/data/movies.dart';
+import 'package:otakase/data/store.dart';
+
 import 'movies_test.dart' show MemoryTokens, MovieCore, freshStore;
 
 const show = MediaTitle(
@@ -162,4 +167,80 @@ void main() {
       expect(s1e2.remote?['episode'], 2);
     },
   );
+
+  test(
+    'a card taken off Continue watching comes back once it moves on',
+    () async {
+      final store = await freshStore();
+      final movies = MovieService(
+        trakt: Trakt(
+          client: MockClient((r) async => http.Response('[]', 200)),
+          storage: MemoryTokens(),
+        ),
+        core: MovieCore(),
+        store: store,
+      );
+      await movies.progress(show, 300, 2900, season: 1, episode: 2);
+      final e = movies.continuing.single;
+      await movies.hideContinue(e);
+      expect(movies.continuing, isEmpty);
+      // Playing on brings it back.
+      await movies.progress(show, 320, 2900, season: 1, episode: 2);
+      expect(movies.continuing, hasLength(1));
+
+      expect(store.continueHidden('al:1', 3, 100), isFalse);
+      await store.hideContinue('al:1', 3, 100);
+      expect(store.continueHidden('al:1', 3, 100), isTrue);
+      expect(store.continueHidden('al:1', 4, 100), isFalse);
+      expect(store.continueHidden('al:1', 3, 101), isFalse);
+    },
+  );
+
+  test('the Schedule reads series episodes from the Trakt calendar', () async {
+    Uri? asked;
+    final tokens = MemoryTokens()
+      ..values[traktTokenKey] = jsonEncode({
+        'access_token': 'tok',
+        'expires_in': 0,
+      });
+    final trakt = Trakt(
+      client: MockClient((r) async {
+        asked = r.url;
+        return http.Response(
+          jsonEncode([
+            {
+              'first_aired': '2026-11-12T01:00:00.000Z',
+              'episode': {'season': 2, 'number': 5, 'title': 'Five'},
+              'show': {
+                'title': 'Breaking Bad',
+                'ids': {'trakt': 1388, 'tmdb': 1396},
+              },
+            },
+            {'first_aired': 'not a date', 'episode': {}, 'show': {}},
+          ]),
+          200,
+        );
+      }),
+      storage: tokens,
+    );
+    final found = await trakt.calendar(DateTime(2026, 11, 9), 7);
+    expect(asked!.path, '/calendars/my/shows/2026-11-09/7');
+    expect(found.single.show.title, 'Breaking Bad');
+    expect(found.single.episode.code, 'S2E5');
+    expect(found.single.at.isUtc, isFalse);
+  });
+
+  test('stored own-mpv and fallback switches are dropped', () async {
+    final store = await freshStore({
+      'settings.v1': jsonEncode({
+        'ExternalMpv': true,
+        'MpvPath': '/usr/bin/mpv',
+        'AutoFallback': false,
+      }),
+    });
+    expect(store.value('ExternalMpv'), isNull);
+    expect(store.value('MpvPath'), isNull);
+    expect(store.value('AutoFallback'), isNull);
+    expect(store, isA<AppStore>());
+  });
 }

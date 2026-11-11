@@ -1570,9 +1570,14 @@ class PosterCard extends StatefulWidget {
     this.onFocused,
     this.landscape = false,
     this.cropped = false,
+    this.onMenu,
   });
   final Anime anime;
   final VoidCallback onOpen;
+
+  /// More for this card: a long press, a right click, or the remote's
+  /// Info or Menu key. Null when the card has nothing more.
+  final VoidCallback? onMenu;
   final bool isTV, autofocus, landscape, cropped;
   final double width;
   final double? progress;
@@ -1603,55 +1608,59 @@ class _PosterCardState extends State<PosterCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              FocusBox(
-                isTV: widget.isTV,
-                autofocus: widget.autofocus,
-                outsideFrame: true,
-                lift: true,
-                radius: widget.cropped ? 14 : 10,
-                onPressed: open,
-                onFocused: widget.onFocused,
-                onFocusChanged: (value) => setState(() => focused = value),
-                child: Hero(
-                  tag: 'poster-${widget.key ?? a.key}',
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(
-                      widget.cropped ? 14 : 10,
-                    ),
-                    child: AspectRatio(
-                      aspectRatio: widget.landscape
-                          ? 16 / 9
-                          : widget.cropped
-                          ? (widget.isTV ? 143 / 194 : 132 / 184)
-                          : 2 / 3,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          if (widget.landscape && a.banner.isEmpty)
-                            WideCoverArt(
-                              a.cover,
-                              width: widget.width,
-                              height: widget.width * 9 / 16,
-                            )
-                          else
-                            CoverImage(
-                              widget.landscape ? a.banner : a.cover,
-                              width: widget.width,
-                              height: widget.width * 1.5,
-                            ),
-                          if (widget.progress != null && widget.progress! > 0)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              child: LinearProgressIndicator(
-                                value: widget.progress!.clamp(0, 1),
-                                minHeight: 3,
-                                color: shu,
-                                backgroundColor: line,
+              CardMenu(
+                onMenu: widget.onMenu,
+                child: FocusBox(
+                  isTV: widget.isTV,
+                  autofocus: widget.autofocus,
+                  outsideFrame: true,
+                  lift: true,
+                  radius: widget.cropped ? 14 : 10,
+                  onPressed: open,
+                  onLongPress: widget.onMenu,
+                  onFocused: widget.onFocused,
+                  onFocusChanged: (value) => setState(() => focused = value),
+                  child: Hero(
+                    tag: 'poster-${widget.key ?? a.key}',
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(
+                        widget.cropped ? 14 : 10,
+                      ),
+                      child: AspectRatio(
+                        aspectRatio: widget.landscape
+                            ? 16 / 9
+                            : widget.cropped
+                            ? (widget.isTV ? 143 / 194 : 132 / 184)
+                            : 2 / 3,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (widget.landscape && a.banner.isEmpty)
+                              WideCoverArt(
+                                a.cover,
+                                width: widget.width,
+                                height: widget.width * 9 / 16,
+                              )
+                            else
+                              CoverImage(
+                                widget.landscape ? a.banner : a.cover,
+                                width: widget.width,
+                                height: widget.width * 1.5,
                               ),
-                            ),
-                        ],
+                            if (widget.progress != null && widget.progress! > 0)
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                child: LinearProgressIndicator(
+                                  value: widget.progress!.clamp(0, 1),
+                                  minHeight: 3,
+                                  color: shu,
+                                  backgroundColor: line,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1752,9 +1761,13 @@ class PosterRow extends StatefulWidget {
     this.captions,
     this.trailing,
     this.landscape = false,
+    this.onMenu,
   });
   final String title;
   final List<Anime> items;
+
+  /// More for one card, such as removing it from Continue watching.
+  final void Function(Anime)? onMenu;
   final bool isTV, landscape;
   final void Function(Anime) onOpen;
   final double? Function(Anime)? progress;
@@ -1862,6 +1875,9 @@ class _PosterRowState extends State<PosterRow> {
                     cropped: !widget.landscape,
                     progress: widget.progress?.call(widget.items[i]),
                     caption: widget.captions?.call(widget.items[i]),
+                    onMenu: widget.onMenu == null
+                        ? null
+                        : () => widget.onMenu!(widget.items[i]),
                   ),
                 ),
               ),
@@ -1869,6 +1885,32 @@ class _PosterRowState extends State<PosterRow> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Opens [onMenu] from a right click, or the remote's Info or Menu key while
+/// the card inside has focus.
+class CardMenu extends StatelessWidget {
+  const CardMenu({super.key, required this.onMenu, required this.child});
+  final VoidCallback? onMenu;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) {
+    final menu = onMenu;
+    if (menu == null) return child;
+    return Focus(
+      skipTraversal: true,
+      canRequestFocus: false,
+      onKeyEvent: (_, event) {
+        if (event.logicalKey == LogicalKeyboardKey.info ||
+            event.logicalKey == LogicalKeyboardKey.contextMenu) {
+          if (event is KeyDownEvent) menu();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(onSecondaryTap: menu, child: child),
     );
   }
 }

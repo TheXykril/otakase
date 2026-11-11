@@ -76,6 +76,9 @@ class MovieEntry {
   final Set<String> watched;
   bool get finished => title.isShow ? false : watched.contains('movie');
   String get code => 'S${season}E$episode';
+
+  /// One number for the episode playing, for comparing places.
+  int get place => season * 100000 + episode;
   bool get started => position > 0 || percent > 0;
   double get progress => position > 0 && duration > 0
       ? (position / duration).clamp(0, 1).toDouble()
@@ -306,10 +309,18 @@ class MovieService extends ChangeNotifier {
           .where(
             (e) =>
                 // A watched film being watched again still has a spot to resume.
-                e.started || !e.finished && e.title.isShow && e.episode > 0,
+                (e.started || !e.finished && e.title.isShow && e.episode > 0) &&
+                !store.continueHidden(e.title.key, e.place, e.updated),
           )
           .toList()
         ..sort((a, b) => b.updated.compareTo(a.updated));
+
+  /// Takes [e] off Continue watching until another episode plays or its
+  /// spot moves on.
+  Future<void> hideContinue(MovieEntry e) async {
+    await store.hideContinue(e.title.key, e.place, e.updated);
+    _notify();
+  }
 
   bool onWatchlist(MediaTitle title) =>
       watchlist.any((t) => t.key == title.key);

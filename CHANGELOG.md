@@ -20,6 +20,16 @@
   finishing a film or the last episode of a show that has ended asks for a
   score (the "Ask for a score" setting), like anime. With Trakt signed in,
   the score goes to Trakt.
+- **Series pages like anime pages.** A show's episodes now have stills,
+  a resume bar, the Hide episode spoilers blur, Episode details (the info
+  button, a long press, or the remote's Info key) with the summary, and
+  Go to episode for long seasons. Movies and shows also get a Related row.
+- **Your shows in the Schedule.** With movies & shows on and Trakt signed
+  in, Schedule lists new episodes of your series next to the anime airing
+  that day. A profile with only movies & shows gets Schedule too.
+- **Remove from Continue watching.** Long press a card in Continue
+  watching (right click on a computer, Info or Menu on a TV remote) to take
+  it off the row. It comes back once you play on.
 - **Downloads play on.** A downloaded episode plays the next downloaded
   episode of the same show when it ends, and Previous and Next go between
   them. A downloaded episode or film can also be moved to an Otakase TV,
@@ -39,14 +49,17 @@
 - **Play on says This computer on a computer** instead of This phone.
 - **Download on a computer in TV mode** now shows for movies and shows
   too, like it does for anime.
-- **Play in my own mpv** now says that movies and shows still play in
-  Otakase.
 - **The phone remote stays upright.** Control TV and the now playing
   remote no longer turn sideways when you tilt the phone.
 - **Remotes go by device name.** TVs, computers and phones show up in the
   remote under their own device name (the name set in Android's settings,
   or the computer's name) instead of the profile's name. Phones paired
   earlier switch to their device name the next time they connect.
+
+### Removed
+
+- **Play in my own mpv** is gone. Everything plays in Otakase's own player
+  on every device, with the same skips, tracking and remote.
 
 ## 26.4.0 - 2026-11-11
 

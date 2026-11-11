@@ -14,7 +14,7 @@ import 'seal.dart';
 import 'settings.dart';
 import 'downloads_page.dart';
 import '../data/movies.dart';
-import 'movies_pages.dart' show traktSignIn;
+import 'movies_pages.dart' show openTitle, titleCardsOf, traktSignIn;
 import 'show_page.dart';
 import 'profiles_page.dart';
 import 'community_page.dart';
@@ -56,16 +56,32 @@ Future<void> openSchedule(
       body: SchedulePage(
         services: services,
         isTV: isTV,
-        onOpen: (a) => Navigator.push(
-          context,
-          OtakaseRoute<void>(
-            builder: (_) => ShowPage(services: services, anime: a, isTV: isTV),
-          ),
-        ),
+        onOpen: (a) {
+          // Series rows open their own page.
+          if (titleCardsOf(services).title(a) case final title?) {
+            unawaited(openTitle(context, services, title, isTV));
+            return;
+          }
+          unawaited(
+            Navigator.push(
+              context,
+              OtakaseRoute<void>(
+                builder: (_) =>
+                    ShowPage(services: services, anime: a, isTV: isTV),
+              ),
+            ),
+          );
+        },
       ),
     ),
   ),
 );
+
+/// Schedule shows anime airing, and the viewer's series once movies &
+/// shows are on and Trakt is signed in.
+bool scheduleShown(AppServices services) =>
+    contentModeOf(services.store) != ContentMode.movies ||
+    services.trakt.signedIn;
 
 Future<void> openDetail(BuildContext context, Widget page, bool isTV) async {
   if (!isTV) {
@@ -236,7 +252,7 @@ class MorePage extends StatelessWidget {
             LucideIcons.download,
             () => openDownloads(context, services, isTV),
           ),
-        if (contentModeOf(services.store) != ContentMode.movies)
+        if (scheduleShown(services))
           row(
             'Schedule',
             'This week · ${DateTime.now().timeZoneName}',
@@ -517,7 +533,7 @@ class _DesktopMoreState extends State<DesktopMore> {
           LucideIcons.download,
           open: () => openDownloads(context, services, true),
         ),
-        if (contentModeOf(services.store) != ContentMode.movies)
+        if (scheduleShown(services))
           item(
             'Schedule',
             LucideIcons.calendarDays,

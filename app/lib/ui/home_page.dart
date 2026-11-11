@@ -75,8 +75,12 @@ class ResumeCard extends StatelessWidget {
     this.label,
     this.kicker,
     this.action,
+    this.onMenu,
   });
   final WatchEntry entry;
+
+  /// Long press, right click or the remote's Info key: more for it.
+  final VoidCallback? onMenu;
 
   /// Replace the corner note and the play button's name, for a trending
   /// pick in the banner.
@@ -108,148 +112,153 @@ class ResumeCard extends StatelessWidget {
             fontSize: isTV ? 45 : 33,
             height: isTV ? 49 / 45 : 1,
           );
-    return Container(
-      key: const Key('resume-card'),
-      height: height,
-      margin: EdgeInsets.symmetric(horizontal: isTV ? 0 : 20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: isTV ? null : Border.all(color: const Color(0xff4a342a)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(isTV ? 0 : 16),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onOpen,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (showArtwork) HeroArt(anime, height: height),
-              Positioned(
-                top: 13,
-                left: isTV ? 48 : 14,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  color: bgDeep.withValues(alpha: .95),
-                  child: Text(
-                    kicker ??
-                        (entry.position > 0
-                            ? 'Continue watching'
-                            : label == 'MOVIE'
-                            ? 'Up next'
-                            : 'Your next episode'),
-                    style: uiStyle(context, size: 15),
-                  ),
-                ),
-              ),
-              if (anime.nativeTitle.isNotEmpty)
+    return CardMenu(
+      onMenu: onMenu,
+      child: Container(
+        key: const Key('resume-card'),
+        height: height,
+        margin: EdgeInsets.symmetric(horizontal: isTV ? 0 : 20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: isTV ? null : Border.all(color: const Color(0xff4a342a)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(isTV ? 0 : 16),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onOpen,
+            onLongPress: onMenu,
+            onSecondaryTap: onMenu,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (showArtwork) HeroArt(anime, height: height),
                 Positioned(
-                  right: isTV ? 48 : 10,
-                  top: 16,
-                  child: NativeTitle(anime.nativeTitle, isTV: isTV),
-                ),
-              if (isTV && label == null)
-                Positioned(
-                  right: 100,
-                  bottom: 36,
+                  top: 13,
+                  left: isTV ? 48 : 14,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 2,
+                      horizontal: 8,
+                      vertical: 4,
                     ),
-                    decoration: BoxDecoration(
-                      color: bgDeep.withValues(alpha: .9),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
+                    color: bgDeep.withValues(alpha: .95),
                     child: Text(
-                      entry.episode.toString().padLeft(2, '0'),
-                      style: display.copyWith(fontSize: 54),
+                      kicker ??
+                          (entry.position > 0
+                              ? 'Continue watching'
+                              : label == 'MOVIE'
+                              ? 'Up next'
+                              : 'Your next episode'),
+                      style: uiStyle(context, size: 15),
                     ),
                   ),
                 ),
-              Align(
-                alignment: Alignment.bottomLeft,
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    isTV ? 48 : 18,
-                    48,
-                    isTV ? 300 : 42,
-                    20,
+                if (anime.nativeTitle.isNotEmpty)
+                  Positioned(
+                    right: isTV ? 48 : 10,
+                    top: 16,
+                    child: NativeTitle(anime.nativeTitle, isTV: isTV),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label ??
-                            'EP ${entry.episode.toString().padLeft(2, '0')}',
-                        style: mono.copyWith(
-                          fontSize: isTV ? 20 : 15,
-                          color: fg,
-                        ),
+                if (isTV && label == null)
+                  Positioned(
+                    right: 100,
+                    bottom: 36,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        anime.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: titleStyle,
+                      decoration: BoxDecoration(
+                        color: bgDeep.withValues(alpha: .9),
+                        borderRadius: BorderRadius.circular(9),
                       ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 12,
-                        runSpacing: 4,
-                        children: [
-                          AppButton(
-                            key: const Key('home-resume'),
-                            label:
-                                action ??
-                                (entry.position > 0 ? 'Resume' : 'Play'),
-                            icon: LucideIcons.play,
-                            filled: true,
-                            isTV: isTV,
-                            autofocus: autofocus,
-                            onPressed: onResume,
+                      child: Text(
+                        entry.episode.toString().padLeft(2, '0'),
+                        style: display.copyWith(fontSize: 54),
+                      ),
+                    ),
+                  ),
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      isTV ? 48 : 18,
+                      48,
+                      isTV ? 300 : 42,
+                      20,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label ??
+                              'EP ${entry.episode.toString().padLeft(2, '0')}',
+                          style: mono.copyWith(
+                            fontSize: isTV ? 20 : 15,
+                            color: fg,
                           ),
-                          if (isTV)
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          anime.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: titleStyle,
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 12,
+                          runSpacing: 4,
+                          children: [
                             AppButton(
-                              label: 'Details',
-                              icon: LucideIcons.info,
-                              isTV: true,
-                              onPressed: onOpen,
+                              key: const Key('home-resume'),
+                              label:
+                                  action ??
+                                  (entry.position > 0 ? 'Resume' : 'Play'),
+                              icon: LucideIcons.play,
+                              filled: true,
+                              isTV: isTV,
+                              autofocus: autofocus,
+                              onPressed: onResume,
                             ),
-                          if (knownDuration && entry.position > 0)
-                            Container(
-                              color: bgDeep.withValues(alpha: .95),
-                              padding: const EdgeInsets.all(4),
-                              child: Text(
-                                '${((entry.duration - entry.position).clamp(0, entry.duration) / 60).ceil()} min left',
-                                style: uiStyle(context, size: 15),
+                            if (isTV)
+                              AppButton(
+                                label: 'Details',
+                                icon: LucideIcons.info,
+                                isTV: true,
+                                onPressed: onOpen,
                               ),
-                            ),
-                        ],
-                      ),
-                    ],
+                            if (knownDuration && entry.position > 0)
+                              Container(
+                                color: bgDeep.withValues(alpha: .95),
+                                padding: const EdgeInsets.all(4),
+                                child: Text(
+                                  '${((entry.duration - entry.position).clamp(0, entry.duration) / 60).ceil()} min left',
+                                  style: uiStyle(context, size: 15),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              if (knownDuration && entry.position > 0)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: LinearProgressIndicator(
-                    value: (entry.position / entry.duration).clamp(0, 1),
-                    minHeight: 3,
-                    color: shu,
-                    backgroundColor: line,
+                if (knownDuration && entry.position > 0)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: LinearProgressIndicator(
+                      value: (entry.position / entry.duration).clamp(0, 1),
+                      minHeight: 3,
+                      color: shu,
+                      backgroundColor: line,
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -582,7 +591,32 @@ class _HomePageState extends State<HomePage> {
         titleProgress[cards.card(e.title).key] = e;
       }
     }
-    final continuing = mergeRecent(continuation.continueWatching, titleEntries);
+    final continuing = mergeRecent(
+      continuation.continueWatching
+          .where(
+            (e) => !s.store.continueHidden(e.anime.key, e.episode, e.updated),
+          )
+          .toList(),
+      titleEntries,
+    );
+    // Long press, right click or the remote's Info key on a Continue
+    // watching card offers to take it off the row.
+    Future<void> removeContinue(Anime card) async {
+      const remove = 'Remove from Continue watching';
+      final choice = await chooseValue(context, card.title, [
+        remove,
+        'Cancel',
+      ], selected: 'Cancel');
+      if (choice != remove || !mounted) return;
+      if (titleProgress[card.key] case final t?) {
+        await s.movies.hideContinue(t);
+      } else if (continuing.where((e) => e.anime.key == card.key).firstOrNull
+          case final h?) {
+        await s.store.hideContinue(h.anime.key, h.episode, h.updated);
+      }
+      if (mounted) setState(() {});
+    }
+
     final resume = continuing.firstOrNull;
     final shelf = isDesktop ? continuing : continuing.skip(1).toList();
     final watchlist = titles && s.trakt.signedIn ? s.movies.watchlist : null;
@@ -615,6 +649,9 @@ class _HomePageState extends State<HomePage> {
         showArtwork: !tv,
         onResume: shown?.onPlay ?? () => widget.onResume(stage),
         onOpen: shown?.onDetails ?? () => widget.onOpen(stage.anime),
+        onMenu: shown == null || shown.entry != null
+            ? () => unawaited(removeContinue(stage.anime))
+            : null,
       );
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -692,6 +729,7 @@ class _HomePageState extends State<HomePage> {
             DesktopContinueRow(
               entries: shelf,
               onResume: widget.onResume,
+              onMenu: (e) => unawaited(removeContinue(e.anime)),
               label: (e) => switch (titleProgress[e.anime.key]) {
                 final t? => titleCaption(t),
                 _ => null,
@@ -755,6 +793,7 @@ class _HomePageState extends State<HomePage> {
               items: shelf.map((e) => e.anime).toList(),
               isTV: widget.isTV,
               onOpen: widget.onOpen,
+              onMenu: (a) => unawaited(removeContinue(a)),
               progress: (a) {
                 if (titleProgress[a.key] case final t?) {
                   return t.progress > 0 ? t.progress : null;

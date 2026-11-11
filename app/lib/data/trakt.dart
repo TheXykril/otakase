@@ -189,9 +189,13 @@ class TitleEpisode {
     this.overview = '',
     this.aired,
     this.runtime = 0,
+    this.thumbnail = '',
   });
   final int season, number, runtime;
   final String title, overview;
+
+  /// A still from the episode, '' when Trakt has none.
+  final String thumbnail;
   final DateTime? aired;
   String get code => 'S${season}E$number';
   String get label => title.isEmpty ? code : '$code · $title';
@@ -739,7 +743,7 @@ class Trakt extends ChangeNotifier {
   /// A series' aired episodes by season, specials left out.
   Future<List<TitleEpisode>> episodes(MediaTitle show) async {
     final seasons =
-        await _get('/shows/${show.trakt}/seasons?extended=full,episodes')
+        await _get('/shows/${show.trakt}/seasons?extended=full,images,episodes')
             as List? ??
         [];
     final today = now();
@@ -758,6 +762,10 @@ class Trakt extends ChangeNotifier {
             overview: e['overview'] as String? ?? '',
             aired: aired,
             runtime: number(e['runtime']),
+            thumbnail: MediaTitle._image(
+              (e['images'] as Map?)?.cast<String, dynamic>(),
+              'screenshot',
+            ),
           ),
         );
       }
@@ -766,6 +774,42 @@ class Trakt extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------- sync
+
+  /// Episodes of the viewer's shows (watched or on the watchlist) airing in
+  /// the [days] days from [start], from Trakt's calendar.
+  Future<List<({MediaTitle show, TitleEpisode episode, DateTime at})>> calendar(
+    DateTime start,
+    int days,
+  ) async {
+    final day =
+        '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+    final list =
+        await _get(
+          '/calendars/my/shows/$day/${days.clamp(1, 31)}?extended=full,images',
+          auth: true,
+        ) as List? ??
+        [];
+    return [
+      for (final item in list.whereType<Map>())
+        if (DateTime.tryParse(item['first_aired'] as String? ?? '')
+            case final at?)
+          if (item['show'] is Map && item['episode'] is Map)
+            (
+              show: MediaTitle.fromTrakt(
+                (item['show'] as Map).cast<String, dynamic>(),
+                'show',
+              ),
+              episode: TitleEpisode(
+                season: number((item['episode'] as Map)['season']),
+                number: number((item['episode'] as Map)['number']),
+                title: (item['episode'] as Map)['title'] as String? ?? '',
+                runtime: number((item['episode'] as Map)['runtime']),
+                aired: at,
+              ),
+              at: at.toLocal(),
+            ),
+    ];
+  }
 
   Future<TraktLibrary> library() async {
     final results = await Future.wait([

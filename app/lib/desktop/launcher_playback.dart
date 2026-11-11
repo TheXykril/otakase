@@ -11,7 +11,6 @@ import '../services.dart';
 import '../ui/components.dart';
 import '../player.dart';
 import '../ui/movies_pages.dart';
-import 'external_mpv.dart';
 import 'window_frame.dart';
 import '../host.dart';
 
@@ -111,7 +110,7 @@ class LauncherPlayback {
 
   Widget player(AppServices services) {
     if (data['anime'] case final Json anime) {
-      return playerFor(
+      return PlayerPage(
         services: services,
         anime: Anime.fromJson(anime),
         episode: data['number'] as int,

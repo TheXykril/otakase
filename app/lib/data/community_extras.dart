@@ -186,8 +186,7 @@ String reportDiagnostics(AppStore store, {String extra = ''}) {
       'Sub or dub: ${store.text('SubOrDub')}, subs ${store.text('SubsLanguage')}',
     )
     ..writeln('Quality: ${store.text('Quality')}')
-    ..writeln('Torrents: ${store.flag('TorrentSources') ? 'on' : 'off'}')
-    ..writeln('External mpv: ${store.flag('ExternalMpv') ? 'on' : 'off'}');
+    ..writeln('Torrents: ${store.flag('TorrentSources') ? 'on' : 'off'}');
   final health = store.providerHealth.entries
       .where((e) => store.adultAllowed || !adultSourceNames.contains(e.key))
       .map((e) => '${sourceLabel(e.key)} ${e.value}')

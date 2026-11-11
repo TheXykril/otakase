@@ -4,11 +4,9 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:otakase/core.dart';
 import 'package:otakase/data/community_extras.dart';
 import 'package:otakase/data/discord.dart';
 import 'package:otakase/data/store.dart';
-import 'package:otakase/desktop/external_mpv.dart';
 import 'package:otakase/host.dart';
 import 'package:otakase/desktop/launcher_shortcut.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -212,44 +210,6 @@ void main() {
     expect(seen.headers['content-type'], startsWith('multipart/form-data'));
     expect(seen.body, contains('name="title"'));
     expect(seen.body, contains('It broke'));
-  });
-
-  test('external mpv gets the stream, headers, subtitles and resume', () async {
-    final store = AppStore(await SharedPreferences.getInstance());
-    await store.set('SubsLanguage', 'english');
-    final stream = ResolvedStream.fromJson({
-      'url': 'https://cdn.example/master.m3u8',
-      'headers': {'Referer': 'https://site.example/', 'Origin': 'https://o'},
-      'subtitles': [
-        {'url': 'https://s/en.vtt', 'language': 'en', 'label': 'English'},
-        {'url': 'https://s/es.vtt', 'language': 'es', 'label': 'Spanish'},
-      ],
-    });
-    final args = mpvArguments(
-      stream: stream,
-      title: 'Show - Episode 2',
-      store: store,
-      scriptPath: '/tmp/o.lua',
-      commandsPath: '/tmp/c',
-      start: 125,
-    );
-    expect(args.last, 'https://cdn.example/master.m3u8');
-    expect(args[args.length - 2], '--');
-    expect(args, contains('--referrer=https://site.example/'));
-    expect(args, contains('--http-header-fields-append=Origin: https://o'));
-    expect(args, contains('--start=125'));
-    expect(args, contains('--sub-file=https://s/en.vtt'));
-    expect(args, isNot(contains('--sub-file=https://s/es.vtt')));
-    expect(args, contains('--script=/tmp/o.lua'));
-    expect(args, contains('--script-opts=otakase-commands=/tmp/c'));
-    final s = parseMpvStatus('[otakase] otakase-status 61.250 1420.000 1');
-    expect(s!.position, 61.25);
-    expect(s.duration, 1420);
-    expect(s.paused, isTrue);
-    expect(s.loaded, isTrue);
-    expect(parseMpvStatus('otakase-status -1.000 -1.000 0')!.loaded, isFalse);
-    expect(parseMpvStatus('something else'), isNull);
-    expect(mpvQuote('Skipped "Intro"'), r'"Skipped \"Intro\""');
   });
 
   test('launcher shortcut: Hyprland block is added once and removed', () {

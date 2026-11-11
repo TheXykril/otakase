@@ -259,9 +259,13 @@ class DesktopContinueRow extends StatefulWidget {
     required this.entries,
     required this.onResume,
     this.label,
+    this.onMenu,
   });
   final List<WatchEntry> entries;
   final ValueChanged<WatchEntry> onResume;
+
+  /// Right click or long press on a card: more for it.
+  final ValueChanged<WatchEntry>? onMenu;
 
   /// Replaces the episode line on a card, for films and series.
   final String? Function(WatchEntry)? label;
@@ -323,6 +327,9 @@ class _DesktopContinueRowState extends State<DesktopContinueRow> {
                     width: width,
                     first: i == 0,
                     onPressed: () => widget.onResume(widget.entries[i]),
+                    onMenu: widget.onMenu == null
+                        ? null
+                        : () => widget.onMenu!(widget.entries[i]),
                   ),
                 ),
               );
@@ -342,12 +349,14 @@ class _ContinueCard extends StatefulWidget {
     required this.first,
     required this.onPressed,
     this.label,
+    this.onMenu,
   });
   final WatchEntry entry;
   final String? label;
   final double width;
   final bool first;
   final VoidCallback onPressed;
+  final VoidCallback? onMenu;
   @override
   State<_ContinueCard> createState() => _ContinueCardState();
 }
@@ -370,88 +379,92 @@ class _ContinueCardState extends State<_ContinueCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FocusBox(
-            isTV: true,
-            outsideFrame: true,
-            lift: true,
-            radius: 12,
-            onPressed: widget.onPressed,
-            onHover: (value) => setState(() => hovered = value),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                width: widget.width,
-                height: height,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (a.banner.isNotEmpty)
-                      CoverImage(
-                        a.banner,
-                        width: widget.width,
-                        height: height,
-                        banner: true,
-                      )
-                    else
-                      WideCoverArt(
-                        a.coverLarge.isNotEmpty ? a.coverLarge : a.cover,
-                        width: widget.width,
-                        height: height,
-                      ),
-                    const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0x00000000), Color(0xcc000000)],
-                          stops: [.45, 1],
+          CardMenu(
+            onMenu: widget.onMenu,
+            child: FocusBox(
+              isTV: true,
+              outsideFrame: true,
+              lift: true,
+              radius: 12,
+              onPressed: widget.onPressed,
+              onLongPress: widget.onMenu,
+              onHover: (value) => setState(() => hovered = value),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: widget.width,
+                  height: height,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (a.banner.isNotEmpty)
+                        CoverImage(
+                          a.banner,
+                          width: widget.width,
+                          height: height,
+                          banner: true,
+                        )
+                      else
+                        WideCoverArt(
+                          a.coverLarge.isNotEmpty ? a.coverLarge : a.cover,
+                          width: widget.width,
+                          height: height,
                         ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 16,
-                      bottom: 16,
-                      child: Text(
-                        widget.label ??
-                            'EP $ep${left > 0 ? ' · $left min left' : ''}',
-                        style: mono.copyWith(
-                          fontSize: 17,
-                          color: fgBright,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    AnimatedOpacity(
-                      opacity: hovered || widget.first ? 1 : 0,
-                      duration: const Duration(milliseconds: 180),
-                      child: Center(
-                        child: Container(
-                          width: 64,
-                          height: 64,
-                          decoration: const BoxDecoration(
-                            color: shu,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            LucideIcons.play,
-                            color: bgDeep,
-                            size: 28,
+                      const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0x00000000), Color(0xcc000000)],
+                            stops: [.45, 1],
                           ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 4,
-                        color: shu,
-                        backgroundColor: fgBright.withValues(alpha: .18),
+                      Positioned(
+                        left: 16,
+                        bottom: 16,
+                        child: Text(
+                          widget.label ??
+                              'EP $ep${left > 0 ? ' · $left min left' : ''}',
+                          style: mono.copyWith(
+                            fontSize: 17,
+                            color: fgBright,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                      AnimatedOpacity(
+                        opacity: hovered || widget.first ? 1 : 0,
+                        duration: const Duration(milliseconds: 180),
+                        child: Center(
+                          child: Container(
+                            width: 64,
+                            height: 64,
+                            decoration: const BoxDecoration(
+                              color: shu,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              LucideIcons.play,
+                              color: bgDeep,
+                              size: 28,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          minHeight: 4,
+                          color: shu,
+                          backgroundColor: fgBright.withValues(alpha: .18),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
