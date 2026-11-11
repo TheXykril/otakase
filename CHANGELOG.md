@@ -6,8 +6,13 @@
 
 - **Trending on an empty Search.** Before you type anything, Search shows
   what is trending: anime, and with movies on, trending movies and shows
-  too, each kept to a few rows so both fit. Start typing and it switches to
-  your results; clear the box and trending comes back.
+  too. Start typing and it switches to your results; clear the box and
+  trending comes back.
+- **Anime and films side by side in Search.** With movies on, results and
+  filtered browsing show a few rows of anime and a few rows of movies and
+  shows, each with a More button to see the rest. The genre filter also
+  lists film genres like Crime, Family, History, War and Western; a genre
+  only films have shows just films.
 - **Pair the phone remote by tapping Allow on the TV.** Tap a TV or
   computer in Control TV on the phone and it asks Allow on screen, with two
   numbers to match, instead of you typing a code. The QR code and typed
