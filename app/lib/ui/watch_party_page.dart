@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core.dart';
 import '../data/watch_party.dart';
 import '../services.dart';
 import 'community_page.dart';
@@ -151,7 +152,7 @@ class _WatchPartiesPageState extends State<WatchPartiesPage> {
       final list = await party.planned();
       if (mounted) setState(() => parties = list);
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     }
   }
 
@@ -169,7 +170,7 @@ class _WatchPartiesPageState extends State<WatchPartiesPage> {
         );
       }
     } catch (e) {
-      if (mounted) communityMessage(context, e.toString());
+      if (mounted) communityMessage(context, errorMessage(e));
     } finally {
       if (mounted) setState(() => joining = false);
     }
@@ -187,7 +188,7 @@ class _WatchPartiesPageState extends State<WatchPartiesPage> {
       );
       await load();
     } catch (e) {
-      if (mounted) communityMessage(context, e.toString());
+      if (mounted) communityMessage(context, errorMessage(e));
     }
   }
 
@@ -215,9 +216,12 @@ class _WatchPartiesPageState extends State<WatchPartiesPage> {
             const PageHeading('Watch together', '宴'),
             const SizedBox(height: 12),
             if (!linked)
-              Text(
-                'Link this profile to Discord first (More, then Discord).',
-                style: uiStyle(context, color: muted),
+              LinkDiscordFirst(
+                services: widget.services,
+                isTV: widget.isTV,
+                onLinked: () {
+                  if (mounted) setState(() {});
+                },
               )
             else ...[
               if (party.active) ...[
@@ -389,7 +393,10 @@ class _WatchPartiesPageState extends State<WatchPartiesPage> {
                                     );
                                   } catch (e) {
                                     if (context.mounted) {
-                                      communityMessage(context, e.toString());
+                                      communityMessage(
+                                        context,
+                                        errorMessage(e),
+                                      );
                                     }
                                   }
                                 },

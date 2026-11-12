@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../core.dart';
 import '../data/discord.dart';
+import '../desktop/desktop_core.dart';
 import '../data/heritage.dart';
 import '../data/lan_page.dart';
 import '../data/models.dart';
@@ -169,7 +170,7 @@ class DiscordPage extends StatelessWidget {
                         await openTitle(context, services, title, isTV);
                       } catch (e) {
                         if (context.mounted) {
-                          communityMessage(context, e.toString());
+                          communityMessage(context, errorMessage(e));
                         }
                       }
                     } else if (number(item['anilist_id']) > 0) {
@@ -201,7 +202,7 @@ class DiscordPage extends StatelessWidget {
                           await services.auth.launch(url);
                         } catch (e) {
                           if (context.mounted) {
-                            communityMessage(context, e.toString());
+                            communityMessage(context, errorMessage(e));
                           }
                         }
                       }
@@ -244,6 +245,10 @@ class DiscordLinkDialog extends StatefulWidget {
 }
 
 class _DiscordLinkDialogState extends State<DiscordLinkDialog> {
+  /// A TV hands the command to a phone; a computer has its own keyboard
+  /// and Discord, so it skips the phone page.
+  bool get handOff => widget.isTV && !isDesktop;
+  bool copied = false;
   DiscordLinkCode? code;
   final phone = LanPage();
   Uri? url;
@@ -268,7 +273,7 @@ class _DiscordLinkDialogState extends State<DiscordLinkDialog> {
       final pending = await widget.services.discord.beginLink();
       if (!mounted) return;
       setState(() => code = pending);
-      if (widget.isTV) {
+      if (handOff) {
         try {
           final uri = await phone.open(
             title: 'Link Discord',
@@ -281,13 +286,13 @@ class _DiscordLinkDialogState extends State<DiscordLinkDialog> {
           }
           setState(() => url = uri);
         } catch (e) {
-          if (mounted) setState(() => error = e.toString());
+          if (mounted) setState(() => error = errorMessage(e));
         }
       }
       timer = Timer.periodic(const Duration(seconds: 3), (_) => poll());
       unawaited(poll());
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     }
   }
 
@@ -302,7 +307,7 @@ class _DiscordLinkDialogState extends State<DiscordLinkDialog> {
       }
     } catch (e) {
       if (e is BotFailure && e.status == 410) timer?.cancel();
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     } finally {
       polling = false;
     }
@@ -338,6 +343,20 @@ class _DiscordLinkDialogState extends State<DiscordLinkDialog> {
                 '/link-app code:${code!.code}',
                 style: mono.copyWith(fontSize: 20, color: accentText),
               ),
+              if (!handOff) ...[
+                const SizedBox(height: 8),
+                AppButton(
+                  label: copied ? 'Copied' : 'Copy command',
+                  icon: copied ? LucideIcons.check : LucideIcons.copy,
+                  isTV: widget.isTV,
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: '/link-app code:${code!.code}'),
+                    );
+                    if (mounted) setState(() => copied = true);
+                  },
+                ),
+              ],
               const SizedBox(height: 12),
               if (url != null) ...[
                 Center(
@@ -369,19 +388,57 @@ class _DiscordLinkDialogState extends State<DiscordLinkDialog> {
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      if (code != null && !widget.isTV)
+      if (code != null && !handOff)
         TextButton(
           onPressed: () async {
             try {
               await widget.services.auth.launch(Uri.parse(discordInviteUrl));
             } catch (e) {
-              if (mounted) setState(() => error = e.toString());
+              if (mounted) setState(() => error = errorMessage(e));
             }
           },
           child: const Text('Open Discord'),
         ),
       if (error != null)
         TextButton(onPressed: begin, child: const Text('New code')),
+    ],
+  );
+}
+
+/// Shown where a feature needs Discord: says so and links right there.
+class LinkDiscordFirst extends StatelessWidget {
+  const LinkDiscordFirst({
+    super.key,
+    required this.services,
+    required this.isTV,
+    this.onLinked,
+  });
+  final AppServices services;
+  final bool isTV;
+  final VoidCallback? onLinked;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        'This needs your Discord account linked to this profile.',
+        style: uiStyle(context, color: muted),
+      ),
+      const SizedBox(height: 12),
+      AppButton(
+        label: 'Link Discord',
+        filled: true,
+        autofocus: true,
+        isTV: isTV,
+        onPressed: () async {
+          await showDialog<void>(
+            context: context,
+            builder: (_) => DiscordLinkDialog(services: services, isTV: isTV),
+          );
+          onLinked?.call();
+        },
+      ),
     ],
   );
 }
@@ -486,7 +543,7 @@ class _CommunityTextDialogState extends State<CommunityTextDialog> {
       await subscription.cancel();
       if (mounted && received != null) setState(() => text.text = received!);
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     } finally {
       await phone.close();
     }
@@ -521,7 +578,7 @@ class _CommunityTextDialogState extends State<CommunityTextDialog> {
                 onChanged: (_) => setState(() {}),
               ),
             ),
-            if (widget.isTV)
+            if (widget.isTV && !isDesktop)
               AppButton(
                 label: 'Type on phone',
                 isTV: true,
@@ -542,7 +599,7 @@ class _CommunityTextDialogState extends State<CommunityTextDialog> {
                       );
                     }
                   } catch (e) {
-                    if (mounted) setState(() => error = e.toString());
+                    if (mounted) setState(() => error = errorMessage(e));
                   }
                 },
               ),
@@ -651,7 +708,7 @@ class _CapsulePageState extends State<CapsulePage> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -690,7 +747,7 @@ class _CapsulePageState extends State<CapsulePage> {
         return;
       } catch (e) {
         if (!mounted) return;
-        setState(() => error = e.toString());
+        setState(() => error = errorMessage(e));
         if (e is! BotFailure || e.status != 422) return;
         await showDialog<void>(
           context: context,
@@ -782,7 +839,7 @@ class _CapsulePageState extends State<CapsulePage> {
                           await h.removeCommunity();
                           await load();
                         } catch (e) {
-                          if (mounted) setState(() => error = e.toString());
+                          if (mounted) setState(() => error = errorMessage(e));
                         }
                       },
                 child: const Text('Remove community message'),
@@ -908,7 +965,7 @@ Future<void> birthdayCapsule(
       if (report == true) await h.reportCommunity(note['id'] as String);
     }
   } catch (e) {
-    if (context.mounted) communityMessage(context, e.toString());
+    if (context.mounted) communityMessage(context, errorMessage(e));
   }
   if (number(h.capsule['offered']) >= date.year ||
       h.pending != null ||

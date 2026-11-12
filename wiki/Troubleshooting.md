@@ -83,6 +83,19 @@ when a tracker is unavailable and retry automatically.
 Phone and TV need to be on the same home network, and guest Wi-Fi often keeps
 devices apart. Check that the code on the phone matches the one on the TV.
 
+## Linux asks for a keyring password when signing in
+
+Otakase keeps sign-ins in your system keyring. Desktops like GNOME and KDE
+unlock it when you log in. On a window manager without one (Hyprland, Sway and
+similar), the first sign-in asks you to create a "Default keyring". Pick a
+password, or leave it empty to keep it unlocked. To skip the question on later
+logins, unlock the keyring at login through PAM (gnome-keyring or KWallet).
+
+## The browser doesn't open to sign in
+
+The sign-in window then offers **Copy link**. Paste the link into any browser
+on the same computer and finish there.
+
 ## The desktop app doesn't open on macOS
 
 It is not signed by Apple yet. Right-click Otakase in Applications and choose

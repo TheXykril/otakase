@@ -77,7 +77,7 @@ Future<void> askRating(
       );
     }
     await services.store.set('LocalScore.${anime.key}', score);
-    await services.store.set('LocalStatus.${anime.key}', 'COMPLETED');
+    await services.store.setLocalStatus(anime, 'COMPLETED');
     if (context.mounted) {
       await offerRatingShare(context, services, anime, score.toDouble(), isTV);
     }

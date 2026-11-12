@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core.dart';
 import '../data/community_extras.dart';
 import '../data/discord.dart';
 import '../data/models.dart';
 import '../services.dart';
+import 'community_page.dart';
 import 'components.dart';
 import 'device_status.dart';
 
@@ -35,11 +37,6 @@ Scaffold _page(
     ],
   ),
   body: ListView(padding: const EdgeInsets.all(24), children: children),
-);
-
-Widget _notLinked(BuildContext context) => Text(
-  'Link this profile to Discord first (More, then Discord).',
-  style: uiStyle(context, color: muted),
 );
 
 /// Community → Settings backup.
@@ -122,7 +119,13 @@ class _BackupPageState extends State<BackupPage> {
       ),
       const SizedBox(height: 20),
       if (!linked)
-        _notLinked(context)
+        LinkDiscordFirst(
+          services: widget.services,
+          isTV: widget.isTV,
+          onLinked: () {
+            if (mounted) setState(() {});
+          },
+        )
       else
         Wrap(
           spacing: 12,
@@ -239,7 +242,7 @@ class _ReportPageState extends State<ReportPage> {
             'Posted to the support forum. Replies come to you in Discord.';
       });
     } catch (e) {
-      if (mounted) setState(() => message = e.toString());
+      if (mounted) setState(() => message = errorMessage(e));
     } finally {
       if (mounted) setState(() => sending = false);
     }

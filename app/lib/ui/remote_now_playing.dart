@@ -4,6 +4,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
+import '../core.dart';
 import '../data/models.dart';
 import '../data/tv_remote.dart';
 import '../services.dart';
@@ -59,7 +60,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
       await current.send(action, args: args);
       if (mounted && error != null) setState(() => error = null);
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     }
   }
 

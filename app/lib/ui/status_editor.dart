@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../core.dart';
 import '../data/models.dart';
 import '../data/tracking.dart';
 import '../services.dart';
@@ -60,7 +61,8 @@ class _StatusEditorState extends State<_StatusEditor> {
               }[e?.status] ??
               s.store.text('LocalStatus.${widget.anime.key}');
     if (!anilistStatuses.containsKey(status) || status == 'ALL') {
-      status = 'CURRENT';
+      // Nothing watched yet means it is for later.
+      status = progress > 0 ? 'CURRENT' : 'PLANNING';
     }
   }
 
@@ -80,7 +82,7 @@ class _StatusEditorState extends State<_StatusEditor> {
         );
       }
       await s.store.setWatchedProgress(widget.anime, progress);
-      await s.store.set('LocalStatus.${widget.anime.key}', status);
+      await s.store.setLocalStatus(widget.anime, status);
       await s.store.set('LocalScore.${widget.anime.key}', score);
       if (mounted && status == 'COMPLETED' && score > 0) {
         await offerRatingShare(
@@ -93,7 +95,7 @@ class _StatusEditorState extends State<_StatusEditor> {
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -101,9 +103,7 @@ class _StatusEditorState extends State<_StatusEditor> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text(
-      widget.services.auth.hasAccounts ? 'List status' : 'Local progress',
-    ),
+    title: Text(widget.services.auth.hasAccounts ? 'List status' : 'Your list'),
     content: SizedBox(
       width: 480,
       child: SingleChildScrollView(
@@ -114,12 +114,14 @@ class _StatusEditorState extends State<_StatusEditor> {
             Text(
               widget.services.auth.hasAccounts
                   ? 'Updates ${widget.services.auth.accounts.keys.join(' and ')}.'
-                  : 'Saved on this device. Public lists are read only.',
+                  : 'Saved on this device. Sign in to AniList or MAL in More, '
+                        'Your accounts, to keep it everywhere.',
               style: uiStyle(context, color: muted),
             ),
             const SizedBox(height: 16),
             AppButton(
-              label: anilistStatuses[status]!,
+              label: 'Status: ${anilistStatuses[status]!}',
+              icon: LucideIcons.chevronDown,
               isTV: widget.isTV,
               onPressed: saving
                   ? null

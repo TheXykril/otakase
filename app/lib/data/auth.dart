@@ -383,14 +383,14 @@ class AuthService extends ChangeNotifier {
   Future<void> launch(Uri uri) async {
     if (isDesktop) {
       if (!await openInBrowser(uri)) {
-        throw const LoginFailure('No browser is available.');
+        throw const LoginFailure("Couldn't open your browser.");
       }
       return;
     }
     try {
       await platform.invokeMethod<void>('launchUri', uri.toString());
     } on PlatformException {
-      throw const LoginFailure('No browser is available.');
+      throw const LoginFailure("Couldn't open your browser.");
     }
   }
 

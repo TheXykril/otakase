@@ -10,10 +10,12 @@ import '../data/models.dart';
 import '../data/store.dart';
 import '../data/trakt.dart';
 import '../desktop/desktop_core.dart';
+import '../desktop/window_frame.dart';
 import '../services.dart';
 import 'catalog_pages.dart'
     show ActiveFilters, FilterButton, SearchFilters, showSearchFilters;
 import 'components.dart';
+import 'device_status.dart';
 import 'downloads_page.dart';
 import 'play_on.dart';
 import 'remote_now_playing.dart';
@@ -1422,15 +1424,27 @@ class _TitlePageState extends State<TitlePage> {
                   SafeArea(
                     child: Align(
                       alignment: Alignment.topLeft,
-                      child: Padding(
-                        padding: EdgeInsets.all(widget.isTV ? 24 : 8),
-                        child: IconButton(
-                          key: const Key('title-back'),
-                          tooltip: 'Back',
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(
-                            LucideIcons.arrowLeft,
-                            color: fgBright,
+                      // The window has no frame on a computer, so the top
+                      // edge moves it and holds its buttons, as on anime.
+                      child: WindowDragArea(
+                        child: Padding(
+                          padding: EdgeInsets.all(
+                            isDesktop ? 8 : (widget.isTV ? 24 : 8),
+                          ),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                key: const Key('title-back'),
+                                tooltip: 'Back',
+                                onPressed: () => Navigator.pop(context),
+                                icon: const Icon(
+                                  LucideIcons.arrowLeft,
+                                  color: fgBright,
+                                ),
+                              ),
+                              const Spacer(),
+                              if (isDesktop) const DeviceStatus(),
+                            ],
                           ),
                         ),
                       ),

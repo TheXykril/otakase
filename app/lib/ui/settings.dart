@@ -490,13 +490,13 @@ class _SettingsPageState extends State<SettingsPage> {
         row(
           'SubsLanguage',
           'Languages to try in order, separated by commas. Type off for no subtitles.',
-          value: store.text('SubsLanguage'),
+          value: languageListLabel(store.text('SubsLanguage')),
           onTap: () => edit('SubsLanguage'),
         ),
         row(
           'AudioLanguages',
           'Audio languages to try in order, separated by commas.',
-          value: store.text('AudioLanguages'),
+          value: languageListLabel(store.text('AudioLanguages')),
           onTap: () => edit('AudioLanguages'),
         ),
         // Only matters once movies & shows are on.

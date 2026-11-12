@@ -6,8 +6,10 @@ import '../core.dart';
 import '../data/downloads.dart';
 import '../data/models.dart';
 import '../data/trakt.dart';
+import '../desktop/desktop_core.dart';
 import '../services.dart';
 import 'components.dart';
+import 'device_status.dart';
 import '../data/play_request.dart';
 import '../player.dart';
 import 'movies_pages.dart';
@@ -155,12 +157,13 @@ class DownloadsPage extends StatelessWidget {
     'done' => _size(d.bytes),
     'failed' => d.error.isEmpty ? 'Failed' : d.error,
     'cancelled' => 'Cancelled',
-    _ =>
-      d.partsTotal > 0
-          ? '${(d.progress * 100).round()}% · ${_size(d.bytes)}'
-          : d.total > 0
-          ? '${(d.progress * 100).round()}% · ${_size(d.bytes)} of ${_size(d.total)}'
-          : 'Downloading · ${_size(d.bytes)}',
+    _ => [
+      if (d.progress > 0) '${(d.progress * 100).round()}%' else 'Downloading',
+      if (d.partsTotal <= 0 && d.total > 0 && d.bytes > 0)
+        '${_size(d.bytes)} of ${_size(d.total)}'
+      else if (d.bytes > 0)
+        _size(d.bytes),
+    ].join(' · '),
   };
 
   void play(BuildContext context, DownloadItem d) => Navigator.push(
@@ -184,6 +187,7 @@ class DownloadsPage extends StatelessWidget {
         icon: const Icon(LucideIcons.arrowLeft),
       ),
       title: const Text('Downloads'),
+      actions: isDesktop ? const [DeviceStatus(), SizedBox(width: 16)] : null,
     ),
     body: ListenableBuilder(
       listenable: services.downloads,

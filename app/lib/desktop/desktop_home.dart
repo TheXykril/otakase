@@ -299,12 +299,13 @@ class _DesktopContinueRowState extends State<DesktopContinueRow> {
           LayoutBuilder(
             builder: (context, box) {
               // Fewer shows than fit stretch to fill the row instead of
-              // leaving a gap at the end; never more than four across.
+              // leaving a gap at the end; never more than four across, and
+              // one or two shows stay a third wide instead of a giant card.
               final room = box.maxWidth - desktopSide * 2;
               final fits = ((room + gap) / (380 + gap)).floor().clamp(1, 4);
               final count = math.max(
                 math.min(fits, widget.entries.length),
-                math.min(fits, 2),
+                math.min(fits, 3),
               );
               final width = (room - gap * (count - 1)) / count;
               final art = width * 9 / 16;

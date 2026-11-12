@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../core.dart';
 import '../host.dart';
 import 'auth.dart';
 import 'lan_page.dart';
@@ -474,7 +475,7 @@ class TVRemote extends ChangeNotifier {
       final ip = await findAddress();
       if (ip == null || !transport.allowed(ip)) {
         throw StateError(
-          'Connect the TV to your local network to use a phone remote.',
+          'Connect this device to your home network to use a phone remote.',
         );
       }
       address = ip;
@@ -540,7 +541,7 @@ class TVRemote extends ChangeNotifier {
       }
     } catch (e) {
       serverStarted = false;
-      error = e.toString();
+      error = errorMessage(e);
     }
     notifyListeners();
   }

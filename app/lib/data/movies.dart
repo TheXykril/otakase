@@ -23,8 +23,36 @@ const contentLabels = {
   'movies': 'Movies & shows only',
 };
 
+/// Why no copy of a film or episode played: no source for the chosen
+/// languages, sources that did not answer, or none that has it.
+String noCopyMessage(int sources, int unreachable) {
+  if (sources == 0) {
+    return 'No source covers your movie & show languages. Add one in More, '
+        'Subtitles & languages.';
+  }
+  if (unreachable == sources) {
+    return "Couldn't reach any source. Check your connection and try again "
+        'in a minute.';
+  }
+  if (unreachable > 0) {
+    return "No source we reached has this yet, and some didn't answer. "
+        'Try again in a minute.';
+  }
+  return 'No source has this yet. Try another language in More, '
+      'Subtitles & languages.';
+}
+
 /// Source languages, as the core names them, and how settings name them.
 const movieLanguageNames = {'en': 'english', 'lt': 'lithuanian'};
+
+/// "japanese,chinese,english" as "Japanese, Chinese, English".
+String languageListLabel(String value) {
+  final names = [
+    for (final n in value.split(','))
+      if (n.trim().isNotEmpty) languageTitle(n.trim()),
+  ];
+  return names.isEmpty ? 'Off' : names.join(', ');
+}
 
 String languageTitle(String name) =>
     name.isEmpty ? name : name[0].toUpperCase() + name.substring(1);
@@ -913,6 +941,7 @@ class MovieService extends ChangeNotifier {
           (s) => s.isNotEmpty && s != 'off' && s != 'none',
           orElse: () => 'english',
         );
+    var unreachable = 0;
     for (final source in order) {
       scope.check();
       status('Finding a copy');
@@ -965,18 +994,17 @@ class MovieService extends ChangeNotifier {
         );
       } on CoreFailure catch (e) {
         if (e.code == 'cancelled') rethrow;
+        if (e.code != 'not_found') unreachable++;
         store.health(
           'movie:${source.name}',
           e.code == 'not_found' ? 'No match' : 'Unavailable',
         );
       } catch (_) {
         scope.check();
+        unreachable++;
         store.health('movie:${source.name}', 'Unavailable');
       }
     }
-    throw const CoreFailure(
-      'no_stream',
-      'No source has this title in your languages. Check Movies & shows settings.',
-    );
+    throw CoreFailure('no_stream', noCopyMessage(order.length, unreachable));
   }
 }

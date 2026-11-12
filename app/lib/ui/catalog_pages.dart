@@ -294,7 +294,8 @@ class _SearchPageState extends State<SearchPage> {
         length: length,
       );
       if (mounted && g == titleGeneration) {
-        setState(() => titleResults = found);
+        // Anime has its own row above; the same show twice only confuses.
+        setState(() => titleResults = found.where((t) => !t.isAnime).toList());
       }
     } catch (_) {
       if (mounted && g == titleGeneration) setState(() => titlesFailed = true);

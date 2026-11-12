@@ -14,6 +14,27 @@ class CoreFailure implements Exception {
   String toString() => '$code: $message';
 }
 
+/// What a person reads when something fails: the message alone, without
+/// Dart's "Bad state:" or "Exception:" prefixes or a core error code.
+String errorMessage(Object error) {
+  if (error is CoreFailure) return error.message;
+  var text = switch (error) {
+    StateError e => e.message,
+    ArgumentError e => '${e.message}',
+    _ => error.toString(),
+  };
+  for (var again = true; again;) {
+    again = false;
+    for (final prefix in ['Exception: ', 'Bad state: ']) {
+      if (text.startsWith(prefix)) {
+        text = text.substring(prefix.length);
+        again = true;
+      }
+    }
+  }
+  return text;
+}
+
 class RequestScope {
   bool cancelled = false;
   final Set<int> handles = {};
