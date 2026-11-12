@@ -1,7 +1,7 @@
 {
   // Otakase accounts. Deployed by the "Deploy account Worker" workflow,
   // which fills in the database id from the ACCOUNT_D1_ID repository
-  // variable. Secrets are set once with `wrangler secret put` (see README).
+  // variable. Secrets are set once with `wrangler secret put`.
   "name": "otakase-account",
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
