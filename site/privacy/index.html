@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>otakase · Privacy</title>
+<meta name="description" content="What the Otakase app, the Otakase account and the Discord bot keep about you.">
+<meta name="theme-color" content="#0e0d0c">
+<link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../img/favicon-32.png" sizes="32x32">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root { --bg: #0e0d0c; --fg: #ece4d6; --accent: #d2492f; --muted: #a39b8e; --line: #2a2724; color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--fg); padding: 48px 16px 64px;
+         font: 15px/1.7 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; display: grid; gap: 18px; }
+  h1 { font: 34px/1.1 'Archivo Black', 'Arial Black', Impact, sans-serif; letter-spacing: 1px; text-transform: uppercase; }
+  h2 { font: 600 13px/1.4 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 3px; text-transform: uppercase;
+       color: var(--accent); margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+  p, li { color: var(--fg); }
+  ul { padding-left: 20px; display: grid; gap: 6px; }
+  .muted { color: var(--muted); }
+  a { color: var(--fg); text-decoration-color: var(--accent); text-underline-offset: 3px; }
+  a.back { color: var(--muted); font: 12px/1.7 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 3px; text-transform: uppercase; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="../">← otakase.com</a>
+  <h1>Privacy</h1>
+  <p class="muted">Last updated 12 November 2026</p>
+  <p>Otakase is a free app with no ads. Nothing about you is sold or shared for advertising. This page says what is kept, where, and how to remove it.</p>
+
+  <h2>The app on your device</h2>
+  <p>Your watch history, settings, profiles and downloads stay on your device. When you sign in to AniList, MyAnimeList or Trakt, the app talks to those services directly with your login; Otakase's servers never see those passwords. Update checks ask otakase.com which version is newest and send nothing about you.</p>
+
+  <h2>The Otakase account</h2>
+  <p>An Otakase account is optional. You sign in with Discord or Google. The account keeps:</p>
+  <ul>
+    <li>Your Discord or Google user id, the name and picture from that login, and for Google sign-ins the email address, so you can tell your sign-ins apart.</li>
+    <li>Your devices: the name you gave each one, its system, app version and when it was last used.</li>
+    <li>What you choose to sync: profiles, settings, where you stopped watching and choices you made per show.</li>
+    <li>Your AniList, MyAnimeList and Trakt logins, encrypted on your devices before they are sent. The server cannot read them, and there is no way to recover them if you lose every device.</li>
+  </ul>
+  <p>The account runs on Cloudflare. Its database is kept in the European Union. A copy is saved once a week to a private server run by the developer, so an outage can't lose your account.</p>
+  <p>If you link Discord, the Otakase Discord bot receives your Discord id so it can send your app news, new episode alerts and replies, and post the problem reports you send.</p>
+
+  <h2>Removing your data</h2>
+  <p>In the app, open your Otakase account. <b>Export my data</b> saves everything the account keeps as a file. <b>Delete account</b> removes the account, its devices and everything it synced at once. The next weekly copy no longer has it; older weekly copies stay only on the developer's private backup server.</p>
+
+  <h2>The website</h2>
+  <p>otakase.com sets no cookies. Cloudflare, which serves the site, may count visits without cookies and without following you across sites.</p>
+
+  <h2>Contact</h2>
+  <p>Questions or requests: ask in the <a href="../discord/">Otakase Discord server</a>.</p>
+</main>
+</body>
+</html>
