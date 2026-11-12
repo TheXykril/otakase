@@ -211,7 +211,6 @@ class DiscordService extends ChangeNotifier {
   void _startLinked() {
     if (!linked || viaAccount) return;
     unawaited(heartbeat(null, 0, 0));
-    unawaited(claimPendingGrass());
     _scheduleInbox(Duration.zero);
   }
 
@@ -668,23 +667,6 @@ class DiscordService extends ChangeNotifier {
     }
   }
 
-  Future<void> claimPendingGrass({
-    Duration timeout = const Duration(seconds: 5),
-  }) async {
-    if (!linked || store.text('TouchGrass') != 'pending') return;
-    try {
-      await request(
-        'POST',
-        '/v1/badge/touch-grass',
-        body: {},
-        timeout: timeout,
-      );
-      if (!closed) await store.set('TouchGrass', 'claimed');
-    } catch (e) {
-      _error(e);
-    }
-  }
-
   Future<String> exitGreeting({int Function(int)? roll}) async {
     final choose = roll ?? Random.secure().nextInt;
     final rare = choose(100) == 0;
@@ -695,13 +677,7 @@ class DiscordService extends ChangeNotifier {
             'Plot twist: you go touch grass now.',
           ]
         : const ['Mata ne!', 'Otsukare! Rest those eyes.'];
-    final greeting = greetings[choose(greetings.length)];
-    if (rare && store.text('TouchGrass').isEmpty && choose(10) == 0) {
-      await store.set('TouchGrass', 'pending');
-      await claimPendingGrass(timeout: const Duration(seconds: 3));
-      return '$greeting\nRare drop: the Touch Grass badge for the Otakase Discord.';
-    }
-    return greeting;
+    return greetings[choose(greetings.length)];
   }
 
   void _error(Object e) {

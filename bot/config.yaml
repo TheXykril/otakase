@@ -1,6 +1,6 @@
 # Home Assistant add-on for the Discord bot.
 name: Otakase Bot
-version: "1.31.0"
+version: "1.32.0"
 slug: otakase_bot
 description: Discord bot for the Otakase community server
 url: https://github.com/TheXykril/otakase
@@ -34,12 +34,13 @@ options:
   warning_days: 90
   season_preview: true
   helper_points: 5
-  watch_torrent_max_gib: 4
-  watch_torrent_storage_gib: 8
   discord_client_secret: ""
   mal_client_id: ""
   mal_client_secret: ""
-  watch_cdn: ""
+  account_url: "https://account.otakase.com"
+  account_secret: ""
+  cloudflare_api_token: ""
+  cloudflare_account_id: ""
 schema:
   token: password
   guild_id: str
@@ -54,9 +55,10 @@ schema:
   warning_days: int(0,3650)
   season_preview: bool?
   helper_points: int(1,1000)?
-  watch_torrent_max_gib: int(1,16)?
-  watch_torrent_storage_gib: int(2,32)?
   discord_client_secret: password?
   mal_client_id: str?
   mal_client_secret: password?
-  watch_cdn: str?
+  account_url: url?
+  account_secret: password?
+  cloudflare_api_token: password?
+  cloudflare_account_id: str?

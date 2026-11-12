@@ -1,4 +1,4 @@
-// The Otakase Activity: the watch room (watch.js), a menu of games played alone (the daily
+// The Otakase Activity: a menu of games played alone (the daily
 // puzzle, guess the anime, higher or lower, emoji riddles, title scramble,
 // the puzzles: zoomed cover, timeline, connections, redacted, anime grid,
 // hangman, wordle, quiz, two truths and a lie; watch bingo), games played
@@ -19,7 +19,7 @@ let daily = null;
 let busy = false;
 let freshDaily = false;
 let where = ""; // "menu", "party" or "" for any other page
-let launchMode = ""; // empty for the full Activity, "games" or "watch" for shortcuts
+let launchMode = ""; // empty for the full Activity, "games" for the games shortcut
 let gamesOff = []; // games staff turned off
 let pranks = new Set(); // prank switches an admin put on this screen
 
@@ -79,7 +79,6 @@ const ICONS = {
   ff: '<path d="M3 5v14l9-7zM12 5v14l9-7z"/>',
   message: '<path d="M4 5h16v11H9l-5 4z"/>',
   send: '<path d="M3 11l18-8-8 18-2-8z"/>',
-  watch: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4M10 8.5v5l4-2.5z"/>',
 };
 const icon = (name) =>
   `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -94,7 +93,6 @@ const stamp = (ok) =>
 
 // preview draws a tiny picture of each game for its menu card.
 const PREVIEWS = {
-  watch: () => `<div class="pv watch"><i>${icon("play")}</i><b><u></u></b></div>`,
   party: () => `<div class="pv party" id="pvparty">${faces()}</div>`,
   daily: () => `<div class="pv daily">${["yes", "no", "near", "yes", "no", "yes", "near", "yes"].map((h) => `<i class="${h}"></i>`).join("")}</div>`,
   guess: () => `<div class="pv guess">${Array.from({ length: 24 }, (_, k) => `<i style="opacity:${[0.25, 0.45, 0.7, 1][(k * 7) % 4]}"></i>`).join("")}</div>`,
@@ -116,7 +114,6 @@ const PREVIEWS = {
     `<div class="pv wordle">${["no", "near", "yes", "no", "yes"].map((h, k) => `<i class="${h}">${"TITAN"[k]}</i>`).join("")}</div>`,
 };
 const JP = {
-  watch: "みる",
   party: "みんなで",
   koikoi: "はなふだ",
   daily: "デイリー",
@@ -138,7 +135,6 @@ const JP = {
 };
 
 const GAMES = [
-  { key: "watch", color: "#e8664b", big: true, name: "Watch room", text: "The bot plays an anime for everyone in this call, in step. Opening one takes a watch ticket." },
   { key: "party", color: "#d2492f", big: true, name: "Play together", text: "Everyone in this call, one game: quiz show, imposter, draw it, hot potato and more." },
   { key: "daily", color: "#ef6a4c", big: true, name: "Daily puzzle", text: "One show a day for everyone. 8 tries." },
   { key: "koikoi", color: "#c9a227", name: "Koi-Koi", text: "Hanafuda, the flower card game, with anime covers. Play bots or the whole call." },
@@ -299,9 +295,8 @@ function openLink(url) {
 
 function page(title, body) {
   clearTimeout(pending);
-  if (where === "watch") watchLeave();
   where = "";
-  app.innerHTML = `${launchMode === "watch" ? "" : `<button class="back" id="back">${icon("back")} Games</button>`}<header><h1>${title}</h1><span class="pill" id="side" hidden></span></header>${body}`;
+  app.innerHTML = `<button class="back" id="back">${icon("back")} Games</button><header><h1>${title}</h1><span class="pill" id="side" hidden></span></header>${body}`;
   const back = document.getElementById("back");
   if (back) back.onclick = menu;
   enter();
@@ -332,7 +327,7 @@ async function start() {
   const { code } = await authorize(DS_SCOPES).catch(() => authorize(["identify"]));
   const tok = await api("token", { code });
   session = tok.session;
-  launchMode = ["games", "watch"].includes(tok.mode) ? tok.mode : "";
+  launchMode = tok.mode === "games" ? "games" : "";
   me = tok.name || "";
   try {
     const auth = await sdk.commands.authenticate({ access_token: tok.access_token });
@@ -344,32 +339,25 @@ async function start() {
   room = String(sdk.instanceId || channel || "solo").replace(/[^A-Za-z0-9_.:-]/g, "").slice(0, 100) || "solo";
   [titles, daily] = await Promise.all([api("titles"), api("daily").catch(() => null)]);
   joinRoom();
-  if (launchMode === "watch") watchView().catch(showError);
-  else menu();
+  menu();
 }
 
 // ── Menu ──
 
 function menu() {
-  if (launchMode === "watch") {
-    if (where !== "watch") watchView().catch(showError);
-    return;
-  }
   clearTimeout(pending);
-  if (where === "watch") watchLeave();
   where = "menu";
   const tag = (g) => {
     if (g.key === "party") return `<span class="tag live" id="ptag">${partyTag()}</span>`;
-    if (g.key === "watch") return `<span class="tag live" id="wtag" hidden></span>`;
     if (g.key !== "daily" || !daily) return "";
     if (daily.play.done) return `<span class="tag done">#${daily.num} · ${esc(daily.score)}</span>`;
     return `<span class="tag live">#${daily.num} · ${daily.play.guesses.length}/${daily.tries} · today's puzzle</span>`;
   };
   app.innerHTML = `
-    <header class="hero"><div><h1>Otakase <span>Activity</span></h1><p class="sub">${launchMode === "games" ? "Pick a game to play." : "Watch anime together or pick a game to play."}</p></div>${
+    <header class="hero"><div><h1>Otakase <span>Activity</span></h1><p class="sub">Pick a game to play.</p></div>${
       me ? `<span class="pill">${esc(me)}</span>` : ""
     }<div class="dshere" id="dshere" data-label="In this Activity" hidden></div></header>
-    <div class="menu">${GAMES.filter((g) => launchMode !== "games" || g.key !== "watch").map(
+    <div class="menu">${GAMES.map(
       (g, i) =>
         `<button class="card${g.big ? " big" : ""}${gamesOff.includes(g.key) ? " off" : ""}" data-game="${g.key}" style="--c:${g.color};--i:${i}"><span class="jp">${JP[g.key]}</span>${PREVIEWS[
           g.key
@@ -378,25 +366,11 @@ function menu() {
   dsHereDraw();
   dsGameActivity("");
   app.querySelectorAll("[data-game]").forEach((el) => (el.onclick = () => (el.classList.contains("off") ? message("Staff turned this game off for now.") : open(el.dataset.game))));
-  // Watch rooms running anywhere show on its tile; an 18+ one only as a room.
-  api(`watch/status?room=${encodeURIComponent(room)}`)
-    .then((st) => {
-      const tag = document.getElementById("wtag");
-      if (!tag || !st.busy) return;
-      const other = (st.rooms || [])[0];
-      tag.textContent = st.here ? `live in this call · ${st.people} watching`
-        : st.rooms.length > 1 ? `${st.rooms.length} rooms live`
-          : other.show && !other.adult ? `live: ${other.show}${other.ep ? " ep " + other.ep : ""} · ${other.people} watching`
-            : `live in ${other.channel_name ? "#" + other.channel_name : "another call"}`;
-      tag.hidden = false;
-    })
-    .catch(() => {});
 }
 
 function open(game) {
-  if ((launchMode === "games" && game === "watch") || (launchMode === "watch" && game !== "watch")) return;
   dsGameActivity(game);
-  const views = { watch: () => watchView(), party: partyView, koikoi: kkOpen, daily: dailyView, guess: soloStart, riddle: soloStart, scramble: soloStart, hl: hlStart, bingo: bingoView, board: boardView };
+  const views = { party: partyView, koikoi: kkOpen, daily: dailyView, guess: soloStart, riddle: soloStart, scramble: soloStart, hl: hlStart, bingo: bingoView, board: boardView };
   Promise.resolve((views[game] || pzOpen)(game)).catch(showError);
 }
 
@@ -2862,16 +2836,13 @@ function musicStop() {
 }
 
 function soundApply() {
-  // Keep the user's music preference, but mute it on Watch Together pages.
-  const playMusic = soundMode === "music" && !document.hidden && where !== "watch";
+  const playMusic = soundMode === "music" && !document.hidden;
   if (!playMusic) {
     musicStop();
   } else if (actx && actx.state !== "running") {
-    // Video playback or Discord can suspend Web Audio while watching.
-    // Resume the existing context after returning to Games, then restore
-    // music only if the user is still on a non-watch page.
+    // Discord can suspend Web Audio; resume it, then the music.
     actx.resume().then(() => {
-      if (soundMode === "music" && !document.hidden && where !== "watch") musicStart();
+      if (soundMode === "music" && !document.hidden) musicStart();
     }).catch(() => {});
   } else {
     musicStart();
@@ -2904,130 +2875,6 @@ function soundApply() {
     sfx("tap");
   };
   soundApply();
-})();
-
-// Account-wide Watch Together defaults. Manual player selections override
-// these settings until Automatic is selected again.
-(function preferencesButton() {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.id = "prefbtn";
-  button.className = "prefbtn";
-  button.innerHTML = icon("settings");
-  button.title = "Watch Together preferences";
-  button.setAttribute("aria-label", "Watch Together preferences");
-  button.setAttribute("aria-expanded", "false");
-  document.getElementById("activitytools").appendChild(button);
-
-  const languages = [
-    ["auto", "Use stream default"], ["ja", "Japanese"], ["en", "English"],
-    ["de", "German"], ["es", "Spanish"], ["fr", "French"],
-    ["hi", "Hindi"], ["it", "Italian"], ["pt", "Portuguese"],
-    ["ta", "Tamil"], ["te", "Telugu"], ["ko", "Korean"],
-    ["zh", "Chinese"], ["ru", "Russian"], ["ar", "Arabic"],
-    ["pl", "Polish"], ["tr", "Turkish"], ["uk", "Ukrainian"],
-    ["id", "Indonesian"], ["nl", "Dutch"], ["th", "Thai"],
-  ];
-  const choices = (firstLabel) => languages.map(([code, name]) =>
-    `<option value="${code}">${esc(code === "auto" ? firstLabel : name)}</option>`).join("");
-
-  button.onclick = async (event) => {
-    event.stopPropagation();
-    if (document.getElementById("prefsoverlay")) return;
-    const layer = document.createElement("div");
-    layer.id = "prefsoverlay";
-    layer.className = "prefsoverlay";
-    layer.innerHTML = `<section class="prefscard" role="dialog" aria-modal="true" aria-labelledby="prefstitle">
-      <div class="prefshead"><h2 id="prefstitle">Watch Together preferences</h2>
-        <button type="button" id="prefsclose" aria-label="Close preferences">${icon("x")}</button></div>
-      <p class="note">These settings belong to your account. Automatic tries your first audio language, then your backup, then the stream default.</p>
-      <label>Preferred audio language<select id="prefaudio">${choices("Stream default")}</select></label>
-      <label>Backup audio language<select id="prefbackup">${choices("Stream default")}</select></label>
-      <label>Subtitles with Japanese audio (sub)<select id="prefsubsub">
-        <option value="auto">Automatic</option><option value="off">Subtitles off</option>
-        ${choices("Automatic").replace('<option value="auto">Automatic</option>', "")}
-      </select></label>
-      <label>Subtitles with other audio (dub)<select id="prefsub">
-        <option value="auto">Automatic</option><option value="off">Subtitles off</option>
-        ${choices("Automatic").replace('<option value="auto">Automatic</option>', "")}
-      </select></label>
-      <p class="note">Manual player choices take priority until you select Automatic again. Unavailable subtitle languages remain off.</p>
-      <div class="prefskips"><span>Skip automatically in rooms you open</span>
-        <label class="wsw"><input type="checkbox" id="prefskipop"> Openings (OP)</label>
-        <label class="wsw"><input type="checkbox" id="prefskiped"> Endings (ED)</label></div>
-      <p class="note">The host can still switch skips on or off for everyone during the room.</p>
-      <p class="prefstatus" id="prefstatus" role="status"></p>
-      <div class="prefsactions"><button type="button" class="btn alt" id="prefcancel">Cancel</button>
-        <button type="button" class="btn" id="prefsave">Save preferences</button></div>
-    </section>`;
-    document.body.appendChild(layer);
-    button.setAttribute("aria-expanded", "true");
-    const audio = layer.querySelector("#prefaudio");
-    const backup = layer.querySelector("#prefbackup");
-    const sub = layer.querySelector("#prefsub");
-    const subSub = layer.querySelector("#prefsubsub");
-    const skipOP = layer.querySelector("#prefskipop");
-    const skipED = layer.querySelector("#prefskiped");
-    const status = layer.querySelector("#prefstatus");
-    const save = layer.querySelector("#prefsave");
-    const available = (el, value) => {
-      el.value = value;
-      if (!el.value) el.value = "auto";
-    };
-    const updateBackup = () => {
-      backup.disabled = audio.value === "auto";
-      if (backup.disabled || backup.value === audio.value) backup.value = "auto";
-    };
-    audio.onchange = updateBackup;
-    backup.onchange = updateBackup;
-    const onKey = (e) => {
-      if (e.key === "Escape") { e.stopPropagation(); close(); }
-    };
-    const close = () => {
-      document.removeEventListener("keydown", onKey, true);
-      layer.remove();
-      button.setAttribute("aria-expanded", "false");
-      button.focus();
-    };
-    document.addEventListener("keydown", onKey, true);
-    layer.addEventListener("click", (e) => { if (e.target === layer) close(); });
-    layer.querySelector("#prefsclose").onclick = close;
-    layer.querySelector("#prefcancel").onclick = close;
-    save.disabled = true;
-    status.textContent = "Loading your preferences…";
-    try {
-      const current = await api("watch/preferences");
-      if (!layer.isConnected) return;
-      available(audio, current.audio || "auto");
-      available(backup, current.backup_audio || "auto");
-      available(sub, current.subtitles || "auto");
-      available(subSub, current.sub_subtitles || "auto");
-      skipOP.checked = !!current.skip_op;
-      skipED.checked = !!current.skip_ed;
-      updateBackup();
-      save.disabled = false;
-      status.textContent = "";
-      audio.focus();
-    } catch (error) {
-      status.textContent = error.message;
-      return;
-    }
-    save.onclick = async () => {
-      save.disabled = true;
-      status.textContent = "Saving…";
-      try {
-        const saved = await api("watch/preferences", {
-          audio: audio.value, backup_audio: backup.value, subtitles: sub.value, sub_subtitles: subSub.value,
-          skip_op: skipOP.checked, skip_ed: skipED.checked,
-        });
-        if (typeof wPreferencesChanged === "function") wPreferencesChanged(saved);
-        close();
-      } catch (error) {
-        save.disabled = false;
-        status.textContent = error.message;
-      }
-    };
-  };
 })();
 
 // The first tap anywhere wakes the audio (browsers block it before).
@@ -3412,7 +3259,7 @@ function admButton(v) {
 function admDo(kind, target = "", text = "", n = 0) {
   return api("party/admin", { room, kind, target, text, n })
     .then((v) => {
-      admNote = kind === "tickets" ? `Balance: ${v.balance} watch tickets.` : "Done.";
+      admNote = "Done.";
       if (v.view) setRoom(v.view);
       else if (document.getElementById("admsheet")) admSheet();
     })
@@ -3576,7 +3423,7 @@ function admSheet() {
     })
     .join("");
   const scroll = el.closest(".modal").scrollTop;
-  const boxes = ["ahint", "aname", "apup", "awarn", "aoff", "aticketuser", "aticketcount"];
+  const boxes = ["ahint", "aname", "apup", "awarn", "aoff"];
   const kept = {};
   for (const id of boxes) {
     const b = document.getElementById(id);
@@ -3587,10 +3434,6 @@ function admSheet() {
     <p class="note">${running ? esc(game) + (tv.paused ? " · paused" : "") : "In the lobby"} · ${tv.members.length} here. Pranks end when the game does; moderation steps go to the staff log.</p>
     ${gameBtns ? `<h3 class="lh">This game</h3><div class="abtns">${gameBtns}</div>` : ""}
     <h3 class="lh">Room and server</h3><div class="abtns">${roomBtns}</div><div class="ahint">${offRow}</div>
-    ${a.owner ? `<h3 class="lh">Watch tickets</h3><p class="note">Server owner only. Enter a Discord user ID and select a ticket adjustment.</p>
-      <div class="ahint"><input id="aticketuser" inputmode="numeric" placeholder="Discord user ID" maxlength="20" value="${esc(admPick || "")}">
-      <input id="aticketcount" type="number" min="1" max="100" value="1" aria-label="Ticket amount"></div>
-      <div class="abtns">${btn("tickets", "Add tickets", { n: 1 })}${btn("tickets", "Remove tickets", { n: -1 })}</div>` : ""}
     <h3 class="lh">Pranks for everyone</h3><div class="abtns">${fun}</div>
     <h3 class="lh">Players</h3><div class="arows">${rows}</div>
     <p class="anote" role="status">${esc(admNote)}</p>`;
@@ -3615,20 +3458,8 @@ function admSheet() {
         const from = { hint: "ahint", rename: "aname", puppet: "apup", warn: "awarn", "game-off": "aoff" }[b.dataset.k];
         if (from) text = (document.getElementById(from) || {}).value || "";
         if (b.dataset.k === "puppet" || b.dataset.k === "warn") (document.getElementById(from) || {}).value = "";
-        let target = b.dataset.t;
-        let amount = +b.dataset.n;
-        if (b.dataset.k === "tickets") {
-          target = (document.getElementById("aticketuser") || {}).value?.trim() || "";
-          const n = +(document.getElementById("aticketcount") || {}).value;
-          if (!/^\d{17,20}$/.test(target) || !Number.isInteger(n) || n < 1 || n > 100) {
-            admNote = "Enter a Discord user ID and 1 to 100 tickets.";
-            admSheet();
-            return;
-          }
-          amount *= n;
-        }
         b.disabled = true;
-        admDo(b.dataset.k, target, text, amount);
+        admDo(b.dataset.k, b.dataset.t, text, +b.dataset.n);
       })
   );
 }

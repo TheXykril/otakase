@@ -16,7 +16,7 @@ import (
 // lists kept in line by the bot, the way the app does at launch: for every
 // show on both lists that the trackers disagree on (status or episodes
 // watched), the newer change is written to the other tracker. It runs in the
-// background when a member opens the Activity or the watch room's picker, at
+// background when a member opens the Activity, at
 // most once per trackerSyncEvery. Shows on only one list are left alone:
 // copying whole lists over is the app's tracker sync action, which asks first.
 
@@ -217,7 +217,7 @@ func (b *bot) syncTrackersSoon(user string) {
 			trackerSyncs.Unlock()
 		}()
 		if n, err := b.syncTrackers(user, al, mal); err != nil {
-			logWatchErr("tracker sync", user, err)
+			log.Printf("tracker sync of member %s: %v", user, err)
 		} else if n > 0 {
 			log.Printf("tracker sync of member %s: %d update(s)", user, n)
 		}
@@ -260,12 +260,6 @@ func (b *bot) syncTrackers(user string, al anilistLink, mal malLink) (int, error
 		}
 		written++
 		trackerSyncPause()
-	}
-	if written > 0 {
-		// The picker's lists read the trackers again next time.
-		watchListCache.Lock()
-		delete(watchListCache.m, user)
-		watchListCache.Unlock()
 	}
 	return written, nil
 }

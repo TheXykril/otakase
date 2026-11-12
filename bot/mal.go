@@ -8,8 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -18,8 +16,8 @@ import (
 
 // MyAnimeList links: /link-mal gives a member a button to sign in on
 // myanimelist.net; MAL sends them back to /v1/mal/callback on the public API
-// and the bot keeps the token, so the watch room can move their MAL list on
-// like their AniList one. Needs a MAL API app (myanimelist.net/apiconfig)
+// and the bot keeps the token, so tracker sync can keep their MAL list in
+// line with their AniList one. Needs a MAL API app (myanimelist.net/apiconfig)
 // with the callback as its App Redirect URL, set as mal_client_id and
 // mal_client_secret. MAL only offers PKCE "plain", so the verifier is the
 // challenge.
@@ -92,9 +90,9 @@ func (f *malFlows) take(key string, now time.Time) (malFlow, bool) {
 var malLimit = newRateLimit(20, time.Minute)
 
 func init() {
-	registerCommand(&discordgo.ApplicationCommand{Name: "link-mal", Description: "Link your MyAnimeList account so the watch room updates it"}, (*bot).linkMALCommand)
+	registerCommand(&discordgo.ApplicationCommand{Name: "link-mal", Description: "Link your MyAnimeList account so it stays in line with your AniList"}, (*bot).linkMALCommand)
 	registerCommand(&discordgo.ApplicationCommand{Name: "unlink-mal", Description: "Remove your linked MyAnimeList account"}, (*bot).unlinkMALCommand)
-	registerHelp("`/link-mal` links MyAnimeList, so episodes you watch in the watch room count on your list")
+	registerHelp("`/link-mal` links MyAnimeList, so it stays in line with your AniList list")
 	apiHandle("GET /v1/mal", (*bot).apiMALStart)
 	apiHandle("GET /v1/mal/callback", (*bot).apiMALCallback)
 }
@@ -106,7 +104,7 @@ func (b *bot) linkMALCommand(i *discordgo.InteractionCreate) {
 	}
 	user := interactionUser(i).ID
 	start := malStarts.add(user, "", appNow())
-	desc := "Press the button, sign in on MyAnimeList and press **Allow**. Episodes you watch in the watch room then count on your MAL list too. `/unlink-mal` removes it.\n\nThe button works once, for 10 minutes."
+	desc := "Press the button, sign in on MyAnimeList and press **Allow**. Your MAL list then stays in line with your AniList one. `/unlink-mal` removes it.\n\nThe button works once, for 10 minutes."
 	var l malLink
 	var had bool
 	b.store.view(func(d *storeData) { l, had = d.MAL[user] })
@@ -198,7 +196,7 @@ func (b *bot) apiMALCallback(w http.ResponseWriter, r *http.Request) {
 		d.MAL[flow.user] = l
 	})
 	log.Printf("mal linked for member %s", flow.user)
-	linkedRolePage(w, http.StatusOK, "Done", fmt.Sprintf("Linked to MyAnimeList %s. Episodes you watch in the watch room now count there too. Go back to Discord.", me.Name))
+	linkedRolePage(w, http.StatusOK, "Done", fmt.Sprintf("Linked to MyAnimeList %s. It now stays in line with your AniList list. Go back to Discord.", me.Name))
 }
 
 type malTokenAnswer struct {
@@ -259,56 +257,4 @@ func malGet(token, path string, out any) error {
 	req, _ := http.NewRequest("GET", malAPI+path, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	return getJSON(req, out)
-}
-
-// malProgress moves a member's MAL list to episode, the same way
-// anilistProgress does AniList's.
-func (b *bot) malProgress(user string, l malLink, show watchShow, episode int) (bool, error) {
-	if !b.malReady() {
-		return false, nil
-	}
-	l, err := b.freshMAL(user, l)
-	if err != nil {
-		return false, err
-	}
-	var cur struct {
-		NumEpisodes int `json:"num_episodes"`
-		Status      *struct {
-			Status      string `json:"status"`
-			Watched     int    `json:"num_episodes_watched"`
-			IsRewatched bool   `json:"is_rewatching"`
-		} `json:"my_list_status"`
-	}
-	if err := malGet(l.AccessToken, "/anime/"+strconv.Itoa(show.MalID)+"?fields=num_episodes,my_list_status", &cur); err != nil {
-		return false, err
-	}
-	status := "watching"
-	if s := cur.Status; s != nil {
-		if s.Status == "completed" && !s.IsRewatched || s.Watched >= episode {
-			return false, nil
-		}
-		if s.IsRewatched {
-			status = s.Status
-		}
-	}
-	total := cur.NumEpisodes
-	if total == 0 {
-		total = show.Episodes
-	}
-	if total > 0 && episode >= total && status == "watching" {
-		status = "completed"
-	}
-	form := url.Values{"num_watched_episodes": {strconv.Itoa(episode)}, "status": {status}}
-	req, _ := http.NewRequest("PATCH", malAPI+"/anime/"+strconv.Itoa(show.MalID)+"/my_list_status", strings.NewReader(form.Encode()))
-	req.Header.Set("Authorization", "Bearer "+l.AccessToken)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := activityClient.Do(req)
-	if err != nil {
-		return false, errors.New("couldn't reach MyAnimeList")
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("list update: MyAnimeList answered %s", resp.Status)
-	}
-	return true, nil
 }

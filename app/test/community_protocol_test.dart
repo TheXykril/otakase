@@ -289,37 +289,26 @@ void main() {
     await f.store.set('DiscordShareRatings', 'never');
     expect(f.discord.ratingWanted(show, 8), false);
   });
-  test('Touch Grass uses 1/100 then 1/10, pending survives offline and claims once', () async {
-    var offline = true, calls = 0;
-    final f = await discordFixture((r) async {
-      calls++;
-      if (offline) throw const SocketException('offline');
-      return json({'new': true, 'finders': 2});
-    });
-    final odds = <int>[];
-    final line = await f.discord.exitGreeting(
-      roll: (n) {
-        odds.add(n);
-        return 0;
-      },
-    );
-    expect(odds, [100, 3, 10]);
-    expect(line, contains('Rare drop'));
-    expect(f.store.text('TouchGrass'), 'pending');
-    offline = false;
-    await f.discord.claimPendingGrass();
-    expect(f.store.text('TouchGrass'), 'claimed');
-    await f.discord.claimPendingGrass();
-    expect(calls, 2);
-    odds.clear();
-    await f.discord.exitGreeting(
-      roll: (n) {
-        odds.add(n);
-        return 0;
-      },
-    );
-    expect(odds, [100, 3]);
-  });
+  test(
+    'exit greetings: one in a hundred is a touch-grass line, nothing is sent',
+    () async {
+      var calls = 0;
+      final f = await discordFixture((r) async {
+        calls++;
+        return json({});
+      });
+      final odds = <int>[];
+      final line = await f.discord.exitGreeting(
+        roll: (n) {
+          odds.add(n);
+          return 0;
+        },
+      );
+      expect(odds, [100, 3]);
+      expect(line, contains('touch grass'));
+      expect(calls, 0);
+    },
+  );
   test('Continue hides caught-up airing and finished shows, preserves real resume and filters', () {
     final airing = Anime(
       id: 1,
@@ -396,80 +385,6 @@ void main() {
     },
   );
   test(
-    'capsule date, replacement, due letters and storage match birthday rules',
-    () async {
-      final f = await discordFixture((r) async => json({}, 404), linked: false);
-      final auth = AuthService(
-        client: MockClient((r) async => json({})),
-        storage: MemoryTokens(),
-      );
-      final h = Heritage(
-        f.store,
-        StatsRepository(auth),
-        f.discord,
-        now: () => date,
-      );
-      expect(nextBirthday(DateTime(2027, 4, 11)), 2027);
-      expect(nextBirthday(date), 2028);
-      expect(
-        capsuleDate(current: date, override: '2030-04-12', debug: false),
-        date,
-      );
-      expect(
-        capsuleDate(current: date, override: '2030-04-12', debug: true),
-        DateTime(2030, 4, 12, 10),
-      );
-      expect(
-        capsuleDate(current: date, override: '2030-02-30', debug: true),
-        date,
-      );
-      await h.writeLetter('first', snapshot: const WatchStats(episodes: 10));
-      await h.writeLetter('replacement');
-      expect(h.letters.length, 1);
-      expect(h.pending!['text'], 'replacement');
-      expect(h.dueLetters(2027), isEmpty);
-      expect(h.dueLetters(2029), [0]);
-      await h.markOpened(0);
-      expect(h.dueLetters(2029), isEmpty);
-      await h.markOffered(2027);
-      await h.birthdayCommunity(2027);
-      expect(h.capsule['offered'], 2027);
-      expect(h.capsule['community_shown'], 2027);
-      auth.dispose();
-    },
-  );
-  test('capsule community uses existing API and retains server errors for revision', () async {
-    final calls = <http.Request>[];
-    final f = await discordFixture((r) async {
-      calls.add(r);
-      if (r.method == 'POST' && r.url.path == '/v1/capsule') {
-        return json({'error': 'Please revise this message'}, 422);
-      }
-      return json({'text': 'old', 'opens': 2028});
-    });
-    final auth = AuthService(
-      client: MockClient((r) async => json({})),
-      storage: MemoryTokens(),
-    );
-    final h = Heritage(
-      f.store,
-      StatsRepository(auth),
-      f.discord,
-      now: () => date,
-    );
-    expect((await h.communityMine())!['text'], 'old');
-    await expectLater(
-      h.writeCommunity('🦊' * 350),
-      throwsA(isA<BotFailure>().having((e) => e.status, 'status', 422)),
-    );
-    expect((jsonDecode(calls.last.body)['text'] as String).runes.length, 300);
-    await h.reportCommunity('id');
-    expect(jsonDecode(calls.last.body), {'id': 'id'});
-    await h.removeCommunity();
-    expect(calls.last.method, 'DELETE');
-    auth.dispose();
-  });
-  test(
     'milestones baseline quietly, highest threshold once, remote progress only',
     () async {
       expect(milestoneToCelebrate(600, 0, false), (play: 0, record: 500));
@@ -493,7 +408,7 @@ void main() {
         }),
       );
       auth.accounts['AniList'] = account('AniList');
-      final h = Heritage(f.store, StatsRepository(auth), f.discord);
+      final h = Heritage(f.store, StatsRepository(auth));
       expect(await h.milestoneOnExit(), 0);
       expect(calls, 0);
       h.progressWritten = true;

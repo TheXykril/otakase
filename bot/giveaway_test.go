@@ -37,30 +37,6 @@ func TestHankoEarnSpend(t *testing.T) {
 	}
 }
 
-func TestMintedCodes(t *testing.T) {
-	b := cheatTestBot(t)
-	var codes []string
-	b.store.update(func(d *storeData) { codes = mintCodes(d, "staff", "Oct giveaway", 3, appNow()) })
-	if len(codes) != 3 {
-		t.Fatal(codes)
-	}
-	x, err := b.redeemCheat("u1", formatCheatCode(codes[0]), appNow())
-	if err != nil || x.Note != "Oct giveaway" {
-		t.Fatalf("redeem %+v %v", x, err)
-	}
-	if _, err := b.redeemCheat("u2", codes[0], appNow()); err != errLinkNotFound {
-		t.Errorf("second redeem: %v", err)
-	}
-	b.store.view(func(d *storeData) {
-		if d.WatchTickets["u1"] != 1 || len(unusedMinted(d)) != 2 {
-			t.Errorf("tickets %v unused %v", d.WatchTickets, unusedMinted(d))
-		}
-		if _, _, found := weekCode(d, "staff", appNow()); found {
-			t.Error("minting must not count as finding a code")
-		}
-	})
-}
-
 func TestGiveawayShop(t *testing.T) {
 	var d storeData
 	g := gaTest(2)

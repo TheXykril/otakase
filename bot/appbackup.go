@@ -94,7 +94,7 @@ func (b *bot) apiBackupSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var link appLink
-	h := hashToken(bearerToken(r))
+	h := b.callerKey(r)
 	now := appNow()
 	b.store.update(func(d *storeData) {
 		link = d.AppLinks[h]

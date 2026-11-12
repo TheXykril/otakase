@@ -272,7 +272,7 @@ class _OtakaseMovieState extends State<OtakaseMovie> {
                                         ? '${widget.milestone} episodes. A milestone worth keeping.\n'
                                         : stats != null && stats!.completed > 0
                                         ? '${stats!.completed} endings, and still curious.\n'
-                                        : ''}${widget.services.store.text('TouchGrass').isNotEmpty ? 'Touch Grass\n' : ''}The one who stayed for the credits.',
+                                        : ''}The one who stayed for the credits.',
                                     textAlign: TextAlign.center,
                                     style: uiStyle(
                                       context,

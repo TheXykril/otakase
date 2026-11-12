@@ -42,7 +42,7 @@ type config struct {
 	LoungeChannel      string // default watch party voice channel
 	DailyAiring        bool
 	AiringHour         int    // UTC hour the airing post goes out
-	OtakaseHelper      string // otakase-helper binary: watch room lookups, /provider-status
+	OtakaseHelper      string // otakase-helper binary: /provider-status
 	OllamaURL          string // Ollama for matching questions by meaning, empty = off
 	EmbedModel         string
 	AIThreshold        float64
@@ -58,7 +58,10 @@ type config struct {
 	DiscordSecret      string   // the Discord app's client secret, for the daily puzzle Activity
 	MALClientID        string   // MyAnimeList API app for /link-mal, empty = off
 	MALSecret          string   // that app's client secret
-	WatchCDN           string   // Discord URL mapping path of the edge cache Worker, e.g. /.proxy/cdn; empty = off
+	AccountURL         string   // the Otakase account server
+	AccountSecret      string   // shared with the account server, empty = off
+	CloudflareToken    string   // Cloudflare API token with Account Analytics read, for the free limit warning
+	CloudflareAccount  string   // the Cloudflare account id the account server runs in
 }
 
 // loadEnvFile sets variables from a KEY=value file, keeping any that are
@@ -88,25 +91,26 @@ func loadEnvFile(path string) {
 
 // haOptions maps Home Assistant add-on options to environment variables.
 var haOptions = map[string]string{
-	"token":                     "DISCORD_BOT_TOKEN",
-	"guild_id":                  "OTAKASE_GUILD_ID",
-	"github_token":              "GITHUB_TOKEN",
-	"welcome_dm":                "OTAKASE_WELCOME_DM",
-	"daily_airing":              "OTAKASE_DAILY_AIRING",
-	"airing_hour_utc":           "OTAKASE_AIRING_HOUR",
-	"ollama_url":                "OTAKASE_OLLAMA_URL",
-	"anilist_client_id":         "OTAKASE_ANILIST_CLIENT_ID",
-	"anilist_secret":            "OTAKASE_ANILIST_SECRET",
-	"public_port":               "OTAKASE_PUBLIC_PORT",
-	"warning_days":              "OTAKASE_WARNING_DAYS",
-	"season_preview":            "OTAKASE_SEASON_PREVIEW",
-	"helper_points":             "OTAKASE_HELPER_POINTS",
-	"watch_torrent_max_gib":     "OTAKASE_WATCH_TORRENT_MAX_GIB",
-	"watch_torrent_storage_gib": "OTAKASE_WATCH_TORRENT_STORAGE_GIB",
-	"discord_client_secret":     "OTAKASE_DISCORD_CLIENT_SECRET",
-	"mal_client_id":             "OTAKASE_MAL_CLIENT_ID",
-	"mal_client_secret":         "OTAKASE_MAL_CLIENT_SECRET",
-	"watch_cdn":                 "OTAKASE_WATCH_CDN",
+	"token":                 "DISCORD_BOT_TOKEN",
+	"guild_id":              "OTAKASE_GUILD_ID",
+	"github_token":          "GITHUB_TOKEN",
+	"welcome_dm":            "OTAKASE_WELCOME_DM",
+	"daily_airing":          "OTAKASE_DAILY_AIRING",
+	"airing_hour_utc":       "OTAKASE_AIRING_HOUR",
+	"ollama_url":            "OTAKASE_OLLAMA_URL",
+	"anilist_client_id":     "OTAKASE_ANILIST_CLIENT_ID",
+	"anilist_secret":        "OTAKASE_ANILIST_SECRET",
+	"public_port":           "OTAKASE_PUBLIC_PORT",
+	"warning_days":          "OTAKASE_WARNING_DAYS",
+	"season_preview":        "OTAKASE_SEASON_PREVIEW",
+	"helper_points":         "OTAKASE_HELPER_POINTS",
+	"discord_client_secret": "OTAKASE_DISCORD_CLIENT_SECRET",
+	"mal_client_id":         "OTAKASE_MAL_CLIENT_ID",
+	"mal_client_secret":     "OTAKASE_MAL_CLIENT_SECRET",
+	"account_url":           "OTAKASE_ACCOUNT_URL",
+	"account_secret":        "OTAKASE_ACCOUNT_SECRET",
+	"cloudflare_api_token":  "OTAKASE_CLOUDFLARE_TOKEN",
+	"cloudflare_account_id": "OTAKASE_CLOUDFLARE_ACCOUNT",
 }
 
 // loadHAOptions sets variables from a Home Assistant add-on options file,
@@ -159,7 +163,13 @@ func loadConfig() config {
 		DiscordSecret:      strings.TrimSpace(os.Getenv("OTAKASE_DISCORD_CLIENT_SECRET")),
 		MALClientID:        strings.TrimSpace(os.Getenv("OTAKASE_MAL_CLIENT_ID")),
 		MALSecret:          strings.TrimSpace(os.Getenv("OTAKASE_MAL_CLIENT_SECRET")),
-		WatchCDN:           strings.TrimSpace(os.Getenv("OTAKASE_WATCH_CDN")),
+		AccountURL:         strings.TrimRight(strings.TrimSpace(os.Getenv("OTAKASE_ACCOUNT_URL")), "/"),
+		AccountSecret:      strings.TrimSpace(os.Getenv("OTAKASE_ACCOUNT_SECRET")),
+		CloudflareToken:    strings.TrimSpace(os.Getenv("OTAKASE_CLOUDFLARE_TOKEN")),
+		CloudflareAccount:  strings.TrimSpace(os.Getenv("OTAKASE_CLOUDFLARE_ACCOUNT")),
+	}
+	if c.AccountURL == "" {
+		c.AccountURL = "https://account.otakase.com"
 	}
 	if h, err := strconv.Atoi(os.Getenv("OTAKASE_AIRING_HOUR")); err == nil && h >= 0 && h < 24 {
 		c.AiringHour = h
@@ -210,7 +220,6 @@ type bot struct {
 	solo      soloRounds
 	pz        pzBoards
 	together  togetherRooms
-	watch     watchRooms
 	xp        xpTracker
 	msgs      *msgCache
 	verify    verifyRuntime
@@ -305,7 +314,6 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
-	b.saveWatchRooms()
 	b.saveXP()
 	crash.stop()
 }

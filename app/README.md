@@ -60,14 +60,9 @@ preference follows your AniList setting.
 Caught-up airing shows move from Continue to Up next, with the next episode’s countdown.
 More > Discord links each profile with the bot’s `/link-app` command. It receives queued
 shows and remote commands, reports source health, and sends watch time. Sharing title
-details is off by default. Finished scores ask before sharing. More > Time capsule keeps
-a letter and stats for April 12, with optional community messages through Discord. On TV,
+details is off by default. Finished scores ask before sharing. On TV,
 Type on phone opens a temporary page on your local network. Episode milestones and rare
-exit greetings use the same thresholds and badge state as the desktop app.
-
-More > Watch rooms lists rooms your linked Discord account can join. The player follows
-the host, handles ready checks, and lets viewers ask for a pause, jump or next episode.
-The host accepts requests in the player. Room tracking uses the bot's linked trackers.
+exit greetings use the same thresholds as the desktop app.
 This requires the bot from this branch, which accepts linked apps on its existing watch
 routes. Private rooms still require presence in their Discord voice channel and the
 profile's AniList setting must allow them.

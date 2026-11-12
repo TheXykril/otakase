@@ -12,15 +12,13 @@
 // the extra ones down signs in with identify alone.
 const DS_SCOPES = ["identify", "rpc.voice.read", "rpc.activities.write"];
 const DS_ICON = "https://otakase.com/img/icon-512.png";
-const DS_LOCK = { unlocked: 1, portrait: 2, landscape: 3 };
 const DS_LAYOUT = { 0: "focused", 1: "pip", 2: "grid" };
-const DS_DOING = { watch: "Looking for a watch room", party: "Playing party games", board: "Checking the leaderboard", bingo: "Filling a watch bingo card" };
+const DS_DOING = { party: "Playing party games", board: "Checking the leaderboard", bingo: "Filling a watch bingo card" };
 
 let dsMe = ""; // this member's id
 let dsPeople = []; // everyone in this Activity: {id, name}
 let dsPeopleSeen = false; // the first list arrived, so later changes are joins and leaves
 const dsTalking = new Set(); // ids talking in the call right now
-let dsLocked = 0; // the orientation lock last asked for
 let dsActivity = null; // the status line last asked for
 let dsActivityKey = "";
 let dsActivitySent = 0;
@@ -68,7 +66,6 @@ function dsPeopleSet(list) {
   dsPeopleSeen = true;
   for (const id of [...dsTalking]) if (!next.some((p) => p.id === id)) dsTalking.delete(id);
   dsHereDraw();
-  if (typeof wPeople === "function" && where === "watch" && wv) wPeople();
   dsActivityRefresh();
 }
 
@@ -93,7 +90,7 @@ function dsFace(id, name) {
 }
 
 // dsHere is the strip of everyone in this Activity, for a page to place
-// in a #dshere box (the menu, the watch room).
+// in a #dshere box on the menu.
 function dsHere(label) {
   if (dsPeople.length < 2) return "";
   return `<span class="dslabel">${esc(label)}</span>${dsPeople.map((p) => dsFace(p.id, p.name)).join("")}`;
@@ -158,8 +155,7 @@ function dsSetActivity(a) {
 // dsActivityRefresh redraws the status line for where the member is now,
 // e.g. after the number of people here changed.
 function dsActivityRefresh() {
-  if (where === "watch" && wv) dsWatchActivity();
-  else if (dsGame !== null) dsGameActivity(dsGame);
+  if (dsGame !== null) dsGameActivity(dsGame);
 }
 
 let dsGame = null; // the game the status line names; "" for the menu
@@ -175,80 +171,16 @@ function dsGameActivity(key) {
   });
 }
 
-// dsWatchActivity puts the watch room on the status line: the show and
-// episode with how many watch, a clock while it plays. An 18+ room only
-// says it is a private room.
-function dsWatchActivity() {
-  const v = wv;
-  if (!v) return;
-  dsGame = null;
-  const n = (v.members || []).length;
-  const size = n ? [n, Math.max(n, v.max || n)] : null;
-  if (v.adult || (v.show && v.show.adult)) {
-    return dsSetActivity({ type: 3, details: "In a private watch room", state: `${n} watching`, size });
-  }
-  if (!v.show || v.phase === "pick") {
-    return dsSetActivity({ type: 3, details: "In a watch room", state: "Picking a show", size });
-  }
-  const ep = `Episode ${v.ep}${v.last_ep ? ` of ${v.last_ep}` : ""}`;
-  // The page loads covers through the bot; Discord gets the address itself.
-  let cover = v.show.cover || "";
-  let local = cover;
-  if (cover.startsWith("api/watch/cover?u=")) cover = new URLSearchParams(cover.slice(cover.indexOf("?"))).get("u") || "";
-  else if (cover) local = "api/watch/cover?u=" + encodeURIComponent(cover);
-  if (!/^https:\/\//.test(cover)) cover = local = "";
-  dsSetActivity({
-    type: 3,
-    details: `Watching ${v.show.title}`.slice(0, 128),
-    state: `${v.phase === "loading" ? "Loading · " : v.playing ? "" : "Paused · "}${ep} · ${n} watching`,
-    image: cover,
-    pic: local,
-    imageText: v.show.title.slice(0, 128),
-    // Rounded so the clock doesn't count as a change on every update.
-    start: v.phase === "play" && v.playing ? Math.round((wvAt - (v.pos || 0) * 1000) / 10000) * 10000 : 0,
-    size,
-  });
-}
-
 // ── Device and layout ──
 
 function dsOrient(o) {
   document.body.dataset.orient = o;
-  // Turning the phone sideways while an episode plays opens theater mode.
-  if (o === "landscape" && document.body.dataset.platform === "mobile" && where === "watch" && wv && wv.phase === "play" && !wFull && typeof wFullscreen === "function") {
-    wFullscreen(true);
-  }
-}
-
-// dsLockOrientation holds a phone in landscape for theater mode and lets
-// it turn freely again after. Desktop ignores it.
-function dsLockOrientation(landscape) {
-  if (!sdk || document.body.dataset.platform !== "mobile") return;
-  const lock = landscape ? DS_LOCK.landscape : DS_LOCK.unlocked;
-  if (lock === dsLocked) return;
-  dsLocked = lock;
-  sdk.commands
-    .setOrientationLockState({ lock_state: lock, picture_in_picture_lock_state: lock, grid_lock_state: lock })
-    .catch(() => (dsLocked = 0));
 }
 
 // dsLayout follows Discord shrinking the Activity: in picture in picture
-// or a call grid tile the page shows only the video, or a card saying what
-// is going on.
-let dsPipTheater = false; // theater mode was opened for the small window
-
+// or a call grid tile the page shows a card saying what is going on.
 function dsLayout(mode) {
   document.body.dataset.layout = mode;
-  // The video fills the small window through theater mode, which puts the
-  // player straight on the page; it closes again on the way back.
-  const small = mode !== "focused";
-  if (small && where === "watch" && !wFull && document.getElementById("wvid")) {
-    dsPipTheater = true;
-    wFullscreen(true);
-  } else if (!small && dsPipTheater) {
-    dsPipTheater = false;
-    if (wFull) wFullscreen(false);
-  }
   dsPipDraw();
 }
 

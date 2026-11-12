@@ -191,14 +191,14 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('TV capsule text leaves editing when its keyboard is hidden', (
+  testWidgets('TV community text leaves editing when its keyboard is hidden', (
     tester,
   ) async {
     await launchAudit(tester);
     final context = tester.element(find.text('Find your next story'));
     final result = communityText(context, title: 'Your letter', isTV: true);
     await tester.pumpAndSettle();
-    final field = find.byKey(const Key('capsule-text'));
+    final field = find.byKey(const Key('community-text'));
     await tester.showKeyboard(field);
     await tester.enterText(field, 'A letter\nwith two lines');
     tester.view.viewInsets = const FakeViewPadding(bottom: 240);
@@ -295,8 +295,6 @@ void main() {
     'Subtitles & languages',
     'Schedule',
     'Discord',
-    'Time capsule',
-    'Watch rooms',
     'Watch parties',
     'Settings backup',
     'Report a problem',

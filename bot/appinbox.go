@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,7 +81,8 @@ func (b *bot) sendToApps(user string, it inboxItem) int {
 			d.AppInbox = map[string][]inboxItem{}
 		}
 		for h, l := range d.AppLinks {
-			if l.User != user {
+			// Devices of an account get the item from the account server.
+			if l.User != user || strings.HasPrefix(h, accountKeyPrefix) {
 				continue
 			}
 			x := it
@@ -103,7 +105,11 @@ func (b *bot) sendToApps(user string, it inboxItem) int {
 		}
 	}
 	inboxWaiters.Unlock()
-	return len(hashes)
+	n := len(hashes)
+	if b.hasAccount(user) && b.sendToAccount(user, it) {
+		n++
+	}
+	return n
 }
 
 // pruneInbox drops expired items.
@@ -145,7 +151,7 @@ func (b *bot) apiInbox(w http.ResponseWriter, r *http.Request) {
 	if b.requireApp(w, r) == "" {
 		return
 	}
-	h := hashToken(bearerToken(r))
+	h := b.callerKey(r)
 	if !inboxLimit.allow(h, appNow()) {
 		apiError(w, http.StatusTooManyRequests, "asking too often")
 		return
@@ -193,7 +199,7 @@ func (b *bot) apiInboxAck(w http.ResponseWriter, r *http.Request) {
 	if b.requireApp(w, r) == "" {
 		return
 	}
-	h := hashToken(bearerToken(r))
+	h := b.callerKey(r)
 	if !inboxAckLimit.allow(h, appNow()) {
 		apiError(w, http.StatusTooManyRequests, "too many acks")
 		return

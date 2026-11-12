@@ -10,8 +10,8 @@ import 'store.dart';
 import '../host.dart';
 
 // The CLI's other Community rows, now in the app: the server club, the
-// settings backup, the cheat code hunt and Report a problem. All talk to the
-// Discord bot (bot/watchclub.go, appbackup.go, cheathunt.go, appreport.go).
+// settings backup and Report a problem. All talk to the Discord bot
+// (bot/watchclub.go, appbackup.go, appreport.go).
 
 /// The server club: a show and an episode to reach by a deadline.
 class ServerClub {
@@ -95,58 +95,6 @@ Map<String, dynamic> backupSettings(String text) {
     if (value != null) out[key] = value;
   }
   return out;
-}
-
-/// A cheat hunt step, as the bot answers it.
-class CheatView {
-  CheatView.fromJson(Json j)
-    : correct = j['correct'] == true,
-      status = j['status'] as String? ?? '',
-      kind = j['kind'] as String? ?? '',
-      step = number(j['step']),
-      steps = number(j['steps']),
-      text = j['text'] as String? ?? '',
-      links = (j['links'] as List? ?? []).whereType<String>().toList(),
-      where = j['where'] as String? ?? 'app',
-      wrongLeft = number(j['wrong_left']),
-      code = j['code'] as String? ?? '',
-      redeemed = j['redeemed'] == true,
-      until = DateTime.tryParse(j['until'] as String? ?? '')?.toLocal(),
-      message = j['message'] as String? ?? '';
-  final bool correct, redeemed;
-  final String status, kind, text, where, code, message;
-  final int step, steps, wrongLeft;
-  final List<String> links;
-  final DateTime? until;
-  bool get puzzle => status == 'puzzle';
-}
-
-/// The Konami code: ↑↑↓↓←→←→BA. A TV remote has no B or A, so two presses
-/// of Select stand in for them.
-class KonamiTracker {
-  static const code = [
-    'up', 'up', 'down', 'down', 'left', 'right', 'left', 'right', 'b', 'a', //
-  ];
-  final _keys = <String>[];
-
-  /// Records [key] and reports whether it finished the code.
-  bool press(String key) {
-    _keys.add(key.toLowerCase());
-    if (_keys.length > code.length) _keys.removeAt(0);
-    if (_keys.length != code.length) return false;
-    final tail = _keys.sublist(8).join();
-    final ok =
-        listEquals(_keys.sublist(0, 8), code.sublist(0, 8)) &&
-        (tail == 'ba' || tail == 'selectselect');
-    if (ok) _keys.clear();
-    return ok;
-  }
-}
-
-/// Whether text typed in search is the code spelt out (uuddlrlrba).
-bool isKonamiText(String text) {
-  final t = text.toLowerCase().replaceAll(RegExp(r'\s+'), '');
-  return t == 'uuddlrlrba' || t == '↑↑↓↓←→←→ba';
 }
 
 /// A system the bot reports (Go's GOOS) the way people say it.
@@ -287,7 +235,7 @@ String playbackReportDetails({
   'Problem: ${redactPlaybackProblem(problem)}',
 ].join('\n');
 
-/// Talks to the bot for the club, backup, cheat code and reports.
+/// Talks to the bot for the club, backup and reports.
 class CommunityExtras extends ChangeNotifier {
   CommunityExtras({
     required this.discord,
@@ -383,24 +331,6 @@ class CommunityExtras extends ChangeNotifier {
   }
 
   Future<void> deleteBackup() => discord.request('DELETE', '/v1/backup');
-
-  Future<CheatView> cheat() async => CheatView.fromJson(
-    await discord.request(
-      'POST',
-      '/v1/cheat',
-      body: {},
-      timeout: const Duration(seconds: 30),
-    ),
-  );
-
-  Future<CheatView> cheatAnswer(String answer) async => CheatView.fromJson(
-    await discord.request(
-      'POST',
-      '/v1/cheat/answer',
-      body: {'answer': answer},
-      timeout: const Duration(seconds: 30),
-    ),
-  );
 
   /// Posts a report to the support forum as the linked member; returns the
   /// post's link.

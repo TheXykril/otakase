@@ -52,12 +52,10 @@ class DesktopPlayerBar extends StatelessWidget {
   final VoidCallback onFullscreen;
   final VoidCallback? onNext;
 
-  /// Opens the quality list; null hides the button (a watch room has one
-  /// stream picked by the bot).
+  /// Opens the quality list; null hides the button.
   final VoidCallback? onQuality;
 
-  /// More icons before the full screen button, such as a watch room's room
-  /// panel.
+  /// More icons before the full screen button.
   final List<
     ({Key? key, IconData icon, String tooltip, VoidCallback onPressed})
   >

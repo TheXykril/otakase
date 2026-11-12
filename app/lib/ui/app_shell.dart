@@ -19,8 +19,6 @@ import 'more_page.dart';
 import 'seal.dart';
 import 'show_page.dart';
 import 'community_page.dart';
-import 'community_extras_page.dart';
-import '../data/community_extras.dart';
 import 'movie_page.dart';
 import 'movies_pages.dart';
 import 'remote_now_playing.dart';
@@ -121,7 +119,6 @@ class _AppShellState extends State<AppShell> {
         widget.services.store.flag('CheckUpdates')) {
       unawaited(widget.services.updates.check());
     }
-    HardwareKeyboard.instance.addHandler(konamiKey);
     widget.services.party.open = partyOpen;
     widget.services.discord.notify = fromDiscord;
     widget.services.episodeAlerts.show = fromDiscord;
@@ -129,7 +126,6 @@ class _AppShellState extends State<AppShell> {
       await widget.services.discord.initialize();
       unawaited(widget.services.extras.refreshClub());
       if (mounted) await askContent();
-      if (mounted) await birthdayCapsule(context, widget.services, widget.isTV);
       if (mounted && isDesktop && !desktopLauncher.value) {
         await offerSystemInstall(context, widget.services.store.preferences);
       }
@@ -159,27 +155,6 @@ class _AppShellState extends State<AppShell> {
       'Content',
       contentLabels.entries.firstWhere((e) => e.value == chosen).key,
     );
-  }
-
-  final konami = KonamiTracker();
-
-  /// ↑↑↓↓←→←→BA anywhere outside the player opens the cheat code hunt.
-  bool konamiKey(KeyEvent event) {
-    if (event is! KeyDownEvent || !mounted) return false;
-    final name = switch (event.logicalKey) {
-      LogicalKeyboardKey.arrowUp => 'up',
-      LogicalKeyboardKey.arrowDown => 'down',
-      LogicalKeyboardKey.arrowLeft => 'left',
-      LogicalKeyboardKey.arrowRight => 'right',
-      LogicalKeyboardKey.keyB => 'b',
-      LogicalKeyboardKey.keyA => 'a',
-      LogicalKeyboardKey.select || LogicalKeyboardKey.enter => 'select',
-      _ => 'other',
-    };
-    if (konami.press(name) && widget.services.playerStatus == null) {
-      unawaited(openCheat(context, widget.services, widget.isTV));
-    }
-    return false;
   }
 
   /// A new episode of a followed show, a shared show or a reply arrived
@@ -225,7 +200,6 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
-    HardwareKeyboard.instance.removeHandler(konamiKey);
     if (widget.services.party.open == partyOpen) {
       widget.services.party.open = null;
     }

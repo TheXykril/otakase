@@ -74,7 +74,7 @@ func (b *bot) apiParties(w http.ResponseWriter, r *http.Request) {
 	if user == "" {
 		return
 	}
-	if !partiesLimit.allow(hashToken(bearerToken(r)), appNow()) {
+	if !partiesLimit.allow(b.callerKey(r), appNow()) {
 		apiError(w, http.StatusTooManyRequests, "asking too often")
 		return
 	}
@@ -105,7 +105,7 @@ func (b *bot) apiPartyRSVP(w http.ResponseWriter, r *http.Request) {
 	if user == "" {
 		return
 	}
-	if !rsvpLimit.allow(hashToken(bearerToken(r)), appNow()) {
+	if !rsvpLimit.allow(b.callerKey(r), appNow()) {
 		apiError(w, http.StatusTooManyRequests, "too many answers")
 		return
 	}
