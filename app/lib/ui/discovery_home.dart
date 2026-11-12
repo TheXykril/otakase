@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../core.dart';
 import '../data/models.dart';
 import '../data/trakt.dart' show MediaTitle;
 import '../services.dart';
@@ -80,7 +81,7 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
       if (mounted && request == generation) setState(() => data = result);
     } catch (e) {
       if (mounted && request == generation) {
-        setState(() => error = e.toString());
+        setState(() => error = errorMessage(e));
       }
     } finally {
       if (mounted && request == generation) setState(() => busy = false);

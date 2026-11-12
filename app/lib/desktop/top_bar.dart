@@ -52,6 +52,8 @@ class DesktopTopBar extends StatelessWidget {
     final mac = window && macWindowLayout;
     final flush = window && windowButtonStyle == WindowButtonStyle.windows;
     final islandTall = islandExtent(context);
+    // A narrow window has no room for the name beside the centred tabs.
+    final showBrand = MediaQuery.sizeOf(context).width >= 760;
     Widget island(
       IslandSide side,
       Widget child,
@@ -70,7 +72,7 @@ class DesktopTopBar extends StatelessWidget {
       children: [
         if (mac) SizedBox(width: windowButtonsLeading),
         if (leading != null) ...[leading!, const SizedBox(width: 10)],
-        if (!mac) brand,
+        if (!mac && showBrand) brand,
       ],
     );
     return SizedBox(
@@ -109,7 +111,10 @@ class DesktopTopBar extends StatelessWidget {
             right: 0,
             child: island(
               IslandSide.right,
-              trailing ?? (mac ? brand : const WindowButtons()),
+              trailing ??
+                  (mac
+                      ? (showBrand ? brand : const SizedBox.shrink())
+                      : const WindowButtons()),
               flush
                   ? const EdgeInsets.only(left: 18)
                   : EdgeInsets.fromLTRB(26, 0, 24 + inset.right, 0),

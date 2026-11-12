@@ -42,6 +42,16 @@
 - **Share movies and shows from Discord.** `/share-title` recommends a film
   or series to another member, like `/share-anime`. It lands in their DMs
   and under Community → From Discord, where it opens the film or show page.
+- **Pick what you watch on first start.** A new profile asks once whether
+  it shows anime, movies & shows, or both, instead of hiding movies until
+  you find the switch in More, Display.
+- **Plan to watch without an account.** Add to list on an anime page now
+  works without AniList or MAL: shows you mark Planning wait in a Plan to
+  watch row on Home.
+- **Copy link when the browser doesn't open.** Signing in to AniList or
+  MAL on a computer offers the link to paste into any browser.
+- **Link Discord from where it's needed.** Settings backup and Watch
+  parties have a Link Discord button instead of pointing to another page.
 
 ### Changed
 
@@ -68,6 +78,30 @@
 
 - **Play in my own mpv** is gone. Everything plays in Otakase's own player
   on every device, with the same skips, tracking and remote.
+
+### Fixed
+
+- **A failed video can always be left.** The player's error screen has a
+  Back button, so a computer no longer needs Esc to get out.
+- **Clearer reason when a movie won't play.** It now says whether no
+  source had it or the sources couldn't be reached, instead of always
+  blaming your languages.
+- **Link Discord on a computer** no longer shows a Wi-Fi error and has a
+  Copy command button.
+- **Error messages read plainly**, without "Bad state:" in front, and the
+  phone remote page no longer calls a computer a TV.
+- **No duplicate shows in search.** With anime and movies & shows on, an
+  anime no longer shows up a second time under Movies & shows, and music
+  videos stay out of anime results.
+- **Window buttons on every page.** Movie and show pages, Downloads and
+  Profiles on a computer now have minimise, maximise and close.
+- **Smaller tweaks for new users.** One show in Continue watching no longer
+  fills half the screen, episode names drop a repeated "Episode 3 -",
+  language settings read "Japanese, Chinese, English", choice lists show
+  every option without scrolling, Downloads shows progress as a percent,
+  the accounts page explains AniList and MAL and only shows Sync AniList and
+  MAL once both are signed in, Profiles keeps a readable width, and a narrow
+  window hides the Otakase name instead of overlapping the tabs.
 
 ## 26.4.0 - 2026-11-11
 

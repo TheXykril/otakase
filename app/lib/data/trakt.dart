@@ -69,6 +69,11 @@ class MediaTitle {
   final List<String> genres;
   final double rating;
   bool get isShow => kind == 'show';
+
+  /// Japanese animation, which the anime half of a profile already lists.
+  bool get isAnime =>
+      genres.contains('anime') ||
+      (language == 'ja' && genres.contains('animation'));
   String get key => '$kind:$trakt';
   String get label => year > 0 ? '$title ($year)' : title;
 

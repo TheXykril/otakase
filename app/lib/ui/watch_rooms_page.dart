@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../core.dart';
 import '../data/models.dart';
 import '../desktop/desktop_core.dart';
 import '../desktop/player_bar.dart';
@@ -63,7 +64,7 @@ class _WatchRoomsPageState extends State<WatchRoomsPage> {
       );
       if (mounted) await widget.services.watchRooms.load();
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     } finally {
       if (mounted) setState(() => joining = false);
     }

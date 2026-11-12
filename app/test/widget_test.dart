@@ -196,7 +196,10 @@ void main() {
     await tester.tap(find.byKey(const Key('show-status')));
     await tester.pumpAndSettle();
     expect(
-      find.text('Saved on this device. Public lists are read only.'),
+      find.text(
+        'Saved on this device. Sign in to AniList or MAL in More, '
+        'Your accounts, to keep it everywhere.',
+      ),
       findsOneWidget,
     );
     await tester.tap(find.byTooltip('Increase progress'));

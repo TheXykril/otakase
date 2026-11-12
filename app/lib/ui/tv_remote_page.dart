@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../core.dart';
 import '../cast/cast.dart';
 import '../data/tv_remote.dart';
 import '../services.dart';
@@ -72,7 +73,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
     try {
       await remote.beginPair();
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -128,7 +129,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
         }.values.toList();
       });
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     } finally {
       try {
         await const MethodChannel('otakase/device')
@@ -189,7 +190,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
       await remote.pair(tv, code, phoneName: widget.services.tvRemote.name);
       if (mounted) connect(tv);
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     }
   }
 
@@ -219,7 +220,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
         connect(tv);
       }
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -618,7 +619,7 @@ class _AskDialogState extends State<_AskDialog> {
       );
       if (mounted && !cancelled) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     }
   }
 

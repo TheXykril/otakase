@@ -2992,6 +2992,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                             position: position,
                             provider: source?.provider ?? '',
                           ),
+                          // Desktop hides the title bar behind the error,
+                          // so there must be a way out besides Esc.
+                          AppButton(
+                            label: 'Back',
+                            icon: LucideIcons.arrowLeft,
+                            onPressed: () => Navigator.pop(context),
+                            isTV: widget.isTV,
+                          ),
                         ],
                       ),
                     ),

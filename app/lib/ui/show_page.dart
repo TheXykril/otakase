@@ -27,6 +27,17 @@ import '../desktop/desktop_core.dart';
 import '../desktop/top_bar.dart';
 import '../desktop/window_frame.dart';
 
+/// An episode's own name without the "Episode 3 - " that some sources put
+/// in front, so it doesn't read "3. Episode 3 - Killing Magic".
+String episodeName(String title, int ep) {
+  final name = title.trim();
+  final lead = RegExp(
+    '^(?:episode|ep\\.?)\\s*0*$ep\\s*(?:[-–—:.]\\s*)?',
+    caseSensitive: false,
+  );
+  return name.replaceFirst(lead, '').trim();
+}
+
 class ShowPage extends StatefulWidget {
   const ShowPage({
     super.key,
@@ -80,10 +91,8 @@ class _ShowPageState extends State<ShowPage> {
   }
 
   String episodeTitle(int ep) {
-    final title = art(ep)?['title'] as String? ?? '';
-    return hiddenEpisode(ep) || title.trim().isEmpty
-        ? 'Episode $ep'
-        : '$ep. $title';
+    final title = episodeName(art(ep)?['title'] as String? ?? '', ep);
+    return hiddenEpisode(ep) || title.isEmpty ? 'Episode $ep' : '$ep. $title';
   }
 
   Widget episodeArtwork(int ep) {
@@ -358,8 +367,11 @@ class _ShowPageState extends State<ShowPage> {
         ? 'No episodes have aired yet.'
         : null;
     final entry = widget.services.tracking.mergedCached(anime);
+    final local = widget.services.auth.hasAccounts
+        ? ''
+        : widget.services.store.text('LocalStatus.${anime.key}');
     final label = entry == null
-        ? (widget.services.auth.hasAccounts ? 'Add to list' : 'Local progress')
+        ? (anilistStatuses[local] ?? 'Add to list')
         : (anilistStatuses[entry.status] ??
               malStatuses[entry.status] ??
               'List status');

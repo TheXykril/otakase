@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../core.dart';
 import '../data/models.dart';
 import '../data/continuation.dart';
 import '../data/movies.dart';
@@ -851,6 +852,16 @@ class _HomePageState extends State<HomePage> {
                 _ => 'Movie',
               },
             ),
+          // Without AniList or MAL, shows added to the list on this
+          // device wait here.
+          if (configured.isEmpty && store.localList('PLANNING').isNotEmpty)
+            PosterRow(
+              key: const Key('home-local-planning'),
+              title: 'Plan to watch',
+              items: store.localList('PLANNING'),
+              isTV: widget.isTV,
+              onOpen: widget.onOpen,
+            ),
           if (configured.isEmpty)
             DiscoveryHome(
               key: discovery,
@@ -1023,10 +1034,10 @@ class _AccountBlockState extends State<AccountBlock> {
             });
             widget.onLoaded?.call(rows);
           } catch (_) {
-            setState(() => error = e.toString());
+            setState(() => error = errorMessage(e));
           }
         } else {
-          setState(() => error = e.toString());
+          setState(() => error = errorMessage(e));
         }
       }
     } finally {

@@ -185,12 +185,14 @@ class Catalog {
       _ => query.trim().isEmpty ? 'POPULARITY_DESC' : 'SEARCH_MATCH',
     };
     final data = await graph(
-      '''query(\$q:String,\$adult:Boolean,\$page:Int,\$format:MediaFormat,\$season:MediaSeason,\$year:Int,\$genre:String,\$status:MediaStatus,\$from:FuzzyDateInt,\$to:FuzzyDateInt,\$score:Int){Page(page:\$page,perPage:30){pageInfo{hasNextPage}media(search:\$q,type:ANIME,isAdult:\$adult,format:\$format,season:\$season,seasonYear:\$year,genre:\$genre,status:\$status,startDate_greater:\$from,startDate_lesser:\$to,averageScore_greater:\$score,sort:$order){$mediaFields}}}''',
+      '''query(\$q:String,\$adult:Boolean,\$page:Int,\$format:MediaFormat,\$season:MediaSeason,\$year:Int,\$genre:String,\$status:MediaStatus,\$from:FuzzyDateInt,\$to:FuzzyDateInt,\$score:Int,\$skip:[MediaFormat]){Page(page:\$page,perPage:30){pageInfo{hasNextPage}media(search:\$q,type:ANIME,isAdult:\$adult,format:\$format,format_not_in:\$skip,season:\$season,seasonYear:\$year,genre:\$genre,status:\$status,startDate_greater:\$from,startDate_lesser:\$to,averageScore_greater:\$score,sort:$order){$mediaFields}}}''',
       {
         'q': query.trim().isEmpty ? null : query.trim(),
         'adult': adult ? null : false,
         'page': page,
         'format': format,
+        // Music videos only crowd out shows unless asked for.
+        if (format == null) 'skip': ['MUSIC'],
         'season': season,
         'year': year,
         'genre': genre,

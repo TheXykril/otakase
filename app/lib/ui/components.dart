@@ -2012,6 +2012,7 @@ Future<String?> chooseValue(
   String title,
   List<String> values, {
   String? selected,
+  String? note,
 }) => showDialog<String>(
   context: context,
   builder: (context) => AlertDialog(
@@ -2020,33 +2021,43 @@ Future<String?> chooseValue(
       title,
       style: uiStyle(context, size: 22, weight: FontWeight.w600),
     ),
-    content: SizedBox(
-      width: 460,
-      height: (values.length * 56.0).clamp(80, 420),
+    content: ConstrainedBox(
+      // Grows with the list so a short one never needs scrolling.
+      constraints: const BoxConstraints(
+        minWidth: 460,
+        maxWidth: 460,
+        maxHeight: 420,
+      ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: values
-              .map(
-                (value) => ChoiceRow(
-                  autofocus:
-                      value ==
-                      (values.contains(selected) ? selected : values.first),
-                  title: Text(value, style: uiStyle(context)),
-                  trailing: value == selected
-                      ? const Icon(LucideIcons.check, color: shu)
-                      : null,
-                  onTap: () => Navigator.pop(context, value),
-                ),
-              )
-              .toList(),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (note != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(note, style: uiStyle(context, color: muted)),
+              ),
+            ...values.map(
+              (value) => ChoiceRow(
+                autofocus:
+                    value ==
+                    (values.contains(selected) ? selected : values.first),
+                title: Text(value, style: uiStyle(context)),
+                trailing: value == selected
+                    ? const Icon(LucideIcons.check, color: shu)
+                    : null,
+                onTap: () => Navigator.pop(context, value),
+              ),
+            ),
+          ],
         ),
       ),
     ),
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('BACK'),
+        child: const Text('Cancel'),
       ),
     ],
   ),

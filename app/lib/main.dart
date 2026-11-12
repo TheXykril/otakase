@@ -27,6 +27,7 @@ import 'ui/profiles_page.dart';
 
 Future<void> main([List<String> args = const []]) async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
+  askContentOnFirstRun = true;
   final reduceMotion =
       binding.platformDispatcher.accessibilityFeatures.disableAnimations;
   final wayland = launcherFadesContent;

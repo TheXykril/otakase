@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core.dart';
 import '../data/profiles.dart';
 import 'components.dart';
 import 'seal.dart';
@@ -75,7 +76,7 @@ class _ProfilesChooserState extends State<ProfilesChooser> {
       await widget.manager.switchTo(p.id, unlock: unlock);
       if (mounted && widget.canGoBack) Navigator.pop(context);
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     }
   }
 
@@ -205,7 +206,7 @@ class _ProfilesPageState extends State<ProfilesPage> {
     try {
       await run();
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     }
   }
 
@@ -284,9 +285,21 @@ class _ProfilesPageState extends State<ProfilesPage> {
       appBar: AppBar(
         title: const Text('Profiles'),
         leading: const BackButton(),
+        actions: [
+          DeviceStatus(isTV: widget.manager.isTV),
+          const SizedBox(width: 24),
+        ],
       ),
       body: ListView(
-        padding: EdgeInsets.all(widget.manager.isTV ? 48 : 20),
+        // A wide window keeps the list a readable width instead of
+        // stretching every button edge to edge.
+        padding: EdgeInsets.symmetric(
+          vertical: widget.manager.isTV ? 48 : 20,
+          horizontal: math.max(
+            widget.manager.isTV ? 48 : 20,
+            (MediaQuery.sizeOf(context).width - 760) / 2,
+          ),
+        ),
         children: [
           if (error != null) Text(error!, style: uiStyle(context, color: warn)),
           AppButton(

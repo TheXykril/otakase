@@ -47,6 +47,10 @@ const _tabIcons = {
 };
 
 /// Most tabs any content setting gives.
+/// The real app asks a new profile once what it wants to watch; tests and
+/// the site demo leave it off.
+bool askContentOnFirstRun = false;
+
 const _maxTabs = 3;
 
 class AppShell extends StatefulWidget {
@@ -123,11 +127,37 @@ class _AppShellState extends State<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await widget.services.discord.initialize();
       unawaited(widget.services.extras.refreshClub());
+      if (mounted) await askContent();
       if (mounted) await birthdayCapsule(context, widget.services, widget.isTV);
       if (mounted && isDesktop && !desktopLauncher.value) {
         await offerSystemInstall(context, widget.services.store.preferences);
       }
     });
+  }
+
+  /// A profile that never picked shows anime only, so movies and shows
+  /// stayed hidden in More, Display. Ask once instead.
+  Future<void> askContent() async {
+    final store = widget.services.store;
+    if (!askContentOnFirstRun ||
+        store.isSet('Content') ||
+        store.flag('ContentAsked')) {
+      return;
+    }
+    await store.set('ContentAsked', true);
+    if (!mounted) return;
+    final labels = contentLabels.values.toList();
+    final chosen = await chooseValue(
+      context,
+      'What do you want to watch?',
+      labels,
+      note: 'You can change this later in More, Display.',
+    );
+    if (chosen == null) return;
+    await store.set(
+      'Content',
+      contentLabels.entries.firstWhere((e) => e.value == chosen).key,
+    );
   }
 
   final konami = KonamiTracker();
@@ -370,7 +400,7 @@ class _AppShellState extends State<AppShell> {
         );
       }
     } catch (e) {
-      if (mounted) communityMessage(context, e.toString());
+      if (mounted) communityMessage(context, errorMessage(e));
     }
   }
 

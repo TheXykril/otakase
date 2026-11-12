@@ -115,6 +115,9 @@ class AppStore extends ChangeNotifier {
   final Map<String, String> providerHealth = {};
   String avatar = '';
   dynamic value(String key) => _values[key] ?? settingDefaults[key];
+
+  /// Whether this profile picked a value itself instead of the default.
+  bool isSet(String key) => _values.containsKey(key);
   bool _adultAllowed = false;
   bool get adultAllowed => _adultAllowed;
   void setAdultAllowed(bool allowed) {
@@ -175,6 +178,36 @@ class AppStore extends ChangeNotifier {
       hidden.remove(hidden.keys.first);
     }
     return set('HiddenContinue', hidden);
+  }
+
+  /// Shows a profile without AniList or MAL put on its own list, newest
+  /// first, as status plus the show itself so Home can draw them.
+  Future<void> setLocalStatus(Anime anime, String status) {
+    final list = Map<String, dynamic>.from(value('LocalList') as Map? ?? {});
+    list.remove(anime.key);
+    list[anime.key] = {'status': status, 'anime': anime.toJson()};
+    while (list.length > 500) {
+      list.remove(list.keys.first);
+    }
+    return Future.wait([
+      set('LocalList', list),
+      set('LocalStatus.${anime.key}', status),
+    ]);
+  }
+
+  List<Anime> localList(String status) {
+    final list = value('LocalList');
+    if (list is! Map) return const [];
+    final shows = <Anime>[];
+    for (final v in list.values.toList().reversed) {
+      if (v is! Map || v['status'] != status || v['anime'] is! Map) continue;
+      try {
+        shows.add(Anime.fromJson((v['anime'] as Map).cast<String, dynamic>()));
+      } catch (_) {
+        /* A damaged entry is skipped. */
+      }
+    }
+    return shows;
   }
 
   WatchEntry? entry(Anime anime) =>

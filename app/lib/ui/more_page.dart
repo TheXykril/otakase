@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../core.dart';
 import '../data/auth.dart';
 import '../desktop/desktop_core.dart';
 import '../data/models.dart';
@@ -715,16 +717,29 @@ class _AccountsPageState extends State<AccountsPage> {
         await auth.cancelLogin();
         return;
       }
-      if (!phone) await auth.launch(url);
+      var opened = true;
+      if (!phone) {
+        try {
+          await auth.launch(url);
+        } on LoginFailure {
+          // The dialog offers the link to copy into any browser instead.
+          opened = false;
+        }
+      }
       if (!mounted) return;
       await showDialog<void>(
         context: context,
-        builder: (context) =>
-            _LoginDialog(auth: auth, url: url, service: service, isTV: phone),
+        builder: (context) => _LoginDialog(
+          auth: auth,
+          url: url,
+          service: service,
+          isTV: phone,
+          opened: opened,
+        ),
       );
       await auth.cancelLogin();
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = errorMessage(e));
     } finally {
       if (mounted && widget.isTV) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -826,13 +841,17 @@ class _AccountsPageState extends State<AccountsPage> {
         builder: (context, _) => ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            SwitchListTile(
-              title: const Text('Sync AniList and MAL'),
-              subtitle: Text(widget.services.listSync.status),
-              value: widget.services.store.flag('SyncAniListMAL'),
-              onChanged: (value) =>
-                  widget.services.store.set('SyncAniListMAL', value),
-            ),
+            // Only means something once both lists are signed in.
+            if (widget.services.auth.signedIn('AniList') &&
+                widget.services.auth.signedIn('MAL'))
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Sync AniList and MAL'),
+                subtitle: Text(widget.services.listSync.status),
+                value: widget.services.store.flag('SyncAniListMAL'),
+                onChanged: (value) =>
+                    widget.services.store.set('SyncAniListMAL', value),
+              ),
             if (widget.services.listSync.ready)
               TextButton(
                 onPressed: widget.services.listSync.running
@@ -893,13 +912,22 @@ class _AccountsPageState extends State<AccountsPage> {
                   ],
                 ),
               ] else ...[
-                AppButton(
-                  label: 'Sign in to $service',
-                  focusNode: serviceFocus[service],
-                  isTV: widget.isTV,
-                  autofocus: service == 'AniList',
-                  filled: true,
-                  onPressed: () => login(service),
+                Text(
+                  'Keeps your anime list, episode progress and scores in '
+                  'sync with $service.',
+                  style: uiStyle(context, size: 15, color: muted),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: AppButton(
+                    label: 'Sign in to $service',
+                    focusNode: serviceFocus[service],
+                    isTV: widget.isTV,
+                    autofocus: service == 'AniList',
+                    filled: true,
+                    onPressed: () => login(service),
+                  ),
                 ),
               ],
               const Divider(height: 40),
@@ -918,16 +946,21 @@ class _LoginDialog extends StatefulWidget {
     required this.url,
     required this.service,
     required this.isTV,
+    this.opened = true,
   });
   final AuthService auth;
   final Uri url;
   final String service;
   final bool isTV;
+
+  /// False when the browser did not open; the link is offered to copy.
+  final bool opened;
   @override
   State<_LoginDialog> createState() => _LoginDialogState();
 }
 
 class _LoginDialogState extends State<_LoginDialog> {
+  bool copied = false;
   StreamSubscription<String>? subscription;
   @override
   void initState() {
@@ -979,13 +1012,36 @@ class _LoginDialogState extends State<_LoginDialog> {
             Text(
               widget.isTV
                   ? 'Scan with your phone. Keep both devices on the same home network, then finish sign in on the page.'
-                  : 'Finish sign in in your browser. Return here after approval.',
+                  : widget.opened
+                  ? 'Finish sign in in your browser. Return here after approval.'
+                  : "Your browser didn't open. Copy the link, paste it into a "
+                        'browser on this computer and finish sign in there.',
               style: uiStyle(context),
             ),
             if (!widget.isTV)
-              TextButton(
-                onPressed: () => widget.auth.launch(widget.url),
-                child: const Text('Open browser'),
+              Wrap(
+                spacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: () async {
+                      try {
+                        await widget.auth.launch(widget.url);
+                      } on LoginFailure {
+                        /* Copy link still works. */
+                      }
+                    },
+                    child: const Text('Open browser'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: widget.url.toString()),
+                      );
+                      if (mounted) setState(() => copied = true);
+                    },
+                    child: Text(copied ? 'Copied' : 'Copy link'),
+                  ),
+                ],
               ),
           ],
         ),
