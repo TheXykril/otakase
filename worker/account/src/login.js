@@ -73,7 +73,7 @@ export function loginPage(url, env, base) {
 <div class="turnstile" ${site ? `data-sitekey="${escapeHTML(site)}"` : 'hidden'}></div>
 <div class="buttons">${buttons}</div>
 <p id="status" class="small" role="status"></p>
-<p class="small">Otakase keeps only your login's id and name. <a href="https://otakase.com/privacy/">Privacy</a></p>
+<p class="small">Otakase keeps your login's id, name and picture (and email for Google), never its password. <a href="https://otakase.com/privacy/">Privacy</a></p>
 <script>
 const start = ${JSON.stringify({ challenge, ret, pair: pairCode, attach })};
 const status = document.getElementById('status');
