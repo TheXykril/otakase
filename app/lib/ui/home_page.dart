@@ -570,6 +570,7 @@ class _HomePageState extends State<HomePage> {
       adult: false,
       now: DateTime.now(),
     );
+    s.episodeAlerts.watch(continuation.upNext, on: store.flag('EpisodeAlerts'));
     // Films and series join Continue watching, the big resume card and the
     // desktop hero, and the Trakt watchlist gets a row.
     final titles = showsTitles;

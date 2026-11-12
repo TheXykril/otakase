@@ -12,6 +12,7 @@ import 'data/store.dart';
 import 'data/list_sync.dart';
 import 'data/profiles.dart';
 import 'data/discord.dart';
+import 'data/episode_alerts.dart';
 import 'data/heritage.dart';
 import 'data/models.dart';
 import 'data/watch_rooms.dart';
@@ -155,9 +156,16 @@ class AppServices {
     return link;
   }
 
+  /// The phone remote away from home: through the Otakase account when this
+  /// profile belongs to one, else through the Discord bot.
+  AwayRoute get relay => accountRoute?.call() ?? botRelay;
+
+  /// Set by the account center while this profile's account is online.
+  AwayRoute? Function()? accountRoute;
+
   /// The phone remote through the Discord bot, for TVs this phone can't
   /// reach on the local network and TVs on the same Discord account.
-  late final relay = RelayClient(
+  late final botRelay = RelayClient(
     base: discord.baseUrl,
     token: () => discord.linked ? discord.linkToken : '',
     list: () => discord.request('GET', '/v1/remote/tvs'),
@@ -166,19 +174,30 @@ class AppServices {
   RelayHost? _relayHost;
   bool _hostsRemote = false;
 
+  /// New episode alerts for the shows this profile watches.
+  late final episodeAlerts = EpisodeAlerts(store.preferences);
+
+  /// Whether this TV or computer answers phone remotes away from home.
+  final hostsRemote = ValueNotifier<bool>(false);
+
   /// On a TV or computer: keeps a connection to the Discord bot while the
   /// profile is linked and RemoteAnywhere is on, so the member's phones
   /// reach it away from home.
   void hostRemote(bool on) {
     _hostsRemote = on;
+    hostsRemote.value = on && store.flag('RemoteAnywhere');
     _relayCheck();
   }
 
   void _relayCheck() {
+    hostsRemote.value = _hostsRemote && !closed && store.flag('RemoteAnywhere');
+    // The Otakase account carries the remote when the profile has one.
     final want =
         _hostsRemote &&
         !closed &&
         discord.linked &&
+        !discord.viaAccount &&
+        accountRoute?.call() == null &&
         store.flag('RemoteAnywhere');
     if (want && _relayHost == null) {
       _relayHost = RelayHost(
@@ -215,6 +234,7 @@ class AppServices {
   Future<void> close() async {
     if (closed) return;
     await stopPlayback?.call();
+    episodeAlerts.dispose();
     heritage.closed = true;
     await watchRooms.close();
     await party.close();

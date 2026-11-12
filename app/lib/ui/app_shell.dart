@@ -124,6 +124,7 @@ class _AppShellState extends State<AppShell> {
     HardwareKeyboard.instance.addHandler(konamiKey);
     widget.services.party.open = partyOpen;
     widget.services.discord.notify = fromDiscord;
+    widget.services.episodeAlerts.show = fromDiscord;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await widget.services.discord.initialize();
       unawaited(widget.services.extras.refreshClub());
@@ -182,7 +183,8 @@ class _AppShellState extends State<AppShell> {
   }
 
   /// A new episode of a followed show, a shared show or a reply arrived
-  /// from Discord: say so; it waits under Community, From Discord.
+  /// from Discord: say so; it waits under Community, From Discord. New
+  /// episode alerts on computers use it too.
   void fromDiscord(String text) {
     if (!mounted || widget.services.playerStatus != null) return;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -229,6 +231,9 @@ class _AppShellState extends State<AppShell> {
     }
     if (widget.services.discord.notify == fromDiscord) {
       widget.services.discord.notify = null;
+    }
+    if (widget.services.episodeAlerts.show == fromDiscord) {
+      widget.services.episodeAlerts.show = null;
     }
     FocusManager.instance.removeHighlightModeListener(modeChanged);
     widget.services.auth.remoteLink = null;

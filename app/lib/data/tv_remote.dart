@@ -1297,13 +1297,13 @@ class RemoteLink extends ChangeNotifier {
 
   /// The way through the Discord bot when the local network can't reach
   /// the TV; null keeps the remote local only.
-  final RelayClient? relay;
+  final AwayRoute? relay;
   final String phoneName;
   TVDevice tv;
   Json status = {};
   LinkState state = LinkState.connecting;
   String? error;
-  WebSocket? _socket;
+  RemoteChannel? _socket;
   Timer? _retry, _poll, _home;
   int _fails = 0, _seq = 0;
   bool _closed = false, _finding = false;
@@ -1330,9 +1330,9 @@ class RemoteLink extends ChangeNotifier {
     if (_closed) return;
     _retry?.cancel();
     if (state != LinkState.lost) _set(LinkState.connecting);
-    final WebSocket socket;
+    final RemoteChannel socket;
     try {
-      socket = await remote.openLive(tv);
+      socket = SocketChannel(await remote.openLive(tv));
     } on WebSocketException {
       // Not upgraded: an older TV, or this phone is no longer paired.
       try {
@@ -1357,7 +1357,7 @@ class RemoteLink extends ChangeNotifier {
     _attach(socket, LinkState.live);
   }
 
-  Future<WebSocket?> _viaRelay() async {
+  Future<RemoteChannel?> _viaRelay() async {
     final bot = relay;
     if (bot == null || !bot.available || _closed) return null;
     try {
@@ -1367,7 +1367,7 @@ class RemoteLink extends ChangeNotifier {
     }
   }
 
-  void _attach(WebSocket socket, LinkState as) {
+  void _attach(RemoteChannel socket, LinkState as) {
     if (_closed) {
       unawaited(socket.close());
       return;
@@ -1418,7 +1418,7 @@ class RemoteLink extends ChangeNotifier {
         await socket.close();
         return;
       }
-      _attach(socket, LinkState.live);
+      _attach(SocketChannel(socket), LinkState.live);
     } catch (_) {
       /* Still away. */
     }

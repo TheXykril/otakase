@@ -97,6 +97,7 @@ const settingLabels = <String, String>{
   'ResumePlayback': 'Resume where you left off',
   'CheckUpdates': 'Check for updates',
   'KeepScreenOn': 'Keep screen on',
+  'EpisodeAlerts': 'New episode alerts',
   'RemoteAnywhere': 'Phone remote from anywhere',
   'DiscordWatchWithMe': 'Watch with me',
   'Notifications': 'Notifications',
@@ -708,6 +709,18 @@ class _SettingsPageState extends State<SettingsPage> {
           ]),
         ),
       ]),
+      if (!widget.isTV && (Host.android || isDesktop))
+        group('Notifications', LucideIcons.bell, [
+          toggle(
+            'EpisodeAlerts',
+            Host.android
+                ? 'Get a notification when a new episode of a show you watch '
+                      'comes out. Checked a few times a day.'
+                : 'Say so in the app when a new episode of a show you watch '
+                      'comes out.',
+            icon: LucideIcons.bellRing,
+          ),
+        ]),
       group('About & updates', LucideIcons.shield, [
         toggle(
           'CheckUpdates',

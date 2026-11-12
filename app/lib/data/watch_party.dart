@@ -378,11 +378,12 @@ class WatchParties extends ChangeNotifier {
   }
 
   Future<Json> _dial(String partyId) async {
-    final url = partySocketUrl(discord.baseUrl, partyId);
+    final (base, token) = await discord.endpoint('/v1/party/$partyId/ws');
+    final url = partySocketUrl(base, partyId);
     final PartySocket socket;
     try {
       socket = await connect(url, {
-        'Authorization': 'Bearer ${discord.linkToken}',
+        'Authorization': 'Bearer $token',
         'User-Agent': 'Otakase/$appVersion',
       });
     } catch (_) {

@@ -165,6 +165,27 @@ class AuthService extends ChangeNotifier {
   bool get hasAccounts => accounts.isNotEmpty;
   Account? account(String service) => accounts[service];
 
+  /// Gets otakase://account links (Otakase account sign-in) on Android.
+  static Future<void> Function(Uri)? accountLink;
+
+  /// Reads the saved logins again, after the account vault brought new ones.
+  Future<void> reloadAccounts() async {
+    for (final service in ['AniList', 'MAL']) {
+      final raw = await storage.read('account.$service');
+      if (closed) return;
+      if (raw == null) continue;
+      try {
+        accounts[service] = Account.fromJson(
+          (jsonDecode(raw) as Map).cast<String, dynamic>(),
+        );
+      } catch (_) {
+        /* Keep the login this device had. */
+      }
+    }
+    await refreshAniListOptions();
+    notifyListeners();
+  }
+
   Future<void> initialize({bool platformCallbacks = true}) async {
     for (final service in ['AniList', 'MAL']) {
       final raw = await storage.read('account.$service');
@@ -199,6 +220,12 @@ class AuthService extends ChangeNotifier {
           await remoteLink?.call(Uri.parse(call.arguments as String));
           return;
         }
+        if (call.method == 'login' &&
+            call.arguments is String &&
+            Uri.tryParse(call.arguments as String)?.host == 'account') {
+          await accountLink?.call(Uri.parse(call.arguments as String));
+          return;
+        }
         if (call.method == 'login' && call.arguments is String) {
           try {
             await accept(Uri.parse(call.arguments as String));
@@ -210,7 +237,11 @@ class AuthService extends ChangeNotifier {
       });
       try {
         final initial = await platform.invokeMethod<String>('initialLogin');
-        if (initial != null) await accept(Uri.parse(initial));
+        if (initial != null && Uri.tryParse(initial)?.host == 'account') {
+          await accountLink?.call(Uri.parse(initial));
+        } else if (initial != null) {
+          await accept(Uri.parse(initial));
+        }
       } on MissingPluginException {
         /* Tests have no Android host. */
       } on PlatformException {

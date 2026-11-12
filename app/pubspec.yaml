@@ -13,6 +13,7 @@ dependencies:
   qr_flutter: ^4.1.0
   http: 1.6.0
   crypto: ^3.0.7
+  cryptography: 2.9.0
   html: 0.15.6
   shared_preferences: 2.5.4
   cached_network_image: 3.4.1

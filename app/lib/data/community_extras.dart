@@ -405,14 +405,11 @@ class CommunityExtras extends ChangeNotifier {
   /// Posts a report to the support forum as the linked member; returns the
   /// post's link.
   Future<String> report(String title, String description, String diag) async {
-    final token = discord.linkToken;
+    final (base, token) = await discord.endpoint('/v1/report');
     if (!discord.linked || token.isEmpty) {
       throw const BotFailure(401, 'Not linked');
     }
-    final r = http.MultipartRequest(
-      'POST',
-      Uri.parse('${discord.baseUrl}/v1/report'),
-    );
+    final r = http.MultipartRequest('POST', Uri.parse('$base/v1/report'));
     r.headers.addAll({
       'Accept': 'application/json',
       'User-Agent': 'Otakase/$appVersion',
@@ -434,6 +431,8 @@ class CommunityExtras extends ChangeNotifier {
         value['error']?.toString() ?? 'Request failed',
       );
     }
+    // Queued by the account server while the bot is offline.
+    if (response.statusCode == 202) return '';
     return value['url'] as String? ?? '';
   }
 }

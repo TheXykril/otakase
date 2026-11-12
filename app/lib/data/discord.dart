@@ -84,6 +84,24 @@ String cleanProviderError(String text) => clipRunes(
   160,
 );
 
+/// The Otakase account with Discord attached, standing in for the old app
+/// link: Discord calls go through the account server as the member.
+abstract class DiscordBridge {
+  /// Whether the account is signed in and has Discord attached.
+  bool get ready;
+  String get name;
+  String get base;
+  Future<String> token();
+
+  /// Sends a playback heartbeat over the live connection.
+  bool heartbeat(Json body);
+}
+
+/// Bot calls the account server passes on, by path.
+bool bridgedPath(String path) => RegExp(
+  r'^/v1/(rating|report|provider-report|parties|club|news|party/start|party/[A-Za-z0-9_-]+/(rsvp|ws))(\?|$)',
+).hasMatch(path);
+
 class DiscordService extends ChangeNotifier {
   DiscordService({
     required this.client,
@@ -125,9 +143,40 @@ class DiscordService extends ChangeNotifier {
     notify?.call(line);
   }
 
+  /// Set while the profile belongs to an Otakase account with Discord.
+  DiscordBridge? _bridge;
+  DiscordBridge? get bridge => _bridge;
+  set bridge(DiscordBridge? value) {
+    if (identical(value, _bridge)) return;
+    _bridge = value;
+    if (!closed) {
+      notifyListeners();
+      if (viaAccount) {
+        // The account's live connection carries the inbox now.
+        _inboxTimer?.cancel();
+        unawaited(heartbeat(null, 0, 0));
+      } else {
+        _startLinked();
+      }
+    }
+  }
+
+  /// Discord reached through the Otakase account instead of the old link.
+  bool get viaAccount => !closed && (_bridge?.ready ?? false);
+
   bool get linked =>
+      viaAccount ||
       !closed && (_link['token'] as String? ?? '').trim().isNotEmpty;
-  String get name => _link['discord_name'] as String? ?? '';
+  String get name =>
+      viaAccount ? _bridge!.name : _link['discord_name'] as String? ?? '';
+
+  /// Where a bot call for [path] goes and the bearer token it carries.
+  Future<(String, String)> endpoint(String path) async {
+    if (viaAccount && bridgedPath(path)) {
+      return (_bridge!.base, await _bridge!.token());
+    }
+    return (baseUrl, linkToken);
+  }
 
   /// The link's bearer token, for requests [request] can't make (WebSockets,
   /// uploads).
@@ -160,7 +209,7 @@ class DiscordService extends ChangeNotifier {
   }
 
   void _startLinked() {
-    if (!linked) return;
+    if (!linked || viaAccount) return;
     unawaited(heartbeat(null, 0, 0));
     unawaited(claimPendingGrass());
     _scheduleInbox(Duration.zero);
@@ -190,6 +239,9 @@ class DiscordService extends ChangeNotifier {
     Duration timeout = const Duration(seconds: 5),
   }) async {
     if (closed) throw StateError('Profile closed');
+    if (viaAccount && bridgedPath(path)) {
+      return _accountRequest(method, path, body: body, timeout: timeout);
+    }
     final token = authenticated ? _link['token'] as String? ?? '' : '';
     if (authenticated && token.isEmpty) {
       throw const BotFailure(401, 'Not linked');
@@ -231,6 +283,45 @@ class DiscordService extends ChangeNotifier {
     if (response.statusCode ~/ 100 != 2) {
       throw BotFailure(
         response.statusCode,
+        value['error']?.toString().trim() ?? 'Request failed',
+      );
+    }
+    return {'_status': response.statusCode, ...value};
+  }
+
+  Future<Json> _accountRequest(
+    String method,
+    String path, {
+    Json? body,
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    final bridge = _bridge!;
+    final r = http.Request(method, Uri.parse('${bridge.base}$path'));
+    r.headers.addAll({
+      'Accept': 'application/json',
+      'User-Agent': 'Otakase/$appVersion',
+      'Authorization': 'Bearer ${await bridge.token()}',
+    });
+    if (body != null) {
+      r.headers['Content-Type'] = 'application/json';
+      r.body = jsonEncode(body);
+    }
+    final response = await (() async => http.Response.fromStream(
+      await client.send(r),
+    ))().timeout(timeout);
+    Json value = {};
+    try {
+      if (response.body.trim().isNotEmpty) {
+        value = (jsonDecode(response.body) as Map).cast<String, dynamic>();
+      }
+    } catch (_) {
+      if (response.statusCode ~/ 100 == 2) {
+        throw const FormatException('Discord bot: unreadable answer');
+      }
+    }
+    if (response.statusCode ~/ 100 != 2) {
+      throw BotFailure(
+        response.statusCode == 401 ? 403 : response.statusCode,
         value['error']?.toString().trim() ?? 'Request failed',
       );
     }
@@ -322,6 +413,10 @@ class DiscordService extends ChangeNotifier {
           : null,
       'watched_seconds': max(0, seconds),
     };
+    if (viaAccount) {
+      _bridge!.heartbeat(payload);
+      return Future.value();
+    }
     return _heartbeats = _heartbeats.catchError((Object _) {}).then((_) async {
       if (!linked || epoch != _epoch || token != _link['token']) return;
       try {
@@ -370,7 +465,7 @@ class DiscordService extends ChangeNotifier {
 
   void _scheduleInbox(Duration delay) {
     _inboxTimer?.cancel();
-    if (!linked) return;
+    if (!linked || viaAccount) return;
     final epoch = _epoch;
     _inboxTimer = Timer(delay, () async {
       if (!linked || epoch != _epoch) return;
@@ -405,6 +500,19 @@ class DiscordService extends ChangeNotifier {
         .map((m) => m.cast<String, dynamic>())
         .toList();
     if (items.isEmpty) return;
+    await handleInbox(items);
+    if (closed || epoch != _epoch) return;
+    await request(
+      'POST',
+      '/v1/inbox/ack',
+      body: {'ids': items.map((i) => i['id'] as String? ?? '').toList()},
+    );
+  }
+
+  /// Takes inbox items from the bot or the Otakase account.
+  Future<void> handleInbox(List<Json> items) async {
+    if (closed) throw StateError('Profile closed');
+    final epoch = _epoch;
     var kept = inbox;
     for (final item in items) {
       final expiry = DateTime.tryParse(item['expires'] as String? ?? '');
@@ -454,14 +562,9 @@ class DiscordService extends ChangeNotifier {
           }
       }
     }
-    if (closed || epoch != _epoch) return;
+    if (closed || epoch != _epoch) throw StateError('Profile closed');
     await store.set('DiscordInbox', kept.take(50).toList());
     notifyListeners();
-    await request(
-      'POST',
-      '/v1/inbox/ack',
-      body: {'ids': items.map((i) => i['id'] as String? ?? '').toList()},
-    );
   }
 
   Future<void> refreshNews() async {
@@ -471,7 +574,9 @@ class DiscordService extends ChangeNotifier {
         : null;
     if (at != null && now().difference(at) < const Duration(hours: 6)) return;
     try {
-      final r = await request('GET', '/v1/news', authenticated: false);
+      final r = viaAccount
+          ? await _accountRequest('GET', '/v1/news')
+          : await request('GET', '/v1/news', authenticated: false);
       if (!closed) {
         await store.set('DiscordNews', {
           ...r,
