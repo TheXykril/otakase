@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core.dart';
 import '../services.dart';
+import 'account_center.dart';
 import 'auth.dart';
 import 'catalog.dart';
 import 'models.dart';
@@ -61,8 +62,12 @@ class Profile {
     this.lockSalt = '',
     this.failures = 0,
     this.lockUntil = 0,
+    this.account = '',
   });
   final String id, name, avatar, lockHash, lockSalt;
+
+  /// The Otakase account this profile syncs with, '' for this device only.
+  final String account;
   final int color, failures, lockUntil;
   bool get locked => lockHash.isNotEmpty;
   Profile copyWith({
@@ -73,6 +78,7 @@ class Profile {
     String? lockSalt,
     int? failures,
     int? lockUntil,
+    String? account,
   }) => Profile(
     id: id,
     name: name ?? this.name,
@@ -82,6 +88,7 @@ class Profile {
     lockSalt: lockSalt ?? this.lockSalt,
     failures: failures ?? this.failures,
     lockUntil: lockUntil ?? this.lockUntil,
+    account: account ?? this.account,
   );
   Json toJson() => {
     'id': id,
@@ -92,6 +99,7 @@ class Profile {
     'lockSalt': lockSalt,
     'failures': failures,
     'lockUntil': lockUntil,
+    if (account.isNotEmpty) 'account': account,
   };
   factory Profile.fromJson(Json j) => Profile(
     id: j['id'] as String,
@@ -102,6 +110,7 @@ class Profile {
     lockSalt: j['lockSalt'] as String? ?? '',
     failures: number(j['failures']),
     lockUntil: number(j['lockUntil']),
+    account: j['account'] as String? ?? '',
   );
 }
 
@@ -119,6 +128,9 @@ class ProfileLocked implements Exception {
 
 class ProfileTokens implements TokenStore {
   ProfileTokens(this.base, this.preferences, this.profileId);
+
+  /// Hears every saved login, so the account vault can carry it.
+  static void Function(String profile, String key, String? value)? written;
   final TokenStore base;
   final SharedPreferences preferences;
   final String profileId;
@@ -147,6 +159,7 @@ class ProfileTokens implements TokenStore {
           );
         }
         await base.write('$prefix$key', value);
+        written?.call(profileId, key, value);
         if (value == null) keys.remove(key);
         await preferences.setStringList(
           '${prefix}secure.keys',
@@ -198,6 +211,9 @@ class ProfileManager extends ChangeNotifier {
   List<Profile> get profiles => List.unmodifiable(_profiles);
   String activeId = '1';
   AppServices? session;
+
+  /// The Otakase accounts on this device, set once at start.
+  AccountCenter? accounts;
   int generation = 0;
   bool busy = false, closed = false;
   bool initialized = false;
@@ -499,6 +515,14 @@ class ProfileManager extends ChangeNotifier {
             .toList()) {
       await preferences.remove(key);
     }
+    if (p.account.isNotEmpty) {
+      // The account learns this profile is gone on the next sync.
+      final key = 'account.${p.account}.deleted';
+      await preferences.setStringList(
+        key,
+        {...preferences.getStringList(key) ?? <String>[], id}.toList(),
+      );
+    }
     _profiles.removeWhere((p) => p.id == id);
     _unlocks.remove(id);
     if (activeId == id) activeId = _profiles.first.id;
@@ -506,10 +530,178 @@ class ProfileManager extends ChangeNotifier {
     if (!closed) notifyListeners();
   }
 
+  // ---- Otakase account sync ---------------------------------------------
+
+  /// The open settings of profile [id], when it is the active one.
+  AppStore? storeOf(String id) =>
+      session != null && activeId == id ? session!.store : null;
+
+  /// Profiles that belong to an account.
+  List<Profile> boundTo(String account) =>
+      _profiles.where((p) => p.account == account).toList();
+
+  /// Ties a profile to an account, or back to this device with ''.
+  Future<void> bind(String id, String account) async {
+    final p = profile(id);
+    if (p.account == account) return;
+    _replace(p.copyWith(account: account));
+    await _save();
+    notifyListeners();
+  }
+
+  /// Profiles of an account deleted on this device and not yet told.
+  List<String> deletedSynced(String account) =>
+      preferences.getStringList('account.$account.deleted') ?? const [];
+
+  Future<void> forgetDeleted(String account) =>
+      preferences.remove('account.$account.deleted');
+
+  /// Unties every profile of an account that signed out here. They stay on
+  /// this device as local profiles.
+  Future<void> unbindAll(String account) async {
+    var changed = false;
+    for (final p in boundTo(account)) {
+      _replace(p.copyWith(account: ''));
+      changed = true;
+    }
+    await preferences.remove('account.$account.deleted');
+    if (!changed) return;
+    await _save();
+    notifyListeners();
+  }
+
+  /// A profile from the account: made here if new, else updated.
+  Future<void> upsertSynced(String account, String id, Json fields) async {
+    final i = _profiles.indexWhere((p) => p.id == id);
+    String text(String key, String fallback) =>
+        fields.containsKey(key) ? fields[key] as String? ?? '' : fallback;
+    if (i < 0) {
+      if (_profiles.length >= 6) return;
+      final name = text('name', '').trim();
+      _profiles.add(
+        Profile(
+          id: id,
+          name: name.isEmpty ? 'Profile' : name,
+          color: fields.containsKey('color')
+              ? number(fields['color'])
+              : profileColors[_profiles.length % profileColors.length],
+          lockHash: text('lock', ''),
+          lockSalt: text('salt', ''),
+          account: account,
+        ),
+      );
+    } else {
+      final p = _profiles[i];
+      // Every device starts with profile 1: an unbound one on this device
+      // is the same profile and joins the account.
+      if (p.account.isNotEmpty && p.account != account) return;
+      final name = text('name', p.name).trim();
+      final lock = text('lock', p.lockHash);
+      _profiles[i] = p.copyWith(
+        name: name.isEmpty ? p.name : name,
+        color: fields.containsKey('color') ? number(fields['color']) : null,
+        lockHash: lock,
+        lockSalt: text('salt', p.lockSalt),
+        // A new lock code resets wrong tries.
+        failures: lock == p.lockHash ? null : 0,
+        lockUntil: lock == p.lockHash ? null : 0,
+        account: account,
+      );
+    }
+    await _save();
+    notifyListeners();
+  }
+
+  /// A profile deleted on another device goes here too. The last profile
+  /// on the device stays, as a local profile.
+  Future<void> removeSynced(String id) async {
+    final i = _profiles.indexWhere((p) => p.id == id);
+    if (i < 0) return;
+    if (_profiles.length == 1) {
+      _replace(_profiles[i].copyWith(account: ''));
+      await _save();
+      notifyListeners();
+      return;
+    }
+    if (activeId == id) {
+      final previous = session;
+      if (previous != null) {
+        previous.auth.removeListener(_avatarChanged);
+        await previous.close();
+      }
+      session = null;
+    }
+    await ProfileTokens(tokens, preferences, id).clear();
+    for (final key
+        in preferences
+            .getKeys()
+            .where((key) => key.startsWith('profile.$id.'))
+            .toList()) {
+      await preferences.remove(key);
+    }
+    _profiles.removeAt(i);
+    _unlocks.remove(id);
+    if (activeId == id) {
+      activeId = _profiles.first.id;
+      if (!active.locked) await switchTo(activeId);
+    }
+    await _save();
+    if (!closed) notifyListeners();
+  }
+
+  /// Settings from the account for a profile, open or not.
+  Future<void> applySettings(String id, Json values) async {
+    final store = storeOf(id);
+    if (store != null) return store.applyRemote(values);
+    Json saved;
+    try {
+      saved = (jsonDecode(
+        preferences.getString('profile.$id.settings.v1') ?? '{}',
+      ) as Map).cast<String, dynamic>();
+    } catch (_) {
+      saved = {};
+    }
+    for (final MapEntry(:key, :value) in values.entries) {
+      if (value == null) {
+        saved.remove(key);
+      } else {
+        saved[key] = value;
+      }
+    }
+    await preferences.setString('profile.$id.settings.v1', jsonEncode(saved));
+  }
+
+  /// Resume spots from the account for a profile, open or not.
+  Future<void> applyResume(String id, List<WatchEntry> entries) async {
+    final store = storeOf(id);
+    if (store != null) return store.applyResume(entries);
+    final byKey = <String, WatchEntry>{};
+    try {
+      for (final e in jsonDecode(
+        preferences.getString('profile.$id.history.v1') ?? '[]',
+      ) as List) {
+        final w = WatchEntry.fromJson((e as Map).cast<String, dynamic>());
+        byKey[w.anime.key] = w;
+      }
+    } catch (_) {
+      /* Damaged history starts over from the account's spots. */
+    }
+    for (final e in entries) {
+      final old = byKey[e.anime.key];
+      if (old != null && old.updated >= e.updated) continue;
+      byKey[e.anime.key] = mergeResume(old, e);
+    }
+    await preferences.setString(
+      'profile.$id.history.v1',
+      jsonEncode(byKey.values.map((e) => e.toJson()).toList()),
+    );
+  }
+
   Future<void>? _closing;
   Future<void> close() => _closing ??= _close();
   Future<void> _close() async {
     closed = true;
+    await accounts?.close();
     await session?.close();
     session = null;
     dispose();

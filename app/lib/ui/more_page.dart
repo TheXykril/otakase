@@ -25,6 +25,7 @@ import 'watch_party_page.dart';
 import 'tv_remote_page.dart';
 import 'watch_rooms_page.dart';
 import 'account_sync_status.dart';
+import 'account_page.dart';
 
 Future<void> openAccounts(
   BuildContext context,
@@ -841,6 +842,7 @@ class _AccountsPageState extends State<AccountsPage> {
         builder: (context, _) => ListView(
           padding: const EdgeInsets.all(24),
           children: [
+            OtakaseAccountSection(services: widget.services, isTV: widget.isTV),
             // Only means something once both lists are signed in.
             if (widget.services.auth.signedIn('AniList') &&
                 widget.services.auth.signedIn('MAL'))

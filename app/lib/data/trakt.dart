@@ -298,6 +298,12 @@ class Trakt extends ChangeNotifier {
   String? lastError;
   bool get signedIn => _token != null;
 
+  /// Reads the saved login again, after the account vault brought one.
+  Future<void> reload() {
+    _loaded = false;
+    return load();
+  }
+
   Future<void> load() async {
     if (_loaded) return;
     _loaded = true;

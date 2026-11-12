@@ -13,6 +13,55 @@ import 'tv_remote.dart';
 // it, and gets a local pairing without Allow, since only the member's own
 // apps reach their TVs.
 
+/// One connection from the phone to a TV: a WebSocket on the home network
+/// or through the Discord bot, or messages through the Otakase account.
+abstract class RemoteChannel {
+  StreamSubscription<dynamic> listen(
+    void Function(dynamic data) onData, {
+    void Function()? onDone,
+    Function? onError,
+    bool? cancelOnError,
+  });
+  void add(String data);
+  Future<void> close();
+  int? get closeCode;
+  String? get closeReason;
+}
+
+class SocketChannel implements RemoteChannel {
+  SocketChannel(this.socket);
+  final WebSocket socket;
+  @override
+  StreamSubscription<dynamic> listen(
+    void Function(dynamic data) onData, {
+    void Function()? onDone,
+    Function? onError,
+    bool? cancelOnError,
+  }) => socket.listen(
+    onData,
+    onDone: onDone,
+    onError: onError,
+    cancelOnError: cancelOnError,
+  );
+  @override
+  void add(String data) => socket.add(data);
+  @override
+  Future<void> close() => socket.close();
+  @override
+  int? get closeCode => socket.closeCode;
+  @override
+  String? get closeReason => socket.closeReason;
+}
+
+/// A way to the member's TVs when the home network can't reach them.
+abstract class AwayRoute {
+  bool get available;
+
+  /// The TVs and computers online now.
+  Future<List<TVDevice>> tvs();
+  Future<RemoteChannel> open(TVDevice tv, String phone);
+}
+
 /// Opens a WebSocket to the bot at [url] with the link [token].
 typedef RelayConnect = Future<WebSocket> Function(Uri url, String token);
 
@@ -172,7 +221,7 @@ class RelayHost {
 
 /// The phone's side: the member's TVs online through the bot, and a
 /// connection to one of them.
-class RelayClient {
+class RelayClient implements AwayRoute {
   RelayClient({
     required this.base,
     required this.token,
@@ -186,9 +235,11 @@ class RelayClient {
   final Future<Json> Function() list;
   final RelayConnect connect;
 
+  @override
   bool get available => token().isNotEmpty;
 
   /// The TVs on this account that are online now.
+  @override
   Future<List<TVDevice>> tvs() async {
     if (!available) return const [];
     final j = await list();
@@ -205,8 +256,11 @@ class RelayClient {
     ];
   }
 
-  Future<WebSocket> open(TVDevice tv, String phone) => connect(
-    relayUrl(base, '/v1/remote/control', {'id': tv.id, 'name': phone}),
-    token(),
+  @override
+  Future<RemoteChannel> open(TVDevice tv, String phone) async => SocketChannel(
+    await connect(
+      relayUrl(base, '/v1/remote/control', {'id': tv.id, 'name': phone}),
+      token(),
+    ),
   );
 }

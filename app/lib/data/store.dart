@@ -65,6 +65,7 @@ const settingDefaults = <String, dynamic>{
   'TorrentOnMobileData': false,
   'CheckUpdates': true,
   'KeepScreenOn': false,
+  'EpisodeAlerts': false,
   // Phones on the same Discord account control TVs through the bot when
   // the local network can't reach them.
   'RemoteAnywhere': true,
@@ -233,6 +234,42 @@ class AppStore extends ChangeNotifier {
     await _persist();
   }
 
+  /// The saved settings as they are, for the account sync.
+  Json syncedValues() => Map.of(_values);
+
+  /// Every show in this profile's history, hidden ones too.
+  List<WatchEntry> get allHistory => _history.values.toList();
+
+  /// Settings from the account: null removes a setting.
+  Future<void> applyRemote(Json values) async {
+    if (values.isEmpty) return;
+    for (final MapEntry(:key, :value) in values.entries) {
+      if (value == null) {
+        _values.remove(key);
+      } else {
+        _values[key] = value;
+      }
+    }
+    notifyListeners();
+    await preferences.setString('${namespace}settings.v1', jsonEncode(_values));
+  }
+
+  /// Resume spots from another device: a show's newer spot wins, episodes
+  /// watched anywhere stay watched.
+  Future<void> applyResume(List<WatchEntry> entries) async {
+    var changed = false;
+    for (final e in entries) {
+      final old = entry(e.anime);
+      if (old != null && old.updated >= e.updated) continue;
+      _history.remove(old?.anime.key);
+      _history[e.anime.key] = mergeResume(old, e);
+      changed = true;
+    }
+    if (!changed) return;
+    notifyListeners();
+    await _persist();
+  }
+
   Future<void> set(String key, dynamic val) async {
     _values[key] = val;
     notifyListeners();
@@ -319,3 +356,16 @@ class AppStore extends ChangeNotifier {
       )
       .then((_) {});
 }
+
+/// A newer resume spot from another device, keeping what this device knew:
+/// watched episodes from both and spots of other episodes seen here.
+WatchEntry mergeResume(WatchEntry? old, WatchEntry newer) => WatchEntry(
+  anime: newer.anime,
+  episode: newer.episode,
+  position: newer.position,
+  duration: newer.duration,
+  watched: ({...?old?.watched, ...newer.watched}.toList()..sort()),
+  viewing: {...?old?.viewing, ...newer.viewing},
+  resumes: {...?old?.resumes, ...newer.resumes},
+  updated: newer.updated,
+);

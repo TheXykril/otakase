@@ -40,7 +40,8 @@ class MainActivity : FlutterActivity() {
         it.scheme == "otakase" && it.host == "remote"
     }?.toString()
     private fun loginUri(intent: Intent?): String? = intent?.data?.takeIf {
-        it.scheme == "otakase" && it.host == "login"
+        // Tracker logins and Otakase account sign-ins share one route.
+        it.scheme == "otakase" && (it.host == "login" || it.host == "account")
     }?.toString()
     // The Wi-Fi or Ethernet interface this device is on, as {name, index}.
     // Android 11 and later hide the interface list from the Go core, which
@@ -156,6 +157,17 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(if (call.arguments == true) localNetwork() else null)
                 } catch (_: Exception) { result.error("unavailable", "Local discovery unavailable", null) }
+                "episodeAlerts" -> {
+                    val on = call.argument<Boolean>("on") == true
+                    @Suppress("UNCHECKED_CAST")
+                    val shows = call.argument<List<Map<String, Any?>>>("shows") ?: emptyList()
+                    if (on && Build.VERSION.SDK_INT >= 33 &&
+                        checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 47614)
+                    }
+                    EpisodeAlerts.update(applicationContext, on, shows)
+                    result.success(null)
+                }
                 "status" -> result.success(deviceStatus())
                 "deviceName" -> result.success(deviceName())
                 "keepAwake" -> {
@@ -164,7 +176,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "launchUri" -> try {
                     val uri = android.net.Uri.parse(call.arguments as String)
-                    require(uri.scheme == "https" && uri.host in listOf("anilist.co", "myanimelist.net", "otakase.com", "otakase.xyverion.com", "bot.xyverion.com", "discord.com", "discord.gg", "trakt.tv", "auth.trakt.tv"))
+                    require(uri.scheme == "https" && uri.host in listOf("anilist.co", "myanimelist.net", "otakase.com", "account.otakase.com", "otakase.xyverion.com", "bot.xyverion.com", "discord.com", "discord.gg", "trakt.tv", "auth.trakt.tv"))
                     startActivity(Intent(Intent.ACTION_VIEW, uri))
                     result.success(null)
                 } catch (_: Exception) { result.error("unavailable", "Browser unavailable", null) }

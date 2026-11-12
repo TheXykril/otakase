@@ -8,7 +8,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core.dart';
+import 'data/account.dart';
+import 'data/account_center.dart';
 import 'data/auth.dart';
+import 'data/discord.dart' show appVersion;
+import 'data/tv_remote.dart' show localDeviceName;
 import 'data/profiles.dart';
 import 'desktop/desktop_core.dart';
 import 'desktop/launcher.dart';
@@ -72,14 +76,37 @@ Future<void> main([List<String> args = const []]) async {
   final core = CoreClient();
   final androidTV = !isDesktop && await core.isTV();
   Host.tv = androidTV;
+  final preferences = await SharedPreferences.getInstance();
+  final tokens = platformTokenStore();
   final profiles = ProfileManager(
-    preferences: await SharedPreferences.getInstance(),
-    tokens: platformTokenStore(),
+    preferences: preferences,
+    tokens: tokens,
     core: core,
     // Desktop starts from the wide TV layout (shelves, top navigation) and
     // adds mouse and window controls on top.
     isTV: isDesktop || androidTV,
   );
+  // Otakase accounts start first, so a sign-in link that opened the app
+  // finds them ready.
+  try {
+    final deviceName = await localDeviceName().catchError((Object _) => null);
+    profiles.accounts = AccountCenter(
+      profiles: profiles,
+      preferences: preferences,
+      tokens: tokens,
+      device: DeviceInfo(
+        name: deviceName == null || deviceName.trim().isEmpty
+            ? (androidTV ? 'Android TV' : 'Otakase')
+            : deviceName.trim(),
+        os: AccountManager.osName(),
+        isTV: androidTV,
+        version: appVersion,
+      ),
+    );
+    await profiles.accounts!.initialize();
+  } catch (_) {
+    /* Accounts are optional: the app works signed out. */
+  }
   try {
     await profiles.initialize(playbackProfile: playback?.profileId);
   } catch (e) {
