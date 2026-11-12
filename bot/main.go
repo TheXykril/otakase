@@ -59,6 +59,10 @@ type config struct {
 	MALClientID        string   // MyAnimeList API app for /link-mal, empty = off
 	MALSecret          string   // that app's client secret
 	WatchCDN           string   // Discord URL mapping path of the edge cache Worker, e.g. /.proxy/cdn; empty = off
+	AccountURL         string   // the Otakase account server
+	AccountSecret      string   // shared with the account server, empty = off
+	CloudflareToken    string   // Cloudflare API token with Account Analytics read, for the free limit warning
+	CloudflareAccount  string   // the Cloudflare account id the account server runs in
 }
 
 // loadEnvFile sets variables from a KEY=value file, keeping any that are
@@ -107,6 +111,10 @@ var haOptions = map[string]string{
 	"mal_client_id":             "OTAKASE_MAL_CLIENT_ID",
 	"mal_client_secret":         "OTAKASE_MAL_CLIENT_SECRET",
 	"watch_cdn":                 "OTAKASE_WATCH_CDN",
+	"account_url":               "OTAKASE_ACCOUNT_URL",
+	"account_secret":            "OTAKASE_ACCOUNT_SECRET",
+	"cloudflare_api_token":      "OTAKASE_CLOUDFLARE_TOKEN",
+	"cloudflare_account_id":     "OTAKASE_CLOUDFLARE_ACCOUNT",
 }
 
 // loadHAOptions sets variables from a Home Assistant add-on options file,
@@ -160,6 +168,13 @@ func loadConfig() config {
 		MALClientID:        strings.TrimSpace(os.Getenv("OTAKASE_MAL_CLIENT_ID")),
 		MALSecret:          strings.TrimSpace(os.Getenv("OTAKASE_MAL_CLIENT_SECRET")),
 		WatchCDN:           strings.TrimSpace(os.Getenv("OTAKASE_WATCH_CDN")),
+		AccountURL:         strings.TrimRight(strings.TrimSpace(os.Getenv("OTAKASE_ACCOUNT_URL")), "/"),
+		AccountSecret:      strings.TrimSpace(os.Getenv("OTAKASE_ACCOUNT_SECRET")),
+		CloudflareToken:    strings.TrimSpace(os.Getenv("OTAKASE_CLOUDFLARE_TOKEN")),
+		CloudflareAccount:  strings.TrimSpace(os.Getenv("OTAKASE_CLOUDFLARE_ACCOUNT")),
+	}
+	if c.AccountURL == "" {
+		c.AccountURL = "https://account.otakase.com"
 	}
 	if h, err := strconv.Atoi(os.Getenv("OTAKASE_AIRING_HOUR")); err == nil && h >= 0 && h < 24 {
 		c.AiringHour = h

@@ -40,6 +40,10 @@ options:
   mal_client_id: ""
   mal_client_secret: ""
   watch_cdn: ""
+  account_url: "https://account.otakase.com"
+  account_secret: ""
+  cloudflare_api_token: ""
+  cloudflare_account_id: ""
 schema:
   token: password
   guild_id: str
@@ -60,3 +64,7 @@ schema:
   mal_client_id: str?
   mal_client_secret: password?
   watch_cdn: str?
+  account_url: url?
+  account_secret: password?
+  cloudflare_api_token: password?
+  cloudflare_account_id: str?

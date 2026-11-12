@@ -169,6 +169,10 @@ var errNoToken = errors.New("not linked")
 // appUser checks the Bearer token and returns the linked Discord user id.
 // It also notes when the app was last seen.
 func (b *bot) appUser(r *http.Request) (string, error) {
+	if user, key, ok := b.accountCaller(r); ok {
+		b.accountLink(user, key)
+		return user, nil
+	}
 	tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok || len(tok) < 32 {
 		return "", errNoToken

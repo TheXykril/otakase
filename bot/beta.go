@@ -59,7 +59,11 @@ func (b *bot) onTesterChange(s *discordgo.Session, m *discordgo.GuildMemberUpdat
 		return
 	}
 	change := testerChange(m.BeforeUpdate.Roles, m.Roles, role)
-	if change == 0 || !b.hasApp(m.User.ID) {
+	if change == 0 {
+		return
+	}
+	go b.accountRole(m.User.ID, change > 0)
+	if !b.hasApp(m.User.ID) {
 		return
 	}
 	n := b.sendToApps(m.User.ID, betaSetting(change > 0))

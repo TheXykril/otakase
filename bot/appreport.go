@@ -72,7 +72,7 @@ func (b *bot) apiReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var link appLink
-	h := hashToken(bearerToken(r))
+	h := b.callerKey(r)
 	b.store.view(func(d *storeData) { link = d.AppLinks[h] })
 	url, err := b.postReport(user, link, rep)
 	if err != nil {

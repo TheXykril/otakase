@@ -162,7 +162,7 @@ func (b *bot) apiPartyStart(w http.ResponseWriter, r *http.Request) {
 	if user == "" {
 		return
 	}
-	if !livePartyLimit.allow(hashToken(bearerToken(r)), appNow()) {
+	if !livePartyLimit.allow(b.callerKey(r), appNow()) {
 		apiError(w, http.StatusTooManyRequests, "starting parties too often")
 		return
 	}

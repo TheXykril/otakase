@@ -276,7 +276,7 @@ func (b *bot) apiUnlink(w http.ResponseWriter, r *http.Request) {
 	if b.requireApp(w, r) == "" {
 		return
 	}
-	h := hashToken(bearerToken(r))
+	h := b.callerKey(r)
 	b.store.update(func(d *storeData) { delete(d.AppLinks, h) })
 	writeJSON(w, http.StatusOK, struct{}{})
 }

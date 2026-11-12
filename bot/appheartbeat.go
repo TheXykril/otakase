@@ -197,7 +197,7 @@ func (b *bot) apiHeartbeat(w http.ResponseWriter, r *http.Request) {
 	if user == "" {
 		return
 	}
-	h := hashToken(bearerToken(r))
+	h := b.callerKey(r)
 	now := appNow()
 	if !heartbeatLimit.allow(h, now) {
 		apiError(w, http.StatusTooManyRequests, "too many heartbeats")
@@ -387,6 +387,7 @@ func (b *bot) giveTester(user, version, goos string) {
 		st.Tester = true
 		d.AppStats[user] = st
 	})
+	go b.accountRole(user, true)
 	if version == "" {
 		version = "unknown version"
 	}
