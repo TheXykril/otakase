@@ -20,6 +20,109 @@ import 'components.dart';
 // The Otakase account card at the top of Accounts, the Devices page and the
 // sign-in dialogs. Signed out, the app works exactly as before.
 
+/// One tappable line in the account screens, laid out like Settings rows:
+/// an icon, a title, a short line under it and a chevron.
+class AccountRow extends StatelessWidget {
+  const AccountRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.onTap,
+    this.isTV = false,
+    this.autofocus = false,
+    this.danger = false,
+    this.trailing,
+  });
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+  final bool isTV, autofocus, danger;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = onTap == null ? muted : (danger ? warn : fg);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: FocusBox(
+        isTV: isTV,
+        autofocus: autofocus,
+        radius: 12,
+        onPressed: onTap,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, size: 21, color: color),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: uiStyle(
+                      context,
+                      weight: FontWeight.w500,
+                      color: color,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle!,
+                      style: uiStyle(context, size: 15, color: muted),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            ?trailing,
+            if (trailing == null && onTap != null)
+              const Icon(LucideIcons.chevronRight, size: 18, color: muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A heading over a group of [AccountRow]s.
+class AccountRowsHeading extends StatelessWidget {
+  const AccountRowsHeading(this.title, {super.key});
+  final String title;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 20, 12, 6),
+    child: SectionLabel(title),
+  );
+}
+
+Future<bool?> _confirm(
+  BuildContext context,
+  String title,
+  String text,
+  String action,
+) => showDialog<bool>(
+  context: context,
+  builder: (context) => AlertDialog(
+    title: Text(title),
+    content: Text(text),
+    actions: [
+      TextButton(
+        autofocus: true,
+        onPressed: () => Navigator.pop(context, false),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(context, true),
+        child: Text(action),
+      ),
+    ],
+  ),
+);
+
 String _ago(int ms) {
   if (ms <= 0) return 'never';
   final d = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ms));
@@ -131,34 +234,30 @@ class _OtakaseAccountSectionState extends State<OtakaseAccountSection> {
                 'everything works without it.',
                 style: uiStyle(context, size: 15, color: muted),
               ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  for (final a in others)
-                    AppButton(
-                      label: 'Add this profile to ${a.name}',
-                      isTV: widget.isTV,
-                      filled: true,
-                      onPressed: busy
-                          ? null
-                          : () => run(() async {
-                              await p.bind(widget.services.profileId, a.id);
-                              await c.runFor(a.id)?.sync.sync();
-                            }),
-                    ),
-                  AppButton(
-                    key: const Key('account-sign-in'),
-                    label: others.isEmpty
-                        ? 'Sign in with Discord or Google'
-                        : 'Sign in to another account',
-                    isTV: widget.isTV,
-                    filled: others.isEmpty,
-                    autofocus: widget.isTV,
-                    onPressed: busy ? null : signIn,
-                  ),
-                ],
+              const SizedBox(height: 8),
+              for (final a in others)
+                AccountRow(
+                  icon: LucideIcons.userPlus,
+                  title: 'Add this profile to ${a.name}',
+                  subtitle: 'Use the account already signed in here',
+                  isTV: widget.isTV,
+                  onTap: busy
+                      ? null
+                      : () => run(() async {
+                          await p.bind(widget.services.profileId, a.id);
+                          await c.runFor(a.id)?.sync.sync();
+                        }),
+                ),
+              AccountRow(
+                key: const Key('account-sign-in'),
+                icon: LucideIcons.logIn,
+                title: others.isEmpty
+                    ? 'Sign in with Discord or Google'
+                    : 'Sign in to another account',
+                subtitle: busy ? 'Waiting for the browser…' : null,
+                isTV: widget.isTV,
+                autofocus: widget.isTV,
+                onTap: busy ? null : signIn,
               ),
             ],
             if (error ?? c.manager.lastError case final message?) ...[
@@ -214,44 +313,63 @@ class _OtakaseAccountSectionState extends State<OtakaseAccountSection> {
           style: uiStyle(context, size: 15, color: warn),
         ),
       ],
-      const SizedBox(height: 12),
-      Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          AppButton(
-            label: 'Devices',
-            isTV: widget.isTV,
-            autofocus: widget.isTV,
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    DevicesPage(center: c, run: r, isTV: widget.isTV),
-              ),
-            ),
+      const SizedBox(height: 8),
+      AccountRow(
+        icon: LucideIcons.monitorSmartphone,
+        title: 'Devices',
+        subtitle: r.vault.waiting.isNotEmpty && r.vault.hasKey
+            ? '${r.vault.waiting.length} waiting for approval'
+            : 'See, rename and remove your devices',
+        isTV: widget.isTV,
+        autofocus: widget.isTV,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => DevicesPage(center: c, run: r, isTV: widget.isTV),
           ),
-          if (!widget.isTV || isDesktop)
-            AppButton(
-              label: 'Add a TV',
-              isTV: widget.isTV,
-              onPressed: () => showDialog<void>(
-                context: context,
-                builder: (_) => _ApproveDialog(manager: c.manager, session: s),
-              ),
-            ),
-          AppButton(
-            label: 'What syncs',
-            isTV: widget.isTV,
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    SyncSettingsPage(center: c, run: r, isTV: widget.isTV),
-              ),
-            ),
+        ),
+      ),
+      if (!widget.isTV || isDesktop)
+        AccountRow(
+          icon: LucideIcons.tv,
+          title: 'Add a TV',
+          subtitle: 'Type the code the TV shows',
+          isTV: widget.isTV,
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (_) => _ApproveDialog(manager: c.manager, session: s),
           ),
-        ],
+        ),
+      AccountRow(
+        icon: LucideIcons.refreshCw,
+        title: 'What syncs',
+        subtitle: 'Choose what this device shares',
+        isTV: widget.isTV,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                SyncSettingsPage(center: c, run: r, isTV: widget.isTV),
+          ),
+        ),
+      ),
+      AccountRow(
+        key: const Key('account-sign-out'),
+        icon: LucideIcons.logOut,
+        title: 'Sign out',
+        subtitle: 'Profiles stay on this device',
+        isTV: widget.isTV,
+        onTap: busy
+            ? null
+            : () async {
+                final sure = await _confirm(
+                  context,
+                  'Sign out of ${s.name}?',
+                  'Profiles stay on this device as local profiles. Your tracker logins stay too.',
+                  'Sign out',
+                );
+                if (sure == true) await run(() => c.manager.signOut(s));
+              },
       ),
     ];
   }
@@ -657,6 +775,40 @@ class _DevicesPageState extends State<DevicesPage> {
     );
   }
 
+  Future<void> deviceMenu(Json d) async {
+    final mine = d['id'] == session.deviceId;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: panel,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AccountRow(
+                icon: LucideIcons.pencil,
+                title: 'Rename',
+                isTV: widget.isTV,
+                autofocus: widget.isTV,
+                onTap: () => Navigator.pop(context, 'rename'),
+              ),
+              AccountRow(
+                icon: mine ? LucideIcons.logOut : LucideIcons.x,
+                title: mine ? 'Sign out of this device' : 'Remove device',
+                danger: true,
+                isTV: widget.isTV,
+                onTap: () => Navigator.pop(context, 'remove'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (choice == 'rename') await rename(d);
+    if (choice == 'remove') await remove(d);
+  }
+
   Future<void> remove(Json d) async {
     final mine = d['id'] == session.deviceId;
     final sure = await confirm(
@@ -769,94 +921,87 @@ class _DevicesPageState extends State<DevicesPage> {
       body: ListenableBuilder(
         listenable: vault,
         builder: (context, _) => ListView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
           children: [
             if (error != null)
-              Text(error!, style: uiStyle(context, color: warn)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Text(error!, style: uiStyle(context, color: warn)),
+              ),
             if (vault.waiting.isNotEmpty && vault.hasKey) ...[
-              Text(
-                'Waiting for your logins',
-                style: uiStyle(context, size: 19, weight: FontWeight.w600),
-              ),
+              const AccountRowsHeading('Waiting for your logins'),
               for (final w in vault.waiting)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(w.name),
-                  subtitle: Text('Code ${w.check}'),
-                  trailing: FilledButton(
-                    onPressed: () => approve(w),
-                    child: const Text('Approve'),
-                  ),
+                AccountRow(
+                  icon: LucideIcons.shieldCheck,
+                  title: 'Approve ${w.name}',
+                  subtitle: 'It shows the code ${w.check}',
+                  isTV: widget.isTV,
+                  onTap: () => approve(w),
                 ),
-              const Divider(height: 32),
             ],
-            if (!vault.hasKey &&
-                vault.keyVersion > 0 &&
-                ownCheck.isNotEmpty) ...[
-              Text(
-                'To bring your tracker logins here, open Devices on another of your devices and approve this one. It shows the code $ownCheck.',
-                style: uiStyle(context, size: 15, color: warn),
+            if (!vault.hasKey && vault.keyVersion > 0 && ownCheck.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Text(
+                  'To bring your tracker logins here, open Devices on another of your devices and approve this one. It shows the code $ownCheck.',
+                  style: uiStyle(context, size: 15, color: warn),
+                ),
               ),
-              const Divider(height: 32),
-            ],
-            if (loading) const Center(child: CircularProgressIndicator()),
+            const AccountRowsHeading('Your devices'),
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
             for (final d in devices)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  d['is_tv'] == 1
-                      ? LucideIcons.tv
-                      : d['os'] == 'android'
-                      ? LucideIcons.smartphone
-                      : LucideIcons.monitor,
-                ),
-                title: Text(
-                  '${d['name']}${d['id'] == session.deviceId ? ' · this device' : ''}',
-                ),
-                subtitle: Text(
-                  online.contains(d['id'])
-                      ? 'Online now'
-                      : 'Last seen ${_ago(number(d['last_seen']))}',
-                  style: uiStyle(
-                    context,
-                    size: 14,
-                    color: online.contains(d['id']) ? ok : muted,
-                  ),
-                ),
-                onTap: () => rename(d),
-                trailing: IconButton(
-                  tooltip: d['id'] == session.deviceId ? 'Sign out' : 'Remove',
-                  icon: const Icon(LucideIcons.x),
-                  onPressed: () => remove(d),
-                ),
+              AccountRow(
+                icon: d['is_tv'] == 1
+                    ? LucideIcons.tv
+                    : d['os'] == 'android'
+                    ? LucideIcons.smartphone
+                    : LucideIcons.monitor,
+                title:
+                    '${d['name']}${d['id'] == session.deviceId ? ' · this device' : ''}',
+                subtitle: online.contains(d['id'])
+                    ? 'Online now'
+                    : 'Last seen ${_ago(number(d['last_seen']))}',
+                isTV: widget.isTV,
+                onTap: () => deviceMenu(d),
               ),
-            const Divider(height: 32),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                if (!session.hasDiscord)
-                  AppButton(
-                    label: 'Add Discord',
-                    isTV: widget.isTV,
-                    onPressed: () => attach('discord'),
-                  ),
-                AppButton(
-                  label: 'Add Google',
-                  isTV: widget.isTV,
-                  onPressed: () => attach('google'),
-                ),
-                AppButton(
-                  label: 'Export my data',
-                  isTV: widget.isTV,
-                  onPressed: export,
-                ),
-                AppButton(
-                  label: 'Delete account',
-                  isTV: widget.isTV,
-                  onPressed: deleteAccount,
-                ),
-              ],
+            const AccountRowsHeading('Sign-ins'),
+            AccountRow(
+              icon: LucideIcons.messageCircle,
+              title: session.hasDiscord ? 'Discord' : 'Add Discord',
+              subtitle: session.hasDiscord
+                  ? 'Linked'
+                  : 'Sign in with Discord too',
+              isTV: widget.isTV,
+              onTap: session.hasDiscord ? null : () => attach('discord'),
+            ),
+            AccountRow(
+              icon: LucideIcons.mail,
+              title: 'Add Google',
+              subtitle: 'Sign in with Google too',
+              isTV: widget.isTV,
+              onTap: () => attach('google'),
+            ),
+            const AccountRowsHeading('Your data'),
+            AccountRow(
+              icon: LucideIcons.download,
+              title: 'Export my data',
+              subtitle: isDesktop
+                  ? 'Saves everything the account keeps to Downloads'
+                  : 'Copies everything the account keeps',
+              isTV: widget.isTV,
+              onTap: export,
+            ),
+            AccountRow(
+              icon: LucideIcons.trash2,
+              title: 'Delete account',
+              subtitle: 'Removes it for every device. Cannot be undone.',
+              danger: true,
+              isTV: widget.isTV,
+              onTap: deleteAccount,
             ),
           ],
         ),

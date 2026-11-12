@@ -90,6 +90,10 @@ class AccountSession extends ChangeNotifier {
   Future<String>? _refreshing;
   bool signedOut = false;
 
+  /// Set when the account left this device for good (removed from another
+  /// device or deleted), not by signing out here: the vault key goes too.
+  bool removed = false;
+
   String get name => _data['name'] as String? ?? 'Otakase';
   String get avatar => _data['avatar'] as String? ?? '';
   String get role => _data['role'] as String? ?? 'user';
@@ -590,6 +594,7 @@ class AccountManager extends ChangeNotifier {
   /// Deletes the whole account and everything the server holds for it.
   Future<void> deleteAccount(AccountSession session) async {
     await session.request('DELETE', '/me');
+    session.removed = true;
     await _forget(session);
   }
 
@@ -607,6 +612,7 @@ class AccountManager extends ChangeNotifier {
   Future<void> _lost(AccountSession session) async {
     if (!_accounts.contains(session)) return;
     lastError = '${session.name}: this device was signed out of the account.';
+    session.removed = true;
     await _forget(session);
   }
 

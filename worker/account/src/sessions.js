@@ -131,15 +131,19 @@ export async function token(request, env) {
   throw new HttpError(400, 'bad request');
 }
 
-/** Removes a device: its sessions, its vault key and its live socket. */
-export async function removeDevice(env, account, device) {
+/**
+ * Removes a device: its sessions, its vault key and its live socket. A
+ * removed device makes the others replace the vault key; a device that signs
+ * itself out keeps its copy on purpose ([replaceKey] false).
+ */
+export async function removeDevice(env, account, device, { replaceKey = true } = {}) {
   const results = await env.DB.batch([
     env.DB.prepare('DELETE FROM devices WHERE id = ? AND account_id = ?').bind(device, account),
     env.DB.prepare('DELETE FROM sessions WHERE device_id = ? AND account_id = ?').bind(device, account),
     env.DB.prepare('DELETE FROM vault_keys WHERE device_id = ? AND account_id = ?').bind(device, account),
     // Whoever still holds the vault key replaces it, so the removed device's
     // copy opens nothing new.
-    env.DB.prepare('UPDATE accounts SET vault_stale = 1 WHERE id = ? AND vault_key_version > 0').bind(account),
+    env.DB.prepare('UPDATE accounts SET vault_stale = 1 WHERE id = ? AND vault_key_version > 0 AND ?').bind(account, replaceKey ? 1 : 0),
   ]);
   if (!results[0].meta.changes) return false;
   const hub = env.HUB.get(env.HUB.idFromName(account));
