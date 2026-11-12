@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 1.32.0
+
+- The bot works with the Otakase account server. Apps signed in to an Otakase account with Discord reach the bot through it: the server passes their calls on with a shared secret (`account_secret`), the member's Discord id and the device, so no link code is needed. Each device shows up as a linked app. Apps linked with `/link-app` keep working; the old link endpoints go one release later.
+- Inbox items (new episodes, shared shows, replies, settings) go to the member's account, which hands them to whichever device is open.
+- Gaining or losing the Tester role sets the account's role.
+- Support posts and source reports sent while the bot was offline are queued on the account server and posted when the bot is back.
+- Staff get a note when the account server reaches 70% of a Cloudflare free plan limit for the day (Worker requests, Durable Object requests, D1 rows read or written). Needs `cloudflare_api_token` (Account Analytics read) and `cloudflare_account_id`.
+- New options: `account_url`, `account_secret`, `cloudflare_api_token`, `cloudflare_account_id`.
+- Removed: watch rooms (the Activity's watch room, its relay, torrents, chat, votes, invites, the edge cache and `watch_cdn`), watch tickets, `/redeem` and staff `/codes`, the cheat code hunt, the birthday time capsule and the Touch Grass badge. The Activity is games only. `/watchparty` events and synced parties stay.
+- Notebook giveaways need a prize from staff, now that there are no ticket codes.
+
 ## 1.31.0
 
 - Watch rooms play movies and TV series. The picker has Anime and Movies & shows tabs; films and series are found on IMDb's public search, a series' aired episodes come from TVmaze and play in order across seasons. Streams come from vidsrc by IMDb id through the new helper mode `-title-stream-info`, with English subtitles passed inline. Titles move no AniList or MAL lists. New endpoint `GET /activity/api/watch/title`; covers from m.media-amazon.com and static.tvmaze.com go through the cover proxy.

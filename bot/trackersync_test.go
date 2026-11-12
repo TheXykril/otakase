@@ -32,7 +32,8 @@ func TestPlanTrackerSync(t *testing.T) {
 }
 
 func TestSyncTrackers(t *testing.T) {
-	b, _ := watchBot(t, "https://cdn.example/ep.mp4")
+	b := testGamesBot(t)
+	b.cfg.GuildID = "g"
 	b.store.update(func(d *storeData) {
 		d.AniList = map[string]anilistLink{"a": {ID: 11, Verified: true, Token: "ta"}, "b": {ID: 22, Name: "b"}}
 		d.MAL = map[string]malLink{

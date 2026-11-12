@@ -15,7 +15,6 @@ import 'data/discord.dart';
 import 'data/episode_alerts.dart';
 import 'data/heritage.dart';
 import 'data/models.dart';
-import 'data/watch_rooms.dart';
 import 'data/watch_party.dart';
 import 'data/community_extras.dart';
 import 'data/tv_remote.dart';
@@ -50,8 +49,7 @@ class AppServices {
       storage: this.auth.storage,
       store: store,
     );
-    heritage = Heritage(store, StatsRepository(this.auth), discord);
-    watchRooms = WatchRooms(discord: discord, store: store);
+    heritage = Heritage(store, StatsRepository(this.auth));
     party = WatchParties(discord: discord, store: store);
     // A watch party follows anime only; a film playing is no party state.
     party.status = () {
@@ -128,7 +126,6 @@ class AppServices {
   late final SkipTimes skipTimes;
   late final DiscordPresence presence;
   late final Heritage heritage;
-  late final WatchRooms watchRooms;
   late final WatchParties party;
   late final CommunityExtras extras;
   late final TVRemote tvRemote;
@@ -236,7 +233,6 @@ class AppServices {
     await stopPlayback?.call();
     episodeAlerts.dispose();
     heritage.closed = true;
-    await watchRooms.close();
     await party.close();
     extras.dispose();
     await leaveTV();

@@ -3,8 +3,7 @@ package main
 // The Shinigami Notebook giveaway. Staff start one with /giveaway start;
 // members press Join until joining closes. Then, every few minutes, a page
 // of the notebook is written: random names on it are out. The last one
-// left wins the prize (a /redeem code minted for them, unless staff named
-// another prize).
+// left wins the prize staff named.
 //
 // It stays random, but members can tip the odds with hanko (hanko.go) in
 // the Shop. Items are for this giveaway only, two per member, each costing
@@ -27,6 +26,7 @@ package main
 // is written.
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"log"
@@ -53,8 +53,7 @@ type giveaway struct {
 	Channel   string               `json:"channel"`
 	Thread    string               `json:"thread,omitempty"` // where each page is posted
 	Host      string               `json:"host"`
-	Prize     string               `json:"prize,omitempty"` // "" = a /redeem code
-	Code      string               `json:"code,omitempty"`  // the winner's code
+	Prize     string               `json:"prize,omitempty"`
 	Started   time.Time            `json:"started"`
 	Closed    bool                 `json:"closed,omitempty"` // joining closed, pages started
 	JoinUntil time.Time            `json:"join_until"`
@@ -130,7 +129,7 @@ func init() {
 		Options: []*discordgo.ApplicationCommandOption{
 			{Type: discordgo.ApplicationCommandOptionSubCommand, Name: "start", Description: "Start a giveaway in this channel",
 				Options: []*discordgo.ApplicationCommandOption{
-					{Type: discordgo.ApplicationCommandOptionString, Name: "prize", Description: "The prize (leave out for a /redeem code with a watch ticket)", MaxLength: 100},
+					{Type: discordgo.ApplicationCommandOptionString, Name: "prize", Description: "The prize", Required: true, MaxLength: 100},
 					{Type: discordgo.ApplicationCommandOptionInteger, Name: "join_minutes", Description: fmt.Sprintf("How long joining is open (default %d)", gaDefaultJoin),
 						MinValue: ptr(1.0), MaxValue: 7 * 24 * 60},
 					{Type: discordgo.ApplicationCommandOptionInteger, Name: "page_minutes", Description: fmt.Sprintf("Minutes between pages (default %d)", gaDefaultEvery),
@@ -437,7 +436,7 @@ func gaEyes(g *giveaway, user string) ([]string, bool, error) {
 func (g *giveaway) embed(now time.Time) *discordgo.MessageEmbed {
 	prize := g.Prize
 	if prize == "" {
-		prize = "a /redeem code with a watch ticket"
+		prize = "a prize from staff"
 	}
 	alive := g.alive()
 	var lines []string
@@ -615,10 +614,6 @@ func (b *bot) giveawayStep(id string, now time.Time, force bool) {
 			lines = []string{cur.Log[len(cur.Log)-1]}
 		case force || !now.Before(cur.NextPage):
 			lines = cur.writePage(now, gaRand)
-		}
-		if cur.Done && cur.Winner != "" && cur.Prize == "" {
-			note := "Shinigami Notebook giveaway"
-			cur.Code = mintCodes(d, cur.Host, note, 1, now)[0]
 		}
 		g = *cur
 	})
@@ -815,11 +810,8 @@ func (b *bot) gaClaimButton(i *discordgo.InteractionCreate, id string) {
 		b.respond(i, true, errorEmbed("This giveaway is gone."))
 	case g.Winner != user:
 		b.respond(i, true, errorEmbed("Only %s can claim this one.", gaName(g.Winner)))
-	case g.Code != "":
-		b.respond(i, true, &discordgo.MessageEmbed{Title: "Your prize", Color: shu,
-			Description: "`" + formatCheatCode(g.Code) + "`\n\nRedeem it with `/redeem` for a watch ticket, or give it to someone. It works once."})
 	default:
 		b.respondQuiet(i, true, &discordgo.MessageEmbed{Title: "Your prize", Color: shu,
-			Description: fmt.Sprintf("**%s**. <@%s> ran this giveaway and will get it to you.", g.Prize, g.Host)})
+			Description: fmt.Sprintf("**%s**. <@%s> ran this giveaway and will get it to you.", cmp.Or(g.Prize, "A prize from staff"), g.Host)})
 	}
 }

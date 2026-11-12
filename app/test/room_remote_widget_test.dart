@@ -18,7 +18,6 @@ import 'package:otakase/ui/play_on.dart';
 import 'package:otakase/ui/remote_now_playing.dart';
 import 'package:otakase/ui/screen_orientation.dart';
 import 'package:otakase/ui/tv_remote_page.dart';
-import 'package:otakase/ui/watch_rooms_page.dart';
 import 'package:otakase/ui/movie_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -215,29 +214,6 @@ void main() {
     expect(find.byKey(const Key('catalog-search')), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
-  testWidgets(
-    'watch-room lobby shows allowed live rooms and remote reaches Refresh',
-    (tester) async {
-      await fixture.launch(tester, tv: true);
-      await tester.pumpWidget(const SizedBox());
-      final s = await services();
-      await tester.pumpWidget(
-        page(WatchRoomsPage(services: s, isTV: true), tv: true),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Shared story'), findsOneWidget);
-      expect(find.text('Hidden room'), findsNothing);
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pump();
-      expect(FocusManager.instance.primaryFocus, isNotNull);
-      final card = tester.widget<FocusBox>(
-        find.byKey(const Key('room-room-1')),
-      );
-      expect(card.onPressed, isNotNull);
-      await tester.pumpWidget(const SizedBox());
-      await s.close();
-    },
-  );
   testWidgets('a newer TV is paired by Allow on the TV, no code', (
     tester,
   ) async {

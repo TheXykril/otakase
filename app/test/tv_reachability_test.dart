@@ -204,8 +204,6 @@ void main() {
     'Subtitles & languages',
     'Schedule',
     'Discord',
-    'Time capsule',
-    'Watch rooms',
     'Watch parties',
     'Settings backup',
     'Report a problem',
@@ -375,7 +373,7 @@ void main() {
         await tester.pumpWidget(const SizedBox());
       });
     }
-    for (final title in ['Schedule', 'Watch rooms', 'Discord']) {
+    for (final title in ['Schedule', 'Discord']) {
       testWidgets('TV More $title has no unreachable controls ($state)', (
         tester,
       ) async {

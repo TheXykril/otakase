@@ -41,8 +41,6 @@ const deviceOnlySettings = {
   'DiscordInbox',
   'DiscordNews',
   'DiscordClub',
-  'TouchGrass',
-  'TimeCapsule',
   'Milestone',
   'AniSkipSubmitter',
   'SkipVotes',

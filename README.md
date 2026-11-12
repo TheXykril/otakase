@@ -41,7 +41,7 @@ Android TV, Windows, macOS and Linux.
 - Up to six profiles, each with its own accounts, history and settings
 - Android TV with full remote control, sign-in by QR code, and your phone as a remote
 - On the computer: a full window, or a small keyboard launcher you can open from a shortcut
-- Works with the Otakase Discord: watch rooms, queued shows, and problem reports from the app
+- Works with the Otakase Discord: watch parties, queued shows, and problem reports from the app
 - Updates itself on every platform
 
 ## Install

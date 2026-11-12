@@ -70,7 +70,7 @@ var faqs = []faqEntry{
 		"See [Casting](" + wikiURL + "/Casting)."},
 	{"mac", "macOS says the app can't be opened", "It is not signed by Apple yet. Right-click **Otakase** in Applications and choose **Open** the first time."},
 	{"discord", "How do I link the app to Discord?", "Open **More → Discord** in the app and follow it, or run `/link-app` here. " +
-		"Linking lets you join watch rooms, follow shows and report problems straight from the app."},
+		"Linking lets you follow shows and report problems straight from the app."},
 	{"dev-builds", "Can I try new features early?", "Test builds are posted in the test-builds channel. They may break, so keep the normal release if you want things to just work."},
 }
 

@@ -149,69 +149,44 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await s.close();
   });
-  testWidgets(
-    'capsule saves only its profile and movie responds to D-pad and Back',
-    (tester) async {
-      final s = await communityApp(tester, tv: true);
-      await tester.pumpWidget(
-        AppLayout(
-          isTV: true,
-          child: MaterialApp(
-            theme: ThemeData.dark(),
-            home: CapsulePage(services: s, isTV: true),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Write a letter'));
-      await tester.pumpAndSettle();
-      expect(find.text('Type on phone'), findsOneWidget);
-      await tester.enterText(
-        find.byKey(const Key('capsule-text')),
-        'Remember this day',
-      );
-      await tester.pump();
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
-      expect(s.heritage.pending!['text'], 'Remember this day');
-      expect(s.heritage.pending!['stats']['episodes'], 50);
-      await tester.pumpWidget(
-        AppLayout(
-          isTV: true,
-          child: MaterialApp(
-            theme: ThemeData.dark(),
-            home: Builder(
-              builder: (context) => Scaffold(
-                body: TextButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          OtakaseMovie(services: s, isTV: true, milestone: 50),
-                    ),
+  testWidgets('the film responds to D-pad and Back', (tester) async {
+    final s = await communityApp(tester, tv: true);
+    await tester.pumpWidget(
+      AppLayout(
+        isTV: true,
+        child: MaterialApp(
+          theme: ThemeData.dark(),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        OtakaseMovie(services: s, isTV: true, milestone: 50),
                   ),
-                  child: const Text('Film'),
                 ),
+                child: const Text('Film'),
               ),
             ),
           ),
         ),
-      );
-      await tester.tap(find.text('Film'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('Counting the Stars'), findsOneWidget);
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-      await tester.pump(const Duration(milliseconds: 600));
-      expect(find.text('The Voices'), findsOneWidget);
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-      await tester.pump(const Duration(milliseconds: 600));
-      expect(find.text('Memories That Never Fade'), findsOneWidget);
-      await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
-      expect(find.text('Film'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-      await s.close();
-    },
-  );
+      ),
+    );
+    await tester.tap(find.text('Film'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Counting the Stars'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('The Voices'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('Memories That Never Fade'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Film'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await s.close();
+  });
 }

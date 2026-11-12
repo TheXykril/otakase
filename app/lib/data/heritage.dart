@@ -1,9 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
-
 import 'auth.dart';
-import 'discord.dart';
 import 'models.dart';
 import 'store.dart';
 
@@ -18,34 +15,6 @@ const episodeMilestones = [50, 100, 250, 500, 1000, 2500, 5000, 10000];
   if (reached > celebrated) return (play: reached, record: reached);
   return (play: 0, record: celebrated);
 }
-
-DateTime capsuleDate({
-  DateTime? current,
-  String override = const String.fromEnvironment('OTAKASE_CAPSULE_DATE'),
-  bool debug = kDebugMode,
-}) {
-  final now = current ?? DateTime.now();
-  if (debug && RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(override)) {
-    final day = DateTime.tryParse(override);
-    if (day != null &&
-        '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}' ==
-            override) {
-      return DateTime(
-        day.year,
-        day.month,
-        day.day,
-        now.hour,
-        now.minute,
-        now.second,
-      );
-    }
-  }
-  return now;
-}
-
-bool isBirthday(DateTime t) => t.month == 4 && t.day == 12;
-int nextBirthday(DateTime t) =>
-    t.month < 4 || t.month == 4 && t.day < 12 ? t.year : t.year + 1;
 
 class WatchStats {
   const WatchStats({
@@ -154,97 +123,12 @@ class StatsRepository {
   }
 }
 
+/// Watch milestones: the film plays on exit at 50, 100, 250… episodes.
 class Heritage {
-  Heritage(this.store, this.stats, this.discord, {DateTime Function()? now})
-    : now = now ?? capsuleDate;
+  Heritage(this.store, this.stats);
   final AppStore store;
   final StatsRepository stats;
-  final DiscordService discord;
-  final DateTime Function() now;
   bool progressWritten = false, closed = false;
-  Json get capsule =>
-      (store.value('TimeCapsule') as Map? ?? {}).cast<String, dynamic>();
-  List<Json> get letters => (capsule['letters'] as List? ?? [])
-      .whereType<Map>()
-      .map((l) => l.cast<String, dynamic>())
-      .toList();
-  List<int> dueLetters(int year) => [
-    for (var i = 0; i < letters.length; i++)
-      if (letters[i]['opened'] != true && number(letters[i]['opens']) <= year)
-        i,
-  ];
-  Json? get pending => letters
-      .where(
-        (l) => l['opened'] != true && number(l['opens']) == nextBirthday(now()),
-      )
-      .firstOrNull;
-  Future<void> _save(Json value) async {
-    if (!closed) await store.set('TimeCapsule', value);
-  }
-
-  Future<void> writeLetter(String text, {WatchStats? snapshot}) async {
-    text = clipRunes(text.trim(), 500);
-    if (text.isEmpty || closed) return;
-    final opens = nextBirthday(now());
-    final rows = letters;
-    final row = <String, dynamic>{
-      'text': text,
-      'written': now().toUtc().toIso8601String(),
-      'opens': opens,
-      if (snapshot != null) 'stats': snapshot.toJson(),
-    };
-    final index = rows.indexWhere(
-      (l) => l['opened'] != true && number(l['opens']) == opens,
-    );
-    if (index >= 0) {
-      rows[index] = row;
-    } else {
-      rows.add(row);
-    }
-    await _save({...capsule, 'letters': rows});
-  }
-
-  Future<void> markOpened(int index) async {
-    final rows = letters;
-    if (index < 0 || index >= rows.length) return;
-    rows[index] = {...rows[index], 'opened': true};
-    await _save({...capsule, 'letters': rows});
-  }
-
-  Future<void> markOffered(int year) => _save({...capsule, 'offered': year});
-  Future<Json?> birthdayCommunity(int year) async {
-    if (number(capsule['community_shown']) >= year) return null;
-    Json? note;
-    try {
-      note = await discord.request('GET', '/v1/capsule', authenticated: false);
-    } on BotFailure catch (e) {
-      if (e.status != 404) rethrow;
-    }
-    await _save({...capsule, 'community_shown': year});
-    return note;
-  }
-
-  Future<Json?> communityMine() async {
-    try {
-      return await discord.request('GET', '/v1/capsule/mine');
-    } on BotFailure catch (e) {
-      if (e.status == 404) return null;
-      rethrow;
-    }
-  }
-
-  Future<Json> writeCommunity(String text) => discord.request(
-    'POST',
-    '/v1/capsule',
-    body: {'text': clipRunes(text.trim(), 300)},
-  );
-  Future<void> removeCommunity() async {
-    await discord.request('DELETE', '/v1/capsule');
-  }
-
-  Future<void> reportCommunity(String id) async {
-    await discord.request('POST', '/v1/capsule/report', body: {'id': id});
-  }
 
   Future<int> milestoneOnExit() async {
     if (!progressWritten || !stats.auth.hasAccounts || closed) return 0;

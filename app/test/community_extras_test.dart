@@ -128,52 +128,6 @@ void main() {
     expect(systemLabel('linux'), 'Linux');
   });
 
-  test('cheat hunt steps and answers go to the bot', () async {
-    final (x, calls) = await fixture(
-      (r) async => r.url.path == '/v1/cheat'
-          ? json({
-              'status': 'puzzle',
-              'kind': 'Cipher',
-              'step': 1,
-              'steps': 3,
-              'text': 'ABC',
-              'links': ['https://example.com'],
-              'where': 'app',
-            })
-          : json({
-              'correct': false,
-              'status': 'puzzle',
-              'message': 'Not quite.',
-              'wrong_left': 4,
-            }),
-    );
-    final v = await x.cheat();
-    expect(v.puzzle, isTrue);
-    expect(v.kind, 'Cipher');
-    expect(v.links, ['https://example.com']);
-    final a = await x.cheatAnswer('xyz');
-    expect(a.correct, isFalse);
-    expect(a.wrongLeft, 4);
-    expect(jsonDecode(calls.last.body), {'answer': 'xyz'});
-  });
-
-  test('the Konami code, by keyboard, remote and typed', () {
-    final k = KonamiTracker();
-    const arrows = [
-      'up', 'up', 'down', 'down', 'left', 'right', 'left', 'right', //
-    ];
-    for (final key in [...arrows, 'b']) {
-      expect(k.press(key), isFalse);
-    }
-    expect(k.press('a'), isTrue);
-    for (final key in ['up', ...arrows, 'select']) {
-      expect(k.press(key), isFalse);
-    }
-    expect(k.press('select'), isTrue);
-    expect(isKonamiText('UUDD LRLR BA'), isTrue);
-    expect(isKonamiText('frieren'), isFalse);
-  });
-
   test('reports are multipart, as the linked member, with details', () async {
     late http.Request seen;
     final tokens = MemoryTokens();

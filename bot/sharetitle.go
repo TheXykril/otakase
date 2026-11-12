@@ -10,7 +10,7 @@ import (
 )
 
 // /share-title: /share-anime for films and series. The suggestions come
-// from IMDb's search, as in the watch room's picker. The DM links the IMDb
+// from IMDb's search. The DM links the IMDb
 // page; a linked app gets the title under Community → From Discord and
 // opens it from Trakt.
 

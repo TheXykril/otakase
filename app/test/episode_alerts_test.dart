@@ -31,7 +31,9 @@ void main() {
     again.watch(upNext, on: true);
     expect(said, hasLength(1));
     // Off stops it.
-    alerts.watch([UpcomingEpisode(Anime(id: 6, title: 'New'), 1, at)], on: false);
+    alerts.watch([
+      UpcomingEpisode(Anime(id: 6, title: 'New'), 1, at),
+    ], on: false);
     alerts.check();
     expect(said, hasLength(1));
   });

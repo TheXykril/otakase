@@ -23,7 +23,6 @@ import 'community_page.dart';
 import 'community_extras_page.dart';
 import 'watch_party_page.dart';
 import 'tv_remote_page.dart';
-import 'watch_rooms_page.dart';
 import 'account_sync_status.dart';
 import 'account_page.dart';
 
@@ -314,16 +313,6 @@ class MorePage extends StatelessWidget {
           ),
         ),
         row(
-          'Watch rooms',
-          'Join your Discord community',
-          LucideIcons.users,
-          () => openDetail(
-            context,
-            WatchRoomsPage(services: services, isTV: isTV),
-            isTV,
-          ),
-        ),
-        row(
           'Watch parties',
           services.party.active
               ? 'In ${services.party.show}'
@@ -351,16 +340,6 @@ class MorePage extends StatelessWidget {
               ),
             ),
           ),
-        row(
-          'Time capsule',
-          'Opens April 12',
-          LucideIcons.mail,
-          () => openDetail(
-            context,
-            CapsulePage(services: services, isTV: isTV),
-            isTV,
-          ),
-        ),
         const MoreGroupHeading('Help & app'),
         row(
           'Diagnostics',
@@ -406,7 +385,7 @@ class MorePage extends StatelessWidget {
 
 /// Desktop settings: sections in a sidebar, the chosen settings section
 /// beside it as grouped cards. Pages that are more than settings, such as
-/// Discord or Watch rooms, still open on their own.
+/// Discord, still open on their own.
 class DesktopMore extends StatefulWidget {
   const DesktopMore({super.key, required this.services, required this.onOpen});
   final AppServices services;
@@ -573,11 +552,6 @@ class _DesktopMoreState extends State<DesktopMore> {
           open: () => detail(DiscordPage(services: services, isTV: true)),
         ),
         item(
-          'Watch rooms',
-          LucideIcons.users,
-          open: () => detail(WatchRoomsPage(services: services, isTV: true)),
-        ),
-        item(
           'Watch parties',
           LucideIcons.partyPopper,
           open: () => detail(WatchPartiesPage(services: services, isTV: true)),
@@ -589,11 +563,6 @@ class _DesktopMoreState extends State<DesktopMore> {
             open: () =>
                 widget.onOpen(Anime(id: club.anilistId, title: club.title)),
           ),
-        item(
-          'Time capsule',
-          LucideIcons.mail,
-          open: () => detail(CapsulePage(services: services, isTV: true)),
-        ),
         const MoreGroupHeading('Help & app'),
         item(
           'Diagnostics',

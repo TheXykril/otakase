@@ -7,7 +7,6 @@ import 'package:otakase/data/catalog.dart';
 import 'package:otakase/data/downloads.dart';
 import 'package:otakase/data/models.dart';
 import 'package:otakase/data/trakt.dart';
-import 'package:otakase/data/watch_rooms.dart';
 import 'package:otakase/services.dart';
 import 'package:otakase/ui/downloads_page.dart';
 import 'package:otakase/ui/movies_pages.dart';
@@ -271,20 +270,5 @@ void main() {
     expect(asked!.queryParameters['type'], 'movie');
     expect(found!.title, 'The Matrix');
     expect(await trakt.byImdb('0133093; drop'), isNull);
-  });
-
-  test('a watch room playing a film shows no episode number', () {
-    final film = RoomState({
-      'room': 'r',
-      'phase': 'play',
-      'ep': 1,
-      'show': {'id': -134093, 'title': 'The Matrix', 'format': 'MOVIE'},
-    }, DateTime(2026));
-    expect(film.film, isTrue);
-    expect(film.anime!.id, lessThan(0));
-    final series = RoomState({
-      'show': {'id': 1, 'title': 'Frieren', 'format': 'TV'},
-    }, DateTime(2026));
-    expect(series.film, isFalse);
   });
 }

@@ -66,28 +66,27 @@ type apiSetting struct {
 }
 
 type apiSummary struct {
-	Token       string            `json:"token"`
-	Version     string            `json:"version"`
-	Uptime      int64             `json:"uptime"` // seconds
-	Connected   bool              `json:"connected"`
-	LatencyMS   int64             `json:"latency_ms"`
-	Members     int               `json:"members"`
-	MemoryMB    float64           `json:"memory_mb"`
-	DataKB      int64             `json:"data_kb"`
-	Jobs        []apiJob          `json:"jobs"`
-	WatchErrors []watchDiagnostic `json:"watch_errors"`
-	Failing     int               `json:"failing"`
-	Safety      apiSafety         `json:"safety"`
-	Airing      []apiShow         `json:"airing"`
-	Parties     []apiParty        `json:"parties"`
-	Rooms       []apiRoom         `json:"rooms"`
-	Guess       apiGuess          `json:"guess"`
-	Games       apiGames          `json:"games"`
-	Levels      []apiRank         `json:"levels"`
-	Support     apiSupport        `json:"support"`
-	Settings    []apiSetting      `json:"settings"`
-	Follows     int               `json:"follows"`
-	Linked      int               `json:"linked_apps"`
+	Token     string       `json:"token"`
+	Version   string       `json:"version"`
+	Uptime    int64        `json:"uptime"` // seconds
+	Connected bool         `json:"connected"`
+	LatencyMS int64        `json:"latency_ms"`
+	Members   int          `json:"members"`
+	MemoryMB  float64      `json:"memory_mb"`
+	DataKB    int64        `json:"data_kb"`
+	Jobs      []apiJob     `json:"jobs"`
+	Failing   int          `json:"failing"`
+	Safety    apiSafety    `json:"safety"`
+	Airing    []apiShow    `json:"airing"`
+	Parties   []apiParty   `json:"parties"`
+	Rooms     []apiRoom    `json:"rooms"`
+	Guess     apiGuess     `json:"guess"`
+	Games     apiGames     `json:"games"`
+	Levels    []apiRank    `json:"levels"`
+	Support   apiSupport   `json:"support"`
+	Settings  []apiSetting `json:"settings"`
+	Follows   int          `json:"follows"`
+	Linked    int          `json:"linked_apps"`
 }
 
 type apiSafety struct {
@@ -156,7 +155,6 @@ func (b *bot) dashAPI(w http.ResponseWriter, r *http.Request) {
 func (b *bot) apiSummary() apiSummary {
 	now := time.Now()
 	s := apiSummary{Token: dashToken, Version: botVersion(), Uptime: int64(time.Since(startedAt).Seconds())}
-	s.WatchErrors = recentWatchDiagnostics()
 	if b.s != nil {
 		if l := b.s.HeartbeatLatency(); l > 0 {
 			s.Connected, s.LatencyMS = true, l.Milliseconds()

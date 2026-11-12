@@ -53,8 +53,6 @@ type storeData struct {
 	Parties map[string]watchParty `json:"parties,omitempty"`
 	// Spoiler guard mode: off, nudge or hide ("" = nudge).
 	SpoilerGuard string `json:"spoiler_guard,omitempty"`
-	// Open watch rooms, to open again after a restart (watchrestart.go).
-	WatchOpen []watchSaved `json:"watch_open,omitempty"`
 	// Activity sign-ins by the hash of their token, so pages stay signed
 	// in across a restart.
 	ActivitySessions map[string]activitySession `json:"activity_sessions,omitempty"`
@@ -122,27 +120,10 @@ type storeData struct {
 	FeaturedWatch map[string]featuredWatch `json:"featured_watch,omitempty"`
 	// Otakase settings backups by Discord user id, see appbackup.go.
 	AppBackups map[string]appBackup `json:"app_backups,omitempty"`
-	// Cheat code hunts by Discord user id, and the codes they found, see
-	// cheathunt.go.
-	CheatHunts map[string]cheatHunt `json:"cheat_hunts,omitempty"`
-	CheatCodes map[string]cheatCode `json:"cheat_codes,omitempty"`
-	// Time capsule messages by id, and the last year the capsule was opened
-	// in the server, see capsule.go.
-	Capsules      map[string]capsuleNote `json:"capsules,omitempty"`
-	CapsuleOpened int                    `json:"capsule_opened,omitempty"`
 	// Hanko by Discord user id, see hanko.go.
 	Hanko map[string]hankoWallet `json:"hanko,omitempty"`
 	// Notebook giveaways by their message id, see giveaway.go.
 	Giveaways map[string]*giveaway `json:"giveaways,omitempty"`
-	// Watch tickets from redeemed codes by Discord user id: one watch
-	// room each in the games Activity, see watchroom.go.
-	WatchTickets map[string]int `json:"watch_tickets,omitempty"`
-	// Members who don't want the watch room to move their lists on.
-	WatchNoSync      map[string]bool                     `json:"watch_no_sync,omitempty"`
-	WatchLanguages   map[string]watchLanguagePreference  `json:"watch_languages,omitempty"`
-	WatchPreferences map[string]watchPlaybackPreferences `json:"watch_preferences,omitempty"`
-	// The last watch rooms, newest last, for the dashboard and the log.
-	WatchRooms []watchRoomLog `json:"watch_rooms,omitempty"`
 	// MyAnimeList links by Discord user id, see mal.go.
 	MAL map[string]malLink `json:"mal,omitempty"`
 }
