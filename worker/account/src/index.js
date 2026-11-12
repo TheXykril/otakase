@@ -179,6 +179,10 @@ async function route(request, env, ctx, url, path, base) {
     headers.set('x-tv', device.is_tv ? '1' : '0');
     headers.set('x-os', device.os);
     headers.set('x-discord', auth.discord);
+    // The phone remote finds TVs and computers by their remote id.
+    const remote = url.searchParams.get('remote') || '';
+    headers.set('x-remote', /^[A-Za-z0-9_-]{1,64}$/.test(remote) ? remote : '');
+    headers.set('x-host', url.searchParams.get('host') === '1' ? '1' : '0');
     return hubFor(env, auth.account).fetch(new Request('https://hub/live', { headers }));
   }
   if (path.startsWith('/admin/')) return admin(request, env, auth, path);

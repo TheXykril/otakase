@@ -94,13 +94,15 @@ CREATE TABLE pairings (
 );
 
 -- Messages for the Discord bot that could not be delivered while it was
--- offline (support posts, source reports). The bot collects them.
+-- offline (support posts, source reports). The bot collects them. body is
+-- base64.
 CREATE TABLE outbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   method TEXT NOT NULL,
   path TEXT NOT NULL,
   discord TEXT NOT NULL,
   device TEXT NOT NULL,
+  content_type TEXT NOT NULL DEFAULT '',
   body TEXT NOT NULL,
   created INTEGER NOT NULL
 );

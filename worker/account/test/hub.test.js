@@ -45,9 +45,10 @@ describe('live hub', () => {
     fakeOutside({ users });
     const phone = await signedIn('discord', 'alice');
     const tv = await signedIn('discord', 'alice', { name: 'TV', is_tv: true });
-    const t = await live(tv.access_token, true);
+    const t = await live(`${tv.access_token}&remote=tv-remote-1&host=1`, true);
     const hello = await t.next((m) => m.t === 'hello');
     expect(hello.device).toBe(tv.device_id);
+    expect(hello.online).toEqual([{ device: tv.device_id, name: 'TV', tv: true, os: 'android', remote: 'tv-remote-1', host: true }]);
     const p = await live(phone.access_token);
     const presence = await t.next((m) => m.t === 'presence');
     expect(presence.online.map((d) => d.device).sort()).toEqual([phone.device_id, tv.device_id].sort());

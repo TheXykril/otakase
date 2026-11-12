@@ -44,7 +44,7 @@ describe('calls passed to the bot', () => {
     expect((await call('/bot/outbox')).status).toBe(401);
     const box = await callJSON('/bot/outbox', { headers: bot });
     expect(box.body.items).toHaveLength(1);
-    expect(box.body.items[0]).toMatchObject({ method: 'POST', path: '/v1/provider-report', discord: '222222222222222222', body: '{"source":"Source 1"}' });
+    expect(box.body.items[0]).toMatchObject({ method: 'POST', path: '/v1/provider-report', discord: '222222222222222222', content_type: 'application/json', body: btoa('{"source":"Source 1"}') });
     await call(`/bot/outbox?ids=${box.body.items[0].id}`, { method: 'DELETE', headers: bot });
     expect((await callJSON('/bot/outbox', { headers: bot })).body.items).toHaveLength(0);
   });

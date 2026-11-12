@@ -74,6 +74,8 @@ export class AccountHub extends DurableObject {
       tv: request.headers.get('x-tv') === '1',
       discord: request.headers.get('x-discord') || '',
       os: request.headers.get('x-os') || '',
+      remote: request.headers.get('x-remote') || '',
+      host: request.headers.get('x-host') === '1',
     };
     // One socket per device: a reconnect replaces the old one.
     for (const old of this.ctx.getWebSockets(device)) old.close(4000, 'replaced');
@@ -91,7 +93,7 @@ export class AccountHub extends DurableObject {
     const seen = new Map();
     for (const ws of this.ctx.getWebSockets()) {
       const a = ws.deserializeAttachment();
-      if (a && !seen.has(a.device)) seen.set(a.device, { device: a.device, name: a.name, tv: a.tv, os: a.os });
+      if (a && !seen.has(a.device)) seen.set(a.device, { device: a.device, name: a.name, tv: a.tv, os: a.os, remote: a.remote, host: a.host });
     }
     return [...seen.values()];
   }

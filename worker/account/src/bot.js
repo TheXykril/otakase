@@ -29,6 +29,16 @@ export function relayRoute(method, path) {
   return relayed.find(([m, p]) => m === method && p.test(path)) || null;
 }
 
+const maxRelayBody = 10 * 1024 * 1024;
+const maxQueuedBody = 768 * 1024;
+
+function b64(bytes) {
+  let s = '';
+  const view = new Uint8Array(bytes);
+  for (let i = 0; i < view.length; i += 0x8000) s += String.fromCharCode(...view.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
 const newsTTL = 10 * 60 * 1000;
 const newsSaveEvery = 60 * 60 * 1000;
 
@@ -54,16 +64,18 @@ export async function relay(request, env, path, route) {
     headers.set('upgrade', 'websocket');
     return fetch(target, { headers });
   }
-  const body = request.method === 'GET' ? undefined : await request.text();
-  if (body && body.length > 64 * 1024) throw new HttpError(413, 'too large');
+  // Support posts can carry a screenshot, so bodies stay bytes.
+  const body = request.method === 'GET' ? undefined : await request.arrayBuffer();
+  if (body && body.byteLength > maxRelayBody) throw new HttpError(413, 'too large');
   try {
     const r = await fetch(target, { method: request.method, headers, body, signal: AbortSignal.timeout(15000) });
     if (r.status < 500 || !route[2]) return new Response(r.body, { status: r.status, headers: { 'content-type': r.headers.get('content-type') || 'application/json', 'cache-control': 'no-store' } });
   } catch {
     if (!route[2]) throw new HttpError(503, 'The Discord bot is offline. Try again later.');
   }
-  await env.DB.prepare('INSERT INTO outbox (method, path, discord, device, body, created) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(request.method, path, auth.discord, auth.device, body || '', now()).run();
+  if (body && body.byteLength > maxQueuedBody) throw new HttpError(503, 'The Discord bot is offline. Try again later.');
+  await env.DB.prepare('INSERT INTO outbox (method, path, discord, device, content_type, body, created) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(request.method, path, auth.discord, auth.device, type || '', body ? b64(body) : '', now()).run();
   return json({ queued: true }, 202);
 }
 
@@ -128,7 +140,7 @@ export async function botRoutes(request, env, path) {
     return json({ ...(await r.json()), account: true }, r.status);
   }
   if (path === '/bot/outbox' && request.method === 'GET') {
-    const rows = await env.DB.prepare('SELECT id, method, path, discord, device, body, created FROM outbox ORDER BY id LIMIT 50').all();
+    const rows = await env.DB.prepare('SELECT id, method, path, discord, device, content_type, body, created FROM outbox ORDER BY id LIMIT 20').all();
     return json({ items: rows.results });
   }
   if (path === '/bot/outbox' && request.method === 'DELETE') {
