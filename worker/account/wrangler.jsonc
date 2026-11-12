@@ -1,0 +1,32 @@
+{
+  // Otakase accounts. Deployed by the "Deploy account Worker" workflow,
+  // which fills in the database id from the ACCOUNT_D1_ID repository
+  // variable. Secrets are set once with `wrangler secret put` (see README).
+  "name": "otakase-account",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "account.otakase.com", "custom_domain": true },
+    { "pattern": "otakase.xyverion.com/account*", "zone_name": "xyverion.com" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "otakase-accounts",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "HUB", "class_name": "AccountHub" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountHub"] }],
+  "vars": {
+    "DISCORD_CLIENT_ID": "",
+    "GOOGLE_CLIENT_ID": "",
+    "TURNSTILE_SITE_KEY": "",
+    "BOT_URL": ""
+  },
+  "observability": { "enabled": true, "head_sampling_rate": 0.05 }
+}
