@@ -290,17 +290,20 @@ class _WaitDialog extends StatefulWidget {
 }
 
 class _WaitDialogState extends State<_WaitDialog> {
-  late final count = widget.manager.accounts.length;
+  late final int signIns;
   bool copied = false;
+  bool closed = false;
 
   @override
   void initState() {
     super.initState();
+    signIns = widget.manager.signIns;
     widget.manager.addListener(_check);
   }
 
   void _check() {
-    if (widget.manager.accounts.length != count && mounted) {
+    if (widget.manager.signIns != signIns && mounted && !closed) {
+      closed = true;
       Navigator.pop(context);
     }
   }

@@ -439,6 +439,10 @@ class AccountManager extends ChangeNotifier {
     }
   }
 
+  /// Counts finished sign-ins, so a waiting screen can tell one happened
+  /// even when it was the same account signing in again.
+  int signIns = 0;
+
   /// Finishes a sign-in from an otakase://account?code=… link.
   Future<AccountSession> accept(Uri uri) async {
     var p = _pending;
@@ -502,6 +506,7 @@ class AccountManager extends ChangeNotifier {
     _accounts.add(session);
     await _save();
     lastError = null;
+    signIns++;
     await onSignedIn?.call(session, first: existing == null);
     notifyListeners();
     return session;

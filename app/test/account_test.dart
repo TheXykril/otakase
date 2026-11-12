@@ -213,6 +213,26 @@ void main() {
 
   group('signing in', () {
     test(
+      'counts every finished sign-in, also the same account again',
+      () async {
+        final server = FakeServer();
+        final m = await signedInDevice(
+          server,
+          MemoryTokens(),
+          await SharedPreferences.getInstance(),
+        );
+        expect(m.signIns, 1);
+        var told = 0;
+        m.addListener(() => told++);
+        await m.begin();
+        await m.accept(Uri.parse('otakase://account?code=abc'));
+        expect(m.accounts, hasLength(1));
+        expect(m.signIns, 2);
+        expect(told, greaterThan(0));
+      },
+    );
+
+    test(
       'swaps the code with the PKCE verifier and saves the account',
       () async {
         final server = FakeServer();
