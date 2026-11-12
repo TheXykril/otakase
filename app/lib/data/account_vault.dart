@@ -58,6 +58,43 @@ class TokenStoreKeys implements MovableKeys {
   }
 
   Future<void> forget(String name) => tokens.write(_key(name), null);
+
+  String _vaultName(String account) => 'otakase.vaultkey.$account';
+
+  /// The vault key this device last held for [account], kept after signing
+  /// out so signing in again needs no approval.
+  Future<(int, List<int>)?> savedVault(String account) async {
+    final saved = await tokens.read(_vaultName(account));
+    if (saved == null || saved.isEmpty) return null;
+    final (version, key) = switch (saved.split('.')) {
+      [final v, final k] => (int.tryParse(v), k),
+      _ => (null, ''),
+    };
+    if (version == null || key.isEmpty) return null;
+    try {
+      return (version, unb64url(key).toList());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveVault(String account, int version, List<int> key) =>
+      tokens.write(_vaultName(account), '$version.${b64url(key)}');
+
+  Future<void> forgetVault(String account) =>
+      tokens.write(_vaultName(account), null);
+}
+
+final _checkInfo = utf8.encode('otakase vault check v1');
+
+/// A keyed hash of the vault key. The server keeps it so a device can prove
+/// it still has the key, without the server learning the key.
+Future<String> vaultCheck(List<int> vaultKey) async {
+  final mac = await Hmac.sha256().calculateMac(
+    _checkInfo,
+    secretKey: SecretKey(vaultKey),
+  );
+  return b64url(mac.bytes);
 }
 
 /// Wraps [vaultKey] for the device with [publicKey]: a fresh key pair, a
@@ -266,6 +303,7 @@ class AccountVault extends ChangeNotifier {
         body: {
           'key_version': 1,
           'rotate': true,
+          'check': await vaultCheck(fresh),
           'keys': {session.deviceId: await wrapKey(fresh, myPublic)},
         },
       );
@@ -276,10 +314,23 @@ class AccountVault extends ChangeNotifier {
       }
     } else if (v['wrapped'] is String) {
       _key = await unwrapKey(v['wrapped'] as String, mine);
+      if (v['has_check'] == false) {
+        await session.request(
+          'PUT',
+          '/vault/check',
+          body: {'key_version': keyVersion, 'check': await vaultCheck(_key!)},
+        );
+      }
     } else {
-      _key = null;
+      _key = await _restore(myPublic);
     }
     hasKey = _key != null;
+    if (_key case final key?) {
+      final saved = await keys.savedVault(session.id);
+      if (saved == null || saved.$1 != keyVersion) {
+        await keys.saveVault(session.id, keyVersion, key);
+      }
+    }
     waiting = [
       for (final d in v['waiting'] as List? ?? const [])
         if (d is Map && d['id'] != session.deviceId)
@@ -320,6 +371,29 @@ class AccountVault extends ChangeNotifier {
       await _send(profile, key, blobs[profile]);
       _dirty.remove(profile);
     }
+  }
+
+  /// Signed in again on a device that kept the vault key: proves it with
+  /// the key's check and stores a copy for this device's new entry. After a
+  /// device was removed the key was replaced, so an old one stays unused.
+  Future<List<int>?> _restore(String myPublic) async {
+    final saved = await keys.savedVault(session.id);
+    if (saved == null || saved.$1 != keyVersion) return null;
+    try {
+      await session.request(
+        'POST',
+        '/vault/restore',
+        body: {
+          'key_version': keyVersion,
+          'check': await vaultCheck(saved.$2),
+          'wrapped': await wrapKey(saved.$2, myPublic),
+        },
+      );
+    } on AccountFailure catch (e) {
+      if (e.status == 403) await keys.forgetVault(session.id);
+      return null;
+    }
+    return saved.$2;
   }
 
   /// Writes logins from the vault that are newer than this device's.
@@ -414,7 +488,12 @@ class AccountVault extends ChangeNotifier {
     await session.request(
       'PUT',
       '/vault/keys',
-      body: {'key_version': keyVersion + 1, 'rotate': true, 'keys': wrapped},
+      body: {
+        'key_version': keyVersion + 1,
+        'rotate': true,
+        'check': await vaultCheck(fresh),
+        'keys': wrapped,
+      },
     );
     keyVersion++;
     _key = fresh;

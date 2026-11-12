@@ -3,11 +3,12 @@
 // public key. The server only stores the blobs and cannot open them. A new
 // device gets the key when a device that has it approves it.
 
-import { HttpError, json, readJSON, now } from './util.js';
+import { HttpError, json, readJSON, now, safeEqual } from './util.js';
 
 const blobPattern = /^[A-Za-z0-9_-]{16,65536}$/;
 const wrappedPattern = /^[A-Za-z0-9_-]{40,512}$/;
 const profilePattern = /^[A-Za-z0-9_-]{0,64}$/;
+const checkPattern = /^[A-Za-z0-9_-]{40,64}$/;
 
 async function notify(env, account, msg) {
   const hub = env.HUB.get(env.HUB.idFromName(account));
@@ -17,7 +18,7 @@ async function notify(env, account, msg) {
 /** GET /vault: this device's wrapped key, devices still waiting, all blobs. */
 export async function getVault(env, auth) {
   const [account, keys, devices, blobs] = await env.DB.batch([
-    env.DB.prepare('SELECT vault_key_version, vault_stale FROM accounts WHERE id = ?').bind(auth.account),
+    env.DB.prepare('SELECT vault_key_version, vault_stale, vault_check FROM accounts WHERE id = ?').bind(auth.account),
     env.DB.prepare('SELECT device_id, key_version, wrapped FROM vault_keys WHERE account_id = ?').bind(auth.account),
     env.DB.prepare('SELECT id, name, public_key FROM devices WHERE account_id = ?').bind(auth.account),
     env.DB.prepare('SELECT profile_id, version, key_version, ciphertext FROM vault WHERE account_id = ?').bind(auth.account),
@@ -29,6 +30,7 @@ export async function getVault(env, auth) {
   return json({
     key_version: a.vault_key_version,
     stale: a.vault_stale === 1,
+    has_check: !!a.vault_check,
     wrapped: mine ? mine.wrapped : null,
     holders: [...holders],
     waiting: devices.results.filter((d) => !holders.has(d.id) && d.public_key).map((d) => ({ id: d.id, name: d.name, public_key: d.public_key })),
@@ -57,16 +59,15 @@ export async function putKeys(request, env, auth) {
   if (body.rotate) {
     if (version !== account.vault_key_version + 1) throw new HttpError(409, 'vault changed', { key_version: account.vault_key_version });
     if (!keys.some(([d]) => d === auth.device)) throw new HttpError(400, 'keep a copy for this device');
-    const bump = env.DB.prepare('UPDATE accounts SET vault_key_version = ?, vault_stale = 0 WHERE id = ? AND vault_key_version = ?')
-      .bind(version, auth.account, account.vault_key_version);
+    const check = typeof body.check === 'string' && checkPattern.test(body.check) ? body.check : null;
+    const bump = env.DB.prepare('UPDATE accounts SET vault_key_version = ?, vault_stale = 0, vault_check = ? WHERE id = ? AND vault_key_version = ?')
+      .bind(version, check, auth.account, account.vault_key_version);
     const r = await bump.run();
     if (!r.meta.changes) throw new HttpError(409, 'vault changed');
     statements.push(env.DB.prepare('DELETE FROM vault_keys WHERE account_id = ?').bind(auth.account));
   } else {
     if (version !== account.vault_key_version || version === 0) throw new HttpError(409, 'vault changed', { key_version: account.vault_key_version });
-    const mine = await env.DB.prepare('SELECT 1 FROM vault_keys WHERE account_id = ? AND device_id = ? AND key_version = ?')
-      .bind(auth.account, auth.device, version).first();
-    if (!mine) throw new HttpError(403, 'This device has no vault key yet.');
+    if (!(await holdsKey(env, auth, version))) throw new HttpError(403, 'This device has no vault key yet.');
   }
   for (const [d, w] of keys) {
     statements.push(env.DB.prepare(
@@ -80,6 +81,50 @@ export async function putKeys(request, env, auth) {
     if (body.rotate) await env.DB.prepare('UPDATE accounts SET vault_stale = 1 WHERE id = ?').bind(auth.account).run();
     throw e;
   }
+  await notify(env, auth.account, { t: 'vault', from: auth.device });
+  return json({ ok: true, key_version: version });
+}
+
+async function holdsKey(env, auth, version) {
+  return !!(await env.DB.prepare('SELECT 1 FROM vault_keys WHERE account_id = ? AND device_id = ? AND key_version = ?')
+    .bind(auth.account, auth.device, version).first());
+}
+
+/**
+ * PUT /vault/check {key_version, check}
+ * A device holding the current key stores its check, for vaults made
+ * before checks existed.
+ */
+export async function putCheck(request, env, auth) {
+  const body = await readJSON(request);
+  const version = Number(body.key_version);
+  if (typeof body.check !== 'string' || !checkPattern.test(body.check)) throw new HttpError(400, 'bad check');
+  const account = await env.DB.prepare('SELECT vault_key_version FROM accounts WHERE id = ?').bind(auth.account).first();
+  if (!account) throw new HttpError(401, 'sign in again');
+  if (version !== account.vault_key_version || version === 0) throw new HttpError(409, 'vault changed', { key_version: account.vault_key_version });
+  if (!(await holdsKey(env, auth, version))) throw new HttpError(403, 'This device has no vault key yet.');
+  await env.DB.prepare('UPDATE accounts SET vault_check = ? WHERE id = ? AND vault_key_version = ? AND vault_check IS NULL')
+    .bind(body.check, auth.account, version).run();
+  return json({ ok: true });
+}
+
+/**
+ * POST /vault/restore {key_version, check, wrapped}
+ * A device that signed out and in again still has the vault key. It proves
+ * that with the key's check and stores a copy wrapped for its new entry.
+ * After a device was removed the key is replaced, so an old copy fails here.
+ */
+export async function restoreKey(request, env, auth) {
+  const body = await readJSON(request);
+  const version = Number(body.key_version);
+  if (typeof body.check !== 'string' || typeof body.wrapped !== 'string' || !wrappedPattern.test(body.wrapped)) throw new HttpError(400, 'bad key');
+  const account = await env.DB.prepare('SELECT vault_key_version, vault_check FROM accounts WHERE id = ?').bind(auth.account).first();
+  if (!account) throw new HttpError(401, 'sign in again');
+  if (version !== account.vault_key_version || version === 0) throw new HttpError(409, 'vault changed', { key_version: account.vault_key_version });
+  if (!account.vault_check || !safeEqual(account.vault_check, body.check)) throw new HttpError(403, 'This key is not the vault key.');
+  await env.DB.prepare(
+    'INSERT INTO vault_keys (account_id, device_id, key_version, wrapped) VALUES (?, ?, ?, ?) ON CONFLICT (account_id, device_id) DO UPDATE SET key_version = excluded.key_version, wrapped = excluded.wrapped',
+  ).bind(auth.account, auth.device, version, body.wrapped).run();
   await notify(env, auth.account, { t: 'vault', from: auth.device });
   return json({ ok: true, key_version: version });
 }

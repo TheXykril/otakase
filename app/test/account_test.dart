@@ -40,6 +40,7 @@ class FakeServer {
   final refreshTokens = <String, String>{}; // token -> device
   final requests = <String>[];
   bool stale = false;
+  String? check;
   bool Function(http.Request r)? unreachable;
 
   String deviceOf(http.Request r) {
@@ -144,6 +145,7 @@ class FakeServer {
         return ok({
           'key_version': keyVersion,
           'stale': stale,
+          'has_check': check != null,
           'wrapped': keys[dev],
           'holders': holders.toList(),
           'waiting': [
@@ -167,10 +169,29 @@ class FakeServer {
           keys.clear();
           keyVersion = v;
           stale = false;
+          check = body['check'] as String?;
         } else if (v != keyVersion || !keys.containsKey(dev)) {
           return ok({'error': 'no key'}, 403);
         }
         keys.addAll((body['keys'] as Map).cast<String, String>());
+        return ok({'ok': true});
+      case 'PUT /vault/check':
+        if (!keys.containsKey(dev)) return ok({'error': 'no key'}, 403);
+        check ??= body['check'] as String;
+        return ok({'ok': true});
+      case 'POST /vault/restore':
+        if (body['key_version'] != keyVersion) {
+          return ok({'error': 'vault changed'}, 409);
+        }
+        if (check == null || body['check'] != check) {
+          return ok({'error': 'not the vault key'}, 403);
+        }
+        keys[dev] = body['wrapped'] as String;
+        return ok({'ok': true});
+      case 'POST /logout':
+        keys.remove(dev);
+        publicKeys.remove(dev);
+        refreshTokens.removeWhere((_, d) => d == dev);
         return ok({'ok': true});
       case 'PUT /vault/blob':
         final profile = body['profile'] as String;
@@ -531,6 +552,75 @@ void main() {
       await vaultA.sync();
       expect(storeA.values['account.AniList'], '{"token":"t2"}');
     });
+    test(
+      'signing out and in again keeps the logins without approval',
+      () async {
+        final server = FakeServer();
+        final tokens = MemoryTokens();
+        final prefs = await SharedPreferences.getInstance();
+        final keys = TokenStoreKeys(tokens);
+        final m = await signedInDevice(server, tokens, prefs);
+        final store = MemoryTokens()
+          ..values['account.AniList'] = '{"token":"t1"}';
+        AccountVault vaultFor(AccountSession s) => AccountVault(
+          session: s,
+          keys: keys,
+          preferences: prefs,
+          profileTokens: (_) => store,
+          boundProfiles: () => ['1'],
+        )..addListener(() {});
+        final first = vaultFor(m.accounts.single);
+        addTearDown(first.dispose);
+        await first.sync();
+        expect(first.hasKey, isTrue);
+        expect(server.check, isNotNull);
+        final firstKey = await keys.savedVault('acc-1');
+        expect(firstKey!.$1, 1);
+        // Sign out here, then in again: a new device entry, same key.
+        await m.signOut(m.accounts.single);
+        expect(server.keys, isEmpty);
+        await m.begin();
+        await m.accept(Uri.parse('otakase://account?code=abc'));
+        final again = vaultFor(m.accounts.single);
+        addTearDown(again.dispose);
+        await again.sync();
+        expect(again.hasKey, isTrue);
+        expect(again.waiting, isEmpty);
+        expect(server.keys.keys, [m.accounts.single.deviceId]);
+        expect(server.requests, contains('POST /vault/restore'));
+        // A key from before a rotation is refused and dropped.
+        server.check = 'other';
+        server.keys.clear();
+        final third = vaultFor(m.accounts.single);
+        addTearDown(third.dispose);
+        await third.sync();
+        expect(third.hasKey, isFalse);
+        expect(await keys.savedVault('acc-1'), isNull);
+      },
+    );
+
+    test(
+      'a vault made before checks gets one from a device holding the key',
+      () async {
+        final server = FakeServer();
+        final tokens = MemoryTokens();
+        final prefs = await SharedPreferences.getInstance();
+        final m = await signedInDevice(server, tokens, prefs);
+        final vault = AccountVault(
+          session: m.accounts.single,
+          keys: TokenStoreKeys(tokens),
+          preferences: prefs,
+          profileTokens: (_) => MemoryTokens(),
+          boundProfiles: () => const [],
+        );
+        addTearDown(vault.dispose);
+        await vault.sync();
+        final made = server.check;
+        server.check = null;
+        await vault.sync();
+        expect(server.check, made);
+      },
+    );
   });
 
   group('Discord through the account', () {

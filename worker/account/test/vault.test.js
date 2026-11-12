@@ -67,4 +67,51 @@ describe('vault', () => {
     const r = await callJSON('/vault/keys', { method: 'PUT', token: a.access_token, body: { key_version: 1, rotate: true, keys: { [a.device_id]: wrapped('a'), [bob.device_id]: wrapped('b') } } });
     expect(r.status).toBe(400);
   });
+  it('lets a device that signed out get its key back with the check', async () => {
+    fakeOutside({ users });
+    const check = 'C'.repeat(43);
+    const a = await signedIn('discord', 'alice', { public_key: key('A') });
+    await call('/vault/keys', { method: 'PUT', token: a.access_token, body: { key_version: 1, rotate: true, check, keys: { [a.device_id]: wrapped('a') } } });
+    expect((await callJSON('/vault', { token: a.access_token })).body.has_check).toBe(true);
+    // Signing out keeps the key: nobody has to replace it.
+    expect((await call('/logout', { method: 'POST', token: a.access_token })).status).toBe(200);
+    const again = await signedIn('discord', 'alice', { public_key: key('B') });
+    let v = await callJSON('/vault', { token: again.access_token });
+    expect(v.body).toMatchObject({ key_version: 1, stale: false, wrapped: null });
+    // A wrong check is refused, the right one stores the new copy.
+    const wrong = await callJSON('/vault/restore', { method: 'POST', token: again.access_token, body: { key_version: 1, check: 'D'.repeat(43), wrapped: wrapped('b') } });
+    expect(wrong.status).toBe(403);
+    const right = await callJSON('/vault/restore', { method: 'POST', token: again.access_token, body: { key_version: 1, check, wrapped: wrapped('b') } });
+    expect(right.status).toBe(200);
+    v = await callJSON('/vault', { token: again.access_token });
+    expect(v.body.wrapped).toBe(wrapped('b'));
+  });
+
+  it('refuses an old key after the device was removed elsewhere', async () => {
+    fakeOutside({ users });
+    const a = await signedIn('discord', 'alice', { public_key: key('A') });
+    const b = await signedIn('discord', 'alice', { public_key: key('B') });
+    await call('/vault/keys', { method: 'PUT', token: a.access_token, body: { key_version: 1, rotate: true, check: 'C'.repeat(43), keys: { [a.device_id]: wrapped('a'), [b.device_id]: wrapped('b') } } });
+    await call(`/devices/${b.device_id}`, { method: 'DELETE', token: a.access_token });
+    expect((await callJSON('/vault', { token: a.access_token })).body.stale).toBe(true);
+    await call('/vault/keys', { method: 'PUT', token: a.access_token, body: { key_version: 2, rotate: true, check: 'E'.repeat(43), keys: { [a.device_id]: wrapped('c') } } });
+    const back = await signedIn('discord', 'alice', { public_key: key('B') });
+    const old = await callJSON('/vault/restore', { method: 'POST', token: back.access_token, body: { key_version: 1, check: 'C'.repeat(43), wrapped: wrapped('b') } });
+    expect(old.status).toBe(409);
+    const guess = await callJSON('/vault/restore', { method: 'POST', token: back.access_token, body: { key_version: 2, check: 'C'.repeat(43), wrapped: wrapped('b') } });
+    expect(guess.status).toBe(403);
+  });
+
+  it('takes a check only from a device holding the key, once', async () => {
+    fakeOutside({ users });
+    const a = await signedIn('discord', 'alice', { public_key: key('A') });
+    const b = await signedIn('discord', 'alice', { public_key: key('B') });
+    await call('/vault/keys', { method: 'PUT', token: a.access_token, body: { key_version: 1, rotate: true, keys: { [a.device_id]: wrapped('a') } } });
+    expect((await callJSON('/vault', { token: a.access_token })).body.has_check).toBe(false);
+    expect((await call('/vault/check', { method: 'PUT', token: b.access_token, body: { key_version: 1, check: 'B'.repeat(43) } })).status).toBe(403);
+    expect((await call('/vault/check', { method: 'PUT', token: a.access_token, body: { key_version: 1, check: 'C'.repeat(43) } })).status).toBe(200);
+    await call('/vault/check', { method: 'PUT', token: a.access_token, body: { key_version: 1, check: 'D'.repeat(43) } });
+    const r = await callJSON('/vault/restore', { method: 'POST', token: b.access_token, body: { key_version: 1, check: 'C'.repeat(43), wrapped: wrapped('b') } });
+    expect(r.status).toBe(200);
+  });
 });

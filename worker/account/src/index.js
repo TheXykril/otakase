@@ -7,7 +7,7 @@ import { AccountHub } from './hub.js';
 import { loginPage, loginStart, callback, providers } from './login.js';
 import { authorize, requireRole, token, pairStart, pairApprove, pairPoll, removeDevice, roles } from './sessions.js';
 import { pull } from './sync.js';
-import { getVault, putKeys, putBlob, deleteBlob } from './vault.js';
+import { getVault, putKeys, putCheck, restoreKey, putBlob, deleteBlob } from './vault.js';
 import { relay, relayRoute, news, botRoutes, backup } from './bot.js';
 import { sign } from './jwt.js';
 import { HttpError, json, errorResponse, readJSON, clip } from './util.js';
@@ -126,7 +126,8 @@ async function route(request, env, ctx, url, path, base) {
     return json(await exportAccount(env, auth), 200, { 'content-disposition': 'attachment; filename="otakase-account.json"' });
   }
   if (path === '/logout' && method === 'POST') {
-    await removeDevice(env, auth.account, auth.device);
+    // Signing out keeps the vault key on the device, so the key stays.
+    await removeDevice(env, auth.account, auth.device, { replaceKey: false });
     return json({ ok: true });
   }
   if (path === '/attach' && method === 'POST') {
@@ -166,6 +167,8 @@ async function route(request, env, ctx, url, path, base) {
   }
   if (path === '/vault' && method === 'GET') return getVault(env, auth);
   if (path === '/vault/keys' && method === 'PUT') return putKeys(request, env, auth);
+  if (path === '/vault/check' && method === 'PUT') return putCheck(request, env, auth);
+  if (path === '/vault/restore' && method === 'POST') return restoreKey(request, env, auth);
   if (path === '/vault/blob' && method === 'PUT') return putBlob(request, env, auth);
   if (path === '/vault/blob' && method === 'DELETE') return deleteBlob(url, env, auth);
   if (path === '/live' && method === 'GET') {

@@ -203,6 +203,9 @@ class AccountCenter extends ChangeNotifier with WidgetsBindingObserver {
     await profiles.unbindAll(session.id);
     await run?.close();
     await keys.forget(session.id);
+    // Signing out here keeps the vault key, so signing in again on this
+    // device brings the logins back without an approval.
+    if (session.removed) await keys.forgetVault(session.id);
     _wireActive();
     notifyListeners();
   }
