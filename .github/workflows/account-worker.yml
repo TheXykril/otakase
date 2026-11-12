@@ -5,10 +5,11 @@ name: Deploy account Worker
 #
 # Needs secrets CLOUDFLARE_API_TOKEN (Workers Scripts: Edit, D1: Edit,
 # Workers Routes: Edit, DNS: Edit for the account.otakase.com custom domain)
-# and CLOUDFLARE_ACCOUNT_ID, plus repository variables ACCOUNT_D1_ID,
-# ACCOUNT_DISCORD_CLIENT_ID, ACCOUNT_GOOGLE_CLIENT_ID,
-# ACCOUNT_TURNSTILE_SITE_KEY and ACCOUNT_BOT_URL. Worker secrets are set once
-# with `wrangler secret put`, never here.
+# and CLOUDFLARE_ACCOUNT_ID. Repository variables ACCOUNT_DISCORD_CLIENT_ID
+# and ACCOUNT_GOOGLE_CLIENT_ID name the sign-in apps; ACCOUNT_D1_ID,
+# ACCOUNT_TURNSTILE_SITE_KEY and ACCOUNT_BOT_URL replace the values in
+# wrangler.jsonc when set. Worker secrets are set once with
+# `wrangler secret put`, never here.
 
 on:
   workflow_dispatch:
@@ -54,11 +55,13 @@ jobs:
         env:
           D1_ID: ${{ vars.ACCOUNT_D1_ID }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$D1_ID" ]; then
-            echo "::error::Set CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and the ACCOUNT_D1_ID variable first."
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Set the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets first."
             exit 1
           fi
-          sed -i "s/00000000-0000-0000-0000-000000000000/$D1_ID/" wrangler.jsonc
+          if [ -n "$D1_ID" ]; then
+            sed -i -E "s/\"database_id\": \"[^\"]*\"/\"database_id\": \"$D1_ID\"/" wrangler.jsonc
+          fi
 
       - name: Apply database migrations
         if: inputs.migrate
@@ -70,9 +73,11 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ vars.ACCOUNT_GOOGLE_CLIENT_ID }}
           TURNSTILE_SITE_KEY: ${{ vars.ACCOUNT_TURNSTILE_SITE_KEY }}
           BOT_URL: ${{ vars.ACCOUNT_BOT_URL }}
-        run: >-
-          npx wrangler deploy
-          --var "DISCORD_CLIENT_ID:$DISCORD_CLIENT_ID"
-          --var "GOOGLE_CLIENT_ID:$GOOGLE_CLIENT_ID"
-          --var "TURNSTILE_SITE_KEY:$TURNSTILE_SITE_KEY"
-          --var "BOT_URL:$BOT_URL"
+        run: |
+          args=()
+          for name in DISCORD_CLIENT_ID GOOGLE_CLIENT_ID TURNSTILE_SITE_KEY BOT_URL; do
+            if [ -n "${!name}" ]; then
+              args+=(--var "$name:${!name}")
+            fi
+          done
+          npx wrangler deploy "${args[@]}"
