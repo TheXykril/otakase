@@ -19,15 +19,16 @@ const bg = Color(0xff0e0d0c),
     accentDeep = Color(0xffa83a22),
     ok = Color(0xff9bb67a),
     warn = Color(0xffe3b45a),
-    info = Color(0xff7fa2c4),
-    // Destructive actions and errors; warn stays for cautions.
-    danger = Color(
-      0xffe5604a,
-    ),
-    // Soft drop shadow under floating plates.
-    scrim = Color(
-      0x99000000,
-    );
+    info = Color(0xff7fa2c4);
+
+/// Destructive actions and errors. Cautions keep [warn].
+const danger = KageColors.danger;
+
+/// Divider between rows, quieter than [line].
+const hairline = Color(0xff2a2420);
+
+/// Soft drop shadow under floating plates.
+const scrim = Color(0x99000000);
 
 /// Corner radii: four steps and a circle, then the role each part of the
 /// app uses. Parts pick a role, never a number.
@@ -87,4 +88,9 @@ abstract final class KageMotion {
       base = Duration(milliseconds: 200),
       slow = Duration(milliseconds: 320);
   static const enter = Curves.easeOutCubic, exit = Curves.easeInCubic;
+}
+
+/// Colour names that local variables tend to shadow (a `danger` flag).
+abstract final class KageColors {
+  static const danger = Color(0xffe5604a);
 }

@@ -311,125 +311,42 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-                child: Column(
-                  children: [
-                    const Divider(),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Icon(icon, color: muted, size: 18),
-                        const SizedBox(width: 12),
-                        Expanded(child: SectionLabel(title)),
-                      ],
-                    ),
-                  ],
-                ),
+              GroupHeading(
+                title,
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
               ),
               ...children,
             ],
           ),
         );
+  // Settings rows carry no icons: the title and the line under it say
+  // enough, and mixed icon and no-icon rows never line up.
   Widget row(
     String key,
     String description, {
     VoidCallback? onTap,
     String? value,
-    IconData icon = LucideIcons.slidersHorizontal,
+    IconData? icon,
     bool enabled = true,
   }) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-    child: FocusBox(
+    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+    child: AppRow(
       isTV: widget.isTV,
-      radius: KageRadius.md,
-      onPressed: enabled ? onTap : null,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 21, color: enabled ? fg : muted),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  settingLabel(key),
-                  style: uiStyle(
-                    context,
-                    weight: FontWeight.w500,
-                    color: enabled ? fg : muted,
-                  ),
-                ),
-                if (value != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 5),
-                    child: Text(
-                      value,
-                      style: uiStyle(
-                        context,
-                        size: 15,
-                        color: enabled ? accentText : muted,
-                        weight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 5),
-                Text(
-                  description,
-                  style: uiStyle(context, size: 15, color: muted),
-                ),
-              ],
-            ),
-          ),
-          if (onTap != null)
-            const Icon(LucideIcons.chevronRight, size: 18, color: muted),
-        ],
-      ),
+      title: settingLabel(key),
+      subtitle: description,
+      value: value,
+      enabled: enabled,
+      onTap: onTap,
     ),
   );
-  Widget toggle(
-    String key,
-    String description, {
-    IconData icon = LucideIcons.slidersHorizontal,
-  }) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-    child: FocusBox(
+  Widget toggle(String key, String description, {IconData? icon}) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+    child: AppRow(
       isTV: widget.isTV,
-      radius: KageRadius.md,
-      onPressed: () => store.set(key, !store.flag(key)),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 21, color: fg),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  settingLabel(key),
-                  style: uiStyle(context, weight: FontWeight.w500),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  description,
-                  style: uiStyle(context, size: 15, color: muted),
-                ),
-              ],
-            ),
-          ),
-          ExcludeFocus(
-            child: IgnorePointer(
-              child: Switch(
-                value: store.flag(key),
-                activeThumbColor: fgBright,
-                onChanged: (_) {},
-              ),
-            ),
-          ),
-        ],
-      ),
+      title: settingLabel(key),
+      subtitle: description,
+      toggle: store.flag(key),
+      onTap: () => store.set(key, !store.flag(key)),
     ),
   );
   @override

@@ -130,105 +130,84 @@ class MorePage extends StatelessWidget {
       IconData icon,
       VoidCallback action, {
       bool autofocus = false,
-    }) => Container(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: line)),
-      ),
-      child: FocusBox(
-        key: ValueKey('more-$title'),
-        autofocus: autofocus,
-        isTV: isTV,
-        onPressed: action,
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: isTV ? 64 : 75),
-          child: Row(
-            children: [
-              Icon(icon, size: isTV ? 24 : 23, color: muted),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      title,
-                      style: uiStyle(context, weight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      value,
-                      style: uiStyle(context, size: 15, color: muted),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(LucideIcons.chevronRight, size: 20, color: muted),
-            ],
-          ),
-        ),
-      ),
+    }) => AppRow(
+      key: ValueKey('more-$title'),
+      autofocus: autofocus,
+      isTV: isTV,
+      icon: icon,
+      title: title,
+      subtitle: value,
+      divider: true,
+      onTap: action,
     );
     return ListView(
       key: const PageStorageKey('more-scroll'),
       padding: EdgeInsets.fromLTRB(
-        isTV ? 48 : 20,
+        isTV ? 48 : 4,
         12,
-        isTV ? 48 : 20,
+        isTV ? 48 : 4,
         contentBottom(context),
       ),
       children: [
-        const PageHeading('More', '設'),
-        const SizedBox(height: 16),
-        FocusBox(
-          key: const Key('more-Accounts'),
-          autofocus: true,
-          isTV: isTV,
-          radius: KageRadius.tile,
-          onPressed: () => openAccounts(context, services, isTV),
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 84),
-            padding: const EdgeInsets.all(13),
-            decoration: BoxDecoration(
-              color: panel,
-              border: Border.all(color: line),
-              borderRadius: BorderRadius.circular(KageRadius.tile),
-            ),
-            child: Row(
-              children: [
-                if (services.profiles case final manager?)
-                  ProfileAvatar(manager.active, size: 38)
-                else
-                  const OtakaseSeal(size: 38),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: isTV ? 0 : 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const PageHeading('More', '設'),
+              const SizedBox(height: 16),
+              FocusBox(
+                key: const Key('more-Accounts'),
+                autofocus: true,
+                isTV: isTV,
+                radius: KageRadius.tile,
+                onPressed: () => openAccounts(context, services, isTV),
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 84),
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: panel,
+                    border: Border.all(color: line),
+                    borderRadius: BorderRadius.circular(KageRadius.tile),
+                  ),
+                  child: Row(
                     children: [
-                      Text(
-                        identity.isEmpty ? 'Your accounts' : identity,
-                        style: uiStyle(context, weight: FontWeight.w600),
+                      if (services.profiles case final manager?)
+                        ProfileAvatar(manager.active, size: 38)
+                      else
+                        const OtakaseSeal(size: 38),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              identity.isEmpty ? 'Your accounts' : identity,
+                              style: uiStyle(context, weight: FontWeight.w600),
+                            ),
+                            AccountSyncStatus(services: services),
+                          ],
+                        ),
                       ),
-                      AccountSyncStatus(services: services),
+                      Text(
+                        'Accounts',
+                        style: uiStyle(context, size: 15, color: accentText),
+                      ),
                     ],
                   ),
                 ),
+              ),
+              // Nothing mentions 18+ unless the viewer's AniList allows it.
+              if (services.store.adultAllowed) ...[
+                const SizedBox(height: 12),
                 Text(
-                  'Accounts',
-                  style: uiStyle(context, size: 15, color: accentText),
+                  '18+ follows your AniList setting',
+                  style: uiStyle(context, size: 15, color: muted),
                 ),
               ],
-            ),
+            ],
           ),
         ),
-        // Nothing mentions 18+ unless the viewer's AniList allows it.
-        if (services.store.adultAllowed) ...[
-          const SizedBox(height: 12),
-          Text(
-            '18+ follows your AniList setting',
-            style: uiStyle(context, size: 15, color: muted),
-          ),
-        ],
         const MoreGroupHeading('Watching'),
         row(
           'Playback',
@@ -403,42 +382,15 @@ class _DesktopMoreState extends State<DesktopMore> {
     final selected = open == null && section == title;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: FocusBox(
+      child: AppRow(
         key: ValueKey('more-$title'),
         isTV: true,
-        radius: KageRadius.md,
-        onPressed: open ?? () => setState(() => section = title),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: selected ? selectedPanel : Colors.transparent,
-            borderRadius: BorderRadius.circular(KageRadius.md),
-            border: Border(
-              left: BorderSide(
-                color: selected ? shu : Colors.transparent,
-                width: 3,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: selected ? fgBright : muted),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  title,
-                  style: uiStyle(
-                    context,
-                    weight: selected ? FontWeight.w600 : FontWeight.w500,
-                    color: selected ? fgBright : fg,
-                  ),
-                ),
-              ),
-              if (open != null)
-                const Icon(LucideIcons.arrowUpRight, size: 18, color: muted),
-            ],
-          ),
-        ),
+        icon: icon,
+        title: title,
+        selected: selected,
+        external: open != null,
+        trailing: open == null ? const SizedBox.shrink() : null,
+        onTap: open ?? () => setState(() => section = title),
       ),
     );
   }
@@ -1027,19 +979,5 @@ class MoreGroupHeading extends StatelessWidget {
   const MoreGroupHeading(this.title, {super.key});
   final String title;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
-    child: Semantics(
-      header: true,
-      child: Text(
-        title,
-        style: uiStyle(
-          context,
-          size: 15,
-          color: muted,
-          weight: FontWeight.w600,
-        ),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) => GroupHeading(title);
 }

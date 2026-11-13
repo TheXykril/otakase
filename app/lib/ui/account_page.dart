@@ -42,50 +42,17 @@ class AccountRow extends StatelessWidget {
   final Widget? trailing;
 
   @override
-  Widget build(BuildContext context) {
-    final color = onTap == null ? muted : (danger ? warn : fg);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: FocusBox(
-        isTV: isTV,
-        autofocus: autofocus,
-        radius: KageRadius.md,
-        onPressed: onTap,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: [
-            Icon(icon, size: 21, color: color),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: uiStyle(
-                      context,
-                      weight: FontWeight.w500,
-                      color: color,
-                    ),
-                  ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle!,
-                      style: uiStyle(context, size: 15, color: muted),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            ?trailing,
-            if (trailing == null && onTap != null)
-              const Icon(LucideIcons.chevronRight, size: 18, color: muted),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AppRow(
+    icon: icon,
+    title: title,
+    subtitle: subtitle,
+    onTap: onTap,
+    isTV: isTV,
+    autofocus: autofocus,
+    danger: danger,
+    enabled: onTap != null || trailing != null,
+    trailing: trailing,
+  );
 }
 
 /// A heading over a group of [AccountRow]s.
@@ -93,10 +60,7 @@ class AccountRowsHeading extends StatelessWidget {
   const AccountRowsHeading(this.title, {super.key});
   final String title;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(12, 20, 12, 6),
-    child: SectionLabel(title),
-  );
+  Widget build(BuildContext context) => GroupHeading(title);
 }
 
 Future<bool?> _confirm(

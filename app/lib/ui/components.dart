@@ -2124,6 +2124,194 @@ String countdown(int epoch) {
 String clockTime(DateTime at) =>
     '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
 
+/// The one list row: Settings, More, Accounts, pickers. An optional icon,
+/// a title with an optional line under it, then a value, a switch, a custom
+/// trailing widget or a chevron. A chosen row gets the darker panel and a
+/// 3 px Shu bar on its leading edge.
+class AppRow extends StatelessWidget {
+  const AppRow({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.icon,
+    this.value,
+    this.trailing,
+    this.onTap,
+    this.toggle,
+    this.selected = false,
+    this.danger = false,
+    this.external = false,
+    this.divider = false,
+    this.enabled = true,
+    this.isTV = false,
+    this.autofocus = false,
+    this.focusNode,
+    this.leading,
+  });
+  final String title;
+  final String? subtitle, value;
+  final IconData? icon;
+
+  /// Replaces [icon], for avatars and seals.
+  final Widget? leading;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  /// Shows a switch in this state; tapping the row flips it.
+  final bool? toggle;
+  final bool selected, danger, external, divider, enabled, isTV, autofocus;
+  final FocusNode? focusNode;
+
+  @override
+  Widget build(BuildContext context) {
+    final live = enabled && (onTap != null || toggle != null);
+    // A TV sits across the room; the computer shares TV layouts but is read
+    // up close, so it keeps rows compact.
+    final tall = isTV && !isDesktop;
+    final ink = !enabled
+        ? muted
+        : danger
+        ? KageColors.danger
+        : selected
+        ? fgBright
+        : fg;
+    return Semantics(
+      selected: selected,
+      toggled: toggle,
+      child: FocusBox(
+        isTV: isTV,
+        autofocus: autofocus,
+        focusNode: focusNode,
+        radius: KageRadius.md,
+        onPressed: enabled ? onTap : null,
+        child: Container(
+          constraints: BoxConstraints(minHeight: tall ? 72 : (isTV ? 44 : 56)),
+          padding: EdgeInsets.symmetric(
+            horizontal: tall ? 20 : 16,
+            vertical: tall ? 12 : 10,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? selectedPanel : Colors.transparent,
+            borderRadius: divider ? null : BorderRadius.circular(KageRadius.md),
+            border: selected
+                ? const Border(left: BorderSide(color: shu, width: 3))
+                : divider
+                ? const Border(bottom: BorderSide(color: hairline))
+                : null,
+          ),
+          child: Row(
+            children: [
+              if (leading != null) ...[
+                leading!,
+                SizedBox(width: tall ? 16 : 14),
+              ] else if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: tall ? 24 : 20,
+                  color: danger && enabled
+                      ? KageColors.danger
+                      : selected
+                      ? fgBright
+                      : muted,
+                ),
+                SizedBox(width: tall ? 16 : 14),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: uiStyle(
+                        context,
+                        color: ink,
+                        weight: selected ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+                    if (subtitle != null && subtitle!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: uiStyle(context, size: 15, color: muted),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (value != null && value!.isNotEmpty) ...[
+                const SizedBox(width: 12),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: isTV ? 320 : 140),
+                  child: Text(
+                    value!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: uiStyle(context, size: 15, color: muted),
+                  ),
+                ),
+              ],
+              if (toggle != null) ...[
+                const SizedBox(width: 12),
+                ExcludeFocus(
+                  child: IgnorePointer(
+                    child: Switch(
+                      value: toggle!,
+                      activeThumbColor: fgBright,
+                      onChanged: enabled ? (_) {} : null,
+                    ),
+                  ),
+                ),
+              ] else if (trailing != null) ...[
+                const SizedBox(width: 12),
+                trailing!,
+              ] else if (live) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  external
+                      ? LucideIcons.arrowUpRight
+                      : LucideIcons.chevronRight,
+                  size: 18,
+                  color: muted,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A short mono heading over a group of rows, with a hairline to the edge.
+class GroupHeading extends StatelessWidget {
+  const GroupHeading(this.title, {super.key, this.padding});
+  final String title;
+  final EdgeInsets? padding;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: padding ?? const EdgeInsets.fromLTRB(16, 24, 16, 8),
+    child: Semantics(
+      header: true,
+      child: Row(
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: mono.copyWith(
+              fontSize: AppLayout.tvOf(context) ? 18 : 13,
+              letterSpacing: 1.2,
+              color: fgBright,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(child: Divider(height: 1, color: line)),
+        ],
+      ),
+    ),
+  );
+}
+
 class ChoiceRow extends StatelessWidget {
   const ChoiceRow({
     super.key,
@@ -2182,14 +2370,14 @@ Future<String?> chooseValue(
                 child: Text(note, style: uiStyle(context, color: muted)),
               ),
             ...values.map(
-              (value) => ChoiceRow(
+              (value) => AppRow(
                 autofocus:
                     value ==
                     (values.contains(selected) ? selected : values.first),
-                title: Text(value, style: uiStyle(context)),
-                trailing: value == selected
-                    ? const Icon(LucideIcons.check, color: shu)
-                    : null,
+                isTV: AppLayout.tvOf(context),
+                title: value,
+                selected: value == selected,
+                trailing: const SizedBox.shrink(),
                 onTap: () => Navigator.pop(context, value),
               ),
             ),
