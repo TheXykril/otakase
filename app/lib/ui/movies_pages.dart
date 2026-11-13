@@ -995,87 +995,94 @@ class _TitlePageState extends State<TitlePage> {
         : episodeError.isNotEmpty
         ? 'Episode information is unavailable. Retry below.'
         : 'No aired episodes are available.';
-    final controls = Wrap(
-      spacing: 12,
-      runSpacing: 8,
-      children: [
-        AppButton(
-          key: const Key('title-play'),
-          disabledReason: unavailable,
-          label: title.isShow
-              ? next == null
-                    ? (loadingEpisodes
-                          ? 'Loading episodes'
-                          : episodeError.isNotEmpty
-                          ? 'Episodes unavailable'
-                          : 'No episodes yet')
-                    : '${resume ? 'Resume' : 'Play'} ${next.code}'
-              : resume
-              ? 'Resume'
-              : 'Play',
-          icon: LucideIcons.play,
-          filled: true,
-          autofocus: true,
-          isTV: widget.isTV,
-          onPressed: title.isShow && next == null ? null : () => play(next),
-        ),
-        // A phone can start it on a TV or cast it from here.
-        if (!widget.isTV)
-          AppButton(
-            key: const Key('title-play-on'),
-            disabledReason: unavailable,
-            label: 'Play on…',
-            icon: LucideIcons.cast,
-            isTV: false,
-            onPressed: title.isShow && next == null ? null : () => playOn(next),
-          ),
-        AppButton(
-          key: const Key('title-watchlist'),
-          label: movies.onWatchlist(title) ? 'On watchlist' : 'Watchlist',
-          icon: movies.onWatchlist(title)
-              ? LucideIcons.bookmarkCheck
-              : LucideIcons.bookmarkPlus,
-          isTV: widget.isTV,
-          onPressed: () =>
-              movies.setWatchlist(title, !movies.onWatchlist(title)),
-        ),
-        AppButton(
-          key: const Key('title-rate'),
-          label: movies.score(title) > 0
-              ? 'Rated ${movies.score(title)}/10'
-              : 'Rate',
-          icon: LucideIcons.star,
-          isTV: widget.isTV,
-          onPressed: () => unawaited(
-            askTitleRating(
-              context,
-              widget.services,
-              title,
-              widget.isTV,
-              finished: false,
-            ),
-          ),
-        ),
-        if (!title.isShow) ...[
-          AppButton(
-            key: const Key('title-watched'),
-            label: watched ? 'Watched' : 'Mark watched',
-            icon: watched ? LucideIcons.circleCheck : LucideIcons.circle,
-            isTV: widget.isTV,
-            onPressed: () => movies.markWatched(title, !watched),
-          ),
-          // Downloads are for phones and computers; a TV streams.
-          if (!widget.isTV || isDesktop)
-            AppButton(
-              key: const Key('title-download'),
-              label: 'Download',
-              icon: LucideIcons.download,
-              isTV: widget.isTV,
-              onPressed: () => download(),
-            ),
-        ],
-      ],
-    );
+    final playLabel = title.isShow
+        ? next == null
+              ? (loadingEpisodes
+                    ? 'Loading episodes'
+                    : episodeError.isNotEmpty
+                    ? 'Episodes unavailable'
+                    : 'No episodes yet')
+              : '${resume ? 'Resume' : 'Play'} ${next.code}'
+        : resume
+        ? 'Resume'
+        : 'Play';
+    final controls = !widget.isTV
+        ? phoneActions(playLabel, next, unavailable, watched)
+        : Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              AppButton(
+                key: const Key('title-play'),
+                disabledReason: unavailable,
+                label: playLabel,
+                icon: LucideIcons.play,
+                filled: true,
+                autofocus: true,
+                isTV: widget.isTV,
+                onPressed: title.isShow && next == null
+                    ? null
+                    : () => play(next),
+              ),
+              // A phone can start it on a TV or cast it from here.
+              if (!widget.isTV)
+                AppButton(
+                  key: const Key('title-play-on'),
+                  disabledReason: unavailable,
+                  label: 'Play on…',
+                  icon: LucideIcons.cast,
+                  isTV: false,
+                  onPressed: title.isShow && next == null
+                      ? null
+                      : () => playOn(next),
+                ),
+              AppButton(
+                key: const Key('title-watchlist'),
+                label: movies.onWatchlist(title) ? 'On watchlist' : 'Watchlist',
+                icon: movies.onWatchlist(title)
+                    ? LucideIcons.bookmarkCheck
+                    : LucideIcons.bookmarkPlus,
+                isTV: widget.isTV,
+                onPressed: () =>
+                    movies.setWatchlist(title, !movies.onWatchlist(title)),
+              ),
+              AppButton(
+                key: const Key('title-rate'),
+                label: movies.score(title) > 0
+                    ? 'Rated ${movies.score(title)}/10'
+                    : 'Rate',
+                icon: LucideIcons.star,
+                isTV: widget.isTV,
+                onPressed: () => unawaited(
+                  askTitleRating(
+                    context,
+                    widget.services,
+                    title,
+                    widget.isTV,
+                    finished: false,
+                  ),
+                ),
+              ),
+              if (!title.isShow) ...[
+                AppButton(
+                  key: const Key('title-watched'),
+                  label: watched ? 'Watched' : 'Mark watched',
+                  icon: watched ? LucideIcons.circleCheck : LucideIcons.circle,
+                  isTV: widget.isTV,
+                  onPressed: () => movies.markWatched(title, !watched),
+                ),
+                // Downloads are for phones and computers; a TV streams.
+                if (!widget.isTV || isDesktop)
+                  AppButton(
+                    key: const Key('title-download'),
+                    label: 'Download',
+                    icon: LucideIcons.download,
+                    isTV: widget.isTV,
+                    onPressed: () => download(),
+                  ),
+              ],
+            ],
+          );
     if (unavailable == null) return controls;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1089,6 +1096,92 @@ class _TitlePageState extends State<TitlePage> {
             key: const Key('title-action-explanation'),
             style: uiStyle(context, color: muted),
           ),
+        ),
+      ],
+    );
+  }
+
+  /// Phone: the primary button, then one row of compact actions with the
+  /// rest under ⋯, like the anime page.
+  Widget phoneActions(
+    String playLabel,
+    TitleEpisode? next,
+    String? unavailable,
+    bool watched,
+  ) {
+    final noEpisode = title.isShow && next == null;
+    final listed = movies.onWatchlist(title);
+    final rated = movies.score(title);
+    Future<void> more() async {
+      final rate = rated > 0 ? 'Rated $rated/10 · change' : 'Rate';
+      final mark = watched ? 'Mark unwatched' : 'Mark watched';
+      const save = 'Download';
+      final choice = await chooseValue(context, title.title, [
+        rate,
+        if (!title.isShow) mark,
+        if (!title.isShow) save,
+      ]);
+      if (!mounted || choice == null) return;
+      if (choice == rate) {
+        await askTitleRating(
+          context,
+          widget.services,
+          title,
+          widget.isTV,
+          finished: false,
+        );
+      } else if (choice == mark) {
+        await movies.markWatched(title, !watched);
+      } else if (choice == save) {
+        await download();
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppButton(
+          key: const Key('title-play'),
+          disabledReason: unavailable,
+          label: playLabel,
+          icon: LucideIcons.play,
+          filled: true,
+          autofocus: true,
+          onPressed: noEpisode ? null : () => play(next),
+        ),
+        const SizedBox(height: KageSpace.s2),
+        Row(
+          children: [
+            Expanded(
+              child: AppButton(
+                key: const Key('title-watchlist'),
+                label: listed ? 'On watchlist' : 'Watchlist',
+                icon: listed
+                    ? LucideIcons.bookmarkCheck
+                    : LucideIcons.bookmarkPlus,
+                size: ButtonSize.sm,
+                onPressed: () => movies.setWatchlist(title, !listed),
+              ),
+            ),
+            const SizedBox(width: KageSpace.s2),
+            AppButton(
+              key: const Key('title-play-on'),
+              disabledReason: unavailable,
+              label: 'Play on…',
+              icon: LucideIcons.cast,
+              size: ButtonSize.sm,
+              onPressed: noEpisode ? null : () => playOn(next),
+            ),
+            const SizedBox(width: KageSpace.s2),
+            AppButton(
+              key: const Key('title-more'),
+              label: 'More actions',
+              icon: LucideIcons.ellipsis,
+              iconOnly: true,
+              size: ButtonSize.sm,
+              onPressed: () => unawaited(more()),
+            ),
+          ],
         ),
       ],
     );
@@ -1252,6 +1345,16 @@ class _TitlePageState extends State<TitlePage> {
                                     hidden: hiddenEpisode(e),
                                     child: episodeArt(e, width: thumb),
                                   ),
+                                  if (movies.watched(
+                                    title,
+                                    season: e.season,
+                                    episode: e.number,
+                                  )) ...[
+                                    ColoredBox(
+                                      color: bgDeep.withValues(alpha: .55),
+                                    ),
+                                    const Center(child: WatchedStamp(size: 24)),
+                                  ],
                                   if (resumeOf(e) > 0 &&
                                       (movies.entry(title)?.duration ?? 0) > 0)
                                     Positioned(
@@ -1306,16 +1409,6 @@ class _TitlePageState extends State<TitlePage> {
                               ],
                             ),
                           ),
-                          if (movies.watched(
-                            title,
-                            season: e.season,
-                            episode: e.number,
-                          ))
-                            const Icon(
-                              LucideIcons.circleCheck,
-                              color: ok,
-                              size: 20,
-                            ),
                         ],
                       ),
                     ),
@@ -1384,8 +1477,14 @@ class _TitlePageState extends State<TitlePage> {
           padding: EdgeInsets.only(bottom: contentBottom(context)),
           children: [
             SizedBox(
-              height: (size.height * (widget.isTV || isDesktop ? .55 : .42))
-                  .clamp(260, 640),
+              // Phones use the anime page's header height, so both detail
+              // pages start the same way.
+              height: widget.isTV || isDesktop
+                  ? (size.height * .55).clamp(260, 640)
+                  : 346 *
+                        MediaQuery.textScalerOf(context)
+                            .scale(1)
+                            .clamp(1.0, 3.0),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -1487,9 +1586,10 @@ class _TitlePageState extends State<TitlePage> {
                     const SizedBox(height: 12),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 900),
-                      child: Text(
+                      child: Synopsis(
                         title.overview,
-                        style: uiStyle(context, color: muted),
+                        lines: widget.isTV ? 3 : 2,
+                        isTV: widget.isTV,
                       ),
                     ),
                   ],
