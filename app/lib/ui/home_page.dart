@@ -281,6 +281,10 @@ class HomePage extends StatefulWidget {
     this.topInset = 0,
   });
   final AppServices services;
+
+  /// How often Continue watching was worked out, for tests.
+  @visibleForTesting
+  static int continuationBuilds = 0;
   final bool isTV, active;
   final double topInset;
   final void Function(Anime) onOpen;
@@ -323,6 +327,39 @@ class _HomePageState extends State<HomePage> {
     if (mounted && showsTitles) setState(() {});
   }
 
+  // Continue watching and Up next are worked out once per change of the
+  // lists, the history or the minute, not on every rebuild.
+  int snapshotsVersion = 0, storeVersion = 0, minute = 0;
+  Object? continuationKey;
+  Continuation? continuationCache;
+  void storeChanged() => storeVersion++;
+
+  Continuation continuationNow() {
+    final key = (identity, snapshotsVersion, storeVersion, minute);
+    if (key == continuationKey && continuationCache != null) {
+      return continuationCache!;
+    }
+    HomePage.continuationBuilds++;
+    final s = widget.services, store = s.store;
+    final result = buildContinuation(
+      snapshots.values.expand((e) => e).toList(),
+      store.history,
+      // 18+ titles stay off Home even when watched; lists and search keep
+      // them.
+      adult: false,
+      now: DateTime.now(),
+    );
+    continuationKey = key;
+    continuationCache = result;
+    // Telling the alerts what is coming happens after the frame, not
+    // while building it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      s.episodeAlerts.watch(result.upNext, on: store.flag('EpisodeAlerts'));
+    });
+    return result;
+  }
+
   /// Pulls the film and series watchlist and progress once titles show.
   Future<void> syncTitles({bool force = false}) async {
     titlesSynced = true;
@@ -339,9 +376,10 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     lifecycle;
     widget.services.movies.addListener(titlesChanged);
+    widget.services.store.addListener(storeChanged);
     if (isDesktop) unawaited(loadFeatured());
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
+      if (mounted) setState(() => minute++);
       // Picks up films and episodes watched on other devices meanwhile.
       if (mounted && widget.active && showsTitles) {
         unawaited(
@@ -557,6 +595,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     widget.services.movies.removeListener(titlesChanged);
+    widget.services.store.removeListener(storeChanged);
     lifecycle.dispose();
     artTimer?.cancel();
     clock?.cancel();
@@ -571,20 +610,19 @@ class _HomePageState extends State<HomePage> {
     if (identity != stamp) {
       identity = stamp;
       snapshots.clear();
+      snapshotsVersion++;
       focused = null;
     }
-    final continuation = buildContinuation(
-      snapshots.values.expand((e) => e).toList(),
-      store.history,
-      // 18+ titles stay off Home even when watched; lists and search keep them.
-      adult: false,
-      now: DateTime.now(),
-    );
-    s.episodeAlerts.watch(continuation.upNext, on: store.flag('EpisodeAlerts'));
+    final continuation = continuationNow();
     // Films and series join Continue watching, the big resume card and the
     // desktop hero, and the Trakt watchlist gets a row.
     final titles = showsTitles;
-    if (titles && !titlesSynced) unawaited(syncTitles());
+    if (titles && !titlesSynced) {
+      titlesSynced = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(syncTitles());
+      });
+    }
     final cards = titleCardsOf(s);
     final titleProgress = <String, MovieEntry>{};
     final titleEntries = <WatchEntry>[
@@ -642,7 +680,12 @@ class _HomePageState extends State<HomePage> {
     // The phone and TV banner takes turns like the desktop one: what you
     // are watching, then trending picks. It only shows once there is
     // something to resume; a TV list focus still takes it over.
-    if (resume != null && !featureRequested) unawaited(loadFeatured());
+    if (resume != null && !featureRequested) {
+      featureRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(loadFeatured());
+      });
+    }
     final picks = resume == null
         ? const <HeroPick>[]
         : heroPicks(continuing, titleProgress);
@@ -790,9 +833,10 @@ class _HomePageState extends State<HomePage> {
               onCategoryChanged: scheduleRefresh,
               onLoaded: (entries) {
                 if (mounted) {
-                  setState(
-                    () => snapshots[combined ? 'Combined' : service] = entries,
-                  );
+                  setState(() {
+                    snapshots[combined ? 'Combined' : service] = entries;
+                    snapshotsVersion++;
+                  });
                 }
               },
               autofocus: stage == null && service == lists.first,
