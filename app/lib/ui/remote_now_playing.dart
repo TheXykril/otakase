@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
@@ -195,12 +194,9 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
         fit: StackFit.expand,
         children: [
           if (cover.isNotEmpty)
-            ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-              child: Opacity(
-                opacity: .35,
-                child: CoverImage(cover, width: 400, height: 800),
-              ),
+            Opacity(
+              opacity: .35,
+              child: CoverImage(cover, width: 400, height: 800, wash: true),
             ),
           SafeArea(
             child: LayoutBuilder(

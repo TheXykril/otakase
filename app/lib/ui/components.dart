@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
@@ -1793,19 +1792,25 @@ class CoverImage extends StatelessWidget {
     this.banner = false,
     this.fit = BoxFit.cover,
     this.alignment = Alignment.center,
+    this.wash = false,
   });
   final String url;
   final double width, height;
   final bool banner;
   final BoxFit fit;
   final Alignment alignment;
+
+  /// A soft colour wash of the art: decoded a few pixels wide and smoothed
+  /// on the way up, which looks like a blur without a blur pass per frame.
+  final bool wash;
   @override
   Widget build(BuildContext context) {
-    final pixels =
-        ((banner ? math.max(width, height * 4) : width) *
-                MediaQuery.devicePixelRatioOf(context))
-            .round()
-            .clamp(160, banner ? 2560 : 480);
+    final pixels = wash
+        ? 24
+        : ((banner ? math.max(width, height * 4) : width) *
+                  MediaQuery.devicePixelRatioOf(context))
+              .round()
+              .clamp(160, banner ? 2560 : 480);
     if (url.isEmpty) {
       return SizedBox(
         width: width,
@@ -1834,6 +1839,8 @@ class CoverImage extends StatelessWidget {
         alignment: alignment,
         memCacheWidth: pixels,
         maxWidthDiskCache: pixels,
+        // Smooth the tiny wash on its way up; sharp art keeps the default.
+        filterQuality: wash ? FilterQuality.medium : FilterQuality.low,
         fadeInDuration: const Duration(milliseconds: 180),
         placeholder: (_, url) => SkeletonBlock(width: width, height: height),
         errorWidget: (_, url, error) => SizedBox(
@@ -1913,14 +1920,11 @@ class EpisodeArtFallback extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         const ColoredBox(color: panelRaised),
-        ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-          child: Opacity(
-            opacity: .55,
-            child: Transform.scale(
-              scale: 1.3,
-              child: CoverImage(cover, width: width, height: height),
-            ),
+        Opacity(
+          opacity: .55,
+          child: Transform.scale(
+            scale: 1.3,
+            child: CoverImage(cover, width: width, height: height, wash: true),
           ),
         ),
         Center(
@@ -1959,13 +1963,15 @@ class WideCoverArt extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           const ColoredBox(color: panelRaised),
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Opacity(
-              opacity: .55,
-              child: Transform.scale(
-                scale: 1.3,
-                child: CoverImage(cover, width: width, height: height),
+          Opacity(
+            opacity: .55,
+            child: Transform.scale(
+              scale: 1.3,
+              child: CoverImage(
+                cover,
+                width: width,
+                height: height,
+                wash: true,
               ),
             ),
           ),
@@ -2036,19 +2042,17 @@ class HeroArt extends StatelessWidget {
               alignment: const Alignment(0, -.45),
             )
           else ...[
-            ImageFiltered(
+            Opacity(
               key: const Key('hero-fallback-backdrop'),
-              imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-              child: Opacity(
-                opacity: .5,
-                child: Transform.scale(
-                  scale: 1.2,
-                  child: CoverImage(
-                    cover,
-                    width: width,
-                    height: height,
-                    alignment: const Alignment(0, -.3),
-                  ),
+              opacity: .5,
+              child: Transform.scale(
+                scale: 1.2,
+                child: CoverImage(
+                  cover,
+                  width: width,
+                  height: height,
+                  alignment: const Alignment(0, -.3),
+                  wash: true,
                 ),
               ),
             ),
