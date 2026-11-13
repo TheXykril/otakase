@@ -2,6 +2,7 @@ package mobilecore
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -23,6 +24,7 @@ type fakeDevice struct {
 	seeks    []float64
 	position float64
 	idle     bool
+	down     bool
 }
 
 func (f *fakeDevice) Play(url string) error { return f.PlayMedia(cast.Media{URL: url}) }
@@ -35,6 +37,9 @@ func (f *fakeDevice) PlayMedia(m cast.Media) error {
 func (f *fakeDevice) Progress() (cast.Progress, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.down {
+		return cast.Progress{}, errors.New("no answer")
+	}
 	return cast.Progress{Position: f.position, Idle: f.idle}, nil
 }
 func (f *fakeDevice) SeekToTime(s float64) error {
@@ -224,4 +229,27 @@ func TestCastBurnsSubtitlesWithFFmpeg(t *testing.T) {
 	device.position = 2
 	device.mu.Unlock()
 	waitFor(t, "the offset position", func() bool { return status(t, c)["position"] == 8.0 })
+}
+
+func TestCastDeviceSilentForAWhilePlaysOn(t *testing.T) {
+	c := NewCore()
+	defer c.Close()
+	device := &fakeDevice{position: 10}
+	s := fakeSession(t, c, cast.KindDLNA, device)
+	s.mu.Lock()
+	s.state, s.seen, s.lastOK = "playing", true, time.Now().Add(-time.Minute)
+	s.mu.Unlock()
+	device.mu.Lock()
+	device.down = true
+	device.mu.Unlock()
+	if got := status(t, c); got["state"] != "error" || got["error"] == nil {
+		t.Fatalf("silent device: %v", got)
+	}
+	device.mu.Lock()
+	device.down, device.position = false, 12
+	device.mu.Unlock()
+	got := status(t, c)
+	if got["state"] != "playing" || got["error"] != nil || got["position"] != 12.0 {
+		t.Fatalf("device back: %v", got)
+	}
 }

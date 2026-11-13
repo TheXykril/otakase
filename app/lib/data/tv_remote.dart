@@ -20,6 +20,10 @@ const tvDiscoveryPort = 8654;
 /// live connection.
 const remoteVersion = 2;
 
+/// What a TV answers a start it cannot read as an anime episode. TVs from
+/// before films could be started from a phone answer a film with it too.
+const oldTVStartError = 'Choose an episode.';
+
 class TVDevice {
   const TVDevice({
     required this.id,
@@ -875,7 +879,7 @@ class TVRemote extends ChangeNotifier {
         position is! int ||
         position < 0 ||
         (mode != 'sub' && mode != 'dub')) {
-      return (400, {'error': 'Choose an episode.'});
+      return (400, {'error': oldTVStartError});
     }
     final begin = start;
     if (begin == null) {
@@ -1535,6 +1539,21 @@ class RemoteLink extends ChangeNotifier {
 
   /// Sends one control and completes when the TV took it.
   Future<void> send(String action, {Json args = const {}}) async {
+    try {
+      await _send(action, args);
+    } on StateError catch (e) {
+      // A TV from before films could be started from a phone reads the
+      // film as an anime episode without a number.
+      if (action == 'start' &&
+          args['title'] is Map &&
+          e.message == oldTVStartError) {
+        throw StateError('Update Otakase on ${tv.name} to play films there.');
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _send(String action, Json args) async {
     final socket = _socket;
     if (socket == null) {
       if (state == LinkState.polling) {

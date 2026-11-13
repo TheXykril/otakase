@@ -12,9 +12,14 @@ import '../data/play_request.dart';
 /// The player decides what to do with each status; this only talks to the
 /// device and keeps track of it.
 class PlayerCast {
-  PlayerCast(CoreClient core) : client = CastClient(core);
+  PlayerCast(CoreClient core, {this.awake}) : client = CastClient(core);
 
   final CastClient client;
+
+  /// Keeps this device awake and on Wi-Fi while it casts, with [text]
+  /// shown, or lets it sleep with null: a phone feeds the stream to the
+  /// device, so a sleeping phone stalls the cast.
+  final void Function(String? text)? awake;
 
   /// The device playing instead of this screen, or null.
   CastDevice? device;
@@ -37,6 +42,7 @@ class PlayerCast {
   /// [to] takes over playback; nothing is sent until [send].
   void begin(CastDevice to) {
     device = to;
+    awake?.call('Casting to ${to.name}');
     status = null;
     playing = false;
     _ended = -1;
@@ -104,14 +110,25 @@ class PlayerCast {
         /* The device may already be gone. */
       }
     }
+    drop();
+  }
+
+  /// Forgets the device without telling it, for one that refused the cast.
+  void drop() {
+    _timer?.cancel();
+    _timer = null;
     device = null;
     status = null;
+    awake?.call(null);
   }
 
   /// Stops polling and tells the device to stop, without waiting.
   void dispose() {
     _timer?.cancel();
-    if (active) unawaited(client.control('stop').catchError((_) {}));
+    if (active) {
+      unawaited(client.control('stop').catchError((_) {}));
+      awake?.call(null);
+    }
   }
 }
 
