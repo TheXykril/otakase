@@ -1775,9 +1775,13 @@ Future<T?> openSubPage<T>(
       alignment: Alignment.centerRight,
       child: Container(
         width: (MediaQuery.sizeOf(context).width * .35).clamp(432, 560),
+        clipBehavior: Clip.antiAlias,
         decoration: const BoxDecoration(
           color: bg,
-          border: Border(left: BorderSide(color: line)),
+          borderRadius: BorderRadius.horizontal(
+            left: Radius.circular(KageRadius.sheet),
+          ),
+          border: Border.fromBorderSide(BorderSide(color: line)),
         ),
         child: page,
       ),
