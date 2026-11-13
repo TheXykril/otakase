@@ -109,8 +109,9 @@ abstract final class KageRadius {
   static const menu = md;
   static const navBar = lg;
 
-  /// Tile inside the nav bar: the bar's corner less its 6 px padding.
-  static const navTile = navBar - 6;
+  /// Tile inside the nav bar: the bar's corner less its 4 px padding,
+  /// which leaves each tab a 48 px touch target.
+  static const navTile = navBar - 4;
   static const dialog = lg;
   static const sheet = lg;
 

@@ -50,7 +50,7 @@ const _tabIcons = {
 bool askContentOnFirstRun = false;
 
 const _maxTabs = 3;
-const _navPad = 6.0, _navHeight = 64.0, _navBottom = 16.0;
+const _navPad = 4.0, _navHeight = 64.0, _navBottom = 16.0;
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.services, required this.isTV});
