@@ -710,14 +710,22 @@ class _HomePageState extends State<HomePage> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          GestureDetector(
-            onHorizontalDragEnd: picks.length < 2
+          Semantics(
+            container: true,
+            label: picks.length < 2
                 ? null
-                : (d) {
-                    final v = d.primaryVelocity ?? 0;
-                    if (v.abs() > 200) moveBanner(v < 0 ? 1 : -1);
-                  },
-            child: card,
+                : 'Pick ${banner % picks.length + 1} of ${picks.length}',
+            onIncrease: picks.length < 2 ? null : () => moveBanner(1),
+            onDecrease: picks.length < 2 ? null : () => moveBanner(-1),
+            child: GestureDetector(
+              onHorizontalDragEnd: picks.length < 2
+                  ? null
+                  : (d) {
+                      final v = d.primaryVelocity ?? 0;
+                      if (v.abs() > 200) moveBanner(v < 0 ? 1 : -1);
+                    },
+              child: card,
+            ),
           ),
           if (picks.length > 1 && !tvFocus)
             Padding(
@@ -727,27 +735,32 @@ class _HomePageState extends State<HomePage> {
                 widget.isTV ? 48 : 20,
                 0,
               ),
-              child: Row(
-                key: const Key('home-banner-dots'),
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  for (var i = 0; i < picks.length; i++)
-                    GestureDetector(
-                      onTap: () => moveBanner(i - banner % picks.length),
-                      child: AnimatedContainer(
-                        duration: KageMotion.slow,
-                        margin: const EdgeInsets.only(left: 8),
-                        width: i == banner % picks.length ? 26 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: i == banner % picks.length
-                              ? shu
-                              : fgBright.withValues(alpha: .3),
-                          borderRadius: BorderRadius.circular(KageRadius.full),
+              // Screen readers move between picks on the card itself.
+              child: ExcludeSemantics(
+                child: Row(
+                  key: const Key('home-banner-dots'),
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    for (var i = 0; i < picks.length; i++)
+                      GestureDetector(
+                        onTap: () => moveBanner(i - banner % picks.length),
+                        child: AnimatedContainer(
+                          duration: KageMotion.slow,
+                          margin: const EdgeInsets.only(left: 8),
+                          width: i == banner % picks.length ? 26 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: i == banner % picks.length
+                                ? shu
+                                : fgBright.withValues(alpha: .3),
+                            borderRadius: BorderRadius.circular(
+                              KageRadius.full,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
         ],

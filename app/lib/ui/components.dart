@@ -1012,8 +1012,10 @@ class AppButton extends StatelessWidget {
 
   /// Button height for [size] on this device.
   static double heightOf(ButtonSize size, bool isTV) => switch (size) {
-    ButtonSize.md => isTV ? 56 : 44,
-    ButtonSize.sm => isTV ? 48 : 36,
+    // Never under 48 on a phone, the smallest comfortable touch target;
+    // a small button there is only narrower and one line.
+    ButtonSize.md => isTV ? 56 : 48,
+    ButtonSize.sm => 48,
   };
 
   @override
@@ -2261,15 +2263,22 @@ class _SynopsisState extends State<Synopsis> {
                 isTV: widget.isTV,
                 radius: KageRadius.xs,
                 frameGap: 2,
-                padding: const EdgeInsets.symmetric(vertical: KageSpace.s2),
                 onPressed: () => setState(() => open = !open),
-                child: Text(
-                  open ? 'Less' : 'More',
-                  style: uiStyle(
-                    context,
-                    size: 15,
-                    weight: FontWeight.w600,
-                    color: accentText,
+                // A 48 px touch target around the short word.
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: 1,
+                    child: Text(
+                      open ? 'Less' : 'More',
+                      style: uiStyle(
+                        context,
+                        size: 15,
+                        weight: FontWeight.w600,
+                        color: accentText,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -2394,9 +2403,15 @@ class _PosterCardState extends State<PosterCard> {
     return RevealArea(
       child: SizedBox(
         width: widget.width,
+        // One node for screen readers: the art, title and caption are one
+        // button, not three.
         child: Semantics(
+          container: true,
           label: a.title,
           button: true,
+          onTap: open,
+          onLongPress: widget.onMenu,
+          excludeSemantics: true,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
