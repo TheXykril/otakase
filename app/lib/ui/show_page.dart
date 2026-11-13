@@ -72,7 +72,7 @@ class _ShowPageState extends State<ShowPage> {
   final episodeFocus = <int, FocusNode>{};
   FocusNode focusForEpisode(int ep) =>
       episodeFocus.putIfAbsent(ep, () => FocusNode(debugLabel: 'Episode $ep'));
-  double tvGridStart = 0, tvRowExtent = 0;
+  double tvGridStart = 0, tvRowExtent = 0, phoneListStart = 0;
 
   bool seenEpisode(int ep) =>
       (widget.services.store.entry(anime)?.watched.contains(ep) ?? false) ||
@@ -167,6 +167,22 @@ class _ShowPageState extends State<ShowPage> {
         offset.clamp(0, episodeScroll.position.maxScrollExtent),
       );
       await WidgetsBinding.instance.endOfFrame;
+    }
+    // A phone list builds rows lazily: scroll near the row first (rows are
+    // about 94 px), then let the focus reveal finish the job.
+    if (!widget.isTV && episodeScroll.hasClients) {
+      for (var pass = 0; pass < 3; pass++) {
+        final row = focusForEpisode(target).context;
+        if (row != null && row.mounted) break;
+        episodeScroll.jumpTo(
+          (phoneListStart + (target - 1) * 94.0).clamp(
+            0,
+            episodeScroll.position.maxScrollExtent,
+          ),
+        );
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return;
+      }
     }
     if (!mounted) return;
     final jumpFocus = focusForEpisode(target);
@@ -344,11 +360,19 @@ class _ShowPageState extends State<ShowPage> {
         : max(1, ep);
   }
 
+  List<Json>? _artSource;
+  Map<int, Json> _artByEpisode = const {};
+
+  /// Episode artwork and titles by number, rebuilt only when the list
+  /// changes: rows ask several times each, and long shows have hundreds.
   Json? art(int ep) {
-    for (final e in anime.episodeArt) {
-      if (episodeNumber(e) == ep) return e;
+    if (!identical(_artSource, anime.episodeArt)) {
+      _artSource = anime.episodeArt;
+      _artByEpisode = {
+        for (final e in anime.episodeArt.reversed) episodeNumber(e): e,
+      };
     }
-    return null;
+    return _artByEpisode[ep];
   }
 
   int get watched => max(
@@ -428,15 +452,7 @@ class _ShowPageState extends State<ShowPage> {
     ];
     final controls = widget.isTV
         ? Wrap(spacing: 12, runSpacing: 8, children: buttons)
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < buttons.length; i++) ...[
-                if (i > 0) const SizedBox(height: 6),
-                buttons[i],
-              ],
-            ],
-          );
+        : phoneActions(last, label, unavailable);
     if (unavailable == null) return controls;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -448,6 +464,78 @@ class _ShowPageState extends State<ShowPage> {
           unavailable,
           key: const Key('show-action-explanation'),
           style: uiStyle(context, color: muted),
+        ),
+      ],
+    );
+  }
+
+  /// Phone: one primary button, then one row of compact actions, so the
+  /// episodes start on the first screen.
+  Widget phoneActions(int last, String listLabel, String? unavailable) {
+    final soon = anime.status == 'NOT_YET_RELEASED';
+    final h = widget.services.store.entry(anime);
+    final position = max(
+      h?.episode == last ? h?.position ?? 0 : 0,
+      remote.forEpisode(last),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AppButton(
+          key: const Key('show-play'),
+          disabledReason: unavailable,
+          label: position > 0 ? 'Resume episode $last' : 'Play episode $last',
+          icon: LucideIcons.play,
+          filled: true,
+          autofocus: true,
+          focusNode: playFocus,
+          onPressed: soon ? null : () => play(last),
+        ),
+        const SizedBox(height: KageSpace.s2),
+        Row(
+          children: [
+            Expanded(
+              child: AppButton(
+                key: const Key('show-status'),
+                label: listLabel,
+                trailingIcon: LucideIcons.chevronDown,
+                size: ButtonSize.sm,
+                onPressed: () => editListStatus(
+                  context,
+                  widget.services,
+                  anime,
+                  widget.isTV,
+                ),
+              ),
+            ),
+            const SizedBox(width: KageSpace.s2),
+            AppButton(
+              key: const Key('show-play-on'),
+              disabledReason: unavailable,
+              label: 'Play on…',
+              icon: LucideIcons.cast,
+              size: ButtonSize.sm,
+              onPressed: soon ? null : () => playOn(last),
+            ),
+            const SizedBox(width: KageSpace.s2),
+            AppButton(
+              key: const Key('show-download'),
+              disabledReason: unavailable,
+              label: 'Download episode $last',
+              icon: LucideIcons.download,
+              iconOnly: true,
+              size: ButtonSize.sm,
+              onPressed: soon
+                  ? null
+                  : () => downloadAnimeEpisode(
+                      context,
+                      widget.services,
+                      anime,
+                      last,
+                      mode,
+                    ),
+            ),
+          ],
         ),
       ],
     );
@@ -593,8 +681,9 @@ class _ShowPageState extends State<ShowPage> {
       started: started,
       x: 7 + (card ? 14 : 8) + 1.5,
       child: FocusBox(
+        focusNode: focusForEpisode(ep),
         isTV: widget.isTV,
-        radius: card ? 12 : 7,
+        radius: card ? KageRadius.tile : KageRadius.thumb,
         onPressed: () => play(ep),
         onLongPress: () => episodeInfo(ep),
         padding: EdgeInsets.all(card ? 14 : 8),
@@ -642,22 +731,8 @@ class _ShowPageState extends State<ShowPage> {
                             height: card ? 86 : 47,
                           ),
                         if (seen) ...[
-                          ColoredBox(color: bgDeep.withValues(alpha: .65)),
-                          Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: fg),
-                              ),
-                              child: Text(
-                                '済',
-                                style: uiStyle(context, size: 15),
-                              ),
-                            ),
-                          ),
+                          ColoredBox(color: bgDeep.withValues(alpha: .55)),
+                          const Center(child: WatchedStamp(size: 24)),
                         ],
                       ],
                     ),
@@ -996,19 +1071,7 @@ class _ShowPageState extends State<ShowPage> {
                         Positioned(
                           top: 10,
                           right: 10,
-                          child: Container(
-                            width: 28,
-                            height: 28,
-                            decoration: const BoxDecoration(
-                              color: ok,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              LucideIcons.check,
-                              size: 17,
-                              color: bgDeep,
-                            ),
-                          ),
+                          child: const WatchedStamp(size: 30),
                         ),
                       if (current)
                         Center(
@@ -1410,25 +1473,29 @@ class _ShowPageState extends State<ShowPage> {
                                       style: uiStyle(context, color: muted),
                                     ),
                                   if (!widget.isTV) ...[
-                                    Text(
-                                      anime.description,
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: uiStyle(
-                                        context,
-                                        size: 15,
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
                                     actions(last, position),
-                                    const SizedBox(height: 24),
+                                    const SizedBox(height: KageSpace.s4),
+                                    Synopsis(anime.description, lines: 2),
+                                    const SizedBox(height: KageSpace.s4),
                                   ],
                                   Row(
                                     children: [
                                       const Expanded(
                                         child: SectionLabel('Episodes'),
                                       ),
+                                      if (!widget.isTV &&
+                                          anime.airedEpisodes > 12) ...[
+                                        AppButton(
+                                          key: const Key('episode-jump'),
+                                          focusNode: jumpButtonFocus,
+                                          label: 'Go to episode',
+                                          icon: LucideIcons.hash,
+                                          iconOnly: true,
+                                          size: ButtonSize.sm,
+                                          onPressed: jumpToEpisode,
+                                        ),
+                                        const SizedBox(width: KageSpace.s2),
+                                      ],
                                       AppSegmented<String>(
                                         isTV: widget.isTV,
                                         options: const [
@@ -1442,7 +1509,9 @@ class _ShowPageState extends State<ShowPage> {
                                     ],
                                   ),
                                   Text(
-                                    '${anime.year > 0 ? '${anime.year} · ' : ''}$watched watched',
+                                    anime.airedEpisodes > 0
+                                        ? '$watched of ${anime.airedEpisodes} watched'
+                                        : '$watched watched',
                                     style: uiStyle(
                                       context,
                                       size: 15,
@@ -1513,14 +1582,23 @@ class _ShowPageState extends State<ShowPage> {
                               ),
                             )
                           else
-                            SliverPadding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                              ),
-                              sliver: SliverList.builder(
-                                itemCount: anime.airedEpisodes.clamp(0, 10000),
-                                itemBuilder: (_, i) => episodeRow(i + 1),
-                              ),
+                            SliverLayoutBuilder(
+                              builder: (context, constraints) {
+                                phoneListStart =
+                                    constraints.precedingScrollExtent;
+                                return SliverPadding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                  ),
+                                  sliver: SliverList.builder(
+                                    itemCount: anime.airedEpisodes.clamp(
+                                      0,
+                                      10000,
+                                    ),
+                                    itemBuilder: (_, i) => episodeRow(i + 1),
+                                  ),
+                                );
+                              },
                             ),
                           for (final section in {
                             'Related': anime.related,
