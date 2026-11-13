@@ -105,7 +105,7 @@ class _StatusEditorState extends State<_StatusEditor> {
   Widget build(BuildContext context) => AlertDialog(
     title: Text(widget.services.auth.hasAccounts ? 'List status' : 'Your list'),
     content: SizedBox(
-      width: 480,
+      width: widget.isTV ? 560 : 480,
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -119,90 +119,52 @@ class _StatusEditorState extends State<_StatusEditor> {
               style: uiStyle(context, color: muted),
             ),
             const SizedBox(height: 16),
-            AppButton(
-              label: 'Status: ${anilistStatuses[status]!}',
-              icon: LucideIcons.chevronDown,
+            // Statuses sit in the editor itself; no second dialog.
+            GroupHeading(
+              'Status',
+              padding: const EdgeInsets.only(top: 16, bottom: 10),
+            ),
+            AppSegmented<String>(
+              columns: widget.isTV ? 3 : 2,
               isTV: widget.isTV,
-              onPressed: saving
-                  ? null
-                  : () async {
-                      final statuses = anilistStatuses.entries.where(
-                        (e) => e.key != 'ALL',
-                      );
-                      final chosen = await chooseValue(
-                        context,
-                        'List status',
-                        statuses.map((e) => e.value).toList(),
-                        selected: anilistStatuses[status],
-                      );
-                      if (chosen != null && mounted) {
-                        setState(
-                          () => status = statuses
-                              .firstWhere((e) => e.value == chosen)
-                              .key,
-                        );
-                      }
-                    },
+              options: [
+                for (final e in anilistStatuses.entries)
+                  if (e.key != 'ALL') (e.key, e.value),
+              ],
+              selected: status,
+              keyOf: (v) => ValueKey('status-$v'),
+              onChanged: (v) {
+                if (!saving) setState(() => status = v);
+              },
+            ),
+            GroupHeading(
+              'Watched episodes',
+              padding: const EdgeInsets.only(top: 20, bottom: 10),
+            ),
+            AppStepper(
+              label: 'Progress',
+              value: progress,
+              max: widget.anime.episodes > 0 ? widget.anime.episodes : null,
+              text:
+                  '$progress${widget.anime.episodes > 0 ? ' / ${widget.anime.episodes}' : ''}',
+              isTV: widget.isTV,
+              enabled: !saving,
+              onChanged: (v) => setState(() => progress = v),
+            ),
+            GroupHeading(
+              'Score',
+              padding: const EdgeInsets.only(top: 20, bottom: 10),
+            ),
+            AppStepper(
+              label: 'Score',
+              value: score,
+              max: 10,
+              text: score == 0 ? 'Unscored' : '$score / 10',
+              isTV: widget.isTV,
+              enabled: !saving,
+              onChanged: (v) => setState(() => score = v),
             ),
             const SizedBox(height: 12),
-            Text(
-              'Watched episodes',
-              style: uiStyle(context, weight: FontWeight.w600),
-            ),
-            Row(
-              children: [
-                IconButton(
-                  tooltip: 'Decrease progress',
-                  onPressed: saving || progress <= 0
-                      ? null
-                      : () => setState(() => progress--),
-                  icon: const Icon(LucideIcons.minus),
-                ),
-                Expanded(
-                  child: Text(
-                    '$progress${widget.anime.episodes > 0 ? ' / ${widget.anime.episodes}' : ''}',
-                    textAlign: TextAlign.center,
-                    style: uiStyle(context),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Increase progress',
-                  onPressed:
-                      saving ||
-                          widget.anime.episodes > 0 &&
-                              progress >= widget.anime.episodes
-                      ? null
-                      : () => setState(() => progress++),
-                  icon: const Icon(LucideIcons.plus),
-                ),
-              ],
-            ),
-            Text('Score', style: uiStyle(context, weight: FontWeight.w600)),
-            Row(
-              children: [
-                IconButton(
-                  tooltip: 'Decrease score',
-                  onPressed: saving || score <= 0
-                      ? null
-                      : () => setState(() => score--),
-                  icon: const Icon(LucideIcons.minus),
-                ),
-                Expanded(
-                  child: Text(
-                    score == 0 ? 'Unscored' : '$score / 10',
-                    textAlign: TextAlign.center,
-                    style: uiStyle(context),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Increase score',
-                  onPressed: saving || score >= 10
-                      ? null
-                      : () => setState(() => score++),
-                  icon: const Icon(LucideIcons.plus),
-                ),
-              ],
-            ),
             if (error != null)
               Text(error!, style: uiStyle(context, color: warn)),
           ],
@@ -210,14 +172,19 @@ class _StatusEditorState extends State<_StatusEditor> {
       ),
     ),
     actions: [
-      TextButton(
+      AppButton(
+        label: 'Cancel',
+        variant: ButtonVariant.text,
         autofocus: true,
+        isTV: widget.isTV,
         onPressed: saving ? null : () => Navigator.pop(context),
-        child: const Text('Cancel'),
       ),
-      TextButton(
+      AppButton(
+        key: const Key('status-save'),
+        label: saving ? 'Saving' : 'Save',
+        variant: ButtonVariant.primary,
+        isTV: widget.isTV,
         onPressed: saving ? null : save,
-        child: Text(saving ? 'Saving' : 'Save'),
       ),
     ],
   );

@@ -235,6 +235,13 @@ void main() {
     }
     expect(focusedWithin(setting), isTrue);
     await key(tester, LogicalKeyboardKey.select);
+    // Presets first; Custom types a list.
+    final custom = find.text('Custom…');
+    for (var i = 0; i < 8 && !focusedWithin(custom); i++) {
+      await key(tester, LogicalKeyboardKey.arrowDown);
+    }
+    expect(focusedWithin(custom), isTrue);
+    await key(tester, LogicalKeyboardKey.select);
     expect(focusedWithin(find.byType(TextField)), isTrue);
     await key(tester, LogicalKeyboardKey.arrowDown);
     expect(focusedWithin(find.text('Cancel')), isTrue);

@@ -263,7 +263,9 @@ List<(String, List<MoreDestination>)> moreDestinations(
         MoreDestination(
           'Subtitles & languages',
           LucideIcons.captions,
-          subtitle: '${store.text('SubsLanguage')} · ${store.text('SubOrDub')}',
+          subtitle:
+              '${languageListLabel(store.text('SubsLanguage'))} · '
+              '${settingValue(store, 'SubOrDub')}',
           section: 'Subtitles & languages',
         ),
         // TVs have no downloads; computers render with isTV on.
@@ -302,8 +304,7 @@ List<(String, List<MoreDestination>)> moreDestinations(
         MoreDestination(
           'Display',
           LucideIcons.palette,
-          subtitle:
-              '${contentLabels[store.text('Content')] ?? ''} · Shu / Dark',
+          subtitle: contentLabels[store.text('Content')] ?? '',
           section: 'Display',
         ),
       ],

@@ -186,6 +186,31 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  /// A language list from [presets] (label → stored value), or Custom to
+  /// type one. The current value shows even when it is not a preset.
+  Future<void> chooseLanguages(String key, Map<String, String> presets) async {
+    const custom = 'Custom…';
+    final current = store.text(key);
+    final named = presets.entries
+        .where((e) => e.value == current)
+        .map((e) => e.key)
+        .firstOrNull;
+    final options = [
+      ...presets.keys,
+      if (named == null) languageListLabel(current),
+      custom,
+    ];
+    final result = await chooseValue(
+      context,
+      settingLabel(key),
+      options,
+      selected: named ?? languageListLabel(current),
+    );
+    if (result == null || !mounted) return;
+    if (result == custom) return edit(key);
+    if (presets[result] case final value?) await store.set(key, value);
+  }
+
   Future<void> numberChoice(String key, List<int> values) async {
     final result = await chooseValue(
       context,
@@ -365,7 +390,6 @@ class _SettingsPageState extends State<SettingsPage> {
           icon: LucideIcons.clapperboard,
           onTap: chooseContent,
         ),
-        row('Theme', 'Warm dark appearance.', value: 'Shu / Dark'),
         if (Host.android)
           toggle(
             'KeepScreenOn',
@@ -377,15 +401,31 @@ class _SettingsPageState extends State<SettingsPage> {
       group('Subtitles & languages', LucideIcons.captions, [
         row(
           'SubsLanguage',
-          'Languages to try in order, separated by commas. Type off for no subtitles.',
+          'Language to show subtitles in. Custom takes several in order.',
           value: languageListLabel(store.text('SubsLanguage')),
-          onTap: () => edit('SubsLanguage'),
+          onTap: () => chooseLanguages('SubsLanguage', const {
+            'Off': 'off',
+            'English': 'english',
+            'Spanish': 'spanish',
+            'Portuguese': 'portuguese',
+            'French': 'french',
+            'German': 'german',
+            'Italian': 'italian',
+            'Russian': 'russian',
+            'Arabic': 'arabic',
+            'Indonesian': 'indonesian',
+            'Lithuanian': 'lithuanian',
+          }),
         ),
         row(
           'AudioLanguages',
-          'Audio languages to try in order, separated by commas.',
+          'Which audio to pick first when an episode has several.',
           value: languageListLabel(store.text('AudioLanguages')),
-          onTap: () => edit('AudioLanguages'),
+          onTap: () => chooseLanguages('AudioLanguages', const {
+            'Japanese, Chinese, English': 'japanese,chinese,english',
+            'English, Japanese, Chinese': 'english,japanese,chinese',
+            'Chinese, Japanese, English': 'chinese,japanese,english',
+          }),
         ),
         // Only matters once movies & shows are on.
         if (contentModeOf(store) != ContentMode.anime)

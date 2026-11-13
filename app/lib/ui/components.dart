@@ -1017,6 +1017,194 @@ class AppButton extends StatelessWidget {
 
 /// Pick one of a few (2 to about 7): one plate, the chosen segment on a
 /// darker tile. Replaces rows of separate pills.
+/// A number with − and + on either side. Holding a button repeats it,
+/// faster the longer it is held; tapping the number types a value.
+class AppStepper extends StatefulWidget {
+  const AppStepper({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.text,
+    required this.onChanged,
+    this.min = 0,
+    this.max,
+    this.isTV = false,
+    this.enabled = true,
+  });
+
+  /// What the number counts, for tooltips and the type-in dialog.
+  final String label;
+  final int value, min;
+  final int? max;
+
+  /// How the value reads, like "3 / 12" or "Unscored".
+  final String text;
+  final ValueChanged<int> onChanged;
+  final bool isTV, enabled;
+
+  @override
+  State<AppStepper> createState() => _AppStepperState();
+}
+
+class _AppStepperState extends State<AppStepper> {
+  Timer? repeat;
+  int held = 0;
+
+  int clamp(int v) {
+    final top = widget.max;
+    return math.max(widget.min, top == null ? v : math.min(top, v));
+  }
+
+  bool can(int delta) =>
+      widget.enabled && clamp(widget.value + delta) != widget.value;
+
+  void step(int delta) {
+    if (can(delta)) widget.onChanged(clamp(widget.value + delta));
+  }
+
+  /// Starts repeating after a short hold. Raw pointer events, so the
+  /// button's own tap and tooltip gestures still work.
+  void hold(int delta) {
+    held = 0;
+    repeat?.cancel();
+    repeat = Timer(const Duration(milliseconds: 450), () {
+      repeat = Timer.periodic(const Duration(milliseconds: 90), (_) {
+        held++;
+        // One at a time for a second, then five, then ten.
+        step(
+          delta *
+              (held > 30
+                  ? 10
+                  : held > 11
+                  ? 5
+                  : 1),
+        );
+        if (!can(delta)) stop();
+      });
+    });
+  }
+
+  void stop() {
+    repeat?.cancel();
+    repeat = null;
+  }
+
+  @override
+  void didUpdateWidget(AppStepper old) {
+    super.didUpdateWidget(old);
+    if (!widget.enabled) stop();
+  }
+
+  @override
+  void dispose() {
+    stop();
+    super.dispose();
+  }
+
+  Future<void> type() async {
+    final controller = TextEditingController(text: '${widget.value}');
+    final top = widget.max;
+    final result = await showDialog<int>(
+      context: context,
+      builder: (context) {
+        void done() =>
+            Navigator.pop(context, int.tryParse(controller.text.trim()));
+        return AlertDialog(
+          title: Text(widget.label),
+          content: RemoteTextInput(
+            isTV: widget.isTV,
+            builder: (focus) => TextField(
+              key: const Key('stepper-input'),
+              focusNode: focus,
+              autofocus: true,
+              controller: controller,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                hintText: top == null
+                    ? 'From ${widget.min}'
+                    : 'From ${widget.min} to $top',
+              ),
+              onSubmitted: (_) => done(),
+            ),
+          ),
+          actions: [
+            AppButton(
+              label: 'Cancel',
+              variant: ButtonVariant.text,
+              isTV: widget.isTV,
+              onPressed: () => Navigator.pop(context),
+            ),
+            AppButton(
+              label: 'Set',
+              variant: ButtonVariant.primary,
+              isTV: widget.isTV,
+              onPressed: done,
+            ),
+          ],
+        );
+      },
+    );
+    // The dialog can still paint the field for a moment after it closes.
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    controller.dispose();
+    if (result != null && mounted) widget.onChanged(clamp(result));
+  }
+
+  Widget button(int delta) {
+    final name =
+        '${delta < 0 ? 'Decrease' : 'Increase'} '
+        '${widget.label.toLowerCase()}';
+    final live = can(delta);
+    return Listener(
+      onPointerDown: live ? (_) => hold(delta) : null,
+      onPointerUp: (_) => stop(),
+      onPointerCancel: (_) => stop(),
+      child: AppButton(
+        label: name,
+        icon: delta < 0 ? LucideIcons.minus : LucideIcons.plus,
+        iconOnly: true,
+        isTV: widget.isTV,
+        onPressed: live ? () => step(delta) : null,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      button(-1),
+      const SizedBox(width: KageSpace.s2),
+      Expanded(
+        child: FocusBox(
+          key: ValueKey('stepper-${widget.label}'),
+          isTV: widget.isTV,
+          radius: KageRadius.input,
+          onPressed: widget.enabled ? type : null,
+          child: Tooltip(
+            message: 'Type a number',
+            child: Container(
+              height: AppButton.heightOf(ButtonSize.md, widget.isTV),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: fgBright.withValues(alpha: .04),
+                border: Border.all(color: line),
+                borderRadius: BorderRadius.circular(KageRadius.input),
+              ),
+              child: Text(
+                widget.text,
+                style: uiStyle(context, weight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(width: KageSpace.s2),
+      button(1),
+    ],
+  );
+}
+
 class AppSegmented<T> extends StatelessWidget {
   const AppSegmented({
     super.key,
@@ -1026,8 +1214,13 @@ class AppSegmented<T> extends StatelessWidget {
     this.isTV = false,
     this.keyOf,
     this.expand = false,
+    this.columns,
   });
   final List<(T, String)> options;
+
+  /// Lays the segments out in rows of this many, each row full width, for
+  /// choices too many for one line.
+  final int? columns;
   final T selected;
   final ValueChanged<T> onChanged;
   final bool isTV;
@@ -1058,10 +1251,35 @@ class AppSegmented<T> extends StatelessWidget {
         border: Border.all(color: line),
         borderRadius: BorderRadius.circular(KageRadius.input),
       ),
-      child: Row(
-        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-        children: [for (final (v, l) in options) segment(v, l)],
-      ),
+      child: switch (columns) {
+        final n? => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < options.length; i += n)
+              Row(
+                children: [
+                  for (var j = i; j < i + n; j++)
+                    if (j < options.length)
+                      Expanded(
+                        child: AppSegment(
+                          key: keyOf?.call(options[j].$1),
+                          label: options[j].$2,
+                          selected: options[j].$1 == selected,
+                          isTV: isTV,
+                          onPressed: () => onChanged(options[j].$1),
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                ],
+              ),
+          ],
+        ),
+        null => Row(
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          children: [for (final (v, l) in options) segment(v, l)],
+        ),
+      },
     );
   }
 }
