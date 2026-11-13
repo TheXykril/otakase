@@ -2787,6 +2787,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     media?.label ?? '',
   ].where((s) => s.isNotEmpty).join(' · ');
 
+  /// Phones show the error buttons small, so they fit beside the picture.
+  ButtonSize get errorSize => widget.isTV ? ButtonSize.md : ButtonSize.sm;
+
   /// Where the last double tap landed, across the screen.
   double? doubleTapAt;
 
@@ -2805,9 +2808,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     child: Container(
       key: const Key('player-next'),
       // Sized to what it says, up to a readable width.
-      constraints: const BoxConstraints(maxWidth: 440),
+      constraints: BoxConstraints(maxWidth: widget.isTV ? 440 : 360),
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(widget.isTV ? 12 : 10),
       decoration: BoxDecoration(
         color: panel,
         border: Border.all(color: line),
@@ -2819,9 +2822,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           if (anime.cover.isNotEmpty) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(KageRadius.md),
-              child: CoverImage(anime.cover, width: 54, height: 81),
+              child: widget.isTV
+                  ? CoverImage(anime.cover, width: 54, height: 81)
+                  : CoverImage(anime.cover, width: 40, height: 60),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: widget.isTV ? 16 : 12),
           ],
           Flexible(
             child: Column(
@@ -2832,14 +2837,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   isTitle
                       ? 'Next · ${upNext?.subtitle ?? ''}'
                       : 'Next · Episode ${episode + 1}',
-                  style: uiStyle(context, weight: FontWeight.w600),
+                  style: uiStyle(context, size: 15, weight: FontWeight.w600),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: widget.isTV ? 6 : 2),
                 Text(
                   widget.services.store.flag('NextEpisodePrompt')
                       ? 'Continue the story?'
                       : 'Playing in $countdownSeconds seconds',
-                  style: uiStyle(context),
+                  style: uiStyle(
+                    context,
+                    size: 15,
+                    color: widget.isTV ? fg : muted,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 LinearProgressIndicator(
@@ -3018,6 +3027,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                   ),
                                 );
                               },
+                              size: errorSize,
                               isTV: widget.isTV,
                             ),
                           if (isTitle)
@@ -3037,6 +3047,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                   ),
                                 );
                               },
+                              size: errorSize,
                               isTV: widget.isTV,
                             ),
                           if (!isTitle || (media?.copy ?? '').isNotEmpty)
@@ -3048,6 +3059,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                   : ButtonVariant.primary,
                               autofocus: !isTitle,
                               onPressed: tryAnotherCopy,
+                              size: errorSize,
                               isTV: widget.isTV,
                             ),
                           PlaybackReportButton(
@@ -3067,6 +3079,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           AppButton(
                             label: 'Back',
                             variant: ButtonVariant.text,
+                            size: errorSize,
                             onPressed: () => Navigator.pop(context),
                             isTV: widget.isTV,
                           ),

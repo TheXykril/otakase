@@ -71,7 +71,7 @@ class PhonePlayerControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final max = math.max(1, duration.inMilliseconds).toDouble();
     final timeStyle = mono.copyWith(
-      fontSize: isTV ? 20 : 15,
+      fontSize: isTV ? 20 : 13,
       color: fg,
       letterSpacing: 0,
     );
@@ -90,7 +90,10 @@ class PhonePlayerControls extends StatelessWidget {
           child: SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              // Phones keep the bar slim so the picture stays in view.
+              padding: isTV
+                  ? const EdgeInsets.all(16)
+                  : const EdgeInsets.fromLTRB(4, 4, 12, 4),
               child: Row(
                 children: [
                   IconButton(
@@ -98,7 +101,7 @@ class PhonePlayerControls extends StatelessWidget {
                     onPressed: onBack,
                     icon: const Icon(LucideIcons.arrowLeft, color: fgBright),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: isTV ? 12 : 4),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,18 +112,24 @@ class PhonePlayerControls extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: uiStyle(
                             context,
-                            size: 20,
+                            size: isTV ? 20 : 16,
                             weight: FontWeight.w600,
                             color: fgBright,
                           ),
                         ),
                         if (subtitle.isNotEmpty) ...[
-                          const SizedBox(height: 4),
+                          SizedBox(height: isTV ? 4 : 2),
                           Text(
                             subtitle.toUpperCase(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: uiStyle(context, size: 15, color: muted),
+                            style: isTV
+                                ? uiStyle(context, size: 15, color: muted)
+                                : mono.copyWith(
+                                    fontSize: 12,
+                                    letterSpacing: 1,
+                                    color: fg,
+                                  ),
                           ),
                         ],
                       ],
@@ -129,10 +138,10 @@ class PhonePlayerControls extends StatelessWidget {
                   ...topActions,
                   TopBarEnd(isTV: isTV),
                   const SizedBox(width: 12),
-                  const SizedBox(
-                    width: 48,
-                    height: 48,
-                    child: Center(child: OtakaseSeal()),
+                  SizedBox(
+                    width: isTV ? 48 : 32,
+                    height: isTV ? 48 : 32,
+                    child: Center(child: OtakaseSeal(size: isTV ? 32 : 24)),
                   ),
                 ],
               ),
@@ -146,12 +155,12 @@ class PhonePlayerControls extends StatelessWidget {
             child: Center(
               child: Wrap(
                 alignment: WrapAlignment.center,
-                spacing: 24,
+                spacing: isTV ? 24 : 32,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   TransportButton(
                     label: 'Rewind 10 seconds',
-                    text: '−10',
+                    icon: LucideIcons.rotateCcw,
                     onPressed: () => onSeekBy(-10),
                   ),
                   TransportButton(
@@ -163,7 +172,7 @@ class PhonePlayerControls extends StatelessWidget {
                   ),
                   TransportButton(
                     label: 'Forward 10 seconds',
-                    text: '+10',
+                    icon: LucideIcons.rotateCw,
                     onPressed: () => onSeekBy(10),
                   ),
                 ],
@@ -184,11 +193,16 @@ class PhonePlayerControls extends StatelessWidget {
           child: SafeArea(
             top: false,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(24, 8, 24, isTV ? 40 : 12),
+              padding: EdgeInsets.fromLTRB(
+                isTV ? 24 : 16,
+                isTV ? 8 : 0,
+                isTV ? 24 : 16,
+                isTV ? 40 : 6,
+              ),
               child: Column(
                 children: [
                   SizedBox(
-                    height: 44,
+                    height: isTV ? 44 : 32,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
@@ -262,7 +276,7 @@ class _PlayerIconButtonState extends State<PlayerIconButton> {
   Widget build(BuildContext context) {
     final a = widget.action, tv = widget.isTV;
     final enabled = a.onPressed != null;
-    final size = tv ? 52.0 : 44.0;
+    final size = tv ? 52.0 : 40.0;
     return Semantics(
       label: a.label,
       button: true,
@@ -287,7 +301,7 @@ class _PlayerIconButtonState extends State<PlayerIconButton> {
                   Icon(
                     a.icon,
                     color: enabled ? fgBright : disabled,
-                    size: tv ? 26 : 22,
+                    size: tv ? 26 : 20,
                   ),
                   if (tv && focused)
                     Positioned(

@@ -3274,42 +3274,46 @@ class TransportButton extends StatelessWidget {
   final bool primary;
   final FocusNode? focusNode;
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: label,
-    button: true,
-    child: Tooltip(
-      message: label,
-      child: FocusBox(
-        onPressed: onPressed,
-        isTV: AppLayout.tvOf(context),
-        focusNode: focusNode,
-        radius: KageRadius.full,
-        child: Container(
-          width: primary ? 64 : 56,
-          height: primary ? 64 : 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: primary ? shu : panel,
-          ),
-          child: Center(
-            child: icon != null
-                ? Icon(
-                    icon,
-                    color: primary ? bgDeep : fgBright,
-                    size: primary ? 30 : 24,
-                  )
-                : Text(
-                    text!,
-                    style: mono.copyWith(
-                      color: fgBright,
-                      fontSize: AppLayout.tvOf(context) ? 20 : 15,
+  Widget build(BuildContext context) {
+    final tv = AppLayout.tvOf(context);
+    return Semantics(
+      label: label,
+      button: true,
+      child: Tooltip(
+        message: label,
+        child: FocusBox(
+          onPressed: onPressed,
+          isTV: tv,
+          focusNode: focusNode,
+          radius: KageRadius.full,
+          // Phones get smaller circles so the picture stays in view.
+          child: Container(
+            width: primary ? (tv ? 64 : 52) : (tv ? 56 : 44),
+            height: primary ? (tv ? 64 : 52) : (tv ? 56 : 44),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: primary ? shu : panel.withValues(alpha: .85),
+            ),
+            child: Center(
+              child: icon != null
+                  ? Icon(
+                      icon,
+                      color: primary ? bgDeep : fgBright,
+                      size: primary ? (tv ? 30 : 24) : (tv ? 24 : 20),
+                    )
+                  : Text(
+                      text!,
+                      style: mono.copyWith(
+                        color: fgBright,
+                        fontSize: AppLayout.tvOf(context) ? 20 : 15,
+                      ),
                     ),
-                  ),
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// The window draws under a phone's camera cutout (see MainActivity). In
