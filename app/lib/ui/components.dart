@@ -1783,7 +1783,17 @@ Future<T?> openSubPage<T>(
           ),
           border: Border.fromBorderSide(BorderSide(color: line)),
         ),
-        child: page,
+        // One surface from the top bar down, whatever the page sets.
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            scaffoldBackgroundColor: panel,
+            canvasColor: panel,
+            appBarTheme: Theme.of(
+              context,
+            ).appBarTheme.copyWith(backgroundColor: panel),
+          ),
+          child: page,
+        ),
       ),
     ),
     transitionBuilder: (context, animation, _, child) {
