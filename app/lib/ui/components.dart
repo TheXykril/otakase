@@ -112,6 +112,48 @@ TextStyle roleStyle(
 // Scale the whole Navigator so routes, focus frames and hit testing agree.
 /// Whether the desktop viewer is moving around with the keyboard (arrow keys
 /// or Tab) rather than the mouse.
+/// Whether focus rings show: a remote or keyboard is driving rather than
+/// touch or the mouse. One listener for the whole app; a widget that draws
+/// a ring listens only while it holds focus.
+class FocusRings extends ChangeNotifier {
+  FocusRings._() {
+    DesktopInput.keyboardMode.addListener(_update);
+  }
+  static final instance = FocusRings._();
+  static bool get show => _compute();
+
+  // The focus manager can be replaced (tests do it), so follow the
+  // current one.
+  FocusManager? _manager;
+  bool _last = false;
+
+  static bool _compute() => isDesktop
+      ? DesktopInput.keyboard
+      : FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+
+  void _follow() {
+    if (identical(_manager, FocusManager.instance)) return;
+    _manager?.removeHighlightModeListener(_mode);
+    _manager = FocusManager.instance..addHighlightModeListener(_mode);
+    _last = _compute();
+  }
+
+  void _mode(FocusHighlightMode _) => _update();
+
+  @override
+  void addListener(VoidCallback listener) {
+    _follow();
+    super.addListener(listener);
+  }
+
+  void _update() {
+    final now = _compute();
+    if (now == _last) return;
+    _last = now;
+    notifyListeners();
+  }
+}
+
 abstract final class DesktopInput {
   static final keyboardMode = ValueNotifier(false);
   static bool get keyboard => keyboardMode.value;
@@ -384,27 +426,22 @@ class _FocusBoxState extends State<FocusBox> {
   bool focused = false;
   bool hovered = false;
   bool revealScheduled = false;
-  void modeChanged(FocusHighlightMode _) {
+
+  // Only the focused box redraws when rings turn on or off.
+  void ringsChanged() {
     if (mounted) setState(() {});
   }
 
   @override
   void initState() {
     super.initState();
-    FocusManager.instance.addHighlightModeListener(modeChanged);
     if (isDesktop) DesktopInput.listen();
-    DesktopInput.keyboardMode.addListener(inputChanged);
   }
 
   @override
   void dispose() {
-    FocusManager.instance.removeHighlightModeListener(modeChanged);
-    DesktopInput.keyboardMode.removeListener(inputChanged);
+    if (focused) FocusRings.instance.removeListener(ringsChanged);
     super.dispose();
-  }
-
-  void inputChanged() {
-    if (mounted && isDesktop) setState(() {});
   }
 
   @override
@@ -437,12 +474,7 @@ class _FocusBoxState extends State<FocusBox> {
 
   @override
   Widget build(BuildContext context) {
-    final visible =
-        focused &&
-        (isDesktop
-            ? DesktopInput.keyboard
-            : FocusManager.instance.highlightMode ==
-                  FocusHighlightMode.traditional);
+    final visible = focused && FocusRings.show;
     final interaction = Material(
       color: Colors.transparent,
       child: InkWell(
@@ -461,6 +493,13 @@ class _FocusBoxState extends State<FocusBox> {
         splashColor: accentDeep.withValues(alpha: .2),
         borderRadius: BorderRadius.circular(widget.radius),
         onFocusChange: (value) {
+          if (value != focused) {
+            if (value) {
+              FocusRings.instance.addListener(ringsChanged);
+            } else {
+              FocusRings.instance.removeListener(ringsChanged);
+            }
+          }
           setState(() => focused = value);
           widget.onFocusChanged?.call(value);
           if (value) {

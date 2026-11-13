@@ -78,10 +78,6 @@ class _AppShellState extends State<AppShell> {
   );
   List<String> shownTabs = const [];
   final searchField = FocusNode(debugLabel: 'Search field');
-  void modeChanged(FocusHighlightMode _) {
-    if (mounted) setState(() {});
-  }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -100,7 +96,6 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    FocusManager.instance.addHighlightModeListener(modeChanged);
     widget.services.selectRoot = choose;
     desktopCloseHook = closeWindow;
     widget.services.auth.remoteLink = remoteLink;
@@ -229,7 +224,6 @@ class _AppShellState extends State<AppShell> {
     if (widget.services.episodeAlerts.show == fromDiscord) {
       widget.services.episodeAlerts.show = null;
     }
-    FocusManager.instance.removeHighlightModeListener(modeChanged);
     widget.services.auth.remoteLink = null;
     unawaited(remoteEvents?.cancel() ?? Future<void>.value());
     widget.services.selectRoot = null;
@@ -680,9 +674,11 @@ class _AppShellState extends State<AppShell> {
         child: Container(
           constraints: BoxConstraints(minHeight: widget.isTV ? 48 : 50),
           padding: EdgeInsets.symmetric(horizontal: widget.isTV ? 6 : 0),
+          // Only the tabs redraw when focus rings turn on or off.
           child: widget.isTV
-              ? Builder(
-                  builder: (context) {
+              ? ListenableBuilder(
+                  listenable: FocusRings.instance,
+                  builder: (context, _) {
                     final remote =
                         FocusManager.instance.highlightMode ==
                         FocusHighlightMode.traditional;
@@ -716,14 +712,17 @@ class _AppShellState extends State<AppShell> {
                     );
                   },
                 )
-              : _PhoneTab(
-                  label: label,
-                  icon: _tabIcons[label] ?? LucideIcons.circle,
-                  active: active,
-                  focused:
-                      focusedNav == index &&
-                      FocusManager.instance.highlightMode ==
-                          FocusHighlightMode.traditional,
+              : ListenableBuilder(
+                  listenable: FocusRings.instance,
+                  builder: (context, _) => _PhoneTab(
+                    label: label,
+                    icon: _tabIcons[label] ?? LucideIcons.circle,
+                    active: active,
+                    focused:
+                        focusedNav == index &&
+                        FocusManager.instance.highlightMode ==
+                            FocusHighlightMode.traditional,
+                  ),
                 ),
         ),
       ),

@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 
+import 'components.dart' show FocusRings;
 import 'tokens.dart';
 
 /// The app theme, built from the tokens. Material widgets pick up Otakase
 /// colours, type and shapes from here, so screens do not style them one by
 /// one.
 ///
-/// [traditional] is true while the viewer moves with keys or a remote; only
-/// then do buttons draw a focus outline.
-ThemeData buildOtakaseTheme({required bool isTV, bool traditional = false}) {
+/// Buttons draw a focus outline only while [FocusRings] show. [focusRings]
+/// sets the ink focus colour; the desktop swaps it as the viewer moves
+/// between mouse and keyboard.
+ThemeData buildOtakaseTheme({required bool isTV, bool focusRings = true}) {
   final buttons = ButtonStyle(
     textStyle: WidgetStatePropertyAll(
       TextStyle(
@@ -26,7 +28,7 @@ ThemeData buildOtakaseTheme({required bool isTV, bool traditional = false}) {
     ),
     side: WidgetStateProperty.resolveWith(
       (s) => BorderSide(
-        color: traditional && s.contains(WidgetState.focused)
+        color: FocusRings.show && s.contains(WidgetState.focused)
             ? shu
             : Colors.transparent,
         width: 2,
@@ -70,7 +72,7 @@ ThemeData buildOtakaseTheme({required bool isTV, bool traditional = false}) {
       labelMedium: TextStyle(fontSize: isTV ? 20 : 15),
       labelSmall: TextStyle(fontSize: isTV ? 20 : 15),
     ),
-    focusColor: traditional ? line : Colors.transparent,
+    focusColor: focusRings ? line : Colors.transparent,
     dividerColor: line,
     dividerTheme: const DividerThemeData(color: line, thickness: 1),
     iconTheme: IconThemeData(color: fg, size: isTV ? 24 : 22),
