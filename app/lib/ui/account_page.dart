@@ -501,8 +501,10 @@ class _PairDialogState extends State<PairDialog> {
             children: [
               if (p == null && error == null)
                 const Padding(
-                  padding: EdgeInsets.all(40),
-                  child: CircularProgressIndicator(),
+                  padding: EdgeInsets.all(12),
+                  child: SkeletonShimmer(
+                    child: SkeletonBlock(width: 220, height: 220),
+                  ),
                 ),
               if (p != null) ...[
                 Container(
@@ -914,8 +916,8 @@ class _DevicesPageState extends State<DevicesPage> {
             const AccountRowsHeading('Your devices'),
             if (loading)
               const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: SkeletonList(rows: 2),
               ),
             for (final d in devices)
               AccountRow(

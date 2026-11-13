@@ -162,8 +162,8 @@ class _BackupPageState extends State<BackupPage> {
         ),
       if (working)
         const Padding(
-          padding: EdgeInsets.all(24),
-          child: Center(child: CircularProgressIndicator()),
+          padding: EdgeInsets.symmetric(vertical: 24),
+          child: WorkingLine(),
         ),
       if (message.isNotEmpty)
         Padding(

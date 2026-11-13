@@ -79,7 +79,12 @@ abstract final class DesktopInput {
     return false;
   }
 
+  /// Where the mouse last went down, in window coordinates. A desktop
+  /// picker opens its menu here.
+  static Offset? lastPointerDown;
+
   static void pointer(PointerEvent event) {
+    if (event is PointerDownEvent) lastPointerDown = event.position;
     if (event is PointerDownEvent ||
         event is PointerScrollEvent ||
         event is PointerHoverEvent ||
@@ -292,7 +297,7 @@ class FocusBox extends StatefulWidget {
     this.onFocused,
     this.outsideFrame = false,
     this.showFocusBorder = true,
-    this.focusFill = bg,
+    this.focusFill = Colors.transparent,
     this.hoverColor,
     this.onHover,
     this.onFocusChanged,
@@ -451,11 +456,16 @@ class _FocusBoxState extends State<FocusBox> {
           : const Duration(milliseconds: 180),
       curve: Curves.easeOut,
       padding: EdgeInsets.all(widget.frameGap),
+      // Controls show one focus ring: 2 px of bright text colour just
+      // outside the control, following its corner. Artwork uses the split
+      // frame above instead.
       decoration: BoxDecoration(
         color: visible ? widget.focusFill : Colors.transparent,
-        borderRadius: BorderRadius.circular(widget.radius + 7),
+        borderRadius: BorderRadius.circular(widget.radius + widget.frameGap),
         border: Border.all(
-          color: visible && widget.showFocusBorder ? shu : Colors.transparent,
+          color: visible && widget.showFocusBorder
+              ? fgBright
+              : Colors.transparent,
           width: 2,
         ),
       ),
@@ -1320,6 +1330,47 @@ class _SkeletonShimmerState extends State<SkeletonShimmer>
         colors: [line, line.withValues(alpha: .3), line],
       ).createShader(rect),
       child: child,
+    ),
+  );
+}
+
+/// Stand-in rows while a list loads: shimmering blocks the height of a
+/// row, so the page does not jump when the rows arrive.
+class SkeletonList extends StatelessWidget {
+  const SkeletonList({super.key, this.rows = 3, this.height = 56});
+  final int rows;
+  final double height;
+  @override
+  Widget build(BuildContext context) => SkeletonShimmer(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < rows; i++)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: KageSpace.s1),
+            child: SkeletonBlock(height: height - KageSpace.s2),
+          ),
+      ],
+    ),
+  );
+}
+
+/// The animated thread: a thin Shu line that runs while an action works.
+/// Content that is loading shows a skeleton instead.
+class WorkingLine extends StatelessWidget {
+  const WorkingLine({super.key, this.label = 'Working'});
+  final String label;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    child: ClipRRect(
+      borderRadius: const BorderRadius.all(Radius.circular(KageRadius.mark)),
+      child: const LinearProgressIndicator(
+        minHeight: 2,
+        color: shu,
+        backgroundColor: line,
+      ),
     ),
   );
 }
@@ -2338,13 +2389,247 @@ class ChoiceRow extends StatelessWidget {
   );
 }
 
+/// Lets the viewer pick one of [values]. The same call looks right on each
+/// screen: a bottom sheet on a phone, a side panel on a TV and a menu at the
+/// pointer on a computer. A computer question that carries a [note] stays a
+/// dialog, because a menu has no room to explain.
 Future<String?> chooseValue(
   BuildContext context,
   String title,
   List<String> values, {
   String? selected,
   String? note,
-}) => showDialog<String>(
+}) {
+  final tv = AppLayout.tvOf(context);
+  if (isDesktop) {
+    final anchor = note == null ? _pickerAnchor(context) : null;
+    if (anchor != null) {
+      return _chooseMenu(context, anchor, values, selected);
+    }
+    return _chooseDialog(context, title, values, selected, note);
+  }
+  if (tv) return _choosePanel(context, title, values, selected, note);
+  return _chooseSheet(context, title, values, selected, note);
+}
+
+List<Widget> _pickerRows(
+  BuildContext context,
+  List<String> values,
+  String? selected, {
+  required bool tv,
+}) => [
+  for (final value in values)
+    AppRow(
+      autofocus: value == (values.contains(selected) ? selected : values.first),
+      isTV: tv,
+      title: value,
+      selected: value == selected,
+      trailing: const SizedBox.shrink(),
+      onTap: () => Navigator.pop(context, value),
+    ),
+];
+
+Widget _pickerHeading(BuildContext context, String title, String? note) =>
+    Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: uiStyle(
+            context,
+            size: 20,
+            weight: FontWeight.w600,
+            color: fgBright,
+          ),
+        ),
+        if (note != null)
+          Padding(
+            padding: const EdgeInsets.only(top: KageSpace.s2),
+            child: Text(note, style: uiStyle(context, color: muted)),
+          ),
+        const SizedBox(height: KageSpace.s3),
+      ],
+    );
+
+Future<String?> _chooseSheet(
+  BuildContext context,
+  String title,
+  List<String> values,
+  String? selected,
+  String? note,
+) => showModalBottomSheet<String>(
+  context: context,
+  isScrollControlled: true,
+  useSafeArea: true,
+  backgroundColor: panel,
+  constraints: BoxConstraints(
+    maxHeight: MediaQuery.sizeOf(context).height * .75,
+  ),
+  builder: (context) => SafeArea(
+    top: false,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(
+        KageSpace.s3,
+        KageSpace.s5,
+        KageSpace.s3,
+        KageSpace.s3,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: KageSpace.s2),
+            child: _pickerHeading(context, title, note),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: _pickerRows(context, values, selected, tv: false),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+);
+
+Future<String?> _choosePanel(
+  BuildContext context,
+  String title,
+  List<String> values,
+  String? selected,
+  String? note,
+) => showGeneralDialog<String>(
+  context: context,
+  barrierDismissible: true,
+  barrierLabel: title,
+  barrierColor: scrim,
+  transitionDuration: MediaQuery.disableAnimationsOf(context)
+      ? Duration.zero
+      : KageMotion.base,
+  transitionBuilder: (context, animation, _, child) => SlideTransition(
+    position: Tween(begin: const Offset(1, 0), end: Offset.zero).animate(
+      CurvedAnimation(
+        parent: animation,
+        curve: KageMotion.enter,
+        reverseCurve: KageMotion.exit,
+      ),
+    ),
+    child: child,
+  ),
+  pageBuilder: (context, _, _) => Align(
+    alignment: Alignment.centerRight,
+    child: Material(
+      color: panel,
+      child: SizedBox(
+        width: math.min(560, MediaQuery.sizeOf(context).width * .42),
+        height: double.infinity,
+        child: Container(
+          decoration: const BoxDecoration(
+            border: Border(left: BorderSide(color: line)),
+          ),
+          padding: const EdgeInsets.fromLTRB(
+            KageSpace.s6,
+            KageSpace.s7,
+            KageSpace.s6,
+            KageSpace.s5,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _pickerHeading(context, title, note),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: _pickerRows(context, values, selected, tv: true),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  ),
+);
+
+/// The control that opened a desktop picker: the focused one with the
+/// keyboard, else the spot the mouse went down. Null when neither is known.
+Rect? _pickerAnchor(BuildContext context) {
+  final overlay = Overlay.maybeOf(context)?.context.findRenderObject();
+  if (overlay is! RenderBox) return null;
+  if (DesktopInput.keyboard) {
+    final box = FocusManager.instance.primaryFocus?.context?.findRenderObject();
+    if (box is RenderBox && box.attached && box.hasSize) {
+      final topLeft = overlay.globalToLocal(box.localToGlobal(Offset.zero));
+      final bottomRight = overlay.globalToLocal(
+        box.localToGlobal(box.size.bottomRight(Offset.zero)),
+      );
+      return Rect.fromPoints(topLeft, bottomRight);
+    }
+    return null;
+  }
+  final down = DesktopInput.lastPointerDown;
+  if (down == null) return null;
+  return overlay.globalToLocal(down) & Size.zero;
+}
+
+Future<String?> _chooseMenu(
+  BuildContext context,
+  Rect anchor,
+  List<String> values,
+  String? selected,
+) {
+  final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
+  return showMenu<String>(
+    context: context,
+    color: panel,
+    position: RelativeRect.fromRect(anchor, Offset.zero & overlay.size),
+    constraints: const BoxConstraints(minWidth: 220, maxWidth: 420),
+    items: [
+      for (final value in values)
+        PopupMenuItem(
+          value: value,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                child: value == selected
+                    ? const Icon(LucideIcons.check, size: 18, color: shu)
+                    : null,
+              ),
+              Expanded(
+                child: Text(
+                  value,
+                  style: uiStyle(
+                    context,
+                    color: value == selected ? fgBright : fg,
+                    weight: value == selected
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+    ],
+  );
+}
+
+Future<String?> _chooseDialog(
+  BuildContext context,
+  String title,
+  List<String> values,
+  String? selected,
+  String? note,
+) => showDialog<String>(
   context: context,
   builder: (context) => AlertDialog(
     backgroundColor: panel,
@@ -2369,17 +2654,11 @@ Future<String?> chooseValue(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(note, style: uiStyle(context, color: muted)),
               ),
-            ...values.map(
-              (value) => AppRow(
-                autofocus:
-                    value ==
-                    (values.contains(selected) ? selected : values.first),
-                isTV: AppLayout.tvOf(context),
-                title: value,
-                selected: value == selected,
-                trailing: const SizedBox.shrink(),
-                onTap: () => Navigator.pop(context, value),
-              ),
+            ..._pickerRows(
+              context,
+              values,
+              selected,
+              tv: AppLayout.tvOf(context),
             ),
           ],
         ),

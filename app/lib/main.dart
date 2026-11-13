@@ -203,10 +203,7 @@ class _ProfileHostState extends State<ProfileHost> {
               ),
               if (widget.manager.busy)
                 const Positioned.fill(
-                  child: ColoredBox(
-                    color: bg,
-                    child: Center(child: CircularProgressIndicator(color: shu)),
-                  ),
+                  child: ColoredBox(color: bg, child: PageSkeleton(hero: true)),
                 ),
             ],
           ),

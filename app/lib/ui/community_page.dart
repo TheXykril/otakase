@@ -324,7 +324,9 @@ class _DiscordLinkDialogState extends State<DiscordLinkDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (code == null && error == null)
-              const CircularProgressIndicator(),
+              const SkeletonShimmer(
+                child: SkeletonBlock(width: 260, height: 48),
+              ),
             if (code != null) ...[
               Text(
                 'Run this command in the Otakase Discord:',

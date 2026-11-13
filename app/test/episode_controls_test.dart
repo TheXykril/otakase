@@ -404,7 +404,7 @@ void main() {
       expect(border(), Colors.transparent);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await tester.pumpAndSettle();
-      expect(border(), shu);
+      expect(border(), fgBright);
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: const Offset(300, 300));
       await mouse.moveTo(const Offset(310, 310));
@@ -413,7 +413,7 @@ void main() {
       expect(focused.hasFocus, isTrue);
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
-      expect(border(), shu);
+      expect(border(), fgBright);
       tester.binding.handlePointerEvent(
         const PointerScrollEvent(
           position: Offset(300, 300),

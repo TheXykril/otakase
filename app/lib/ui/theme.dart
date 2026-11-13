@@ -109,7 +109,9 @@ ThemeData buildOtakaseTheme({required bool isTV, bool traditional = false}) {
       ),
     ),
     popupMenuTheme: const PopupMenuThemeData(
+      color: panel,
       shape: RoundedRectangleBorder(
+        side: BorderSide(color: line),
         borderRadius: BorderRadius.all(Radius.circular(KageRadius.menu)),
       ),
     ),
