@@ -134,26 +134,27 @@ class ResumeCard extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 if (showArtwork) HeroArt(anime, height: height),
-                Positioned(
-                  top: 13,
-                  left: isTV ? 48 : 14,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    color: bgDeep.withValues(alpha: .95),
-                    child: Text(
-                      kicker ??
-                          (entry.position > 0
-                              ? 'Continue watching'
-                              : label == 'MOVIE'
-                              ? 'Up next'
-                              : 'Your next episode'),
-                      style: uiStyle(context, size: 15),
+                // The page heading already says this is where you left off,
+                // so a card you are partway through needs no corner note.
+                if (kicker != null || entry.position == 0)
+                  Positioned(
+                    top: 13,
+                    left: isTV ? 48 : 14,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      color: bgDeep.withValues(alpha: .95),
+                      child: Text(
+                        kicker ??
+                            (label == 'MOVIE'
+                                ? 'Up next'
+                                : 'Your next episode'),
+                        style: uiStyle(context, size: 15),
+                      ),
                     ),
                   ),
-                ),
                 if (anime.nativeTitle.isNotEmpty)
                   Positioned(
                     right: isTV ? 48 : 10,
@@ -312,16 +313,11 @@ class _HomePageState extends State<HomePage> {
       contentModeOf(widget.services.store) == ContentMode.both;
   bool titlesSynced = false;
 
-  /// Which pick the phone and TV banner shows; it moves on every few
-  /// seconds, like the desktop one, unless it was just touched.
+  /// Which pick the phone and TV banner shows. It only moves when the
+  /// viewer swipes or picks a dot: a resume card that changes on its own is
+  /// easy to mis-tap.
   int banner = 0;
-  DateTime? bannerTouched;
-  Timer? bannerTimer;
-  void touchBanner() => bannerTouched = DateTime.now();
-  void moveBanner(int step) => setState(() {
-    banner += step;
-    touchBanner();
-  });
+  void moveBanner(int step) => setState(() => banner += step);
 
   void titlesChanged() {
     if (mounted && showsTitles) setState(() {});
@@ -344,17 +340,6 @@ class _HomePageState extends State<HomePage> {
     lifecycle;
     widget.services.movies.addListener(titlesChanged);
     if (isDesktop) unawaited(loadFeatured());
-    if (!isDesktop) {
-      bannerTimer = Timer.periodic(const Duration(seconds: 9), (_) {
-        final paused =
-            bannerTouched != null &&
-            DateTime.now().difference(bannerTouched!) <
-                const Duration(seconds: 20);
-        if (!mounted || paused || !widget.active) return;
-        if (MediaQuery.disableAnimationsOf(context)) return;
-        setState(() => banner++);
-      });
-    }
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
       // Picks up films and episodes watched on other devices meanwhile.
@@ -549,7 +534,6 @@ class _HomePageState extends State<HomePage> {
     lifecycle.dispose();
     artTimer?.cancel();
     clock?.cancel();
-    bannerTimer?.cancel();
     super.dispose();
   }
 
@@ -658,25 +642,14 @@ class _HomePageState extends State<HomePage> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Focus(
-            canRequestFocus: false,
-            skipTraversal: true,
-            onKeyEvent: (_, _) {
-              touchBanner();
-              return KeyEventResult.ignored;
-            },
-            child: Listener(
-              onPointerDown: (_) => touchBanner(),
-              child: GestureDetector(
-                onHorizontalDragEnd: picks.length < 2
-                    ? null
-                    : (d) {
-                        final v = d.primaryVelocity ?? 0;
-                        if (v.abs() > 200) moveBanner(v < 0 ? 1 : -1);
-                      },
-                child: card,
-              ),
-            ),
+          GestureDetector(
+            onHorizontalDragEnd: picks.length < 2
+                ? null
+                : (d) {
+                    final v = d.primaryVelocity ?? 0;
+                    if (v.abs() > 200) moveBanner(v < 0 ? 1 : -1);
+                  },
+            child: card,
           ),
           if (picks.length > 1 && !tvFocus)
             Padding(
