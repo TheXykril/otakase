@@ -888,7 +888,7 @@ class _ShowPageState extends State<ShowPage> {
                     borderRadius: BorderRadius.circular(KageRadius.poster),
                     boxShadow: const [
                       BoxShadow(
-                        color: Color(0x99000000),
+                        color: scrim,
                         blurRadius: 30,
                         offset: Offset(0, 14),
                       ),

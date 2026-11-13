@@ -444,7 +444,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
               data: SliderTheme.of(context).copyWith(
                 trackHeight: 5,
                 activeTrackColor: shu,
-                inactiveTrackColor: const Color(0xff5a5148),
+                inactiveTrackColor: trackRest,
                 thumbColor: fgBright,
                 overlayShape: SliderComponentShape.noOverlay,
               ),
@@ -558,7 +558,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
             data: SliderTheme.of(context).copyWith(
               trackHeight: 4,
               activeTrackColor: shu,
-              inactiveTrackColor: const Color(0xff5a5148),
+              inactiveTrackColor: trackRest,
               thumbColor: fgBright,
               overlayShape: SliderComponentShape.noOverlay,
             ),
@@ -778,7 +778,7 @@ class RemoteMiniBar extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: (number(status['position']) / duration).clamp(0, 1),
                     color: shu,
-                    backgroundColor: const Color(0xff5a5148),
+                    backgroundColor: trackRest,
                   ),
                 ),
             ],

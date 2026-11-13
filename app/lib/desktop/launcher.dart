@@ -170,7 +170,7 @@ Future<void> _fadeNativeLauncher({
     for (var frame = 1; frame < frames; frame++) {
       await Future<void>.delayed(step);
       if (!closing && _launcherClosing.value) return;
-      final progress = Curves.easeOutCubic.transform(frame / frames);
+      final progress = KageMotion.enter.transform(frame / frames);
       await _setLauncherOpacity(from + (to - from) * progress);
     }
   }
@@ -223,7 +223,7 @@ class LauncherStartup extends StatelessWidget {
             child: AnimatedOpacity(
               opacity: visible ? 1 : 0,
               duration: reduceMotion ? Duration.zero : _launcherFadeDuration,
-              curve: Curves.easeOutCubic,
+              curve: KageMotion.enter,
               onEnd: () {
                 final fadeOut = _launcherFadeOut;
                 if (closing && fadeOut != null && !fadeOut.isCompleted) {

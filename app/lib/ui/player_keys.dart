@@ -294,12 +294,12 @@ class PlayerFlash extends StatelessWidget {
       alignment: const Alignment(0, -.78),
       child: AnimatedOpacity(
         opacity: text.isEmpty ? 0 : 1,
-        duration: const Duration(milliseconds: 150),
+        duration: KageMotion.base,
         child: Container(
           key: const Key('player-flash'),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xcc080707),
+            color: bgDeep80,
             borderRadius: BorderRadius.circular(KageRadius.toast),
             border: Border.all(color: line),
           ),
