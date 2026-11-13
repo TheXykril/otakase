@@ -135,7 +135,9 @@ class _ProfilesChooserState extends State<ProfilesChooser> {
                               decoration: BoxDecoration(
                                 color: panel,
                                 border: Border.all(color: line),
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(
+                                  KageRadius.tile,
+                                ),
                               ),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -455,7 +457,7 @@ class _EditProfileDialogState extends State<_EditProfileDialog> {
                 FocusBox(
                   isTV: widget.isTV,
                   onPressed: () => setState(() => color = profileColors[i]),
-                  radius: 999,
+                  radius: KageRadius.full,
                   child: Semantics(
                     button: true,
                     selected: color == profileColors[i],

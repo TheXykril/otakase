@@ -12,26 +12,12 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../data/models.dart';
+import 'tokens.dart';
 
 export 'package:lucide_icons_flutter/lucide_icons.dart';
 
-const bg = Color(0xff0e0d0c),
-    bgDeep = Color(0xff080707),
-    panel = Color(0xff191614),
-    line = Color(0xff3c332d),
-    fg = Color(0xffece4d6),
-    fgBright = Color(0xfffff8ec),
-    muted = Color(0xffb9b0a4),
-    panelRaised = Color(0xff211b18),
-    selectedPanel = Color(0xff2b221e),
-    lineStrong = Color(0xff655046),
-    accentText = Color(0xfff28b74),
-    disabled = Color(0xff8a8276),
-    shu = Color(0xffd2492f),
-    accentDeep = Color(0xffa83a22),
-    ok = Color(0xff9bb67a),
-    warn = Color(0xffe3b45a),
-    info = Color(0xff7fa2c4);
+export 'tokens.dart';
+
 const mono = TextStyle(
   fontFamily: 'JetBrainsMono',
   fontFamilyFallback: ['NotoSansJP'],
@@ -300,7 +286,7 @@ class FocusBox extends StatefulWidget {
     this.autofocus = false,
     this.focusNode,
     this.padding = EdgeInsets.zero,
-    this.radius = 12,
+    this.radius = KageRadius.md,
     this.frameGap = 5,
     this.scale = 1.00,
     this.onFocused,
@@ -887,7 +873,7 @@ class AppButton extends StatelessWidget {
       isTV: isTV,
       autofocus: autofocus,
       focusNode: focusNode,
-      radius: 999,
+      radius: KageRadius.button,
       onPressed: onPressed,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
@@ -899,7 +885,7 @@ class AppButton extends StatelessWidget {
               : filled
               ? shu
               : fgBright.withValues(alpha: .12),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(KageRadius.button),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -959,7 +945,7 @@ class AppTab extends StatelessWidget {
   Widget build(BuildContext context) => FocusBox(
     isTV: isTV,
     onPressed: onPressed,
-    radius: 999,
+    radius: KageRadius.tab,
     scale: 1.02,
     child: AnimatedContainer(
       duration: const Duration(milliseconds: 250),
@@ -969,7 +955,7 @@ class AppTab extends StatelessWidget {
         color: selected
             ? (isTV ? fg : shu.withValues(alpha: .22))
             : fgBright.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(KageRadius.tab),
       ),
       child: Text(
         label,
@@ -1092,7 +1078,7 @@ class SkeletonBlock extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         color: line.withValues(alpha: .65),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(KageRadius.md),
       ),
     ),
   );
@@ -1381,7 +1367,7 @@ class WideCoverArt extends StatelessWidget {
             left: inset * 1.4,
             top: inset,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(KageRadius.sm),
               child: CoverImage(
                 cover,
                 width: posterHeight * 2 / 3,
@@ -1473,7 +1459,7 @@ class HeroArt extends StatelessWidget {
                     width: posterHeight * 2 / 3,
                     height: posterHeight,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(KageRadius.poster),
                       boxShadow: const [
                         BoxShadow(
                           color: Color(0x99000000),
@@ -1483,7 +1469,7 @@ class HeroArt extends StatelessWidget {
                       ],
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(KageRadius.poster),
                       child: CoverImage(
                         key: const Key('hero-fallback-poster'),
                         cover,
@@ -1615,7 +1601,9 @@ class _PosterCardState extends State<PosterCard> {
                   autofocus: widget.autofocus,
                   outsideFrame: true,
                   lift: true,
-                  radius: widget.cropped ? 14 : 10,
+                  radius: widget.cropped
+                      ? KageRadius.poster
+                      : KageRadius.posterFit,
                   onPressed: open,
                   onLongPress: widget.onMenu,
                   onFocused: widget.onFocused,
@@ -1624,7 +1612,9 @@ class _PosterCardState extends State<PosterCard> {
                     tag: 'poster-${widget.key ?? a.key}',
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(
-                        widget.cropped ? 14 : 10,
+                        widget.cropped
+                            ? KageRadius.poster
+                            : KageRadius.posterFit,
                       ),
                       child: AspectRatio(
                         aspectRatio: widget.landscape
@@ -1939,7 +1929,7 @@ class MetaLine extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: bgDeep.withValues(alpha: .65),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(KageRadius.chip),
                 ),
                 child: Text(
                   label,
@@ -2089,7 +2079,7 @@ class TransportButton extends StatelessWidget {
         onPressed: onPressed,
         isTV: AppLayout.tvOf(context),
         focusNode: focusNode,
-        radius: 999,
+        radius: KageRadius.full,
         child: Container(
           width: primary ? 64 : 56,
           height: primary ? 64 : 56,

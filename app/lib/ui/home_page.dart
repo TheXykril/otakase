@@ -46,7 +46,7 @@ class NativeTitle extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: bgDeep.withValues(alpha: .94),
-              borderRadius: BorderRadius.circular(isTV ? 5 : 4),
+              borderRadius: BorderRadius.circular(KageRadius.spine(isTV)),
             ),
             child: Text(
               title.characters.join('\n'),
@@ -120,11 +120,11 @@ class ResumeCard extends StatelessWidget {
         height: height,
         margin: EdgeInsets.symmetric(horizontal: isTV ? 0 : 20),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(KageRadius.panel),
           border: isTV ? null : Border.all(color: const Color(0xff4a342a)),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(isTV ? 0 : 16),
+          borderRadius: BorderRadius.circular(isTV ? 0 : KageRadius.panel),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onOpen,
@@ -171,7 +171,9 @@ class ResumeCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: bgDeep.withValues(alpha: .9),
-                        borderRadius: BorderRadius.circular(9),
+                        borderRadius: BorderRadius.circular(
+                          KageRadius.episodeTag,
+                        ),
                       ),
                       child: Text(
                         entry.episode.toString().padLeft(2, '0'),
@@ -702,7 +704,7 @@ class _HomePageState extends State<HomePage> {
                           color: i == banner % picks.length
                               ? shu
                               : fgBright.withValues(alpha: .3),
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(KageRadius.full),
                         ),
                       ),
                     ),
@@ -1066,7 +1068,9 @@ class _AccountBlockState extends State<AccountBlock> {
             32,
       ),
       position: RelativeRect.fromRect(rect, Offset.zero & overlay.size),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(KageRadius.menu),
+      ),
       items: categories.entries
           .map(
             (e) => PopupMenuItem<String>(
@@ -1164,7 +1168,7 @@ class _AccountBlockState extends State<AccountBlock> {
                       autofocus: widget.autofocus,
                       isTV: widget.isTV,
                       onPressed: () => pick(anchor),
-                      radius: 9,
+                      radius: KageRadius.control,
                       child: Container(
                         constraints: BoxConstraints(
                           minHeight: widget.isTV ? 48 : 44,
@@ -1172,7 +1176,9 @@ class _AccountBlockState extends State<AccountBlock> {
                         padding: const EdgeInsets.symmetric(horizontal: 13),
                         decoration: BoxDecoration(
                           border: Border.all(color: line),
-                          borderRadius: BorderRadius.circular(9),
+                          borderRadius: BorderRadius.circular(
+                            KageRadius.control,
+                          ),
                         ),
                         child: Row(
                           children: [

@@ -125,13 +125,15 @@ class _PlayOnSheetState extends State<_PlayOnSheet> {
   }) => ListTile(
     key: key,
     contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(KageRadius.tile),
+    ),
     leading: Container(
       width: 42,
       height: 42,
       decoration: BoxDecoration(
         color: panelRaised,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(KageRadius.md),
       ),
       child: Icon(icon, color: accent ?? fg),
     ),

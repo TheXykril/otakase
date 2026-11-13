@@ -777,7 +777,7 @@ class _SchedulePageState extends State<SchedulePage> {
       child: FocusBox(
         key: ValueKey('week-${row.anime.key}-${row.episode}'),
         isTV: true,
-        radius: 12,
+        radius: KageRadius.md,
         outsideFrame: true,
         onPressed: () => widget.onOpen(row.anime),
         child: Container(
@@ -785,13 +785,13 @@ class _SchedulePageState extends State<SchedulePage> {
           decoration: BoxDecoration(
             color: mine ? selectedPanel : panel,
             border: Border.all(color: mine ? shu : line),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(KageRadius.md),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(KageRadius.sm),
                 child: CoverImage(row.anime.cover, width: 56, height: 80),
               ),
               const SizedBox(width: 12),
@@ -1117,7 +1117,7 @@ class _SchedulePageState extends State<SchedulePage> {
                     ),
                   ),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(KageRadius.md),
                     child: CoverImage(row.anime.cover, width: 58, height: 84),
                   ),
                   const SizedBox(width: 18),
@@ -1310,7 +1310,7 @@ Future<SearchFilters?> showSearchFilters(
             key: const Key('search-filter-menu'),
             color: panel,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(KageRadius.floatingPanel),
               side: const BorderSide(color: line),
             ),
             clipBehavior: Clip.antiAlias,
@@ -1407,14 +1407,14 @@ class ActiveFilters extends StatelessWidget {
             FocusBox(
               key: ValueKey('active-filter-$label'),
               isTV: true,
-              radius: 999,
+              radius: KageRadius.chip,
               outsideFrame: true,
               onPressed: () => onChanged(without),
               child: Container(
                 padding: const EdgeInsets.fromLTRB(14, 4, 10, 4),
                 decoration: BoxDecoration(
                   border: Border.all(color: lineStrong),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(KageRadius.chip),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -1447,7 +1447,7 @@ class FilterButton extends StatelessWidget {
     key: const Key('search-filters'),
     isTV: isTV,
     onPressed: onPressed,
-    radius: 12,
+    radius: KageRadius.input,
     outsideFrame: true,
     // Same surface as the search field beside it.
     child: Container(
@@ -1455,7 +1455,7 @@ class FilterButton extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: fgBright.withValues(alpha: .06),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(KageRadius.input),
         border: Border.all(color: lineStrong),
       ),
       child: Row(
@@ -1471,7 +1471,7 @@ class FilterButton extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
               decoration: BoxDecoration(
                 color: shu,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(KageRadius.full),
               ),
               child: Text(
                 '$count',
@@ -1594,14 +1594,14 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
   Widget picker(String label, VoidCallback onPressed) => FocusBox(
     isTV: widget.isTV,
     onPressed: onPressed,
-    radius: 12,
+    radius: KageRadius.input,
     outsideFrame: true,
     child: Container(
       constraints: BoxConstraints(minHeight: widget.isTV ? 52 : 48),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: fgBright.withValues(alpha: .06),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(KageRadius.input),
         border: Border.all(color: lineStrong),
       ),
       child: Row(
@@ -1787,7 +1787,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
             FocusBox(
               key: const Key('filters-apply'),
               isTV: widget.isTV,
-              radius: 14,
+              radius: KageRadius.wideButton,
               outsideFrame: true,
               onPressed: () => Navigator.pop(context, current),
               child: Container(
@@ -1795,7 +1795,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: shu,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(KageRadius.wideButton),
                 ),
                 child: Text(
                   'Apply filters',
@@ -1835,7 +1835,7 @@ class FilterPill extends StatelessWidget {
       isTV: isTV,
       autofocus: autofocus,
       onPressed: onPressed,
-      radius: 999,
+      radius: KageRadius.chip,
       outsideFrame: true,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
@@ -1845,7 +1845,7 @@ class FilterPill extends StatelessWidget {
           color: selected
               ? shu.withValues(alpha: .12)
               : fgBright.withValues(alpha: .08),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(KageRadius.chip),
           border: Border.all(
             color: selected ? shu : Colors.transparent,
             width: 1.5,

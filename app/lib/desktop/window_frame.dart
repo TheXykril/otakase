@@ -326,7 +326,7 @@ class _WindowButtonState extends State<_WindowButton> {
           height: 34,
           decoration: BoxDecoration(
             color: hovered ? (danger ? shu : panelRaised) : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(KageRadius.sm),
           ),
           child: Icon(widget.icon, size: 16, color: hovered ? fgBright : muted),
         );

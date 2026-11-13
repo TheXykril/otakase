@@ -235,7 +235,9 @@ class _OtakaseMovieState extends State<OtakaseMovie> {
                                               children: [
                                                 ClipRRect(
                                                   borderRadius:
-                                                      BorderRadius.circular(6),
+                                                      BorderRadius.circular(
+                                                        KageRadius.thumb,
+                                                      ),
                                                   child: AspectRatio(
                                                     aspectRatio: 2 / 3,
                                                     child: CoverImage(

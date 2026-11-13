@@ -273,7 +273,7 @@ class _PlayerIconButtonState extends State<PlayerIconButton> {
         child: FocusBox(
           key: a.key,
           isTV: tv,
-          radius: 999,
+          radius: KageRadius.full,
           onPressed: a.onPressed,
           onFocusChanged: tv ? (f) => setState(() => focused = f) : null,
           child: ExcludeSemantics(
@@ -332,7 +332,7 @@ class PlayerChip extends StatelessWidget {
     child: FocusBox(
       isTV: isTV,
       focusNode: focusNode,
-      radius: 8,
+      radius: KageRadius.sm,
       onPressed: onPressed,
       child: Container(
         padding: EdgeInsets.symmetric(
@@ -342,7 +342,7 @@ class PlayerChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xe6191614),
           border: Border.all(color: line),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(KageRadius.sm),
         ),
         child: ExcludeSemantics(
           child: Row(

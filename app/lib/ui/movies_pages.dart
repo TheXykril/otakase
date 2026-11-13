@@ -335,7 +335,7 @@ class _MoviesHomeState extends State<MoviesHome> {
                   child: FocusBox(
                     key: const Key('movies-trakt'),
                     isTV: widget.isTV,
-                    radius: 14,
+                    radius: KageRadius.tile,
                     onPressed: () =>
                         traktSignIn(context, widget.services, widget.isTV),
                     child: Container(
@@ -343,7 +343,7 @@ class _MoviesHomeState extends State<MoviesHome> {
                       decoration: BoxDecoration(
                         color: panel,
                         border: Border.all(color: line),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(KageRadius.tile),
                       ),
                       child: Row(
                         children: [
@@ -979,7 +979,7 @@ class _TitlePageState extends State<TitlePage> {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: fgBright.withValues(alpha: .08),
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(KageRadius.chip),
           ),
           child: Text(text, style: uiStyle(context, size: 15, color: fg)),
         ),
@@ -1249,14 +1249,14 @@ class _TitlePageState extends State<TitlePage> {
                       key: ValueKey('episode-${e.code}'),
                       focusNode: focusFor(e),
                       isTV: widget.isTV,
-                      radius: 10,
+                      radius: KageRadius.listRow,
                       padding: const EdgeInsets.all(8),
                       onPressed: () => play(e),
                       onLongPress: () => unawaited(episodeInfo(e)),
                       child: Row(
                         children: [
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(KageRadius.sm),
                             child: SizedBox(
                               width: thumb,
                               height: thumb * 9 / 16,
@@ -1599,7 +1599,7 @@ Future<void> traktSignIn(
             Tooltip(
               message: 'Copy code',
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(KageRadius.sm),
                 onTap: () async {
                   await Clipboard.setData(ClipboardData(text: code.userCode));
                   if (dialog.mounted) {

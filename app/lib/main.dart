@@ -27,6 +27,7 @@ import 'ui/app_keys.dart';
 import 'ui/app_shell.dart';
 import 'ui/components.dart';
 import 'ui/seal.dart';
+import 'ui/theme.dart';
 import 'ui/profiles_page.dart';
 
 Future<void> main([List<String> args = const []]) async {
@@ -334,28 +335,6 @@ class _OtakaseAppState extends State<OtakaseApp> {
     final traditional = isDesktop
         ? DesktopInput.keyboard
         : FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
-    final focusStyle = ButtonStyle(
-      textStyle: WidgetStatePropertyAll(
-        TextStyle(
-          fontFamily: 'Inter',
-          fontSize: widget.isTV ? 20 : 16,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      foregroundColor: const WidgetStatePropertyAll(fg),
-      overlayColor: WidgetStatePropertyAll(shu.withValues(alpha: .08)),
-      shape: WidgetStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-      ),
-      side: WidgetStateProperty.resolveWith(
-        (s) => BorderSide(
-          color: traditional && s.contains(WidgetState.focused)
-              ? shu
-              : Colors.transparent,
-          width: 2,
-        ),
-      ),
-    );
     return AppLayout(
       isTV: widget.isTV,
       child: MaterialApp(
@@ -370,140 +349,7 @@ class _OtakaseAppState extends State<OtakaseApp> {
                     ? TVViewport(child: child!)
                     : CutoutInset(child: child!),
               ),
-        theme: ThemeData(
-          brightness: Brightness.dark,
-          colorScheme: const ColorScheme.dark(
-            primary: shu,
-            onPrimary: bgDeep,
-            secondary: shu,
-            surface: panel,
-            outline: line,
-            outlineVariant: line,
-            onSurface: fg,
-            error: warn,
-          ),
-          scaffoldBackgroundColor: bg,
-          canvasColor: bg,
-          fontFamily: 'Inter',
-          fontFamilyFallback: const ['NotoSansJP'],
-          textTheme: TextTheme(
-            bodySmall: TextStyle(
-              fontSize: widget.isTV ? 20 : 15,
-              color: muted,
-              height: 1.4,
-            ),
-            bodyMedium: TextStyle(
-              fontSize: widget.isTV ? 20 : 16,
-              color: fg,
-              height: 1.4,
-            ),
-            bodyLarge: TextStyle(
-              fontSize: widget.isTV ? 22 : 16,
-              color: fg,
-              height: 1.4,
-            ),
-            titleSmall: TextStyle(
-              fontSize: widget.isTV ? 20 : 16,
-              fontWeight: FontWeight.w600,
-            ),
-            titleMedium: TextStyle(
-              fontSize: widget.isTV ? 22 : 18,
-              fontWeight: FontWeight.w600,
-            ),
-            titleLarge: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w700,
-            ),
-            labelLarge: TextStyle(
-              fontSize: widget.isTV ? 20 : 16,
-              fontWeight: FontWeight.w600,
-            ),
-            labelMedium: TextStyle(fontSize: widget.isTV ? 20 : 15),
-            labelSmall: TextStyle(fontSize: widget.isTV ? 20 : 15),
-          ),
-          focusColor: traditional ? line : Colors.transparent,
-          dividerColor: line,
-          dividerTheme: const DividerThemeData(color: line, thickness: 1),
-          iconTheme: IconThemeData(color: fg, size: widget.isTV ? 24 : 22),
-          appBarTheme: AppBarTheme(
-            backgroundColor: bg,
-            surfaceTintColor: Colors.transparent,
-            titleTextStyle: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: widget.isTV ? 22 : 20,
-              color: fg,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          bottomSheetTheme: const BottomSheetThemeData(
-            backgroundColor: panel,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-          ),
-          dialogTheme: DialogThemeData(
-            backgroundColor: panel,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-          ),
-          textButtonTheme: TextButtonThemeData(style: focusStyle),
-          outlinedButtonTheme: OutlinedButtonThemeData(style: focusStyle),
-          iconButtonTheme: IconButtonThemeData(style: focusStyle),
-          listTileTheme: const ListTileThemeData(
-            textColor: fg,
-            iconColor: muted,
-          ),
-          switchTheme: SwitchThemeData(
-            thumbColor: WidgetStateProperty.resolveWith(
-              (s) => s.contains(WidgetState.selected) ? fgBright : muted,
-            ),
-            trackColor: WidgetStateProperty.resolveWith(
-              (s) => s.contains(WidgetState.selected) ? shu : line,
-            ),
-            trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            isDense: true,
-            hintStyle: TextStyle(
-              fontFamily: 'Inter',
-              color: muted,
-              fontSize: widget.isTV ? 20 : 16,
-            ),
-            labelStyle: TextStyle(
-              fontFamily: 'Inter',
-              color: muted,
-              fontSize: widget.isTV ? 20 : 15,
-            ),
-            filled: true,
-            fillColor: fgBright.withValues(alpha: .06),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: lineStrong),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: lineStrong),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: shu),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              vertical: 16,
-              horizontal: 16,
-            ),
-          ),
-          sliderTheme: SliderThemeData(
-            activeTrackColor: shu,
-            inactiveTrackColor: line,
-            thumbColor: fg,
-            trackHeight: 2,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-            overlayColor: shu.withValues(alpha: .1),
-          ),
-        ),
+        theme: buildOtakaseTheme(isTV: widget.isTV, traditional: traditional),
         home: widget.playback != null
             ? LauncherPlayerWindow(
                 request: widget.playback!,

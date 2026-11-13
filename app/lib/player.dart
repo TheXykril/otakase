@@ -2791,13 +2791,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       decoration: BoxDecoration(
         color: panel,
         border: Border.all(color: line),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(KageRadius.md),
       ),
       child: Row(
         children: [
           if (anime.cover.isNotEmpty) ...[
             ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(KageRadius.md),
               child: CoverImage(anime.cover, width: 54, height: 81),
             ),
             const SizedBox(width: 16),

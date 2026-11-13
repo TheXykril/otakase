@@ -598,7 +598,7 @@ class _AppShellState extends State<AppShell> {
         key: ValueKey('nav-$label'),
         focusNode: navFocus[index],
         isTV: widget.isTV,
-        radius: 16,
+        radius: KageRadius.lg,
         frameGap: widget.isTV ? 5 : 0,
         showFocusBorder: !widget.isTV,
         focusFill: widget.isTV ? Colors.transparent : bg,
@@ -820,7 +820,7 @@ class _AppShellState extends State<AppShell> {
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
         decoration: BoxDecoration(
           color: panel.withValues(alpha: .98),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(KageRadius.navBar),
           border: Border.all(color: line),
           boxShadow: const [
             BoxShadow(

@@ -160,7 +160,7 @@ class _RateDialogState extends State<RateDialog> {
                 FocusBox(
                   isTV: widget.isTV,
                   autofocus: i == (score == 0 ? 7 : score),
-                  radius: 999,
+                  radius: KageRadius.full,
                   onPressed: () => setState(() => score = i),
                   child: Container(
                     width: widget.isTV ? 52 : 40,

@@ -272,7 +272,7 @@ class EpisodeInfo extends StatelessWidget {
         AspectRatio(
           aspectRatio: 16 / 9,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(KageRadius.md),
             child: SpoilerArt(hidden: hidden, child: artwork),
           ),
         ),

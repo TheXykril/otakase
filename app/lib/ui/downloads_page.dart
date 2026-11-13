@@ -219,13 +219,13 @@ class DownloadsPage extends StatelessWidget {
                   child: FocusBox(
                     key: ValueKey('download-${d.id}'),
                     isTV: isTV,
-                    radius: 10,
+                    radius: KageRadius.listRow,
                     padding: const EdgeInsets.all(10),
                     onPressed: d.done ? () => play(context, d) : null,
                     child: Row(
                       children: [
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(KageRadius.thumb),
                           child: CoverImage(d.poster, width: 46, height: 69),
                         ),
                         const SizedBox(width: 14),

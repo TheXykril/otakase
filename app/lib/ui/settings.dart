@@ -36,7 +36,9 @@ Future<void> openSettings(
         child: SizedBox(
           width: (MediaQuery.sizeOf(context).width * .35).clamp(432, 560),
           child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(KageRadius.sheet),
+            ),
             child: SettingsPage(
               services: services,
               isTV: true,
@@ -288,7 +290,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 decoration: BoxDecoration(
                   color: panel,
                   border: Border.all(color: line),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(KageRadius.panel),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -340,7 +342,7 @@ class _SettingsPageState extends State<SettingsPage> {
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
     child: FocusBox(
       isTV: widget.isTV,
-      radius: 12,
+      radius: KageRadius.md,
       onPressed: enabled ? onTap : null,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(
@@ -394,7 +396,7 @@ class _SettingsPageState extends State<SettingsPage> {
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
     child: FocusBox(
       isTV: widget.isTV,
-      radius: 12,
+      radius: KageRadius.md,
       onPressed: () => store.set(key, !store.flag(key)),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(

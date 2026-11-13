@@ -218,7 +218,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
                         const SizedBox(height: 20),
                         Center(
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(KageRadius.md),
                             child: SizedBox(
                               width: math.min(220, box.maxWidth * .56),
                               height: math.min(310, box.maxWidth * .79),
@@ -288,7 +288,9 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
                                       ),
                                       side: const BorderSide(color: shu),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
+                                        borderRadius: BorderRadius.circular(
+                                          KageRadius.compactButton,
+                                        ),
                                       ),
                                     ),
                                     onPressed: () => send('party_skip'),
@@ -347,7 +349,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
             padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
             decoration: BoxDecoration(
               color: panel.withValues(alpha: .85),
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(KageRadius.toast),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -601,7 +603,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
     Widget tool(String label, IconData icon, VoidCallback? tap) => Expanded(
       child: InkWell(
         key: Key('remote-tool-$label'),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(KageRadius.md),
         onTap: tap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -689,7 +691,7 @@ class RemoteMiniBar extends StatelessWidget {
         key: const Key('remote-mini-bar'),
         color: panelRaised,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(KageRadius.panel),
           side: const BorderSide(color: line),
         ),
         clipBehavior: Clip.antiAlias,
@@ -707,7 +709,7 @@ class RemoteMiniBar extends StatelessWidget {
                 child: Row(
                   children: [
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(KageRadius.thumb),
                       child: SizedBox(
                         width: 36,
                         height: 50,

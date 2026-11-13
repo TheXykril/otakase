@@ -300,7 +300,7 @@ class PlayerFlash extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: const Color(0xcc080707),
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(KageRadius.toast),
             border: Border.all(color: line),
           ),
           child: Text(text, style: uiStyle(context, color: fgBright)),

@@ -248,7 +248,7 @@ class _FeaturedAnime extends StatelessWidget {
       height: height,
       margin: EdgeInsets.symmetric(horizontal: isTV ? 0 : 20),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(isTV ? 0 : 16),
+        borderRadius: BorderRadius.circular(isTV ? 0 : KageRadius.panel),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onOpen,
