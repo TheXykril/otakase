@@ -1070,117 +1070,128 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
     final menu = menus.last;
     final rows = visible();
     if (selected >= rows.length) selected = math.max(0, rows.length - 1);
-    return Scaffold(
-      backgroundColor: bg,
-      body: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: line),
-          color: bg,
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-              child: Row(
-                children: [
-                  if (menus.length > 1)
-                    IconButton(
-                      tooltip: 'Back',
-                      icon: const Icon(LucideIcons.chevronLeft, size: 18),
-                      onPressed: back,
-                    )
-                  else
-                    const OtakaseSeal(size: 22),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      menu.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: uiStyle(
-                        context,
-                        size: 15,
-                        weight: FontWeight.w600,
-                        color: fgBright,
+    // The launcher window is not scaled like the app canvas, so it reads
+    // the native desktop sizes.
+    return AppLayout(
+      isTV: true,
+      minText: KageType.launcher,
+      child: Scaffold(
+        backgroundColor: bg,
+        body: Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: line),
+            color: bg,
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                child: Row(
+                  children: [
+                    if (menus.length > 1)
+                      IconButton(
+                        tooltip: 'Back',
+                        icon: const Icon(LucideIcons.chevronLeft, size: 18),
+                        onPressed: back,
+                      )
+                    else
+                      const OtakaseSeal(size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        menu.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: uiStyle(
+                          context,
+                          size: 15,
+                          weight: FontWeight.w600,
+                          color: fgBright,
+                        ),
                       ),
                     ),
-                  ),
-                  if (menu.detail.isNotEmpty)
-                    Text(
-                      menu.detail,
-                      style: mono.copyWith(fontSize: 12, color: muted),
-                    ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Focus(
-                onKeyEvent: key,
-                child: TextField(
-                  key: const Key('launcher-input'),
-                  controller: query,
-                  focusNode: input,
-                  autofocus: true,
-                  style: uiStyle(context, size: 17),
-                  decoration: const InputDecoration(
-                    hintText: 'Search or pick…',
-                    prefixIcon: Icon(LucideIcons.search, size: 18),
-                  ),
-                ),
-              ),
-            ),
-            if (menu.loading)
-              const LinearProgressIndicator(minHeight: 2, color: shu),
-            Expanded(
-              child: ListView.builder(
-                key: const Key('launcher-list'),
-                controller: scroll,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: rows.length,
-                itemExtent: 44,
-                itemBuilder: (context, i) => _LauncherRow(
-                  item: rows[i],
-                  selected: i == selected,
-                  onHover: () => setState(() => selected = i),
-                  onTap: () {
-                    if (_quitting) return;
-                    setState(() => selected = i);
-                    unawaited(Future.sync(rows[i].onSelect));
-                    input.requestFocus();
-                  },
-                ),
-              ),
-            ),
-            if (message != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
-                child: Text(
-                  message!,
-                  style: uiStyle(context, size: 13, color: warn),
-                ),
-              ),
-            Container(
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: line)),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-              child: Row(
-                children: [
-                  for (final hint in const [
-                    '↑↓ move',
-                    'Enter pick',
-                    'Esc back',
-                  ]) ...[
-                    Text(hint, style: mono.copyWith(fontSize: 11)),
-                    const SizedBox(width: 16),
+                    if (menu.detail.isNotEmpty)
+                      Text(
+                        menu.detail,
+                        style: mono.copyWith(fontSize: 12, color: muted),
+                      ),
                   ],
-                  const Spacer(),
-                  Text('Ctrl+W full app', style: mono.copyWith(fontSize: 11)),
-                ],
+                ),
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Focus(
+                  onKeyEvent: key,
+                  child: TextField(
+                    key: const Key('launcher-input'),
+                    controller: query,
+                    focusNode: input,
+                    autofocus: true,
+                    style: uiStyle(context, size: 15),
+                    decoration: const InputDecoration(
+                      hintText: 'Search or pick…',
+                      prefixIcon: Icon(LucideIcons.search, size: 18),
+                    ),
+                  ),
+                ),
+              ),
+              if (menu.loading)
+                const LinearProgressIndicator(minHeight: 2, color: shu),
+              Expanded(
+                child: ListView.builder(
+                  key: const Key('launcher-list'),
+                  controller: scroll,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: rows.length,
+                  itemExtent: 44,
+                  itemBuilder: (context, i) => _LauncherRow(
+                    item: rows[i],
+                    selected: i == selected,
+                    onHover: () {
+                      if (selected != i) setState(() => selected = i);
+                    },
+                    onTap: () {
+                      if (_quitting) return;
+                      setState(() => selected = i);
+                      unawaited(Future.sync(rows[i].onSelect));
+                      input.requestFocus();
+                    },
+                  ),
+                ),
+              ),
+              if (message != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+                  child: Text(
+                    message!,
+                    style: uiStyle(context, size: 13, color: warn),
+                  ),
+                ),
+              Container(
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: line)),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    for (final hint in const [
+                      '↑↓ move',
+                      'Enter pick',
+                      'Esc back',
+                    ]) ...[
+                      Text(hint, style: mono.copyWith(fontSize: 11)),
+                      const SizedBox(width: 16),
+                    ],
+                    const Spacer(),
+                    Text('Ctrl+W full app', style: mono.copyWith(fontSize: 11)),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1200,7 +1211,11 @@ class _LauncherRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MouseRegion(
     cursor: SystemMouseCursors.click,
-    onHover: (_) => onHover(),
+    // Select when the pointer enters a row, not on every move, so a resting
+    // mouse never fights the arrow keys.
+    onEnter: (_) {
+      if (!DesktopInput.keyboard) onHover();
+    },
     child: GestureDetector(
       onTap: onTap,
       child: Container(

@@ -94,3 +94,49 @@ abstract final class KageMotion {
 abstract final class KageColors {
   static const danger = Color(0xffe5604a);
 }
+
+/// The screen a text size is chosen for. Desktop sizes are in the scaled
+/// 1920 × 1080 window canvas, TV sizes in the 1600 × 900 TV canvas; the
+/// desktop launcher is not scaled and uses [KageType.launcher].
+enum TypeScreen { phone, desktop, tv }
+
+/// Named text sizes with one column per screen. Every size respects the
+/// screen's legibility floor, which is checked by a test rather than
+/// silently raised at runtime.
+enum TextRole { display, title, heading, body, label, meta, kicker }
+
+abstract final class KageType {
+  /// The smallest text each screen shows. Desktop sits close to the viewer,
+  /// so it reads smaller text than a TV across the room.
+  static const floor = {
+    TypeScreen.phone: 15.0,
+    TypeScreen.desktop: 17.0,
+    TypeScreen.tv: 20.0,
+  };
+
+  /// The unscaled desktop launcher window.
+  static const launcher = 13.0;
+
+  /// Mono kickers ("EP 03 · 17 MIN LEFT") may sit below the phone floor:
+  /// a few uppercase characters stay readable at 12.
+  static const phoneKicker = 12.0;
+
+  static const sizes = {
+    TextRole.display: (phone: 30.0, desktop: 56.0, tv: 48.0),
+    TextRole.title: (phone: 22.0, desktop: 32.0, tv: 32.0),
+    TextRole.heading: (phone: 18.0, desktop: 24.0, tv: 26.0),
+    TextRole.body: (phone: 15.0, desktop: 18.0, tv: 22.0),
+    TextRole.label: (phone: 15.0, desktop: 17.0, tv: 22.0),
+    TextRole.meta: (phone: 15.0, desktop: 17.0, tv: 20.0),
+    TextRole.kicker: (phone: 12.0, desktop: 17.0, tv: 20.0),
+  };
+
+  static double size(TextRole role, TypeScreen screen) {
+    final s = sizes[role]!;
+    return switch (screen) {
+      TypeScreen.phone => s.phone,
+      TypeScreen.desktop => s.desktop,
+      TypeScreen.tv => s.tv,
+    };
+  }
+}
