@@ -104,7 +104,7 @@ void main() {
     await focusPoster(tester, result(0));
     await key(tester, LogicalKeyboardKey.arrowLeft);
     expect(focusedWithin(result(0)), isTrue);
-    final grid = tester.widget<GridView>(find.byType(GridView));
+    final grid = tester.widget<SliverGrid>(find.byType(SliverGrid));
     final columns =
         (grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount)
             .crossAxisCount;

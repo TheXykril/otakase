@@ -588,18 +588,36 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
                 Expanded(
                   child: RemoteTextInput(
                     isTV: widget.isTV,
-                    builder: (focus) => TextField(
-                      key: const Key('movie-search-field'),
-                      focusNode: widget.fieldFocus ?? focus,
-                      autofocus: widget.autofocus,
-                      controller: controller,
-                      textInputAction: TextInputAction.search,
-                      decoration: const InputDecoration(
-                        hintText: 'Search movies and shows',
-                        prefixIcon: Icon(LucideIcons.search),
+                    // Rebuilt as the text changes, for the clear button.
+                    builder: (focus) => ListenableBuilder(
+                      listenable: controller,
+                      builder: (context, _) => TextField(
+                        key: const Key('movie-search-field'),
+                        focusNode: widget.fieldFocus ?? focus,
+                        autofocus: widget.autofocus,
+                        controller: controller,
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: 'Search movies and shows',
+                          prefixIcon: const Icon(LucideIcons.search),
+                          suffixIcon:
+                              controller.text.isNotEmpty &&
+                                  !(widget.isTV && !isDesktop)
+                              ? IconButton(
+                                  key: const Key('movie-search-clear'),
+                                  tooltip: 'Clear search',
+                                  icon: const Icon(LucideIcons.x),
+                                  onPressed: () {
+                                    controller.clear();
+                                    debounce?.cancel();
+                                    unawaited(search(''));
+                                  },
+                                )
+                              : null,
+                        ),
+                        onChanged: changed,
+                        onSubmitted: search,
                       ),
-                      onChanged: changed,
-                      onSubmitted: search,
                     ),
                   ),
                 ),

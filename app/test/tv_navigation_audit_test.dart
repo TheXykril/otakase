@@ -125,10 +125,17 @@ void main() {
     expect(find.text('Format'), findsOneWidget);
     // TV applies each choice at once, so there is no Apply button.
     expect(apply, findsNothing);
-    expect(focusedWithin(find.text('TV')), isTrue);
-    await key(tester, LogicalKeyboardKey.arrowRight);
+    // Each single-choice filter is a row that opens a picker.
+    final formatRow = find.byKey(const ValueKey('filter-Format'));
+    expect(focusedWithin(formatRow), isTrue);
+    await key(tester, LogicalKeyboardKey.select);
+    expect(find.text('Music'), findsOneWidget);
+    await key(tester, LogicalKeyboardKey.arrowDown);
+    await key(tester, LogicalKeyboardKey.arrowDown);
     expect(focusedWithin(find.text('Movie')), isTrue);
     await key(tester, LogicalKeyboardKey.select);
+    expect(find.text('Music'), findsNothing);
+    expect(focusedWithin(formatRow), isTrue);
     expect(
       find.descendant(of: count, matching: find.text('1')),
       findsOneWidget,

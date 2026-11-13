@@ -35,11 +35,11 @@ void main() {
         await key(tester, LogicalKeyboardKey.arrowDown);
         expect(focusedWithin(find.byKey(const Key('catalog-search'))), isTrue);
         expect(tester.testTextInput.isVisible, isFalse);
-        final grid = tester.widget<GridView>(
+        final grid = tester.widget<SliverGrid>(
           find
               .descendant(
                 of: find.byType(FocusTraversalGroup),
-                matching: find.byType(GridView),
+                matching: find.byType(SliverGrid),
               )
               .first,
         );

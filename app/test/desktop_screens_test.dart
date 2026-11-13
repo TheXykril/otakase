@@ -276,6 +276,8 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const Key('search-filters')));
         await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('filter-Format')));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('TV').last);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Fantasy').last);

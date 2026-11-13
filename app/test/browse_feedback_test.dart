@@ -332,26 +332,22 @@ void main() {
     expect(catalog.searches.single.sort, 'TRENDING');
     expect(find.text('Trending anime'), findsOneWidget);
     expect(find.text('Trending movies & shows'), findsNothing);
-    expect(cardsKeyed('search-').evaluate().length, 30);
-    await tester.scrollUntilVisible(
-      find.text('Load more'),
-      400,
-      scrollable: find
-          .descendant(
-            of: find.byKey(const Key('page-under-test')),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    // The bottom bar may cover it, so press it directly.
-    tester
-        .widget<AppButton>(
-          find.widgetWithText(AppButton, 'Load more', skipOffstage: false),
+    // The grid is lazy: only cards near the screen are built.
+    expect(cardsKeyed('search-').evaluate().length, lessThan(30));
+    // Scrolling near the end loads the next page without a button.
+    final scrollable = find
+        .descendant(
+          of: find.byKey(const Key('page-under-test')),
+          matching: find.byType(Scrollable),
         )
-        .onPressed!();
-    await tester.pumpAndSettle();
-    expect(catalog.searches.last.page, 2);
-    expect(catalog.searches.last.sort, 'TRENDING');
+        .first;
+    for (var i = 0; i < 6 && catalog.searches.length < 2; i++) {
+      await tester.drag(scrollable, const Offset(0, -1500));
+      await tester.pumpAndSettle();
+    }
+    expect(catalog.searches.map((r) => r.page), contains(2));
+    expect(catalog.searches[1].page, 2);
+    expect(catalog.searches[1].sort, 'TRENDING');
   });
   testWidgets('movie search shows trending films and series until asked', (
     tester,
