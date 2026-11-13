@@ -712,6 +712,8 @@ class _AccountsPageState extends State<AccountsPage> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: panel,
     appBar: AppBar(
+      // One surface: the bar matches the page under it.
+      backgroundColor: panel,
       title: const Text('Accounts'),
       leading: widget.isTV
           ? AppBackButton(focusNode: backFocus)
