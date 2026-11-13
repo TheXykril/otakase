@@ -35,9 +35,18 @@ class HeroPick {
 /// first, then trending picks, changing every few seconds unless the pointer
 /// rests on it.
 class DesktopHero extends StatefulWidget {
-  const DesktopHero({super.key, required this.picks, this.topInset = 0});
+  const DesktopHero({
+    super.key,
+    required this.picks,
+    this.topInset = 0,
+    this.remote = false,
+  });
   final List<HeroPick> picks;
   final double topInset;
+
+  /// On a TV the first pick is what the remote last rested on, so there are
+  /// no dots to pick from and the play button takes focus first.
+  final bool remote;
   @override
   State<DesktopHero> createState() => _DesktopHeroState();
 }
@@ -59,7 +68,12 @@ class _DesktopHeroState extends State<DesktopHero> {
     if (widget.picks.isEmpty) return SizedBox(height: widget.topInset);
     final pick = widget.picks[index];
     final a = pick.anime;
-    final height = (MediaQuery.sizeOf(context).height * .6).clamp(520.0, 720.0);
+    // A TV screen is short in logical pixels, so its hero leaves room for a
+    // full row of Continue watching below it.
+    final height = (MediaQuery.sizeOf(context).height * .6).clamp(
+      widget.remote ? 380.0 : 520.0,
+      720.0,
+    );
     final facts = [
       if (a.score > 0) '★ ${a.score.toStringAsFixed(1)}',
       ...a.genres.take(3),
@@ -147,6 +161,7 @@ class _DesktopHeroState extends State<DesktopHero> {
                                   icon: LucideIcons.play,
                                   filled: true,
                                   isTV: true,
+                                  autofocus: widget.remote,
                                   onPressed: pick.onPlay,
                                 ),
                                 const SizedBox(width: 14),
@@ -163,7 +178,7 @@ class _DesktopHeroState extends State<DesktopHero> {
                         ),
                       ),
                     ),
-                    if (widget.picks.length > 1)
+                    if (widget.picks.length > 1 && !widget.remote)
                       Row(
                         children: [
                           for (var i = 0; i < widget.picks.length; i++)
@@ -210,9 +225,17 @@ class DesktopContinueRow extends StatefulWidget {
     required this.onResume,
     this.label,
     this.onMenu,
+    this.onFocused,
+    this.minCard = 380,
   });
   final List<WatchEntry> entries;
+
+  /// The narrowest a card may get before fewer fit across.
+  final double minCard;
   final ValueChanged<WatchEntry> onResume;
+
+  /// A TV remote resting on a card, so the hero can follow it.
+  final ValueChanged<WatchEntry>? onFocused;
 
   /// Right click or long press on a card: more for it.
   final ValueChanged<WatchEntry>? onMenu;
@@ -252,7 +275,9 @@ class _DesktopContinueRowState extends State<DesktopContinueRow> {
               // leaving a gap at the end; never more than four across, and
               // one or two shows stay a third wide instead of a giant card.
               final room = box.maxWidth - desktopSide * 2;
-              final fits = ((room + gap) / (380 + gap)).floor().clamp(1, 4);
+              final fits = ((room + gap) / (widget.minCard + gap))
+                  .floor()
+                  .clamp(1, 4);
               final count = math.max(
                 math.min(fits, widget.entries.length),
                 math.min(fits, 3),
@@ -278,6 +303,9 @@ class _DesktopContinueRowState extends State<DesktopContinueRow> {
                     width: width,
                     first: i == 0,
                     onPressed: () => widget.onResume(widget.entries[i]),
+                    onFocused: widget.onFocused == null
+                        ? null
+                        : () => widget.onFocused!(widget.entries[i]),
                     onMenu: widget.onMenu == null
                         ? null
                         : () => widget.onMenu!(widget.entries[i]),
@@ -299,6 +327,7 @@ class _ContinueCard extends StatefulWidget {
     required this.width,
     required this.first,
     required this.onPressed,
+    this.onFocused,
     this.label,
     this.onMenu,
   });
@@ -306,6 +335,7 @@ class _ContinueCard extends StatefulWidget {
   final String? label;
   final double width;
   final bool first;
+  final VoidCallback? onFocused;
   final VoidCallback onPressed;
   final VoidCallback? onMenu;
   @override
@@ -338,6 +368,7 @@ class _ContinueCardState extends State<_ContinueCard> {
               lift: true,
               radius: KageRadius.md,
               onPressed: widget.onPressed,
+              onFocused: widget.onFocused,
               onLongPress: widget.onMenu,
               onHover: (value) => setState(() => hovered = value),
               child: ClipRRect(

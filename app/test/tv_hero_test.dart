@@ -35,11 +35,18 @@ void main() {
           rect.contains(tester.getCenter(find.byKey(const Key('nav-Home')))),
           isTrue,
         );
-        final hero = find.byKey(
-          Key(personal ? 'resume-card' : 'discovery-featured'),
-        );
-        expect(rect.bottom, closeTo(tester.getRect(hero).bottom, .01));
-        expect(find.byKey(const Key('home-top-vignette')), findsOneWidget);
+        if (personal) {
+          // The resume hero is the desktop one: its art fills it.
+          expect(rect.bottom, closeTo(tester.getRect(region).bottom, .01));
+          expect(
+            focusedWithin(find.byKey(const Key('desktop-hero-play'))),
+            isTrue,
+          );
+        } else {
+          final hero = find.byKey(const Key('discovery-featured'));
+          expect(rect.bottom, closeTo(tester.getRect(hero).bottom, .01));
+          expect(find.byKey(const Key('home-top-vignette')), findsOneWidget);
+        }
         navigation(tester, 'Home').requestFocus();
         await tester.pumpAndSettle();
         await key(tester, LogicalKeyboardKey.arrowRight);
@@ -144,6 +151,27 @@ void main() {
     expect(focusedWithin(card), isTrue);
     final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
     expect(tester.getRect(card).bottom, lessThanOrEqualTo(screen.height));
+  });
+  testWidgets('TV resume hero and Continue watching move with the remote', (
+    tester,
+  ) async {
+    final services = await launchHome(tester, tv: true, catalog: HomeCatalog());
+    await services.store.progress(fixture.anime, 5, 720, 1440);
+    await tester.pumpAndSettle();
+    final play = find.byKey(const Key('desktop-hero-play'));
+    final card = find.byKey(ValueKey('desktop-continue-${fixture.anime.key}'));
+    expect(focusedWithin(play), isTrue);
+    await key(tester, LogicalKeyboardKey.arrowDown);
+    expect(focusedWithin(card), isTrue);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('tv-home-hero')),
+        matching: find.text(fixture.anime.title),
+      ),
+      findsOneWidget,
+    );
+    await key(tester, LogicalKeyboardKey.arrowUp);
+    expect(focusedWithin(play), isTrue);
   });
   testWidgets('phone keeps artwork within its card', (tester) async {
     await launchHome(tester, catalog: HomeCatalog());

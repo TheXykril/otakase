@@ -100,7 +100,11 @@ class MorePage extends StatelessWidget {
   final void Function(Anime) onOpen;
   @override
   Widget build(BuildContext context) {
-    if (isDesktop) return DesktopMore(services: services, onOpen: onOpen);
+    // TV shares the desktop two-pane settings: the sections on the left,
+    // the chosen one on the right.
+    if (isDesktop || isTV) {
+      return DesktopMore(services: services, onOpen: onOpen);
+    }
     final identity = accountNames(services).join(' · ');
     Widget row(
       String title,
@@ -392,19 +396,48 @@ class _DesktopMoreState extends State<DesktopMore> {
 
   AppServices get services => widget.services;
 
+  // The sidebar row of each section, so Back in the pane returns to it.
+  final rows = <String, FocusNode>{};
+  final pane = FocusNode(debugLabel: 'Settings pane', skipTraversal: true);
+
+  /// On a TV, choosing a section takes the remote to its first setting.
+  void choose(String title) {
+    setState(() => section = title);
+    if (isDesktop) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      pane.descendants
+          .where((n) => n.canRequestFocus && !n.skipTraversal)
+          .firstOrNull
+          ?.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    pane.dispose();
+    for (final node in rows.values) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
   Widget item(String title, IconData icon, {VoidCallback? open}) {
     final selected = open == null && section == title;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: AppRow(
         key: ValueKey('more-$title'),
+        focusNode: open == null
+            ? rows.putIfAbsent(title, () => FocusNode(debugLabel: title))
+            : null,
         isTV: true,
         icon: icon,
         title: title,
         selected: selected,
         external: open != null,
         trailing: open == null ? const SizedBox.shrink() : null,
-        onTap: open ?? () => setState(() => section = title),
+        onTap: open ?? () => choose(title),
       ),
     );
   }
@@ -413,6 +446,7 @@ class _DesktopMoreState extends State<DesktopMore> {
   Widget build(BuildContext context) {
     final identity = accountNames(services).join(' · ');
     final sidebar = ListView(
+      key: const PageStorageKey('more-scroll'),
       padding: EdgeInsets.fromLTRB(48, 16, 0, contentBottom(context)),
       children: [
         Row(
@@ -495,12 +529,19 @@ class _DesktopMoreState extends State<DesktopMore> {
               constraints: const BoxConstraints(maxWidth: 1400),
               child: Padding(
                 padding: const EdgeInsets.only(top: 72, right: 48),
-                child: SettingsPage(
-                  key: ValueKey('desktop-settings-$section'),
-                  services: services,
-                  isTV: true,
-                  section: section,
-                  embedded: true,
+                child: BackTo(
+                  onBack: () => rows[section]?.requestFocus(),
+                  child: Focus(
+                    focusNode: pane,
+                    canRequestFocus: false,
+                    child: SettingsPage(
+                      key: ValueKey('desktop-settings-$section'),
+                      services: services,
+                      isTV: true,
+                      section: section,
+                      embedded: true,
+                    ),
+                  ),
                 ),
               ),
             ),

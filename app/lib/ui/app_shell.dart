@@ -529,6 +529,7 @@ class _AppShellState extends State<AppShell> {
       FocusManager.instance.primaryFocus?.unfocus();
       return;
     }
+    if (widget.isTV && BackTo.handle()) return;
     if (widget.isTV && scopes[selected].hasFocus) {
       navFocus[selected].requestFocus();
       return;
