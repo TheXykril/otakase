@@ -39,6 +39,7 @@ import 'ui/watch_party_page.dart';
 import 'ui/mpv.dart';
 import 'host.dart';
 import 'player/cast.dart';
+import 'player/next_up.dart';
 import 'player/progress.dart';
 import 'player/skips.dart';
 
@@ -111,8 +112,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   /// watched up to it.
   Duration startedAt = Duration.zero;
 
-  /// The episode a title's countdown leads to.
-  PlayRequest? upNext;
+  /// The up-next countdown, and the title it leads to.
+  final upcoming = NextUp();
+  PlayRequest? get upNext => upcoming.title;
+  int get countdownSeconds => upcoming.seconds.value;
 
   /// The audio and subtitles playing when the same copy is opened again
   /// (a quality change or a dropped stream), so they come back.
@@ -158,17 +161,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   int savedResume = 0;
   var viewing = EpisodeViewing();
   String? viewingKey;
-  bool nextCancelled = false, scrubbing = false;
+  bool scrubbing = false;
   PlaybackSource? source;
   RequestScope scope = RequestScope();
   final subscriptions = <StreamSubscription<dynamic>>[];
   final surface = FocusNode(debugLabel: 'Playback surface');
   final playFocus = FocusNode(debugLabel: 'Play pause');
   final skipFocus = FocusNode(debugLabel: 'Skip segment');
-  Timer? hideTimer, nextTimer, loadingTimer;
+  Timer? hideTimer, loadingTimer;
   final stall = PlaybackStallWatchdog();
   bool playRequested = false;
-  int copy = 0, generation = 0, countdownSeconds = 0;
+  int copy = 0, generation = 0;
   bool overlay = true,
       fullscreen = false,
       busy = true,
@@ -418,8 +421,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     media = null;
     watchProgress.reset();
     started = false;
-    upNext = null;
-    nextCancelled = false;
+    upcoming.reset();
     savedResume = 0;
     failedSources.clear();
   }
@@ -550,11 +552,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     scope = RequestScope();
     final requestScope = scope;
     unsubtitledCopy = null;
-    nextTimer?.cancel();
     stall.cancel();
     playRequested = false;
     reopenedCopy = reopening;
-    countdownSeconds = 0;
+    upcoming.hide();
     playbackPosition = Duration.zero;
     viewing = EpisodeViewing();
     viewingKey = null;
@@ -1249,7 +1250,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       unawaited(Navigator.maybePop(context));
       return;
     }
-    upNext = next;
+    upcoming.title = next;
     offerNext();
   }
 
@@ -1774,11 +1775,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   /// the one left. Nothing happens without a target.
   Future<void> switchTitle(PlayRequest? target) async {
     if (target == null || !isTitle) return;
-    nextTimer?.cancel();
+    upcoming.stop();
     await save(leaving: true);
     if (!busy) scrobble('pause');
     if (!mounted || profileStopped) return;
-    setState(() => countdownSeconds = 0);
+    setState(upcoming.hide);
     startTitle(target);
     await open();
   }
@@ -1792,7 +1793,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await watchProgress.flush();
     if (!mounted || profileStopped) return;
     savedResume = 0;
-    nextCancelled = false;
+    upcoming.cancelled = false;
     episode = target;
     skipEpisodeSubtitles = false;
     failedSources.clear();
@@ -1801,7 +1802,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Future<void> next({bool automatic = false}) async {
     if (!canNext) return;
-    nextTimer?.cancel();
+    upcoming.stop();
     if (isTitle) {
       await switchTitle(upNext ?? request!.next?.call());
       return;
@@ -1824,7 +1825,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (!mounted) return;
     await watchProgress.flush();
     savedResume = 0;
-    nextCancelled = false;
+    upcoming.cancelled = false;
     episode = target;
     skipEpisodeSubtitles = false;
     failedSources.clear();
@@ -1832,23 +1833,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   void offerNext() {
-    if (!canNext || nextCancelled || countdownSeconds > 0) return;
-    setState(() {
-      countdownSeconds = 10;
-      overlay = true;
-    });
-    if (widget.services.store.flag('NextEpisodePrompt')) return;
-    nextTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      setState(() => countdownSeconds--);
-      if (countdownSeconds <= 0) {
-        timer.cancel();
+    if (!canNext) return;
+    final offered = upcoming.offer(
+      prompt: widget.services.store.flag('NextEpisodePrompt'),
+      done: () {
+        if (!mounted) return;
+        setState(() {});
         unawaited(next(automatic: true));
-      }
-    });
+      },
+    );
+    if (offered) setState(() => overlay = true);
   }
 
   Future<void> trackPanel() async {
@@ -2440,7 +2434,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     hideTimer?.cancel();
     watchProgress.cancel();
     stall.cancel();
-    nextTimer?.cancel();
+    upcoming.stop();
     loadingTimer?.cancel();
     cast.dispose();
     if (!profileStopped) {
@@ -2491,7 +2485,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     hideTimer?.cancel();
     watchProgress.cancel();
     stall.cancel();
-    nextTimer?.cancel();
+    upcoming.stop();
     loadingTimer?.cancel();
     discordMeter?.cancel();
     await widget.services.discord.stopWatching();
@@ -2644,14 +2638,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     flash.show(side < 0 ? '−10 s' : '+10 s');
   }
 
-  void cancelNext() {
-    nextTimer?.cancel();
-    nextCancelled = true;
-    setState(() {
-      countdownSeconds = 0;
-      upNext = null;
-    });
-  }
+  void cancelNext() => setState(upcoming.cancel);
 
   /// Phones get one slim line: a mono kicker with the countdown, what plays
   /// next, a small Play next and a close icon.
@@ -2722,7 +2709,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget nextCard(BuildContext context) => !widget.isTV
+  /// Redraws on its own each second of the countdown.
+  Widget nextCard(BuildContext context) => ValueListenableBuilder(
+    valueListenable: upcoming.seconds,
+    builder: (context, _, _) => nextCardBody(context),
+  );
+
+  Widget nextCardBody(BuildContext context) => !widget.isTV
       ? phoneNextCard(context)
       : Align(
           alignment: Alignment.centerRight,
