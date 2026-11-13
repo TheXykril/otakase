@@ -2787,11 +2787,25 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     media?.label ?? '',
   ].where((s) => s.isNotEmpty).join(' · ');
 
+  /// Where the last double tap landed, across the screen.
+  double? doubleTapAt;
+
+  void doubleTapSeek() {
+    final width = MediaQuery.sizeOf(context).width;
+    final at = doubleTapAt;
+    if (at == null || busy || error.isNotEmpty || width <= 0) return;
+    final side = doubleTapSeconds(at, width);
+    if (side == 0) return;
+    unawaited(seek(side));
+    flash.show(side < 0 ? '−10 s' : '+10 s');
+  }
+
   Widget nextCard(BuildContext context) => Align(
     alignment: Alignment.centerRight,
     child: Container(
       key: const Key('player-next'),
-      width: 500,
+      // Sized to what it says, up to a readable width.
+      constraints: const BoxConstraints(maxWidth: 440),
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -2800,6 +2814,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         borderRadius: BorderRadius.circular(KageRadius.md),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (anime.cover.isNotEmpty) ...[
             ClipRRect(
@@ -2808,8 +2823,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             ),
             const SizedBox(width: 16),
           ],
-          Expanded(
+          Flexible(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -2832,17 +2848,22 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   color: shu,
                   backgroundColor: line,
                 ),
+                const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
                   children: [
                     AppButton(
                       label: 'Play next',
+                      variant: ButtonVariant.primary,
+                      size: ButtonSize.sm,
                       autofocus: isTitle,
                       onPressed: () => next(),
                       isTV: widget.isTV,
                     ),
                     AppButton(
                       label: 'Cancel',
+                      variant: ButtonVariant.text,
+                      size: ButtonSize.sm,
                       onPressed: () {
                         nextTimer?.cancel();
                         nextCancelled = true;
@@ -2891,9 +2912,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             children: [
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
+                // Phones seek 10 s with a double tap on either side; the
+                // middle third stays a plain tap.
+                onDoubleTapDown: isDesktop || widget.isTV
+                    ? null
+                    : (d) => doubleTapAt = d.localPosition.dx,
                 onDoubleTap: isDesktop
                     ? () => unawaited(toggleFullscreen())
-                    : null,
+                    : widget.isTV
+                    ? null
+                    : doubleTapSeek,
                 onTap: () {
                   if (overlay) {
                     setState(() => overlay = false);
@@ -2947,12 +2975,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                       children: [
                         OtakaseSeal(size: widget.isTV ? 96 : 64),
                         const SizedBox(height: 24),
-                        const SkeletonBlock(width: 160, height: 2),
+                        // A moving thread, so a slow source never looks frozen.
+                        const SizedBox(
+                          width: 160,
+                          child: WorkingLine(label: 'Loading'),
+                        ),
                         const SizedBox(height: 24),
                         Text(status, style: uiStyle(context)),
                         const SizedBox(height: 16),
                         AppButton(
                           label: 'Back',
+                          variant: ButtonVariant.text,
                           onPressed: () => Navigator.pop(context),
                           isTV: widget.isTV,
                         ),
@@ -2975,6 +3008,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           if (unsubtitledCopy case final fallback?)
                             AppButton(
                               label: 'Play without subtitles',
+                              variant: ButtonVariant.secondary,
                               onPressed: () {
                                 skipEpisodeSubtitles = true;
                                 unawaited(
@@ -3008,6 +3042,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           if (!isTitle || (media?.copy ?? '').isNotEmpty)
                             AppButton(
                               label: 'Try another copy',
+                              // Anime has no Try again, so this leads there.
+                              variant: isTitle
+                                  ? ButtonVariant.secondary
+                                  : ButtonVariant.primary,
+                              autofocus: !isTitle,
                               onPressed: tryAnotherCopy,
                               isTV: widget.isTV,
                             ),
@@ -3021,12 +3060,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                             problem: error,
                             position: position,
                             provider: source?.provider ?? '',
+                            variant: ButtonVariant.text,
                           ),
                           // Desktop hides the title bar behind the error,
                           // so there must be a way out besides Esc.
                           AppButton(
                             label: 'Back',
-                            icon: LucideIcons.arrowLeft,
+                            variant: ButtonVariant.text,
                             onPressed: () => Navigator.pop(context),
                             isTV: widget.isTV,
                           ),

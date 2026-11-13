@@ -4,6 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otakase/ui/player_keys.dart';
 
 void main() {
+  test('phone double tap seeks back on the left, forward on the right', () {
+    expect(doubleTapSeconds(40, 900), -10);
+    expect(doubleTapSeconds(450, 900), 0);
+    expect(doubleTapSeconds(860, 900), 10);
+  });
+
   PlayerAction? key(
     LogicalKeyboardKey k, [
     String? character,

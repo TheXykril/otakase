@@ -311,6 +311,14 @@ class PlayerFlash extends StatelessWidget {
 }
 
 /// Shows short notes for a moment.
+/// Seconds a phone double tap at [x] across [width] seeks: back 10 on the
+/// left third, forward 10 on the right third, nothing in the middle.
+int doubleTapSeconds(double x, double width) => x < width / 3
+    ? -10
+    : x > width * 2 / 3
+    ? 10
+    : 0;
+
 class FlashText extends ValueNotifier<String> {
   FlashText() : super('');
   Timer? _timer;

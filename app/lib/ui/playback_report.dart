@@ -17,7 +17,11 @@ class PlaybackReportButton extends StatelessWidget {
     required this.problem,
     required this.position,
     this.provider = '',
+    this.variant,
   });
+
+  /// How loud the button is; the player's error screen keeps it quiet.
+  final ButtonVariant? variant;
   final AppServices services;
   final bool isTV;
   final String title, episode, problem, provider;
@@ -26,6 +30,7 @@ class PlaybackReportButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AppButton(
     label: 'Report playback problem',
+    variant: variant,
     isTV: isTV,
     onPressed: () => Navigator.push(
       context,
