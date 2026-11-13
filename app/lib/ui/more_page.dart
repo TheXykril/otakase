@@ -49,7 +49,7 @@ Future<void> openSchedule(
   OtakaseRoute<void>(
     builder: (_) => Scaffold(
       appBar: AppBar(
-        leading: const BackButton(),
+        leading: const AppBackButton(),
         actions: [
           DeviceStatus(isTV: isTV),
           const SizedBox(width: 24),
@@ -785,13 +785,8 @@ class _AccountsPageState extends State<AccountsPage> {
     appBar: AppBar(
       title: const Text('Accounts'),
       leading: widget.isTV
-          ? IconButton(
-              focusNode: backFocus,
-              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-              icon: const BackButtonIcon(),
-              onPressed: () => Navigator.maybePop(context),
-            )
-          : const BackButton(),
+          ? AppBackButton(focusNode: backFocus)
+          : const AppBackButton(),
       actions: [
         DeviceStatus(isTV: widget.isTV),
         const SizedBox(width: 24),

@@ -721,7 +721,7 @@ void main() {
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
       expect(
-        tester.widget<AppTab>(find.byKey(const Key('season-2'))).selected,
+        tester.widget<AppSegment>(find.byKey(const Key('season-2'))).selected,
         isTrue,
       );
       expect(

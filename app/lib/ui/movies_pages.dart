@@ -308,7 +308,7 @@ class _MoviesHomeState extends State<MoviesHome> {
                           context,
                           OtakaseRoute<void>(
                             builder: (_) => Scaffold(
-                              appBar: AppBar(leading: const BackButton()),
+                              appBar: AppBar(leading: const AppBackButton()),
                               body: MovieSearchPage(
                                 services: widget.services,
                                 isTV: widget.isTV,
@@ -960,30 +960,20 @@ class _TitlePageState extends State<TitlePage> {
   Future<void> download([TitleEpisode? episode]) =>
       downloadTitle(context, widget.services, title, episode: episode);
 
-  Widget meta(BuildContext context) => Wrap(
-    spacing: 10,
-    runSpacing: 6,
-    children: [
-      for (final text in [
-        if (title.year > 0) '${title.year}',
-        if (title.isShow)
-          'Series'
-        else if (title.runtime > 0)
-          '${title.runtime} min',
-        if (title.certification.isNotEmpty) title.certification,
-        if (title.rating > 0) '★ ${title.rating.toStringAsFixed(1)}',
-        if (title.network.isNotEmpty) title.network,
-        ...title.genres.take(3).map(languageTitle),
-      ])
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: fgBright.withValues(alpha: .08),
-            borderRadius: BorderRadius.circular(KageRadius.chip),
-          ),
-          child: Text(text, style: uiStyle(context, size: 15, color: fg)),
-        ),
+  Widget meta(BuildContext context) => MetaText(
+    [
+      if (title.year > 0) '${title.year}',
+      if (title.isShow)
+        'Series'
+      else if (title.runtime > 0)
+        '${title.runtime} min',
+      if (title.certification.isNotEmpty) title.certification,
+      if (title.rating > 0) '★ ${title.rating.toStringAsFixed(1)}',
+      if (title.network.isNotEmpty) title.network,
+      ...title.genres.take(3).map(languageTitle),
     ],
+    size: 15,
+    color: fg,
   );
 
   Widget actions(BuildContext context) {
@@ -1209,21 +1199,15 @@ class _TitlePageState extends State<TitlePage> {
             Expanded(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    if (seasons.length > 1)
-                      for (final s in seasons) ...[
-                        AppTab(
-                          key: ValueKey('season-$s'),
-                          label: 'Season $s',
-                          selected: s == season,
-                          isTV: widget.isTV,
-                          onPressed: () => setState(() => season = s),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                  ],
-                ),
+                child: seasons.length > 1
+                    ? AppSegmented<int>(
+                        isTV: widget.isTV,
+                        keyOf: (s) => ValueKey('season-$s'),
+                        options: [for (final s in seasons) (s, 'Season $s')],
+                        selected: season,
+                        onChanged: (s) => setState(() => season = s),
+                      )
+                    : const SizedBox.shrink(),
               ),
             ),
             if (shown.length > 12)

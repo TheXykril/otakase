@@ -849,6 +849,23 @@ class _RemoteTextInputState extends State<RemoteTextInput> {
   Widget build(BuildContext context) => widget.builder(focus);
 }
 
+/// How much a button asks for attention. One [primary] per screen.
+enum ButtonVariant {
+  /// Shu fill: Resume, Play, Sign in, Apply.
+  primary,
+
+  /// Raised panel with a hairline: Add to list, Download, Play on.
+  secondary,
+
+  /// Red text only: dialog actions, More, Reset.
+  text,
+
+  /// Like [secondary], in the danger colour: Sign out, Delete.
+  danger,
+}
+
+enum ButtonSize { md, sm }
+
 class AppButton extends StatelessWidget {
   const AppButton({
     super.key,
@@ -856,6 +873,8 @@ class AppButton extends StatelessWidget {
     required this.onPressed,
     this.icon,
     this.filled = false,
+    this.variant,
+    this.size = ButtonSize.md,
     this.isTV = false,
     this.autofocus = false,
     this.focusNode,
@@ -864,11 +883,44 @@ class AppButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
-  final bool filled, isTV, autofocus;
+
+  /// Shorthand for [ButtonVariant.primary] when [variant] is not given.
+  final bool filled;
+  final ButtonVariant? variant;
+  final ButtonSize size;
+  final bool isTV, autofocus;
   final FocusNode? focusNode;
   final String? disabledReason;
+
+  ButtonVariant get kind =>
+      variant ?? (filled ? ButtonVariant.primary : ButtonVariant.secondary);
+
+  /// Button height for [size] on this device.
+  static double heightOf(ButtonSize size, bool isTV) => switch (size) {
+    ButtonSize.md => isTV ? 56 : 44,
+    ButtonSize.sm => isTV ? 48 : 36,
+  };
+
   @override
   Widget build(BuildContext context) {
+    final off = onPressed == null;
+    final (fill, border, ink) = off
+        ? (line, Colors.transparent, muted)
+        : switch (kind) {
+            ButtonVariant.primary => (shu, Colors.transparent, bgDeep),
+            ButtonVariant.secondary => (panelRaised, line, fg),
+            ButtonVariant.text => (
+              Colors.transparent,
+              Colors.transparent,
+              accentText,
+            ),
+            ButtonVariant.danger => (panelRaised, line, danger),
+          };
+    final pad = kind == ButtonVariant.text
+        ? (isTV ? 12.0 : 8.0)
+        : size == ButtonSize.sm
+        ? (isTV ? 16.0 : 12.0)
+        : (isTV ? 20.0 : 16.0);
     final button = FocusBox(
       isTV: isTV,
       autofocus: autofocus,
@@ -876,30 +928,20 @@ class AppButton extends StatelessWidget {
       radius: KageRadius.button,
       onPressed: onPressed,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        duration: KageMotion.base,
+        curve: KageMotion.enter,
+        constraints: BoxConstraints(minHeight: heightOf(size, isTV)),
+        padding: EdgeInsets.symmetric(horizontal: pad, vertical: 6),
         decoration: BoxDecoration(
-          color: onPressed == null
-              ? line
-              : filled
-              ? shu
-              : fgBright.withValues(alpha: .12),
+          color: fill,
           borderRadius: BorderRadius.circular(KageRadius.button),
+          border: Border.all(color: border),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(
-                icon,
-                size: isTV ? 24 : 20,
-                color: onPressed == null
-                    ? muted
-                    : filled
-                    ? bgDeep
-                    : fgBright,
-              ),
+              Icon(icon, size: isTV ? 24 : 20, color: ink),
               const SizedBox(width: 8),
             ],
             Flexible(
@@ -907,15 +949,7 @@ class AppButton extends StatelessWidget {
                 label,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: uiStyle(
-                  context,
-                  weight: FontWeight.w600,
-                  color: onPressed == null
-                      ? muted
-                      : filled
-                      ? bgDeep
-                      : fgBright,
-                ),
+                style: uiStyle(context, weight: FontWeight.w600, color: ink),
               ),
             ),
           ],
@@ -930,8 +964,60 @@ class AppButton extends StatelessWidget {
   }
 }
 
-class AppTab extends StatelessWidget {
-  const AppTab({
+/// Pick one of a few (2 to about 7): one plate, the chosen segment on a
+/// darker tile. Replaces rows of separate pills.
+class AppSegmented<T> extends StatelessWidget {
+  const AppSegmented({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+    this.isTV = false,
+    this.keyOf,
+    this.expand = false,
+  });
+  final List<(T, String)> options;
+  final T selected;
+  final ValueChanged<T> onChanged;
+  final bool isTV;
+
+  /// Key for each segment, for tests and focus.
+  final Key Function(T value)? keyOf;
+
+  /// Segments share the full width instead of hugging their labels.
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget segment(T value, String label) {
+      final child = AppSegment(
+        key: keyOf?.call(value),
+        label: label,
+        selected: value == selected,
+        isTV: isTV,
+        onPressed: () => onChanged(value),
+      );
+      return expand ? Expanded(child: child) : child;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: panel,
+        border: Border.all(color: line),
+        borderRadius: BorderRadius.circular(KageRadius.input),
+      ),
+      child: Row(
+        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+        children: [for (final (v, l) in options) segment(v, l)],
+      ),
+    );
+  }
+}
+
+/// One segment of [AppSegmented].
+class AppSegment extends StatelessWidget {
+  const AppSegment({
     super.key,
     required this.label,
     required this.selected,
@@ -942,30 +1028,139 @@ class AppTab extends StatelessWidget {
   final bool selected, isTV;
   final VoidCallback onPressed;
   @override
-  Widget build(BuildContext context) => FocusBox(
-    isTV: isTV,
-    onPressed: onPressed,
-    radius: KageRadius.tab,
-    scale: 1.02,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: selected
-            ? (isTV ? fg : shu.withValues(alpha: .22))
-            : fgBright.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(KageRadius.tab),
-      ),
-      child: Text(
-        label,
-        style: uiStyle(
-          context,
-          color: selected ? (isTV ? bg : fgBright) : muted,
-          weight: selected ? FontWeight.w600 : FontWeight.w500,
+  Widget build(BuildContext context) => Semantics(
+    selected: selected,
+    button: true,
+    child: FocusBox(
+      isTV: isTV,
+      radius: KageRadius.segment,
+      scale: 1,
+      onPressed: onPressed,
+      child: AnimatedContainer(
+        duration: KageMotion.fast,
+        height: (isTV ? 52 : 40) - 6,
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(horizontal: isTV ? 20 : 14),
+        decoration: BoxDecoration(
+          color: selected ? selectedPanel : Colors.transparent,
+          borderRadius: BorderRadius.circular(KageRadius.segment),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          style: uiStyle(
+            context,
+            color: selected ? fgBright : muted,
+            weight: selected ? FontWeight.w600 : FontWeight.w500,
+          ),
         ),
       ),
     ),
+  );
+}
+
+/// Pick many: a removable or toggled token, such as a genre. Chosen chips
+/// get a darker tile, a Shu outline and a check.
+class AppChip extends StatelessWidget {
+  const AppChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+    this.isTV = false,
+    this.autofocus = false,
+  });
+  final String label;
+  final bool selected, isTV, autofocus;
+  final VoidCallback onPressed;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    selected: selected,
+    child: FocusBox(
+      isTV: isTV,
+      autofocus: autofocus,
+      onPressed: onPressed,
+      radius: KageRadius.chip,
+      outsideFrame: true,
+      child: AnimatedContainer(
+        duration: KageMotion.fast,
+        constraints: BoxConstraints(minHeight: isTV ? 48 : 36),
+        padding: EdgeInsets.symmetric(horizontal: isTV ? 16 : 12),
+        decoration: BoxDecoration(
+          color: selected ? selectedPanel : panelRaised,
+          borderRadius: BorderRadius.circular(KageRadius.chip),
+          border: Border.all(color: selected ? shu : line),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selected) ...[
+              Icon(LucideIcons.check, size: isTV ? 18 : 14, color: fgBright),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              style: uiStyle(
+                context,
+                size: isTV ? 17 : 14,
+                color: selected ? fgBright : fg,
+                weight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Facts about a title as one line of text ("★ 7.6 · TV · 12 ep · 2026"),
+/// not a row of chips.
+class MetaText extends StatelessWidget {
+  const MetaText(
+    this.parts, {
+    super.key,
+    this.size = 16,
+    this.color = muted,
+    this.maxLines = 2,
+  });
+  final List<String> parts;
+  final double size;
+  final Color color;
+  final int maxLines;
+  @override
+  Widget build(BuildContext context) {
+    final text = parts.where((p) => p.trim().isNotEmpty).join(' · ');
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Text(
+      text,
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      style: uiStyle(context, size: size, color: color),
+    );
+  }
+}
+
+/// The one back button: Lucide arrow, the platform's tooltip.
+class AppBackButton extends StatelessWidget {
+  const AppBackButton({
+    super.key,
+    this.focusNode,
+    this.autofocus = false,
+    this.color,
+    this.onPressed,
+  });
+  final FocusNode? focusNode;
+  final bool autofocus;
+  final Color? color;
+  final VoidCallback? onPressed;
+  @override
+  Widget build(BuildContext context) => IconButton(
+    focusNode: focusNode,
+    autofocus: autofocus,
+    tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+    icon: Icon(LucideIcons.arrowLeft, color: color),
+    onPressed: onPressed ?? () => Navigator.maybePop(context),
   );
 }
 
@@ -1897,42 +2092,6 @@ class CardMenu extends StatelessWidget {
       child: GestureDetector(onSecondaryTap: menu, child: child),
     );
   }
-}
-
-class MetaLine extends StatelessWidget {
-  const MetaLine(this.anime, {super.key});
-  final Anime anime;
-  @override
-  Widget build(BuildContext context) => Wrap(
-    spacing: 6,
-    runSpacing: 6,
-    children:
-        [
-              if (anime.score > 0) '★ ${anime.score.toStringAsFixed(1)}',
-              anime.formatLabel,
-              if (anime.year > 0) '${anime.year}',
-              if (anime.duration > 0) '${anime.duration} min',
-              if (anime.episodes > 0) '${anime.episodes} ep',
-            ]
-            .where((s) => s.isNotEmpty)
-            .map(
-              (label) => Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: bgDeep.withValues(alpha: .65),
-                  borderRadius: BorderRadius.circular(KageRadius.chip),
-                ),
-                child: Text(
-                  label,
-                  style: uiStyle(context, size: 15, color: fg),
-                ),
-              ),
-            )
-            .toList(),
-  );
 }
 
 class FailureView extends StatelessWidget {

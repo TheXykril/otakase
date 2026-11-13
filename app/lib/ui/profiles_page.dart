@@ -286,7 +286,7 @@ class _ProfilesPageState extends State<ProfilesPage> {
     builder: (context, _) => Scaffold(
       appBar: AppBar(
         title: const Text('Profiles'),
-        leading: const BackButton(),
+        leading: const AppBackButton(),
         actions: [
           DeviceStatus(isTV: widget.manager.isTV),
           const SizedBox(width: 24),
