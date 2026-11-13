@@ -32,7 +32,7 @@ Scaffold _page(
   appBar: AppBar(
     title: Text(title),
     actions: [
-      DeviceStatus(isTV: isTV),
+      TopBarEnd(isTV: isTV),
       const SizedBox(width: 16),
     ],
   ),

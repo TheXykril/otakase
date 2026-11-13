@@ -17,7 +17,8 @@ import 'show_page.dart';
 
 void communityMessage(BuildContext context, String text) {
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(placeNote(context, SnackBar(content: Text(text))));
   }
 }
 
@@ -34,7 +35,7 @@ class DiscordPage extends StatelessWidget {
         appBar: AppBar(
           title: const Text('Discord'),
           actions: [
-            DeviceStatus(isTV: isTV),
+            TopBarEnd(isTV: isTV),
             const SizedBox(width: 16),
           ],
         ),

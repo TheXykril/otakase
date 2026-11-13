@@ -127,7 +127,7 @@ class PhonePlayerControls extends StatelessWidget {
                     ),
                   ),
                   ...topActions,
-                  DeviceStatus(isTV: isTV),
+                  TopBarEnd(isTV: isTV),
                   const SizedBox(width: 12),
                   const SizedBox(
                     width: 48,

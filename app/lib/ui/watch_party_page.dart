@@ -206,7 +206,7 @@ class _WatchPartiesPageState extends State<WatchPartiesPage> {
         appBar: AppBar(
           title: const Text('Watch parties'),
           actions: [
-            DeviceStatus(isTV: widget.isTV),
+            TopBarEnd(isTV: widget.isTV),
             const SizedBox(width: 16),
           ],
         ),

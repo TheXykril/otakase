@@ -938,9 +938,10 @@ class _TitlePageState extends State<TitlePage> {
           await link.ready();
           await link.send('start', args: request.remote!);
         } catch (e) {
-          messenger.showSnackBar(
-            SnackBar(content: Text(e is StateError ? e.message : '$e')),
+          final note = SnackBar(
+            content: Text(e is StateError ? e.message : '$e'),
           );
+          messenger.showSnackBar(mounted ? placeNote(context, note) : note);
           return;
         }
         if (!mounted) return;
@@ -1427,7 +1428,7 @@ class _TitlePageState extends State<TitlePage> {
                                 ),
                               ),
                               const Spacer(),
-                              if (isDesktop) const DeviceStatus(),
+                              if (isDesktop) const TopBarEnd(),
                             ],
                           ),
                         ),
@@ -1552,7 +1553,12 @@ Future<void> traktSignIn(
   } catch (_) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Trakt could not be reached. Try again.')),
+        placeNote(
+          context,
+          const SnackBar(
+            content: Text('Trakt could not be reached. Try again.'),
+          ),
+        ),
       );
     }
     return;
@@ -1588,7 +1594,10 @@ Future<void> traktSignIn(
                   await Clipboard.setData(ClipboardData(text: code.userCode));
                   if (dialog.mounted) {
                     ScaffoldMessenger.of(dialog).showSnackBar(
-                      const SnackBar(content: Text('Code copied.')),
+                      placeNote(
+                        dialog,
+                        const SnackBar(content: Text('Code copied.')),
+                      ),
                     );
                   }
                 },
@@ -1636,8 +1645,11 @@ Future<void> traktSignIn(
                     .catchError((_) {
                       if (dialog.mounted) {
                         ScaffoldMessenger.of(dialog).showSnackBar(
-                          const SnackBar(
-                            content: Text('No browser could open Trakt.'),
+                          placeNote(
+                            dialog,
+                            const SnackBar(
+                              content: Text('No browser could open Trakt.'),
+                            ),
                           ),
                         );
                       }
@@ -1657,9 +1669,12 @@ Future<void> traktSignIn(
   cancelled = ok != true;
   if (ok == true && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Signed in to Trakt${trakt.username.isEmpty ? '' : ' as ${trakt.username}'}.',
+      placeNote(
+        context,
+        SnackBar(
+          content: Text(
+            'Signed in to Trakt${trakt.username.isEmpty ? '' : ' as ${trakt.username}'}.',
+          ),
         ),
       ),
     );
@@ -1680,9 +1695,12 @@ Future<void> _traktBrowserSignIn(
     await trakt.cancelBrowserSignIn();
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e is TraktFailure ? e.message : 'Trakt could not be opened.',
+        placeNote(
+          context,
+          SnackBar(
+            content: Text(
+              e is TraktFailure ? e.message : 'Trakt could not be opened.',
+            ),
           ),
         ),
       );
@@ -1735,9 +1753,12 @@ Future<void> _traktBrowserSignIn(
   await trakt.cancelBrowserSignIn();
   if (ok == true && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Signed in to Trakt${trakt.username.isEmpty ? '' : ' as ${trakt.username}'}.',
+      placeNote(
+        context,
+        SnackBar(
+          content: Text(
+            'Signed in to Trakt${trakt.username.isEmpty ? '' : ' as ${trakt.username}'}.',
+          ),
         ),
       ),
     );

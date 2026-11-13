@@ -7,6 +7,17 @@ import '../desktop/desktop_core.dart';
 import '../desktop/window_frame.dart';
 import 'components.dart';
 
+/// The end of a top bar: the window buttons on a computer, the clock (and
+/// battery on a phone) on Android.
+class TopBarEnd extends StatelessWidget {
+  const TopBarEnd({super.key, this.isTV = false});
+  final bool isTV;
+  @override
+  Widget build(BuildContext context) =>
+      isDesktop ? const WindowButtons() : DeviceStatus(isTV: isTV);
+}
+
+/// Clock and battery drawn where the hidden system status bar would be.
 class DeviceStatus extends StatefulWidget {
   const DeviceStatus({super.key, this.isTV = false});
   final bool isTV;
@@ -88,8 +99,6 @@ class _DeviceStatusState extends State<DeviceStatus>
 
   @override
   Widget build(BuildContext context) {
-    // Desktop pages show the window buttons where Android shows the clock.
-    if (isDesktop) return const WindowButtons();
     final time = TimeOfDay.fromDateTime(now).format(context);
     final use24 =
         data['use24Hour'] as bool? ??

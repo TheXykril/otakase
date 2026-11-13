@@ -245,7 +245,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
           title: Text(widget.isTV ? 'Phone remote' : 'Control TV'),
           leading: widget.isTV ? const AppBackButton(autofocus: true) : null,
           actions: [
-            DeviceStatus(isTV: widget.isTV),
+            TopBarEnd(isTV: widget.isTV),
             const SizedBox(width: 16),
           ],
         ),

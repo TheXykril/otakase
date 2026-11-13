@@ -394,7 +394,7 @@ class _FocusBoxState extends State<FocusBox> {
         onTap: widget.onPressed,
         onLongPress: widget.onLongPress,
         focusColor: Colors.transparent,
-        hoverColor: widget.hoverColor ?? line.withValues(alpha: .4),
+        hoverColor: widget.hoverColor ?? panelRaised,
         onHover: (value) {
           if (widget.lift && isDesktop && hovered != value) {
             setState(() => hovered = value);
@@ -1749,6 +1749,77 @@ class HeroArt extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Opens a sub-page (settings, accounts, details) the one way each screen
+/// expects: a full page on a phone and a panel from the right edge on a TV
+/// or computer, with the page still in view beside it.
+Future<T?> openSubPage<T>(
+  BuildContext context,
+  Widget page, {
+  required bool isTV,
+  String label = 'Close',
+}) {
+  if (!isTV) {
+    return Navigator.push<T>(context, OtakaseRoute<T>(builder: (_) => page));
+  }
+  return showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: label,
+    barrierColor: bgDeep.withValues(alpha: .6),
+    transitionDuration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : KageMotion.slow,
+    pageBuilder: (context, _, _) => Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        width: (MediaQuery.sizeOf(context).width * .35).clamp(432, 560),
+        decoration: const BoxDecoration(
+          color: bg,
+          border: Border(left: BorderSide(color: line)),
+        ),
+        child: page,
+      ),
+    ),
+    transitionBuilder: (context, animation, _, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: KageMotion.enter,
+        reverseCurve: KageMotion.exit,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween(
+            begin: const Offset(.12, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+/// Sets a note's place: on a phone it floats just above the bottom nav bar
+/// (or the screen edge on pages without one); TVs and computers get the
+/// compact note from the theme.
+SnackBar placeNote(BuildContext context, SnackBar note) {
+  if (AppLayout.tvOf(context) || note.margin != null) return note;
+  return SnackBar(
+    key: note.key,
+    content: note.content,
+    action: note.action,
+    duration: note.duration,
+    showCloseIcon: note.showCloseIcon,
+    margin: EdgeInsets.fromLTRB(
+      KageSpace.s3,
+      0,
+      KageSpace.s3,
+      PageInsets.bottomOf(context) + KageSpace.s2,
+    ),
+  );
 }
 
 class OtakaseRoute<T> extends PageRouteBuilder<T> {

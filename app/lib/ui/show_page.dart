@@ -315,9 +315,10 @@ class _ShowPageState extends State<ShowPage> {
             args: {'anilist_id': anime.id, 'episode': ep, 'mode': mode},
           );
         } catch (e) {
-          messenger.showSnackBar(
-            SnackBar(content: Text(e is StateError ? e.message : '$e')),
+          final note = SnackBar(
+            content: Text(e is StateError ? e.message : '$e'),
           );
+          messenger.showSnackBar(mounted ? placeNote(context, note) : note);
           return;
         }
         if (!mounted) return;
@@ -499,7 +500,7 @@ class _ShowPageState extends State<ShowPage> {
               child: Container(
                 color: bgDeep.withValues(alpha: .95),
                 padding: const EdgeInsets.all(8),
-                child: const DeviceStatus(),
+                child: const TopBarEnd(),
               ),
             ),
           if (anime.nativeTitle.isNotEmpty)

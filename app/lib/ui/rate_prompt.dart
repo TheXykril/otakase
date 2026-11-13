@@ -83,9 +83,12 @@ Future<void> askRating(
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.showSnackBar(SnackBar(content: Text('The score was not saved: $e')));
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        placeNote(
+          context,
+          SnackBar(content: Text('The score was not saved: $e')),
+        ),
+      );
     }
   }
 }
@@ -114,7 +117,10 @@ Future<void> askTitleRating(
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('The score was not sent to Trakt: $e')),
+        placeNote(
+          context,
+          SnackBar(content: Text('The score was not sent to Trakt: $e')),
+        ),
       );
     }
   }
