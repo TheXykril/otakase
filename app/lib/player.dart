@@ -26,7 +26,6 @@ import 'desktop/player_bar.dart';
 import 'desktop/window_frame.dart';
 import 'data/skip_times.dart';
 import 'data/store.dart';
-import 'data/synced_resume.dart';
 import 'data/subtitle_fallback.dart';
 import 'services.dart';
 import 'tls_ca.dart';
@@ -35,12 +34,12 @@ import 'ui/screen_orientation.dart';
 import 'ui/seal.dart';
 import 'ui/skip_marker.dart';
 import 'ui/player_keys.dart';
-import 'ui/rate_prompt.dart';
 import 'ui/phone_player.dart';
 import 'ui/playback_report.dart';
 import 'ui/watch_party_page.dart';
 import 'ui/mpv.dart';
 import 'host.dart';
+import 'player/progress.dart';
 
 /// The one player for everything: anime episodes, films, series episodes
 /// and downloads. What a title has no data for stays hidden: films have no
@@ -92,7 +91,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final VideoController video;
   late int episode;
   late Anime anime;
-  late final ResumePusher resumePusher;
+  late final PlayerProgress watchProgress;
 
   /// What plays when this is a film, series episode or download; null for
   /// an anime episode. It changes as the next episode starts.
@@ -105,7 +104,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   /// A title counted as watched (the percentage rule or its end), and
   /// whether Trakt was told it stopped, so later events do not put it back
   /// in Trakt's paused list.
-  bool markedWatched = false, stopSent = false, started = false;
+  bool started = false;
   bool castPlaying = false;
 
   /// Where the title's copy started; a spot saved from playing counts as
@@ -157,7 +156,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   late final Json Function() statusHandler;
   Timer? discordMeter;
   int savedResume = 0;
-  final completedEpisodes = <int>{};
   var viewing = EpisodeViewing();
   String? viewingKey;
   bool nextCancelled = false, scrubbing = false;
@@ -167,7 +165,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   final surface = FocusNode(debugLabel: 'Playback surface');
   final playFocus = FocusNode(debugLabel: 'Play pause');
   final skipFocus = FocusNode(debugLabel: 'Skip segment');
-  Timer? hideTimer, saveTimer, nextTimer, loadingTimer;
+  Timer? hideTimer, nextTimer, loadingTimer;
   final stall = PlaybackStallWatchdog();
   bool playRequested = false;
   int copy = 0, generation = 0, countdownSeconds = 0;
@@ -241,7 +239,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (isTitle) status = 'Finding a copy';
     episode = widget.episode;
     if (!isTitle) widget.services.tracking.remember(anime);
-    resumePusher = widget.services.tracking.pusher();
+    watchProgress = PlayerProgress(widget.services);
     profileStop = stopForProfileSwitch;
     widget.services.stopPlayback = profileStop;
     commandHandler = control;
@@ -331,16 +329,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             showPresence();
           }
           if (!playing && !busy && !casting) {
-            unawaited(save().then((_) => resumePusher.flush()));
+            unawaited(save().then((_) => watchProgress.flush()));
           }
         }
       }),
     ]);
     // The spot is kept every few seconds in memory; the history is written
     // and the app hears of it on pause, on leaving and at the end.
-    saveTimer = Timer.periodic(
+    watchProgress.every(
       const Duration(seconds: 5),
-      (_) => unawaited(save(quiet: true)),
+      () => unawaited(save(quiet: true)),
     );
     unawaited(
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
@@ -378,7 +376,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           !casting &&
           (state == AppLifecycleState.hidden ||
               state == AppLifecycleState.paused);
-      unawaited(save(leaving: leaving).then((_) => resumePusher.flush()));
+      unawaited(save(leaving: leaving).then((_) => watchProgress.flush()));
       // A cast plays on with this screen off. A computer window that only
       // lost focus (inactive) or was minimised keeps playing, as films do;
       // a phone or TV leaving the app pauses.
@@ -410,23 +408,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       : playbackPosition.inMilliseconds * 100 / duration.inMilliseconds;
 
   /// Tells Trakt a title started, paused or stopped.
-  void scrobble(String action) {
-    final r = request;
-    if (r == null) return;
-    if (action == 'stop') return sendStop();
-    if (stopSent || markedWatched) return;
-    // Before the first frame the spot is not known yet; 0% would tell
-    // Trakt the title was restarted.
-    if (action == 'pause' && playbackPosition == Duration.zero) return;
-    r.onScrobble?.call(action, percent);
-  }
+  void scrobble(String action) =>
+      watchProgress.scrobble(request, action, playbackPosition, percent);
 
   /// Tells Trakt the title is done, once.
-  void sendStop() {
-    if (stopSent) return;
-    stopSent = true;
-    request?.onScrobble?.call('stop', 100);
-  }
+  void sendStop() => watchProgress.sendStop(request);
 
   /// Starts [next] from its own beginning: nothing of the last title's
   /// watch state carries over.
@@ -434,12 +420,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     request = next;
     anime = Anime(id: 0, title: next.title);
     media = null;
-    markedWatched = false;
-    stopSent = false;
+    watchProgress.reset();
     started = false;
     upNext = null;
     nextCancelled = false;
-    completedEpisodes.clear();
     savedResume = 0;
     failedSources.clear();
   }
@@ -1223,7 +1207,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   /// skipped to the end is not watched.
   void titleWatched(Duration p) {
     final total = duration.inSeconds;
-    if (markedWatched ||
+    if (watchProgress.markedWatched ||
         !copyLengthOk ||
         total <= 0 ||
         p.inSeconds * 100 <
@@ -1232,7 +1216,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         !viewing.watchedUpTo(p)) {
       return;
     }
-    markedWatched = true;
+    watchProgress.markedWatched = true;
     unawaited(save(completed: true));
     sendStop();
   }
@@ -1275,7 +1259,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     playRequested = false;
     stall.cancel();
     final watched =
-        markedWatched || viewing.ended(playbackPosition, duration, spans);
+        watchProgress.markedWatched ||
+        viewing.ended(playbackPosition, duration, spans);
     if (isTitle) {
       unawaited(titleEnded(watched));
       return;
@@ -1292,8 +1277,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (mounted) unawaited(Navigator.maybePop(context));
       return;
     }
-    if (!markedWatched) {
-      markedWatched = true;
+    if (!watchProgress.markedWatched) {
+      watchProgress.markedWatched = true;
       await save(completed: true);
     }
     sendStop();
@@ -1389,7 +1374,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }) async {
     if (profileStopped) return;
     await saveSpot(completed: completed, leaving: leaving, quiet: quiet);
-    if (!quiet && !isTitle) await widget.services.store.flushHistory();
+    if (!quiet && !isTitle) await watchProgress.flushHistory();
   }
 
   Future<void> saveSpot({
@@ -1400,41 +1385,31 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (busy || duration <= Duration.zero) return;
     final at = playbackPosition;
     if (isTitle) {
-      final done = completed || markedWatched;
-      // Leaving before playback moved must not wipe the saved spot.
-      if (!done && at == Duration.zero) return;
-      await request!.onProgress?.call(at.inSeconds, duration.inSeconds, done);
-      return;
+      return watchProgress.saveTitle(
+        request!,
+        at,
+        duration,
+        completed: completed,
+      );
     }
-    if (!completed && at == Duration.zero) return;
-    final watched =
-        completed ||
-        completedEpisodes.contains(episode) ||
-        (leaving &&
+    await watchProgress.saveEpisode(
+      EpisodeSpot(
+        anime: anime,
+        episode: episode,
+        at: at,
+        length: duration,
+        inCredits:
+            leaving &&
             !retrying &&
             error.isEmpty &&
             copyLengthOk &&
-            viewing.credits(at, duration, spans));
-    final newlyWatched = watched && completedEpisodes.add(episode);
-    final persist = widget.services.store.progress(
-      anime,
-      episode,
-      at.inSeconds,
-      duration.inSeconds,
-      completed: watched,
-      viewingKey: viewingKey,
-      viewingCheckpoint: viewing.checkpoint,
-      quiet: quiet && !watched,
+            viewing.credits(at, duration, spans),
+        viewingKey: viewingKey,
+        viewingCheckpoint: viewing.checkpoint,
+      ),
+      completed: completed,
+      quiet: quiet,
     );
-    if (newlyWatched) {
-      if (finishesShow(widget.services, anime, episode)) {
-        widget.services.ratingDue = anime;
-      }
-      await resumePusher.episodeDone(anime.key, episode, anime.episodes);
-    } else if (!watched) {
-      resumePusher.note(anime.key, episode, at.inSeconds);
-    }
-    await persist;
   }
 
   void showControls() {
@@ -1847,7 +1822,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       case 'stop':
         await save();
         if (!busy) scrobble('pause');
-        await resumePusher.flush();
+        await watchProgress.flush();
         if (casting) await stopCast(resumeHere: false);
         await player.stop();
         if (mounted) Navigator.pop(context);
@@ -1917,7 +1892,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       return;
     }
     await save(leaving: true);
-    await resumePusher.flush();
+    await watchProgress.flush();
     if (!mounted || profileStopped) return;
     savedResume = 0;
     nextCancelled = false;
@@ -1950,7 +1925,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
     }
     if (!mounted) return;
-    await resumePusher.flush();
+    await watchProgress.flush();
     savedResume = 0;
     nextCancelled = false;
     episode = target;
@@ -2596,7 +2571,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     generation++;
     scope.cancel();
     hideTimer?.cancel();
-    saveTimer?.cancel();
+    watchProgress.cancel();
     stall.cancel();
     nextTimer?.cancel();
     loadingTimer?.cancel();
@@ -2607,7 +2582,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (!busy) scrobble('pause');
       unawaited(
         save(leaving: true).then((_) async {
-          await resumePusher.flush();
+          await watchProgress.flush();
           await close?.call();
         }),
       );
@@ -2648,7 +2623,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Future<void> stopForProfileSwitch() async {
     if (profileStopped) return;
     hideTimer?.cancel();
-    saveTimer?.cancel();
+    watchProgress.cancel();
     stall.cancel();
     nextTimer?.cancel();
     loadingTimer?.cancel();
@@ -2667,7 +2642,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (casting) await stopCast(resumeHere: false);
     await save(leaving: true);
     if (!busy) scrobble('pause');
-    await resumePusher.flush().timeout(
+    await watchProgress.flush().timeout(
       const Duration(seconds: 5),
       onTimeout: () {},
     );
