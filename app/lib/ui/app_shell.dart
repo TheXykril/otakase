@@ -1040,7 +1040,8 @@ class _PhoneTab extends StatelessWidget {
         alignment: Alignment.center,
         children: [
           Padding(
-            padding: EdgeInsets.only(bottom: active ? 10 : 0),
+            // Same lift on every tab so icons line up; room for the mark below.
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
             // The bar keeps its height; large system text shrinks to fit.
             child: FittedBox(
               fit: BoxFit.scaleDown,
@@ -1048,13 +1049,13 @@ class _PhoneTab extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(icon, size: 22, color: active ? accentText : muted),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   Text(
                     label.toUpperCase(),
                     maxLines: 1,
                     style: mono.copyWith(
                       fontSize: 12,
-                      height: 1.2,
+                      height: 1.1,
                       letterSpacing: 1.1,
                       color: active || focused ? fgBright : muted,
                     ),
@@ -1065,7 +1066,7 @@ class _PhoneTab extends StatelessWidget {
           ),
           if (active)
             const Positioned(
-              bottom: 4,
+              bottom: 3,
               child: SizedBox(
                 width: 22,
                 height: 3,
