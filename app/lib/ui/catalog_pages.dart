@@ -1310,7 +1310,7 @@ Future<SearchFilters?> showSearchFilters(
             key: const Key('search-filter-menu'),
             color: panel,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(KageRadius.floatingPanel),
+              borderRadius: BorderRadius.circular(KageRadius.dialog),
               side: const BorderSide(color: line),
             ),
             clipBehavior: Clip.antiAlias,
@@ -1787,7 +1787,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
             FocusBox(
               key: const Key('filters-apply'),
               isTV: widget.isTV,
-              radius: KageRadius.wideButton,
+              radius: KageRadius.button,
               outsideFrame: true,
               onPressed: () => Navigator.pop(context, current),
               child: Container(
@@ -1795,7 +1795,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: shu,
-                  borderRadius: BorderRadius.circular(KageRadius.wideButton),
+                  borderRadius: BorderRadius.circular(KageRadius.button),
                 ),
                 child: Text(
                   'Apply filters',

@@ -289,7 +289,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
                                       side: const BorderSide(color: shu),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(
-                                          KageRadius.compactButton,
+                                          KageRadius.button,
                                         ),
                                       ),
                                     ),

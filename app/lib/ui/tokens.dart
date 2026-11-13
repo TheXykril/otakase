@@ -31,34 +31,25 @@ abstract final class KageRadius {
   static const full = 999.0;
 
   // Controls.
-  static const button = full;
-  static const wideButton = 14.0;
-  static const compactButton = 10.0;
-  static const tab = full;
-  static const chip = full;
-  static const toast = full;
-  static const input = md;
-  static const control = 9.0;
+  static const button = sm;
+  static const tab = sm;
+  static const chip = sm;
+  static const toast = sm;
+  static const input = sm;
 
-  // Artwork.
-  static const poster = 14.0;
-  static const posterFit = 10.0;
-  static const thumb = 6.0;
-  static const episodeThumb = 7.0;
-  static const tag = 6.0;
-  static const episodeTag = 9.0;
-  static double spine(bool isTV) => isTV ? 5 : 4;
+  // Artwork. Never rounder than md.
+  static const poster = md;
+  static const thumb = sm;
+  static const tag = xs;
+  static const spine = xs;
 
   // Surfaces.
-  static const tile = 14.0;
-  static const listRow = 10.0;
-  static const bubble = 10.0;
+  static const tile = md;
   static const panel = lg;
-  static const menu = 13.0;
-  static const floatingPanel = 18.0;
-  static const navBar = 24.0;
-  static const dialog = 20.0;
-  static const sheet = 20.0;
+  static const menu = md;
+  static const navBar = lg;
+  static const dialog = lg;
+  static const sheet = lg;
 
   /// Thin bars: tab underlines, seek rails, battery outline.
   static const mark = 2.0, track = 3.0;

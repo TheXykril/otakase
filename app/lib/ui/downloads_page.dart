@@ -219,7 +219,7 @@ class DownloadsPage extends StatelessWidget {
                   child: FocusBox(
                     key: ValueKey('download-${d.id}'),
                     isTV: isTV,
-                    radius: KageRadius.listRow,
+                    radius: KageRadius.tile,
                     padding: const EdgeInsets.all(10),
                     onPressed: d.done ? () => play(context, d) : null,
                     child: Row(

@@ -46,7 +46,7 @@ class NativeTitle extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: bgDeep.withValues(alpha: .94),
-              borderRadius: BorderRadius.circular(KageRadius.spine(isTV)),
+              borderRadius: BorderRadius.circular(KageRadius.spine),
             ),
             child: Text(
               title.characters.join('\n'),
@@ -171,9 +171,7 @@ class ResumeCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: bgDeep.withValues(alpha: .9),
-                        borderRadius: BorderRadius.circular(
-                          KageRadius.episodeTag,
-                        ),
+                        borderRadius: BorderRadius.circular(KageRadius.tag),
                       ),
                       child: Text(
                         entry.episode.toString().padLeft(2, '0'),
@@ -1168,7 +1166,7 @@ class _AccountBlockState extends State<AccountBlock> {
                       autofocus: widget.autofocus,
                       isTV: widget.isTV,
                       onPressed: () => pick(anchor),
-                      radius: KageRadius.control,
+                      radius: KageRadius.input,
                       child: Container(
                         constraints: BoxConstraints(
                           minHeight: widget.isTV ? 48 : 44,
@@ -1176,9 +1174,7 @@ class _AccountBlockState extends State<AccountBlock> {
                         padding: const EdgeInsets.symmetric(horizontal: 13),
                         decoration: BoxDecoration(
                           border: Border.all(color: line),
-                          borderRadius: BorderRadius.circular(
-                            KageRadius.control,
-                          ),
+                          borderRadius: BorderRadius.circular(KageRadius.input),
                         ),
                         child: Row(
                           children: [

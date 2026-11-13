@@ -23,4 +23,16 @@ void main() {
     }
     expect(found, isEmpty, reason: 'use a KageRadius role instead');
   });
+
+  test('one theme for the whole app', () {
+    final found = <String>[];
+    for (final file in Directory('lib').listSync(recursive: true)) {
+      if (file is! File || !file.path.endsWith('.dart')) continue;
+      if (file.path.endsWith('theme.dart')) continue;
+      if (RegExp(r'\bThemeData\(').hasMatch(file.readAsStringSync())) {
+        found.add(file.path);
+      }
+    }
+    expect(found, isEmpty, reason: 'build themes with buildOtakaseTheme()');
+  });
 }

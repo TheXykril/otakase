@@ -598,7 +598,7 @@ class _AppShellState extends State<AppShell> {
         key: ValueKey('nav-$label'),
         focusNode: navFocus[index],
         isTV: widget.isTV,
-        radius: KageRadius.lg,
+        radius: KageRadius.tab,
         frameGap: widget.isTV ? 5 : 0,
         showFocusBorder: !widget.isTV,
         focusFill: widget.isTV ? Colors.transparent : bg,
