@@ -87,7 +87,7 @@ class KageSeekSlider extends StatelessWidget {
     required this.onChanged,
     required this.onChangeStart,
     required this.onChangeEnd,
-    this.inactiveColor = const Color(0xff5a5148),
+    this.inactiveColor = trackRest,
   });
   final double value, max;
 

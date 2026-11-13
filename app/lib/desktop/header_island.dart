@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../ui/tokens.dart';
+
 /// Where a top bar island sits: grown out of the left or right window
 /// corner, or hanging from the middle of the top edge.
 enum IslandSide { left, center, right }
@@ -30,7 +32,7 @@ class IslandPainter extends CustomPainter {
   const IslandPainter(this.side);
   final IslandSide side;
 
-  static const color = Color(0xff0b0a09);
+  static const color = islandFill;
   static const flare = 18.0;
   static const radius = 26.0;
 

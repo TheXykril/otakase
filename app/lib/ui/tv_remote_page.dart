@@ -266,7 +266,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
               if (code != null && left > 0) ...[
                 Center(
                   child: ColoredBox(
-                    color: Colors.white,
+                    color: qrPaper,
                     child: QrImageView(data: code.qr.toString(), size: 184),
                   ),
                 ),

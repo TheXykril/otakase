@@ -84,7 +84,7 @@ class PhonePlayerControls extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [bgDeep, Color(0x00080707)],
+              colors: [bgDeep, bgDeepClear],
             ),
           ),
           child: SafeArea(
@@ -187,7 +187,7 @@ class PhonePlayerControls extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0x00080707), bgDeep],
+              colors: [bgDeepClear, bgDeep],
             ),
           ),
           child: SafeArea(
@@ -354,7 +354,7 @@ class PlayerChip extends StatelessWidget {
           vertical: isTV ? 12 : 9,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xe6191614),
+          color: panel90,
           border: Border.all(color: line),
           borderRadius: BorderRadius.circular(KageRadius.sm),
         ),
@@ -390,7 +390,7 @@ class SkipPainter extends CustomPainter {
       final region = Rect.fromLTRB(left, 0, right, 7);
       canvas.save();
       canvas.clipRect(region);
-      canvas.drawRect(region, Paint()..color = const Color(0xff302923));
+      canvas.drawRect(region, Paint()..color = skipBand);
       for (double x = left - 7; x < right; x += 10) {
         canvas.drawPath(
           Path()

@@ -1518,7 +1518,7 @@ class _TitlePageState extends State<TitlePage> {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Color(0x990e0d0c), Color(0x330e0d0c), bg],
+                        colors: [bg60, bg20, bg],
                         stops: [0, .45, 1],
                       ),
                     ),

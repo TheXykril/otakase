@@ -294,7 +294,7 @@ class _WindowButtonState extends State<_WindowButton> {
           width: 46,
           height: 36,
           color: hovered
-              ? (danger ? const Color(0xffc42b1c) : const Color(0x1affffff))
+              ? (danger ? WindowColors.windowsClose : WindowColors.hover)
               : Colors.transparent,
           child: Icon(widget.icon, size: 15, color: fgBright),
         );
@@ -304,7 +304,7 @@ class _WindowButtonState extends State<_WindowButton> {
           height: 24,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: hovered ? const Color(0x33ffffff) : const Color(0x1affffff),
+            color: hovered ? WindowColors.pressed : WindowColors.hover,
           ),
           child: Icon(widget.icon, size: 13, color: fgBright),
         );
@@ -315,10 +315,10 @@ class _WindowButtonState extends State<_WindowButton> {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: danger
-                ? (hovered ? const Color(0xffda4453) : const Color(0x00000000))
-                : (hovered ? const Color(0x33ffffff) : const Color(0x00000000)),
+                ? (hovered ? WindowColors.kdeClose : shadeClear)
+                : (hovered ? WindowColors.pressed : shadeClear),
           ),
-          child: Icon(widget.icon, size: 13, color: const Color(0xffeff0f1)),
+          child: Icon(widget.icon, size: 13, color: WindowColors.kdeIcon),
         );
       case WindowButtonStyle.tiling:
         return Container(

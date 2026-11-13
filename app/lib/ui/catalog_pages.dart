@@ -1501,7 +1501,7 @@ Future<SearchFilters?> showSearchFilters(
       barrierDismissible: true,
       barrierLabel: 'Close filters',
       barrierColor: Colors.black38,
-      transitionDuration: const Duration(milliseconds: 160),
+      transitionDuration: KageMotion.base,
       transitionBuilder: (context, animation, _, child) =>
           FadeTransition(opacity: animation, child: child),
       // A menu under the Filters button instead of a full-height panel.

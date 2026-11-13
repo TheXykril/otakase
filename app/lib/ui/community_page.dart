@@ -360,7 +360,7 @@ class _DiscordLinkDialogState extends State<DiscordLinkDialog> {
               if (url != null) ...[
                 Center(
                   child: ColoredBox(
-                    color: Colors.white,
+                    color: qrPaper,
                     child: QrImageView(data: url.toString(), size: 184),
                   ),
                 ),
@@ -521,7 +521,7 @@ class _CommunityTextDialogState extends State<CommunityTextDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ColoredBox(
-                color: Colors.white,
+                color: qrPaper,
                 child: QrImageView(data: url.toString(), size: 184),
               ),
               const SizedBox(height: 16),

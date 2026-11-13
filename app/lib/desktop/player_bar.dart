@@ -92,12 +92,7 @@ class DesktopPlayerBar extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   stops: [0, .18, .7, 1],
-                  colors: [
-                    Color(0xb3000000),
-                    Color(0x00000000),
-                    Color(0x00000000),
-                    Color(0xcc000000),
-                  ],
+                  colors: [shade70, shadeClear, shadeClear, shade80],
                 ),
               ),
             ),
@@ -163,7 +158,7 @@ class DesktopPlayerBar extends StatelessWidget {
               width: 960,
               padding: const EdgeInsets.fromLTRB(18, 10, 18, 8),
               decoration: BoxDecoration(
-                color: const Color(0xe60e0d0c),
+                color: bg90,
                 border: Border.all(color: line),
                 borderRadius: BorderRadius.circular(KageRadius.md),
               ),
@@ -375,7 +370,7 @@ class SeekRailPainter extends CustomPainter {
           top + h,
           const Radius.circular(KageRadius.track),
         ),
-        Paint()..color = const Color(0xff5a5148),
+        Paint()..color = trackRest,
       );
     }
     final b = rail ? buffered.clamp(0.0, 1.0) * size.width : 0.0;
@@ -388,7 +383,7 @@ class SeekRailPainter extends CustomPainter {
           top + h,
           const Radius.circular(KageRadius.track),
         ),
-        Paint()..color = const Color(0xffa09282),
+        Paint()..color = trackBuffered,
       );
     }
     if (seconds <= 0 || rail) return;
@@ -399,11 +394,11 @@ class SeekRailPainter extends CustomPainter {
       final region = Rect.fromLTRB(left, top - 1, right, top + h + 1);
       canvas.save();
       canvas.clipRect(region);
-      canvas.drawRect(region, Paint()..color = const Color(0xff302923));
+      canvas.drawRect(region, Paint()..color = skipBand);
       for (double x = left; x < right; x += 8) {
         canvas.drawRect(
           Rect.fromLTRB(x + 4, region.top, x + 8, region.bottom),
-          Paint()..color = const Color(0xffe3b45a),
+          Paint()..color = warn,
         );
       }
       canvas.restore();
