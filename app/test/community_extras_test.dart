@@ -7,7 +7,6 @@ import 'package:http/testing.dart';
 import 'package:otakase/data/community_extras.dart';
 import 'package:otakase/data/discord.dart';
 import 'package:otakase/data/store.dart';
-import 'package:otakase/host.dart';
 import 'package:otakase/desktop/launcher_shortcut.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -68,64 +67,49 @@ void main() {
     expect(calls, hasLength(1), reason: 'fetched at most every 3 hours');
   });
 
-  test(
-    'backups leave private keys out and restore in the right types',
-    () async {
-      final (x, calls) = await fixture((_) async => json({'at': 'now'}));
-      await x.store.set('SkipOp', false);
-      await x.store.set('SubtitleSize', 54);
-      await x.store.set('ProviderOrder', ['megavid', 'anikoto']);
-      final n = await x.backUp();
-      final sent = jsonDecode(calls.single.body)['config'] as String;
-      expect(sent, contains('SkipOp=false'));
-      expect(sent, contains('SubtitleSize=54'));
-      expect(sent, contains('ProviderOrder=megavid,anikoto'));
-      expect(n, sent.split('\n').length);
-      expect(backupKeyKept('MALClientID'), isFalse);
-      expect(backupKeyKept('AniListToken'), isFalse);
-      expect(backupKeyKept('AdultContent'), isFalse);
-      final values = backupSettings(
-        'SkipOp=true\nSubtitleSize=40\nProviderOrder=animex, nyaa\n'
-        'DiscordToken=x\nUnknownKey=1\nSubtitleSize2=4\n# SkipEd=false\n'
-        'NormalizeVolume=maybe',
-      );
-      expect(values, {
-        'SkipOp': true,
-        'SubtitleSize': 40,
-        'ProviderOrder': ['animex', 'nyaa'],
-      });
-      expect(await x.restore('SkipOp=true\nSubtitleSize=40'), 2);
-      expect(x.store.flag('SkipOp'), isTrue);
-      expect(x.store.integer('SubtitleSize'), 40);
-    },
-  );
-
-  test('no backup is a null, not an error', () async {
-    final (x, _) = await fixture((_) async => json({'error': 'none'}, 404));
-    expect(await x.fetchBackup(), isNull);
+  test('old backups keep private keys out and read in the right types', () {
+    expect(backupKeyKept('MALClientID'), isFalse);
+    expect(backupKeyKept('AniListToken'), isFalse);
+    expect(backupKeyKept('AdultContent'), isFalse);
+    final values = backupSettings(
+      'SkipOp=true\nSubtitleSize=40\nProviderOrder=animex, nyaa\n'
+      'DiscordToken=x\nUnknownKey=1\nSubtitleSize2=4\n# SkipEd=false\n'
+      'NormalizeVolume=maybe',
+    );
+    expect(values, {
+      'SkipOp': true,
+      'SubtitleSize': 40,
+      'ProviderOrder': ['animex', 'nyaa'],
+    });
+    expect(systemLabel('android', tv: true), 'Android TV');
+    expect(systemLabel('windows'), 'Windows');
   });
 
-  test('a backup names the system it was made on', () async {
+  test('an old bot backup moves in once, never over chosen settings', () async {
     final (x, calls) = await fixture(
-      (r) async => r.method == 'POST'
-          ? json({'at': '2026-11-09T12:00:00Z'})
+      (r) async => r.method == 'DELETE'
+          ? json({})
           : json({
-              'config': 'Player=mpv',
+              'config': 'SkipOp=true\nSubtitleSize=40\nDiscordToken=x',
               'at': '2026-11-09T12:00:00Z',
               'from_os': 'windows',
             }),
     );
-    await x.backUp();
-    final sent = jsonDecode(
-      calls.lastWhere((r) => r.method == 'POST').body,
-    ) as Map<String, dynamic>;
-    expect(sent['os'], Host.goos);
-    expect(sent['tv'], isFalse);
-    expect((await x.fetchBackup())!.fromOS, 'Windows');
-    expect(systemLabel('android', tv: true), 'Android TV');
-    expect(systemLabel('android'), 'Android');
-    expect(systemLabel('darwin'), 'macOS');
-    expect(systemLabel('linux'), 'Linux');
+    await x.store.set('SubtitleSize', 54);
+    expect(await x.moveOldBackup(), 1);
+    expect(x.store.flag('SkipOp'), isTrue);
+    expect(x.store.integer('SubtitleSize'), 54);
+    expect(calls.map((r) => '${r.method} ${r.url.path}'), [
+      'GET /v1/backup',
+      'DELETE /v1/backup',
+    ]);
+  });
+
+  test('no old backup is nothing to move, not an error', () async {
+    final (x, calls) = await fixture((_) async => json({'error': 'none'}, 404));
+    expect(await x.fetchBackup(), isNull);
+    expect(await x.moveOldBackup(), 0);
+    expect(calls.where((r) => r.method == 'DELETE'), isEmpty);
   });
 
   test('reports are multipart, as the linked member, with details', () async {

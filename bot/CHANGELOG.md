@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.32.1
+
+- Settings backups moved to the Otakase account, which syncs settings. `/settings-backup` and saving new backups are gone. Apps take a member's old backup once, through the account server too, and delete it here; `GET` and `DELETE /v1/backup` stay for that until the old link endpoints go.
+
 ## 1.32.0
 
 - The bot works with the Otakase account server. Apps signed in to an Otakase account with Discord reach the bot through it: the server passes their calls on with a shared secret (`account_secret`), the member's Discord id and the device, so no link code is needed. Each device shows up as a linked app. Apps linked with `/link-app` keep working; the old link endpoints go one release later.

@@ -21,6 +21,7 @@ export default defineConfig(async () => {
             BOT_SECRET: 'bot-secret',
             BACKUP_TOKEN: 'backup-token',
             ADMIN_DISCORD_ID: '111111111111111111',
+            VAULT_SECRET: 'vault-secret-vault-secret-vault-secret',
           },
         },
       }),

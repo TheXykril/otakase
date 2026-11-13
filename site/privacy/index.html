@@ -44,7 +44,7 @@
     <li>Your Discord or Google user id, the name and picture from that login, and for Google sign-ins the email address, so you can tell your sign-ins apart.</li>
     <li>Your devices: the name you gave each one, its system, app version and when it was last used.</li>
     <li>What you choose to sync: profiles, settings, where you stopped watching and choices you made per show.</li>
-    <li>Your AniList, MyAnimeList and Trakt logins, encrypted on your devices before they are sent. The server cannot read them, and there is no way to recover them if you lose every device.</li>
+    <li>Your AniList, MyAnimeList and Trakt logins, encrypted on your devices before they are sent. The server keeps a copy of the key to them, locked with a secret only the account server has, and hands it only to devices signed in to your own account, so a new device gets your logins without another one approving it. The database and its weekly copies alone can't open them.</li>
   </ul>
   <p>The account runs on Cloudflare. Its database is kept in the European Union. A copy is saved once a week to a private server run by the developer, so an outage can't lose your account.</p>
   <p>If you link Discord, the Otakase Discord bot receives your Discord id so it can send your app news, new episode alerts and replies, and post the problem reports you send.</p>

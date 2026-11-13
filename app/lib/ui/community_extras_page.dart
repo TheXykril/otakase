@@ -8,7 +8,6 @@ import '../data/community_extras.dart';
 import '../data/discord.dart';
 import '../data/models.dart';
 import '../services.dart';
-import 'community_page.dart';
 import 'components.dart';
 import 'device_status.dart';
 
@@ -38,141 +37,6 @@ Scaffold _page(
   ),
   body: ListView(padding: const EdgeInsets.all(24), children: children),
 );
-
-/// Community → Settings backup.
-class BackupPage extends StatefulWidget {
-  const BackupPage({super.key, required this.services, required this.isTV});
-  final AppServices services;
-  final bool isTV;
-  @override
-  State<BackupPage> createState() => _BackupPageState();
-}
-
-class _BackupPageState extends State<BackupPage> {
-  bool working = false;
-  String message = '';
-
-  Future<void> run(Future<String> Function() action) async {
-    if (working) return;
-    setState(() => working = true);
-    String text;
-    try {
-      text = await action();
-    } catch (e) {
-      text = e is BotFailure ? e.toString() : 'That didn’t work: $e';
-    }
-    if (mounted) {
-      setState(() {
-        working = false;
-        message = text;
-      });
-    }
-  }
-
-  Future<String> restore() async {
-    final x = widget.services.extras;
-    final backup = await x.fetchBackup();
-    if (backup == null) {
-      return 'There is no backup yet. Back up on the device that has your settings.';
-    }
-    if (!mounted) return '';
-    final from = [
-      if (backup.fromOS.isNotEmpty) 'from ${backup.fromOS}',
-      if (backup.at != null) 'made ${_day(backup.at!)}',
-    ].join(', ');
-    final yes = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Restore settings?'),
-        content: Text(
-          'The backup${from.isEmpty ? '' : ' ($from)'} replaces the settings it has. Accounts and sign-ins stay as they are.',
-        ),
-        actions: [
-          TextButton(
-            autofocus: true,
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(c, true),
-            child: const Text('Restore'),
-          ),
-        ],
-      ),
-    );
-    if (yes != true) return '';
-    final n = await x.restore(backup.config);
-    return n == 0
-        ? 'The backup has no settings this app knows.'
-        : 'Restored $n settings.';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final linked = widget.services.discord.linked;
-    return _page(context, 'Settings backup', widget.isTV, [
-      const PageHeading('Keep your settings', '控'),
-      const SizedBox(height: 12),
-      Text(
-        'Keeps a copy of your settings with the Otakase Discord bot, for your Discord account, so a new phone, TV or computer can get them back. Sign-ins and keys never leave this device.',
-        style: uiStyle(context, color: muted),
-      ),
-      const SizedBox(height: 20),
-      if (!linked)
-        LinkDiscordFirst(
-          services: widget.services,
-          isTV: widget.isTV,
-          onLinked: () {
-            if (mounted) setState(() {});
-          },
-        )
-      else
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            AppButton(
-              label: 'Back up now',
-              filled: true,
-              autofocus: true,
-              isTV: widget.isTV,
-              onPressed: working
-                  ? null
-                  : () => run(() async {
-                      final n = await widget.services.extras.backUp();
-                      return 'Backed up $n settings.';
-                    }),
-            ),
-            AppButton(
-              label: 'Restore',
-              isTV: widget.isTV,
-              onPressed: working ? null : () => run(restore),
-            ),
-            AppButton(
-              label: 'Delete backup',
-              isTV: widget.isTV,
-              onPressed: working
-                  ? null
-                  : () => run(() async {
-                      await widget.services.extras.deleteBackup();
-                      return 'Backup deleted.';
-                    }),
-            ),
-          ],
-        ),
-      if (working)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 24),
-          child: WorkingLine(),
-        ),
-      if (message.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.only(top: 16),
-          child: Text(message, style: uiStyle(context, color: accentText)),
-        ),
-    ]);
-  }
-}
 
 /// Community → Report a problem: posts to the support forum as the linked
 /// member, with the app details attached.
@@ -375,7 +239,7 @@ Widget? clubTile(
   );
 }
 
-/// The Community extras for the Discord page: club, backup, report.
+/// The Community extras for the Discord page: club and report.
 class CommunityExtrasSection extends StatelessWidget {
   const CommunityExtrasSection({
     super.key,
@@ -399,16 +263,6 @@ class CommunityExtrasSection extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: [
-              AppButton(
-                label: 'Settings backup',
-                isTV: isTV,
-                onPressed: () => Navigator.push(
-                  context,
-                  OtakaseRoute<void>(
-                    builder: (_) => BackupPage(services: services, isTV: isTV),
-                  ),
-                ),
-              ),
               AppButton(
                 label: 'Report a problem',
                 isTV: isTV,

@@ -99,7 +99,7 @@ abstract class DiscordBridge {
 
 /// Bot calls the account server passes on, by path.
 bool bridgedPath(String path) => RegExp(
-  r'^/v1/(rating|report|provider-report|parties|club|news|party/start|party/[A-Za-z0-9_-]+/(rsvp|ws))(\?|$)',
+  r'^/v1/(rating|report|provider-report|parties|club|news|party/start|party/[A-Za-z0-9_-]+/(rsvp|ws)|backup)(\?|$)',
 ).hasMatch(path);
 
 class DiscordService extends ChangeNotifier {

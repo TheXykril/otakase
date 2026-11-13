@@ -1,6 +1,6 @@
 # Home Assistant add-on for the Discord bot.
 name: Otakase Bot
-version: "1.32.0"
+version: "1.32.1"
 slug: otakase_bot
 description: Discord bot for the Otakase community server
 url: https://github.com/TheXykril/otakase
