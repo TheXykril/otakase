@@ -160,7 +160,7 @@ class PhonePlayerControls extends StatelessWidget {
                 children: [
                   TransportButton(
                     label: 'Rewind 10 seconds',
-                    icon: LucideIcons.rotateCcw,
+                    icon: LucideIcons.rewind,
                     onPressed: () => onSeekBy(-10),
                   ),
                   TransportButton(
@@ -172,7 +172,7 @@ class PhonePlayerControls extends StatelessWidget {
                   ),
                   TransportButton(
                     label: 'Forward 10 seconds',
-                    icon: LucideIcons.rotateCw,
+                    icon: LucideIcons.fastForward,
                     onPressed: () => onSeekBy(10),
                   ),
                 ],

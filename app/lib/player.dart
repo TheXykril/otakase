@@ -2803,95 +2803,172 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     flash.show(side < 0 ? '−10 s' : '+10 s');
   }
 
-  Widget nextCard(BuildContext context) => Align(
-    alignment: Alignment.centerRight,
-    child: Container(
-      key: const Key('player-next'),
-      // Sized to what it says, up to a readable width.
-      constraints: BoxConstraints(maxWidth: widget.isTV ? 440 : 360),
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      padding: EdgeInsets.all(widget.isTV ? 12 : 10),
-      decoration: BoxDecoration(
-        color: panel,
-        border: Border.all(color: line),
-        borderRadius: BorderRadius.circular(KageRadius.md),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (anime.cover.isNotEmpty) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(KageRadius.md),
-              child: widget.isTV
-                  ? CoverImage(anime.cover, width: 54, height: 81)
-                  : CoverImage(anime.cover, width: 40, height: 60),
-            ),
-            SizedBox(width: widget.isTV ? 16 : 12),
-          ],
-          Flexible(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isTitle
-                      ? 'Next · ${upNext?.subtitle ?? ''}'
-                      : 'Next · Episode ${episode + 1}',
-                  style: uiStyle(context, size: 15, weight: FontWeight.w600),
-                ),
-                SizedBox(height: widget.isTV ? 6 : 2),
-                Text(
-                  widget.services.store.flag('NextEpisodePrompt')
-                      ? 'Continue the story?'
-                      : 'Playing in $countdownSeconds seconds',
-                  style: uiStyle(
-                    context,
-                    size: 15,
-                    color: widget.isTV ? fg : muted,
+  void cancelNext() {
+    nextTimer?.cancel();
+    nextCancelled = true;
+    setState(() {
+      countdownSeconds = 0;
+      upNext = null;
+    });
+  }
+
+  /// Phones get one slim line: a mono kicker with the countdown, what plays
+  /// next, a small Play next and a close icon.
+  Widget phoneNextCard(BuildContext context) {
+    final prompt = widget.services.store.flag('NextEpisodePrompt');
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        key: const Key('player-next'),
+        constraints: const BoxConstraints(maxWidth: 300),
+        margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        decoration: BoxDecoration(
+          color: panel.withValues(alpha: .92),
+          border: Border.all(color: line),
+          borderRadius: BorderRadius.circular(KageRadius.md),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    prompt ? 'UP NEXT' : 'UP NEXT · ${countdownSeconds}S',
+                    style: mono.copyWith(
+                      fontSize: 11,
+                      letterSpacing: 1.2,
+                      color: accentText,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  minHeight: 2,
-                  value: countdownSeconds / 10,
-                  color: shu,
-                  backgroundColor: line,
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    AppButton(
-                      label: 'Play next',
-                      variant: ButtonVariant.primary,
-                      size: ButtonSize.sm,
-                      autofocus: isTitle,
-                      onPressed: () => next(),
-                      isTV: widget.isTV,
+                  const SizedBox(height: 2),
+                  Text(
+                    isTitle ? upNext?.subtitle ?? '' : 'Episode ${episode + 1}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: fgBright,
                     ),
-                    AppButton(
-                      label: 'Cancel',
-                      variant: ButtonVariant.text,
-                      size: ButtonSize.sm,
-                      onPressed: () {
-                        nextTimer?.cancel();
-                        nextCancelled = true;
-                        setState(() {
-                          countdownSeconds = 0;
-                          upNext = null;
-                        });
-                      },
-                      isTV: widget.isTV,
-                    ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            AppButton(
+              label: 'Play next',
+              variant: ButtonVariant.primary,
+              size: ButtonSize.sm,
+              autofocus: isTitle,
+              onPressed: () => next(),
+            ),
+            AppButton(
+              label: 'Cancel',
+              icon: LucideIcons.x,
+              iconOnly: true,
+              variant: ButtonVariant.text,
+              size: ButtonSize.sm,
+              onPressed: cancelNext,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget nextCard(BuildContext context) => !widget.isTV
+      ? phoneNextCard(context)
+      : Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            key: const Key('player-next'),
+            // Sized to what it says, up to a readable width.
+            constraints: BoxConstraints(maxWidth: widget.isTV ? 440 : 360),
+            margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            padding: EdgeInsets.all(widget.isTV ? 12 : 10),
+            decoration: BoxDecoration(
+              color: panel,
+              border: Border.all(color: line),
+              borderRadius: BorderRadius.circular(KageRadius.md),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (anime.cover.isNotEmpty) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(KageRadius.md),
+                    child: widget.isTV
+                        ? CoverImage(anime.cover, width: 54, height: 81)
+                        : CoverImage(anime.cover, width: 40, height: 60),
+                  ),
+                  SizedBox(width: widget.isTV ? 16 : 12),
+                ],
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isTitle
+                            ? 'Next · ${upNext?.subtitle ?? ''}'
+                            : 'Next · Episode ${episode + 1}',
+                        style: uiStyle(
+                          context,
+                          size: 15,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: widget.isTV ? 6 : 2),
+                      Text(
+                        widget.services.store.flag('NextEpisodePrompt')
+                            ? 'Continue the story?'
+                            : 'Playing in $countdownSeconds seconds',
+                        style: uiStyle(
+                          context,
+                          size: 15,
+                          color: widget.isTV ? fg : muted,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        minHeight: 2,
+                        value: countdownSeconds / 10,
+                        color: shu,
+                        backgroundColor: line,
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          AppButton(
+                            label: 'Play next',
+                            variant: ButtonVariant.primary,
+                            size: ButtonSize.sm,
+                            autofocus: isTitle,
+                            onPressed: () => next(),
+                            isTV: widget.isTV,
+                          ),
+                          AppButton(
+                            label: 'Cancel',
+                            variant: ButtonVariant.text,
+                            size: ButtonSize.sm,
+                            onPressed: cancelNext,
+                            isTV: widget.isTV,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    ),
-  );
+        );
 
   @override
   Widget build(BuildContext context) => PopScope(
