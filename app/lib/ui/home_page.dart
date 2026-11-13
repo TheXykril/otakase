@@ -121,7 +121,7 @@ class ResumeCard extends StatelessWidget {
         margin: EdgeInsets.symmetric(horizontal: isTV ? 0 : 20),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(KageRadius.panel),
-          border: isTV ? null : Border.all(color: const Color(0xff4a342a)),
+          border: isTV ? null : Border.all(color: resumeEdge),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(isTV ? 0 : KageRadius.panel),
@@ -546,9 +546,7 @@ class _HomePageState extends State<HomePage> {
   void focusEntry(ListEntry entry) {
     artTimer?.cancel();
     artTimer = Timer(
-      MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : const Duration(milliseconds: 180),
+      MediaQuery.disableAnimationsOf(context) ? Duration.zero : KageMotion.base,
       () {
         if (!mounted) return;
         if (entry.anime.airedEpisodes > 0 &&
@@ -570,9 +568,7 @@ class _HomePageState extends State<HomePage> {
   void focusWatch(WatchEntry entry) {
     artTimer?.cancel();
     artTimer = Timer(
-      MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : const Duration(milliseconds: 180),
+      MediaQuery.disableAnimationsOf(context) ? Duration.zero : KageMotion.base,
       () {
         if (mounted) setState(() => focused = entry);
       },
@@ -739,7 +735,7 @@ class _HomePageState extends State<HomePage> {
                     GestureDetector(
                       onTap: () => moveBanner(i - banner % picks.length),
                       child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
+                        duration: KageMotion.slow,
                         margin: const EdgeInsets.only(left: 8),
                         width: i == banner % picks.length ? 26 : 8,
                         height: 8,

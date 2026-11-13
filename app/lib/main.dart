@@ -346,7 +346,7 @@ class _SplashGateState extends State<SplashGate> {
 
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
-    duration: const Duration(milliseconds: 300),
+    duration: KageMotion.slow,
     child: done
         ? widget.child
         : Scaffold(
@@ -354,7 +354,7 @@ class _SplashGateState extends State<SplashGate> {
             body: Center(
               child: AnimatedOpacity(
                 opacity: visible ? 1 : 0,
-                duration: const Duration(milliseconds: 300),
+                duration: KageMotion.slow,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [

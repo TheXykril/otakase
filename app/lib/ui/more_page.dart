@@ -919,12 +919,12 @@ class _LoginDialogState extends State<_LoginDialog> {
           children: [
             if (widget.isTV)
               Container(
-                color: Colors.white,
+                color: qrPaper,
                 padding: const EdgeInsets.all(12),
                 child: QrImageView(
                   data: widget.url.toString(),
                   size: 260,
-                  backgroundColor: Colors.white,
+                  backgroundColor: qrPaper,
                 ),
               ),
             if (widget.isTV && widget.auth.loginCode != null) ...[

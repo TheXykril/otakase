@@ -35,4 +35,30 @@ void main() {
     }
     expect(found, isEmpty, reason: 'build themes with buildOtakaseTheme()');
   });
+
+  test('colours, durations and curves come from the tokens', () {
+    final colour = RegExp(r'\bColor\(0x');
+    final curve = RegExp(r'\bCurves\.');
+    // An animation length typed into a screen: `duration:`-style
+    // arguments, and the `: const Duration(...)` branch after
+    // MediaQuery.disableAnimationsOf.
+    final motion = RegExp(
+      r'(uration: |^\s*: )(const )?Duration\(milliseconds:',
+    );
+    final found = <String>[];
+    for (final file in Directory('lib').listSync(recursive: true)) {
+      if (file is! File || !file.path.endsWith('.dart')) continue;
+      if (file.path.endsWith('tokens.dart')) continue;
+      final lines = file.readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i];
+        if (colour.hasMatch(line) ||
+            curve.hasMatch(line) ||
+            motion.hasMatch(line)) {
+          found.add('${file.path}:${i + 1}: ${line.trim()}');
+        }
+      }
+    }
+    expect(found, isEmpty, reason: 'name it in tokens.dart');
+  });
 }

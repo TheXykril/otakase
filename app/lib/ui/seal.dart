@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'tokens.dart';
+
 class OtakaseSeal extends StatelessWidget {
   const OtakaseSeal({super.key, this.size = 34});
   final double size;
@@ -114,7 +116,7 @@ class _SealPainter extends CustomPainter {
         ..quadraticBezierTo(62.672, 87.496, 58.07, 87.496)
         ..lineTo(55.886, 87.496)
         ..close(),
-      Paint()..color = const Color(0xff582419),
+      Paint()..color = sealShade,
     );
     canvas.drawPath(
       Path()
@@ -223,7 +225,7 @@ class _SealPainter extends CustomPainter {
         ..quadraticBezierTo(59.672, 84.496, 55.07, 84.496)
         ..lineTo(52.886, 84.496)
         ..close(),
-      Paint()..color = const Color(0xffd2492f),
+      Paint()..color = shu,
     );
   }
 

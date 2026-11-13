@@ -525,10 +525,7 @@ class _DirectionDialogState extends State<_DirectionDialog>
   @override
   void initState() {
     super.initState();
-    shake = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 280),
-    );
+    shake = AnimationController(vsync: this, duration: KageMotion.slow);
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });

@@ -30,6 +30,54 @@ const hairline = Color(0xff2a2420);
 /// Soft drop shadow under floating plates.
 const scrim = Color(0x99000000);
 
+/// Seek bars: the part not played yet, the part already buffered, and
+/// the striped band under a skip span.
+const trackRest = Color(0xff5a5148),
+    trackBuffered = Color(0xffa09282),
+    skipBand = Color(0xff302923);
+
+/// Edge of the phone resume card.
+const resumeEdge = Color(0xff4a342a);
+
+/// The seal mark's shaded side.
+const sealShade = Color(0xff582419);
+
+/// The desktop header island, a step darker than [bgDeep].
+const islandFill = Color(0xff0b0a09);
+
+/// White behind QR codes, which scanners need.
+const qrPaper = Color(0xffffffff);
+
+/// Black shades over video and art, by strength.
+const shadeClear = Color(0x00000000),
+    shade40 = Color(0x66000000),
+    shade70 = Color(0xb3000000),
+    shade80 = Color(0xcc000000);
+
+/// The page background fading into art: [bg] at a given opacity.
+const bgClear = Color(0x000e0d0c),
+    bg20 = Color(0x330e0d0c),
+    bg25 = Color(0x400e0d0c),
+    bg30 = Color(0x500e0d0c),
+    bg60 = Color(0x990e0d0c),
+    bg85 = Color(0xd90e0d0c),
+    bg90 = Color(0xe60e0d0c);
+
+/// [bgDeep] and [panel] at a given opacity, for plates over video.
+const bgDeepClear = Color(0x00080707),
+    bgDeep80 = Color(0xcc080707),
+    bgDeep90 = Color(0xe6080707),
+    panel90 = Color(0xe6191614);
+
+/// Window buttons drawn the way each desktop draws its own.
+abstract final class WindowColors {
+  static const hover = Color(0x1affffff),
+      pressed = Color(0x33ffffff),
+      windowsClose = Color(0xffc42b1c),
+      kdeClose = Color(0xffda4453),
+      kdeIcon = Color(0xffeff0f1);
+}
+
 /// Corner radii: four steps and a circle, then the role each part of the
 /// app uses. Parts pick a role, never a number.
 abstract final class KageRadius {
@@ -88,6 +136,15 @@ abstract final class KageMotion {
       base = Duration(milliseconds: 200),
       slow = Duration(milliseconds: 320);
   static const enter = Curves.easeOutCubic, exit = Curves.easeInCubic;
+
+  /// Moving something already on screen, such as scrolling it into view.
+  static const move = Curves.ease;
+
+  /// Slow crossfades between big pictures, such as hero banners.
+  static const hero = Duration(milliseconds: 600);
+
+  /// One sweep of a loading skeleton.
+  static const shimmer = Duration(milliseconds: 1500);
 }
 
 /// Colour names that local variables tend to shadow (a `danger` flag).

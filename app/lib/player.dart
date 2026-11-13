@@ -2916,7 +2916,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               if (error.isNotEmpty)
                 Center(
                   child: ColoredBox(
-                    color: const Color(0xe6080707),
+                    color: bgDeep90,
                     child: EmptyState(
                       error: true,
                       message: error,

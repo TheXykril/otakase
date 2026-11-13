@@ -386,12 +386,12 @@ class CastPanel extends StatelessWidget {
               if (link.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 Container(
-                  color: Colors.white,
+                  color: qrPaper,
                   padding: const EdgeInsets.all(10),
                   child: QrImageView(
                     data: link,
                     size: 180,
-                    backgroundColor: Colors.white,
+                    backgroundColor: qrPaper,
                   ),
                 ),
                 const SizedBox(height: 12),

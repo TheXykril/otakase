@@ -505,12 +505,12 @@ class _PairDialogState extends State<PairDialog> {
                 ),
               if (p != null) ...[
                 Container(
-                  color: Colors.white,
+                  color: qrPaper,
                   padding: const EdgeInsets.all(12),
                   child: QrImageView(
                     data: p.url,
                     size: 240,
-                    backgroundColor: Colors.white,
+                    backgroundColor: qrPaper,
                   ),
                 ),
                 const SizedBox(height: 16),

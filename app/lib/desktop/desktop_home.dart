@@ -91,7 +91,7 @@ class _DesktopHeroState extends State<DesktopHero> {
             fit: StackFit.expand,
             children: [
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 600),
+                duration: KageMotion.hero,
                 child: KeyedSubtree(
                   key: ValueKey(a.key),
                   child: HeroArt(
@@ -188,7 +188,7 @@ class _DesktopHeroState extends State<DesktopHero> {
                               child: MouseRegion(
                                 cursor: SystemMouseCursors.click,
                                 child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 250),
+                                  duration: KageMotion.slow,
                                   margin: const EdgeInsets.only(left: 8),
                                   width: i == index ? 30 : 10,
                                   height: 10,
@@ -397,7 +397,7 @@ class _ContinueCardState extends State<_ContinueCard> {
                           gradient: LinearGradient(
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
-                            colors: [Color(0x00000000), Color(0xcc000000)],
+                            colors: [shadeClear, shade80],
                             stops: [.45, 1],
                           ),
                         ),
@@ -417,7 +417,7 @@ class _ContinueCardState extends State<_ContinueCard> {
                       ),
                       AnimatedOpacity(
                         opacity: hovered || widget.first ? 1 : 0,
-                        duration: const Duration(milliseconds: 180),
+                        duration: KageMotion.base,
                         child: Center(
                           child: Container(
                             width: 64,

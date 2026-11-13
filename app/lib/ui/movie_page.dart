@@ -169,7 +169,7 @@ class _OtakaseMovieState extends State<OtakaseMovie> {
                           child: AnimatedSwitcher(
                             duration: MediaQuery.disableAnimationsOf(context)
                                 ? Duration.zero
-                                : const Duration(milliseconds: 500),
+                                : KageMotion.hero,
                             child: Column(
                               key: ValueKey(chapter),
                               mainAxisSize: MainAxisSize.min,

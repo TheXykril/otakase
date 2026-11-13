@@ -519,16 +519,16 @@ class _FocusBoxState extends State<FocusBox> {
       if (!widget.lift || !isDesktop) return framed;
       final motion = MediaQuery.disableAnimationsOf(context)
           ? Duration.zero
-          : const Duration(milliseconds: 160);
+          : KageMotion.base;
       return AnimatedScale(
         duration: motion,
-        curve: Curves.easeOut,
+        curve: KageMotion.enter,
         scale: hovered ? 1.04 : 1,
         child: AnimatedContainer(
           duration: motion,
-          curve: Curves.easeOut,
+          curve: KageMotion.enter,
           foregroundDecoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: hovered ? .06 : 0),
+            color: fgBright.withValues(alpha: hovered ? .06 : 0),
             borderRadius: BorderRadius.circular(widget.radius),
           ),
           decoration: BoxDecoration(
@@ -548,8 +548,8 @@ class _FocusBoxState extends State<FocusBox> {
     return AnimatedContainer(
       duration: MediaQuery.disableAnimationsOf(context)
           ? Duration.zero
-          : const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
+          : KageMotion.base,
+      curve: KageMotion.enter,
       padding: EdgeInsets.all(widget.frameGap),
       // Controls show one focus ring: 2 px of bright text colour just
       // outside the control, following its corner. Artwork uses the split
@@ -621,7 +621,7 @@ Future<void> revealFocus(
   bool live() => stillFocused?.call() ?? true;
   final duration = MediaQuery.disableAnimationsOf(context)
       ? Duration.zero
-      : const Duration(milliseconds: 180);
+      : KageMotion.base;
   final page = _verticalScrollable(context);
   final box = context.findRenderObject();
   final viewport = page?.context.findRenderObject();
@@ -649,7 +649,7 @@ Future<void> revealFocus(
         await position.animateTo(
           target,
           duration: duration,
-          curve: Curves.ease,
+          curve: KageMotion.move,
         );
         // Another reveal took over the scroll.
         if ((position.pixels - target).abs() > .5) return;
@@ -1659,7 +1659,7 @@ class _SkeletonShimmerState extends State<SkeletonShimmer>
     with SingleTickerProviderStateMixin {
   late final controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1500),
+    duration: KageMotion.shimmer,
   );
   @override
   void didChangeDependencies() {
@@ -1841,7 +1841,7 @@ class CoverImage extends StatelessWidget {
         maxWidthDiskCache: pixels,
         // Smooth the tiny wash on its way up; sharp art keeps the default.
         filterQuality: wash ? FilterQuality.medium : FilterQuality.low,
-        fadeInDuration: const Duration(milliseconds: 180),
+        fadeInDuration: KageMotion.base,
         placeholder: (_, url) => SkeletonBlock(width: width, height: height),
         errorWidget: (_, url, error) => SizedBox(
           width: width,
@@ -1881,11 +1881,7 @@ class TVHomeHero extends StatelessWidget {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [
-                          Color(0xd90e0d0c),
-                          Color(0x400e0d0c),
-                          Color(0x000e0d0c),
-                        ],
+                        colors: [bg85, bg25, bgClear],
                         stops: [0, .38, .7],
                       ),
                     ),
@@ -1934,7 +1930,7 @@ class EpisodeArtFallback extends StatelessWidget {
               fontSize: height * .42,
               height: 1,
               color: fgBright.withValues(alpha: .92),
-              shadows: const [Shadow(color: Color(0x99000000), blurRadius: 12)],
+              shadows: const [Shadow(color: scrim, blurRadius: 12)],
             ),
           ),
         ),
@@ -2072,7 +2068,7 @@ class HeroArt extends StatelessWidget {
                       borderRadius: BorderRadius.circular(KageRadius.poster),
                       boxShadow: const [
                         BoxShadow(
-                          color: Color(0x99000000),
+                          color: scrim,
                           blurRadius: 30,
                           offset: Offset(0, 14),
                         ),
@@ -2094,7 +2090,7 @@ class HeroArt extends StatelessWidget {
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [bg, Color(0xd90e0d0c), Color(0x000e0d0c)],
+                colors: [bg, bg85, bgClear],
                 stops: [0, .38, 1],
               ),
             ),
@@ -2104,7 +2100,7 @@ class HeroArt extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0x000e0d0c), Color(0x500e0d0c), bg],
+                colors: [bgClear, bg30, bg],
                 stops: [0, .6, 1],
               ),
             ),
@@ -2320,10 +2316,10 @@ class OtakaseRoute<T> extends PageRouteBuilder<T> {
   OtakaseRoute({required WidgetBuilder builder})
     : super(
         pageBuilder: (context, a, b) => builder(context),
-        transitionDuration: const Duration(milliseconds: 300),
-        reverseTransitionDuration: const Duration(milliseconds: 250),
+        transitionDuration: KageMotion.slow,
+        reverseTransitionDuration: KageMotion.base,
         transitionsBuilder: (context, a, b, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: a, curve: Curves.easeOut),
+          opacity: CurvedAnimation(parent: a, curve: KageMotion.enter),
           child: child,
         ),
       );
@@ -3177,7 +3173,7 @@ Future<String?> _choosePanel(
   context: context,
   barrierDismissible: true,
   barrierLabel: title,
-  barrierColor: const Color(0x66000000),
+  barrierColor: shade40,
   transitionDuration: MediaQuery.disableAnimationsOf(context)
       ? Duration.zero
       : KageMotion.base,
