@@ -760,25 +760,6 @@ class _ShowPageState extends State<ShowPage> {
       .map((w) => w[0] + w.substring(1).toLowerCase())
       .join(' ');
 
-  Widget chip(String label, {IconData? icon}) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-    decoration: BoxDecoration(
-      color: bgDeep.withValues(alpha: .45),
-      border: Border.all(color: fgBright.withValues(alpha: .22)),
-      borderRadius: BorderRadius.circular(KageRadius.chip),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (icon != null) ...[
-          Icon(icon, size: 16, color: warn),
-          const SizedBox(width: 6),
-        ],
-        Text(label, style: uiStyle(context, size: 17)),
-      ],
-    ),
-  );
-
   Widget desktopHeader(int last, int position) {
     const height = 600.0;
     final cover = anime.coverLarge.isNotEmpty ? anime.coverLarge : anime.cover;
@@ -849,18 +830,15 @@ class _ShowPageState extends State<ShowPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 8,
-                        children: [
+                      MetaText(
+                        [
                           if (anime.score > 0)
-                            chip(
-                              anime.score.toStringAsFixed(1),
-                              icon: LucideIcons.star,
-                            ),
-                          for (final g in anime.genres.take(4)) chip(g),
-                          if (anime.studio.isNotEmpty) chip(anime.studio),
+                            '★ ${anime.score.toStringAsFixed(1)}',
+                          ...anime.genres.take(4),
+                          anime.studio,
                         ],
+                        size: 17,
+                        color: fg,
                       ),
                       if (anime.description.isNotEmpty) ...[
                         const SizedBox(height: 16),
@@ -881,28 +859,12 @@ class _ShowPageState extends State<ShowPage> {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           actions(last, position),
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: fgBright.withValues(alpha: .08),
-                              borderRadius: BorderRadius.circular(
-                                KageRadius.chip,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                for (final value in ['sub', 'dub'])
-                                  AppTab(
-                                    key: ValueKey('show-mode-$value'),
-                                    label: value == 'sub' ? 'Sub' : 'Dub',
-                                    selected: mode == value,
-                                    isTV: true,
-                                    onPressed: () =>
-                                        setState(() => mode = value),
-                                  ),
-                              ],
-                            ),
+                          AppSegmented<String>(
+                            isTV: true,
+                            keyOf: (value) => ValueKey('show-mode-$value'),
+                            options: const [('sub', 'Sub'), ('dub', 'Dub')],
+                            selected: mode,
+                            onChanged: (value) => setState(() => mode = value),
                           ),
                         ],
                       ),
@@ -1132,16 +1094,15 @@ class _ShowPageState extends State<ShowPage> {
             ),
             const SizedBox(width: 20),
             if (blocks > 1 && blocks <= 4) ...[
-              for (var b = 0; b < blocks; b++) ...[
-                AppTab(
-                  key: ValueKey('episode-range-$b'),
-                  label: rangeLabel(b, total),
-                  selected: b == block,
-                  isTV: true,
-                  onPressed: () => setState(() => range = b),
-                ),
-                const SizedBox(width: 10),
-              ],
+              AppSegmented<int>(
+                isTV: true,
+                keyOf: (b) => ValueKey('episode-range-$b'),
+                options: [
+                  for (var b = 0; b < blocks; b++) (b, rangeLabel(b, total)),
+                ],
+                selected: block,
+                onChanged: (b) => setState(() => range = b),
+              ),
               const Spacer(),
             ] else if (blocks > 4) ...[
               // Long shows get one menu of ranges instead of a wall of
@@ -1185,8 +1146,9 @@ class _ShowPageState extends State<ShowPage> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: fgBright.withValues(alpha: .08),
-                    borderRadius: BorderRadius.circular(KageRadius.chip),
+                    color: panelRaised,
+                    border: Border.all(color: line),
+                    borderRadius: BorderRadius.circular(KageRadius.button),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1466,14 +1428,16 @@ class _ShowPageState extends State<ShowPage> {
                                       const Expanded(
                                         child: SectionLabel('Episodes'),
                                       ),
-                                      for (final value in ['sub', 'dub'])
-                                        AppTab(
-                                          label: value == 'sub' ? 'Sub' : 'Dub',
-                                          selected: mode == value,
-                                          isTV: widget.isTV,
-                                          onPressed: () =>
-                                              setState(() => mode = value),
-                                        ),
+                                      AppSegmented<String>(
+                                        isTV: widget.isTV,
+                                        options: const [
+                                          ('sub', 'Sub'),
+                                          ('dub', 'Dub'),
+                                        ],
+                                        selected: mode,
+                                        onChanged: (value) =>
+                                            setState(() => mode = value),
+                                      ),
                                     ],
                                   ),
                                   Text(

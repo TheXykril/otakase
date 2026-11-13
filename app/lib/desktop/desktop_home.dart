@@ -82,11 +82,10 @@ class _DesktopHeroState extends State<DesktopHero> {
     final pick = widget.picks[index];
     final a = pick.anime;
     final height = (MediaQuery.sizeOf(context).height * .6).clamp(520.0, 720.0);
-    final chips = [
-      if (a.score > 0)
-        _Chip(icon: LucideIcons.star, label: a.score.toStringAsFixed(1)),
-      for (final g in a.genres.take(3)) _Chip(label: g),
-      if (a.studio.isNotEmpty) _Chip(label: a.studio),
+    final facts = [
+      if (a.score > 0) '★ ${a.score.toStringAsFixed(1)}',
+      ...a.genres.take(3),
+      a.studio,
     ];
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -147,10 +146,8 @@ class _DesktopHeroState extends State<DesktopHero> {
                               overflow: TextOverflow.ellipsis,
                               style: display.copyWith(fontSize: 60),
                             ),
-                            if (chips.isNotEmpty) ...[
-                              const SizedBox(height: 18),
-                              Wrap(spacing: 10, runSpacing: 8, children: chips),
-                            ],
+                            const SizedBox(height: 14),
+                            MetaText(facts, size: 17, color: fg),
                             if (a.description.isNotEmpty) ...[
                               const SizedBox(height: 18),
                               ConstrainedBox(
@@ -226,31 +223,6 @@ class _DesktopHeroState extends State<DesktopHero> {
       ),
     );
   }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({required this.label, this.icon});
-  final String label;
-  final IconData? icon;
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-    decoration: BoxDecoration(
-      color: bgDeep.withValues(alpha: .45),
-      border: Border.all(color: fgBright.withValues(alpha: .22)),
-      borderRadius: BorderRadius.circular(KageRadius.chip),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (icon != null) ...[
-          Icon(icon, size: 16, color: warn),
-          const SizedBox(width: 6),
-        ],
-        Text(label, style: uiStyle(context, size: 17, color: fg)),
-      ],
-    ),
-  );
 }
 
 /// Wide Continue watching cards that always fill the row: four across on a

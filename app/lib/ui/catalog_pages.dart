@@ -853,8 +853,6 @@ class _SchedulePageState extends State<SchedulePage> {
     final start = monday, end = start.add(const Duration(days: 6));
     final today = DateTime(now.year, now.month, now.day);
     String day(DateTime d) => '${months[d.month - 1]} ${d.day}';
-    Widget toggle(String label, bool on, VoidCallback onPressed) =>
-        AppTab(label: label, selected: on, isTV: true, onPressed: onPressed);
     Widget arrow(IconData icon, String tip, int step) => IconButton(
       tooltip: tip,
       onPressed: () {
@@ -899,16 +897,11 @@ class _SchedulePageState extends State<SchedulePage> {
               style: uiStyle(context, size: 17, color: muted),
             ),
             const Spacer(),
-            toggle(
-              'My list only',
-              mineOnly,
-              () => setState(() => mineOnly = true),
-            ),
-            const SizedBox(width: 10),
-            toggle(
-              'Everything',
-              !mineOnly,
-              () => setState(() => mineOnly = false),
+            AppSegmented<bool>(
+              isTV: true,
+              options: const [(true, 'My list only'), (false, 'Everything')],
+              selected: mineOnly,
+              onChanged: (value) => setState(() => mineOnly = value),
             ),
             const SizedBox(width: 16),
             arrow(LucideIcons.chevronLeft, 'Previous week', -1),
@@ -1072,22 +1065,19 @@ class _SchedulePageState extends State<SchedulePage> {
         const SizedBox(height: 20),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: Row(
-            children: List.generate(7, (i) {
-              final date = DateTime(monday.year, monday.month, monday.day + i);
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: AppTab(
-                  label: '${names[i]} ${date.day}',
-                  selected: date == selected,
-                  isTV: widget.isTV,
-                  onPressed: () {
-                    selected = date;
-                    unawaited(load());
-                  },
-                ),
-              );
-            }),
+          child: AppSegmented<DateTime>(
+            isTV: widget.isTV,
+            options: [
+              for (var i = 0; i < 7; i++)
+                if (DateTime(monday.year, monday.month, monday.day + i)
+                    case final date)
+                  (date, '${names[i]} ${date.day}'),
+            ],
+            selected: selected,
+            onChanged: (date) {
+              selected = date;
+              unawaited(load());
+            },
           ),
         ),
         const SizedBox(height: 20),
@@ -1571,7 +1561,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
     runSpacing: widget.isTV ? 12 : 8,
     children: [
       if (any)
-        FilterPill(
+        AppChip(
           label: anyLabel,
           selected: selected == null,
           isTV: widget.isTV,
@@ -1579,7 +1569,7 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
           onPressed: () => change(() => choose(null)),
         ),
       for (final (i, entry) in values.entries.indexed)
-        FilterPill(
+        AppChip(
           label: entry.value,
           selected: selected == entry.key,
           isTV: widget.isTV,
@@ -1812,55 +1802,4 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
       ),
     );
   }
-}
-
-/// One choice in the Search filter sheet: a quiet pill, outlined in the
-/// accent colour while chosen.
-class FilterPill extends StatelessWidget {
-  const FilterPill({
-    super.key,
-    required this.label,
-    required this.selected,
-    required this.onPressed,
-    this.isTV = false,
-    this.autofocus = false,
-  });
-  final String label;
-  final bool selected, isTV, autofocus;
-  final VoidCallback onPressed;
-  @override
-  Widget build(BuildContext context) => Semantics(
-    selected: selected,
-    child: FocusBox(
-      isTV: isTV,
-      autofocus: autofocus,
-      onPressed: onPressed,
-      radius: KageRadius.chip,
-      outsideFrame: true,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        padding: EdgeInsets.symmetric(horizontal: isTV ? 18 : 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected
-              ? shu.withValues(alpha: .12)
-              : fgBright.withValues(alpha: .08),
-          borderRadius: BorderRadius.circular(KageRadius.chip),
-          border: Border.all(
-            color: selected ? shu : Colors.transparent,
-            width: 1.5,
-          ),
-        ),
-        child: Text(
-          label,
-          style: uiStyle(
-            context,
-            size: isTV ? 17 : 14,
-            color: selected ? fgBright : fg,
-            weight: selected ? FontWeight.w600 : FontWeight.w400,
-          ),
-        ),
-      ),
-    ),
-  );
 }

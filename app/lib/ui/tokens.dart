@@ -20,6 +20,10 @@ const bg = Color(0xff0e0d0c),
     ok = Color(0xff9bb67a),
     warn = Color(0xffe3b45a),
     info = Color(0xff7fa2c4),
+    // Destructive actions and errors; warn stays for cautions.
+    danger = Color(
+      0xffe5604a,
+    ),
     // Soft drop shadow under floating plates.
     scrim = Color(
       0x99000000,
@@ -40,6 +44,9 @@ abstract final class KageRadius {
   static const chip = sm;
   static const toast = sm;
   static const input = sm;
+
+  /// Segment inside a segmented plate: its corner less the 2 px padding.
+  static const segment = input - 2;
 
   // Artwork. Never rounder than md.
   static const poster = md;

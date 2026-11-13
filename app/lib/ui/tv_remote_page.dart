@@ -243,14 +243,7 @@ class _TVRemotePageState extends State<TVRemotePage> {
       return Scaffold(
         appBar: AppBar(
           title: Text(widget.isTV ? 'Phone remote' : 'Control TV'),
-          leading: widget.isTV
-              ? IconButton(
-                  autofocus: true,
-                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                  icon: const BackButtonIcon(),
-                  onPressed: () => Navigator.maybePop(context),
-                )
-              : null,
+          leading: widget.isTV ? const AppBackButton(autofocus: true) : null,
           actions: [
             DeviceStatus(isTV: widget.isTV),
             const SizedBox(width: 16),

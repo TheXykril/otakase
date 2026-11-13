@@ -44,7 +44,7 @@ ThemeData buildOtakaseTheme({required bool isTV, bool traditional = false}) {
       outline: line,
       outlineVariant: line,
       onSurface: fg,
-      error: warn,
+      error: danger,
     ),
     scaffoldBackgroundColor: bg,
     canvasColor: bg,

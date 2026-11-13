@@ -178,7 +178,7 @@ void main() {
       expect(find.text('Private history'), findsNothing);
       expect(m.session!.store.history, isEmpty);
       expect(m.session!.store.text('AniListUsername'), '');
-      expect(find.byType(BackButton), findsNothing);
+      expect(find.byType(AppBackButton), findsNothing);
       expect(find.byType(FocusBox), findsWidgets);
       await tester.pumpWidget(const SizedBox());
       await m.close();
