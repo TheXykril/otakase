@@ -123,8 +123,25 @@ void main() {
     for (final tab in ['Home', 'Search', 'More']) {
       await tester.tap(find.byKey(ValueKey('nav-$tab')));
       await tester.pumpAndSettle();
-      final list = tester.widget<ListView>(find.byType(ListView).first);
-      expect((list.padding! as EdgeInsets).bottom, 64 + 16 + 34 + 24);
+      // Search is a sliver list (its results grid is lazy); the last
+      // sliver carries the bottom inset there.
+      final bottom = tab == 'Search'
+          ? (tester
+                        .widget<SliverPadding>(
+                          find
+                              .descendant(
+                                of: find.byType(CustomScrollView).first,
+                                matching: find.byType(SliverPadding),
+                              )
+                              .at(2),
+                        )
+                        .padding
+                    as EdgeInsets)
+                .bottom
+          : (tester.widget<ListView>(find.byType(ListView).first).padding!
+                    as EdgeInsets)
+                .bottom;
+      expect(bottom, 64 + 16 + 34 + 24);
     }
     await tester.scrollUntilVisible(
       find.byKey(const Key('more-Diagnostics')),

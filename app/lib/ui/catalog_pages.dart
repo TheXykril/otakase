@@ -359,8 +359,59 @@ class _SearchPageState extends State<SearchPage> {
     ),
   );
 
-  /// Poster cards in as many columns as fit. With [cap], only that many
-  /// show, rounded to whole rows (at least one).
+  /// Columns, card width and grid layout for poster cards across [width].
+  (int, double, SliverGridDelegate) gridFor(
+    BuildContext context,
+    double width,
+  ) {
+    final gap = isDesktop ? 26.0 : 12.0;
+    final columns =
+        (width /
+                (isDesktop
+                    ? 226
+                    : widget.isTV
+                    ? 180
+                    : (MediaQuery.textScalerOf(context).scale(1) > 1.2
+                          ? 150
+                          : 116)))
+            .floor()
+            .clamp(2, 9);
+    final card = (width - (columns - 1) * gap) / columns;
+    return (
+      columns,
+      card,
+      SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        crossAxisSpacing: gap,
+        mainAxisSpacing: isDesktop ? 26 : 14,
+        mainAxisExtent:
+            card * 1.5 + 108 * MediaQuery.textScalerOf(context).scale(1),
+      ),
+    );
+  }
+
+  Widget poster(
+    Anime anime,
+    double width,
+    String keyPrefix,
+    String? Function(Anime)? caption,
+  ) => PosterCard(
+    key: ValueKey('$keyPrefix-${anime.key}'),
+    anime: anime,
+    width: width,
+    isTV: widget.isTV,
+    caption: caption?.call(anime),
+    onOpen: () => widget.onOpen(anime),
+  );
+
+  /// Whole rows of [cap] cards (rounded up so a cap of 12 never hides a
+  /// 12th card), or all of [list] without a cap.
+  int capped(List<Anime> list, int columns, int? cap) => cap == null
+      ? list.length
+      : min(list.length, (cap + columns - 1) ~/ columns * columns);
+
+  /// Poster cards in as many columns as fit, inside a box. With [cap], only
+  /// that many show, rounded to whole rows (at least one).
   Widget posterGrid(
     List<Anime> list, {
     required String keyPrefix,
@@ -368,45 +419,51 @@ class _SearchPageState extends State<SearchPage> {
     String? Function(Anime)? caption,
   }) => LayoutBuilder(
     builder: (context, box) {
-      final gap = isDesktop ? 26.0 : 12.0;
-      final columns =
-          (box.maxWidth /
-                  (isDesktop
-                      ? 226
-                      : widget.isTV
-                      ? 180
-                      : (MediaQuery.textScalerOf(context).scale(1) > 1.2
-                            ? 150
-                            : 116)))
-              .floor()
-              .clamp(2, 9);
-      final width = (box.maxWidth - (columns - 1) * gap) / columns;
-      // Whole rows, rounded up so a cap of 12 never hides a 12th card.
-      final count = cap == null
-          ? list.length
-          : min(list.length, (cap + columns - 1) ~/ columns * columns);
+      final (columns, width, layout) = gridFor(context, box.maxWidth);
       return GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: count,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columns,
-          crossAxisSpacing: gap,
-          mainAxisSpacing: isDesktop ? 26 : 14,
-          mainAxisExtent:
-              width * 1.5 + 108 * MediaQuery.textScalerOf(context).scale(1),
-        ),
-        itemBuilder: (_, i) => PosterCard(
-          key: ValueKey('$keyPrefix-${list[i].key}'),
-          anime: list[i],
-          width: width,
-          isTV: widget.isTV,
-          caption: caption?.call(list[i]),
-          onOpen: () => widget.onOpen(list[i]),
-        ),
+        itemCount: capped(list, columns, cap),
+        gridDelegate: layout,
+        itemBuilder: (_, i) => poster(list[i], width, keyPrefix, caption),
       );
     },
   );
+
+  /// The same grid as a sliver, so only cards near the screen are built.
+  Widget posterSliver(
+    List<Anime> list, {
+    required String keyPrefix,
+    int? cap,
+  }) => SliverLayoutBuilder(
+    builder: (context, box) {
+      final (columns, width, layout) = gridFor(context, box.crossAxisExtent);
+      return SliverGrid.builder(
+        itemCount: capped(list, columns, cap),
+        gridDelegate: layout,
+        itemBuilder: (_, i) => poster(list[i], width, keyPrefix, null),
+      );
+    },
+  );
+
+  /// Whether the next anime page loads by itself near the end. TV keeps the
+  /// Load more button, since paging under the remote can trap focus.
+  bool get pagesOn =>
+      hasMore &&
+      !busy &&
+      error == null &&
+      (!widget.titles || animeOpen) &&
+      !(widget.isTV && !isDesktop);
+
+  bool nearEnd(ScrollNotification note) {
+    if (note.depth == 0 &&
+        note is ScrollUpdateNotification &&
+        note.metrics.extentAfter < 900 &&
+        pagesOn) {
+      unawaited(load(more: true));
+    }
+    return false;
+  }
 
   SearchFilters get filters => SearchFilters(
     format: format,
@@ -472,182 +529,226 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-    padding: EdgeInsets.fromLTRB(
-      widget.isTV ? 48 : 20,
-      isDesktop ? 16 : 20,
-      widget.isTV ? 48 : 20,
-      contentBottom(context),
-    ),
-    children: [
-      if (!isDesktop) ...[
-        const PageHeading('Search', '探'),
-        const SizedBox(height: 18),
-      ],
-      IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: RemoteTextInput(
-                isTV: widget.isTV,
-                focusNode: widget.fieldFocus,
-                onUp: widget.onNavigateUp,
-                onActivate: widget.isTV && !isDesktop ? editQuery : null,
-                onFocusChanged: (focused) {
-                  if (mounted && !focused && editing) {
-                    setState(() => editing = false);
-                  }
-                },
-                builder: (focus) => TextField(
-                  focusNode: focus,
-                  // Desktop has a keyboard, so the field is always editable.
-                  readOnly: widget.isTV && !isDesktop && !editing,
-                  onTap: widget.isTV && !isDesktop
-                      ? () => editQuery(focus)
-                      : null,
-                  key: const Key('catalog-search'),
-                  controller: query,
-                  decoration: InputDecoration(
-                    hintText: widget.titles
-                        ? 'Search anime, movies and shows'
-                        : 'Search anime',
-                    prefixIcon: const Icon(LucideIcons.search),
-                    suffixIcon: widget.isTV && voiceAvailable
-                        ? IconButton(
-                            tooltip: 'Voice search',
-                            icon: const Icon(LucideIcons.mic),
-                            onPressed: () async {
-                              final text = await widget.onVoice();
-                              if (text != null && mounted) {
-                                query.text = text;
-                                await load();
-                              }
-                            },
-                          )
-                        : null,
+  Widget build(BuildContext context) {
+    final side = widget.isTV ? 48.0 : 20.0;
+    return NotificationListener<ScrollNotification>(
+      onNotification: nearEnd,
+      child: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(side, isDesktop ? 16 : 20, side, 0),
+            sliver: SliverList.list(
+              children: [
+                if (!isDesktop) ...[
+                  const PageHeading('Search', '探'),
+                  const SizedBox(height: 18),
+                ],
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: RemoteTextInput(
+                          isTV: widget.isTV,
+                          focusNode: widget.fieldFocus,
+                          onUp: widget.onNavigateUp,
+                          onActivate: widget.isTV && !isDesktop
+                              ? editQuery
+                              : null,
+                          onFocusChanged: (focused) {
+                            if (mounted && !focused && editing) {
+                              setState(() => editing = false);
+                            }
+                          },
+                          // Rebuilt as the text changes, for the clear button.
+                          builder: (focus) => ListenableBuilder(
+                            listenable: query,
+                            builder: (context, _) => TextField(
+                              focusNode: focus,
+                              // Desktop has a keyboard, so the field is always editable.
+                              readOnly: widget.isTV && !isDesktop && !editing,
+                              onTap: widget.isTV && !isDesktop
+                                  ? () => editQuery(focus)
+                                  : null,
+                              key: const Key('catalog-search'),
+                              controller: query,
+                              decoration: InputDecoration(
+                                hintText: widget.titles
+                                    ? 'Search anime, movies and shows'
+                                    : 'Search anime',
+                                prefixIcon: const Icon(LucideIcons.search),
+                                suffixIcon:
+                                    query.text.isNotEmpty &&
+                                        !(widget.isTV && !isDesktop)
+                                    ? IconButton(
+                                        key: const Key('catalog-search-clear'),
+                                        tooltip: 'Clear search',
+                                        icon: const Icon(LucideIcons.x),
+                                        onPressed: () {
+                                          debounce?.cancel();
+                                          query.clear();
+                                          unawaited(load());
+                                          focus.requestFocus();
+                                        },
+                                      )
+                                    : widget.isTV && voiceAvailable
+                                    ? IconButton(
+                                        tooltip: 'Voice search',
+                                        icon: const Icon(LucideIcons.mic),
+                                        onPressed: () async {
+                                          final text = await widget.onVoice();
+                                          if (text != null && mounted) {
+                                            query.text = text;
+                                            await load();
+                                          }
+                                        },
+                                      )
+                                    : null,
+                              ),
+                              textInputAction: TextInputAction.search,
+                              onEditingComplete: widget.isTV ? () {} : null,
+                              onSubmitted: (_) {
+                                debounce?.cancel();
+                                unawaited(load());
+                                if (widget.isTV) {
+                                  setState(() => editing = false);
+                                  if (!focus.focusInDirection(
+                                    TraversalDirection.down,
+                                  )) {
+                                    focus.nextFocus();
+                                  }
+                                }
+                              },
+                              onChanged: (_) {
+                                debounce?.cancel();
+                                debounce = Timer(
+                                  const Duration(milliseconds: 450),
+                                  () => load(),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: widget.isTV ? 14 : 10),
+                      FilterButton(
+                        count: filters.count,
+                        isTV: widget.isTV,
+                        onPressed: openFilters,
+                      ),
+                    ],
                   ),
-                  textInputAction: TextInputAction.search,
-                  onEditingComplete: widget.isTV ? () {} : null,
-                  onSubmitted: (_) {
-                    debounce?.cancel();
-                    unawaited(load());
-                    if (widget.isTV) {
-                      setState(() => editing = false);
-                      if (!focus.focusInDirection(TraversalDirection.down)) {
-                        focus.nextFocus();
-                      }
-                    }
-                  },
-                  onChanged: (_) {
-                    debounce?.cancel();
-                    debounce = Timer(
-                      const Duration(milliseconds: 450),
-                      () => load(),
-                    );
-                  },
                 ),
-              ),
-            ),
-            SizedBox(width: widget.isTV ? 14 : 10),
-            FilterButton(
-              count: filters.count,
-              isTV: widget.isTV,
-              onPressed: openFilters,
-            ),
-          ],
-        ),
-      ),
-      if (isDesktop)
-        ActiveFilters(
-          filters: filters,
-          onChanged: (next) => unawaited(apply(next)),
-        ),
-      const SizedBox(height: 22),
-      // Always one slot, so the results below keep their place (and TV
-      // focus) when the heading comes and goes.
-      if (items.isNotEmpty && (browsing || titlesQuery.isNotEmpty))
-        Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: SectionLabel(browsing ? 'Trending anime' : 'Anime'),
-        )
-      else
-        const SizedBox.shrink(),
-      if (busy && items.isEmpty)
-        Semantics(
-          liveRegion: true,
-          label: 'Searching anime',
-          child: const SkeletonBlock(height: 180),
-        ),
-      if (error != null && items.isEmpty)
-        FailureView(
-          message: error!,
-          onRetry: () => load(more: retryMore),
-          isTV: widget.isTV,
-        ),
-      if (!busy &&
-          items.isEmpty &&
-          error == null &&
-          (titlesBusy || titleResults.isEmpty))
-        EmptyState(
-          message: query.text.trim().isEmpty
-              ? (filters.count == 0
-                    ? 'No anime to display right now.'
-                    : 'No anime are available for these filters.')
-              : 'No matching anime. Try another title or spelling.',
-          action: filters.count == 0
-              ? Text(
-                  'Change the search above to try again.',
-                  style: uiStyle(context, color: muted),
-                )
-              : AppButton(
-                  label: 'Clear filters',
-                  isTV: widget.isTV,
-                  onPressed: () => unawaited(apply(const SearchFilters())),
-                ),
-        ),
-      posterGrid(
-        items,
-        keyPrefix: 'search',
-        // Anime and films share the page; anime alone pages on.
-        cap: widget.titles && !animeOpen ? share : null,
-      ),
-      if (widget.titles &&
-          !animeOpen &&
-          (hasMore || items.length > share) &&
-          error == null)
-        moreButton('More anime', () => setState(() => animeOpen = true)),
-      if (busy && items.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Semantics(
-            liveRegion: true,
-            child: Text(
-              'Loading more anime…',
-              style: uiStyle(context, color: muted),
+                if (isDesktop)
+                  ActiveFilters(
+                    filters: filters,
+                    onChanged: (next) => unawaited(apply(next)),
+                  ),
+                const SizedBox(height: 22),
+                // Always one slot, so the results below keep their place (and TV
+                // focus) when the heading comes and goes.
+                if (items.isNotEmpty && (browsing || titlesQuery.isNotEmpty))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: SectionLabel(browsing ? 'Trending anime' : 'Anime'),
+                  )
+                else
+                  const SizedBox.shrink(),
+                if (busy && items.isEmpty)
+                  Semantics(
+                    liveRegion: true,
+                    label: 'Searching anime',
+                    child: const SkeletonBlock(height: 180),
+                  ),
+                if (error != null && items.isEmpty)
+                  FailureView(
+                    message: error!,
+                    onRetry: () => load(more: retryMore),
+                    isTV: widget.isTV,
+                  ),
+                if (!busy &&
+                    items.isEmpty &&
+                    error == null &&
+                    (titlesBusy || titleResults.isEmpty))
+                  EmptyState(
+                    message: query.text.trim().isEmpty
+                        ? (filters.count == 0
+                              ? 'No anime to display right now.'
+                              : 'No anime are available for these filters.')
+                        : 'No matching anime. Try another title or spelling.',
+                    action: filters.count == 0
+                        ? Text(
+                            'Change the search above to try again.',
+                            style: uiStyle(context, color: muted),
+                          )
+                        : AppButton(
+                            label: 'Clear filters',
+                            isTV: widget.isTV,
+                            onPressed: () =>
+                                unawaited(apply(const SearchFilters())),
+                          ),
+                  ),
+              ],
             ),
           ),
-        ),
-      if (error != null && items.isNotEmpty)
-        FailureView(
-          message:
-              'More results could not be loaded. Your results are still here.',
-          onRetry: () => load(more: retryMore),
-          isTV: widget.isTV,
-        ),
-      if (hasMore && error == null && (!widget.titles || animeOpen))
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: AppButton(
-            label: 'Load more',
-            disabledReason: busy ? 'More results are loading.' : null,
-            onPressed: busy ? null : () => unawaited(load(more: true)),
-            isTV: widget.isTV,
+          SliverPadding(
+            padding: EdgeInsets.symmetric(horizontal: side),
+            sliver: posterSliver(
+              items,
+              keyPrefix: 'search',
+              // Anime and films share the page; anime alone pages on.
+              cap: widget.titles && !animeOpen ? share : null,
+            ),
           ),
-        ),
-      ...titleSection(),
-    ],
-  );
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(side, 0, side, contentBottom(context)),
+            sliver: SliverList.list(
+              children: [
+                if (widget.titles &&
+                    !animeOpen &&
+                    (hasMore || items.length > share) &&
+                    error == null)
+                  moreButton(
+                    'More anime',
+                    () => setState(() => animeOpen = true),
+                  ),
+                if (busy && items.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        'Loading more anime…',
+                        style: uiStyle(context, color: muted),
+                      ),
+                    ),
+                  ),
+                if (error != null && items.isNotEmpty)
+                  FailureView(
+                    message: 'More results could not be loaded. Your results are still here.',
+                    onRetry: () => load(more: retryMore),
+                    isTV: widget.isTV,
+                  ),
+                if (hasMore && error == null && (!widget.titles || animeOpen))
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: AppButton(
+                      label: 'Load more',
+                      disabledReason: busy ? 'More results are loading.' : null,
+                      onPressed: busy
+                          ? null
+                          : () => unawaited(load(more: true)),
+                      isTV: widget.isTV,
+                    ),
+                  ),
+                ...titleSection(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class SchedulePage extends StatefulWidget {
@@ -1325,14 +1426,25 @@ Future<SearchFilters?> showSearchFilters(
       barrierDismissible: true,
       barrierLabel: 'Close filters',
       barrierColor: Colors.black54,
+      // A plate at the right edge, like the TV pickers, sized to its rows.
       pageBuilder: (context, _, _) => Align(
         alignment: Alignment.centerRight,
-        child: Material(
-          color: panel,
-          child: SizedBox(
-            width: 560,
-            height: double.infinity,
-            child: SafeArea(child: sheet),
+        child: Padding(
+          padding: const EdgeInsets.all(KageSpace.s6),
+          child: Material(
+            color: panel,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(KageRadius.sheet),
+              side: const BorderSide(color: line),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 520,
+                maxHeight: MediaQuery.sizeOf(context).height * .9,
+              ),
+              child: sheet,
+            ),
           ),
         ),
       ),
@@ -1537,70 +1649,39 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
     widget.onChanged?.call(current);
   }
 
-  Widget section(String title, Widget child) => Padding(
-    padding: const EdgeInsets.only(top: 20),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: uiStyle(context, weight: FontWeight.w600)),
-        const SizedBox(height: 10),
-        child,
-      ],
-    ),
-  );
-
-  Widget chips(
-    Map<String, String> values,
-    String? selected,
-    ValueChanged<String?> choose, {
-    bool any = false,
-    String anyLabel = 'Any',
-    bool autofocus = false,
-  }) => Wrap(
+  /// Genres are the one multi-value-looking group, so they stay chips;
+  /// choosing the selected genre again clears it.
+  Widget genreChips() => Wrap(
     spacing: widget.isTV ? 12 : 8,
     runSpacing: widget.isTV ? 12 : 8,
     children: [
-      if (any)
+      for (final g in widget.genres)
         AppChip(
-          label: anyLabel,
-          selected: selected == null,
+          label: g,
+          selected: genre == g,
           isTV: widget.isTV,
-          autofocus: autofocus,
-          onPressed: () => change(() => choose(null)),
-        ),
-      for (final (i, entry) in values.entries.indexed)
-        AppChip(
-          label: entry.value,
-          selected: selected == entry.key,
-          isTV: widget.isTV,
-          autofocus: autofocus && !any && i == 0,
-          // Choosing the selected value again clears it.
-          onPressed: () =>
-              change(() => choose(selected == entry.key ? null : entry.key)),
+          onPressed: () => change(() => genre = genre == g ? null : g),
         ),
     ],
   );
 
-  Widget picker(String label, VoidCallback onPressed) => FocusBox(
+  /// One single-choice filter: its name, the current value on the right,
+  /// and a picker with [any] first.
+  Widget valueRow(
+    String title,
+    Map<String, String> values,
+    String? selected,
+    String any,
+    ValueChanged<String?> choose, {
+    bool autofocus = false,
+  }) => AppRow(
+    key: ValueKey('filter-$title'),
     isTV: widget.isTV,
-    onPressed: onPressed,
-    radius: KageRadius.input,
-    outsideFrame: true,
-    child: Container(
-      constraints: BoxConstraints(minHeight: widget.isTV ? 52 : 48),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: fgBright.withValues(alpha: .06),
-        borderRadius: BorderRadius.circular(KageRadius.input),
-        border: Border.all(color: lineStrong),
-      ),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: uiStyle(context))),
-          const Icon(LucideIcons.chevronDown, size: 20),
-        ],
-      ),
-    ),
+    autofocus: autofocus,
+    title: title,
+    value: values[selected] ?? any,
+    divider: true,
+    onTap: () => unawaited(pick(title, values, selected, any, choose)),
   );
 
   Future<void> pick(
@@ -1628,178 +1709,153 @@ class _SearchFilterSheetState extends State<SearchFilterSheet> {
     final years = {
       for (var i = 0; i < 50; i++) '${now + 1 - i}': '${now + 1 - i}',
     };
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(
-        widget.isTV ? 32 : 20,
-        widget.isTV ? 28 : 0,
-        widget.isTV ? 32 : 20,
-        24,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    final side = widget.isTV ? 28.0 : 20.0;
+    final films = widget.films && !widget.titles;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(side, widget.isTV ? 24 : 0, 12, 8),
+          child: Row(
             children: [
               Expanded(
                 child: Text(
                   'Filters',
-                  style: uiStyle(context, size: 28, weight: FontWeight.w700),
+                  style: uiStyle(context, size: 24, weight: FontWeight.w700),
                 ),
               ),
-              TextButton(
+              AppButton(
                 key: const Key('filters-reset'),
+                label: 'Reset',
+                variant: ButtonVariant.text,
+                isTV: widget.isTV,
                 onPressed: () => change(() {
                   format = season = genre = status = sort = null;
                   language = age = length = null;
                   year = decade = minScore = null;
                 }),
-                child: Text(
-                  'Reset',
-                  style: uiStyle(context, color: shu, weight: FontWeight.w600),
-                ),
               ),
-              IconButton(
-                tooltip: 'Close',
-                icon: const Icon(LucideIcons.x),
+              AppButton(
+                label: 'Close',
+                icon: LucideIcons.x,
+                iconOnly: true,
+                variant: ButtonVariant.text,
+                isTV: widget.isTV,
                 onPressed: () => Navigator.pop(context),
               ),
             ],
           ),
-          section(
-            widget.titles ? 'Type' : 'Format',
-            chips(
-              widget.titles ? _titleFormats : _formats,
-              format,
-              (v) => format = v,
-              any: widget.titles,
-              autofocus: widget.isTV,
-            ),
-          ),
-          section(
-            'Sort',
-            chips(
-              {..._sorts, if (widget.films) ...titleOnlySorts},
-              sort,
-              (v) => sort = v,
-              any: true,
-              anyLabel: 'Best match',
-            ),
-          ),
-          if (!widget.titles)
-            section(
-              'Season',
-              chips(_seasons, season, (v) => season = v, any: true),
-            ),
-          section(
-            'Year',
-            picker(
-              year?.toString() ?? 'Any year',
-              () => pick('Year', years, year?.toString(), 'Any year', (v) {
-                year = int.tryParse(v ?? '');
-                // A year is narrower than a decade; keep one of them.
-                if (year != null) decade = null;
-              }),
-            ),
-          ),
-          section(
-            'Decade',
-            picker(
-              decade == null ? 'Any decade' : '${decade}s',
-              () => pick(
-                'Decade',
-                _decades(),
-                decade?.toString(),
-                'Any decade',
-                (v) {
-                  decade = int.tryParse(v ?? '');
-                  if (decade != null) year = null;
-                },
-              ),
-            ),
-          ),
-          section(
-            'Rating',
-            chips(
-              _scores,
-              minScore?.toString(),
-              (v) => minScore = int.tryParse(v ?? ''),
-              any: true,
-            ),
-          ),
-          if (widget.films) ...[
-            section(
-              widget.titles ? 'Language' : 'Language (movies & shows)',
-              picker(
-                titleLanguages[language] ?? 'Any language',
-                () => pick(
-                  'Language',
-                  titleLanguages,
-                  language,
-                  'Any language',
-                  (v) => language = v,
+        ),
+        Flexible(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.symmetric(horizontal: side - 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                valueRow(
+                  widget.titles ? 'Type' : 'Format',
+                  widget.titles ? _titleFormats : _formats,
+                  format,
+                  widget.titles ? 'Movies & series' : 'Any format',
+                  (v) => format = v,
+                  autofocus: widget.isTV,
                 ),
-              ),
-            ),
-            section(
-              widget.titles ? 'Age rating' : 'Age rating (movies & shows)',
-              chips(titleAges, age, (v) => age = v, any: true),
-            ),
-            section(
-              widget.titles ? 'Length' : 'Length (movies & shows)',
-              chips(titleLengths, length, (v) => length = v, any: true),
-            ),
-          ],
-          if (widget.genres.isNotEmpty)
-            section(
-              'Genres',
-              chips(
-                {for (final g in widget.genres) g: g},
-                genre,
-                (v) => genre = v,
-              ),
-            ),
-          section(
-            widget.titles ? 'Series status' : 'Status',
-            picker(
-              (widget.titles ? _titleStatuses : _statuses)[status] ??
-                  'Any status',
-              () => pick(
-                widget.titles ? 'Series status' : 'Status',
-                widget.titles ? _titleStatuses : _statuses,
-                status,
-                'Any status',
-                (v) => status = v,
-              ),
-            ),
-          ),
-          if (widget.onChanged == null) ...[
-            const SizedBox(height: 24),
-            FocusBox(
-              key: const Key('filters-apply'),
-              isTV: widget.isTV,
-              radius: KageRadius.button,
-              outsideFrame: true,
-              onPressed: () => Navigator.pop(context, current),
-              child: Container(
-                height: 52,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: shu,
-                  borderRadius: BorderRadius.circular(KageRadius.button),
+                valueRow(
+                  'Sort',
+                  {..._sorts, if (widget.films) ...titleOnlySorts},
+                  sort,
+                  'Best match',
+                  (v) => sort = v,
                 ),
-                child: Text(
-                  'Apply filters',
-                  style: uiStyle(
-                    context,
-                    color: bgDeep,
-                    weight: FontWeight.w700,
+                if (!widget.titles)
+                  valueRow(
+                    'Season',
+                    _seasons,
+                    season,
+                    'Any season',
+                    (v) => season = v,
                   ),
+                valueRow('Year', years, year?.toString(), 'Any year', (v) {
+                  year = int.tryParse(v ?? '');
+                  // A year is narrower than a decade; keep one of them.
+                  if (year != null) decade = null;
+                }),
+                valueRow(
+                  'Decade',
+                  _decades(),
+                  decade?.toString(),
+                  'Any decade',
+                  (v) {
+                    decade = int.tryParse(v ?? '');
+                    if (decade != null) year = null;
+                  },
                 ),
-              ),
+                valueRow(
+                  'Rating',
+                  _scores,
+                  minScore?.toString(),
+                  'Any rating',
+                  (v) => minScore = int.tryParse(v ?? ''),
+                ),
+                valueRow(
+                  widget.titles ? 'Series status' : 'Status',
+                  widget.titles ? _titleStatuses : _statuses,
+                  status,
+                  'Any status',
+                  (v) => status = v,
+                ),
+                if (widget.films) ...[
+                  valueRow(
+                    films ? 'Language (movies & shows)' : 'Language',
+                    titleLanguages,
+                    language,
+                    'Any language',
+                    (v) => language = v,
+                  ),
+                  valueRow(
+                    films ? 'Age rating (movies & shows)' : 'Age rating',
+                    titleAges,
+                    age,
+                    'Any age',
+                    (v) => age = v,
+                  ),
+                  valueRow(
+                    films ? 'Length (movies & shows)' : 'Length',
+                    titleLengths,
+                    length,
+                    'Any length',
+                    (v) => length = v,
+                  ),
+                ],
+                if (widget.genres.isNotEmpty) ...[
+                  GroupHeading(
+                    'Genres',
+                    padding: const EdgeInsets.fromLTRB(8, 20, 8, 12),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: genreChips(),
+                  ),
+                ],
+                const SizedBox(height: 16),
+              ],
             ),
-          ],
-        ],
-      ),
+          ),
+        ),
+        // TV applies each choice at once and needs no Apply button.
+        if (widget.onChanged == null)
+          Padding(
+            padding: EdgeInsets.fromLTRB(side, 8, side, 20),
+            child: AppButton(
+              key: const Key('filters-apply'),
+              label: 'Apply filters',
+              variant: ButtonVariant.primary,
+              isTV: widget.isTV,
+              onPressed: () => Navigator.pop(context, current),
+            ),
+          ),
+      ],
     );
   }
 }

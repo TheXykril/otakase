@@ -1301,11 +1301,10 @@ void main() {
       // Film choices, not the anime ones.
       expect(find.text('Type'), findsOneWidget);
       expect(find.text('Season'), findsNothing);
-      await tester.tap(find.text('Series'));
+      await chooseFilter(tester, 'Type', 'Series');
       await tester.ensureVisible(find.text('Crime'));
       await tester.tap(find.text('Crime'));
-      await tester.ensureVisible(find.text('Top rated'));
-      await tester.tap(find.text('Top rated'));
+      await chooseFilter(tester, 'Sort', 'Top rated');
       await tester.ensureVisible(find.byKey(const Key('filters-apply')));
       await tester.tap(find.byKey(const Key('filters-apply')));
       await tester.pumpAndSettle();
@@ -1326,14 +1325,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('search-filters')));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Box office'));
-      await tester.tap(find.text('Box office'));
-      await tester.ensureVisible(find.text('Kids'));
-      await tester.tap(find.text('Kids'));
-      await tester.ensureVisible(find.text('Short'));
-      await tester.tap(find.text('Short'));
-      await tester.ensureVisible(find.text('7+'));
-      await tester.tap(find.text('7+'));
+      await chooseFilter(tester, 'Sort', 'Box office');
+      await chooseFilter(tester, 'Age rating', 'Kids');
+      await chooseFilter(tester, 'Length', 'Short');
+      await chooseFilter(tester, 'Rating', '7+');
       seen.clear();
       await tester.ensureVisible(find.byKey(const Key('filters-apply')));
       await tester.tap(find.byKey(const Key('filters-apply')));
@@ -1370,4 +1365,19 @@ void main() {
       shellContent = ContentMode.anime;
     });
   });
+}
+
+/// Opens the filter row [title] and picks [option] from its menu.
+Future<void> chooseFilter(
+  WidgetTester tester,
+  String title,
+  String option,
+) async {
+  final row = find.byKey(ValueKey('filter-$title'));
+  await tester.ensureVisible(row);
+  await tester.pumpAndSettle();
+  await tester.tap(row);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(option).last);
+  await tester.pumpAndSettle();
 }

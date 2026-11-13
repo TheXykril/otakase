@@ -171,9 +171,8 @@ void main() {
     expect(find.text('Season'), findsNothing);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Movie'));
-    await tester.tap(find.text('Fall'));
-    await tester.pumpAndSettle();
+    await chooseFilter(tester, 'Format', 'Movie');
+    await chooseFilter(tester, 'Season', 'Fall');
     await tester.ensureVisible(find.byKey(const Key('filters-apply')));
     await tester.tap(find.byKey(const Key('filters-apply')));
     await tester.pumpAndSettle();
@@ -201,4 +200,19 @@ void main() {
     expect(find.byKey(const Key('search-filters-count')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
+}
+
+/// Opens the filter row [title] and picks [option] from its menu.
+Future<void> chooseFilter(
+  WidgetTester tester,
+  String title,
+  String option,
+) async {
+  final row = find.byKey(ValueKey('filter-$title'));
+  await tester.ensureVisible(row);
+  await tester.pumpAndSettle();
+  await tester.tap(row);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(option).last);
+  await tester.pumpAndSettle();
 }
