@@ -281,33 +281,8 @@ class _OtakaseAppState extends State<OtakaseApp> {
     desktopLauncher.value = false;
   }
 
-  void modeChanged(FocusHighlightMode _) {
-    if (mounted) setState(() {});
-  }
-
-  void desktopInputChanged() {
-    if (mounted && isDesktop) setState(() {});
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    FocusManager.instance.addHighlightModeListener(modeChanged);
-    DesktopInput.keyboardMode.addListener(desktopInputChanged);
-  }
-
-  @override
-  void dispose() {
-    FocusManager.instance.removeHighlightModeListener(modeChanged);
-    DesktopInput.keyboardMode.removeListener(desktopInputChanged);
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final traditional = isDesktop
-        ? DesktopInput.keyboard
-        : FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
     return AppLayout(
       isTV: widget.isTV,
       child: MaterialApp(
@@ -319,10 +294,12 @@ class _OtakaseAppState extends State<OtakaseApp> {
             ? child!
             : DesktopFrame(
                 child: widget.isTV
-                    ? TVViewport(child: child!)
+                    ? TVViewport(child: desktopFocusTheme(child!))
                     : CutoutInset(child: child!),
               ),
-        theme: buildOtakaseTheme(isTV: widget.isTV, traditional: traditional),
+        // Built once: switching between touch, mouse and keys no longer
+        // rebuilds the whole app.
+        theme: buildOtakaseTheme(isTV: widget.isTV),
         home: widget.playback != null
             ? LauncherPlayerWindow(
                 request: widget.playback!,
@@ -396,3 +373,19 @@ class _SplashGateState extends State<SplashGate> {
           ),
   );
 }
+
+/// A mouse click must not leave a focus tint behind on desktop, so the ink
+/// focus colour follows the keyboard there. Phone and TV ink shows focus
+/// only in remote mode anyway.
+Widget desktopFocusTheme(Widget child) => !isDesktop
+    ? child
+    : ListenableBuilder(
+        listenable: FocusRings.instance,
+        builder: (context, child) => Theme(
+          data: Theme.of(
+            context,
+          ).copyWith(focusColor: FocusRings.show ? line : Colors.transparent),
+          child: child!,
+        ),
+        child: child,
+      );
