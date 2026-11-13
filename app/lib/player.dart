@@ -38,6 +38,7 @@ import 'ui/playback_report.dart';
 import 'ui/watch_party_page.dart';
 import 'ui/mpv.dart';
 import 'host.dart';
+import 'player/cast.dart';
 import 'player/progress.dart';
 import 'player/skips.dart';
 
@@ -105,7 +106,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   /// whether Trakt was told it stopped, so later events do not put it back
   /// in Trakt's paused list.
   bool started = false;
-  bool castPlaying = false;
 
   /// Where the title's copy started; a spot saved from playing counts as
   /// watched up to it.
@@ -201,14 +201,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Duration get position => positionValue.value;
   set position(Duration value) => positionValue.value = value;
   Duration playbackPosition = Duration.zero;
-  late final CastClient caster = CastClient(widget.services.core);
 
-  /// The device the episode plays on instead of this screen, or null.
-  CastDevice? castDevice;
-  CastStatus? castStatus;
-  Timer? castTimer;
-  int castEnded = -1;
-  bool castPolling = false;
+  /// The device the episode plays on instead of this screen.
+  late final cast = PlayerCast(widget.services.core);
+  CastDevice? get castDevice => cast.device;
+  CastStatus? get castStatus => cast.status;
 
   /// The external subtitle track last picked, which a cast takes along.
   Json? externalTrack;
@@ -216,9 +213,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   int? selectingTracks;
   bool skipEpisodeSubtitles = false;
   ({String provider, int copy})? unsubtitledCopy;
-  bool get casting => castDevice != null;
-  bool get isPlaying =>
-      casting ? castStatus?.paused != true : player.state.playing;
+  bool get casting => cast.active;
+  bool get isPlaying => casting ? !cast.paused : player.state.playing;
   bool get canNext => isTitle
       ? upNext != null || request!.next != null
       : episodes.isNotEmpty
@@ -351,7 +347,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         ]),
       );
     }
-    castDevice = widget.castTo;
+    if (widget.castTo case final CastDevice to) cast.begin(to);
     unawaited(
       open(
         resumeFrom: widget.startAt > 0
@@ -1445,7 +1441,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Future<void> castControl(String action, [double value = 0]) async {
     try {
-      await caster.control(action, value);
+      await cast.control(action, value);
       await pollCast();
     } catch (_) {
       if (mounted) {
@@ -1471,7 +1467,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       here: false,
       // Titles a TV cannot find stay on cast.
       otakase: !widget.isTV && (!isTitle || request!.remote != null),
-      caster: caster,
+      caster: cast.client,
     );
     panelOpen = false;
     if (target == null || !mounted) return;
@@ -1527,10 +1523,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Future<void> startCast(CastDevice device) async {
     final at = position.inSeconds.toDouble();
     await save();
-    castDevice = device;
-    castStatus = null;
-    castEnded = -1;
-    castPlaying = false;
+    cast.begin(device);
     playRequested = false;
     stall.cancel();
     await player.pause();
@@ -1541,65 +1534,24 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   /// Keep an explicit external choice, otherwise prefer dialogue for casting.
-  String castSubtitle(ResolvedStream stream) {
-    if (skipEpisodeSubtitles) return '';
-    if (externalTrack case final Json track) {
-      // A file on this device reaches the cast device only beside a
-      // download, which the core serves from here.
-      final url = track['url'] as String? ?? '';
-      return !isTitle || url.startsWith('http') || castsFile ? url : '';
-    }
-    if ((source?.mode ?? widget.mode) == 'dub') return '';
-    // A title's embedded track picked here, or a dub, sends no file.
-    if (isTitle && (subSelected || dubbedTitle)) return '';
-    final files = isTitle && !castsFile
-        ? stream.subtitles
-              .where((t) => (t['url'] as String? ?? '').startsWith('http'))
-              .toList()
-        : stream.subtitles;
-    final preferences = widget.services.store
-        .text('SubsLanguage')
-        .toLowerCase()
-        .split(',')
-        .map((v) => v.trim())
-        .where((v) => v.isNotEmpty);
-    for (final preferred in preferences) {
-      if (preferred == 'none' || preferred == 'off') return '';
-      for (final t in dialogueSubtitleOrder(
-        files,
-        language: (t) => t['language'] as String?,
-        label: (t) => t['label'] as String?,
-      )) {
-        if (languageMatches(
-          t['language'] as String?,
-          t['label'] as String?,
-          preferred,
-        )) {
-          return t['url'] as String? ?? '';
-        }
-      }
-    }
-    if (isTitle) return '';
-    if (files.isNotEmpty) {
-      return dialogueSubtitleOrder(
-                files,
-                language: (t) => t['language'] as String?,
-                label: (t) => t['label'] as String?,
-              ).first['url']
-              as String? ??
-          '';
-    }
-    return stream.subtitle.startsWith('http') ? stream.subtitle : '';
-  }
+  String castSubtitle(ResolvedStream stream) => castSubtitleFor(
+    stream,
+    isTitle: isTitle,
+    mode: source?.mode ?? widget.mode,
+    languages: widget.services.store.text('SubsLanguage'),
+    externalTrack: externalTrack,
+    skipEpisodeSubtitles: skipEpisodeSubtitles,
+    castsFile: castsFile,
+    subSelected: subSelected,
+    dubbedTitle: dubbedTitle,
+  );
 
   /// Sends the current copy of the episode to the cast device.
   Future<void> castCurrent({double start = 0}) async {
-    final device = castDevice;
-    if (device == null || source == null) return;
+    if (!casting || source == null) return;
     final stream = source!.streams[copy];
     try {
-      await caster.start(
-        device: device,
+      await cast.send(
         stream: stream,
         title: isTitle
             ? [
@@ -1610,28 +1562,22 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         subtitle: castSubtitle(stream),
         start: start,
         duration: duration.inMilliseconds / 1000,
+        poll: () => unawaited(pollCast()),
       );
     } on CoreFailure catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(placeNote(context, SnackBar(content: Text(e.message))));
-      castDevice = null;
+      cast.device = null;
       setState(() {});
-      return;
     }
-    castTimer?.cancel();
-    castTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => unawaited(pollCast()),
-    );
   }
 
   Future<void> pollCast() async {
-    if (!casting || castPolling || !mounted) return;
-    castPolling = true;
+    if (!casting || !mounted) return;
     try {
-      final s = await caster.status();
-      if (!mounted || !casting) return;
+      final s = await cast.read();
+      if (s == null || !mounted || !casting) return;
       if (!s.active) {
         // Stopped from the browser page.
         await stopCast(remote: true);
@@ -1639,7 +1585,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
       final hadDuration = duration > Duration.zero;
       setState(() {
-        castStatus = s;
         if (s.duration > 0) {
           duration = Duration(milliseconds: (s.duration * 1000).round());
         }
@@ -1651,28 +1596,25 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (s.state == 'playing' || s.state == 'paused') {
         tick(Duration(milliseconds: (s.position * 1000).round()));
         final playing = s.state == 'playing';
-        if (isTitle && playing != castPlaying && started) {
+        if (isTitle && playing != cast.playing && started) {
           scrobble(playing ? 'start' : 'pause');
           showPresence();
         }
-        castPlaying = playing;
+        cast.playing = playing;
       }
-      if (s.state == 'ended' && castEnded != s.load) {
-        castEnded = s.load;
+      if (cast.endedNow(s)) {
         final at = Duration(milliseconds: (s.position * 1000).round());
         if (at > Duration.zero) playbackPosition = at;
         playbackEnded();
       }
     } catch (_) {
       // A missed poll is retried in a second.
-    } finally {
-      castPolling = false;
     }
   }
 
   /// Opens this computer's firewall and starts the cast again where it was.
   Future<void> allowCast() async {
-    final opened = await caster.allow();
+    final opened = await cast.allow();
     if (!mounted || !casting) return;
     if (!opened) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1689,17 +1631,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   /// Ends the cast. Unless the screen is being left, the episode carries on
   /// here from where the device was.
   Future<void> stopCast({bool resumeHere = true, bool remote = false}) async {
-    castTimer?.cancel();
-    castTimer = null;
-    if (!remote) {
-      try {
-        await caster.control('stop');
-      } catch (_) {
-        /* The device may already be gone. */
-      }
-    }
-    castDevice = null;
-    castStatus = null;
+    await cast.stop(remote: remote);
     if (!resumeHere || !mounted) return;
     await save();
     savedResume = position.inSeconds;
@@ -2510,8 +2442,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     stall.cancel();
     nextTimer?.cancel();
     loadingTimer?.cancel();
-    castTimer?.cancel();
-    if (casting) unawaited(caster.control('stop').catchError((_) {}));
+    cast.dispose();
     if (!profileStopped) {
       final close = request?.onClose;
       if (!busy) scrobble('pause');
