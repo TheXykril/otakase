@@ -86,6 +86,19 @@
 
 ### Fixed
 
+- **Casting from the phone no longer stutters.** The phone stays awake and
+  on Wi-Fi while it casts (with a notification), and the stream to DLNA TVs
+  reads a few pieces ahead, so the TV no longer keeps stopping as if it
+  were buffering.
+- **Cast errors clear themselves.** A TV that stops answering for a moment
+  no longer leaves a red error on the cast screen for the rest of the
+  episode once it answers again.
+- **A cast the TV refuses plays on the phone instead.** Before, the screen
+  stayed empty.
+- **Phone remote for films.** Playing a film on an older Otakase TV now says
+  to update the TV instead of asking for an episode, the remote shows
+  "Starting on" while the TV opens it, and films no longer show an episode
+  number or an Episodes button.
 - **A failed video can always be left.** The player's error screen has a
   Back button, so a computer no longer needs Esc to get out.
 - **Clearer reason when a movie won't play.** It now says whether no

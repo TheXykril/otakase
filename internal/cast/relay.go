@@ -731,21 +731,62 @@ func (r *Relay) serveProgressive(w http.ResponseWriter, req *http.Request, src *
 	from, _ := strconv.ParseFloat(req.URL.Query().Get("from"), 64)
 	next, _ := media.from(from)
 	flusher, _ := w.(http.Flusher)
+	// Segments are fetched a few ahead of the one being written, so the
+	// device's buffer is not left to drain while each next one is
+	// requested from the source.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ready := make(chan progressivePiece, progressiveAhead)
+	go r.fetchProgressive(ctx, src, media, next, ready)
+	for piece := range ready {
+		if piece.err != nil {
+			if ctx.Err() == nil {
+				Log(fmt.Sprintf("cast: a segment failed: %v", piece.err))
+			}
+			return
+		}
+		if _, err := w.Write(piece.body); err != nil {
+			return
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+}
+
+// progressiveAhead is how many segments a progressive stream holds ready
+// beyond the one being written.
+const progressiveAhead = 3
+
+// progressivePiece is one segment ready to write, or why it could not be.
+type progressivePiece struct {
+	body []byte
+	err  error
+}
+
+// fetchProgressive reads the segments of media from next in order into
+// ready, following a playlist still being written, and closes ready when
+// the stream is done, failed or no longer wanted.
+func (r *Relay) fetchProgressive(ctx context.Context, src *relaySource, media *mediaPlaylist, next int, ready chan<- progressivePiece) {
+	defer close(ready)
 	keys := map[string][]byte{}
 	sent := int64(-1)
+	put := func(p progressivePiece) bool {
+		select {
+		case ready <- p:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}
 	for {
 		for _, segment := range media.segments[next:] {
 			if segment.sequence <= sent {
 				continue
 			}
-			if err := r.sendSegment(ctx, w, src, segment, keys); err != nil {
-				if ctx.Err() == nil {
-					Log(fmt.Sprintf("cast: a segment failed: %v", err))
-				}
+			body, err := r.segmentBytes(ctx, src, segment, keys)
+			if !put(progressivePiece{body: body, err: err}) || err != nil {
 				return
-			}
-			if flusher != nil {
-				flusher.Flush()
 			}
 			sent = segment.sequence
 		}
@@ -767,53 +808,46 @@ func (r *Relay) serveProgressive(w http.ResponseWriter, req *http.Request, src *
 	}
 }
 
-func (r *Relay) sendSegment(ctx context.Context, w io.Writer, src *relaySource, segment mediaSegment, keys map[string][]byte) error {
+// segmentBytes reads one segment whole, decrypted where it is locked, from
+// the start of its transport stream.
+func (r *Relay) segmentBytes(ctx context.Context, src *relaySource, segment mediaSegment, keys map[string][]byte) ([]byte, error) {
 	resp, err := r.fetch(ctx, src, segment.url, "")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	if segment.key == nil {
-		body := bufio.NewReaderSize(resp.Body, 64<<10)
-		head, _ := body.Peek(32 << 10)
-		if skip, ok := transportStreamStart(head); ok {
-			_, _ = body.Discard(skip)
-		}
-		_, err = io.Copy(w, body)
-		return err
-	}
-	if segment.key.method != "AES-128" {
-		return fmt.Errorf("cast: segments locked with %s cannot be relayed", segment.key.method)
-	}
-	key, ok := keys[segment.key.url]
-	if !ok {
-		keyResp, err := r.fetch(ctx, src, segment.key.url, "")
-		if err != nil {
-			return err
-		}
-		key, err = io.ReadAll(io.LimitReader(keyResp.Body, 64))
-		keyResp.Body.Close()
-		if err != nil {
-			return err
-		}
-		if len(key) != 16 {
-			return errors.New("cast: the segment key is not 16 bytes")
-		}
-		keys[segment.key.url] = key
-	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 256<<20))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	plain, err := decryptSegment(body, key, segment.key.iv, segment.sequence)
-	if err != nil {
-		return err
+	if segment.key != nil {
+		if segment.key.method != "AES-128" {
+			return nil, fmt.Errorf("cast: segments locked with %s cannot be relayed", segment.key.method)
+		}
+		key, ok := keys[segment.key.url]
+		if !ok {
+			keyResp, err := r.fetch(ctx, src, segment.key.url, "")
+			if err != nil {
+				return nil, err
+			}
+			key, err = io.ReadAll(io.LimitReader(keyResp.Body, 64))
+			keyResp.Body.Close()
+			if err != nil {
+				return nil, err
+			}
+			if len(key) != 16 {
+				return nil, errors.New("cast: the segment key is not 16 bytes")
+			}
+			keys[segment.key.url] = key
+		}
+		if body, err = decryptSegment(body, key, segment.key.iv, segment.sequence); err != nil {
+			return nil, err
+		}
 	}
-	if skip, ok := transportStreamStart(plain[:min(len(plain), 32<<10)]); ok {
-		plain = plain[skip:]
+	if skip, ok := transportStreamStart(body[:min(len(body), 32<<10)]); ok {
+		body = body[skip:]
 	}
-	_, err = w.Write(plain)
-	return err
+	return body, nil
 }
 
 // decryptSegment undoes HLS AES-128: CBC with PKCS#7 padding, and the media

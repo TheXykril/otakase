@@ -358,7 +358,12 @@ class _ShowPageState extends State<ShowPage> {
         await Navigator.push(
           context,
           OtakaseRoute<void>(
-            builder: (_) => RemoteNowPlaying(services: widget.services),
+            builder: (_) => RemoteNowPlaying(
+              services: widget.services,
+              starting: anime.airedEpisodes == 1
+                  ? anime.title
+                  : '${anime.title} · Episode $ep',
+            ),
           ),
         );
     }
