@@ -260,12 +260,15 @@ class _ReportPageState extends State<ReportPage> {
           style: uiStyle(context, color: muted),
         ),
         const SizedBox(height: 12),
-        AppButton(
-          label: 'Open the Discord',
-          isTV: widget.isTV,
-          autofocus: true,
-          onPressed: () =>
-              widget.services.auth.launch(Uri.parse(discordInviteUrl)),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AppButton(
+            label: 'Open the Discord',
+            isTV: widget.isTV,
+            autofocus: true,
+            onPressed: () =>
+                widget.services.auth.launch(Uri.parse(discordInviteUrl)),
+          ),
         ),
       ],
       RemoteTextInput(

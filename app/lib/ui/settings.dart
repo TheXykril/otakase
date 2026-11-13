@@ -760,21 +760,25 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
       builder: (context, _) => ListView(
         padding: EdgeInsets.fromLTRB(24, 16, 24, contentBottom(context)),
         children: [
-          const PageHeading('Diagnostics', '設'),
+          // The bar already says Diagnostics; the page starts with what it
+          // does.
           Text(
             'Playback chooses a source automatically and remembers what worked for each show.',
             style: uiStyle(context, color: muted),
           ),
           const SizedBox(height: 24),
-          AppButton(
-            label: 'HLS / ASS probe',
-            onPressed: () => Navigator.push(
-              context,
-              OtakaseRoute<void>(
-                builder: (_) => const DiagnosticsPage(probe: true),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton(
+              label: 'HLS / ASS probe',
+              onPressed: () => Navigator.push(
+                context,
+                OtakaseRoute<void>(
+                  builder: (_) => const DiagnosticsPage(probe: true),
+                ),
               ),
+              isTV: widget.isTV,
             ),
-            isTV: widget.isTV,
           ),
           const SizedBox(height: 32),
           const SectionLabel('Sources'),
@@ -827,10 +831,13 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
                 ),
               ),
           const SizedBox(height: 24),
-          AppButton(
-            label: checking ? 'Checking' : 'Check all',
-            onPressed: checking ? null : check,
-            isTV: widget.isTV,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppButton(
+              label: checking ? 'Checking' : 'Check all',
+              onPressed: checking ? null : check,
+              isTV: widget.isTV,
+            ),
           ),
         ],
       ),

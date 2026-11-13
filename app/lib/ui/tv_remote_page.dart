@@ -360,18 +360,25 @@ class _TVRemotePageState extends State<TVRemotePage> {
                 },
               ),
             ] else ...[
-              AppButton(
-                label: busy ? 'Looking for TVs…' : 'Find TVs',
-                autofocus: true,
-                isTV: false,
-                onPressed: busy ? null : scan,
-              ),
-              const SizedBox(height: 12),
-              AppButton(
-                key: const Key('tv-enter-code'),
-                label: 'Enter code',
-                isTV: false,
-                onPressed: busy ? null : enterCode,
+              // One primary action, the other beside it.
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  AppButton(
+                    label: busy ? 'Looking for TVs…' : 'Find TVs',
+                    filled: true,
+                    autofocus: true,
+                    isTV: false,
+                    onPressed: busy ? null : scan,
+                  ),
+                  AppButton(
+                    key: const Key('tv-enter-code'),
+                    label: 'Enter code',
+                    isTV: false,
+                    onPressed: busy ? null : enterCode,
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               if (!busy && devices.isEmpty)
