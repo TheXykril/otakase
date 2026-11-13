@@ -206,6 +206,23 @@ class _ShowPageState extends State<ShowPage> {
     return tvHeaderExtent(context) + max(lineHeight * 2, lineHeight + 38) + 16;
   }
 
+  /// The TV Episodes heading with the watched count.
+  Widget episodesHeading() => Row(
+    crossAxisAlignment: CrossAxisAlignment.baseline,
+    textBaseline: TextBaseline.alphabetic,
+    children: [
+      Text(
+        'Episodes',
+        style: uiStyle(context, size: 28, weight: FontWeight.w700),
+      ),
+      const SizedBox(width: 16),
+      Text(
+        '$watched of ${anime.airedEpisodes} watched',
+        style: uiStyle(context, color: muted),
+      ),
+    ],
+  );
+
   Widget focusedTitle() => Row(
     children: [
       Expanded(
@@ -1456,12 +1473,18 @@ class _ShowPageState extends State<ShowPage> {
                       child: CustomScrollView(
                         controller: episodeScroll,
                         slivers: [
-                          SliverToBoxAdapter(child: header(last, position)),
+                          // TV shares the desktop header: poster, facts,
+                          // synopsis and actions over the art.
+                          SliverToBoxAdapter(
+                            child: widget.isTV
+                                ? desktopHeader(last, position)
+                                : header(last, position),
+                          ),
                           SliverToBoxAdapter(
                             child: Padding(
                               padding: EdgeInsets.symmetric(
                                 horizontal: widget.isTV ? 48 : 22,
-                                vertical: 12,
+                                vertical: widget.isTV ? 0 : 12,
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1478,46 +1501,52 @@ class _ShowPageState extends State<ShowPage> {
                                     Synopsis(anime.description, lines: 2),
                                     const SizedBox(height: KageSpace.s4),
                                   ],
-                                  Row(
-                                    children: [
-                                      const Expanded(
-                                        child: SectionLabel('Episodes'),
-                                      ),
-                                      if (!widget.isTV &&
-                                          anime.airedEpisodes > 12) ...[
-                                        AppButton(
-                                          key: const Key('episode-jump'),
-                                          focusNode: jumpButtonFocus,
-                                          label: 'Go to episode',
-                                          icon: LucideIcons.hash,
-                                          iconOnly: true,
-                                          size: ButtonSize.sm,
-                                          onPressed: jumpToEpisode,
+                                  // On TV the heading rides on the
+                                  // episode title band below.
+                                  if (!widget.isTV ||
+                                      anime.airedEpisodes == 0) ...[
+                                    Row(
+                                      children: [
+                                        const Expanded(
+                                          child: SectionLabel('Episodes'),
                                         ),
-                                        const SizedBox(width: KageSpace.s2),
-                                      ],
-                                      AppSegmented<String>(
-                                        isTV: widget.isTV,
-                                        options: const [
-                                          ('sub', 'Sub'),
-                                          ('dub', 'Dub'),
+                                        if (!widget.isTV &&
+                                            anime.airedEpisodes > 12) ...[
+                                          AppButton(
+                                            key: const Key('episode-jump'),
+                                            focusNode: jumpButtonFocus,
+                                            label: 'Go to episode',
+                                            icon: LucideIcons.hash,
+                                            iconOnly: true,
+                                            size: ButtonSize.sm,
+                                            onPressed: jumpToEpisode,
+                                          ),
+                                          const SizedBox(width: KageSpace.s2),
                                         ],
-                                        selected: mode,
-                                        onChanged: (value) =>
-                                            setState(() => mode = value),
-                                      ),
-                                    ],
-                                  ),
-                                  Text(
-                                    anime.airedEpisodes > 0
-                                        ? '$watched of ${anime.airedEpisodes} watched'
-                                        : '$watched watched',
-                                    style: uiStyle(
-                                      context,
-                                      size: 15,
-                                      color: muted,
+                                        if (!widget.isTV)
+                                          AppSegmented<String>(
+                                            isTV: widget.isTV,
+                                            options: const [
+                                              ('sub', 'Sub'),
+                                              ('dub', 'Dub'),
+                                            ],
+                                            selected: mode,
+                                            onChanged: (value) =>
+                                                setState(() => mode = value),
+                                          ),
+                                      ],
                                     ),
-                                  ),
+                                    Text(
+                                      anime.airedEpisodes > 0
+                                          ? '$watched of ${anime.airedEpisodes} watched'
+                                          : '$watched watched',
+                                      style: uiStyle(
+                                        context,
+                                        size: 15,
+                                        color: muted,
+                                      ),
+                                    ),
+                                  ],
                                   if (anime.airedEpisodes == 0)
                                     Text(
                                       'Episode availability is checked when you press Play.',
@@ -1533,6 +1562,7 @@ class _ShowPageState extends State<ShowPage> {
                               delegate: _EpisodeTitleHeader(
                                 extent: tvTitleExtent(context),
                                 top: tvHeaderExtent(context),
+                                heading: episodesHeading(),
                                 child: focusedTitle(),
                               ),
                             ),
@@ -1653,10 +1683,11 @@ class _EpisodeTitleHeader extends SliverPersistentHeaderDelegate {
   _EpisodeTitleHeader({
     required this.extent,
     required this.top,
+    required this.heading,
     required this.child,
   });
   final double extent, top;
-  final Widget child;
+  final Widget heading, child;
   @override
   double get minExtent => extent;
   @override
@@ -1670,8 +1701,21 @@ class _EpisodeTitleHeader extends SliverPersistentHeaderDelegate {
     child: ColoredBox(
       color: bg,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(48, top + 8, 48, 8),
-        child: child,
+        padding: const EdgeInsets.fromLTRB(48, 0, 48, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // The band under the top bar shows the Episodes heading until
+            // the grid scrolls beneath it, so there is no empty gap.
+            SizedBox(
+              height: top + 8,
+              child: overlapsContent
+                  ? null
+                  : Align(alignment: Alignment.bottomLeft, child: heading),
+            ),
+            Expanded(child: child),
+          ],
+        ),
       ),
     ),
   );
