@@ -19,7 +19,11 @@ const bg = Color(0xff0e0d0c),
     accentDeep = Color(0xffa83a22),
     ok = Color(0xff9bb67a),
     warn = Color(0xffe3b45a),
-    info = Color(0xff7fa2c4);
+    info = Color(0xff7fa2c4),
+    // Soft drop shadow under floating plates.
+    scrim = Color(
+      0x99000000,
+    );
 
 /// Corner radii: four steps and a circle, then the role each part of the
 /// app uses. Parts pick a role, never a number.
@@ -48,6 +52,9 @@ abstract final class KageRadius {
   static const panel = lg;
   static const menu = md;
   static const navBar = lg;
+
+  /// Tile inside the nav bar: the bar's corner less its 6 px padding.
+  static const navTile = navBar - 6;
   static const dialog = lg;
   static const sheet = lg;
 
