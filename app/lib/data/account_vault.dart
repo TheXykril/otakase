@@ -15,9 +15,11 @@ import 'models.dart';
 //
 // Each account has one vault key. Every device has its own X25519 key pair;
 // the vault key is stored on the server wrapped for each device's public
-// key. A new device gets the vault key when a device that already has it
-// approves it in Devices. Each profile's logins are sealed with the vault
-// key (AES-GCM) into one blob.
+// key. The server also keeps one copy sealed with its own secret and gives
+// it only to signed-in devices of the same account, so a new device gets
+// the key on sign-in. Where the server keeps no copy, a device that already
+// has the key approves the new one in Devices. Each profile's logins are
+// sealed with the vault key (AES-GCM) into one blob.
 
 final _x25519 = X25519();
 final _aes = AesGcm.with256bits();
@@ -309,6 +311,7 @@ class AccountVault extends ChangeNotifier {
       );
       _key = fresh;
       keyVersion = 1;
+      if (v['server'] == 'missing') await _giveServer(fresh);
       for (final p in boundProfiles()) {
         _dirty.add(p);
       }
@@ -322,9 +325,16 @@ class AccountVault extends ChangeNotifier {
         );
       }
     } else {
-      _key = await _restore(myPublic);
+      _key = await _restore(myPublic, v['server_key'] as String?);
     }
     hasKey = _key != null;
+    if (_key case final key?
+        when v['server'] == 'missing' &&
+            v['stale'] != true &&
+            number(v['key_version']) == keyVersion &&
+            keyVersion > 0) {
+      await _giveServer(key);
+    }
     if (_key case final key?) {
       final saved = await keys.savedVault(session.id);
       if (saved == null || saved.$1 != keyVersion) {
@@ -373,12 +383,31 @@ class AccountVault extends ChangeNotifier {
     }
   }
 
-  /// Signed in again on a device that kept the vault key: proves it with
-  /// the key's check and stores a copy for this device's new entry. After a
-  /// device was removed the key was replaced, so an old one stays unused.
-  Future<List<int>?> _restore(String myPublic) async {
-    final saved = await keys.savedVault(session.id);
-    if (saved == null || saved.$1 != keyVersion) return null;
+  /// Hands the server its copy of [key], so this account's next device
+  /// needs no approval. Best effort: approval still works without it.
+  Future<void> _giveServer(List<int> key) async {
+    try {
+      await session.request(
+        'PUT',
+        '/vault/server',
+        body: {'key_version': keyVersion, 'key': b64url(key)},
+      );
+    } on AccountFailure catch (_) {
+      /* Another device will hand it over, or approval brings the key. */
+    }
+  }
+
+  /// A device without its own copy: takes the key the server gave this
+  /// account ([server]), or one it kept from before signing out. Proves it
+  /// with the key's check and stores a copy for this device's entry. After
+  /// a device was removed the key was replaced, so an old one stays unused.
+  Future<List<int>?> _restore(String myPublic, [String? server]) async {
+    final saved = server != null
+        ? (keyVersion, unb64url(server).toList())
+        : await keys.savedVault(session.id);
+    if (saved == null || saved.$1 != keyVersion || saved.$2.length != 32) {
+      return null;
+    }
     try {
       await session.request(
         'POST',
@@ -390,7 +419,7 @@ class AccountVault extends ChangeNotifier {
         },
       );
     } on AccountFailure catch (e) {
-      if (e.status == 403) await keys.forgetVault(session.id);
+      if (e.status == 403 && server == null) await keys.forgetVault(session.id);
       return null;
     }
     return saved.$2;
@@ -497,6 +526,7 @@ class AccountVault extends ChangeNotifier {
     );
     keyVersion++;
     _key = fresh;
+    await _giveServer(fresh);
     for (final MapEntry(key: profile, value: blob) in blobs.entries) {
       final logins = await open(old, blob['ciphertext'] as String);
       final r = await session.request(

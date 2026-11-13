@@ -300,12 +300,6 @@ List<(String, List<MoreDestination>)> moreDestinations(
             open: () => push(ProfilesPage(manager: manager)),
           ),
         MoreDestination(
-          'Settings backup',
-          LucideIcons.cloudUpload,
-          subtitle: 'Keep your settings with the Discord bot',
-          open: () => detail(BackupPage(services: services, isTV: isTV)),
-        ),
-        MoreDestination(
           'Display',
           LucideIcons.palette,
           subtitle: contentLabels[store.text('Content')] ?? '',

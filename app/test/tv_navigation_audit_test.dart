@@ -310,7 +310,6 @@ void main() {
     'Schedule',
     'Discord',
     'Watch parties',
-    'Settings backup',
     'Report a problem',
     'Phone remote',
     'Display',
