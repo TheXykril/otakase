@@ -20,24 +20,28 @@ class SpoilerArt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hidden) return child;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ExcludeSemantics(
-          child: ImageFiltered(
-            imageFilter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-            child: child,
+    // The spoiler blur is real (it hides the picture), so it gets its own
+    // layer and is not redrawn with the rest of the page.
+    return RepaintBoundary(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ExcludeSemantics(
+            child: ImageFiltered(
+              imageFilter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+              child: child,
+            ),
           ),
-        ),
-        ColoredBox(color: bgDeep.withValues(alpha: .55)),
-        Align(
-          alignment: iconAlignment,
-          child: const Padding(
-            padding: EdgeInsets.all(10),
-            child: Icon(LucideIcons.eyeOff, color: fg, size: 32),
+          ColoredBox(color: bgDeep.withValues(alpha: .55)),
+          Align(
+            alignment: iconAlignment,
+            child: const Padding(
+              padding: EdgeInsets.all(10),
+              child: Icon(LucideIcons.eyeOff, color: fg, size: 32),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
