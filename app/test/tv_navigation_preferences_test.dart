@@ -144,12 +144,11 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('phone Search still opens the keyboard on tap', (tester) async {
+  testWidgets('phone Search opens the keyboard only on tap', (tester) async {
     await fixture.launch(tester);
     await tester.tap(find.byKey(const ValueKey('nav-Search')));
     await tester.pumpAndSettle();
-    expect(tester.testTextInput.isVisible, isTrue);
-    tester.testTextInput.hide();
+    expect(tester.testTextInput.isVisible, isFalse);
     await tester.tap(find.byKey(const Key('catalog-search')));
     await tester.pumpAndSettle();
     expect(tester.testTextInput.isVisible, isTrue);
