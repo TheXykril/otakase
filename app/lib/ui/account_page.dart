@@ -641,8 +641,12 @@ class DevicesPage extends StatefulWidget {
   State<DevicesPage> createState() => _DevicesPageState();
 }
 
-class _DevicesPageState extends State<DevicesPage> {
+class _DevicesPageState extends State<DevicesPage> with WidgetsBindingObserver {
   List<Json> devices = const [];
+
+  /// Linked sign-ins by provider ('discord', 'google'), with the name or
+  /// email the server keeps for each. Null until the server answered.
+  Map<String, String>? logins;
   String? error;
   bool loading = true;
   String ownCheck = '';
@@ -652,6 +656,7 @@ class _DevicesPageState extends State<DevicesPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.run.live.addListener(_reloadOnline);
     unawaited(load());
     unawaited(widget.run.vault.sync());
@@ -667,7 +672,14 @@ class _DevicesPageState extends State<DevicesPage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Back from the browser after adding a sign-in: show it.
+    if (state == AppLifecycleState.resumed) unawaited(load());
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.run.live.removeListener(_reloadOnline);
     super.dispose();
   }
@@ -675,12 +687,14 @@ class _DevicesPageState extends State<DevicesPage> {
   Future<void> load() async {
     try {
       final r = await session.request('GET', '/devices');
+      final linked = await session.logins();
       if (!mounted) return;
       setState(() {
         devices = [
           for (final d in r['devices'] as List? ?? const [])
             if (d is Map) d.cast<String, dynamic>(),
         ];
+        logins = linked;
         loading = false;
         error = null;
       });
@@ -851,6 +865,16 @@ class _DevicesPageState extends State<DevicesPage> {
     });
   }
 
+  /// The name kept for a linked sign-in, or null when it is not linked.
+  String? _linked(String provider) {
+    final known = logins;
+    if (known == null) {
+      // Before the server answers, only the token's Discord id is known.
+      return provider == 'discord' && session.hasDiscord ? '' : null;
+    }
+    return known[provider];
+  }
+
   Future<void> attach(String provider) => act(() async {
     final r = await session.request(
       'POST',
@@ -932,22 +956,26 @@ class _DevicesPageState extends State<DevicesPage> {
                 onTap: () => deviceMenu(d),
               ),
             const AccountRowsHeading('Sign-ins'),
-            AccountRow(
-              icon: LucideIcons.messageCircle,
-              title: session.hasDiscord ? 'Discord' : 'Add Discord',
-              subtitle: session.hasDiscord
-                  ? 'Linked'
-                  : 'Sign in with Discord too',
-              isTV: widget.isTV,
-              onTap: session.hasDiscord ? null : () => attach('discord'),
-            ),
-            AccountRow(
-              icon: LucideIcons.mail,
-              title: 'Add Google',
-              subtitle: 'Sign in with Google too',
-              isTV: widget.isTV,
-              onTap: () => attach('google'),
-            ),
+            for (final (provider, label, icon) in [
+              ('discord', 'Discord', LucideIcons.messageCircle),
+              ('google', 'Google', LucideIcons.mail),
+            ])
+              if (_linked(provider) case final name?)
+                AccountRow(
+                  icon: icon,
+                  title: label,
+                  subtitle: name.isEmpty ? 'Linked' : 'Linked · $name',
+                  isTV: widget.isTV,
+                  trailing: Icon(LucideIcons.check, color: ok),
+                )
+              else if (logins != null)
+                AccountRow(
+                  icon: icon,
+                  title: 'Add $label',
+                  subtitle: 'Sign in with $label too',
+                  isTV: widget.isTV,
+                  onTap: () => attach(provider),
+                ),
             const AccountRowsHeading('Your data'),
             AccountRow(
               icon: LucideIcons.download,
