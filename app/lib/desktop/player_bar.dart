@@ -228,7 +228,7 @@ class DesktopPlayerBar extends StatelessWidget {
                   Row(
                     children: [
                       _BarIcon(
-                        icon: LucideIcons.rotateCcw,
+                        icon: LucideIcons.rewind,
                         tooltip: 'Back 10 seconds',
                         onPressed: () => onSeekBy(-10),
                       ),
@@ -240,7 +240,7 @@ class DesktopPlayerBar extends StatelessWidget {
                         onPressed: onPlayPause,
                       ),
                       _BarIcon(
-                        icon: LucideIcons.rotateCw,
+                        icon: LucideIcons.fastForward,
                         tooltip: 'Forward 10 seconds',
                         onPressed: () => onSeekBy(10),
                       ),

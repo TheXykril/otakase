@@ -2787,81 +2787,188 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     media?.label ?? '',
   ].where((s) => s.isNotEmpty).join(' · ');
 
-  Widget nextCard(BuildContext context) => Align(
-    alignment: Alignment.centerRight,
-    child: Container(
-      key: const Key('player-next'),
-      width: 500,
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: panel,
-        border: Border.all(color: line),
-        borderRadius: BorderRadius.circular(KageRadius.md),
-      ),
-      child: Row(
-        children: [
-          if (anime.cover.isNotEmpty) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(KageRadius.md),
-              child: CoverImage(anime.cover, width: 54, height: 81),
+  /// Phones show the error buttons small, so they fit beside the picture.
+  ButtonSize get errorSize => widget.isTV ? ButtonSize.md : ButtonSize.sm;
+
+  /// Where the last double tap landed, across the screen.
+  double? doubleTapAt;
+
+  void doubleTapSeek() {
+    final width = MediaQuery.sizeOf(context).width;
+    final at = doubleTapAt;
+    if (at == null || busy || error.isNotEmpty || width <= 0) return;
+    final side = doubleTapSeconds(at, width);
+    if (side == 0) return;
+    unawaited(seek(side));
+    flash.show(side < 0 ? '−10 s' : '+10 s');
+  }
+
+  void cancelNext() {
+    nextTimer?.cancel();
+    nextCancelled = true;
+    setState(() {
+      countdownSeconds = 0;
+      upNext = null;
+    });
+  }
+
+  /// Phones get one slim line: a mono kicker with the countdown, what plays
+  /// next, a small Play next and a close icon.
+  Widget phoneNextCard(BuildContext context) {
+    final prompt = widget.services.store.flag('NextEpisodePrompt');
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        key: const Key('player-next'),
+        constraints: const BoxConstraints(maxWidth: 300),
+        margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        decoration: BoxDecoration(
+          color: panel.withValues(alpha: .92),
+          border: Border.all(color: line),
+          borderRadius: BorderRadius.circular(KageRadius.md),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    prompt ? 'UP NEXT' : 'UP NEXT · ${countdownSeconds}S',
+                    style: mono.copyWith(
+                      fontSize: 11,
+                      letterSpacing: 1.2,
+                      color: accentText,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isTitle ? upNext?.subtitle ?? '' : 'Episode ${episode + 1}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: fgBright,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 10),
+            AppButton(
+              label: 'Play next',
+              variant: ButtonVariant.primary,
+              size: ButtonSize.sm,
+              autofocus: isTitle,
+              onPressed: () => next(),
+            ),
+            AppButton(
+              label: 'Cancel',
+              icon: LucideIcons.x,
+              iconOnly: true,
+              variant: ButtonVariant.text,
+              size: ButtonSize.sm,
+              onPressed: cancelNext,
+            ),
           ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        ),
+      ),
+    );
+  }
+
+  Widget nextCard(BuildContext context) => !widget.isTV
+      ? phoneNextCard(context)
+      : Align(
+          alignment: Alignment.centerRight,
+          child: Container(
+            key: const Key('player-next'),
+            // Sized to what it says, up to a readable width.
+            constraints: BoxConstraints(maxWidth: widget.isTV ? 440 : 360),
+            margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            padding: EdgeInsets.all(widget.isTV ? 12 : 10),
+            decoration: BoxDecoration(
+              color: panel,
+              border: Border.all(color: line),
+              borderRadius: BorderRadius.circular(KageRadius.md),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  isTitle
-                      ? 'Next · ${upNext?.subtitle ?? ''}'
-                      : 'Next · Episode ${episode + 1}',
-                  style: uiStyle(context, weight: FontWeight.w600),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  widget.services.store.flag('NextEpisodePrompt')
-                      ? 'Continue the story?'
-                      : 'Playing in $countdownSeconds seconds',
-                  style: uiStyle(context),
-                ),
-                const SizedBox(height: 8),
-                LinearProgressIndicator(
-                  minHeight: 2,
-                  value: countdownSeconds / 10,
-                  color: shu,
-                  backgroundColor: line,
-                ),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    AppButton(
-                      label: 'Play next',
-                      autofocus: isTitle,
-                      onPressed: () => next(),
-                      isTV: widget.isTV,
-                    ),
-                    AppButton(
-                      label: 'Cancel',
-                      onPressed: () {
-                        nextTimer?.cancel();
-                        nextCancelled = true;
-                        setState(() {
-                          countdownSeconds = 0;
-                          upNext = null;
-                        });
-                      },
-                      isTV: widget.isTV,
-                    ),
-                  ],
+                if (anime.cover.isNotEmpty) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(KageRadius.md),
+                    child: widget.isTV
+                        ? CoverImage(anime.cover, width: 54, height: 81)
+                        : CoverImage(anime.cover, width: 40, height: 60),
+                  ),
+                  SizedBox(width: widget.isTV ? 16 : 12),
+                ],
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isTitle
+                            ? 'Next · ${upNext?.subtitle ?? ''}'
+                            : 'Next · Episode ${episode + 1}',
+                        style: uiStyle(
+                          context,
+                          size: 15,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: widget.isTV ? 6 : 2),
+                      Text(
+                        widget.services.store.flag('NextEpisodePrompt')
+                            ? 'Continue the story?'
+                            : 'Playing in $countdownSeconds seconds',
+                        style: uiStyle(
+                          context,
+                          size: 15,
+                          color: widget.isTV ? fg : muted,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        minHeight: 2,
+                        value: countdownSeconds / 10,
+                        color: shu,
+                        backgroundColor: line,
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          AppButton(
+                            label: 'Play next',
+                            variant: ButtonVariant.primary,
+                            size: ButtonSize.sm,
+                            autofocus: isTitle,
+                            onPressed: () => next(),
+                            isTV: widget.isTV,
+                          ),
+                          AppButton(
+                            label: 'Cancel',
+                            variant: ButtonVariant.text,
+                            size: ButtonSize.sm,
+                            onPressed: cancelNext,
+                            isTV: widget.isTV,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    ),
-  );
+        );
 
   @override
   Widget build(BuildContext context) => PopScope(
@@ -2891,9 +2998,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             children: [
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
+                // Phones seek 10 s with a double tap on either side; the
+                // middle third stays a plain tap.
+                onDoubleTapDown: isDesktop || widget.isTV
+                    ? null
+                    : (d) => doubleTapAt = d.localPosition.dx,
                 onDoubleTap: isDesktop
                     ? () => unawaited(toggleFullscreen())
-                    : null,
+                    : widget.isTV
+                    ? null
+                    : doubleTapSeek,
                 onTap: () {
                   if (overlay) {
                     setState(() => overlay = false);
@@ -2947,12 +3061,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                       children: [
                         OtakaseSeal(size: widget.isTV ? 96 : 64),
                         const SizedBox(height: 24),
-                        const SkeletonBlock(width: 160, height: 2),
+                        // A moving thread, so a slow source never looks frozen.
+                        const SizedBox(
+                          width: 160,
+                          child: WorkingLine(label: 'Loading'),
+                        ),
                         const SizedBox(height: 24),
                         Text(status, style: uiStyle(context)),
                         const SizedBox(height: 16),
                         AppButton(
                           label: 'Back',
+                          variant: ButtonVariant.text,
                           onPressed: () => Navigator.pop(context),
                           isTV: widget.isTV,
                         ),
@@ -2975,6 +3094,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                           if (unsubtitledCopy case final fallback?)
                             AppButton(
                               label: 'Play without subtitles',
+                              variant: ButtonVariant.secondary,
                               onPressed: () {
                                 skipEpisodeSubtitles = true;
                                 unawaited(
@@ -2984,6 +3104,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                   ),
                                 );
                               },
+                              size: errorSize,
                               isTV: widget.isTV,
                             ),
                           if (isTitle)
@@ -3003,12 +3124,19 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                                   ),
                                 );
                               },
+                              size: errorSize,
                               isTV: widget.isTV,
                             ),
                           if (!isTitle || (media?.copy ?? '').isNotEmpty)
                             AppButton(
                               label: 'Try another copy',
+                              // Anime has no Try again, so this leads there.
+                              variant: isTitle
+                                  ? ButtonVariant.secondary
+                                  : ButtonVariant.primary,
+                              autofocus: !isTitle,
                               onPressed: tryAnotherCopy,
+                              size: errorSize,
                               isTV: widget.isTV,
                             ),
                           PlaybackReportButton(
@@ -3021,12 +3149,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                             problem: error,
                             position: position,
                             provider: source?.provider ?? '',
+                            variant: ButtonVariant.text,
                           ),
                           // Desktop hides the title bar behind the error,
                           // so there must be a way out besides Esc.
                           AppButton(
                             label: 'Back',
-                            icon: LucideIcons.arrowLeft,
+                            variant: ButtonVariant.text,
+                            size: errorSize,
                             onPressed: () => Navigator.pop(context),
                             isTV: widget.isTV,
                           ),

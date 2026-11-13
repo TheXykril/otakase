@@ -521,7 +521,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
           key: const Key('remote-previous'),
         ),
         round(
-          LucideIcons.rotateCcw,
+          LucideIcons.rewind,
           'Back 10 seconds',
           () => send('seek', args: {'seconds': -10}),
           key: const Key('remote-back'),
@@ -536,7 +536,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
           key: const Key('remote-play'),
         ),
         round(
-          LucideIcons.rotateCw,
+          LucideIcons.fastForward,
           'Forward 10 seconds',
           () => send('seek', args: {'seconds': 10}),
           key: const Key('remote-forward'),
