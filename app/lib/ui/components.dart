@@ -890,10 +890,20 @@ class AppButton extends StatelessWidget {
     this.autofocus = false,
     this.focusNode,
     this.disabledReason,
+    this.iconOnly = false,
+    this.trailingIcon,
   });
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
+
+  /// A square button that shows only [icon]; [label] becomes its tooltip and
+  /// spoken name.
+  final bool iconOnly;
+
+  /// A small icon after the label, such as a chevron on a button that opens
+  /// a picker.
+  final IconData? trailingIcon;
 
   /// Shorthand for [ButtonVariant.primary] when [variant] is not given.
   final bool filled;
@@ -941,32 +951,62 @@ class AppButton extends StatelessWidget {
       child: AnimatedContainer(
         duration: KageMotion.base,
         curve: KageMotion.enter,
-        constraints: BoxConstraints(minHeight: heightOf(size, isTV)),
-        padding: EdgeInsets.symmetric(horizontal: pad, vertical: 6),
+        constraints: BoxConstraints(
+          minHeight: heightOf(size, isTV),
+          minWidth: iconOnly ? heightOf(size, isTV) : 0,
+        ),
+        padding: iconOnly
+            ? EdgeInsets.zero
+            : EdgeInsets.symmetric(horizontal: pad, vertical: 6),
         decoration: BoxDecoration(
           color: fill,
           borderRadius: BorderRadius.circular(KageRadius.button),
           border: Border.all(color: border),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: isTV ? 24 : 20, color: ink),
-              const SizedBox(width: 8),
-            ],
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: uiStyle(context, weight: FontWeight.w600, color: ink),
+        child: iconOnly && icon != null
+            ? Center(
+                child: Icon(icon, size: isTV ? 24 : 20, color: ink),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: isTV ? 24 : 20, color: ink),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: size == ButtonSize.sm ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: uiStyle(
+                        context,
+                        weight: FontWeight.w600,
+                        color: ink,
+                      ),
+                    ),
+                  ),
+                  if (trailingIcon != null) ...[
+                    const SizedBox(width: 6),
+                    Icon(trailingIcon, size: isTV ? 20 : 16, color: muted),
+                  ],
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
+    if (iconOnly) {
+      final labelled = Tooltip(
+        message: disabledReason ?? label,
+        child: Semantics(
+          label: label,
+          button: true,
+          enabled: onPressed != null,
+          excludeSemantics: true,
+          child: button,
+        ),
+      );
+      return labelled;
+    }
     if (onPressed != null || disabledReason == null) return button;
     return Tooltip(
       message: disabledReason!,
@@ -1851,6 +1891,106 @@ class SubPanelScope extends InheritedWidget {
       context.getInheritedWidgetOfExactType<SubPanelScope>() != null;
   @override
   bool updateShouldNotify(SubPanelScope old) => false;
+}
+
+/// A show's synopsis: a few lines, with More to read the rest.
+class Synopsis extends StatefulWidget {
+  const Synopsis(this.text, {super.key, this.lines = 3, this.isTV = false});
+  final String text;
+  final int lines;
+  final bool isTV;
+  @override
+  State<Synopsis> createState() => _SynopsisState();
+}
+
+class _SynopsisState extends State<Synopsis> {
+  bool open = false;
+  @override
+  Widget build(BuildContext context) {
+    if (widget.text.isEmpty) return const SizedBox.shrink();
+    final style = uiStyle(context, size: 15, height: 1.5);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: widget.text, style: style),
+          maxLines: widget.lines,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout(maxWidth: constraints.maxWidth);
+        final long = painter.didExceedMaxLines;
+        painter.dispose();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AnimatedSize(
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : KageMotion.base,
+              curve: KageMotion.enter,
+              alignment: Alignment.topLeft,
+              child: Text(
+                widget.text,
+                key: const Key('synopsis'),
+                maxLines: open ? null : widget.lines,
+                overflow: open ? null : TextOverflow.ellipsis,
+                style: style,
+              ),
+            ),
+            if (long)
+              FocusBox(
+                key: const Key('synopsis-more'),
+                isTV: widget.isTV,
+                radius: KageRadius.xs,
+                frameGap: 2,
+                padding: const EdgeInsets.symmetric(vertical: KageSpace.s2),
+                onPressed: () => setState(() => open = !open),
+                child: Text(
+                  open ? 'Less' : 'More',
+                  style: uiStyle(
+                    context,
+                    size: 15,
+                    weight: FontWeight.w600,
+                    color: accentText,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The watched mark on episode art: a small 済 stamp in Shu, the same on
+/// every screen.
+class WatchedStamp extends StatelessWidget {
+  const WatchedStamp({super.key, this.size = 26});
+  final double size;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Watched',
+    excludeSemantics: true,
+    child: Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: bgDeep.withValues(alpha: .85),
+        borderRadius: const BorderRadius.all(Radius.circular(KageRadius.xs)),
+        border: Border.all(color: shu, width: 1.5),
+      ),
+      child: Text(
+        '済',
+        style: TextStyle(
+          fontFamily: 'NotoSansJP',
+          fontSize: size * .58,
+          height: 1,
+          color: accentText,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ),
+  );
 }
 
 class OtakaseRoute<T> extends PageRouteBuilder<T> {
