@@ -756,7 +756,10 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
       ),
     ),
     body: ListenableBuilder(
-      listenable: widget.services.store,
+      listenable: Listenable.merge([
+        widget.services.store,
+        widget.services.store.healthChanged,
+      ]),
       builder: (context, _) => ListView(
         padding: EdgeInsets.fromLTRB(24, 16, 24, contentBottom(context)),
         children: [

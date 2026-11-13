@@ -99,6 +99,17 @@ class AppStore extends ChangeNotifier {
     _values.remove('AutoFallback');
     // 'ask' opened a track menu at every episode start; it is gone.
     if (_values['SubStyle'] == 'ask') _values['SubStyle'] = 'soft';
+    // List caches used to ride in the settings blob, so every refresh
+    // rewrote all settings and rebuilt the app. They have their own keys.
+    final caches = _values.keys.where(isCacheKey).toList();
+    if (caches.isNotEmpty) {
+      for (final key in caches) {
+        unawaited(setCache(key, _values.remove(key)));
+      }
+      unawaited(
+        preferences.setString('${namespace}settings.v1', jsonEncode(_values)),
+      );
+    }
     try {
       for (final e in (jsonDecode(
         preferences.getString('${namespace}history.v1') ?? '[]',
@@ -115,6 +126,35 @@ class AppStore extends ChangeNotifier {
   final Json _values = {};
   final Map<String, WatchEntry> _history = {};
   final Map<String, String> providerHealth = {};
+
+  /// Ticks when a source's health changes, for the pages that show it; the
+  /// rest of the app does not rebuild for it.
+  final ValueNotifier<int> healthChanged = ValueNotifier(0);
+
+  /// Saved lists kept to show something before the network answers.
+  static bool isCacheKey(String key) =>
+      key.startsWith('ListCache.') || key.startsWith('PublicListCache.');
+
+  /// A cached list, stored apart from settings.
+  dynamic cache(String key) {
+    final raw = preferences.getString('${namespace}cache.$key');
+    if (raw == null) return null;
+    try {
+      return jsonDecode(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Stores a cached list without touching settings or notifying the app;
+  /// whoever shows it already holds the fresh copy.
+  Future<void> setCache(String key, dynamic value) async {
+    if (value == null) {
+      await preferences.remove('${namespace}cache.$key');
+    } else {
+      await preferences.setString('${namespace}cache.$key', jsonEncode(value));
+    }
+  }
 
   /// How long a playing episode's spot waits in memory before it is written.
   /// Pause, leaving the player and the episode ending write it at once.
@@ -290,8 +330,9 @@ class AppStore extends ChangeNotifier {
   }
 
   void health(String name, String status) {
+    if (providerHealth[name] == status) return;
     providerHealth[name] = status;
-    notifyListeners();
+    healthChanged.value++;
   }
 
   /// Saves where an episode is. A quiet save, made while it plays, keeps
@@ -371,6 +412,7 @@ class AppStore extends ChangeNotifier {
     _disposed = true;
     if (_historyWrite != null) unawaited(_persist());
     historyProgress.dispose();
+    healthChanged.dispose();
     super.dispose();
   }
 

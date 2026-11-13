@@ -1004,7 +1004,7 @@ class _AccountBlockState extends State<AccountBlock> {
         }
         result = all.values.toList();
         if (mounted && g == generation && username == requestedUsername) {
-          await s.store.set('PublicListCache.${widget.service}', {
+          await s.store.setCache('PublicListCache.${widget.service}', {
             'username': requestedUsername,
             'entries': result.map((e) => e.toJson()).toList(),
           });
@@ -1024,7 +1024,7 @@ class _AccountBlockState extends State<AccountBlock> {
       }
     } catch (e) {
       if (mounted && g == generation) {
-        final cached = widget.services.store.value(
+        final cached = widget.services.store.cache(
           'PublicListCache.${widget.service}',
         );
         if (!widget.services.auth.signedIn(widget.service) &&
