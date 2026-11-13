@@ -40,12 +40,12 @@ void main() {
     expect(await result, '1080p');
   });
 
-  testWidgets('TV uses a side panel', (tester) async {
+  testWidgets('TV uses a compact panel at the right edge', (tester) async {
     final result = pick(await mount(tester, tv: true));
     await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.byType(AlertDialog), findsNothing);
-    final panel = tester.getRect(find.text('Quality'));
+    final panel = tester.getRect(find.text('QUALITY'));
     expect(panel.left, greaterThan(800));
     await tester.tap(find.text('1080p'));
     await tester.pumpAndSettle();

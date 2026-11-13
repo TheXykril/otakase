@@ -2419,37 +2419,126 @@ List<Widget> _pickerRows(
   required bool tv,
 }) => [
   for (final value in values)
-    AppRow(
-      autofocus: value == (values.contains(selected) ? selected : values.first),
-      isTV: tv,
-      title: value,
+    _PickerOption(
+      label: value,
       selected: value == selected,
-      trailing: const SizedBox.shrink(),
+      tv: tv,
+      autofocus: value == (values.contains(selected) ? selected : values.first),
       onTap: () => Navigator.pop(context, value),
     ),
 ];
 
-Widget _pickerHeading(BuildContext context, String title, String? note) =>
-    Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          title,
-          style: uiStyle(
-            context,
-            size: 20,
-            weight: FontWeight.w600,
-            color: fgBright,
+/// One choice in a picker: a compact line, the current one on a raised tile
+/// with a Shu check.
+class _PickerOption extends StatelessWidget {
+  const _PickerOption({
+    required this.label,
+    required this.selected,
+    required this.tv,
+    required this.autofocus,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected, tv, autofocus;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    selected: selected,
+    button: true,
+    child: FocusBox(
+      autofocus: autofocus,
+      isTV: tv,
+      radius: KageRadius.button,
+      frameGap: 2,
+      onPressed: onTap,
+      child: Container(
+        constraints: BoxConstraints(minHeight: tv ? 52 : 48),
+        padding: const EdgeInsets.symmetric(horizontal: KageSpace.s3),
+        decoration: BoxDecoration(
+          color: selected ? selectedPanel : Colors.transparent,
+          borderRadius: const BorderRadius.all(
+            Radius.circular(KageRadius.button),
           ),
         ),
-        if (note != null)
-          Padding(
-            padding: const EdgeInsets.only(top: KageSpace.s2),
-            child: Text(note, style: uiStyle(context, color: muted)),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: uiStyle(
+                  context,
+                  color: selected ? fgBright : fg,
+                  weight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+            if (selected)
+              Icon(LucideIcons.check, size: tv ? 22 : 20, color: shu),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Picker title as a mono kicker with a hairline rule, like the section
+/// labels on the pages, and an optional note under it.
+Widget _pickerHeading(BuildContext context, String title, String? note) =>
+    Padding(
+      padding: const EdgeInsets.fromLTRB(
+        KageSpace.s3,
+        0,
+        KageSpace.s3,
+        KageSpace.s2,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  title.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: mono.copyWith(
+                    color: fgBright,
+                    fontSize: AppLayout.tvOf(context) ? 16 : 13,
+                    letterSpacing: 1.6,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+              const SizedBox(width: KageSpace.s3),
+              const Expanded(child: Divider(color: hairline, height: 1)),
+            ],
           ),
-        const SizedBox(height: KageSpace.s3),
-      ],
+          if (note != null)
+            Padding(
+              padding: const EdgeInsets.only(top: KageSpace.s2),
+              child: Text(note, style: uiStyle(context, color: muted)),
+            ),
+        ],
+      ),
+    );
+
+/// The floating plate both pickers sit on: panel colour, hairline edge and
+/// one soft shadow, like the phone nav bar.
+Widget _pickerPlate({required Widget child, required EdgeInsets padding}) =>
+    Container(
+      padding: padding,
+      decoration: const BoxDecoration(
+        color: panel,
+        borderRadius: BorderRadius.all(Radius.circular(KageRadius.sheet)),
+        border: Border.fromBorderSide(BorderSide(color: line)),
+        boxShadow: [
+          BoxShadow(color: scrim, offset: Offset(0, 8), blurRadius: 24),
+        ],
+      ),
+      child: child,
     );
 
 Future<String?> _chooseSheet(
@@ -2462,37 +2551,52 @@ Future<String?> _chooseSheet(
   context: context,
   isScrollControlled: true,
   useSafeArea: true,
-  backgroundColor: panel,
+  backgroundColor: Colors.transparent,
+  elevation: 0,
   constraints: BoxConstraints(
-    maxHeight: MediaQuery.sizeOf(context).height * .75,
+    maxHeight: MediaQuery.sizeOf(context).height * .7,
   ),
   builder: (context) => SafeArea(
     top: false,
+    minimum: const EdgeInsets.only(bottom: KageSpace.s3),
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(
-        KageSpace.s3,
-        KageSpace.s5,
-        KageSpace.s3,
-        KageSpace.s3,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: KageSpace.s2),
-            child: _pickerHeading(context, title, note),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: _pickerRows(context, values, selected, tv: false),
+      padding: const EdgeInsets.symmetric(horizontal: KageSpace.s3),
+      child: _pickerPlate(
+        padding: const EdgeInsets.fromLTRB(
+          KageSpace.s2,
+          KageSpace.s2,
+          KageSpace.s2,
+          KageSpace.s2,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: KageSpace.s3),
+                decoration: const BoxDecoration(
+                  color: lineStrong,
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(KageRadius.full),
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
+            _pickerHeading(context, title, note),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _pickerRows(context, values, selected, tv: false),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   ),
@@ -2508,50 +2612,70 @@ Future<String?> _choosePanel(
   context: context,
   barrierDismissible: true,
   barrierLabel: title,
-  barrierColor: scrim,
+  barrierColor: const Color(0x66000000),
   transitionDuration: MediaQuery.disableAnimationsOf(context)
       ? Duration.zero
       : KageMotion.base,
-  transitionBuilder: (context, animation, _, child) => SlideTransition(
-    position: Tween(begin: const Offset(1, 0), end: Offset.zero).animate(
-      CurvedAnimation(
-        parent: animation,
-        curve: KageMotion.enter,
-        reverseCurve: KageMotion.exit,
+  transitionBuilder: (context, animation, _, child) {
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: KageMotion.enter,
+      reverseCurve: KageMotion.exit,
+    );
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween(
+          begin: const Offset(.08, 0),
+          end: Offset.zero,
+        ).animate(curved),
+        child: child,
       ),
-    ),
-    child: child,
-  ),
-  pageBuilder: (context, _, _) => Align(
-    alignment: Alignment.centerRight,
-    child: Material(
-      color: panel,
-      child: SizedBox(
-        width: math.min(560, MediaQuery.sizeOf(context).width * .42),
-        height: double.infinity,
-        child: Container(
-          decoration: const BoxDecoration(
-            border: Border(left: BorderSide(color: line)),
+    );
+  },
+  // A compact plate at the right edge, as tall as its list: the page stays
+  // in view beside it.
+  pageBuilder: (context, _, _) => SafeArea(
+    child: Align(
+      alignment: Alignment.centerRight,
+      child: Padding(
+        padding: const EdgeInsets.all(KageSpace.s6),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 400,
+            maxHeight: MediaQuery.sizeOf(context).height * .8,
           ),
-          padding: const EdgeInsets.fromLTRB(
-            KageSpace.s6,
-            KageSpace.s7,
-            KageSpace.s6,
-            KageSpace.s5,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _pickerHeading(context, title, note),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: _pickerRows(context, values, selected, tv: true),
-                  ),
-                ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: _pickerPlate(
+              padding: const EdgeInsets.fromLTRB(
+                KageSpace.s2,
+                KageSpace.s4,
+                KageSpace.s2,
+                KageSpace.s2,
               ),
-            ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _pickerHeading(context, title, note),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: _pickerRows(
+                          context,
+                          values,
+                          selected,
+                          tv: true,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
