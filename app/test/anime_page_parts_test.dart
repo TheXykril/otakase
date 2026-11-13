@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:otakase/ui/components.dart';
 
 // Parts of the anime page: the synopsis opens with More, the watched stamp
