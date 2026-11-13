@@ -161,12 +161,30 @@ class _AppShellState extends State<AppShell> {
   /// A new episode of a followed show, a shared show or a reply arrived
   /// from Discord: say so; it waits under Community, From Discord. New
   /// episode alerts on computers use it too.
+  /// A note from the shell itself: on a phone it floats above the nav bar.
+  SnackBar shellNote(
+    Widget content, {
+    Duration duration = const Duration(milliseconds: 4000),
+  }) => widget.isTV
+      ? SnackBar(content: content, duration: duration)
+      : SnackBar(
+          content: content,
+          duration: duration,
+          margin: EdgeInsets.fromLTRB(
+            KageSpace.s3,
+            0,
+            KageSpace.s3,
+            MediaQuery.paddingOf(context).bottom +
+                _navHeight +
+                _navBottom +
+                KageSpace.s2,
+          ),
+        );
+
   void fromDiscord(String text) {
     if (!mounted || widget.services.playerStatus != null) return;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(
-        content: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
-      ),
+      shellNote(Text(text, maxLines: 2, overflow: TextOverflow.ellipsis)),
     );
   }
 
@@ -201,6 +219,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    exitArmed?.cancel();
     if (widget.services.party.open == partyOpen) {
       widget.services.party.open = null;
     }
@@ -483,6 +502,28 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  /// Runs for two seconds after the first Back on Home on a phone.
+  Timer? exitArmed;
+
+  Future<bool?> _askExit() => showDialog<bool>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: const Text('Exit Otakase?'),
+      actions: [
+        TextButton(
+          autofocus: !widget.isTV,
+          onPressed: () => Navigator.pop(c, false),
+          child: const Text('Stay'),
+        ),
+        TextButton(
+          autofocus: widget.isTV,
+          onPressed: () => Navigator.pop(c, true),
+          child: const Text('Exit'),
+        ),
+      ],
+    ),
+  );
+
   Future<void> back() async {
     if (MediaQuery.viewInsetsOf(context).bottom > 0) {
       FocusManager.instance.primaryFocus?.unfocus();
@@ -498,24 +539,29 @@ class _AppShellState extends State<AppShell> {
     }
     // Esc on Home leaves the window open; the close button closes it.
     if (isDesktop) return;
-    final exit = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Exit Otakase?'),
-        actions: [
-          TextButton(
-            autofocus: !widget.isTV,
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('Stay'),
-          ),
-          TextButton(
-            autofocus: widget.isTV,
-            onPressed: () => Navigator.pop(c, true),
-            child: const Text('Exit'),
-          ),
-        ],
-      ),
-    );
+    // A phone leaves on a second Back within two seconds, the usual Android
+    // way, instead of asking. A TV remote asks, since Back is pressed a lot.
+    final bool? exit;
+    if (!widget.isTV) {
+      final again = exitArmed?.isActive ?? false;
+      exitArmed?.cancel();
+      exitArmed = Timer(const Duration(seconds: 2), () {});
+      if (!again) {
+        ScaffoldMessenger.maybeOf(context)
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(
+            shellNote(
+              const Text('Press Back again to exit'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        return;
+      }
+      ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+      exit = true;
+    } else {
+      exit = await _askExit();
+    }
     if (exit == true && mounted) {
       final milestone = otakaseMovieEnabled
           ? await widget.services.heritage.milestoneOnExit()
@@ -715,7 +761,7 @@ class _AppShellState extends State<AppShell> {
                 alignment: WrapAlignment.spaceBetween,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 runSpacing: 8,
-                children: const [Brand(), DeviceStatus()],
+                children: const [Brand(), TopBarEnd()],
               ),
             ),
           ),
@@ -972,7 +1018,7 @@ class TVTopBar extends StatelessWidget {
       brand: const Brand(),
       tabs: tabs,
       leading: leading,
-      trailing: const DeviceStatus(isTV: true),
+      trailing: const TopBarEnd(isTV: true),
       inset: EdgeInsets.fromLTRB(
         math.max(8, safe.left - 40),
         math.max(18, safe.top - 9),

@@ -21,50 +21,12 @@ Future<void> openSettings(
   AppServices services,
   bool isTV, {
   String? section,
-}) async {
-  if (isTV) {
-    await showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Settings',
-      barrierColor: const Color(0xb3080707),
-      transitionDuration: MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : const Duration(milliseconds: 240),
-      pageBuilder: (context, a, b) => Align(
-        alignment: Alignment.centerRight,
-        child: SizedBox(
-          width: (MediaQuery.sizeOf(context).width * .35).clamp(432, 560),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(KageRadius.sheet),
-            ),
-            child: SettingsPage(
-              services: services,
-              isTV: true,
-              section: section,
-            ),
-          ),
-        ),
-      ),
-      transitionBuilder: (context, a, b, child) => SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(1, 0),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(parent: a, curve: Curves.easeOut)),
-        child: child,
-      ),
-    );
-  } else {
-    await Navigator.push(
-      context,
-      OtakaseRoute<void>(
-        builder: (_) =>
-            SettingsPage(services: services, isTV: false, section: section),
-      ),
-    );
-  }
-}
+}) => openSubPage<void>(
+  context,
+  SettingsPage(services: services, isTV: isTV, section: section),
+  isTV: isTV,
+  label: 'Settings',
+);
 
 // Friendly names for settings. The keys match the CLI config, so they stay
 // the storage keys; only the label shown to the viewer changes.
@@ -361,7 +323,7 @@ class _SettingsPageState extends State<SettingsPage> {
             backgroundColor: panel,
             title: Text(widget.section ?? 'Settings'),
             actions: [
-              DeviceStatus(isTV: widget.isTV),
+              TopBarEnd(isTV: widget.isTV),
               const SizedBox(width: 24),
             ],
             leading: IconButton(

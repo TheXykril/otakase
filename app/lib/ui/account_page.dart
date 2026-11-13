@@ -286,11 +286,10 @@ class _OtakaseAccountSectionState extends State<OtakaseAccountSection> {
             : 'See, rename and remove your devices',
         isTV: widget.isTV,
         autofocus: widget.isTV,
-        onTap: () => Navigator.push(
+        onTap: () => openSubPage<void>(
           context,
-          MaterialPageRoute<void>(
-            builder: (_) => DevicesPage(center: c, run: r, isTV: widget.isTV),
-          ),
+          DevicesPage(center: c, run: r, isTV: widget.isTV),
+          isTV: widget.isTV,
         ),
       ),
       if (!widget.isTV || isDesktop)
@@ -309,12 +308,10 @@ class _OtakaseAccountSectionState extends State<OtakaseAccountSection> {
         title: 'What syncs',
         subtitle: 'Choose what this device shares',
         isTV: widget.isTV,
-        onTap: () => Navigator.push(
+        onTap: () => openSubPage<void>(
           context,
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                SyncSettingsPage(center: c, run: r, isTV: widget.isTV),
-          ),
+          SyncSettingsPage(center: c, run: r, isTV: widget.isTV),
+          isTV: widget.isTV,
         ),
       ),
       AccountRow(

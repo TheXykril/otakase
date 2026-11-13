@@ -204,7 +204,7 @@ class _LauncherShortcutPageState extends State<LauncherShortcutPage> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: const Text('Launcher shortcut'),
-      actions: const [DeviceStatus(isTV: true), SizedBox(width: 16)],
+      actions: const [TopBarEnd(isTV: true), SizedBox(width: 16)],
     ),
     body: ListView(
       padding: const EdgeInsets.all(32),

@@ -51,7 +51,7 @@ Future<void> openSchedule(
       appBar: AppBar(
         leading: const AppBackButton(),
         actions: [
-          DeviceStatus(isTV: isTV),
+          TopBarEnd(isTV: isTV),
           const SizedBox(width: 24),
         ],
       ),
@@ -85,30 +85,8 @@ bool scheduleShown(AppServices services) =>
     contentModeOf(services.store) != ContentMode.movies ||
     services.trakt.signedIn;
 
-Future<void> openDetail(BuildContext context, Widget page, bool isTV) async {
-  if (!isTV) {
-    await Navigator.push(context, OtakaseRoute<void>(builder: (_) => page));
-    return;
-  }
-  await showGeneralDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: 'Close',
-    barrierColor: bgDeep.withValues(alpha: .6),
-    transitionDuration: MediaQuery.disableAnimationsOf(context)
-        ? Duration.zero
-        : const Duration(milliseconds: 240),
-    pageBuilder: (context, a, b) => Align(
-      alignment: Alignment.centerRight,
-      child: SizedBox(
-        width: (MediaQuery.sizeOf(context).width * .35).clamp(432, 560),
-        child: page,
-      ),
-    ),
-    transitionBuilder: (context, a, b, child) =>
-        FadeTransition(opacity: a, child: child),
-  );
-}
+Future<void> openDetail(BuildContext context, Widget page, bool isTV) =>
+    openSubPage<void>(context, page, isTV: isTV);
 
 class MorePage extends StatelessWidget {
   const MorePage({
@@ -740,7 +718,7 @@ class _AccountsPageState extends State<AccountsPage> {
           ? AppBackButton(focusNode: backFocus)
           : const AppBackButton(),
       actions: [
-        DeviceStatus(isTV: widget.isTV),
+        TopBarEnd(isTV: widget.isTV),
         const SizedBox(width: 24),
       ],
     ),

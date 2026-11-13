@@ -27,7 +27,8 @@ Future<void> openDownloads(
 
 void _notice(BuildContext context, String text) {
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  ScaffoldMessenger.of(context)
+      .showSnackBar(placeNote(context, SnackBar(content: Text(text))));
 }
 
 int _quality(AppServices services) =>
@@ -187,7 +188,7 @@ class DownloadsPage extends StatelessWidget {
         icon: const Icon(LucideIcons.arrowLeft),
       ),
       title: const Text('Downloads'),
-      actions: isDesktop ? const [DeviceStatus(), SizedBox(width: 16)] : null,
+      actions: isDesktop ? const [TopBarEnd(), SizedBox(width: 16)] : null,
     ),
     body: ListenableBuilder(
       listenable: services.downloads,

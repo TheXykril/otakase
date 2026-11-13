@@ -88,7 +88,7 @@ class _ProfilesChooserState extends State<ProfilesChooser> {
         title: const Text("Who's watching?"),
         automaticallyImplyLeading: widget.canGoBack,
         actions: [
-          DeviceStatus(isTV: widget.manager.isTV),
+          TopBarEnd(isTV: widget.manager.isTV),
           const SizedBox(width: 24),
         ],
       ),
@@ -288,7 +288,7 @@ class _ProfilesPageState extends State<ProfilesPage> {
         title: const Text('Profiles'),
         leading: const AppBackButton(),
         actions: [
-          DeviceStatus(isTV: widget.manager.isTV),
+          TopBarEnd(isTV: widget.manager.isTV),
           const SizedBox(width: 24),
         ],
       ),

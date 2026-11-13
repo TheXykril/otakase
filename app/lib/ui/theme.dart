@@ -115,6 +115,24 @@ ThemeData buildOtakaseTheme({required bool isTV, bool traditional = false}) {
         borderRadius: BorderRadius.all(Radius.circular(KageRadius.menu)),
       ),
     ),
+    // Feedback: one quiet floating note. Phones get it full width at the
+    // bottom; TVs and computers get a compact one.
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: panelRaised,
+      elevation: 0,
+      width: isTV ? 440 : null,
+      contentTextStyle: TextStyle(
+        fontFamily: 'Inter',
+        fontSize: isTV ? 20 : 16,
+        color: fgBright,
+      ),
+      actionTextColor: accentText,
+      shape: const RoundedRectangleBorder(
+        side: BorderSide(color: lineStrong),
+        borderRadius: BorderRadius.all(Radius.circular(KageRadius.toast)),
+      ),
+    ),
     outlinedButtonTheme: OutlinedButtonThemeData(style: buttons),
     iconButtonTheme: IconButtonThemeData(style: buttons),
     listTileTheme: const ListTileThemeData(textColor: fg, iconColor: muted),

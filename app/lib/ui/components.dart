@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../desktop/desktop_core.dart';
+import '../desktop/top_bar.dart' show DesktopTopBar;
 
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -394,7 +395,7 @@ class _FocusBoxState extends State<FocusBox> {
         onTap: widget.onPressed,
         onLongPress: widget.onLongPress,
         focusColor: Colors.transparent,
-        hoverColor: widget.hoverColor ?? line.withValues(alpha: .4),
+        hoverColor: widget.hoverColor ?? panelRaised,
         onHover: (value) {
           if (widget.lift && isDesktop && hovered != value) {
             setState(() => hovered = value);
@@ -1749,6 +1750,107 @@ class HeroArt extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Opens a sub-page (settings, accounts, details) the one way each screen
+/// expects: a full page on a phone and a panel from the right edge on a TV
+/// or computer, with the page still in view beside it.
+Future<T?> openSubPage<T>(
+  BuildContext context,
+  Widget page, {
+  required bool isTV,
+  String label = 'Close',
+}) {
+  if (!isTV) {
+    return Navigator.push<T>(context, OtakaseRoute<T>(builder: (_) => page));
+  }
+  return showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: label,
+    barrierColor: bgDeep.withValues(alpha: .6),
+    transitionDuration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : KageMotion.slow,
+    // On a computer the panel starts under the top bar, so the window
+    // buttons stay where they always are.
+    pageBuilder: (context, _, _) => Padding(
+      padding: EdgeInsets.only(
+        top: isDesktop ? DesktopTopBar.extent(context) : 0,
+      ),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          width: (MediaQuery.sizeOf(context).width * .35).clamp(432, 560),
+          clipBehavior: Clip.antiAlias,
+          decoration: const BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.horizontal(
+              left: Radius.circular(KageRadius.sheet),
+            ),
+            border: Border.fromBorderSide(BorderSide(color: line)),
+          ),
+          // One surface from the top bar down, whatever the page sets.
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              scaffoldBackgroundColor: panel,
+              canvasColor: panel,
+              appBarTheme: Theme.of(context).appBarTheme
+                  .copyWith(backgroundColor: panel),
+            ),
+            child: SubPanelScope(child: page),
+          ),
+        ),
+      ),
+    ),
+    transitionBuilder: (context, animation, _, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: KageMotion.enter,
+        reverseCurve: KageMotion.exit,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween(
+            begin: const Offset(.12, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+/// Sets a note's place: on a phone it floats just above the bottom nav bar
+/// (or the screen edge on pages without one); TVs and computers get the
+/// compact note from the theme.
+SnackBar placeNote(BuildContext context, SnackBar note) {
+  if (AppLayout.tvOf(context) || note.margin != null) return note;
+  return SnackBar(
+    key: note.key,
+    content: note.content,
+    action: note.action,
+    duration: note.duration,
+    showCloseIcon: note.showCloseIcon,
+    margin: EdgeInsets.fromLTRB(
+      KageSpace.s3,
+      0,
+      KageSpace.s3,
+      PageInsets.bottomOf(context) + KageSpace.s2,
+    ),
+  );
+}
+
+/// Marks a page shown in a sub-page panel, where the top bar end stays empty
+/// on a computer: the window buttons belong to the window, not the panel.
+class SubPanelScope extends InheritedWidget {
+  const SubPanelScope({super.key, required super.child});
+  static bool of(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<SubPanelScope>() != null;
+  @override
+  bool updateShouldNotify(SubPanelScope old) => false;
 }
 
 class OtakaseRoute<T> extends PageRouteBuilder<T> {

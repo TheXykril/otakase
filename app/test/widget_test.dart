@@ -147,10 +147,9 @@ void main() {
       expect(find.text('Find your next story'), findsOneWidget);
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.text('Exit Otakase?'), findsOneWidget);
-      expect(FocusManager.instance.primaryFocus?.context?.widget, isNotNull);
-      await tester.tap(find.text('Stay'));
-      await tester.pumpAndSettle();
+      expect(find.text('Exit Otakase?'), findsNothing);
+      expect(find.text('Press Back again to exit'), findsOneWidget);
+      expect(find.text('Find your next story'), findsOneWidget);
       expect(find.byType(Drawer), findsNothing);
       await tester.pumpWidget(const SizedBox());
     },

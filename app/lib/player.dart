@@ -1094,7 +1094,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             ? e.message
             : 'The player could not open this subtitle file.';
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(message)));
+            .showSnackBar(placeNote(context, SnackBar(content: Text(message))));
       }
       return false;
     } finally {
@@ -1510,7 +1510,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('The cast device did not answer.')),
+          placeNote(
+            context,
+            const SnackBar(content: Text('The cast device did not answer.')),
+          ),
         );
       }
     }
@@ -1671,7 +1674,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     } on CoreFailure catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.message)));
+          .showSnackBar(placeNote(context, SnackBar(content: Text(e.message))));
       castDevice = null;
       setState(() {});
       return;
@@ -1733,7 +1736,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (!mounted || !casting) return;
     if (!opened) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The firewall was not opened.')),
+        placeNote(
+          context,
+          const SnackBar(content: Text('The firewall was not opened.')),
+        ),
       );
       return;
     }

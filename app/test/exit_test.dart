@@ -48,7 +48,7 @@ void main() {
     }
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('Exit Otakase?'), findsOneWidget);
+    if (tv) expect(find.text('Exit Otakase?'), findsOneWidget);
   }
 
   testWidgets('TV exit prompt starts with Exit selected', (tester) async {
@@ -99,20 +99,34 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('phone keeps Stay selected and its exit greeting', (
+  testWidgets('phone exits on a second Back, with its greeting', (
     tester,
   ) async {
     await launch(tester, tv: false);
-    expect(Focus.of(tester.element(find.text('Stay'))).hasPrimaryFocus, isTrue);
-    await tester.tap(find.text('Exit'));
-    await tester.pumpAndSettle();
     expect(find.text('Exit Otakase?'), findsNothing);
+    expect(find.text('Press Back again to exit'), findsOneWidget);
+    expect(exits, 0);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.text('Close'), findsOneWidget);
     expect(exits, 0);
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
     expect(exits, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('phone Back once only warns', (tester) async {
+    await launch(tester, tv: false);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(find.text('Press Back again to exit'), findsNothing);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.text('Press Back again to exit'), findsOneWidget);
+    expect(exits, 0);
     await tester.pumpWidget(const SizedBox());
   });
 }
