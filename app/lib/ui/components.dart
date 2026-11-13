@@ -45,12 +45,66 @@ const display = TextStyle(
 
 // Share the device typography with routes, sheets and dialogs.
 class AppLayout extends InheritedWidget {
-  const AppLayout({super.key, required this.isTV, required super.child});
+  const AppLayout({
+    super.key,
+    required this.isTV,
+    this.minText,
+    required super.child,
+  });
   final bool isTV;
+
+  /// Overrides the screen's smallest text, for a window outside the scaled
+  /// canvas such as the desktop launcher.
+  final double? minText;
   static bool tvOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppLayout>()?.isTV ?? false;
+
+  /// Which column of [KageType] this context reads from. Desktop has its
+  /// own: it is wide like a TV but read from arm's length.
+  static TypeScreen screenOf(BuildContext context) => !tvOf(context)
+      ? TypeScreen.phone
+      : isDesktop
+      ? TypeScreen.desktop
+      : TypeScreen.tv;
+
+  static double minTextOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppLayout>()?.minText ??
+      KageType.floor[screenOf(context)]!;
   @override
-  bool updateShouldNotify(AppLayout old) => old.isTV != isTV;
+  bool updateShouldNotify(AppLayout old) =>
+      old.isTV != isTV || old.minText != minText;
+}
+
+/// A named text size for this screen; see [KageType].
+TextStyle roleStyle(
+  BuildContext context,
+  TextRole role, {
+  Color color = fg,
+  FontWeight? weight,
+}) {
+  final size = KageType.size(role, AppLayout.screenOf(context));
+  return switch (role) {
+    TextRole.display || TextRole.title => display.copyWith(
+      fontSize: size,
+      color: color == fg ? fgBright : color,
+    ),
+    TextRole.kicker => mono.copyWith(
+      fontSize: size,
+      color: color,
+      letterSpacing: size * .08,
+      fontWeight: weight ?? FontWeight.w500,
+    ),
+    _ => uiStyle(
+      context,
+      size: size,
+      color: role == TextRole.meta && color == fg ? muted : color,
+      weight:
+          weight ??
+          (role == TextRole.heading || role == TextRole.label
+              ? FontWeight.w600
+              : FontWeight.w400),
+    ),
+  };
 }
 
 // Android TVs report different densities for the same output resolution.
@@ -212,9 +266,11 @@ class _TVViewportState extends State<TVViewport> {
         // Desktop windows are closer to the screen than a TV and can be any
         // size, so they use a larger canvas and never shrink text below
         // a readable size.
+        // The floor of .8 keeps desktop text (17 on the canvas) at least
+        // about 14 px on screen in a small window.
         final scale = isDesktop
             ? math.max(
-                .7,
+                .8,
                 math.min(
                   constraints.maxWidth / 1920,
                   constraints.maxHeight / 1080,
@@ -263,7 +319,7 @@ TextStyle uiStyle(
 }) => TextStyle(
   fontFamily: 'Inter',
   fontFamilyFallback: const ['NotoSansJP'],
-  fontSize: math.max(size, AppLayout.tvOf(context) ? 20 : 15),
+  fontSize: math.max(size, AppLayout.minTextOf(context)),
   fontWeight: weight,
   height: height,
   color: color,
