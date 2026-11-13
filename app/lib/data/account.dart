@@ -180,6 +180,24 @@ class AccountSession extends ChangeNotifier {
     }
   }
 
+  /// The sign-ins linked to this account, by provider ('discord',
+  /// 'google'), with the name or email the server keeps for each.
+  ///
+  /// The Discord id rides in the access token, which only changes on
+  /// refresh, so a Discord login added since then gets a fresh token here.
+  Future<Map<String, String>> logins() async {
+    final me = await request('GET', '/me');
+    final linked = {
+      for (final i in me['identities'] as List? ?? const [])
+        if (i is Map && i['provider'] is String)
+          i['provider'] as String: i['name'] as String? ?? '',
+    };
+    if (linked.containsKey('discord') != hasDiscord) {
+      await accessToken(force: true);
+    }
+    return linked;
+  }
+
   /// Calls the account server as this account. A 401 refreshes once.
   Future<Json> request(
     String method,

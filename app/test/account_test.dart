@@ -42,6 +42,12 @@ class FakeServer {
   bool stale = false;
   String? check;
 
+  /// Linked sign-ins, as GET /me lists them. The access token's Discord id
+  /// follows this list.
+  final identities = <Map<String, String>>[
+    {'provider': 'discord', 'name': 'Alice'},
+  ];
+
   /// The server's own copy of the vault key, when [serverCopies] is on.
   bool serverCopies = false;
   String? serverKey;
@@ -60,7 +66,8 @@ class FakeServer {
   Map<String, dynamic> tokens(String dev) {
     final refresh = 'r-${++refreshes}';
     refreshTokens[refresh] = dev;
-    final access = fakeAccess('acc-1');
+    final discord = identities.any((i) => i['provider'] == 'discord');
+    final access = fakeAccess('acc-1', discord: discord ? '111' : '');
     return {
       'access_token': '${access.substring(0, access.lastIndexOf('.'))}.$dev',
       'expires_in': 3600,
@@ -87,6 +94,8 @@ class FakeServer {
     switch ('${r.method} $path') {
       case 'HEAD /login':
         return http.Response('', 200);
+      case 'GET /me':
+        return ok({'identities': identities});
       case 'POST /token':
         if (body['grant_type'] == 'code') {
           final id = 'dev-${++devicesMade}';
@@ -366,6 +375,40 @@ void main() {
       expect(m.accounts, isEmpty);
       expect(m.lastError, contains('signed out'));
     });
+  });
+
+  group('linked sign-ins', () {
+    test(
+      'lists Discord and Google and picks up a newly added Discord',
+      () async {
+        final server = FakeServer()
+          ..identities.replaceRange(0, 1, [
+            {'provider': 'google', 'name': 'alice@example.com'},
+          ]);
+        final m = await signedInDevice(
+          server,
+          MemoryTokens(),
+          await SharedPreferences.getInstance(),
+        );
+        final s = m.accounts.single;
+        expect(s.hasDiscord, isFalse);
+        expect(await s.logins(), {'google': 'alice@example.com'});
+
+        // Discord added in the browser: the old token has no Discord id yet.
+        server.identities.add({'provider': 'discord', 'name': 'Alice'});
+        final before = server.refreshes;
+        expect(await s.logins(), {
+          'google': 'alice@example.com',
+          'discord': 'Alice',
+        });
+        expect(s.hasDiscord, isTrue);
+        expect(server.refreshes, before + 1);
+
+        // Nothing new: no extra refresh.
+        await s.logins();
+        expect(server.refreshes, before + 1);
+      },
+    );
   });
 
   group('sync', () {
