@@ -967,30 +967,36 @@ class AppButton extends StatelessWidget {
             ? Center(
                 child: Icon(icon, size: isTV ? 24 : 20, color: ink),
               )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (icon != null) ...[
-                    Icon(icon, size: isTV ? 24 : 20, color: ink),
-                    const SizedBox(width: 8),
-                  ],
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: size == ButtonSize.sm ? 1 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: uiStyle(
-                        context,
-                        weight: FontWeight.w600,
-                        color: ink,
+            // A stretched button keeps its label in the middle; a loose
+            // one stays as wide as its label.
+            : Align(
+                widthFactor: 1,
+                heightFactor: 1,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (icon != null) ...[
+                      Icon(icon, size: isTV ? 24 : 20, color: ink),
+                      const SizedBox(width: 8),
+                    ],
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: size == ButtonSize.sm ? 1 : 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: uiStyle(
+                          context,
+                          weight: FontWeight.w600,
+                          color: ink,
+                        ),
                       ),
                     ),
-                  ),
-                  if (trailingIcon != null) ...[
-                    const SizedBox(width: 6),
-                    Icon(trailingIcon, size: isTV ? 20 : 16, color: muted),
+                    if (trailingIcon != null) ...[
+                      const SizedBox(width: 6),
+                      Icon(trailingIcon, size: isTV ? 20 : 16, color: muted),
+                    ],
                   ],
-                ],
+                ),
               ),
       ),
     );

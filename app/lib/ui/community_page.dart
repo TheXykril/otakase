@@ -54,14 +54,18 @@ class DiscordPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             if (!d.linked)
-              AppButton(
-                label: 'Link Discord',
-                autofocus: true,
-                isTV: isTV,
-                onPressed: () => showDialog<void>(
-                  context: context,
-                  builder: (_) =>
-                      DiscordLinkDialog(services: services, isTV: isTV),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppButton(
+                  label: 'Link Discord',
+                  filled: true,
+                  autofocus: true,
+                  isTV: isTV,
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) =>
+                        DiscordLinkDialog(services: services, isTV: isTV),
+                  ),
                 ),
               )
             else ...[
