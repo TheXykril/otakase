@@ -146,6 +146,9 @@ type castSession struct {
 	// blocked is set when the device could not reach this machine;
 	// canAllow when this computer has a firewall the app can open.
 	blocked, canAllow bool
+	// lost is set when the device stopped answering for a while; it is
+	// still asked, and clears the error once it answers again.
+	lost bool
 }
 
 func (c *Core) castOperation(ctx context.Context, req request) string {
@@ -305,6 +308,7 @@ func (k *caster) start(c *Core, in castRequest) (any, error) {
 	s.state, s.err, s.note = "connecting", "", ""
 	s.seen, s.paused, s.position = false, false, in.Start
 	s.fetchCheck, s.direct, s.blocked = false, false, false
+	s.lost = false
 	s.duration = in.Duration
 	s.lastOK = time.Now()
 	s.mu.Unlock()
@@ -739,9 +743,9 @@ func (k *caster) status() any {
 // poll reads the device once. Called with op held.
 func (s *castSession) poll() {
 	s.mu.Lock()
-	player, state, load := s.player, s.state, s.load
+	player, state, load, lost := s.player, s.state, s.load, s.lost
 	s.mu.Unlock()
-	if player == nil || state == "error" || state == "stopped" || state == "connecting" || state == "ended" {
+	if player == nil || state == "error" && !lost || state == "stopped" || state == "connecting" || state == "ended" {
 		return
 	}
 	p, err := player.Progress()
@@ -752,11 +756,16 @@ func (s *castSession) poll() {
 	}
 	if err != nil {
 		if time.Since(s.lastOK) > castStatusGone {
-			s.state, s.err = "error", castMessage(err)
+			s.state, s.err, s.lost = "error", castMessage(err), true
 		}
 		return
 	}
 	s.lastOK = time.Now()
+	if s.lost {
+		// A TV that only stopped answering for a while plays on.
+		s.lost, s.err = false, ""
+		s.state = "playing"
+	}
 	s.volume = player.Volume()
 	if p.Settling {
 		return

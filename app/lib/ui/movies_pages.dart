@@ -966,7 +966,13 @@ class _TitlePageState extends State<TitlePage> {
         await Navigator.push(
           context,
           OtakaseRoute<void>(
-            builder: (_) => RemoteNowPlaying(services: widget.services),
+            builder: (_) => RemoteNowPlaying(
+              services: widget.services,
+              starting: [
+                request.title,
+                request.subtitle,
+              ].where((s) => s.isNotEmpty).join(' · '),
+            ),
           ),
         );
     }

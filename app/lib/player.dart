@@ -206,7 +206,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Duration playbackPosition = Duration.zero;
 
   /// The device the episode plays on instead of this screen.
-  late final cast = PlayerCast(widget.services.core);
+  late final cast = PlayerCast(
+    widget.services.core,
+    awake: (text) => widget.services.awake.busy('cast', text),
+  );
   CastDevice? get castDevice => cast.device;
   CastStatus? get castStatus => cast.status;
 
@@ -659,13 +662,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               : 0,
         );
         if (!mounted || g != generation) return;
-        playbackPosition = Duration(seconds: savedResume);
-        startedAt = playbackPosition;
-        started = true;
-        setState(() => busy = false);
-        unawaited(loadEpisodes(g));
-        showControls();
-        return;
+        // A device that refused it leaves the episode on this screen.
+        if (casting) {
+          playbackPosition = Duration(seconds: savedResume);
+          startedAt = playbackPosition;
+          started = true;
+          setState(() => busy = false);
+          unawaited(loadEpisodes(g));
+          showControls();
+          return;
+        }
       }
       final initial = source!;
       final initialCopy = copy;
@@ -1515,7 +1521,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     unawaited(
       navigator.push(
         OtakaseRoute<void>(
-          builder: (_) => RemoteNowPlaying(services: widget.services),
+          builder: (_) => RemoteNowPlaying(
+            services: widget.services,
+            starting: isTitle
+                ? [
+                    request!.title,
+                    request!.subtitle,
+                  ].where((s) => s.isNotEmpty).join(' · ')
+                : anime.airedEpisodes == 1
+                ? anime.title
+                : '${anime.title} · Episode $episode',
+          ),
         ),
       ),
     );
@@ -1569,7 +1585,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(placeNote(context, SnackBar(content: Text(e.message))));
-      cast.device = null;
+      cast.drop();
       setState(() {});
     }
   }

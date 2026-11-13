@@ -16,6 +16,21 @@ import 'skip_marker.dart';
 bool remoteVisible(AppServices services, Json status) =>
     status['adult'] != true || services.store.adultAllowed;
 
+/// The episode number worth naming for what the TV plays, 0 for none: a
+/// film, an anime film of one episode, or a series episode whose title
+/// already carries its season and number.
+int remoteEpisode(Json status) {
+  final ep = number(status['episode']);
+  if (ep <= 0 || status['kind'] == 'movie' || number(status['episodes']) == 1) {
+    return 0;
+  }
+  return ep;
+}
+
+/// Whether there are other episodes to pick from on the TV.
+bool remoteHasEpisodes(Json status) =>
+    status['room'] != true && number(status['episodes']) > 1;
+
 String remoteStateText(RemoteLink link) => switch (link.state) {
   LinkState.live || LinkState.polling => 'Connected',
   LinkState.away => 'Away, through Discord',
@@ -27,8 +42,12 @@ String remoteStateText(RemoteLink link) => switch (link.state) {
 /// the opening and ending marked, skip, episodes, tracks, quality,
 /// volume and stop.
 class RemoteNowPlaying extends StatefulWidget {
-  const RemoteNowPlaying({super.key, required this.services});
+  const RemoteNowPlaying({super.key, required this.services, this.starting});
   final AppServices services;
+
+  /// What the phone just asked the TV to play, shown as starting until the
+  /// TV's player opens.
+  final String? starting;
   @override
   State<RemoteNowPlaying> createState() => _RemoteNowPlayingState();
 }
@@ -37,6 +56,10 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
   double? dragging, volume;
   String? error;
 
+  /// The title sent to the TV while its player has not opened yet.
+  String? starting;
+  Timer? startingTimer;
+
   RemoteLink? get link => widget.services.remoteLink.value;
 
   @override
@@ -44,10 +67,19 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
     super.initState();
     // The remote is held like a phone, never turned sideways.
     ScreenOrientation.lockUpright();
+    starting = widget.starting;
+    if (starting != null) {
+      // A title the TV could not find leaves the TV showing why; the phone
+      // stops saying it is starting after a while.
+      startingTimer = Timer(const Duration(seconds: 60), () {
+        if (mounted) setState(() => starting = null);
+      });
+    }
   }
 
   @override
   void dispose() {
+    startingTimer?.cancel();
     ScreenOrientation.release();
     super.dispose();
   }
@@ -188,6 +220,10 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
         duration = number(status['duration']).toDouble(),
         position = dragging ?? number(status['position']).toDouble(),
         problem = error ?? current.error;
+    if (playing && starting != null) {
+      starting = null;
+      startingTimer?.cancel();
+    }
     return Scaffold(
       backgroundColor: bgDeep,
       body: Stack(
@@ -250,11 +286,11 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
                             color: fgBright,
                           ),
                         ),
-                        if (visible && number(status['episode']) > 0)
+                        if (visible && remoteEpisode(status) > 0)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
-                              'EPISODE ${number(status['episode'])}',
+                              'EPISODE ${remoteEpisode(status)}',
                               style: mono.copyWith(letterSpacing: 1.2),
                             ),
                           ),
@@ -390,32 +426,51 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
     ],
   );
 
-  Widget idle(RemoteLink current) => Padding(
-    padding: const EdgeInsets.only(top: 120),
-    child: Column(
-      children: [
-        Icon(
-          current.live ? LucideIcons.tv : LucideIcons.wifiOff,
-          size: 48,
-          color: muted,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          current.live
-              ? 'Nothing is playing on ${current.tv.name}'
-              : remoteStateText(current),
-          textAlign: TextAlign.center,
-          style: uiStyle(context, size: 20, weight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Open an episode on the TV and its controls show up here.',
-          textAlign: TextAlign.center,
-          style: uiStyle(context, color: muted),
-        ),
-      ],
-    ),
-  );
+  Widget idle(RemoteLink current) {
+    final sent = current.live ? starting : null;
+    return Padding(
+      padding: const EdgeInsets.only(top: 120),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(
+            current.live ? LucideIcons.tv : LucideIcons.wifiOff,
+            size: 48,
+            color: muted,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            sent != null
+                ? 'Starting on ${current.tv.name}'
+                : current.live
+                ? 'Nothing is playing on ${current.tv.name}'
+                : remoteStateText(current),
+            key: const Key('remote-idle'),
+            textAlign: TextAlign.center,
+            style: uiStyle(context, size: 20, weight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          if (sent != null) ...[
+            Text(
+              sent,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: uiStyle(context, color: muted),
+            ),
+            const SizedBox(height: 16),
+            WorkingLine(label: 'Starting on ${current.tv.name}'),
+          ] else
+            Text(
+              'Pick something on this phone and choose Play on, or start '
+              'it on the TV. Its controls show up here.',
+              textAlign: TextAlign.center,
+              style: uiStyle(context, color: muted),
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget scrubber(Json status, double duration, double position) {
     final spans = [
@@ -594,8 +649,11 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
         if (t is Map) t.cast<String, dynamic>(),
     ];
     final subtitles = list('subtitles'), audio = list('audio');
-    final canEpisodes =
-        visible && status['room'] != true && number(status['episodes']) > 0;
+    final canEpisodes = visible && remoteHasEpisodes(status);
+    // A film has no episodes to pick, so the tool is left out.
+    final episodic =
+        number(status['episodes']) > 1 ||
+        status['kind'] != 'movie' && number(status['episodes']) == 0;
     Widget tool(String label, IconData icon, VoidCallback? tap) => Expanded(
       child: InkWell(
         key: Key('remote-tool-$label'),
@@ -622,11 +680,12 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
     );
     return Row(
       children: [
-        tool(
-          'Episodes',
-          LucideIcons.list,
-          canEpisodes ? () => episodes(status) : null,
-        ),
+        if (episodic)
+          tool(
+            'Episodes',
+            LucideIcons.list,
+            canEpisodes ? () => episodes(status) : null,
+          ),
         tool(
           'Subtitles',
           LucideIcons.captions,
@@ -679,8 +738,7 @@ class RemoteMiniBar extends StatelessWidget {
       final title = visible
           ? [
               '${status['title'] ?? ''}',
-              if (number(status['episode']) > 0)
-                'Ep ${number(status['episode'])}',
+              if (remoteEpisode(status) > 0) 'Ep ${remoteEpisode(status)}',
             ].where((s) => s.isNotEmpty).join(' · ')
           : 'Playing on ${link.tv.name}';
       return Material(

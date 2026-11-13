@@ -34,6 +34,15 @@ const tv = TVDevice(
 class FakeLan extends LanTransport {
   final commands = <String>[], hellos = <String>[];
   bool adult = false;
+
+  /// Plays a film rather than an anime episode.
+  bool film = false;
+
+  /// Nothing is playing on the TV.
+  bool idle = false;
+
+  /// Answers like a TV from before films could be started from a phone.
+  bool oldTV = false;
   int waits = 0;
 
   /// Answers like a TV on an older Otakase, so the phone asks for status.
@@ -82,6 +91,23 @@ class FakeLan extends LanTransport {
     }
     if (path == '/command') {
       commands.add('${body['action']}:${jsonEncode(body['args'])}');
+      if (oldTV && body['action'] == 'start') {
+        throw StateError('Choose an episode.');
+      }
+    }
+    if (idle) return {'has_player': false};
+    if (film) {
+      return {
+        'has_player': true,
+        'kind': 'movie',
+        'title': 'A film',
+        'episode': 0,
+        'episodes': 0,
+        'position': 40,
+        'duration': 6000,
+        'playing': true,
+        'volume': 50,
+      };
     }
     return {
       'has_player': true,
@@ -481,4 +507,83 @@ void main() {
       await active.close();
     },
   );
+
+  testWidgets('a film on the TV shows no episode number or episode picker', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    await tester.pumpWidget(const SizedBox());
+    final lan = FakeLan()..film = true;
+    final active = await services(lan: lan);
+    await active.tvRemote.pair(tv, '012345');
+    final link = active.controlTV(tv);
+    await tester.pumpWidget(page(RemoteNowPlaying(services: active)));
+    await tester.runAsync(link.ready);
+    await tester.pumpAndSettle();
+    expect(find.text('A film'), findsOneWidget);
+    expect(find.textContaining('EPISODE'), findsNothing);
+    expect(find.byKey(const Key('remote-tool-Episodes')), findsNothing);
+    expect(find.byKey(const Key('remote-tool-Subtitles')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await active.close();
+  });
+
+  testWidgets('the phone says it is starting until the TV player opens', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    await tester.pumpWidget(const SizedBox());
+    final lan = FakeLan()..idle = true;
+    final active = await services(lan: lan);
+    await active.tvRemote.pair(tv, '012345');
+    final link = active.controlTV(tv);
+    await tester.pumpWidget(
+      page(RemoteNowPlaying(services: active, starting: 'A film (2020)')),
+    );
+    await tester.runAsync(link.ready);
+    await tester.pump();
+    expect(find.text('Starting on Living room'), findsOneWidget);
+    expect(find.text('A film (2020)'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 61));
+    expect(find.text('Nothing is playing on Living room'), findsOneWidget);
+    expect(find.textContaining('Open an episode'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await active.close();
+  });
+
+  test('an older TV asked to play a film says to update it', () async {
+    final lan = FakeLan()..oldTV = true;
+    final active = await services(lan: lan);
+    await active.tvRemote.pair(tv, '012345');
+    final link = active.controlTV(tv);
+    await link.ready();
+    await expectLater(
+      link.send(
+        'start',
+        args: {
+          'title': {'kind': 'movie', 'trakt': 7, 'title': 'A film'},
+          'season': 0,
+          'episode': 0,
+        },
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          'Update Otakase on Living room to play films there.',
+        ),
+      ),
+    );
+    await expectLater(
+      link.send('start', args: {'anilist_id': 1, 'episode': 0}),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          'Choose an episode.',
+        ),
+      ),
+    );
+    await active.close();
+  });
 }
