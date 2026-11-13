@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -114,6 +115,18 @@ class AppStore extends ChangeNotifier {
   final Json _values = {};
   final Map<String, WatchEntry> _history = {};
   final Map<String, String> providerHealth = {};
+
+  /// How long a playing episode's spot waits in memory before it is written.
+  /// Pause, leaving the player and the episode ending write it at once.
+  static const historyWriteDelay = Duration(seconds: 30);
+
+  /// Ticks when the playing episode's spot moves. Only what shows that spot
+  /// live listens here; the rest of the app hears once playback pauses or
+  /// stops, so pages under the player don't rebuild while it plays.
+  final ValueNotifier<int> historyProgress = ValueNotifier(0);
+  Timer? _historyWrite;
+  bool _unannounced = false;
+  bool _disposed = false;
   String avatar = '';
   dynamic value(String key) => _values[key] ?? settingDefaults[key];
 
@@ -281,6 +294,9 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Saves where an episode is. A quiet save, made while it plays, keeps
+  /// the spot in memory, ticks [historyProgress] and writes it within
+  /// [historyWriteDelay]; [flushHistory] writes and announces it sooner.
   Future<void> progress(
     Anime anime,
     int episode,
@@ -289,6 +305,7 @@ class AppStore extends ChangeNotifier {
     bool completed = false,
     String? viewingKey,
     List<int>? viewingCheckpoint,
+    bool quiet = false,
   }) async {
     final old = entry(anime);
     _history.remove(old?.anime.key);
@@ -323,8 +340,38 @@ class AppStore extends ChangeNotifier {
       resumes: resumes,
       updated: DateTime.now().millisecondsSinceEpoch,
     );
+    if (quiet) {
+      _unannounced = true;
+      historyProgress.value++;
+      _historyWrite ??= Timer(historyWriteDelay, () {
+        _historyWrite = null;
+        unawaited(_persist());
+      });
+      return;
+    }
     notifyListeners();
     await _persist();
+  }
+
+  /// Writes and announces spots saved quietly during playback.
+  Future<void> flushHistory() async {
+    if (_disposed) return;
+    if (_unannounced) notifyListeners();
+    if (_historyWrite != null) await _persist();
+  }
+
+  @override
+  void notifyListeners() {
+    _unannounced = false;
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    if (_historyWrite != null) unawaited(_persist());
+    historyProgress.dispose();
+    super.dispose();
   }
 
   Future<void> markWatched(Anime anime, int episode, bool watched) async {
@@ -349,12 +396,16 @@ class AppStore extends ChangeNotifier {
     await _persist();
   }
 
-  Future<void> _persist() => preferences
-      .setString(
-        '${namespace}history.v1',
-        jsonEncode(_history.values.map((e) => e.toJson()).toList()),
-      )
-      .then((_) {});
+  Future<void> _persist() {
+    _historyWrite?.cancel();
+    _historyWrite = null;
+    return preferences
+        .setString(
+          '${namespace}history.v1',
+          jsonEncode(_history.values.map((e) => e.toJson()).toList()),
+        )
+        .then((_) {});
+  }
 }
 
 /// A newer resume spot from another device, keeping what this device knew:

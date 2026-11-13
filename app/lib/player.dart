@@ -195,7 +195,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   /// The kind of span the viewer is marking, or null.
   String? marking;
   SkipSpan? markingExisting;
-  Duration position = Duration.zero, duration = Duration.zero;
+  Duration duration = Duration.zero;
+
+  /// Where the seek bar is. Kept apart from the page state so a position
+  /// event redraws the controls, not the whole player.
+  final positionValue = ValueNotifier(Duration.zero);
+  Duration get position => positionValue.value;
+  set position(Duration value) => positionValue.value = value;
   Duration playbackPosition = Duration.zero;
   late final CastClient caster = CastClient(widget.services.core);
 
@@ -330,9 +336,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         }
       }),
     ]);
+    // The spot is kept every few seconds in memory; the history is written
+    // and the app hears of it on pause, on leaving and at the end.
     saveTimer = Timer.periodic(
       const Duration(seconds: 5),
-      (_) => unawaited(save()),
+      (_) => unawaited(save(quiet: true)),
     );
     unawaited(
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
@@ -1162,9 +1170,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       watchForStall();
     }
     if (isTitle) {
-      setState(() {
-        if (!scrubbing) position = p;
-      });
+      if (!scrubbing) position = p;
       titleWatched(p);
       return;
     }
@@ -1185,10 +1191,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         .firstOrNull;
     final entered =
         active?.type != current?.type || active?.start != current?.start;
-    setState(() {
-      if (!scrubbing) position = p;
-      active = current;
-    });
+    if (!scrubbing) position = p;
+    if (!identical(active, current)) setState(() => active = current);
     if (current != null) {
       final setting = switch (current.type) {
         'op' => 'SkipOp',
@@ -1376,8 +1380,24 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> save({bool completed = false, bool leaving = false}) async {
-    if (profileStopped || busy || duration <= Duration.zero) return;
+  /// Saves where playback is. A quiet save keeps the spot in memory only;
+  /// any other save writes the history and tells the app.
+  Future<void> save({
+    bool completed = false,
+    bool leaving = false,
+    bool quiet = false,
+  }) async {
+    if (profileStopped) return;
+    await saveSpot(completed: completed, leaving: leaving, quiet: quiet);
+    if (!quiet && !isTitle) await widget.services.store.flushHistory();
+  }
+
+  Future<void> saveSpot({
+    required bool completed,
+    required bool leaving,
+    required bool quiet,
+  }) async {
+    if (busy || duration <= Duration.zero) return;
     final at = playbackPosition;
     if (isTitle) {
       final done = completed || markedWatched;
@@ -1404,6 +1424,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       completed: watched,
       viewingKey: viewingKey,
       viewingCheckpoint: viewing.checkpoint,
+      quiet: quiet && !watched,
     );
     if (newlyWatched) {
       if (finishesShow(widget.services, anime, episode)) {
@@ -2562,6 +2583,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     flash.dispose();
+    positionValue.dispose();
     discordMeter?.cancel();
     unawaited(widget.services.discord.stopWatching());
     unawaited(widget.services.presence.clear());
@@ -2670,52 +2692,54 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     return Stack(
       fit: StackFit.expand,
       children: [
-        DesktopPlayerBar(
-          title: anime.title,
-          subtitle: isTitle
-              ? titleLine
-              : 'Ep $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
-          position: position,
-          duration: duration,
-          buffered: player.state.buffer,
-          playing: isPlaying,
-          buffering: casting
-              ? castStatus?.state == 'buffering' ||
-                    castStatus?.state == 'loading'
-              : player.state.buffering,
-          silent: player.state.volume == 0,
-          fullscreen: fullscreen,
-          trackLabel: isTitle
-              ? 'Tracks'
-              : source?.mode.toUpperCase() ?? widget.mode.toUpperCase(),
-          centerLabel: isTitle ? request!.subtitle : 'Episode $episode',
-          stripes: spans,
-          playFocus: playFocus,
-          onBack: () => Navigator.pop(context),
-          onPlayPause: () {
-            unawaited(playPause());
-            showControls();
-          },
-          casting: casting,
-          onCast: () => unawaited(castMenu()),
-          onSeekBy: (seconds) => unawaited(seek(seconds)),
-          onSeekStart: (_) {
-            scrubbing = true;
-            hideTimer?.cancel();
-          },
-          onSeekChanged: (v) =>
-              setState(() => position = Duration(milliseconds: v.round())),
-          onSeekEnd: (v) {
-            scrubbing = false;
-            unawaited(seekTo(Duration(milliseconds: v.round())));
-            showControls();
-          },
-          onNext: canNext ? () => unawaited(next()) : null,
-          onMute: toggleMute,
-          onTracks: () => unawaited(trackPanel()),
-          onQuality: () => unawaited(qualityPanel()),
-          onSkipTimes: isTitle ? null : () => unawaited(skipPanel()),
-          onFullscreen: () => unawaited(toggleFullscreen()),
+        ValueListenableBuilder<Duration>(
+          valueListenable: positionValue,
+          builder: (context, position, _) => DesktopPlayerBar(
+            title: anime.title,
+            subtitle: isTitle
+                ? titleLine
+                : 'Ep $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
+            position: position,
+            duration: duration,
+            buffered: player.state.buffer,
+            playing: isPlaying,
+            buffering: casting
+                ? castStatus?.state == 'buffering' ||
+                      castStatus?.state == 'loading'
+                : player.state.buffering,
+            silent: player.state.volume == 0,
+            fullscreen: fullscreen,
+            trackLabel: isTitle
+                ? 'Tracks'
+                : source?.mode.toUpperCase() ?? widget.mode.toUpperCase(),
+            centerLabel: isTitle ? request!.subtitle : 'Episode $episode',
+            stripes: spans,
+            playFocus: playFocus,
+            onBack: () => Navigator.pop(context),
+            onPlayPause: () {
+              unawaited(playPause());
+              showControls();
+            },
+            casting: casting,
+            onCast: () => unawaited(castMenu()),
+            onSeekBy: (seconds) => unawaited(seek(seconds)),
+            onSeekStart: (_) {
+              scrubbing = true;
+              hideTimer?.cancel();
+            },
+            onSeekChanged: (v) => position = Duration(milliseconds: v.round()),
+            onSeekEnd: (v) {
+              scrubbing = false;
+              unawaited(seekTo(Duration(milliseconds: v.round())));
+              showControls();
+            },
+            onNext: canNext ? () => unawaited(next()) : null,
+            onMute: toggleMute,
+            onTracks: () => unawaited(trackPanel()),
+            onQuality: () => unawaited(qualityPanel()),
+            onSkipTimes: isTitle ? null : () => unawaited(skipPanel()),
+            onFullscreen: () => unawaited(toggleFullscreen()),
+          ),
         ),
         Positioned(
           right: 40,
@@ -3015,77 +3039,79 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   },
                 ),
               if (overlay && !busy && error.isEmpty && !isDesktop)
-                PhonePlayerControls(
-                  isTV: widget.isTV,
-                  title: anime.title,
-                  subtitle: isTitle
-                      ? titleLine
-                      : 'Episode $episode · ${source?.mode ?? widget.mode}',
-                  position: position,
-                  duration: duration,
-                  spans: spans,
-                  playing: isPlaying,
-                  buffering: casting
-                      ? castStatus?.state == 'buffering'
-                      : player.state.buffering,
-                  playFocus: playFocus,
-                  onBack: () => Navigator.pop(context),
-                  onPlayPause: () {
-                    unawaited(playPause());
-                    showControls();
-                  },
-                  onSeekBy: (s) => unawaited(seek(s)),
-                  onSeekStart: (_) {
-                    scrubbing = true;
-                    hideTimer?.cancel();
-                  },
-                  onSeekChanged: (v) => setState(
-                    () => position = Duration(milliseconds: v.round()),
-                  ),
-                  onSeekEnd: (v) {
-                    scrubbing = false;
-                    unawaited(seekTo(Duration(milliseconds: v.round())));
-                    showControls();
-                  },
-                  topActions: [
-                    if (!widget.isTV)
-                      IconButton(
-                        key: const Key('player-cast'),
-                        tooltip: casting ? 'Casting' : 'Cast',
-                        onPressed: () => unawaited(castMenu()),
-                        icon: Icon(
-                          LucideIcons.cast,
-                          color: casting ? accentText : fgBright,
+                ValueListenableBuilder<Duration>(
+                  valueListenable: positionValue,
+                  builder: (context, position, _) => PhonePlayerControls(
+                    isTV: widget.isTV,
+                    title: anime.title,
+                    subtitle: isTitle
+                        ? titleLine
+                        : 'Episode $episode · ${source?.mode ?? widget.mode}',
+                    position: position,
+                    duration: duration,
+                    spans: spans,
+                    playing: isPlaying,
+                    buffering: casting
+                        ? castStatus?.state == 'buffering'
+                        : player.state.buffering,
+                    playFocus: playFocus,
+                    onBack: () => Navigator.pop(context),
+                    onPlayPause: () {
+                      unawaited(playPause());
+                      showControls();
+                    },
+                    onSeekBy: (s) => unawaited(seek(s)),
+                    onSeekStart: (_) {
+                      scrubbing = true;
+                      hideTimer?.cancel();
+                    },
+                    onSeekChanged: (v) =>
+                        position = Duration(milliseconds: v.round()),
+                    onSeekEnd: (v) {
+                      scrubbing = false;
+                      unawaited(seekTo(Duration(milliseconds: v.round())));
+                      showControls();
+                    },
+                    topActions: [
+                      if (!widget.isTV)
+                        IconButton(
+                          key: const Key('player-cast'),
+                          tooltip: casting ? 'Casting' : 'Cast',
+                          onPressed: () => unawaited(castMenu()),
+                          icon: Icon(
+                            LucideIcons.cast,
+                            color: casting ? accentText : fgBright,
+                          ),
                         ),
-                      ),
-                  ],
-                  above: [
-                    if (active != null) skipButton(),
-                    if (countdownSeconds > 0) nextCard(context),
-                  ],
-                  actions: [
-                    PlayerButton(
-                      icon: LucideIcons.skipForward,
-                      label: 'Next',
-                      onPressed: canNext ? () => next() : null,
-                    ),
-                    PlayerButton(
-                      icon: LucideIcons.captions,
-                      label: 'Audio & subs',
-                      onPressed: trackPanel,
-                    ),
-                    PlayerButton(
-                      icon: LucideIcons.gauge,
-                      label: 'Quality',
-                      onPressed: qualityPanel,
-                    ),
-                    if (!isTitle)
+                    ],
+                    above: [
+                      if (active != null) skipButton(),
+                      if (countdownSeconds > 0) nextCard(context),
+                    ],
+                    actions: [
                       PlayerButton(
-                        icon: LucideIcons.chevronsRight,
-                        label: 'Skip times',
-                        onPressed: skipPanel,
+                        icon: LucideIcons.skipForward,
+                        label: 'Next',
+                        onPressed: canNext ? () => next() : null,
                       ),
-                  ],
+                      PlayerButton(
+                        icon: LucideIcons.captions,
+                        label: 'Audio & subs',
+                        onPressed: trackPanel,
+                      ),
+                      PlayerButton(
+                        icon: LucideIcons.gauge,
+                        label: 'Quality',
+                        onPressed: qualityPanel,
+                      ),
+                      if (!isTitle)
+                        PlayerButton(
+                          icon: LucideIcons.chevronsRight,
+                          label: 'Skip times',
+                          onPressed: skipPanel,
+                        ),
+                    ],
+                  ),
                 ),
             ],
           ),
