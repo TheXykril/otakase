@@ -322,8 +322,8 @@ class _WatchPartiesPageState extends State<WatchPartiesPage> {
                 )
               else if (parties == null)
                 const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: SkeletonList(),
                 )
               else if (parties!.isEmpty)
                 Padding(

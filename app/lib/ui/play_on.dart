@@ -231,20 +231,15 @@ class _PlayOnSheetState extends State<_PlayOnSheet> {
             else if (searching)
               Padding(
                 padding: const EdgeInsets.all(12),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    Text(
+                      'Looking for cast devices',
+                      style: uiStyle(context, color: muted),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Looking for cast devices',
-                        style: uiStyle(context, color: muted),
-                      ),
-                    ),
+                    const SizedBox(height: 10),
+                    const WorkingLine(label: 'Looking for cast devices'),
                   ],
                 ),
               )

@@ -406,8 +406,8 @@ class _MoviesHomeState extends State<MoviesHome> {
                   }
                   if (!snap.hasData) {
                     return const Padding(
-                      padding: EdgeInsets.all(40),
-                      child: Center(child: CircularProgressIndicator()),
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: SkeletonList(rows: 4, height: 180),
                     );
                   }
                   if (snap.data!.values.every((items) => items.isEmpty)) {
@@ -1504,7 +1504,7 @@ class _TitlePageState extends State<TitlePage> {
                     const SectionLabel('Episodes'),
                     const SizedBox(height: 12),
                     if (loadingEpisodes)
-                      const Center(child: CircularProgressIndicator())
+                      const SkeletonList(rows: 4, height: 72)
                     else if (episodeError.isNotEmpty)
                       FailureView(
                         message: episodeError,

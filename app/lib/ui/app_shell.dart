@@ -640,52 +640,23 @@ class _AppShellState extends State<AppShell> {
                         FocusManager.instance.highlightMode ==
                         FocusHighlightMode.traditional;
                     final focused = remote && focusedNav == index;
-                    // While the header has focus, the focused tab grows and
-                    // glows and the others fade, without a frame or pill.
-                    final faded = remote && focusedNav != null && !focused;
-                    final motion = MediaQuery.disableAnimationsOf(context)
-                        ? Duration.zero
-                        : const Duration(milliseconds: 180);
+                    // A focused tab turns bright; the open tab keeps the
+                    // Shu mark. No glow, no scale.
                     return Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        AnimatedOpacity(
-                          duration: motion,
-                          opacity: faded ? .4 : 1,
-                          child: AnimatedScale(
-                            duration: motion,
-                            curve: Curves.easeOut,
-                            scale: focused ? 1.15 : 1,
-                            child: Text(
-                              label,
-                              style:
-                                  uiStyle(
-                                    context,
-                                    weight: focused
-                                        ? FontWeight.w700
-                                        : active
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                    color: focused || hoveredNav == index
-                                        ? fgBright
-                                        : active
-                                        ? fg
-                                        : muted,
-                                  ).copyWith(
-                                    shadows: focused
-                                        ? [
-                                            Shadow(
-                                              color: shu.withValues(alpha: .8),
-                                              blurRadius: 10,
-                                            ),
-                                            Shadow(
-                                              color: shu.withValues(alpha: .5),
-                                              blurRadius: 28,
-                                            ),
-                                          ]
-                                        : null,
-                                  ),
-                            ),
+                        Text(
+                          label,
+                          style: uiStyle(
+                            context,
+                            weight: focused || active
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                            color: focused || hoveredNav == index
+                                ? fgBright
+                                : active
+                                ? fg
+                                : muted,
                           ),
                         ),
                         const SizedBox(height: 7),

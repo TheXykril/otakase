@@ -192,7 +192,7 @@ class _LauncherPlayerWindowState extends State<LauncherPlayerWindow> {
   Widget build(BuildContext context) => Scaffold(
     body: Center(
       child: widget.services.profileId == widget.request.profileId
-          ? const CircularProgressIndicator()
+          ? const SizedBox(width: 160, child: WorkingLine(label: 'Loading'))
           : TextButton(
               onPressed: close,
               child: const Text('Close player. The selected profile changed.'),

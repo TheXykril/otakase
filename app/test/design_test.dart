@@ -28,7 +28,7 @@ Finder rings() => find.byWidgetPredicate(
   (w) =>
       w is AnimatedContainer &&
       w.decoration is BoxDecoration &&
-      ((w.decoration as BoxDecoration).border as Border?)?.top.color == shu,
+      ((w.decoration as BoxDecoration).border as Border?)?.top.color == fgBright,
 );
 void main() {
   testWidgets(
