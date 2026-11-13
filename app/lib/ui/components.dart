@@ -3362,3 +3362,48 @@ class CutoutInset extends StatelessWidget {
     ),
   );
 }
+
+/// Part of a page that takes the remote's Back before the app does, like a
+/// settings pane that hands focus back to its section in the sidebar.
+class BackTo extends StatefulWidget {
+  const BackTo({super.key, required this.onBack, required this.child});
+  final VoidCallback onBack;
+  final Widget child;
+
+  static final _open = <_BackToState>{};
+
+  /// Runs the Back of the innermost part holding focus. False when focus
+  /// sits outside every such part.
+  static bool handle() {
+    for (final part in _open.toList().reversed) {
+      if (part.node.hasFocus) {
+        part.widget.onBack();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @override
+  State<BackTo> createState() => _BackToState();
+}
+
+class _BackToState extends State<BackTo> {
+  final node = FocusNode(debugLabel: 'Back to', skipTraversal: true);
+  @override
+  void initState() {
+    super.initState();
+    BackTo._open.add(this);
+  }
+
+  @override
+  void dispose() {
+    BackTo._open.remove(this);
+    node.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      Focus(focusNode: node, canRequestFocus: false, child: widget.child);
+}

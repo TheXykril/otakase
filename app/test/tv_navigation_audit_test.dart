@@ -336,6 +336,19 @@ void main() {
       final moreNavigation = navigation(tester, 'More');
       await key(tester, LogicalKeyboardKey.select);
       expect(moreNavigation.hasFocus, isFalse);
+      final pane = find.byKey(ValueKey('desktop-settings-$title'));
+      if (pane.evaluate().isNotEmpty) {
+        // Settings sections open beside the sidebar with the remote on
+        // their first setting; Back returns to the section.
+        expect(focusedWithin(pane), isTrue, reason: 'Pane for $title');
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(focusedWithin(row), isTrue, reason: 'Return focus for $title');
+        await home(tester);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        return;
+      }
       // Every page and sheet must expose a remote-reachable Back control.
       expect(find.byTooltip('Back'), findsOneWidget);
       for (var i = 0; i < 24 && !focusedWithin(find.byTooltip('Back')); i++) {

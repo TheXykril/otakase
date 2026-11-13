@@ -528,6 +528,32 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// A TV remote resting on a Continue watching card puts it in the hero.
+  void focusWatch(WatchEntry entry) {
+    artTimer?.cancel();
+    artTimer = Timer(
+      MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      () {
+        if (mounted) setState(() => focused = entry);
+      },
+    );
+  }
+
+  /// The hero pick for what a TV remote rests on: its Continue watching pick
+  /// when it has one, otherwise the next episode from the list.
+  HeroPick focusPick(WatchEntry e, List<HeroPick> picks) =>
+      picks.where((p) => p.anime.key == e.anime.key).firstOrNull ??
+      HeroPick(
+        entry: e,
+        anime: e.anime,
+        kicker: 'On your list · Ep ${e.episode}',
+        action: 'Play episode ${e.episode}',
+        onPlay: () => widget.onResume(e),
+        onDetails: () => widget.onOpen(e.anime),
+      );
+
   @override
   void dispose() {
     widget.services.movies.removeListener(titlesChanged);
@@ -604,7 +630,10 @@ class _HomePageState extends State<HomePage> {
     }
 
     final resume = continuing.firstOrNull;
-    final shelf = isDesktop ? continuing : continuing.skip(1).toList();
+    // Desktop and TV share one composition: a big hero, then wide Continue
+    // watching cards. The phone keeps its banner and poster shelf.
+    final wide = isDesktop || widget.isTV;
+    final shelf = wide ? continuing : continuing.skip(1).toList();
     final watchlist = titles && s.trakt.signedIn ? s.movies.watchlist : null;
     String? titleLabel(WatchEntry e) => switch (titleProgress[e.anime.key]) {
       final t? => t.title.isShow && t.episode > 0 ? t.code : 'MOVIE',
@@ -696,39 +725,45 @@ class _HomePageState extends State<HomePage> {
         key: const PageStorageKey('home-scroll'),
         padding: EdgeInsets.only(bottom: contentBottom(context)),
         children: [
-          if (isDesktop) ...[
-            DesktopHero(
-              picks: heroPicks(continuing, titleProgress),
-              topInset: widget.topInset,
+          if (wide)
+            Builder(
+              builder: (context) {
+                final all = heroPicks(continuing, titleProgress);
+                if (isDesktop) {
+                  return DesktopHero(picks: all, topInset: widget.topInset);
+                }
+                // The TV hero shows what the remote rests on, or what you
+                // are watching; a guest with nothing yet gets the discovery
+                // intro below instead.
+                final shown = tvFocus
+                    ? [focusPick(focused!, all)]
+                    : resume == null
+                    ? const <HeroPick>[]
+                    : all;
+                if (shown.isEmpty && configured.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                return DesktopHero(
+                  key: const Key('tv-home-hero'),
+                  picks: shown,
+                  topInset: widget.topInset,
+                  remote: true,
+                );
+              },
             ),
+          if (wide) ...[
             DesktopContinueRow(
               entries: shelf,
               onResume: widget.onResume,
               onMenu: (e) => unawaited(removeContinue(e.anime)),
+              onFocused: widget.isTV && !isDesktop ? focusWatch : null,
+              minCard: isDesktop ? 380 : 260,
               label: (e) => switch (titleProgress[e.anime.key]) {
                 final t? => titleCaption(t),
                 _ => null,
               },
             ),
           ],
-          if (!isDesktop &&
-              widget.isTV &&
-              (stage != null || configured.isNotEmpty))
-            TVHomeHero(
-              key: const Key('tv-home-hero'),
-              anime: stage?.anime,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(height: widget.topInset),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(48, 12, 48, 16),
-                    child: PageHeading('Back to your story', '続'),
-                  ),
-                  if (stage != null) bannerCard(stage, tv: true),
-                ],
-              ),
-            ),
           if (!widget.isTV && (stage != null || configured.isNotEmpty))
             Padding(
               padding: EdgeInsets.fromLTRB(
@@ -762,7 +797,7 @@ class _HomePageState extends State<HomePage> {
               },
               autofocus: stage == null && service == lists.first,
             ),
-          if (!isDesktop && shelf.isNotEmpty)
+          if (!wide && shelf.isNotEmpty)
             PosterRow(
               title: 'Continue watching',
               items: shelf.map((e) => e.anime).toList(),

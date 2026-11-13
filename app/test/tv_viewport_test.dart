@@ -68,7 +68,7 @@ void main() {
     tester.view.physicalSize = const Size(3840, 2160);
     tester.view.devicePixelRatio = 4;
     await tester.pumpAndSettle();
-    await moreRow(tester, 'Display');
+    await moreRow(tester, 'Schedule');
     final back = find.byTooltip('Back');
     final rect = tester.getRect(back);
     expect(rect.left, greaterThanOrEqualTo(0));
@@ -76,7 +76,7 @@ void main() {
     await tester.tap(back);
     await tester.pumpAndSettle();
     expect(find.byTooltip('Back'), findsNothing);
-    expect(focusedWithin(find.byKey(const ValueKey('more-Display'))), isTrue);
+    expect(focusedWithin(find.byKey(const ValueKey('more-Schedule'))), isTrue);
     await tester.pumpWidget(const SizedBox());
   });
 

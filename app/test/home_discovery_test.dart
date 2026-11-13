@@ -117,8 +117,13 @@ void main() {
 
       await services.store.progress(fixture.anime, 5, 720, 1440);
       await tester.pumpAndSettle();
-      final resume = find.byKey(const Key('resume-card'));
-      await tester.tapAt(tester.getTopRight(resume) + const Offset(-24, 24));
+      // TV shares the desktop hero.
+      final resume = find.byKey(Key(tv ? 'desktop-hero' : 'resume-card'));
+      await tester.tapAt(
+        tv
+            ? tester.getRect(resume).centerRight - const Offset(80, 0)
+            : tester.getTopRight(resume) + const Offset(-24, 24),
+      );
       await tester.pumpAndSettle();
       expect(find.byType(ShowPage), findsOneWidget);
     });
