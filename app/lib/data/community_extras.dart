@@ -9,9 +9,11 @@ import 'movies.dart';
 import 'store.dart';
 import '../host.dart';
 
-// The CLI's other Community rows, now in the app: the server club, the
-// settings backup and Report a problem. All talk to the Discord bot
-// (bot/watchclub.go, appbackup.go, appreport.go).
+// The CLI's other Community rows, now in the app: the server club and
+// Report a problem. Both talk to the Discord bot (bot/watchclub.go,
+// appreport.go). Settings backups used to live with the bot too
+// (appbackup.go); the Otakase account syncs settings now, so an old backup
+// is moved into the profile once and deleted from the bot.
 
 /// The server club: a show and an episode to reach by a deadline.
 class ServerClub {
@@ -46,18 +48,6 @@ final _privateKey = RegExp(
 const _localKeys = {'StoragePath', 'AdultContent', 'ContinueWatchingAdult'};
 bool backupKeyKept(String key) =>
     key.isNotEmpty && !_privateKey.hasMatch(key) && !_localKeys.contains(key);
-
-/// The settings as a backup carries them: `Key=value` lines, like the CLI's
-/// config file, so a CLI backup restores here and the other way round.
-String backupText(AppStore store) {
-  final lines = <String>[];
-  for (final key in settingDefaults.keys) {
-    if (!backupKeyKept(key)) continue;
-    final v = store.value(key);
-    lines.add('$key=${v is List ? v.join(',') : v}');
-  }
-  return lines.join('\n');
-}
 
 /// Reads a backup's value for [key] in the type its default has.
 dynamic backupValue(String key, String raw) {
@@ -284,22 +274,7 @@ class CommunityExtras extends ChangeNotifier {
     }
   }
 
-  /// Backs up the settings; returns how many went.
-  Future<int> backUp() async {
-    final text = backupText(store);
-    if (utf8.encode(text).length > 64 << 10) {
-      throw StateError('The settings are too large to back up.');
-    }
-    await discord.request(
-      'POST',
-      '/v1/backup',
-      body: {'config': text, 'os': Host.goos, 'tv': Host.tv},
-      timeout: const Duration(seconds: 15),
-    );
-    return '\n'.allMatches(text).length + 1;
-  }
-
-  /// The saved backup, or null when there is none.
+  /// The old backup kept by the bot, or null when there is none.
   Future<({String config, DateTime? at, String fromOS})?> fetchBackup() async {
     try {
       final r = await discord.request(
@@ -321,16 +296,24 @@ class CommunityExtras extends ChangeNotifier {
     }
   }
 
-  /// Lays a backup over the settings; returns how many it set.
-  Future<int> restore(String config) async {
-    final values = backupSettings(config);
-    for (final e in values.entries) {
+  /// Moves an old settings backup from the bot into this profile, which the
+  /// Otakase account then syncs. Only settings still at their defaults are
+  /// taken, so nothing chosen on this device is overwritten. The bot's copy
+  /// is deleted after. Returns how many settings it set, or null when
+  /// Discord is not reachable yet (try again later).
+  Future<int?> moveOldBackup() async {
+    if (!discord.linked) return null;
+    final backup = await fetchBackup();
+    if (backup == null) return 0;
+    var n = 0;
+    for (final e in backupSettings(backup.config).entries) {
+      if (store.isSet(e.key)) continue;
       await store.set(e.key, e.value);
+      n++;
     }
-    return values.length;
+    await discord.request('DELETE', '/v1/backup');
+    return n;
   }
-
-  Future<void> deleteBackup() => discord.request('DELETE', '/v1/backup');
 
   /// Posts a report to the support forum as the linked member; returns the
   /// post's link.

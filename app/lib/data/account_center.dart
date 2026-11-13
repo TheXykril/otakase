@@ -239,6 +239,31 @@ class AccountCenter extends ChangeNotifier with WidgetsBindingObserver {
     final run = activeRun;
     services.discord.bridge = run == null ? null : _Bridge(run);
     services.accountRoute = run == null ? null : () => HubRoute(run.live);
+    if (run != null) unawaited(_moveOldBackup(services, run));
+  }
+
+  bool _moving = false;
+
+  /// Settings backups lived with the Discord bot before accounts synced
+  /// settings. Once per account, an old one is taken into the open profile
+  /// (settings still at their defaults only) and deleted from the bot.
+  Future<void> _moveOldBackup(AppServices services, AccountRun run) async {
+    final done = 'account.${run.session.id}.botBackupMoved';
+    if (_moving || closed || preferences.getBool(done) == true) return;
+    if (!run.sync.switches.on(SyncPart.settings)) return;
+    _moving = true;
+    try {
+      final n = await services.extras.moveOldBackup();
+      if (n == null) return;
+      await preferences.setBool(done, true);
+      if (n > 0) {
+        notify?.call('Your old settings backup moved to your Otakase account');
+      }
+    } catch (_) {
+      /* Tried again the next time the profile opens. */
+    } finally {
+      _moving = false;
+    }
   }
 
   /// Every account on a TV or computer answers the account's phones.

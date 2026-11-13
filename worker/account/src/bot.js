@@ -23,6 +23,10 @@ const relayed = [
   ['POST', /^\/v1\/party\/start$/, false],
   ['GET', /^\/v1\/party\/[A-Za-z0-9_-]{1,64}\/ws$/, false],
   ['GET', /^\/v1\/club$/, false],
+  // Settings backups moved to the account: the app takes an old one from
+  // the bot once, then deletes it there.
+  ['GET', /^\/v1\/backup$/, false],
+  ['DELETE', /^\/v1\/backup$/, false],
 ];
 
 export function relayRoute(method, path) {

@@ -41,6 +41,10 @@ class FakeServer {
   final requests = <String>[];
   bool stale = false;
   String? check;
+
+  /// The server's own copy of the vault key, when [serverCopies] is on.
+  bool serverCopies = false;
+  String? serverKey;
   bool Function(http.Request r)? unreachable;
 
   String deviceOf(http.Request r) {
@@ -146,6 +150,13 @@ class FakeServer {
           'key_version': keyVersion,
           'stale': stale,
           'has_check': check != null,
+          'server': !serverCopies
+              ? 'off'
+              : serverKey == null
+              ? 'missing'
+              : 'ready',
+          if (serverCopies && serverKey != null && !keys.containsKey(dev))
+            'server_key': serverKey,
           'wrapped': keys[dev],
           'holders': holders.toList(),
           'waiting': [
@@ -169,11 +180,19 @@ class FakeServer {
           keys.clear();
           keyVersion = v;
           stale = false;
+          serverKey = null;
           check = body['check'] as String?;
         } else if (v != keyVersion || !keys.containsKey(dev)) {
           return ok({'error': 'no key'}, 403);
         }
         keys.addAll((body['keys'] as Map).cast<String, String>());
+        return ok({'ok': true});
+      case 'PUT /vault/server':
+        if (!serverCopies) return ok({'error': 'off'}, 503);
+        if (body['key_version'] != keyVersion || !keys.containsKey(dev)) {
+          return ok({'error': 'no key'}, 403);
+        }
+        serverKey = body['key'] as String;
         return ok({'ok': true});
       case 'PUT /vault/check':
         if (!keys.containsKey(dev)) return ok({'error': 'no key'}, 403);
@@ -552,6 +571,72 @@ void main() {
       await vaultA.sync();
       expect(storeA.values['account.AniList'], '{"token":"t2"}');
     });
+    test('a new device gets the logins from the server copy', () async {
+      final server = FakeServer()..serverCopies = true;
+      final tokensA = MemoryTokens(), tokensB = MemoryTokens();
+      final prefsA = await SharedPreferences.getInstance();
+      final a = await signedInDevice(server, tokensA, prefsA);
+      SharedPreferences.setMockInitialValues({});
+      final prefsB = await SharedPreferences.getInstance();
+      final b = await signedInDevice(server, tokensB, prefsB);
+      final storeA = MemoryTokens()
+        ..values['account.AniList'] = '{"token":"t1"}';
+      final storeB = MemoryTokens();
+      final vaultA = AccountVault(
+        session: a.accounts.single,
+        keys: TokenStoreKeys(tokensA),
+        preferences: prefsA,
+        profileTokens: (_) => storeA,
+        boundProfiles: () => ['1'],
+      );
+      final vaultB = AccountVault(
+        session: b.accounts.single,
+        keys: TokenStoreKeys(tokensB),
+        preferences: prefsB,
+        profileTokens: (_) => storeB,
+        boundProfiles: () => ['1'],
+      );
+      addTearDown(vaultA.dispose);
+      addTearDown(vaultB.dispose);
+      await vaultA.sync();
+      expect(server.serverKey, isNotNull);
+      expect(server.check, await vaultCheck(unb64url(server.serverKey!)));
+      // No approval: B takes the server's copy and stores its own.
+      await vaultB.sync();
+      expect(vaultB.hasKey, isTrue);
+      expect(vaultB.waiting, isEmpty);
+      expect(server.keys.keys, containsAll(['dev-1', 'dev-2']));
+      expect(storeB.values['account.AniList'], '{"token":"t1"}');
+      // A removed device: the rotation hands the server the new key.
+      final old = server.serverKey;
+      server.stale = true;
+      server.publicKeys.remove('dev-2');
+      await vaultA.sync();
+      expect(server.keyVersion, 2);
+      expect(server.serverKey, isNotNull);
+      expect(server.serverKey, isNot(old));
+    });
+
+    test('a vault from before server copies hands one over', () async {
+      final server = FakeServer();
+      final tokens = MemoryTokens();
+      final prefs = await SharedPreferences.getInstance();
+      final m = await signedInDevice(server, tokens, prefs);
+      final vault = AccountVault(
+        session: m.accounts.single,
+        keys: TokenStoreKeys(tokens),
+        preferences: prefs,
+        profileTokens: (_) => MemoryTokens(),
+        boundProfiles: () => const [],
+      );
+      addTearDown(vault.dispose);
+      await vault.sync();
+      expect(server.requests, isNot(contains('PUT /vault/server')));
+      server.serverCopies = true;
+      await vault.sync();
+      expect(server.serverKey, isNotNull);
+    });
+
     test(
       'signing out and in again keeps the logins without approval',
       () async {

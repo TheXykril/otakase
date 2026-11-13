@@ -50,8 +50,8 @@
   watch row on Home.
 - **Copy link when the browser doesn't open.** Signing in to AniList or
   MAL on a computer offers the link to paste into any browser.
-- **Link Discord from where it's needed.** Settings backup and Watch
-  parties have a Link Discord button instead of pointing to another page.
+- **Link Discord from where it's needed.** Watch parties have a Link
+  Discord button instead of pointing to another page.
 
 ### Changed
 
@@ -76,6 +76,11 @@
 
 ### Removed
 
+- **Settings backup to Discord** is gone. Your Otakase account keeps your
+  settings in step on every device instead. A backup you made earlier moves
+  into the profile you have open the first time you sign in, without
+  changing settings you already picked there, and is then deleted from the
+  bot.
 - **Play in my own mpv** is gone. Everything plays in Otakase's own player
   on every device, with the same skips, tracking and remote.
 

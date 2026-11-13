@@ -9,82 +9,34 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func TestCleanBackup(t *testing.T) {
-	in := "# otakase\r\nPlayer=mpv\nKodiPassword=hunter2\nTraktClientSecret=abc\nMyAnimeListClientID=123\nSomeToken=x\n\nSkipOp=true\x07\n"
-	got := cleanBackup(in)
-	if got != "# otakase\nPlayer=mpv\nSkipOp=true" {
-		t.Fatalf("cleanBackup = %q", got)
-	}
-}
-
-func TestBackupEndpoints(t *testing.T) {
+func TestOldBackupEndpoints(t *testing.T) {
 	b := appTestBot(t)
 	backupLimit = newRateLimit(10, time.Hour)
 	tok := testToken(b, "u1")
-	other := testToken(b, "u1") // a second PC of the same member
-	if w := apiDo(t, b, http.MethodGet, "/v1/backup", nil, map[string]string{"Authorization": "Bearer " + tok}); w.Code != http.StatusNotFound {
+	auth := map[string]string{"Authorization": "Bearer " + tok}
+	if w := apiDo(t, b, http.MethodGet, "/v1/backup", nil, auth); w.Code != http.StatusNotFound {
 		t.Fatalf("get before any backup: %d", w.Code)
 	}
-	if w := apiJSON(t, b, "/v1/backup", `{"config":"Player=mpv\nKodiPassword=x"}`, tok); w.Code != http.StatusOK {
-		t.Fatalf("save: %d %s", w.Code, w.Body)
-	}
-	w := apiDo(t, b, http.MethodGet, "/v1/backup", nil, map[string]string{"Authorization": "Bearer " + other})
-	if w.Code != http.StatusOK {
-		t.Fatalf("get from the other app: %d %s", w.Code, w.Body)
-	}
-	if got := decode(t, w); got["config"] != "Player=mpv" || got["at"] == "" {
+	at := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	b.store.update(func(d *storeData) {
+		d.AppBackups = map[string]appBackup{"u1": {Config: "Player=mpv", At: at, FromOS: "windows"}}
+	})
+	got := decode(t, apiDo(t, b, http.MethodGet, "/v1/backup", nil, auth))
+	if got["config"] != "Player=mpv" || got["from_os"] != "windows" {
 		t.Fatalf("get: %v", got)
 	}
-	// The backup names the system it came from, not the one the link last
-	// reported.
-	b.store.update(func(d *storeData) {
-		l := d.AppLinks[hashToken(tok)]
-		l.OS = "android"
-		d.AppLinks[hashToken(tok)] = l
-	})
-	if w := apiJSON(t, b, "/v1/backup", `{"config":"Player=mpv","os":"windows","tv":true}`, tok); w.Code != http.StatusOK {
-		t.Fatalf("save from windows: %d %s", w.Code, w.Body)
+	// Nothing new is saved here any more.
+	if w := apiJSON(t, b, "/v1/backup", `{"config":"Player=vlc"}`, tok); w.Code == http.StatusOK {
+		t.Fatalf("save still works: %d", w.Code)
 	}
-	if bk, _ := b.memberBackup("u1"); bk.FromOS != "windows" || bk.FromTV {
-		t.Fatalf("from windows: %+v", bk)
-	}
-	if w := apiJSON(t, b, "/v1/backup", `{"config":"Player=mpv","os":"android","tv":true}`, tok); w.Code != http.StatusOK {
-		t.Fatalf("save from tv: %d %s", w.Code, w.Body)
-	}
-	if got := decode(t, apiDo(t, b, http.MethodGet, "/v1/backup", nil, map[string]string{"Authorization": "Bearer " + other})); got["from_os"] != "android" || got["from_tv"] != true {
-		t.Fatalf("from tv: %v", got)
-	}
-	if w := apiJSON(t, b, "/v1/backup", `{"config":"Player=mpv"}`, tok); w.Code != http.StatusOK {
-		t.Fatalf("save from old app: %d %s", w.Code, w.Body)
-	}
-	if bk, _ := b.memberBackup("u1"); bk.FromOS != "android" || bk.FromTV {
-		t.Fatalf("old app falls back to the link: %+v", bk)
-	}
-	if w := apiJSON(t, b, "/v1/backup", `{"config":"`+strings.Repeat("a", maxBackupBytes+1)+`"}`, tok); w.Code != http.StatusRequestEntityTooLarge && w.Code != http.StatusBadRequest {
-		t.Fatalf("too large: %d", w.Code)
-	}
-	if w := apiJSON(t, b, "/v1/backup", `{"config":"KodiPassword=x"}`, tok); w.Code != http.StatusBadRequest {
-		t.Fatalf("only secrets: %d", w.Code)
-	}
-	if w := apiDo(t, b, http.MethodDelete, "/v1/backup", nil, map[string]string{"Authorization": "Bearer " + tok}); w.Code != http.StatusOK {
+	if w := apiDo(t, b, http.MethodDelete, "/v1/backup", nil, auth); w.Code != http.StatusOK {
 		t.Fatalf("delete: %d", w.Code)
 	}
 	if _, ok := b.memberBackup("u1"); ok {
 		t.Fatal("backup still there after delete")
 	}
-	if w := apiJSON(t, b, "/v1/backup", `{"config":"Player=mpv"}`, ""); w.Code != http.StatusUnauthorized {
+	if w := apiDo(t, b, http.MethodGet, "/v1/backup", nil, nil); w.Code != http.StatusUnauthorized {
 		t.Fatalf("no token: %d", w.Code)
-	}
-}
-
-func TestBackupView(t *testing.T) {
-	e, comps := backupView(appBackup{}, false)
-	if len(comps) != 0 || !strings.Contains(e.Description, "no Otakase settings backup") {
-		t.Fatalf("none: %v %v", e.Description, comps)
-	}
-	e, comps = backupView(appBackup{Config: "A=1\nB=2", At: time.Unix(1700000000, 0), FromOS: "windows", Version: "26.8.0"}, true)
-	if len(comps) != 1 || !strings.Contains(e.Description, "<t:1700000000:R>") || !strings.Contains(e.Description, "Windows · Otakase 26.8.0, 2 settings") {
-		t.Fatalf("backup: %v", e.Description)
 	}
 }
 
