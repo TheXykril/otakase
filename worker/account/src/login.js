@@ -22,7 +22,10 @@ export const providers = {
     secret: (env) => env.DISCORD_CLIENT_SECRET,
     async user(access) {
       const r = await fetch('https://discord.com/api/users/@me', { headers: { authorization: `Bearer ${access}` } });
-      if (!r.ok) throw new HttpError(502, 'Discord did not answer');
+      if (!r.ok) {
+        console.log(`discord user: HTTP ${r.status} ${(await r.text().catch(() => '')).slice(0, 300)}`);
+        throw new HttpError(502, `Discord did not answer (${r.status}). Try again.`);
+      }
       const u = await r.json();
       const avatar = u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : '';
       return { id: String(u.id), name: clip(u.global_name || u.username, 64), avatar };
@@ -160,12 +163,32 @@ async function providerUser(env, name, code, base) {
     code,
     redirect_uri: `${base}/callback/${name}`,
   });
-  const r = await fetch(provider.token, {
+  const send = () => fetch(provider.token, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
     body: form,
   });
-  if (!r.ok) throw new HttpError(502, `${provider.label} sign-in failed. Try again.`);
+  let r = await send();
+  if (r.status === 429) {
+    // Rate limited: one more try when the wait is short.
+    const wait = Number(r.headers.get('retry-after')) || 1;
+    if (wait <= 5) {
+      await new Promise((done) => setTimeout(done, wait * 1000));
+      r = await send();
+    }
+  }
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    let reason = '';
+    try {
+      const body = JSON.parse(text);
+      reason = String(body.error_description || body.error || body.message || '');
+    } catch {
+      reason = /error code: (\d+)/i.exec(text)?.[0] || '';
+    }
+    console.log(`${name} token exchange: HTTP ${r.status} ${text.slice(0, 300)}`);
+    throw new HttpError(502, `${provider.label} sign-in failed (${r.status}${reason ? `: ${clip(reason, 120)}` : ''}). Try again.`);
+  }
   const token = await r.json();
   if (!token.access_token) throw new HttpError(502, `${provider.label} sign-in failed. Try again.`);
   return provider.user(token.access_token);

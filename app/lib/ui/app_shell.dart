@@ -421,6 +421,12 @@ class _AppShellState extends State<AppShell> {
       searchField.requestFocus();
       return;
     }
+    // On a phone nothing takes focus: a focused search field would pop the
+    // keyboard up every time the Search tab opens.
+    if (!widget.isTV && !isDesktop) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      return;
+    }
     final scope = scopes[index];
     final remembered = scope.focusedChild;
     scope.requestFocus();
