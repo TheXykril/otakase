@@ -13,8 +13,11 @@ class TopBarEnd extends StatelessWidget {
   const TopBarEnd({super.key, this.isTV = false});
   final bool isTV;
   @override
-  Widget build(BuildContext context) =>
-      isDesktop ? const WindowButtons() : DeviceStatus(isTV: isTV);
+  Widget build(BuildContext context) => !isDesktop
+      ? DeviceStatus(isTV: isTV)
+      : SubPanelScope.of(context)
+      ? const SizedBox.shrink()
+      : const WindowButtons();
 }
 
 /// Clock and battery drawn where the hidden system status bar would be.
