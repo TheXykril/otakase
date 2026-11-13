@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -46,34 +45,13 @@ class DesktopHero extends StatefulWidget {
 class _DesktopHeroState extends State<DesktopHero> {
   int index = 0;
 
-  /// When the pointer last moved over the hero. Leaving the window does not
-  /// always report an exit, so a still pointer stops pausing after a while.
-  DateTime? hoveredAt;
-  Timer? timer;
-
-  @override
-  void initState() {
-    super.initState();
-    timer = Timer.periodic(const Duration(seconds: 9), (_) {
-      final paused =
-          hoveredAt != null &&
-          DateTime.now().difference(hoveredAt!) < const Duration(seconds: 20);
-      if (!mounted || paused || widget.picks.length < 2) return;
-      if (MediaQuery.disableAnimationsOf(context)) return;
-      setState(() => index = (index + 1) % widget.picks.length);
-    });
-  }
+  // The hero only changes when the viewer picks a dot; it never moves on
+  // its own.
 
   @override
   void didUpdateWidget(DesktopHero old) {
     super.didUpdateWidget(old);
     if (index >= widget.picks.length) index = 0;
-  }
-
-  @override
-  void dispose() {
-    timer?.cancel();
-    super.dispose();
   }
 
   @override
@@ -89,8 +67,6 @@ class _DesktopHeroState extends State<DesktopHero> {
     ];
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      onHover: (_) => hoveredAt = DateTime.now(),
-      onExit: (_) => hoveredAt = null,
       child: SizedBox(
         key: const Key('desktop-hero'),
         height: height,
