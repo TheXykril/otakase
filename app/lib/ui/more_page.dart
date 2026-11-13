@@ -118,226 +118,261 @@ class MorePage extends StatelessWidget {
       divider: true,
       onTap: action,
     );
-    return ListView(
-      key: const PageStorageKey('more-scroll'),
-      padding: EdgeInsets.fromLTRB(
-        isTV ? 48 : 4,
-        12,
-        isTV ? 48 : 4,
-        contentBottom(context),
-      ),
-      children: [
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: isTV ? 0 : 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const PageHeading('More', '設'),
-              const SizedBox(height: 16),
-              FocusBox(
-                key: const Key('more-Accounts'),
-                autofocus: true,
-                isTV: isTV,
-                radius: KageRadius.tile,
-                onPressed: () => openAccounts(context, services, isTV),
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 84),
-                  padding: const EdgeInsets.all(13),
-                  decoration: BoxDecoration(
-                    color: panel,
-                    border: Border.all(color: line),
-                    borderRadius: BorderRadius.circular(KageRadius.tile),
-                  ),
-                  child: Row(
-                    children: [
-                      if (services.profiles case final manager?)
-                        ProfileAvatar(manager.active, size: 38)
-                      else
-                        const OtakaseSeal(size: 38),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              identity.isEmpty ? 'Your accounts' : identity,
-                              style: uiStyle(context, weight: FontWeight.w600),
-                            ),
-                            AccountSyncStatus(services: services),
-                          ],
+    // The About row says when an update is waiting.
+    return ListenableBuilder(
+      listenable: services.updates,
+      builder: (context, _) => ListView(
+        key: const PageStorageKey('more-scroll'),
+        padding: EdgeInsets.fromLTRB(
+          isTV ? 48 : 4,
+          12,
+          isTV ? 48 : 4,
+          contentBottom(context),
+        ),
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: isTV ? 0 : 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const PageHeading('More', '設'),
+                const SizedBox(height: 16),
+                FocusBox(
+                  key: const Key('more-Accounts'),
+                  autofocus: true,
+                  isTV: isTV,
+                  radius: KageRadius.tile,
+                  onPressed: () => openAccounts(context, services, isTV),
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 84),
+                    padding: const EdgeInsets.all(13),
+                    decoration: BoxDecoration(
+                      color: panel,
+                      border: Border.all(color: line),
+                      borderRadius: BorderRadius.circular(KageRadius.tile),
+                    ),
+                    child: Row(
+                      children: [
+                        if (services.profiles case final manager?)
+                          ProfileAvatar(manager.active, size: 38)
+                        else
+                          const OtakaseSeal(size: 38),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                identity.isEmpty ? 'Your accounts' : identity,
+                                style: uiStyle(
+                                  context,
+                                  weight: FontWeight.w600,
+                                ),
+                              ),
+                              AccountSyncStatus(services: services),
+                            ],
+                          ),
                         ),
-                      ),
-                      Text(
-                        'Accounts',
-                        style: uiStyle(context, size: 15, color: accentText),
-                      ),
-                    ],
+                        Text(
+                          'Accounts',
+                          style: uiStyle(context, size: 15, color: accentText),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              // Nothing mentions 18+ unless the viewer's AniList allows it.
-              if (services.store.adultAllowed) ...[
-                const SizedBox(height: 12),
-                Text(
-                  '18+ follows your AniList setting',
-                  style: uiStyle(context, size: 15, color: muted),
-                ),
+                // Nothing mentions 18+ unless the viewer's AniList allows it.
+                if (services.store.adultAllowed) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    '18+ follows your AniList setting',
+                    style: uiStyle(context, size: 15, color: muted),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
-        const MoreGroupHeading('Watching'),
-        row(
-          'Playback',
-          'Resume, skips & quality',
-          LucideIcons.circlePlay,
-          () => openSettings(context, services, isTV, section: 'Playback'),
-        ),
-        row(
-          'Subtitles & languages',
-          '${services.store.text('SubsLanguage')} · ${services.store.text('SubOrDub')}',
-          LucideIcons.captions,
-          () => openSettings(
+          for (final (heading, items) in moreDestinations(
             context,
             services,
-            isTV,
-            section: 'Subtitles & languages',
-          ),
-        ),
-        if (!isTV)
-          row(
-            'Downloads',
-            'Watch offline',
-            LucideIcons.download,
-            () => openDownloads(context, services, isTV),
-          ),
-        if (scheduleShown(services))
-          row(
-            'Schedule',
-            'This week · ${DateTime.now().timeZoneName}',
-            LucideIcons.calendarDays,
-            () => openSchedule(context, services, isTV),
-          ),
-        const MoreGroupHeading('Your profile'),
-        if (services.profiles case final manager?)
-          row(
-            'Profiles',
-            manager.active.name,
-            LucideIcons.users,
-            () => Navigator.push(
-              context,
-              OtakaseRoute<void>(
-                builder: (_) => ProfilesPage(manager: manager),
+            isTV: isTV,
+            onOpen: onOpen,
+          )) ...[
+            MoreGroupHeading(heading),
+            for (final d in items)
+              row(
+                d.title,
+                d.subtitle,
+                d.icon,
+                d.open ??
+                    () => openSettings(
+                      context,
+                      services,
+                      isTV,
+                      section: d.section,
+                    ),
               ),
-            ),
-          ),
-        row(
-          'Settings backup',
-          'Keep your settings with the Discord bot',
-          LucideIcons.cloudUpload,
-          () => openDetail(
-            context,
-            BackupPage(services: services, isTV: isTV),
-            isTV,
-          ),
-        ),
-        row(
-          'Display',
-          '${contentLabels[services.store.text('Content')] ?? ''} · Shu / Dark',
-          LucideIcons.palette,
-          () => openSettings(context, services, isTV, section: 'Display'),
-        ),
-        const MoreGroupHeading('Devices'),
-        row(
-          isTV ? 'Phone remote' : 'Control TV',
-          'Pair on your local network',
-          LucideIcons.tv,
-          () => openDetail(
-            context,
-            TVRemotePage(services: services, isTV: isTV),
-            isTV,
-          ),
-        ),
-        const MoreGroupHeading('Community'),
-        row(
-          'Discord',
-          services.discord.linked ? services.discord.name : 'Link this profile',
-          LucideIcons.messagesSquare,
-          () => openDetail(
-            context,
-            DiscordPage(services: services, isTV: isTV),
-            isTV,
-          ),
-        ),
-        row(
-          'Watch parties',
-          services.party.active
-              ? 'In ${services.party.show}'
-              : 'Planned in the Discord · watch in sync',
-          LucideIcons.partyPopper,
-          () => openDetail(
-            context,
-            WatchPartiesPage(services: services, isTV: isTV),
-            isTV,
-          ),
-        ),
-        if (services.extras.club case final club?)
-          row(
-            'Server club',
-            clubLabel(club),
-            LucideIcons.flag,
-            () => Navigator.push(
-              context,
-              OtakaseRoute<void>(
-                builder: (_) => ShowPage(
-                  services: services,
-                  anime: Anime(id: club.anilistId, title: club.title),
-                  isTV: isTV,
-                ),
-              ),
-            ),
-          ),
-        const MoreGroupHeading('Help & app'),
-        row(
-          'Diagnostics',
-          'Playback checks',
-          LucideIcons.activity,
-          () => Navigator.push(
-            context,
-            OtakaseRoute<void>(
-              builder: (_) => DiagnosticsHub(services: services, isTV: isTV),
-            ),
-          ),
-        ),
-        row(
-          'Report a problem',
-          'Post to the support forum',
-          LucideIcons.lifeBuoy,
-          () => openDetail(
-            context,
-            ReportPage(services: services, isTV: isTV),
-            isTV,
-          ),
-        ),
-        ListenableBuilder(
-          listenable: services.updates,
-          builder: (context, _) => row(
-            'About & updates',
-            services.updates.available
-                ? 'Update available · ${services.updates.update!.label}'
-                : 'Otakase · Android phone and TV',
-            LucideIcons.info,
-            () => openSettings(
-              context,
-              services,
-              isTV,
-              section: 'About & updates',
-            ),
-          ),
-        ),
-      ],
+          ],
+        ],
+      ),
     );
   }
+}
+
+/// One place a More page row leads: a settings section ([section]) or a
+/// page of its own ([open]).
+class MoreDestination {
+  const MoreDestination(
+    this.title,
+    this.icon, {
+    this.subtitle = '',
+    this.section,
+    this.open,
+  }) : assert((section == null) != (open == null));
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String? section;
+  final VoidCallback? open;
+}
+
+/// Every More destination, in groups. The phone and TV list and the
+/// computer sidebar both draw this list, so they never drift apart.
+List<(String, List<MoreDestination>)> moreDestinations(
+  BuildContext context,
+  AppServices services, {
+  required bool isTV,
+  required void Function(Anime) onOpen,
+}) {
+  void detail(Widget page) => unawaited(openDetail(context, page, isTV));
+  void push(Widget page) => unawaited(
+    Navigator.push(context, OtakaseRoute<void>(builder: (_) => page)),
+  );
+  final store = services.store;
+  final updates = services.updates;
+  return [
+    (
+      'Watching',
+      [
+        const MoreDestination(
+          'Playback',
+          LucideIcons.circlePlay,
+          subtitle: 'Resume, skips & quality',
+          section: 'Playback',
+        ),
+        MoreDestination(
+          'Subtitles & languages',
+          LucideIcons.captions,
+          subtitle: '${store.text('SubsLanguage')} · ${store.text('SubOrDub')}',
+          section: 'Subtitles & languages',
+        ),
+        // TVs have no downloads; computers render with isTV on.
+        if (!isTV || isDesktop)
+          MoreDestination(
+            'Downloads',
+            LucideIcons.download,
+            subtitle: 'Watch offline',
+            open: () => openDownloads(context, services, isTV),
+          ),
+        if (scheduleShown(services))
+          MoreDestination(
+            'Schedule',
+            LucideIcons.calendarDays,
+            subtitle: 'This week · ${DateTime.now().timeZoneName}',
+            open: () => openSchedule(context, services, isTV),
+          ),
+      ],
+    ),
+    (
+      'Your profile',
+      [
+        if (services.profiles case final manager?)
+          MoreDestination(
+            'Profiles',
+            LucideIcons.users,
+            subtitle: manager.active.name,
+            open: () => push(ProfilesPage(manager: manager)),
+          ),
+        MoreDestination(
+          'Settings backup',
+          LucideIcons.cloudUpload,
+          subtitle: 'Keep your settings with the Discord bot',
+          open: () => detail(BackupPage(services: services, isTV: isTV)),
+        ),
+        MoreDestination(
+          'Display',
+          LucideIcons.palette,
+          subtitle:
+              '${contentLabels[store.text('Content')] ?? ''} · Shu / Dark',
+          section: 'Display',
+        ),
+      ],
+    ),
+    (
+      'Devices',
+      [
+        MoreDestination(
+          isTV ? 'Phone remote' : 'Control TV',
+          LucideIcons.tv,
+          subtitle: 'Pair on your local network',
+          open: () => detail(TVRemotePage(services: services, isTV: isTV)),
+        ),
+      ],
+    ),
+    (
+      'Community',
+      [
+        MoreDestination(
+          'Discord',
+          LucideIcons.messagesSquare,
+          subtitle: services.discord.linked
+              ? services.discord.name
+              : 'Link this profile',
+          open: () => detail(DiscordPage(services: services, isTV: isTV)),
+        ),
+        MoreDestination(
+          'Watch parties',
+          LucideIcons.partyPopper,
+          subtitle: services.party.active
+              ? 'In ${services.party.show}'
+              : 'Planned in the Discord · watch in sync',
+          open: () => detail(WatchPartiesPage(services: services, isTV: isTV)),
+        ),
+        if (services.extras.club case final club?)
+          MoreDestination(
+            'Server club',
+            LucideIcons.flag,
+            subtitle: clubLabel(club),
+            open: () => onOpen(Anime(id: club.anilistId, title: club.title)),
+          ),
+      ],
+    ),
+    (
+      'Help & app',
+      [
+        MoreDestination(
+          'Diagnostics',
+          LucideIcons.activity,
+          subtitle: 'Playback checks',
+          open: () => push(DiagnosticsHub(services: services, isTV: isTV)),
+        ),
+        MoreDestination(
+          'Report a problem',
+          LucideIcons.lifeBuoy,
+          subtitle: 'Post to the support forum',
+          open: () => detail(ReportPage(services: services, isTV: isTV)),
+        ),
+        MoreDestination(
+          'About & updates',
+          LucideIcons.info,
+          subtitle: updates.available
+              ? 'Update available · ${updates.update!.label}'
+              : 'Otakase · Android phone and TV',
+          section: 'About & updates',
+        ),
+      ],
+    ),
+  ];
 }
 
 /// Desktop settings: sections in a sidebar, the chosen settings section
@@ -376,7 +411,6 @@ class _DesktopMoreState extends State<DesktopMore> {
   @override
   Widget build(BuildContext context) {
     final identity = accountNames(services).join(' · ');
-    void detail(Widget page) => unawaited(openDetail(context, page, true));
     final sidebar = ListView(
       padding: EdgeInsets.fromLTRB(48, 16, 0, contentBottom(context)),
       children: [
@@ -437,79 +471,15 @@ class _DesktopMoreState extends State<DesktopMore> {
             ),
           ),
         ),
-        const MoreGroupHeading('Watching'),
-        item('Playback', LucideIcons.circlePlay),
-        item('Subtitles & languages', LucideIcons.captions),
-        item(
-          'Downloads',
-          LucideIcons.download,
-          open: () => openDownloads(context, services, true),
-        ),
-        if (scheduleShown(services))
-          item(
-            'Schedule',
-            LucideIcons.calendarDays,
-            open: () => openSchedule(context, services, true),
-          ),
-        const MoreGroupHeading('Your profile'),
-        if (services.profiles case final manager?)
-          item(
-            'Profiles',
-            LucideIcons.users,
-            open: () => Navigator.push(
-              context,
-              OtakaseRoute<void>(
-                builder: (_) => ProfilesPage(manager: manager),
-              ),
-            ),
-          ),
-        item(
-          'Settings backup',
-          LucideIcons.cloudUpload,
-          open: () => detail(BackupPage(services: services, isTV: true)),
-        ),
-        item('Display', LucideIcons.palette),
-        const MoreGroupHeading('Devices'),
-        item(
-          'Phone remote',
-          LucideIcons.tv,
-          open: () => detail(TVRemotePage(services: services, isTV: true)),
-        ),
-        const MoreGroupHeading('Community'),
-        item(
-          'Discord',
-          LucideIcons.messagesSquare,
-          open: () => detail(DiscordPage(services: services, isTV: true)),
-        ),
-        item(
-          'Watch parties',
-          LucideIcons.partyPopper,
-          open: () => detail(WatchPartiesPage(services: services, isTV: true)),
-        ),
-        if (services.extras.club case final club?)
-          item(
-            'Server club · ${clubLabel(club)}',
-            LucideIcons.flag,
-            open: () =>
-                widget.onOpen(Anime(id: club.anilistId, title: club.title)),
-          ),
-        const MoreGroupHeading('Help & app'),
-        item(
-          'Diagnostics',
-          LucideIcons.activity,
-          open: () => Navigator.push(
-            context,
-            OtakaseRoute<void>(
-              builder: (_) => DiagnosticsHub(services: services, isTV: true),
-            ),
-          ),
-        ),
-        item(
-          'Report a problem',
-          LucideIcons.lifeBuoy,
-          open: () => detail(ReportPage(services: services, isTV: true)),
-        ),
-        item('About & updates', LucideIcons.info),
+        for (final (heading, items) in moreDestinations(
+          context,
+          services,
+          isTV: true,
+          onOpen: widget.onOpen,
+        )) ...[
+          MoreGroupHeading(heading),
+          for (final d in items) item(d.title, d.icon, open: d.open),
+        ],
       ],
     );
     return Row(
@@ -651,60 +621,89 @@ class _AccountsPageState extends State<AccountsPage> {
     }
   }
 
+  /// One tracker: icon, name and status on one line, its buttons small
+  /// underneath, a hairline below. Same shape for AniList, MAL and Trakt.
+  Widget tracker({
+    required String name,
+    required IconData icon,
+    required String status,
+    bool alert = false,
+    String? detail,
+    required List<Widget> buttons,
+  }) {
+    final tv = widget.isTV && !isDesktop;
+    return Container(
+      key: ValueKey('tracker-$name'),
+      padding: EdgeInsets.symmetric(vertical: tv ? 16 : 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: hairline)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon, size: tv ? 24 : 20, color: muted),
+          ),
+          SizedBox(width: tv ? 16 : 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: uiStyle(context, weight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(
+                  status,
+                  style: uiStyle(
+                    context,
+                    size: 15,
+                    color: alert ? warn : muted,
+                  ),
+                ),
+                if (detail != null) ...[
+                  const SizedBox(height: 2),
+                  Text(detail, style: uiStyle(context, size: 15, color: warn)),
+                ],
+                const SizedBox(height: KageSpace.s3),
+                Wrap(
+                  spacing: KageSpace.s2,
+                  runSpacing: KageSpace.s2,
+                  children: buttons,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Trakt keeps films and series in sync, laid out like AniList and MAL.
   Widget traktSection() {
     final trakt = widget.services.trakt;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Trakt',
-          style: uiStyle(context, size: 21, weight: FontWeight.w600),
+    final failing =
+        widget.services.movies.lastError != null || trakt.lastError != null;
+    return tracker(
+      name: 'Trakt',
+      icon: LucideIcons.clapperboard,
+      status: trakt.signedIn
+          ? [
+              if (trakt.username.isNotEmpty) trakt.username,
+              traktSyncStatus(widget.services),
+            ].join(' · ')
+          : 'Not connected. Keeps your movie and show watchlist, what you '
+                'watched and where you stopped in sync.',
+      alert: trakt.signedIn && failing,
+      detail: trakt.lastError,
+      buttons: [
+        AppButton(
+          key: const Key('accounts-trakt'),
+          label: trakt.signedIn ? 'Log out of Trakt' : 'Sign in to Trakt',
+          focusNode: serviceFocus['Trakt'],
+          size: ButtonSize.sm,
+          isTV: widget.isTV,
+          onPressed: trakt.signedIn ? traktLogout : traktLogin,
         ),
-        const SizedBox(height: 12),
-        if (trakt.signedIn) ...[
-          if (trakt.username.isNotEmpty)
-            Text(trakt.username, style: uiStyle(context)),
-          Text(
-            traktSyncStatus(widget.services),
-            style: uiStyle(
-              context,
-              size: 15,
-              color:
-                  widget.services.movies.lastError != null ||
-                      trakt.lastError != null
-                  ? warn
-                  : muted,
-            ),
-          ),
-          const SizedBox(height: 12),
-          AppButton(
-            key: const Key('accounts-trakt'),
-            label: 'Log out of Trakt',
-            focusNode: serviceFocus['Trakt'],
-            onPressed: traktLogout,
-            isTV: widget.isTV,
-          ),
-        ] else ...[
-          Text(
-            'Keeps your movie and show watchlist, what you watched and where '
-            'you stopped in sync.',
-            style: uiStyle(context, size: 15, color: muted),
-          ),
-          const SizedBox(height: 12),
-          AppButton(
-            key: const Key('accounts-trakt'),
-            label: 'Sign in to Trakt',
-            focusNode: serviceFocus['Trakt'],
-            isTV: widget.isTV,
-            filled: true,
-            onPressed: traktLogin,
-          ),
-        ],
-        if (trakt.lastError case final message?) ...[
-          const SizedBox(height: 8),
-          Text(message, style: uiStyle(context, size: 15, color: warn)),
-        ],
       ],
     );
   }
@@ -713,6 +712,8 @@ class _AccountsPageState extends State<AccountsPage> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: panel,
     appBar: AppBar(
+      // One surface: the bar matches the page under it.
+      backgroundColor: panel,
       title: const Text('Accounts'),
       leading: widget.isTV
           ? AppBackButton(focusNode: backFocus)
@@ -737,24 +738,8 @@ class _AccountsPageState extends State<AccountsPage> {
           padding: const EdgeInsets.all(24),
           children: [
             OtakaseAccountSection(services: widget.services, isTV: widget.isTV),
-            // Only means something once both lists are signed in.
-            if (widget.services.auth.signedIn('AniList') &&
-                widget.services.auth.signedIn('MAL'))
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Sync AniList and MAL'),
-                subtitle: Text(widget.services.listSync.status),
-                value: widget.services.store.flag('SyncAniListMAL'),
-                onChanged: (value) =>
-                    widget.services.store.set('SyncAniListMAL', value),
-              ),
-            if (widget.services.listSync.ready)
-              TextButton(
-                onPressed: widget.services.listSync.running
-                    ? null
-                    : widget.services.listSync.refresh,
-                child: const Text('Sync now'),
-              ),
+            const SizedBox(height: KageSpace.s4),
+            const GroupHeading('Trackers'),
             if (error != null)
               Text(error!, style: uiStyle(context, color: warn)),
             if (widget.services.auth.lastError != null)
@@ -762,39 +747,28 @@ class _AccountsPageState extends State<AccountsPage> {
                 widget.services.auth.lastError!,
                 style: uiStyle(context, color: warn),
               ),
-            for (final service in ['AniList', 'MAL']) ...[
-              Text(
-                service,
-                style: uiStyle(context, size: 21, weight: FontWeight.w600),
-              ),
-              const SizedBox(height: 12),
+            for (final service in ['AniList', 'MAL'])
               if (widget.services.auth.account(service)
-                  case final Account account) ...[
-                Text(account.username, style: uiStyle(context)),
-                Text(
-                  account.expired
-                      ? 'Login expired. Sign in again to sync.'
-                      : widget.services.tracking.progressStatus(service),
-                  style: uiStyle(
-                    context,
-                    size: 15,
-                    color:
-                        account.expired ||
-                            widget.services.tracking.needsAttention(service)
-                        ? warn
-                        : muted,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
+                  case final Account account)
+                tracker(
+                  name: service,
+                  icon: LucideIcons.listChecks,
+                  status: account.expired
+                      ? '${account.username} · Login expired. Sign in again '
+                            'to sync.'
+                      : '${account.username} · '
+                            '${widget.services.tracking.progressStatus(service)}',
+                  alert:
+                      account.expired ||
+                      widget.services.tracking.needsAttention(service),
+                  buttons: [
                     if (account.expired)
                       AppButton(
                         label: 'Sign in again',
                         focusNode: serviceFocus[service],
                         autofocus: service == 'AniList',
+                        size: ButtonSize.sm,
+                        filled: true,
                         onPressed: () => login(service),
                         isTV: widget.isTV,
                       ),
@@ -802,33 +776,53 @@ class _AccountsPageState extends State<AccountsPage> {
                       label: 'Log out of $service',
                       focusNode: account.expired ? null : serviceFocus[service],
                       autofocus: !account.expired && service == 'AniList',
+                      size: ButtonSize.sm,
                       onPressed: () => logout(service),
                       isTV: widget.isTV,
                     ),
                   ],
+                )
+              else
+                tracker(
+                  name: service,
+                  icon: LucideIcons.listChecks,
+                  status:
+                      'Not connected. Keeps your anime list, episode '
+                      'progress and scores in sync with $service.',
+                  buttons: [
+                    AppButton(
+                      label: 'Sign in to $service',
+                      focusNode: serviceFocus[service],
+                      isTV: widget.isTV,
+                      autofocus: service == 'AniList',
+                      size: ButtonSize.sm,
+                      onPressed: () => login(service),
+                    ),
+                  ],
                 ),
-              ] else ...[
-                Text(
-                  'Keeps your anime list, episode progress and scores in '
-                  'sync with $service.',
-                  style: uiStyle(context, size: 15, color: muted),
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: AppButton(
-                    label: 'Sign in to $service',
-                    focusNode: serviceFocus[service],
-                    isTV: widget.isTV,
-                    autofocus: service == 'AniList',
-                    filled: true,
-                    onPressed: () => login(service),
-                  ),
-                ),
-              ],
-              const Divider(height: 40),
-            ],
             traktSection(),
+            // Only means something once both lists are signed in.
+            if (widget.services.auth.signedIn('AniList') &&
+                widget.services.auth.signedIn('MAL'))
+              AppRow(
+                title: 'Sync AniList and MAL',
+                subtitle: widget.services.listSync.status,
+                toggle: widget.services.store.flag('SyncAniListMAL'),
+                isTV: widget.isTV,
+                divider: true,
+                onTap: () => widget.services.store.set(
+                  'SyncAniListMAL',
+                  !widget.services.store.flag('SyncAniListMAL'),
+                ),
+              ),
+            if (widget.services.listSync.ready)
+              AppRow(
+                title: 'Sync now',
+                icon: LucideIcons.refreshCw,
+                isTV: widget.isTV,
+                enabled: !widget.services.listSync.running,
+                onTap: widget.services.listSync.refresh,
+              ),
           ],
         ),
       ),

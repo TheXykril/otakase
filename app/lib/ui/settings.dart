@@ -231,8 +231,14 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget group(String title, IconData icon, List<Widget> children) =>
-      widget.section != null && widget.section != title
+  // [section] names the More page that shows this group. Long pages, like
+  // Playback, are several groups under one section.
+  Widget group(
+    String title,
+    IconData icon,
+    List<Widget> children, {
+    String? section,
+  }) => widget.section != null && widget.section != (section ?? title)
       ? const SizedBox.shrink()
       : widget.embedded
       ? Padding(
@@ -468,7 +474,7 @@ class _SettingsPageState extends State<SettingsPage> {
           icon: LucideIcons.globe,
         ),
       ]),
-      group('Playback', LucideIcons.circlePlay, [
+      group('Watching', LucideIcons.circlePlay, section: 'Playback', [
         toggle(
           'HideEpisodeSpoilers',
           'Blur unwatched episode artwork and hide episode titles until you reveal them.',
@@ -478,14 +484,40 @@ class _SettingsPageState extends State<SettingsPage> {
           'NextEpisodePrompt',
           'Wait for you at the end of an episode. Off counts down and plays the next one.',
         ),
-        toggle('SkipOp', 'Jump past the opening when its times are known.'),
-        toggle('SkipEd', 'Jump past the ending when its times are known.'),
-        toggle('SkipRecap', 'Jump past recaps when their times are known.'),
+        toggle(
+          'ResumePlayback',
+          'Start where you stopped last time on this device.',
+        ),
+        row(
+          'PercentageToMarkComplete',
+          'A movie or show episode you stop after this point counts as watched. '
+              'Anime counts once the episode ends.',
+          value: '${store.integer('PercentageToMarkComplete')}%',
+          onTap: () => numberChoice('PercentageToMarkComplete', [
+            70,
+            75,
+            80,
+            85,
+            90,
+            95,
+            100,
+          ]),
+        ),
+        toggle(
+          'ScoreOnCompletion',
+          'Ask for a score after a film, or after the last episode of a show that has ended.',
+          icon: LucideIcons.star,
+        ),
         toggle(
           'NormalizeVolume',
           'Raise quiet dialogue and soften loud effects.',
           icon: LucideIcons.audioLines,
         ),
+      ]),
+      group('Skipping', LucideIcons.skipForward, section: 'Playback', [
+        toggle('SkipOp', 'Jump past the opening when its times are known.'),
+        toggle('SkipEd', 'Jump past the ending when its times are known.'),
+        toggle('SkipRecap', 'Jump past recaps when their times are known.'),
         row(
           'SkipDelay',
           'Wait this many seconds before an automatic skip.',
@@ -506,26 +538,8 @@ class _SettingsPageState extends State<SettingsPage> {
           'Also get skip times from Anime-Skip.',
           icon: LucideIcons.flag,
         ),
-        toggle(
-          'ScoreOnCompletion',
-          'Ask for a score after a film, or after the last episode of a show that has ended.',
-          icon: LucideIcons.star,
-        ),
-        toggle(
-          'RemoteAnywhere',
-          'With this profile linked to Discord, your phones control this '
-              'device and your TVs through the Otakase bot when they are '
-              'not on the same Wi-Fi, and pair without a code.',
-          icon: LucideIcons.tv,
-        ),
-        if (isDesktop)
-          toggle(
-            'DiscordPresence',
-            store.adultAllowed
-                ? 'Your Discord status shows the show and episode playing. 18+ titles never show.'
-                : 'Your Discord status shows the show and episode playing.',
-            icon: LucideIcons.messageCircle,
-          ),
+      ]),
+      group('Sources & quality', LucideIcons.gauge, section: 'Playback', [
         row(
           'Quality',
           'Picture quality to play when there is a choice.',
@@ -543,10 +557,23 @@ class _SettingsPageState extends State<SettingsPage> {
           'Torrents download the whole episode. Off waits for Wi-Fi.',
           icon: LucideIcons.signal,
         ),
+      ]),
+      group('This device', LucideIcons.monitorSmartphone, section: 'Playback', [
         toggle(
-          'ResumePlayback',
-          'Start where you stopped last time on this device.',
+          'RemoteAnywhere',
+          'With this profile linked to Discord, your phones control this '
+              'device and your TVs through the Otakase bot when they are '
+              'not on the same Wi-Fi, and pair without a code.',
+          icon: LucideIcons.tv,
         ),
+        if (isDesktop)
+          toggle(
+            'DiscordPresence',
+            store.adultAllowed
+                ? 'Your Discord status shows the show and episode playing. 18+ titles never show.'
+                : 'Your Discord status shows the show and episode playing.',
+            icon: LucideIcons.messageCircle,
+          ),
         if (isDesktop) ...[
           if (systemInstall.available)
             FutureBuilder<bool>(
@@ -574,21 +601,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
         ],
-        row(
-          'PercentageToMarkComplete',
-          'A movie or show episode you stop after this point counts as watched. '
-              'Anime counts once the episode ends.',
-          value: '${store.integer('PercentageToMarkComplete')}%',
-          onTap: () => numberChoice('PercentageToMarkComplete', [
-            70,
-            75,
-            80,
-            85,
-            90,
-            95,
-            100,
-          ]),
-        ),
       ]),
       if (!widget.isTV && (Host.android || isDesktop))
         group('Notifications', LucideIcons.bell, [
