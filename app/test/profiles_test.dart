@@ -456,7 +456,7 @@ void main() {
         }),
       );
       await checked;
-      expect(m.session!.store.value('ListCache.AniList'), isNull);
+      expect(m.session!.store.cache('ListCache.AniList'), isNull);
       expect(m.session!.store.history, isEmpty);
     },
   );

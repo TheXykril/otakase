@@ -181,7 +181,7 @@ class TrackingService extends ChangeNotifier {
     required bool adult,
     bool filterAdult = true,
   }) {
-    final data = store?.value('ListCache.$service');
+    final data = store?.cache('ListCache.$service');
     if (!auth.signedIn(service) ||
         data is! Map ||
         data['identity'] != _identity(service)) {
@@ -282,7 +282,7 @@ class TrackingService extends ChangeNotifier {
     for (final e in rows.values) {
       _entries[_entryKey(service, e.anime)] = e;
     }
-    await store?.set('ListCache.$service', {
+    await store?.setCache('ListCache.$service', {
       'identity': owner,
       'entries': rows.values.map((e) => e.toJson()).toList(),
     });
