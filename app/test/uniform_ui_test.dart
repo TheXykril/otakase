@@ -123,6 +123,14 @@ void main() {
     expect(find.text('#FFFFFF'), findsNothing);
 
     await open('Playback');
+    // Playback is split into groups; quality sits under Sources & quality.
+    expect(find.text('WATCHING'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Best available'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('SOURCES & QUALITY'), findsOneWidget);
     expect(find.text('Best available'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
