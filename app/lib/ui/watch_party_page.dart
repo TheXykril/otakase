@@ -102,7 +102,7 @@ class _PartyOverlayState extends State<PartyOverlay> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: bgDeep.withValues(alpha: .72),
-          borderRadius: BorderRadius.circular(KageRadius.bubble),
+          borderRadius: BorderRadius.circular(KageRadius.toast),
         ),
         child: Text(
           text,

@@ -224,31 +224,7 @@ class _ProfileHostState extends State<ProfileHost> {
                       ? TVViewport(child: child!)
                       : CutoutInset(child: child!),
                 ),
-          theme: ThemeData(
-            brightness: Brightness.dark,
-            fontFamily: 'Inter',
-            scaffoldBackgroundColor: bg,
-            appBarTheme: const AppBarTheme(
-              backgroundColor: bg,
-              foregroundColor: fg,
-            ),
-            textTheme: TextTheme(
-              bodyMedium: TextStyle(
-                fontSize: widget.manager.isTV ? 20 : 16,
-                color: fg,
-              ),
-              bodySmall: TextStyle(
-                fontSize: widget.manager.isTV ? 20 : 15,
-                color: muted,
-              ),
-              labelLarge: TextStyle(fontSize: widget.manager.isTV ? 20 : 16),
-            ),
-            colorScheme: const ColorScheme.dark(
-              primary: shu,
-              surface: panel,
-              onSurface: fg,
-            ),
-          ),
+          theme: buildOtakaseTheme(isTV: widget.manager.isTV),
           home: widget.manager.profiles.isEmpty || !widget.manager.initialized
               ? Scaffold(
                   body: SafeArea(

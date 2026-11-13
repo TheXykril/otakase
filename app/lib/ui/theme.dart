@@ -99,6 +99,20 @@ ThemeData buildOtakaseTheme({required bool isTV, bool traditional = false}) {
       ),
     ),
     textButtonTheme: TextButtonThemeData(style: buttons),
+    filledButtonTheme: const FilledButtonThemeData(
+      style: ButtonStyle(
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(KageRadius.button)),
+          ),
+        ),
+      ),
+    ),
+    popupMenuTheme: const PopupMenuThemeData(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(KageRadius.menu)),
+      ),
+    ),
     outlinedButtonTheme: OutlinedButtonThemeData(style: buttons),
     iconButtonTheme: IconButtonThemeData(style: buttons),
     listTileTheme: const ListTileThemeData(textColor: fg, iconColor: muted),

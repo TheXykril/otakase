@@ -1249,7 +1249,7 @@ class _TitlePageState extends State<TitlePage> {
                       key: ValueKey('episode-${e.code}'),
                       focusNode: focusFor(e),
                       isTV: widget.isTV,
-                      radius: KageRadius.listRow,
+                      radius: KageRadius.tile,
                       padding: const EdgeInsets.all(8),
                       onPressed: () => play(e),
                       onLongPress: () => unawaited(episodeInfo(e)),

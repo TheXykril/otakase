@@ -41,7 +41,7 @@ List<String> get rootTabs => const ['Home', 'Search', 'More'];
 const _tabIcons = {
   'Home': LucideIcons.house,
   'Search': LucideIcons.search,
-  'More': LucideIcons.ellipsis,
+  'More': LucideIcons.menu,
 };
 
 /// Most tabs any content setting gives.
@@ -50,6 +50,7 @@ const _tabIcons = {
 bool askContentOnFirstRun = false;
 
 const _maxTabs = 3;
+const _navPad = 6.0, _navHeight = 64.0, _navBottom = 16.0;
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.services, required this.isTV});
@@ -598,10 +599,10 @@ class _AppShellState extends State<AppShell> {
         key: ValueKey('nav-$label'),
         focusNode: navFocus[index],
         isTV: widget.isTV,
-        radius: KageRadius.lg,
+        radius: widget.isTV ? KageRadius.tab : KageRadius.navTile,
         frameGap: widget.isTV ? 5 : 0,
         showFocusBorder: !widget.isTV,
-        focusFill: widget.isTV ? Colors.transparent : bg,
+        focusFill: widget.isTV ? Colors.transparent : selectedPanel,
         hoverColor: widget.isTV ? Colors.transparent : null,
         // A TV remote moves between tabs by focus, so focus opens the tab.
         // A computer has a mouse: hovering only lights the tab up and a
@@ -631,7 +632,7 @@ class _AppShellState extends State<AppShell> {
         onPressed: () => choose(index),
         child: Container(
           constraints: BoxConstraints(minHeight: widget.isTV ? 48 : 50),
-          padding: EdgeInsets.symmetric(horizontal: widget.isTV ? 6 : 4),
+          padding: EdgeInsets.symmetric(horizontal: widget.isTV ? 6 : 0),
           child: widget.isTV
               ? Builder(
                   builder: (context) {
@@ -697,42 +698,14 @@ class _AppShellState extends State<AppShell> {
                     );
                   },
                 )
-              : Stack(
-                  alignment: Alignment.topCenter,
-                  children: [
-                    if (active) Container(width: 33, height: 3, color: shu),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 7),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _tabIcons[label] ?? LucideIcons.circle,
-                            size: 22,
-                            color: active ? accentText : muted,
-                          ),
-                          Text(
-                            label,
-                            style: uiStyle(
-                              context,
-                              size: 15,
-                              color:
-                                  focusedNav == index &&
-                                      FocusManager.instance.highlightMode ==
-                                          FocusHighlightMode.traditional
-                                  ? fgBright
-                                  : active
-                                  ? fg
-                                  : muted,
-                              weight: active
-                                  ? FontWeight.w600
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+              : _PhoneTab(
+                  label: label,
+                  icon: _tabIcons[label] ?? LucideIcons.circle,
+                  active: active,
+                  focused:
+                      focusedNav == index &&
+                      FocusManager.instance.highlightMode ==
+                          FocusHighlightMode.traditional,
                 ),
         ),
       ),
@@ -795,49 +768,47 @@ class _AppShellState extends State<AppShell> {
                           MediaQuery.viewPaddingOf(context).bottom,
                           MediaQuery.paddingOf(context).bottom,
                         ) +
-                        7 +
-                        72 +
+                        _navBottom +
+                        _navHeight +
                         10,
                     child: RemoteMiniBar(services: widget.services, link: link),
                   ),
           ),
   );
 
+  // Floating plate: hairline, one soft shadow, flat tiles.
   Widget phoneNav() => Positioned(
-    left: 20,
-    right: 20,
+    left: 40,
+    right: 40,
     bottom:
         math.max(
           MediaQuery.viewPaddingOf(context).bottom,
           MediaQuery.paddingOf(context).bottom,
         ) +
-        7,
-    child: Center(
-      child: Container(
-        key: const Key('phone-bottom-bar'),
-        width: math.min(292, MediaQuery.sizeOf(context).width - 40),
-        constraints: const BoxConstraints(minHeight: 72),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-        decoration: BoxDecoration(
-          color: panel.withValues(alpha: .98),
-          borderRadius: BorderRadius.circular(KageRadius.navBar),
-          border: Border.all(color: line),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x87000000),
-              offset: Offset(0, 12),
-              blurRadius: 35,
-            ),
+        _navBottom,
+    child: Container(
+      key: const Key('phone-bottom-bar'),
+      height: _navHeight,
+      padding: const EdgeInsets.all(_navPad),
+      decoration: BoxDecoration(
+        color: panel,
+        borderRadius: BorderRadius.circular(KageRadius.navBar),
+        border: Border.all(color: line),
+        boxShadow: const [
+          BoxShadow(color: scrim, offset: Offset(0, 8), blurRadius: 24),
+        ],
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < rootTabs.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Expanded(child: nav(i)),
           ],
-        ),
-        child: Row(
-          children: [
-            for (var i = 0; i < rootTabs.length; i++) Expanded(child: nav(i)),
-          ],
-        ),
+        ],
       ),
     ),
   );
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([
@@ -917,13 +888,8 @@ class _AppShellState extends State<AppShell> {
                             ? math.max(27, MediaQuery.paddingOf(context).bottom)
                             : keyboard
                             ? 16
-                            : (72 +
-                                      (MediaQuery.textScalerOf(context)
-                                                      .scale(1) -
-                                                  1)
-                                              .clamp(0, 2) *
-                                          64) +
-                                  7 +
+                            : _navHeight +
+                                  _navBottom +
                                   // Room for the bar of a TV this phone
                                   // controls.
                                   (widget.services.remoteLink.value == null
@@ -1044,4 +1010,71 @@ class TVTopBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// One tab of the phone bar: line icon over a mono label. The open tab sits
+/// on a flat darker tile with a short Shu mark under it.
+class _PhoneTab extends StatelessWidget {
+  const _PhoneTab({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.focused,
+  });
+  final String label;
+  final IconData icon;
+  final bool active, focused;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(
+      minWidth: 64,
+      minHeight: _navHeight - 2 * _navPad - 2,
+    ),
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: active ? selectedPanel : Colors.transparent,
+        borderRadius: BorderRadius.circular(KageRadius.navTile),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Padding(
+            // Same lift on every tab so icons line up; room for the mark below.
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
+            // The bar keeps its height; large system text shrinks to fit.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 22, color: active ? accentText : muted),
+                  const SizedBox(height: 2),
+                  Text(
+                    label.toUpperCase(),
+                    maxLines: 1,
+                    style: mono.copyWith(
+                      fontSize: 12,
+                      height: 1.1,
+                      letterSpacing: 1.1,
+                      color: active || focused ? fgBright : muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (active)
+            const Positioned(
+              bottom: 3,
+              child: SizedBox(
+                width: 22,
+                height: 3,
+                child: ColoredBox(color: shu),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 }

@@ -1601,9 +1601,7 @@ class _PosterCardState extends State<PosterCard> {
                   autofocus: widget.autofocus,
                   outsideFrame: true,
                   lift: true,
-                  radius: widget.cropped
-                      ? KageRadius.poster
-                      : KageRadius.posterFit,
+                  radius: KageRadius.poster,
                   onPressed: open,
                   onLongPress: widget.onMenu,
                   onFocused: widget.onFocused,
@@ -1611,11 +1609,7 @@ class _PosterCardState extends State<PosterCard> {
                   child: Hero(
                     tag: 'poster-${widget.key ?? a.key}',
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(
-                        widget.cropped
-                            ? KageRadius.poster
-                            : KageRadius.posterFit,
-                      ),
+                      borderRadius: BorderRadius.circular(KageRadius.poster),
                       child: AspectRatio(
                         aspectRatio: widget.landscape
                             ? 16 / 9

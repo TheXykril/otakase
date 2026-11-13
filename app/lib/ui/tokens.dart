@@ -19,7 +19,11 @@ const bg = Color(0xff0e0d0c),
     accentDeep = Color(0xffa83a22),
     ok = Color(0xff9bb67a),
     warn = Color(0xffe3b45a),
-    info = Color(0xff7fa2c4);
+    info = Color(0xff7fa2c4),
+    // Soft drop shadow under floating plates.
+    scrim = Color(
+      0x99000000,
+    );
 
 /// Corner radii: four steps and a circle, then the role each part of the
 /// app uses. Parts pick a role, never a number.
@@ -31,34 +35,28 @@ abstract final class KageRadius {
   static const full = 999.0;
 
   // Controls.
-  static const button = full;
-  static const wideButton = 14.0;
-  static const compactButton = 10.0;
-  static const tab = full;
-  static const chip = full;
-  static const toast = full;
-  static const input = md;
-  static const control = 9.0;
+  static const button = sm;
+  static const tab = sm;
+  static const chip = sm;
+  static const toast = sm;
+  static const input = sm;
 
-  // Artwork.
-  static const poster = 14.0;
-  static const posterFit = 10.0;
-  static const thumb = 6.0;
-  static const episodeThumb = 7.0;
-  static const tag = 6.0;
-  static const episodeTag = 9.0;
-  static double spine(bool isTV) => isTV ? 5 : 4;
+  // Artwork. Never rounder than md.
+  static const poster = md;
+  static const thumb = sm;
+  static const tag = xs;
+  static const spine = xs;
 
   // Surfaces.
-  static const tile = 14.0;
-  static const listRow = 10.0;
-  static const bubble = 10.0;
+  static const tile = md;
   static const panel = lg;
-  static const menu = 13.0;
-  static const floatingPanel = 18.0;
-  static const navBar = 24.0;
-  static const dialog = 20.0;
-  static const sheet = 20.0;
+  static const menu = md;
+  static const navBar = lg;
+
+  /// Tile inside the nav bar: the bar's corner less its 6 px padding.
+  static const navTile = navBar - 6;
+  static const dialog = lg;
+  static const sheet = lg;
 
   /// Thin bars: tab underlines, seek rails, battery outline.
   static const mark = 2.0, track = 3.0;

@@ -617,7 +617,7 @@ class _ShowPageState extends State<ShowPage> {
               ),
               const SizedBox(width: 8),
               ClipRRect(
-                borderRadius: BorderRadius.circular(KageRadius.episodeThumb),
+                borderRadius: BorderRadius.circular(KageRadius.thumb),
                 child: SizedBox(
                   width: card ? 92 : 73,
                   height: card ? 86 : 47,

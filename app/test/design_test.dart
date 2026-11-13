@@ -123,7 +123,7 @@ void main() {
       await tester.tap(find.byKey(ValueKey('nav-$tab')));
       await tester.pumpAndSettle();
       final list = tester.widget<ListView>(find.byType(ListView).first);
-      expect((list.padding! as EdgeInsets).bottom, 72 + 7 + 34 + 24);
+      expect((list.padding! as EdgeInsets).bottom, 64 + 16 + 34 + 24);
     }
     await tester.scrollUntilVisible(
       find.byKey(const Key('more-Diagnostics')),
@@ -148,11 +148,12 @@ void main() {
       final home = tester.widget<Text>(
         find.descendant(
           of: find.byKey(const Key('nav-Home')),
-          matching: find.text('Home'),
+          matching: find.text('HOME'),
         ),
       );
-      expect(home.style!.fontSize, 15);
-      expect(home.style!.fontFamily, 'Inter');
+      // Nav labels are short mono kickers, the one exception to 15 px.
+      expect(home.style!.fontSize, 12);
+      expect(home.style!.fontFamily, 'JetBrainsMono');
       expect(find.text('Trending'), findsOneWidget);
       expect(find.text('Find your next story'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
