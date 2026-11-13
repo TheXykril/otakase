@@ -24,7 +24,6 @@ import 'data/play_request.dart';
 import 'desktop/desktop_core.dart';
 import 'desktop/player_bar.dart';
 import 'desktop/window_frame.dart';
-import 'data/skip_times.dart';
 import 'data/store.dart';
 import 'data/subtitle_fallback.dart';
 import 'services.dart';
@@ -40,6 +39,7 @@ import 'ui/watch_party_page.dart';
 import 'ui/mpv.dart';
 import 'host.dart';
 import 'player/progress.dart';
+import 'player/skips.dart';
 
 /// The one player for everything: anime episodes, films, series episodes
 /// and downloads. What a title has no data for stays hidden: films have no
@@ -184,11 +184,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   /// Shown instead of the search and loading steps while a dropped stream
   /// comes back.
   static const reconnecting = 'Reconnecting';
-  List<SkipSpan> spans = [];
   List<int> episodes = [];
   List<int> availableQualities = [];
-  SkipSpan? active;
-  final skipped = <String>{};
+  late final skips = PlayerSkips(widget.services);
+  List<SkipSpan> get spans => skips.spans;
+  SkipSpan? get active => skips.active;
 
   /// The kind of span the viewer is marking, or null.
   String? marking;
@@ -565,8 +565,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     setState(() {
       busy = true;
       error = '';
-      active = null;
-      spans = [];
+      skips.reset();
       finished = false;
       overlay = true;
       duration = Duration.zero;
@@ -577,7 +576,6 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         status = 'Finding a copy';
       }
     });
-    skipped.clear();
     subSelected = false;
     subtitleRequest++;
     audioSelected = false;
@@ -830,38 +828,22 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   /// services for anime, from the request (TheIntroDB) for series episodes.
   /// Films have none, so their skip button never shows.
   Future<void> loadSkips(int g) async {
-    if (source == null) return;
-    if (isTitle) {
-      final find = request!.skips;
-      final seconds = duration.inMilliseconds / 1000;
-      if (find == null || seconds <= 0) return;
-      final found = await find(seconds, scope);
-      if (!mounted || g != generation || !isTitle) return;
-      setState(() => spans = selectSkipSpans(const [], found, seconds));
-      return;
-    }
-    final result = await widget.services.resolver.skips(
-      source!,
-      episode,
-      scope,
-    );
-    if (!mounted || g != generation) return;
-    final seconds = duration.inMilliseconds / 1000;
-    if (seconds <= 0) return;
-    final provider = selectSkipSpans(result, const [], seconds);
-    if (provider.any((s) => s.type == 'op') &&
-        provider.any((s) => s.type == 'ed')) {
-      setState(() => spans = provider);
-      return;
-    }
-    final extra = await widget.services.skipTimes.lookup(
-      anime,
-      episode,
-      seconds,
-      scope: scope,
-    );
-    if (!mounted || g != generation) return;
-    setState(() => spans = selectSkipSpans(result, extra, seconds));
+    final from = source;
+    if (from == null) return;
+    final title = isTitle;
+    final found = title
+        ? await skips.forTitle(request!, duration.inMilliseconds / 1000, scope)
+        : await skips.forEpisode(
+            from,
+            anime,
+            episode,
+            scope,
+            length: () => duration.inMilliseconds / 1000,
+            stillWanted: () => mounted && g == generation,
+          );
+    if (found == null || !mounted || g != generation) return;
+    if (title != isTitle) return;
+    setState(() => skips.spans = found);
   }
 
   Future<SubtitleFailure?> preferredTracks(int g) async {
@@ -1170,35 +1152,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       );
       unawaited(widget.services.store.rememberSource(anime, source!.provider));
     }
-    final current = spans
-        .where((s) => s.contains(p.inMilliseconds / 1000))
-        .firstOrNull;
-    final entered =
-        active?.type != current?.type || active?.start != current?.start;
+    final skip = skips.at(p.inMilliseconds / 1000);
     if (!scrubbing) position = p;
-    if (!identical(active, current)) setState(() => active = current);
-    if (current != null) {
-      final setting = switch (current.type) {
-        'op' => 'SkipOp',
-        'ed' => 'SkipEd',
-        _ => 'SkipRecap',
-      };
-      final key = '${current.type}:${current.start}';
-      if (widget.services.store.flag(setting) &&
-          !skipped.contains(key) &&
-          p.inMilliseconds / 1000 >=
-              current.start + widget.services.store.integer('SkipDelay')) {
-        skipped.add(key);
-        unawaited(skipSpan(current));
-      } else if (entered &&
-          !panelOpen &&
-          !scrubbing &&
-          !widget.services.store.flag(setting)) {
+    if (skip.changed) setState(() {});
+    switch (skip.cue) {
+      case SkipCue.skip:
+        unawaited(skipSpan(active!));
+      case SkipCue.offer when !panelOpen && !scrubbing:
         setState(() => overlay = true);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && active != null) skipFocus.requestFocus();
         });
-      }
+      default:
     }
   }
 
@@ -2049,7 +2014,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           Duration(milliseconds: (math.max(0, span.start - 2) * 1000).round()),
         );
         // Watching a span on purpose: don't skip it.
-        skipped.add('${span.type}:${span.start}');
+        skips.keep(span);
       case null:
         playFocus.requestFocus();
     }
@@ -2059,29 +2024,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Future<String?> sendSpan(double start, double end) async {
     final type = marking;
     if (type == null) return 'Nothing is being marked.';
-    try {
-      final id = await widget.services.skipTimes.submit(
-        anime,
-        episode,
-        type,
-        start,
-        end,
-        duration.inMilliseconds / 1000,
-      );
-      if (mounted) {
-        setState(() {
-          spans = [
-            ...spans.where((s) => s.type != type),
-            SkipSpan(type, start, end, source: 'aniskip', id: id),
-          ]..sort((a, b) => a.start.compareTo(b.start));
-        });
-      }
-      return null;
-    } on CoreFailure catch (e) {
-      return e.message;
-    } catch (_) {
-      return 'AniSkip could not be reached. Try again later.';
-    }
+    final failure = await skips.submit(
+      anime,
+      episode,
+      type,
+      start,
+      end,
+      duration.inMilliseconds / 1000,
+    );
+    if (failure == null && mounted) setState(() {});
+    return failure;
   }
 
   void closeMarker() {
@@ -2100,7 +2052,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     position: () => position.inMilliseconds / 1000,
     duration: duration.inMilliseconds / 1000,
     seekTo: (seconds) async {
-      skipped.addAll(spans.map((s) => '${s.type}:${s.start}'));
+      skips.keepAll();
       await seekTo(Duration(milliseconds: (seconds * 1000).round()));
       if (!isPlaying) await resumePlayback();
     },
@@ -2527,25 +2479,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   /// Alt+U / Alt+D: votes on the skip playing now, else the episode's
   /// first AniSkip time.
-  Future<void> voteKey({required bool up}) async {
-    final span =
-        (active != null && active!.id.isNotEmpty ? active : null) ??
-        spans.where((s) => s.id.isNotEmpty).firstOrNull;
-    if (span == null) {
-      flash.show('No AniSkip time to vote on');
-      return;
-    }
-    if (widget.services.skipTimes.voted(span)) {
-      flash.show('You already voted on this one');
-      return;
-    }
-    try {
-      await widget.services.skipTimes.vote(span, up: up);
-      flash.show('Thanks, your vote is in');
-    } catch (_) {
-      flash.show('AniSkip could not be reached');
-    }
-  }
+  Future<void> voteKey({required bool up}) async =>
+      flash.show(await skips.vote(up: up));
 
   Future<void> keysPanel() async {
     panelOpen = true;
