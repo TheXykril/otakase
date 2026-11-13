@@ -1147,7 +1147,10 @@ class _SchedulePageState extends State<SchedulePage> {
   @override
   Widget build(BuildContext context) {
     if (isDesktop) return desktopWeek();
-    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final shown = [
+      for (final row in rows)
+        if (!mineOnly || onList(row.anime)) row,
+    ];
     final monday = DateTime(now.year, now.month, now.day - (now.weekday - 1));
     return ListView(
       padding: EdgeInsets.fromLTRB(
@@ -1164,21 +1167,26 @@ class _SchedulePageState extends State<SchedulePage> {
           style: TextStyle(color: muted),
         ),
         const SizedBox(height: 20),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: AppSegmented<DateTime>(
+        // The whole week fits: one cell per day, no scrolling.
+        WeekStrip(
+          monday: monday,
+          selected: selected,
+          today: DateTime(now.year, now.month, now.day),
+          isTV: widget.isTV,
+          onChanged: (date) {
+            selected = date;
+            unawaited(load());
+          },
+        ),
+        const SizedBox(height: 14),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AppSegmented<bool>(
             isTV: widget.isTV,
-            options: [
-              for (var i = 0; i < 7; i++)
-                if (DateTime(monday.year, monday.month, monday.day + i)
-                    case final date)
-                  (date, '${names[i]} ${date.day}'),
-            ],
-            selected: selected,
-            onChanged: (date) {
-              selected = date;
-              unawaited(load());
-            },
+            expand: !widget.isTV,
+            options: const [(true, 'My list only'), (false, 'Everything')],
+            selected: mineOnly,
+            onChanged: (value) => setState(() => mineOnly = value),
           ),
         ),
         const SizedBox(height: 20),
@@ -1189,9 +1197,13 @@ class _SchedulePageState extends State<SchedulePage> {
             onRetry: () => load(append: retryAppend),
             isTV: widget.isTV,
           ),
-        if (!busy && rows.isEmpty && error == null)
-          const EmptyState(message: 'A quiet day on the calendar.'),
-        for (final row in rows)
+        if (!busy && shown.isEmpty && error == null)
+          EmptyState(
+            message: mineOnly && rows.isNotEmpty
+                ? 'Nothing from your list airs this day.'
+                : 'A quiet day on the calendar.',
+          ),
+        for (final row in shown)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: FocusBox(
@@ -1216,6 +1228,15 @@ class _SchedulePageState extends State<SchedulePage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (onList(row.anime))
+                          Text(
+                            'ON YOUR LIST',
+                            style: mono.copyWith(
+                              fontSize: 12,
+                              letterSpacing: 1.5,
+                              color: accentText,
+                            ),
+                          ),
                         Text(
                           row.anime.title,
                           maxLines: 2,
@@ -1245,6 +1266,100 @@ class _SchedulePageState extends State<SchedulePage> {
       ],
     );
   }
+}
+
+/// The seven days of one week as equal cells: weekday over date, today in
+/// Shu, the chosen day raised. Fits a phone without scrolling.
+class WeekStrip extends StatelessWidget {
+  const WeekStrip({
+    super.key,
+    required this.monday,
+    required this.selected,
+    required this.today,
+    required this.onChanged,
+    this.isTV = false,
+  });
+  final DateTime monday, selected, today;
+  final ValueChanged<DateTime> onChanged;
+  final bool isTV;
+
+  static const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(2),
+    decoration: BoxDecoration(
+      color: panel,
+      border: Border.all(color: line),
+      borderRadius: BorderRadius.circular(KageRadius.input),
+    ),
+    child: Row(
+      children: [
+        for (var i = 0; i < 7; i++)
+          if (DateTime(monday.year, monday.month, monday.day + i)
+              case final date)
+            Expanded(
+              child: Semantics(
+                selected: date == selected,
+                button: true,
+                label:
+                    '${names[i]} ${date.day}${date == today ? ', today' : ''}',
+                excludeSemantics: true,
+                child: FocusBox(
+                  key: ValueKey('schedule-day-$i'),
+                  isTV: isTV,
+                  radius: KageRadius.segment,
+                  scale: 1,
+                  onPressed: () => onChanged(date),
+                  child: AnimatedContainer(
+                    duration: KageMotion.fast,
+                    padding: EdgeInsets.symmetric(vertical: isTV ? 10 : 8),
+                    decoration: BoxDecoration(
+                      color: date == selected
+                          ? panelRaised
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(KageRadius.segment),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          names[i].toUpperCase(),
+                          style: mono.copyWith(
+                            fontSize: isTV ? 14 : 12,
+                            letterSpacing: 1,
+                            color: date == today ? accentText : muted,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${date.day}',
+                          style: uiStyle(
+                            context,
+                            weight: FontWeight.w700,
+                            color: date == selected
+                                ? fgBright
+                                : date == today
+                                ? accentText
+                                : fg,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        // Shu mark under the chosen day.
+                        Container(
+                          width: 16,
+                          height: 2,
+                          color: date == selected ? shu : Colors.transparent,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+      ],
+    ),
+  );
 }
 
 const _formats = {
