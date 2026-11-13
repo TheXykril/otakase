@@ -49,7 +49,7 @@ class AccountRow extends StatelessWidget {
       child: FocusBox(
         isTV: isTV,
         autofocus: autofocus,
-        radius: 12,
+        radius: KageRadius.md,
         onPressed: onTap,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(

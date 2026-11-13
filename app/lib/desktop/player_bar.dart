@@ -165,7 +165,7 @@ class DesktopPlayerBar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xe60e0d0c),
                 border: Border.all(color: line),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(KageRadius.md),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -368,14 +368,26 @@ class SeekRailPainter extends CustomPainter {
     final top = (size.height - h) / 2;
     if (rail) {
       canvas.drawRRect(
-        RRect.fromLTRBR(0, top, size.width, top + h, const Radius.circular(3)),
+        RRect.fromLTRBR(
+          0,
+          top,
+          size.width,
+          top + h,
+          const Radius.circular(KageRadius.track),
+        ),
         Paint()..color = const Color(0xff5a5148),
       );
     }
     final b = rail ? buffered.clamp(0.0, 1.0) * size.width : 0.0;
     if (b > 0) {
       canvas.drawRRect(
-        RRect.fromLTRBR(0, top, b, top + h, const Radius.circular(3)),
+        RRect.fromLTRBR(
+          0,
+          top,
+          b,
+          top + h,
+          const Radius.circular(KageRadius.track),
+        ),
         Paint()..color = const Color(0xffa09282),
       );
     }

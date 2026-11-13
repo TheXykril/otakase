@@ -102,7 +102,7 @@ class _PartyOverlayState extends State<PartyOverlay> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: bgDeep.withValues(alpha: .72),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(KageRadius.bubble),
         ),
         child: Text(
           text,
@@ -340,7 +340,7 @@ class _WatchPartiesPageState extends State<WatchPartiesPage> {
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: panel,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(KageRadius.tile),
                       border: Border.all(color: line),
                     ),
                     child: Column(

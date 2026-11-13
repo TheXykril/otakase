@@ -617,7 +617,7 @@ class _ShowPageState extends State<ShowPage> {
               ),
               const SizedBox(width: 8),
               ClipRRect(
-                borderRadius: BorderRadius.circular(7),
+                borderRadius: BorderRadius.circular(KageRadius.episodeThumb),
                 child: SizedBox(
                   width: card ? 92 : 73,
                   height: card ? 86 : 47,
@@ -765,7 +765,7 @@ class _ShowPageState extends State<ShowPage> {
     decoration: BoxDecoration(
       color: bgDeep.withValues(alpha: .45),
       border: Border.all(color: fgBright.withValues(alpha: .22)),
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(KageRadius.chip),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -811,7 +811,7 @@ class _ShowPageState extends State<ShowPage> {
                   width: 260,
                   height: 370,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(KageRadius.poster),
                     boxShadow: const [
                       BoxShadow(
                         color: Color(0x99000000),
@@ -821,7 +821,7 @@ class _ShowPageState extends State<ShowPage> {
                     ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(KageRadius.poster),
                     child: CoverImage(cover, width: 260, height: 370),
                   ),
                 ),
@@ -885,7 +885,9 @@ class _ShowPageState extends State<ShowPage> {
                             padding: const EdgeInsets.all(4),
                             decoration: BoxDecoration(
                               color: fgBright.withValues(alpha: .08),
-                              borderRadius: BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(
+                                KageRadius.chip,
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -968,10 +970,10 @@ class _ShowPageState extends State<ShowPage> {
               isTV: true,
               outsideFrame: true,
               lift: true,
-              radius: 12,
+              radius: KageRadius.md,
               onPressed: () => play(ep),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(KageRadius.md),
                 child: SizedBox(
                   width: width,
                   height: height,
@@ -1014,7 +1016,9 @@ class _ShowPageState extends State<ShowPage> {
                             ),
                             decoration: BoxDecoration(
                               color: bgDeep.withValues(alpha: .8),
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(
+                                KageRadius.tag,
+                              ),
                             ),
                             child: Text(
                               clock(length),
@@ -1182,7 +1186,7 @@ class _ShowPageState extends State<ShowPage> {
                   ),
                   decoration: BoxDecoration(
                     color: fgBright.withValues(alpha: .08),
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.circular(KageRadius.chip),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1268,7 +1272,7 @@ class _ShowPageState extends State<ShowPage> {
       decoration: BoxDecoration(
         color: panel,
         border: Border.all(color: line),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(KageRadius.panel),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1300,7 +1304,7 @@ class _ShowPageState extends State<ShowPage> {
                       isTV: true,
                       outsideFrame: true,
                       lift: true,
-                      radius: 8,
+                      radius: KageRadius.sm,
                       onPressed: () => Navigator.push(
                         context,
                         OtakaseRoute<void>(
@@ -1312,7 +1316,7 @@ class _ShowPageState extends State<ShowPage> {
                         ),
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(KageRadius.sm),
                         child: CoverImage(a.cover, width: 92, height: 130),
                       ),
                     ),

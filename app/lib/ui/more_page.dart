@@ -184,7 +184,7 @@ class MorePage extends StatelessWidget {
           key: const Key('more-Accounts'),
           autofocus: true,
           isTV: isTV,
-          radius: 14,
+          radius: KageRadius.tile,
           onPressed: () => openAccounts(context, services, isTV),
           child: Container(
             constraints: const BoxConstraints(minHeight: 84),
@@ -192,7 +192,7 @@ class MorePage extends StatelessWidget {
             decoration: BoxDecoration(
               color: panel,
               border: Border.all(color: line),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(KageRadius.tile),
             ),
             child: Row(
               children: [
@@ -406,13 +406,13 @@ class _DesktopMoreState extends State<DesktopMore> {
       child: FocusBox(
         key: ValueKey('more-$title'),
         isTV: true,
-        radius: 12,
+        radius: KageRadius.md,
         onPressed: open ?? () => setState(() => section = title),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: selected ? selectedPanel : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(KageRadius.md),
             border: Border(
               left: BorderSide(
                 color: selected ? shu : Colors.transparent,
@@ -473,14 +473,14 @@ class _DesktopMoreState extends State<DesktopMore> {
         FocusBox(
           key: const Key('more-Accounts'),
           isTV: true,
-          radius: 14,
+          radius: KageRadius.tile,
           onPressed: () => openAccounts(context, services, true),
           child: Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: panel,
               border: Border.all(color: line),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(KageRadius.tile),
             ),
             child: Row(
               children: [

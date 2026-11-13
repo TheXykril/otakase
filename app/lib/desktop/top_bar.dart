@@ -148,7 +148,7 @@ class _DesktopTabState extends State<DesktopTab> {
   @override
   Widget build(BuildContext context) => FocusBox(
     isTV: true,
-    radius: 16,
+    radius: KageRadius.lg,
     frameGap: 5,
     focusFill: Colors.transparent,
     hoverColor: Colors.transparent,
@@ -174,7 +174,7 @@ class _DesktopTabState extends State<DesktopTab> {
             height: 3,
             decoration: BoxDecoration(
               color: widget.selected ? shu : Colors.transparent,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(KageRadius.mark),
             ),
           ),
         ],

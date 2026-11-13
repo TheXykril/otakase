@@ -326,7 +326,7 @@ class SkipMarkerCardState extends State<SkipMarkerCard> {
       decoration: BoxDecoration(
         color: panel.withValues(alpha: .96),
         border: Border.all(color: line),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(KageRadius.panel),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

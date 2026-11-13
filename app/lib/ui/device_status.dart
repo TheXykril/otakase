@@ -131,7 +131,7 @@ class _Battery extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         const Rect.fromLTWH(0, 1, 21, 14),
-        const Radius.circular(3),
+        const Radius.circular(KageRadius.track),
       ),
       Paint()
         ..color = color

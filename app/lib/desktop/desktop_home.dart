@@ -208,7 +208,9 @@ class _DesktopHeroState extends State<DesktopHero> {
                                     color: i == index
                                         ? shu
                                         : fgBright.withValues(alpha: .3),
-                                    borderRadius: BorderRadius.circular(5),
+                                    borderRadius: BorderRadius.circular(
+                                      KageRadius.full,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -236,7 +238,7 @@ class _Chip extends StatelessWidget {
     decoration: BoxDecoration(
       color: bgDeep.withValues(alpha: .45),
       border: Border.all(color: fgBright.withValues(alpha: .22)),
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(KageRadius.chip),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -386,12 +388,12 @@ class _ContinueCardState extends State<_ContinueCard> {
               isTV: true,
               outsideFrame: true,
               lift: true,
-              radius: 12,
+              radius: KageRadius.md,
               onPressed: widget.onPressed,
               onLongPress: widget.onMenu,
               onHover: (value) => setState(() => hovered = value),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(KageRadius.md),
                 child: SizedBox(
                   width: widget.width,
                   height: height,
