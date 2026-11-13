@@ -87,6 +87,19 @@ describe('sign-in', () => {
     expect(r.code).toBeTruthy();
   });
 
+  it('says why Discord refused the code', async () => {
+    const spy = fakeOutside({ users });
+    const real = spy.getMockImplementation();
+    spy.mockImplementation(async (input, init) => {
+      const url = new Request(input, init).url;
+      if (url === 'https://discord.com/api/oauth2/token') return Response.json({ error: 'invalid_client' }, { status: 401 });
+      return real(input, init);
+    });
+    const r = await browserSignIn('discord', 'alice', { challenge: (await pkcePair()).challenge });
+    expect(r.status).toBe(502);
+    expect(r.html).toContain('Discord sign-in failed (401: invalid_client)');
+  });
+
   it('rejects a forged state', async () => {
     const r = await call('/callback/discord?code=x&state=nope');
     expect(r.status).toBe(400);
