@@ -38,6 +38,8 @@ type movieSource struct {
 
 var movieSources = []movieSource{
 	{Name: movies.VidsrcName, Label: "vidsrc", Language: "en", Series: true},
+	// 2embed is keyed by IMDb id like vidsrc, and tried next.
+	{Name: movies.TwoEmbedName, Label: "2Embed", Language: "en", Series: true},
 	{Name: movies.FilmaiName, Label: "8Filmai", Language: "lt", Series: true},
 	{Name: movies.FilmukasName, Label: "Filmukas", Language: "lt"},
 	// Asian dramas and films with English subtitles, after vidsrc so it is
@@ -249,18 +251,19 @@ func movieProvider(name string, client *http.Client, subtitles string) (movies.P
 	case movies.VidsrcName:
 		v := movies.NewVidsrc()
 		v.Client = client
-		language := movies.English
-		if name := providers.CanonicalLanguage(subtitles); name != "" {
-			if code := providers.ThreeLetterCode(name); code != "" {
-				language = movies.SubtitleLanguage{Code: code, Name: strings.ToUpper(name[:1]) + name[1:]}
-			}
-		}
+		language := subtitleLanguage(subtitles)
 		v.Subtitles = func(movies.Movie) movies.SubtitleLanguage { return language }
 		return v, true
 	case movies.FilmukasName:
 		f := movies.NewFilmukas()
 		f.Client = client
 		return f, true
+	case movies.TwoEmbedName:
+		e := movies.NewTwoEmbed()
+		e.Client = client
+		language := subtitleLanguage(subtitles)
+		e.Subtitles = func(movies.Movie) movies.SubtitleLanguage { return language }
+		return e, true
 	case movies.DramacoolName:
 		d := movies.NewDramacool()
 		d.Client = client
@@ -286,6 +289,17 @@ func movieProvider(name string, client *http.Client, subtitles string) (movies.P
 	return nil, false
 }
 
+// subtitleLanguage is the OpenSubtitles language for a subtitle setting
+// such as "lithuanian", English when it names none OpenSubtitles knows.
+func subtitleLanguage(setting string) movies.SubtitleLanguage {
+	if name := providers.CanonicalLanguage(setting); name != "" {
+		if code := providers.ThreeLetterCode(name); code != "" {
+			return movies.SubtitleLanguage{Code: code, Name: strings.ToUpper(name[:1]) + name[1:]}
+		}
+	}
+	return movies.English
+}
+
 var seasonPath = regexp.MustCompile(`-(\d+)-sezonas`)
 
 // matchMovie finds a Trakt title on one source. vidsrc is keyed by IMDb id,
@@ -301,11 +315,11 @@ func matchMovie(client *http.Client, req movieRequest) (movieTitle, error) {
 	if req.Series && !movieSources[source].Series {
 		return movieTitle{}, nil
 	}
-	if req.Provider == movies.VidsrcName {
+	if req.Provider == movies.VidsrcName || req.Provider == movies.TwoEmbedName {
 		if !strings.HasPrefix(req.IMDb, "tt") {
 			return movieTitle{}, nil
 		}
-		return movieTitle{Provider: movies.VidsrcName, Path: req.IMDb, IMDb: req.IMDb, Title: firstTitle(req.Titles, req.IMDb), Year: yearText(req.Year), Series: req.Series}, nil
+		return movieTitle{Provider: req.Provider, Path: req.IMDb, IMDb: req.IMDb, Title: firstTitle(req.Titles, req.IMDb), Year: yearText(req.Year), Series: req.Series}, nil
 	}
 	if req.Provider == movies.DramacoolName {
 		return matchDrama(client, req)

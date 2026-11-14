@@ -36,7 +36,7 @@ func TestMovieProvidersCarryTheirLanguage(t *testing.T) {
 	for _, s := range list {
 		languages[s.Name] = s.Language
 	}
-	if languages["vidsrc"] != "en" || languages["8filmai"] != "lt" || languages["filmukas"] != "lt" || languages["dramacool"] != "en" {
+	if languages["vidsrc"] != "en" || languages["8filmai"] != "lt" || languages["filmukas"] != "lt" || languages["dramacool"] != "en" || languages["2embed"] != "en" {
 		t.Fatalf("languages = %v", languages)
 	}
 }
@@ -52,6 +52,10 @@ func TestVidsrcMatchUsesIMDbWithoutRequests(t *testing.T) {
 	movieData(t, call(t, c, `{"version":1,"operation":"movie_match","provider":"vidsrc","titles":["Interstellar"],"year":2014,"imdb":"tt0816692"}`), "movie", &m)
 	if m.Path != "tt0816692" || m.IMDb != "tt0816692" || m.Provider != "vidsrc" {
 		t.Fatalf("movie = %+v", m)
+	}
+	movieData(t, call(t, c, `{"version":1,"operation":"movie_match","provider":"2embed","titles":["Interstellar"],"year":2014,"imdb":"tt0816692"}`), "movie", &m)
+	if m.Path != "tt0816692" || m.Provider != "2embed" {
+		t.Fatalf("2embed movie = %+v", m)
 	}
 	r := call(t, c, `{"version":1,"operation":"movie_match","provider":"vidsrc","titles":["No id"]}`)
 	if r.Error == nil || r.Error.Code != "not_found" {

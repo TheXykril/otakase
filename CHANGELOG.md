@@ -10,6 +10,9 @@
   titles), including later seasons. It is tried after vidsrc, so a K-drama
   or Asian film vidsrc has no stream for still plays, and it shows up in
   Diagnostics with the other sources.
+- **A second English source for movies and shows.** 2Embed plays films and
+  episodes by their IMDb id, like vidsrc, and is tried right after it, with
+  subtitles in your language from OpenSubtitles.
 
 - **Play movies and shows on your TV from the phone.** A film or show page
   on the phone now has Play on, like anime: pick an Otakase TV or computer
