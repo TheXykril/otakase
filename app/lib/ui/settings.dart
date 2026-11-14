@@ -683,11 +683,21 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
   List<String> sources = [];
   // Shown only while the viewer's AniList allows 18+ content.
   List<String> adultSources = [];
+  // Film and series sources, checked and shown after the anime ones.
+  List<MovieSource> movieSources = [];
   bool checking = false;
   @override
   void initState() {
     super.initState();
     widget.services.store.addListener(loadAdult);
+    unawaited(
+      widget.services.movies
+          .sources()
+          .then((v) {
+            if (mounted) setState(() => movieSources = v);
+          })
+          .catchError((_) {}),
+    );
     unawaited(
       widget.services.resolver
           .providerOrder()
@@ -742,6 +752,14 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
         widget.services.store.health(provider, 'Unavailable');
       }
     }
+    for (final source in movieSources) {
+      if (scope.cancelled) break;
+      try {
+        await widget.services.movies.check(source, scope);
+      } catch (_) {
+        break;
+      }
+    }
     if (mounted) setState(() => checking = false);
   }
 
@@ -784,7 +802,7 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
             ),
           ),
           const SizedBox(height: 32),
-          const SectionLabel('Sources'),
+          const SectionLabel('Anime sources'),
           const SizedBox(height: 12),
           for (var i = 0; i < sources.length; i++)
             Container(
@@ -833,6 +851,44 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
                   ],
                 ),
               ),
+          if (movieSources.isNotEmpty) ...[
+            const SizedBox(height: 32),
+            const SectionLabel('Movie & show sources'),
+            const SizedBox(height: 12),
+            for (var i = 0; i < movieSources.length; i++)
+              Container(
+                key: ValueKey('movie-source-$i'),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: line)),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      '${i + 1}'.padLeft(2, '0'),
+                      style: uiStyle(context, color: muted),
+                    ),
+                    const SizedBox(width: 20),
+                    // Named by language only, like the anime sources.
+                    Expanded(
+                      child: Text(
+                        'Source ${i + 1} · '
+                        '${languageTitle(movieSources[i].languageName)}',
+                        style: uiStyle(context),
+                      ),
+                    ),
+                    Text(
+                      widget
+                              .services
+                              .store
+                              .providerHealth['movie:${movieSources[i].name}'] ??
+                          'Not checked',
+                      style: uiStyle(context, size: 15, color: muted),
+                    ),
+                  ],
+                ),
+              ),
+          ],
           const SizedBox(height: 24),
           Align(
             alignment: Alignment.centerLeft,

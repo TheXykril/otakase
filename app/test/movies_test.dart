@@ -227,6 +227,30 @@ void main() {
     },
   );
 
+  test('diagnostics check finds a film and a stream on each source', () async {
+    final store = await freshStore();
+    final core = MovieCore()..missing.add('filmukas');
+    final movies = MovieService(
+      trakt: offlineTrakt(),
+      core: core,
+      store: store,
+    );
+    final sources = await movies.sources();
+    final scope = RequestScope();
+    expect(await movies.check(sources[0], scope), 'Working');
+    expect(await movies.check(sources[2], scope), 'No match');
+    expect(store.providerHealth['movie:vidsrc'], 'Working');
+    expect(store.providerHealth['movie:filmukas'], 'No match');
+    final match = core.calls.firstWhere(
+      (c) => c['operation'] == 'movie_match' && c['provider'] == 'vidsrc',
+    );
+    expect(match['imdb'], 'tt1375666');
+    expect(
+      core.calls.where((c) => c['operation'] == 'movie_resolve'),
+      hasLength(1),
+    );
+  });
+
   test('progress, watched episodes and the continue row persist', () async {
     final store = await freshStore();
     final movies = MovieService(
