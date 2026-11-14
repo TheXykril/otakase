@@ -28,6 +28,32 @@ void main() {
     expect(noCopyMessage(3, 3), contains("Couldn't reach"));
     expect(noCopyMessage(3, 1), contains("didn't answer"));
     expect(noCopyMessage(3, 0), startsWith('No source has this yet'));
+    expect(
+      noCopyMessage(
+        2,
+        2,
+        reasons: ['English: no server played', 'Lithuanian: timed out'],
+      ),
+      endsWith('\nEnglish: no server played\nLithuanian: timed out'),
+    );
+  });
+
+  test('a failed source says why in a few words', () {
+    expect(failureReason(const CoreFailure('timeout', 'x')), 'timed out');
+    expect(
+      failureReason(const CoreFailure('no_stream', 'x')),
+      'no server played',
+    );
+    expect(
+      failureReason(
+        const CoreFailure(
+          'provider_error',
+          'Source request failed (certificate not trusted by this device).',
+        ),
+      ),
+      'certificate not trusted by this device',
+    );
+    expect(failureReason(const CoreFailure('internal', 'Broke.')), 'failed');
   });
 
   test('errors read without Dart prefixes', () {

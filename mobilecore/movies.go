@@ -3,9 +3,12 @@ package mobilecore
 import (
 	"cmp"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -182,10 +185,46 @@ func (c *Core) executeExtra(ctx context.Context, input string) string {
 		if transport.rateLimited.Load() {
 			return failure("rate_limited", "Source rate limit reached. Try again later.", true)
 		}
-		return failure("provider_error", "Source request failed. Try another source.", true)
+		return failure("provider_error", "Source request failed ("+sourceProblem(err)+").", true)
 	}
 	return encode(response{Version: 1, Data: data})
 }
+
+// sourceProblem says in a few words why a source could not be reached, so a
+// device that fails where another plays (an old certificate store, a wrong
+// clock, a blocked address) shows why without its logs.
+func sourceProblem(err error) string {
+	var dns *net.DNSError
+	var hostname x509.HostnameError
+	var invalid x509.CertificateInvalidError
+	var unknownAuthority x509.UnknownAuthorityError
+	var certificate *tls.CertificateVerificationError
+	var netErr net.Error
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &netErr) && netErr.Timeout():
+		return "timed out"
+	case errors.As(err, &dns):
+		return "address not found"
+	case errors.As(err, &hostname):
+		return "certificate for another name"
+	case errors.As(err, &invalid) && invalid.Reason == x509.Expired:
+		return "certificate date wrong, check the device clock"
+	case errors.As(err, &unknownAuthority):
+		return "certificate not trusted by this device"
+	case errors.As(err, &certificate):
+		return "certificate not accepted"
+	case strings.Contains(err.Error(), "connection refused"):
+		return "connection refused"
+	case strings.Contains(err.Error(), "connection reset"):
+		return "connection reset"
+	}
+	if status := httpStatusPattern.FindStringSubmatch(err.Error()); status != nil {
+		return "site answered " + status[1]
+	}
+	return "site changed or unreachable"
+}
+
+var httpStatusPattern = regexp.MustCompile(`answered (\d{3})\b`)
 
 // useCacheForSubtitles points the system temp dir at the app's cache once.
 // vidsrc saves the subtitles it fetches there, and Android has no writable
