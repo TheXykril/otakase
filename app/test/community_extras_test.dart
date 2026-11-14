@@ -137,7 +137,7 @@ void main() {
     final diag = reportDiagnostics(store);
     expect(diag, contains('Otakase app'));
     expect(diag, contains('Source 2 Working'));
-    expect(diag, contains('Movie source 2 No match'));
+    expect(diag, contains('Movie source 3 No match'));
     for (final name in [...sourceNames, 'sukebei', '8filmai', 'vidsrc']) {
       expect(diag.toLowerCase(), isNot(contains(name)));
     }

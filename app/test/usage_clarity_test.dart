@@ -145,7 +145,7 @@ void main() {
   });
 
   test('a film report numbers its source and keeps the language', () {
-    expect(reportSource('8Filmai · Lithuanian'), 'Movie source 2 · Lithuanian');
+    expect(reportSource('8Filmai · Lithuanian'), 'Movie source 3 · Lithuanian');
     expect(reportSource('somethingnew'), 'Other source');
   });
 
