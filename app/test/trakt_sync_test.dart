@@ -36,6 +36,8 @@ class _Core extends CoreClient {
 
 const mentalist = MediaTitle(kind: 'show', trakt: 4553, title: 'The Mentalist');
 const other = MediaTitle(kind: 'show', trakt: 1388, title: 'Breaking Bad');
+const ended = MediaTitle(kind: 'show', trakt: 1390, title: 'Ended Show');
+const film = MediaTitle(kind: 'movie', trakt: 102156, title: 'Interstellar');
 
 Json _show(MediaTitle t) => {
   'title': t.title,
@@ -214,25 +216,152 @@ void main() {
     expect(movies.onWatchlist(mentalist), isTrue);
   });
 
-  test('watching an episode takes the show off the watchlist', () async {
-    final client = MockClient((r) async {
-      if (r.url.path == '/sync/watchlist') return http.Response('{}', 201);
-      return http.Response('[]', 200);
+  group('a started show stays on the watchlist until completed', () {
+    // Trakt as it behaves: a watch takes the title off the watchlist.
+    late Map<String, Json> listed;
+    late List<Json> watched;
+    late List<String> adds;
+    late MockClient client;
+    String keyOf(Json body) {
+      final shows = body['shows'] as List?;
+      final row = (shows ?? body['movies'] as List).single as Map;
+      return '${shows != null ? 'show' : 'movie'}:${(row['ids'] as Map)['trakt']}';
+    }
+
+    setUp(() {
+      listed = {};
+      watched = [];
+      adds = [];
+      client = MockClient((r) async {
+        switch (r.url.path) {
+          case '/sync/watchlist':
+            final body = jsonDecode(r.body) as Json;
+            final key = keyOf(body);
+            adds.add(key);
+            final row = ((body['shows'] ?? body['movies']) as List).single;
+            listed[key] = {
+              key.startsWith('show') ? 'show' : 'movie': {
+                'title': 'x',
+                'ids': (row as Map)['ids'],
+                'status': key == 'show:${ended.trakt}'
+                    ? 'ended'
+                    : 'returning series',
+                'aired_episodes': 2,
+              },
+            };
+            return http.Response('{}', 201);
+          case '/sync/watchlist/remove':
+            listed.remove(keyOf(jsonDecode(r.body) as Json));
+            return http.Response('{}', 200);
+          case '/scrobble/stop':
+            final body = jsonDecode(r.body) as Json;
+            final ids = ((body['show'] ?? body['movie']) as Map)['ids'] as Map;
+            listed.remove(
+              '${body['show'] != null ? 'show' : 'movie'}:${ids['trakt']}',
+            );
+            return http.Response('{}', 201);
+          case '/sync/watchlist/shows':
+            return http.Response(
+              jsonEncode([
+                for (final MapEntry(:key, :value) in listed.entries)
+                  if (key.startsWith('show')) value,
+              ]),
+              200,
+            );
+          case '/sync/watchlist/movies':
+            return http.Response(
+              jsonEncode([
+                for (final MapEntry(:key, :value) in listed.entries)
+                  if (key.startsWith('movie')) value,
+              ]),
+              200,
+            );
+          case '/sync/watched/shows':
+            return http.Response(jsonEncode(watched), 200);
+        }
+        return http.Response('[]', 200);
+      });
     });
-    final movies = await _service(client);
-    await movies.sync(force: true);
-    await movies.setWatchlist(mentalist, true);
-    await movies.progress(
-      mentalist,
-      2600,
-      2640,
-      season: 1,
-      episode: 1,
-      completed: true,
-    );
-    // As Trakt does once an episode is watched.
-    expect(movies.onWatchlist(mentalist), isFalse);
-    await movies.sync(force: true);
-    expect(movies.onWatchlist(mentalist), isFalse);
+
+    test('watched here', () async {
+      final movies = await _service(client);
+      await movies.sync(force: true);
+      await movies.setWatchlist(mentalist, true);
+      await movies.sync(force: true);
+      await movies.progress(
+        mentalist,
+        2600,
+        2640,
+        season: 1,
+        episode: 1,
+        completed: true,
+      );
+      expect(movies.onWatchlist(mentalist), isTrue);
+      await movies.scrobble('stop', mentalist, 100, season: 1, episode: 1);
+      // Trakt dropped it on the watch; it was put back.
+      expect(listed.keys, contains(mentalist.key));
+      await movies.sync(force: true);
+      expect(movies.onWatchlist(mentalist), isTrue);
+    });
+
+    test('watched on another device', () async {
+      final movies = await _service(client);
+      await movies.sync(force: true);
+      await movies.setWatchlist(mentalist, true);
+      await movies.sync(force: true);
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      // Another app scrobbles episode 1 and Trakt drops the show.
+      listed.remove(mentalist.key);
+      watched = [
+        {
+          'show': _show(mentalist),
+          'seasons': [
+            {
+              'number': 1,
+              'episodes': [
+                {
+                  'number': 1,
+                  'last_watched_at': DateTime.now().toUtc().toIso8601String(),
+                },
+              ],
+            },
+          ],
+        },
+      ];
+      await movies.sync(force: true);
+      expect(movies.onWatchlist(mentalist), isTrue);
+      expect(listed.keys, contains(mentalist.key));
+    });
+
+    test('taken off on trakt.tv with no watch stays off', () async {
+      final movies = await _service(client);
+      await movies.sync(force: true);
+      await movies.setWatchlist(mentalist, true);
+      await movies.sync(force: true);
+      listed.remove(mentalist.key);
+      await movies.sync(force: true);
+      expect(movies.onWatchlist(mentalist), isFalse);
+      expect(adds, hasLength(1));
+    });
+
+    test('an ended show with every episode watched leaves', () async {
+      final movies = await _service(client);
+      await movies.sync(force: true);
+      await movies.setWatchlist(ended, true);
+      await movies.sync(force: true);
+      await movies.markWatched(ended, true, season: 1, episode: 1);
+      expect(movies.onWatchlist(ended), isTrue);
+      await movies.markWatched(ended, true, season: 1, episode: 2);
+      expect(movies.onWatchlist(ended), isFalse);
+    });
+
+    test('a watched film leaves', () async {
+      final movies = await _service(client);
+      await movies.sync(force: true);
+      await movies.setWatchlist(film, true);
+      await movies.sync(force: true);
+      await movies.progress(film, 7000, 7200, completed: true);
+      expect(movies.onWatchlist(film), isFalse);
+    });
   });
 }

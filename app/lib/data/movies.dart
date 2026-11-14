@@ -270,6 +270,11 @@ class MovieService extends ChangeNotifier {
   /// by title key.
   final Map<String, WatchlistEdit> _watchlistEdits = {};
 
+  /// When each title was last seen on the Trakt watchlist, by key, so a
+  /// show Trakt dropped because an episode was watched can be told from
+  /// one taken off on purpose.
+  final Map<String, int> _listedSeen = {};
+
   /// Watched marks still to send to Trakt.
   List<UnsentWatch> get unsentWatches => List.unmodifiable(_unsent);
 
@@ -328,6 +333,11 @@ class MovieService extends ChangeNotifier {
       // 'activity' was saved by pulls that missed every watched episode
       // (Trakt's July 2026 change); dropping it makes the next sync pull
       // everything once.
+      if (data['listed_seen'] case final Map seen) {
+        for (final MapEntry(:key, :value) in seen.entries) {
+          _listedSeen['$key'] = number(value);
+        }
+      }
       if (data['activity2'] case final Map activity) {
         _activity.addAll(activity.cast<String, String>());
       }
@@ -345,6 +355,7 @@ class MovieService extends ChangeNotifier {
       if (_watchlistEdits.isNotEmpty)
         'watchlist_edits': [for (final w in _watchlistEdits.values) w.toJson()],
       if (_activity.isNotEmpty) 'activity2': _activity,
+      if (_listedSeen.isNotEmpty) 'listed_seen': _listedSeen,
     }),
   );
 
@@ -437,6 +448,7 @@ class MovieService extends ChangeNotifier {
       }
       final pullStarted = DateTime.now().millisecondsSinceEpoch;
       final lib = await trakt.library();
+      final before = watchlist;
       watchlist = _withEdits(lib.watchlist, pullStarted);
       for (final t in lib.watchedMovies.values) {
         final e = _entries[t.key];
@@ -477,6 +489,8 @@ class MovieService extends ChangeNotifier {
         );
       }
       await _moveToUpNext(lib.lastEpisodes);
+      _keepStartedShows(before, lib, pullStarted);
+      await _sendWatchlistEdits();
       final merged = _mergePlayback(lib.playback);
       lastError = null;
       if (activity.isNotEmpty) _activity[account] = activity;
@@ -600,13 +614,74 @@ class MovieService extends ChangeNotifier {
       e.status == 429 ||
       e.status >= 500;
 
+  /// Whether every episode of a show that has ended is watched, or a film
+  /// is. A show still airing is never done, as on AniList and MyAnimeList.
+  bool _completed(MediaTitle title) {
+    final e = _entries[title.key];
+    if (e == null) return false;
+    if (!title.isShow) return e.watched.contains('movie');
+    final status = title.status.toLowerCase();
+    if (status != 'ended' && status != 'canceled') return false;
+    final seen = e.watched.where((c) => !c.startsWith('S0E')).length;
+    return title.airedEpisodes > 0 && seen >= title.airedEpisodes;
+  }
+
+  /// The watchlist's own copy of [title], which carries its status and
+  /// episode count.
+  MediaTitle _listed(MediaTitle title) =>
+      watchlist.where((t) => t.key == title.key).firstOrNull ?? title;
+
   /// Trakt takes a film off the watchlist once it is watched, and a show
-  /// once any episode is; the list here follows at once rather than at
-  /// the next pull.
-  void _leaveWatchlist(MediaTitle title) {
+  /// once any episode is. A film leaves here too. A show stays listed until
+  /// it is completed, as a show being watched stays on an AniList or
+  /// MyAnimeList list, so it is put back on Trakt once Trakt has the watch.
+  /// Returns the show to put back, or null.
+  MediaTitle? _afterWatch(MediaTitle title) {
+    if (!onWatchlist(title)) return null;
+    final listed = _listed(title);
+    if (title.isShow && !_completed(listed)) return listed;
     final edit = _watchlistEdits[title.key];
     if (edit != null && edit.on) _watchlistEdits.remove(title.key);
     watchlist = [...watchlist.where((t) => t.key != title.key)];
+    return null;
+  }
+
+  /// Puts [show] back on the Trakt watchlist after a watch made Trakt drop
+  /// it. Sent again on the next sync when Trakt is away.
+  Future<void> _relist(MediaTitle show) async {
+    final edit = WatchlistEdit(title: show, on: true, at: _stamp());
+    _watchlistEdits[show.key] = edit;
+    try {
+      await trakt.setWatchlist(show, true);
+      _watchlistSent(edit);
+    } catch (_) {
+      /* Sent on the next sync. */
+    }
+    await _persist();
+  }
+
+  /// Shows that left the Trakt watchlist since the last pull because an
+  /// episode was watched (on any device or app), and are not completed,
+  /// go back on it. One taken off with no watch since was removed on
+  /// purpose and stays off.
+  void _keepStartedShows(
+    List<MediaTitle> before,
+    TraktLibrary lib,
+    int pullStarted,
+  ) {
+    final listedNow = {for (final t in watchlist) t.key};
+    for (final t in before) {
+      if (!t.isShow || listedNow.contains(t.key)) continue;
+      if (_watchlistEdits.containsKey(t.key)) continue;
+      final seen = _listedSeen[t.key] ?? 0;
+      final watchedAt = lib.lastEpisodes[t.key]?.at ?? 0;
+      if (seen == 0 || watchedAt < seen - 60000 || _completed(t)) continue;
+      watchlist = [...watchlist, t];
+      _watchlistEdits[t.key] = WatchlistEdit(title: t, on: true, at: _stamp());
+    }
+    _listedSeen
+      ..removeWhere((key, _) => !watchlist.any((t) => t.key == key))
+      ..addAll({for (final t in watchlist) t.key: pullStarted});
   }
 
   /// Sends the watched marks Trakt missed, oldest first, at the time they
@@ -822,7 +897,6 @@ class MovieService extends ChangeNotifier {
     final code = title.isShow ? 'S${season}E$episode' : 'movie';
     final watched = {...e.watched};
     on ? watched.add(code) : watched.remove(code);
-    if (on && trakt.signedIn) _leaveWatchlist(title);
     _entries[title.key] = e.copyWith(
       watched: watched,
       position:
@@ -833,6 +907,7 @@ class MovieService extends ChangeNotifier {
       updated: _stamp(),
     );
     final at = _entries[title.key]!.updated;
+    final relist = on && trakt.signedIn ? _afterWatch(title) : null;
     _notify();
     await _persist();
     if (trakt.signedIn) {
@@ -853,7 +928,15 @@ class MovieService extends ChangeNotifier {
           episode: episode,
           watchedAt: at,
         );
+        if (relist != null) await _relist(relist);
       } catch (e) {
+        if (relist != null) {
+          _watchlistEdits[relist.key] = WatchlistEdit(
+            title: relist,
+            on: true,
+            at: _stamp(),
+          );
+        }
         _queueWatch(mark);
         await _persist();
         lastError = 'Trakt was not updated. It is sent again on the next sync.';
@@ -875,7 +958,6 @@ class MovieService extends ChangeNotifier {
     final e = _entries[title.key] ?? MovieEntry(title: title);
     final watched = {...e.watched};
     if (completed) watched.add(title.isShow ? 'S${season}E$episode' : 'movie');
-    if (completed && trakt.signedIn) _leaveWatchlist(title);
     _entries[title.key] = e.copyWith(
       title: title,
       season: season,
@@ -886,6 +968,18 @@ class MovieService extends ChangeNotifier {
       watched: watched,
       updated: _stamp(),
     );
+    if (completed && trakt.signedIn) {
+      final relist = _afterWatch(title);
+      // The scrobble that tells Trakt of the watch puts it back; until
+      // then a pull keeps it listed here.
+      if (relist != null) {
+        _watchlistEdits[relist.key] = WatchlistEdit(
+          title: relist,
+          on: true,
+          at: _stamp(),
+        );
+      }
+    }
     _notify();
     await _persist();
   }
@@ -919,10 +1013,13 @@ class MovieService extends ChangeNotifier {
         _progressSent(account);
         await _persist();
       }
+      if (action == 'stop') await _sendWatchlistEdits();
     } on TraktFailure catch (e) {
       // 409: Trakt already has this finish.
       if (e.status != 409) {
         _queueFinish(action, title, percent, season, episode);
+      } else if (action == 'stop') {
+        await _sendWatchlistEdits();
       }
     } catch (_) {
       // Playback goes on; the progress is saved locally, and a finish is
