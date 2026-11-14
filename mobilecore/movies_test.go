@@ -1,7 +1,12 @@
 package mobilecore
 
 import (
+	"context"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"slices"
 	"strings"
@@ -208,6 +213,26 @@ func TestLooseQuery(t *testing.T) {
 	} {
 		if got := looseQuery(title); got != want {
 			t.Errorf("looseQuery(%q) = %q, want %q", title, got, want)
+		}
+	}
+}
+
+// A source that cannot be reached says why in a few words.
+func TestSourceProblem(t *testing.T) {
+	for _, c := range []struct {
+		err  error
+		want string
+	}{
+		{x509.UnknownAuthorityError{}, "certificate not trusted by this device"},
+		{x509.CertificateInvalidError{Reason: x509.Expired}, "certificate date wrong, check the device clock"},
+		{&net.DNSError{Err: "no such host", Name: "x"}, "address not found"},
+		{fmt.Errorf("get: %w", context.DeadlineExceeded), "timed out"},
+		{errors.New("https://x/?s=a answered 503"), "site answered 503"},
+		{errors.New("read tcp: connection reset by peer"), "connection reset"},
+		{errors.New("no pass_md5 on the page"), "site changed or unreachable"},
+	} {
+		if got := sourceProblem(c.err); got != c.want {
+			t.Errorf("%v: %q, want %q", c.err, got, c.want)
 		}
 	}
 }

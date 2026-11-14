@@ -32,6 +32,20 @@ func TestVidsrcLive(t *testing.T) {
 			continue
 		}
 		t.Logf("%s: %.120s subs=%v", stream.Server, stream.URL, stream.Subtitles)
+		// The player gets the playlist as it is asked for here.
+		req, _ := http.NewRequest(http.MethodGet, stream.URL, nil)
+		req.Header.Set("User-Agent", userAgent)
+		if stream.Referrer != "" {
+			req.Header.Set("Referer", stream.Referrer)
+		}
+		resp, err := v.Client.Do(req)
+		if err != nil {
+			t.Fatalf("playlist: %v", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("playlist answered %d", resp.StatusCode)
+		}
 		return
 	}
 	t.Fatal("nothing resolved")

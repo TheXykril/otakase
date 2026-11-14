@@ -239,8 +239,10 @@ func (v *Vidsrc) streams(movie Movie, episode Episode) ([]Source, error) {
 	}
 	api := v.API + "/api.php?" + query + "&stream_urls"
 	var header map[string]string
-	if token, origin, err := v.apiToken(movie.IMDb, episode); err != nil {
+	token, origin, err := v.apiToken(movie.IMDb, episode)
+	if err != nil {
 		logf("vidsrc: no API token for %s: %v", name, err)
+		token = ""
 	} else if token != "" {
 		// Asked as the player asks it.
 		api += "&api_token=" + url.QueryEscape(token)
@@ -274,7 +276,7 @@ func (v *Vidsrc) streams(movie Movie, episode Episode) ([]Source, error) {
 	for i, link := range links {
 		server := fmt.Sprintf("vidsrc %d", i+1)
 		sources = append(sources, Source{Server: server, Resolve: func() (Stream, error) {
-			stream, err := v.withToken(link)
+			stream, err := v.withToken(link, token, origin)
 			if err != nil {
 				return Stream{}, err
 			}
@@ -344,13 +346,21 @@ func (v *Vidsrc) decrypt(encoded, wasmURL string) ([]string, error) {
 	return links, nil
 }
 
-// withToken asks a stream's host for the token its playlist needs.
-func (v *Vidsrc) withToken(link string) (Stream, error) {
+// withToken asks a stream's host for the token its playlist needs. The host
+// only hands one out with the API token the streams were listed with (it
+// checks the asker's address against it), as vidsrc's player does. The
+// playlist and its segments are then only served to the player's page, so
+// the stream names it as the referrer.
+func (v *Vidsrc) withToken(link, apiToken, playerOrigin string) (Stream, error) {
 	parsed, err := url.Parse(link)
 	if err != nil {
 		return Stream{}, err
 	}
-	token, err := v.get(parsed.Scheme+"://"+parsed.Host+"/generate.php", nil)
+	generate := parsed.Scheme + "://" + parsed.Host + "/generate.php"
+	if apiToken != "" {
+		generate += "?api_token=" + url.QueryEscape(apiToken)
+	}
+	token, err := v.get(generate, nil)
 	if err != nil {
 		return Stream{}, fmt.Errorf("token: %w", err)
 	}
@@ -366,9 +376,11 @@ func (v *Vidsrc) withToken(link string) (Stream, error) {
 	default:
 		link += "?token=" + jwt
 	}
-	// No referrer: the host answers any segment asked for with one, even its
-	// own address, with 403.
-	return Stream{URL: link, HLS: true, AudioLanguage: "en,eng"}, nil
+	stream := Stream{URL: link, HLS: true, AudioLanguage: "en,eng"}
+	if playerOrigin != "" {
+		stream.Referrer = playerOrigin + "/"
+	}
+	return stream, nil
 }
 
 // SubtitleLanguage is a language to fetch subtitles in.

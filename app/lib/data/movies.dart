@@ -25,7 +25,18 @@ const contentLabels = {
 
 /// Why no copy of a film or episode played: no source for the chosen
 /// languages, sources that did not answer, or none that has it.
-String noCopyMessage(int sources, int unreachable) {
+/// [reasons] says per language why its sources failed, so a device that
+/// fails where another plays shows why.
+String noCopyMessage(
+  int sources,
+  int unreachable, {
+  List<String> reasons = const [],
+}) {
+  final why = reasons.isEmpty ? '' : '\n${reasons.join('\n')}';
+  return _noCopyMessage(sources, unreachable) + why;
+}
+
+String _noCopyMessage(int sources, int unreachable) {
   if (sources == 0) {
     return 'No source covers your movie & show languages. Add one in More, '
         'Subtitles & languages.';
@@ -40,6 +51,23 @@ String noCopyMessage(int sources, int unreachable) {
   }
   return 'No source has this yet. Try another language in More, '
       'Subtitles & languages.';
+}
+
+/// Why one source gave no copy, in a few words: the core's reason when it
+/// gives one ("Source request failed (timed out).").
+String failureReason(CoreFailure e) {
+  switch (e.code) {
+    case 'not_found':
+      return 'not found';
+    case 'no_stream':
+      return 'no server played';
+    case 'timeout':
+      return 'timed out';
+    case 'rate_limited':
+      return 'too many requests';
+  }
+  final detail = RegExp(r'\(([^()]+)\)\.?$').firstMatch(e.message);
+  return detail?.group(1) ?? 'failed';
 }
 
 /// Source languages, as the core names them, and how settings name them.
@@ -1198,6 +1226,13 @@ class MovieService extends ChangeNotifier {
           orElse: () => 'english',
         );
     var unreachable = 0;
+    final reasons = <String>[];
+    void failed(MovieSource source, String why) {
+      // Sources are never named to the viewer; their language is.
+      final line = '${languageTitle(source.languageName)}: $why';
+      if (!reasons.contains(line)) reasons.add(line);
+    }
+
     for (final source in order) {
       scope.check();
       status('Finding a copy');
@@ -1251,6 +1286,7 @@ class MovieService extends ChangeNotifier {
       } on CoreFailure catch (e) {
         if (e.code == 'cancelled') rethrow;
         if (e.code != 'not_found') unreachable++;
+        failed(source, failureReason(e));
         store.health(
           'movie:${source.name}',
           e.code == 'not_found' ? 'No match' : 'Unavailable',
@@ -1258,9 +1294,13 @@ class MovieService extends ChangeNotifier {
       } catch (_) {
         scope.check();
         unreachable++;
+        failed(source, 'failed');
         store.health('movie:${source.name}', 'Unavailable');
       }
     }
-    throw CoreFailure('no_stream', noCopyMessage(order.length, unreachable));
+    throw CoreFailure(
+      'no_stream',
+      noCopyMessage(order.length, unreachable, reasons: reasons),
+    );
   }
 }
