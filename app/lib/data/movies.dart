@@ -921,6 +921,52 @@ class MovieService extends ChangeNotifier {
         .toList();
   }
 
+  /// Checks one source for Diagnostics: finds a well-known film on it and
+  /// asks for a stream, as playback would. Records and returns the result.
+  Future<String> check(MovieSource source, RequestScope scope) async {
+    final key = 'movie:${source.name}';
+    store.health(key, 'Checking');
+    String result;
+    try {
+      final found = await core.request(
+        {
+          'operation': 'movie_match',
+          'provider': source.name,
+          // A film every source carries, with its Lithuanian title for the
+          // sources that search in Lithuanian.
+          'titles': ['Pradžia', 'Inception'],
+          'year': 2010,
+          'imdb': 'tt1375666',
+          'series': false,
+          'season': 0,
+        },
+        scope: scope,
+        timeout: const Duration(seconds: 30),
+      );
+      await core.request(
+        {
+          'operation': 'movie_resolve',
+          'movie': (found['movie'] as Map).cast<String, dynamic>(),
+          'season': 0,
+          'episode': 0,
+          'subtitles': 'english',
+          'skip': <String>[],
+        },
+        scope: scope,
+        timeout: const Duration(seconds: 60),
+      );
+      result = 'Working';
+    } on CoreFailure catch (e) {
+      if (e.code == 'cancelled') rethrow;
+      result = e.code == 'not_found' ? 'No match' : 'Unavailable';
+    } catch (_) {
+      scope.check();
+      result = 'Unavailable';
+    }
+    store.health(key, result);
+    return result;
+  }
+
   /// Finds a stream for a film, or for one episode of a series, trying each
   /// source in turn. [skip] holds source:server pairs that already failed.
   Future<MoviePlayback> resolve(
