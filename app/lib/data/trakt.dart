@@ -387,6 +387,47 @@ class Trakt extends ChangeNotifier {
         : jsonDecode(utf8.decode(response.bodyBytes, allowMalformed: true));
   }
 
+  /// Every page of a paged list. Trakt's watched lists hand out one page
+  /// of 100 at a time since July 2026; a call without paging gets only the
+  /// first. Stops at the page count Trakt gives, at an empty page, or at a
+  /// page that only repeats rows already seen (Trakt answers a page past
+  /// the end with the last one again).
+  Future<List<dynamic>> _getAll(
+    String path, {
+    bool auth = false,
+    int limit = 100,
+    int maxPages = 100,
+  }) async {
+    final rows = <dynamic>[];
+    final seen = <String>{};
+    final join = path.contains('?') ? '&' : '?';
+    for (var page = 1; page <= maxPages; page++) {
+      final response = await _send(
+        'GET',
+        '$path${join}page=$page&limit=$limit',
+        auth: auth,
+      );
+      final data = response.bodyBytes.isEmpty
+          ? null
+          : jsonDecode(utf8.decode(response.bodyBytes, allowMalformed: true));
+      if (data is! List || data.isEmpty) break;
+      var fresh = 0;
+      for (final row in data) {
+        if (seen.add(jsonEncode(row))) {
+          rows.add(row);
+          fresh++;
+        }
+      }
+      if (fresh == 0) break;
+      final count = int.tryParse(
+        response.headers['x-pagination-page-count'] ?? '',
+      );
+      // No paging headers: the whole list came in one answer.
+      if (count == null || page >= count) break;
+    }
+    return rows;
+  }
+
   Future<Json>? _refreshing;
 
   Future<String> _bearer({bool force = false}) async {
@@ -844,10 +885,12 @@ class Trakt extends ChangeNotifier {
 
   Future<TraktLibrary> library() async {
     final results = await Future.wait([
-      _get('/sync/watchlist/movies?extended=full,images', auth: true),
-      _get('/sync/watchlist/shows?extended=full,images', auth: true),
-      _get('/sync/watched/movies', auth: true),
-      _get('/sync/watched/shows', auth: true),
+      _getAll('/sync/watchlist/movies?extended=full,images', auth: true),
+      _getAll('/sync/watchlist/shows?extended=full,images', auth: true),
+      _getAll('/sync/watched/movies', auth: true),
+      // Since July 2026 the seasons and episodes only come with
+      // extended=progress; without it every show reads as unwatched.
+      _getAll('/sync/watched/shows?extended=progress', auth: true),
       _get('/sync/playback?extended=full,images', auth: true),
     ]);
     final watchlist = [
