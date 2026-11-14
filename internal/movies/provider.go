@@ -37,6 +37,11 @@ const (
 	VidsrcName = "vidsrc"
 	// FilmukasName is filmukas.com, family films in Lithuanian.
 	FilmukasName = "filmukas"
+	// DramacoolName is dramacool.com.tr, Asian dramas and films with English
+	// subtitles.
+	DramacoolName = "dramacool"
+	// TwoEmbedName is 2embed's player, vidsrc.buzz, in English.
+	TwoEmbedName = "2embed"
 )
 
 // ProviderNames lists the providers, the default first.
@@ -52,6 +57,10 @@ func NewProvider(name string, site *Site) (Provider, error) {
 		return filmai{site: site}, nil
 	case FilmukasName:
 		return NewFilmukas(), nil
+	case DramacoolName:
+		return NewDramacool(), nil
+	case TwoEmbedName:
+		return NewTwoEmbed(), nil
 	}
 	return nil, fmt.Errorf("no movie provider called %q (have %s)", name, strings.Join(ProviderNames, ", "))
 }
