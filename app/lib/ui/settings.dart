@@ -890,30 +890,59 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
                 decoration: const BoxDecoration(
                   border: Border(bottom: BorderSide(color: line)),
                 ),
-                child: Row(
-                  children: [
-                    Text(
-                      '${i + 1}'.padLeft(2, '0'),
-                      style: uiStyle(context, color: muted),
-                    ),
-                    const SizedBox(width: 20),
-                    // Named by language only, like the anime sources.
-                    Expanded(
-                      child: Text(
-                        'Source ${i + 1} · '
-                        '${languageTitle(movieSources[i].languageName)}',
-                        style: uiStyle(context),
-                      ),
-                    ),
-                    Text(
-                      widget
-                              .services
-                              .store
-                              .providerHealth['movie:${movieSources[i].name}'] ??
-                          'Not checked',
-                      style: uiStyle(context, size: 15, color: muted),
-                    ),
-                  ],
+                child: Builder(
+                  builder: (context) {
+                    // "Unavailable (timed out)": the word stays on the
+                    // right and the reason goes under the name, so a long
+                    // reason never squeezes the name on a phone.
+                    final health =
+                        widget
+                            .services
+                            .store
+                            .providerHealth['movie:${movieSources[i].name}'] ??
+                        'Not checked';
+                    final reason = RegExp(r'^(.*?) \((.+)\)$')
+                        .firstMatch(health);
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${i + 1}'.padLeft(2, '0'),
+                          style: uiStyle(context, color: muted),
+                        ),
+                        const SizedBox(width: 20),
+                        // Named by language only, like the anime sources.
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Source ${i + 1} · '
+                                '${languageTitle(movieSources[i].languageName)}',
+                                style: uiStyle(context),
+                              ),
+                              if (reason != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  reason.group(2)!,
+                                  style: uiStyle(
+                                    context,
+                                    size: 15,
+                                    color: muted,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          reason?.group(1) ?? health,
+                          style: uiStyle(context, size: 15, color: muted),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
           ],
