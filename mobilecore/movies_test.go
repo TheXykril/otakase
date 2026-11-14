@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -35,7 +36,7 @@ func TestMovieProvidersCarryTheirLanguage(t *testing.T) {
 	for _, s := range list {
 		languages[s.Name] = s.Language
 	}
-	if languages["vidsrc"] != "en" || languages["8filmai"] != "lt" || languages["filmukas"] != "lt" {
+	if languages["vidsrc"] != "en" || languages["8filmai"] != "lt" || languages["filmukas"] != "lt" || languages["dramacool"] != "en" || languages["2embed"] != "en" {
 		t.Fatalf("languages = %v", languages)
 	}
 }
@@ -51,6 +52,10 @@ func TestVidsrcMatchUsesIMDbWithoutRequests(t *testing.T) {
 	movieData(t, call(t, c, `{"version":1,"operation":"movie_match","provider":"vidsrc","titles":["Interstellar"],"year":2014,"imdb":"tt0816692"}`), "movie", &m)
 	if m.Path != "tt0816692" || m.IMDb != "tt0816692" || m.Provider != "vidsrc" {
 		t.Fatalf("movie = %+v", m)
+	}
+	movieData(t, call(t, c, `{"version":1,"operation":"movie_match","provider":"2embed","titles":["Interstellar"],"year":2014,"imdb":"tt0816692"}`), "movie", &m)
+	if m.Path != "tt0816692" || m.Provider != "2embed" {
+		t.Fatalf("2embed movie = %+v", m)
 	}
 	r := call(t, c, `{"version":1,"operation":"movie_match","provider":"vidsrc","titles":["No id"]}`)
 	if r.Error == nil || r.Error.Code != "not_found" {
@@ -234,5 +239,73 @@ func TestSourceProblem(t *testing.T) {
 		if got := sourceProblem(c.err); got != c.want {
 			t.Errorf("%v: %q, want %q", c.err, got, c.want)
 		}
+	}
+}
+
+func dramacoolItem(slug, name string) string {
+	return `<li><a href="https://wxx.dramacool.com.tr/drama-detail/` + slug + `/" class="img" title="x"><img data-original="/p.jpg"><h3 class="title">` + name + `</h3></a></li>`
+}
+
+func dramacoolDetail(slug, name string, episodes int) string {
+	page := `<div class="info"><h1>` + name + `</h1><p><span>Episodes:</span> ` + strconv.Itoa(episodes) + `</p></div>`
+	for n := 1; n <= episodes; n++ {
+		page += `<a href="https://wxx.dramacool.com.tr/` + slug + `-episode-` + strconv.Itoa(n) + `/">ep</a>`
+	}
+	return page
+}
+
+func dramacoolCore(t *testing.T) *Core {
+	c := NewCore()
+	t.Cleanup(c.Close)
+	c.transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		switch r.URL.Path {
+		case "/":
+			return reply(r, 200, []byte(dramacoolItem("hospital-playlist-2", "Hospital Playlist 2 (2021)")+
+				dramacoolItem("hospital-playlist", "Hospital Playlist (2021)")+
+				dramacoolItem("hospital-playlist-movie", "Hospital Playlist (2021)"))), nil
+		case "/drama-detail/hospital-playlist-movie/":
+			return reply(r, 200, []byte(dramacoolDetail("hospital-playlist-movie", "Hospital Playlist (2021)", 1))), nil
+		case "/drama-detail/hospital-playlist/":
+			return reply(r, 200, []byte(dramacoolDetail("hospital-playlist", "Hospital Playlist (2021)", 12))), nil
+		case "/drama-detail/hospital-playlist-2/":
+			return reply(r, 200, []byte(dramacoolDetail("hospital-playlist-2", "Hospital Playlist 2 (2021)", 12))), nil
+		case "/hospital-playlist-2-episode-3/":
+			return reply(r, 200, []byte(`<li data-video="https://player.example/kisskh/77">Standard Server</li>`)), nil
+		case "/kisskh/77/source":
+			if r.Header.Get("Referer") != "https://player.example/kisskh/77" {
+				return reply(r, 403, nil), nil
+			}
+			return reply(r, 200, []byte(`{"status":"ok","source":"https://player.example/vid/x/ep3.m3u8","tracks":[]}`)), nil
+		}
+		return reply(r, 404, nil), nil
+	})
+	return c
+}
+
+func TestDramacoolMatchPicksSeasonPageAndKind(t *testing.T) {
+	c := dramacoolCore(t)
+	var m movieTitle
+	movieData(t, call(t, c, `{"version":1,"operation":"movie_match","provider":"dramacool","titles":["Hospital Playlist"],"year":2020,"series":true,"season":2}`), "movie", &m)
+	if m.Path != "/drama-detail/hospital-playlist-2/" || !m.Series {
+		t.Fatalf("season 2 = %+v", m)
+	}
+	movieData(t, call(t, c, `{"version":1,"operation":"movie_match","provider":"dramacool","titles":["Hospital Playlist"],"year":2020,"series":true,"season":1}`), "movie", &m)
+	if m.Path != "/drama-detail/hospital-playlist/" {
+		t.Fatalf("season 1 = %+v", m)
+	}
+	// The site's years are when it added a title, so 2020 still matches.
+	var film movieTitle
+	movieData(t, call(t, c, `{"version":1,"operation":"movie_match","provider":"dramacool","titles":["Hospital Playlist"],"year":2020}`), "movie", &film)
+	if film.Path != "/drama-detail/hospital-playlist-movie/" || film.Series {
+		t.Fatalf("film = %+v", film)
+	}
+}
+
+func TestDramacoolResolvePlaysTheEpisode(t *testing.T) {
+	c := dramacoolCore(t)
+	var s movieStream
+	movieData(t, call(t, c, `{"version":1,"operation":"movie_resolve","movie":{"provider":"dramacool","path":"/drama-detail/hospital-playlist-2/","title":"Hospital Playlist 2","series":true},"season":2,"episode":3}`), "stream", &s)
+	if s.URL != "https://player.example/vid/x/ep3.m3u8" || !s.HLS || s.Headers["Referer"] != "https://player.example/kisskh/77" || s.Server != "Dramacool" {
+		t.Fatalf("stream = %+v", s)
 	}
 }
