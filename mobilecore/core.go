@@ -133,6 +133,7 @@ type stream struct {
 // text or upstream errors (which sometimes contain signed URLs) reach logs.
 func NewCore() *Core {
 	hooksOnce.Do(func() {
+		useDeviceRoots()
 		providerhost.HTTPClient = func() *http.Client { return &http.Client{Timeout: requestTimeout} }
 		providerhost.Log = func(string) {}
 		providerhost.Out = func(string) {}

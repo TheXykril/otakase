@@ -96,6 +96,14 @@
 
 ### Fixed
 
+- **English movie and show sources work on Android again.** vidsrc,
+  2Embed and English subtitles failed with "certificate not trusted by this
+  device": their sites moved to Let's Encrypt's newest certificates, which
+  the app's network code could not check on Android. It now uses the
+  phone's up-to-date certificates and carries its own copy as well, for
+  older TVs.
+- **Diagnostics fits on a phone.** A long failure reason sits under the
+  source name instead of squeezing it into one letter per line.
 - **Back on the TV remote leaves the player.** Back used to bring the
   controls up and hide them again, so the player could only be left from
   its on-screen arrow. Now Back hides the controls when they show and
