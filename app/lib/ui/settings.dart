@@ -55,6 +55,7 @@ const settingLabels = <String, String>{
   'DiscordPresence': 'Show what I watch in Discord',
   'SkipDelay': 'Skip delay',
   'Quality': 'Quality',
+  'VideoDecoding': 'Video decoding',
   'TorrentSources': 'Torrent sources',
   'TorrentOnMobileData': 'Torrents on mobile data',
   'PercentageToMarkComplete': 'Count movies & shows as watched at',
@@ -91,6 +92,12 @@ const settingValueNames = <String, Map<String, String>>{
   },
   'SubStyle': {'soft': 'Original styling', 'plain': 'My subtitle settings'},
   'SubOrDub': {'sub': 'Subtitled', 'dub': 'Dubbed'},
+  'VideoDecoding': {
+    'auto': 'Automatic',
+    'direct': 'Hardware',
+    'copy': 'Hardware, copied',
+    'software': 'Software',
+  },
   'Quality': {
     'best': 'Best available',
     '1080': '1080p',
@@ -586,6 +593,16 @@ class _SettingsPageState extends State<SettingsPage> {
           value: settingValue(store, 'Quality'),
           onTap: () => choose('Quality', ['best', '1080', '720', '480', '360']),
         ),
+        if (Host.android)
+          row(
+            'VideoDecoding',
+            'Change this if the picture shows blocks, dots or green flashes. '
+                'Automatic copies frames on TVs and decodes straight to the '
+                'screen on phones. Software works everywhere but uses more power.',
+            value: settingValue(store, 'VideoDecoding'),
+            onTap: () =>
+                choose('VideoDecoding', ['auto', 'direct', 'copy', 'software']),
+          ),
         toggle(
           'TorrentSources',
           'Play from other viewers when no site has the episode. '
@@ -788,18 +805,29 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
             style: uiStyle(context, color: muted),
           ),
           const SizedBox(height: 24),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: AppButton(
-              label: 'HLS / ASS probe',
-              onPressed: () => Navigator.push(
-                context,
-                OtakaseRoute<void>(
-                  builder: (_) => const DiagnosticsPage(probe: true),
-                ),
+          // Both buttons sit above the source list, so a remote reaches
+          // them without scrolling past every source.
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              AppButton(
+                label: checking ? 'Checking' : 'Check all',
+                onPressed: checking ? null : check,
+                isTV: widget.isTV,
               ),
-              isTV: widget.isTV,
-            ),
+              AppButton(
+                label: 'HLS / ASS probe',
+                variant: ButtonVariant.secondary,
+                onPressed: () => Navigator.push(
+                  context,
+                  OtakaseRoute<void>(
+                    builder: (_) => const DiagnosticsPage(probe: true),
+                  ),
+                ),
+                isTV: widget.isTV,
+              ),
+            ],
           ),
           const SizedBox(height: 32),
           const SectionLabel('Anime sources'),
@@ -889,15 +917,6 @@ class _DiagnosticsHubState extends State<DiagnosticsHub> {
                 ),
               ),
           ],
-          const SizedBox(height: 24),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: AppButton(
-              label: checking ? 'Checking' : 'Check all',
-              onPressed: checking ? null : check,
-              isTV: widget.isTV,
-            ),
-          ),
         ],
       ),
     ),

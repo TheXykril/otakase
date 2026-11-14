@@ -421,8 +421,15 @@ class FocusBox extends StatefulWidget {
   State<FocusBox> createState() => _FocusBoxState();
 }
 
-class _FocusBoxState extends State<FocusBox> {
+class _FocusBoxState extends State<FocusBox>
+    with AutomaticKeepAliveClientMixin {
   bool focused = false;
+
+  // A long list drops what scrolls far off screen. The focused control
+  // stays, so a remote can scroll past text to the next control without
+  // losing its place.
+  @override
+  bool get wantKeepAlive => focused;
   bool hovered = false;
   bool revealScheduled = false;
 
@@ -473,6 +480,7 @@ class _FocusBoxState extends State<FocusBox> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final visible = focused && FocusRings.show;
     final interaction = Material(
       color: Colors.transparent,
@@ -500,6 +508,7 @@ class _FocusBoxState extends State<FocusBox> {
             }
           }
           setState(() => focused = value);
+          updateKeepAlive();
           widget.onFocusChanged?.call(value);
           if (value) {
             widget.onFocused?.call();
@@ -702,7 +711,13 @@ class RemoteTraversalPolicy extends ReadingOrderTraversalPolicy {
     if ((!up && direction != TraversalDirection.down) || scope == null) {
       return super.inDirection(currentNode, direction);
     }
-    final from = currentNode.rect;
+    // A focused control kept by a list while scrolled far away has no
+    // place on screen; moves start from the edge of its page instead.
+    final page = currentNode.context == null
+        ? null
+        : _verticalScrollable(currentNode.context!);
+    final from = _placeOf(currentNode, page, up);
+    if (from == null) return super.inDirection(currentNode, direction);
     double gap(Rect rect) =>
         up ? from.top - rect.bottom : rect.top - from.bottom;
     final candidates = scope.traversalDescendants
@@ -710,11 +725,35 @@ class RemoteTraversalPolicy extends ReadingOrderTraversalPolicy {
           (node) =>
               node != currentNode &&
               !node.rect.isEmpty &&
+              node.rect.isFinite &&
               gap(node.rect) > -1 &&
               !currentNode.ancestors.contains(node) &&
               !node.ancestors.contains(currentNode),
         )
         .toList();
+    // A list builds only what is near the screen, so the next control of a
+    // long page may not exist yet. Scroll towards it instead of leaving the
+    // page for a bar or a pinned button.
+    if (page != null && page.position.hasContentDimensions) {
+      final position = page.position;
+      final more = up
+          ? position.pixels > position.minScrollExtent + .5
+          : position.pixels < position.maxScrollExtent - .5;
+      if (_retrying || more) {
+        candidates.removeWhere(
+          (n) => n.context == null || !_within(n.context!, page),
+        );
+      }
+      if (candidates.isEmpty) {
+        if (_retrying) return false;
+        // Past the last control the page still scrolls, so text below it
+        // can be read; focus stays where it is.
+        if (more) {
+          _scrollTowards(currentNode, direction, page);
+          return true;
+        }
+      }
+    }
     if (candidates.isEmpty) return super.inDirection(currentNode, direction);
     double far(Rect rect) =>
         up ? from.top - rect.top : rect.bottom - from.bottom;
@@ -737,6 +776,81 @@ class RemoteTraversalPolicy extends ReadingOrderTraversalPolicy {
 
     final target = candidates.reduce((a, b) => beats(b.rect, a.rect) ? b : a);
     requestFocusCallback(target);
+    return true;
+  }
+
+  static bool _retrying = false;
+
+  static Rect? _placeOf(FocusNode node, ScrollableState? page, bool up) {
+    final rect = node.rect;
+    if (rect.isFinite) return rect;
+    final view = page?.context.findRenderObject();
+    if (view is! RenderBox || !view.attached || !view.hasSize) return null;
+    final area = MatrixUtils.transformRect(
+      view.getTransformTo(null),
+      Offset.zero & view.size,
+    );
+    return up
+        ? Rect.fromLTRB(area.left, area.bottom, area.right, area.bottom)
+        : Rect.fromLTRB(area.left, area.top, area.right, area.top);
+  }
+
+  static bool _within(BuildContext context, ScrollableState page) {
+    var inside = false;
+    context.visitAncestorElements((element) {
+      if (element == page.context) inside = true;
+      return !inside;
+    });
+    return inside;
+  }
+
+  /// Scrolls [page] part of a screen towards [direction], then moves focus
+  /// there if a control has come in. A control that a list could drop is
+  /// never scrolled out of the part the list keeps, so focus is not lost.
+  bool _scrollTowards(
+    FocusNode node,
+    TraversalDirection direction,
+    ScrollableState page,
+  ) {
+    final view = page.context.findRenderObject();
+    final box = node.context?.findRenderObject();
+    if (view is! RenderBox || box is! RenderBox || !view.attached) {
+      return false;
+    }
+    final up = direction == TraversalDirection.up;
+    final position = page.position;
+    final top = box.hasSize
+        ? box.localToGlobal(Offset.zero, ancestor: view).dy
+        : double.nan;
+    final bottom = top + (box.hasSize ? box.size.height : 0);
+    // A FocusBox keeps itself while focused. Other controls stay only while
+    // near the screen: lists keep 250 px beyond each edge.
+    const kept = 200.0;
+    final keeps =
+        node.context?.findAncestorStateOfType<_FocusBoxState>() != null;
+    final room = keeps
+        ? double.infinity
+        : up
+        ? position.viewportDimension + kept - top
+        : bottom + kept;
+    final step = math.min(position.viewportDimension * .6, room);
+    if (!step.isFinite || step < 24) return false;
+    final target = (position.pixels + (up ? -step : step)).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((target - position.pixels).abs() < .5) return false;
+    position.jumpTo(target);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!node.hasPrimaryFocus) return;
+      _retrying = true;
+      try {
+        inDirection(node, direction);
+      } finally {
+        _retrying = false;
+      }
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
     return true;
   }
 }

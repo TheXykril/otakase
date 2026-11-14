@@ -1167,46 +1167,58 @@ class MovieService extends ChangeNotifier {
   }
 
   /// Checks one source for Diagnostics: finds a well-known film on it and
-  /// asks for a stream, as playback would. Records and returns the result.
+  /// asks for a stream, as playback would. Records and returns the result,
+  /// with the reason when the source could not be used.
   Future<String> check(MovieSource source, RequestScope scope) async {
     final key = 'movie:${source.name}';
     store.health(key, 'Checking');
-    String result;
-    try {
-      final found = await core.request(
-        {
-          'operation': 'movie_match',
-          'provider': source.name,
-          // A film every source carries, with its Lithuanian title for the
-          // sources that search in Lithuanian.
-          'titles': ['Pradžia', 'Inception'],
-          'year': 2010,
-          'imdb': 'tt1375666',
-          'series': false,
-          'season': 0,
-        },
-        scope: scope,
-        timeout: const Duration(seconds: 30),
-      );
-      await core.request(
-        {
-          'operation': 'movie_resolve',
-          'movie': (found['movie'] as Map).cast<String, dynamic>(),
-          'season': 0,
-          'episode': 0,
-          'subtitles': 'english',
-          'skip': <String>[],
-        },
-        scope: scope,
-        timeout: const Duration(seconds: 60),
-      );
-      result = 'Working';
-    } on CoreFailure catch (e) {
-      if (e.code == 'cancelled') rethrow;
-      result = e.code == 'not_found' ? 'No match' : 'Unavailable';
-    } catch (_) {
-      scope.check();
-      result = 'Unavailable';
+    String result = 'No match';
+    // Films the sources are sure to carry, with their Lithuanian titles for
+    // the sources that search in Lithuanian. The family source has no
+    // Inception, so it is asked for Shrek next.
+    const films = [
+      (titles: ['Pradžia', 'Inception'], year: 2010, imdb: 'tt1375666'),
+      (titles: ['Šrekas', 'Shrek'], year: 2001, imdb: 'tt0126029'),
+    ];
+    for (final film in films) {
+      try {
+        final found = await core.request(
+          {
+            'operation': 'movie_match',
+            'provider': source.name,
+            'titles': film.titles,
+            'year': film.year,
+            'imdb': film.imdb,
+            'series': false,
+            'season': 0,
+          },
+          scope: scope,
+          timeout: const Duration(seconds: 45),
+        );
+        await core.request(
+          {
+            'operation': 'movie_resolve',
+            'movie': (found['movie'] as Map).cast<String, dynamic>(),
+            'season': 0,
+            'episode': 0,
+            'subtitles': 'english',
+            'skip': <String>[],
+          },
+          scope: scope,
+          timeout: const Duration(seconds: 95),
+        );
+        result = 'Working';
+        break;
+      } on CoreFailure catch (e) {
+        if (e.code == 'cancelled') rethrow;
+        if (e.code == 'not_found') continue;
+        result = 'Unavailable (${failureReason(e)})';
+        break;
+      } catch (_) {
+        scope.check();
+        result = 'Unavailable';
+        break;
+      }
     }
     store.health(key, result);
     return result;
