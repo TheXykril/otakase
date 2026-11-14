@@ -501,3 +501,33 @@ func TestVidsrcAPIToken(t *testing.T) {
 		t.Errorf("no embed site should mean no token: %q %v", token, err)
 	}
 }
+
+// A stream host hands out its playlist token only for the API token the
+// streams were listed with, and serves the playlist only to the player's
+// page, so the stream names the player as its referrer.
+func TestVidsrcStreamTokenUsesAPIToken(t *testing.T) {
+	host := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/generate.php" || r.URL.Query().Get("api_token") != "tok.en" {
+			http.Error(w, "invalid or mismatched api token", http.StatusForbidden)
+			return
+		}
+		w.Write([]byte("a.b.c\n"))
+	}))
+	defer host.Close()
+
+	v := NewVidsrc()
+	v.Client = host.Client()
+	s, err := v.withToken(host.URL+"/pl/x/master.m3u8", "tok.en", "https://player.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.URL != host.URL+"/pl/x/master.m3u8?token=a.b.c" || s.Referrer != "https://player.example/" || !s.HLS {
+		t.Errorf("stream = %+v", s)
+	}
+	if _, err := v.withToken(host.URL+"/pl/x/master.m3u8", "", ""); err == nil {
+		t.Error("a host that refused the token gave a stream")
+	}
+	if s, _ := v.withToken(host.URL+"/pl/__TOKEN__/m.m3u8", "tok.en", ""); s.URL != host.URL+"/pl/a.b.c/m.m3u8" || s.Referrer != "" {
+		t.Errorf("stream = %+v", s)
+	}
+}
