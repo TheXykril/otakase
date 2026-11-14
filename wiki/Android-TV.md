@@ -17,6 +17,13 @@ it switches to a layout made for the remote.
   search field to type, then submit to reach the filters and results.
 - **Back** on Home asks whether to leave, with Exit already selected.
 - Play, pause, seek and next buttons on the remote work in the player.
+- On a long page, **Down** past the last button in view scrolls on to the
+  next one, or further down the page when only text is left.
+- In the player, **Back** hides the controls; with the controls hidden it
+  leaves the player.
+- If video shows as blocks, dots or green flashes, change **More > Playback >
+  Video decoding**. Automatic copies frames on TVs; Software works on every
+  TV but uses more power.
 
 Menus scale to your screen by themselves, and Android's larger text setting
 still applies.
