@@ -689,8 +689,10 @@ class _AppShellState extends State<AppShell> {
                         FocusManager.instance.highlightMode ==
                         FocusHighlightMode.traditional;
                     final focused = remote && focusedNav == index;
-                    // A focused tab turns bright; the open tab keeps the
-                    // Shu mark. No glow, no scale.
+                    // A focused or hovered tab turns Shu, which stands out
+                    // from the open tab's white far more than a brighter
+                    // white did; the open tab keeps the Shu mark. No glow,
+                    // no scale.
                     return Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -702,7 +704,7 @@ class _AppShellState extends State<AppShell> {
                                 ? FontWeight.w600
                                 : FontWeight.w500,
                             color: focused || hoveredNav == index
-                                ? fgBright
+                                ? shu
                                 : active
                                 ? fg
                                 : muted,

@@ -128,7 +128,7 @@ class DesktopTopBar extends StatelessWidget {
 }
 
 /// A plain top bar tab for pages pushed over the main tabs: the label, an
-/// underline when it is the open tab, brighter on hover.
+/// underline when it is the open tab, Shu on hover.
 class DesktopTab extends StatefulWidget {
   const DesktopTab({
     super.key,
@@ -165,7 +165,11 @@ class _DesktopTabState extends State<DesktopTab> {
             style: uiStyle(
               context,
               weight: widget.selected ? FontWeight.w600 : FontWeight.w500,
-              color: widget.selected || hovered ? fgBright : muted,
+              color: hovered
+                  ? shu
+                  : widget.selected
+                  ? fgBright
+                  : muted,
             ),
           ),
           const SizedBox(height: 4),
