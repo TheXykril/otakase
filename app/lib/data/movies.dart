@@ -216,6 +216,37 @@ class UnsentWatch {
   };
 }
 
+/// A watchlist change made here. Kept until a Trakt pull that started after
+/// it was sent, so a pull already under way cannot undo it, and resent when
+/// Trakt or the network was away.
+class WatchlistEdit {
+  const WatchlistEdit({
+    required this.title,
+    required this.on,
+    required this.at,
+    this.sent = 0,
+  });
+  final MediaTitle title;
+  final bool on;
+
+  /// When it was made, and when Trakt took it (0 until then), in
+  /// milliseconds since the epoch.
+  final int at, sent;
+
+  factory WatchlistEdit.fromJson(Json json) => WatchlistEdit(
+    title: MediaTitle.fromJson((json['title'] as Map).cast<String, dynamic>()),
+    on: json['on'] == true,
+    at: number(json['at']),
+    sent: number(json['sent']),
+  );
+  Json toJson() => {
+    'title': title.toJson(),
+    'on': on,
+    'at': at,
+    if (sent > 0) 'sent': sent,
+  };
+}
+
 class MovieService extends ChangeNotifier {
   MovieService({
     required this.trakt,
@@ -234,6 +265,10 @@ class MovieService extends ChangeNotifier {
   final Duration pushGap;
   final Map<String, MovieEntry> _entries = {};
   final List<UnsentWatch> _unsent = [];
+
+  /// Watchlist changes made here that a Trakt pull has not confirmed yet,
+  /// by title key.
+  final Map<String, WatchlistEdit> _watchlistEdits = {};
 
   /// Watched marks still to send to Trakt.
   List<UnsentWatch> get unsentWatches => List.unmodifiable(_unsent);
@@ -285,7 +320,15 @@ class MovieService extends ChangeNotifier {
         for (final u in (data['unsent'] as List? ?? []).whereType<Map>())
           UnsentWatch.fromJson(u.cast<String, dynamic>()),
       ]);
-      if (data['activity'] case final Map activity) {
+      for (final w
+          in (data['watchlist_edits'] as List? ?? []).whereType<Map>()) {
+        final edit = WatchlistEdit.fromJson(w.cast<String, dynamic>());
+        _watchlistEdits[edit.title.key] = edit;
+      }
+      // 'activity' was saved by pulls that missed every watched episode
+      // (Trakt's July 2026 change); dropping it makes the next sync pull
+      // everything once.
+      if (data['activity2'] case final Map activity) {
         _activity.addAll(activity.cast<String, String>());
       }
     } catch (_) {
@@ -299,7 +342,9 @@ class MovieService extends ChangeNotifier {
       'entries': [for (final e in _entries.values) e.toJson()],
       'watchlist': [for (final t in watchlist) t.toJson()],
       if (_unsent.isNotEmpty) 'unsent': [for (final u in _unsent) u.toJson()],
-      if (_activity.isNotEmpty) 'activity': _activity,
+      if (_watchlistEdits.isNotEmpty)
+        'watchlist_edits': [for (final w in _watchlistEdits.values) w.toJson()],
+      if (_activity.isNotEmpty) 'activity2': _activity,
     }),
   );
 
@@ -377,6 +422,7 @@ class MovieService extends ChangeNotifier {
     _notify();
     try {
       await _sendUnsent();
+      await _sendWatchlistEdits();
       final account = trakt.username;
       var activity = '';
       try {
@@ -389,8 +435,9 @@ class MovieService extends ChangeNotifier {
         await _push(_pendingSpots());
         return;
       }
+      final pullStarted = DateTime.now().millisecondsSinceEpoch;
       final lib = await trakt.library();
-      watchlist = lib.watchlist;
+      watchlist = _withEdits(lib.watchlist, pullStarted);
       for (final t in lib.watchedMovies.values) {
         final e = _entries[t.key];
         final at = lib.watchedAt[t.key] ?? 0;
@@ -502,6 +549,66 @@ class MovieService extends ChangeNotifier {
               e.episode == last.episode &&
               !e.started);
 
+  /// Trakt's watchlist with the changes made here that it may not show yet:
+  /// ones not sent, and ones sent after this pull started. Older sent ones
+  /// are settled, and Trakt's list counts, its own removals included.
+  List<MediaTitle> _withEdits(List<MediaTitle> pulled, int pullStarted) {
+    _watchlistEdits.removeWhere((_, w) => w.sent > 0 && w.sent < pullStarted);
+    var list = pulled;
+    for (final w in _watchlistEdits.values) {
+      list = [if (w.on) w.title, ...list.where((t) => t.key != w.title.key)];
+    }
+    return list;
+  }
+
+  /// Sends watchlist changes Trakt missed. One Trakt refuses outright is
+  /// dropped; one that fails because Trakt or the network is away waits.
+  Future<void> _sendWatchlistEdits() async {
+    final waiting = _watchlistEdits.values.where((w) => w.sent == 0).toList()
+      ..sort((a, b) => a.at.compareTo(b.at));
+    for (final w in waiting) {
+      if (!trakt.signedIn) return;
+      try {
+        await trakt.setWatchlist(w.title, w.on);
+        _watchlistSent(w);
+      } on TraktFailure catch (e) {
+        if (_retry(e)) break;
+        if (_watchlistEdits[w.title.key]?.at == w.at) {
+          _watchlistEdits.remove(w.title.key);
+        }
+      } catch (_) {
+        break;
+      }
+    }
+    await _persist();
+  }
+
+  void _watchlistSent(WatchlistEdit w) {
+    if (_watchlistEdits[w.title.key]?.at != w.at) return;
+    _watchlistEdits[w.title.key] = WatchlistEdit(
+      title: w.title,
+      on: w.on,
+      at: w.at,
+      sent: DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  static bool _retry(TraktFailure e) =>
+      e.status == 0 ||
+      e.status == 401 ||
+      e.status == 408 ||
+      e.status == 429 ||
+      e.status >= 500;
+
+  /// Trakt takes a film off the watchlist once it is watched, and a show
+  /// once any episode is; the list here follows at once rather than at
+  /// the next pull.
+  void _leaveWatchlist(MediaTitle title) {
+    final edit = _watchlistEdits[title.key];
+    if (edit != null && edit.on) _watchlistEdits.remove(title.key);
+    watchlist = [...watchlist.where((t) => t.key != title.key)];
+  }
+
   /// Sends the watched marks Trakt missed, oldest first, at the time they
   /// happened. A mark Trakt refuses outright is dropped; one that fails
   /// because Trakt or the network is away waits for the next sync.
@@ -518,13 +625,7 @@ class MovieService extends ChangeNotifier {
           watchedAt: u.at,
         );
       } on TraktFailure catch (e) {
-        final retry =
-            e.status == 0 ||
-            e.status == 401 ||
-            e.status == 408 ||
-            e.status == 429 ||
-            e.status >= 500;
-        if (retry) break;
+        if (_retry(e)) break;
       } catch (_) {
         break;
       }
@@ -689,15 +790,25 @@ class MovieService extends ChangeNotifier {
 
   Future<void> setWatchlist(MediaTitle title, bool on) async {
     watchlist = [if (on) title, ...watchlist.where((t) => t.key != title.key)];
+    final edit = WatchlistEdit(title: title, on: on, at: _stamp());
+    if (trakt.signedIn) _watchlistEdits[title.key] = edit;
     _notify();
     await _persist();
-    if (trakt.signedIn) {
-      try {
-        await trakt.setWatchlist(title, on);
-      } catch (e) {
-        lastError = 'Trakt was not updated. $e';
-        _notify();
+    if (!trakt.signedIn) return;
+    try {
+      await trakt.setWatchlist(title, on);
+      _watchlistSent(edit);
+      await _persist();
+    } on TraktFailure catch (e) {
+      if (!_retry(e) && _watchlistEdits[title.key]?.at == edit.at) {
+        _watchlistEdits.remove(title.key);
+        await _persist();
       }
+      lastError = 'Trakt was not updated. $e';
+      _notify();
+    } catch (e) {
+      lastError = 'Trakt was not updated. It is sent again on the next sync.';
+      _notify();
     }
   }
 
@@ -711,6 +822,7 @@ class MovieService extends ChangeNotifier {
     final code = title.isShow ? 'S${season}E$episode' : 'movie';
     final watched = {...e.watched};
     on ? watched.add(code) : watched.remove(code);
+    if (on && trakt.signedIn) _leaveWatchlist(title);
     _entries[title.key] = e.copyWith(
       watched: watched,
       position:
@@ -763,6 +875,7 @@ class MovieService extends ChangeNotifier {
     final e = _entries[title.key] ?? MovieEntry(title: title);
     final watched = {...e.watched};
     if (completed) watched.add(title.isShow ? 'S${season}E$episode' : 'movie');
+    if (completed && trakt.signedIn) _leaveWatchlist(title);
     _entries[title.key] = e.copyWith(
       title: title,
       season: season,
