@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Korean, Chinese, Japanese and other Asian dramas.** Dramacool joins
+  the movie and show sources: Asian series and films in their own language
+  with English subtitles (and Indonesian, Malay, Arabic and more for many
+  titles), including later seasons. It is tried after vidsrc, so a K-drama
+  or Asian film vidsrc has no stream for still plays, and it shows up in
+  Diagnostics with the other sources.
+
 - **Play movies and shows on your TV from the phone.** A film or show page
   on the phone now has Play on, like anime: pick an Otakase TV or computer
   and it starts there, with the phone as its remote. Moving a film or

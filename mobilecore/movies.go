@@ -40,6 +40,9 @@ var movieSources = []movieSource{
 	{Name: movies.VidsrcName, Label: "vidsrc", Language: "en", Series: true},
 	{Name: movies.FilmaiName, Label: "8Filmai", Language: "lt", Series: true},
 	{Name: movies.FilmukasName, Label: "Filmukas", Language: "lt"},
+	// Asian dramas and films with English subtitles, after vidsrc so it is
+	// tried when vidsrc has no stream for a title.
+	{Name: movies.DramacoolName, Label: "Dramacool", Language: "en", Series: true},
 }
 
 // movieTitle is a film or series on one source, as the app keeps it.
@@ -258,6 +261,15 @@ func movieProvider(name string, client *http.Client, subtitles string) (movies.P
 		f := movies.NewFilmukas()
 		f.Client = client
 		return f, true
+	case movies.DramacoolName:
+		d := movies.NewDramacool()
+		d.Client = client
+		wanted := []string{"English"}
+		if name := providers.CanonicalLanguage(subtitles); name != "" && name != "english" {
+			wanted = []string{name, "English"}
+		}
+		d.Subtitles = func() []string { return wanted }
+		return d, true
 	case movies.FilmaiName:
 		filmaiAddress.Lock()
 		remembered := filmaiAddress.value
@@ -294,6 +306,9 @@ func matchMovie(client *http.Client, req movieRequest) (movieTitle, error) {
 			return movieTitle{}, nil
 		}
 		return movieTitle{Provider: movies.VidsrcName, Path: req.IMDb, IMDb: req.IMDb, Title: firstTitle(req.Titles, req.IMDb), Year: yearText(req.Year), Series: req.Series}, nil
+	}
+	if req.Provider == movies.DramacoolName {
+		return matchDrama(client, req)
 	}
 	p, _ := movieProvider(req.Provider, client, "")
 	type candidate struct {
@@ -561,4 +576,81 @@ func resolveSource(source movies.Source) (movies.Stream, error) {
 	case <-time.After(45 * time.Second):
 		return movies.Stream{}, errors.New("server timed out")
 	}
+}
+
+// matchDrama finds a Trakt title on Dramacool. The site has a page per
+// season, named like "Hospital Playlist 2", and does not say in its
+// results whether a title is a film or a series: the best matches are opened
+// until one has the right kind, a film having one episode.
+func matchDrama(client *http.Client, req movieRequest) (movieTitle, error) {
+	p, _ := movieProvider(movies.DramacoolName, client, "")
+	d := p.(*movies.Dramacool)
+	season := 1
+	if req.Series {
+		season = max(req.Season, 1)
+	}
+	type candidate struct {
+		movie movies.Movie
+		score int
+	}
+	var found []candidate
+	seen := map[string]bool{}
+	var lastErr error
+	tried := 0
+	for _, title := range req.Titles {
+		title = strings.TrimSpace(title)
+		if title == "" || len(title) > 300 || tried == 3 {
+			continue
+		}
+		tried++
+		results, err := d.Search(title)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		for _, m := range results {
+			if seen[m.Path] {
+				continue
+			}
+			seen[m.Path] = true
+			name, n := movies.DramacoolSeason(m.Title)
+			if n != season {
+				continue
+			}
+			// The site dates most titles by when it added them, so the
+			// year only breaks a tie between titles of the same name.
+			scored := m
+			scored.Title = name
+			anyYear := req
+			anyYear.Year = 0
+			score := movieScore(scored, anyYear)
+			if req.Year > 0 && m.Year == strconv.Itoa(req.Year) {
+				score += 10
+			}
+			if score >= 50 {
+				found = append(found, candidate{m, score})
+			}
+		}
+		if slices.ContainsFunc(found, func(c candidate) bool { return c.score >= 100 }) {
+			break
+		}
+	}
+	slices.SortStableFunc(found, func(a, b candidate) int { return b.score - a.score })
+	for i, c := range found {
+		if i == 3 {
+			break
+		}
+		count, err := d.EpisodeCount(c.movie.Path)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		// A film split in two parts is listed with two episodes.
+		if req.Series != (count > 2) && !(req.Series && count > 0 && c.score >= 90) {
+			continue
+		}
+		c.movie.Series = req.Series
+		return titleOf(c.movie), nil
+	}
+	return movieTitle{}, lastErr
 }

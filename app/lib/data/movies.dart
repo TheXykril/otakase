@@ -102,6 +102,7 @@ const knownMovieSources = [
   MovieSource('vidsrc', 'vidsrc', 'en'),
   MovieSource('8filmai', '8Filmai', 'lt'),
   MovieSource('filmukas', 'Filmukas', 'lt', series: false),
+  MovieSource('dramacool', 'Dramacool', 'en'),
 ];
 
 /// Where a title was left: the episode for a series, the position, and what
