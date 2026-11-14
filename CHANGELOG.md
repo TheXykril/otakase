@@ -96,6 +96,24 @@
 
 ### Fixed
 
+- **Back on the TV remote leaves the player.** Back used to bring the
+  controls up and hide them again, so the player could only be left from
+  its on-screen arrow. Now Back hides the controls when they show and
+  leaves the player when they don't.
+- **Long TV pages scroll to every button.** Down on the last button in
+  view now scrolls the page on until the next one appears, so buttons below
+  a long list, such as Check all in Diagnostics, can be reached with the
+  remote. It also lets you scroll down to read text below the last button.
+- **Blocky picture on some TVs.** TVs now copy each decoded frame before
+  drawing it, which fixes video that showed as a grid of dots on some TV
+  chips. **More > Playback > Video decoding** switches between
+  Automatic, Hardware, Hardware, copied and Software if a device still
+  shows a broken picture.
+- **Diagnostics says why a source failed.** A movie or show source that
+  fails its check shows the reason next to Unavailable, such as timed out or
+  certificate not trusted by this device. Check all now sits at the top of
+  the page, and a source without the usual test film is checked with a
+  second one, so the family source no longer shows No match.
 - **Casting from the phone no longer stutters.** The phone stays awake and
   on Wi-Fi while it casts (with a notification), and the stream to DLNA TVs
   reads a few pieces ahead, so the TV no longer keeps stopping as if it

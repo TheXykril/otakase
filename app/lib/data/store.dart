@@ -30,6 +30,17 @@ const volumeLeveller =
 String audioFilter(AppStore store) =>
     store.flag('NormalizeVolume') ? volumeLeveller : '';
 
+/// The mpv `hwdec` value for the viewer's VideoDecoding setting on Android.
+/// Phones decode straight to the screen. TVs copy each decoded frame back
+/// first: several TV chips draw directly decoded video as a grid of blocks.
+String videoDecoder(AppStore store, {required bool tv}) =>
+    switch (store.text('VideoDecoding')) {
+      'direct' => 'mediacodec',
+      'copy' => 'mediacodec-copy',
+      'software' => 'no',
+      _ => tv ? 'mediacodec-copy' : 'mediacodec',
+    };
+
 const settingDefaults = <String, dynamic>{
   'AniListUsername': '',
   'MyAnimeListUsername': '',
@@ -57,6 +68,7 @@ const settingDefaults = <String, dynamic>{
   'ScoreOnCompletion': true,
   'DiscordPresence': true,
   'Quality': 'best',
+  'VideoDecoding': 'auto',
   'ResumePlayback': true,
   'PercentageToMarkComplete': 85,
   'Provider': 'stacked',

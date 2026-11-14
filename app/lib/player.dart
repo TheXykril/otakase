@@ -257,8 +257,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     );
     video = VideoController(
       player,
-      configuration: const VideoControllerConfiguration(
-        hwdec: 'mediacodec',
+      configuration: VideoControllerConfiguration(
+        hwdec: Host.android
+            ? videoDecoder(widget.services.store, tv: widget.isTV)
+            : 'mediacodec',
         enableHardwareAcceleration: true,
       ),
     );
@@ -2153,6 +2155,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
     }
     final key = event.logicalKey;
+    // Back goes on to the system, which closes the controls or the player.
+    // Showing the controls first would make every Back only hide them again.
+    if (key == LogicalKeyboardKey.goBack ||
+        key == LogicalKeyboardKey.browserBack ||
+        key == LogicalKeyboardKey.escape) {
+      return KeyEventResult.ignored;
+    }
     if ([
       LogicalKeyboardKey.mediaPlayPause,
       LogicalKeyboardKey.space,
