@@ -17,6 +17,7 @@ require (
 	github.com/tr1xem/go-discordrpc v1.0.0
 	github.com/vishen/go-chromecast v0.3.4
 	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto/x509roots/fallback v0.0.0-20261113174652-9ccaac6145fb
 	golang.org/x/term v0.46.0
 	golang.org/x/time v0.14.0
 	rsc.io/qr v0.2.0

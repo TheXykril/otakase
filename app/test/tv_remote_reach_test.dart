@@ -13,6 +13,7 @@ import 'package:otakase/services.dart';
 import 'package:otakase/ui/components.dart';
 import 'package:otakase/ui/phone_player.dart';
 import 'package:otakase/ui/movies_pages.dart';
+import 'package:otakase/ui/settings.dart' show DiagnosticsHub;
 import 'package:otakase/data/catalog.dart';
 import 'package:otakase/data/trakt.dart' show MediaTitle;
 
@@ -58,7 +59,49 @@ class SourcesCore extends CoreClient {
   };
 }
 
+void phoneDiagnosticsTests() {
+  testWidgets('phone Diagnostics puts a failure reason under the source name', (
+    tester,
+  ) async {
+    await fixture.launch(tester);
+    await tester.pumpWidget(const SizedBox());
+    final base = await fixture.services();
+    final services = AppServices(
+      catalog: base.catalog,
+      store: base.store,
+      core: SourcesCore(),
+      auth: AuthService(
+        storage: MemoryTokens(),
+        client: MockClient((_) async => http.Response('{}', 200)),
+      ),
+    );
+    addTearDown(services.close);
+    services.store.health(
+      'movie:movie1',
+      'Unavailable (certificate not trusted by this device)',
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: DiagnosticsHub(services: services, isTV: false)),
+    );
+    await tester.pumpAndSettle();
+    final name = find.text('Source 1 · English');
+    await tester.scrollUntilVisible(
+      name,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(name, findsOneWidget);
+    expect(find.text('certificate not trusted by this device'), findsOneWidget);
+    expect(find.text('Unavailable'), findsOneWidget);
+    // One line, not a letter per line.
+    expect(tester.getSize(name).width, greaterThan(100));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+}
+
 void main() {
+  phoneDiagnosticsTests();
   longPageTests();
   titlePageTests();
   testWidgets('TV Diagnostics reaches Check all below a long source list', (
