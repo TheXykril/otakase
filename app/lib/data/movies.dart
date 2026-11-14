@@ -600,7 +600,12 @@ class MovieService extends ChangeNotifier {
     _watchlistEdits.removeWhere((_, w) => w.sent > 0 && w.sent < pullStarted);
     var list = pulled;
     for (final w in _watchlistEdits.values) {
-      list = [if (w.on) w.title, ...list.where((t) => t.key != w.title.key)];
+      // Trakt's own copy, when it lists the title already, carries the
+      // status and episode count a show needs to count as completed.
+      final kept = w.on
+          ? pulled.where((t) => t.key == w.title.key).firstOrNull ?? w.title
+          : null;
+      list = [?kept, ...list.where((t) => t.key != w.title.key)];
     }
     return list;
   }

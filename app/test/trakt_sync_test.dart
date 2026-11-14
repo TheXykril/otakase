@@ -222,6 +222,7 @@ void main() {
     late List<Json> watched;
     late List<String> adds;
     late MockClient client;
+    late Future<http.Response> Function(http.Request) trakt;
     String keyOf(Json body) {
       final shows = body['shows'] as List?;
       final row = (shows ?? body['movies'] as List).single as Map;
@@ -232,7 +233,7 @@ void main() {
       listed = {};
       watched = [];
       adds = [];
-      client = MockClient((r) async {
+      trakt = (r) async {
         switch (r.url.path) {
           case '/sync/watchlist':
             final body = jsonDecode(r.body) as Json;
@@ -280,7 +281,8 @@ void main() {
             return http.Response(jsonEncode(watched), 200);
         }
         return http.Response('[]', 200);
-      });
+      };
+      client = MockClient(trakt);
     });
 
     test('watched here', () async {
@@ -354,6 +356,29 @@ void main() {
       await movies.markWatched(ended, true, season: 1, episode: 2);
       expect(movies.onWatchlist(ended), isFalse);
     });
+
+    test(
+      'an ended show still waiting to reach Trakt leaves once done',
+      () async {
+        // Trakt takes the add but the answer is lost, so the change still
+        // waits here while Trakt's list already has the show.
+        final movies = await _service(
+          MockClient((r) async {
+            final res = await trakt(r);
+            return r.url.path == '/sync/watchlist'
+                ? http.Response('', 503)
+                : res;
+          }),
+        );
+        await movies.sync(force: true);
+        await movies.setWatchlist(ended, true);
+        await movies.sync(force: true);
+        await movies.markWatched(ended, true, season: 1, episode: 1);
+        expect(movies.onWatchlist(ended), isTrue);
+        await movies.markWatched(ended, true, season: 1, episode: 2);
+        expect(movies.onWatchlist(ended), isFalse);
+      },
+    );
 
     test('a watched film leaves', () async {
       final movies = await _service(client);
