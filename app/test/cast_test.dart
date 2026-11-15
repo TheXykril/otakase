@@ -221,4 +221,39 @@ void main() {
     );
     expect(find.byKey(const Key('cast-allow')), findsNothing);
   });
+
+  testWidgets('panel stays above the middle buttons on a phone on its side', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1544, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final status = CastStatus.fromJson({
+      'active': true,
+      'device': 'Living Room TV',
+      'state': 'error',
+      'error':
+          'Play: Post "http://192.168.0.141:1917/AVTransport/59f92eb4/control.xml": '
+          'context deadline exceeded (Client.Timeout exceeded while awaiting headers)',
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CastPanel(
+            status: status,
+            deviceName: 'Living Room TV',
+            onStop: () {},
+          ),
+        ),
+      ),
+    );
+    // The player's play button is centred, 48 px each way.
+    final middleTop = 720 / 2 - 48;
+    for (final key in ['cast-label', 'cast-stop']) {
+      final box = tester.getRect(find.byKey(Key(key)));
+      expect(box.bottom, lessThan(middleTop), reason: key);
+      expect(box.top, greaterThan(80), reason: key);
+    }
+    expect(tester.takeException(), isNull);
+  });
 }

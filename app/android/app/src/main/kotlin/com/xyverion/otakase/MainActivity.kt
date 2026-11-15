@@ -23,6 +23,7 @@ import android.net.wifi.WifiManager
 import com.xyverion.otakase.mobilecore.Mobilecore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterShellArgs
 import io.flutter.plugin.common.MethodChannel
 import java.net.NetworkInterface
 import java.util.concurrent.Executors
@@ -89,6 +90,23 @@ class MainActivity : FlutterActivity() {
         }
         return values
     }
+    // How Flutter draws the app, from the Screen drawing setting, which the
+    // app saves as flutter.Renderer. It applies from the next start. TVs
+    // default to Skia: several TV graphics chips flicker and ghost the
+    // whole screen with Impeller.
+    override fun getFlutterShellArgs(): FlutterShellArgs {
+        val args = super.getFlutterShellArgs()
+        val saved = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            .getString("flutter.Renderer", null)
+        val tv = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+            !packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
+        when (saved?.takeIf { it != "auto" } ?: if (tv) "skia" else "impeller") {
+            "skia" -> args.add("--enable-impeller=false")
+            "opengl" -> args.add("--impeller-backend=opengles")
+        }
+        return args
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Draw under the camera cutout too. Without this Android leaves a
         // black strip on the cutout side, most visibly in the landscape

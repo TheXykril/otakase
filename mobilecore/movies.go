@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"slices"
@@ -190,7 +191,7 @@ func (c *Core) executeExtra(ctx context.Context, input string) string {
 		if transport.rateLimited.Load() {
 			return failure("rate_limited", "Source rate limit reached. Try again later.", true)
 		}
-		return failure("provider_error", "Source request failed ("+sourceProblem(err)+").", true)
+		return failure("provider_error", "Source request failed ("+describeSourceFailure(ctx, err)+").", true)
 	}
 	return encode(response{Version: 1, Data: data})
 }
@@ -230,6 +231,92 @@ func sourceProblem(err error) string {
 }
 
 var httpStatusPattern = regexp.MustCompile(`answered (\d{3})\b`)
+
+// describeSourceFailure is sourceProblem plus, for an address or certificate
+// problem, a note when this network's DNS sends the host somewhere public DNS
+// does not: an internet provider blocking the site answers with its own
+// server, whose certificate never fits. Sources stay unnamed, so the host
+// itself is never shown.
+func describeSourceFailure(ctx context.Context, err error) string {
+	problem := sourceProblem(err)
+	if !strings.HasPrefix(problem, "certificate") && problem != "address not found" {
+		return problem
+	}
+	var request *url.Error
+	if !errors.As(err, &request) {
+		return problem
+	}
+	address, parseErr := url.Parse(request.URL)
+	if parseErr != nil || address.Hostname() == "" {
+		return problem
+	}
+	host := address.Hostname()
+	if net.ParseIP(host) == nil && networkRedirects(ctx, host) {
+		problem += ", this network may block the site"
+	}
+	return problem
+}
+
+// publicDNS answers the way an unfiltered resolver does, over HTTPS so a
+// network cannot rewrite it. Tests point it elsewhere.
+var publicDNS = "https://1.1.1.1/dns-query"
+
+// lookupHost is this device's own lookup. Tests replace it.
+var lookupHost = net.DefaultResolver.LookupHost
+
+// networkRedirects reports whether this device's DNS gives host addresses
+// that public DNS does not give at all, or none where public DNS has some.
+func networkRedirects(ctx context.Context, host string) bool {
+	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+	public, err := publicLookup(ctx, host)
+	if err != nil || len(public) == 0 {
+		return false
+	}
+	local, err := lookupHost(ctx, host)
+	if err != nil || len(local) == 0 {
+		var dns *net.DNSError
+		return errors.As(err, &dns) && dns.IsNotFound
+	}
+	for _, a := range local {
+		if ip := net.ParseIP(a); ip != nil && slices.Contains(public, ip.String()) {
+			return false
+		}
+	}
+	return true
+}
+
+func publicLookup(ctx context.Context, host string) ([]string, error) {
+	var found []string
+	for _, kind := range []string{"A", "AAAA"} {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, publicDNS+"?name="+url.QueryEscape(host)+"&type="+kind, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/dns-json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		var answer struct {
+			Answer []struct {
+				Type int    `json:"type"`
+				Data string `json:"data"`
+			}
+		}
+		err = json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&answer)
+		resp.Body.Close()
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range answer.Answer {
+			if ip := net.ParseIP(a.Data); ip != nil && (a.Type == 1 || a.Type == 28) {
+				found = append(found, ip.String())
+			}
+		}
+	}
+	return found, nil
+}
 
 // useCacheForSubtitles points the system temp dir at the app's cache once.
 // vidsrc saves the subtitles it fetches there, and Android has no writable

@@ -24,6 +24,8 @@ it switches to a layout made for the remote.
 - If video shows as blocks, dots or green flashes, change **More > Playback >
   Video decoding**. Automatic copies frames on TVs; Software works on every
   TV but uses more power.
+- If the whole screen flickers or ghosts, change **More > Playback > Screen
+  drawing** and restart the app. Automatic uses Skia on TVs.
 
 Menus scale to your screen by themselves, and Android's larger text setting
 still applies.

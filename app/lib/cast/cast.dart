@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -350,26 +351,56 @@ class CastPanel extends StatelessWidget {
     final link = s?.link ?? '';
     return ColoredBox(
       color: bgDeep,
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 96, 24, 200),
-          child: Column(
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // A phone on its side has no room under the player's middle
+          // buttons and seek bar, so the panel sits above them instead. A
+          // browser link keeps the full layout: its code needs the room.
+          final short =
+              !isTV && !isDesktop && link.isEmpty && box.maxHeight < 820;
+          final column = Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(LucideIcons.cast, size: 56, color: accentText),
-              const SizedBox(height: 16),
-              Text(
-                label,
-                key: const Key('cast-label'),
-                textAlign: TextAlign.center,
-                style: uiStyle(context, size: 22, weight: FontWeight.w600),
-              ),
+              if (short)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.cast, size: 28, color: accentText),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Text(
+                        label,
+                        key: const Key('cast-label'),
+                        style: uiStyle(
+                          context,
+                          size: 20,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else ...[
+                const Icon(LucideIcons.cast, size: 56, color: accentText),
+                const SizedBox(height: 16),
+                Text(
+                  label,
+                  key: const Key('cast-label'),
+                  textAlign: TextAlign.center,
+                  style: uiStyle(context, size: 22, weight: FontWeight.w600),
+                ),
+              ],
               if (s != null && s.error.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text(
-                  s.error,
-                  textAlign: TextAlign.center,
-                  style: uiStyle(context, color: accentText),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 640),
+                  child: Text(
+                    s.error,
+                    textAlign: TextAlign.center,
+                    maxLines: short ? 3 : null,
+                    overflow: short ? TextOverflow.ellipsis : null,
+                    style: uiStyle(context, color: accentText),
+                  ),
                 ),
               ],
               if (s != null && s.note.isNotEmpty) ...[
@@ -420,7 +451,7 @@ class CastPanel extends StatelessWidget {
                   isTV: isTV,
                 ),
               ],
-              const SizedBox(height: 20),
+              SizedBox(height: short ? 12 : 20),
               AppButton(
                 key: const Key('cast-stop'),
                 label: 'Stop casting',
@@ -429,8 +460,29 @@ class CastPanel extends StatelessWidget {
                 isTV: isTV,
               ),
             ],
-          ),
-        ),
+          );
+          if (short) {
+            // Room from under the title bar to above the middle buttons.
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(24, 88, 24, 0),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: max(0, box.maxHeight / 2 - 60 - 88),
+                  ),
+                  child: SingleChildScrollView(child: column),
+                ),
+              ),
+            );
+          }
+          return Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 96, 24, 200),
+              child: column,
+            ),
+          );
+        },
       ),
     );
   }

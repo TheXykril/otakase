@@ -56,6 +56,7 @@ const settingLabels = <String, String>{
   'SkipDelay': 'Skip delay',
   'Quality': 'Quality',
   'VideoDecoding': 'Video decoding',
+  'Renderer': 'Screen drawing',
   'TorrentSources': 'Torrent sources',
   'TorrentOnMobileData': 'Torrents on mobile data',
   'PercentageToMarkComplete': 'Count movies & shows as watched at',
@@ -97,6 +98,12 @@ const settingValueNames = <String, Map<String, String>>{
     'direct': 'Hardware',
     'copy': 'Hardware, copied',
     'software': 'Software',
+  },
+  'Renderer': {
+    'auto': 'Automatic',
+    'impeller': 'Impeller',
+    'opengl': 'Impeller, OpenGL',
+    'skia': 'Skia',
   },
   'Quality': {
     'best': 'Best available',
@@ -602,6 +609,15 @@ class _SettingsPageState extends State<SettingsPage> {
             value: settingValue(store, 'VideoDecoding'),
             onTap: () =>
                 choose('VideoDecoding', ['auto', 'direct', 'copy', 'software']),
+          ),
+        if (Host.android)
+          row(
+            'Renderer',
+            'Change this if the screen flickers or ghosts. Automatic uses '
+                'Skia on TVs and Impeller on phones. Restart the app to apply.',
+            value: settingValue(store, 'Renderer'),
+            onTap: () =>
+                choose('Renderer', ['auto', 'impeller', 'opengl', 'skia']),
           ),
         toggle(
           'TorrentSources',
