@@ -60,7 +60,10 @@ class _AppUpdatePanelState extends State<AppUpdatePanel>
       final message = switch (phase) {
         UpdatePhase.idle => platform.idleText,
         UpdatePhase.checking => 'Checking for updates…',
-        UpdatePhase.current => 'Your app is up to date.',
+        UpdatePhase.current =>
+          isDevBuild(updates.installed) && !updates.devBuilds
+              ? 'You are on a dev build. The next stable release replaces it.'
+              : 'Your app is up to date.',
         UpdatePhase.unpublished => 'No in-app update has been published yet.',
         UpdatePhase.available => 'An Otakase update is available.',
         UpdatePhase.downloading => 'Downloading and verifying the update…',
@@ -87,7 +90,7 @@ class _AppUpdatePanelState extends State<AppUpdatePanel>
             if (candidate != null && updates.available) ...[
               const SizedBox(height: 8),
               Text(
-                '${candidate.label} · ${(candidate.size / 1024 / 1024).toStringAsFixed(1)} MB',
+                '${candidate.isDev ? 'Dev build ' : ''}${candidate.label} · ${(candidate.size / 1024 / 1024).toStringAsFixed(1)} MB',
                 style: uiStyle(context, size: 15, color: accentText),
               ),
             ],

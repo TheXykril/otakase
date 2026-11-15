@@ -62,6 +62,7 @@ const settingLabels = <String, String>{
   'PercentageToMarkComplete': 'Count movies & shows as watched at',
   'ResumePlayback': 'Resume where you left off',
   'CheckUpdates': 'Check for updates',
+  'DevBuilds': 'Dev builds',
   'KeepScreenOn': 'Keep screen on',
   'EpisodeAlerts': 'New episode alerts',
   'RemoteAnywhere': 'Phone remote from anywhere',
@@ -693,6 +694,24 @@ class _SettingsPageState extends State<SettingsPage> {
           'Look for a new version when the app starts.',
           icon: LucideIcons.download,
         ),
+        if (Host.android || isDesktop)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            child: AppRow(
+              key: const Key('dev-builds'),
+              isTV: widget.isTV,
+              title: settingLabel('DevBuilds'),
+              subtitle:
+                  'Update to test builds of the next version before it is '
+                  'released. They can be broken. Turn off to go back to '
+                  'stable with the next release.',
+              toggle: store.flag('DevBuilds'),
+              onTap: () async {
+                await store.set('DevBuilds', !store.flag('DevBuilds'));
+                unawaited(widget.services.updates.recheck());
+              },
+            ),
+          ),
         AppUpdatePanel(
           updates: widget.services.updates,
           isTV: widget.isTV,

@@ -43,6 +43,64 @@ int versionCode(String version) {
   return year * 1000000 + drop * 1000 + (rest.isEmpty ? 0 : rest.first);
 }
 
+/// A version the update check can order. Releases look like 26.7.0; dev
+/// builds look like 26.8.0-dev.41: a test build of the version it is heading
+/// to, numbered by the build run. Dev builds of a version come before its
+/// release and after every earlier version.
+class AppVersion implements Comparable<AppVersion> {
+  const AppVersion._(this.code, this.dev);
+  final int code;
+
+  /// The dev build number, or null for a release.
+  final int? dev;
+  bool get isDev => dev != null;
+
+  static final _pattern = RegExp(
+    r'^(\d{1,3}\.\d{1,3}(?:\.\d{1,3})?)(?:-dev\.(\d{1,9}))?$',
+  );
+
+  /// Null when [name] is not a release or dev build version.
+  static AppVersion? tryParse(String name) {
+    final match = _pattern.firstMatch(name.trim());
+    if (match == null) return null;
+    final code = versionCode(match.group(1)!);
+    if (code < 1) return null;
+    final dev = match.group(2);
+    return AppVersion._(code, dev == null ? null : int.parse(dev));
+  }
+
+  @override
+  int compareTo(AppVersion other) {
+    if (code != other.code) return code.compareTo(other.code);
+    if (dev == other.dev) return 0;
+    if (dev == null) return 1;
+    if (other.dev == null) return -1;
+    return dev!.compareTo(other.dev!);
+  }
+}
+
+/// True when [update] is newer than what is installed. Builds that share a
+/// version number (dev builds of one version, and its release) are told
+/// apart by the version name; a name the app cannot read falls back to the
+/// number alone.
+bool isNewer(AppUpdate update, InstalledApp? installed) {
+  if (installed == null) return update.code > 0;
+  final next = AppVersion.tryParse(update.name);
+  final current = AppVersion.tryParse(installed.name);
+  if (next == null ||
+      current == null ||
+      next.code != update.code ||
+      current.code != installed.code ||
+      update.code != installed.code) {
+    return update.code > installed.code;
+  }
+  return next.compareTo(current) > 0;
+}
+
+/// True when the installed app is a dev build.
+bool isDevBuild(InstalledApp? installed) =>
+    installed != null && AppVersion.tryParse(installed.name)?.isDev == true;
+
 class AppUpdate {
   const AppUpdate({
     required this.name,
@@ -55,10 +113,12 @@ class AppUpdate {
   final int code, size;
   final Uri url;
   String get label => '$name (build $code)';
+  bool get isDev => AppVersion.tryParse(name)?.isDev == true;
 
   /// Reads an update from the release data the Otakase site serves (GitHub's
   /// release shape): the version from the tag (v26.1.0), and the size and
-  /// SHA-256 checksum recorded for the uploaded file.
+  /// SHA-256 checksum recorded for the uploaded file. The dev build has the
+  /// tag "dev" and its version (26.8.0-dev.41) in "version".
   factory AppUpdate.parse(
     Map release,
     Map asset,
@@ -66,10 +126,19 @@ class AppUpdate {
     String host = updateSite,
   }) {
     final tag = release['tag_name'];
-    final match = tag is String
-        ? RegExp(r'^v(\d{1,3}\.\d{1,3}(?:\.\d{1,3})?)$').firstMatch(tag)
-        : null;
-    final name = match?.group(1);
+    final String? name;
+    if (tag == 'dev') {
+      final version = release['version'];
+      name = version is String && AppVersion.tryParse(version)?.isDev == true
+          ? version
+          : null;
+    } else {
+      name = tag is String
+          ? RegExp(r'^v(\d{1,3}\.\d{1,3}(?:\.\d{1,3})?)$')
+                .firstMatch(tag)
+                ?.group(1)
+          : null;
+    }
     final code = name == null ? 0 : versionCode(name);
     final size = asset['size'];
     final digest = asset['digest'];
@@ -124,6 +193,10 @@ Uri latestReleaseOn(String host) => Uri.https(host, '/download/latest.json');
 
 /// The newest release on [updateSite].
 final latestRelease = latestReleaseOn(updateSite);
+
+/// The current dev build (the "dev" pre-release), in the same shape, with
+/// its version in "version". Asked only with Dev builds turned on.
+Uri devBuildOn(String host) => Uri.https(host, '/download/dev.json');
 
 /// Checks a download link: `/download/<tag>/<filename>` on [host], the
 /// update site the release data came from.
@@ -238,6 +311,7 @@ class AndroidUpdatePlatform extends UpdatePlatform {
       channel.invokeMethod<void>('validate', {
         'path': file.path,
         'code': update.code,
+        'name': update.name,
         'sha256': update.checksum,
       });
 
@@ -246,6 +320,7 @@ class AndroidUpdatePlatform extends UpdatePlatform {
       await channel.invokeMethod<bool>('install', {
         'path': file.path,
         'code': update.code,
+        'name': update.name,
         'sha256': update.checksum,
       }) ??
       false;
@@ -258,12 +333,23 @@ class _Unreachable implements Exception {
 }
 
 class AppUpdates extends ChangeNotifier {
-  AppUpdates({UpdatePlatform? platform, http.Client Function()? client})
-    : platform = platform ?? AndroidUpdatePlatform(),
-      _newClient = client ?? http.Client.new;
+  AppUpdates({
+    UpdatePlatform? platform,
+    http.Client Function()? client,
+    bool Function()? devBuilds,
+  }) : platform = platform ?? AndroidUpdatePlatform(),
+       _newClient = client ?? http.Client.new,
+       _devBuilds = devBuilds ?? _never;
+
+  static bool _never() => false;
 
   final UpdatePlatform platform;
   final http.Client Function() _newClient;
+
+  /// Whether the Dev builds setting is on: checks then also look at the
+  /// current dev build and offer it when it is newer than the release.
+  final bool Function() _devBuilds;
+  bool get devBuilds => _devBuilds();
   UpdatePhase phase = UpdatePhase.idle;
   InstalledApp? installed;
   AppUpdate? update;
@@ -282,7 +368,7 @@ class AppUpdates extends ChangeNotifier {
       phase == UpdatePhase.checking ||
       phase == UpdatePhase.downloading ||
       _installPending;
-  bool get available => update != null && update!.code > (installed?.code ?? 0);
+  bool get available => update != null && isNewer(update!, installed);
   bool get downloaded => _download != null;
   double? get progress => update == null ? null : received / update!.size;
 
@@ -310,7 +396,7 @@ class AppUpdates extends ChangeNotifier {
 
   Future<http.StreamedResponse> _get(http.Client client, Uri uri) async {
     final request = http.Request('GET', uri)
-      ..headers['Accept'] = uri.path == '/download/latest.json'
+      ..headers['Accept'] = uri.path.endsWith('.json')
           ? 'application/json'
           : 'application/octet-stream'
       ..headers['User-Agent'] = 'Otakase-App';
@@ -343,6 +429,54 @@ class AppUpdates extends ChangeNotifier {
     return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
   }
 
+  /// Asks the update sites in order for [feed]; the first that answers is
+  /// used, even with an error, and the next is tried only when one cannot be
+  /// reached at all.
+  Future<(http.StreamedResponse, String)?> _ask(
+    http.Client client,
+    Uri Function(String host) feed,
+    int generation,
+  ) async {
+    Object? firstError;
+    for (final site in updateSites) {
+      try {
+        return (await _get(client, feed(site)), site);
+      } catch (e) {
+        if (!unreachable(e)) rethrow;
+        firstError ??= e;
+        if (!_active(generation)) return null;
+      }
+    }
+    throw _Unreachable(firstError!);
+  }
+
+  /// The release (or dev build) one feed offers for this device, or null
+  /// when it has none.
+  Future<AppUpdate?> _offer(
+    http.Client client,
+    Uri Function(String host) feed,
+    int generation, {
+    required bool dev,
+  }) async {
+    final answer = await _ask(client, feed, generation);
+    if (answer == null || !_active(generation)) return null;
+    final (response, host) = answer;
+    if (response.statusCode == 404) return null;
+    final release = await _json(response, 2 * 1024 * 1024);
+    if (!_active(generation)) return null;
+    if (release['draft'] == true || (release['prerelease'] == true) != dev) {
+      return null;
+    }
+    final assets = (release['assets'] as List? ?? []).whereType<Map>();
+    final files = assets.where((a) => a['name'] == platform.fileName);
+    if (files.length != 1) return null;
+    final offer = AppUpdate.parse(release, files.single, platform, host: host);
+    if (offer.isDev != dev) {
+      throw const FormatException('Invalid update metadata.');
+    }
+    return offer;
+  }
+
   Future<void> check() async {
     if (busy || _closed || downloaded) return;
     final generation = ++_generation;
@@ -353,44 +487,38 @@ class AppUpdates extends ChangeNotifier {
     try {
       installed = await platform.installed();
       if (!_active(generation)) return;
-      http.StreamedResponse? response;
-      var host = updateSite;
-      Object? firstError;
-      for (final site in updateSites) {
+      var candidate = await _offer(
+        client,
+        latestReleaseOn,
+        generation,
+        dev: false,
+      );
+      if (!_active(generation)) return;
+      if (devBuilds) {
+        // A broken or missing dev build never hides the release.
+        AppUpdate? dev;
         try {
-          response = await _get(client, latestReleaseOn(site));
-          host = site;
-          break;
-        } catch (e) {
-          if (!unreachable(e)) rethrow;
-          firstError ??= e;
-          if (!_active(generation)) return;
+          dev = await _offer(client, devBuildOn, generation, dev: true);
+        } on FormatException {
+          dev = null;
+        } on HttpException {
+          dev = null;
+        } on _Unreachable {
+          dev = null;
+        }
+        if (!_active(generation)) return;
+        if (dev != null &&
+            (candidate == null ||
+                AppVersion.tryParse(dev.name)!
+                        .compareTo(AppVersion.tryParse(candidate.name)!) >
+                    0)) {
+          candidate = dev;
         }
       }
-      if (!_active(generation)) return;
-      if (response == null) throw _Unreachable(firstError!);
-      if (response.statusCode == 404) {
+      if (candidate == null) {
         _emit(UpdatePhase.unpublished);
         return;
       }
-      final release = await _json(response, 2 * 1024 * 1024);
-      if (!_active(generation)) return;
-      if (release['draft'] == true || release['prerelease'] == true) {
-        _emit(UpdatePhase.unpublished);
-        return;
-      }
-      final assets = (release['assets'] as List? ?? []).whereType<Map>();
-      final files = assets.where((a) => a['name'] == platform.fileName);
-      if (files.length != 1) {
-        _emit(UpdatePhase.unpublished);
-        return;
-      }
-      final candidate = AppUpdate.parse(
-        release,
-        files.single,
-        platform,
-        host: host,
-      );
       update = candidate;
       manualReason = available ? await platform.manualReason() : null;
       if (!_active(generation)) return;
@@ -417,6 +545,19 @@ class AppUpdates extends ChangeNotifier {
       client.close();
       if (identical(_client, client)) _client = null;
     }
+  }
+
+  /// Checks again from scratch, dropping a downloaded update that was not
+  /// installed. Used when the Dev builds setting changes, so a dev build
+  /// downloaded before is not installed after turning it off.
+  Future<void> recheck() async {
+    if (_closed || busy) return;
+    final file = _download;
+    _download = null;
+    update = null;
+    received = 0;
+    if (file != null && await file.exists()) await file.delete();
+    await check();
   }
 
   Future<void> download() async {

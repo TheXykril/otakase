@@ -99,6 +99,7 @@ class AppUpdates(private val activity: FlutterActivity, messenger: BinaryMesseng
     private fun validate(call: MethodCall): File {
         val path = call.argument<String>("path") ?: error("Update download is missing. Please download again.")
         val expectedCode = call.argument<Number>("code")?.toLong() ?: error("Update version is missing.")
+        val expectedName = call.argument<String>("name")
         val expectedHash = call.argument<String>("sha256") ?: error("Update checksum is missing.")
         val file = File(path).canonicalFile
         require(file.parentFile == directory.canonicalFile && file.isFile && file.extension == "apk") {
@@ -121,7 +122,11 @@ class AppUpdates(private val activity: FlutterActivity, messenger: BinaryMesseng
             ?: error("The downloaded file is not a valid Android app.")
         val current = installed()
         require(archive.packageName == activity.packageName) { "The downloaded app is not Otakase." }
-        require(code(archive) == expectedCode && code(archive) > code(current)) {
+        require(
+            code(archive) == expectedCode &&
+                (expectedName == null || archive.versionName == expectedName) &&
+                isNewerUpdate(code(archive), archive.versionName, code(current), current.versionName)
+        ) {
             "This update is not newer than the installed app."
         }
         verifyUpdateSigning(

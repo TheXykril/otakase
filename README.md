@@ -91,6 +91,11 @@ updates**, choose **Download update**, then **Install update**. On the
 computer it offers the update and installs it for you. Your profiles and
 progress stay in place.
 
+To try new features early, turn on **Dev builds** in the same place. The app
+then also updates to test builds of the next version, which can be broken.
+Turn it off to go back to stable: you stay on the test build until the next
+release replaces it.
+
 ## Getting started
 
 Sign in under **Accounts** to sync with AniList or MyAnimeList; you can sign in

@@ -117,7 +117,8 @@ jobs:
     secrets: inherit
 
   # Replaces the "dev" pre-release. It is marked pre-release and never
-  # "latest", so the apps' update checks never offer it; install it by hand.
+  # "latest", so only apps with Dev builds turned on are offered it (the
+  # site's /download/dev.json reads the version from the release title).
   # The "dev" tag does not start with "v", so the release changelog range
   # skips it.
   dev:
@@ -162,7 +163,7 @@ jobs:
           cat > notes.md <<EOF
           Development build of \`main\` at ${GITHUB_SHA::7}, version \`$DEV_VERSION\`.
 
-          Not a release: it can be broken, and it is replaced by the next dev build. The apps never offer it as an update; install it by hand.
+          Not a release: it can be broken, and it is replaced by the next dev build. Apps with Dev builds turned on (More, About & updates) update to it; others stay on stable releases.
           EOF
           gh release create dev dist/otakase-android.apk dist/otakase-app-windows-setup.exe \
             dist/otakase-app-macos.zip dist/otakase-app-linux-x86_64.AppImage \
