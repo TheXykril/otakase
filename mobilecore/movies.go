@@ -233,9 +233,10 @@ func sourceProblem(err error) string {
 var httpStatusPattern = regexp.MustCompile(`answered (\d{3})\b`)
 
 // describeSourceFailure is sourceProblem plus, for an address or certificate
-// problem, the host it happened at, and a note when this network's DNS sends
-// that host somewhere public DNS does not: an internet provider blocking the
-// site answers with its own server, whose certificate never fits.
+// problem, a note when this network's DNS sends the host somewhere public DNS
+// does not: an internet provider blocking the site answers with its own
+// server, whose certificate never fits. Sources stay unnamed, so the host
+// itself is never shown.
 func describeSourceFailure(ctx context.Context, err error) string {
 	problem := sourceProblem(err)
 	if !strings.HasPrefix(problem, "certificate") && problem != "address not found" {
@@ -250,7 +251,6 @@ func describeSourceFailure(ctx context.Context, err error) string {
 		return problem
 	}
 	host := address.Hostname()
-	problem += " at " + host
 	if net.ParseIP(host) == nil && networkRedirects(ctx, host) {
 		problem += ", this network may block the site"
 	}

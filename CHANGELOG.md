@@ -105,8 +105,8 @@
   stopped with a timeout. Play, pause and seek now wait up to 30 seconds.
 - **Cast screen fits a phone on its side.** The casting status and Stop
   casting no longer sit under the player's buttons.
-- **Diagnostics says where a source failed.** A certificate or address
-  problem names the site, and says when the network seems to block it.
+- **Diagnostics spots blocked sources.** A certificate or address problem
+  says when the network seems to block the source.
 - **English movie and show sources work on Android again.** vidsrc,
   2Embed and English subtitles failed with "certificate not trusted by this
   device": their sites moved to Let's Encrypt's newest certificates, which

@@ -313,8 +313,9 @@ func TestDramacoolResolvePlaysTheEpisode(t *testing.T) {
 	}
 }
 
-// A certificate problem names the host, and says when this network's DNS
-// sends it somewhere public DNS does not, as a provider's block page does.
+// A certificate problem says when this network's DNS sends the host
+// somewhere public DNS does not, as a provider's block page does, and never
+// names the host.
 func TestDescribeSourceFailure(t *testing.T) {
 	dns := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("type") == "A" && r.URL.Query().Get("name") == "blocked.example" {
@@ -341,9 +342,9 @@ func TestDescribeSourceFailure(t *testing.T) {
 		err  error
 		want string
 	}{
-		{certErr("blocked.example"), "certificate for another name at blocked.example, this network may block the site"},
-		{certErr("open.example"), "certificate for another name at open.example"},
-		{certErr("176.97.124.32"), "certificate for another name at 176.97.124.32"},
+		{certErr("blocked.example"), "certificate for another name, this network may block the site"},
+		{certErr("open.example"), "certificate for another name"},
+		{certErr("176.97.124.32"), "certificate for another name"},
 		{errors.New("no pass_md5 on the page"), "site changed or unreachable"},
 	} {
 		if got := describeSourceFailure(context.Background(), c.err); got != c.want {
