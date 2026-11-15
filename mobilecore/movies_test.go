@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -307,5 +310,44 @@ func TestDramacoolResolvePlaysTheEpisode(t *testing.T) {
 	movieData(t, call(t, c, `{"version":1,"operation":"movie_resolve","movie":{"provider":"dramacool","path":"/drama-detail/hospital-playlist-2/","title":"Hospital Playlist 2","series":true},"season":2,"episode":3}`), "stream", &s)
 	if s.URL != "https://player.example/vid/x/ep3.m3u8" || !s.HLS || s.Headers["Referer"] != "https://player.example/kisskh/77" || s.Server != "Dramacool" {
 		t.Fatalf("stream = %+v", s)
+	}
+}
+
+// A certificate problem names the host, and says when this network's DNS
+// sends it somewhere public DNS does not, as a provider's block page does.
+func TestDescribeSourceFailure(t *testing.T) {
+	dns := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("type") == "A" && r.URL.Query().Get("name") == "blocked.example" {
+			io.WriteString(w, `{"Answer":[{"type":1,"data":"104.21.85.110"}]}`)
+			return
+		}
+		io.WriteString(w, `{"Answer":[]}`)
+	}))
+	defer dns.Close()
+	oldDNS, oldLookup, oldClient := publicDNS, lookupHost, http.DefaultClient
+	publicDNS, http.DefaultClient = dns.URL, dns.Client()
+	lookupHost = func(_ context.Context, host string) ([]string, error) {
+		if host == "blocked.example" {
+			return []string{"10.0.0.1"}, nil
+		}
+		return []string{"104.21.85.110"}, nil
+	}
+	defer func() { publicDNS, lookupHost, http.DefaultClient = oldDNS, oldLookup, oldClient }()
+
+	certErr := func(host string) error {
+		return &url.Error{Op: "Get", URL: "https://" + host + "/embed", Err: x509.HostnameError{}}
+	}
+	for _, c := range []struct {
+		err  error
+		want string
+	}{
+		{certErr("blocked.example"), "certificate for another name at blocked.example, this network may block the site"},
+		{certErr("open.example"), "certificate for another name at open.example"},
+		{certErr("176.97.124.32"), "certificate for another name at 176.97.124.32"},
+		{errors.New("no pass_md5 on the page"), "site changed or unreachable"},
+	} {
+		if got := describeSourceFailure(context.Background(), c.err); got != c.want {
+			t.Errorf("%v: %q, want %q", c.err, got, c.want)
+		}
 	}
 }

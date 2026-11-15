@@ -96,6 +96,17 @@
 
 ### Fixed
 
+- **TV screen no longer flickers.** On TVs whose graphics chip flickered
+  and ghosted the whole screen, the app now draws with Skia by default. A
+  new **Screen drawing** setting under Playback switches between Skia and
+  Impeller if a device looks wrong either way; it applies after a restart.
+- **Casting to slower TVs starts.** Some TVs answer Play only once the
+  video has buffered, which took longer than the app waited, so casting
+  stopped with a timeout. Play, pause and seek now wait up to 30 seconds.
+- **Cast screen fits a phone on its side.** The casting status and Stop
+  casting no longer sit under the player's buttons.
+- **Diagnostics says where a source failed.** A certificate or address
+  problem names the site, and says when the network seems to block it.
 - **English movie and show sources work on Android again.** vidsrc,
   2Embed and English subtitles failed with "certificate not trusted by this
   device": their sites moved to Let's Encrypt's newest certificates, which

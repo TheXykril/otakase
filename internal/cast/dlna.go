@@ -46,6 +46,25 @@ const (
 // answers in milliseconds or not at all.
 var dlnaHTTP = &http.Client{Timeout: 5 * time.Second}
 
+// dlnaOrders sends SOAP calls; each call's own deadline comes from
+// soapTimeout.
+var dlnaOrders = &http.Client{}
+
+// dlnaOrderWait is how long an order that changes playback may take. Some
+// TVs (Sony's among them) answer Play, Seek or a new URI only once the
+// stream has buffered, which over Wi-Fi can take well past five seconds.
+var dlnaOrderWait = 30 * time.Second
+
+// soapTimeout is the deadline for one SOAP action: polls stay short so a
+// gone TV is noticed quickly, playback orders wait for slow renderers.
+func soapTimeout(action string) time.Duration {
+	switch action {
+	case "SetAVTransportURI", "Play", "Pause", "Seek", "Stop":
+		return dlnaOrderWait
+	}
+	return dlnaHTTP.Timeout
+}
+
 // discoverDLNA lists the media renderers that answer an SSDP search.
 func discoverDLNA(ctx context.Context) ([]Device, error) {
 	locations, err := ssdpSearch(ctx, mediaRendererType)
@@ -283,13 +302,15 @@ func soapCall(controlURL, serviceType, action string, args [][2]string) (map[str
 	}
 	body.WriteString(`</u:` + action + `></s:Body></s:Envelope>`)
 
-	req, err := http.NewRequest(http.MethodPost, controlURL, strings.NewReader(body.String()))
+	ctx, cancel := context.WithTimeout(context.Background(), soapTimeout(action))
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, controlURL, strings.NewReader(body.String()))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", `text/xml; charset="utf-8"`)
 	req.Header.Set("SOAPAction", `"`+serviceType+"#"+action+`"`)
-	resp, err := dlnaHTTP.Do(req)
+	resp, err := dlnaOrders.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("cast: %s: %w", action, err)
 	}

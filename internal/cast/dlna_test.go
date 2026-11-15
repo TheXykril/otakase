@@ -367,3 +367,23 @@ func TestDLNAPlayerTrustsAMovingPosition(t *testing.T) {
 		t.Fatalf("position %v, want the device's 20", progress.Position)
 	}
 }
+
+// A TV may answer Play only once the stream has buffered. Orders that change
+// playback wait for that; polls still give up quickly.
+func TestSoapOrdersWaitForSlowTV(t *testing.T) {
+	tv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+		io.WriteString(w, `<s:Envelope><s:Body><u:Response/></s:Body></s:Envelope>`)
+	}))
+	defer tv.Close()
+	oldPoll, oldOrder := dlnaHTTP.Timeout, dlnaOrderWait
+	dlnaHTTP.Timeout, dlnaOrderWait = 100*time.Millisecond, 5*time.Second
+	defer func() { dlnaHTTP.Timeout, dlnaOrderWait = oldPoll, oldOrder }()
+
+	if _, err := soapCall(tv.URL, avTransportType, "Play", [][2]string{{"InstanceID", "0"}, {"Speed", "1"}}); err != nil {
+		t.Fatalf("Play gave up on a slow TV: %v", err)
+	}
+	if _, err := soapCall(tv.URL, avTransportType, "GetTransportInfo", [][2]string{{"InstanceID", "0"}}); err == nil {
+		t.Fatal("a poll waited past its short deadline")
+	}
+}

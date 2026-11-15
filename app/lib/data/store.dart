@@ -69,6 +69,7 @@ const settingDefaults = <String, dynamic>{
   'DiscordPresence': true,
   'Quality': 'best',
   'VideoDecoding': 'auto',
+  'Renderer': 'auto',
   'ResumePlayback': true,
   'PercentageToMarkComplete': 85,
   'Provider': 'stacked',
@@ -338,6 +339,8 @@ class AppStore extends ChangeNotifier {
   Future<void> set(String key, dynamic val) async {
     _values[key] = val;
     notifyListeners();
+    // Android reads this one before Flutter starts, outside any profile.
+    if (key == 'Renderer') await preferences.setString('Renderer', '$val');
     await preferences.setString('${namespace}settings.v1', jsonEncode(_values));
   }
 
