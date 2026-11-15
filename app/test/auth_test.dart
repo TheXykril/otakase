@@ -340,7 +340,7 @@ void main() {
       ),
     );
     expect(response.statusCode, 200);
-    expect(response.body, contains('Return to Otakase'));
+    expect(response.body, contains('close this tab and go back to Otakase'));
     expect(await completed, 'AniList');
     expect(auth.account('AniList')!.username, 'viewer');
     auth.dispose();

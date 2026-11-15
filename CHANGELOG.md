@@ -96,6 +96,11 @@
 
 ### Fixed
 
+- **Signing in on a computer ends on a proper page.** After signing in to
+  your Otakase account (or with Discord or Google) in the browser, the tab
+  showed a connection error instead of a confirmation. It now shows a
+  "You're signed in" page you can close; AniList, MAL and Trakt sign-ins get
+  the same page.
 - **TV screen no longer flickers.** On TVs whose graphics chip flickered
   and ghosted the whole screen, the app now draws with Skia by default. A
   new **Screen drawing** setting under Playback switches between Skia and

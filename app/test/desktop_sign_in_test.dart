@@ -177,7 +177,7 @@ void main() {
         }),
       );
       expect(response.statusCode, 200);
-      expect(response.body, contains('Return to Otakase'));
+      expect(response.body, contains('close this tab and go back to Otakase'));
       expect(await done, isTrue);
       expect(exchange!['grant_type'], 'authorization_code');
       expect(exchange!['code'], 'approved');

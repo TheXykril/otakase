@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'auth.dart';
+import 'login_page.dart';
 import 'models.dart';
 import 'oauth_config.dart';
 
@@ -612,12 +613,20 @@ class Trakt extends ChangeNotifier {
       await _signedIn(token);
       success = true;
       request.response.write(
-        '<!doctype html><meta name="viewport" content="width=device-width"><title>Otakase</title><p>Signed in to Trakt. Return to Otakase.</p>',
+        loginResultPage(
+          ok: true,
+          title: 'Trakt is signed in',
+          message: 'You can close this tab and go back to Otakase.',
+        ),
       );
     } catch (_) {
       request.response.statusCode = HttpStatus.badRequest;
       request.response.write(
-        '<!doctype html><title>Otakase</title><p>Login expired or unsuccessful. Start again in Otakase.</p>',
+        loginResultPage(
+          ok: false,
+          title: "Sign-in didn't finish",
+          message: 'It expired or was turned down. Start again in Otakase.',
+        ),
       );
     } finally {
       await request.response.close();

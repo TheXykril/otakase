@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../host.dart';
 import 'auth.dart';
+import 'login_page.dart';
 import 'models.dart';
 
 /// The account server, then the address on the older domain for networks
@@ -435,12 +436,19 @@ class AccountManager extends ChangeNotifier {
 
   Future<void> _receive(HttpRequest request) async {
     request.response.headers.set('Cache-Control', 'no-store');
+    request.response.headers.set('Referrer-Policy', 'no-referrer');
     request.response.headers.contentType = ContentType.html;
+    if (request.method != 'GET' || request.uri.path != '/account') {
+      request.response.statusCode = HttpStatus.notFound;
+      await request.response.close();
+      return;
+    }
+    // accept() cancels the sign-in, which closes the server. Take it out of
+    // reach first so it stays up until the browser has its page; closing it
+    // with this request still open left the tab on a connection error.
+    final server = _server;
+    _server = null;
     try {
-      if (request.method != 'GET' || request.uri.path != '/account') {
-        request.response.statusCode = HttpStatus.notFound;
-        return;
-      }
       await accept(
         Uri(
           scheme: 'otakase',
@@ -449,15 +457,24 @@ class AccountManager extends ChangeNotifier {
         ),
       );
       request.response.write(
-        '<!doctype html><meta name="viewport" content="width=device-width"><title>Otakase</title><p>Signed in. Return to Otakase.</p>',
+        loginResultPage(
+          ok: true,
+          title: "You're signed in",
+          message: 'You can close this tab and go back to Otakase.',
+        ),
       );
     } catch (e) {
       request.response.statusCode = HttpStatus.badRequest;
       request.response.write(
-        '<!doctype html><title>Otakase</title><p>Sign-in expired or unsuccessful. Start again in Otakase.</p>',
+        loginResultPage(
+          ok: false,
+          title: "Sign-in didn't finish",
+          message: 'It expired or was turned down. Start again in Otakase.',
+        ),
       );
     } finally {
       await request.response.close();
+      await server?.close(force: true);
     }
   }
 

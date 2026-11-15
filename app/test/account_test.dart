@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:otakase/data/account.dart';
 import 'package:otakase/data/account_sync.dart';
 import 'package:otakase/data/account_vault.dart';
+import 'package:otakase/data/auth.dart';
 import 'package:otakase/data/discord.dart';
 import 'package:otakase/data/models.dart';
 import 'package:otakase/data/profiles.dart';
@@ -278,6 +279,37 @@ void main() {
         expect(m.accounts, hasLength(1));
         expect(m.signIns, 2);
         expect(told, greaterThan(0));
+      },
+    );
+
+    test(
+      'desktop sign-in answers the browser with a page before closing',
+      () async {
+        final m = AccountManager(
+          tokens: MemoryTokens(),
+          preferences: await SharedPreferences.getInstance(),
+          device: device,
+          client: FakeServer().client(),
+          keys: TokenStoreKeys(MemoryTokens()),
+        );
+        await m.initialize();
+        await m.begin(desktop: true);
+        final response = await http.get(
+          Uri(
+            scheme: 'http',
+            host: '127.0.0.1',
+            port: AuthService.desktopLoginPort,
+            path: '/account',
+            queryParameters: {'code': 'abc'},
+          ),
+        );
+        expect(response.statusCode, 200);
+        expect(response.body, contains("You're signed in"));
+        expect(response.body, contains('close this tab'));
+        expect(m.accounts.single.name, 'Alice');
+        // The port is free again for the next sign-in.
+        await m.begin(desktop: true);
+        await m.cancel();
       },
     );
 

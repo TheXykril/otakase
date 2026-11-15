@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 
 import '../desktop/desktop_core.dart';
 import '../desktop/open_link.dart';
+import 'login_page.dart';
 import 'models.dart';
 import 'oauth_config.dart';
 import '../host.dart';
@@ -394,13 +395,23 @@ class AuthService extends ChangeNotifier {
         );
         success = true;
         request.response.write(
-          '<!doctype html><meta name="viewport" content="width=device-width"><title>Otakase</title><p>Signed in. Return to $device.</p>',
+          loginResultPage(
+            ok: true,
+            title: "You're signed in",
+            message: device == 'Otakase'
+                ? 'You can close this tab and go back to Otakase.'
+                : 'You can close this tab. Your TV is signed in.',
+          ),
         );
       }
     } catch (_) {
       request.response.statusCode = HttpStatus.badRequest;
       request.response.write(
-        '<!doctype html><title>Otakase</title><p>Login expired or unsuccessful. Start again in $device.</p>',
+        loginResultPage(
+          ok: false,
+          title: "Sign-in didn't finish",
+          message: 'It expired or was turned down. Start again in $device.',
+        ),
       );
     } finally {
       await request.response.close();
