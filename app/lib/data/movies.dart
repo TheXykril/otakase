@@ -1224,6 +1224,57 @@ class MovieService extends ChangeNotifier {
     return result;
   }
 
+  /// The languages, as settings name them, that another source has this
+  /// film or series season in, besides [playing]. Only matches are looked
+  /// up (and kept for playback), no stream: the copy is found when picked.
+  /// A source that fails or does not answer is left out quietly.
+  Future<List<String>> otherLanguages(
+    MediaTitle title, {
+    int season = 0,
+    required String playing,
+    required RequestScope scope,
+  }) async {
+    final order = await sourcesFor(title);
+    final wanted = [
+      for (final l in languages)
+        if (l != playing && order.any((s) => s.languageName == l)) l,
+    ];
+    Future<bool> carried(String language) async {
+      for (final source in order.where((s) => s.languageName == language)) {
+        final key = '${source.name}:${title.key}:${title.isShow ? season : 0}';
+        if (_matches.containsKey(key)) return true;
+        try {
+          final found = await core.request(
+            {
+              'operation': 'movie_match',
+              'provider': source.name,
+              'titles': await _titlesFor(title, source),
+              'year': title.year,
+              'imdb': title.imdb,
+              'series': title.isShow,
+              'season': season,
+            },
+            scope: scope,
+            timeout: const Duration(seconds: 45),
+          );
+          _matches[key] = (found['movie'] as Map).cast<String, dynamic>();
+          return true;
+        } on CoreFailure catch (e) {
+          if (e.code == 'cancelled') rethrow;
+        } catch (_) {
+          scope.check();
+        }
+      }
+      return false;
+    }
+
+    final found = await Future.wait(wanted.map(carried));
+    return [
+      for (var i = 0; i < wanted.length; i++)
+        if (found[i]) wanted[i],
+    ];
+  }
+
   /// Finds a stream for a film, or for one episode of a series, trying each
   /// source in turn. [skip] holds source:server pairs that already failed.
   Future<MoviePlayback> resolve(
@@ -1233,8 +1284,11 @@ class MovieService extends ChangeNotifier {
     required RequestScope scope,
     required void Function(String) status,
     Set<String> skip = const {},
+    String? language,
   }) async {
-    final order = await sourcesFor(title);
+    final order = (await sourcesFor(title))
+        .where((s) => language == null || s.languageName == language)
+        .toList();
     scope.check();
     final subtitles = store
         .text('SubsLanguage')

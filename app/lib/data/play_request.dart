@@ -11,6 +11,7 @@ class PlayableMedia {
     this.audioLanguage = '',
     this.copy = '',
     this.label = '',
+    this.language = '',
   });
   final String url;
   final Map<String, String> headers;
@@ -27,6 +28,10 @@ class PlayableMedia {
 
   /// Where it plays from, for the title line.
   final String label;
+
+  /// The language its source plays in, as settings name it ("lithuanian");
+  /// empty for a file.
+  final String language;
 }
 
 /// What the player shows and tells as it plays.
@@ -48,6 +53,8 @@ class PlayRequest {
     this.pick,
     this.number = 0,
     this.count = 0,
+    this.otherLanguages,
+    this.openLanguage,
   });
   final String title, subtitle;
 
@@ -96,6 +103,15 @@ class PlayRequest {
   /// This episode's number in its season and how many the season has, 0
   /// for a film or a lone file.
   final int number, count;
+
+  /// The languages other sources have this in, besides [playing] (as
+  /// settings name them); null when there is only this copy, as for a file.
+  final Future<List<String>> Function(String playing, RequestScope scope)?
+  otherLanguages;
+
+  /// Finds a copy in [language] alone, for switching to it mid-play.
+  final Future<PlayableMedia> Function(String language, RequestScope scope)?
+  openLanguage;
 }
 
 /// Whether a track's [language] code or [title] names the [preferred]

@@ -232,12 +232,14 @@ class SourceResolver {
     String? mode,
     String? onlyProvider,
     bool allowAudioFallback = true,
+    String? firstProvider,
   }) async {
     final order = (await sourcesFor(anime))
         .where((p) => onlyProvider == null || p == onlyProvider)
         .toList();
     scope.check();
-    final remembered = store.preferredSource(anime);
+    // A source known to carry this audio goes before the remembered one.
+    final remembered = firstProvider ?? store.preferredSource(anime);
     final providers = [
       if (order.contains(remembered) && !exclude.contains(remembered))
         remembered!,
