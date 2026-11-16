@@ -184,6 +184,10 @@ class SourceResolver {
   report;
   final CoreClient core;
   final AppStore store;
+
+  /// Hears what playback found out: a show that played, or one no source
+  /// has at all.
+  void Function(Anime anime, bool playable)? learned;
   final Map<String, String> _matches = {};
   Future<Json>? _coreOrder;
   Future<Json> _sources() => _coreOrder ??= _loadOrder();
@@ -253,6 +257,8 @@ class SourceResolver {
     if (allowAudioFallback && store.flag('AutoAudioFallback')) {
       modes.add(modes.first == 'sub' ? 'dub' : 'sub');
     }
+    // Whether every source said it has no such show, rather than failing.
+    var missingEverywhere = true;
     for (final provider in providers) {
       for (final audio in modes) {
         scope.check();
@@ -310,6 +316,7 @@ class SourceResolver {
           store.health(provider, 'Working');
           unawaited(report?.call(provider, true, kind, '') ?? Future.value());
           scope.check();
+          learned?.call(anime, true);
           return PlaybackSource(
             provider: provider,
             showId: id,
@@ -318,6 +325,9 @@ class SourceResolver {
           );
         } on CoreFailure catch (e) {
           if (e.code == 'cancelled') rethrow;
+          if (kind != 'search' || e.code != 'not_found') {
+            missingEverywhere = false;
+          }
           unawaited(
             report?.call(
                   provider,
@@ -333,6 +343,7 @@ class SourceResolver {
           );
         } catch (e) {
           scope.check();
+          missingEverywhere = false;
           unawaited(
             report?.call(provider, false, kind, e.toString()) ?? Future.value(),
           );
@@ -340,10 +351,94 @@ class SourceResolver {
         }
       }
     }
+    // Only a search over every source tells; one source left out may have it.
+    if (missingEverywhere && exclude.isEmpty && onlyProvider == null) {
+      learned?.call(anime, false);
+    }
     throw const CoreFailure(
       'no_stream',
       'This episode is unavailable. Try another copy.',
     );
+  }
+
+  /// Whether any source can play [anime]: each is asked for the first
+  /// episode, the source that played it before first, then the ones that
+  /// answer with a single request. True as soon as one has it; false when
+  /// every source answered that it has not; null when one could not be
+  /// asked, since it may have the show.
+  Future<bool?> available(Anime anime, RequestScope scope) async {
+    final order = await sourcesFor(anime);
+    final remembered = store.preferredSource(anime);
+    int rank(String p) => p == remembered
+        ? 0
+        : p == 'megavid'
+        ? 1
+        : p == 'animex'
+        ? 2
+        : torrentSources.contains(p)
+        ? 4
+        : 3;
+    final ranked = [...order]
+      ..sort((a, b) {
+        final r = rank(a).compareTo(rank(b));
+        return r != 0 ? r : order.indexOf(a).compareTo(order.indexOf(b));
+      });
+    var unknown = false;
+    for (final provider in ranked) {
+      scope.check();
+      try {
+        final d = await core.request(
+          {
+            'operation': 'available',
+            'provider': provider,
+            'mode': 'sub',
+            'titles': anime.titles.isEmpty ? [anime.title] : anime.titles,
+            'mal_id': anime.malId,
+            'anilist_id': anime.id,
+            'episodes': anime.episodes,
+          },
+          scope: scope,
+          timeout: const Duration(seconds: 30),
+        );
+        if (d['available'] == true) return true;
+      } on CoreFailure catch (e) {
+        if (e.code == 'cancelled') rethrow;
+        unknown = true;
+      } catch (_) {
+        scope.check();
+        unknown = true;
+      }
+    }
+    return unknown || ranked.isEmpty ? null : false;
+  }
+
+  /// One page of a source's own list of shows, as (name, other name)
+  /// pairs: by one of its orders, or by a search word. Every show on it can
+  /// be played from that source.
+  Future<List<String>> catalog(
+    String provider, {
+    String sort = '',
+    String query = '',
+    int page = 1,
+    RequestScope? scope,
+  }) async {
+    final d = await core.request(
+      {
+        'operation': 'catalog',
+        'provider': provider,
+        'mode': 'sub',
+        'sort': sort,
+        'query': query,
+        'page': page,
+      },
+      scope: scope,
+      timeout: const Duration(seconds: 30),
+    );
+    return [
+      for (final s in (d['shows'] as List? ?? []).whereType<Map>())
+        for (final n in [s['title'], s['alt_title']])
+          if (n is String && n.trim().isNotEmpty) n,
+    ];
   }
 
   Future<List<SkipSpan>> skips(

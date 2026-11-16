@@ -1166,6 +1166,53 @@ class MovieService extends ChangeNotifier {
         .toList();
   }
 
+  /// Hears that a title played.
+  void Function(MediaTitle title, bool playable)? learned;
+
+  /// Whether any source has [title]. 2Embed answers from one page; the
+  /// sources that search answer whether they found it. vidsrc can only be
+  /// told by playing, and carries what 2Embed carries, so it is not asked.
+  /// True as soon as one has it; false when every source asked said no;
+  /// null when one could not be asked.
+  Future<bool?> available(MediaTitle title, RequestScope scope) async {
+    final order = (await sourcesFor(title))
+        .where((s) => s.name != 'vidsrc')
+        .toList();
+    order.sort(
+      (a, b) =>
+          (a.name == '2embed' ? 0 : 1).compareTo(b.name == '2embed' ? 0 : 1),
+    );
+    var unknown = false;
+    var asked = 0;
+    for (final source in order) {
+      scope.check();
+      try {
+        final d = await core.request(
+          {
+            'operation': 'movie_available',
+            'provider': source.name,
+            'titles': await _titlesFor(title, source),
+            'year': title.year,
+            'imdb': title.imdb,
+            'series': title.isShow,
+            'season': 1,
+          },
+          scope: scope,
+          timeout: const Duration(seconds: 45),
+        );
+        asked++;
+        if (d['available'] == true) return true;
+      } on CoreFailure catch (e) {
+        if (e.code == 'cancelled') rethrow;
+        if (e.code != 'unsupported_provider') unknown = true;
+      } catch (_) {
+        scope.check();
+        unknown = true;
+      }
+    }
+    return unknown || asked == 0 ? null : false;
+  }
+
   /// Checks one source for Diagnostics: finds a well-known film on it and
   /// asks for a stream, as playback would. Records and returns the result,
   /// with the reason when the source could not be used.
@@ -1295,6 +1342,7 @@ class MovieService extends ChangeNotifier {
         final stream = (d['stream'] as Map).cast<String, dynamic>();
         store.health('movie:${source.name}', 'Working');
         unawaited(rememberSource(title, source.name));
+        learned?.call(title, true);
         return MoviePlayback(
           source: source,
           movie: movie,

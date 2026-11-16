@@ -11,6 +11,7 @@ import '../desktop/top_bar.dart' show DesktopTopBar;
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../data/availability.dart';
 import '../data/models.dart';
 import 'tokens.dart';
 
@@ -2505,15 +2506,46 @@ class PosterCard extends StatefulWidget {
 
 class _PosterCardState extends State<PosterCard> {
   bool focused = false;
+  Timer? resting;
   void open() => PosterNavigation.open(
     context,
     widget.anime,
     'poster-${widget.key ?? widget.anime.key}',
     widget.onOpen,
   );
+
+  /// A card the remote rests on is asked about, as one opened would be.
+  void focusChanged(bool value) {
+    setState(() => focused = value);
+    resting?.cancel();
+    if (value && widget.isTV) {
+      resting = Timer(const Duration(milliseconds: 700), () {
+        if (mounted && focused) {
+          unawaited(Availability.active?.check(widget.anime));
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    resting?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final known = Availability.active;
+    if (known == null) return card(context, Playable.unknown);
+    return ListenableBuilder(
+      listenable: known,
+      builder: (context, _) => card(context, known.of(widget.anime)),
+    );
+  }
+
+  Widget card(BuildContext context, Playable playable) {
     final a = widget.anime;
+    final unplayable = playable == Playable.no;
     return RevealArea(
       child: SizedBox(
         width: widget.width,
@@ -2541,45 +2573,50 @@ class _PosterCardState extends State<PosterCard> {
                   onPressed: open,
                   onLongPress: widget.onMenu,
                   onFocused: widget.onFocused,
-                  onFocusChanged: (value) => setState(() => focused = value),
+                  onFocusChanged: focusChanged,
                   child: Hero(
                     tag: 'poster-${widget.key ?? a.key}',
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(KageRadius.poster),
-                      child: AspectRatio(
-                        aspectRatio: widget.landscape
-                            ? 16 / 9
-                            : widget.cropped
-                            ? (widget.isTV ? 143 / 194 : 132 / 184)
-                            : 2 / 3,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            if (widget.landscape && a.banner.isEmpty)
-                              WideCoverArt(
-                                a.cover,
-                                width: widget.width,
-                                height: widget.width * 9 / 16,
-                              )
-                            else
-                              CoverImage(
-                                widget.landscape ? a.banner : a.cover,
-                                width: widget.width,
-                                height: widget.width * 1.5,
-                              ),
-                            if (widget.progress != null && widget.progress! > 0)
-                              Positioned(
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                child: LinearProgressIndicator(
-                                  value: widget.progress!.clamp(0, 1),
-                                  minHeight: 3,
-                                  color: shu,
-                                  backgroundColor: line,
+                    child: AnimatedOpacity(
+                      opacity: unplayable ? .38 : 1,
+                      duration: KageMotion.base,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(KageRadius.poster),
+                        child: AspectRatio(
+                          aspectRatio: widget.landscape
+                              ? 16 / 9
+                              : widget.cropped
+                              ? (widget.isTV ? 143 / 194 : 132 / 184)
+                              : 2 / 3,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (widget.landscape && a.banner.isEmpty)
+                                WideCoverArt(
+                                  a.cover,
+                                  width: widget.width,
+                                  height: widget.width * 9 / 16,
+                                )
+                              else
+                                CoverImage(
+                                  widget.landscape ? a.banner : a.cover,
+                                  width: widget.width,
+                                  height: widget.width * 1.5,
                                 ),
-                              ),
-                          ],
+                              if (widget.progress != null &&
+                                  widget.progress! > 0)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  child: LinearProgressIndicator(
+                                    value: widget.progress!.clamp(0, 1),
+                                    minHeight: 3,
+                                    color: shu,
+                                    backgroundColor: line,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -2604,8 +2641,12 @@ class _PosterCardState extends State<PosterCard> {
               ),
               const SizedBox(height: 5),
               Text(
-                widget.caption ??
-                    '${a.formatLabel}${a.year > 0 ? ' · ${a.year}' : ''}',
+                unplayable
+                    ? (a.status == 'NOT_YET_RELEASED'
+                          ? 'Not out yet'
+                          : 'No source has this')
+                    : widget.caption ??
+                          '${a.formatLabel}${a.year > 0 ? ' · ${a.year}' : ''}',
                 maxLines: widget.isTV ? 1 : 2,
                 overflow: TextOverflow.ellipsis,
                 style: uiStyle(context, size: 15, color: muted),

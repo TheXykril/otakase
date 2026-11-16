@@ -59,6 +59,7 @@ const settingLabels = <String, String>{
   'Renderer': 'Screen drawing',
   'TorrentSources': 'Torrent sources',
   'TorrentOnMobileData': 'Torrents on mobile data',
+  'HideUnplayable': 'Hide titles with no source',
   'PercentageToMarkComplete': 'Count movies & shows as watched at',
   'ResumePlayback': 'Resume where you left off',
   'CheckUpdates': 'Check for updates',
@@ -629,6 +630,12 @@ class _SettingsPageState extends State<SettingsPage> {
           'TorrentOnMobileData',
           'Torrents download the whole episode. Off waits for Wi-Fi.',
           icon: LucideIcons.signal,
+        ),
+        toggle(
+          'HideUnplayable',
+          'Titles no source can play are greyed out. On, search and '
+              'browse leave them out. Your own lists always show them.',
+          icon: LucideIcons.eyeOff,
         ),
       ]),
       group('This device', LucideIcons.monitorSmartphone, section: 'Playback', [

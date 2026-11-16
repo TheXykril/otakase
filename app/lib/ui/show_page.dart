@@ -261,6 +261,8 @@ class _ShowPageState extends State<ShowPage> {
     anime = widget.anime;
     mode = widget.services.store.text('SubOrDub');
     unawaited(load());
+    // Learned while the viewer reads, so the card says it next time.
+    unawaited(widget.services.availability.check(anime));
   }
 
   Future<void> load() async {
@@ -1409,9 +1411,11 @@ class _ShowPageState extends State<ShowPage> {
             SliverToBoxAdapter(
               child: PosterRow(
                 title: 'Recommended',
-                items: anime.recommended
-                    .where(widget.services.store.visible)
-                    .toList(),
+                items: widget.services.availability.visible(
+                  anime.recommended
+                      .where(widget.services.store.visible)
+                      .toList(),
+                ),
                 isTV: true,
                 onOpen: (a) => Navigator.push(
                   context,
