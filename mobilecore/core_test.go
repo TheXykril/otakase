@@ -381,6 +381,19 @@ func TestAvailableAsksForTheFirstEpisode(t *testing.T) {
 			t.Fatal("recorded show reported unplayable")
 		}
 	})
+	t.Run("one request", func(t *testing.T) {
+		c := replay(t)
+		recorded := c.transport
+		requests := 0
+		c.transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			requests++
+			return recorded.RoundTrip(r)
+		})
+		call(t, c, input)
+		if requests != 1 {
+			t.Fatalf("checked with %d requests, want 1", requests)
+		}
+	})
 	t.Run("site has no episode", func(t *testing.T) {
 		c := NewCore()
 		t.Cleanup(c.Close)

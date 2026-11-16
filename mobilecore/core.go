@@ -631,7 +631,8 @@ func (t *requestTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 }
 
 // available says whether a source can play a show: it finds the show and
-// asks for its first episode, as playback would. A source whose site
+// asks for its first episode: with one request where the source can say
+// so directly, otherwise as playback would. A source whose site
 // answered every request but had no show or no first episode says no. A
 // failure that might be the network or the site being down is returned as
 // an error, so the show is not taken for unplayable; so is any failure of a
@@ -654,9 +655,17 @@ func available(searcher providers.Provider, resolver providers.HintResolver, tor
 		}
 		return len(episodes) > 0, nil
 	}
-	urls, _, err := resolver.GetEpisodeURLForModeWithHints(providers.PlaybackConfig{SubOrDub: req.Mode, SubStyle: "soft"}, found.ID, 1, req.Mode)
-	if err == nil {
-		return len(urls) > 0, nil
+	if checker, ok := searcher.(providers.EpisodeChecker); ok {
+		err = checker.HasEpisode(found.ID, 1, req.Mode)
+		if err == nil {
+			return true, nil
+		}
+	} else {
+		var urls []string
+		urls, _, err = resolver.GetEpisodeURLForModeWithHints(providers.PlaybackConfig{SubOrDub: req.Mode, SubStyle: "soft"}, found.ID, 1, req.Mode)
+		if err == nil {
+			return len(urls) > 0, nil
+		}
 	}
 	if transport.answered.Load() > 0 && !transport.broken.Load() {
 		return false, nil

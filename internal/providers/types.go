@@ -82,6 +82,13 @@ type HintResolver interface {
 	GetEpisodeURLForModeWithHints(cfg PlaybackConfig, id string, epNo int, mode string) (links []string, hints map[string]StreamPlaybackHint, err error)
 }
 
+// EpisodeChecker answers whether a source has an episode with fewer
+// requests than resolving it: no host checks, no second copy once one
+// answers. A nil error means the episode is there.
+type EpisodeChecker interface {
+	HasEpisode(id string, epNo int, mode string) error
+}
+
 // SkipRanger reports the intro and outro of an episode as [start, end] second
 // pairs. A provider that already knows them -- because its stream response
 // carries them -- can answer without a second service being asked at all.

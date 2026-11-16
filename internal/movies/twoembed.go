@@ -91,6 +91,25 @@ func (t *TwoEmbed) embedURL(imdb string, episode Episode) string {
 	return t.Base + "/embed/movie/" + url.PathEscape(imdb)
 }
 
+// Has says whether 2embed has servers for a film, or for the first episode of
+// a series' season, from its embed page alone. An answer without servers is
+// a no; a page that could not be fetched is an error.
+func (t *TwoEmbed) Has(imdb string, series bool, season int) (bool, error) {
+	if !strings.HasPrefix(imdb, "tt") {
+		return false, nil
+	}
+	episode := Episode{}
+	if series {
+		episode = Episode{Season: max(season, 1), Number: 1}
+	}
+	body, err := fetchPage(t.Client, t.embedURL(imdb, episode), "")
+	if err != nil {
+		return false, err
+	}
+	_, err = parseTwoEmbedPage(body)
+	return err == nil, nil
+}
+
 func parseTwoEmbedPage(body string) (twoEmbedPage, error) {
 	var page twoEmbedPage
 	match := twoEmbedPagePattern.FindStringSubmatch(body)
