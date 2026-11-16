@@ -370,3 +370,47 @@ func TestPlaybackRelayLifecycle(t *testing.T) {
 		t.Fatal("closed core retained relay")
 	}
 }
+
+func TestAvailableAsksForTheFirstEpisode(t *testing.T) {
+	input := `{"version":1,"operation":"available","provider":"megavid","mode":"sub","titles":["Frieren"],"mal_id":52991}`
+	t.Run("playable", func(t *testing.T) {
+		got := dataAs[struct {
+			Available bool `json:"available"`
+		}](t, call(t, replay(t), input))
+		if !got.Available {
+			t.Fatal("recorded show reported unplayable")
+		}
+	})
+	t.Run("site has no episode", func(t *testing.T) {
+		c := NewCore()
+		t.Cleanup(c.Close)
+		c.transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return reply(r, http.StatusNotFound, []byte(`{"error":"not found"}`)), nil
+		})
+		got := dataAs[struct {
+			Available bool `json:"available"`
+		}](t, call(t, c, input))
+		if got.Available {
+			t.Fatal("missing episode reported playable")
+		}
+	})
+	for name, transport := range map[string]roundTripFunc{
+		"offline": func(*http.Request) (*http.Response, error) { return nil, fmt.Errorf("offline") },
+		"site down": func(r *http.Request) (*http.Response, error) {
+			return reply(r, http.StatusBadGateway, nil), nil
+		},
+		"blocked": func(r *http.Request) (*http.Response, error) {
+			return reply(r, http.StatusForbidden, nil), nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := NewCore()
+			t.Cleanup(c.Close)
+			c.transport = transport
+			r := call(t, c, input)
+			if r.Error == nil || r.Error.Code != "provider_error" {
+				t.Fatalf("%s should be unknown, not an answer: %+v %+v", name, r.Error, r.Data)
+			}
+		})
+	}
+}
