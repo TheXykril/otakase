@@ -712,6 +712,22 @@ class _MovieSearchPageState extends State<MovieSearchPage> {
   }
 }
 
+/// A found stream as the player takes it.
+PlayableMedia playableOf(MoviePlayback p) {
+  final headers = Map<String, String>.of(p.stream.headers);
+  if (p.stream.referrer.isNotEmpty) headers['Referer'] = p.stream.referrer;
+  return PlayableMedia(
+    url: p.stream.url,
+    headers: headers,
+    subtitles: p.stream.subtitles,
+    audioLanguage: p.audioLanguage,
+    copy: '${p.source.name}:${p.server}',
+    // Sources are never named to the viewer.
+    label: languageTitle(p.source.languageName),
+    language: p.source.languageName,
+  );
+}
+
 /// Plays a film, or one episode of a series with the rest following.
 PlayRequest titlePlay(
   AppServices services,
@@ -756,18 +772,24 @@ PlayRequest titlePlay(
         skip: failed,
       );
       await pulled;
-      final headers = Map<String, String>.of(p.stream.headers);
-      if (p.stream.referrer.isNotEmpty) headers['Referer'] = p.stream.referrer;
-      return PlayableMedia(
-        url: p.stream.url,
-        headers: headers,
-        subtitles: p.stream.subtitles,
-        audioLanguage: p.audioLanguage,
-        copy: '${p.source.name}:${p.server}',
-        // Sources are never named to the viewer.
-        label: languageTitle(p.source.languageName),
-      );
+      return playableOf(p);
     },
+    otherLanguages: (playing, scope) => movies.otherLanguages(
+      title,
+      season: season,
+      playing: playing,
+      scope: scope,
+    ),
+    openLanguage: (language, scope) async => playableOf(
+      await movies.resolve(
+        title,
+        season: season,
+        episode: number,
+        scope: scope,
+        status: (_) {},
+        language: language,
+      ),
+    ),
     resumeAt: (duration) {
       final e = movies.entry(title);
       if (e == null) return 0;

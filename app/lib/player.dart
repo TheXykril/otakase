@@ -20,6 +20,7 @@ import 'data/episode_completion.dart';
 import 'data/external_subtitles.dart';
 import 'data/hls_quality.dart';
 import 'data/models.dart';
+import 'data/movies.dart' show languageTitle;
 import 'data/play_request.dart';
 import 'desktop/desktop_core.dart';
 import 'desktop/player_bar.dart';
@@ -40,6 +41,7 @@ import 'ui/mpv.dart';
 import 'host.dart';
 import 'player/cast.dart';
 import 'player/next_up.dart';
+import 'player/other_audio.dart';
 import 'player/progress.dart';
 import 'player/skips.dart';
 
@@ -102,6 +104,25 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   /// The copy the request found.
   PlayableMedia? media;
+
+  /// The mode an anime episode is played in: the one it opened with, or the
+  /// dub or sub the viewer switched to.
+  late String audioMode = widget.mode;
+
+  /// A copy found for an audio switch, opened in place of a new search.
+  PlayableMedia? pendingMedia;
+  PlaybackSource? pendingSource;
+
+  /// The language last picked from another copy, picked first among the
+  /// tracks while it plays.
+  String? wantedAudio;
+
+  /// Audio other copies have, found in the background once playback
+  /// starts, and what they were looked up for.
+  List<OtherAudio> otherAudio = const [];
+  String otherAudioKey = '';
+  RequestScope otherAudioScope = RequestScope();
+  bool switchingAudio = false;
 
   /// A title counted as watched (the percentage rule or its end), and
   /// whether Trakt was told it stopped, so later events do not put it back
@@ -617,9 +638,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       await clearSubtitleFiles();
       if (isTitle && (mirror == null || source == null)) {
         await widget.services.core.stopPlayback();
-        final found = await request!.open(failedSources, requestScope, (s) {
-          if (g == generation) showStatus(s);
-        });
+        final picked = pendingMedia;
+        pendingMedia = null;
+        final found =
+            picked ??
+            await request!.open(failedSources, requestScope, (s) {
+              if (g == generation) showStatus(s);
+            });
         if (!mounted || g != generation) return;
         media = found;
         source = mediaSource(found);
@@ -630,18 +655,22 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         }
       } else if (mirror == null || onlyProvider != null) {
         await widget.services.core.stopPlayback();
-        source = await widget.services.resolver.resolve(
-          anime,
-          episode,
-          scope: requestScope,
-          exclude: onlyProvider == null ? failedSources : const {},
-          mode: onlyProvider == null ? widget.mode : 'sub',
-          onlyProvider: onlyProvider,
-          allowAudioFallback: onlyProvider == null,
-          status: (s) {
-            if (g == generation) showStatus(s);
-          },
-        );
+        final picked = onlyProvider == null ? pendingSource : null;
+        pendingSource = null;
+        source =
+            picked ??
+            await widget.services.resolver.resolve(
+              anime,
+              episode,
+              scope: requestScope,
+              exclude: onlyProvider == null ? failedSources : const {},
+              mode: onlyProvider == null ? audioMode : 'sub',
+              onlyProvider: onlyProvider,
+              allowAudioFallback: onlyProvider == null,
+              status: (s) {
+                if (g == generation) showStatus(s);
+              },
+            );
       }
       if (!mounted || g != generation) return;
       copy = mirror != null && mirror < source!.streams.length ? mirror : 0;
@@ -671,6 +700,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           started = true;
           setState(() => busy = false);
           unawaited(loadEpisodes(g));
+          unawaited(findOtherAudio());
           showControls();
           return;
         }
@@ -682,7 +712,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         initialCopy: initialCopy,
         // A title's copy carries its own subtitle files; there is no other
         // source to hunt through for one with working subtitles.
-        enabled: !isTitle && !skipEpisodeSubtitles && widget.mode != 'dub',
+        enabled: !isTitle && !skipEpisodeSubtitles && audioMode != 'dub',
         scope: requestScope,
         openCopy: (candidate, index) => prepareCopy(candidate, index, g),
         nextSource: (tried) async {
@@ -752,6 +782,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
       unawaited(loadEpisodes(g));
       unawaited(loadSkips(g));
+      unawaited(findOtherAudio());
       showControls();
     } on CoreFailure catch (e) {
       if (e.code == 'cancelled') return;
@@ -865,7 +896,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final s = widget.services.store;
     if (!audioSelected) {
       for (final language in [
-        // The audio the source names (a Lithuanian dub) comes first.
+        // A language picked from another copy comes first, then the audio
+        // the source names (a Lithuanian dub).
+        ?wantedAudio,
         ...?media?.audioLanguage
             .split(',')
             .map((v) => v.trim())
@@ -1012,7 +1045,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               timeout:
                   !manual &&
                       busy &&
-                      widget.mode == 'sub' &&
+                      audioMode == 'sub' &&
                       source?.mode == 'sub' &&
                       !isTitle
                   ? const Duration(seconds: 6)
@@ -1513,7 +1546,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 'anilist_id': anime.id,
                 'episode': episode,
                 'position': at,
-                'mode': source?.mode ?? widget.mode,
+                'mode': source?.mode ?? audioMode,
               },
       );
     } catch (e) {
@@ -1563,7 +1596,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   String castSubtitle(ResolvedStream stream) => castSubtitleFor(
     stream,
     isTitle: isTitle,
-    mode: source?.mode ?? widget.mode,
+    mode: source?.mode ?? audioMode,
     languages: widget.services.store.text('SubsLanguage'),
     externalTrack: externalTrack,
     skipEpisodeSubtitles: skipEpisodeSubtitles,
@@ -1734,6 +1767,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         }
       case 'audio':
         final id = '${args['id']}';
+        if (id.startsWith('copy:')) {
+          final other = otherAudio
+              .where((o) => 'copy:${o.language}' == id)
+              .firstOrNull;
+          if (other != null) await switchAudio(other);
+          break;
+        }
         for (final track in player.state.tracks.audio) {
           if (track.id != id) continue;
           audioSelected = true;
@@ -1870,6 +1910,131 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     if (offered) setState(() => overlay = true);
   }
 
+  /// Looks for audio other copies have, quietly, once the episode or title
+  /// plays: other sources' languages for a film or series episode, the dub
+  /// (or sub) for an anime episode. Reopening the same copy (a quality
+  /// change) keeps what was found.
+  Future<void> findOtherAudio() async {
+    final String key;
+    if (isTitle) {
+      final playing = media?.language ?? '';
+      if (request!.otherLanguages == null || playing.isEmpty) {
+        otherAudioScope.cancel();
+        otherAudioKey = '';
+        otherAudio = const [];
+        return;
+      }
+      key = 'title:${identityHashCode(request)}:$playing';
+    } else {
+      final from = source;
+      if (from == null) return;
+      key = 'anime:${anime.key}:$episode:${from.mode}';
+    }
+    if (key == otherAudioKey) return;
+    otherAudioScope.cancel();
+    final lookup = otherAudioScope = RequestScope();
+    otherAudioKey = key;
+    if (mounted) setState(() => otherAudio = const []);
+    // The copy gets the connection to itself while it starts.
+    await Future<void>.delayed(otherAudioDelay);
+    if (!mounted || otherAudioKey != key) return;
+    try {
+      final List<OtherAudio> found;
+      if (isTitle) {
+        final playing = media!.language;
+        found = [
+          for (final language in await request!.otherLanguages!(
+            playing,
+            lookup,
+          ))
+            OtherAudio(language: language),
+        ];
+      } else {
+        final other = source!.mode == 'dub' ? 'sub' : 'dub';
+        final copy = await widget.services.resolver.resolve(
+          anime,
+          episode,
+          scope: lookup,
+          status: (_) {},
+          mode: other,
+          allowAudioFallback: false,
+          exclude: {...failedSources, ...torrentSources},
+        );
+        found = [
+          if (copy.mode == other)
+            OtherAudio(
+              language: animeAudioLanguage(other),
+              mode: other,
+              provider: copy.provider,
+            ),
+        ];
+      }
+      if (!mounted || otherAudioKey != key) return;
+      setState(() => otherAudio = found);
+    } catch (_) {
+      // Nothing else carries it, or the lookup was dropped: no choice shows.
+    }
+  }
+
+  /// How long a copy plays before other copies are looked for.
+  static const otherAudioDelay = Duration(seconds: 4);
+
+  /// Plays [other]'s copy from where this one is. The copy is found while
+  /// this one keeps playing; when none plays, this one stays.
+  Future<void> switchAudio(OtherAudio other) async {
+    if (busy || switchingAudio) return;
+    switchingAudio = true;
+    final g = generation, requestScope = scope;
+    final name = languageTitle(other.language);
+    void tell(String text) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(placeNote(context, SnackBar(content: Text(text))));
+    }
+
+    tell('Switching to $name');
+    try {
+      if (isTitle) {
+        final found = await request!.openLanguage!(
+          other.language,
+          requestScope,
+        );
+        if (!mounted || g != generation) return;
+        pendingMedia = found;
+      } else {
+        final found = await widget.services.resolver.resolve(
+          anime,
+          episode,
+          scope: requestScope,
+          status: (_) {},
+          mode: other.mode,
+          firstProvider: other.provider,
+          allowAudioFallback: false,
+          exclude: {...failedSources, ...torrentSources},
+        );
+        if (!mounted || g != generation) return;
+        pendingSource = found;
+        audioMode = other.mode;
+      }
+      wantedAudio = other.language;
+      await save();
+      if (!mounted || g != generation) {
+        pendingMedia = null;
+        pendingSource = null;
+        return;
+      }
+      await open(resumeFrom: playbackPosition);
+    } catch (e) {
+      if (e is CoreFailure && e.code == 'cancelled') return;
+      if (mounted && g == generation) {
+        tell('No $name copy played. This one keeps playing.');
+      }
+    } finally {
+      switchingAudio = false;
+    }
+  }
+
   Future<void> trackPanel() async {
     panelOpen = true;
     showControls();
@@ -1920,6 +2085,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     audioSelected = true;
                     Navigator.pop(dialog);
                     unawaited(player.setAudioTrack(track));
+                  },
+                ),
+              for (final other in offeredAudio(
+                otherAudio,
+                player.state.tracks.audio,
+              ))
+                ChoiceRow(
+                  key: ValueKey('other-audio-${other.language}'),
+                  title: Text(other.label),
+                  onTap: () {
+                    Navigator.pop(dialog);
+                    unawaited(switchAudio(other));
                   },
                 ),
             ],
@@ -2136,16 +2313,16 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   'on': t.id == chosen.subtitle.id,
                 },
             ],
-      'audio': casting
-          ? const []
-          : [
-              for (final t in tracks.audio)
-                {
-                  'id': t.id,
-                  'label': audioLabel(t),
-                  'on': t.id == chosen.audio.id,
-                },
-            ],
+      'audio': [
+        if (!casting)
+          for (final t in tracks.audio)
+            {'id': t.id, 'label': audioLabel(t), 'on': t.id == chosen.audio.id},
+        for (final other in offeredAudio(
+          otherAudio,
+          casting ? const [] : tracks.audio,
+        ))
+          {'id': 'copy:${other.language}', 'label': other.label, 'on': false},
+      ],
       'qualities': casting ? const [] : qualityChoices,
       'quality': widget.services.store.text('Quality'),
     };
@@ -2463,6 +2640,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     unawaited(widget.services.presence.clear());
     generation++;
     scope.cancel();
+    otherAudioScope.cancel();
     hideTimer?.cancel();
     watchProgress.cancel();
     stall.cancel();
@@ -2571,7 +2749,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             title: anime.title,
             subtitle: isTitle
                 ? titleLine
-                : 'Ep $episode · ${source?.mode.toUpperCase() ?? widget.mode.toUpperCase()}',
+                : 'Ep $episode · ${source?.mode.toUpperCase() ?? audioMode.toUpperCase()}',
             position: position,
             duration: duration,
             buffered: player.state.buffer,
@@ -2584,7 +2762,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             fullscreen: fullscreen,
             trackLabel: isTitle
                 ? 'Tracks'
-                : source?.mode.toUpperCase() ?? widget.mode.toUpperCase(),
+                : source?.mode.toUpperCase() ?? audioMode.toUpperCase(),
             centerLabel: isTitle ? request!.subtitle : 'Episode $episode',
             stripes: spans,
             playFocus: playFocus,
@@ -3048,7 +3226,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     title: anime.title,
                     subtitle: isTitle
                         ? titleLine
-                        : 'Episode $episode · ${source?.mode ?? widget.mode}',
+                        : 'Episode $episode · ${source?.mode ?? audioMode}',
                     position: position,
                     duration: duration,
                     spans: spans,
