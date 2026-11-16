@@ -124,9 +124,9 @@ func betaReply(on, linked bool) string {
 	case linked:
 		msg += "\nYour linked Otakase switches back to stable releases by itself."
 	case on:
-		msg += "\nIn Otakase, turn on **DevBuilds** in the settings (or link it with `/link-app` and it follows this role)."
+		msg += "\nIn Otakase, turn on **Dev builds** in More, About & updates (or link it with `/link-app` and it follows this role)."
 	default:
-		msg += "\nIn Otakase, turn off **DevBuilds** in the settings."
+		msg += "\nIn Otakase, turn off **Dev builds** in More, About & updates."
 	}
 	return msg
 }

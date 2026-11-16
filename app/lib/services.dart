@@ -43,7 +43,10 @@ class AppServices {
        auth = auth ?? AuthService(client: catalog.client) {
     updates =
         appUpdates ??
-        AppUpdates(platform: isDesktop ? DesktopUpdatePlatform() : null);
+        AppUpdates(
+          platform: isDesktop ? DesktopUpdatePlatform() : null,
+          devBuilds: () => store.flag('DevBuilds'),
+        );
     discord = DiscordService(
       client: catalog.client,
       storage: this.auth.storage,

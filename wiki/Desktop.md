@@ -126,3 +126,6 @@ The app checks for new releases and installs them:
   after `--install`, so the menu entry and `otakase` stay the same). A copy it cannot
   replace (installed by a package manager, for example) gets a link to the
   download page instead.
+
+**Dev builds** (Settings → About & updates) also offers test builds of the
+next version. Turn it off and the next stable release replaces the test build.

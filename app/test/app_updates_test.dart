@@ -24,9 +24,10 @@ class UpdateHost extends AndroidUpdatePlatform {
   UpdateHost(this.directory);
   final Directory directory;
   int validated = 0, installs = 0, code = 3;
+  String name = '0.1.0';
   bool allowed = true, reject = false;
   @override
-  Future<InstalledApp> installed() async => InstalledApp('0.1.0', code);
+  Future<InstalledApp> installed() async => InstalledApp(name, code);
   @override
   Future<File> createDownload() => File(
     '${directory.path}/download-${DateTime.now().microsecondsSinceEpoch}.apk',
@@ -487,7 +488,157 @@ void main() {
     expect(calls.where((call) => call.method == 'validate').single.arguments, {
       'path': file.path,
       'code': 26007000,
+      'name': '26.7.0',
       'sha256': checksum,
+    });
+  });
+
+  test('orders dev builds before their release and by build number', () {
+    AppVersion v(String name) => AppVersion.tryParse(name)!;
+    expect(v('26.8.0-dev.41').compareTo(v('26.8.0-dev.42')), lessThan(0));
+    expect(v('26.8.0-dev.100').compareTo(v('26.8.0-dev.99')), greaterThan(0));
+    expect(v('26.8.0-dev.99').compareTo(v('26.8.0')), lessThan(0));
+    expect(v('26.7.3').compareTo(v('26.8.0-dev.1')), lessThan(0));
+    expect(v('26.8.0').compareTo(v('26.8.0')), 0);
+    for (final bad in ['dev', '26.8.0-dev', '26.8.0-beta.1', '26.8.0-dev.x']) {
+      expect(AppVersion.tryParse(bad), isNull, reason: bad);
+    }
+    AppUpdate offer(String name) => AppUpdate(
+      name: name,
+      code: versionCode(name),
+      url: Uri.https('otakase.com'),
+      size: 1,
+      checksum: checksum,
+    );
+    InstalledApp app(String name) => InstalledApp(name, versionCode(name));
+    expect(isNewer(offer('26.8.0-dev.42'), app('26.8.0-dev.41')), isTrue);
+    expect(isNewer(offer('26.8.0-dev.41'), app('26.8.0-dev.41')), isFalse);
+    expect(isNewer(offer('26.8.0'), app('26.8.0-dev.41')), isTrue);
+    expect(isNewer(offer('26.8.0-dev.50'), app('26.8.0')), isFalse);
+    expect(isNewer(offer('26.7.2'), app('26.8.0-dev.41')), isFalse);
+    expect(isDevBuild(app('26.8.0-dev.41')), isTrue);
+    expect(isDevBuild(app('26.8.0')), isFalse);
+  });
+
+  group('with Dev builds on', () {
+    const devBase = 'https://otakase.com/download/dev';
+    late Map<String, dynamic> dev;
+    late bool devOn;
+    var devStatus = 200;
+    late List<String> asked;
+    late AppUpdates app;
+    Map<String, dynamic> freshDev() => {
+      'tag_name': 'dev',
+      'version': '26.8.0-dev.41',
+      'draft': false,
+      'prerelease': true,
+      'assets': [
+        asset(androidApk)..['browser_download_url'] = '$devBase/$androidApk',
+      ],
+    };
+
+    setUp(() {
+      devOn = true;
+      devStatus = 200;
+      asked = [];
+      dev = freshDev();
+      app = AppUpdates(
+        platform: host,
+        devBuilds: () => devOn,
+        client: () => MockClient((request) async {
+          asked.add(request.url.path);
+          return switch (request.url.path) {
+            '/download/latest.json' => http.Response(jsonEncode(release), 200),
+            '/download/dev.json' => http.Response(jsonEncode(dev), devStatus),
+            _ => http.Response.bytes(download, 200),
+          };
+        }),
+      );
+    });
+    tearDown(() => app.dispose());
+
+    test('offers the dev build when it is newer than the release', () async {
+      await app.check();
+      expect(app.phase, UpdatePhase.available);
+      expect(app.update!.name, '26.8.0-dev.41');
+      expect(app.update!.isDev, isTrue);
+      expect(app.update!.url.toString(), '$devBase/$androidApk');
+      await app.download();
+      expect(app.phase, UpdatePhase.ready);
+      expect(asked.last, '/download/dev/$androidApk');
+    });
+
+    test('moves on to later dev builds and then the release', () async {
+      host
+        ..name = '26.8.0-dev.41'
+        ..code = 26008000;
+      await app.check();
+      expect(app.phase, UpdatePhase.current);
+      dev['version'] = '26.8.0-dev.42';
+      await app.check();
+      expect(app.phase, UpdatePhase.available);
+      expect(app.update!.name, '26.8.0-dev.42');
+      // The release of the version a dev build was heading to replaces it.
+      release['tag_name'] = 'v26.8.0';
+      release['assets'] = [
+        asset(androidApk)
+          ..['browser_download_url'] =
+              'https://otakase.com/download/v26.8.0/$androidApk',
+      ];
+      await app.check();
+      expect(app.update!.name, '26.8.0');
+      expect(app.phase, UpdatePhase.available);
+    });
+
+    test('a release newer than the dev build wins', () async {
+      dev['version'] = '26.6.0-dev.30';
+      await app.check();
+      expect(app.update!.name, '26.7.0');
+    });
+
+    test('turned off, only releases are asked for', () async {
+      devOn = false;
+      host
+        ..name = '26.8.0-dev.41'
+        ..code = 26008000;
+      await app.check();
+      expect(asked, ['/download/latest.json']);
+      expect(app.phase, UpdatePhase.current);
+      expect(isDevBuild(app.installed), isTrue);
+    });
+
+    test('a missing or broken dev build never hides the release', () async {
+      for (final change in <void Function()>[
+        () => devStatus = 404,
+        () => devStatus = 502,
+        () => dev['version'] = '26.8.0',
+        () => dev['prerelease'] = false,
+        () => dev['tag_name'] = 'v26.8.0',
+        () => dev['assets'] = [asset(androidApk)],
+      ]) {
+        dev = freshDev();
+        devStatus = 200;
+        change();
+        await app.check();
+        expect(app.phase, UpdatePhase.available);
+        expect(app.update!.name, '26.7.0');
+      }
+    });
+
+    test('a dev build in the release feed is refused', () async {
+      release = {...dev, 'prerelease': false};
+      await app.check();
+      expect(app.phase, UpdatePhase.failed);
+    });
+
+    test('recheck drops a downloaded dev build', () async {
+      await app.check();
+      await app.download();
+      expect(app.downloaded, isTrue);
+      devOn = false;
+      await app.recheck();
+      expect(app.downloaded, isFalse);
+      expect(app.update!.name, '26.7.0');
     });
   });
 }

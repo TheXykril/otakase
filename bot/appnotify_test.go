@@ -247,7 +247,7 @@ func TestBetaSetting(t *testing.T) {
 	if off.Key != "DevBuilds" || off.Value != "false" || off.Text == "" {
 		t.Errorf("off: %+v", off)
 	}
-	if !strings.Contains(betaReply(true, true), "switches to development builds") || !strings.Contains(betaReply(false, false), "turn off **DevBuilds**") {
+	if !strings.Contains(betaReply(true, true), "switches to development builds") || !strings.Contains(betaReply(false, false), "turn off **Dev builds**") {
 		t.Error("beta replies")
 	}
 }

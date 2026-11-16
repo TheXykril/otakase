@@ -78,6 +78,9 @@ const settingDefaults = <String, dynamic>{
   'TorrentSources': true,
   'TorrentOnMobileData': false,
   'CheckUpdates': true,
+  // Updates also offer test builds of the next version (the "dev"
+  // pre-release). The Discord bot's /beta switches it too.
+  'DevBuilds': false,
   'KeepScreenOn': false,
   'EpisodeAlerts': false,
   // Phones on the same Discord account control TVs through the bot when
