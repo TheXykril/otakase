@@ -412,8 +412,8 @@ class SourceResolver {
     return unknown || ranked.isEmpty ? null : false;
   }
 
-  /// One page of a source's own list of shows, as (name, other name)
-  /// pairs: by one of its orders, or by a search word. Every show on it can
+  /// The names on one page of a source's own list of shows, by one of its
+  /// orders or by a search word. Every show on it can
   /// be played from that source.
   Future<List<String>> catalog(
     String provider, {
