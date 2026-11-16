@@ -88,6 +88,9 @@ type request struct {
 	// Quality is the resolution a torrent source tries first, e.g. 720.
 	// Zero takes the best release.
 	Quality int `json:"quality"`
+	// Sort and Page pick a page of a source's own catalog.
+	Sort string `json:"sort"`
+	Page int    `json:"page"`
 	// Cast describes a cast_* operation.
 	Cast     *castRequest             `json:"cast"`
 	Subtitle *subtitleDownloadRequest `json:"subtitle"`
@@ -315,6 +318,26 @@ func (c *Core) execute(ctx context.Context, input string) string {
 	if !ok {
 		return failure("unsupported_provider", "Unknown source.", false)
 	}
+	if req.Operation == "catalog" {
+		lister, ok := searcher.(providers.Cataloguer)
+		if !ok {
+			return failure("unsupported_provider", "This source has no catalog.", false)
+		}
+		if len(req.Query) > 300 || req.Page < 0 || req.Page > 1000 {
+			return failure("invalid_request", "Ask for a page from 1 to 1000.", false)
+		}
+		entries, err := lister.Catalog(req.Sort, req.Query, max(req.Page, 1))
+		if ctx.Err() != nil {
+			return contextFailure(ctx.Err())
+		}
+		if err != nil {
+			return failure("provider_error", "Source request failed ("+describeSourceFailure(ctx, err)+").", true)
+		}
+		if entries == nil {
+			entries = []providers.CatalogEntry{}
+		}
+		return encode(response{Version: 1, Data: map[string]any{"shows": entries}})
+	}
 	p, hints := searcher.(providers.HintResolver)
 	torrentSource, isTorrent := searcher.(*nyaa.Provider)
 	if !hints && !isTorrent {
@@ -408,6 +431,13 @@ func (c *Core) execute(ctx context.Context, input string) string {
 			return failure("not_found", "This source does not have the show.", false)
 		}
 		data = map[string]any{"show": found}
+	case "available":
+		if len(req.Titles) == 0 && req.MalID <= 0 && req.AnilistID <= 0 {
+			return failure("invalid_request", "A title or tracker id is required.", false)
+		}
+		var ok bool
+		ok, err = available(searcher, p, isTorrent, req, transport)
+		data = map[string]any{"available": ok}
 	case "skip":
 		if !validShowID(req.ShowID) || req.Episode <= 0 || req.Episode > 10000 {
 			return failure("invalid_request", "A show id and positive episode are required.", false)
@@ -598,6 +628,10 @@ type requestTransport struct {
 	ctx         context.Context
 	base        http.RoundTripper
 	rateLimited atomic.Bool
+	// answered counts responses; broken is set when a request could not
+	// be made or the site refused or failed it, rather than saying no.
+	answered atomic.Int32
+	broken   atomic.Bool
 }
 
 func (t *requestTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -608,5 +642,56 @@ func (t *requestTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
 		t.rateLimited.Store(true)
 	}
+	switch {
+	case err != nil || resp == nil:
+		t.broken.Store(true)
+	case resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
+		t.broken.Store(true)
+	default:
+		t.answered.Add(1)
+	}
 	return resp, err
+}
+
+// available says whether a source can play a show: it finds the show and
+// asks for its first episode: with one request where the source can say
+// so directly, otherwise as playback would. A source whose site
+// answered every request but had no show or no first episode says no. A
+// failure that might be the network or the site being down is returned as
+// an error, so the show is not taken for unplayable; so is any failure of a
+// source that does not use the request's own client, as its answers are
+// not seen here.
+func available(searcher providers.Provider, resolver providers.HintResolver, torrent bool, req request, transport *requestTransport) (bool, error) {
+	found, err := matchShow(searcher, req)
+	if err != nil {
+		return false, err
+	}
+	if found.ID == "" {
+		return false, nil
+	}
+	if torrent {
+		// A torrent episode is only found by asking other viewers, which
+		// takes minutes; a release in the feed is enough.
+		episodes, err := searcher.EpisodesList(found.ID, req.Mode)
+		if err != nil {
+			return false, err
+		}
+		return len(episodes) > 0, nil
+	}
+	if checker, ok := searcher.(providers.EpisodeChecker); ok {
+		err = checker.HasEpisode(found.ID, 1, req.Mode)
+		if err == nil {
+			return true, nil
+		}
+	} else {
+		var urls []string
+		urls, _, err = resolver.GetEpisodeURLForModeWithHints(providers.PlaybackConfig{SubOrDub: req.Mode, SubStyle: "soft"}, found.ID, 1, req.Mode)
+		if err == nil {
+			return len(urls) > 0, nil
+		}
+	}
+	if transport.answered.Load() > 0 && !transport.broken.Load() {
+		return false, nil
+	}
+	return false, err
 }

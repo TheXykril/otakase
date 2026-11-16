@@ -88,13 +88,17 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
     }
   }
 
+  /// [items] less the titles no source has, when the viewer hides them.
+  List<Anime> shown(List<Anime> items) =>
+      widget.services.availability.visible(items);
+
   /// A row of films or series from Trakt, opened like anime cards.
   Widget titleRow(String name) {
     final items = widget.titles ? titleRows[name] ?? const [] : const [];
     final cards = titleCardsOf(widget.services);
     return PosterRow(
       title: name,
-      items: [for (final t in items) cards.card(t)],
+      items: shown([for (final t in items) cards.card(t)]),
       isTV: widget.isTV,
       onOpen: widget.onOpen,
     );
@@ -200,7 +204,7 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
           ),
         PosterRow(
           title: 'Trending',
-          items: trending,
+          items: shown(trending),
           isTV: widget.isTV,
           onOpen: widget.onOpen,
         ),
@@ -208,7 +212,7 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
         titleRow('Trending shows'),
         PosterRow(
           title: 'Popular this season',
-          items: seasonal,
+          items: shown(seasonal),
           isTV: widget.isTV,
           onOpen: widget.onOpen,
         ),
@@ -216,7 +220,7 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
         titleRow('Popular shows'),
         PosterRow(
           title: 'Recently aired',
-          items: recent.values.map((e) => e.anime).toList(),
+          items: shown(recent.values.map((e) => e.anime).toList()),
           isTV: widget.isTV,
           onOpen: widget.onOpen,
           captions: (anime) => 'Episode ${recent[anime.key]!.episode}',

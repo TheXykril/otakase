@@ -82,6 +82,26 @@ type HintResolver interface {
 	GetEpisodeURLForModeWithHints(cfg PlaybackConfig, id string, epNo int, mode string) (links []string, hints map[string]StreamPlaybackHint, err error)
 }
 
+// EpisodeChecker answers whether a source has an episode with fewer
+// requests than resolving it: no host checks, no second copy once one
+// answers. A nil error means the episode is there.
+type EpisodeChecker interface {
+	HasEpisode(id string, epNo int, mode string) error
+}
+
+// CatalogEntry is one show on a source's own listing, under its names.
+type CatalogEntry struct {
+	Title    string `json:"title"`
+	AltTitle string `json:"alt_title,omitempty"`
+}
+
+// Cataloguer lists the shows a source carries, a page at a time: sorted by
+// one of the source's own orders, or found by a search word. Every show on
+// the list can be played from the source, so one page answers for many.
+type Cataloguer interface {
+	Catalog(sort, query string, page int) ([]CatalogEntry, error)
+}
+
 // SkipRanger reports the intro and outro of an episode as [start, end] second
 // pairs. A provider that already knows them -- because its stream response
 // carries them -- can answer without a second service being asked at all.

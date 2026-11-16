@@ -188,6 +188,11 @@ class _SearchPageState extends State<SearchPage> {
         }
         return;
       }
+      if (!more && query.text.trim().isNotEmpty) {
+        // The same words go to a source's search, which marks every show
+        // it has at once.
+        unawaited(widget.services.availability.searched(query.text));
+      }
       final result = await widget.services.catalog.search(
         query.text,
         adult: widget.services.store.flag('AdultContent'),
@@ -202,9 +207,14 @@ class _SearchPageState extends State<SearchPage> {
         minScore: minScore,
       );
       if (mounted && g == generation) {
+        // Upcoming titles stay when the viewer asked for them.
+        final found = widget.services.availability.visible(
+          result.items,
+          upcomingOk: status == 'NOT_YET_RELEASED' || sort == 'ANTICIPATED',
+        );
         setState(() {
           page = requestedPage;
-          items = more ? [...items, ...result.items] : result.items;
+          items = more ? [...items, ...found] : found;
           hasMore = result.hasMore;
         });
       }
@@ -287,7 +297,12 @@ class _SearchPageState extends State<SearchPage> {
       );
       if (mounted && g == titleGeneration) {
         // Anime has its own row above; the same show twice only confuses.
-        setState(() => titleResults = found.where((t) => !t.isAnime).toList());
+        setState(
+          () => titleResults = widget.services.availability.visibleTitles(
+            found.where((t) => !t.isAnime).toList(),
+            upcomingOk: status == 'NOT_YET_RELEASED' || sort == 'ANTICIPATED',
+          ),
+        );
       }
     } catch (_) {
       if (mounted && g == titleGeneration) setState(() => titlesFailed = true);

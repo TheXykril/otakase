@@ -22,6 +22,7 @@ import 'remote_now_playing.dart';
 import '../data/play_request.dart';
 import '../player.dart';
 import 'episode_controls.dart';
+import '../data/availability.dart';
 import 'more_page.dart' show openDetail;
 import 'rate_prompt.dart';
 
@@ -41,6 +42,8 @@ class TitleCards {
       banner: t.fanart,
       description: t.overview,
       format: t.isShow ? 'TV' : 'MOVIE',
+      // Upcoming films and series are greyed like upcoming anime.
+      status: upcomingTitle(t) ? 'NOT_YET_RELEASED' : '',
       year: t.year,
       duration: t.runtime,
       genres: t.genres.map(languageTitle).toList(),
@@ -430,7 +433,11 @@ class _MoviesHomeState extends State<MoviesHome> {
                           }),
                           isTV: widget.isTV,
                         ),
-                      for (final e in snap.data!.entries) row(e.key, e.value),
+                      for (final e in snap.data!.entries)
+                        row(
+                          e.key,
+                          widget.services.availability.visibleTitles(e.value),
+                        ),
                     ],
                   );
                 },
@@ -851,6 +858,7 @@ class _TitlePageState extends State<TitlePage> {
     super.initState();
     unawaited(load());
     unawaited(loadRelated());
+    unawaited(widget.services.availability.checkTitle(widget.title));
   }
 
   @override
@@ -1483,7 +1491,12 @@ class _TitlePageState extends State<TitlePage> {
           padding: const EdgeInsets.only(top: 8),
           child: PosterRow(
             title: 'Related',
-            items: [for (final t in related) cards.card(t)],
+            items: [
+              for (final t in widget.services.availability.visibleTitles(
+                related,
+              ))
+                cards.card(t),
+            ],
             isTV: widget.isTV,
             onOpen: (a) {
               if (cards.title(a) case final t?) {

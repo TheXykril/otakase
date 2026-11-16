@@ -20,6 +20,7 @@ import 'data/community_extras.dart';
 import 'data/tv_remote.dart';
 import 'data/app_updates.dart';
 import 'data/downloads.dart';
+import 'data/availability.dart';
 import 'data/movies.dart';
 import 'data/stay_awake.dart';
 import 'data/trakt.dart';
@@ -81,6 +82,12 @@ class AppServices {
     listSync = ListSync(tracking: tracking, store: store);
     trakt = Trakt(client: catalog.client, storage: this.auth.storage);
     movies = MovieService(trakt: trakt, core: core, store: store);
+    availability = Availability(
+      store: store,
+      resolver: resolver,
+      movies: movies,
+    );
+    Availability.active = availability;
     downloads = DownloadManager(
       core: core,
       preferences: store.preferences,
@@ -121,6 +128,7 @@ class AppServices {
   late final ListSync listSync;
   late final Trakt trakt;
   late final MovieService movies;
+  late final Availability availability;
   late final DownloadManager downloads;
   late final DiscordService discord;
   late final SkipTimes skipTimes;
@@ -254,6 +262,7 @@ class AppServices {
     updates.dispose();
     auth.removeListener(_adultPreference);
     listSync.dispose();
+    availability.dispose();
     movies.dispose();
     trakt.dispose();
     downloads.dispose();

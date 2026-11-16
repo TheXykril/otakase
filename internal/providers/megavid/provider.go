@@ -134,6 +134,21 @@ func (p *Provider) GetEpisodeURLForModeWithHints(config providers.PlaybackConfig
 	return urls, hints, nil
 }
 
+// HasEpisode asks megavid for the episode's copies in turn and stops at the
+// first one that has a stream: one request for nearly every show.
+func (p *Provider) HasEpisode(id string, epNo int, mode string) error {
+	malID, err := parseID(id)
+	if err != nil {
+		return err
+	}
+	for _, copyParam := range copies {
+		if _, err = p.api().source(malID, epNo, normalizeLang(mode), copyParam); err == nil {
+			return nil
+		}
+	}
+	return err
+}
+
 // resolve fetches each copy of an episode in one language.
 //
 // megavid answers a dub request for a show that has no dub with the sub

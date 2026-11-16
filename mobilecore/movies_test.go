@@ -352,3 +352,51 @@ func TestDescribeSourceFailure(t *testing.T) {
 		}
 	}
 }
+
+func TestMovieAvailableAsksTwoEmbedOnce(t *testing.T) {
+	const withServers = "<script>\n  var Q = {\"type\":\"movie\",\"t\":\"tok.sig\",\"ssr\":{\"servers\":[{\"ref\":\"r1\",\"name\":\"Server VNY\"}]}};\n</script>"
+	input := `{"version":1,"operation":"movie_available","provider":"2embed","titles":["Interstellar"],"imdb":"tt0816692"}`
+	for name, tc := range map[string]struct {
+		status int
+		body   string
+		want   bool
+	}{
+		"servers":    {200, withServers, true},
+		"no servers": {200, "<html>nothing here</html>", false},
+		"not found":  {404, "", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := NewCore()
+			defer c.Close()
+			requests := 0
+			c.transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				requests++
+				if r.URL.Path != "/embed/movie/tt0816692" {
+					t.Errorf("unexpected request to %s", r.URL)
+				}
+				return reply(r, tc.status, []byte(tc.body)), nil
+			})
+			var got bool
+			movieData(t, call(t, c, input), "available", &got)
+			if got != tc.want || requests != 1 {
+				t.Fatalf("available = %v after %d requests, want %v after 1", got, requests, tc.want)
+			}
+		})
+	}
+	t.Run("site down is unknown", func(t *testing.T) {
+		c := NewCore()
+		defer c.Close()
+		c.transport = roundTripFunc(func(r *http.Request) (*http.Response, error) { return reply(r, 502, nil), nil })
+		if r := call(t, c, input); r.Error == nil {
+			t.Fatalf("site down answered %+v", r.Data)
+		}
+	})
+	t.Run("vidsrc cannot be checked", func(t *testing.T) {
+		c := NewCore()
+		defer c.Close()
+		r := call(t, c, `{"version":1,"operation":"movie_available","provider":"vidsrc","imdb":"tt0816692"}`)
+		if r.Error == nil || r.Error.Code != "unsupported_provider" {
+			t.Fatalf("vidsrc: %+v", r)
+		}
+	})
+}

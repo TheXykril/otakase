@@ -77,6 +77,8 @@ const settingDefaults = <String, dynamic>{
   'DisabledProviders': <String>[],
   'TorrentSources': true,
   'TorrentOnMobileData': false,
+  // Titles no source can play are greyed; on, browse lists leave them out.
+  'HideUnplayable': false,
   'CheckUpdates': true,
   'KeepScreenOn': false,
   'EpisodeAlerts': false,

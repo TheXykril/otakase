@@ -168,6 +168,13 @@ func (c *Core) executeExtra(ctx context.Context, input string) string {
 			return failure("not_found", "This source does not have the title.", false)
 		}
 		data = map[string]any{"movie": found}
+	case "movie_available":
+		var ok bool
+		ok, err = movieAvailable(client, req, transport)
+		if errors.Is(err, errCannotCheck) {
+			return failure("unsupported_provider", "This source can only be checked by playing.", false)
+		}
+		data = map[string]any{"available": ok}
 	case "movie_resolve":
 		if req.Movie == nil || req.Movie.Path == "" || len(req.Movie.Path) > 300 {
 			return failure("invalid_request", "A movie is required.", false)
@@ -194,6 +201,36 @@ func (c *Core) executeExtra(ctx context.Context, input string) string {
 		return failure("provider_error", "Source request failed ("+describeSourceFailure(ctx, err)+").", true)
 	}
 	return encode(response{Version: 1, Data: data})
+}
+
+var errCannotCheck = errors.New("source cannot be checked")
+
+// movieAvailable says whether a source has a title. 2embed is asked for its
+// embed page, one request; vidsrc can only be checked by playing, so it is
+// not checked here; the sources that search answer whether they found the
+// title. As for anime, a failure that may be the network is an error, not a
+// no.
+func movieAvailable(client *http.Client, req movieRequest, transport *requestTransport) (bool, error) {
+	switch req.Provider {
+	case movies.VidsrcName:
+		return false, errCannotCheck
+	case movies.TwoEmbedName:
+		e := movies.NewTwoEmbed()
+		e.Client = client
+		ok, err := e.Has(req.IMDb, req.Series, req.Season)
+		if err != nil && transport.answered.Load() > 0 && !transport.broken.Load() {
+			return false, nil
+		}
+		return ok, err
+	}
+	if len(req.Titles) == 0 {
+		return false, nil
+	}
+	found, err := matchMovie(client, req)
+	if err != nil {
+		return false, err
+	}
+	return found.Path != "", nil
 }
 
 // sourceProblem says in a few words why a source could not be reached, so a

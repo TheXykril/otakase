@@ -97,6 +97,15 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     widget.services.selectRoot = choose;
+    widget.services.availability.titleOf = (card) =>
+        titleCardsOf(widget.services).title(card);
+    // A little after start, so the first pages load first.
+    if (widget.services.store.text('Content') != 'movies') {
+      catalogRead = Timer(
+        const Duration(seconds: 20),
+        () => unawaited(widget.services.availability.refreshCatalog()),
+      );
+    }
     desktopCloseHook = closeWindow;
     widget.services.auth.remoteLink = remoteLink;
     remoteEvents = widget.services.tvRemote.events.listen((text) {
@@ -214,6 +223,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    catalogRead?.cancel();
     exitArmed?.cancel();
     if (widget.services.party.open == partyOpen) {
       widget.services.party.open = null;
@@ -504,6 +514,9 @@ class _AppShellState extends State<AppShell> {
 
   /// Runs for two seconds after the first Back on Home on a phone.
   Timer? exitArmed;
+
+  /// Reads a source's catalog once the app has settled.
+  Timer? catalogRead;
 
   Future<bool?> _askExit() => showDialog<bool>(
     context: context,
