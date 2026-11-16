@@ -427,3 +427,24 @@ func TestAvailableAsksForTheFirstEpisode(t *testing.T) {
 		})
 	}
 }
+
+func TestCatalogListsASourcePage(t *testing.T) {
+	c := NewCore()
+	t.Cleanup(c.Close)
+	c.transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path != "/filter" || r.URL.Query().Get("sort") != "most-viewed" || r.URL.Query().Get("page") != "2" {
+			t.Errorf("unexpected request %s", r.URL)
+		}
+		return reply(r, 200, []byte(`<div class="ani poster tip" data-tip="1"> <a href="https://x/watch/solo-1/ep-1"></a></div><a class="name d-title" href="https://x/watch/solo-1/ep-1" data-jp="Ore dake Level Up na Ken">Solo Leveling</a>`)), nil
+	})
+	got := dataAs[struct {
+		Shows []providers.CatalogEntry `json:"shows"`
+	}](t, call(t, c, `{"version":1,"operation":"catalog","provider":"anikoto","mode":"sub","sort":"most-viewed","page":2}`))
+	if len(got.Shows) != 1 || got.Shows[0].Title != "Solo Leveling" || got.Shows[0].AltTitle != "Ore dake Level Up na Ken" {
+		t.Fatalf("shows = %+v", got.Shows)
+	}
+	r := call(t, c, `{"version":1,"operation":"catalog","provider":"megavid","mode":"sub","sort":"most-viewed"}`)
+	if r.Error == nil || r.Error.Code != "unsupported_provider" {
+		t.Fatalf("megavid catalog: %+v", r)
+	}
+}

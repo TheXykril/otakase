@@ -49,6 +49,11 @@ func (p *Provider) SearchAnime(query, mode string) ([]providers.SelectionOption,
 	return options, nil
 }
 
+// Catalog lists one page of the shows anikoto carries.
+func (p *Provider) Catalog(sort, query string, page int) ([]providers.CatalogEntry, error) {
+	return p.api().catalog(sort, query, page)
+}
+
 func describe(result searchResult) string {
 	parts := []string{}
 	if result.Format != "" {

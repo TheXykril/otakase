@@ -88,6 +88,9 @@ type request struct {
 	// Quality is the resolution a torrent source tries first, e.g. 720.
 	// Zero takes the best release.
 	Quality int `json:"quality"`
+	// Sort and Page pick a page of a source's own catalog.
+	Sort string `json:"sort"`
+	Page int    `json:"page"`
 	// Cast describes a cast_* operation.
 	Cast     *castRequest             `json:"cast"`
 	Subtitle *subtitleDownloadRequest `json:"subtitle"`
@@ -314,6 +317,26 @@ func (c *Core) execute(ctx context.Context, input string) string {
 	searcher, ok := newProvider(req.Provider, client)
 	if !ok {
 		return failure("unsupported_provider", "Unknown source.", false)
+	}
+	if req.Operation == "catalog" {
+		lister, ok := searcher.(providers.Cataloguer)
+		if !ok {
+			return failure("unsupported_provider", "This source has no catalog.", false)
+		}
+		if len(req.Query) > 300 || req.Page < 0 || req.Page > 1000 {
+			return failure("invalid_request", "Ask for a page from 1 to 1000.", false)
+		}
+		entries, err := lister.Catalog(req.Sort, req.Query, max(req.Page, 1))
+		if ctx.Err() != nil {
+			return contextFailure(ctx.Err())
+		}
+		if err != nil {
+			return failure("provider_error", "Source request failed ("+describeSourceFailure(ctx, err)+").", true)
+		}
+		if entries == nil {
+			entries = []providers.CatalogEntry{}
+		}
+		return encode(response{Version: 1, Data: map[string]any{"shows": entries}})
 	}
 	p, hints := searcher.(providers.HintResolver)
 	torrentSource, isTorrent := searcher.(*nyaa.Provider)

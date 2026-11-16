@@ -27,6 +27,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/thexykril/otakase/internal/providers"
 )
 
 // defaultMirrors are tried in order. The site moves domains every so often;
@@ -278,6 +280,48 @@ func (c *client) search(query string) ([]searchResult, error) {
 		}
 	}
 	return results, nil
+}
+
+// catalogItemRE reads one show off a filter page: its English name and,
+// when given, its romaji one.
+var catalogItemRE = regexp.MustCompile(`(?s)class="ani poster tip" data-tip="\d+">\s*<a href="[^"]*/watch/[a-z0-9-]+/ep-1">.*?class="name d-title"([^>]*)>([^<]*)</a>`)
+var dataJPRE = regexp.MustCompile(`data-jp="([^"]*)"`)
+
+// catalogSorts are the filter page orders the app may ask for.
+var catalogSorts = map[string]bool{"default": true, "latest-updated": true, "latest-added": true, "most-viewed": true, "score": true}
+
+// catalog reads one filter page: a sort order, or a search word, and a page.
+func (c *client) catalog(sort, query string, page int) ([]providers.CatalogEntry, error) {
+	params := url.Values{}
+	if query = strings.TrimSpace(query); query != "" {
+		params.Set("keyword", query)
+	} else if catalogSorts[sort] {
+		params.Set("sort", sort)
+	} else {
+		return nil, fmt.Errorf("anikoto: unknown order %q", sort)
+	}
+	if page > 1 {
+		params.Set("page", strconv.Itoa(page))
+	}
+	body, err := c.site("/filter?"+params.Encode(), false)
+	if err != nil {
+		return nil, err
+	}
+	return parseCatalog(body), nil
+}
+
+func parseCatalog(body []byte) []providers.CatalogEntry {
+	var out []providers.CatalogEntry
+	for _, m := range catalogItemRE.FindAllSubmatch(body, -1) {
+		entry := providers.CatalogEntry{Title: clean(string(m[2]))}
+		if jp := dataJPRE.FindSubmatch(m[1]); jp != nil {
+			entry.AltTitle = clean(string(jp[1]))
+		}
+		if entry.Title != "" || entry.AltTitle != "" {
+			out = append(out, entry)
+		}
+	}
+	return out
 }
 
 // showID is the site's numeric id for a slug, read off its watch page.
