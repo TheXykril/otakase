@@ -4,6 +4,15 @@
 
 ### Added
 
+- **See which titles you can't play.** Anime, movies and shows no source
+  has are greyed out with "No source has this", and upcoming titles with
+  "Not out yet", in search, trending and the other lists. The app learns
+  this quietly: from a few pages of a source's catalog once a day, from
+  your searches, from the titles you open (or rest on with the TV remote)
+  and from what you play. A source that can't be reached never makes a
+  title look unplayable. Turn on **Hide titles with no source** in
+  Playback to leave them out of search and browse altogether; your own
+  lists always show them.
 - **Korean, Chinese, Japanese and other Asian dramas.** Dramacool joins
   the movie and show sources: Asian series and films in their own language
   with English subtitles (and Indonesian, Malay, Arabic and more for many
