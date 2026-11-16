@@ -789,8 +789,11 @@ PlayRequest titlePlay(
     onScrobble: (action, percent) => unawaited(
       movies.scrobble(action, title, percent, season: season, episode: number),
     ),
-    skips: episode == null || title.tmdb <= 0
+    skips: title.tmdb <= 0
         ? null
+        : episode == null
+        ? (length, scope) =>
+              services.skipTimes.lookupMovie(title.tmdb, length, scope: scope)
         : (length, scope) => services.skipTimes.lookupShow(
             title.tmdb,
             season,

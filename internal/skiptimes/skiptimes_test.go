@@ -240,3 +240,29 @@ func TestASeriesEpisodeIsLookedUpByItsTMDBID(t *testing.T) {
 		t.Errorf("without a TMDB id: %+v", spans)
 	}
 }
+
+func TestAFilmIsLookedUpByItsTMDBIDAlone(t *testing.T) {
+	s, _ := fake(t, "", "", "")
+	films := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("tmdb_id") != "550" || q.Has("season") || q.Has("episode") {
+			t.Errorf("TheIntroDB asked for %s", r.URL.RawQuery)
+		}
+		io.WriteString(w, `{"tmdb_id":550,"type":"movie","intro":[{"start_ms":null,"end_ms":119000}],"credits":[{"start_ms":8177000,"end_ms":8348000}]}`)
+	}))
+	t.Cleanup(films.Close)
+	s.introDBBase = films.URL
+	spans, err := s.LookupMovie(http.DefaultClient, 550, 8350)
+	if err != nil || len(spans) != 2 {
+		t.Fatalf("spans = %+v, %v", spans, err)
+	}
+	if spans[0].Type != "op" || spans[0].Start != 0 || spans[0].End != 119 || spans[0].Source != IntroDB {
+		t.Errorf("opening = %+v", spans[0])
+	}
+	if spans[1].Type != "ed" || spans[1].Start != 8177 || spans[1].End != 8348 {
+		t.Errorf("credits = %+v", spans[1])
+	}
+	if spans, _ := s.LookupMovie(http.DefaultClient, 0, 8350); len(spans) != 0 {
+		t.Errorf("without a TMDB id: %+v", spans)
+	}
+}

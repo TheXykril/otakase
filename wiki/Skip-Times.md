@@ -19,12 +19,12 @@ times* and *Anime-Skip skip times*. AniSkip is always enabled. Anime-Skip uses
 the public client id it publishes for trying its API; being shared, it may be
 rate-limited now and then.
 
-## TV series
+## Movies and TV series
 
-Episodes of TV series (movies & shows) get their intro, recap and credits
-times from TheIntroDB, looked up by the show's TMDB id, so no table is
+Films and episodes of TV series (movies & shows) get their intro, recap and
+credits times from TheIntroDB, looked up by the TMDB id, so no table is
 needed. They skip the same way, following the same Playback settings.
-Films have no skip times. Marking and voting are for anime only.
+Marking and voting are for anime only.
 
 ## See where a skip came from, and vote
 

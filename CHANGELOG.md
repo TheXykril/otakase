@@ -96,6 +96,11 @@
 
 ### Fixed
 
+- **Movies and shows skip intros and credits on their own.** Series
+  episodes found their intro, recap and credits times but never skipped
+  them or showed the skip button. They now skip like anime with Skip
+  opening, Skip ending and Skip recap on, and films look up their opening
+  and credits times on TheIntroDB too.
 - **Signing in on a computer ends on a proper page.** After signing in to
   your Otakase account (or with Discord or Google) in the browser, the tab
   showed a connection error instead of a confirmation. It now shows a

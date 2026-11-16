@@ -67,7 +67,8 @@ void main() {
     expect(middle.pick?.call(9), isNull);
     final first = titlePlay(s, show, episode: episodes[0], episodes: episodes);
     expect(first.previous?.call(), isNull);
-    // A film has no episodes either way.
+    // A film has no episodes either way, and without a TMDB id nothing
+    // to look skip times up by.
     final movie = titlePlay(s, film);
     expect(movie.previous, isNull);
     expect(movie.pick, isNull);
@@ -96,6 +97,30 @@ void main() {
     await request.skips!(2900, RequestScope());
     expect(
       core.calls.where((c) => c['operation'] == 'skiptimes_show'),
+      hasLength(1),
+    );
+  });
+
+  test('a film asks TheIntroDB by its TMDB id alone', () async {
+    final (s, core) = await services();
+    const known = MediaTitle(
+      kind: 'movie',
+      trakt: 102156,
+      tmdb: 157336,
+      title: 'Interstellar',
+    );
+    final request = titlePlay(s, known);
+    await request.skips!(10140, RequestScope());
+    final asked = core.calls.where((c) => c['operation'] == 'skiptimes_movie');
+    expect(asked.single, {
+      'operation': 'skiptimes_movie',
+      'tmdb_id': 157336,
+      'length': 10140.0,
+    });
+    await s.store.set('IntroDBSkipTimes', false);
+    await request.skips!(10140, RequestScope());
+    expect(
+      core.calls.where((c) => c['operation'] == 'skiptimes_movie'),
       hasLength(1),
     );
   });

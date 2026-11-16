@@ -81,8 +81,8 @@ class PlayerSkips {
     );
   }
 
-  /// Series episodes get their spans from the request (TheIntroDB); films
-  /// have none. Null when there is nothing to look up.
+  /// Films and series episodes get their spans from the request
+  /// (TheIntroDB). Null when there is nothing to look up.
   Future<List<SkipSpan>?> forTitle(
     PlayRequest request,
     double length,
