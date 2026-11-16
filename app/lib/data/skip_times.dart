@@ -64,18 +64,36 @@ class SkipTimes {
     double length, {
     RequestScope? scope,
   }) async {
-    if (tmdb <= 0 || episode <= 0 || !store.flag('IntroDBSkipTimes')) {
-      return [];
-    }
+    if (tmdb <= 0 || episode <= 0) return [];
+    return _introDB({
+      'operation': 'skiptimes_show',
+      'tmdb_id': tmdb,
+      'season': season,
+      'episode': episode,
+      'length': length,
+    }, scope);
+  }
+
+  /// Opening and credits of a film from TheIntroDB, which knows films by
+  /// their TMDB id.
+  Future<List<SkipSpan>> lookupMovie(
+    int tmdb,
+    double length, {
+    RequestScope? scope,
+  }) async {
+    if (tmdb <= 0) return [];
+    return _introDB({
+      'operation': 'skiptimes_movie',
+      'tmdb_id': tmdb,
+      'length': length,
+    }, scope);
+  }
+
+  Future<List<SkipSpan>> _introDB(Json request, RequestScope? scope) async {
+    if (!store.flag('IntroDBSkipTimes')) return [];
     try {
       final d = await core.request(
-        {
-          'operation': 'skiptimes_show',
-          'tmdb_id': tmdb,
-          'season': season,
-          'episode': episode,
-          'length': length,
-        },
+        request,
         scope: scope,
         timeout: const Duration(seconds: 30),
       );

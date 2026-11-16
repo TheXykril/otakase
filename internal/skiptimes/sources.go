@@ -58,6 +58,11 @@ func (s *Service) LookupShow(client *http.Client, tmdbID, season, episode int, l
 		return nil, nil
 	}
 	found, err := s.introDBEpisode(client, tmdbID, season, episode, length)
+	return s.firstUsable(found, length), err
+}
+
+// firstUsable keeps the first usable span of each type that fits length.
+func (s *Service) firstUsable(found []Span, length float64) []Span {
 	spans := []Span{}
 	taken := map[string]bool{}
 	for _, span := range found {
@@ -68,11 +73,24 @@ func (s *Service) LookupShow(client *http.Client, tmdbID, season, episode int, l
 		taken[span.Type] = true
 		spans = append(spans, span)
 	}
-	return spans, err
+	return spans
+}
+
+// LookupMovie asks TheIntroDB for a film it knows by TMDB id. length is the
+// copy's length in seconds, zero when unknown.
+func (s *Service) LookupMovie(client *http.Client, tmdbID int, length float64) ([]Span, error) {
+	if tmdbID <= 0 {
+		return nil, nil
+	}
+	found, err := s.introDBAt(client, fmt.Sprintf("%s?tmdb_id=%d", s.introDBBase, tmdbID), length)
+	return s.firstUsable(found, length), err
 }
 
 func (s *Service) introDBEpisode(client *http.Client, tmdbID, season, episode int, length float64) ([]Span, error) {
-	url := fmt.Sprintf("%s?tmdb_id=%d&season=%d&episode=%d", s.introDBBase, tmdbID, season, episode)
+	return s.introDBAt(client, fmt.Sprintf("%s?tmdb_id=%d&season=%d&episode=%d", s.introDBBase, tmdbID, season, episode), length)
+}
+
+func (s *Service) introDBAt(client *http.Client, url string, length float64) ([]Span, error) {
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("theintrodb: %w", err)

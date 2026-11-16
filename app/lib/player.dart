@@ -830,8 +830,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   /// Opening, ending and recap times: from the source and the skip time
-  /// services for anime, from the request (TheIntroDB) for series episodes.
-  /// Films have none, so their skip button never shows.
+  /// services for anime, from the request (TheIntroDB) for films and series
+  /// episodes.
   Future<void> loadSkips(int g) async {
     final from = source;
     if (from == null) return;
@@ -1141,7 +1141,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       watchForStall();
     }
     if (isTitle) {
-      if (!scrubbing) position = p;
+      skipCue(p);
       titleWatched(p);
       return;
     }
@@ -1157,6 +1157,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       );
       unawaited(widget.services.store.rememberSource(anime, source!.provider));
     }
+    skipCue(p);
+  }
+
+  /// Playback is at [p]: skips the span it entered when automatic skipping
+  /// is on, else offers the skip button. Anime, films and series episodes
+  /// alike.
+  void skipCue(Duration p) {
     final skip = skips.at(p.inMilliseconds / 1000);
     if (!scrubbing) position = p;
     if (skip.changed) setState(() {});

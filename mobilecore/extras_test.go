@@ -89,3 +89,11 @@ func TestShowSkipTimesNeedAnEpisode(t *testing.T) {
 		t.Errorf("lookup without an episode: %s", out)
 	}
 }
+
+func TestFilmSkipTimesNeedATMDBID(t *testing.T) {
+	c := NewCore()
+	out := c.execute(context.Background(), `{"version":1,"operation":"skiptimes_movie"}`)
+	if !strings.Contains(out, "invalid_request") {
+		t.Errorf("lookup without a TMDB id: %s", out)
+	}
+}
