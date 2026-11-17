@@ -117,62 +117,74 @@ class DiscoveryHomeState extends State<DiscoveryHome> {
     }
     final featured = trending.firstOrNull ?? seasonal.firstOrNull;
     final side = widget.isTV ? 48.0 : 20.0;
-    final introduction = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(height: widget.topInset),
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            side,
-            widget.hasResume ? 28 : 12,
-            side,
-            12,
+    // A short phone can't show the welcome text and the featured card in
+    // one view, and the card's button ended up under the floating tab bar,
+    // so there the card comes first.
+    final compact =
+        !widget.isTV &&
+        featured != null &&
+        !widget.hasResume &&
+        MediaQuery.sizeOf(context).height < 720;
+    final welcome = Padding(
+      padding: EdgeInsets.fromLTRB(side, widget.hasResume ? 28 : 12, side, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const PageHeading('Find your next story', '探'),
+          const SizedBox(height: 8),
+          Text(
+            widget.titles
+                ? 'Browse anime, movies and shows, or link AniList, MAL or Trakt to see your lists and sync progress.'
+                : 'Browse anime, or link AniList or MAL to see your lists and sync progress.',
+            style: uiStyle(context, color: muted),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 4,
             children: [
-              const PageHeading('Find your next story', '探'),
-              const SizedBox(height: 8),
-              Text(
-                widget.titles
-                    ? 'Browse anime, movies and shows, or link AniList, MAL or Trakt to see your lists and sync progress.'
-                    : 'Browse anime, or link AniList or MAL to see your lists and sync progress.',
-                style: uiStyle(context, color: muted),
+              AppButton(
+                label: widget.titles ? 'Search' : 'Search anime',
+                icon: LucideIcons.search,
+                isTV: widget.isTV,
+                autofocus: !widget.hasResume,
+                onPressed: widget.onSearch,
               ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 4,
-                children: [
-                  AppButton(
-                    label: widget.titles ? 'Search' : 'Search anime',
-                    icon: LucideIcons.search,
-                    isTV: widget.isTV,
-                    autofocus: !widget.hasResume,
-                    onPressed: widget.onSearch,
-                  ),
-                  AppButton(
-                    label: 'Accounts',
-                    isTV: widget.isTV,
-                    onPressed: widget.onAccounts,
-                  ),
-                ],
+              AppButton(
+                label: 'Accounts',
+                isTV: widget.isTV,
+                onPressed: widget.onAccounts,
               ),
             ],
           ),
-        ),
-        if (busy && data == null)
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: side),
-            child: const SkeletonBlock(height: 292),
-          ),
-        if (featured != null && !widget.hasResume)
-          _FeaturedAnime(
+        ],
+      ),
+    );
+    final card = featured != null && !widget.hasResume
+        ? _FeaturedAnime(
             anime: featured,
             isTV: widget.isTV,
             showArtwork: !widget.isTV,
             onOpen: () => widget.onOpen(featured),
-          ),
+          )
+        : null;
+    final introduction = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: widget.topInset),
+        if (compact) ...[
+          const SizedBox(height: 12),
+          card!,
+          welcome,
+        ] else ...[
+          welcome,
+          if (busy && data == null)
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: side),
+              child: const SkeletonBlock(height: 292),
+            ),
+          ?card,
+        ],
       ],
     );
     return Column(

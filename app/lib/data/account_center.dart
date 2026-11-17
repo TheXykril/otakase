@@ -240,7 +240,37 @@ class AccountCenter extends ChangeNotifier with WidgetsBindingObserver {
     services.discord.bridge = run == null ? null : _Bridge(run);
     services.accountRoute = run == null ? null : () => HubRoute(run.live);
     services.accountSyncText = run == null ? null : () => accountSyncLine(run);
+    _followSync(services, run);
     if (run != null) unawaited(_moveOldBackup(services, run));
+  }
+
+  AccountRun? _followed;
+  AppServices? _followedFor;
+
+  void _syncTick() {
+    final services = _followedFor;
+    if (services != null) services.accountSyncChanged.value++;
+  }
+
+  /// Tells the open profile's sync lines when the account's sync, logins or
+  /// connection change.
+  void _followSync(AppServices services, AccountRun? run) {
+    if (!identical(_followed, run) || !identical(_followedFor, services)) {
+      final old = _followed;
+      if (old != null) {
+        for (final l in <Listenable>[old.sync, old.vault, old.live]) {
+          l.removeListener(_syncTick);
+        }
+      }
+      _followed = run;
+      _followedFor = services;
+      if (run != null) {
+        for (final l in <Listenable>[run.sync, run.vault, run.live]) {
+          l.addListener(_syncTick);
+        }
+      }
+    }
+    _syncTick();
   }
 
   bool _moving = false;

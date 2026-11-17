@@ -172,6 +172,10 @@ class AppServices {
   /// center while the profile belongs to one.
   String Function()? accountSyncText;
 
+  /// Ticks when that account sync state changes, so lines showing it
+  /// follow along.
+  final accountSyncChanged = ValueNotifier<int>(0);
+
   /// The phone remote through the Discord bot, for TVs this phone can't
   /// reach on the local network and TVs on the same Discord account.
   late final botRelay = RelayClient(

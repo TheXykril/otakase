@@ -69,6 +69,7 @@ class AccountSyncStatus extends StatelessWidget {
       services.trakt,
       services.movies,
       services.store,
+      services.accountSyncChanged,
     ]),
     builder: (context, _) => Text(
       accountSyncSummary(services),
