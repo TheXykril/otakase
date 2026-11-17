@@ -193,7 +193,8 @@ export async function pairApprove(request, env) {
   }
   if (!/^\d{6}$/.test(body.code || '')) throw new HttpError(400, 'Type the 6 digits on the TV.');
   const row = await env.DB.prepare('SELECT device, account_id, expires FROM pairings WHERE code = ?').bind(body.code).first();
-  if (!row || row.expires < now()) throw new HttpError(404, 'That code ran out. Show a new one on the TV.');
+  if (!row) throw new HttpError(404, 'No TV is showing that code. Check the digits on the TV.');
+  if (row.expires < now()) throw new HttpError(410, 'That code ran out. Show a new one on the TV.');
   if (row.account_id && row.account_id !== account) throw new HttpError(409, 'Someone else already approved that code.');
   await env.DB.prepare('UPDATE pairings SET account_id = ? WHERE code = ? AND account_id IS NULL').bind(account, body.code).run();
   return json({ ok: true, name: JSON.parse(row.device).name });

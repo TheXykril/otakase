@@ -168,6 +168,10 @@ class AppServices {
   /// Set by the account center while this profile's account is online.
   AwayRoute? Function()? accountRoute;
 
+  /// How the profile's Otakase account sync stands, set by the account
+  /// center while the profile belongs to one.
+  String Function()? accountSyncText;
+
   /// The phone remote through the Discord bot, for TVs this phone can't
   /// reach on the local network and TVs on the same Discord account.
   late final botRelay = RelayClient(

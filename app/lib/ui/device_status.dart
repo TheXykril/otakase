@@ -8,15 +8,17 @@ import '../desktop/window_frame.dart';
 import 'components.dart';
 
 /// The end of a top bar: the window buttons on a computer, the clock (and
-/// battery on a phone) on Android.
+/// battery on a phone) on Android. Nothing in a side panel.
 class TopBarEnd extends StatelessWidget {
   const TopBarEnd({super.key, this.isTV = false});
   final bool isTV;
   @override
-  Widget build(BuildContext context) => !isDesktop
-      ? DeviceStatus(isTV: isTV)
-      : SubPanelScope.of(context)
+  Widget build(BuildContext context) => SubPanelScope.of(context)
+      // A side panel keeps its title row to itself: the window buttons or
+      // the TV clock stay on the page beside it.
       ? const SizedBox.shrink()
+      : !isDesktop
+      ? DeviceStatus(isTV: isTV)
       : const WindowButtons();
 }
 

@@ -3228,24 +3228,34 @@ Widget _pickerHeading(BuildContext context, String title, String? note) =>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Flexible(
-                child: Text(
-                  title.toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: mono.copyWith(
-                    color: fgBright,
-                    fontSize: AppLayout.tvOf(context) ? 16 : 13,
-                    letterSpacing: 1.6,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-              const SizedBox(width: KageSpace.s3),
-              const Expanded(child: Divider(color: hairline, height: 1)),
-            ],
+          // The title takes the room it needs and wraps rather than being
+          // cut; the rule fills what is left beside its first line.
+          LayoutBuilder(
+            builder: (context, box) {
+              final style = mono.copyWith(
+                color: fgBright,
+                fontSize: AppLayout.tvOf(context) ? 16 : 13,
+                letterSpacing: 1.6,
+                height: 1.2,
+              );
+              final text = title.toUpperCase();
+              final painter = TextPainter(
+                text: TextSpan(text: text, style: style),
+                textDirection: Directionality.of(context),
+                textScaler: MediaQuery.textScalerOf(context),
+                maxLines: 1,
+              )..layout(maxWidth: math.max(0, box.maxWidth - 48));
+              final fits = !painter.didExceedMaxLines;
+              painter.dispose();
+              if (!fits) return Text(text, maxLines: 3, style: style);
+              return Row(
+                children: [
+                  Text(text, maxLines: 1, style: style),
+                  const SizedBox(width: KageSpace.s3),
+                  const Expanded(child: Divider(color: hairline, height: 1)),
+                ],
+              );
+            },
           ),
           if (note != null)
             Padding(

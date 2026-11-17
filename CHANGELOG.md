@@ -105,6 +105,27 @@
 
 ### Fixed
 
+- **Downloads ride out a busy source.** A download the source turned away
+  for being busy (or with a passing server error) is now asked again a few
+  times, waiting as long as the source asks, before it gives up. A failed
+  download says what went wrong in plain words instead of a bare error
+  number, and has a **Retry** button that finds a fresh copy and carries on.
+- **Removing a show from Continue watching sticks on every device.** A
+  title taken off the row on the phone could stay on the TV when the TV had
+  its own, slightly newer copy of the same spot.
+- **Phone remote works with screen readers.** The now-playing controls
+  (play, pause, seek, volume, subtitles, stop) are labelled, and the remote
+  for a computer no longer talks about a TV.
+- **Smaller fixes.** Popup headings wrap instead of being cut off. Adding a
+  TV counts only the 6 digits, tells a mistyped code from an expired one
+  and names the TV properly instead of its build code. The account card and
+  Accounts agree on sync status. The TV clock no longer draws over side
+  panels, and the phone clock no longer covers a show's Japanese title.
+  Episode names read the same on phone and computer. The desktop launcher
+  closes with one Esc after going back from search results. On small phones
+  the Home highlight's button is no longer hidden under the tab bar.
+  Movies and shows in Continue watching saved without pictures get their
+  poster and backdrop.
 - **Movies and shows skip intros and credits on their own.** Series
   episodes found their intro, recap and credits times but never skipped
   them or showed the skip button. They now skip like anime with Skip

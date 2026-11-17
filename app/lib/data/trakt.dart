@@ -163,6 +163,14 @@ class MediaTitle {
     if (votes > 0) 'votes': votes,
   };
 
+  /// The same title with pictures looked up later.
+  MediaTitle withArt({required String poster, required String fanart}) =>
+      MediaTitle.fromJson({
+        ...toJson(),
+        'poster': poster.isEmpty ? this.poster : poster,
+        'fanart': fanart.isEmpty ? this.fanart : fanart,
+      });
+
   /// The few fields an Otakase TV needs to find and play this title, small
   /// enough for the phone remote.
   Json get remote => {

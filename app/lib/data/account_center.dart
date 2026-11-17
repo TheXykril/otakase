@@ -239,6 +239,7 @@ class AccountCenter extends ChangeNotifier with WidgetsBindingObserver {
     final run = activeRun;
     services.discord.bridge = run == null ? null : _Bridge(run);
     services.accountRoute = run == null ? null : () => HubRoute(run.live);
+    services.accountSyncText = run == null ? null : () => accountSyncLine(run);
     if (run != null) unawaited(_moveOldBackup(services, run));
   }
 
@@ -354,4 +355,14 @@ class AccountCenter extends ChangeNotifier with WidgetsBindingObserver {
     await manager.close();
     super.dispose();
   }
+}
+
+/// How the Otakase account's sync stands, in a few words. Accounts and the
+/// account card both say this, so they never disagree.
+String accountSyncLine(AccountRun run) {
+  if (run.sync.lastError != null) return 'Sync waits: ${run.sync.lastError}';
+  if (run.vault.lastError != null) return 'Logins wait: ${run.vault.lastError}';
+  if (!run.live.connected) return 'Saved on this device · connecting…';
+  if (run.sync.lastSynced == null) return 'Syncing…';
+  return 'In sync on every device';
 }

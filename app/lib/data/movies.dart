@@ -534,6 +534,42 @@ class MovieService extends ChangeNotifier {
       syncing = false;
       _notify();
     }
+    unawaited(fillMissingArt());
+  }
+
+  final _artAsked = <String>{};
+
+  /// Looks up pictures for Continue watching titles saved without any, such
+  /// as a series pulled from history with no images, so Home shows its
+  /// poster and backdrop instead of empty boxes. Each title is asked once
+  /// per run.
+  Future<void> fillMissingArt() async {
+    final missing = [
+      for (final e in continuing.take(20))
+        if (e.title.poster.isEmpty &&
+            e.title.fanart.isEmpty &&
+            e.title.trakt > 0 &&
+            _artAsked.add(e.title.key))
+          e,
+    ];
+    var changed = false;
+    for (final e in missing) {
+      try {
+        final full = await trakt.details(e.title);
+        if (full.poster.isEmpty && full.fanart.isEmpty) continue;
+        final now = _entries[e.title.key];
+        if (now == null || _disposed) continue;
+        _entries[e.title.key] = now.copyWith(
+          title: now.title.withArt(poster: full.poster, fanart: full.fanart),
+        );
+        changed = true;
+      } catch (_) {
+        /* Offline or unknown: the card keeps its title placeholder. */
+      }
+    }
+    if (!changed || _disposed) return;
+    _notify();
+    await _persist();
   }
 
   DateTime? _syncedAt;

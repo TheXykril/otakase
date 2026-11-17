@@ -243,10 +243,18 @@ class _FeaturedAnime extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final height = math.max(
+    final full = math.max(
       292.0,
       292 * MediaQuery.textScalerOf(context).scale(1),
     );
+    // On a short phone the full height pushes the button under the
+    // floating tab bar on first view, so the card gives some up there.
+    final height = isTV
+        ? full
+        : math.min(
+            full,
+            math.max(220.0, MediaQuery.sizeOf(context).height * .4),
+          );
     return Container(
       key: const Key('discovery-featured'),
       height: height,

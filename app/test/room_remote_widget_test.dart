@@ -551,6 +551,39 @@ void main() {
     await active.close();
   });
 
+  testWidgets('screen readers follow the remote from idle to playing', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await fixture.launch(tester);
+    await tester.pumpWidget(const SizedBox());
+    final lan = FakeLan()..idle = true;
+    final active = await services(lan: lan);
+    await active.tvRemote.pair(tv, '012345');
+    final link = active.controlTV(tv);
+    await tester.pumpWidget(page(RemoteNowPlaying(services: active)));
+    await tester.runAsync(link.ready);
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel(RegExp('Nothing is playing')), findsOneWidget);
+    lan.idle = false;
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expect(find.text('Playing story'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Nothing is playing')), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('Playing story')), findsOneWidget);
+    for (final label in [
+      'Pause',
+      'Back 10 seconds',
+      'Forward 10 seconds',
+      'Stop',
+    ]) {
+      expect(find.bySemanticsLabel(label), findsOneWidget, reason: label);
+    }
+    await tester.pumpWidget(const SizedBox());
+    await active.close();
+    semantics.dispose();
+  });
+
   test('an older TV asked to play a film says to update it', () async {
     final lan = FakeLan()..oldTV = true;
     final active = await services(lan: lan);

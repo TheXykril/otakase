@@ -69,11 +69,16 @@ class MainActivity : FlutterActivity() {
         val named = try {
             android.provider.Settings.Global.getString(contentResolver, "device_name")
         } catch (_: Exception) { null }
-        if (!named.isNullOrBlank()) return named.trim()
+        if (!named.isNullOrBlank() && !buildName(named.trim())) return named.trim()
         val maker = Build.MANUFACTURER.orEmpty().replaceFirstChar { it.uppercase() }
         val model = Build.MODEL.orEmpty()
-        return if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model".trim()
+        val made = if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model".trim()
+        if (made.isNotBlank() && !buildName(model)) return made
+        // A build code such as sdk_google_atv64_x86_64 means nothing to people.
+        return if (packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)) "Android TV" else "Android phone"
     }
+
+    private fun buildName(name: String) = name.contains('_') && !name.contains(' ')
 
     private fun deviceStatus(): Map<String, Any> {
         val battery = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))

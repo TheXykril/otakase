@@ -229,11 +229,16 @@ class AppStore extends ChangeNotifier {
 
   /// Whether the viewer took this off Continue watching. It comes back once
   /// another episode plays or the spot moves on.
+  ///
+  /// Another device holds its own copy of the same spot, often saved a
+  /// little later (its own play, or a list refresh), so anything on that
+  /// episode from before the moment it was taken off stays hidden too.
   bool continueHidden(String key, int episode, int updated) {
     final hidden = value('HiddenContinue');
     if (hidden is! Map || hidden[key] is! Map) return false;
     final h = hidden[key] as Map;
-    return number(h['episode']) == episode && updated <= number(h['updated']);
+    return number(h['episode']) == episode &&
+        (updated <= number(h['updated']) || updated < number(h['at']));
   }
 
   /// Takes a show, film or series off Continue watching until it moves on.
@@ -241,7 +246,12 @@ class AppStore extends ChangeNotifier {
     final hidden = Map<String, dynamic>.from(
       value('HiddenContinue') as Map? ?? {},
     );
-    hidden[key] = {'episode': episode, 'updated': updated};
+    hidden.remove(key);
+    hidden[key] = {
+      'episode': episode,
+      'updated': updated,
+      'at': DateTime.now().millisecondsSinceEpoch,
+    };
     // Only the latest few matter; old ones have moved on long ago.
     while (hidden.length > 200) {
       hidden.remove(hidden.keys.first);

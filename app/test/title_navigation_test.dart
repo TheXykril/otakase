@@ -217,7 +217,11 @@ void main() {
       await store.hideContinue('al:1', 3, 100);
       expect(store.continueHidden('al:1', 3, 100), isTrue);
       expect(store.continueHidden('al:1', 4, 100), isFalse);
-      expect(store.continueHidden('al:1', 3, 101), isFalse);
+      // Another device's copy of the same spot, saved before it was taken
+      // off, stays hidden; a spot saved after it comes back.
+      expect(store.continueHidden('al:1', 3, 150), isTrue);
+      final later = DateTime.now().millisecondsSinceEpoch + 60000;
+      expect(store.continueHidden('al:1', 3, later), isFalse);
     },
   );
 

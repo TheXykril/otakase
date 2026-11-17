@@ -618,7 +618,10 @@ class _ShowPageState extends State<ShowPage> {
           if (anime.nativeTitle.isNotEmpty)
             Positioned(
               right: tv ? 48 : 12,
-              top: tv ? top + 16 : 80,
+              // Under the clock pill, however tall the phone's status area.
+              top: tv
+                  ? top + 16
+                  : max(25, MediaQuery.viewPaddingOf(context).top) + 56,
               child: NativeTitle(anime.nativeTitle, isTV: tv),
             ),
           if (tv)
@@ -698,6 +701,9 @@ class _ShowPageState extends State<ShowPage> {
     final metadata = art(ep);
     final thumbnail = metadata?['thumbnail'] as String? ?? '';
     final airdate = metadata?['airdate'] as String? ?? '';
+    final name = hidden
+        ? ''
+        : episodeName(metadata?['title'] as String? ?? '', ep);
     return EpisodeProgressThread(
       key: ValueKey('episode-$ep'),
       episode: ep,
@@ -770,9 +776,9 @@ class _ShowPageState extends State<ShowPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      hidden
-                          ? 'Episode $ep'
-                          : metadata?['title'] as String? ?? 'Episode $ep',
+                      // The number sits beside it already; the name is
+                      // cleaned like the cards on other screens.
+                      name.isEmpty ? 'Episode $ep' : name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: uiStyle(
@@ -1332,7 +1338,7 @@ class _ShowPageState extends State<ShowPage> {
           if (anime.status.isNotEmpty) fact('Status', titleCase(anime.status)),
           if (anime.year > 0) fact('Year', '${anime.year}'),
           if (anime.duration > 0)
-            fact('Length', '${anime.duration} min per episode'),
+            fact('Length', 'About ${anime.duration} min per episode'),
           if (anime.genres.isNotEmpty) fact('Genres', anime.genres.join(', ')),
           if (also.isNotEmpty) fact('Also known as', also.join('\n')),
           if (related.isNotEmpty) ...[
