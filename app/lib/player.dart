@@ -509,6 +509,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
 
   Future<void> configure() async {
     final s = widget.services.store;
+    if (softwareDecoding) await property('hwdec', 'no');
     await property('sub-visibility', 'yes');
     await property('sub-font', s.text('SubtitleFont'));
     await property('sub-font-size', s.integer('SubtitleSize').toString());
@@ -596,6 +597,17 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   /// Time for a found copy to open, load its tracks and be ready to play.
   static const copyLimit = Duration(seconds: 60);
 
+  /// Time for clearing up the last copy before a new one is looked for. A
+  /// player or core that stopped answering must not hold up the search.
+  static const stepLimit = Duration(seconds: 5);
+
+  /// Set once a copy failed to start: hardware decoding is off for the rest
+  /// of this player.
+  bool softwareDecoding = false;
+
+  Future<void> bounded(Future<void> step) =>
+      step.timeout(stepLimit, onTimeout: () {}).catchError((Object _) {});
+
   void watchStart(int g, Duration limit, {required bool searching}) {
     startTimer?.cancel();
     startTimer = Timer(limit, () => unawaited(startTimedOut(g, searching)));
@@ -609,8 +621,20 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     scope.cancel();
     loadingTimer?.cancel();
     stall.cancel();
+    // Cut the copy's feed too: a decoder left running on it kept a TV at
+    // full CPU and held up the next show.
+    unawaited(widget.services.core.stopPlayback().catchError((Object _) {}));
     unawaited(player.stop().catchError((Object _) {}));
     startTimeouts++;
+    // A hardware decoder that never delivers a frame (seen on Android TV)
+    // is the likely hold-up, so this player decodes in software from now
+    // on.
+    if (!searching && Host.android && !softwareDecoding) {
+      softwareDecoding = true;
+      unawaited(
+        property('hwdec', 'no').timeout(stepLimit).catchError((Object _) {}),
+      );
+    }
     // A copy that opened but never started: the next copy may play. A
     // search that hung would most likely hang again, so it stops there.
     if (!searching && startTimeouts < 2) {
@@ -704,10 +728,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     }
     if (!mounted || g != generation) return;
     try {
-      await player.stop();
-      await clearSubtitleFiles();
+      await bounded(player.stop());
+      await bounded(clearSubtitleFiles());
+      if (!mounted || g != generation) return;
       if (isTitle && (mirror == null || source == null)) {
-        await widget.services.core.stopPlayback();
+        await bounded(widget.services.core.stopPlayback());
         final picked = pendingMedia;
         pendingMedia = null;
         final found =
@@ -726,7 +751,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           if (!mounted || g != generation) return;
         }
       } else if (mirror == null || onlyProvider != null) {
-        await widget.services.core.stopPlayback();
+        await bounded(widget.services.core.stopPlayback());
         final picked = onlyProvider == null ? pendingSource : null;
         pendingSource = null;
         source =
@@ -790,9 +815,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         scope: requestScope,
         openCopy: (candidate, index) => prepareCopy(candidate, index, g),
         nextSource: (tried) async {
-          await player.stop();
+          await bounded(player.stop());
           requestScope.check();
-          await widget.services.core.stopPlayback();
+          await bounded(widget.services.core.stopPlayback());
           try {
             return await widget.services.resolver.resolve(
               anime,
@@ -887,9 +912,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     int g,
   ) async {
     final requestScope = scope;
-    await player.stop();
+    await bounded(player.stop());
     requestScope.check();
-    await clearSubtitleFiles();
+    await bounded(clearSubtitleFiles());
     requestScope.check();
     source = candidate;
     copy = index;
@@ -2368,11 +2393,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       if (!isTitle || (media?.copy ?? '').isNotEmpty) another,
     ];
     panelOpen = true;
-    final chosen = await chooseValue(
-      context,
-      'Quality',
+    final chosen = await chooseQuality(
+      (labels, selected) =>
+          chooseValue(context, 'Quality', labels, selected: selected),
       values,
-      selected: widget.services.store.text('Quality'),
+      widget.services.store.text('Quality'),
     );
     panelOpen = false;
     if (chosen == another && mounted) {

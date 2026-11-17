@@ -80,4 +80,30 @@ void main() {
     );
     handle.dispose();
   });
+
+  test('quality choices read as words and map back to values', () async {
+    expect(qualityLabel('best'), 'Best available');
+    expect(qualityLabel('worst'), 'Lowest');
+    expect(qualityLabel('1080'), '1080p');
+    List<String>? shown;
+    String? marked;
+    final picked = await chooseQuality(
+      (labels, selected) async {
+        shown = labels;
+        marked = selected;
+        return '720p';
+      },
+      ['best', '1080', '720', 'worst', 'Try another copy'],
+      'best',
+    );
+    expect(shown, [
+      'Best available',
+      '1080p',
+      '720p',
+      'Lowest',
+      'Try another copy',
+    ]);
+    expect(marked, 'Best available');
+    expect(picked, '720');
+  });
 }

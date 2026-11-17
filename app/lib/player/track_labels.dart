@@ -78,3 +78,27 @@ List<String> distinctLabels(List<String> labels) {
       },
   ];
 }
+
+/// A quality choice as people read it: "best" is "Best available", "1080"
+/// is "1080p".
+String qualityLabel(String value) => switch (value) {
+  'best' => 'Best available',
+  'worst' => 'Lowest',
+  _ when int.tryParse(value) != null => '${value}p',
+  _ => value,
+};
+
+/// Lets the viewer pick one of [values] by its [qualityLabel]; returns the
+/// value, not the label.
+Future<String?> chooseQuality(
+  Future<String?> Function(List<String> labels, String? selected) choose,
+  List<String> values,
+  String? selected,
+) async {
+  final labels = {for (final v in values) qualityLabel(v): v};
+  final picked = await choose(
+    labels.keys.toList(),
+    selected == null ? null : qualityLabel(selected),
+  );
+  return picked == null ? null : labels[picked];
+}

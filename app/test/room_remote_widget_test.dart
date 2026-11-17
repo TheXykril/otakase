@@ -432,7 +432,7 @@ void main() {
     expect(lan.commands.last, 'audio:{"id":"2"}');
     await tester.tap(find.byKey(const Key('remote-tool-Quality')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('720').last);
+    await tester.tap(find.text('720p').last);
     await tester.pumpAndSettle();
     expect(lan.commands.last, 'quality:{"value":"720"}');
     await tester.tap(find.byKey(const Key('remote-tool-Episodes')));
