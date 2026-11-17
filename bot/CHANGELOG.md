@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.32.2
+
+- Log reader test table formatted so every Go release's gofmt accepts it.
+
 ## 1.32.1
 
 - Settings backups moved to the Otakase account, which syncs settings. `/settings-backup` and saving new backups are gone. Apps take a member's old backup once, through the account server too, and delete it here; `GET` and `DELETE /v1/backup` stay for that until the old link endpoints go.
