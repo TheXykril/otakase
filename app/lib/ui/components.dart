@@ -6,6 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../desktop/desktop_core.dart';
+import '../host.dart';
 import '../desktop/top_bar.dart' show DesktopTopBar;
 
 import 'package:flutter/services.dart';
@@ -127,9 +128,14 @@ class FocusRings extends ChangeNotifier {
   FocusManager? _manager;
   bool _last = false;
 
+  // A TV is always driven by its remote. Its highlight mode can still read
+  // touch until the first key arrives, which left the first screens with
+  // no visible focus.
   static bool _compute() => isDesktop
       ? DesktopInput.keyboard
-      : FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
+      : Host.tv ||
+            FocusManager.instance.highlightMode ==
+                FocusHighlightMode.traditional;
 
   void _follow() {
     if (identical(_manager, FocusManager.instance)) return;
@@ -467,7 +473,7 @@ class _FocusBoxState extends State<FocusBox>
   }
 
   Future<void> reveal() async {
-    if (!mounted || !focused || Scrollable.maybeOf(context) == null) return;
+    if (!mounted || !focused || !_canReveal(context)) return;
     // With a mouse the page stays where the viewer scrolled it; only arrow
     // keys and Tab scroll the focused control into view.
     if (isDesktop && !DesktopInput.keyboard) return;
@@ -612,12 +618,27 @@ BuildContext _revealArea(BuildContext context) {
   return area ?? context;
 }
 
+// Looked up without subscribing: these run from focus moves and reveals,
+// outside build.
 ScrollableState? _verticalScrollable(BuildContext context) {
-  var scrollable = Scrollable.maybeOf(context);
+  var scrollable = context.findAncestorStateOfType<ScrollableState>();
   while (scrollable != null && scrollable.axisDirection != AxisDirection.down) {
-    scrollable = Scrollable.maybeOf(scrollable.context);
+    scrollable = scrollable.context.findAncestorStateOfType<ScrollableState>();
   }
   return scrollable;
+}
+
+/// Whether [context] can still be scrolled into view. A reveal runs a frame
+/// or an animation after focus moved; by then a profile switch or a closed
+/// page may have taken the control or its list out of the tree.
+bool _canReveal(BuildContext context) {
+  if (!context.mounted) return false;
+  final box = context.findRenderObject();
+  if (box == null || !box.attached) return false;
+  final scrollable = context.findAncestorStateOfType<ScrollableState>();
+  if (scrollable == null || !scrollable.mounted) return false;
+  final position = scrollable.position;
+  return position.hasContentDimensions && position.hasPixels;
 }
 
 /// Scrolls a focused control into view. A control that fits on the page's
@@ -627,15 +648,24 @@ Future<void> revealFocus(
   BuildContext focused, {
   bool Function()? stillFocused,
 }) async {
+  if (!_canReveal(focused)) return;
   final context = _revealArea(focused);
   bool live() => stillFocused?.call() ?? true;
-  final duration = MediaQuery.disableAnimationsOf(context)
+  // This runs outside build, after focus moved: read the inherited values
+  // without subscribing, so no stale dependency is left on a page that a
+  // profile switch is tearing down.
+  final duration =
+      context
+              .getInheritedWidgetOfExactType<MediaQuery>()
+              ?.data
+              .disableAnimations ??
+          false
       ? Duration.zero
       : KageMotion.base;
   final page = _verticalScrollable(context);
   final box = context.findRenderObject();
   final viewport = page?.context.findRenderObject();
-  if (AppLayout.tvOf(context) &&
+  if ((context.getInheritedWidgetOfExactType<AppLayout>()?.isTV ?? false) &&
       page != null &&
       box is RenderBox &&
       box.attached &&
@@ -644,7 +674,8 @@ Future<void> revealFocus(
     final position = page.position;
     final top = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
     final bottom = top + box.size.height;
-    final clearance = ScrollClearance.topOf(context);
+    final clearance =
+        context.getInheritedWidgetOfExactType<ScrollClearance>()?.top ?? 0;
     final double target =
         bottom + position.pixels - position.minScrollExtent <=
             position.viewportDimension
@@ -666,14 +697,14 @@ Future<void> revealFocus(
       }
     }
   }
-  if (!context.mounted || !live()) return;
+  if (!context.mounted || !_canReveal(context) || !live()) return;
   // Keep visible controls still. Only scroll the edge outside the viewport.
   await Scrollable.ensureVisible(
     context,
     duration: duration,
     alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
   );
-  if (!context.mounted || !live()) return;
+  if (!context.mounted || !_canReveal(context) || !live()) return;
   await Scrollable.ensureVisible(
     context,
     duration: duration,
@@ -967,6 +998,59 @@ class _RemoteFocusRowState extends State<RemoteFocusRow> {
   Widget build(BuildContext context) => Focus(
     focusNode: region,
     canRequestFocus: false,
+    onKeyEvent: key,
+    child: widget.child,
+  );
+}
+
+/// A row of buttons on TV: Left and Right stop at its ends instead of
+/// jumping to a far control of another row (a poster at the screen's edge
+/// further down, say), which the viewer may not even see.
+class RemoteButtonRow extends StatefulWidget {
+  const RemoteButtonRow({super.key, required this.isTV, required this.child});
+  final bool isTV;
+  final Widget child;
+  @override
+  State<RemoteButtonRow> createState() => _RemoteButtonRowState();
+}
+
+class _RemoteButtonRowState extends State<RemoteButtonRow> {
+  final region = FocusNode(canRequestFocus: false, debugLabel: 'Button row');
+
+  @override
+  void dispose() {
+    region.dispose();
+    super.dispose();
+  }
+
+  KeyEventResult key(FocusNode _, KeyEvent event) {
+    if (!widget.isTV || (event is! KeyDownEvent && event is! KeyRepeatEvent)) {
+      return KeyEventResult.ignored;
+    }
+    final right = event.logicalKey == LogicalKeyboardKey.arrowRight;
+    if (!right && event.logicalKey != LogicalKeyboardKey.arrowLeft) {
+      return KeyEventResult.ignored;
+    }
+    final current = FocusManager.instance.primaryFocus;
+    if (current == null || !current.rect.isFinite) {
+      return KeyEventResult.ignored;
+    }
+    final from = current.rect;
+    final more = region.traversalDescendants.any((node) {
+      final rect = node.rect;
+      if (node == current || rect.isEmpty || !rect.isFinite) return false;
+      final inLine = rect.bottom > from.top && rect.top < from.bottom;
+      return inLine &&
+          (right ? rect.left >= from.right - 1 : rect.right <= from.left + 1);
+    });
+    return more ? KeyEventResult.ignored : KeyEventResult.handled;
+  }
+
+  @override
+  Widget build(BuildContext context) => Focus(
+    focusNode: region,
+    canRequestFocus: false,
+    skipTraversal: true,
     onKeyEvent: key,
     child: widget.child,
   );
@@ -2555,6 +2639,10 @@ class _PosterCardState extends State<PosterCard> {
           container: true,
           label: a.title,
           button: true,
+          // The card's own focus node sits under excludeSemantics, so say
+          // here that the remote rests on it.
+          focusable: true,
+          focused: focused,
           onTap: open,
           onLongPress: widget.onMenu,
           excludeSemantics: true,
@@ -3036,12 +3124,16 @@ class AppRow extends StatelessWidget {
               ],
               if (toggle != null) ...[
                 const SizedBox(width: 12),
+                // The row is the switch: one node with its label, state
+                // and tap for screen readers, not an empty focused one.
                 ExcludeFocus(
-                  child: IgnorePointer(
-                    child: Switch(
-                      value: toggle!,
-                      activeThumbColor: fgBright,
-                      onChanged: enabled ? (_) {} : null,
+                  child: ExcludeSemantics(
+                    child: IgnorePointer(
+                      child: Switch(
+                        value: toggle!,
+                        activeThumbColor: fgBright,
+                        onChanged: enabled ? (_) {} : null,
+                      ),
                     ),
                   ),
                 ),

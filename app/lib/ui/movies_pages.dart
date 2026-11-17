@@ -296,7 +296,11 @@ class _MoviesHomeState extends State<MoviesHome> {
           },
           child: ListView(
             key: const PageStorageKey('movies-home'),
-            padding: EdgeInsets.only(bottom: contentBottom(context)),
+            // On TV and desktop the page starts under the floating top bar.
+            padding: EdgeInsets.only(
+              top: ScrollClearance.topOf(context),
+              bottom: contentBottom(context),
+            ),
             children: [
               Padding(
                 padding: EdgeInsets.fromLTRB(pad, 12, pad, 8),
@@ -322,13 +326,18 @@ class _MoviesHomeState extends State<MoviesHome> {
                         ),
                         icon: const Icon(LucideIcons.search),
                       ),
-                    IconButton(
-                      key: const Key('movies-downloads'),
-                      tooltip: 'Downloads',
-                      onPressed: () =>
-                          openDownloads(context, widget.services, widget.isTV),
-                      icon: const Icon(LucideIcons.download),
-                    ),
+                    // Downloads are for phones and computers; a TV streams.
+                    if (!widget.isTV || isDesktop)
+                      IconButton(
+                        key: const Key('movies-downloads'),
+                        tooltip: 'Downloads',
+                        onPressed: () => openDownloads(
+                          context,
+                          widget.services,
+                          widget.isTV,
+                        ),
+                        icon: const Icon(LucideIcons.download),
+                      ),
                   ],
                 ),
               ),
@@ -1065,80 +1074,87 @@ class _TitlePageState extends State<TitlePage> {
         : 'Play';
     final controls = !widget.isTV
         ? phoneActions(playLabel, next, unavailable, watched)
-        : Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              AppButton(
-                key: const Key('title-play'),
-                disabledReason: unavailable,
-                label: playLabel,
-                icon: LucideIcons.play,
-                filled: true,
-                autofocus: true,
-                isTV: widget.isTV,
-                onPressed: title.isShow && next == null
-                    ? null
-                    : () => play(next),
-              ),
-              // A phone can start it on a TV or cast it from here.
-              if (!widget.isTV)
+        : RemoteButtonRow(
+            isTV: widget.isTV,
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
                 AppButton(
-                  key: const Key('title-play-on'),
+                  key: const Key('title-play'),
                   disabledReason: unavailable,
-                  label: 'Play on…',
-                  icon: LucideIcons.cast,
-                  isTV: false,
+                  label: playLabel,
+                  icon: LucideIcons.play,
+                  filled: true,
+                  autofocus: true,
+                  isTV: widget.isTV,
                   onPressed: title.isShow && next == null
                       ? null
-                      : () => playOn(next),
+                      : () => play(next),
                 ),
-              AppButton(
-                key: const Key('title-watchlist'),
-                label: movies.onWatchlist(title) ? 'On watchlist' : 'Watchlist',
-                icon: movies.onWatchlist(title)
-                    ? LucideIcons.bookmarkCheck
-                    : LucideIcons.bookmarkPlus,
-                isTV: widget.isTV,
-                onPressed: () =>
-                    movies.setWatchlist(title, !movies.onWatchlist(title)),
-              ),
-              AppButton(
-                key: const Key('title-rate'),
-                label: movies.score(title) > 0
-                    ? 'Rated ${movies.score(title)}/10'
-                    : 'Rate',
-                icon: LucideIcons.star,
-                isTV: widget.isTV,
-                onPressed: () => unawaited(
-                  askTitleRating(
-                    context,
-                    widget.services,
-                    title,
-                    widget.isTV,
-                    finished: false,
-                  ),
-                ),
-              ),
-              if (!title.isShow) ...[
-                AppButton(
-                  key: const Key('title-watched'),
-                  label: watched ? 'Watched' : 'Mark watched',
-                  icon: watched ? LucideIcons.circleCheck : LucideIcons.circle,
-                  isTV: widget.isTV,
-                  onPressed: () => movies.markWatched(title, !watched),
-                ),
-                // Downloads are for phones and computers; a TV streams.
-                if (!widget.isTV || isDesktop)
+                // A phone can start it on a TV or cast it from here.
+                if (!widget.isTV)
                   AppButton(
-                    key: const Key('title-download'),
-                    label: 'Download',
-                    icon: LucideIcons.download,
-                    isTV: widget.isTV,
-                    onPressed: () => download(),
+                    key: const Key('title-play-on'),
+                    disabledReason: unavailable,
+                    label: 'Play on…',
+                    icon: LucideIcons.cast,
+                    isTV: false,
+                    onPressed: title.isShow && next == null
+                        ? null
+                        : () => playOn(next),
                   ),
+                AppButton(
+                  key: const Key('title-watchlist'),
+                  label: movies.onWatchlist(title)
+                      ? 'On watchlist'
+                      : 'Watchlist',
+                  icon: movies.onWatchlist(title)
+                      ? LucideIcons.bookmarkCheck
+                      : LucideIcons.bookmarkPlus,
+                  isTV: widget.isTV,
+                  onPressed: () =>
+                      movies.setWatchlist(title, !movies.onWatchlist(title)),
+                ),
+                AppButton(
+                  key: const Key('title-rate'),
+                  label: movies.score(title) > 0
+                      ? 'Rated ${movies.score(title)}/10'
+                      : 'Rate',
+                  icon: LucideIcons.star,
+                  isTV: widget.isTV,
+                  onPressed: () => unawaited(
+                    askTitleRating(
+                      context,
+                      widget.services,
+                      title,
+                      widget.isTV,
+                      finished: false,
+                    ),
+                  ),
+                ),
+                if (!title.isShow) ...[
+                  AppButton(
+                    key: const Key('title-watched'),
+                    label: watched ? 'Watched' : 'Mark watched',
+                    icon: watched
+                        ? LucideIcons.circleCheck
+                        : LucideIcons.circle,
+                    isTV: widget.isTV,
+                    onPressed: () => movies.markWatched(title, !watched),
+                  ),
+                  // Downloads are for phones and computers; a TV streams.
+                  if (!widget.isTV || isDesktop)
+                    AppButton(
+                      key: const Key('title-download'),
+                      label: 'Download',
+                      icon: LucideIcons.download,
+                      isTV: widget.isTV,
+                      onPressed: () => download(),
+                    ),
+                ],
               ],
-            ],
+            ),
           );
     if (unavailable == null) return controls;
     return Column(
