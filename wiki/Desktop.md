@@ -49,7 +49,7 @@ The player takes mpv's keys. **?** shows this list in the player.
 | Key | Does |
 | --- | --- |
 | Space / P | Play / pause |
-| ← / → | Seek 5 seconds (Shift: 1 second) |
+| ← / → | Seek 10 seconds (Shift: 1 second) |
 | ↑ / ↓ | Volume (9 / 0 for small steps) |
 | M | Mute |
 | F | Fullscreen (Esc leaves it) |

@@ -7,6 +7,7 @@ import '../core.dart';
 import '../data/models.dart';
 import '../data/tv_remote.dart';
 import '../services.dart';
+import '../player/track_labels.dart';
 import 'components.dart';
 import 'screen_orientation.dart';
 import 'skip_marker.dart';
@@ -139,11 +140,11 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
       for (final q in status['qualities'] as List? ?? const []) '$q',
     ];
     if (values.isEmpty) return;
-    final chosen = await chooseValue(
-      context,
-      'Quality',
+    final chosen = await chooseQuality(
+      (labels, selected) =>
+          chooseValue(context, 'Quality', labels, selected: selected),
       values,
-      selected: '${status['quality'] ?? ''}',
+      '${status['quality'] ?? ''}',
     );
     if (chosen != null) await send('quality', args: {'value': chosen});
   }

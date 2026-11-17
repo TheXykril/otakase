@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 
+import '../player/track_labels.dart';
 import 'components.dart';
 import 'mpv.dart';
 import '../host.dart';
@@ -179,7 +180,7 @@ List<(String, List<PlayerKeyHelp>)> playerKeyHelp({
     'Playback',
     [
       const PlayerKeyHelp('Space / P', 'Play / pause'),
-      const PlayerKeyHelp('← / →', 'Seek 5 seconds'),
+      const PlayerKeyHelp('← / →', 'Seek 10 seconds'),
       const PlayerKeyHelp('Shift + ← / →', 'Seek 1 second'),
       const PlayerKeyHelp('PgUp / PgDn', 'Previous / next chapter'),
       if (episodes) const PlayerKeyHelp('Enter', 'Skip opening or ending'),
@@ -340,15 +341,8 @@ class FlashText extends ValueNotifier<String> {
   }
 }
 
-String _trackName(String id, String? title, String? language) {
-  if (id == 'no') return 'Off';
-  if (title != null && title.isNotEmpty) {
-    return language != null && language.isNotEmpty && title != language
-        ? '$title · $language'
-        : title;
-  }
-  return language ?? 'Track $id';
-}
+String _trackName(String id, String? title, String? language) =>
+    trackLabel(id, title, language, kind: 'Track');
 
 /// The next speed after [rate] for a step, kept between 0.25x and 4x.
 double nextSpeed(double rate, PlayerAction action) {
