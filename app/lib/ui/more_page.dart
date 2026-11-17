@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../core.dart';
 import '../data/auth.dart';
 import '../desktop/desktop_core.dart';
+import '../host.dart';
 import '../data/models.dart';
 import '../services.dart';
 import 'catalog_pages.dart';
@@ -284,7 +285,7 @@ List<(String, List<MoreDestination>)> moreDestinations(
           MoreDestination(
             'Schedule',
             LucideIcons.calendarDays,
-            subtitle: 'This week · ${DateTime.now().timeZoneName}',
+            subtitle: 'This week · ${Host.timeZoneName}',
             open: () => openSchedule(context, services, isTV),
           ),
       ],
