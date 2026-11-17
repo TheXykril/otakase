@@ -77,6 +77,12 @@ Future<void> main([List<String> args = const []]) async {
   final core = CoreClient();
   final androidTV = !isDesktop && await core.isTV();
   Host.tv = androidTV;
+  if (androidTV) {
+    // Material's own focus colours follow the highlight mode, which starts
+    // as touch until a key arrives.
+    FocusManager.instance.highlightStrategy =
+        FocusHighlightStrategy.alwaysTraditional;
+  }
   final preferences = await SharedPreferences.getInstance();
   final tokens = platformTokenStore();
   final profiles = ProfileManager(
