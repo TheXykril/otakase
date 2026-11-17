@@ -407,6 +407,37 @@ class _DesktopMoreState extends State<DesktopMore> {
     });
   }
 
+  /// Down from the last setting stays in the pane. Without this the remote
+  /// fell diagonally into the middle of the sidebar.
+  KeyEventResult paneKey(FocusNode _, KeyEvent event) {
+    if (isDesktop ||
+        (event is! KeyDownEvent && event is! KeyRepeatEvent) ||
+        event.logicalKey != LogicalKeyboardKey.arrowDown) {
+      return KeyEventResult.ignored;
+    }
+    final current = FocusManager.instance.primaryFocus;
+    final context = current?.context;
+    if (current == null || context == null || !current.rect.isFinite) {
+      return KeyEventResult.ignored;
+    }
+    final below = pane.traversalDescendants.any(
+      (n) =>
+          n != current &&
+          n.rect.isFinite &&
+          !n.rect.isEmpty &&
+          n.rect.top > current.rect.bottom - 1,
+    );
+    if (below) return KeyEventResult.ignored;
+    // Text below the last row still scrolls into view.
+    final position = Scrollable.maybeOf(context)?.position;
+    if (position != null &&
+        position.hasContentDimensions &&
+        position.pixels < position.maxScrollExtent - .5) {
+      return KeyEventResult.ignored;
+    }
+    return KeyEventResult.handled;
+  }
+
   @override
   void dispose() {
     pane.dispose();
@@ -528,6 +559,7 @@ class _DesktopMoreState extends State<DesktopMore> {
                   child: Focus(
                     focusNode: pane,
                     canRequestFocus: false,
+                    onKeyEvent: paneKey,
                     child: SettingsPage(
                       key: ValueKey('desktop-settings-$section'),
                       services: services,
