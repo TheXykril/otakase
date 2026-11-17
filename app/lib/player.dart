@@ -44,6 +44,7 @@ import 'player/next_up.dart';
 import 'player/other_audio.dart';
 import 'player/progress.dart';
 import 'player/skips.dart';
+import 'player/track_labels.dart';
 
 /// The one player for everything: anime episodes, films, series episodes
 /// and downloads. What a title has no data for stays hidden: films have no
@@ -225,6 +226,18 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Duration get position => positionValue.value;
   set position(Duration value) => positionValue.value = value;
   Duration playbackPosition = Duration.zero;
+
+  /// The resume point the current open was asked for. A copy that fails
+  /// before it plays keeps it, so the next copy starts there too.
+  Duration? requestedResume;
+
+  /// Player track ids of subtitle files this copy loaded.
+  final fileSubtitleIds = <String>{};
+
+  /// Where a reopen continues: the played position, else the point the
+  /// failed open was going to resume from. Null lets [open] work it out.
+  Duration? get resumePoint =>
+      playbackPosition > Duration.zero ? playbackPosition : requestedResume;
 
   /// The device the episode plays on instead of this screen.
   late final cast = PlayerCast(
@@ -563,6 +576,59 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     });
   }
 
+  /// Watches the start of playback. Each step has its own time limit, but
+  /// a player that never answers (seen on Android TV) would leave the
+  /// loading screen up for good, so the whole start has one too.
+  Timer? startTimer;
+
+  /// Copies dropped in a row because they did not start in time.
+  int startTimeouts = 0;
+
+  /// Time to find a copy, counted again each time the search moves on.
+  Duration get searchLimit => isTitle
+      // One film source may take 45 s to match and 95 s to resolve.
+      ? const Duration(minutes: 2, seconds: 30)
+      : widget.services.store.flag('TorrentSources')
+      // A torrent search waits on other viewers for up to three minutes.
+      ? const Duration(minutes: 3, seconds: 30)
+      : const Duration(seconds: 90);
+
+  /// Time for a found copy to open, load its tracks and be ready to play.
+  static const copyLimit = Duration(seconds: 60);
+
+  void watchStart(int g, Duration limit, {required bool searching}) {
+    startTimer?.cancel();
+    startTimer = Timer(limit, () => unawaited(startTimedOut(g, searching)));
+  }
+
+  Future<void> startTimedOut(int g, bool searching) async {
+    if (!mounted || g != generation || !busy || casting) return;
+    // Leave the stuck attempt behind. Nothing below waits on the player,
+    // which may be the part that stopped answering.
+    generation++;
+    scope.cancel();
+    loadingTimer?.cancel();
+    stall.cancel();
+    unawaited(player.stop().catchError((Object _) {}));
+    startTimeouts++;
+    // A copy that opened but never started: the next copy may play. A
+    // search that hung would most likely hang again, so it stops there.
+    if (!searching && startTimeouts < 2) {
+      showStatus('Trying another copy');
+      await tryAnotherCopy(automatic: true, resumeFrom: resumePoint);
+      return;
+    }
+    startTimeouts = 0;
+    if (!mounted) return;
+    setState(() {
+      busy = false;
+      overlay = true;
+      error = isTitle
+          ? 'This title took too long to start. Try another copy.'
+          : 'This episode took too long to start. Try another copy.';
+    });
+  }
+
   Future<void> open({
     int? mirror,
     Duration? resumeFrom,
@@ -582,6 +648,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     playRequested = false;
     reopenedCopy = reopening;
     upcoming.hide();
+    requestedResume = resumeFrom != null && resumeFrom > Duration.zero
+        ? resumeFrom
+        : null;
     playbackPosition = Duration.zero;
     viewing = EpisodeViewing();
     viewingKey = null;
@@ -599,6 +668,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         status = 'Finding a copy';
       }
     });
+    watchStart(g, searchLimit, searching: true);
     subSelected = false;
     subtitleRequest++;
     audioSelected = false;
@@ -643,7 +713,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         final found =
             picked ??
             await request!.open(failedSources, requestScope, (s) {
-              if (g == generation) showStatus(s);
+              if (g != generation) return;
+              watchStart(g, searchLimit, searching: true);
+              showStatus(s);
             });
         if (!mounted || g != generation) return;
         media = found;
@@ -668,7 +740,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               onlyProvider: onlyProvider,
               allowAudioFallback: onlyProvider == null,
               status: (s) {
-                if (g == generation) showStatus(s);
+                if (g != generation) return;
+                watchStart(g, searchLimit, searching: true);
+                showStatus(s);
               },
             );
       }
@@ -726,6 +800,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               scope: requestScope,
               status: (_) {
                 if (g == generation) {
+                  watchStart(g, searchLimit, searching: true);
                   showStatus('Finding a copy with subtitles');
                 }
               },
@@ -773,6 +848,8 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
       startedAt = Duration(seconds: savedResume);
       if (!mounted || g != generation) return;
+      startTimer?.cancel();
+      startTimeouts = 0;
       setState(() => busy = false);
       await resumePlayback();
       if (!mounted || g != generation) return;
@@ -817,6 +894,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     source = candidate;
     copy = index;
     externalTrack = null;
+    fileSubtitleIds.clear();
     subSelected = false;
     audioSelected = false;
     subtitleRequest++;
@@ -825,7 +903,14 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       position = Duration.zero;
     });
     final stream = candidate.streams[index];
-    if (stream.torrent) watchLoading(g);
+    if (stream.torrent) {
+      // A torrent shows how much has arrived instead.
+      startTimer?.cancel();
+      watchLoading(g);
+    } else {
+      watchStart(g, copyLimit, searching: false);
+      showStatus('Loading');
+    }
     final headers = Map<String, String>.of(stream.headers);
     if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
     await configure();
@@ -1088,6 +1173,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           ),
         );
       }
+      if (!current()) return false;
+      final sid = await player.mpvGet('sid');
+      if (sid != null && sid != 'no') fileSubtitleIds.add(sid);
       if (!current()) return false;
       externalTrack = track;
       return true;
@@ -2024,7 +2112,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         pendingSource = null;
         return;
       }
-      await open(resumeFrom: playbackPosition);
+      await open(resumeFrom: resumePoint);
     } catch (e) {
       if (e is CoreFailure && e.code == 'cancelled') return;
       if (mounted && g == generation) {
@@ -2038,6 +2126,33 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   Future<void> trackPanel() async {
     panelOpen = true;
     showControls();
+    final chosen = player.state.track;
+    final fileSubtitleOn = chosen.subtitle.uri || chosen.subtitle.data;
+    // A loaded subtitle file is also listed as a player track; its own row
+    // stands for it.
+    final subtitleRows = [
+      for (final track in player.state.tracks.subtitle)
+        if (!fileSubtitleIds.contains(track.id)) track,
+    ];
+    final files = source == null
+        ? <Json>[]
+        : externalSubtitleTracks(source!.streams[copy]);
+    final labels = distinctLabels([
+      for (final track in subtitleRows) subtitleLabel(track),
+      for (final track in files)
+        trackLabel(
+          '',
+          track['label'] as String?,
+          track['language'] as String?,
+          kind: 'Subtitles',
+        ),
+    ]);
+    // Turning the sound off is the mute key's job.
+    final audioRows = [
+      for (final track in player.state.tracks.audio)
+        if (track.id != 'no') track,
+    ];
+    final audioLabels = distinctLabels(audioRows.map(audioLabel).toList());
     await showDialog<void>(
       context: context,
       builder: (dialog) => AlertDialog(
@@ -2048,10 +2163,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
           child: ListView(
             children: [
               const Text('Subtitles', style: TextStyle(color: accentText)),
-              for (final track in player.state.tracks.subtitle)
+              for (final (i, track) in subtitleRows.indexed)
                 ChoiceRow(
-                  autofocus: track == player.state.tracks.subtitle.first,
-                  title: Text(subtitleLabel(track)),
+                  autofocus: i == 0,
+                  selected: !fileSubtitleOn && track.id == chosen.subtitle.id,
+                  title: Text(labels[i]),
                   onTap: () {
                     subSelected = true;
                     subtitleRequest++;
@@ -2060,14 +2176,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                     unawaited(player.setSubtitleTrack(track));
                   },
                 ),
-              for (final track
-                  in source == null
-                      ? <Json>[]
-                      : externalSubtitleTracks(source!.streams[copy]))
+              for (final (i, track) in files.indexed)
                 ChoiceRow(
-                  title: Text(
-                    '${track['label'] ?? track['language'] ?? 'Subtitles'}',
-                  ),
+                  selected:
+                      fileSubtitleOn && externalTrack?['url'] == track['url'],
+                  title: Text(labels[subtitleRows.length + i]),
                   onTap: () {
                     subSelected = true;
                     Navigator.pop(dialog);
@@ -2078,9 +2191,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                 ),
               const Divider(),
               const Text('Audio', style: TextStyle(color: accentText)),
-              for (final track in player.state.tracks.audio)
+              for (final (i, track) in audioRows.indexed)
                 ChoiceRow(
-                  title: Text(audioLabel(track)),
+                  selected: track.id == chosen.audio.id,
+                  title: Text(audioLabels[i]),
                   onTap: () {
                     audioSelected = true;
                     Navigator.pop(dialog);
@@ -2194,11 +2308,15 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     Duration? resumeFrom,
   }) async {
     final g = generation;
-    resumeFrom ??= playbackPosition;
+    if (!automatic) startTimeouts = 0;
+    resumeFrom ??= resumePoint ?? Duration.zero;
     await save();
     if (!mounted || g != generation) return;
     if (source != null && copy + 1 < source!.streams.length) {
-      await open(mirror: copy + 1, resumeFrom: resumeFrom);
+      await open(
+        mirror: copy + 1,
+        resumeFrom: resumeFrom > Duration.zero ? resumeFrom : null,
+      );
       return;
     }
     if (isTitle) {
@@ -2236,7 +2354,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       }
       failedSources.clear();
     }
-    if (mounted && g == generation) await open(resumeFrom: resumeFrom);
+    if (mounted && g == generation) {
+      // Zero would wipe the episode's saved resume point.
+      await open(resumeFrom: resumeFrom > Duration.zero ? resumeFrom : null);
+    }
   }
 
   Future<void> qualityPanel() async {
@@ -2255,7 +2376,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     );
     panelOpen = false;
     if (chosen == another && mounted) {
-      await tryAnotherCopy(resumeFrom: playbackPosition);
+      await tryAnotherCopy(resumeFrom: resumePoint);
     } else if (chosen != null && mounted) {
       await applyQuality(chosen);
     } else if (mounted) {
@@ -2273,19 +2394,33 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     await save();
     await widget.services.store.set('Quality', chosen);
     rememberTracks();
-    await open(mirror: copy, resumeFrom: playbackPosition);
+    await open(mirror: copy, resumeFrom: resumePoint);
   }
 
-  String subtitleLabel(SubtitleTrack track) => track.id == 'no'
-      ? 'Off'
-      : track.id == 'auto'
-      ? 'Automatic'
-      : track.title ?? track.language ?? 'Track ${track.id}';
+  String subtitleLabel(SubtitleTrack track) =>
+      trackLabel(track.id, track.title, track.language, kind: 'Subtitles');
 
-  String audioLabel(AudioTrack track) =>
-      track.title ??
-      track.language ??
-      (track.id == 'auto' ? 'Automatic' : 'Track ${track.id}');
+  String audioLabel(AudioTrack track) => trackLabel(
+    track.id,
+    track.title,
+    track.language,
+    kind: 'Audio',
+    fallback: loneAudioLanguage,
+  );
+
+  /// The language of a copy's only audio track when the file does not name
+  /// it: what the copy was found as (an anime dub is English).
+  String? get loneAudioLanguage {
+    final real = player.state.tracks.audio.where(
+      (t) => t.id != 'auto' && t.id != 'no',
+    );
+    if (real.length != 1) return null;
+    if (isTitle) {
+      final named = (media?.audioLanguage ?? '').split(',').first.trim();
+      return named.isEmpty ? null : named;
+    }
+    return animeAudioLanguage(source?.mode ?? audioMode);
+  }
 
   /// What a phone remote shows beyond the basics: art, skip marks, the
   /// skip button and the track and quality choices.
@@ -2477,7 +2612,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         unawaited(playPause());
         showControls();
       case PlayerAction.seekBack || PlayerAction.seekForward:
-        unawaited(seek(action == PlayerAction.seekBack ? -5 : 5));
+        unawaited(seek(action == PlayerAction.seekBack ? -10 : 10));
       case PlayerAction.stepBack || PlayerAction.stepForward:
         unawaited(seek(action == PlayerAction.stepBack ? -1 : 1));
       case PlayerAction.volumeUp ||
@@ -2646,6 +2781,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     stall.cancel();
     upcoming.stop();
     loadingTimer?.cancel();
+    startTimer?.cancel();
     cast.dispose();
     if (!profileStopped) {
       final close = request?.onClose;
@@ -3160,13 +3296,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                               onPressed: () {
                                 failedSources.clear();
                                 source = null;
-                                unawaited(
-                                  open(
-                                    resumeFrom: playbackPosition > Duration.zero
-                                        ? playbackPosition
-                                        : null,
-                                  ),
-                                );
+                                unawaited(open(resumeFrom: resumePoint));
                               },
                               size: errorSize,
                               isTV: widget.isTV,

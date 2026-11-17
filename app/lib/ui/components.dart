@@ -3101,21 +3101,39 @@ class ChoiceRow extends StatelessWidget {
     required this.onTap,
     this.autofocus = false,
     this.trailing,
+    this.selected = false,
   });
   final Widget title;
   final VoidCallback? onTap;
   final bool autofocus;
   final Widget? trailing;
+
+  /// The current choice: a raised row with a Shu check, as in the pickers.
+  final bool selected;
   @override
-  Widget build(BuildContext context) => FocusBox(
-    autofocus: autofocus,
-    onPressed: onTap,
-    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-    child: Row(
-      children: [
-        Expanded(child: title),
-        ?trailing,
-      ],
+  Widget build(BuildContext context) => Semantics(
+    selected: selected,
+    child: FocusBox(
+      autofocus: autofocus,
+      onPressed: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: selected
+            ? const BoxDecoration(
+                color: selectedPanel,
+                borderRadius: BorderRadius.all(
+                  Radius.circular(KageRadius.button),
+                ),
+              )
+            : null,
+        child: Row(
+          children: [
+            Expanded(child: title),
+            ?trailing,
+            if (selected) const Icon(LucideIcons.check, size: 20, color: shu),
+          ],
+        ),
+      ),
     ),
   );
 }
