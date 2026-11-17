@@ -107,6 +107,16 @@ Future<void> downloadAnimeEpisode(
   );
   final episode = int.tryParse(picked?.replaceFirst('Episode ', '') ?? '');
   if (episode == null || !context.mounted) return;
+  await _downloadAnime(context, services, anime, episode, mode);
+}
+
+Future<void> _downloadAnime(
+  BuildContext context,
+  AppServices services,
+  Anime anime,
+  int episode,
+  String mode,
+) async {
   _notice(context, 'Finding episode $episode…');
   try {
     final source = await services.resolver.resolve(
@@ -137,6 +147,48 @@ Future<void> downloadAnimeEpisode(
   }
 }
 
+/// Starts a failed download again: finds a fresh copy the same way the
+/// first try did, so a busy or vanished link is replaced, and keeps the
+/// part already saved when the new copy is the same file.
+Future<void> retryDownload(
+  BuildContext context,
+  AppServices services,
+  DownloadItem d,
+) async {
+  final meta = d.meta;
+  final episode = number(meta['episode']);
+  if (meta['anime'] case final Map a when episode > 0) {
+    final anime = Anime.fromJson(a.cast<String, dynamic>());
+    final mode = meta['mode'] as String? ?? d.id.split(':').last;
+    return _downloadAnime(context, services, anime, episode, mode);
+  }
+  if (meta['title'] case final Map t) {
+    final title = MediaTitle.fromJson(t.cast<String, dynamic>());
+    final season = number(meta['season']);
+    return downloadTitle(
+      context,
+      services,
+      title,
+      episode: episode > 0
+          ? TitleEpisode(
+              season: season,
+              number: episode,
+              runtime: number(meta['runtime']),
+            )
+          : null,
+    );
+  }
+  _notice(
+    context,
+    'This download is too old to retry. Delete it and download it again.',
+  );
+}
+
+/// Whether [d] knows enough about what it saved to look for it again.
+bool canRetryDownload(DownloadItem d) =>
+    d.meta['title'] is Map ||
+    (d.meta['anime'] is Map && number(d.meta['episode']) > 0);
+
 String _size(int bytes) {
   if (bytes <= 0) return '';
   const units = ['B', 'KB', 'MB', 'GB'];
@@ -156,7 +208,7 @@ class DownloadsPage extends StatelessWidget {
 
   String status(DownloadItem d) => switch (d.state) {
     'done' => _size(d.bytes),
-    'failed' => d.error.isEmpty ? 'Failed' : d.error,
+    'failed' => downloadErrorText(d.error),
     'cancelled' => 'Cancelled',
     _ => [
       if (d.progress > 0) '${(d.progress * 100).round()}%' else 'Downloading',
@@ -276,6 +328,13 @@ class DownloadsPage extends StatelessWidget {
                     ),
                   ),
                 ),
+                if ((d.state == 'failed' || d.state == 'cancelled') &&
+                    canRetryDownload(d))
+                  IconButton(
+                    tooltip: 'Retry',
+                    onPressed: () => retryDownload(context, services, d),
+                    icon: const Icon(LucideIcons.refreshCw, color: accentText),
+                  ),
                 IconButton(
                   tooltip: d.running ? 'Cancel' : 'Delete',
                   onPressed: () => d.running

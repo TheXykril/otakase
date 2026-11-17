@@ -577,12 +577,16 @@ class LauncherPageState extends State<LauncherPage> with WindowListener {
     if (menus.length > 1) {
       final previous = _menuHistory.removeLast();
       setState(() {
-        menus.removeLast();
+        final left = menus.removeLast();
         // The main menu shows what changed meanwhile (watchlist, progress).
         if (menus.length == 1) menus[0] = mainMenu();
-        query.text = previous.filter;
+        // The words a search was made from are done with: back from its
+        // results goes to the plain list, so the next Esc closes.
+        final searched =
+            left.title == 'Search' && left.detail == previous.filter;
+        query.text = searched ? '' : previous.filter;
         query.selection = TextSelection.collapsed(offset: query.text.length);
-        selected = previous.selected;
+        selected = searched ? 0 : previous.selected;
         message = null;
       });
       _restoreScroll(previous.offset);

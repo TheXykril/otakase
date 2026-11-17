@@ -200,15 +200,68 @@ func (j downloadJob) get(ctx context.Context, link string, extra map[string]stri
 	for k, v := range extra {
 		req.Header.Set(k, v)
 	}
-	resp, err := j.client().Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+	for attempt := 0; ; attempt++ {
+		resp, err := j.client().Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusPartialContent {
+			return resp, nil
+		}
 		resp.Body.Close()
-		return nil, fmt.Errorf("the server answered %d", resp.StatusCode)
+		status := resp.StatusCode
+		busy := status == http.StatusTooManyRequests || status >= 500
+		if !busy || attempt+1 >= downloadAttempts {
+			return nil, downloadHTTPError{status: status}
+		}
+		if err := downloadWait(ctx, retryDelay(attempt, resp.Header.Get("Retry-After"))); err != nil {
+			return nil, err
+		}
 	}
-	return resp, nil
+}
+
+// downloadAttempts is how often a busy source (429 or a 5xx) is asked
+// before the download gives up.
+const downloadAttempts = 5
+
+// downloadWait sleeps between tries; tests replace it.
+var downloadWait = func(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
+}
+
+// retryDelay is how long to wait before asking a busy source again: what
+// its Retry-After says when that is sensible, else 2, 4, 8, 16 s.
+func retryDelay(attempt int, retryAfter string) time.Duration {
+	const most = 60 * time.Second
+	if secs, err := strconv.Atoi(strings.TrimSpace(retryAfter)); err == nil && secs >= 0 {
+		return min(time.Duration(secs)*time.Second, most)
+	}
+	if at, err := http.ParseTime(retryAfter); err == nil {
+		return min(max(time.Until(at), 0), most)
+	}
+	return min(time.Duration(2<<attempt)*time.Second, most)
+}
+
+// downloadHTTPError is a source refusing a request, worded for people.
+type downloadHTTPError struct{ status int }
+
+func (e downloadHTTPError) Error() string {
+	switch {
+	case e.status == http.StatusTooManyRequests:
+		return "The source is busy. Try again in a few minutes."
+	case e.status == http.StatusUnauthorized || e.status == http.StatusForbidden:
+		return "The source refused the download. Try again, or download from another copy."
+	case e.status == http.StatusNotFound || e.status == http.StatusGone:
+		return "The source no longer has this copy. Try again to find another one."
+	case e.status >= 500:
+		return "The source is having trouble. Try again later."
+	}
+	return fmt.Sprintf("The source did not send the video (error %d). Try again later.", e.status)
 }
 
 func (j downloadJob) run(ctx context.Context) (string, error) {
@@ -352,9 +405,26 @@ func (j downloadJob) ffmpeg(ctx context.Context, ffmpeg string) (string, error) 
 		if len(message) > 300 {
 			message = message[len(message)-300:]
 		}
+		if refused, ok := ffmpegRefusal(message); ok {
+			return "", refused
+		}
 		return "", fmt.Errorf("ffmpeg: %s", orText(message, err.Error()))
 	}
 	return final, os.Rename(part, final)
+}
+
+// ffmpegRefusal reads an HTTP refusal out of ffmpeg's error text, so it is
+// worded like one the core met itself.
+func ffmpegRefusal(message string) (downloadHTTPError, bool) {
+	for _, status := range []int{429, 401, 403, 404, 410, 500, 502, 503, 504} {
+		if strings.Contains(message, "HTTP error "+strconv.Itoa(status)) || strings.Contains(message, "Server returned "+strconv.Itoa(status)) {
+			return downloadHTTPError{status: status}, true
+		}
+	}
+	if strings.Contains(message, "Server returned 5XX") {
+		return downloadHTTPError{status: 500}, true
+	}
+	return downloadHTTPError{}, false
 }
 
 func orText(a, b string) string {
@@ -605,6 +675,11 @@ func (j downloadJob) fetchSegment(ctx context.Context, link string) ([]byte, err
 			}
 		}
 		resp, err := j.get(ctx, link, nil)
+		var refused downloadHTTPError
+		if errors.As(err, &refused) {
+			// get already asked a busy source again.
+			return nil, err
+		}
 		if err != nil {
 			lastErr = err
 			continue

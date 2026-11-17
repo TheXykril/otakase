@@ -95,6 +95,23 @@ class DownloadItem {
   };
 }
 
+/// [error] in plain words. Older cores passed a bare HTTP status through
+/// ("the server answered 429"); those read like the current wording.
+String downloadErrorText(String error) {
+  final status = int.tryParse(
+    RegExp(r'^the server answered (\d+)$').firstMatch(error)?.group(1) ?? '',
+  );
+  if (status == null) return error.isEmpty ? 'Failed' : error;
+  return switch (status) {
+    429 => 'The source is busy. Try again in a few minutes.',
+    401 || 403 => 'The source refused the download. Try again, or download from another copy.',
+    404 ||
+    410 => 'The source no longer has this copy. Try again to find another one.',
+    >= 500 => 'The source is having trouble. Try again later.',
+    _ => 'The source did not send the video (error $status). Try again later.',
+  };
+}
+
 /// A file name that every system accepts.
 String safeFileName(String name) {
   final cleaned = name

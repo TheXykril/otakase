@@ -546,7 +546,8 @@ class _SettingsPageState extends State<SettingsPage> {
         row(
           'PercentageToMarkComplete',
           'A movie or show episode you stop after this point counts as watched. '
-              'Anime counts once the episode ends.',
+              'Anime counts once the episode ends. The default is 85%, and '
+              'your Otakase account carries your choice to every device.',
           value: '${store.integer('PercentageToMarkComplete')}%',
           onTap: () => numberChoice('PercentageToMarkComplete', [
             70,

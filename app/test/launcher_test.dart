@@ -137,9 +137,10 @@ void main() {
     await press(tester, LogicalKeyboardKey.escape);
     expect(find.text('Play next: resume episode 3'), findsOneWidget);
     await press(tester, LogicalKeyboardKey.escape);
+    // Back from the search results goes to the plain list, not the words
+    // the search was made from, so one more Esc closes the launcher.
     await press(tester, LogicalKeyboardKey.escape);
-    expect(find.text('frierenn'), findsOneWidget);
-    await press(tester, LogicalKeyboardKey.escape);
+    expect(find.text('frierenn'), findsNothing);
     expect(find.text('Continue: Frieren · Ep 3'), findsOneWidget);
   });
 

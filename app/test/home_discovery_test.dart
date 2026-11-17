@@ -70,6 +70,36 @@ Future<AppServices> launchHome(
 }
 
 void main() {
+  for (final content in ['anime', 'both']) {
+    testWidgets('small phone shows the featured button above the tab bar '
+        '($content)', (tester) async {
+      await fixture.launch(tester);
+      await tester.pumpWidget(const SizedBox());
+      // 720x1280 at 2x, like the smallest phones in the QA run.
+      tester.view.physicalSize = const Size(720, 1280);
+      tester.view.devicePixelRatio = 2;
+      tester.view.padding = const FakeViewPadding(top: 48, bottom: 96);
+      addTearDown(tester.view.resetPadding);
+      final base = await fixture.services();
+      await base.store.set('SyncAniListMAL', false);
+      await base.store.set('Content', content);
+      final services = AppServices(
+        catalog: HomeCatalog(),
+        store: base.store,
+        core: base.core,
+        auth: AuthService(storage: MemoryTokens()),
+      );
+      await tester.pumpWidget(OtakaseApp(services: services, isTV: false));
+      await tester.pumpAndSettle();
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        await services.close();
+      });
+      final button = tester.getRect(find.byKey(const Key('discovery-open')));
+      final bar = tester.getRect(find.byKey(const ValueKey('nav-Home')));
+      expect(button.bottom, lessThanOrEqualTo(bar.top - 8));
+    });
+  }
   for (final tv in [false, true]) {
     testWidgets('unlinked ${tv ? 'TV' : 'phone'} Home offers safe discovery', (
       tester,

@@ -239,7 +239,38 @@ class AccountCenter extends ChangeNotifier with WidgetsBindingObserver {
     final run = activeRun;
     services.discord.bridge = run == null ? null : _Bridge(run);
     services.accountRoute = run == null ? null : () => HubRoute(run.live);
+    services.accountSyncText = run == null ? null : () => accountSyncLine(run);
+    _followSync(services, run);
     if (run != null) unawaited(_moveOldBackup(services, run));
+  }
+
+  AccountRun? _followed;
+  AppServices? _followedFor;
+
+  void _syncTick() {
+    final services = _followedFor;
+    if (services != null) services.accountSyncChanged.value++;
+  }
+
+  /// Tells the open profile's sync lines when the account's sync, logins or
+  /// connection change.
+  void _followSync(AppServices services, AccountRun? run) {
+    if (!identical(_followed, run) || !identical(_followedFor, services)) {
+      final old = _followed;
+      if (old != null) {
+        for (final l in <Listenable>[old.sync, old.vault, old.live]) {
+          l.removeListener(_syncTick);
+        }
+      }
+      _followed = run;
+      _followedFor = services;
+      if (run != null) {
+        for (final l in <Listenable>[run.sync, run.vault, run.live]) {
+          l.addListener(_syncTick);
+        }
+      }
+    }
+    _syncTick();
   }
 
   bool _moving = false;
@@ -354,4 +385,14 @@ class AccountCenter extends ChangeNotifier with WidgetsBindingObserver {
     await manager.close();
     super.dispose();
   }
+}
+
+/// How the Otakase account's sync stands, in a few words. Accounts and the
+/// account card both say this, so they never disagree.
+String accountSyncLine(AccountRun run) {
+  if (run.sync.lastError != null) return 'Sync waits: ${run.sync.lastError}';
+  if (run.vault.lastError != null) return 'Logins wait: ${run.vault.lastError}';
+  if (!run.live.connected) return 'Saved on this device · connecting…';
+  if (run.sync.lastSynced == null) return 'Syncing…';
+  return 'In sync on every device';
 }

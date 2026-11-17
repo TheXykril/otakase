@@ -22,6 +22,32 @@ import 'auth_test.dart' show MemoryTokens, account, json;
 import 'widget_test.dart' as fixture;
 
 void main() {
+  testWidgets('the account card follows the Otakase account sync line', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final services = AppServices(
+      catalog: fixture.TestCatalog(),
+      store: AppStore(await SharedPreferences.getInstance()),
+      core: CoreClient(),
+      auth: AuthService(storage: MemoryTokens()),
+    );
+    addTearDown(services.close);
+    var line = 'Saved on this device · connecting…';
+    services.accountSyncText = () => line;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: AccountSyncStatus(services: services)),
+      ),
+    );
+    expect(find.text(line), findsOneWidget);
+    // The account connects: the card says so without anything else moving.
+    line = 'In sync on every device';
+    services.accountSyncChanged.value++;
+    await tester.pump();
+    expect(find.text('In sync on every device'), findsOneWidget);
+  });
+
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test(

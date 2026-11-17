@@ -2,6 +2,7 @@ package mobilecore
 
 import (
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -219,5 +221,105 @@ func TestDownloadPlaylistWithFFmpeg(t *testing.T) {
 	}
 	if info, err := os.Stat(base + ".mkv"); err != nil || info.Size() == 0 {
 		t.Fatalf("no file: %v", err)
+	}
+}
+
+func TestDownloadRetriesABusySource(t *testing.T) {
+	waits := []time.Duration{}
+	defer func(old func(context.Context, time.Duration) error) { downloadWait = old }(downloadWait)
+	downloadWait = func(_ context.Context, d time.Duration) error {
+		waits = append(waits, d)
+		return nil
+	}
+	body := bytes.Repeat([]byte("abc"), 1000)
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) <= 2 {
+			w.Header().Set("Retry-After", "3")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.Write(body)
+	}))
+	defer server.Close()
+	c := NewCore()
+	defer c.Close()
+	base := filepath.Join(t.TempDir(), "Film")
+	id := startDownload(t, c, map[string]any{"url": server.URL + "/film.mp4", "path": base})
+	s := waitDownload(t, c, id)
+	if s.State != downloadDone {
+		t.Fatalf("status = %+v", s)
+	}
+	if got, _ := os.ReadFile(base + ".mp4"); !bytes.Equal(got, body) {
+		t.Fatalf("file has %d bytes", len(got))
+	}
+	if len(waits) != 2 || waits[0] != 3*time.Second {
+		t.Fatalf("waits = %v", waits)
+	}
+}
+
+func TestDownloadGivesUpOnABusySourceWithPlainWords(t *testing.T) {
+	defer func(old func(context.Context, time.Duration) error) { downloadWait = old }(downloadWait)
+	downloadWait = func(context.Context, time.Duration) error { return nil }
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+	c := NewCore()
+	defer c.Close()
+	id := startDownload(t, c, map[string]any{"url": server.URL + "/film.mp4", "path": filepath.Join(t.TempDir(), "Film")})
+	s := waitDownload(t, c, id)
+	if s.State != downloadFailed || strings.Contains(s.Error, "429") || !strings.Contains(s.Error, "busy") {
+		t.Fatalf("status = %+v", s)
+	}
+	if calls.Load() != downloadAttempts {
+		t.Fatalf("asked %d times", calls.Load())
+	}
+}
+
+func TestDownloadDoesNotRetryARefusal(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+	c := NewCore()
+	defer c.Close()
+	id := startDownload(t, c, map[string]any{"url": server.URL + "/film.mp4", "path": filepath.Join(t.TempDir(), "Film")})
+	s := waitDownload(t, c, id)
+	if s.State != downloadFailed || strings.Contains(s.Error, "404") || calls.Load() != 1 {
+		t.Fatalf("status = %+v after %d calls", s, calls.Load())
+	}
+}
+
+func TestRetryDelay(t *testing.T) {
+	cases := []struct {
+		attempt int
+		after   string
+		want    time.Duration
+	}{
+		{0, "", 2 * time.Second},
+		{3, "", 16 * time.Second},
+		{9, "", 60 * time.Second},
+		{0, "7", 7 * time.Second},
+		{0, "3600", 60 * time.Second},
+		{1, "soon", 4 * time.Second},
+	}
+	for _, c := range cases {
+		if got := retryDelay(c.attempt, c.after); got != c.want {
+			t.Errorf("retryDelay(%d, %q) = %v, want %v", c.attempt, c.after, got, c.want)
+		}
+	}
+}
+
+func TestFFmpegRefusal(t *testing.T) {
+	if e, ok := ffmpegRefusal("[https @ 0x1] HTTP error 429 Too Many Requests\nfoo: Server returned 4XX Client Error"); !ok || e.status != 429 {
+		t.Fatalf("got %v %v", e, ok)
+	}
+	if _, ok := ffmpegRefusal("Invalid data found when processing input"); ok {
+		t.Fatal("not a refusal")
 	}
 }

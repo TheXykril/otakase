@@ -97,14 +97,6 @@ String _ago(int ms) {
   return 'over a month ago';
 }
 
-String accountSyncLine(AccountRun run) {
-  if (run.sync.lastError != null) return 'Sync waits: ${run.sync.lastError}';
-  if (run.vault.lastError != null) return 'Logins wait: ${run.vault.lastError}';
-  if (!run.live.connected) return 'Saved on this device · connecting…';
-  if (run.sync.lastSynced == null) return 'Syncing…';
-  return 'In sync on every device';
-}
-
 /// The Otakase account card at the top of Accounts.
 class OtakaseAccountSection extends StatefulWidget {
   const OtakaseAccountSection({
@@ -399,7 +391,7 @@ class _WaitDialogState extends State<_WaitDialog> {
     content: Text(
       copied
           ? 'Link copied. Open it in any browser on this device.'
-          : 'Finish signing in in your browser. This closes on its own.',
+          : 'Complete the sign-in in your browser. This closes on its own.',
     ),
     actions: [
       TextButton(
@@ -521,8 +513,8 @@ class _PairDialogState extends State<PairDialog> {
                 const SizedBox(height: 8),
                 Text(
                   'Scan with your phone and sign in with Discord or Google. '
-                  'Or open Accounts in Otakase on your phone, pick Add a TV '
-                  'and type the digits.',
+                  'Or open Accounts in Otakase on your phone or computer, '
+                  'pick Add a TV and type the digits.',
                   textAlign: TextAlign.center,
                   style: uiStyle(context, size: 15, color: muted),
                 ),
@@ -601,6 +593,13 @@ class _ApproveDialogState extends State<_ApproveDialog> {
           enabled: !done,
           keyboardType: TextInputType.number,
           maxLength: 7,
+          // Only the digits count; a space between the halves is fine.
+          buildCounter:
+              (_, {required currentLength, required isFocused, maxLength}) =>
+                  Text(
+                    '${code.text.replaceAll(RegExp(r'\D'), '').length}/6',
+                    style: uiStyle(context, size: 12, color: muted),
+                  ),
           decoration: const InputDecoration(hintText: '123 456'),
           onSubmitted: (_) => approve(),
         ),

@@ -19,8 +19,9 @@ String traktSyncStatus(AppServices services) {
 
 String accountSyncSummary(AppServices services) {
   final auth = services.auth;
+  final account = services.accountSyncText?.call();
   if (!auth.hasAccounts && !services.trakt.signedIn) {
-    return 'Progress saved on this device';
+    return account ?? 'Progress saved on this device';
   }
   if (auth.accounts.values.any((a) => a.expired)) {
     return 'Sign in again to sync progress';
@@ -49,6 +50,9 @@ String accountSyncSummary(AppServices services) {
       'Trakt',
   ];
   if (sent.isNotEmpty) return 'Last update sent to ${sent.join(' & ')}';
+  // The Otakase account carries progress between devices, so its state is
+  // the one to show; Accounts says the same.
+  if (account != null) return '$account · view sync status';
   return 'Progress saved locally · view sync status';
 }
 
@@ -65,6 +69,7 @@ class AccountSyncStatus extends StatelessWidget {
       services.trakt,
       services.movies,
       services.store,
+      services.accountSyncChanged,
     ]),
     builder: (context, _) => Text(
       accountSyncSummary(services),

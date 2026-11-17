@@ -386,7 +386,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(LucideIcons.tv, size: 18, color: shu),
+                const Icon(LucideIcons.monitorPlay, size: 18, color: shu),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
@@ -434,7 +434,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Icon(
-            current.live ? LucideIcons.tv : LucideIcons.wifiOff,
+            current.live ? LucideIcons.monitorPlay : LucideIcons.wifiOff,
             size: 48,
             color: muted,
           ),
@@ -463,7 +463,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
           ] else
             Text(
               'Pick something on this phone and choose Play on, or start '
-              'it on the TV. Its controls show up here.',
+              'it on ${current.tv.name}. Its controls show up here.',
               textAlign: TextAlign.center,
               style: uiStyle(context, color: muted),
             ),
@@ -505,6 +505,8 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
               ),
               child: Slider(
                 key: const Key('remote-scrubber'),
+                semanticFormatterCallback: (v) =>
+                    'Position ${clock(v)} of ${clock(duration)}',
                 value: duration <= 0 ? 0 : position.clamp(0, duration),
                 max: duration <= 0 ? 1 : duration,
                 onChanged: duration <= 0
@@ -537,22 +539,30 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
     Color fill = panel,
     Color color = fgBright,
     Key? key,
-  }) => Tooltip(
-    message: tip,
-    child: Material(
-      color: fill,
-      shape: const CircleBorder(),
-      child: InkWell(
-        key: key,
-        customBorder: const CircleBorder(),
-        onTap: tap,
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: Icon(
-            icon,
-            size: size * .42,
-            color: tap == null ? disabled : color,
+  }) => Semantics(
+    button: true,
+    enabled: tap != null,
+    label: tip,
+    excludeSemantics: true,
+    onTap: tap,
+    child: Tooltip(
+      message: tip,
+      excludeFromSemantics: true,
+      child: Material(
+        color: fill,
+        shape: const CircleBorder(),
+        child: InkWell(
+          key: key,
+          customBorder: const CircleBorder(),
+          onTap: tap,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Icon(
+              icon,
+              size: size * .42,
+              color: tap == null ? disabled : color,
+            ),
           ),
         ),
       ),
@@ -619,6 +629,7 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
             ),
             child: Slider(
               key: const Key('remote-volume'),
+              semanticFormatterCallback: (v) => 'Volume ${v.round()}',
               value: level.toDouble(),
               max: 100,
               onChanged: (v) => setState(() => volume = v),
@@ -655,25 +666,32 @@ class _RemoteNowPlayingState extends State<RemoteNowPlaying> {
         number(status['episodes']) > 1 ||
         status['kind'] != 'movie' && number(status['episodes']) == 0;
     Widget tool(String label, IconData icon, VoidCallback? tap) => Expanded(
-      child: InkWell(
-        key: Key('remote-tool-$label'),
-        borderRadius: BorderRadius.circular(KageRadius.md),
+      child: Semantics(
+        button: true,
+        enabled: tap != null,
+        label: label,
+        excludeSemantics: true,
         onTap: tap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            children: [
-              Icon(icon, color: tap == null ? disabled : fg),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: uiStyle(
-                  context,
-                  size: 12,
-                  color: tap == null ? disabled : muted,
+        child: InkWell(
+          key: Key('remote-tool-$label'),
+          borderRadius: BorderRadius.circular(KageRadius.md),
+          onTap: tap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              children: [
+                Icon(icon, color: tap == null ? disabled : fg),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: uiStyle(
+                    context,
+                    size: 12,
+                    color: tap == null ? disabled : muted,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
