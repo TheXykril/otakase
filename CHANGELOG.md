@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Watch on your car's screen while parked.** Android Auto now lists
+  Otakase (after turning on Unknown sources in Android Auto's developer
+  settings, see the wiki). Pick an episode from Continue watching on the
+  car screen, or choose **Car screen** in the phone player's cast menu.
+  Video pauses as soon as the car moves.
 - **See which titles you can't play.** Anime, movies and shows no source
   has are greyed out with "No source has this", and upcoming titles with
   "Not out yet", in search, trending and the other lists. The app learns

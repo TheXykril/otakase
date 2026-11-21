@@ -20,6 +20,7 @@ import android.os.Looper
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
+import com.xyverion.otakase.car.CarPlayer
 import com.xyverion.otakase.mobilecore.Mobilecore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -162,6 +163,7 @@ class MainActivity : FlutterActivity() {
         // temp directory is not writable for apps.
         core.setCacheDir(cacheDir.absolutePath)
         appUpdates = AppUpdates(this, flutterEngine.dartExecutor.binaryMessenger)
+        CarPlayer.attach(this, flutterEngine.dartExecutor.binaryMessenger)
         pendingLogin = pendingLogin ?: loginUri(intent)
         pendingRemote = pendingRemote ?: remoteUri(intent)
         intent.data = null
@@ -313,6 +315,7 @@ class MainActivity : FlutterActivity() {
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         appUpdates?.close()
+        CarPlayer.detach(flutterEngine.dartExecutor.binaryMessenger)
         appUpdates = null
         multicastLock?.let { if (it.isHeld) it.release() }
         multicastLock = null

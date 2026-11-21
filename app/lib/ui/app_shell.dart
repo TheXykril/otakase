@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../cast/car_screen.dart';
 import '../core.dart';
 import '../data/models.dart';
 import '../data/movies.dart';
@@ -113,6 +114,7 @@ class _AppShellState extends State<AppShell> {
     });
     unawaited(startRemote());
     widget.services.tvRemote.addListener(remoteAsk);
+    if (!widget.isTV) CarScreen.instance.play = playOnCar;
     if (widget.isTV) {
       widget.services.tvRemote.start = startFromPhone;
       widget.services.tvRemote.startTitle = startTitleFromPhone;
@@ -245,6 +247,7 @@ class _AppShellState extends State<AppShell> {
       s.dispose();
     }
     searchField.dispose();
+    if (CarScreen.instance.play == playOnCar) CarScreen.instance.play = null;
     if (!widget.services.tvRemote.closed) {
       widget.services.tvRemote.removeListener(remoteAsk);
       if (widget.services.tvRemote.start == startFromPhone) {
@@ -477,6 +480,30 @@ class _AppShellState extends State<AppShell> {
                 isTV: widget.isTV,
                 heroTag: heroTag,
               ),
+      ),
+    );
+  }
+
+  /// The car screen picked a Continue watching episode: close whatever
+  /// plays here and cast it to the car.
+  Future<void> playOnCar(WatchEntry h) async {
+    final services = widget.services;
+    await services.stopPlayback?.call();
+    if (!mounted) return;
+    final navigator = Navigator.of(context);
+    navigator.popUntil((route) => route.isFirst);
+    unawaited(
+      navigator.push(
+        OtakaseRoute<void>(
+          builder: (_) => PlayerPage(
+            services: services,
+            anime: h.anime,
+            episode: h.episode,
+            isTV: false,
+            mode: services.store.text('SubOrDub'),
+            castTo: CarScreen.device,
+          ),
+        ),
       ),
     );
   }

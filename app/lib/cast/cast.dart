@@ -9,6 +9,7 @@ import '../core.dart';
 import '../data/models.dart';
 import '../desktop/desktop_core.dart';
 import '../ui/components.dart';
+import 'car_screen.dart';
 
 /// A TV, speaker box or browser the core found to cast to.
 class CastDevice {
@@ -23,6 +24,7 @@ class CastDevice {
 
   IconData get icon => switch (kind.toLowerCase()) {
     'browser' => LucideIcons.globe,
+    'car' => LucideIcons.car,
     'kodi' => LucideIcons.monitorPlay,
     'dlna' => LucideIcons.tv,
     _ => LucideIcons.cast,
@@ -30,6 +32,7 @@ class CastDevice {
 
   String get description => switch (kind.toLowerCase()) {
     'browser' => 'Any phone, TV or console on this network',
+    'car' => 'Android Auto · plays while parked',
     'dlna' => 'Smart TV (DLNA)${address.isEmpty ? '' : ' · $address'}',
     'kodi' => 'Kodi${address.isEmpty ? '' : ' · $address'}',
     _ => 'Chromecast${address.isEmpty ? '' : ' · $address'}',
@@ -97,10 +100,25 @@ Future<Json?> _multicast(bool on) async {
 
 /// The core's cast operations.
 class CastClient {
-  CastClient(this.core);
+  CastClient(this.core, {CarScreen? car}) : car = car ?? CarScreen.instance;
   final CoreClient core;
 
+  /// The Android Auto screen, listed first while it is open.
+  final CarScreen car;
+
+  /// Whether the last cast went to the car screen.
+  bool _onCar = false;
+
   Future<List<CastDevice>> devices({int seconds = 4}) async {
+    final onCar = await car.connected();
+    // The car screen stays listed when the network search fails.
+    final found = onCar
+        ? await _found(seconds).catchError((Object _) => <CastDevice>[])
+        : await _found(seconds);
+    return [if (onCar) CarScreen.device, ...found];
+  }
+
+  Future<List<CastDevice>> _found(int seconds) async {
     // Android drops the multicast answers TVs send unless the app holds a
     // Wi-Fi multicast lock while it listens.
     final network = await _multicast(true);
@@ -127,6 +145,16 @@ class CastClient {
     double start = 0,
     double duration = 0,
   }) async {
+    _onCar = device.kind == 'car';
+    if (_onCar) {
+      return car.start(
+        stream: stream,
+        title: title,
+        subtitle: subtitle,
+        start: start,
+        duration: duration,
+      );
+    }
     final headers = Map<String, String>.of(stream.headers);
     if (stream.referrer.isNotEmpty) headers['Referer'] = stream.referrer;
     await core.request({
@@ -144,11 +172,13 @@ class CastClient {
     }, timeout: const Duration(seconds: 15));
   }
 
-  Future<CastStatus> status() async => CastStatus.fromJson(
-    await core.request({
-      'operation': 'cast_status',
-    }, timeout: const Duration(seconds: 12)),
-  );
+  Future<CastStatus> status() async => _onCar
+      ? car.status()
+      : CastStatus.fromJson(
+          await core.request({
+            'operation': 'cast_status',
+          }, timeout: const Duration(seconds: 12)),
+        );
 
   /// Opens this computer's firewall for casting, behind the system's own
   /// password or admin prompt. False when it was refused or failed.
@@ -175,10 +205,12 @@ class CastClient {
     }
   }
 
-  Future<void> control(String action, [double value = 0]) => core.request({
-    'operation': 'cast_control',
-    'cast': {'action': action, 'value': value},
-  }, timeout: const Duration(seconds: 12));
+  Future<void> control(String action, [double value = 0]) => _onCar
+      ? car.control(action, value)
+      : core.request({
+          'operation': 'cast_control',
+          'cast': {'action': action, 'value': value},
+        }, timeout: const Duration(seconds: 12));
 }
 
 /// This computer's firewall, as the phone remote page needs it.
