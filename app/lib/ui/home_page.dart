@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../cast/car_screen.dart';
 import '../core.dart';
 import '../data/models.dart';
 import '../data/continuation.dart';
@@ -644,6 +645,11 @@ class _HomePageState extends State<HomePage> {
           )
           .toList(),
       titleEntries,
+    );
+    // The Android Auto screen lists the same row; films and shows stay on
+    // the phone.
+    CarScreen.instance.offer(
+      continuing.where((e) => !titleProgress.containsKey(e.anime.key)),
     );
     // Long press, right click or the remote's Info key on a Continue
     // watching card offers to take it off the row.
